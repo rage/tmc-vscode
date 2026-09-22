@@ -4,7 +4,6 @@ import * as vscode from "vscode"
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import type Langs from "../api/langs"
-import { TmcPanel } from "../panels/TmcPanel"
 import type { MoocCourse, Organization } from "../shared/langsSchema"
 import type { CourseIdentifier, Enum } from "../shared/shared"
 import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
@@ -163,13 +162,5 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
   const result = await actions.addNewCourse(actionContext, picked[0], picked[1])
   if (result.err) {
     dialog.reportError("Failed to add course.", result.val, picked[1].kind)
-    return
   }
-  // A My Courses panel renders the list it was last sent, so it has to be told
-  // about the course that was just added.
-  TmcPanel.postMessage({
-    type: "setMyCourses",
-    target: { type: "MyCourses" },
-    courses: userData.getCourses(),
-  })
 }

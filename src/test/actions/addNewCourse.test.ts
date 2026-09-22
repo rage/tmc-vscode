@@ -5,6 +5,7 @@ import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { UserData } from "../../config/userdata"
+import { TmcPanel } from "../../panels/TmcPanel"
 import { CourseIdentifier } from "../../shared/shared"
 import Storage from "../../storage"
 import type UI from "../../ui/ui"
@@ -72,6 +73,19 @@ suite("addNewCourse action (mooc)", function () {
     expect(stored?.exercises[0]?.passed).toBe(true)
     expect(stored?.awardedPoints).toBe(1)
     expect(stored?.availablePoints).toBe(1)
+  })
+
+  test("tells an open My Courses panel about the added course", async function () {
+    const postMessage = vi.spyOn(TmcPanel, "postMessage").mockResolvedValue(undefined)
+
+    await addNewCourse(actionContext(), "unused-org-slug", CourseIdentifier.from(MOOC_COURSE_UUID))
+
+    expect(postMessage).toHaveBeenCalledExactlyOnceWith({
+      type: "setMyCourses",
+      target: { type: "MyCourses" },
+      courses: userData.getCourses(),
+    })
+    expect(userData.getCourses()).toHaveLength(1)
   })
 
   test("a failed progress fetch still adds the course, with zeroed progress", async function () {

@@ -23,6 +23,13 @@ const exercises: Exercise[] = [
     file_contents: "def hello()",
     expected_result: "pass",
   },
+  {
+    course: "Python Course",
+    name: "02_failing_exercise",
+    file_path: ["src", "failing_exercise.py"],
+    file_contents: "def hello()",
+    expected_result: "fail",
+  },
 ]
 
 for (const exercise of exercises) {

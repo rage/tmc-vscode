@@ -16,7 +16,6 @@ const moocCourse = CourseIdentifier.from("11111111-2222-3333-4444-555555555555")
 
 afterEach(() => {
   updateablesRegistry.clear()
-  vi.mocked(TmcPanel.postMessage).mockClear()
 })
 
 suite("updateables registry", () => {

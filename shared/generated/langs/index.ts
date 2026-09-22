@@ -7,6 +7,7 @@ import {
     zBrowserTestSpec,
     zClientUpdateData,
     zCombinedCourseData,
+    zCombinedMoocCourseData,
     zConfigValue,
     zCourse,
     zCourseData,
@@ -97,6 +98,13 @@ export type ClientUpdateData = z.infer<typeof ClientUpdateData>;
 
 export const CombinedCourseData = zCombinedCourseData;
 export type CombinedCourseData = z.infer<typeof CombinedCourseData>;
+
+/**
+ * A mooc course, its exercise slides and the current user's progress in it,
+ * fetched together. The mooc counterpart of [`CombinedCourseData`].
+ */
+export const CombinedMoocCourseData = zCombinedMoocCourseData;
+export type CombinedMoocCourseData = z.infer<typeof CombinedMoocCourseData>;
 
 /**
  * A setting in a TmcConfig file.

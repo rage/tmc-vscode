@@ -718,6 +718,16 @@ export const zTmcExerciseSlide = z.object({
 });
 
 /**
+ * A mooc course, its exercise slides and the current user's progress in it,
+ * fetched together. The mooc counterpart of [`CombinedCourseData`].
+ */
+export const zCombinedMoocCourseData = z.object({
+    course: zMoocCourse,
+    progress: zCourseProgress,
+    slides: z.array(zTmcExerciseSlide)
+});
+
+/**
  * Extra data from a `.tmcproject.yml` file.
  */
 export const zTmcProjectYml = z.object({
@@ -994,6 +1004,10 @@ export const zDataKind = z.union([
     z.object({
         'output-data': zCourseProgress,
         'output-data-kind': z.literal('mooc-course-progress')
+    }),
+    z.object({
+        'output-data': zCombinedMoocCourseData,
+        'output-data-kind': z.literal('mooc-combined-course-data')
     }),
     z.object({
         'output-data': zMoocOldSubmissionRestore,

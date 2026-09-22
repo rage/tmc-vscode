@@ -280,6 +280,20 @@ suite("UserData course add/get/update/delete", function () {
     expect(userData.getCourseBySlug("mooc", "mooc-algo").unwrap().kind).toBe("mooc")
   })
 
+  test("an added course's passed exercises read as passed", async function () {
+    const [userData] = await makeUserData({ courses: [], mooc_courses: [] })
+    await userData.addCourse(
+      makeTmcKind(tmcCourse({ id: 7, exercises: [tmcExercise({ id: 1, passed: true })] })),
+    )
+    await userData.addCourse(
+      makeMoocKind(
+        moocCourse({ id: "inst-9", exercises: [moocExercise({ id: "m", passed: true })] }),
+      ),
+    )
+    expect(userData.getPassed(ExerciseIdentifier.from(1))).toBe(true)
+    expect(userData.getPassed(ExerciseIdentifier.from("m"))).toBe(true)
+  })
+
   test("rejects adding a duplicate tmc course", async function () {
     const [userData] = await makeUserData({ courses: [tmcCourse({ id: 0 })], mooc_courses: [] })
     const result = await userData.addCourse(makeTmcKind(tmcCourse({ id: 0 })))
@@ -382,6 +396,28 @@ suite("UserData updateExercises", function () {
     const course = userData.getMoocCourses()[0]
     expect(course?.exercises.map((x) => x.id)).toEqual(["a", "b", "c"])
     expect(course?.newExercises).toEqual(["c"])
+  })
+  test("lists an exercise once when it was already new but not yet stored", async function () {
+    const [userData] = await makeUserData({
+      courses: [tmcCourse({ id: 0, newExercises: [3], exercises: [tmcExercise({ id: 1 })] })],
+      mooc_courses: [
+        moocCourse({
+          id: "instance-uuid-1",
+          newExercises: ["c"],
+          exercises: [moocExercise({ id: "a" })],
+        }),
+      ],
+    })
+    await userData.updateExercises(CourseIdentifier.from(0), [
+      makeTmcKind(tmcExercise({ id: 1 })),
+      makeTmcKind(tmcExercise({ id: 3, name: "new_one" })),
+    ])
+    await userData.updateExercises(CourseIdentifier.from("instance-uuid-1"), [
+      makeMoocKind(moocExercise({ id: "a" })),
+      makeMoocKind(moocExercise({ id: "c", name: "new_mooc" })),
+    ])
+    expect(userData.getTmcCourse(0).newExercises).toEqual([3])
+    expect(userData.getMoocCourses()[0]?.newExercises).toEqual(["c"])
   })
 })
 

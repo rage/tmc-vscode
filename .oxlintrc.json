@@ -343,19 +343,6 @@
           }
         ]
       }
-    },
-    {
-      // Shrink list, never grow list: each of these still imports across a layer the rule
-      // above forbids. Delete the entry when the import goes, not the rule.
-      "files": [
-        "src/api/authState.ts",
-        "src/commands/addNewCourse.ts",
-        "src/commands/changeTmcDataPath.ts",
-        "src/commands/updateExercises.ts"
-      ],
-      "rules": {
-        "no-restricted-imports": "off"
-      }
     }
   ]
 }

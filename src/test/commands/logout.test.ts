@@ -22,10 +22,6 @@ function contextWith(
 }
 
 suite("logout command", function () {
-  afterEach(function () {
-    vi.mocked(actions.logout).mockClear()
-  })
-
   test("logs out and announces success once the user confirms", async function () {
     const [context, dialog] = contextWith(true)
 

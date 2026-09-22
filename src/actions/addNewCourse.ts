@@ -1,20 +1,19 @@
 import type { Result } from "ts-results"
+import { Ok } from "ts-results"
 
+import { TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
-import { match } from "../shared/shared"
-import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
+import { LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
 import { Logger } from "../utilities"
-import {
-  combineMoocApiExerciseData,
-  combineTmcApiExerciseData,
-  sumCoursePoints,
-  sumTmcApiCoursePoints,
-} from "../utilities/apiData"
+import { toStoredMoocCourse, toStoredTmcCourse } from "../utilities/apiData"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
 
 /**
- * Adds a new course to user's courses.
+ * Adds a new course to user's courses, and tells an open My Courses panel.
+ *
+ * @param organizationSlug The tmc organization the course was picked from;
+ *   ignored for a mooc course, which carries its own.
  */
 export async function addNewCourse(
   actionContext: ReadyActionContext,
@@ -25,43 +24,13 @@ export async function addNewCourse(
   const { langs, userData, workspaceManager } = actionContext.startup
   Logger.info("Adding new course")
 
-  return match(
+  const fetched = await match(
     course,
-    async (tmcCourse) => {
-      const courseDataResult = await langs.getTmcCourseData(tmcCourse.courseId)
-      if (courseDataResult.err) {
-        return courseDataResult
-      }
-      const courseData = courseDataResult.val
-
-      const { availablePoints, awardedPoints } = sumTmcApiCoursePoints(courseData.exercises)
-
-      const localData: TmcLocalCourseData = {
-        description: courseData.details.description || "",
-        exercises: combineTmcApiExerciseData(courseData.details.exercises, courseData.exercises),
-        id: courseData.details.id,
-        name: courseData.details.name,
-        title: courseData.details.title,
-        organization: organizationSlug,
-        availablePoints,
-        awardedPoints,
-        perhapsExamMode: courseData.settings.hide_submission_results,
-        newExercises: [],
-        notifyAfter: 0,
-        disabled: courseData.settings.disabled_status !== "enabled",
-        materialUrl: courseData.settings.material_url,
-      }
-      const addResult = await userData.addCourse({ kind: "tmc", data: localData })
-      if (addResult.err) {
-        return addResult
-      }
-      ui.treeDP.refresh()
-      await workspaceManager.createWorkspaceFile(courseData.details.name, "tmc")
-      return refreshLocalExercises(actionContext)
+    async (tmcCourse): Promise<Result<LocalCourseData, Error>> => {
+      const courseData = await langs.getTmcCourseData(tmcCourse.courseId)
+      return courseData.map((x) => makeTmcKind(toStoredTmcCourse(x, organizationSlug)))
     },
-    async (mooc) => {
-      // mooc has no course-instance concept: the identifier is the course id,
-      // and the CLI call returns the course itself.
+    async (mooc): Promise<Result<LocalCourseData, Error>> => {
       const courseRes = await langs.getMoocCourseData(mooc.instanceId)
       if (courseRes.err) {
         return courseRes
@@ -73,37 +42,32 @@ export async function addNewCourse(
       if (progressRes.err) {
         Logger.warn("Failed to fetch mooc course progress", progressRes.val)
       }
-
-      const exercises = combineMoocApiExerciseData(
-        slides,
-        progressRes.ok ? progressRes.val : undefined,
+      return Ok(
+        makeMoocKind(
+          toStoredMoocCourse(moocCourse, slides, progressRes.ok ? progressRes.val : undefined),
+        ),
       )
-      const { availablePoints, awardedPoints } = sumCoursePoints(exercises)
-
-      const localData: MoocLocalCourseData = {
-        id: moocCourse.id,
-        name: moocCourse.slug,
-        description: moocCourse.description,
-        title: moocCourse.name,
-        organization: moocCourse.organization_name,
-        awardedPoints,
-        availablePoints,
-        disabled: false,
-        materialUrl: null,
-        exercises,
-        newExercises: [],
-        notifyAfter: 0,
-        perhapsExamMode: false,
-      }
-      // A duplicate enrollment of the same course can surface twice from the
-      // backend, so an already-added course id is a plausible input here.
-      const addResult = await userData.addCourse({ kind: "mooc", data: localData })
-      if (addResult.err) {
-        return addResult
-      }
-      ui.treeDP.refresh()
-      await workspaceManager.createWorkspaceFile(moocCourse.slug, "mooc")
-      return refreshLocalExercises(actionContext)
     },
   )
+  if (fetched.err) {
+    return fetched
+  }
+
+  // A duplicate enrollment of the same mooc course can surface twice from the
+  // backend, so an already-added course id is a plausible input here.
+  const addResult = await userData.addCourse(fetched.val)
+  if (addResult.err) {
+    return addResult
+  }
+  ui.treeDP.refresh()
+  TmcPanel.postMessage({
+    type: "setMyCourses",
+    target: { type: "MyCourses" },
+    courses: userData.getCourses(),
+  })
+  await workspaceManager.createWorkspaceFile(
+    LocalCourseData.getCourseName(fetched.val),
+    fetched.val.kind,
+  )
+  return refreshLocalExercises(actionContext)
 }

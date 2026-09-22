@@ -41,9 +41,6 @@ suite("AuthState", function () {
   beforeEach(function () {
     Logger.configure(LogLevel.None)
     vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
-    // The shared vscode mock's members are `vi.fn()`s already, so `vi.spyOn`
-    // hands back the same mock and `restoreAllMocks` leaves its history.
-    vi.mocked(vscode.commands.executeCommand).mockClear()
   })
 
   afterEach(function () {

@@ -20,18 +20,11 @@
   "workspaces": {
     ".": {
       // knip's plugins already find the extension host entry, the webview build
-      // and both vitest tiers. These are the ones nothing declares: the bin
-      // scripts that shell scripts and CI invoke by filename, the build-profile
-      // map that esbuild and vitest `require` by path, husky's lint-staged
-      // config, and the `vscode` mock vitest reaches through a resolve alias.
-      "entry": [
-        "src/test/**/*.test.ts",
-        "src/test/support/vscode.cjs",
-        "src/test-integration/**/*.{spec,test}.ts",
-        "bin/*.{js,mjs,ts}",
-        "config.js",
-        ".husky/lint-staged-config.js"
-      ],
+      // and every test tier. These are the ones nothing declares: the bin
+      // scripts that shell scripts and CI invoke by filename, husky's
+      // lint-staged config, and the `vscode` mock vitest reaches through a
+      // resolve alias.
+      "entry": ["src/test/support/vscode.cjs", "bin/*.{js,mjs,ts}", ".husky/lint-staged-config.js"],
       "project": [
         "src/**/*.{ts,cjs}",
         "shared/**/*.ts",
@@ -45,11 +38,10 @@
     "webview-ui": {
       // global.ts carries a triple-slash type reference rather than exports, so
       // nothing imports it; tsconfig's `include` is what pulls it in.
-      "entry": ["src/**/*.test.ts", "src/global.ts"],
+      "entry": ["src/global.ts"],
       "project": ["src/**/*.{ts,svelte}", "!src/generated/**", "*.ts"]
     },
     "backend": {
-      "entry": ["**/*.test.ts"],
       "project": ["**/*.ts", "!cli/**", "!resources/**"]
     }
   }

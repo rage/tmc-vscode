@@ -78,9 +78,6 @@ suite("Close exercise command", function () {
   beforeEach(function () {
     vi.mocked(actions.closeExercises).mockClear()
     vi.mocked(actions.closeExercises).mockResolvedValue(Ok([]))
-    // jest-mock-vscode's spies are module-level and survive a restore, so the
-    // editor-closing assertions below need the history cleared, not restored.
-    vi.mocked(vscode.commands.executeCommand).mockReset()
   })
 
   test("closes the stored exercise the on-disk one names, qualified by its backend", async function () {

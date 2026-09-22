@@ -148,12 +148,9 @@ export class UserData {
    * Looks up an exercise by course slug and exercise name **within one backend**,
    * returning it tagged with that backend.
    *
-   * As with `getCourseBySlug`, the backend is required rather than inferred.
-   * Every caller comes from a `WorkspaceExercise`, which already records which
-   * backend the exercise on disk belongs to, so there is nothing to guess — and
-   * guessing was actively wrong: the previous name-only version scanned tmc
-   * courses first and returned as soon as a *course* slug matched, so a mooc
-   * course sharing its slug with a tmc course could never be reached.
+   * As with `getCourseBySlug`, the backend is required rather than inferred: a
+   * mooc course can share its slug with a tmc course. Every caller comes from a
+   * `WorkspaceExercise`, which already records the backend.
    */
   public getExerciseByName(
     backend: BackendKind,
@@ -257,6 +254,9 @@ export class UserData {
         assertUnreachable(data)
       }
     }
+    LocalCourseData.getExercises(data).forEach((x) =>
+      this._setPassed(ExerciseIdentifier.from(x.data.id), x.data.passed),
+    )
     return this._updatePersistentData()
   }
 
@@ -286,7 +286,7 @@ export class UserData {
       case "mooc": {
         const course = data
         if (!this._moocCourses.has(course.data.id)) {
-          return Err(new Error(`No mooc course with instance id ${course.data.id} to update`))
+          return Err(new Error(`No mooc course with id ${course.data.id} to update`))
         }
         this._moocCourses.set(course.data.id, course.data)
         break
@@ -313,21 +313,29 @@ export class UserData {
     courseData.data.newExercises = match(
       courseData,
       (tmc) =>
-        tmc.newExercises
-          .filter((exerciseId) => exerciseIds.includes(exerciseId))
-          .concat(
-            exerciseIds
-              .filter((eid) => typeof eid === "number")
-              .filter((newExerciseId) => !courseExercises.some((e) => e.data.id === newExerciseId)),
-          ),
+        _.uniq(
+          tmc.newExercises
+            .filter((exerciseId) => exerciseIds.includes(exerciseId))
+            .concat(
+              exerciseIds
+                .filter((eid) => typeof eid === "number")
+                .filter(
+                  (newExerciseId) => !courseExercises.some((e) => e.data.id === newExerciseId),
+                ),
+            ),
+        ),
       (mooc) =>
-        mooc.newExercises
-          .filter((exerciseId) => exerciseIds.includes(exerciseId))
-          .concat(
-            exerciseIds
-              .filter((eid) => typeof eid === "string")
-              .filter((newExerciseId) => !courseExercises.some((e) => e.data.id === newExerciseId)),
-          ),
+        _.uniq(
+          mooc.newExercises
+            .filter((exerciseId) => exerciseIds.includes(exerciseId))
+            .concat(
+              exerciseIds
+                .filter((eid) => typeof eid === "string")
+                .filter(
+                  (newExerciseId) => !courseExercises.some((e) => e.data.id === newExerciseId),
+                ),
+            ),
+        ),
     )
     if (courseData.data.newExercises.length > 0) {
       Logger.info(

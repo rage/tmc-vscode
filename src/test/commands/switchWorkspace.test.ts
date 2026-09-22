@@ -52,7 +52,6 @@ function harness(pick: number | "dismissed" = 0): Harness {
 
 suite("Switch workspace command", function () {
   beforeEach(function () {
-    vi.mocked(actions.openWorkspace).mockClear()
     openWorkspaceNamed(undefined)
   })
 

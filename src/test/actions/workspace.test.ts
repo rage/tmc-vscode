@@ -179,10 +179,6 @@ suite("downloadAndOpenExercises action", function () {
     }
   }
 
-  beforeEach(function () {
-    vi.mocked(downloadExercisesForUi).mockClear()
-  })
-
   test("does not re-download an exercise that is already on disk under another slug", async function () {
     await downloadAndOpenExercises(
       {} as vscode.ExtensionContext,

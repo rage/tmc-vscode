@@ -278,7 +278,6 @@ suite("openWorkspace action", function () {
     ;[dialogMock, dialogMockValues] = createDialogMock()
     createWorkspaceFile = vi.fn()
     executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
-    executeCommand.mockClear()
   })
 
   afterEach(function () {

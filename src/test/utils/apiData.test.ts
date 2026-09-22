@@ -4,11 +4,14 @@ import {
   LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
 } from "../../config/constants"
 import type { CourseExercise, Exercise } from "../../shared/langsSchema"
+import type { MoocLocalCourseData } from "../../storage/data"
 import {
   combineTmcApiExerciseData,
   sumCoursePoints,
   sumTmcApiCoursePoints,
+  toStoredMoocCourse,
 } from "../../utilities/apiData"
+import { moocCourse, moocCourseProgress, moocExerciseSlides } from "../fixtures/tmc"
 
 /** An exercise as `/api/v8/core/courses/{id}` lists it; only the combined fields vary. */
 function apiExercise(exercise: Pick<Exercise, "id" | "name" | "completed">): Exercise {
@@ -139,5 +142,32 @@ suite("sumTmcApiCoursePoints", function () {
 
   test("is zero for a course with no exercises", function () {
     expect(sumTmcApiCoursePoints([])).toEqual({ availablePoints: 0, awardedPoints: 0 })
+  })
+})
+
+const addedMoocCourse = (): MoocLocalCourseData =>
+  toStoredMoocCourse(moocCourse, moocExerciseSlides, moocCourseProgress)
+
+suite("toStoredMoocCourse", function () {
+  test("keeps only the slug and the new-exercise state of the course it refreshes", function () {
+    const previous: MoocLocalCourseData = {
+      ...addedMoocCourse(),
+      name: "old-slug",
+      title: "Old title",
+      description: "Old description",
+      organization: "Old organization",
+      newExercises: ["new-exercise"],
+      notifyAfter: 1234,
+      disabled: true,
+    }
+
+    expect(
+      toStoredMoocCourse(moocCourse, moocExerciseSlides, moocCourseProgress, previous),
+    ).toEqual({
+      ...addedMoocCourse(),
+      name: "old-slug",
+      newExercises: ["new-exercise"],
+      notifyAfter: 1234,
+    })
   })
 })

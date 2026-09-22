@@ -299,7 +299,6 @@ suite("registerCommands", function () {
 suite("registered command handlers", function () {
   test("tmc.settings opens the extension's settings page", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
-    executeCommand.mockClear()
     const { handlers } = registerAndCollect()
 
     await handlers.get("tmc.settings")?.()
@@ -309,7 +308,6 @@ suite("registered command handlers", function () {
 
   test("tmc.selectAction opens the palette scoped to the extension", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
-    executeCommand.mockClear()
     const { handlers } = registerAndCollect()
 
     await handlers.get("tmc.selectAction")?.()
@@ -328,7 +326,6 @@ suite("registered command handlers", function () {
 
   test("tmc.debug clears the output, shows it, then opens the active log file", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
-    executeCommand.mockClear()
     const show = vi.spyOn(Logger, "show").mockImplementation(() => {})
     const { handlers } = registerAndCollect()
 
@@ -538,7 +535,6 @@ suite("registered command handlers", function () {
 
   test("tmc.openTMCExercisesFolder reveals the projects directory", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
-    executeCommand.mockClear()
     const { handlers } = registerAndCollect(
       createMockActionContext({
         startup: { resources: { projectsDirectory: "/tmp/tmcdata/projects" } as Resources },
@@ -555,7 +551,6 @@ suite("registered command handlers", function () {
 
   test("tmc.openTMCExercisesFolder says why it opens nothing without a known projects directory", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
-    executeCommand.mockClear()
     const actionContext = createMockActionContext({
       startup: { resources: { projectsDirectory: undefined } as Resources },
     })

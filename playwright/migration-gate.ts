@@ -1,10 +1,8 @@
-import { execFileSync } from "node:child_process"
-import { existsSync } from "node:fs"
 import { join, resolve } from "node:path"
 
 import { MIGRATION_CONTRACT_VERSION, productionApi } from "../config"
+import { probeCli } from "../src/test-integration/cliMigrationProbe"
 import { getLangsCLIForPlatform, getPlatform } from "../src/utilities/env"
-import { semVerCompare } from "../src/utilities/semanticVersion"
 import { vsCodeTest } from "./fixtures"
 
 // The mooc specs drive CLI subcommands (`mooc login`, `mooc courses`,
@@ -22,44 +20,12 @@ const CLI_PATH = join(
   getLangsCLIForPlatform(getPlatform(), productionApi.__TMC_LANGS_VERSION__.replaceAll('"', "")),
 )
 
-/**
- * What the tmc-langs CLI under `backend/cli` reports about itself.
- *
- * `broken` -- present but unrunnable, or printing no version -- is deliberately
- * distinct from `absent`: skipping on it would report a broken harness as "the
- * pinned CLI is too old", which is how a suite stays green while testing
- * nothing.
- */
-type CliProbe =
-  | { kind: "version"; version: string; carriesMoocContract: boolean }
-  | { kind: "absent" }
-  | { kind: "broken"; cause: string }
-
-function probeCli(): CliProbe {
-  if (!existsSync(CLI_PATH)) {
-    return { kind: "absent" }
-  }
-  let reported: string
-  try {
-    reported = execFileSync(CLI_PATH, ["--version"], { encoding: "utf-8" }).trim()
-  } catch (error) {
-    return { kind: "broken", cause: String(error) }
-  }
-  // `--version` prints `tmc-langs-cli <version>`, so the version is embedded in
-  // the line rather than being the whole of it; semVerCompare matches unanchored.
-  const comparison = semVerCompare(reported, MIGRATION_CONTRACT_VERSION, "patch")
-  if (comparison === undefined) {
-    return { kind: "broken", cause: `\`--version\` printed ${JSON.stringify(reported)}` }
-  }
-  return { kind: "version", version: reported, carriesMoocContract: comparison >= 0 }
-}
-
-const probe = probeCli()
+const probe = probeCli(CLI_PATH, MIGRATION_CONTRACT_VERSION)
 if (probe.kind === "broken") {
   throw new Error(`Could not read a version from the tmc-langs CLI at ${CLI_PATH}: ${probe.cause}`)
 }
 
-const cliSupportsMoocContract = probe.kind === "version" && probe.carriesMoocContract
+const cliSupportsMoocContract = probe.kind === "version" && probe.meetsMinimum
 
 if (!cliSupportsMoocContract) {
   const reason =

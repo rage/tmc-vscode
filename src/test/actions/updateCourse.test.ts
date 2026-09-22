@@ -1,5 +1,6 @@
 import { Err, Ok } from "ts-results"
 
+import { addNewCourse } from "../../actions/addNewCourse"
 import type { ReadyActionContext } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
 import type Dialog from "../../api/dialog"
@@ -17,8 +18,15 @@ import type {
 import { CourseIdentifier } from "../../shared/shared"
 import Storage from "../../storage"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
+import type UI from "../../ui/ui"
 import { Logger } from "../../utilities"
-import { MOOC_EXERCISE_UUID, moocCourse, moocExerciseSlides } from "../fixtures/tmc"
+import { combineTmcApiExerciseData } from "../../utilities/apiData"
+import {
+  MOOC_COURSE_UUID,
+  MOOC_EXERCISE_UUID,
+  moocCourse,
+  moocExerciseSlides,
+} from "../fixtures/tmc"
 import { createMockActionContext } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
@@ -27,7 +35,7 @@ import { createWorkspaceMangerMock } from "../mocks/workspaceManager"
 import { autoMock } from "../support/mock"
 
 const storedMoocCourse: MoocLocalCourseData = {
-  id: "course-uuid-1",
+  id: MOOC_COURSE_UUID,
   name: "mooc-python-course",
   title: "Mooc Python",
   description: null,
@@ -43,7 +51,7 @@ const storedMoocCourse: MoocLocalCourseData = {
 }
 
 suite("updateCourse action (mooc)", function () {
-  const courseId = CourseIdentifier.from("course-uuid-1")
+  const courseId = CourseIdentifier.from(MOOC_COURSE_UUID)
 
   let tmcMock: Langs
   let tmcMockValues: TMCMockValues
@@ -340,6 +348,53 @@ suite("updateCourse action (tmc)", function () {
     expect(stored?.disabled).toBe(false)
   })
 
+  test("keeps the slug, organization and new-exercise state it was stored with", async function () {
+    const storage = new Storage(createMockContext())
+    await storage.updateUserData({
+      courses: [
+        {
+          ...tmcCourse,
+          name: "old-slug",
+          organization: "old-org",
+          exercises: combineTmcApiExerciseData(
+            tmcCourseData.details.exercises,
+            tmcCourseData.exercises,
+          ),
+          newExercises: [3],
+          notifyAfter: 5,
+        },
+      ],
+      mooc_courses: [],
+    })
+    userData = new UserData(storage)
+
+    expect((await updateCourse(actionContext(), courseId)).val).toBe(true)
+
+    const stored = userData.getTmcCourses()[0]
+    expect(stored?.name).toBe("old-slug")
+    expect(stored?.organization).toBe("old-org")
+    expect(stored?.newExercises).toEqual([3])
+    expect(stored?.notifyAfter).toBe(5)
+    expect(stored?.title).toBe("Test Python Course")
+  })
+
+  test("records an exercise the refresh brings as new", async function () {
+    const storage = new Storage(createMockContext())
+    const known = combineTmcApiExerciseData(
+      tmcCourseData.details.exercises,
+      tmcCourseData.exercises,
+    ).filter((x) => x.id !== 3)
+    await storage.updateUserData({
+      courses: [{ ...tmcCourse, exercises: known }],
+      mooc_courses: [],
+    })
+    userData = new UserData(storage)
+
+    expect((await updateCourse(actionContext(), courseId)).val).toBe(true)
+
+    expect(userData.getTmcCourses()[0]?.newExercises).toEqual([3])
+  })
+
   test("takes the course totals from the points endpoint, not the combined exercises", async function () {
     // Exercise 2 is missing from the points endpoint and so carries placeholder
     // points; folding those into the totals would overstate what the course is worth.
@@ -392,4 +447,53 @@ suite("updateCourse action (tmc)", function () {
     await storage.updateUserData({ courses: [{ ...tmcCourse, disabled: false }], mooc_courses: [] })
     userData = new UserData(storage)
   }
+})
+
+suite("updateCourse after addNewCourse", function () {
+  let langsMock: Langs
+  let userData: UserData
+
+  const actionContext = (): ReadyActionContext => {
+    const [workspaceManager] = createWorkspaceMangerMock()
+    workspaceManager.createWorkspaceFile = vi.fn() as never
+    return {
+      ...createMockActionContext({ startup: { langs: langsMock, userData, workspaceManager } }),
+      ui: { treeDP: { refresh: vi.fn() } } as unknown as UI,
+    }
+  }
+
+  beforeEach(async function () {
+    ;[langsMock] = createTMCMock()
+    ;(langsMock as unknown as { getTmcCourseData: unknown }).getTmcCourseData = vi.fn(async () =>
+      Ok(tmcCourseData),
+    )
+    const storage = new Storage(createMockContext())
+    await storage.updateUserData({ courses: [], mooc_courses: [] })
+    userData = new UserData(storage)
+    vi.spyOn(TmcPanel, "postMessage").mockImplementation(async () => {})
+  })
+
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("a refresh of an unchanged tmc course stores what adding it stored", async function () {
+    const courseId = CourseIdentifier.from(tmcCourseData.details.id)
+    expect((await addNewCourse(actionContext(), "test", courseId)).ok).toBe(true)
+    const added = structuredClone(userData.getTmcCourses())
+
+    expect((await updateCourse(actionContext(), courseId)).val).toBe(true)
+
+    expect(userData.getTmcCourses()).toEqual(added)
+  })
+
+  test("a refresh of an unchanged mooc course stores what adding it stored", async function () {
+    const courseId = CourseIdentifier.from(MOOC_COURSE_UUID)
+    expect((await addNewCourse(actionContext(), "", courseId)).ok).toBe(true)
+    const added = structuredClone(userData.getMoocCourses())
+
+    expect((await updateCourse(actionContext(), courseId)).val).toBe(true)
+
+    expect(userData.getMoocCourses()).toEqual(added)
+  })
 })
