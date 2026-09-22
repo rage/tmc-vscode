@@ -28,7 +28,7 @@
         "src/test/**/*.test.ts",
         "src/test/support/vscode.cjs",
         "src/test-integration/**/*.{spec,test}.ts",
-        "bin/*.{js,mjs}",
+        "bin/*.{js,mjs,ts}",
         "config.js",
         ".husky/lint-staged-config.js"
       ],
@@ -37,7 +37,7 @@
         "shared/**/*.ts",
         "!shared/generated/**",
         "playwright/**/*.ts",
-        "bin/**/*.{js,mjs}",
+        "bin/**/*.{js,mjs,ts}",
         "*.{ts,mjs,js}",
         ".husky/*.js"
       ]

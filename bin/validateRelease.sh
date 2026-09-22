@@ -53,7 +53,7 @@ validateRelease() {
         exitCode=1
     fi
 
-    if ! node ./bin/verifyThatLangsBuildsExist.js
+    if ! node --import tsx ./bin/verifyThatLangsBuildsExist.ts
     then
         echo "Error: Failed to verify that all Langs builds exist."
         exitCode=1
