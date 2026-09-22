@@ -255,6 +255,32 @@ suite("TmcPanel initialization guards", () => {
     )
   })
 
+  test("a courses request without an exercise directory says why, in the panel and a toast", async () => {
+    const actionContext = createMockActionContext({
+      startup: {
+        userData: { getCourses: () => [] } as never,
+        resources: { projectsDirectory: undefined } as never,
+      },
+    })
+    const { panel, listener } = await mountSidePanel(actionContext)
+    const sourcePanel = { id: 5, type: "MyCourses" as const, courseDeadlines: {} }
+
+    await listener({ type: "requestMyCoursesData", requestId: 3, sourcePanel })
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "panelDataResult",
+        requestId: 3,
+        error: { message: "tmc-langs did not report an exercise directory" },
+      }),
+    )
+    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
+      "Showing your courses is unavailable: tmc-langs did not report an exercise directory.",
+      expect.any(Error),
+    )
+    expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
+  })
+
   test("a request served from stored data is answered without an error", async () => {
     const actionContext = createMockActionContext({
       startup: {

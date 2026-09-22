@@ -529,11 +529,12 @@ export class TmcPanel {
             const { userData, resources } = actionContext.startup
             const projectsDirectory = resources.projectsDirectory
             if (!projectsDirectory) {
-              this._postPanelDataFailed(
-                target,
-                message.requestId,
-                reportNotInitialized(actionContext.dialog),
+              const error = new Error("tmc-langs did not report an exercise directory")
+              void actionContext.dialog.errorNotification(
+                "Showing your courses is unavailable: tmc-langs did not report an exercise directory.",
+                error,
               )
+              this._postPanelDataFailed(target, message.requestId, error)
               return
             }
 
