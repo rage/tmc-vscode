@@ -12,7 +12,6 @@ import type { Result } from "ts-results"
 import { MOCK_TMC_ACCESS_TOKEN } from "../../backend/controllers/accessToken"
 import { TMC_ARCHIVE_MIME } from "../../backend/mooc/fixtures"
 import Langs from "../api/langs"
-import type { SubmissionFeedback } from "../api/types"
 import {
   CLIENT_NAME,
   MIGRATION_CONTRACT_VERSION,
@@ -20,8 +19,9 @@ import {
   TMC_LANGS_VERSION,
 } from "../config/constants"
 import { AuthorizationError, BottleneckError, RuntimeError } from "../errors"
+import type { SubmissionFeedback } from "../shared/langsSchema"
 import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
-import { getLangsCLIForPlatform, getPlatform, semVerCompare } from "../utilities/"
+import { getLangsCLIForPlatform, getPlatform, semVerCompare } from "../utilities"
 
 // __dirname is the dist folder when built.
 const PROJECT_ROOT = path.join(__dirname, "..")

@@ -47,6 +47,21 @@ export type Locale = z.infer<typeof Locale>
 export const Compression = z.enum(["tar", "zip", "zstd"])
 export type Compression = z.infer<typeof Compression>
 
+/**
+ * The answers a user gave to a submission's feedback questions.
+ *
+ * `tmc send-feedback` takes them as repeated `--feedback <question-id> <answer>` pairs;
+ * this is the shape a caller assembles before that flattening.
+ */
+export interface SubmissionFeedback {
+  status: SubmissionFeedbackAnswer[]
+}
+
+export interface SubmissionFeedbackAnswer {
+  question_id: number
+  answer: string
+}
+
 /** The format for all status updates. May contain some data. */
 export interface StatusUpdate<T> {
   finished: boolean

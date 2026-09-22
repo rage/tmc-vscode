@@ -12,7 +12,7 @@ import type {
   SubmissionFeedbackResponse,
   SubmissionResponse,
   SubmissionStatusReport,
-} from "../../src/api/types"
+} from "../tmcApiTypes"
 import type { BackendCourse, ExerciseWithFile } from "../utils"
 import {
   createCourse,

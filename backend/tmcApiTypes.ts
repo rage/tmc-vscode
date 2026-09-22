@@ -1,3 +1,7 @@
+// The legacy TMC server's API v8 response shapes, as this mock serves them, checked
+// against shared/bindings.schema.json by controllers/v8.test.ts. The extension itself
+// never sees them — it reads the CLI's output contract in shared/langsSchema.ts.
+
 /**
  * GET /api/v8/core/org/{organization_slug}/courses
  */
@@ -66,7 +70,7 @@ export interface CourseExercise {
   unlocked: boolean
 }
 
-export interface ExercisePoint {
+interface ExercisePoint {
   id: number
   exercise_id: number
   name: string
@@ -98,7 +102,7 @@ export interface CourseSettings {
   refreshed_at?: string | null
   locked_exercise_points_visible: boolean
   description?: string | null
-  paste_visibility?: string | null
+  paste_visibility?: number | null
   formal_name?: string | null
   certificate_downloadable: boolean
   certificate_unlock_spec?: string | null
@@ -146,7 +150,7 @@ export interface SubmissionFeedbackResponse {
  */
 export type SubmissionStatusReport = SubmissionProcessingReport | SubmissionResultReport
 
-export interface SubmissionProcessingReport {
+interface SubmissionProcessingReport {
   status: "processing"
   sandbox_status: "created" | "sending_to_sandbox" | "processing_on_sandbox"
 }
@@ -185,22 +189,10 @@ export interface SubmissionResultReport {
   validations: unknown
 }
 
-export interface SubmissionFeedbackQuestion {
+interface SubmissionFeedbackQuestion {
   id: number
   question: string
   kind: string
-}
-
-/**
- * POST /api/v8/core/submissions/{submission_id}/feedback
- */
-export interface SubmissionFeedback {
-  status: SubmissionFeedbackAnswer[]
-}
-
-export interface SubmissionFeedbackAnswer {
-  question_id: number
-  answer: string
 }
 
 export interface OldSubmission {
@@ -228,18 +220,4 @@ export interface OldSubmission {
   paste_available: boolean
   message_for_paste: string
   paste_key: string | null
-}
-
-export interface TestResult {
-  name: string
-  successful: boolean
-  message: string
-  points: string[]
-  exception?: string[]
-}
-
-export interface TestResults {
-  status: "PASSED" | "TESTS_FAILED" | "COMPILE_FAILED" | "TESTRUN_INTERRUPTED" | "GENERIC_ERROR"
-  testResults: TestResult[]
-  logs: unknown
 }

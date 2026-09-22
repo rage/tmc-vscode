@@ -54,6 +54,7 @@ import type {
   StatusUpdateData,
   StyleValidationResult,
   Submission,
+  SubmissionFeedback,
   SubmissionFeedbackResponse,
   SubmissionFinished,
   TmcExerciseSlide,
@@ -70,7 +71,6 @@ import {
 } from "../shared/shared"
 import { Logger, LogLevel } from "../utilities/logger"
 import type { FractionProgress } from "./dialog"
-import type { SubmissionFeedback } from "./types"
 
 interface Options {
   cliConfigDir?: string | undefined
