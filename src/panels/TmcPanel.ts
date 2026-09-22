@@ -9,6 +9,7 @@ import type { ActionContext } from "../actions/types"
 import type Dialog from "../api/dialog"
 import { ConnectionError, InitializationError } from "../errors"
 import type {
+  BackendKind,
   CourseDetailsPanel,
   CourseIdentifier,
   ExerciseGroup,
@@ -69,7 +70,7 @@ export interface WebviewHandlers {
   openWorkspace: (
     actionContext: ActionContext,
     courseName: string,
-    backend: "tmc" | "mooc",
+    backend: BackendKind,
   ) => Promise<void>
   pasteMoocExercise: (
     actionContext: ActionContext,

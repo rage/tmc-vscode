@@ -2,7 +2,7 @@ import * as _ from "lodash"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 
-import type { CourseIdentifier, LocalCourseExercise } from "../shared/shared"
+import type { BackendKind, CourseIdentifier, LocalCourseExercise } from "../shared/shared"
 import {
   assertUnreachable,
   ExerciseIdentifier,
@@ -110,7 +110,7 @@ export class UserData {
    * to pick a scan order, and whichever backend came first would silently
    * shadow the other backend's course of the same slug.
    */
-  public getCourseBySlug(backend: "tmc" | "mooc", slug: string): Result<LocalCourseData, Error> {
+  public getCourseBySlug(backend: BackendKind, slug: string): Result<LocalCourseData, Error> {
     switch (backend) {
       case "tmc": {
         for (const course of this._tmcCourses.values()) {
@@ -156,7 +156,7 @@ export class UserData {
    * course sharing its slug with a tmc course could never be reached.
    */
   public getExerciseByName(
-    backend: "tmc" | "mooc",
+    backend: BackendKind,
     courseSlug: string,
     exerciseName: string,
   ): Readonly<LocalCourseExercise> | undefined {
@@ -216,7 +216,7 @@ export class UserData {
    * submission means the catalogue is out of step with what was submitted.
    */
   public async setExerciseAsPassed(
-    backend: "tmc" | "mooc",
+    backend: BackendKind,
     courseSlug: string,
     exerciseName: string,
   ): Promise<Result<void, Error>> {
