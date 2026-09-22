@@ -1802,45 +1802,16 @@ export default class Langs {
         // tmc.mooc.fi 403s a course the user may not see. Only the latter is about the
         // course, so only it may be read as one being unavailable.
         if (auth.backend === "mooc") {
-          return Err(
-            new InsufficientScopeError(
-              `${message}\nYour courses.mooc.fi session no longer grants access to` +
-                ` programming exercises. Log in again to continue.`,
-              details,
-            ),
-          )
+          return Err(new InsufficientScopeError(message, details))
         }
         return Err(new ForbiddenError(message, details))
-      case "not-enrolled": {
-        // Not hardcoded to courses.mooc.fi: this error kind can come from either backend.
-        const siteName =
-          auth.backend === "tmc"
-            ? "tmc.mooc.fi"
-            : auth.backend === "mooc"
-              ? "courses.mooc.fi"
-              : "the server"
-        return Err(
-          new NotEnrolledError(
-            `You are no longer enrolled on this course on ${siteName}, so its` +
-              ` exercises can't be fetched. Enroll on the course again from` +
-              ` ${siteName}, then reload the course here.`,
-            details,
-          ),
-        )
-      }
+      case "not-enrolled":
+        return Err(new NotEnrolledError(message, details))
       case "upload-expired":
-        // The CLI uploads and submits within one invocation and already retried the upload
-        // once, so retrying the submit is the only action left to suggest.
-        return Err(
-          new UploadExpiredError(
-            `${message}\nThe submission's files expired on the server before the` +
-              ` submission was accepted. Please try again.`,
-            details,
-          ),
-        )
+        return Err(new UploadExpiredError(message, details))
       case "unknown-upload":
-        // Never a race: the backend has no record of a file the CLI named for
-        // this exercise. Surfaced as-is so it is diagnosable rather than retried.
+        // Never a race: the backend has no record of a file the CLI named for this
+        // exercise, so a retry cannot help.
         return Err(new UnknownUploadError(message, details))
       case "invalid-token":
         this._clearBackendCache(auth.backend)
@@ -1855,14 +1826,7 @@ export default class Langs {
         }
         return Err(new AuthorizationError(message, details))
       case "obsolete-client":
-        return Err(
-          new ObsoleteClientError(
-            message +
-              "\nYour TMC Extension is out of date, please update it." +
-              "\nhttps://code.visualstudio.com/docs/editor/extension-gallery",
-            details,
-          ),
-        )
+        return Err(new ObsoleteClientError(message, details))
     }
 
     return Err(new RuntimeError(message, details))

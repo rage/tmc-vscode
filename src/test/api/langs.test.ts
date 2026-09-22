@@ -922,24 +922,17 @@ suite("Langs error-kind mapping", function () {
     stubSpawn(langsMooc, () => Ok(errorOutput("forbidden")))
     const moocResult = await langsMooc.getEnrolledMoocCourses()
     expect(moocResult.val).toBeInstanceOf(InsufficientScopeError)
-    expect((moocResult.val as Error).message).toContain("Log in again")
   })
 
-  test("not-enrolled names the actual backend the failing command targeted", async function () {
-    // Regression guard: the wording used to hardcode "courses.mooc.fi" regardless
-    // of which backend actually produced the error.
-    const langsMooc = newLangs()
-    stubSpawn(langsMooc, () => Ok(errorOutput("not-enrolled")))
-    const moocResult = await langsMooc.getEnrolledMoocCourses()
-    expect(moocResult.val).toBeInstanceOf(NotEnrolledError)
-    expect((moocResult.val as Error).message).toContain("courses.mooc.fi")
-    expect((moocResult.val as Error).message).not.toContain("tmc.mooc.fi")
-
-    const langsTmc = newLangs()
-    stubSpawn(langsTmc, () => Ok(errorOutput("not-enrolled")))
-    const tmcResult = await langsTmc.getTmcOrganizations()
-    expect(tmcResult.val).toBeInstanceOf(NotEnrolledError)
-    expect((tmcResult.val as Error).message).toContain("tmc.mooc.fi")
+  test("an error kind carries the CLI's message and no remediation of its own", async function () {
+    // `presentationFor` owns every user-facing sentence and button, so a second copy
+    // composed here would drift from it and would reach the output channel as prose.
+    for (const kind of ["forbidden", "not-enrolled", "upload-expired", "obsolete-client"]) {
+      const langs = newLangs()
+      stubSpawn(langs, () => Ok(errorOutput(kind, "Failed to get course")))
+      const result = await langs.getEnrolledMoocCourses()
+      expect((result.val as Error).message).toBe("Failed to get course")
+    }
   })
 
   test("a crashed process is reported as an error", async function () {
