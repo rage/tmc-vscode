@@ -1,0 +1,64 @@
+{
+  "$schema": "./node_modules/knip/schema.json",
+  // An export read only inside its own module is over-wide, not dead. Narrowing
+  // those is a far larger cleanup, and reporting them would bury the dead ones.
+  "ignoreExportsUsedInFile": true,
+  // Entry and ignore patterns that stopped matching anything are how this config
+  // rots into a rubber stamp, so they fail it.
+  "treatConfigHintsAsErrors": true,
+  "ignoreIssues": {
+    // Each data_vN module states one storage version's complete shape, members
+    // no current code reads included; VS Code storage can still hold them.
+    "src/storage/data/**": ["exports", "types", "enumMembers"],
+
+    // Dead code this gate found that nothing has deleted yet, suppressed so it
+    // binds on everything else meanwhile. Drop each line, and the
+    // ignoreDependencies below, with the code behind it.
+    "backend/controllers/index.ts": ["exports", "types"],
+    "shared/course.ts": ["exports", "types", "namespaceMembers"],
+    "shared/langsSchema.ts": ["types"],
+    "shared/protocol.ts": ["types"],
+    "src/actions/types.ts": ["types"],
+    "src/api/types.ts": ["types"],
+    "src/commands/showWelcome.ts": ["exports"],
+    "src/config/constants.ts": ["exports", "duplicates"],
+    "webview-ui/src/test/fixtures.ts": ["exports"]
+  },
+  "workspaces": {
+    ".": {
+      // knip's plugins already find the extension host entry, the webview build
+      // and both vitest tiers. These are the ones nothing declares: bin scripts
+      // shell scripts and CI invoke by filename, the build-profile map esbuild
+      // and vitest `require` by path, husky's lint-staged config, and the
+      // `vscode` mock vitest reaches through a resolve alias.
+      "entry": [
+        "src/test/**/*.test.ts",
+        "src/test/support/vscode.cjs",
+        "src/test-integration/**/*.{spec,test}.ts",
+        "bin/*.{js,mjs}",
+        "config.js",
+        ".husky/lint-staged-config.js"
+      ],
+      "project": [
+        "src/**/*.{ts,cjs}",
+        "shared/**/*.ts",
+        "!shared/generated/**",
+        "playwright/**/*.ts",
+        "bin/**/*.{js,mjs}",
+        "*.{ts,mjs,js}",
+        ".husky/*.js"
+      ]
+    },
+    "webview-ui": {
+      // global.ts carries a triple-slash type reference rather than exports, so
+      // nothing imports it; tsconfig's `include` is what pulls it in.
+      "entry": ["src/**/*.test.ts", "src/global.ts"],
+      "project": ["src/**/*.{ts,svelte}", "!src/generated/**", "*.ts"],
+      "ignoreDependencies": ["@tsconfig/svelte", "tslib"]
+    },
+    "backend": {
+      "entry": ["**/*.test.ts"],
+      "project": ["**/*.ts", "!cli/**", "!resources/**"]
+    }
+  }
+}
