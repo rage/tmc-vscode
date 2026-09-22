@@ -151,17 +151,16 @@ suite("updateCourse action (mooc)", function () {
 
     const first = contextWithOwnDialog()
     await updateCourse(first.context, courseId)
-    expect(first.dialog.errorNotification).toHaveBeenCalledWith(
-      expect.stringContaining("no scope"),
+    expect(first.dialog.reportError).toHaveBeenCalledWith(
+      "Failed to update course data.",
       expect.any(InsufficientScopeError),
-      ["Log in", expect.any(Function)],
     )
 
     // updateCourse runs once per course and from a background poll, so a second
     // failure must stay quiet.
     const repeat = contextWithOwnDialog()
     await updateCourse(repeat.context, courseId)
-    expect(repeat.dialog.errorNotification).not.toHaveBeenCalled()
+    expect(repeat.dialog.reportError).not.toHaveBeenCalled()
 
     tmcMockValues.getMoocCourseData = Ok([moocCourse, moocExerciseSlides])
     await updateCourse(actionContext(), courseId)
@@ -169,7 +168,7 @@ suite("updateCourse action (mooc)", function () {
 
     const afterRenewal = contextWithOwnDialog()
     await updateCourse(afterRenewal.context, courseId)
-    expect(afterRenewal.dialog.errorNotification).toHaveBeenCalledTimes(1)
+    expect(afterRenewal.dialog.reportError).toHaveBeenCalledTimes(1)
   })
 
   test("clears a disabled flag an earlier failure persisted", async function () {
