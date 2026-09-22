@@ -51,9 +51,6 @@ function harness(projectsDirectory: string | "none" = OLD_PATH): Harness {
 
 suite("Change TMC data path command", function () {
   beforeEach(function () {
-    // `restoreAllMocks` puts jest-mock-vscode's own persistent spy back, call
-    // history and all, so a count assertion needs the history reset instead.
-    vi.mocked(vscode.window.showOpenDialog).mockReset()
     vi.mocked(actions.moveExtensionDataPath).mockReset()
     vi.spyOn(vscode.window, "showOpenDialog").mockResolvedValue([vscode.Uri.file(CHOSEN_PATH)])
   })

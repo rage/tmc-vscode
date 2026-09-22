@@ -39,6 +39,9 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["src/test/**/*.test.ts"],
+    // jest-mock-vscode's spies are module-level vi.fn()s that restoreAllMocks restores to
+    // rather than clears, so without this their call history leaks between tests.
+    clearMocks: true,
     // A few download/CLI tests spin up loopback servers and hash multi-MB
     // buffers; keep a 20s ceiling.
     testTimeout: 20000,

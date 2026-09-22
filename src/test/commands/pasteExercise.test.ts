@@ -61,7 +61,6 @@ function harness(backend: BackendKind): Harness {
 
 suite("Paste exercise command", function () {
   beforeEach(function () {
-    vi.mocked(actions.pasteExercise).mockClear()
     vi.mocked(actions.pasteExercise).mockImplementation(async (_context, backend) =>
       Ok(`https://pastebin.example/${backend}`),
     )

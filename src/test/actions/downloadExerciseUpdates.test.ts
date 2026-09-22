@@ -39,7 +39,6 @@ function postedLists(): [string, number[]][] {
 
 suite("downloadExerciseUpdates action", function () {
   beforeEach(function () {
-    vi.mocked(postUpdateables).mockClear()
     downloadOrUpdateExercises.mockReset()
   })
 

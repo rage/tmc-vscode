@@ -61,7 +61,6 @@ function harness(
 
 suite("Download new exercises command", function () {
   beforeEach(function () {
-    vi.mocked(actions.downloadNewExercisesForCourse).mockClear()
     vi.mocked(actions.downloadNewExercisesForCourse).mockResolvedValue(Ok.EMPTY)
   })
 

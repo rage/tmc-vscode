@@ -155,9 +155,6 @@ function stubMessage(
     .spyOn(vscode.window, showMethod)
     .mockImplementation((async (_message: string, ...actions: MessageAction[]) =>
       press(actions)) as never)
-  // The shared vscode mock's members are already `vi.fn()`s, so spying returns
-  // the same mock and its calls outlive `restoreAllMocks`.
-  show.mockClear()
   return show
 }
 

@@ -43,7 +43,6 @@ function contextWith(
 
 suite("Test exercise command", function () {
   beforeEach(function () {
-    vi.mocked(actions.testExercise).mockClear()
     vi.mocked(actions.testExercise).mockResolvedValue(Ok.EMPTY)
   })
 

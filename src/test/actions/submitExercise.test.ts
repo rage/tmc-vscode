@@ -176,11 +176,6 @@ function tmcContextWith(submitResult: unknown): {
   return { actionContext, setPassed, submit }
 }
 
-afterEach(() => {
-  vi.mocked(TmcPanel.postMessage).mockClear()
-  vi.mocked(updateCourse).mockClear()
-})
-
 suite("submitExercise action, tmc", () => {
   const passingSubmission = {
     status: "ok",

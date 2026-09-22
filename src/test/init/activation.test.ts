@@ -254,9 +254,7 @@ function resetActivationRecording(): void {
   langsDownload.failure = undefined
   workspaceManagerStub.persistClosedExercises = undefined
   cliSettings.projectsDirectory = tmp.dirSync().name
-  // `restoreAllMocks` restores this spy to jest-mock-vscode's own persistent `vi.fn()`,
-  // whose call history survives the restore -- `mockReset` is what actually clears it.
-  vi.spyOn(vscode.window, "showErrorMessage").mockReset().mockResolvedValue(undefined)
+  vi.spyOn(vscode.window, "showErrorMessage").mockResolvedValue(undefined)
 }
 
 /**
@@ -266,12 +264,7 @@ function resetActivationRecording(): void {
  * the initialization help panel included -- is skipped.
  */
 async function unregisteredCommandsRun(context: vscode.ExtensionContext): Promise<string[]> {
-  // `restoreAllMocks` puts jest-mock-vscode's own persistent `vi.fn()` back with its call
-  // history intact, so reading an exact call list needs the reset.
-  const executeCommand = vi
-    .spyOn(vscode.commands, "executeCommand")
-    .mockReset()
-    .mockResolvedValue(undefined)
+  const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
 
   await activate(context)
 
@@ -287,14 +280,14 @@ async function commandsRegisteredWhenContextSet(
   key: string,
 ): Promise<string[] | undefined> {
   let registered: string[] | undefined
-  vi.spyOn(vscode.commands, "executeCommand")
-    .mockReset()
-    .mockImplementation(async (command: string, ...args: unknown[]) => {
+  vi.spyOn(vscode.commands, "executeCommand").mockImplementation(
+    async (command: string, ...args: unknown[]) => {
       if (command === "setContext" && args[0] === key) {
         registered = [...recorded.registeredCommandIds]
       }
       return undefined
-    })
+    },
+  )
 
   await activate(context)
 

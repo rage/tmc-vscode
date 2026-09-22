@@ -85,10 +85,6 @@ function contextWithTestRun(
 }
 
 suite("testExercise action", () => {
-  beforeEach(() => {
-    vi.mocked(TmcPanel.postMessage).mockClear()
-  })
-
   test("a failed test run survives the webview boundary with its message intact", async () => {
     // The panel reads `error.message`, and the webview bridge serializes the message
     // as JSON -- which drops a live Error's non-enumerable `message`.

@@ -117,10 +117,6 @@ function harness(options: {
 }
 
 suite("Add new course command", function () {
-  beforeEach(function () {
-    vi.mocked(actions.addNewCourse).mockClear()
-  })
-
   test("lists organizations and mooc courses in one pick, each naming its backend", async function () {
     const { context, picks } = harness({ select: [undefined] })
     await addNewCourse(context)
