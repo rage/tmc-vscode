@@ -3,7 +3,7 @@ import { tick } from "svelte"
 
 import type { MoocLoginPanel } from "../shared/shared"
 import { findButton, getButton } from "../test/dom"
-import { postedMessages } from "../test/setup"
+import { dispatchToWebview, postedMessages } from "../test/setup"
 import MoocLogin from "./MoocLogin.svelte"
 
 const panel: MoocLoginPanel = { id: 7, type: "MoocLogin" }
@@ -16,10 +16,6 @@ const deviceCodeMessage = {
   verificationUriComplete: "https://courses.mooc.fi/oauth_device?user_code=WXYZ-1234",
   expiresIn: 900,
   interval: 5,
-}
-
-const dispatch = (data: unknown): void => {
-  window.dispatchEvent(new MessageEvent("message", { data }))
 }
 
 // jsdom ships no Clipboard API, so each test installs the one it needs. Without the
@@ -49,7 +45,7 @@ suite("MoocLogin panel", () => {
 
   test("shows the user code once the device code arrives", async () => {
     render(MoocLogin, { props: { panel } })
-    dispatch(deviceCodeMessage)
+    dispatchToWebview(deviceCodeMessage)
     await waitFor(() => {
       // a real button, so it is reachable by keyboard and activates on Enter/Space only
       expect(screen.getByRole("button", { name: "WXYZ-1234" })).toBeInTheDocument()
@@ -59,7 +55,7 @@ suite("MoocLogin panel", () => {
 
   test("Open in browser opens the complete verification URL", async () => {
     render(MoocLogin, { props: { panel } })
-    dispatch(deviceCodeMessage)
+    dispatchToWebview(deviceCodeMessage)
     const button = await findButton("Open in browser")
     postedMessages.mockClear()
     await fireEvent.click(button)
@@ -71,7 +67,7 @@ suite("MoocLogin panel", () => {
 
   test("Cancel interrupts the login", async () => {
     render(MoocLogin, { props: { panel } })
-    dispatch(deviceCodeMessage)
+    dispatchToWebview(deviceCodeMessage)
     // Wait for the awaiting-state re-render so the Cancel button grabbed below is the live one.
     await screen.findByText("WXYZ-1234")
     const button = getButton("Cancel")
@@ -87,7 +83,7 @@ suite("MoocLogin panel", () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     stubClipboard({ writeText })
     render(MoocLogin, { props: { panel } })
-    dispatch(deviceCodeMessage)
+    dispatchToWebview(deviceCodeMessage)
     const code = await screen.findByText("WXYZ-1234")
     expect(screen.queryByText("Copied to clipboard")).not.toBeInTheDocument()
     await fireEvent.click(code)
@@ -101,7 +97,7 @@ suite("MoocLogin panel", () => {
     const writeText = vi.fn().mockRejectedValue(new Error("denied"))
     stubClipboard({ writeText })
     render(MoocLogin, { props: { panel } })
-    dispatch(deviceCodeMessage)
+    dispatchToWebview(deviceCodeMessage)
     const code = await screen.findByText("WXYZ-1234")
     await fireEvent.click(code)
     await waitFor(() => expect(writeText).toHaveBeenCalled())
@@ -114,7 +110,7 @@ suite("MoocLogin panel", () => {
   test("tells the user to copy manually when the Clipboard API is absent", async () => {
     stubClipboard(undefined)
     render(MoocLogin, { props: { panel } })
-    dispatch(deviceCodeMessage)
+    dispatchToWebview(deviceCodeMessage)
     const code = await screen.findByText("WXYZ-1234")
     await fireEvent.click(code)
     await waitFor(() => {
@@ -129,7 +125,7 @@ suite("MoocLogin panel", () => {
       const writeText = vi.fn().mockResolvedValue(undefined)
       stubClipboard({ writeText })
       render(MoocLogin, { props: { panel } })
-      dispatch(deviceCodeMessage)
+      dispatchToWebview(deviceCodeMessage)
       await tick()
       await fireEvent.click(screen.getByText("WXYZ-1234"))
       await vi.advanceTimersByTimeAsync(0)
@@ -150,7 +146,7 @@ suite("MoocLogin panel", () => {
 
   test("shows the error state on a moocLoginError message", async () => {
     render(MoocLogin, { props: { panel } })
-    dispatch({
+    dispatchToWebview({
       type: "moocLoginError",
       target: { type: "MoocLogin", id: panel.id },
       error: "device flow expired",
