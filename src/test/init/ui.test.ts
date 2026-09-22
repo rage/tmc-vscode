@@ -49,8 +49,9 @@ suite("registerUiActions", function () {
     expect(logOut?.visible).toBe("loggedIn")
   })
 
-  // The tree is the one place a course is labelled, and it shows the title: the slug
-  // belongs to paths, workspace file names and setting keys.
+  // The tree is the one place a course is labelled, and it shows the title (the slug
+  // belongs to paths, workspace file names and setting keys) plus which backend it is
+  // on, the same way every other course picker does.
   test("courses are listed under My Courses by title, on both backends", function () {
     const courses = [
       makeTmcKind({ id: 1, name: "tmc-slug", title: "The Python Course" }),
@@ -62,7 +63,7 @@ suite("registerUiActions", function () {
 
     expect(myCourses?.children?.()).toEqual([
       {
-        label: "The Python Course",
+        label: "The Python Course · TMC Server",
         id: "1",
         command: expect.objectContaining({
           command: "tmc.courseDetails",
@@ -70,7 +71,7 @@ suite("registerUiActions", function () {
         }),
       },
       {
-        label: "Introduction to CS",
+        label: "Introduction to CS · courses.mooc.fi",
         id: "course-uuid",
         command: expect.objectContaining({
           command: "tmc.courseDetails",
