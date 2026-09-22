@@ -4,7 +4,7 @@
   import Button from "../components/Button.svelte"
   import { releaseNotes } from "../generated/releaseNotes"
   import type { WelcomePanel } from "../shared/shared"
-  import { assertUnreachable } from "../shared/shared"
+  import { assertUnreachable, pasteServiceName } from "../shared/shared"
   import { addMessageListener } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
 
@@ -109,8 +109,8 @@
           spam and preventing abuse.
         </p>
         <p>
-          The same applies if you choose to submit your answer to the TMC pastebin for sharing your
-          solution to other students.
+          The same applies if you choose to submit your answer to {pasteServiceName("tmc")} or
+          {pasteServiceName("mooc")} for sharing your solution to other students.
         </p>
         <p>
           When you interact with our server, e.g. log in, download, or submit exercises, we will

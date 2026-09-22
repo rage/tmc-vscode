@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/svelte"
 
 import { releaseNotes } from "../generated/releaseNotes"
 import type { WelcomePanel } from "../shared/shared"
+import { pasteServiceName } from "../shared/shared"
 import { postedMessages } from "../test/setup"
 import Welcome from "./Welcome.svelte"
 
@@ -31,6 +32,14 @@ suite("Welcome panel", () => {
     expect(
       await screen.findByRole("heading", { name: /Welcome to TestMyCode 9.9.9/ }),
     ).toBeInTheDocument()
+  })
+
+  // The notice covers both backends, so it names each paste service through the shared
+  // contract instead of spelling one of them out.
+  test("names both paste services in the data collection notice", () => {
+    render(Welcome, { props: { panel } })
+    const notice = screen.getByText(/The same applies if you choose to submit your answer/)
+    expect(notice).toHaveTextContent(`${pasteServiceName("tmc")} or ${pasteServiceName("mooc")}`)
   })
 
   // What matters is that the panel shows whatever CHANGELOG.md currently says,

@@ -10,7 +10,7 @@
     LocalCourseExercise,
     TargetPanel,
   } from "../shared/shared"
-  import { backendName } from "../shared/shared"
+  import { pasteServiceName } from "../shared/shared"
   import { vscode } from "../utilities/vscode"
   import Button from "./Button.svelte"
 
@@ -28,7 +28,7 @@
 
   let { course, exercise, sourcePanel, pasteUrl, pasteError, onPaste }: Props = $props()
 
-  const pasteService = $derived(`${backendName(course.kind)} paste`)
+  const pasteService = $derived(pasteServiceName(course.kind))
 
   let pasting = $state<boolean>(false)
   let showHelp = $state<boolean>(false)
