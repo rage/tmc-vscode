@@ -18,10 +18,11 @@ import {
   MINIMUM_SUBMISSION_INTERVAL,
   TMC_LANGS_VERSION,
 } from "../config/constants"
-import { AuthorizationError, BottleneckError, RuntimeError } from "../errors"
+import { AuthorizationError, BottleneckError, InvalidTokenError, RuntimeError } from "../errors"
 import type { SubmissionFeedback } from "../shared/langsSchema"
 import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
-import { getLangsCLIForPlatform, getPlatform, semVerCompare } from "../utilities"
+import { getLangsCLIForPlatform, getPlatform } from "../utilities"
+import { probeCli } from "./cliMigrationProbe"
 
 // __dirname is the dist folder when built.
 const PROJECT_ROOT = path.join(__dirname, "..")
@@ -48,19 +49,23 @@ const isString = (object: unknown): object is string => typeof object === "strin
 // Anchored to the first release that will carry the contract rather than to
 // whatever is pinned today, so bumping TMC_LANGS_RUST_VERSION for an unrelated
 // fix cannot silently switch these on.
-const cliSupportsMigrationContract = ((): boolean => {
-  try {
-    const version = cp.execFileSync(CLI_FILE, ["--version"], { encoding: "utf-8" })
-    const cmp = semVerCompare(version, MIGRATION_CONTRACT_VERSION, "patch")
-    return cmp !== undefined && cmp >= 0
-  } catch (error) {
-    console.warn(
-      "Could not determine tmc-langs CLI version; skipping migration-contract tests:",
-      error,
-    )
-    return false
-  }
-})()
+const cliProbe = probeCli(CLI_FILE, MIGRATION_CONTRACT_VERSION)
+if (cliProbe.kind === "broken") {
+  throw new Error(
+    `Could not read a version from the tmc-langs CLI at ${CLI_FILE}: ${cliProbe.cause}`,
+  )
+}
+const cliSupportsMigrationContract = cliProbe.kind === "version" && cliProbe.meetsMinimum
+if (!cliSupportsMigrationContract) {
+  const reason =
+    cliProbe.kind === "absent"
+      ? `no CLI at ${CLI_FILE} (run \`pnpm --dir backend run setup\`)`
+      : `backend/cli reports ${cliProbe.version}, which does not implement the migration contract`
+  console.warn(
+    `Skipping the migration-contract cases: ${reason} (needs >= ${MIGRATION_CONTRACT_VERSION}). ` +
+      "Install a migration-branch build with bin/useLocalLangs.bash to run them.",
+  )
+}
 
 // Use in place of `test` for migration-contract cases: runs on a local build,
 // skips (with the reason logged above) against the released CLI.
@@ -145,6 +150,23 @@ suite("tmc langs cli spec", function () {
 
       const result = await unwrapResult(tmc.isAuthenticated())
       expect(result).to.be.false
+    })
+
+    // The other way a session ends: the backend rejects a stored token instead
+    // of the user asking to log out. The CLI deletes the credential it was
+    // holding, so the extension has to be told the session is gone.
+    //
+    // getCourseDetails stands in for a settings call, which Langs does not
+    // expose; get-course-data would not work here, since its LangsError
+    // wrapping hides the 401 the CLI otherwise turns into invalid-token (see
+    // the comment in "should not get existing api data in general" below).
+    migrationTest("reports a logout when the backend rejects the stored token", async function () {
+      writeCredentials(configDir, "no-longer-accepted")
+
+      const result = await tmc.getCourseDetails(CourseIdentifier.from(1))
+      expect(result.val).to.be.instanceOf(InvalidTokenError)
+      expect(onLoggedOutCalls).to.be.equal(1)
+      expect(fs.existsSync(path.join(configDir, "credentials.json"))).to.be.false
     })
 
     test("should be able to read and change settings", async function () {
@@ -449,17 +471,21 @@ suite("tmc langs cli spec", function () {
     // token for before it makes a request. What the case pins is that none of
     // them quietly succeeds.
     migrationTest("should not get existing api data in general", async function () {
+      // Unlike its siblings below, get-course-data routes through tmc-langs'
+      // get_course_data (crates/tmc-langs/src/lib.rs), whose `#[error(transparent)]`
+      // wrapping loses the client error the CLI otherwise classifies as
+      // not-logged-in -- so this one stays the generic kind.
       const dataResult = await tmc.getTmcCourseData(0)
       expect(dataResult.val).to.be.instanceOf(RuntimeError)
 
       const detailsResult = await tmc.getCourseDetails(CourseIdentifier.from(0))
-      expect(detailsResult.val).to.be.instanceOf(RuntimeError)
+      expect(detailsResult.val).to.be.instanceOf(AuthorizationError)
 
       const coursesResult = await tmc.getCourses("test")
-      expect(coursesResult.val).to.be.instanceOf(RuntimeError)
+      expect(coursesResult.val).to.be.instanceOf(AuthorizationError)
 
       const submissionsResult = await tmc.getTmcOldSubmissions(1)
-      expect(submissionsResult.val).to.be.instanceOf(RuntimeError)
+      expect(submissionsResult.val).to.be.instanceOf(AuthorizationError)
     })
 
     test("should be able to get valid organization data", async function () {
@@ -472,7 +498,7 @@ suite("tmc langs cli spec", function () {
         status: [{ question_id: 0, answer: "42" }],
       }
       const result = await tmc.submitSubmissionFeedback(FEEDBACK_URL, feedback)
-      expect(result.val).to.be.instanceOf(RuntimeError)
+      expect(result.val).to.be.instanceOf(AuthorizationError)
     })
 
     suite("with a local exercise", function () {
@@ -519,12 +545,12 @@ suite("tmc langs cli spec", function () {
 
       migrationTest("should not be able to reset exercise", async function () {
         const result = await tmc.resetExercise(ExerciseIdentifier.from(1), exercisePath, true)
-        expect(result.val).to.be.instanceOf(RuntimeError)
+        expect(result.val).to.be.instanceOf(AuthorizationError)
       })
 
       migrationTest("should not be able to submit exercise", async function () {
         const result = await tmc.submitTmcExerciseAndWaitForResults(1, exercisePath)
-        expect(result.val).to.be.instanceOf(RuntimeError)
+        expect(result.val).to.be.instanceOf(AuthorizationError)
       })
 
       // This actually works
