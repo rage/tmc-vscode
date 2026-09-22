@@ -317,47 +317,47 @@
       "commandPalette": [
         {
           "command": "tmc.addNewCourse",
-          "when": "test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.courseDetails",
-          "when": "test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.downloadNewExercises",
-          "when": "test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.downloadOldSubmission",
-          "when": "test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.logout",
-          "when": "test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.myCourses",
-          "when": "test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.pasteExercise",
-          "when": "test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.resetExercise",
-          "when": "test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.showMoocLogin",
-          "when": "test-my-code:LoggedIn == false"
+          "when": "test-my-code:Initialized && test-my-code:LoggedIn == false"
         },
         {
           "command": "tmc.submitExercise",
-          "when": "test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.updateExercises",
-          "when": "test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.viewInitializationErrorHelp",
@@ -373,15 +373,15 @@
         },
         {
           "command": "tmc.testExercise",
-          "when": "test-my-code:WorkspaceActive"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive"
         },
         {
           "command": "tmc.closeExercise",
-          "when": "test-my-code:WorkspaceActive"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive"
         },
         {
           "command": "tmc.cleanExercise",
-          "when": "test-my-code:WorkspaceActive"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive"
         },
         {
           "command": "tmc.debug",
@@ -406,6 +406,10 @@
         {
           "command": "tmc.selectAction",
           "when": "test-my-code:WorkspaceActive"
+        },
+        {
+          "command": "tmc.showWelcome",
+          "when": "test-my-code:Initialized"
         }
       ],
       "editor/title": [
@@ -417,54 +421,54 @@
         {
           "command": "tmc.testExercise",
           "group": "navigation@0",
-          "when": "resourceScheme == file && test-my-code:WorkspaceActive"
+          "when": "resourceScheme == file && test-my-code:Initialized && test-my-code:WorkspaceActive"
         }
       ],
       "explorer/context": [
         {
           "command": "tmc.cleanExercise",
           "group": "TestMyCode@6",
-          "when": "resourceScheme == file && test-my-code:WorkspaceActive"
+          "when": "resourceScheme == file && test-my-code:Initialized && test-my-code:WorkspaceActive"
         },
         {
           "command": "tmc.closeExercise",
           "group": "TestMyCode@3",
-          "when": "resourceScheme == file && test-my-code:WorkspaceActive"
+          "when": "resourceScheme == file && test-my-code:Initialized && test-my-code:WorkspaceActive"
         },
         {
           "command": "tmc.downloadOldSubmission",
           "group": "TestMyCode@5",
-          "when": "resourceScheme == file && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+          "when": "resourceScheme == file && test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.pasteExercise",
           "group": "TestMyCode@2",
-          "when": "resourceScheme == file && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+          "when": "resourceScheme == file && test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.resetExercise",
           "group": "TestMyCode@4",
-          "when": "resourceScheme == file && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+          "when": "resourceScheme == file && test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.submitExercise",
           "group": "TestMyCode@1",
-          "when": "resourceScheme == file && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+          "when": "resourceScheme == file && test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.testExercise",
           "group": "TestMyCode@0",
-          "when": "resourceScheme == file && test-my-code:WorkspaceActive"
+          "when": "resourceScheme == file && test-my-code:Initialized && test-my-code:WorkspaceActive"
         }
       ],
       "view/title": [
         {
           "command": "tmc.addNewCourse",
-          "when": "view == tmcView && test-my-code:LoggedIn"
+          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn"
         },
         {
           "command": "tmcTreeView.refreshCourses",
-          "when": "view == tmcView && test-my-code:LoggedIn",
+          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn",
           "group": "navigation"
         }
       ]

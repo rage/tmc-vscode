@@ -151,6 +151,23 @@ suite("registerCommands", function () {
     expect(declaredCommands().toSorted()).toEqual(ids.toSorted())
   })
 
+  // Unregistering a command does not take its menu entries away: without a gate the
+  // user picks one and gets "command not found" instead of nothing at all.
+  test("every menu entry a failed activation cannot run is gated on the state", function () {
+    const stillRegistered = new Set(expectedDegradedCommands)
+    const { menus } = packageJson().contributes
+    const ungated = Object.entries(menus).flatMap(([menu, entries]) =>
+      entries
+        .filter((entry) => !stillRegistered.has(entry.command))
+        .filter(
+          (entry) =>
+            entry.when !== "false" && !whenTerms(entry.when).includes("test-my-code:Initialized"),
+        )
+        .map((entry) => `${menu}: ${entry.command}`),
+    )
+    expect(ungated).toEqual([])
+  })
+
   // The device flow is the only login left; nothing may register a TMC
   // username/password login again.
   test("registers no tmc login command", function () {
