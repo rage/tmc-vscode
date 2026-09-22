@@ -13,7 +13,7 @@ import { createMockActionContext } from "../mocks/actionContext"
 // action only needs renderSide (a no-op), postMessage (asserted), and a defined
 // sidePanel so the re-render branch is skipped.
 vi.mock("../../panels/TmcPanel", () => ({
-  randomPanelId: () => 1,
+  nextPanelId: () => 1,
   TmcPanel: {
     renderSide: vi.fn().mockResolvedValue(undefined),
     postMessage: vi.fn(),

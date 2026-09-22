@@ -97,7 +97,7 @@ vi.mock("../../ui/ui", () => ({
 }))
 
 vi.mock("../../panels/TmcPanel", () => ({
-  randomPanelId: () => 1,
+  nextPanelId: () => 1,
   registerWebviewHandlers: () => {},
   TmcPanel: {
     renderMain: (

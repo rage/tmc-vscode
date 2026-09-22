@@ -13,7 +13,7 @@ import {
 } from "../config/constants"
 import type { UserData } from "../config/userdata"
 import { InitializationError } from "../errors"
-import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
+import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
 import type {
   BackendKind,
   CourseIdentifier,
@@ -123,10 +123,10 @@ export async function testExercise(
       onBusy: (message) => dialog.notification(message),
     },
     async () => {
-      const testRunId = randomPanelId()
+      const testRunId = nextPanelId()
       // render panel
       const panel: ExerciseTestsPanel = {
-        id: randomPanelId(),
+        id: nextPanelId(),
         type: "ExerciseTests",
         course: course,
         exercise: courseExercise,
@@ -359,7 +359,7 @@ export async function submitExercise(
     },
     async () => {
       const panel: ExerciseSubmissionPanel = {
-        id: randomPanelId(),
+        id: nextPanelId(),
         type: "ExerciseSubmission",
         course,
         exercise: courseExercise,

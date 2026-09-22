@@ -7,7 +7,7 @@ import type * as vscode from "vscode"
 
 import { ExerciseStatus } from "../api/workspaceManager"
 import { InitializationError } from "../errors"
-import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
+import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { CourseDetailsPanel, CourseIdentifier, ExtensionToWebview } from "../shared/shared"
 import { ExerciseIdentifier, LocalCourseData, LocalCourseExercise, match } from "../shared/shared"
 import { Logger } from "../utilities"
@@ -75,7 +75,7 @@ export async function openExercises(
         "Open course details",
         (): void => {
           const panel: CourseDetailsPanel = {
-            id: randomPanelId(),
+            id: nextPanelId(),
             type: "CourseDetails",
             courseId,
             exerciseStatuses: {

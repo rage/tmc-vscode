@@ -590,7 +590,7 @@ export class TmcPanel {
           }
           case "openCourseDetails": {
             this._renderPanel({
-              id: randomPanelId(),
+              id: nextPanelId(),
               type: "CourseDetails",
               courseId: message.courseId,
               exerciseStatuses: { tmc: {}, mooc: {} },
@@ -619,7 +619,7 @@ export class TmcPanel {
             ) {
               await handlers().removeCourse(actionContext, message.id)
               this._renderPanel({
-                id: randomPanelId(),
+                id: nextPanelId(),
                 type: "MyCourses",
                 courseDeadlines: {},
               })
@@ -656,7 +656,7 @@ export class TmcPanel {
           }
           case "openMyCourses": {
             this._renderPanel({
-              id: randomPanelId(),
+              id: nextPanelId(),
               type: "MyCourses",
               courseDeadlines: {},
             })
@@ -723,7 +723,7 @@ export class TmcPanel {
               Logger.warn("Failed to rescan the local exercises", rescanResult.val)
             }
             this._renderPanel({
-              id: randomPanelId(),
+              id: nextPanelId(),
               type: "CourseDetails",
               courseId,
               exerciseStatuses: { tmc: {}, mooc: {} },
@@ -971,13 +971,13 @@ function assertUnreachable(x: never): never {
   throw new Error(`unreachable ${x}`)
 }
 
-let nextPanelId = 0
+let panelIdCounter = 0
 
 // identifies a panel for the lifetime of the extension host, so a buffered message can be
 // matched against the panel currently rendered
-export function randomPanelId(): number {
-  nextPanelId += 1
-  return nextPanelId
+export function nextPanelId(): number {
+  panelIdCounter += 1
+  return panelIdCounter
 }
 
 function formatError(res: Result<unknown, Error>): { error: string; stack: string } | null {

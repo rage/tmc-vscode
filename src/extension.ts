@@ -29,7 +29,7 @@ import Settings from "./config/settings"
 import { UserData } from "./config/userdata"
 import { EmptyLangsResponseError, FileSystemError, InitializationError, SpawnError } from "./errors"
 import * as init from "./init"
-import { randomPanelId, TmcPanel } from "./panels/TmcPanel"
+import { nextPanelId, TmcPanel } from "./panels/TmcPanel"
 import { createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
 import UI from "./ui/ui"
@@ -416,7 +416,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
 
   if (!initialized) {
     await TmcPanel.renderMain(context.extensionUri, context, actionContext, {
-      id: randomPanelId(),
+      id: nextPanelId(),
       type: "InitializationErrorHelp",
     })
   }

@@ -3,7 +3,7 @@ import * as vscode from "vscode"
 import * as actions from "../actions"
 import type { ActionContext } from "../actions/types"
 import * as commands from "../commands"
-import { randomPanelId, registerWebviewHandlers, TmcPanel } from "../panels/TmcPanel"
+import { nextPanelId, registerWebviewHandlers, TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
 import { Logger } from "../utilities"
 
@@ -88,7 +88,7 @@ export function registerCommands(
     })
     if (courseId) {
       await TmcPanel.renderMain(context.extensionUri, context, actionContext, {
-        id: randomPanelId(),
+        id: nextPanelId(),
         type: "CourseDetails",
         courseId,
         exerciseStatuses: { tmc: {}, mooc: {} },
@@ -106,7 +106,7 @@ export function registerCommands(
 
   register("tmc.myCourses", async () => {
     await TmcPanel.renderMain(context.extensionUri, context, actionContext, {
-      id: randomPanelId(),
+      id: nextPanelId(),
       type: "MyCourses",
       courseDeadlines: {},
     })
@@ -142,7 +142,7 @@ export function registerCommands(
 
   register("tmc.showWelcome", async () => {
     await TmcPanel.renderMain(context.extensionUri, context, actionContext, {
-      id: randomPanelId(),
+      id: nextPanelId(),
       type: "Welcome",
     })
   })
@@ -150,7 +150,7 @@ export function registerCommands(
   // The extension's only login: the courses.mooc.fi device flow.
   register("tmc.showMoocLogin", async () => {
     await TmcPanel.renderSide(context.extensionUri, context, actionContext, {
-      id: randomPanelId(),
+      id: nextPanelId(),
       type: "MoocLogin",
     })
   })
@@ -183,7 +183,7 @@ export function registerCommands(
 
   register("tmc.viewInitializationErrorHelp", async () => {
     await TmcPanel.renderMain(context.extensionUri, context, actionContext, {
-      id: randomPanelId(),
+      id: nextPanelId(),
       type: "InitializationErrorHelp",
     })
   })
