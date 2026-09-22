@@ -77,10 +77,6 @@ export type PanelType =
 // panel that started the run, not to another one that happens to be open
 export type TargetPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"] }>, "id" | "type">
 
-// used to define messages that should be sent to any instance of a given panel type
-// for example, a change in an exercise's status should be sent to all panels that display the status
-export type BroadcastPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"] }>, "type">
-
 /**
  * Addresses `panel` without carrying its state along.
  *
@@ -100,7 +96,7 @@ export function targetPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
   })
 }
 
-// schema equivalent of `BroadcastPanel<T>` for the given panel type(s)
+// schema equivalent of a broadcast target (no id) for the given panel type(s)
 export function broadcastPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
   return z.object({
     type: z.literal(types),
@@ -413,9 +409,6 @@ export type ExtensionToWebview =
 // helper type for messages from the extension to a specific panel
 export type TargetedExtensionToWebview<T extends PanelType> = Targeted<ExtensionToWebview, T>
 
-// helper type for messages from the extension to a specific panel type
-export type BroadcastExtensionToWebview<T extends PanelType> = Broadcast<ExtensionToWebview, T>
-
 /**
  * For use with `vscode.postMessage` in the Svelte app.
  * Handled by the extension host in `TmcPanel`.
@@ -545,5 +538,3 @@ export type Targeted<M, T extends PanelType> = Exclude<
   M,
   { target: { type: Exclude<PanelType, T> } }
 >
-
-export type Broadcast<M, T extends PanelType> = Omit<Targeted<M, T>, "target">

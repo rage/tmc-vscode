@@ -94,17 +94,6 @@ export namespace LocalCourseExercise {
     )
   }
 
-  // oxlint-disable-next-line no-shadow -- deliberate qualified-name reuse (LocalCourseExercise.unwrap)
-  export function unwrap(
-    lce: LocalCourseExercise,
-  ): SharedTmcCourseExercise | SharedMoocCourseExercise {
-    return match(
-      lce,
-      (tmc) => tmc,
-      (mooc) => mooc,
-    )
-  }
-
   export function getId(lce: LocalCourseExercise): ExerciseIdentifier {
     const id = match(
       lce,
@@ -171,18 +160,6 @@ export namespace LocalCourseData {
   }
 }
 
-export function getCourseExercises(
-  course: LocalCourseData,
-): Enum<SharedTmcCourseExercise[], SharedMoocCourseExercise[]> {
-  // TS can't infer the return type without an intermediate variable
-  const ret = match(
-    course,
-    (tmc) => makeTmcKind(tmc.exercises),
-    (mooc) => makeMoocKind(mooc.exercises),
-  )
-  return ret
-}
-
 export const ExerciseStatusSchema = z.enum([
   "closed",
   "downloading",
@@ -204,8 +181,6 @@ export const ExerciseSchema = z.object({
   passed: z.boolean(),
 })
 
-export type Exercise = z.infer<typeof ExerciseSchema>
-
 export const ExerciseGroupSchema = z.object({
   name: z.string(),
   exercises: z.array(ExerciseSchema),
@@ -213,17 +188,6 @@ export const ExerciseGroupSchema = z.object({
 })
 
 export type ExerciseGroup = z.infer<typeof ExerciseGroupSchema>
-
-export interface TestExercise {
-  id: number
-  availablePoints: number
-  awardedPoints: number
-  /// Equivalent to exercise slug
-  name: string
-  deadline: string | null
-  passed: boolean
-  softDeadline: string | null
-}
 
 export const TestResultDataSchema = z.object({
   testResult: RunResult,
@@ -240,21 +204,6 @@ export const TestResultDataSchema = z.object({
 })
 
 export type TestResultData = z.infer<typeof TestResultDataSchema>
-
-export interface TestCourse {
-  id: CourseIdentifier
-  name: string
-  title: string
-  description: string
-  organization: string
-  availablePoints: number
-  awardedPoints: number
-  perhapsExamMode: boolean
-  newExercises: number[]
-  notifyAfter: number
-  disabled: boolean
-  materialUrl: string | null
-}
 
 export const FeedbackQuestionSchema = z.object({
   id: z.number(),

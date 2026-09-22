@@ -18,7 +18,6 @@ import { makeMoocKind, makeTmcKind } from "../shared/shared"
 
 // valid v4 UUIDs (version nibble 4, variant nibble 8-b); mooc ids validate as `z.uuid()`
 export const MOOC_INSTANCE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
-export const MOOC_COURSE_ID = "bbbbbbbb-bbbb-4bbb-9bbb-bbbbbbbbbbbb"
 export const MOOC_EXERCISE_ID = "cccccccc-cccc-4ccc-accc-cccccccccccc"
 
 export function tmcCourseData(overrides: Partial<SharedTmcCourseData> = {}): SharedTmcCourseData {
