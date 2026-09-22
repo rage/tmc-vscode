@@ -389,8 +389,7 @@ suite("activation with usable storage", function () {
   })
 })
 
-// The one failure that leaves the workspace files and the stored data intact, so
-// everything downstream of the CLI degrades while everything beside it does not.
+// The only failure reachable here that leaves the resources and the stored data intact.
 suite("activation without the CLI", function () {
   beforeEach(function () {
     resetActivationRecording()

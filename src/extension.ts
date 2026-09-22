@@ -68,7 +68,7 @@ function makeInitializationErrorReporter(
   }
 }
 
-/** Those of these services that failed, keyed by name. */
+/** The failed ones among these services, keyed by name. */
 function startupFailures(services: Record<string, Result<unknown, Error>>): Record<string, Error> {
   return Object.fromEntries(
     Object.entries(services).flatMap(([service, result]) =>

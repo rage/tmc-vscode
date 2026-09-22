@@ -41,8 +41,7 @@ const expectedCommands = [
   "tmc.viewInitializationErrorHelp",
 ]
 
-// The subset that reaches none of the services an activation may fail to build, and so
-// stays usable when it did. Everything else is unreachable in that state by design.
+// Of those, the ones that reach no service, so a failed activation can still offer them.
 const expectedDegradedCommands = [
   "tmcView.activateEntry",
   "tmc.settings",
@@ -130,8 +129,6 @@ suite("registerCommands", function () {
     expect(ids.toSorted()).toEqual(expectedCommands.toSorted())
   })
 
-  // Fifteen commands that log and return are worse than commands that are not there,
-  // and the recovery entries are what the user is left to work with.
   test("a failed activation registers only the commands it can still run", function () {
     const { ids } = registerAndCollect(createDegradedContext())
     expect(ids.toSorted()).toEqual(expectedDegradedCommands.toSorted())
