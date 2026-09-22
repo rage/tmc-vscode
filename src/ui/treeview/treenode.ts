@@ -13,6 +13,7 @@ export class TmcTreeNode extends vscode.TreeItem {
     contextValue?: string,
     collapsibleState?: vscode.TreeItemCollapsibleState,
     iconId?: string,
+    description?: string,
   ) {
     super(label, collapsibleState)
     this.id = id
@@ -21,6 +22,9 @@ export class TmcTreeNode extends vscode.TreeItem {
     }
     if (iconId !== undefined) {
       this.iconPath = new vscode.ThemeIcon(iconId)
+    }
+    if (description !== undefined) {
+      this.description = description
     }
     this.command = command
   }

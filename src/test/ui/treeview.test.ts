@@ -83,6 +83,20 @@ suite("TmcMenuTree", function () {
     expect((rendered?.iconPath as vscode.ThemeIcon | undefined)?.id).toBe("book")
   })
 
+  test("a child's description is rendered dimmed beside its own label, not folded into it", async function () {
+    tree.registerAction({
+      ...leaf("myCourses"),
+      children: () => [
+        { label: "Introduction to CS", id: "course-uuid", command, description: "courses.mooc.fi" },
+      ],
+    })
+    const [myCourses] = (await dataProvider.getChildren()) ?? []
+    const [rendered] = (await dataProvider.getChildren(myCourses)) ?? []
+
+    expect(rendered?.label).toBe("Introduction to CS")
+    expect(rendered?.description).toBe("courses.mooc.fi")
+  })
+
   test("disposing releases the view and stops further refresh events", function () {
     const refreshed: unknown[] = []
     dataProvider.onDidChangeTreeData?.((node) => refreshed.push(node))

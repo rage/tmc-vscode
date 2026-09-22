@@ -7,6 +7,8 @@ export interface TreeEntryChild {
   label: string
   id: string
   command: vscode.Command
+  /** Rendered dimmed, beside the label. */
+  description?: string | undefined
 }
 
 /**
@@ -115,7 +117,18 @@ export class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeN
       }
       const children = parent.children?.() ?? []
       return Promise.resolve(
-        children.map((child) => new TmcTreeNode(child.label, child.id, child.command, "child")),
+        children.map(
+          (child) =>
+            new TmcTreeNode(
+              child.label,
+              child.id,
+              child.command,
+              "child",
+              undefined,
+              undefined,
+              child.description,
+            ),
+        ),
       )
     }
     const roots = [...this._entries.values()]

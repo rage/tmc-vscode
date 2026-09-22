@@ -75,7 +75,8 @@ suite("registerUiActions", function () {
 
     expect(myCourses?.children?.()).toEqual([
       {
-        label: "The Python Course · TMC Server",
+        label: "The Python Course",
+        description: "TMC Server",
         id: "1",
         command: expect.objectContaining({
           command: "tmc.courseDetails",
@@ -83,7 +84,8 @@ suite("registerUiActions", function () {
         }),
       },
       {
-        label: "Introduction to CS · courses.mooc.fi",
+        label: "Introduction to CS",
+        description: "courses.mooc.fi",
         id: "course-uuid",
         command: expect.objectContaining({
           command: "tmc.courseDetails",
