@@ -20,7 +20,7 @@ import type { ReadyActionContext } from "./types"
 const UNDER_8GB_RAM = os.totalmem() < 8 * 1024 ** 3
 
 /**
- * Opens given exercises, showing them in TMC workspace.
+ * Opens given exercises, showing them in the course workspace.
  * @param exerciseIdsToOpen Array of exercise IDs
  */
 export async function openExercises(
@@ -177,7 +177,7 @@ export async function downloadAndOpenExercises(
 }
 
 /**
- * Closes given exercises, hiding them from TMC workspace.
+ * Closes given exercises, hiding them from the course workspace.
  * @param ids Array of exercise IDs
  */
 export async function closeExercises(

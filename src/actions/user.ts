@@ -655,10 +655,10 @@ export async function openWorkspace(
   const { resources, workspaceManager } = actionContext.startup
 
   const currentWorkspaceFile = vscode.workspace.workspaceFile
-  const tmcWorkspaceFile = resources.getWorkspaceFilePath(name, backend)
-  const workspaceAsUri = vscode.Uri.file(tmcWorkspaceFile)
+  const workspaceFile = resources.getWorkspaceFilePath(name, backend)
+  const workspaceAsUri = vscode.Uri.file(workspaceFile)
   Logger.info(`Current workspace: ${currentWorkspaceFile?.fsPath}`)
-  Logger.info(`${backendName(backend)} workspace: ${tmcWorkspaceFile}`)
+  Logger.info(`${backendName(backend)} workspace: ${workspaceFile}`)
 
   // `vscode.openFolder` reloads the window even for the workspace already open,
   // discarding unsaved editors, so only focus the explorer in that case.
