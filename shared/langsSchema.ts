@@ -62,15 +62,6 @@ export interface SubmissionFeedbackAnswer {
   answer: string
 }
 
-/** The format for all status updates. May contain some data. */
-export interface StatusUpdate<T> {
-  finished: boolean
-  message: string
-  "percent-done": number
-  time: number
-  data: T | null
-}
-
 /**
  * The released CLI that `TMC_LANGS_RUST_VERSION` pins reports a partially failed
  * tmc batch download as a structured `{ "failed-exercise-download": ... }` error
