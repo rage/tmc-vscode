@@ -1,18 +1,9 @@
-import * as _ from "lodash"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-/**
- * -------------------------------------------------------------------------------------------------
- * Group of actions that respond to the user.
- * -------------------------------------------------------------------------------------------------
- */
 import type Langs from "../api/langs"
-import type {
-  WorkspaceExercise,
-  WorkspaceExercise as WorkspaceTmcExercise,
-} from "../api/workspaceManager"
+import type { WorkspaceExercise } from "../api/workspaceManager"
 import {
   CLI_PROCESS_TIMEOUT,
   closedExercisesSettingKey,
@@ -24,6 +15,7 @@ import type { UserData } from "../config/userdata"
 import { InitializationError } from "../errors"
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
 import type {
+  BackendKind,
   CourseIdentifier,
   ExerciseIdentifier,
   ExerciseSubmissionPanel,
@@ -40,7 +32,7 @@ import {
   panelTarget,
   toWebviewError,
 } from "../shared/shared"
-import { Logger, parseFeedbackQuestion, runSingleFlight } from "../utilities/"
+import { Logger, parseFeedbackQuestion, runSingleFlight } from "../utilities"
 import { getActiveEditorExecutablePath } from "../window"
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse"
 import { refreshLocalExercises } from "./refreshLocalExercises"
@@ -78,14 +70,11 @@ export async function logout(actionContext: ActionContext): Promise<Result<void,
 
   const result = await safeDeauthenticate(() => langs.val.deauthenticate())
   if (result.err) {
-    dialog.errorNotification(`Failed to log out: ${result.val.message}`, result.val)
+    dialog.reportError(`Failed to log out of ${backendName("tmc")}.`, result.val, "tmc")
   }
   const moocResult = await safeDeauthenticate(() => langs.val.deauthenticateMooc())
   if (moocResult.err) {
-    dialog.errorNotification(
-      `Failed to log out of courses.mooc.fi: ${moocResult.val.message}`,
-      moocResult.val,
-    )
+    dialog.reportError(`Failed to log out of ${backendName("mooc")}.`, moocResult.val, "mooc")
   }
 
   if (result.err) {
@@ -103,7 +92,7 @@ export async function logout(actionContext: ActionContext): Promise<Result<void,
 export async function testExercise(
   context: vscode.ExtensionContext,
   actionContext: ActionContext,
-  exercise: WorkspaceTmcExercise,
+  exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
   const { dialog, langs, userData } = actionContext
   if (!(langs.ok && userData.ok)) {
@@ -305,7 +294,7 @@ function moocSubmitter(langs: Langs, exerciseId: string): ExerciseSubmitter {
  */
 function submitterFor(
   langs: Langs,
-  backend: "tmc" | "mooc",
+  backend: BackendKind,
   exerciseId: ExerciseIdentifier,
 ): ExerciseSubmitter | undefined {
   return match(
@@ -395,7 +384,11 @@ export async function submitExercise(
           exercise.exerciseSlug,
         )
         if (passedResult.err) {
-          dialog.errorNotification("Failed to record the exercise as passed.", passedResult.val)
+          dialog.reportError(
+            "Failed to record the exercise as passed.",
+            passedResult.val,
+            exercise.backend,
+          )
         } else {
           exerciseDecorationProvider.val.updateDecorationsForExercises(exercise)
         }
@@ -432,7 +425,7 @@ type ExercisePaster = (exercisePath: string) => Promise<Result<string, Error>>
 function pasterFor(
   langs: Langs,
   userData: UserData,
-  backend: "tmc" | "mooc",
+  backend: BackendKind,
   courseSlug: string,
   exerciseName: string,
 ): ExercisePaster | undefined {
@@ -459,7 +452,7 @@ function pasterFor(
  */
 async function pasteExercise(
   actionContext: ActionContext,
-  backend: "tmc" | "mooc",
+  backend: BackendKind,
   courseSlug: string,
   exerciseName: string,
 ): Promise<Result<string, Error>> {
@@ -582,9 +575,10 @@ export async function checkForCourseUpdates(
     const id = LocalCourseData.getCourseId(course)
     const downloadResult = await downloadNewExercisesForCourse(actionContext, id)
     if (downloadResult.err) {
-      dialog.errorNotification(
+      dialog.reportError(
         "Failed to download new exercises for the course.",
         downloadResult.val,
+        course.kind,
       )
     }
   }
@@ -609,7 +603,7 @@ export async function checkForCourseUpdates(
               Date.now() + NOTIFICATION_DELAY,
             )
             if (result.err) {
-              dialog.errorNotification("Failed to postpone the reminder.", result.val)
+              dialog.reportError("Failed to postpone the reminder.", result.val, course.kind)
             }
           },
         ],
@@ -618,7 +612,7 @@ export async function checkForCourseUpdates(
           async (): Promise<void> => {
             const result = await userData.val.clearFromNewExercises(id)
             if (result.err) {
-              dialog.errorNotification("Failed to dismiss the new exercises.", result.val)
+              dialog.reportError("Failed to dismiss the new exercises.", result.val, course.kind)
             }
           },
         ],
@@ -670,7 +664,7 @@ export async function refreshEverything(
         if (silent) {
           Logger.warn("Failed to check for course updates.", refreshed.val)
         } else {
-          dialog.errorNotification("Failed to check for course updates.", refreshed.val)
+          dialog.reportError("Failed to check for course updates.", refreshed.val, courseId?.kind)
         }
       }
       // Through the command, so `actions` doesn't have to import `commands`.
@@ -681,12 +675,13 @@ export async function refreshEverything(
 }
 
 /**
- * Opens the TMC workspace in explorer. If a workspace is already opened, asks user first.
+ * Opens `backend`'s course workspace in explorer. If a workspace is already open,
+ * asks the user first.
  */
 export async function openWorkspace(
   actionContext: ActionContext,
   name: string,
-  backend: "tmc" | "mooc",
+  backend: BackendKind,
 ): Promise<void> {
   const { dialog, resources, workspaceManager } = actionContext
   if (!(resources.ok && workspaceManager.ok)) {
@@ -698,7 +693,7 @@ export async function openWorkspace(
   const tmcWorkspaceFile = resources.val.getWorkspaceFilePath(name, backend)
   const workspaceAsUri = vscode.Uri.file(tmcWorkspaceFile)
   Logger.info(`Current workspace: ${currentWorkspaceFile?.fsPath}`)
-  Logger.info(`TMC workspace: ${tmcWorkspaceFile}`)
+  Logger.info(`${backendName(backend)} workspace: ${tmcWorkspaceFile}`)
 
   // `vscode.openFolder` reloads the window even for the workspace already open,
   // discarding unsaved editors, so only focus the explorer in that case.
@@ -715,7 +710,9 @@ export async function openWorkspace(
 
   if (
     !currentWorkspaceFile ||
-    (await dialog.confirmation("Do you want to open TMC workspace and close the current one?"))
+    (await dialog.confirmation(
+      `Do you want to open the ${backendName(backend)} workspace and close the current one?`,
+    ))
   ) {
     await openCourseWorkspace()
   } else {
@@ -746,7 +743,7 @@ export async function removeCourse(
 
   const courseResult = userData.val.getCourse(id)
   if (courseResult.err) {
-    dialog.errorNotification("Failed to remove the course.", courseResult.val)
+    dialog.reportError("Failed to remove the course.", courseResult.val, id.kind)
     return
   }
   const course = courseResult.val
@@ -757,9 +754,10 @@ export async function removeCourse(
     closedExercisesSettingKey(course.kind, courseName),
   )
   if (unsetResult.err) {
-    dialog.errorNotification(
+    dialog.reportError(
       `Failed to remove TMC-langs data for "${courseName}".`,
       unsetResult.val,
+      course.kind,
     )
   }
 
@@ -770,17 +768,19 @@ export async function removeCourse(
     course.kind,
   )
   if (workspaceFileResult.err) {
-    dialog.errorNotification(
+    dialog.reportError(
       `Failed to remove the workspace file for "${courseName}".`,
       workspaceFileResult.val,
+      course.kind,
     )
   }
 
   const deleteResult = await userData.val.deleteCourse(id)
   if (deleteResult.err) {
-    dialog.errorNotification(
+    dialog.reportError(
       `Failed to remove "${courseName}" from your courses.`,
       deleteResult.val,
+      course.kind,
     )
     return
   }

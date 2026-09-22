@@ -110,7 +110,7 @@ suite("paste actions", () => {
 
     expect(result.err).toBe(true)
     expect(result.val).toBe(error)
-    expect(actionContext.dialog.errorNotification).not.toHaveBeenCalled()
+    expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
   })
 
   test("an empty paste link from the server is its own error case", async () => {
@@ -120,6 +120,6 @@ suite("paste actions", () => {
 
     expect(result.err).toBe(true)
     expect((result.val as Error).message).toContain("did not answer with a paste link")
-    expect(actionContext.dialog.errorNotification).not.toHaveBeenCalled()
+    expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
   })
 })
