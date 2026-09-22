@@ -1,7 +1,18 @@
-//@ts-check
+/** A platform/arch pair tmc-langs-cli publishes a build for. */
+export type SupportedPlatform =
+  | "linux32"
+  | "linux64"
+  | "linuxarm"
+  | "linuxarm64"
+  | "macos64"
+  | "macosarm64"
+  | "windows32"
+  | "windows64"
 
-/**@type {import("./env").SupportedPlatform[]} */
-const allPlatforms = [
+/** A build target, or `"unsupported"` when no build exists for the running process. */
+export type Platform = SupportedPlatform | "unsupported"
+
+const allPlatforms: SupportedPlatform[] = [
   "linux32",
   "linux64",
   "linuxarm",
@@ -12,13 +23,13 @@ const allPlatforms = [
   "windows64",
 ]
 
-/**@type {import("./env").getAllLangsCLIs} */
-function getAllLangsCLIs(version) {
+/** Filenames of every published build, for the release-time existence check. */
+export function getAllLangsCLIs(version: string): string[] {
   return allPlatforms.map((x) => getLangsCLIForPlatform(x, version))
 }
 
-/**@type {import("./env").getPlatform} */
-function getPlatform() {
+/** The build target for the running process, or `"unsupported"`. */
+export function getPlatform(): Platform {
   const platform = process.platform
   const arch = process.arch
   if (platform === "linux") {
@@ -46,8 +57,13 @@ function getPlatform() {
   return "unsupported"
 }
 
-/**@type {import("./env").getLangsCLIForPlatform} */
-function getLangsCLIForPlatform(platform, version) {
+/**
+ * Filename of the tmc-langs-cli build for `platform`.
+ *
+ * Throws on `"unsupported"`: there is no binary to fall back to, and guessing one
+ * costs the user a 51 MB download that cannot run. Narrow the platform first.
+ */
+export function getLangsCLIForPlatform(platform: Platform, version: string): string {
   switch (platform) {
     case "linux32":
       return `tmc-langs-cli-i686-unknown-linux-gnu-${version}`
@@ -69,5 +85,3 @@ function getLangsCLIForPlatform(platform, version) {
       throw new Error(`No tmc-langs-cli build for ${process.platform}/${process.arch}`)
   }
 }
-
-module.exports = { getAllLangsCLIs, getLangsCLIForPlatform, getPlatform }
