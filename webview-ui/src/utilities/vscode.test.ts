@@ -28,6 +28,7 @@ suite("the webview's postMessage", () => {
     // `z.custom`), so the object posted must be the caller's own.
     const message: WebviewToExtension = {
       type: "requestMyCoursesData",
+      requestId: 1,
       sourcePanel: { id: 3, type: "MyCourses", courseDeadlines: {} },
     }
     vscode.postMessage(message)

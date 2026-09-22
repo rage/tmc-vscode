@@ -8,6 +8,15 @@ interface MoocKind {
   kind: "mooc"
 }
 
+/**
+ * Which of the two backends something belongs to.
+ *
+ * This is the bare tag, for values that name a backend without carrying per-backend data.
+ * Anything that does carry per-backend data is an {@link Enum} instead, whose `kind` uses
+ * the same two spellings.
+ */
+export type BackendKind = "tmc" | "mooc"
+
 export type Enum<Tmc, Mooc> = { kind: "tmc"; data: Tmc } | { kind: "mooc"; data: Mooc }
 
 // schema equivalent of the `Enum<Tmc, Mooc>` tagged union
@@ -130,7 +139,7 @@ export function match<A, B, C, D>(data: Enum<A, B>, tmc: (x: A) => C, mooc: (x: 
   }
 }
 
-export function matchBackend<A extends { backend: "tmc" | "mooc" }, B, C>(
+export function matchBackend<A extends { backend: BackendKind }, B, C>(
   data: A,
   tmc: (x: A) => B,
   mooc: (x: A) => C,
@@ -158,7 +167,7 @@ export function matchBackend<A extends { backend: "tmc" | "mooc" }, B, C>(
  * Backend base URLs follow the same rule and come from the `__TMC_BACKEND_URL__`
  * and `__MOOC_BACKEND_URL__` build defines in `config.js`, never from a literal.
  */
-export function backendName(kind: "tmc" | "mooc"): string {
+export function backendName(kind: BackendKind): string {
   return kind === "tmc" ? "TMC Server" : "courses.mooc.fi"
 }
 
@@ -166,7 +175,7 @@ export function backendName(kind: "tmc" | "mooc"): string {
  * The name to show the user for a backend's paste service, where an exercise can be shared
  * for help. Derived from {@link backendName} so the two never disagree.
  */
-export function pasteServiceName(kind: "tmc" | "mooc"): string {
+export function pasteServiceName(kind: BackendKind): string {
   return `${backendName(kind)} paste`
 }
 

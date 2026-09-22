@@ -172,23 +172,6 @@ export function formatSizeInBytes(size: number, precision = 3): string {
   return `${cSize.toPrecision(targetPrecision)} ${suffix}`
 }
 
-/**
- * Return bootstrap striped, animated progress bar div as string
- * @param percentDone How much done of the progress
- */
-export function getProgressBar(percentDone: number): string {
-  return `<div class="progress">
-        <div
-            class="progress-bar progress-bar-striped progress-bar-animated"
-            role="progressbar"
-            aria-valuenow="${percentDone}"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            style="width: ${percentDone}%"
-        ></div>
-    </div>`
-}
-
 export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): FeedbackQuestion[] {
   const feedbackQuestions: FeedbackQuestion[] = []
   questions.forEach((x) => {
@@ -211,37 +194,6 @@ export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): 
     }
   })
   return feedbackQuestions
-}
-
-export function parseTestResultsText(value: string): string {
-  return value
-    .replaceAll("\\", "\\\\")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;")
-    .replaceAll("`", "&#96;")
-}
-
-/**
- * Tries to remove old data if extension restarted within 10 minutes of moving TMC Data and
- * receiving error that some data could not be removed and has to be removed manually.
- * @param oldDataObject
- */
-export async function removeOldData(oldDataObject: {
-  path: string
-  timestamp: number
-}): Promise<Result<string, Error>> {
-  if (oldDataObject.timestamp + 10 * 60 * 1000 > Date.now()) {
-    try {
-      fs.removeSync(oldDataObject.path)
-    } catch (_err) {
-      return new Err(new Error(`Still failed to remove data from ${oldDataObject.path}`))
-    }
-    return new Ok(`Removed successfully from ${oldDataObject.path}`)
-  }
-  return new Ok(`Time exceeded, will not remove data from ${oldDataObject.path}`)
 }
 
 export function cliFolder(context: ExtensionContext): string {

@@ -9,6 +9,7 @@ import type { ActionContext } from "../actions/types"
 import type Dialog from "../api/dialog"
 import { ConnectionError, InitializationError } from "../errors"
 import type {
+  BackendKind,
   CourseDetailsPanel,
   CourseIdentifier,
   ExerciseGroup,
@@ -19,6 +20,7 @@ import type {
   Panel,
   TargetPanel,
   WebviewToExtension,
+  WelcomePanel,
 } from "../shared/shared"
 import {
   LocalCourseData,
@@ -68,7 +70,7 @@ export interface WebviewHandlers {
   openWorkspace: (
     actionContext: ActionContext,
     courseName: string,
-    backend: "tmc" | "mooc",
+    backend: BackendKind,
   ) => Promise<void>
   pasteMoocExercise: (
     actionContext: ActionContext,
@@ -108,6 +110,11 @@ function handlers(): WebviewHandlers {
   return registeredHandlers
 }
 
+type PanelDataTarget =
+  | TargetPanel<WelcomePanel>
+  | TargetPanel<MyCoursesPanel>
+  | TargetPanel<CourseDetailsPanel>
+
 /**
  * Manages the rendering of the extension webview panels.
  */
@@ -137,7 +144,7 @@ export class TmcPanel {
   private _isDisposed = false
 
   // sends a message to the main and side panels
-  public static async postMessage(...messages: ExtensionToWebview[]): Promise<void> {
+  public static postMessage(...messages: ExtensionToWebview[]): void {
     for (const message of messages) {
       TmcPanel.mainPanel?._postMessage(message)
       TmcPanel.sidePanel?._postMessage(message)
@@ -160,23 +167,42 @@ export class TmcPanel {
     // delta messages that use one (setUpdateables, setNewExercises) are posted once
     // per course, so they would all collapse onto one key and only the last would
     // survive; those are restored from the extension's own state instead.
-    if ("id" in message.target && message.target.id === this._lastPanel?.id) {
+    // `panelDataResult` is left out on top of that: the reloaded webview asks again and
+    // its request ids restart from the beginning, so a replayed answer could settle a
+    // request it does not belong to.
+    if (
+      message.type !== "panelDataResult" &&
+      "id" in message.target &&
+      message.target.id === this._lastPanel?.id
+    ) {
       this._messageBuffer.set(`${message.target.id}:${message.type}`, message)
     }
     postMessageToWebview(this._panel.webview, message, this._webviewName)
   }
 
   /**
-   * Tells a panel waiting on data that it is not coming, so it stops waiting.
+   * Tells the panel that asked for `requestId` that its data has been sent.
    *
-   * Every early return from a `request*Data` handler needs this: the panel has no
-   * timeout and would otherwise show its spinner for the rest of the session.
+   * Goes out after the messages the panel needs to render, not before. Whatever a handler
+   * still has in flight by then only refines what the panel is already showing.
    */
-  private _postPanelDataError(
-    target: TargetPanel<CourseDetailsPanel> | TargetPanel<MyCoursesPanel>,
-    error: unknown,
-  ): void {
-    this._postMessage({ type: "panelDataError", target, error: toWebviewError(error) })
+  private _postPanelDataSent(target: PanelDataTarget, requestId: number): void {
+    this._postMessage({ type: "panelDataResult", target, requestId })
+  }
+
+  /**
+   * Tells the panel that asked for `requestId` that its data is not coming.
+   *
+   * Every path out of a `request*Data` handler needs one of these two: a request the
+   * panel never sees answered only stops on the panel's own timeout, seconds later.
+   */
+  private _postPanelDataFailed(target: PanelDataTarget, requestId: number, error: unknown): void {
+    this._postMessage({
+      type: "panelDataResult",
+      target,
+      requestId,
+      error: toWebviewError(error),
+    })
   }
 
   // renders the `panel` in the main panel
@@ -188,7 +214,7 @@ export class TmcPanel {
   ): Promise<void> {
     if (TmcPanel.mainPanel !== undefined) {
       Logger.info(`Revealing existing main panel for "${panel.type}"`)
-      await TmcPanel.mainPanel._renderPanel(panel)
+      TmcPanel.mainPanel._renderPanel(panel)
       TmcPanel.mainPanel._panel.reveal(ViewColumn.One, false)
     } else {
       TmcPanel.mainPanel = await TmcPanel.renderNew(
@@ -217,7 +243,7 @@ export class TmcPanel {
     }
     if (TmcPanel.sidePanel !== undefined) {
       Logger.info(`Revealing existing side panel for "${panel.type}"`)
-      await TmcPanel.sidePanel._renderPanel(panel)
+      TmcPanel.sidePanel._renderPanel(panel)
       TmcPanel.sidePanel._panel.reveal(column, false)
     } else {
       const currentPanel = await TmcPanel.renderNew(
@@ -263,7 +289,7 @@ export class TmcPanel {
       actionContext,
       isMain,
     )
-    await currentPanel._renderPanel(panel)
+    currentPanel._renderPanel(panel)
     return currentPanel
   }
 
@@ -312,10 +338,10 @@ export class TmcPanel {
   }
 
   // remembers `panel` so "ready" can resend it
-  private async _renderPanel(panel: Panel): Promise<void> {
+  private _renderPanel(panel: Panel): void {
     this._lastPanel = panel
     this._messageBuffer.clear()
-    await renderPanel(panel, this._panel.webview)
+    renderPanel(panel, this._panel.webview)
   }
 
   private _getWebviewContent(webview: Webview, extensionUri: Uri): string {
@@ -394,7 +420,7 @@ export class TmcPanel {
               // webview has lost the code it was showing, and MoocLogin's mount posts
               // `moocLogin` again, which interrupts the now-unreachable CLI process.
               // not this._renderPanel(), which would clear the buffer we're about to resend
-              await renderPanel(this._lastPanel, webview)
+              renderPanel(this._lastPanel, webview)
               for (const buffered of this._messageBuffer.values()) {
                 postMessageToWebview(webview, buffered, this._webviewName)
               }
@@ -405,13 +431,17 @@ export class TmcPanel {
             const { langs, userData, workspaceManager } = actionContext
             const target = panelTarget(message.sourcePanel)
             if (!(langs.ok && userData.ok && workspaceManager.ok)) {
-              this._postPanelDataError(target, reportNotInitialized(actionContext.dialog))
+              this._postPanelDataFailed(
+                target,
+                message.requestId,
+                reportNotInitialized(actionContext.dialog),
+              )
               return
             }
             const courseResult = userData.val.getCourse(message.sourcePanel.courseId)
             if (courseResult.err) {
-              actionContext.dialog.errorNotification("Failed to read the course.", courseResult.val)
-              this._postPanelDataError(target, courseResult.val)
+              actionContext.dialog.reportError("Failed to read the course.", courseResult.val)
+              this._postPanelDataFailed(target, message.requestId, courseResult.val)
               return
             }
             const course = courseResult.val
@@ -463,6 +493,7 @@ export class TmcPanel {
               offlineMode: false,
               exerciseGroups: toMessageGroups(view.exerciseGroups),
             })
+            this._postPanelDataSent(target, message.requestId)
 
             // Everything above comes from stored data, so the panel is rendered by now.
             // The backend is reached only to find out whether the deadlines just posted
@@ -499,7 +530,11 @@ export class TmcPanel {
                 resources.val.projectsDirectory
               )
             ) {
-              this._postPanelDataError(target, reportNotInitialized(actionContext.dialog))
+              this._postPanelDataFailed(
+                target,
+                message.requestId,
+                reportNotInitialized(actionContext.dialog),
+              )
               return
             }
 
@@ -513,6 +548,7 @@ export class TmcPanel {
               target,
               tmcDataPath: resources.val.projectsDirectory,
             })
+            this._postPanelDataSent(target, message.requestId)
             getFolderSize
               .loose(resources.val.projectsDirectory)
               .then((size) =>
@@ -534,21 +570,26 @@ export class TmcPanel {
           }
           case "requestWelcomeData": {
             const { resources } = actionContext
+            const target = panelTarget(message.sourcePanel)
             if (!resources.ok) {
-              reportNotInitialized(actionContext.dialog)
+              this._postPanelDataFailed(
+                target,
+                message.requestId,
+                reportNotInitialized(actionContext.dialog),
+              )
               return
             }
 
-            const version = resources.val.extensionVersion
             this._postMessage({
               type: "setWelcomeData",
-              target: panelTarget(message.sourcePanel),
-              version,
+              target,
+              version: resources.val.extensionVersion,
             })
+            this._postPanelDataSent(target, message.requestId)
             break
           }
           case "openCourseDetails": {
-            await this._renderPanel({
+            this._renderPanel({
               id: randomPanelId(),
               type: "CourseDetails",
               courseId: message.courseId,
@@ -565,10 +606,7 @@ export class TmcPanel {
 
             const courseResult = userData.val.getCourse(message.id)
             if (courseResult.err) {
-              actionContext.dialog.errorNotification(
-                "Failed to remove the course.",
-                courseResult.val,
-              )
+              actionContext.dialog.reportError("Failed to remove the course.", courseResult.val)
               return
             }
             const course = courseResult.val
@@ -580,7 +618,7 @@ export class TmcPanel {
               )
             ) {
               await handlers().removeCourse(actionContext, message.id)
-              await this._renderPanel({
+              this._renderPanel({
                 id: randomPanelId(),
                 type: "MyCourses",
                 courseDeadlines: {},
@@ -598,7 +636,7 @@ export class TmcPanel {
 
             const courseResult = userData.val.getCourse(message.courseId)
             if (courseResult.err) {
-              actionContext.dialog.errorNotification("Failed to read the course.", courseResult.val)
+              actionContext.dialog.reportError("Failed to read the course.", courseResult.val)
               return
             }
             handlers().openWorkspace(
@@ -617,7 +655,7 @@ export class TmcPanel {
             break
           }
           case "openMyCourses": {
-            await this._renderPanel({
+            this._renderPanel({
               id: randomPanelId(),
               type: "MyCourses",
               courseDeadlines: {},
@@ -631,8 +669,8 @@ export class TmcPanel {
               message.courseId,
             )
             if (result.err) {
-              actionContext.dialog.errorNotification(
-                "Errored while closing selected exercises.",
+              actionContext.dialog.reportError(
+                "Failed to close the selected exercises.",
                 result.val,
               )
             }
@@ -647,7 +685,7 @@ export class TmcPanel {
 
             const clearResult = await userData.val.clearFromNewExercises(message.courseId)
             if (clearResult.err) {
-              actionContext.dialog.errorNotification(
+              actionContext.dialog.reportError(
                 "Failed to dismiss the new exercises.",
                 clearResult.val,
               )
@@ -676,7 +714,7 @@ export class TmcPanel {
             const courseId = message.id
             const updateResult = await handlers().updateCourse(actionContext, courseId)
             if (updateResult.err) {
-              actionContext.dialog.errorNotification("Failed to update course.", updateResult.val)
+              actionContext.dialog.reportError("Failed to update course.", updateResult.val)
             }
             // `updateCourse` does not rescan, and the re-render below reads the exercise
             // statuses straight out of the workspace manager.
@@ -684,7 +722,7 @@ export class TmcPanel {
             if (rescanResult.err) {
               Logger.warn("Failed to rescan the local exercises", rescanResult.val)
             }
-            await this._renderPanel({
+            this._renderPanel({
               id: randomPanelId(),
               type: "CourseDetails",
               courseId,
@@ -921,7 +959,7 @@ function reportingFailures(
   return (message) =>
     handle(message).catch((error: unknown) => {
       Logger.error("Failed to handle a message from the webview", error)
-      dialog.errorNotification(
+      dialog.reportError(
         "Something went wrong while handling that action.",
         error instanceof Error ? error : new Error(String(error)),
       )

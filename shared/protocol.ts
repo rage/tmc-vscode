@@ -348,12 +348,15 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     target: targetPanelSchema("ExerciseSubmission"),
     error: WebviewErrorSchema,
   }),
-  // A panel asked for its data and it could not be assembled. The panel renders this
-  // where it was showing a spinner, so a failed load stops looking like a slow one.
+  // The one answer a `request*Data` message gets, naming the request it answers so a
+  // panel ignores the answer to one it has already given up on. Every path out of a
+  // request handler has to send it, or the panel waits out its own timeout instead.
   z.object({
-    type: z.literal("panelDataError"),
-    target: targetPanelSchema("MyCourses", "CourseDetails"),
-    error: WebviewErrorSchema,
+    type: z.literal("panelDataResult"),
+    target: targetPanelSchema("Welcome", "MyCourses", "CourseDetails"),
+    requestId: z.number(),
+    // absent once the data itself has been sent
+    error: WebviewErrorSchema.optional(),
   }),
   z.object({
     type: z.literal("setNewExercises"),
@@ -423,16 +426,21 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("ready"),
   }),
+  // Each `request*Data` message carries the id the host echoes back in its
+  // `panelDataResult`; the webview times the request out on its own if none arrives.
   z.object({
     type: z.literal("requestCourseDetailsData"),
+    requestId: z.number(),
     sourcePanel: CourseDetailsPanelSchema,
   }),
   z.object({
     type: z.literal("requestMyCoursesData"),
+    requestId: z.number(),
     sourcePanel: MyCoursesPanelSchema,
   }),
   z.object({
     type: z.literal("requestWelcomeData"),
+    requestId: z.number(),
     sourcePanel: WelcomePanelSchema,
   }),
   z.object({

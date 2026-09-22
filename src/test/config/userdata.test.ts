@@ -286,12 +286,12 @@ suite("UserData course add/get/update/delete", function () {
     expect(result.err).toBe(true)
   })
 
-  test("rejects adding a duplicate mooc course via addMoocCourse", async function () {
+  test("rejects adding a duplicate mooc course", async function () {
     const [userData] = await makeUserData({
       courses: [],
       mooc_courses: [moocCourse({ id: "instance-uuid-1" })],
     })
-    const result = await userData.addMoocCourse(moocCourse({ id: "instance-uuid-1" }))
+    const result = await userData.addCourse(makeMoocKind(moocCourse({ id: "instance-uuid-1" })))
     expect(result.err).toBe(true)
   })
 
@@ -601,12 +601,6 @@ suite("UserData write failures", function () {
     const [userData, updateUserData] = await withFailingWrites({ courses: [], mooc_courses: [] })
     const result = await userData.addCourse(makeTmcKind(tmcCourse({ id: 7 })))
     expect(updateUserData).toHaveBeenCalledOnce()
-    expect(result.err).toBe(true)
-  })
-
-  test("addMoocCourse reports the failed write", async function () {
-    const [userData] = await withFailingWrites({ courses: [], mooc_courses: [] })
-    const result = await userData.addMoocCourse(moocCourse({ id: "inst-7" }))
     expect(result.err).toBe(true)
   })
 

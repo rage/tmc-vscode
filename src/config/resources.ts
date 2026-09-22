@@ -2,6 +2,7 @@ import * as path from "path"
 
 import * as vscode from "vscode"
 
+import type { BackendKind } from "../shared/shared"
 import {
   WORKSPACE_ROOT_FILE_NAME,
   WORKSPACE_ROOT_FOLDER_NAME,
@@ -47,7 +48,7 @@ export default class Resources {
     )
   }
 
-  public getWorkspaceFilePath(courseName: string, backend: "tmc" | "mooc"): string {
+  public getWorkspaceFilePath(courseName: string, backend: BackendKind): string {
     return path.join(this.workspaceFileFolder, workspaceFileName(courseName, backend))
   }
 }

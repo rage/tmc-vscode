@@ -14,7 +14,7 @@
     CourseIdentifier,
     ExerciseIdentifier,
   } from "../shared/shared"
-  import { addMessageListener } from "../utilities/script"
+  import { addMessageListener, createPanelDataRequester } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -40,21 +40,28 @@
   // common course fields, independent of the course's backend
   const course = $derived(panel.course === undefined ? undefined : unwrap(panel.course))
 
-  // Set when the extension host answers that it cannot assemble this panel's data;
-  // rendered where the exercise list would be, so a failed load is not a permanent spinner.
+  const panelData = createPanelDataRequester()
+
+  // Set when the request for this panel's data is answered with a failure, or goes
+  // unanswered; rendered where the exercise list would be, so neither is a permanent spinner.
   let dataError = $state<WebviewError | undefined>(undefined)
 
-  function requestData() {
+  async function requestData() {
     dataError = undefined
-    vscode.postMessage({
-      type: "requestCourseDetailsData",
-      // `panel` is a `$state` proxy once a message has reassigned it; snapshot it or
-      // posting fails structured clone with a `DataCloneError`
-      sourcePanel: $state.snapshot(panel),
-    })
+    dataError = await panelData.request((requestId) =>
+      vscode.postMessage({
+        type: "requestCourseDetailsData",
+        requestId,
+        // `panel` is a `$state` proxy once a message has reassigned it; snapshot it or
+        // posting fails structured clone with a `DataCloneError`
+        sourcePanel: $state.snapshot(panel),
+      }),
+    )
   }
 
-  onMount(requestData)
+  onMount(() => {
+    void requestData()
+  })
   // props aren't deeply reactive in Svelte 5, so panel is reassigned rather than mutated
   addMessageListener(panel, (message) => {
     switch (message.type) {
@@ -129,8 +136,8 @@
         panel = { ...panel, exerciseStatuses: { tmc, mooc } }
         break
       }
-      case "panelDataError": {
-        dataError = message.error
+      case "panelDataResult": {
+        panelData.answer(message)
         break
       }
       case "setUpdateables": {
@@ -301,7 +308,7 @@
       <code>{dataError.details}</code>
     {/if}
   </div>
-  <Button onclick={requestData}>Retry</Button>
+  <Button onclick={() => void requestData()}>Retry</Button>
 {:else}
   <vscode-progress-ring aria-label="Loading"></vscode-progress-ring>
 {/if}

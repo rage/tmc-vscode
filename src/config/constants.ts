@@ -1,5 +1,6 @@
 // @ts-expect-error "No module found" error even though the file exists
 import FAQ from "../../docs/FAQ.md"
+import type { BackendKind } from "../shared/shared"
 
 // Build time only globals defined in the esbuild configuration (esbuild.mjs
 // `define`, sourced from config.js). These values are inlined when bundling.
@@ -108,7 +109,7 @@ export const WORKSPACE_ROOT_FOLDER_NAME = ".tmc"
  * backend since a tmc and mooc course can share a slug. See
  * `backendNamespacing.ts` for the legacy-key migration.
  */
-export function closedExercisesSettingKey(backend: "tmc" | "mooc", courseName: string): string {
+export function closedExercisesSettingKey(backend: BackendKind, courseName: string): string {
   return `closed-exercises-for:${backend}:${courseName}`
 }
 
@@ -118,7 +119,7 @@ export function legacyClosedExercisesSettingKey(courseName: string): string {
 }
 
 /** Basename of a course's `.code-workspace` file; backend-tagged for the same collision reason as {@link closedExercisesSettingKey}. */
-export function workspaceFileName(courseName: string, backend: "tmc" | "mooc"): string {
+export function workspaceFileName(courseName: string, backend: BackendKind): string {
   return `${courseName}-${backend}.code-workspace`
 }
 

@@ -1,8 +1,15 @@
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import Dialog from "../../api/dialog"
-import { Logger } from "../../utilities"
+import Dialog, { courseSelectionItems } from "../../api/dialog"
+import { InsufficientScopeError, RuntimeError } from "../../errors"
+import type {
+  LocalCourseData,
+  SharedMoocCourseData,
+  SharedTmcCourseData,
+} from "../../shared/shared"
+import { makeMoocKind, makeTmcKind } from "../../shared/shared"
+import { Logger, LogLevel } from "../../utilities"
 
 suite("Dialog.selectItem", function () {
   let showQuickPick: ReturnType<typeof vi.spyOn>
@@ -224,5 +231,86 @@ suite("Dialog.errorNotification with an error", function () {
 
     expect(logError).not.toHaveBeenCalled()
     expect(buttonTitles(show)).toEqual([])
+  })
+})
+
+function tmcCourse(id: number, name: string, title: string): LocalCourseData {
+  return makeTmcKind({ id, name, title } as SharedTmcCourseData)
+}
+
+function moocCourse(id: string, name: string, title: string): LocalCourseData {
+  return makeMoocKind({ id, name, title } as SharedMoocCourseData)
+}
+
+suite("courseSelectionItems", function () {
+  const courses = [
+    tmcCourse(3, "python-mooc", "Programming 1"),
+    moocCourse("course-uuid", "python-mooc", "Programming 1"),
+  ]
+
+  test("labels a course by its title and describes it by its backend", function () {
+    expect(courseSelectionItems(courses)).toEqual([
+      ["Programming 1", makeTmcKind({ courseId: 3 }), "TMC Server"],
+      ["Programming 1", makeMoocKind({ instanceId: "course-uuid" }), "courses.mooc.fi"],
+    ])
+  })
+
+  test("decorate replaces the label of the course it marks and leaves the rest alone", function () {
+    const items = courseSelectionItems(courses, {
+      decorate: (course, title) => (course.kind === "mooc" ? `${title} (Currently open)` : title),
+    })
+
+    expect(items.map(([label]) => label)).toEqual([
+      "Programming 1",
+      "Programming 1 (Currently open)",
+    ])
+  })
+
+  test("value chooses what picking a row yields", function () {
+    const items = courseSelectionItems(courses, { value: (course) => course })
+
+    expect(items.map(([, value]) => value)).toEqual(courses)
+  })
+})
+
+suite("Dialog.reportError", function () {
+  afterEach(function () {
+    Logger.configure(LogLevel.None)
+    Logger.output = undefined
+    vi.restoreAllMocks()
+  })
+
+  test("offers the command the error's class prescribes and runs it when pressed", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    vi.spyOn(Logger, "error").mockImplementation(() => {})
+    const show = stubMessage("showErrorMessage", (actions) => actions[0])
+    await new Dialog().reportError("Could not read the course.", new InsufficientScopeError("403"))
+
+    expect(buttonTitles(show)).toEqual(["Log in", "Show logs"])
+    expect(executeCommand).toHaveBeenCalledWith("tmc.showMoocLogin")
+  })
+
+  test("an error with no remedy of its own reads as the operation plus the error", async function () {
+    const logError = vi.spyOn(Logger, "error").mockImplementation(() => {})
+    const show = stubMessage("showErrorMessage", () => undefined)
+    const boom = new RuntimeError("the CLI exited with 1")
+    await new Dialog().reportError("Could not run the tests.", boom)
+
+    expect(show.mock.calls[0]?.[0]).toBe(
+      "TestMyCode: Could not run the tests. Runtime Error: the CLI exited with 1.",
+    )
+    expect(logError).toHaveBeenCalledOnce()
+    expect(buttonTitles(show)).toEqual(["Show logs"])
+  })
+
+  test("the notification holds no stack trace even when everything is logged", async function () {
+    Logger.configure(LogLevel.Verbose)
+    vi.spyOn(Logger, "error").mockImplementation(() => {})
+    const show = stubMessage("showErrorMessage", () => undefined)
+    const boom = new RuntimeError(new Error("boom"))
+    await new Dialog().reportError("Could not run the tests.", boom)
+
+    expect(boom.stack).toBeTruthy()
+    expect(show.mock.calls[0]?.[0]).not.toContain("<TRACE>")
   })
 })

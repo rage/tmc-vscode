@@ -20,6 +20,7 @@ import {
 import type Resources from "../config/resources"
 import { EditorKind } from "../config/resources"
 import { FileSystemError } from "../errors"
+import type { BackendKind } from "../shared/shared"
 import { Logger } from "../utilities"
 
 export enum ExerciseStatus {
@@ -29,7 +30,7 @@ export enum ExerciseStatus {
 }
 
 export interface WorkspaceExercise {
-  backend: "tmc" | "mooc"
+  backend: BackendKind
   courseSlug: string
   exerciseSlug: string
   status: ExerciseStatus
@@ -41,19 +42,11 @@ export interface WorkspaceExercise {
  *
  * `WorkspaceManager` awaits this before it changes anything the user can see, so
  * an implementation must have completed the write by the time it resolves `Ok`.
- */
-export type PersistClosedExercises = (closedExerciseSlugs: string[]) => Promise<Result<void, Error>>
-
-/**
- * Writes the durable record of which of a course's exercises are closed, for a
- * change the manager observed rather than one it was asked to make.
- *
- * Must land in the same place as the {@link PersistClosedExercises} that the
- * open and close calls pass: the manager keeps one last-written set per course
- * and skips a write that would not change it.
+ * The manager keeps one last-written set per course and skips a write that would
+ * not change it.
  */
 export type PersistClosedCourseExercises = (
-  backend: "tmc" | "mooc",
+  backend: BackendKind,
   courseSlug: string,
   closedExerciseSlugs: string[],
 ) => Promise<Result<void, Error>>
@@ -147,7 +140,7 @@ export default class WorkspaceManager implements vscode.Disposable {
    * from `vscode.workspace.name`: that is a display string carrying a
    * " (Workspace)" suffix, and a course slug may itself contain spaces.
    */
-  private get _activeCourseWorkspace(): { slug: string; backend: "tmc" | "mooc" } | undefined {
+  private get _activeCourseWorkspace(): { slug: string; backend: BackendKind } | undefined {
     const workspaceFile = vscode.workspace.workspaceFile
     if (
       !workspaceFile ||
@@ -187,7 +180,7 @@ export default class WorkspaceManager implements vscode.Disposable {
   /**
    * Backend of the currently active course workspace, or `undefined` otherwise.
    */
-  public get activeCourseBackend(): "tmc" | "mooc" | undefined {
+  public get activeCourseBackend(): BackendKind | undefined {
     return this._activeCourseWorkspace?.backend
   }
 
@@ -260,7 +253,7 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   public getExerciseBySlug(
-    backend: "tmc" | "mooc",
+    backend: BackendKind,
     courseSlug: string,
     exerciseSlug: string,
   ): WorkspaceExercise | undefined {
@@ -279,29 +272,24 @@ export default class WorkspaceManager implements vscode.Disposable {
    * the same on-disk exercise names as its TMC counterpart, so the backend is
    * part of the key.
    */
-  public getExercisesByCourseSlug(
-    backend: "tmc" | "mooc",
-    courseSlug: string,
-  ): WorkspaceExercise[] {
+  public getExercisesByCourseSlug(backend: BackendKind, courseSlug: string): WorkspaceExercise[] {
     return this._exercises.filter((x) => x.backend === backend && x.courseSlug === courseSlug)
   }
 
   public openCourseExercises(
-    backend: "tmc" | "mooc",
+    backend: BackendKind,
     courseSlug: string,
     exerciseSlugs: string[],
-    persistClosed: PersistClosedExercises,
   ): Promise<Result<WorkspaceExercise[], Error>> {
-    return this._setOpen(backend, courseSlug, exerciseSlugs, true, persistClosed)
+    return this._setOpen(backend, courseSlug, exerciseSlugs, true)
   }
 
   public closeCourseExercises(
-    backend: "tmc" | "mooc",
+    backend: BackendKind,
     courseSlug: string,
     exerciseSlugs: string[],
-    persistClosed: PersistClosedExercises,
   ): Promise<Result<WorkspaceExercise[], Error>> {
-    return this._setOpen(backend, courseSlug, exerciseSlugs, false, persistClosed)
+    return this._setOpen(backend, courseSlug, exerciseSlugs, false)
   }
 
   /**
@@ -309,7 +297,7 @@ export default class WorkspaceManager implements vscode.Disposable {
    */
   public addWorkspaceRecommendation(
     workspace: string,
-    backend: "tmc" | "mooc",
+    backend: BackendKind,
     extensions: string[],
   ): void {
     const pathToWorkspace = this._resources.getWorkspaceFilePath(workspace, backend)
@@ -341,7 +329,7 @@ export default class WorkspaceManager implements vscode.Disposable {
    * Await it: every caller opens that file, or lists the course, in the next
    * statement.
    */
-  public createWorkspaceFile(courseName: string, backend: "tmc" | "mooc"): Promise<void> {
+  public createWorkspaceFile(courseName: string, backend: BackendKind): Promise<void> {
     return ensureCourseWorkspaceFile(this._resources.getWorkspaceFilePath(courseName, backend))
   }
 
@@ -353,7 +341,7 @@ export default class WorkspaceManager implements vscode.Disposable {
    */
   public async deleteWorkspaceFile(
     courseName: string,
-    backend: "tmc" | "mooc",
+    backend: BackendKind,
   ): Promise<Result<void, Error>> {
     const workspaceFilePath = this._resources.getWorkspaceFilePath(courseName, backend)
     try {
@@ -557,19 +545,18 @@ export default class WorkspaceManager implements vscode.Disposable {
   /**
    * The one place a course's exercises change between open and closed.
    *
-   * Records the resulting closed set through `persistClosed` first and gives up
-   * on a failed write, so the student never sees exercises open or close in a way
-   * the next {@link setExercises} silently reverts.
+   * Records the resulting closed set first and gives up on a failed write, so the
+   * student never sees exercises open or close in a way the next
+   * {@link setExercises} silently reverts.
    *
    * @returns the exercises the request named — matched, not changed: one already
    * in the requested state is included.
    */
   private async _setOpen(
-    backend: "tmc" | "mooc",
+    backend: BackendKind,
     courseSlug: string,
     exerciseSlugs: string[],
     open: boolean,
-    persistClosed: PersistClosedExercises,
   ): Promise<Result<WorkspaceExercise[], Error>> {
     const courseExercises = this._exercises.filter(
       (x) => x.backend === backend && x.courseSlug === courseSlug,
@@ -579,7 +566,7 @@ export default class WorkspaceManager implements vscode.Disposable {
       .filter((x) => (requested.has(x.exerciseSlug) ? !open : x.status === ExerciseStatus.Closed))
       .map((x) => x.exerciseSlug)
 
-    const persisted = await persistClosed(closedAfterwards)
+    const persisted = await this._persistClosedExercises(backend, courseSlug, closedAfterwards)
     if (persisted.err) {
       return persisted
     }
@@ -605,7 +592,7 @@ export default class WorkspaceManager implements vscode.Disposable {
    * re-enters the folder-change handler with the state it has just applied, so
    * writing unconditionally would cost a second CLI call per open or close.
    */
-  private async _recordClosedExercises(backend: "tmc" | "mooc", courseSlug: string): Promise<void> {
+  private async _recordClosedExercises(backend: BackendKind, courseSlug: string): Promise<void> {
     const closedExerciseSlugs = this._exercises
       .filter(
         (x) =>
@@ -630,7 +617,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
   }
 
-  private static _courseKey(backend: "tmc" | "mooc", courseSlug: string): string {
+  private static _courseKey(backend: BackendKind, courseSlug: string): string {
     return `${backend}:${courseSlug}`
   }
 

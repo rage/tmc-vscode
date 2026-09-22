@@ -1,14 +1,39 @@
 import { ExerciseStatus } from "../api/workspaceManager"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { LocalCourseData, LocalCourseExercise } from "../shared/shared"
-import type { ExerciseGroup, ExerciseIdentifier } from "../shared/shared"
-import type * as UITypes from "../ui/types"
+import type {
+  ExerciseGroup,
+  ExerciseIdentifier,
+  ExerciseStatus as PanelExerciseStatus,
+} from "../shared/shared"
 import { dateToString, Logger, parseDate, parseNextDeadlineAfter } from "../utilities"
+
+/**
+ * One exercise row while the view is being derived: the fields the panel shows, plus the
+ * parsed deadlines the derivation sorts and compares on. `toMessageGroups` drops the
+ * `Date`s before the groups cross a `postMessage`.
+ */
+interface CourseDetailsExercise {
+  id: ExerciseIdentifier
+  name: string
+  passed: boolean
+  softDeadline: Date | null
+  softDeadlineString: string
+  hardDeadline: Date | null
+  hardDeadlineString: string
+  isHard: boolean
+}
+
+interface CourseDetailsExerciseGroup {
+  name: string
+  nextDeadlineString: string
+  exercises: CourseDetailsExercise[]
+}
 
 /** Everything a CourseDetails panel renders, derived in one pass. */
 export interface CourseDetailsView {
   /** One entry per exercise the course declares, in the order the course lists them. */
-  exerciseStatuses: { exerciseId: ExerciseIdentifier; status: UITypes.ExerciseStatus }[]
+  exerciseStatuses: { exerciseId: ExerciseIdentifier; status: PanelExerciseStatus }[]
   exerciseGroups: ExerciseGroup[]
 }
 
@@ -37,7 +62,7 @@ export function buildCourseDetailsView(
   }
 
   const exerciseStatuses: CourseDetailsView["exerciseStatuses"] = []
-  const groupsByName = new Map<string, UITypes.CourseDetailsExerciseGroup>()
+  const groupsByName = new Map<string, CourseDetailsExerciseGroup>()
   for (const ex of LocalCourseData.getExercises(course)) {
     const slug = LocalCourseExercise.getSlug(ex)
     const nameMatch = slug.match(/(\w+)-(.+)/)
@@ -60,7 +85,7 @@ export function buildCourseDetailsView(
         hardDeadline !== null && now >= hardDeadline,
       ),
     })
-    const entry: UITypes.CourseDetailsExercise = {
+    const entry: CourseDetailsExercise = {
       id: exerciseId,
       name,
       passed: ex.data.passed,
@@ -96,7 +121,7 @@ export function buildCourseDetailsView(
   return { exerciseStatuses, exerciseGroups }
 }
 
-function mapStatus(status: ExerciseStatus, expired: boolean): UITypes.ExerciseStatus {
+function mapStatus(status: ExerciseStatus, expired: boolean): PanelExerciseStatus {
   switch (status) {
     case ExerciseStatus.Closed:
       return "closed"

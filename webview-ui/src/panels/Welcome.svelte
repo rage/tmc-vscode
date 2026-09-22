@@ -4,8 +4,8 @@
   import Button from "../components/Button.svelte"
   import { releaseNotes } from "../generated/releaseNotes"
   import type { WelcomePanel } from "../shared/shared"
-  import { assertUnreachable } from "../shared/shared"
-  import { addMessageListener } from "../utilities/script"
+  import { assertUnreachable, pasteServiceName } from "../shared/shared"
+  import { addMessageListener, createPanelDataRequester } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -14,11 +14,25 @@
 
   let { panel = $bindable() }: Props = $props()
 
+  const panelData = createPanelDataRequester()
+
+  // Everything on this page but the version is static, so a request that fails or goes
+  // unanswered only costs the version -- and the host has already told the user why.
+  async function requestVersion() {
+    const error = await panelData.request((requestId) =>
+      vscode.postMessage({
+        type: "requestWelcomeData",
+        requestId,
+        sourcePanel: panel,
+      }),
+    )
+    if (error !== undefined) {
+      console.warn("Could not read the extension version:", error.message)
+    }
+  }
+
   onMount(() => {
-    vscode.postMessage({
-      type: "requestWelcomeData",
-      sourcePanel: panel,
-    })
+    void requestVersion()
   })
   addMessageListener(panel, (message) => {
     switch (message.type) {
@@ -27,8 +41,12 @@
         panel = { ...panel, version: message.version }
         break
       }
+      case "panelDataResult": {
+        panelData.answer(message)
+        break
+      }
       default:
-        assertUnreachable(message.type)
+        assertUnreachable(message)
     }
   })
 
@@ -39,7 +57,7 @@
 
 <div class="welcome">
   <header>
-    <h1>Welcome to TestMyCode {panel.version}!</h1>
+    <h1>Welcome to TestMyCode{panel.version ? ` ${panel.version}` : ""}!</h1>
   </header>
 
   <div class="welcome-body">
@@ -109,8 +127,8 @@
           spam and preventing abuse.
         </p>
         <p>
-          The same applies if you choose to submit your answer to the TMC pastebin for sharing your
-          solution to other students.
+          The same applies if you choose to submit your answer to {pasteServiceName("tmc")} or
+          {pasteServiceName("mooc")} for sharing your solution to other students.
         </p>
         <p>
           When you interact with our server, e.g. log in, download, or submit exercises, we will

@@ -25,8 +25,10 @@ stubbedIntegrationBundle=0
 brokeVendoredSchema=0
 brokeReleaseNotes=0
 addedLintProbe=0
+brokeQuickPickPage=0
 
 PROBE_SPEC="playwright/tests/gateProbe.spec.ts"
+EXPORT_PROBE_FILE="playwright/pages/quick-pick.ts"
 
 # Files a case edits in place, checked byte-for-byte once every case has run.
 recordOriginal() {
@@ -63,6 +65,10 @@ restoreAll() {
     rm -f "$PROBE_SPEC"
     addedLintProbe=0
   fi
+  if [ "$brokeQuickPickPage" = 1 ]; then
+    cp "$scratch/quick-pick.ts" "$EXPORT_PROBE_FILE"
+    brokeQuickPickPage=0
+  fi
 }
 trap 'restoreAll; rm -rf "$scratch"' EXIT
 
@@ -89,7 +95,7 @@ expectGateFailure() {
 for tracked in backend/package.json backend/mooc/conformance.test.ts \
   shared/bindings.schema.json shared/generated/langs/zod.gen.ts \
   shared/generated/langs/index.ts dist/integration.spec.js \
-  webview-ui/src/generated/releaseNotes.ts; do
+  webview-ui/src/generated/releaseNotes.ts "$EXPORT_PROBE_FILE"; do
   recordOriginal "$tracked"
 done
 
@@ -156,6 +162,14 @@ test("the playwright lint rules are loaded", async ({ page }) => {
 EOF
 expectGateFailure "playwright lint rules / an un-awaited expect" \
   "playwright(missing-playwright-await)" \
+  pnpm run lint
+restoreAll
+
+cp "$EXPORT_PROBE_FILE" "$scratch/quick-pick.ts"
+brokeQuickPickPage=1
+printf '\nexport const gateProbeUnusedExport = "imported by nothing"\n' >> "$EXPORT_PROBE_FILE"
+expectGateFailure "dead-export gate / an export nothing imports" \
+  "gateProbeUnusedExport" \
   pnpm run lint
 restoreAll
 

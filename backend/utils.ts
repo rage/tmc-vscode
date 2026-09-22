@@ -12,7 +12,7 @@ import type {
   OldSubmission,
   Organization,
   SubmissionResultReport,
-} from "../src/api/types"
+} from "./tmcApiTypes"
 
 interface CreateOrganizationParams {
   information: string

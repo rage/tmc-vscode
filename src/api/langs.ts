@@ -34,13 +34,10 @@ import {
 import type {
   CombinedCourseData,
   Course,
-  CourseData,
   CourseDetails,
-  CourseExercise,
   DataKind,
   DownloadOrUpdateMoocCourseExercisesResult,
   DownloadOrUpdateTmcCourseExercisesResult,
-  ExerciseDetails,
   ExerciseTaskSubmissionStatus,
   LocalExercise,
   LocalMoocExercise,
@@ -57,12 +54,13 @@ import type {
   StatusUpdateData,
   StyleValidationResult,
   Submission,
+  SubmissionFeedback,
   SubmissionFeedbackResponse,
   SubmissionFinished,
   TmcExerciseSlide,
 } from "../shared/langsSchema"
 import { CliNotification, CliOutputData, CliStatusUpdate } from "../shared/langsSchema"
-import type { ExerciseIdentifier } from "../shared/shared"
+import type { BackendKind, ExerciseIdentifier } from "../shared/shared"
 import {
   assertUnreachable,
   BaseError,
@@ -73,12 +71,9 @@ import {
 } from "../shared/shared"
 import { Logger, LogLevel } from "../utilities/logger"
 import type { FractionProgress } from "./dialog"
-import type { SubmissionFeedback } from "./types"
 
 interface Options {
-  apiCacheLifetime?: string | undefined
   cliConfigDir?: string | undefined
-  timeout?: number | undefined
 }
 
 interface ExecutionOptions {
@@ -92,17 +87,14 @@ interface LangsProcessArgs {
    * auth-flavored error can be attributed to the right backend. `undefined`
    * for backend-agnostic commands (local ops, settings).
    */
-  backend?: "tmc" | "mooc" | undefined
+  backend?: BackendKind | undefined
   env?: Record<string, string> | undefined
-  /** Which args should be obfuscated in logs. */
-  obfuscate?: number[] | undefined
   onStdout?: ((data: StatusUpdateData) => void) | undefined
   /**
    * Surfaces a CLI notification to the user. Set only for commands the user is watching,
    * so a background poll cannot toast.
    */
   onNotification?: ((notification: Notification) => void) | undefined
-  stdin?: string | undefined
   processTimeout?: number | undefined
   /** Set on login/logout commands, where an auth-flavored error is expected rather than a lost session. */
   suppressAuthEvents?: boolean | undefined
@@ -121,7 +113,7 @@ interface AuthAttribution {
    * The backend the command talked to. Only its cached responses are dropped when it
    * rejects our credentials, and it names the site in a not-enrolled message.
    */
-  backend?: "tmc" | "mooc" | undefined
+  backend?: BackendKind | undefined
   /** Set on login/logout commands, where an auth error means no session was lost. */
   expected?: boolean | undefined
 }
@@ -160,11 +152,7 @@ interface CacheConfig {
  * output-data kind, so two commands returning the same thing share an entry.
  * @param parts The ids the entry is keyed by, in the order the resource names them.
  */
-function cacheKey(
-  backend: "tmc" | "mooc",
-  resource: string,
-  ...parts: (string | number)[]
-): string {
+function cacheKey(backend: BackendKind, resource: string, ...parts: (string | number)[]): string {
   return [backend, resource, ...parts].join(":")
 }
 
@@ -180,16 +168,6 @@ const MAX_LOGGED_ARG_LENGTH = 120
  */
 function loggableArg(arg: string): string {
   return arg.length > MAX_LOGGED_ARG_LENGTH ? `<${arg.length} characters>` : arg
-}
-
-const organizationsRemapper: CacheConfig["remapper"] = (res) => {
-  if (res.data?.["output-data-kind"] === "organizations") {
-    return res.data["output-data"].map((x) => [
-      cacheKey("tmc", "organization", x.slug),
-      { ...res, data: { "output-data-kind": "organization", "output-data": x } },
-    ])
-  }
-  return []
 }
 
 /** Ample for the failure diagnostics stderr feeds; a test run can write orders of magnitude more. */
@@ -265,7 +243,7 @@ class BoundedStderr {
  */
 export default class Langs {
   // Per-backend: tmc.mooc.fi and courses.mooc.fi are unrelated servers, so one must not throttle the other.
-  private readonly _nextSubmissionAllowedTimestamp: Record<"tmc" | "mooc", number>
+  private readonly _nextSubmissionAllowedTimestamp: Record<BackendKind, number>
   private readonly _options: Options
   private readonly _responseCache: Map<string, ResponseCacheEntry>
   private _onLogout?: (expected: boolean) => void
@@ -514,7 +492,7 @@ export default class Langs {
    * @param courseIdentifier Course slug for TMC, course id (UUID) for mooc.
    */
   public async listLocalCourseExercises(
-    courseKind: "tmc" | "mooc",
+    courseKind: BackendKind,
     courseIdentifier: string,
   ): Promise<Result<(LocalTmcExercise | LocalMoocExercise)[], Error>> {
     if (courseKind === "mooc") {
@@ -764,7 +742,7 @@ export default class Langs {
    * discard the other's answer.
    */
   public async checkExerciseUpdates(
-    backend: "tmc" | "mooc",
+    backend: BackendKind,
     options?: CacheOptions,
   ): Promise<Result<ExerciseIdentifier[], Error>> {
     const cacheConfig = {
@@ -1039,37 +1017,27 @@ export default class Langs {
    * command internally.
    *
    * @param courseId Id to the course.
-   * @returns A combination of getCourseDetails, getCourseExercises, getCourseSettings.
+   * @returns The course's details, its exercises and its settings in one response.
    */
   public async getTmcCourseData(
     courseId: number,
     options?: CacheOptions,
   ): Promise<Result<CombinedCourseData, Error>> {
+    // The combined response contains the course details `getCourseDetails` fetches on its
+    // own, so serving that entry from here saves the second call.
     const remapper: CacheConfig["remapper"] = (response) => {
       if (response.data?.["output-data-kind"] !== "combined-course-data") {
         return []
       }
-      const { details, exercises, settings } = response.data["output-data"]
       return [
         [
           cacheKey("tmc", "course-details", courseId),
           {
             ...response,
-            data: { "output-data-kind": "course-details", "output-data": details },
-          },
-        ],
-        [
-          cacheKey("tmc", "course-exercises", courseId),
-          {
-            ...response,
-            data: { "output-data-kind": "course-exercises", "output-data": exercises },
-          },
-        ],
-        [
-          cacheKey("tmc", "course-settings", courseId),
-          {
-            ...response,
-            data: { "output-data-kind": "course-data", "output-data": settings },
+            data: {
+              "output-data-kind": "course-details",
+              "output-data": response.data["output-data"].details,
+            },
           },
         ],
       ]
@@ -1191,72 +1159,6 @@ export default class Langs {
   }
 
   /**
-   * Gets exercises of the given course. Each exercise includes information about available and
-   * awarded points. Uses TMC-langs `get-course-exercises` core command internally.
-   *
-   * @param courseId Id of the course.
-   * @returns Array of the course's exercises.
-   */
-  public async getCourseExercises(
-    courseId: number,
-    options?: CacheOptions,
-  ): Promise<Result<CourseExercise[], Error>> {
-    const res = await this._executeLangsCommand(
-      {
-        backend: "tmc",
-        args: this._tmcCmd("get-course-exercises", "--course-id", courseId.toString()),
-      },
-      "course-exercises",
-      { forceRefresh: options?.forceRefresh, key: cacheKey("tmc", "course-exercises", courseId) },
-    )
-    return res.map((x) => x.data["output-data"])
-  }
-
-  /**
-   * Gets general course info of the given course. Uses TMC-langs `get-course-settings` core
-   * command internally.
-   *
-   * @param courseId Id of the course.
-   * @returns Info of the course.
-   */
-  public async getCourseSettings(
-    courseId: number,
-    options?: CacheOptions,
-  ): Promise<Result<CourseData, Error>> {
-    const res = await this._executeLangsCommand(
-      {
-        backend: "tmc",
-        args: this._tmcCmd("get-course-settings", "--course-id", courseId.toString()),
-      },
-      "course-data",
-      { forceRefresh: options?.forceRefresh, key: cacheKey("tmc", "course-settings", courseId) },
-    )
-    return res.map((x) => x.data["output-data"])
-  }
-
-  /**
-   * Gets details of the given exercise. Uses TMC-langs `get-exercise-details` core command
-   * internally.
-   *
-   * @param exerciseId Id of the exercise.
-   * @returns Details of the exercise.
-   */
-  public async getExerciseDetails(
-    exerciseId: number,
-    options?: CacheOptions,
-  ): Promise<Result<ExerciseDetails, Error>> {
-    const res = await this._executeLangsCommand(
-      {
-        backend: "tmc",
-        args: this._tmcCmd("get-exercise-details", "--exercise-id", exerciseId.toString()),
-      },
-      "exercise-details",
-      { forceRefresh: options?.forceRefresh, key: cacheKey("tmc", "exercise-details", exerciseId) },
-    )
-    return res.map((x) => x.data["output-data"])
-  }
-
-  /**
    * Gets user's old submissions for the given exercise. Uses TMC-langs `get-exercise-submissions`
    * core command internally.
    *
@@ -1288,31 +1190,6 @@ export default class Langs {
   }
 
   /**
-   * Gets data of the given organization. Uses TMC-langs `get-organization` core command
-   * internally.
-   *
-   * @param organizationSlug Slug of the organization.
-   * @returns Organization matching the given slug.
-   */
-  public async getOrganization(
-    organizationSlug: string,
-    options?: CacheOptions,
-  ): Promise<Result<Organization, Error>> {
-    const res = await this._executeLangsCommand(
-      {
-        backend: "tmc",
-        args: this._tmcCmd("get-organization", "--organization", organizationSlug),
-      },
-      "organization",
-      {
-        forceRefresh: options?.forceRefresh,
-        key: cacheKey("tmc", "organization", organizationSlug),
-      },
-    )
-    return res.map((x) => x.data["output-data"])
-  }
-
-  /**
    * Gets all organizations. Uses TMC-langs `get-organizations` core command internally.
    *
    * @returns A list of organizations.
@@ -1324,11 +1201,7 @@ export default class Langs {
         args: this._tmcCmd("get-organizations"),
       },
       "organizations",
-      {
-        forceRefresh: options?.forceRefresh,
-        key: cacheKey("tmc", "organizations"),
-        remapper: organizationsRemapper,
-      },
+      { forceRefresh: options?.forceRefresh, key: cacheKey("tmc", "organizations") },
     )
     return res.map((x) => x.data["output-data"])
   }
@@ -1621,7 +1494,7 @@ export default class Langs {
    * `--save-old-state` on reset and old-submission restore — so they throttle each other
    * rather than only their own kind.
    */
-  private _claimSubmissionSlot(backend: "tmc" | "mooc"): Result<void, Error> {
+  private _claimSubmissionSlot(backend: BackendKind): Result<void, Error> {
     const now = Date.now()
     if (now < this._nextSubmissionAllowedTimestamp[backend]) {
       return Err(new BottleneckError("This command can't be executed at the moment."))
@@ -1745,7 +1618,7 @@ export default class Langs {
    * the two servers are unrelated, so one rejecting our credentials says nothing about the
    * other's data. An unattributed failure drops everything, having ruled nothing out.
    */
-  private _clearBackendCache(backend: "tmc" | "mooc" | undefined): void {
+  private _clearBackendCache(backend: BackendKind | undefined): void {
     if (backend === undefined) {
       this._responseCache.clear()
       return
@@ -1806,45 +1679,16 @@ export default class Langs {
         // tmc.mooc.fi 403s a course the user may not see. Only the latter is about the
         // course, so only it may be read as one being unavailable.
         if (auth.backend === "mooc") {
-          return Err(
-            new InsufficientScopeError(
-              `${message}\nYour courses.mooc.fi session no longer grants access to` +
-                ` programming exercises. Log in again to continue.`,
-              details,
-            ),
-          )
+          return Err(new InsufficientScopeError(message, details))
         }
         return Err(new ForbiddenError(message, details))
-      case "not-enrolled": {
-        // Not hardcoded to courses.mooc.fi: this error kind can come from either backend.
-        const siteName =
-          auth.backend === "tmc"
-            ? "tmc.mooc.fi"
-            : auth.backend === "mooc"
-              ? "courses.mooc.fi"
-              : "the server"
-        return Err(
-          new NotEnrolledError(
-            `You are no longer enrolled on this course on ${siteName}, so its` +
-              ` exercises can't be fetched. Enroll on the course again from` +
-              ` ${siteName}, then reload the course here.`,
-            details,
-          ),
-        )
-      }
+      case "not-enrolled":
+        return Err(new NotEnrolledError(message, details))
       case "upload-expired":
-        // The CLI uploads and submits within one invocation and already retried the upload
-        // once, so retrying the submit is the only action left to suggest.
-        return Err(
-          new UploadExpiredError(
-            `${message}\nThe submission's files expired on the server before the` +
-              ` submission was accepted. Please try again.`,
-            details,
-          ),
-        )
+        return Err(new UploadExpiredError(message, details))
       case "unknown-upload":
-        // Never a race: the backend has no record of a file the CLI named for
-        // this exercise. Surfaced as-is so it is diagnosable rather than retried.
+        // Never a race: the backend has no record of a file the CLI named for this
+        // exercise, so a retry cannot help.
         return Err(new UnknownUploadError(message, details))
       case "invalid-token":
         this._clearBackendCache(auth.backend)
@@ -1859,14 +1703,7 @@ export default class Langs {
         }
         return Err(new AuthorizationError(message, details))
       case "obsolete-client":
-        return Err(
-          new ObsoleteClientError(
-            message +
-              "\nYour TMC Extension is out of date, please update it." +
-              "\nhttps://code.visualstudio.com/docs/editor/extension-gallery",
-            details,
-          ),
-        )
+        return Err(new ObsoleteClientError(message, details))
     }
 
     return Err(new RuntimeError(message, details))
@@ -1886,7 +1723,7 @@ export default class Langs {
   }
 
   /** Fires the unexpected-logout (`expected: false`) event for `target`, used when credentials were rejected rather than removed deliberately. */
-  private _fireUnexpectedLogout(target?: "tmc" | "mooc"): void {
+  private _fireUnexpectedLogout(target?: BackendKind): void {
     if (target === "tmc") {
       this._onLogout?.(false)
     } else if (target === "mooc") {
@@ -1902,16 +1739,8 @@ export default class Langs {
   private _spawnLangsProcess(
     commandArgs: LangsProcessArgs,
   ): Result<LangsProcessRunner, InitializationError | SpawnError> {
-    const {
-      args,
-      env,
-      obfuscate,
-      onStdout,
-      onNotification,
-      stdin,
-      processTimeout,
-      interruptOnDeactivate,
-    } = commandArgs
+    const { args, env, onStdout, onNotification, processTimeout, interruptOnDeactivate } =
+      commandArgs
 
     let theResult: OutputData | undefined
     let stdoutBuffer = ""
@@ -1920,7 +1749,7 @@ export default class Langs {
     let lastSchemaFailure: LangsSchemaFailure | undefined
 
     const loggableCommand = [this.cliPath]
-      .concat(args.map((x, i) => (obfuscate?.includes(i) ? "***" : loggableArg(x))))
+      .concat(args.map((arg) => loggableArg(arg)))
       .map((x) => JSON.stringify(x))
       .join(" ")
 
@@ -1977,12 +1806,6 @@ export default class Langs {
     // the stream makes Node hold an incomplete sequence until the rest of it arrives.
     cprocess.stdout.setEncoding("utf8")
     cprocess.stderr.setEncoding("utf8")
-    if (stdin) {
-      // A CLI reading stdin blocks until EOF, so the write has to be closed. The listener
-      // keeps an EPIPE from a child that exited early off the unhandled-error path.
-      cprocess.stdin.on("error", (error) => Logger.warn("Failed to write to langs stdin", error))
-      cprocess.stdin.end(stdin + "\n")
-    }
 
     const stderr = new BoundedStderr()
     const processResult = new Promise<number | null>((resolve, reject) => {

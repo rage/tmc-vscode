@@ -53,12 +53,19 @@ function moocPanel(): CourseDetailsPanel {
   }
 }
 
+/** The id the panel's mount-time data request carries; its answer has to quote it. */
+function dataRequestId(): number {
+  const request = postedMessages.mock.calls[0]?.[0] as { requestId: number }
+  return request.requestId
+}
+
 suite("CourseDetails panel", () => {
   test("requests its course data on mount", () => {
     const panel = tmcPanel()
     render(CourseDetails, { props: { panel } })
     expect(postedMessages).toHaveBeenCalledWith({
       type: "requestCourseDetailsData",
+      requestId: expect.any(Number),
       sourcePanel: panel,
     })
   })
@@ -352,8 +359,9 @@ suite("CourseDetails panel", () => {
     expect(screen.getByLabelText("Loading")).toBeInTheDocument()
 
     dispatch({
-      type: "panelDataError",
+      type: "panelDataResult",
       target: { id: panel.id, type: "CourseDetails" },
+      requestId: dataRequestId(),
       error: { message: "Failed to read the course.", details: "no such course" },
     })
 
@@ -366,6 +374,7 @@ suite("CourseDetails panel", () => {
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "requestCourseDetailsData",
+      requestId: expect.any(Number),
       sourcePanel: panel,
     })
   })

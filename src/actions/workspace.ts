@@ -11,7 +11,6 @@ import type * as vscode from "vscode"
  * -------------------------------------------------------------------------------------------------
  */
 import { ExerciseStatus } from "../api/workspaceManager"
-import { closedExercisesSettingKey } from "../config/constants"
 import { InitializationError } from "../errors"
 import { randomPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { CourseDetailsPanel, CourseIdentifier, ExtensionToWebview } from "../shared/shared"
@@ -38,8 +37,8 @@ export async function openExercises(
 ): Promise<Result<ExerciseIdentifier[], Error>> {
   Logger.info("Opening exercises", exerciseIdsToOpen)
 
-  const { workspaceManager, userData, langs, dialog } = actionContext
-  if (!(userData.ok && workspaceManager.ok && langs.ok)) {
+  const { workspaceManager, userData, dialog } = actionContext
+  if (!(userData.ok && workspaceManager.ok)) {
     return Err(new InitializationError("Extension was not initialized properly"))
   }
 
@@ -62,8 +61,6 @@ export async function openExercises(
     course.kind,
     courseName,
     exercisesToOpen.map((x) => LocalCourseExercise.getSlug(x)),
-    (closedExerciseSlugs) =>
-      langs.val.setSetting(closedExercisesSettingKey(course.kind, courseName), closedExerciseSlugs),
   )
   if (openResult.err) {
     return openResult
@@ -197,8 +194,8 @@ export async function closeExercises(
   ids: ExerciseIdentifier[],
   courseId: CourseIdentifier,
 ): Promise<Result<ExerciseIdentifier[], Error>> {
-  const { workspaceManager, userData, langs } = actionContext
-  if (!(userData.ok && workspaceManager.ok && langs.ok)) {
+  const { workspaceManager, userData } = actionContext
+  if (!(userData.ok && workspaceManager.ok)) {
     return Err(new InitializationError("Extension was not initialized properly"))
   }
 
@@ -224,8 +221,6 @@ export async function closeExercises(
     course.kind,
     courseName,
     exerciseSlugs,
-    (closedExerciseSlugs) =>
-      langs.val.setSetting(closedExercisesSettingKey(course.kind, courseName), closedExerciseSlugs),
   )
   if (closeResult.err) {
     return closeResult

@@ -46,6 +46,10 @@ export function combineTmcApiExerciseData(
  * user's per-exercise progress. When `progress` is unavailable (e.g. a
  * transient fetch failure), falls back to `previousExercises` per exercise id
  * so a refresh never wipes previously known points or passed flags.
+ *
+ * One local exercise per slide, keyed by `slide.exercise_id` (a UUID): the bulk
+ * download/update CLI subcommand resolves `--exercise-id` against that field, not
+ * the task id, so it is the identity callers must carry.
  */
 export function combineMoocApiExerciseData(
   slides: TmcExerciseSlide[],

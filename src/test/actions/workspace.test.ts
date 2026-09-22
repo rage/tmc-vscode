@@ -1,4 +1,3 @@
-import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 import type { Mock } from "vitest"
 import { vi } from "vitest"
@@ -59,14 +58,9 @@ suite("closeExercises action", function () {
       getCourse: () => Ok(makeMoocKind(moocCourse) as LocalCourseData),
     } as unknown as UserData
 
-    const langs = {
-      setSetting: vi.fn(async () => Ok.EMPTY),
-    } as unknown as Langs
-
     const actionContext = {
       workspaceManager: new Ok(workspaceManager),
       userData: new Ok(userData),
-      langs: new Ok(langs),
     } as unknown as ActionContext
 
     await closeExercises(
@@ -75,48 +69,9 @@ suite("closeExercises action", function () {
       CourseIdentifier.from("instance-uuid-1"),
     )
 
-    expect(closeCourseExercises).toHaveBeenCalledExactlyOnceWith(
-      "mooc",
-      "mooc-python-course",
-      ["mooc_hello"],
-      expect.any(Function),
-    )
-  })
-
-  test("hands the workspace manager a writer for the course's closed-exercise key", async function () {
-    const closeCourseExercises = vi.fn(
-      async (
-        _backend: string,
-        _courseSlug: string,
-        _exerciseSlugs: string[],
-        persistClosed: (closed: string[]) => Promise<Result<void, Error>>,
-      ) => {
-        await persistClosed(["mooc_hello"])
-        return Ok([])
-      },
-    )
-    const setSetting = vi.fn(async () => Ok.EMPTY)
-    const actionContext = {
-      workspaceManager: new Ok({
-        closeCourseExercises,
-        getExercisesByCourseSlug: () => [],
-      } as unknown as WorkspaceManager),
-      userData: new Ok({
-        getCourse: () => Ok(makeMoocKind(moocCourse) as LocalCourseData),
-      } as unknown as UserData),
-      langs: new Ok({ setSetting } as unknown as Langs),
-    } as unknown as ActionContext
-
-    await closeExercises(
-      actionContext,
-      [ExerciseIdentifier.from("mooc-ex-uuid-1")],
-      CourseIdentifier.from("instance-uuid-1"),
-    )
-
-    expect(setSetting).toHaveBeenCalledExactlyOnceWith(
-      "closed-exercises-for:mooc:mooc-python-course",
-      ["mooc_hello"],
-    )
+    expect(closeCourseExercises).toHaveBeenCalledExactlyOnceWith("mooc", "mooc-python-course", [
+      "mooc_hello",
+    ])
   })
 })
 
@@ -153,7 +108,6 @@ function contextWithOpenExercises(openCount: number): {
       userData: new Ok({
         getCourse: () => Ok(makeMoocKind(moocCourse) as LocalCourseData),
       } as unknown as UserData),
-      langs: new Ok({ setSetting: vi.fn(async () => Ok.EMPTY) } as unknown as Langs),
       dialog: { warningNotification },
     } as unknown as ActionContext,
     warningNotification,
@@ -216,7 +170,6 @@ suite("downloadAndOpenExercises action", function () {
     } as unknown as UserData
     const langs = {
       listLocalCourseExercises: vi.fn(async () => Ok(listing)),
-      setSetting: vi.fn(async () => Ok.EMPTY),
     } as unknown as Langs
     return {
       workspaceManager: new Ok(workspaceManager),

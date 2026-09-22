@@ -3,7 +3,9 @@
 require("tsx/cjs")
 
 const config = require("../config")
-const getAllLangsCLIs = require("../src/utilities/env").getAllLangsCLIs
+// Destructured rather than `require(...).getAllLangsCLIs`: knip does not follow
+// property access on a require, and would report the export dead.
+const { getAllLangsCLIs } = require("../src/utilities/env")
 
 const TMC_LANGS_DL_URL = config.productionApi.__TMC_LANGS_DL_URL__.replaceAll('"', "")
 const TMC_LANGS_VERSION = config.productionApi.__TMC_LANGS_VERSION__.replaceAll('"', "")
