@@ -919,8 +919,8 @@ suite("Langs error-kind mapping", function () {
   })
 
   test("an error kind carries the CLI's message and no remediation of its own", async function () {
-    // `presentationFor` owns every user-facing sentence and button, so a second copy
-    // composed here would drift from it and would reach the output channel as prose.
+    // `presentationFor` owns every user-facing sentence, so a second copy composed here
+    // would drift from it.
     for (const kind of ["forbidden", "not-enrolled", "upload-expired", "obsolete-client"]) {
       const langs = newLangs()
       stubSpawn(langs, () => Ok(errorOutput(kind, "Failed to get course")))
