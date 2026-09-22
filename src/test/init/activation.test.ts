@@ -2,7 +2,7 @@ import * as path from "path"
 
 import * as fs from "fs-extra"
 import * as tmp from "tmp"
-import { Ok } from "ts-results"
+import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
@@ -28,6 +28,8 @@ const langsStub = vi.hoisted(() => ({
   settingsWritten: [] as [string, unknown][],
   /** What activation subscribed to, so a test can fire an event at it. */
   handlers: new Map<string, (payload: never) => void>(),
+  /** When set, both `isAuthenticated` and `getSetting` fail with this same error. */
+  sharedFailure: undefined as Error | undefined,
 }))
 
 /** The writer activation hands `WorkspaceManager`, so a test can drive it. */
@@ -130,13 +132,14 @@ vi.mock("../../api/langs", () => ({
   default: class {
     public isAuthenticated = async (): Promise<unknown> => {
       langsStub.authChecks += 1
-      return Ok(langsStub.tmcAuthenticated)
+      return langsStub.sharedFailure ? Err(langsStub.sharedFailure) : Ok(langsStub.tmcAuthenticated)
     }
     public isMoocAuthenticated = async (): Promise<unknown> => {
       langsStub.authChecks += 1
       return Ok(langsStub.moocAuthenticated)
     }
-    public getSetting = async (): Promise<unknown> => Ok(cliSettings.projectsDirectory)
+    public getSetting = async (): Promise<unknown> =>
+      langsStub.sharedFailure ? Err(langsStub.sharedFailure) : Ok(cliSettings.projectsDirectory)
     public setSetting = async (key: string, value: unknown): Promise<unknown> => {
       langsStub.settingsWritten.push([key, value])
       return Ok.EMPTY
@@ -233,9 +236,12 @@ function resetActivationRecording(): void {
   langsStub.killAllProcessesCalls = 0
   langsStub.settingsWritten.length = 0
   langsStub.handlers.clear()
+  langsStub.sharedFailure = undefined
   workspaceManagerStub.persistClosedExercises = undefined
   cliSettings.projectsDirectory = tmp.dirSync().name
-  vi.spyOn(vscode.window, "showErrorMessage").mockResolvedValue(undefined)
+  // `restoreAllMocks` restores this spy to jest-mock-vscode's own persistent `vi.fn()`,
+  // whose call history survives the restore -- `mockReset` is what actually clears it.
+  vi.spyOn(vscode.window, "showErrorMessage").mockReset().mockResolvedValue(undefined)
 }
 
 suite("activation with unusable storage", function () {
@@ -268,6 +274,38 @@ suite("activation with unusable storage", function () {
     const messages = vi.mocked(vscode.window.showErrorMessage).mock.calls.map((call) => call[0])
     expect(messages.join("\n")).not.toContain("Fatal error")
     expect(messages.join("\n")).toContain("resource initialization")
+  })
+})
+
+suite("initialization error deduplication", function () {
+  beforeEach(resetActivationRecording)
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    vi.restoreAllMocks()
+  })
+
+  // The authentication check and the datapath lookup are two separate steps that both
+  // fail when the CLI is unreachable -- one problem for the user, so one toast.
+  test("shows one notification per distinct initialization failure", async function () {
+    langsStub.sharedFailure = new Error("tmc-langs-cli is unreachable")
+    const logError = vi.spyOn(Logger, "error")
+
+    await activate(createContext())
+
+    const loggedSteps = logError.mock.calls
+      .map((call) => String(call[0]))
+      .filter((m) => m.includes("Initialization error"))
+    // Confirms the scenario genuinely drives two failing steps sharing one cause; with
+    // only one, a missing dedup would pass the toast assertion below by accident.
+    expect(loggedSteps.some((m) => m.includes("authentication check"))).toBe(true)
+    expect(loggedSteps.some((m) => m.includes("finding datapath"))).toBe(true)
+
+    const toasts = vi
+      .mocked(vscode.window.showErrorMessage)
+      .mock.calls.map((call) => String(call[0]))
+      .filter((m) => m.includes("Initialization error"))
+    expect(toasts).toHaveLength(1)
   })
 })
 
