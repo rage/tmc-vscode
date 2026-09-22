@@ -1,8 +1,14 @@
 import * as vscode from "vscode"
 
+import type { CourseIdentifier } from "../shared/shared"
+import { backendName, LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
 
-type Item<T> = [label: string, value: T, description?: string]
+/**
+ * One row of a quick pick: what the user reads, what picking it yields, and an optional
+ * dimmed note beside the label. Rows are resolved by identity, so two may share a label.
+ */
+export type Item<T> = [label: string, value: T, description?: string]
 
 /**
  * A notification button: its label, and what pressing it does. Buttons are
@@ -21,6 +27,43 @@ type ShowNotification = (
 export interface FractionProgress {
   message?: string | undefined
   fraction: number
+}
+
+interface CourseSelectionOptions<T> {
+  /**
+   * Replaces the label for one course, given the course and the title it would otherwise
+   * get — for marking the workspace that is already open, and nothing heavier.
+   */
+  decorate?: (course: LocalCourseData, title: string) => string
+  /** What picking the course yields. Defaults to its {@link CourseIdentifier}. */
+  value?: (course: LocalCourseData) => T
+}
+
+/**
+ * Quick-pick rows for a list of courses, labelled by course title and described by the
+ * backend they come from.
+ *
+ * Every place the user chooses among their courses builds its rows here: titles are only
+ * unique within one backend, so a list that omits the backend can show two rows a student
+ * cannot tell apart.
+ */
+export function courseSelectionItems(
+  courses: readonly LocalCourseData[],
+  options?: CourseSelectionOptions<CourseIdentifier>,
+): Item<CourseIdentifier>[]
+export function courseSelectionItems<T>(
+  courses: readonly LocalCourseData[],
+  options: CourseSelectionOptions<T> & { value: (course: LocalCourseData) => T },
+): Item<T>[]
+export function courseSelectionItems<T>(
+  courses: readonly LocalCourseData[],
+  options?: CourseSelectionOptions<T>,
+): Item<T | CourseIdentifier>[] {
+  return courses.map((course) => {
+    const title = LocalCourseData.getCourseTitle(course)
+    const value = options?.value ? options.value(course) : LocalCourseData.getCourseId(course)
+    return [options?.decorate?.(course, title) ?? title, value, backendName(course.kind)]
+  })
 }
 
 /**
