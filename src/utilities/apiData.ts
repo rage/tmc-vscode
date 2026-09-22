@@ -4,12 +4,19 @@ import {
   LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
 } from "../config/constants"
 import type {
+  CombinedCourseData,
   CourseExercise,
   Exercise,
+  MoocCourse,
   MoocCourseProgress,
   TmcExerciseSlide,
 } from "../shared/langsSchema"
-import type { MoocLocalCourseExercise, TmcLocalCourseExercise } from "../storage/data"
+import type {
+  MoocLocalCourseData,
+  MoocLocalCourseExercise,
+  TmcLocalCourseData,
+  TmcLocalCourseExercise,
+} from "../storage/data"
 
 /**
  * Takes exercise arrays from two different endpoints and attempts to resolve them into
@@ -101,4 +108,71 @@ export function sumTmcApiCoursePoints(courseExercises: CourseExercise[]): Course
       awardedPoints: x.awarded_points.length,
     })),
   )
+}
+
+/**
+ * The stored form of a tmc course, for both adding it and refreshing it.
+ *
+ * @param organization Slug of the organization the course was picked from; the
+ *   course data does not carry it, so a refresh passes the stored one.
+ * @param previous The stored course being refreshed. Its `name`, `newExercises`
+ *   and `notifyAfter` are kept; every other field is rebuilt, so a refresh and an
+ *   add of the same payload agree.
+ */
+export function toStoredTmcCourse(
+  courseData: CombinedCourseData,
+  organization: string,
+  previous?: TmcLocalCourseData,
+): TmcLocalCourseData {
+  const { details, exercises, settings } = courseData
+  return {
+    id: details.id,
+    // The slug names the workspace folder and keys exercises on disk, so a
+    // renamed course keeps its old one.
+    name: previous?.name ?? details.name,
+    title: details.title,
+    description: details.description || "",
+    organization,
+    exercises: combineTmcApiExerciseData(details.exercises, exercises),
+    ...sumTmcApiCoursePoints(exercises),
+    perhapsExamMode: settings.hide_submission_results,
+    newExercises: previous?.newExercises ?? [],
+    notifyAfter: previous?.notifyAfter ?? 0,
+    disabled: settings.disabled_status !== "enabled",
+    materialUrl: settings.material_url,
+  }
+}
+
+/**
+ * The stored form of a courses.mooc.fi course, for both adding it and refreshing it.
+ *
+ * @param progress `undefined` when its fetch failed: exercises then keep
+ *   `previous`'s points and passed flags, or start at zero on an add.
+ * @param previous The stored course being refreshed. Its `name`, `newExercises`
+ *   and `notifyAfter` are kept; every other field is rebuilt, so a refresh and an
+ *   add of the same payload agree. Unlike tmc, `organization` is the course's own.
+ */
+export function toStoredMoocCourse(
+  course: MoocCourse,
+  slides: TmcExerciseSlide[],
+  progress: MoocCourseProgress | undefined,
+  previous?: MoocLocalCourseData,
+): MoocLocalCourseData {
+  const exercises = combineMoocApiExerciseData(slides, progress, previous?.exercises)
+  return {
+    id: course.id,
+    // See `toStoredTmcCourse`: the slug is the on-disk key.
+    name: previous?.name ?? course.slug,
+    title: course.name,
+    description: course.description,
+    organization: course.organization_name,
+    exercises,
+    ...sumCoursePoints(exercises),
+    // courses.mooc.fi has no exam mode, course material link or disabled state.
+    perhapsExamMode: false,
+    materialUrl: null,
+    disabled: false,
+    newExercises: previous?.newExercises ?? [],
+    notifyAfter: previous?.notifyAfter ?? 0,
+  }
 }

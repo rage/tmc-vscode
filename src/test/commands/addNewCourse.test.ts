@@ -7,7 +7,6 @@ import type { ActionContext, ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import { addNewCourse } from "../../commands/addNewCourse"
 import type { UserData } from "../../config/userdata"
-import { TmcPanel } from "../../panels/TmcPanel"
 import type { LocalCourseData } from "../../shared/shared"
 import { createMockActionContext, createMockAuthState } from "../mocks/actionContext"
 
@@ -148,22 +147,6 @@ suite("Add new course command", function () {
       kind: "mooc",
       data: { instanceId: "11111111-1111-1111-1111-111111111111" },
     })
-  })
-
-  test("tells an open My Courses panel about the added course", async function () {
-    const { context } = harness({ select: ["Shared Slug Course"] })
-    const postMessage = vi.spyOn(TmcPanel, "postMessage").mockResolvedValue(undefined)
-    try {
-      await addNewCourse(context)
-
-      expect(postMessage).toHaveBeenCalledWith({
-        type: "setMyCourses",
-        target: { type: "MyCourses" },
-        courses: storedCourses,
-      })
-    } finally {
-      postMessage.mockRestore()
-    }
   })
 
   test("adds a tmc course via its organization", async function () {

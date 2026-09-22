@@ -5,15 +5,17 @@ import type Dialog from "../api/dialog"
 import { ConnectionError, ForbiddenError, InsufficientScopeError } from "../errors"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { CombinedCourseData, MoocCourse, TmcExerciseSlide } from "../shared/langsSchema"
-import type { CourseIdentifier, Enum, ExerciseIdentifier } from "../shared/shared"
-import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
-import { Logger } from "../utilities"
+import type { BackendKind, Enum, ExerciseIdentifier, LocalCourseExercise } from "../shared/shared"
 import {
-  combineMoocApiExerciseData,
-  combineTmcApiExerciseData,
-  sumCoursePoints,
-  sumTmcApiCoursePoints,
-} from "../utilities/apiData"
+  backendName,
+  CourseIdentifier,
+  LocalCourseData,
+  makeMoocKind,
+  makeTmcKind,
+  match,
+} from "../shared/shared"
+import { Logger } from "../utilities"
+import { toStoredMoocCourse, toStoredTmcCourse } from "../utilities/apiData"
 import type { ReadyActionContext } from "./types"
 
 const postCourseStatusMessage = (
@@ -38,6 +40,21 @@ const postCourseStatusMessage = (
       courseId: id,
       disabled,
     },
+  )
+}
+
+interface RefreshedCourse {
+  course: LocalCourseData
+  exercises: LocalCourseExercise[]
+}
+
+/**
+ * The stored course and the refetched data are looked up by the same id, so this
+ * only guards the narrowing the projections need.
+ */
+function mismatchedBackend(courseId: CourseIdentifier, expected: BackendKind): Error {
+  return new Error(
+    `Expected stored course ${CourseIdentifier.toString(courseId)} to be a ${expected} course`,
   )
 }
 
@@ -122,43 +139,26 @@ export async function updateCourse(
     return updateResult
   }
 
-  const updateExercisesResult = await match(
+  // `updateExercises` finds the new exercises by diffing against the stored list,
+  // so the course is stored with its old list and the fresh one goes in after.
+  const refreshed = await match(
     updateResult.val,
-    async (tmc) => {
-      const { details, exercises, settings } = tmc
-      const { availablePoints, awardedPoints } = sumTmcApiCoursePoints(exercises)
-
-      courseData.data = {
-        ...courseData.data,
-        availablePoints,
-        awardedPoints,
-        description: details.description || "",
-        disabled: settings.disabled_status !== "enabled",
-        materialUrl: settings.material_url,
-        perhapsExamMode: settings.hide_submission_results,
+    async (tmc): Promise<Result<RefreshedCourse, Error>> => {
+      if (courseData.kind !== "tmc") {
+        return Err(mismatchedBackend(courseId, "tmc"))
       }
-      const stored = await userData.updateCourse(courseData)
-      if (stored.err) {
-        return stored
-      }
-
-      return await userData.updateExercises(
-        courseId,
-        combineTmcApiExerciseData(details.exercises, exercises).map((x) => makeTmcKind(x)),
-      )
+      const next = toStoredTmcCourse(tmc, courseData.data.organization, courseData.data)
+      return Ok({
+        course: makeTmcKind({ ...next, exercises: courseData.data.exercises }),
+        exercises: next.exercises.map((x) => makeTmcKind(x)),
+      })
     },
-    async (mooc) => {
+    async ([moocCourse, slides]): Promise<Result<RefreshedCourse, Error>> => {
       // The fetch the session was refused before has now gone through, so the next
       // lapse is worth telling the user about again.
       insufficientScopeReported = false
-      const [moocCourse, slides] = mooc
-      // The update result and the stored course are looked up from the same
-      // `courseId`, so this holds by construction; assert it to narrow the stored
-      // data off its tmc|mooc union before the mooc-shaped reads and writes below.
       if (courseData.kind !== "mooc") {
-        return Err(
-          new Error(`Expected stored course ${moocCourse.id} to be a mooc course but it was tmc`),
-        )
+        return Err(mismatchedBackend(courseId, "mooc"))
       }
       // Non-fatal: on a failed fetch, previous local progress is carried over
       // per exercise id so a refresh never wipes known points or passed flags.
@@ -168,65 +168,46 @@ export async function updateCourse(
       if (progressRes.err) {
         Logger.warn("Failed to fetch mooc course progress", progressRes.val)
       }
-      const previousExercises = courseData.data.exercises
-      const localExercises = combineMoocApiExerciseData(
+      const next = toStoredMoocCourse(
+        moocCourse,
         slides,
         progressRes.ok ? progressRes.val : undefined,
-        previousExercises,
+        courseData.data,
       )
-
-      const { availablePoints, awardedPoints } = sumCoursePoints(localExercises)
-      courseData.data = {
-        ...courseData.data,
-        availablePoints,
-        awardedPoints,
-        // Refresh the metadata the backend can change, mirroring what the tmc arm
-        // does. `materialUrl` and `perhapsExamMode` have no mooc equivalent (see
-        // `zMoocCourse`), so there is genuinely nothing to do for them here.
-        //
-        // mooc has no disabled state either, so this clears rather than refreshes:
-        // a flag left in stored data would otherwise never be lifted.
-        disabled: false,
-        //
-        // `name` (the slug) is deliberately NOT refreshed: it is the workspace
-        // folder name and the key for closed-exercise settings and exercise
-        // lookups, so adopting a renamed slug here would desync those from disk
-        // without the accompanying move.
-        description: moocCourse.description,
-        title: moocCourse.name,
-        organization: moocCourse.organization_name,
-      }
-      const stored = await userData.updateCourse(courseData)
-      if (stored.err) {
-        return stored
-      }
-
-      return await userData.updateExercises(
-        courseId,
-        localExercises.map((x) => makeMoocKind(x)),
-      )
+      return Ok({
+        course: makeMoocKind({ ...next, exercises: courseData.data.exercises }),
+        exercises: next.exercises.map((x) => makeMoocKind(x)),
+      })
     },
   )
+  if (refreshed.err) {
+    return refreshed
+  }
+  const stored = await userData.updateCourse(refreshed.val.course)
+  if (stored.err) {
+    return stored
+  }
+  const updateExercisesResult = await userData.updateExercises(courseId, refreshed.val.exercises)
   if (updateExercisesResult.err) {
     return updateExercisesResult
   }
 
-  const courseName = LocalCourseData.getCourseName(courseData)
+  // `updateExercises` mutated this same stored object, so it is already current.
+  const course = refreshed.val.course
+  const courseName = LocalCourseData.getCourseName(course)
   if (
     courseName === workspaceManager.activeCourse &&
-    courseData.kind === workspaceManager.activeCourseBackend
+    course.kind === workspaceManager.activeCourseBackend
   ) {
     exerciseDecorationProvider.updateDecorationsForExercises(
-      ...workspaceManager.getExercisesByCourseSlug(courseData.kind, courseName),
+      ...workspaceManager.getExercisesByCourseSlug(course.kind, courseName),
     )
   }
 
-  // Reading the course back would hand out this same object: `userData` stores the
-  // value given to `updateCourse`, and `updateExercises` mutates it in place.
   postCourseStatusMessage(
-    LocalCourseData.getCourseId(courseData),
-    courseData.data.disabled,
-    LocalCourseData.getNewExercises(courseData),
+    LocalCourseData.getCourseId(course),
+    course.data.disabled,
+    LocalCourseData.getNewExercises(course),
   )
 
   return Ok(true)
