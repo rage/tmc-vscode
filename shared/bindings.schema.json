@@ -138,6 +138,29 @@
         "settings"
       ]
     },
+    "CombinedMoocCourseData": {
+      "description": "A mooc course, its exercise slides and the current user's progress in it,\nfetched together. The mooc counterpart of [`CombinedCourseData`].",
+      "type": "object",
+      "properties": {
+        "course": {
+          "$ref": "#/$defs/MoocCourse"
+        },
+        "progress": {
+          "$ref": "#/$defs/CourseProgress"
+        },
+        "slides": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TmcExerciseSlide"
+          }
+        }
+      },
+      "required": [
+        "course",
+        "slides",
+        "progress"
+      ]
+    },
     "ConfigValue": {
       "description": "A setting in a TmcConfig file.",
       "anyOf": [
@@ -1264,6 +1287,22 @@
             "output-data-kind": {
               "type": "string",
               "const": "mooc-course-progress"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
+              "$ref": "#/$defs/CombinedMoocCourseData"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "mooc-combined-course-data"
             }
           },
           "required": [
