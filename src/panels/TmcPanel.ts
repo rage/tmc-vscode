@@ -5,7 +5,7 @@ import { Uri, ViewColumn, window } from "vscode"
 import * as vscode from "vscode"
 import { z } from "zod"
 
-import type { ActionContext } from "../actions/types"
+import type { ActionContext, ReadyActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type Dialog from "../api/dialog"
 import { ConnectionError, InitializationError } from "../errors"
@@ -52,47 +52,47 @@ export interface WebviewHandlers {
   /** Stops the test run `testRunId`. Does nothing if it already finished. */
   cancelTests: (testRunId: number) => void
   closeExercises: (
-    actionContext: ActionContext,
+    actionContext: ReadyActionContext,
     ids: ExerciseIdentifier[],
     courseId: CourseIdentifier,
   ) => Promise<Result<ExerciseIdentifier[], Error>>
   downloadAndOpenExercises: (
     extensionContext: vscode.ExtensionContext,
-    actionContext: ActionContext,
+    actionContext: ReadyActionContext,
     ids: ExerciseIdentifier[],
     courseId: CourseIdentifier,
   ) => Promise<Result<ExerciseIdentifier[], Error>>
   downloadExercisesForUi: (
-    actionContext: ActionContext,
+    actionContext: ReadyActionContext,
     mode: string,
     courseId: CourseIdentifier,
     ids: ExerciseIdentifier[],
   ) => Promise<void>
   openWorkspace: (
-    actionContext: ActionContext,
+    actionContext: ReadyActionContext,
     courseName: string,
     backend: BackendKind,
   ) => Promise<void>
   pasteMoocExercise: (
-    actionContext: ActionContext,
+    actionContext: ReadyActionContext,
     courseSlug: string,
     exerciseName: string,
   ) => Promise<Result<string, Error>>
   pasteTmcExercise: (
-    actionContext: ActionContext,
+    actionContext: ReadyActionContext,
     courseSlug: string,
     exerciseName: string,
   ) => Promise<Result<string, Error>>
   /** Rescans the exercises on disk, so exercises the backend dropped stop showing as open. */
-  refreshLocalExercises: (actionContext: ActionContext) => Promise<Result<void, Error>>
-  removeCourse: (actionContext: ActionContext, id: CourseIdentifier) => Promise<void>
+  refreshLocalExercises: (actionContext: ReadyActionContext) => Promise<Result<void, Error>>
+  removeCourse: (actionContext: ReadyActionContext, id: CourseIdentifier) => Promise<void>
   submitExercise: (
     extensionContext: vscode.ExtensionContext,
-    actionContext: ActionContext,
+    actionContext: ReadyActionContext,
     exerciseUri: vscode.Uri,
   ) => Promise<Result<void, Error>>
   updateCourse: (
-    actionContext: ActionContext,
+    actionContext: ReadyActionContext,
     courseId: CourseIdentifier,
   ) => Promise<Result<boolean, Error>>
 }
@@ -663,8 +663,12 @@ export class TmcPanel {
             break
           }
           case "closeExercises": {
+            const readyContext = requireReady(actionContext)
+            if (!readyContext) {
+              return
+            }
             const result = await handlers().closeExercises(
-              actionContext,
+              readyContext,
               message.ids,
               message.courseId,
             )
@@ -694,8 +698,12 @@ export class TmcPanel {
             break
           }
           case "downloadExercises": {
+            const readyContext = requireReady(actionContext)
+            if (!readyContext) {
+              return
+            }
             await handlers().downloadExercisesForUi(
-              actionContext,
+              readyContext,
               message.mode,
               message.courseId,
               message.ids,
@@ -703,23 +711,31 @@ export class TmcPanel {
             break
           }
           case "openExercises": {
+            const readyContext = requireReady(actionContext)
+            if (!readyContext) {
+              return
+            }
             await handlers().downloadAndOpenExercises(
               extensionContext,
-              actionContext,
+              readyContext,
               message.ids,
               message.courseId,
             )
             break
           }
           case "refreshCourseDetails": {
+            const readyContext = requireReady(actionContext)
+            if (!readyContext) {
+              return
+            }
             const courseId = message.id
-            const updateResult = await handlers().updateCourse(actionContext, courseId)
+            const updateResult = await handlers().updateCourse(readyContext, courseId)
             if (updateResult.err) {
               actionContext.dialog.reportError("Failed to update course.", updateResult.val)
             }
             // `updateCourse` does not rescan, and the re-render below reads the exercise
             // statuses straight out of the workspace manager.
-            const rescanResult = await handlers().refreshLocalExercises(actionContext)
+            const rescanResult = await handlers().refreshLocalExercises(readyContext)
             if (rescanResult.err) {
               Logger.warn("Failed to rescan the local exercises", rescanResult.val)
             }
@@ -746,10 +762,15 @@ export class TmcPanel {
             // a pre-render here would just flash a second one that's immediately replaced.
             // When it fails there is no such panel, so the ExerciseTests panel still on
             // screen has to be told, or its Submit button stays disabled forever.
+            const readyContext = requireReady(actionContext)
+            if (!readyContext) {
+              TmcPanel.postMessage({ type: "submitFailed", target: { type: "ExerciseTests" } })
+              return
+            }
             try {
               const result = await handlers().submitExercise(
                 extensionContext,
-                actionContext,
+                readyContext,
                 message.exerciseUri,
               )
               if (result.err) {
@@ -762,17 +783,28 @@ export class TmcPanel {
             break
           }
           case "pasteExercise": {
+            const readyContext = requireReady(actionContext)
+            if (!readyContext) {
+              // The requesting panel is waiting on a `pasteResult`/`pasteError` reply,
+              // same as a genuine paste failure below -- silence would leave it waiting.
+              TmcPanel.postMessage({
+                type: "pasteError",
+                target: message.requestingPanel,
+                error: NOT_INITIALIZED_MESSAGE,
+              })
+              return
+            }
             const pasteResult = await match(
               message.course,
               () =>
                 handlers().pasteTmcExercise(
-                  actionContext,
+                  readyContext,
                   LocalCourseData.getCourseName(message.course),
                   LocalCourseExercise.getSlug(message.exercise),
                 ),
               () =>
                 handlers().pasteMoocExercise(
-                  actionContext,
+                  readyContext,
                   LocalCourseData.getCourseName(message.course),
                   LocalCourseExercise.getSlug(message.exercise),
                 ),
@@ -945,6 +977,22 @@ function reportNotInitialized(dialog: Dialog): InitializationError {
     },
   ])
   return error
+}
+
+/**
+ * Narrows a message handler's context for the action- and command-layer calls that
+ * require one, or reports why the action cannot run.
+ *
+ * A webview mounted before a failed (or since-degraded) activation can still post a
+ * message, so this is what turns "not ready" into user-visible feedback for the
+ * handlers below that would otherwise be handed a context they cannot use.
+ */
+function requireReady(actionContext: ActionContext): ReadyActionContext | undefined {
+  if (isReady(actionContext)) {
+    return actionContext
+  }
+  reportNotInitialized(actionContext.dialog)
+  return undefined
 }
 
 /**
