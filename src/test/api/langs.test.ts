@@ -139,7 +139,7 @@ suite("Langs class arg building", function () {
     expect(args.some((arg) => arg.includes("[object Object]"))).toBe(false)
   })
 
-  test("getCourseDetails builds the mooc --course-id from the instance id", async function () {
+  test("getCourseDetails builds the mooc --course-id from the course id", async function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
     await langs.getCourseDetails(CourseIdentifier.from("course-uuid"))
@@ -161,10 +161,10 @@ suite("Langs class arg building", function () {
     ])
   })
 
-  test("getEnrolledMoocCourseInstances", async function () {
+  test("getEnrolledMoocCourses", async function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
-    await langs.getEnrolledMoocCourseInstances()
+    await langs.getEnrolledMoocCourses()
     expect(calls[0]?.args).toEqual(["mooc", "--client-name", "test-client", "courses"])
   })
 
@@ -213,7 +213,7 @@ suite("Langs class arg building", function () {
     expect(result.unwrap()).toEqual(settings)
   })
 
-  test("getEnrolledMoocCourseInstances de-duplicates courses by id", async function () {
+  test("getEnrolledMoocCourses de-duplicates courses by id", async function () {
     // The backend can return the same course twice (two live enrollments of one
     // course); since the extension keys courses by course id, the list must be
     // de-duplicated so the same course never shows up — or gets added — twice.
@@ -242,7 +242,7 @@ suite("Langs class arg building", function () {
       },
     ]
     stubSpawn(langs, () => Ok(dataOutput("mooc-courses", fixtures)))
-    const result = await langs.getEnrolledMoocCourseInstances()
+    const result = await langs.getEnrolledMoocCourses()
     expect(result.ok).toBe(true)
     const courses = result.unwrap()
     expect(courses.map((c) => c.id)).toEqual([uuid(1), uuid(2)])
@@ -264,10 +264,10 @@ suite("Langs class arg building", function () {
     ])
   })
 
-  test("getMoocCourseInstanceData first requests the course", async function () {
+  test("getMoocCourseData first requests the course", async function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
-    await langs.getMoocCourseInstanceData("inst-uuid")
+    await langs.getMoocCourseData("course-uuid")
     // The Err stub stops after the first request; assert its argv.
     expect(calls[0]?.args).toEqual([
       "mooc",
@@ -275,18 +275,18 @@ suite("Langs class arg building", function () {
       "test-client",
       "course",
       "--course-id",
-      "inst-uuid",
+      "course-uuid",
     ])
   })
 
-  test("getMoocCourseInstanceData then requests the course exercises", async function () {
+  test("getMoocCourseData then requests the course exercises", async function () {
     const langs = newLangs()
     const calls = stubSpawn(langs, (i) =>
       i === 0
         ? Ok(dataOutput("mooc-course", { ...moocCourse, id: uuid(1) }))
         : Ok(dataOutput("mooc-exercise-slides", [])),
     )
-    await langs.getMoocCourseInstanceData(uuid(1))
+    await langs.getMoocCourseData(uuid(1))
     expect(calls[1]?.args).toEqual([
       "mooc",
       "--client-name",
@@ -312,14 +312,14 @@ suite("Langs class arg building", function () {
       ],
     }
     const calls = stubSpawn(langs, () => Ok(dataOutput("mooc-course-progress", progress)))
-    const result = await langs.getMoocCourseProgress("inst-uuid")
+    const result = await langs.getMoocCourseProgress("course-uuid")
     expect(calls[0]?.args).toEqual([
       "mooc",
       "--client-name",
       "test-client",
       "course-progress",
       "--course-id",
-      "inst-uuid",
+      "course-uuid",
     ])
     expect(result.ok).toBe(true)
     expect(result.unwrap()).toEqual(progress)
@@ -889,7 +889,7 @@ suite("Langs error-kind mapping", function () {
     test(`maps ${String(kind)} to ${errorClass.name}`, async function () {
       const langs = newLangs()
       stubSpawn(langs, () => Ok(errorOutput(kind)))
-      const result = await langs.getEnrolledMoocCourseInstances()
+      const result = await langs.getEnrolledMoocCourses()
       expect(result.err).toBe(true)
       expect(result.val).toBeInstanceOf(errorClass)
     })
@@ -900,7 +900,7 @@ suite("Langs error-kind mapping", function () {
       test(`${String(kind)} carries the CLI trace and the process stderr`, async function () {
         const langs = newLangs()
         stubSpawn(langs, () => Ok(errorOutput(kind)), "stderr line")
-        const result = await langs.getEnrolledMoocCourseInstances()
+        const result = await langs.getEnrolledMoocCourses()
         const details = (result.val as BaseError).details ?? ""
         expect(details).toContain("trace line")
         expect(details).toContain("stderr line")
@@ -920,7 +920,7 @@ suite("Langs error-kind mapping", function () {
 
     const langsMooc = newLangs()
     stubSpawn(langsMooc, () => Ok(errorOutput("forbidden")))
-    const moocResult = await langsMooc.getEnrolledMoocCourseInstances()
+    const moocResult = await langsMooc.getEnrolledMoocCourses()
     expect(moocResult.val).toBeInstanceOf(InsufficientScopeError)
     expect((moocResult.val as Error).message).toContain("Log in again")
   })
@@ -930,7 +930,7 @@ suite("Langs error-kind mapping", function () {
     // of which backend actually produced the error.
     const langsMooc = newLangs()
     stubSpawn(langsMooc, () => Ok(errorOutput("not-enrolled")))
-    const moocResult = await langsMooc.getEnrolledMoocCourseInstances()
+    const moocResult = await langsMooc.getEnrolledMoocCourses()
     expect(moocResult.val).toBeInstanceOf(NotEnrolledError)
     expect((moocResult.val as Error).message).toContain("courses.mooc.fi")
     expect((moocResult.val as Error).message).not.toContain("tmc.mooc.fi")
@@ -945,7 +945,7 @@ suite("Langs error-kind mapping", function () {
   test("a crashed process is reported as an error", async function () {
     const langs = newLangs()
     stubSpawn(langs, () => Ok({ ...dataOutput("mooc-courses", []), status: "crashed" }))
-    const result = await langs.getEnrolledMoocCourseInstances()
+    const result = await langs.getEnrolledMoocCourses()
     expect(result.err).toBe(true)
   })
 
@@ -971,7 +971,7 @@ suite("Langs error-kind mapping", function () {
     expect(organizationsCalls).toBe(1)
 
     // Only the mooc event fires, since the failing command targets mooc.
-    const result = await langs.getEnrolledMoocCourseInstances()
+    const result = await langs.getEnrolledMoocCourses()
     expect(result.val).toBeInstanceOf(InvalidTokenError)
     expect(onMoocLogout).toHaveBeenCalledExactlyOnceWith(false)
     expect(onLogout).not.toHaveBeenCalled()
@@ -995,13 +995,13 @@ suite("Langs error-kind mapping", function () {
       return Ok(dataOutput("mooc-course", { ...moocCourse, id: uuid(1) }))
     })
 
-    await langs.getMoocCourseInstanceData(uuid(1))
-    await langs.getMoocCourseInstanceData(uuid(1))
+    await langs.getMoocCourseData(uuid(1))
+    await langs.getMoocCourseData(uuid(1))
     expect(courseCalls).toBe(1)
 
-    expect((await langs.getEnrolledMoocCourseInstances()).err).toBe(true)
+    expect((await langs.getEnrolledMoocCourses()).err).toBe(true)
 
-    await langs.getMoocCourseInstanceData(uuid(1))
+    await langs.getMoocCourseData(uuid(1))
     expect(courseCalls).toBe(2)
   })
 
@@ -1119,7 +1119,7 @@ suite("Langs response cache", function () {
     expect(refreshed.val).toEqual([ExerciseIdentifier.from(uuid(2))])
   })
 
-  test("getMoocCourseInstanceData serves a repeat view from cache", async function () {
+  test("getMoocCourseData serves a repeat view from cache", async function () {
     const langs = newLangs()
     let callCount = 0
     stubSpawn(langs, (_i, args) => {
@@ -1128,13 +1128,13 @@ suite("Langs response cache", function () {
         ? Ok(dataOutput("mooc-exercise-slides", []))
         : Ok(dataOutput("mooc-course", { ...moocCourse, id: uuid(1) }))
     })
-    await langs.getMoocCourseInstanceData(uuid(1))
-    await langs.getMoocCourseInstanceData(uuid(1))
+    await langs.getMoocCourseData(uuid(1))
+    await langs.getMoocCourseData(uuid(1))
     // Two subcommands on the first view, both served from cache on the second.
     expect(callCount).toBe(2)
   })
 
-  test("getMoocCourseInstanceData forceRefresh bypasses the cache", async function () {
+  test("getMoocCourseData forceRefresh bypasses the cache", async function () {
     const langs = newLangs()
     let callCount = 0
     stubSpawn(langs, (_i, args) => {
@@ -1143,12 +1143,12 @@ suite("Langs response cache", function () {
         ? Ok(dataOutput("mooc-exercise-slides", []))
         : Ok(dataOutput("mooc-course", { ...moocCourse, id: uuid(1) }))
     })
-    await langs.getMoocCourseInstanceData(uuid(1))
-    await langs.getMoocCourseInstanceData(uuid(1), { forceRefresh: true })
+    await langs.getMoocCourseData(uuid(1))
+    await langs.getMoocCourseData(uuid(1), { forceRefresh: true })
     expect(callCount).toBe(4)
   })
 
-  test("getCourseDetails reuses the mooc course getMoocCourseInstanceData already fetched", async function () {
+  test("getCourseDetails reuses the mooc course getMoocCourseData already fetched", async function () {
     const langs = newLangs()
     let courseCalls = 0
     stubSpawn(langs, (_i, args) => {
@@ -1159,7 +1159,7 @@ suite("Langs response cache", function () {
       return Ok(dataOutput("mooc-course", { ...moocCourse, id: uuid(1) }))
     })
 
-    await langs.getMoocCourseInstanceData(uuid(1))
+    await langs.getMoocCourseData(uuid(1))
     const details = await langs.getCourseDetails(CourseIdentifier.from(uuid(1)))
 
     // Both legs run `mooc course --course-id`, so the second must not spawn.

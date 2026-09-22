@@ -32,7 +32,7 @@ function passedExerciseKey(id: ExerciseIdentifier): string {
 
 export class UserData {
   private _tmcCourses: Map<number, TmcLocalCourseData>
-  // maps instance ids to course data
+  // keyed by course id, not slug
   private _moocCourses: Map<string, MoocLocalCourseData>
   // keyed by a backend-qualified string (see `passedExerciseKey`), never by the
   // ExerciseIdentifier object itself — a `Set` of objects only ever matches on
@@ -196,15 +196,14 @@ export class UserData {
     courseSlug: string,
     exerciseName: string,
   ): Readonly<MoocLocalCourseExercise> | undefined {
-    // Mooc courses are keyed by *instance* id, so two enrolled instances of the
-    // same course share a slug — all the more reason not to stop at the first
-    // slug match without checking that it actually holds the exercise.
     for (const course of this._moocCourses.values()) {
       if (course.name === courseSlug) {
         const exercise = course.exercises.find((x) => x.name === exerciseName)
         if (exercise) {
           return exercise
         }
+        // Keep scanning: a matching course slug is not proof the exercise lives
+        // there, and slugs are not guaranteed unique across stored entries.
       }
     }
     return undefined

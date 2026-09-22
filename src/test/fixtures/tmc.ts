@@ -1,7 +1,7 @@
 import type {
-  CourseInstance,
   LocalExercise,
   LocalTmcExercise,
+  MoocCourse,
   MoocCourseProgress,
   TmcExerciseSlide,
 } from "../../shared/langsSchema"
@@ -38,12 +38,12 @@ const localExercises: LocalExercise[] = listLocalCourseExercisesPythonCourse.map
 // mooc fixtures (courses.mooc.fi — UUID-keyed)
 // -------------------------------------------------------------------------------------------------
 
-const MOOC_INSTANCE_UUID = "018f6f9b-1c2d-7e3f-8a4b-5c6d7e8f9a0b"
+const MOOC_COURSE_UUID = "018f6f9b-1c2d-7e3f-8a4b-5c6d7e8f9a0b"
 const MOOC_EXERCISE_UUID = "550e8400-e29b-41d4-a716-446655440000"
 const MOOC_TASK_UUID = "67e55044-10b1-426f-9247-bb680e5fe0c8"
 
-const moocCourseInstance: CourseInstance = {
-  id: MOOC_INSTANCE_UUID,
+const moocCourse: MoocCourse = {
+  id: MOOC_COURSE_UUID,
   slug: "mooc-python-course",
   name: "Mooc Python",
   description: "A mooc course",
@@ -52,9 +52,9 @@ const moocCourseInstance: CourseInstance = {
 
 const moocExerciseSlides: TmcExerciseSlide[] = [
   {
-    slide_id: MOOC_INSTANCE_UUID,
+    slide_id: MOOC_COURSE_UUID,
     exercise_id: MOOC_EXERCISE_UUID,
-    course_id: MOOC_INSTANCE_UUID,
+    course_id: MOOC_COURSE_UUID,
     exercise_name: "mooc_hello",
     exercise_order_number: 0,
     deadline: null,
@@ -71,12 +71,11 @@ const moocExerciseSlides: TmcExerciseSlide[] = [
   },
 ]
 
-const moocEnrolledCourseInstances: CourseInstance[] = [moocCourseInstance]
+const moocEnrolledCourses: MoocCourse[] = [moocCourse]
 
-// The user's progress for `moocCourseInstance`: the one exercise passed with
-// full points.
+// The user's progress for `moocCourse`: the one exercise passed with full points.
 const moocCourseProgress: MoocCourseProgress = {
-  course_id: MOOC_INSTANCE_UUID,
+  course_id: MOOC_COURSE_UUID,
   exercises: [
     {
       exercise_id: MOOC_EXERCISE_UUID,
@@ -92,12 +91,12 @@ export {
   closedExercisesPythonCourse,
   listLocalCourseExercisesPythonCourse,
   localExercises,
+  MOOC_COURSE_UUID,
   MOOC_EXERCISE_UUID,
-  MOOC_INSTANCE_UUID,
   MOOC_TASK_UUID,
-  moocCourseInstance,
+  moocCourse,
   moocCourseProgress,
-  moocEnrolledCourseInstances,
+  moocEnrolledCourses,
   moocExerciseSlides,
   moocExerciseUpdates,
   tmcExerciseUpdates,
