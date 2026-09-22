@@ -75,12 +75,7 @@ jobs:
 
       # Fetches the spec at the rev the stamp records and byte-compares, which is
       # what catches a stamp refreshed from a dirty or unpushed sibling checkout.
-      # Non-blocking because the recorded rev lives on secret-project-331's
-      # programming-exercise-migration branch: a force-push there would fail this
-      # step for reasons this repo does not control. Drop continue-on-error once
-      # sp331 PR #1769 has merged and the recorded revs are on master.
       - name: Vendored OpenAPI spec source
-        continue-on-error: true
         run: pnpm run vendor:langs-openapi -- --check-source
 
       - name: Release tag validation (bin/validateRelease.test.sh)
