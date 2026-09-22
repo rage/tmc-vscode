@@ -175,7 +175,7 @@ suite("downloadAndOpenExercises action", function () {
       workspaceManager: new Ok(workspaceManager),
       userData: new Ok(userData),
       langs: new Ok(langs),
-      dialog: { errorNotification: vi.fn() },
+      dialog: { reportError: vi.fn() },
     } as unknown as ActionContext
   }
 
