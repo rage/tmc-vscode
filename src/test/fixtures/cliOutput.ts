@@ -691,7 +691,7 @@ const invalidCliOutputFixtures: CliOutputFixture[] = [
   },
   {
     name: "unknown output-data-kind",
-    value: outputData("mooc-course-instances", []),
+    value: outputData("mooc-not-a-kind", []),
   },
   {
     name: "error trace with non-string elements",
