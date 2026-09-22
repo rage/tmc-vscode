@@ -32,7 +32,8 @@ export interface AuthState {
    *
    * A backend whose check fails keeps its previous answer — a failed check says
    * nothing about the session — so the returned errors are for reporting, not
-   * for deciding what the state now is. `timeout` bounds each of the two calls.
+   * for deciding what the state now is. The two calls run at once, so `timeout`
+   * bounds each of them and the call as a whole.
    */
   refresh: (options?: { timeout: number }) => Promise<AuthCheck>
   /** Records what a login or logout event just reported for one backend. */
@@ -83,11 +84,13 @@ export function createAuthState(langs: Result<Langs, Error>, ui: UI): AuthState 
         await apply()
         return { tmc: Ok(false), mooc: Ok(false) }
       }
-      const tmc = await langs.val.isAuthenticated(options)
+      const [tmc, mooc] = await Promise.all([
+        langs.val.isAuthenticated(options),
+        langs.val.isMoocAuthenticated(options),
+      ])
       if (tmc.ok) {
         authenticated.tmc = tmc.val
       }
-      const mooc = await langs.val.isMoocAuthenticated(options)
       if (mooc.ok) {
         authenticated.mooc = mooc.val
       }

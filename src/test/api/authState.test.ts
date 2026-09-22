@@ -103,6 +103,34 @@ suite("AuthState", function () {
     expect(setLoggedIn.mock.calls).toEqual([[true], [false]])
   })
 
+  // Each check is a cold CLI start against an independent backend, and both are
+  // given the same timeout, so running them in sequence doubles the bound the
+  // caller asked for.
+  test("checks the two backends at once, not one after the other", async function () {
+    const events: string[] = []
+    // The yield is what makes the order observable: without it each check would
+    // run to completion before the other was even called, sequential or not.
+    const langs = {
+      isAuthenticated: vi.fn(async () => {
+        events.push("tmc started")
+        await Promise.resolve()
+        events.push("tmc answered")
+        return Ok(true)
+      }),
+      isMoocAuthenticated: vi.fn(async () => {
+        events.push("mooc started")
+        await Promise.resolve()
+        events.push("mooc answered")
+        return Ok(false)
+      }),
+    } as unknown as Langs
+    const ui = { treeDP: { setLoggedIn: vi.fn() } } as unknown as UI
+
+    await createAuthState(new Ok(langs), ui).refresh()
+
+    expect(events).toEqual(["tmc started", "mooc started", "tmc answered", "mooc answered"])
+  })
+
   test("a login event for one backend does not claim the other", async function () {
     const { authState } = harness({ tmc: [false], mooc: [false] })
 
