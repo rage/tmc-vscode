@@ -1,6 +1,11 @@
 import { z } from "zod"
 
-/** An `Error` carrying the fields Node attaches to a failed system call. */
+/**
+ * An `Error` carrying the fields Node attaches to a failed system call.
+ *
+ * Structurally `NodeJS.ErrnoException`, spelled out here so that the webview project, which
+ * shares this module, needs no Node type definitions.
+ */
 export interface ErrnoException extends Error {
   errno?: number | undefined
   code?: string | undefined

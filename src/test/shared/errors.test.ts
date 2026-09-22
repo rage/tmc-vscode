@@ -26,8 +26,7 @@ suite("BaseError", function () {
     )
   })
 
-  // a catch block hands the constructor whatever was thrown, and an error that fails to
-  // construct hides the failure it was reporting
+  // an error that fails to construct hides the failure it was reporting
   test("does not throw on a value that cannot be described", function () {
     const circular: { self?: unknown } = {}
     circular.self = circular
