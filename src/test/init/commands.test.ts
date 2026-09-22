@@ -551,20 +551,21 @@ suite("registered command handlers", function () {
     )
   })
 
-  test("tmc.openTMCExercisesFolder does nothing without a known projects directory", async function () {
+  test("tmc.openTMCExercisesFolder says why it opens nothing without a known projects directory", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     executeCommand.mockClear()
-    const error = vi.spyOn(Logger, "error").mockImplementation(() => {})
-    const { handlers } = registerAndCollect(
-      createMockActionContext({
-        startup: { resources: { projectsDirectory: undefined } as Resources },
-      }),
-    )
+    const actionContext = createMockActionContext({
+      startup: { resources: { projectsDirectory: undefined } as Resources },
+    })
+    const { handlers } = registerAndCollect(actionContext)
 
     await handlers.get("tmc.openTMCExercisesFolder")?.()
 
     expect(executeCommand).not.toHaveBeenCalled()
-    expect(error).toHaveBeenCalledOnce()
+    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
+      "Opening the exercises folder is unavailable: tmc-langs did not report an exercise directory.",
+      expect.any(Error),
+    )
   })
 })
 

@@ -121,13 +121,17 @@ suite("Wipe command", function () {
     expect(context.dialog.reportError).toHaveBeenCalledOnce()
   })
 
-  test("wipes nothing when tmc-langs reported no exercise directory", async function () {
+  test("wipes nothing and says why when tmc-langs reported no exercise directory", async function () {
     const context = wipeContext({ noProjectsDirectory: true })
 
     await wipe(context, extensionContext)
 
     expect(stepsRun).toEqual([])
     expect(context.dialog.explicitConfirmation).not.toHaveBeenCalled()
+    expect(context.dialog.errorNotification).toHaveBeenCalledWith(
+      "Wiping the extension data is unavailable: tmc-langs did not report an exercise directory.",
+      expect.any(Error),
+    )
   })
 
   test("deletes nothing when the user declines the second confirmation", async function () {

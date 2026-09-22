@@ -15,7 +15,10 @@ export async function wipe(
   Logger.info("Wiping")
   const projectsDirectory = resources.projectsDirectory
   if (!projectsDirectory) {
-    Logger.error("Cannot wipe the extension data: tmc-langs reported no exercise directory")
+    void dialog.errorNotification(
+      "Wiping the extension data is unavailable: tmc-langs did not report an exercise directory.",
+      new Error("tmc-langs did not report an exercise directory"),
+    )
     return
   }
 

@@ -187,7 +187,10 @@ export function registerCommands(
   register("tmc.openTMCExercisesFolder", async () => {
     const { projectsDirectory } = readyContext.startup.resources
     if (!projectsDirectory) {
-      Logger.error("Cannot open the exercises folder: tmc-langs reported no exercise directory")
+      void dialog.errorNotification(
+        "Opening the exercises folder is unavailable: tmc-langs did not report an exercise directory.",
+        new Error("tmc-langs did not report an exercise directory"),
+      )
       return
     }
 
