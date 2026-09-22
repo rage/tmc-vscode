@@ -1,8 +1,7 @@
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { NOTIFICATION_DELAY } from "../config/constants"
-import { postUpdateables, withOptimisticList } from "../panels/exerciseLists"
-import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
+import { CourseIdentifier } from "../shared/shared"
 import { Logger } from "../utilities"
 
 /**
@@ -51,39 +50,8 @@ export async function updateExercises(
     exercisesToUpdate.map((x) => [CourseIdentifier.toString(x.courseId), x.courseId]),
   )
 
-  const downloadHandler = async (): Promise<void> => {
-    // Broadcast per course so a CourseDetails panel only applies its own list.
-    const postUpdateablesByCourse = (exerciseIds: ExerciseIdentifier[]): void => {
-      const wanted = new Set(exerciseIds.map((x) => ExerciseIdentifier.unwrap(x)))
-      for (const [key, courseId] of coursesToUpdate) {
-        postUpdateables(
-          courseId,
-          exercisesToUpdate
-            .filter(
-              (x) =>
-                CourseIdentifier.toString(x.courseId) === key &&
-                wanted.has(ExerciseIdentifier.unwrap(x.exerciseId)),
-            )
-            .map((x) => x.exerciseId),
-        )
-      }
-    }
-    await withOptimisticList(
-      () => postUpdateablesByCourse([]),
-      async (): Promise<ExerciseIdentifier[] | undefined> => {
-        const downloadResult = await actions.downloadOrUpdateExercises(
-          actionContext,
-          exercisesToUpdate.map((x) => x.exerciseId),
-        )
-        if (downloadResult.err) {
-          dialog.reportError("Failed to update exercises.", downloadResult.val)
-          return undefined
-        }
-        return downloadResult.val.failed
-      },
-      (failed) => postUpdateablesByCourse(failed ?? exercisesToUpdate.map((x) => x.exerciseId)),
-    )
-  }
+  const downloadHandler = (): Promise<void> =>
+    actions.downloadExerciseUpdates(actionContext, exercisesToUpdate)
 
   if (settings.getAutomaticallyUpdateExercises()) {
     return downloadHandler()
