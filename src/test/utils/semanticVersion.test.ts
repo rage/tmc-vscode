@@ -33,9 +33,11 @@ suite("Semantic version utils", function () {
     expect(semVerCompare("1x2x3", "1.2.3", "patch")).toBeUndefined()
   })
 
-  // The two migration gates (src/test-integration/tmc_langs_cli.spec.ts and
-  // playwright/migration-gate.ts) feed in `tmc-langs-cli --version` output verbatim, and
-  // silently skip every mooc case if the version stops being found inside it.
+  // The two migration gates (src/test-integration/cliMigrationProbe.ts, shared by
+  // src/test-integration/tmc_langs_cli.spec.ts and playwright/migration-gate.ts) feed
+  // in `tmc-langs-cli --version` output verbatim. If a version stops being found
+  // inside it, `semVerCompare` returns `undefined`, which the gates treat as a broken
+  // binary and fail the run -- not a skip.
   test("A version embedded in a command's output is still compared", function () {
     expect(semVerCompare("tmc-langs-cli 0.40.0\n", "0.40.0", "patch")).toBe(0)
     expect(semVerCompare("tmc-langs-cli 0.39.6\n", "0.40.0", "patch")).toBeLessThan(0)
