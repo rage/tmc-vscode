@@ -190,15 +190,6 @@ type _panelTypesMatch = Equal<Panel["type"], PanelType> extends true ? true : ne
 const _panelTypesMatch: _panelTypesMatch = true
 
 /**
- * Contains the state of the webview.
- */
-export const StateSchema = z.object({
-  panel: PanelSchema,
-})
-
-export type State = z.infer<typeof StateSchema>
-
-/**
  * A failure flattened for display in a webview.
  *
  * The host-to-webview bridge serializes a message as JSON and `Error.message` is
