@@ -21,8 +21,6 @@
     "shared/generated",
     "shared/bindings.schema.json",
     "backend/mooc/exercise-services-client.openapi.generated.json",
-    "src/shared",
-    "webview-ui/src/shared",
     "webview-ui/public/build",
     "backend/cli",
     "backend/resources"

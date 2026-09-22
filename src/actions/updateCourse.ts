@@ -10,7 +10,7 @@ import {
   InsufficientScopeError,
 } from "../errors"
 import { TmcPanel } from "../panels/TmcPanel"
-import type { CombinedCourseData, CourseInstance, TmcExerciseSlide } from "../shared/langsSchema"
+import type { CombinedCourseData, MoocCourse, TmcExerciseSlide } from "../shared/langsSchema"
 import type { CourseIdentifier, Enum, ExerciseIdentifier } from "../shared/shared"
 import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
 import { Logger } from "../utilities"
@@ -94,7 +94,7 @@ export async function updateCourse(
   }
   const courseData = storedCourse.val
   const updateResult: Result<
-    Enum<CombinedCourseData, [CourseInstance, TmcExerciseSlide[]]>,
+    Enum<CombinedCourseData, [MoocCourse, TmcExerciseSlide[]]>,
     Error
   > = await match(
     courseId,
@@ -104,7 +104,7 @@ export async function updateCourse(
         .then((res) => res.map((x) => makeTmcKind(x))),
     (moocId) =>
       langs.val
-        .getMoocCourseInstanceData(moocId.instanceId, { forceRefresh: true })
+        .getMoocCourseData(moocId.instanceId, { forceRefresh: true })
         .then((res) => res.map((x) => makeMoocKind(x))),
   )
   if (updateResult.err) {

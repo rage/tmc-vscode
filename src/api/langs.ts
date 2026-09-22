@@ -37,7 +37,6 @@ import type {
   CourseData,
   CourseDetails,
   CourseExercise,
-  CourseInstance,
   DataKind,
   DownloadOrUpdateMoocCourseExercisesResult,
   DownloadOrUpdateTmcCourseExercisesResult,
@@ -46,6 +45,7 @@ import type {
   LocalExercise,
   LocalMoocExercise,
   LocalTmcExercise,
+  MoocCourse,
   MoocCourseProgress,
   MoocDeviceLogin,
   MoocOldSubmissionRestore,
@@ -1095,10 +1095,10 @@ export default class Langs {
    * like tmc's `combined-course-data`. Each is cached by course id; pass
    * `{ forceRefresh: true }` to bypass.
    */
-  public async getMoocCourseInstanceData(
+  public async getMoocCourseData(
     courseId: string,
     options?: CacheOptions,
-  ): Promise<Result<[CourseInstance, TmcExerciseSlide[]], Error>> {
+  ): Promise<Result<[MoocCourse, TmcExerciseSlide[]], Error>> {
     const courseRes = await this._executeLangsCommand(
       { backend: "mooc", args: this._moocCmd("course", "--course-id", courseId) },
       "mooc-course",
@@ -1150,7 +1150,7 @@ export default class Langs {
   public async getCourseDetails(
     courseId: CourseIdentifier,
     options?: CacheOptions,
-  ): Promise<Result<CourseDetails | CourseInstance, Error>> {
+  ): Promise<Result<CourseDetails | MoocCourse, Error>> {
     if (courseId.kind === "tmc") {
       const res = await this._executeLangsCommand(
         {
@@ -1172,7 +1172,7 @@ export default class Langs {
       // The mooc CLI has no `get-course-details` subcommand; `course` returns the
       // course itself. Callers use this only as a connectivity probe (a failed
       // result flips the course-details view into offline mode), so the returned
-      // MoocCourse shape is sufficient. It shares getMoocCourseInstanceData's entry,
+      // MoocCourse shape is sufficient. It shares getMoocCourseData's entry,
       // being the same command against the same course.
       const res = await this._executeLangsCommand(
         {
@@ -1489,15 +1489,14 @@ export default class Langs {
   }
 
   /**
-   * Submits given exercise to TMC Paste and provides a link to it. Uses TMC-langs `paste` core
-   * command internally.
+   * Submits the given exercise to the TMC Server paste service and returns a link to it.
    *
    * Throttled to one call per `MINIMUM_SUBMISSION_INTERVAL` shared with every other tmc call
    * that submits — submit, and `--save-old-state` on reset and restore — and errs with a
    * `BottleneckError` over that rate rather than waiting.
    *
    * @param exerciseId Id of the exercise.
-   * @returns TMC paste link.
+   * @returns The paste link.
    */
   public async submitTmcExerciseToPaste(
     exerciseId: number,
@@ -1597,7 +1596,7 @@ export default class Langs {
    * keys courses by course id, the list is de-duplicated by `id` (keeping the
    * first occurrence) so the same course never appears — or is added — twice.
    */
-  public async getEnrolledMoocCourseInstances(): Promise<Result<CourseInstance[], Error>> {
+  public async getEnrolledMoocCourses(): Promise<Result<MoocCourse[], Error>> {
     const res = await this._executeLangsCommand(
       { backend: "mooc", args: this._moocCmd("courses") },
       "mooc-courses",

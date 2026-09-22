@@ -27,7 +27,7 @@
   import "@vscode-elements/elements/dist/vscode-textfield/index.js"
 
   import Welcome from "./panels/Welcome.svelte"
-  import type { State, AppPanel } from "./shared/shared"
+  import type { AppPanel, Panel } from "./shared/shared"
   import { assertUnreachable } from "./shared/shared"
   import { addMessageListener } from "./utilities/script"
   import { vscode } from "./utilities/vscode"
@@ -72,7 +72,7 @@
   }
   // $state.raw, not $state: panel objects are passed to vscode.postMessage, and a deep
   // $state proxy would fail its structured clone
-  let appState = $state.raw<State>({ panel: appPanel })
+  let appState = $state.raw<{ panel: Panel }>({ panel: appPanel })
   addMessageListener(appPanel, (message) => {
     switch (message.type) {
       case "setPanel": {

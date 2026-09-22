@@ -3,7 +3,6 @@ import { z } from "zod"
 import {
   zCliOutput,
   zCourseProgress,
-  zMoocCourse,
   zMoocOldSubmissionRestore,
   zNotification,
   zOutputData,
@@ -138,11 +137,3 @@ export type MoocCourseProgress = z.infer<typeof MoocCourseProgress>
 /** Outcome of `mooc download-old-submission`: `nothing-to-download` for a submission the server has no files for, which only an exercise type with no files at all can be. */
 export const MoocOldSubmissionRestore = zMoocOldSubmissionRestore
 export type MoocOldSubmissionRestore = z.infer<typeof MoocOldSubmissionRestore>
-
-/**
- * @deprecated The langs CLI has no course-instance concept; it returns
- * courses. Migrate usages to `MoocCourse` (fields changed, e.g.
- * `course_name` -> `name`).
- */
-export const CourseInstance = zMoocCourse
-export type CourseInstance = z.infer<typeof CourseInstance>

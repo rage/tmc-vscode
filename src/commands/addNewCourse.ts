@@ -5,7 +5,7 @@ import * as actions from "../actions"
 import type { ActionContext } from "../actions/types"
 import type Langs from "../api/langs"
 import { TmcPanel } from "../panels/TmcPanel"
-import type { CourseInstance, Organization } from "../shared/langsSchema"
+import type { MoocCourse, Organization } from "../shared/langsSchema"
 import type { CourseIdentifier, Enum } from "../shared/shared"
 import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
 import { Logger } from "../utilities"
@@ -18,7 +18,7 @@ import { Logger } from "../utilities"
  * and needs a second pick. Listing both in one pick keeps the mooc path — the
  * one being migrated to — down to a single step, without a platform question.
  */
-type TopLevelChoice = Enum<Organization, CourseInstance>
+type TopLevelChoice = Enum<Organization, MoocCourse>
 
 /**
  * Stands for both "the user is not logged in to courses.mooc.fi" and the pick
@@ -45,8 +45,8 @@ function courseKey(id: CourseIdentifier): string {
 async function enrolledMoocCourses(
   langs: Langs,
   authenticated: boolean,
-): Promise<Result<CourseInstance[], Error> | typeof MOOC_LOGIN> {
-  return authenticated ? langs.getEnrolledMoocCourseInstances() : MOOC_LOGIN
+): Promise<Result<MoocCourse[], Error> | typeof MOOC_LOGIN> {
+  return authenticated ? langs.getEnrolledMoocCourses() : MOOC_LOGIN
 }
 
 export async function addNewCourse(actionContext: ActionContext): Promise<void> {

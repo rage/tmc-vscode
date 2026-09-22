@@ -1,5 +1,6 @@
+import * as os from "os"
+
 import { compact } from "lodash"
-import * as systeminformation from "systeminformation"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import type * as vscode from "vscode"
@@ -18,6 +19,12 @@ import { ExerciseIdentifier, LocalCourseData, LocalCourseExercise, match } from 
 import { Logger } from "../utilities"
 import { downloadExercisesForUi } from "./downloadExercisesForUi"
 import type { ActionContext } from "./types"
+
+/**
+ * Total RAM, not free RAM: the open-exercise warning is about how many folders the file
+ * watcher and explorer can keep up with on this machine, not about what is free right now.
+ */
+const UNDER_8GB_RAM = os.totalmem() < 8 * 1024 ** 3
 
 /**
  * Opens given exercises, showing them in TMC workspace.
@@ -63,10 +70,9 @@ export async function openExercises(
   }
 
   // check open exercise count and warn if it's too high
-  const under8GbRam = (await systeminformation.mem()).available < 9_000_000_000
   const weakThreshold = 50
   const strongThreshold = 100
-  const warningThreshold = under8GbRam ? weakThreshold : strongThreshold
+  const warningThreshold = UNDER_8GB_RAM ? weakThreshold : strongThreshold
   const currentlyOpen = workspaceManager.val
     .getExercisesByCourseSlug(course.kind, courseName)
     .filter((x) => x.status === ExerciseStatus.Open)

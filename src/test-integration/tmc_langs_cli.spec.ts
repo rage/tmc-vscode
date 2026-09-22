@@ -613,7 +613,7 @@ suite("tmc langs cli spec", function () {
     })
 
     migrationTest("should list the enrolled mooc courses", async function () {
-      const courses = (await tmc.getEnrolledMoocCourseInstances()).unwrap()
+      const courses = (await tmc.getEnrolledMoocCourses()).unwrap()
       // the fixture set's fourth course is one the student is not enrolled on
       expect(courses.length).to.be.equal(3)
       expect(courses.some((c) => c.name === "MOOC Python Course")).to.be.true
@@ -621,7 +621,7 @@ suite("tmc langs cli spec", function () {
     })
 
     migrationTest("should get mooc course data with exercise slides", async function () {
-      const [course, slides] = (await tmc.getMoocCourseInstanceData(PYTHON_COURSE_ID)).unwrap()
+      const [course, slides] = (await tmc.getMoocCourseData(PYTHON_COURSE_ID)).unwrap()
       expect(course.name).to.be.equal("MOOC Python Course")
       expect(slides.length).to.be.equal(1)
       expect(slides[0]?.exercise_id).to.be.equal(PASSING_EXERCISE_ID)
@@ -1023,7 +1023,7 @@ suite("tmc langs cli spec", function () {
       "attaches the bearer to a resource call and succeeds; the mock records it",
       async function () {
         writeMoocCredentials(configDir, { accessToken: SEEDED_ACCESS_TOKEN })
-        const courses = (await tmc.getEnrolledMoocCourseInstances()).unwrap()
+        const courses = (await tmc.getEnrolledMoocCourses()).unwrap()
         expect(courses.length).to.be.greaterThan(0)
         // Cross-process proof the CLI attached the bearer; without
         // TMC_LANGS_MOOC_TRUST_LOCALHOST this call would have 401'd.
@@ -1049,7 +1049,7 @@ suite("tmc langs cli spec", function () {
           expiresIn: 3600,
           obtainedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
         })
-        const courses = (await tmc.getEnrolledMoocCourseInstances()).unwrap()
+        const courses = (await tmc.getEnrolledMoocCourses()).unwrap()
         expect(courses.length).to.be.greaterThan(0)
         // The refreshed credentials were retained -> still logged in.
         expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
@@ -1068,7 +1068,7 @@ suite("tmc langs cli spec", function () {
         })
         expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
         // Refresh is rejected, so langs deletes the creds and proceeds unauthenticated.
-        const res = await tmc.getEnrolledMoocCourseInstances()
+        const res = await tmc.getEnrolledMoocCourses()
         expect(res.err).to.be.true
         expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
       },
@@ -1095,7 +1095,7 @@ suite("tmc langs cli spec", function () {
           expiresIn: 3600,
         })
         await expireAccessToken(SEEDED_ACCESS_TOKEN)
-        const courses = (await tmc.getEnrolledMoocCourseInstances()).unwrap()
+        const courses = (await tmc.getEnrolledMoocCourses()).unwrap()
         expect(courses.length).to.be.greaterThan(0)
         expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
       },
@@ -1110,7 +1110,7 @@ suite("tmc langs cli spec", function () {
           expiresIn: 3600,
         })
         await expireAccessToken(SEEDED_ACCESS_TOKEN)
-        const res = await tmc.getEnrolledMoocCourseInstances()
+        const res = await tmc.getEnrolledMoocCourses()
         expect(res.err).to.be.true
         expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
       },

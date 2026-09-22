@@ -1,5 +1,6 @@
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
+import type { Mock } from "vitest"
 import { vi } from "vitest"
 import type * as vscode from "vscode"
 
@@ -8,6 +9,7 @@ import { downloadExercisesForUi } from "../../actions/downloadExercisesForUi"
 import type { ActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
+import { ExerciseStatus } from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
 import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
@@ -115,6 +117,79 @@ suite("closeExercises action", function () {
       "closed-exercises-for:mooc:mooc-python-course",
       ["mooc_hello"],
     )
+  })
+})
+
+const GIB = 1024 ** 3
+
+// `UNDER_8GB_RAM` is read once at module load, so each machine size needs a fresh module
+// graph with `os.totalmem` already stubbed.
+async function openExercisesOnMachineWith(totalRamBytes: number) {
+  vi.resetModules()
+  vi.doMock("os", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("os")>()),
+    totalmem: () => totalRamBytes,
+  }))
+  return (await import("../../actions/workspace")).openExercises
+}
+
+function contextWithOpenExercises(openCount: number): {
+  actionContext: ActionContext
+  warningNotification: Mock
+} {
+  const warningNotification = vi.fn()
+  const openExerciseList = Array.from({ length: openCount }, (_unused, index) => ({
+    backend: "mooc",
+    courseSlug: "mooc-python-course",
+    exerciseSlug: `mooc_hello_${index}`,
+    status: ExerciseStatus.Open,
+  }))
+  return {
+    actionContext: {
+      workspaceManager: new Ok({
+        openCourseExercises: vi.fn(async () => Ok.EMPTY),
+        getExercisesByCourseSlug: () => openExerciseList,
+      } as unknown as WorkspaceManager),
+      userData: new Ok({
+        getCourse: () => Ok(makeMoocKind(moocCourse) as LocalCourseData),
+      } as unknown as UserData),
+      langs: new Ok({ setSetting: vi.fn(async () => Ok.EMPTY) } as unknown as Langs),
+      dialog: { warningNotification },
+    } as unknown as ActionContext,
+    warningNotification,
+  }
+}
+
+async function openOn(totalRamBytes: number, openCount: number): Promise<Mock> {
+  const openExercises = await openExercisesOnMachineWith(totalRamBytes)
+  const { actionContext, warningNotification } = contextWithOpenExercises(openCount)
+  await openExercises(
+    {} as vscode.ExtensionContext,
+    actionContext,
+    [ExerciseIdentifier.from("mooc-ex-uuid-1")],
+    CourseIdentifier.from("instance-uuid-1"),
+  )
+  return warningNotification
+}
+
+suite("openExercises open-exercise-count warning", function () {
+  afterEach(function () {
+    vi.doUnmock("os")
+    vi.resetModules()
+  })
+
+  test("warns above 50 open exercises on a machine with under 8 GiB of RAM", async function () {
+    expect(await openOn(4 * GIB, 51)).toHaveBeenCalledOnce()
+    expect(await openOn(4 * GIB, 50)).not.toHaveBeenCalled()
+  })
+
+  test("warns only above 100 open exercises on a machine with 8 GiB or more", async function () {
+    expect(await openOn(16 * GIB, 51)).not.toHaveBeenCalled()
+    expect(await openOn(16 * GIB, 101)).toHaveBeenCalledOnce()
+  })
+
+  test("treats exactly 8 GiB as not weak", async function () {
+    expect(await openOn(8 * GIB, 51)).not.toHaveBeenCalled()
   })
 })
 

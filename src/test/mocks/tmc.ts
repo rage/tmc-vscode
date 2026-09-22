@@ -4,11 +4,11 @@ import { vi } from "vitest"
 
 import type Langs from "../../api/langs"
 import type {
-  CourseInstance,
   DownloadOrUpdateMoocCourseExercisesResult,
   DownloadOrUpdateTmcCourseExercisesResult,
   LocalExercise,
   LocalTmcExercise,
+  MoocCourse,
   MoocCourseProgress,
   TmcExerciseSlide,
 } from "../../shared/langsSchema"
@@ -17,9 +17,9 @@ import {
   closedExercisesPythonCourse,
   listLocalCourseExercisesPythonCourse,
   localExercises,
-  moocCourseInstance,
+  moocCourse,
   moocCourseProgress,
-  moocEnrolledCourseInstances,
+  moocEnrolledCourses,
   moocExerciseSlides,
   moocExerciseUpdates,
   tmcExerciseUpdates,
@@ -48,9 +48,9 @@ export interface TMCMockValues {
   tmcExerciseUpdates: Result<ExerciseIdentifier[], Error>
   moocExerciseUpdates: Result<ExerciseIdentifier[], Error>
   isMoocAuthenticated: Result<boolean, Error>
-  getMoocCourseInstanceData: Result<[CourseInstance, TmcExerciseSlide[]], Error>
+  getMoocCourseData: Result<[MoocCourse, TmcExerciseSlide[]], Error>
   getMoocCourseProgress: Result<MoocCourseProgress, Error>
-  getEnrolledMoocCourseInstances: Result<CourseInstance[], Error>
+  getEnrolledMoocCourses: Result<MoocCourse[], Error>
 }
 
 const emptyDownloadExercisesResult: DownloadExercisesMockResult = {
@@ -76,9 +76,9 @@ export function createTMCMock(): [Langs, TMCMockValues] {
     tmcExerciseUpdates: Ok(tmcExerciseUpdates),
     moocExerciseUpdates: Ok(moocExerciseUpdates),
     isMoocAuthenticated: Ok(true),
-    getMoocCourseInstanceData: Ok([moocCourseInstance, moocExerciseSlides]),
+    getMoocCourseData: Ok([moocCourse, moocExerciseSlides]),
     getMoocCourseProgress: Ok(moocCourseProgress),
-    getEnrolledMoocCourseInstances: Ok(moocEnrolledCourseInstances),
+    getEnrolledMoocCourses: Ok(moocEnrolledCourses),
   }
 
   return [setupMockValues(values), values]
@@ -104,9 +104,9 @@ export function createFailingTMCMock(): [Langs, TMCMockValues] {
     tmcExerciseUpdates: error,
     moocExerciseUpdates: error,
     isMoocAuthenticated: error,
-    getMoocCourseInstanceData: error,
+    getMoocCourseData: error,
     getMoocCourseProgress: error,
-    getEnrolledMoocCourseInstances: error,
+    getEnrolledMoocCourses: error,
   }
 
   return [setupMockValues(values), values]
@@ -138,9 +138,9 @@ function setupMockValues(values: TMCMockValues): Langs {
       backend === "tmc" ? values.tmcExerciseUpdates : values.moocExerciseUpdates,
     ),
     isMoocAuthenticated: vi.fn(async () => values.isMoocAuthenticated),
-    getMoocCourseInstanceData: vi.fn(async () => values.getMoocCourseInstanceData),
+    getMoocCourseData: vi.fn(async () => values.getMoocCourseData),
     getMoocCourseProgress: vi.fn(async () => values.getMoocCourseProgress),
-    getEnrolledMoocCourseInstances: vi.fn(async () => values.getEnrolledMoocCourseInstances),
+    getEnrolledMoocCourses: vi.fn(async () => values.getEnrolledMoocCourses),
     downloadExercises: vi.fn(
       async (
         _identifiers: unknown,

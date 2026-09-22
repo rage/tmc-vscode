@@ -39,27 +39,6 @@ const define = {
   ...apiConfig,
 }
 
-// systeminformation optionally `require`s these macOS-only native addons
-// (cpu.js guards both osx-temperature-sensor and, as of 5.31,
-// macos-temperature-sensor in their own try/catch). Neither is installed on
-// other platforms; stub both to an empty module so the bundle resolves
-// cleanly instead of leaving an unresolved runtime `require` in the CJS
-// bundle.
-/** @type {import("esbuild").Plugin} */
-const stubOptionalNativeAddon = {
-  name: "stub-optional-native-addon",
-  setup(build) {
-    build.onResolve({ filter: /^(osx|macos)-temperature-sensor$/ }, (args) => ({
-      path: args.path,
-      namespace: "stub-empty",
-    }))
-    build.onLoad({ filter: /.*/, namespace: "stub-empty" }, () => ({
-      contents: "module.exports = {};",
-      loader: "js",
-    }))
-  },
-}
-
 // Emits markers/diagnostics the VS Code task problem-matcher understands (see
 // the `esbuildWatch` task in .vscode/tasks.json).
 /** @type {import("esbuild").Plugin} */
@@ -93,9 +72,9 @@ const common = {
   // would otherwise leak as an unresolved runtime require (fatal under
   // `--no-dependencies` packaging).
   mainFields: ["module", "main"],
-  // `vscode` is injected by the runtime; chai/mocha/vscode-test are resolved
-  // from node_modules when the test bundles run inside the extension host.
-  external: ["vscode", "mocha", "chai", "chai-as-promised", "vscode-test"],
+  // `vscode` is injected by the runtime; chai and mocha are resolved from
+  // node_modules when the test bundles run inside the extension host.
+  external: ["vscode", "mocha", "chai"],
   define,
   loader: {
     // docs/FAQ.md is imported as text (src/config/constants.ts).
@@ -107,7 +86,7 @@ const common = {
   sourcemap: true,
   minify: production,
   logLevel: "info",
-  plugins: watch ? [stubOptionalNativeAddon, problemMatcherPlugin] : [stubOptionalNativeAddon],
+  plugins: watch ? [problemMatcherPlugin] : [],
 }
 
 // Bundles every matching spec file into a single test output via a generated

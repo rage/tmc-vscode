@@ -77,7 +77,7 @@ function harness(options: {
   const langs = {
     getTmcOrganizations: vi.fn(async () => options.organizations ?? Ok(organizations)),
     getCourses: vi.fn(async () => Ok(tmcCourses)),
-    getEnrolledMoocCourseInstances: vi.fn(async () => options.moocCourses ?? Ok(moocCourses)),
+    getEnrolledMoocCourses: vi.fn(async () => options.moocCourses ?? Ok(moocCourses)),
     isMoocAuthenticated,
   } as unknown as Langs
 

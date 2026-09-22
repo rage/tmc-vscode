@@ -4,7 +4,7 @@ import { z } from "zod"
 import { DEBUG_MODE } from "../config/constants"
 import type { ExtensionToWebview, Panel } from "../shared/shared"
 import { ExtensionToWebviewSchema } from "../shared/shared"
-import { Logger, LogLevel } from "./logger"
+import { Logger, LogLevel } from "../utilities/logger"
 
 /**
  * Helper function for the extension panel to render a webview panel.

@@ -1,4 +1,4 @@
-import { createSessionExpiryTracker } from "../../utilities/sessionExpiryTracker"
+import { createSessionExpiryTracker } from "../sessionExpiryTracker"
 
 suite("createSessionExpiryTracker", () => {
   test("a poll never warns for a backend that has never been logged in this session", () => {

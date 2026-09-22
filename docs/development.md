@@ -148,6 +148,21 @@ checkout to re-vendor from. The consequence is the rule: never `cp` an artifact
 into place. A hand-copy leaves the stamp naming the previous revision and fails
 the gate; run the vendoring script, which rewrites both.
 
+## Webview panels
+
+The extension host is authoritative for panel state. `TmcPanel` keeps the last
+panel it posted and replays it when a webview process reloads, so the webview
+never persists anything itself — `VSCodeAPIWrapper` exposes only `postMessage`,
+and its `WebviewApi<never>` says the webview's own state bag stays empty.
+
+**Panels are deliberately not restored across a window reload.** No
+`WebviewPanelSerializer` is registered: after a reload the TestMyCode panel is
+gone and the user reopens it from the tree view or the command palette. Making it
+survive would mean persisting panel state where the extension host cannot see it
+and reconstructing it from data that may since have changed; reopening is one
+click. If that changes, register the serializer in `activateInner` and validate
+the restored state before rendering it.
+
 ## Mock backends
 
 `backend/` is one Express app on port 4001 (`pnpm run backend:start`) serving

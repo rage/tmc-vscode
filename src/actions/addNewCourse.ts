@@ -66,7 +66,7 @@ export async function addNewCourse(
     async (mooc) => {
       // mooc has no course-instance concept: the identifier is the course id,
       // and the CLI call returns the course itself.
-      const courseRes = await langs.val.getMoocCourseInstanceData(mooc.instanceId)
+      const courseRes = await langs.val.getMoocCourseData(mooc.instanceId)
       if (courseRes.err) {
         return courseRes
       }

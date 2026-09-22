@@ -12,7 +12,7 @@ import {
 import type { ExerciseSlide } from "../../backend/mooc/fixtures"
 import type { MoocMockControls } from "../../backend/mooc/router"
 import { createMoocApp, moocMockOf } from "../../backend/mooc/router"
-import { zPasteResult } from "../shared/generated/langs/zod.gen"
+import { zPasteResult } from "../../shared/generated/langs/zod.gen"
 import {
   DataKind,
   ExerciseSlideSubmissionListItem,

@@ -1,3 +1,7 @@
+// `src/utilities/env` is TypeScript and this script is plain node, so the require hook
+// has to be in place before it is loaded.
+require("tsx/cjs")
+
 const config = require("../config")
 const getAllLangsCLIs = require("../src/utilities/env").getAllLangsCLIs
 

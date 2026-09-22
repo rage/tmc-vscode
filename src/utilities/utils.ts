@@ -7,9 +7,9 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import type { ExtensionContext } from "vscode"
 
-import type { FeedbackQuestion } from "../actions/types"
 import { ConnectionError } from "../errors"
 import type { SubmissionFeedbackQuestion } from "../shared/langsSchema"
+import type { FeedbackQuestion } from "../shared/shared"
 import { BaseError } from "../shared/shared"
 import { Logger } from "./logger"
 

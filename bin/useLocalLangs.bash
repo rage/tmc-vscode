@@ -50,8 +50,9 @@ if [ ! -f "$BINARY" ]; then
 fi
 
 # Resolve the pinned filename the harness expects (platform triple + version)
-# using the same helper the extension uses.
-FILENAME="$(cd "$REPO_ROOT" && node -e 'const {getLangsCLIForPlatform,getPlatform}=require("./src/utilities/env.js");const cfg=require("./config.js");const v=JSON.parse(cfg.mockBackend.__TMC_LANGS_VERSION__);process.stdout.write(getLangsCLIForPlatform(getPlatform(),v))')"
+# using the same helper the extension uses. That helper is TypeScript, hence the
+# require hook.
+FILENAME="$(cd "$REPO_ROOT" && node -e 'require("tsx/cjs");const {getLangsCLIForPlatform,getPlatform}=require("./src/utilities/env");const cfg=require("./config.js");const v=JSON.parse(cfg.mockBackend.__TMC_LANGS_VERSION__);process.stdout.write(getLangsCLIForPlatform(getPlatform(),v))')"
 
 CLI_DIR="$REPO_ROOT/backend/cli"
 DEST="$CLI_DIR/$FILENAME"

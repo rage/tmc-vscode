@@ -6,9 +6,8 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
-    // node is needed because the shared lib (shared/lib.ts) uses node:util
-    // and NodeJS.ErrnoException; explicit so tsc and tsgo agree
-    "types": ["node", "vscode-webview", "vitest/globals", "@testing-library/jest-dom"],
+    // explicit so tsc and tsgo agree on which globals-providing packages are in scope
+    "types": ["vscode-webview", "vitest/globals", "@testing-library/jest-dom"],
     // to have warnings/errors of the Svelte compiler at the correct
     // position, enable source maps
     "sourceMap": true

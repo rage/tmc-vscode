@@ -18,7 +18,7 @@ import { CourseIdentifier } from "../../shared/shared"
 import Storage from "../../storage"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
 import { Logger } from "../../utilities"
-import { MOOC_EXERCISE_UUID, moocCourseInstance, moocExerciseSlides } from "../fixtures/tmc"
+import { MOOC_EXERCISE_UUID, moocCourse, moocExerciseSlides } from "../fixtures/tmc"
 import { createMockActionContext } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
@@ -26,8 +26,8 @@ import { createMockContext } from "../mocks/vscode"
 import { createWorkspaceMangerMock } from "../mocks/workspaceManager"
 import { autoMock } from "../support/mock"
 
-const moocCourse: MoocLocalCourseData = {
-  id: "instance-uuid-1",
+const storedMoocCourse: MoocLocalCourseData = {
+  id: "course-uuid-1",
   name: "mooc-python-course",
   title: "Mooc Python",
   description: null,
@@ -44,7 +44,7 @@ const moocCourse: MoocLocalCourseData = {
 
 suite("updateCourse action (mooc)", function () {
   const stubContext = createMockActionContext()
-  const courseId = CourseIdentifier.from("instance-uuid-1")
+  const courseId = CourseIdentifier.from("course-uuid-1")
 
   let tmcMock: Langs
   let tmcMockValues: TMCMockValues
@@ -75,7 +75,7 @@ suite("updateCourse action (mooc)", function () {
   beforeEach(async function () {
     ;[tmcMock, tmcMockValues] = createTMCMock()
     ;[workspaceManagerMock] = createWorkspaceMangerMock()
-    await storeCourse(moocCourse)
+    await storeCourse(storedMoocCourse)
     vi.spyOn(TmcPanel, "postMessage").mockImplementation(async () => {})
   })
 
@@ -136,7 +136,7 @@ suite("updateCourse action (mooc)", function () {
   test("leaves the course alone when the session lacks the exercise scope", async function () {
     // The mooc backend 403s an underscoped token, which says nothing about the course --
     // and the mooc arm never clears `disabled`, so persisting it here would be permanent.
-    tmcMockValues.getMoocCourseInstanceData = Err(new InsufficientScopeError("no scope"))
+    tmcMockValues.getMoocCourseData = Err(new InsufficientScopeError("no scope"))
 
     const result = await updateCourse(actionContext(), courseId)
 
@@ -147,7 +147,7 @@ suite("updateCourse action (mooc)", function () {
   test("offers a login once per lapse, and again once the session is renewed", async function () {
     // A success first, so the report latch starts in a known state.
     await updateCourse(actionContext(), courseId)
-    tmcMockValues.getMoocCourseInstanceData = Err(new InsufficientScopeError("no scope"))
+    tmcMockValues.getMoocCourseData = Err(new InsufficientScopeError("no scope"))
 
     const first = contextWithOwnDialog()
     await updateCourse(first.context, courseId)
@@ -163,9 +163,9 @@ suite("updateCourse action (mooc)", function () {
     await updateCourse(repeat.context, courseId)
     expect(repeat.dialog.errorNotification).not.toHaveBeenCalled()
 
-    tmcMockValues.getMoocCourseInstanceData = Ok([moocCourseInstance, moocExerciseSlides])
+    tmcMockValues.getMoocCourseData = Ok([moocCourse, moocExerciseSlides])
     await updateCourse(actionContext(), courseId)
-    tmcMockValues.getMoocCourseInstanceData = Err(new InsufficientScopeError("no scope"))
+    tmcMockValues.getMoocCourseData = Err(new InsufficientScopeError("no scope"))
 
     const afterRenewal = contextWithOwnDialog()
     await updateCourse(afterRenewal.context, courseId)
@@ -174,7 +174,7 @@ suite("updateCourse action (mooc)", function () {
 
   test("clears a disabled flag an earlier failure persisted", async function () {
     // `disabled` has no mooc equivalent, so nothing else would ever lift it.
-    await storeCourse({ ...moocCourse, disabled: true })
+    await storeCourse({ ...storedMoocCourse, disabled: true })
 
     const result = await updateCourse(actionContext(), courseId)
 
@@ -184,7 +184,7 @@ suite("updateCourse action (mooc)", function () {
 
   test("returns offline (not disabled) on a ConnectionError", async function () {
     const warn = vi.spyOn(Logger, "warn").mockImplementation(() => {})
-    tmcMockValues.getMoocCourseInstanceData = Err(new ConnectionError("down"))
+    tmcMockValues.getMoocCourseData = Err(new ConnectionError("down"))
     const result = await updateCourse(actionContext(), courseId)
     expect(result.val).toBe(false)
     expect(userData.getMoocCourses()[0]?.disabled).toBe(false)
