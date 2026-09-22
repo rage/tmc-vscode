@@ -6,15 +6,17 @@ import { WebviewToExtensionSchema } from "../shared/shared"
 
 /**
  * A utility wrapper around the acquireVsCodeApi() function, which enables
- * message passing and state management between the webview and extension
- * contexts.
+ * message passing between the webview and extension contexts.
+ *
+ * Deliberately exposes no `getState`/`setState`: the extension host owns all panel state, so
+ * the webview's own state bag stays empty (hence `WebviewApi<never>`).
  *
  * This utility also enables webview code to be run in a web browser-based
  * dev server by using native web browser features that mock the functionality
  * enabled by acquireVsCodeApi.
  */
 class VSCodeAPIWrapper {
-  private readonly vsCodeApi: WebviewApi<unknown> | undefined
+  private readonly vsCodeApi: WebviewApi<never> | undefined
 
   public constructor() {
     // Check if the acquireVsCodeApi function exists in the current development
