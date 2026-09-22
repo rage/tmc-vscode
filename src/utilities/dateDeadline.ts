@@ -1,4 +1,3 @@
-import type { Exercise } from "../api/types"
 import { Logger } from "./logger"
 
 /**
@@ -74,35 +73,4 @@ export function parseNextDeadlineAfter(after: Date, deadlines: Deadline[]): stri
   }
 
   return "All deadlines have expired"
-}
-
-/**
- * Compares two dates and returns 1, if first date later tha second date. Otherwise returns -1.
- * @param a first date arg
- * @param b second date arg
- */
-export function compareDates(a: Date, b: Date): number {
-  if (a > b) {
-    return 1
-  }
-  return -1
-}
-
-/**
- * Selects proper deadline from soft and hard deadline
- * @returns Soft deadline and/or Hard deadline for exercise
- */
-export function chooseDeadline(ex: Exercise): { date: Date | null; isHard: boolean } {
-  const softDeadline = ex.soft_deadline ? parseDate(ex.soft_deadline) : null
-  const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null
-  const next = findNextDateAfter(new Date(), [softDeadline, hardDeadline])
-  return { date: next, isHard: next === hardDeadline }
-}
-
-/**
- * Make date pathable. Removes ":"" and replace with "-" and removes GMT.
- */
-export function dateInPath(date: string): string {
-  const fixedDate = date.replaceAll(":", "-")
-  return fixedDate.split(" GMT")[0] ?? fixedDate
 }
