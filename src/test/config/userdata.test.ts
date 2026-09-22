@@ -280,6 +280,20 @@ suite("UserData course add/get/update/delete", function () {
     expect(userData.getCourseBySlug("mooc", "mooc-algo").unwrap().kind).toBe("mooc")
   })
 
+  test("an added course's passed exercises read as passed", async function () {
+    const [userData] = await makeUserData({ courses: [], mooc_courses: [] })
+    await userData.addCourse(
+      makeTmcKind(tmcCourse({ id: 7, exercises: [tmcExercise({ id: 1, passed: true })] })),
+    )
+    await userData.addCourse(
+      makeMoocKind(
+        moocCourse({ id: "inst-9", exercises: [moocExercise({ id: "m", passed: true })] }),
+      ),
+    )
+    expect(userData.getPassed(ExerciseIdentifier.from(1))).toBe(true)
+    expect(userData.getPassed(ExerciseIdentifier.from("m"))).toBe(true)
+  })
+
   test("rejects adding a duplicate tmc course", async function () {
     const [userData] = await makeUserData({ courses: [tmcCourse({ id: 0 })], mooc_courses: [] })
     const result = await userData.addCourse(makeTmcKind(tmcCourse({ id: 0 })))

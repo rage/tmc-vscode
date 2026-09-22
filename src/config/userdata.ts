@@ -254,6 +254,9 @@ export class UserData {
         assertUnreachable(data)
       }
     }
+    LocalCourseData.getExercises(data).forEach((x) =>
+      this._setPassed(ExerciseIdentifier.from(x.data.id), x.data.passed),
+    )
     return this._updatePersistentData()
   }
 
