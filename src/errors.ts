@@ -1,8 +1,7 @@
-import { BaseError } from "./shared/shared"
+import type { BackendKind } from "./shared/shared"
+import { backendName, BaseError } from "./shared/shared"
+import { formatErrorMessage } from "./utilities/logger"
 
-export class ApiError extends BaseError {
-  public override readonly name = "API Error"
-}
 export class AuthorizationError extends BaseError {
   public override readonly name = "Authorization Error"
 }
@@ -26,11 +25,7 @@ export class CorruptStoredDataError extends BaseError {
 }
 
 export class EmptyLangsResponseError extends BaseError {
-  public override readonly name = "Empy Langs Response Error"
-}
-
-export class ExerciseExistsError extends BaseError {
-  public override readonly name = "Exercise Exists Error"
+  public override readonly name = "Empty Langs Response Error"
 }
 
 export class ForbiddenError extends BaseError {
@@ -98,10 +93,69 @@ export class SpawnError extends BaseError {
   public override readonly name = "Langs Spawn Error"
 }
 
-export class UnsupportedOperationError extends BaseError {
-  public override readonly name = "Unsupported Operation Error"
-}
-
 export class LangsResponseSchemaError extends BaseError {
   public override readonly name = "Langs Response Schema Error"
+}
+
+/** A button offered beside an error notification: its label, and the command pressing it runs. */
+export interface ErrorAction {
+  label: string
+  command: string
+}
+
+/** How an error reaches the user: the sentence they read, and what they can do about it. */
+export interface ErrorPresentation {
+  message: string
+  actions: ErrorAction[]
+}
+
+/**
+ * How to show `error` to the user.
+ *
+ * Every class whose remedy follows from the class itself states that remedy here, so no
+ * call site spells one out and the same failure reads the same way wherever it surfaces.
+ * A class with no entry shows its own message and no buttons, which is the right answer
+ * for a failure the user cannot act on. The message never carries a stack trace; the
+ * output channel takes that.
+ *
+ * @param backend Names the backend in the sentence, for the errors either backend can
+ * raise. Omit it where the caller does not know which one, and the sentence stays
+ * backend-neutral.
+ */
+export function presentationFor(error: Error, backend?: BackendKind): ErrorPresentation {
+  const reported = formatErrorMessage(error)
+  if (error instanceof InsufficientScopeError) {
+    return {
+      message:
+        `${reported} Your ${backendName("mooc")} session no longer grants access to` +
+        " programming exercises. Log in again to continue.",
+      actions: [{ label: "Log in", command: "tmc.showMoocLogin" }],
+    }
+  }
+  if (error instanceof NotEnrolledError) {
+    const site = backend === undefined ? "" : ` on ${backendName(backend)}`
+    return {
+      message:
+        `${reported} You are no longer enrolled on this course${site}, so its exercises` +
+        ` can't be fetched. Enroll on the course again${site}, then reload it here.`,
+      actions: [],
+    }
+  }
+  if (error instanceof UploadExpiredError) {
+    return {
+      message:
+        `${reported} The submission's files expired on the server before the submission` +
+        " was accepted. Please try again.",
+      actions: [],
+    }
+  }
+  if (error instanceof ObsoleteClientError) {
+    return {
+      message:
+        `${reported} This extension is out of date, please update it.` +
+        " https://code.visualstudio.com/docs/editor/extension-gallery",
+      actions: [],
+    }
+  }
+  return { message: reported, actions: [] }
 }

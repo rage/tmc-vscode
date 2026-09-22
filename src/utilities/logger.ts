@@ -3,7 +3,6 @@ import { env } from "process"
 import type { OutputChannel } from "vscode"
 import { Uri, window } from "vscode"
 
-import type Dialog from "../api/dialog"
 import { DEBUG_MODE, OUTPUT_CHANNEL_NAME } from "../config/constants"
 import { BaseError } from "../shared/shared"
 
@@ -93,12 +92,6 @@ export class Logger {
     this._write(ConsoleLogLevel.Info, this._level !== LogLevel.None, params)
   }
 
-  public static errorWithDialog(dialog: Dialog, ...params: unknown[]): void {
-    const loggable = this._toLoggableParams(params)
-    dialog.errorNotification(loggable)
-    this._log(ConsoleLogLevel.Error, ...params)
-  }
-
   /**
    * Reveals the output channel, creating one to explain itself if logging is off.
    *
@@ -124,7 +117,7 @@ export class Logger {
 
   public static toLoggable(p: unknown): string {
     if (p instanceof Error) {
-      return formatError(p, this._level)
+      return formatError(p, this._level === LogLevel.Verbose)
     }
     if (typeof p === "function") {
       return `[Function ${p.name || "anonymous"}]`
@@ -229,10 +222,20 @@ export class Logger {
   }
 }
 
+/**
+ * The error as prose for a message the user reads, with no stack trace.
+ *
+ * Use this and not {@link Logger.toLoggable} for anything shown in a notification: the
+ * output channel takes the trace, where it can be scrolled and copied.
+ */
+export function formatErrorMessage(error: Error): string {
+  return formatError(error, false)
+}
+
 // A cause chain can be cyclic; `BaseError` copies whatever it was handed.
 const MAX_CAUSE_DEPTH = 8
 
-function formatError(error: Error, level: LogLevel, depth = 0): string {
+function formatError(error: Error, withStack: boolean, depth = 0): string {
   if (error instanceof BaseError) {
     let errorMessage = ""
     if (error.errno) {
@@ -257,11 +260,11 @@ function formatError(error: Error, level: LogLevel, depth = 0): string {
       } else if (depth >= MAX_CAUSE_DEPTH) {
         errorMessage += " Caused by: {...}."
       } else {
-        const cause = formatError(error.cause, level, depth + 1)
+        const cause = formatError(error.cause, withStack, depth + 1)
         errorMessage += ` Caused by: {${cause}}.`
       }
     }
-    if (error.stack && level === LogLevel.Verbose) {
+    if (error.stack && withStack) {
       errorMessage += `\n<TRACE>\n${error.stack}\n</TRACE>`
     }
     return errorMessage
@@ -270,7 +273,7 @@ function formatError(error: Error, level: LogLevel, depth = 0): string {
   if (error.cause) {
     errorMessage += ` ${error.cause}.`
   }
-  if (error.stack && level === LogLevel.Verbose) {
+  if (error.stack && withStack) {
     errorMessage += `\n<TRACE>\n${error.stack}\n</TRACE>`
   }
   return errorMessage

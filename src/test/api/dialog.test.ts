@@ -2,13 +2,14 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import Dialog, { courseSelectionItems } from "../../api/dialog"
+import { InsufficientScopeError, RuntimeError } from "../../errors"
 import type {
   LocalCourseData,
   SharedMoocCourseData,
   SharedTmcCourseData,
 } from "../../shared/shared"
 import { makeMoocKind, makeTmcKind } from "../../shared/shared"
-import { Logger } from "../../utilities"
+import { Logger, LogLevel } from "../../utilities"
 
 suite("Dialog.selectItem", function () {
   let showQuickPick: ReturnType<typeof vi.spyOn>
@@ -269,5 +270,47 @@ suite("courseSelectionItems", function () {
     const items = courseSelectionItems(courses, { value: (course) => course })
 
     expect(items.map(([, value]) => value)).toEqual(courses)
+  })
+})
+
+suite("Dialog.reportError", function () {
+  afterEach(function () {
+    Logger.configure(LogLevel.None)
+    Logger.output = undefined
+    vi.restoreAllMocks()
+  })
+
+  test("offers the command the error's class prescribes and runs it when pressed", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    vi.spyOn(Logger, "error").mockImplementation(() => {})
+    const show = stubMessage("showErrorMessage", (actions) => actions[0])
+    await new Dialog().reportError("Could not read the course.", new InsufficientScopeError("403"))
+
+    expect(buttonTitles(show)).toEqual(["Log in", "Show logs"])
+    expect(executeCommand).toHaveBeenCalledWith("tmc.showMoocLogin")
+  })
+
+  test("an error with no remedy of its own reads as the operation plus the error", async function () {
+    const logError = vi.spyOn(Logger, "error").mockImplementation(() => {})
+    const show = stubMessage("showErrorMessage", () => undefined)
+    const boom = new RuntimeError("the CLI exited with 1")
+    await new Dialog().reportError("Could not run the tests.", boom)
+
+    expect(show.mock.calls[0]?.[0]).toBe(
+      "TestMyCode: Could not run the tests. Runtime Error: the CLI exited with 1.",
+    )
+    expect(logError).toHaveBeenCalledOnce()
+    expect(buttonTitles(show)).toEqual(["Show logs"])
+  })
+
+  test("the notification holds no stack trace even when everything is logged", async function () {
+    Logger.configure(LogLevel.Verbose)
+    vi.spyOn(Logger, "error").mockImplementation(() => {})
+    const show = stubMessage("showErrorMessage", () => undefined)
+    const boom = new RuntimeError(new Error("boom"))
+    await new Dialog().reportError("Could not run the tests.", boom)
+
+    expect(boom.stack).toBeTruthy()
+    expect(show.mock.calls[0]?.[0]).not.toContain("<TRACE>")
   })
 })

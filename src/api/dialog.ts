@@ -1,6 +1,7 @@
 import * as vscode from "vscode"
 
-import type { CourseIdentifier } from "../shared/shared"
+import { presentationFor } from "../errors"
+import type { BackendKind, CourseIdentifier } from "../shared/shared"
 import { backendName, LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
 
@@ -97,6 +98,25 @@ export default class Dialog {
     const buttons = error ? items.concat([Dialog._logsButton]) : items
 
     return this._notify(vscode.window.showErrorMessage, notification, buttons)
+  }
+
+  /**
+   * Reports a failed operation: `message` says what was being done, and `error` supplies
+   * the rest of the sentence and any buttons its class prescribes.
+   *
+   * The notification carries no stack trace — {@link Logger} writes the full error, trace
+   * included, to the output channel, which the "Show logs" button reveals.
+   *
+   * @param backend The backend the operation ran against, where the caller knows it; it
+   * lets the sentence name the site for errors either backend can raise.
+   */
+  public async reportError(message: string, error: Error, backend?: BackendKind): Promise<void> {
+    const presentation = presentationFor(error, backend)
+    const buttons = presentation.actions.map<NotificationButton>(({ label, command }) => [
+      label,
+      (): void => void vscode.commands.executeCommand(command),
+    ])
+    return this.errorNotification(`${message} ${presentation.message}`, error, ...buttons)
   }
 
   /**

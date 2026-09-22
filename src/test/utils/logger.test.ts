@@ -3,7 +3,7 @@ import type { OutputChannel } from "vscode"
 import { window } from "vscode"
 
 import { BaseError } from "../../shared/shared"
-import { Logger, LogLevel } from "../../utilities/logger"
+import { formatErrorMessage, Logger, LogLevel } from "../../utilities/logger"
 
 const TOKEN = "super-secret-refresh-token"
 
@@ -187,5 +187,20 @@ suite("Logger reveal", function () {
     Logger.error("boom")
 
     expect(lines).toHaveLength(0)
+  })
+})
+
+suite("formatErrorMessage", function () {
+  afterEach(function () {
+    Logger.configure(LogLevel.None)
+    Logger.output = undefined
+  })
+
+  test("keeps the stack out of a message the user reads, where the channel keeps it", function () {
+    Logger.configure(LogLevel.Verbose)
+    const error = new BaseError(new Error("boom"), "while downloading")
+
+    expect(Logger.toLoggable(error)).toContain("<TRACE>")
+    expect(formatErrorMessage(error)).toBe("Base Error: boom. while downloading.")
   })
 })
