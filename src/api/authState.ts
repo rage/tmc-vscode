@@ -3,7 +3,6 @@ import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { BackendKind } from "../shared/shared"
-import type UI from "../ui/ui"
 import { Logger } from "../utilities"
 import type Langs from "./langs"
 
@@ -44,13 +43,18 @@ export interface AuthState {
   subscribe: (listener: (loggedIn: boolean) => void) => void
 }
 
+/** The part of the tree view {@link createAuthState} keeps in step with the session. */
+interface LoggedInView {
+  treeDP: { setLoggedIn: (loggedIn: boolean) => void }
+}
+
 /**
  * Builds the {@link AuthState} for one activation.
  *
  * It applies `test-my-code:LoggedIn` and the tree view's logged-in half itself,
  * so nothing else may set either.
  */
-export function createAuthState(langs: Result<Langs, Error>, ui: UI): AuthState {
+export function createAuthState(langs: Result<Langs, Error>, ui: LoggedInView): AuthState {
   const authenticated: Record<BackendKind, boolean> = { tmc: false, mooc: false }
   const listeners: ((loggedIn: boolean) => void)[] = []
   let applied: boolean | undefined

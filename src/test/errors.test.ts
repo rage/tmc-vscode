@@ -1,4 +1,5 @@
 import {
+  InitializationError,
   InsufficientScopeError,
   NotEnrolledError,
   ObsoleteClientError,
@@ -26,6 +27,17 @@ suite("presentationFor", function () {
 
     expect(presentation.message).toContain("Log in again to continue")
     expect(presentation.actions).toEqual([{ label: "Log in", command: "tmc.showMoocLogin" }])
+  })
+
+  test("a failed initialization offers the help panel", function () {
+    const presentation = presentationFor(new InitializationError("langs is missing"))
+
+    expect(presentation.message).toBe(
+      "Initialization Error: langs is missing. The help page lists what failed and how to fix it.",
+    )
+    expect(presentation.actions).toEqual([
+      { label: "Show help", command: "tmc.viewInitializationErrorHelp" },
+    ])
   })
 
   test("a dropped enrollment names the backend to re-enroll on when the caller knows it", function () {

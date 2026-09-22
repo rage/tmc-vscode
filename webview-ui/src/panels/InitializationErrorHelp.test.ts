@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/svelte"
 
 import type { InitializationErrorHelpPanel } from "../shared/shared"
-import { postedMessages } from "../test/setup"
+import { dispatchToWebview, postedMessages } from "../test/setup"
 import InitializationErrorHelp from "./InitializationErrorHelp.svelte"
 
 const panel: InitializationErrorHelpPanel = { id: 4, type: "InitializationErrorHelp" }
@@ -22,22 +22,18 @@ suite("InitializationErrorHelp panel", () => {
 
   test("renders a specific initialization error once it arrives", async () => {
     render(InitializationErrorHelp, { props: { panel } })
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: {
-          type: "initializationErrors",
-          target: { type: "InitializationErrorHelp", id: panel.id },
-          cliFolder: "/tmp/cli",
-          initializationErrors: {
-            tmc: { error: "langs boom", stack: "at foo" },
-            userData: noError,
-            workspaceManager: noError,
-            exerciseDecorationProvider: noError,
-            resources: noError,
-          },
-        },
-      }),
-    )
+    dispatchToWebview({
+      type: "initializationErrors",
+      target: { type: "InitializationErrorHelp", id: panel.id },
+      cliFolder: "/tmp/cli",
+      initializationErrors: {
+        tmc: { error: "langs boom", stack: "at foo" },
+        userData: noError,
+        workspaceManager: noError,
+        exerciseDecorationProvider: noError,
+        resources: noError,
+      },
+    })
 
     expect(
       await screen.findByText(/Failed to initialize tmc-langs: langs boom/),
@@ -47,22 +43,18 @@ suite("InitializationErrorHelp panel", () => {
 
   test("reports a non-tmc error without also claiming there is no error data", async () => {
     render(InitializationErrorHelp, { props: { panel } })
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: {
-          type: "initializationErrors",
-          target: { type: "InitializationErrorHelp", id: panel.id },
-          cliFolder: "/tmp/cli",
-          initializationErrors: {
-            tmc: noError,
-            userData: noError,
-            workspaceManager: { error: "workspace boom", stack: "at bar" },
-            exerciseDecorationProvider: noError,
-            resources: noError,
-          },
-        },
-      }),
-    )
+    dispatchToWebview({
+      type: "initializationErrors",
+      target: { type: "InitializationErrorHelp", id: panel.id },
+      cliFolder: "/tmp/cli",
+      initializationErrors: {
+        tmc: noError,
+        userData: noError,
+        workspaceManager: { error: "workspace boom", stack: "at bar" },
+        exerciseDecorationProvider: noError,
+        resources: noError,
+      },
+    })
 
     expect(
       await screen.findByText(/Failed to initialize workspace manager: workspace boom/),
@@ -73,22 +65,18 @@ suite("InitializationErrorHelp panel", () => {
 
   test("shows the empty-state message only when every error is null", async () => {
     render(InitializationErrorHelp, { props: { panel } })
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: {
-          type: "initializationErrors",
-          target: { type: "InitializationErrorHelp", id: panel.id },
-          cliFolder: "/tmp/cli",
-          initializationErrors: {
-            tmc: noError,
-            userData: noError,
-            workspaceManager: noError,
-            exerciseDecorationProvider: noError,
-            resources: noError,
-          },
-        },
-      }),
-    )
+    dispatchToWebview({
+      type: "initializationErrors",
+      target: { type: "InitializationErrorHelp", id: panel.id },
+      cliFolder: "/tmp/cli",
+      initializationErrors: {
+        tmc: noError,
+        userData: noError,
+        workspaceManager: noError,
+        exerciseDecorationProvider: noError,
+        resources: noError,
+      },
+    })
 
     expect(await screen.findByText("No error data found")).toBeInTheDocument()
   })

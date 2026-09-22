@@ -15,7 +15,7 @@ import { createMockActionContext } from "../mocks/actionContext"
 vi.mock("../../panels/TmcPanel", () => ({
   nextPanelId: () => 1,
   TmcPanel: {
-    renderSide: vi.fn().mockResolvedValue(undefined),
+    renderSide: vi.fn(),
     postMessage: vi.fn(),
     sidePanel: {},
   },

@@ -98,7 +98,8 @@ function treeEntries(startup: Startup): TreeEntry[] {
       },
       children: (): TreeEntryChild[] =>
         courseSelectionItems(userData.getCourses()).map(([title, courseId, backend]) => ({
-          label: `${title} · ${backend}`,
+          label: title,
+          description: backend,
           id: CourseIdentifier.toString(courseId),
           command: {
             command: "tmc.courseDetails",

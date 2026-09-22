@@ -451,7 +451,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   }
 
   if (!readyContext) {
-    await TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+    TmcPanel.renderMain(context.extensionUri, context, actionContext, {
       id: nextPanelId(),
       type: "InitializationErrorHelp",
     })

@@ -9,7 +9,7 @@ import {
   tmcLocalCourse,
   tmcLocalExercise,
 } from "../test/fixtures"
-import { postedMessages } from "../test/setup"
+import { dispatchToWebview, postedMessages } from "../test/setup"
 import ExerciseSubmission from "./ExerciseSubmission.svelte"
 
 const panel: ExerciseSubmissionPanel = {
@@ -26,44 +26,32 @@ const moocPanel: ExerciseSubmissionPanel = {
   exercise: moocLocalExercise(),
 }
 
-// Posts the error that ends a failed submission on either backend, through the
-// same JSON serialization the webview bridge applies -- a live `Error` would
-// arrive as `{}`, so the panel must be sent a flattened one.
+// Posts the error that ends a failed submission on either backend. toWebviewError
+// flattens it first: the schema needs a plain {message, details?}, not a live Error.
 function postSubmissionError(panelId: number, error: Error): void {
-  const message = {
+  dispatchToWebview({
     type: "submissionStatusError",
     target: { type: "ExerciseSubmission", id: panelId },
     error: toWebviewError(error),
-  }
-  window.dispatchEvent(
-    new MessageEvent("message", { data: JSON.parse(JSON.stringify(message)) as unknown }),
-  )
+  })
 }
 
 function postStatusUpdate(panelId: number, fraction: number, message: string): void {
-  window.dispatchEvent(
-    new MessageEvent("message", {
-      data: {
-        type: "submissionStatusUpdate",
-        target: { type: "ExerciseSubmission", id: panelId },
-        fraction,
-        message,
-      },
-    }),
-  )
+  dispatchToWebview({
+    type: "submissionStatusUpdate",
+    target: { type: "ExerciseSubmission", id: panelId },
+    fraction,
+    message,
+  })
 }
 
 // Posts a mooc grading result to the panel.
 function postMoocResult(result: unknown): void {
-  window.dispatchEvent(
-    new MessageEvent("message", {
-      data: {
-        type: "moocSubmissionResult",
-        target: { type: "ExerciseSubmission", id: moocPanel.id },
-        result,
-      },
-    }),
-  )
+  dispatchToWebview({
+    type: "moocSubmissionResult",
+    target: { type: "ExerciseSubmission", id: moocPanel.id },
+    result,
+  })
 }
 
 suite("ExerciseSubmission panel", () => {

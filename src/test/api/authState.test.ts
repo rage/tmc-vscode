@@ -4,7 +4,6 @@ import * as vscode from "vscode"
 
 import { createAuthState } from "../../api/authState"
 import type Langs from "../../api/langs"
-import type UI from "../../ui/ui"
 import { Logger, LogLevel } from "../../utilities"
 
 function harness(answers: { tmc?: boolean[]; mooc?: boolean[] } = {}): {
@@ -25,7 +24,7 @@ function harness(answers: { tmc?: boolean[]; mooc?: boolean[] } = {}): {
     }),
   } as unknown as Langs
   const setLoggedIn = vi.fn()
-  const ui = { treeDP: { setLoggedIn } } as unknown as UI
+  const ui = { treeDP: { setLoggedIn } }
 
   return {
     authState: createAuthState(new Ok(langs), ui),
@@ -124,7 +123,7 @@ suite("AuthState", function () {
         return Ok(false)
       }),
     } as unknown as Langs
-    const ui = { treeDP: { setLoggedIn: vi.fn() } } as unknown as UI
+    const ui = { treeDP: { setLoggedIn: vi.fn() } }
 
     await createAuthState(new Ok(langs), ui).refresh()
 

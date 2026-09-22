@@ -27,9 +27,7 @@
 #     checkout, so it is the gate CI runs (see .github/workflows/test.yml).
 #   * `--check-source` fetches the spec from GitHub at the stamp's source_rev and
 #     byte-compares, which is the only layer that catches a stamp refreshed from
-#     a dirty or unpushed sibling checkout. It needs network, and the recorded
-#     rev currently lives on sp331's programming-exercise-migration branch, so
-#     it stays non-blocking in CI until PR #1769 merges.
+#     a dirty or unpushed sibling checkout. It needs network.
 #
 # Run via `pnpm run vendor:langs-openapi` (copy + refresh stamp), or with
 # `-- --check`, `-- --check-stamp` or `-- --check-source`.

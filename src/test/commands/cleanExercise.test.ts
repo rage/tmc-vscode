@@ -71,4 +71,12 @@ suite("Clean exercise command", function () {
     expect(tmcMock.clean).not.toHaveBeenCalled()
     expect(stubContext.dialog.errorNotification).toHaveBeenCalledOnce()
   })
+
+  test("should not clean a path outside the provided exercise", async function () {
+    workspaceManagerMockValues.getExerciseByPath = exercise
+    const outsideUri = vscode.Uri.file(path.join(COURSE_PATH, "part01-02_other_exercise"))
+    await cleanExercise(actionContext(), outsideUri)
+    expect(tmcMock.clean).not.toHaveBeenCalled()
+    expect(stubContext.dialog.errorNotification).toHaveBeenCalledOnce()
+  })
 })

@@ -1,5 +1,6 @@
 import getFolderSize from "get-folder-size"
 import type { Result } from "ts-results"
+import { Err } from "ts-results"
 import type { Disposable, Webview, WebviewPanel } from "vscode"
 import { Uri, ViewColumn, window } from "vscode"
 import * as vscode from "vscode"
@@ -26,7 +27,6 @@ import type {
 import {
   LocalCourseData,
   LocalCourseExercise,
-  match,
   panelTarget,
   toWebviewError,
   WebviewToExtensionSchema,
@@ -73,13 +73,9 @@ export interface WebviewHandlers {
     courseName: string,
     backend: BackendKind,
   ) => Promise<void>
-  pasteMoocExercise: (
+  pasteExercise: (
     actionContext: ReadyActionContext,
-    courseSlug: string,
-    exerciseName: string,
-  ) => Promise<Result<string, Error>>
-  pasteTmcExercise: (
-    actionContext: ReadyActionContext,
+    backend: BackendKind,
     courseSlug: string,
     exerciseName: string,
   ) => Promise<Result<string, Error>>
@@ -207,18 +203,18 @@ export class TmcPanel {
   }
 
   // renders the `panel` in the main panel
-  public static async renderMain(
+  public static renderMain(
     extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
     panel: Panel,
-  ): Promise<void> {
+  ): void {
     if (TmcPanel.mainPanel !== undefined) {
       Logger.info(`Revealing existing main panel for "${panel.type}"`)
       TmcPanel.mainPanel._renderPanel(panel)
       TmcPanel.mainPanel._panel.reveal(ViewColumn.One, false)
     } else {
-      TmcPanel.mainPanel = await TmcPanel.renderNew(
+      TmcPanel.mainPanel = TmcPanel.renderNew(
         extensionUri,
         extensionContext,
         actionContext,
@@ -229,12 +225,12 @@ export class TmcPanel {
   }
 
   // renders the `panel` in the side panel
-  public static async renderSide(
+  public static renderSide(
     extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
     panel: Panel,
-  ): Promise<void> {
+  ): void {
     const column = ViewColumn.Two
     // Navigating away from an in-flight mooc login abandons it, so kill its CLI
     // process. Exempt for re-entering MoocLogin: the new `moocLogin` handler
@@ -247,7 +243,7 @@ export class TmcPanel {
       TmcPanel.sidePanel._renderPanel(panel)
       TmcPanel.sidePanel._panel.reveal(column, false)
     } else {
-      const currentPanel = await TmcPanel.renderNew(
+      const currentPanel = TmcPanel.renderNew(
         extensionUri,
         extensionContext,
         actionContext,
@@ -260,13 +256,13 @@ export class TmcPanel {
 
   // convenience function for rendering a main/side panel when no main/side panel exists yet
   // otherwise the panel can simply be "revealed" with `panel.reveal`
-  public static async renderNew(
+  public static renderNew(
     extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
     panel: Panel,
     isMain: boolean,
-  ): Promise<TmcPanel> {
+  ): TmcPanel {
     let panelViewType
     let column
     if (isMain) {
@@ -783,31 +779,21 @@ export class TmcPanel {
             break
           }
           case "pasteExercise": {
-            const readyContext = requireReady(actionContext)
-            if (!readyContext) {
+            if (!isReady(actionContext)) {
               // The requesting panel is waiting on a `pasteResult`/`pasteError` reply,
               // same as a genuine paste failure below -- silence would leave it waiting.
               TmcPanel.postMessage({
                 type: "pasteError",
                 target: message.requestingPanel,
-                error: NOT_INITIALIZED_MESSAGE,
+                error: reportNotInitialized(actionContext.dialog).message,
               })
               return
             }
-            const pasteResult = await match(
-              message.course,
-              () =>
-                handlers().pasteTmcExercise(
-                  readyContext,
-                  LocalCourseData.getCourseName(message.course),
-                  LocalCourseExercise.getSlug(message.exercise),
-                ),
-              () =>
-                handlers().pasteMoocExercise(
-                  readyContext,
-                  LocalCourseData.getCourseName(message.course),
-                  LocalCourseExercise.getSlug(message.exercise),
-                ),
+            const pasteResult = await handlers().pasteExercise(
+              actionContext,
+              message.course.kind,
+              LocalCourseData.getCourseName(message.course),
+              LocalCourseExercise.getSlug(message.exercise),
             )
             if (pasteResult.err) {
               // No notification: the panel that asked is on screen and renders this
@@ -845,12 +831,17 @@ export class TmcPanel {
             break
           }
           case "moocLogin": {
+            const moocLoginPanel = message.sourcePanel
             if (!isReady(actionContext)) {
-              reportNotInitialized(actionContext.dialog)
+              // The panel shows "starting" until it hears back.
+              postMessageToWebview(webview, {
+                type: "moocLoginError",
+                target: moocLoginPanel,
+                error: reportNotInitialized(actionContext.dialog).message,
+              })
               return
             }
             const { langs } = actionContext.startup
-            const moocLoginPanel = message.sourcePanel
             // Set below, after `authenticateMooc` returns; the callback fires
             // asynchronously so it always sees the real id.
             let invocationId = 0
@@ -874,7 +865,10 @@ export class TmcPanel {
             // Interrupt-and-replaces any login already in flight, so two `mooc
             // login` processes never race on the credentials file.
             invocationId = moocLoginRegistry.start(moocLoginPanel.id, interrupt)
-            const loginResult = await result
+            // Caught here rather than by `reportingFailures`, which would leave the panel waiting.
+            const loginResult = await result.catch((error: unknown) =>
+              Err(error instanceof Error ? error : new Error(String(error))),
+            )
             if (!moocLoginRegistry.isCurrent(invocationId)) {
               // Superseded or cancelled while polling; leave the live attempt's
               // registry entry untouched.
@@ -958,24 +952,16 @@ function toMessageGroups(groups: ExerciseGroup[]): ExerciseGroup[] {
   }))
 }
 
-const NOT_INITIALIZED_MESSAGE =
-  "The extension did not initialize properly, so this action is unavailable."
-
 /**
  * Answers a webview action the extension cannot serve because initialization
  * failed. The panels stay interactive in that state, so a click has to say why
- * nothing happened and point at the panel that explains the failure.
+ * nothing happened.
  *
  * @returns the failure, for a caller that also has a waiting panel to tell.
  */
 function reportNotInitialized(dialog: Dialog): InitializationError {
-  const error = new InitializationError(NOT_INITIALIZED_MESSAGE)
-  dialog.errorNotification(NOT_INITIALIZED_MESSAGE, error, [
-    "Show help",
-    (): void => {
-      vscode.commands.executeCommand("tmc.viewInitializationErrorHelp")
-    },
-  ])
+  const error = new InitializationError("The extension did not initialize properly")
+  void dialog.reportError("This action is unavailable.", error)
   return error
 }
 

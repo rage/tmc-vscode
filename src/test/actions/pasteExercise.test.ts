@@ -2,7 +2,7 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import type * as vscode from "vscode"
 
-import { pasteMoocExercise, pasteTmcExercise } from "../../actions"
+import { pasteExercise } from "../../actions"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { BottleneckError } from "../../errors"
 import { createMockActionContext } from "../mocks/actionContext"
@@ -54,11 +54,11 @@ function tmcContextWith(pasteResult: unknown): {
   return { actionContext, submit }
 }
 
-suite("paste actions", () => {
+suite("paste action", () => {
   test("a tmc exercise goes to the tmc paste service with its numeric id", async () => {
     const { actionContext, submit } = tmcContextWith(Ok("https://tmc.mooc.fi/paste/abc123"))
 
-    const result = await pasteTmcExercise(actionContext, COURSE_SLUG, EXERCISE_SLUG)
+    const result = await pasteExercise(actionContext, "tmc", COURSE_SLUG, EXERCISE_SLUG)
 
     expect(submit).toHaveBeenCalledWith(TMC_EXERCISE_ID, EXERCISE_PATH)
     expect(result.val).toBe("https://tmc.mooc.fi/paste/abc123")
@@ -67,7 +67,7 @@ suite("paste actions", () => {
   test("a mooc exercise goes to the mooc paste service with its uuid", async () => {
     const { actionContext, submit } = moocContextWith(Ok("https://paste.example/abc123"))
 
-    const result = await pasteMoocExercise(actionContext, COURSE_SLUG, EXERCISE_SLUG)
+    const result = await pasteExercise(actionContext, "mooc", COURSE_SLUG, EXERCISE_SLUG)
 
     expect(submit).toHaveBeenCalledWith(MOOC_EXERCISE_ID, EXERCISE_PATH)
     expect(result.ok).toBe(true)
@@ -87,8 +87,8 @@ suite("paste actions", () => {
       )
     const notification = vi.mocked(actionContext.dialog.notification)
 
-    const first = pasteMoocExercise(actionContext, COURSE_SLUG, EXERCISE_SLUG)
-    const second = await pasteMoocExercise(actionContext, COURSE_SLUG, EXERCISE_SLUG)
+    const first = pasteExercise(actionContext, "mooc", COURSE_SLUG, EXERCISE_SLUG)
+    const second = await pasteExercise(actionContext, "mooc", COURSE_SLUG, EXERCISE_SLUG)
 
     expect(second.err).toBe(true)
     expect(second.val).toBeInstanceOf(BottleneckError)
@@ -106,7 +106,7 @@ suite("paste actions", () => {
     const error = new Error("backend unreachable")
     const { actionContext } = moocContextWith(Err(error))
 
-    const result = await pasteMoocExercise(actionContext, COURSE_SLUG, EXERCISE_SLUG)
+    const result = await pasteExercise(actionContext, "mooc", COURSE_SLUG, EXERCISE_SLUG)
 
     expect(result.err).toBe(true)
     expect(result.val).toBe(error)
@@ -116,7 +116,7 @@ suite("paste actions", () => {
   test("an empty paste link from the server is its own error case", async () => {
     const { actionContext } = moocContextWith(Ok(""))
 
-    const result = await pasteMoocExercise(actionContext, COURSE_SLUG, EXERCISE_SLUG)
+    const result = await pasteExercise(actionContext, "mooc", COURSE_SLUG, EXERCISE_SLUG)
 
     expect(result.err).toBe(true)
     expect((result.val as Error).message).toContain("did not answer with a paste link")

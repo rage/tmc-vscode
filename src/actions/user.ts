@@ -128,7 +128,7 @@ export async function testExercise(
         exerciseUri: exercise.uri,
         testRunId,
       }
-      await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+      TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
       const target = panelTarget(panel)
 
       if (!course.data.perhapsExamMode) {
@@ -181,7 +181,7 @@ export async function testExercise(
 
           if (TmcPanel.sidePanel === undefined) {
             // user closed panel, re-render
-            await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+            TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
           }
           TmcPanel.postMessage({
             type: "testResults",
@@ -354,7 +354,7 @@ export async function submitExercise(
         course,
         exercise: courseExercise,
       }
-      await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+      TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
       const target = panelTarget(panel)
 
       const outcome = await submit(target, exercisePath)
@@ -385,7 +385,7 @@ export async function submitExercise(
       }
 
       if (TmcPanel.sidePanel === undefined) {
-        await TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+        TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
       }
       TmcPanel.postMessage(outcome.val.resultMessage)
 
@@ -440,7 +440,7 @@ function pasterFor(
  * asked from. A paste that comes back without a link is an error rather than an empty
  * `Ok`, so no caller has to check for one.
  */
-async function pasteExercise(
+export async function pasteExercise(
   actionContext: ReadyActionContext,
   backend: BackendKind,
   courseSlug: string,
@@ -475,24 +475,6 @@ async function pasteExercise(
       return pasteResult
     },
   )
-}
-
-/** Sends a tmc exercise to its paste service. The mooc twin is {@link pasteMoocExercise}. */
-export async function pasteTmcExercise(
-  actionContext: ReadyActionContext,
-  courseSlug: string,
-  exerciseName: string,
-): Promise<Result<string, Error>> {
-  return pasteExercise(actionContext, "tmc", courseSlug, exerciseName)
-}
-
-/** Sends a mooc exercise to its paste service. The tmc twin is {@link pasteTmcExercise}. */
-export async function pasteMoocExercise(
-  actionContext: ReadyActionContext,
-  courseSlug: string,
-  exerciseName: string,
-): Promise<Result<string, Error>> {
-  return pasteExercise(actionContext, "mooc", courseSlug, exerciseName)
 }
 
 export interface CourseUpdateOptions {
@@ -673,10 +655,10 @@ export async function openWorkspace(
   const { resources, workspaceManager } = actionContext.startup
 
   const currentWorkspaceFile = vscode.workspace.workspaceFile
-  const tmcWorkspaceFile = resources.getWorkspaceFilePath(name, backend)
-  const workspaceAsUri = vscode.Uri.file(tmcWorkspaceFile)
+  const workspaceFile = resources.getWorkspaceFilePath(name, backend)
+  const workspaceAsUri = vscode.Uri.file(workspaceFile)
   Logger.info(`Current workspace: ${currentWorkspaceFile?.fsPath}`)
-  Logger.info(`${backendName(backend)} workspace: ${tmcWorkspaceFile}`)
+  Logger.info(`${backendName(backend)} workspace: ${workspaceFile}`)
 
   // `vscode.openFolder` reloads the window even for the workspace already open,
   // discarding unsaved editors, so only focus the explorer in that case.

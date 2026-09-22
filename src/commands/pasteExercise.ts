@@ -2,7 +2,7 @@ import * as vscode from "vscode"
 
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import { matchBackend, pasteServiceName } from "../shared/shared"
+import { pasteServiceName } from "../shared/shared"
 import { failure, runForExercise } from "./runForExercise"
 
 export async function pasteExercise(
@@ -15,10 +15,11 @@ export async function pasteExercise(
     resource,
     "Pasting the exercise",
     async (exercise) => {
-      const result = await matchBackend(
-        exercise,
-        () => actions.pasteTmcExercise(actionContext, exercise.courseSlug, exercise.exerciseSlug),
-        () => actions.pasteMoocExercise(actionContext, exercise.courseSlug, exercise.exerciseSlug),
+      const result = await actions.pasteExercise(
+        actionContext,
+        exercise.backend,
+        exercise.courseSlug,
+        exercise.exerciseSlug,
       )
       if (result.ok) {
         return result

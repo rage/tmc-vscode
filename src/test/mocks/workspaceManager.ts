@@ -1,3 +1,5 @@
+import * as path from "path"
+
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
@@ -49,7 +51,18 @@ export function createWorkspaceMangerMock(): [WorkspaceManager, WorkspaceManager
     getExerciseByPath: vi.fn((uri: vscode.Uri) =>
       values.getExerciseByPath?.uri.fsPath === uri.fsPath ? values.getExerciseByPath : undefined,
     ),
-    getExerciseContaining: vi.fn(() => values.getExerciseByPath),
+    // Unlike production, there is one fixture exercise, not a path map: containment is
+    // its own uri or any path below it.
+    getExerciseContaining: vi.fn((uri: vscode.Uri) => {
+      const exercise = values.getExerciseByPath
+      if (!exercise) {
+        return undefined
+      }
+      const exercisePath = exercise.uri.fsPath
+      return uri.fsPath === exercisePath || uri.fsPath.startsWith(exercisePath + path.sep)
+        ? exercise
+        : undefined
+    }),
     getExercisesByCourseSlug: vi.fn((backend: string, courseSlug: string) =>
       backend === "tmc" && courseSlug === "test-python-course"
         ? values.getExercisesByCoursePythonCourse
