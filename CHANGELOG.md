@@ -6,6 +6,11 @@
 - Raised the minimum required VS Code version to 1.100.
 - The extension now declares itself unsupported in untrusted (restricted-mode) workspaces, since it downloads and runs the TMC-langs CLI against workspace files.
 - The extension now declares itself unsupported in virtual workspaces, such as a repository opened straight from GitHub, since it runs the TMC-langs CLI as a local process and stores exercises on disk.
+- The backend name beside a course in the My Courses tree is now shown dimmed, next to the title, instead of appended to it.
+- Fixed the courses.mooc.fi login panel waiting forever on "Starting login…": it now shows an error with Try again if no sign-in code arrives within a minute, or at once if the extension failed to start.
+- Every initialization error notification now offers Show help.
+- Open Exercises Folder, Wipe, Change data path and My Courses now say why they cannot run when TMC-langs reported no exercise directory.
+- Fixed a newly added course's passed exercises not showing as passed right away.
 
 ## [3.5.4] - 2026-09-15
 
