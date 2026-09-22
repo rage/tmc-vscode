@@ -313,21 +313,29 @@ export class UserData {
     courseData.data.newExercises = match(
       courseData,
       (tmc) =>
-        tmc.newExercises
-          .filter((exerciseId) => exerciseIds.includes(exerciseId))
-          .concat(
-            exerciseIds
-              .filter((eid) => typeof eid === "number")
-              .filter((newExerciseId) => !courseExercises.some((e) => e.data.id === newExerciseId)),
-          ),
+        _.uniq(
+          tmc.newExercises
+            .filter((exerciseId) => exerciseIds.includes(exerciseId))
+            .concat(
+              exerciseIds
+                .filter((eid) => typeof eid === "number")
+                .filter(
+                  (newExerciseId) => !courseExercises.some((e) => e.data.id === newExerciseId),
+                ),
+            ),
+        ),
       (mooc) =>
-        mooc.newExercises
-          .filter((exerciseId) => exerciseIds.includes(exerciseId))
-          .concat(
-            exerciseIds
-              .filter((eid) => typeof eid === "string")
-              .filter((newExerciseId) => !courseExercises.some((e) => e.data.id === newExerciseId)),
-          ),
+        _.uniq(
+          mooc.newExercises
+            .filter((exerciseId) => exerciseIds.includes(exerciseId))
+            .concat(
+              exerciseIds
+                .filter((eid) => typeof eid === "string")
+                .filter(
+                  (newExerciseId) => !courseExercises.some((e) => e.data.id === newExerciseId),
+                ),
+            ),
+        ),
     )
     if (courseData.data.newExercises.length > 0) {
       Logger.info(

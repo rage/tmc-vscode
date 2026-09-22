@@ -397,6 +397,28 @@ suite("UserData updateExercises", function () {
     expect(course?.exercises.map((x) => x.id)).toEqual(["a", "b", "c"])
     expect(course?.newExercises).toEqual(["c"])
   })
+  test("lists an exercise once when it was already new but not yet stored", async function () {
+    const [userData] = await makeUserData({
+      courses: [tmcCourse({ id: 0, newExercises: [3], exercises: [tmcExercise({ id: 1 })] })],
+      mooc_courses: [
+        moocCourse({
+          id: "instance-uuid-1",
+          newExercises: ["c"],
+          exercises: [moocExercise({ id: "a" })],
+        }),
+      ],
+    })
+    await userData.updateExercises(CourseIdentifier.from(0), [
+      makeTmcKind(tmcExercise({ id: 1 })),
+      makeTmcKind(tmcExercise({ id: 3, name: "new_one" })),
+    ])
+    await userData.updateExercises(CourseIdentifier.from("instance-uuid-1"), [
+      makeMoocKind(moocExercise({ id: "a" })),
+      makeMoocKind(moocExercise({ id: "c", name: "new_mooc" })),
+    ])
+    expect(userData.getTmcCourse(0).newExercises).toEqual([3])
+    expect(userData.getMoocCourses()[0]?.newExercises).toEqual(["c"])
+  })
 })
 
 suite("UserData mixed-backend isolation", function () {
