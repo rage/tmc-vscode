@@ -7,7 +7,9 @@ import { moveExtensionDataPath } from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
+import type Resources from "../../config/resources"
 import type { UserData } from "../../config/userdata"
+import { TmcPanel } from "../../panels/TmcPanel"
 import { createMockActionContext } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
@@ -17,6 +19,8 @@ import { createWorkspaceMangerMock } from "../mocks/workspaceManager"
 import { makeTmpDirs } from "../utils"
 
 const emptyFolder = (root: string): vscode.Uri => vscode.Uri.file(root + "/new/path/empty")
+const OLD_PATH = "/tmp/tmcdata/projects"
+
 const nonEmptyFolder = (root: string): vscode.Uri => vscode.Uri.file(root + "/new/path/nonempty")
 
 suite("moveExtensionDataPath action", function () {
@@ -37,10 +41,12 @@ suite("moveExtensionDataPath action", function () {
   let userDataMock: UserData
   let workspaceManagerMock: WorkspaceManager
   let workspaceManagerMockValues: WorkspaceManagerMockValues
+  let resources: Resources
 
   const actionContext = (): ReadyActionContext =>
     createMockActionContext({
       startup: {
+        resources,
         langs: tmcMock,
         userData: userDataMock,
         workspaceManager: workspaceManagerMock,
@@ -53,6 +59,12 @@ suite("moveExtensionDataPath action", function () {
     ;[userDataMock] = createUserDataMock()
     ;[workspaceManagerMock, workspaceManagerMockValues] = createWorkspaceMangerMock()
     workspaceManagerMockValues.activeCourse = courseName
+    resources = { projectsDirectory: OLD_PATH } as Resources
+    vi.spyOn(TmcPanel, "postMessage").mockResolvedValue(undefined)
+  })
+
+  afterEach(function () {
+    vi.restoreAllMocks()
   })
 
   test("should change extension data path", async function () {
@@ -94,5 +106,24 @@ suite("moveExtensionDataPath action", function () {
     tmcMockValues.moveProjectsDirectory = Err(new Error())
     const result = await moveExtensionDataPath(actionContext(), emptyFolder(root))
     expect(result.val).toBeInstanceOf(Error)
+  })
+
+  test("tells a My Courses panel the new path after a move", async function () {
+    await moveExtensionDataPath(actionContext(), emptyFolder(root))
+    expect(TmcPanel.postMessage).toHaveBeenCalledExactlyOnceWith({
+      type: "setTmcDataPath",
+      tmcDataPath: emptyFolder(root).fsPath,
+      target: { type: "MyCourses" },
+    })
+  })
+
+  test("tells a My Courses panel the unchanged path after a failed move", async function () {
+    tmcMockValues.moveProjectsDirectory = Err(new Error())
+    await moveExtensionDataPath(actionContext(), emptyFolder(root))
+    expect(TmcPanel.postMessage).toHaveBeenCalledExactlyOnceWith({
+      type: "setTmcDataPath",
+      tmcDataPath: OLD_PATH,
+      target: { type: "MyCourses" },
+    })
   })
 })

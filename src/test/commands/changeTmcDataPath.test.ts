@@ -6,7 +6,6 @@ import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import { changeTmcDataPath } from "../../commands/changeTmcDataPath"
 import type Resources from "../../config/resources"
-import { TmcPanel } from "../../panels/TmcPanel"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -57,7 +56,6 @@ suite("Change TMC data path command", function () {
     vi.mocked(vscode.window.showOpenDialog).mockReset()
     vi.mocked(actions.moveExtensionDataPath).mockReset()
     vi.spyOn(vscode.window, "showOpenDialog").mockResolvedValue([vscode.Uri.file(CHOSEN_PATH)])
-    vi.spyOn(TmcPanel, "postMessage").mockResolvedValue(undefined)
   })
 
   afterEach(function () {
@@ -89,11 +87,15 @@ suite("Change TMC data path command", function () {
     expect(notifications[0]).toContain("not empty")
   })
 
-  test("asks for nothing when tmc-langs reported no exercise directory", async function () {
+  test("says why it cannot run when tmc-langs reported no exercise directory", async function () {
     const { context, notifications, errors } = harness("none")
 
     await changeTmcDataPath(context)
 
+    expect(context.dialog.errorNotification).toHaveBeenCalledExactlyOnceWith(
+      "Changing the TMC data path is unavailable: tmc-langs did not report an exercise directory.",
+      expect.any(Error),
+    )
     expect(vscode.window.showOpenDialog).not.toHaveBeenCalled()
     expect(actions.moveExtensionDataPath).not.toHaveBeenCalled()
     expect(notifications).toEqual([])

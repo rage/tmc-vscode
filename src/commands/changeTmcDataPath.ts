@@ -2,7 +2,6 @@ import * as vscode from "vscode"
 
 import { moveExtensionDataPath } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import { TmcPanel } from "../panels/TmcPanel"
 import { Logger } from "../utilities"
 
 /**
@@ -13,7 +12,10 @@ export async function changeTmcDataPath(actionContext: ReadyActionContext): Prom
   const { resources } = actionContext.startup
   Logger.info("Changing TMC data path")
   if (!resources.projectsDirectory) {
-    Logger.error("Cannot change the data path: tmc-langs reported no exercise directory")
+    await dialog.errorNotification(
+      "Changing the TMC data path is unavailable: tmc-langs did not report an exercise directory.",
+      new Error("tmc-langs did not report an exercise directory"),
+    )
     return
   }
 
@@ -27,7 +29,7 @@ export async function changeTmcDataPath(actionContext: ReadyActionContext): Prom
   }
 
   const newPath = (await vscode.window.showOpenDialog(options))?.[0]
-  if (newPath && old) {
+  if (newPath) {
     const res = await dialog.progressNotification("Moving projects directory...", (progress) => {
       return moveExtensionDataPath(actionContext, newPath, (update) => progress.report(update))
     })
@@ -42,12 +44,5 @@ so a tmcdata subfolder was used.`,
     } else {
       dialog.reportError("Failed to move the projects directory.", res.val)
     }
-    TmcPanel.postMessage({
-      type: "setTmcDataPath",
-      tmcDataPath: resources.projectsDirectory,
-      target: {
-        type: "MyCourses",
-      },
-    })
   }
 }
