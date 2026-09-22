@@ -260,15 +260,6 @@ export class UserData {
     return this._updatePersistentData()
   }
 
-  public async addMoocCourse(data: MoocLocalCourseData): Promise<Result<void, Error>> {
-    if (this._moocCourses.has(data.id)) {
-      return Err(new Error(`Course ${data.name} has already been added`))
-    }
-    Logger.info(`Adding course ${data.name} to My Courses`)
-    this._moocCourses.set(data.id, data)
-    return this._updatePersistentData()
-  }
-
   public async deleteCourse(id: CourseIdentifier): Promise<Result<void, Error>> {
     match(
       id,
