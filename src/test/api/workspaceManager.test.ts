@@ -2,17 +2,12 @@ import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
 
-import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import type { Mock } from "vitest"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import type {
-  PersistClosedCourseExercises,
-  PersistClosedExercises,
-  WorkspaceExercise,
-} from "../../api/workspaceManager"
+import type { PersistClosedCourseExercises, WorkspaceExercise } from "../../api/workspaceManager"
 import WorkspaceManager, {
   ensureCourseWorkspaceFile,
   ensureWorkspaceRootFile,
@@ -98,7 +93,6 @@ function folderOf(uri: vscode.Uri, name: string): vscode.WorkspaceFolder {
   return { uri, name, index: 0 }
 }
 
-const persist: PersistClosedExercises = async () => Ok.EMPTY
 const persistForCourse: PersistClosedCourseExercises = async () => Ok.EMPTY
 
 /**
@@ -250,6 +244,7 @@ suite("WorkspaceManager class", function () {
     const courseSlug = "test-python-course"
     let open: WorkspaceExercise
     let closed: WorkspaceExercise
+    let record: Mock<PersistClosedCourseExercises>
     let manager: WorkspaceManager
 
     beforeEach(function () {
@@ -257,35 +252,36 @@ suite("WorkspaceManager class", function () {
       closed = exercise("tmc", courseSlug, "part02-01_greeting", ExerciseStatus.Closed)
       openWorkspaceFile(workspaceFileName(courseSlug, "tmc"))
       stubWorkspace("workspaceFolders", [rootFolder, folderOf(open.uri, open.exerciseSlug)])
-      manager = new WorkspaceManager(resources, persistForCourse, [open, closed])
+      record = vi.fn<PersistClosedCourseExercises>(async () => Ok.EMPTY)
+      manager = new WorkspaceManager(resources, record, [open, closed])
     })
 
     test("records the whole closed set, not only the exercises the caller named", async function () {
-      const record = vi.fn<PersistClosedExercises>(async () => Ok.EMPTY)
+      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
 
-      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug], record)
-
-      expect(record).toHaveBeenCalledExactlyOnceWith(["hello_world", "part02-01_greeting"])
+      expect(record).toHaveBeenCalledExactlyOnceWith("tmc", courseSlug, [
+        "hello_world",
+        "part02-01_greeting",
+      ])
     })
 
     test("records the closed set before the workspace shows the change", async function () {
       let workspaceWritesBeforeRecording = -1
-      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug], async () => {
+      record.mockImplementation(async () => {
         workspaceWritesBeforeRecording = updateWorkspaceFolders.mock.calls.length
         return Ok.EMPTY
       })
+
+      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
 
       expect(workspaceWritesBeforeRecording).toBe(0)
       expect(updateWorkspaceFolders).toHaveBeenCalledOnce()
     })
 
     test("changes nothing the user can see when the closed set cannot be recorded", async function () {
-      const result = await manager.closeCourseExercises(
-        "tmc",
-        courseSlug,
-        [open.exerciseSlug],
-        async () => Err(new Error("settings are read-only")),
-      )
+      record.mockResolvedValue(Err(new Error("settings are read-only")))
+
+      const result = await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
 
       expect(result.err).toBe(true)
       expect(open.status).toBe(ExerciseStatus.Open)
@@ -293,11 +289,9 @@ suite("WorkspaceManager class", function () {
     })
 
     test("drops the reopened exercise from the recorded closed set", async function () {
-      const record = vi.fn<PersistClosedExercises>(async () => Ok.EMPTY)
+      await manager.openCourseExercises("tmc", courseSlug, [closed.exerciseSlug])
 
-      await manager.openCourseExercises("tmc", courseSlug, [closed.exerciseSlug], record)
-
-      expect(record).toHaveBeenCalledExactlyOnceWith([])
+      expect(record).toHaveBeenCalledExactlyOnceWith("tmc", courseSlug, [])
       expect(closed.status).toBe(ExerciseStatus.Open)
     })
   })
@@ -311,9 +305,6 @@ suite("WorkspaceManager class", function () {
     let notifyFolderChange: ((e: vscode.WorkspaceFoldersChangeEvent) => void) | undefined
     let write: Mock<PersistClosedCourseExercises>
     let manager: WorkspaceManager
-
-    const persistThrough = (closedExerciseSlugs: string[]): Promise<Result<void, Error>> =>
-      write("tmc", courseSlug, closedExerciseSlugs)
 
     beforeEach(function () {
       Logger.configure(LogLevel.None)
@@ -370,8 +361,8 @@ suite("WorkspaceManager class", function () {
     // The workspace move each call makes re-enters the handler, so an
     // unconditional write here would double every CLI call the user's clicks cost.
     test("an open-then-close cycle writes once per change, not once per folder move", async function () {
-      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug], persistThrough)
-      await manager.openCourseExercises("tmc", courseSlug, [open.exerciseSlug], persistThrough)
+      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+      await manager.openCourseExercises("tmc", courseSlug, [open.exerciseSlug])
 
       expect(write.mock.calls).toEqual([
         ["tmc", courseSlug, ["hello_world", "part02-01_greeting"]],
@@ -624,7 +615,7 @@ suite("WorkspaceManager class", function () {
     })
 
     test("opens an exercise only in the requested backend", async function () {
-      const result = await manager.openCourseExercises("mooc", courseSlug, ["hello_world"], persist)
+      const result = await manager.openCourseExercises("mooc", courseSlug, ["hello_world"])
 
       expect(result.ok).toBe(true)
       expect(moocExercise.status).toBe(ExerciseStatus.Open)
@@ -636,12 +627,7 @@ suite("WorkspaceManager class", function () {
       tmcExercise.status = ExerciseStatus.Open
       moocExercise.status = ExerciseStatus.Open
 
-      const result = await manager.closeCourseExercises(
-        "mooc",
-        courseSlug,
-        ["hello_world"],
-        persist,
-      )
+      const result = await manager.closeCourseExercises("mooc", courseSlug, ["hello_world"])
 
       expect(result.val).toEqual([moocExercise])
       expect(tmcExercise.status).toBe(ExerciseStatus.Open)

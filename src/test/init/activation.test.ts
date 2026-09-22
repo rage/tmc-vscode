@@ -25,8 +25,20 @@ const langsStub = vi.hoisted(() => ({
   moocAuthenticated: false,
   authChecks: 0,
   killAllProcessesCalls: 0,
+  settingsWritten: [] as [string, unknown][],
   /** What activation subscribed to, so a test can fire an event at it. */
   handlers: new Map<string, (payload: never) => void>(),
+}))
+
+/** The writer activation hands `WorkspaceManager`, so a test can drive it. */
+const workspaceManagerStub = vi.hoisted(() => ({
+  persistClosedExercises: undefined as
+    | ((
+        backend: "tmc" | "mooc",
+        courseSlug: string,
+        closedExerciseSlugs: string[],
+      ) => Promise<unknown>)
+    | undefined,
 }))
 
 // Swapped per test so a suite can decide what global state holds.
@@ -99,6 +111,21 @@ vi.mock("../../panels/TmcPanel", () => ({
   },
 }))
 
+// Wraps the real manager to capture the writer activation constructs it with; nothing
+// else can reach that closure.
+vi.mock("../../api/workspaceManager", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../api/workspaceManager")>()
+  return {
+    ...original,
+    default: class extends original.default {
+      public constructor(...args: ConstructorParameters<typeof original.default>) {
+        super(...args)
+        workspaceManagerStub.persistClosedExercises = args[1]
+      }
+    },
+  }
+})
+
 vi.mock("../../api/langs", () => ({
   default: class {
     public isAuthenticated = async (): Promise<unknown> => {
@@ -110,6 +137,10 @@ vi.mock("../../api/langs", () => ({
       return Ok(langsStub.moocAuthenticated)
     }
     public getSetting = async (): Promise<unknown> => Ok(cliSettings.projectsDirectory)
+    public setSetting = async (key: string, value: unknown): Promise<unknown> => {
+      langsStub.settingsWritten.push([key, value])
+      return Ok.EMPTY
+    }
     public on = (event: string, callback: (payload: never) => void): void => {
       langsStub.handlers.set(event, callback)
     }
@@ -200,7 +231,9 @@ function resetActivationRecording(): void {
   langsStub.moocAuthenticated = false
   langsStub.authChecks = 0
   langsStub.killAllProcessesCalls = 0
+  langsStub.settingsWritten.length = 0
   langsStub.handlers.clear()
+  workspaceManagerStub.persistClosedExercises = undefined
   cliSettings.projectsDirectory = tmp.dirSync().name
   vi.spyOn(vscode.window, "showErrorMessage").mockResolvedValue(undefined)
 }
@@ -274,6 +307,31 @@ suite("activation with usable storage", function () {
 
     expect(recorded.treeEntryIds).not.toContain("tmc.viewInitializationErrorHelp")
     expect(recorded.panelTypes).toEqual([])
+  })
+})
+
+suite("the record of a course's closed exercises", function () {
+  beforeEach(resetActivationRecording)
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    vi.restoreAllMocks()
+  })
+
+  // `refreshLocalExercises` reads this setting back by the same key, and the manager
+  // skips a write it believes it already made, so a key that disagrees strands closed
+  // exercises with nothing to correct it.
+  test("writes it to the backend-tagged settings key", async function () {
+    await activate(createContext())
+
+    expect(workspaceManagerStub.persistClosedExercises).toBeDefined()
+    await workspaceManagerStub.persistClosedExercises?.("mooc", "mooc-python-course", [
+      "mooc_hello",
+    ])
+
+    expect(langsStub.settingsWritten).toEqual([
+      ["closed-exercises-for:mooc:mooc-python-course", ["mooc_hello"]],
+    ])
   })
 })
 

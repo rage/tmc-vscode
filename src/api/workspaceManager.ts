@@ -41,16 +41,8 @@ export interface WorkspaceExercise {
  *
  * `WorkspaceManager` awaits this before it changes anything the user can see, so
  * an implementation must have completed the write by the time it resolves `Ok`.
- */
-export type PersistClosedExercises = (closedExerciseSlugs: string[]) => Promise<Result<void, Error>>
-
-/**
- * Writes the durable record of which of a course's exercises are closed, for a
- * change the manager observed rather than one it was asked to make.
- *
- * Must land in the same place as the {@link PersistClosedExercises} that the
- * open and close calls pass: the manager keeps one last-written set per course
- * and skips a write that would not change it.
+ * The manager keeps one last-written set per course and skips a write that would
+ * not change it.
  */
 export type PersistClosedCourseExercises = (
   backend: "tmc" | "mooc",
@@ -290,18 +282,16 @@ export default class WorkspaceManager implements vscode.Disposable {
     backend: "tmc" | "mooc",
     courseSlug: string,
     exerciseSlugs: string[],
-    persistClosed: PersistClosedExercises,
   ): Promise<Result<WorkspaceExercise[], Error>> {
-    return this._setOpen(backend, courseSlug, exerciseSlugs, true, persistClosed)
+    return this._setOpen(backend, courseSlug, exerciseSlugs, true)
   }
 
   public closeCourseExercises(
     backend: "tmc" | "mooc",
     courseSlug: string,
     exerciseSlugs: string[],
-    persistClosed: PersistClosedExercises,
   ): Promise<Result<WorkspaceExercise[], Error>> {
-    return this._setOpen(backend, courseSlug, exerciseSlugs, false, persistClosed)
+    return this._setOpen(backend, courseSlug, exerciseSlugs, false)
   }
 
   /**
@@ -557,9 +547,9 @@ export default class WorkspaceManager implements vscode.Disposable {
   /**
    * The one place a course's exercises change between open and closed.
    *
-   * Records the resulting closed set through `persistClosed` first and gives up
-   * on a failed write, so the student never sees exercises open or close in a way
-   * the next {@link setExercises} silently reverts.
+   * Records the resulting closed set first and gives up on a failed write, so the
+   * student never sees exercises open or close in a way the next
+   * {@link setExercises} silently reverts.
    *
    * @returns the exercises the request named — matched, not changed: one already
    * in the requested state is included.
@@ -569,7 +559,6 @@ export default class WorkspaceManager implements vscode.Disposable {
     courseSlug: string,
     exerciseSlugs: string[],
     open: boolean,
-    persistClosed: PersistClosedExercises,
   ): Promise<Result<WorkspaceExercise[], Error>> {
     const courseExercises = this._exercises.filter(
       (x) => x.backend === backend && x.courseSlug === courseSlug,
@@ -579,7 +568,7 @@ export default class WorkspaceManager implements vscode.Disposable {
       .filter((x) => (requested.has(x.exerciseSlug) ? !open : x.status === ExerciseStatus.Closed))
       .map((x) => x.exerciseSlug)
 
-    const persisted = await persistClosed(closedAfterwards)
+    const persisted = await this._persistClosedExercises(backend, courseSlug, closedAfterwards)
     if (persisted.err) {
       return persisted
     }
