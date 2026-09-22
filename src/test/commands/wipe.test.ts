@@ -34,6 +34,7 @@ function wipeContext(
   options: {
     /** Answers to the two explicit confirmations, in order. */
     confirmations?: boolean[]
+    noProjectsDirectory?: boolean
     resetSettings?: Result<void, Error>
     deleteAllWorkspaceFiles?: Result<void, Error>
   } = {},
@@ -45,7 +46,9 @@ function wipeContext(
   return {
     ...createMockActionContext({
       startup: {
-        resources: { projectsDirectory: PROJECTS_DIRECTORY } as Resources,
+        resources: {
+          projectsDirectory: options.noProjectsDirectory ? undefined : PROJECTS_DIRECTORY,
+        } as Resources,
         langs: {
           resetSettings: vi.fn(step("resetSettings", () => options.resetSettings ?? Ok.EMPTY)),
           deauthenticate: vi.fn(step("deauthenticate", () => Ok.EMPTY)),
@@ -116,6 +119,15 @@ suite("Wipe command", function () {
 
     expect(fs.removeSync).not.toHaveBeenCalled()
     expect(context.dialog.reportError).toHaveBeenCalledOnce()
+  })
+
+  test("wipes nothing when tmc-langs reported no exercise directory", async function () {
+    const context = wipeContext({ noProjectsDirectory: true })
+
+    await wipe(context, extensionContext)
+
+    expect(stepsRun).toEqual([])
+    expect(context.dialog.explicitConfirmation).not.toHaveBeenCalled()
   })
 
   test("deletes nothing when the user declines the second confirmation", async function () {

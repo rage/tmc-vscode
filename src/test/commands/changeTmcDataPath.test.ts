@@ -23,7 +23,8 @@ interface Harness {
   errors: string[]
 }
 
-function harness(projectsDirectory: string | undefined = OLD_PATH): Harness {
+/** `"none"` stands for an activation tmc-langs gave no exercise directory. */
+function harness(projectsDirectory: string | "none" = OLD_PATH): Harness {
   const [dialog] = createDialogMock()
   const notifications: string[] = []
   const errors: string[] = []
@@ -35,7 +36,13 @@ function harness(projectsDirectory: string | undefined = OLD_PATH): Harness {
   })
   return {
     context: {
-      ...createMockActionContext({ startup: { resources: { projectsDirectory } as Resources } }),
+      ...createMockActionContext({
+        startup: {
+          resources: {
+            projectsDirectory: projectsDirectory === "none" ? undefined : projectsDirectory,
+          } as Resources,
+        },
+      }),
       dialog,
     },
     notifications,
@@ -45,6 +52,10 @@ function harness(projectsDirectory: string | undefined = OLD_PATH): Harness {
 
 suite("Change TMC data path command", function () {
   beforeEach(function () {
+    // `restoreAllMocks` puts jest-mock-vscode's own persistent spy back, call
+    // history and all, so a count assertion needs the history reset instead.
+    vi.mocked(vscode.window.showOpenDialog).mockReset()
+    vi.mocked(actions.moveExtensionDataPath).mockReset()
     vi.spyOn(vscode.window, "showOpenDialog").mockResolvedValue([vscode.Uri.file(CHOSEN_PATH)])
     vi.spyOn(TmcPanel, "postMessage").mockResolvedValue(undefined)
   })
@@ -76,6 +87,17 @@ suite("Change TMC data path command", function () {
     expect(notifications).toHaveLength(1)
     expect(notifications[0]).toContain(used)
     expect(notifications[0]).toContain("not empty")
+  })
+
+  test("asks for nothing when tmc-langs reported no exercise directory", async function () {
+    const { context, notifications, errors } = harness("none")
+
+    await changeTmcDataPath(context)
+
+    expect(vscode.window.showOpenDialog).not.toHaveBeenCalled()
+    expect(actions.moveExtensionDataPath).not.toHaveBeenCalled()
+    expect(notifications).toEqual([])
+    expect(errors).toEqual([])
   })
 
   test("reports a failed move", async function () {
