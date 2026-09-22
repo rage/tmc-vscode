@@ -5,14 +5,13 @@ import type { ActionContext } from "../actions/types"
 import * as commands from "../commands"
 import { randomPanelId, registerWebviewHandlers, TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
-import { backendName, LocalCourseData } from "../shared/shared"
-import { Logger } from "../utilities/"
+import { Logger } from "../utilities"
 
 export function registerCommands(
   context: vscode.ExtensionContext,
   actionContext: ActionContext,
 ): void {
-  const { dialog, ui, userData, resources } = actionContext
+  const { dialog, ui, resources } = actionContext
   Logger.info("Registering TMC VSCode commands")
 
   registerWebviewHandlers({
@@ -45,7 +44,7 @@ export function registerCommands(
         try {
           return await run(...args)
         } catch (e) {
-          void dialog.errorNotification(
+          void dialog.reportError(
             `Failed to run ${id}.`,
             e instanceof Error ? e : new Error(String(e)),
           )
@@ -83,25 +82,10 @@ export function registerCommands(
   )
 
   register("tmc.courseDetails", async (courseId?: CourseIdentifier) => {
-    if (userData.err) {
-      Logger.error("The extension was not initialized properly")
-      return
-    }
-
-    const courses = userData.val.getCourses()
-    if (courses.length === 0) {
-      return
-    }
-    courseId =
-      courseId ??
-      (await dialog.selectItem(
-        { title: "Course Details", placeHolder: "Which course page do you want to open?" },
-        ...courses.map<[string, CourseIdentifier, string]>((c) => [
-          LocalCourseData.getCourseName(c),
-          LocalCourseData.getCourseId(c),
-          backendName(c.kind),
-        ]),
-      ))
+    courseId ??= await commands.pickCourse(actionContext, {
+      title: "Course Details",
+      placeHolder: "Which course page do you want to open?",
+    })
     if (courseId) {
       await TmcPanel.renderMain(context.extensionUri, context, actionContext, {
         id: randomPanelId(),
@@ -118,15 +102,7 @@ export function registerCommands(
     commands.downloadOldSubmission(actionContext, resource),
   )
 
-  register("tmc.logout", async () => {
-    if (await dialog.confirmation("Are you sure you want to log out?")) {
-      // The action layer reports failures itself; only announce success here.
-      const deauth = await actions.logout(actionContext)
-      if (deauth.ok) {
-        dialog.notification("Logged out from TestMyCode.")
-      }
-    }
-  })
+  register("tmc.logout", async () => commands.logout(actionContext))
 
   register("tmc.myCourses", async () => {
     await TmcPanel.renderMain(context.extensionUri, context, actionContext, {
