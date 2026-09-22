@@ -3,7 +3,7 @@ import * as vscode from "vscode"
 
 import type { ActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
-import { ConnectionError, ForbiddenError } from "../../errors"
+import { ConnectionError, ForbiddenError, InitializationError, presentationFor } from "../../errors"
 import { postUpdateables } from "../../panels/exerciseLists"
 import { moocLoginRegistry } from "../../panels/moocLoginRegistry"
 import type { WebviewHandlers } from "../../panels/TmcPanel"
@@ -280,25 +280,14 @@ suite("TmcPanel initialization guards", () => {
 
     await listener({ type: "removeCourse", id: CourseIdentifier.from(1) })
 
-    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
-      "The extension did not initialize properly, so this action is unavailable.",
-      expect.any(Error),
-      ["Show help", expect.any(Function)],
+    expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
+      "This action is unavailable.",
+      expect.any(InitializationError),
     )
-
-    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
-    try {
-      const [, , button] = vi.mocked(actionContext.dialog.errorNotification).mock.calls[0] as [
-        string,
-        Error,
-        [string, () => void],
-      ]
-      button[1]()
-
-      expect(executeCommand).toHaveBeenCalledWith("tmc.viewInitializationErrorHelp")
-    } finally {
-      executeCommand.mockRestore()
-    }
+    const [, error] = vi.mocked(actionContext.dialog.reportError).mock.calls[0] as [string, Error]
+    expect(presentationFor(error).actions).toEqual([
+      { label: "Show help", command: "tmc.viewInitializationErrorHelp" },
+    ])
   })
 })
 
@@ -567,8 +556,7 @@ suite("TmcPanel handler dispatch", () => {
 // A webview mounted before a failed (or since-degraded) activation can still post any
 // of these messages; each must be answered rather than silently dropped.
 suite("TmcPanel handler dispatch, degraded startup", () => {
-  const NOT_INITIALIZED_MESSAGE =
-    "The extension did not initialize properly, so this action is unavailable."
+  const UNAVAILABLE_ACTION = "This action is unavailable."
 
   test("closeExercises reports the failure instead of calling the handler", async () => {
     const handlers = stubHandlers()
@@ -583,10 +571,9 @@ suite("TmcPanel handler dispatch, degraded startup", () => {
     })
 
     expect(handlers.closeExercises).not.toHaveBeenCalled()
-    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
-      NOT_INITIALIZED_MESSAGE,
-      expect.any(Error),
-      ["Show help", expect.any(Function)],
+    expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
+      UNAVAILABLE_ACTION,
+      expect.any(InitializationError),
     )
   })
 
@@ -604,10 +591,9 @@ suite("TmcPanel handler dispatch, degraded startup", () => {
     })
 
     expect(handlers.downloadExercisesForUi).not.toHaveBeenCalled()
-    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
-      NOT_INITIALIZED_MESSAGE,
-      expect.any(Error),
-      expect.anything(),
+    expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
+      UNAVAILABLE_ACTION,
+      expect.any(InitializationError),
     )
   })
 
@@ -624,10 +610,9 @@ suite("TmcPanel handler dispatch, degraded startup", () => {
     })
 
     expect(handlers.downloadAndOpenExercises).not.toHaveBeenCalled()
-    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
-      NOT_INITIALIZED_MESSAGE,
-      expect.any(Error),
-      expect.anything(),
+    expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
+      UNAVAILABLE_ACTION,
+      expect.any(InitializationError),
     )
   })
 
@@ -641,10 +626,9 @@ suite("TmcPanel handler dispatch, degraded startup", () => {
 
     expect(handlers.updateCourse).not.toHaveBeenCalled()
     expect(handlers.refreshLocalExercises).not.toHaveBeenCalled()
-    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
-      NOT_INITIALIZED_MESSAGE,
-      expect.any(Error),
-      expect.anything(),
+    expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
+      UNAVAILABLE_ACTION,
+      expect.any(InitializationError),
     )
     // No re-render either: a CourseDetails panel would just ask for data nothing
     // can serve, the same way the initial request would have failed.
@@ -694,10 +678,9 @@ suite("TmcPanel handler dispatch, degraded startup", () => {
     })
 
     expect(handlers.submitExercise).not.toHaveBeenCalled()
-    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
-      NOT_INITIALIZED_MESSAGE,
-      expect.any(Error),
-      expect.anything(),
+    expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
+      UNAVAILABLE_ACTION,
+      expect.any(InitializationError),
     )
     expect(panel.webview.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ type: "submitFailed", target: { type: "ExerciseTests" } }),
@@ -720,16 +703,15 @@ suite("TmcPanel handler dispatch, degraded startup", () => {
     await listener(pasteMessage)
 
     expect(handlers.pasteExercise).not.toHaveBeenCalled()
-    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
-      NOT_INITIALIZED_MESSAGE,
-      expect.any(Error),
-      expect.anything(),
+    expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
+      UNAVAILABLE_ACTION,
+      expect.any(InitializationError),
     )
     expect(panel.webview.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "pasteError",
         target: pasteMessage.requestingPanel,
-        error: NOT_INITIALIZED_MESSAGE,
+        error: "The extension did not initialize properly",
       }),
     )
   })

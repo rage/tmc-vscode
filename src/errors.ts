@@ -163,6 +163,12 @@ export function presentationFor(error: Error, backend?: BackendKind): ErrorPrese
       actions: [],
     }
   }
+  if (error instanceof InitializationError) {
+    return {
+      message: `${reported} The help page lists what failed and how to fix it.`,
+      actions: [{ label: "Show help", command: "tmc.viewInitializationErrorHelp" }],
+    }
+  }
   if (error instanceof ObsoleteClientError) {
     return {
       message:

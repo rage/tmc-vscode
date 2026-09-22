@@ -779,19 +779,18 @@ export class TmcPanel {
             break
           }
           case "pasteExercise": {
-            const readyContext = requireReady(actionContext)
-            if (!readyContext) {
+            if (!isReady(actionContext)) {
               // The requesting panel is waiting on a `pasteResult`/`pasteError` reply,
               // same as a genuine paste failure below -- silence would leave it waiting.
               TmcPanel.postMessage({
                 type: "pasteError",
                 target: message.requestingPanel,
-                error: NOT_INITIALIZED_MESSAGE,
+                error: reportNotInitialized(actionContext.dialog).message,
               })
               return
             }
             const pasteResult = await handlers().pasteExercise(
-              readyContext,
+              actionContext,
               message.course.kind,
               LocalCourseData.getCourseName(message.course),
               LocalCourseExercise.getSlug(message.exercise),
@@ -834,12 +833,11 @@ export class TmcPanel {
           case "moocLogin": {
             const moocLoginPanel = message.sourcePanel
             if (!isReady(actionContext)) {
-              reportNotInitialized(actionContext.dialog)
               // The panel shows "starting" until it hears back.
               postMessageToWebview(webview, {
                 type: "moocLoginError",
                 target: moocLoginPanel,
-                error: NOT_INITIALIZED_MESSAGE,
+                error: reportNotInitialized(actionContext.dialog).message,
               })
               return
             }
@@ -954,24 +952,16 @@ function toMessageGroups(groups: ExerciseGroup[]): ExerciseGroup[] {
   }))
 }
 
-const NOT_INITIALIZED_MESSAGE =
-  "The extension did not initialize properly, so this action is unavailable."
-
 /**
  * Answers a webview action the extension cannot serve because initialization
  * failed. The panels stay interactive in that state, so a click has to say why
- * nothing happened and point at the panel that explains the failure.
+ * nothing happened.
  *
  * @returns the failure, for a caller that also has a waiting panel to tell.
  */
 function reportNotInitialized(dialog: Dialog): InitializationError {
-  const error = new InitializationError(NOT_INITIALIZED_MESSAGE)
-  dialog.errorNotification(NOT_INITIALIZED_MESSAGE, error, [
-    "Show help",
-    (): void => {
-      vscode.commands.executeCommand("tmc.viewInitializationErrorHelp")
-    },
-  ])
+  const error = new InitializationError("The extension did not initialize properly")
+  void dialog.reportError("This action is unavailable.", error)
   return error
 }
 
