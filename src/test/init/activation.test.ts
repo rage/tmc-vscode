@@ -16,6 +16,8 @@ import { createMockMemento } from "../mocks/vscode"
 const recorded = vi.hoisted(() => ({
   treeEntryIds: [] as string[],
   registeredCommandIds: [] as string[],
+  /** A snapshot of `registeredCommandIds`, taken when the CLI download step starts. */
+  commandsRegisteredBeforeCliDownload: undefined as string[] | undefined,
   treeLoggedIn: [] as boolean[],
   panelTypes: [] as string[],
   uiDisposals: 0,
@@ -171,8 +173,10 @@ vi.mock("../../storage", () => ({
 }))
 
 vi.mock("../../init/ensureLangsUpdated", () => ({
-  ensureLangsUpdated: async (): Promise<unknown> =>
-    langsDownload.failure ? Err(langsDownload.failure) : Ok("/nonexistent/tmc-langs-cli"),
+  ensureLangsUpdated: async (): Promise<unknown> => {
+    recorded.commandsRegisteredBeforeCliDownload = [...recorded.registeredCommandIds]
+    return langsDownload.failure ? Err(langsDownload.failure) : Ok("/nonexistent/tmc-langs-cli")
+  },
 }))
 
 vi.mock("../../init/verifyCliSchema", () => ({
@@ -235,6 +239,7 @@ function resetActivationRecording(): void {
   Logger.configure(LogLevel.None)
   recorded.treeEntryIds.length = 0
   recorded.registeredCommandIds.length = 0
+  recorded.commandsRegisteredBeforeCliDownload = undefined
   recorded.treeLoggedIn.length = 0
   recorded.panelTypes.length = 0
   recorded.uiDisposals = 0
@@ -417,6 +422,16 @@ suite("activation with usable storage", function () {
     expect(registered).toContain("tmc.testExercise")
   })
 
+  // A stalled CLI download shouldn't strand a user with no palette entries at all --
+  // "Show Logs" in particular has to be reachable before the download that might be
+  // the very thing worth looking at the logs for. An end-state assertion can't show
+  // this: the final registered set looks the same whichever step registers it.
+  test("registers the service-free commands before downloading the CLI", async function () {
+    await activate(createContext())
+
+    expect(recorded.commandsRegisteredBeforeCliDownload).toContain("tmc.logs")
+  })
+
   test("runs no command it left unregistered", async function () {
     expect(await unregisteredCommandsRun(createContext())).toEqual([])
   })
@@ -592,11 +607,15 @@ suite("activation in a workspace the migration cannot use in place", function ()
     )
   })
 
-  // The window is about to be replaced, so anything registered here would be
-  // registered twice over the two activations.
-  test("registers nothing before the reload", async function () {
+  // Tree entries never register here (`registerUiActions` runs after this return).
+  // The five service-free commands do, since `registerServiceFreeCommands` now runs
+  // ahead of the migration check -- but `vscode.openFolder` reloads the window into a
+  // fresh extension host process, discarding this one's `context.subscriptions` before
+  // the next activation registers anything, so nothing collides.
+  test("registers no tree entry before the reload", async function () {
     await activate(createContext())
 
     expect(recorded.treeEntryIds).toEqual([])
+    expect(recorded.registeredCommandIds).toContain("tmc.logs")
   })
 })

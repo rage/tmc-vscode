@@ -3,23 +3,94 @@ import * as vscode from "vscode"
 import * as actions from "../actions"
 import type { ActionContext, ReadyActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
+import type Dialog from "../api/dialog"
 import * as commands from "../commands"
 import { nextPanelId, registerWebviewHandlers, TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
+import type UI from "../ui/ui"
 import { Logger } from "../utilities"
 
 /**
- * Registers the commands the given startup state can actually run.
+ * Builds the `register` both registration passes use.
  *
- * A degraded activation gets only the entries that need no service behind them, so the
- * rest cannot be reached at all rather than reached and silently refused. `package.json`
- * hides the same commands from the palette through `test-my-code:Initialized`.
+ * VS Code drops whatever a command handler rejects with, so without this a failing
+ * command leaves the user with no result and no message.
+ */
+function commandRegistrar(
+  context: vscode.ExtensionContext,
+  dialog: Dialog,
+): <Args extends unknown[]>(id: string, run: (...args: Args) => unknown) => void {
+  return function register<Args extends unknown[]>(
+    id: string,
+    run: (...args: Args) => unknown,
+  ): void {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(id, async (...args: Args) => {
+        try {
+          return await run(...args)
+        } catch (e) {
+          void dialog.reportError(
+            `Failed to run ${id}.`,
+            e instanceof Error ? e : new Error(String(e)),
+          )
+          return undefined
+        }
+      }),
+    )
+  }
+}
+
+/**
+ * Registers the commands that need nothing an activation builds.
+ *
+ * Call before the services are constructed: "Show Logs" and "Settings" are the only
+ * palette entries not gated on `test-my-code:Initialized`, so they are all a user can
+ * reach while activation is still running. Every id here is left out of
+ * {@link registerCommands}; registering one twice throws.
+ */
+export function registerServiceFreeCommands(
+  context: vscode.ExtensionContext,
+  dialog: Dialog,
+  ui: UI,
+): void {
+  const register = commandRegistrar(context, dialog)
+
+  // `tmcView.activateEntry` is how every tree entry runs, recovery ones too.
+  register("tmcView.activateEntry", ui.createUiActionHandler())
+
+  register("tmc.settings", async () => {
+    await vscode.commands.executeCommand("workbench.action.openSettings", "TestMyCode")
+  })
+
+  register("tmc.selectAction", async () => {
+    await vscode.commands.executeCommand("workbench.action.quickOpen", ">TestMyCode: ")
+  })
+
+  register("tmc.logs", async () => {
+    Logger.show()
+  })
+
+  register("tmc.debug", async () => {
+    await vscode.commands.executeCommand("workbench.output.action.clearOutput")
+    Logger.show()
+    await vscode.commands.executeCommand("workbench.action.openActiveLogOutputFile")
+  })
+}
+
+/**
+ * Registers the commands that need the startup state, i.e. everything except
+ * {@link registerServiceFreeCommands}'s five.
+ *
+ * A degraded activation still reaches `tmc.viewInitializationErrorHelp`, the one
+ * exception that needs an `ActionContext` but no service; every id after it requires
+ * `startup.kind === "ready"`. `package.json` hides the ready-only ones from the palette
+ * through `test-my-code:Initialized`.
  */
 export function registerCommands(
   context: vscode.ExtensionContext,
   actionContext: ActionContext,
 ): void {
-  const { dialog, ui } = actionContext
+  const { dialog } = actionContext
   Logger.info("Registering TMC VSCode commands")
 
   registerWebviewHandlers({
@@ -44,45 +115,7 @@ export function registerCommands(
     updateCourse: actions.updateCourse,
   })
 
-  // VS Code drops whatever a command handler rejects with, so without this a
-  // failing command leaves the user with no result and no message.
-  function register<Args extends unknown[]>(id: string, run: (...args: Args) => unknown): void {
-    context.subscriptions.push(
-      vscode.commands.registerCommand(id, async (...args: Args) => {
-        try {
-          return await run(...args)
-        } catch (e) {
-          void dialog.reportError(
-            `Failed to run ${id}.`,
-            e instanceof Error ? e : new Error(String(e)),
-          )
-          return undefined
-        }
-      }),
-    )
-  }
-
-  // Registered whatever activation managed to build: none of these reaches a service.
-  // `tmcView.activateEntry` included -- it is how every tree entry runs, recovery ones too.
-  register("tmcView.activateEntry", ui.createUiActionHandler())
-
-  register("tmc.settings", async () => {
-    await vscode.commands.executeCommand("workbench.action.openSettings", "TestMyCode")
-  })
-
-  register("tmc.selectAction", async () => {
-    await vscode.commands.executeCommand("workbench.action.quickOpen", ">TestMyCode: ")
-  })
-
-  register("tmc.logs", async () => {
-    Logger.show()
-  })
-
-  register("tmc.debug", async () => {
-    await vscode.commands.executeCommand("workbench.output.action.clearOutput")
-    Logger.show()
-    await vscode.commands.executeCommand("workbench.action.openActiveLogOutputFile")
-  })
+  const register = commandRegistrar(context, dialog)
 
   register("tmc.viewInitializationErrorHelp", async () => {
     await TmcPanel.renderMain(context.extensionUri, context, actionContext, {

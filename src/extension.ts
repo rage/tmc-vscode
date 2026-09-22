@@ -131,6 +131,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   const dialog = new Dialog()
   const ui = new UI()
   context.subscriptions.push(ui)
+  init.registerServiceFreeCommands(context, dialog, ui)
   const cliFolderPath = cliFolder(context)
   const reportInitializationError = makeInitializationErrorReporter(dialog, cliFolderPath)
   const cliPathResult = await init.ensureLangsUpdated(

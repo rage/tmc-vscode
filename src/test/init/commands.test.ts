@@ -10,14 +10,15 @@ import type { ActionContext } from "../../actions/types"
 import * as commands from "../../commands"
 import { EXTENSION_ID, EXTENSION_VERSION } from "../../config/constants"
 import type Resources from "../../config/resources"
-import { registerCommands } from "../../init/commands"
+import { registerCommands, registerServiceFreeCommands } from "../../init/commands"
 import { TmcPanel } from "../../panels/TmcPanel"
 import { CourseIdentifier } from "../../shared/shared"
 import { Logger } from "../../utilities"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 
-// Every command the extension registers. Declared here rather than derived, so a
-// command silently disappearing (or a new one arriving unreviewed) fails.
+// Every command the extension registers, across both `registerServiceFreeCommands` and
+// `registerCommands`. Declared here rather than derived, so a command silently
+// disappearing (or a new one arriving unreviewed) fails.
 const expectedCommands = [
   "tmcView.activateEntry",
   "tmcTreeView.refreshCourses",
@@ -47,7 +48,9 @@ const expectedCommands = [
   "tmc.viewInitializationErrorHelp",
 ]
 
-// Of those, the ones that reach no service, so a failed activation can still offer them.
+// Of those, the ones that reach no service, so a failed activation can still offer them:
+// `registerServiceFreeCommands`'s five, plus `tmc.viewInitializationErrorHelp`, which
+// needs an `ActionContext` but no service and so stays in `registerCommands`.
 const expectedDegradedCommands = [
   "tmcView.activateEntry",
   "tmc.settings",
@@ -57,8 +60,18 @@ const expectedDegradedCommands = [
   "tmc.viewInitializationErrorHelp",
 ]
 
+// What `registerServiceFreeCommands` registers on its own, regardless of startup state.
+const expectedServiceFreeCommands = [
+  "tmcView.activateEntry",
+  "tmc.settings",
+  "tmc.selectAction",
+  "tmc.logs",
+  "tmc.debug",
+]
+
 function registerAndCollect(actionContext: ActionContext = createMockActionContext()): {
   ids: string[]
+  serviceFreeIds: string[]
   handlers: Map<string, (...args: unknown[]) => Promise<unknown>>
   context: vscode.ExtensionContext
   actionContext: ActionContext
@@ -79,9 +92,11 @@ function registerAndCollect(actionContext: ActionContext = createMockActionConte
     extensionUri: vscode.Uri.file("/tmp/extension"),
   } as unknown as vscode.ExtensionContext
 
+  registerServiceFreeCommands(context, actionContext.dialog, actionContext.ui)
+  const serviceFreeIds = [...ids]
   registerCommands(context, actionContext)
   registerCommand.mockRestore()
-  return { ids, handlers, context, actionContext }
+  return { ids, serviceFreeIds, handlers, context, actionContext }
 }
 
 interface MenuEntry {
@@ -134,6 +149,14 @@ suite("registerCommands", function () {
   test("registers exactly the expected command set", function () {
     const { ids } = registerAndCollect()
     expect(ids.toSorted()).toEqual(expectedCommands.toSorted())
+  })
+
+  // Pins the split itself: `registerServiceFreeCommands` must register exactly these
+  // five and nothing `registerCommands` also registers, or the two other set
+  // assertions in this suite would only prove the union is right, not the partition.
+  test("registerServiceFreeCommands registers exactly the ids that need no service", function () {
+    const { serviceFreeIds } = registerAndCollect()
+    expect(serviceFreeIds.toSorted()).toEqual(expectedServiceFreeCommands.toSorted())
   })
 
   test("a failed activation registers only the commands it can still run", function () {
