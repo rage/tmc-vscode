@@ -144,7 +144,7 @@ export class TmcPanel {
   private _isDisposed = false
 
   // sends a message to the main and side panels
-  public static async postMessage(...messages: ExtensionToWebview[]): Promise<void> {
+  public static postMessage(...messages: ExtensionToWebview[]): void {
     for (const message of messages) {
       TmcPanel.mainPanel?._postMessage(message)
       TmcPanel.sidePanel?._postMessage(message)
@@ -214,7 +214,7 @@ export class TmcPanel {
   ): Promise<void> {
     if (TmcPanel.mainPanel !== undefined) {
       Logger.info(`Revealing existing main panel for "${panel.type}"`)
-      await TmcPanel.mainPanel._renderPanel(panel)
+      TmcPanel.mainPanel._renderPanel(panel)
       TmcPanel.mainPanel._panel.reveal(ViewColumn.One, false)
     } else {
       TmcPanel.mainPanel = await TmcPanel.renderNew(
@@ -243,7 +243,7 @@ export class TmcPanel {
     }
     if (TmcPanel.sidePanel !== undefined) {
       Logger.info(`Revealing existing side panel for "${panel.type}"`)
-      await TmcPanel.sidePanel._renderPanel(panel)
+      TmcPanel.sidePanel._renderPanel(panel)
       TmcPanel.sidePanel._panel.reveal(column, false)
     } else {
       const currentPanel = await TmcPanel.renderNew(
@@ -289,7 +289,7 @@ export class TmcPanel {
       actionContext,
       isMain,
     )
-    await currentPanel._renderPanel(panel)
+    currentPanel._renderPanel(panel)
     return currentPanel
   }
 
@@ -338,10 +338,10 @@ export class TmcPanel {
   }
 
   // remembers `panel` so "ready" can resend it
-  private async _renderPanel(panel: Panel): Promise<void> {
+  private _renderPanel(panel: Panel): void {
     this._lastPanel = panel
     this._messageBuffer.clear()
-    await renderPanel(panel, this._panel.webview)
+    renderPanel(panel, this._panel.webview)
   }
 
   private _getWebviewContent(webview: Webview, extensionUri: Uri): string {
@@ -420,7 +420,7 @@ export class TmcPanel {
               // webview has lost the code it was showing, and MoocLogin's mount posts
               // `moocLogin` again, which interrupts the now-unreachable CLI process.
               // not this._renderPanel(), which would clear the buffer we're about to resend
-              await renderPanel(this._lastPanel, webview)
+              renderPanel(this._lastPanel, webview)
               for (const buffered of this._messageBuffer.values()) {
                 postMessageToWebview(webview, buffered, this._webviewName)
               }
@@ -589,7 +589,7 @@ export class TmcPanel {
             break
           }
           case "openCourseDetails": {
-            await this._renderPanel({
+            this._renderPanel({
               id: randomPanelId(),
               type: "CourseDetails",
               courseId: message.courseId,
@@ -621,7 +621,7 @@ export class TmcPanel {
               )
             ) {
               await handlers().removeCourse(actionContext, message.id)
-              await this._renderPanel({
+              this._renderPanel({
                 id: randomPanelId(),
                 type: "MyCourses",
                 courseDeadlines: {},
@@ -658,7 +658,7 @@ export class TmcPanel {
             break
           }
           case "openMyCourses": {
-            await this._renderPanel({
+            this._renderPanel({
               id: randomPanelId(),
               type: "MyCourses",
               courseDeadlines: {},
@@ -725,7 +725,7 @@ export class TmcPanel {
             if (rescanResult.err) {
               Logger.warn("Failed to rescan the local exercises", rescanResult.val)
             }
-            await this._renderPanel({
+            this._renderPanel({
               id: randomPanelId(),
               type: "CourseDetails",
               courseId,

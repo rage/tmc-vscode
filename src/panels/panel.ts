@@ -6,19 +6,11 @@ import type { ExtensionToWebview, Panel } from "../shared/shared"
 import { ExtensionToWebviewSchema } from "../shared/shared"
 import { Logger, LogLevel } from "../utilities/logger"
 
-/**
- * Helper function for the extension panel to render a webview panel.
- */
-export async function renderPanel(panel: Panel, webview: Webview): Promise<void> {
-  const sent = postMessageToWebview(webview, {
+export function renderPanel(panel: Panel, webview: Webview): void {
+  postMessageToWebview(webview, {
     type: "setPanel",
     target: { id: 0, type: "App" },
     panel,
-  })
-  sent.then((delivered) => {
-    if (delivered) {
-      Logger.debug(`Webview panel set to "${panel.type}"`)
-    }
   })
 }
 
