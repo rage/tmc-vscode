@@ -18,7 +18,7 @@ interface DownloadResults {
 }
 
 /**
- * Downloads given exercises and opens them in TMC workspace.
+ * Downloads given exercises and opens them in the course workspace.
  *
  * @param exerciseIds Exercises to download.
  * @param courseId Course the exercises belong to, when they all share one. Passed
