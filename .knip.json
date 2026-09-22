@@ -27,10 +27,10 @@
   "workspaces": {
     ".": {
       // knip's plugins already find the extension host entry, the webview build
-      // and both vitest tiers. These are the ones nothing declares: bin scripts
-      // shell scripts and CI invoke by filename, the build-profile map esbuild
-      // and vitest `require` by path, husky's lint-staged config, and the
-      // `vscode` mock vitest reaches through a resolve alias.
+      // and both vitest tiers. These are the ones nothing declares: the bin
+      // scripts that shell scripts and CI invoke by filename, the build-profile
+      // map that esbuild and vitest `require` by path, husky's lint-staged
+      // config, and the `vscode` mock vitest reaches through a resolve alias.
       "entry": [
         "src/test/**/*.test.ts",
         "src/test/support/vscode.cjs",
