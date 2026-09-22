@@ -1,12 +1,12 @@
 import * as vscode from "vscode"
 
 import * as actions from "../actions"
-import type { ActionContext } from "../actions/types"
+import type { ReadyActionContext } from "../actions/types"
 import { matchBackend, pasteServiceName } from "../shared/shared"
 import { failure, runForExercise } from "./runForExercise"
 
 export async function pasteExercise(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   resource: vscode.Uri | undefined,
 ): Promise<void> {
   const { dialog } = actionContext

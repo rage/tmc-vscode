@@ -1,12 +1,12 @@
 import type * as vscode from "vscode"
 
 import * as actions from "../actions"
-import type { ActionContext } from "../actions/types"
+import type { ReadyActionContext } from "../actions/types"
 import { failure, runForExercise } from "./runForExercise"
 
 export async function testExercise(
   context: vscode.ExtensionContext,
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   resource: vscode.Uri | undefined,
 ): Promise<void> {
   await runForExercise(actionContext, resource, "Testing the exercise", async (exercise) => {

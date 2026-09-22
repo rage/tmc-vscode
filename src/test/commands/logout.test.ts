@@ -2,7 +2,7 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
 import * as actions from "../../actions"
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext } from "../../actions/types"
 import { logout } from "../../commands/logout"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -11,7 +11,9 @@ vi.mock("../../actions", () => ({
   logout: vi.fn(async () => Ok.EMPTY),
 }))
 
-function contextWith(confirmed: boolean): [ActionContext, ReturnType<typeof createDialogMock>[0]] {
+function contextWith(
+  confirmed: boolean,
+): [ReadyActionContext, ReturnType<typeof createDialogMock>[0]] {
   const [dialog, values] = createDialogMock()
   values.confirmation = confirmed
   const notification = vi.fn(async () => undefined)

@@ -2,7 +2,7 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import type { ActionContext } from "../actions/types"
+import type { ReadyActionContext } from "../actions/types"
 import { CLI_PROCESS_TIMEOUT } from "../config/constants"
 import type {
   ExerciseSlideSubmissionListItem,
@@ -71,15 +71,11 @@ function moocSubmissionStatus(submission: ExerciseSlideSubmissionListItem): stri
  * @param resource An exercise file or folder; the active editor's exercise when omitted.
  */
 export async function downloadOldSubmission(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   resource: vscode.Uri | undefined,
 ): Promise<void> {
-  const { dialog, langs, userData } = actionContext
-  if (!(langs.ok && userData.ok)) {
-    Logger.error("Extension was not initialized properly")
-    return
-  }
-
+  const { dialog } = actionContext
+  const { langs, userData } = actionContext.startup
   await runForExercise(
     actionContext,
     resource,
@@ -89,8 +85,8 @@ export async function downloadOldSubmission(
       // resolve to the wrong backend if a tmc and mooc exercise share a slug.
       const exerciseId =
         exercise.backend === "mooc"
-          ? userData.val.getMoocExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id
-          : userData.val.getTmcExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id
+          ? userData.getMoocExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id
+          : userData.getTmcExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id
       if (!exerciseId) {
         return failure("Failed to resolve exercise id.")
       }
@@ -103,7 +99,7 @@ export async function downloadOldSubmission(
       const submissionsResult = await match(
         id,
         (tmc): Promise<Result<PickableSubmission[], Error>> =>
-          langs.val.getTmcOldSubmissions(tmc.tmcExerciseId).then((res) =>
+          langs.getTmcOldSubmissions(tmc.tmcExerciseId).then((res) =>
             res.map((submissions) =>
               submissions.map<PickableSubmission>((submission) => ({
                 target: makeTmcKind({
@@ -116,7 +112,7 @@ export async function downloadOldSubmission(
             ),
           ),
         (mooc): Promise<Result<PickableSubmission[], Error>> =>
-          langs.val.getMoocOldSubmissions(mooc.moocExerciseId).then((res) =>
+          langs.getMoocOldSubmissions(mooc.moocExerciseId).then((res) =>
             res.map((submissions) =>
               submissions.map<PickableSubmission>((submission) => ({
                 target: makeMoocKind({
@@ -183,7 +179,7 @@ export async function downloadOldSubmission(
           const restoreResult: Result<MoocOldSubmissionRestore, Error> = await match(
             submission.target,
             (tmc) =>
-              langs.val
+              langs
                 .downloadTmcOldSubmission(
                   tmc.exerciseId,
                   exercise.uri.fsPath,
@@ -192,7 +188,7 @@ export async function downloadOldSubmission(
                 )
                 .then((res) => res.map(() => "restored" as const)),
             (mooc) =>
-              langs.val.downloadMoocOldSubmission(
+              langs.downloadMoocOldSubmission(
                 mooc.exerciseId,
                 exercise.uri.fsPath,
                 mooc.submissionId,

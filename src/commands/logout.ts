@@ -1,7 +1,7 @@
 import * as actions from "../actions"
-import type { ActionContext } from "../actions/types"
+import type { ReadyActionContext } from "../actions/types"
 
-export async function logout(actionContext: ActionContext): Promise<void> {
+export async function logout(actionContext: ReadyActionContext): Promise<void> {
   const { dialog } = actionContext
   if (await dialog.confirmation("Are you sure you want to log out?")) {
     // The action layer reports failures itself; only announce success here.

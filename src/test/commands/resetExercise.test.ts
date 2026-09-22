@@ -2,7 +2,7 @@ import { Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import type { ActionContext } from "../../actions/types"
+import type { ActionContext, ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
@@ -27,7 +27,7 @@ suite("Reset exercise command", function () {
   let prompts: string[]
 
   /** @param answers labels to pick at each prompt; `undefined` dismisses it. */
-  function actionContext(answers: (string | undefined)[]): ActionContext {
+  function actionContext(answers: (string | undefined)[]): ReadyActionContext {
     const base = createMockActionContext()
     reset = vi.fn(async () => Ok.EMPTY)
     notification = vi.fn()
@@ -46,16 +46,19 @@ suite("Reset exercise command", function () {
     return {
       ...base,
       dialog,
-      langs: new Ok({ resetExercise: reset } as unknown as Langs),
-      userData: new Ok({
-        getMoocExerciseByName: () => ({ id: "mooc-ex-uuid" }),
-      } as unknown as UserData),
-      workspaceManager: new Ok({
-        get activeExercise() {
-          return exercise
-        },
-        getExerciseContaining: () => exercise,
-      } as unknown as WorkspaceManager),
+      startup: {
+        ...base.startup,
+        langs: { resetExercise: reset } as unknown as Langs,
+        userData: {
+          getMoocExerciseByName: () => ({ id: "mooc-ex-uuid" }),
+        } as unknown as UserData,
+        workspaceManager: {
+          get activeExercise() {
+            return exercise
+          },
+          getExerciseContaining: () => exercise,
+        } as unknown as WorkspaceManager,
+      },
     }
   }
 

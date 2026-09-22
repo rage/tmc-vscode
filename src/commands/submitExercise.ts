@@ -2,12 +2,12 @@ import type { Result } from "ts-results"
 import type * as vscode from "vscode"
 
 import * as actions from "../actions"
-import type { ActionContext } from "../actions/types"
+import type { ReadyActionContext } from "../actions/types"
 import { failure, runForExercise } from "./runForExercise"
 
 export async function submitExercise(
   context: vscode.ExtensionContext,
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   resource: vscode.Uri | undefined,
 ): Promise<Result<void, Error>> {
   return runForExercise(actionContext, resource, "Submitting the exercise", async (exercise) => {

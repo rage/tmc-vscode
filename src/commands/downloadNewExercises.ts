@@ -1,22 +1,23 @@
 import * as actions from "../actions"
-import type { ActionContext } from "../actions/types"
+import type { ReadyActionContext } from "../actions/types"
 import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
 import { pickCourse } from "./pickCourse"
 
-export async function downloadNewExercises(actionContext: ActionContext): Promise<void> {
-  const { dialog, userData } = actionContext
+export async function downloadNewExercises(actionContext: ReadyActionContext): Promise<void> {
+  const { dialog } = actionContext
+  const { userData } = actionContext.startup
   Logger.info("Downloading new exercises")
 
   const courseId = await pickCourse(actionContext, {
     title: "Download New Exercises",
     placeHolder: "Download new exercises for course?",
   })
-  if (!courseId || userData.err) {
+  if (!courseId) {
     return
   }
 
-  const courseResult = userData.val.getCourse(courseId)
+  const courseResult = userData.getCourse(courseId)
   if (courseResult.err) {
     dialog.reportError("Failed to read the selected course.", courseResult.val, courseId.kind)
     return

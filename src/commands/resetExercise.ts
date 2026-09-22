@@ -1,7 +1,7 @@
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import type { ActionContext } from "../actions/types"
+import type { ReadyActionContext } from "../actions/types"
 import { CLI_PROCESS_TIMEOUT } from "../config/constants"
 import { backendName, ExerciseIdentifier } from "../shared/shared"
 import { Logger, runSingleFlight } from "../utilities"
@@ -14,22 +14,18 @@ import { failure, runForExercise } from "./runForExercise"
  * @param resource An exercise file or folder; the active editor's exercise when omitted.
  */
 export async function resetExercise(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   resource: vscode.Uri | undefined,
 ): Promise<void> {
-  const { dialog, langs, userData } = actionContext
-  if (!(langs.ok && userData.ok)) {
-    Logger.error("Extension was not initialized properly")
-    return
-  }
-
+  const { dialog } = actionContext
+  const { langs, userData } = actionContext.startup
   await runForExercise(actionContext, resource, "Resetting the exercise", async (exercise) => {
     // Look up by known backend rather than a name-only match, which could
     // resolve to the wrong backend if a tmc and mooc exercise share a slug.
     const exerciseDetails =
       exercise.backend === "mooc"
-        ? userData.val.getMoocExerciseByName(exercise.courseSlug, exercise.exerciseSlug)
-        : userData.val.getTmcExerciseByName(exercise.courseSlug, exercise.exerciseSlug)
+        ? userData.getMoocExerciseByName(exercise.courseSlug, exercise.exerciseSlug)
+        : userData.getTmcExerciseByName(exercise.courseSlug, exercise.exerciseSlug)
     if (!exerciseDetails) {
       return failure(`Missing exercise data for ${exercise.exerciseSlug}.`)
     }
@@ -56,7 +52,7 @@ export async function resetExercise(
       async () => {
         const editor = vscode.window.activeTextEditor
         const document = editor?.document.uri
-        const resetResult = await langs.val.resetExercise(id, exercise.uri.fsPath, submitFirst)
+        const resetResult = await langs.resetExercise(id, exercise.uri.fsPath, submitFirst)
         if (resetResult.err) {
           return failure("Failed to reset exercise.", resetResult.val)
         }

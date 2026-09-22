@@ -2,34 +2,24 @@ import * as fs from "fs-extra"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import type { ActionContext } from "../actions/types"
+import type { ReadyActionContext } from "../actions/types"
 import { FileSystemError } from "../errors"
 import { Logger } from "../utilities"
 
 export async function wipe(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   context: vscode.ExtensionContext,
 ): Promise<void> {
-  const { authState, dialog, resources, langs, userData, workspaceManager } = actionContext
+  const { authState, dialog } = actionContext
+  const { langs, resources, userData, workspaceManager } = actionContext.startup
   Logger.info("Wiping")
-  if (
-    !(
-      workspaceManager.ok &&
-      resources.ok &&
-      langs.ok &&
-      userData.ok &&
-      resources.val.projectsDirectory
-    )
-  ) {
-    Logger.error("Extension was not initialized properly")
+  const projectsDirectory = resources.projectsDirectory
+  if (!projectsDirectory) {
+    Logger.error("Cannot wipe the extension data: tmc-langs reported no exercise directory")
     return
   }
 
-  // The guard above narrows a property, which does not survive into the progress
-  // closure below; binding it here is what keeps the wipe target checked.
-  const projectsDirectory = resources.val.projectsDirectory
-
-  if (workspaceManager.val.activeCourse) {
+  if (workspaceManager.activeCourse) {
     dialog.warningNotification(
       "Extension data can't be wiped now because a course workspace is open. \
 Please close the workspace and any related files before running this command again.",
@@ -65,7 +55,7 @@ and every setting and course this extension has stored will be cleared.",
   // Deleting the exercises is the one step that cannot be recovered from, so it
   // goes last: a failure anywhere before it leaves the student's work on disk.
   const wipeResult = await dialog.progressNotification(message, async (progress) => {
-    const settingsReset = await langs.val.resetSettings()
+    const settingsReset = await langs.resetSettings()
     if (settingsReset.err) {
       return settingsReset
     }
@@ -73,20 +63,20 @@ and every setting and course this extension has stored will be cleared.",
 
     // `deauthenticate` fires the logout events with `expected: true`, so the
     // session-expiry warning stays quiet and the auth context updates itself.
-    const tmcLogout = await langs.val.deauthenticate()
+    const tmcLogout = await langs.deauthenticate()
     if (tmcLogout.err) {
       return tmcLogout
     }
-    const moocLogout = await langs.val.deauthenticateMooc()
+    const moocLogout = await langs.deauthenticateMooc()
     if (moocLogout.err) {
       return moocLogout
     }
     progress.report({ message, fraction: 0.4 })
 
-    await userData.val.wipeDataFromStorage()
+    await userData.wipeDataFromStorage()
     progress.report({ message, fraction: 0.6 })
 
-    const workspaceFilesRemoved = await workspaceManager.val.deleteAllWorkspaceFiles()
+    const workspaceFilesRemoved = await workspaceManager.deleteAllWorkspaceFiles()
     if (workspaceFilesRemoved.err) {
       return workspaceFilesRemoved
     }

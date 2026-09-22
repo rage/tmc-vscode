@@ -2,7 +2,7 @@ import { Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import type { ActionContext } from "../../actions/types"
+import type { ActionContext, ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
@@ -58,7 +58,7 @@ suite("Download old submission command (mooc branch)", function () {
        */
       answers?: (string | undefined)[]
     } = {},
-  ): ActionContext {
+  ): ReadyActionContext {
     const base = createMockActionContext()
     const answers = options.answers ?? ["Discard current state", "Yes, discard current state"]
 
@@ -103,9 +103,7 @@ suite("Download old submission command (mooc branch)", function () {
     return {
       ...base,
       dialog,
-      langs: new Ok(langs),
-      userData: new Ok(userData),
-      workspaceManager: new Ok(workspaceManager),
+      startup: { ...base.startup, langs, userData, workspaceManager },
     }
   }
 

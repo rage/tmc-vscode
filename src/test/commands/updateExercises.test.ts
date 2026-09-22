@@ -1,9 +1,10 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext } from "../../actions/types"
 import { updateExercises } from "../../commands/updateExercises"
 import type Settings from "../../config/settings"
+import type { UserData } from "../../config/userdata"
 import { postUpdateables } from "../../panels/exerciseLists"
 import type { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
 import {
@@ -45,20 +46,23 @@ function outdated(
 
 function contextWith(
   automaticallyUpdate: boolean,
-): [ActionContext, ReturnType<typeof createDialogMock>[0], ReturnType<typeof vi.fn>] {
+): [ReadyActionContext, ReturnType<typeof createDialogMock>[0], ReturnType<typeof vi.fn>] {
   const [dialog] = createDialogMock()
   const setNewExerciseNotifyAfter = vi.fn(async () => Ok.EMPTY)
   return [
     {
-      ...createMockActionContext(),
+      ...createMockActionContext({
+        startup: {
+          userData: {
+            getCourse: () => Ok({ data: { notifyAfter: 0, disabled: false } }),
+            setNewExerciseNotifyAfter,
+          } as unknown as UserData,
+        },
+      }),
       dialog,
       settings: {
         getAutomaticallyUpdateExercises: () => automaticallyUpdate,
       } as unknown as Settings,
-      userData: Ok({
-        getCourse: () => Ok({ data: { notifyAfter: 0, disabled: false } }),
-        setNewExerciseNotifyAfter,
-      }) as unknown as ActionContext["userData"],
     },
     dialog,
     setNewExerciseNotifyAfter,

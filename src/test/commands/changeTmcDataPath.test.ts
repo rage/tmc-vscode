@@ -3,7 +3,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import * as actions from "../../actions"
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext } from "../../actions/types"
 import { changeTmcDataPath } from "../../commands/changeTmcDataPath"
 import type Resources from "../../config/resources"
 import { TmcPanel } from "../../panels/TmcPanel"
@@ -18,12 +18,12 @@ const OLD_PATH = "/tmp/tmcdata/projects"
 const CHOSEN_PATH = "/tmp/elsewhere"
 
 interface Harness {
-  context: ActionContext
+  context: ReadyActionContext
   notifications: string[]
   errors: string[]
 }
 
-function harness(): Harness {
+function harness(projectsDirectory: string | undefined = OLD_PATH): Harness {
   const [dialog] = createDialogMock()
   const notifications: string[] = []
   const errors: string[] = []
@@ -35,9 +35,8 @@ function harness(): Harness {
   })
   return {
     context: {
-      ...createMockActionContext(),
+      ...createMockActionContext({ startup: { resources: { projectsDirectory } as Resources } }),
       dialog,
-      resources: Ok({ projectsDirectory: OLD_PATH } as Resources),
     },
     notifications,
     errors,

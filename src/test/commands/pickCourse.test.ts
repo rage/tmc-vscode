@@ -1,10 +1,10 @@
-import { Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext } from "../../actions/types"
 import type { Item } from "../../api/dialog"
 import { pickCourse } from "../../commands/pickCourse"
+import type { UserData } from "../../config/userdata"
 import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
@@ -20,13 +20,14 @@ const courses = [
 
 function contextWith(
   courseList: LocalCourseData[],
-): [ActionContext, ReturnType<typeof createDialogMock>[0]] {
+): [ReadyActionContext, ReturnType<typeof createDialogMock>[0]] {
   const [dialog] = createDialogMock()
   return [
     {
-      ...createMockActionContext(),
+      ...createMockActionContext({
+        startup: { userData: { getCourses: () => courseList } as UserData },
+      }),
       dialog,
-      userData: Ok({ getCourses: () => courseList }) as never,
     },
     dialog,
   ]
@@ -101,21 +102,5 @@ suite("pickCourse", function () {
       "The Python Course (Currently open)",
       "Introduction to CS (Currently open)",
     ])
-  })
-
-  test("returns undefined when the extension is not initialized", async function () {
-    const [dialog] = createDialogMock()
-    const context: ActionContext = {
-      ...createMockActionContext(),
-      dialog,
-      userData: createMockActionContext({ userData: "err" }).userData,
-    }
-    const selectItem = vi.fn()
-    dialog.selectItem = selectItem
-
-    const picked = await pickCourse(context, { title: "Title", placeHolder: "Pick one" })
-
-    expect(picked).toBeUndefined()
-    expect(selectItem).not.toHaveBeenCalled()
   })
 })
