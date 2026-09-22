@@ -1,35 +1,46 @@
-import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
+import * as vscode from "vscode"
 
 import type { ActionContext } from "../../actions/types"
+import { registerCommands } from "../../init/commands"
 import { registerUiActions } from "../../init/ui"
 import { CourseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
 import type { TreeEntry } from "../../ui/treeview/treeview"
 import type UI from "../../ui/ui"
-import { createMockActionContext } from "../mocks/actionContext"
+import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 
-const healthyResults = {
-  userData: Ok({ getCourses: () => [] }) as never,
-  langs: Ok({}) as never,
-  resources: Ok({}) as never,
-  exerciseDecorationProvider: Ok({}) as never,
-  workspaceManager: Ok({}) as never,
+function readyContext(courses: unknown[] = []): ActionContext {
+  return createMockActionContext({ startup: { userData: { getCourses: () => courses } as never } })
 }
 
-function registerAndCollect(overrides: Partial<ActionContext> = {}): TreeEntry[] {
+function registerAndCollect(actionContext: ActionContext = readyContext()): TreeEntry[] {
   const entries: TreeEntry[] = []
   const registerAction = vi.fn((entry: TreeEntry) => {
     entries.push(entry)
   })
   const ui = { treeDP: { registerAction } } as unknown as UI
 
-  registerUiActions({
-    ...createMockActionContext(),
-    ui,
-    ...healthyResults,
-    ...overrides,
-  })
+  registerUiActions({ ...actionContext, ui })
   return entries
+}
+
+function registeredCommandIds(actionContext: ActionContext): string[] {
+  const ids: string[] = []
+  const registerCommand = vi.spyOn(vscode.commands, "registerCommand").mockImplementation(((
+    id: string,
+  ) => {
+    ids.push(id)
+    return { dispose: vi.fn() }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  }) as any)
+  const context = {
+    subscriptions: [],
+    extensionUri: vscode.Uri.file("/tmp/extension"),
+  } as unknown as vscode.ExtensionContext
+
+  registerCommands(context, actionContext)
+  registerCommand.mockRestore()
+  return ids
 }
 
 suite("registerUiActions", function () {
@@ -57,9 +68,9 @@ suite("registerUiActions", function () {
       makeTmcKind({ id: 1, name: "tmc-slug", title: "The Python Course" }),
       makeMoocKind({ id: "course-uuid", name: "mooc-slug", title: "Introduction to CS" }),
     ]
-    const myCourses = registerAndCollect({
-      userData: Ok({ getCourses: () => courses }) as never,
-    }).find((entry) => entry.id === "myCourses")
+    const myCourses = registerAndCollect(readyContext(courses)).find(
+      (entry) => entry.id === "myCourses",
+    )
 
     expect(myCourses?.children?.()).toEqual([
       {
@@ -84,13 +95,7 @@ suite("registerUiActions", function () {
   // A failed activation is the one state whose entire remaining purpose is to let the
   // user diagnose or restart; an empty tree leaves nothing to click.
   test("a failed initialization still offers the entries that diagnose it", function () {
-    const failure = Err(new Error("resource initialization failed")) as never
-    const ids = registerAndCollect({
-      userData: failure,
-      resources: failure,
-      workspaceManager: failure,
-      exerciseDecorationProvider: failure,
-    }).map((entry) => entry.id)
+    const ids = registerAndCollect(createDegradedContext()).map((entry) => entry.id)
 
     expect(ids).toContain("tmc.viewInitializationErrorHelp")
     expect(ids).toContain("workbench.action.restartExtensionHost")
@@ -105,19 +110,28 @@ suite("registerUiActions", function () {
   })
 
   // `TmcMenuTree.registerAction` throws on a repeated id, which aborts activation
-  // outright -- so no combination of initialization results may reach one twice.
-  test("no entry is registered twice in any combination of initialization results", function () {
-    const fields = Object.keys(healthyResults) as (keyof typeof healthyResults)[]
-    for (let failed = 0; failed < 1 << fields.length; failed++) {
-      const overrides: Partial<ActionContext> = {}
-      fields.forEach((field, index) => {
-        if (failed & (1 << index)) {
-          overrides[field] = Err(new Error(`${field} failed`)) as never
-        }
-      })
+  // outright, and the two menus share the entries that need no service.
+  test.for([
+    ["a ready", readyContext()],
+    ["a degraded", createDegradedContext()],
+  ] as const)("%s startup registers no entry twice", function ([, actionContext]) {
+    const ids = registerAndCollect(actionContext).map((entry) => entry.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
 
-      const ids = registerAndCollect(overrides).map((entry) => entry.id)
-      expect(new Set(ids).size, `duplicate entry for ${JSON.stringify(overrides)}`).toBe(ids.length)
-    }
+  // An entry whose command the same startup state leaves unregistered is a button that
+  // answers "command not found"; the two registrations are written apart and drift.
+  test.for([
+    ["a ready", readyContext()],
+    ["a degraded", createDegradedContext()],
+  ] as const)("%s startup offers no entry it cannot run", function ([, actionContext]) {
+    const registered = new Set(registeredCommandIds(actionContext))
+    const unrunnable = registerAndCollect(actionContext)
+      .map((entry) => entry.command.command)
+      // VS Code's own, so it is always there and this extension never registers it.
+      .filter((command) => command !== "workbench.action.restartExtensionHost")
+      .filter((command) => !registered.has(command))
+
+    expect(unrunnable).toEqual([])
   })
 })

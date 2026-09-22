@@ -15,6 +15,7 @@ import { createMockMemento } from "../mocks/vscode"
 
 const recorded = vi.hoisted(() => ({
   treeEntryIds: [] as string[],
+  registeredCommandIds: [] as string[],
   treeLoggedIn: [] as boolean[],
   panelTypes: [] as string[],
   uiDisposals: 0,
@@ -53,6 +54,9 @@ const storedMigration = vi.hoisted(() => ({ outcome: { kind: "done" } as unknown
 
 const registration = vi.hoisted(() => ({ dispose: (): void => {} }))
 
+/** When set, `ensureLangsUpdated` fails with it. */
+const langsDownload = vi.hoisted(() => ({ failure: undefined as Error | undefined }))
+
 // jest-mock-vscode ships neither the `env` nor the `extensions` namespace, and activation
 // reads the editor name and the extension version from them. Its registration functions
 // also return nothing where the real API returns a `Disposable`, and activation puts what
@@ -65,7 +69,10 @@ vi.mock("vscode", async (importOriginal) => {
     extensions: { getExtension: () => ({ packageJSON: { version: "3.0.0" } }) },
     commands: {
       ...(original["commands"] as Record<string, unknown>),
-      registerCommand: () => registration,
+      registerCommand: (id: string) => {
+        recorded.registeredCommandIds.push(id)
+        return registration
+      },
     },
     window: {
       ...(original["window"] as Record<string, unknown>),
@@ -164,7 +171,8 @@ vi.mock("../../storage", () => ({
 }))
 
 vi.mock("../../init/ensureLangsUpdated", () => ({
-  ensureLangsUpdated: async (): Promise<unknown> => Ok("/nonexistent/tmc-langs-cli"),
+  ensureLangsUpdated: async (): Promise<unknown> =>
+    langsDownload.failure ? Err(langsDownload.failure) : Ok("/nonexistent/tmc-langs-cli"),
 }))
 
 vi.mock("../../init/verifyCliSchema", () => ({
@@ -226,6 +234,7 @@ function createContextWithBlockedStorage(): vscode.ExtensionContext {
 function resetActivationRecording(): void {
   Logger.configure(LogLevel.None)
   recorded.treeEntryIds.length = 0
+  recorded.registeredCommandIds.length = 0
   recorded.treeLoggedIn.length = 0
   recorded.panelTypes.length = 0
   recorded.uiDisposals = 0
@@ -238,11 +247,34 @@ function resetActivationRecording(): void {
   langsStub.settingsWritten.length = 0
   langsStub.handlers.clear()
   langsStub.sharedFailure = undefined
+  langsDownload.failure = undefined
   workspaceManagerStub.persistClosedExercises = undefined
   cliSettings.projectsDirectory = tmp.dirSync().name
   // `restoreAllMocks` restores this spy to jest-mock-vscode's own persistent `vi.fn()`,
   // whose call history survives the restore -- `mockReset` is what actually clears it.
   vi.spyOn(vscode.window, "showErrorMessage").mockReset().mockResolvedValue(undefined)
+}
+
+/**
+ * The extension's own commands activation ran but never registered.
+ *
+ * VS Code rejects such a call, and `activateInner` awaits it, so everything after it --
+ * the initialization help panel included -- is skipped.
+ */
+async function unregisteredCommandsRun(context: vscode.ExtensionContext): Promise<string[]> {
+  // `restoreAllMocks` puts jest-mock-vscode's own persistent `vi.fn()` back with its call
+  // history intact, so reading an exact call list needs the reset.
+  const executeCommand = vi
+    .spyOn(vscode.commands, "executeCommand")
+    .mockReset()
+    .mockResolvedValue(undefined)
+
+  await activate(context)
+
+  const registered = new Set(recorded.registeredCommandIds)
+  return executeCommand.mock.calls
+    .map((call) => String(call[0]))
+    .filter((id) => id.startsWith("tmc.") && !registered.has(id))
 }
 
 suite("activation with unusable storage", function () {
@@ -331,6 +363,10 @@ suite("activation with unreadable stored data", function () {
     expect(recorded.treeEntryIds).toContain("tmc.viewInitializationErrorHelp")
     expect(recorded.panelTypes).toContain("InitializationErrorHelp")
   })
+
+  test("runs no command it left unregistered", async function () {
+    expect(await unregisteredCommandsRun(createContext())).toEqual([])
+  })
 })
 
 suite("activation with usable storage", function () {
@@ -346,6 +382,35 @@ suite("activation with usable storage", function () {
 
     expect(recorded.treeEntryIds).not.toContain("tmc.viewInitializationErrorHelp")
     expect(recorded.panelTypes).toEqual([])
+  })
+
+  test("runs no command it left unregistered", async function () {
+    expect(await unregisteredCommandsRun(createContext())).toEqual([])
+  })
+})
+
+// The one failure that leaves the workspace files and the stored data intact, so
+// everything downstream of the CLI degrades while everything beside it does not.
+suite("activation without the CLI", function () {
+  beforeEach(function () {
+    resetActivationRecording()
+    langsDownload.failure = new Error("tmc-langs-cli could not be downloaded")
+  })
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    vi.restoreAllMocks()
+  })
+
+  test("offers the recovery entries instead of aborting", async function () {
+    await activate(createContext())
+
+    expect(recorded.treeEntryIds).toContain("tmc.viewInitializationErrorHelp")
+    expect(recorded.panelTypes).toContain("InitializationErrorHelp")
+  })
+
+  test("runs no command it left unregistered", async function () {
+    expect(await unregisteredCommandsRun(createContext())).toEqual([])
   })
 })
 

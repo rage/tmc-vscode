@@ -5,7 +5,8 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import { refreshEverything, refreshLocalExercises } from "./actions"
-import type { ActionContext } from "./actions/types"
+import type { ActionContext, Startup } from "./actions/types"
+import { isReady } from "./actions/types"
 import { createAuthState } from "./api/authState"
 import Dialog from "./api/dialog"
 import ExerciseDecorationProvider from "./api/exerciseDecorationProvider"
@@ -65,6 +66,15 @@ function makeInitializationErrorReporter(
       )
     }
   }
+}
+
+/** Those of these services that failed, keyed by name. */
+function startupFailures(services: Record<string, Result<unknown, Error>>): Record<string, Error> {
+  return Object.fromEntries(
+    Object.entries(services).flatMap(([service, result]) =>
+      result.err ? [[service, result.val] as const] : [],
+    ),
+  )
 }
 
 /**
@@ -347,31 +357,53 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     )
   }
 
-  // Gates the palette entries whose commands can only report "not initialized properly".
-  const initialized =
-    langs.ok && userData.ok && workspaceManager.ok && exerciseDecorationProvider.ok && resources.ok
-  await vscode.commands.executeCommand("setContext", "test-my-code:Initialized", initialized)
-
-  const actionContext: ActionContext = {
-    authState,
-    dialog,
-    exerciseDecorationProvider,
-    resources,
-    settings,
-    langs,
-    ui,
-    userData,
-    workspaceManager,
+  const startup: Startup =
+    langs.ok && resources.ok && workspaceManager.ok && userData.ok && exerciseDecorationProvider.ok
+      ? {
+          kind: "ready",
+          langs: langs.val,
+          resources: resources.val,
+          workspaceManager: workspaceManager.val,
+          userData: userData.val,
+          exerciseDecorationProvider: exerciseDecorationProvider.val,
+        }
+      : {
+          kind: "degraded",
+          failures: startupFailures({
+            langs,
+            resources,
+            workspaceManager,
+            userData,
+            exerciseDecorationProvider,
+          }),
+        }
+  if (startup.kind === "degraded") {
+    // Only the root failures are reported as they happen; what they drag down with them
+    // is named nowhere else.
+    Logger.warn(`Activation degraded, missing: ${Object.keys(startup.failures).join(", ")}`)
   }
+  // Hides the palette entries whose commands the registration below leaves out.
+  await vscode.commands.executeCommand(
+    "setContext",
+    "test-my-code:Initialized",
+    startup.kind === "ready",
+  )
 
-  const refreshResult = await refreshLocalExercises(actionContext)
-  if (refreshResult.err) {
-    Logger.warn("Failed to set initial exercises.", refreshResult.val)
+  const actionContext: ActionContext = { authState, dialog, settings, startup, ui }
+  const readyContext = isReady(actionContext) ? actionContext : undefined
+
+  if (readyContext) {
+    const refreshResult = await refreshLocalExercises(readyContext)
+    if (refreshResult.err) {
+      Logger.warn("Failed to set initial exercises.", refreshResult.val)
+    }
   }
 
   init.registerUiActions(actionContext)
   init.registerCommands(context, actionContext)
-  init.registerSettingsCallbacks(actionContext)
+  if (readyContext) {
+    init.registerSettingsCallbacks(readyContext)
+  }
 
   if (exerciseDecorationProvider.ok) {
     context.subscriptions.push(
@@ -380,8 +412,8 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     )
   }
 
-  if (authState.loggedIn) {
-    void refreshEverything(actionContext, { silent: true }).catch((e) =>
+  if (readyContext && authState.loggedIn) {
+    void refreshEverything(readyContext, { silent: true }).catch((e) =>
       Logger.error("Background refresh failed", e),
     )
   }
@@ -398,8 +430,8 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
       // Proactively catches a session dropping between polls, not just on a failed command.
       sessionExpiry.onAuthChecked("tmc", authState.tmc)
       sessionExpiry.onAuthChecked("mooc", authState.mooc)
-      if (authState.loggedIn) {
-        void refreshEverything(actionContext, { silent: true }).catch((e) =>
+      if (readyContext && authState.loggedIn) {
+        void refreshEverything(readyContext, { silent: true }).catch((e) =>
           Logger.error("Background refresh failed", e),
         )
       }
@@ -410,11 +442,13 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
 
   setMaintenancePollArmed(authState.loggedIn)
 
-  if (showWelcome) {
+  // `tmc.showWelcome` is registered only in the ready case, and VS Code rejects a command
+  // it cannot find -- which would abort the rest of this function, help panel included.
+  if (showWelcome && readyContext) {
     await vscode.commands.executeCommand("tmc.showWelcome")
   }
 
-  if (!initialized) {
+  if (!readyContext) {
     await TmcPanel.renderMain(context.extensionUri, context, actionContext, {
       id: nextPanelId(),
       type: "InitializationErrorHelp",

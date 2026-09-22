@@ -1,5 +1,3 @@
-import type { Result } from "ts-results"
-
 import type { AuthState } from "../api/authState"
 import type Dialog from "../api/dialog"
 import type ExerciseDecorationProvider from "../api/exerciseDecorationProvider"
@@ -10,16 +8,50 @@ import type Settings from "../config/settings"
 import type { UserData } from "../config/userdata"
 import type UI from "../ui/ui"
 
-// `Result`-typed fields are `Err` when that service failed during activation; the
-// rest are always available.
+/** The services an activation builds, once all of them have succeeded. */
+export interface ReadyStartup {
+  kind: "ready"
+  exerciseDecorationProvider: ExerciseDecorationProvider
+  langs: Langs
+  resources: Resources
+  userData: UserData
+  workspaceManager: WorkspaceManager
+}
+
+/** The errors behind a failed activation, keyed by the service that failed. */
+export interface DegradedStartup {
+  kind: "degraded"
+  failures: Record<string, Error>
+}
+
+/**
+ * What an activation managed to build.
+ *
+ * Deliberately binary: a caller that needs one of these services needs the rest, and the
+ * partial combinations `extension.ts` can produce follow from its construction order
+ * rather than from anything a caller could act on.
+ */
+export type Startup = ReadyStartup | DegradedStartup
+
 export interface ActionContext {
   authState: AuthState
   dialog: Dialog
-  exerciseDecorationProvider: Result<ExerciseDecorationProvider, Error>
-  resources: Result<Resources, Error>
   settings: Settings
-  langs: Result<Langs, Error>
+  startup: Startup
   ui: UI
-  userData: Result<UserData, Error>
-  workspaceManager: Result<WorkspaceManager, Error>
+}
+
+/** A context whose services are all available, and the argument most actions want. */
+export interface ReadyActionContext extends ActionContext {
+  startup: ReadyStartup
+}
+
+/**
+ * Whether the activation behind this context built everything.
+ *
+ * Narrows the context itself, not just its {@link Startup}, so a caller can hand it
+ * straight to something that takes a {@link ReadyActionContext}.
+ */
+export function isReady(context: ActionContext): context is ReadyActionContext {
+  return context.startup.kind === "ready"
 }

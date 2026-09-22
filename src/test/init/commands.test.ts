@@ -8,7 +8,7 @@ import type { ActionContext } from "../../actions/types"
 import { EXTENSION_ID, EXTENSION_VERSION } from "../../config/constants"
 import { registerCommands } from "../../init/commands"
 import { TmcPanel } from "../../panels/TmcPanel"
-import { createMockActionContext } from "../mocks/actionContext"
+import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 
 // Every command the extension registers. Declared here rather than derived, so a
 // command silently disappearing (or a new one arriving unreviewed) fails.
@@ -41,7 +41,18 @@ const expectedCommands = [
   "tmc.viewInitializationErrorHelp",
 ]
 
-function registerAndCollect(): {
+// The subset that reaches none of the services an activation may fail to build, and so
+// stays usable when it did. Everything else is unreachable in that state by design.
+const expectedDegradedCommands = [
+  "tmcView.activateEntry",
+  "tmc.settings",
+  "tmc.selectAction",
+  "tmc.logs",
+  "tmc.debug",
+  "tmc.viewInitializationErrorHelp",
+]
+
+function registerAndCollect(actionContext: ActionContext = createMockActionContext()): {
   ids: string[]
   handlers: Map<string, () => Promise<void>>
   actionContext: ActionContext
@@ -62,7 +73,6 @@ function registerAndCollect(): {
     extensionUri: vscode.Uri.file("/tmp/extension"),
   } as unknown as vscode.ExtensionContext
 
-  const actionContext = createMockActionContext()
   registerCommands(context, actionContext)
   registerCommand.mockRestore()
   return { ids, handlers, actionContext }
@@ -120,9 +130,18 @@ suite("registerCommands", function () {
     expect(ids.toSorted()).toEqual(expectedCommands.toSorted())
   })
 
+  // Fifteen commands that log and return are worse than commands that are not there,
+  // and the recovery entries are what the user is left to work with.
+  test("a failed activation registers only the commands it can still run", function () {
+    const { ids } = registerAndCollect(createDegradedContext())
+    expect(ids.toSorted()).toEqual(expectedDegradedCommands.toSorted())
+  })
+
   test("registers no command twice", function () {
-    const { ids } = registerAndCollect()
-    expect(ids).toHaveLength(new Set(ids).size)
+    for (const context of [createMockActionContext(), createDegradedContext()]) {
+      const { ids } = registerAndCollect(context)
+      expect(ids).toHaveLength(new Set(ids).size)
+    }
   })
 
   // A command declared in package.json but never registered fails only when the
@@ -166,10 +185,10 @@ suite("registerCommands", function () {
   })
 
   // Without a reachable palette entry a user with no credentials has no way in
-  // besides the tree view; `"when": "false"` (its previous value) hides it.
+  // besides the tree view.
   test("the login command is reachable from the palette while logged out", function () {
     const entry = commandPalette().find((x) => x.command === "tmc.showMoocLogin")
-    expect(entry?.when).toBe("test-my-code:LoggedIn == false")
+    expect(whenTerms(entry?.when)).toContain("test-my-code:LoggedIn == false")
   })
 
   // A menu, keybinding or welcome-view link naming an undeclared command gives
