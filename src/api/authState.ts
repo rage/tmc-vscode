@@ -2,15 +2,13 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type { BackendKind } from "../shared/shared"
 import type UI from "../ui/ui"
 import { Logger } from "../utilities"
 import type Langs from "./langs"
 
-/** A backend the extension can hold a session with. */
-export type Backend = "tmc" | "mooc"
-
 /** What one {@link AuthState.refresh} observed, per backend. */
-export type AuthCheck = Record<Backend, Result<boolean, Error>>
+export type AuthCheck = Record<BackendKind, Result<boolean, Error>>
 
 /**
  * The extension's single answer to "is the user logged in".
@@ -38,7 +36,7 @@ export interface AuthState {
    */
   refresh: (options?: { timeout: number }) => Promise<AuthCheck>
   /** Records what a login or logout event just reported for one backend. */
-  set: (backend: Backend, authenticated: boolean) => Promise<void>
+  set: (backend: BackendKind, authenticated: boolean) => Promise<void>
   /** Forgets both sessions, for a wipe or a sign-out of everything. */
   clear: () => Promise<void>
   /** Called whenever {@link loggedIn} changes, after the change is applied. */
@@ -52,7 +50,7 @@ export interface AuthState {
  * so nothing else may set either.
  */
 export function createAuthState(langs: Result<Langs, Error>, ui: UI): AuthState {
-  const authenticated: Record<Backend, boolean> = { tmc: false, mooc: false }
+  const authenticated: Record<BackendKind, boolean> = { tmc: false, mooc: false }
   const listeners: ((loggedIn: boolean) => void)[] = []
   let applied: boolean | undefined
 

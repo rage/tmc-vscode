@@ -62,7 +62,7 @@ import type {
   TmcExerciseSlide,
 } from "../shared/langsSchema"
 import { CliNotification, CliOutputData, CliStatusUpdate } from "../shared/langsSchema"
-import type { ExerciseIdentifier } from "../shared/shared"
+import type { BackendKind, ExerciseIdentifier } from "../shared/shared"
 import {
   assertUnreachable,
   BaseError,
@@ -92,7 +92,7 @@ interface LangsProcessArgs {
    * auth-flavored error can be attributed to the right backend. `undefined`
    * for backend-agnostic commands (local ops, settings).
    */
-  backend?: "tmc" | "mooc" | undefined
+  backend?: BackendKind | undefined
   env?: Record<string, string> | undefined
   /** Which args should be obfuscated in logs. */
   obfuscate?: number[] | undefined
@@ -121,7 +121,7 @@ interface AuthAttribution {
    * The backend the command talked to. Only its cached responses are dropped when it
    * rejects our credentials, and it names the site in a not-enrolled message.
    */
-  backend?: "tmc" | "mooc" | undefined
+  backend?: BackendKind | undefined
   /** Set on login/logout commands, where an auth error means no session was lost. */
   expected?: boolean | undefined
 }
@@ -160,11 +160,7 @@ interface CacheConfig {
  * output-data kind, so two commands returning the same thing share an entry.
  * @param parts The ids the entry is keyed by, in the order the resource names them.
  */
-function cacheKey(
-  backend: "tmc" | "mooc",
-  resource: string,
-  ...parts: (string | number)[]
-): string {
+function cacheKey(backend: BackendKind, resource: string, ...parts: (string | number)[]): string {
   return [backend, resource, ...parts].join(":")
 }
 
@@ -265,7 +261,7 @@ class BoundedStderr {
  */
 export default class Langs {
   // Per-backend: tmc.mooc.fi and courses.mooc.fi are unrelated servers, so one must not throttle the other.
-  private readonly _nextSubmissionAllowedTimestamp: Record<"tmc" | "mooc", number>
+  private readonly _nextSubmissionAllowedTimestamp: Record<BackendKind, number>
   private readonly _options: Options
   private readonly _responseCache: Map<string, ResponseCacheEntry>
   private _onLogout?: (expected: boolean) => void
@@ -514,7 +510,7 @@ export default class Langs {
    * @param courseIdentifier Course slug for TMC, course id (UUID) for mooc.
    */
   public async listLocalCourseExercises(
-    courseKind: "tmc" | "mooc",
+    courseKind: BackendKind,
     courseIdentifier: string,
   ): Promise<Result<(LocalTmcExercise | LocalMoocExercise)[], Error>> {
     if (courseKind === "mooc") {
@@ -764,7 +760,7 @@ export default class Langs {
    * discard the other's answer.
    */
   public async checkExerciseUpdates(
-    backend: "tmc" | "mooc",
+    backend: BackendKind,
     options?: CacheOptions,
   ): Promise<Result<ExerciseIdentifier[], Error>> {
     const cacheConfig = {
@@ -1621,7 +1617,7 @@ export default class Langs {
    * `--save-old-state` on reset and old-submission restore — so they throttle each other
    * rather than only their own kind.
    */
-  private _claimSubmissionSlot(backend: "tmc" | "mooc"): Result<void, Error> {
+  private _claimSubmissionSlot(backend: BackendKind): Result<void, Error> {
     const now = Date.now()
     if (now < this._nextSubmissionAllowedTimestamp[backend]) {
       return Err(new BottleneckError("This command can't be executed at the moment."))
@@ -1745,7 +1741,7 @@ export default class Langs {
    * the two servers are unrelated, so one rejecting our credentials says nothing about the
    * other's data. An unattributed failure drops everything, having ruled nothing out.
    */
-  private _clearBackendCache(backend: "tmc" | "mooc" | undefined): void {
+  private _clearBackendCache(backend: BackendKind | undefined): void {
     if (backend === undefined) {
       this._responseCache.clear()
       return
@@ -1886,7 +1882,7 @@ export default class Langs {
   }
 
   /** Fires the unexpected-logout (`expected: false`) event for `target`, used when credentials were rejected rather than removed deliberately. */
-  private _fireUnexpectedLogout(target?: "tmc" | "mooc"): void {
+  private _fireUnexpectedLogout(target?: BackendKind): void {
     if (target === "tmc") {
       this._onLogout?.(false)
     } else if (target === "mooc") {

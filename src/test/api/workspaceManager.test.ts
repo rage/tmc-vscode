@@ -23,6 +23,7 @@ import {
   workspaceFileName,
 } from "../../config/constants"
 import Resources from "../../config/resources"
+import type { BackendKind } from "../../shared/shared"
 import { Logger, LogLevel } from "../../utilities"
 
 // `Resources` reads `vscode.env.appName` to tell Code from VSCodium, and the
@@ -75,7 +76,7 @@ let rootFolder: vscode.WorkspaceFolder
 let updateWorkspaceFolders: Mock<WorkspaceStubs["updateWorkspaceFolders"]>
 
 function exercise(
-  backend: "tmc" | "mooc",
+  backend: BackendKind,
   courseSlug: string,
   exerciseSlug: string,
   status: ExerciseStatus,

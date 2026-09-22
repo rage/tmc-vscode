@@ -1,17 +1,17 @@
-import type { Backend } from "./api/authState"
+import type { BackendKind } from "./shared/shared"
 
 export interface SessionExpiryTracker {
   /** Call after each background auth check. Warns once if a previously-authenticated backend is now not, until the next login. */
-  onAuthChecked: (backend: Backend, authenticated: boolean) => void
+  onAuthChecked: (backend: BackendKind, authenticated: boolean) => void
   /** Call when an explicit login for `backend` succeeds. */
-  onLogin: (backend: Backend) => void
+  onLogin: (backend: BackendKind) => void
   /** Call on logout. `expected` (user-initiated) never warns and clears the dedup state; unexpected warns once. */
-  onLogout: (backend: Backend, expected: boolean) => void
+  onLogout: (backend: BackendKind, expected: boolean) => void
   /**
    * Forgets everything known about `backend` without claiming it has a session.
    * A later `onAuthChecked` with `true` is what re-arms the expiry warning.
    */
-  reset: (backend: Backend) => void
+  reset: (backend: BackendKind) => void
 }
 
 /**
@@ -20,13 +20,13 @@ export interface SessionExpiryTracker {
  * backend that was never logged in this run.
  */
 export function createSessionExpiryTracker(
-  initiallyAuthenticated: Readonly<Record<Backend, boolean>>,
-  onExpired: (backend: Backend) => void,
+  initiallyAuthenticated: Readonly<Record<BackendKind, boolean>>,
+  onExpired: (backend: BackendKind) => void,
 ): SessionExpiryTracker {
-  const hadSession: Record<Backend, boolean> = { ...initiallyAuthenticated }
-  const warnedExpired: Record<Backend, boolean> = { tmc: false, mooc: false }
+  const hadSession: Record<BackendKind, boolean> = { ...initiallyAuthenticated }
+  const warnedExpired: Record<BackendKind, boolean> = { tmc: false, mooc: false }
 
-  const warnOnce = (backend: Backend): void => {
+  const warnOnce = (backend: BackendKind): void => {
     if (!warnedExpired[backend]) {
       onExpired(backend)
       warnedExpired[backend] = true
