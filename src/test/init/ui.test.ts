@@ -2,7 +2,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { ActionContext } from "../../actions/types"
-import { registerCommands } from "../../init/commands"
+import { registerCommands, registerServiceFreeCommands } from "../../init/commands"
 import { registerUiActions } from "../../init/ui"
 import { CourseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
 import type { TreeEntry } from "../../ui/treeview/treeview"
@@ -38,6 +38,7 @@ function registeredCommandIds(actionContext: ActionContext): string[] {
     extensionUri: vscode.Uri.file("/tmp/extension"),
   } as unknown as vscode.ExtensionContext
 
+  registerServiceFreeCommands(context, actionContext.dialog, actionContext.ui)
   registerCommands(context, actionContext)
   registerCommand.mockRestore()
   return ids
