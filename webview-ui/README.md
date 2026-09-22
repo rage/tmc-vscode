@@ -11,7 +11,7 @@ sides import the same schemas from one file.
 ## Panels
 
 A panel is one screen: `MyCourses`, `CourseDetails`, `ExerciseTests`, … Each has
-a schema in `shared/lib.ts` and a component of the same name in `src/panels/`.
+a schema in `shared/protocol.ts` and a component of the same name in `src/panels/`.
 The schemas form the `Panel` discriminated union, so adding a screen means
 adding a variant there and a branch in `App.svelte`; `assertUnreachable` turns a
 missing branch into a type error.
@@ -33,7 +33,7 @@ messages it buffered for that panel — see `_messageBuffer` in
 
 ## About messages
 
-`shared/lib.ts` defines both directions as zod unions:
+`shared/protocol.ts` defines both directions as zod unions:
 `ExtensionToWebviewSchema` and `WebviewToExtensionSchema`. Both are validated at
 both ends. On the way out, `vscode.postMessage` (`src/utilities/vscode.ts`)
 refuses to post a message that does not parse — otherwise a Svelte `$state`

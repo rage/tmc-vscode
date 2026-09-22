@@ -55,11 +55,11 @@ suite("Welcome panel", () => {
 
   test("updates the version when setWelcomeData arrives", async () => {
     render(Welcome, { props: { panel: { id: 2, type: "Welcome" } } })
-    window.dispatchEvent(
-      new MessageEvent("message", {
-        data: { type: "setWelcomeData", target: { type: "Welcome", id: 2 }, version: "9.9.9" },
-      }),
-    )
+    dispatchToWebview({
+      type: "setWelcomeData",
+      target: { type: "Welcome", id: 2 },
+      version: "9.9.9",
+    })
     expect(
       await screen.findByRole("heading", { name: /Welcome to TestMyCode 9.9.9/ }),
     ).toBeInTheDocument()
