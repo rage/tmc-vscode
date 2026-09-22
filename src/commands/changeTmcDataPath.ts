@@ -13,7 +13,7 @@ export async function changeTmcDataPath(actionContext: ReadyActionContext): Prom
   Logger.info("Changing TMC data path")
   if (!resources.projectsDirectory) {
     await dialog.errorNotification(
-      "Changing the TMC data path is unavailable: tmc-langs did not report an exercise directory.",
+      "Changing the data path is unavailable: tmc-langs did not report an exercise directory.",
       new Error("tmc-langs did not report an exercise directory"),
     )
     return

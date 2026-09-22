@@ -93,7 +93,7 @@ suite("Change TMC data path command", function () {
     await changeTmcDataPath(context)
 
     expect(context.dialog.errorNotification).toHaveBeenCalledExactlyOnceWith(
-      "Changing the TMC data path is unavailable: tmc-langs did not report an exercise directory.",
+      "Changing the data path is unavailable: tmc-langs did not report an exercise directory.",
       expect.any(Error),
     )
     expect(vscode.window.showOpenDialog).not.toHaveBeenCalled()
