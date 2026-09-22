@@ -10,7 +10,7 @@ import {
   removeCourse,
 } from "../../actions"
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
 import type Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
@@ -38,15 +38,12 @@ suite("logout action", function () {
   let deauthenticate: ReturnType<typeof vi.fn>
   let deauthenticateMooc: ReturnType<typeof vi.fn>
 
-  function actionContext(): ActionContext {
+  function actionContext(): ReadyActionContext {
     const langs = {
       deauthenticate,
       deauthenticateMooc,
     } as unknown as Langs
-    return {
-      dialog: dialogMock,
-      langs: new Ok(langs),
-    } as unknown as ActionContext
+    return { ...createMockActionContext({ startup: { langs } }), dialog: dialogMock }
   }
 
   beforeEach(function () {
@@ -149,23 +146,26 @@ suite("logout action", function () {
 
 function contextWith(
   userData: Partial<UserData>,
-): [ActionContext, Dialog, ReturnType<typeof vi.fn>] {
+): [ReadyActionContext, Dialog, ReturnType<typeof vi.fn>] {
   const [dialog] = createDialogMock()
   const refresh = vi.fn()
   return [
     {
-      ...createMockActionContext(),
+      ...createMockActionContext({
+        startup: {
+          langs: {
+            unsetSetting: vi.fn(async () => Ok.EMPTY),
+          } as unknown as ReadyStartup["langs"],
+          userData: userData as ReadyStartup["userData"],
+          workspaceManager: {
+            activeCourse: undefined,
+            activeCourseBackend: undefined,
+            deleteWorkspaceFile: vi.fn(async () => Ok.EMPTY),
+          } as unknown as ReadyStartup["workspaceManager"],
+        },
+      }),
       dialog,
-      langs: Ok({
-        unsetSetting: vi.fn(async () => Ok.EMPTY),
-      }) as unknown as ActionContext["langs"],
-      userData: Ok(userData) as unknown as ActionContext["userData"],
-      ui: { treeDP: { refresh } } as unknown as ActionContext["ui"],
-      workspaceManager: Ok({
-        activeCourse: undefined,
-        activeCourseBackend: undefined,
-        deleteWorkspaceFile: vi.fn(async () => Ok.EMPTY),
-      }) as unknown as ActionContext["workspaceManager"],
+      ui: { treeDP: { refresh } } as unknown as ReadyActionContext["ui"],
     },
     dialog,
     refresh,
@@ -237,7 +237,7 @@ suite("removeCourse action", function () {
     await removeCourse(actionContext, CourseIdentifier.from(1))
 
     expect(
-      (actionContext.workspaceManager as Ok<WorkspaceManager>).val.deleteWorkspaceFile,
+      actionContext.startup.workspaceManager.deleteWorkspaceFile,
     ).toHaveBeenCalledExactlyOnceWith("test-python-course", "tmc")
   })
 })
@@ -260,14 +260,17 @@ suite("openWorkspace action", function () {
   let createWorkspaceFile: ReturnType<typeof vi.fn>
   let executeCommand: ReturnType<typeof vi.spyOn>
 
-  function actionContext(): ActionContext {
+  function actionContext(): ReadyActionContext {
     return {
-      ...createMockActionContext(),
+      ...createMockActionContext({
+        startup: {
+          resources: {
+            getWorkspaceFilePath: () => courseWorkspaceFile,
+          } as unknown as Resources,
+          workspaceManager: { createWorkspaceFile } as unknown as WorkspaceManager,
+        },
+      }),
       dialog: dialogMock,
-      resources: new Ok({
-        getWorkspaceFilePath: () => courseWorkspaceFile,
-      } as unknown as Resources),
-      workspaceManager: new Ok({ createWorkspaceFile } as unknown as WorkspaceManager),
     }
   }
 
@@ -334,17 +337,20 @@ const tmcCourse = (id: number, notifyAfter: number, newExercises: number[]): Loc
     materialUrl: null,
   })
 
-function contextWithCourses(courses: LocalCourseData[]): [ActionContext, Dialog] {
+function contextWithCourses(courses: LocalCourseData[]): [ReadyActionContext, Dialog] {
   const [dialog] = createDialogMock()
   const byId = new Map(courses.map((c) => [String(c.data.id), c]))
   return [
     {
-      ...createMockActionContext(),
+      ...createMockActionContext({
+        startup: {
+          userData: {
+            getCourses: () => courses,
+            getCourse: (id: CourseIdentifier) => Ok(byId.get(CourseIdentifier.toString(id))),
+          } as unknown as ReadyStartup["userData"],
+        },
+      }),
       dialog,
-      userData: Ok({
-        getCourses: () => courses,
-        getCourse: (id: CourseIdentifier) => Ok(byId.get(CourseIdentifier.toString(id))),
-      }) as unknown as ActionContext["userData"],
     },
     dialog,
   ]

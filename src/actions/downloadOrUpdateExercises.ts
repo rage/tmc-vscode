@@ -1,14 +1,14 @@
 import type { Result } from "ts-results"
-import { Err, Ok } from "ts-results"
+import { Ok } from "ts-results"
 
 import type { FractionProgress } from "../api/dialog"
 import type Langs from "../api/langs"
-import { ExerciseUpdateError, InitializationError } from "../errors"
+import { ExerciseUpdateError } from "../errors"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier, ExerciseStatus, ExtensionToWebview } from "../shared/shared"
 import { ExerciseIdentifier, LocalCourseData, match } from "../shared/shared"
 import { Logger } from "../utilities"
-import type { ActionContext } from "./types"
+import type { ReadyActionContext } from "./types"
 
 type ExerciseDownloadResult = Awaited<ReturnType<Langs["downloadExercises"]>>
 
@@ -28,14 +28,12 @@ interface DownloadResults {
  * @returns Exercise ids for successful downloads.
  */
 export async function downloadOrUpdateExercises(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   exerciseIds: ExerciseIdentifier[],
   courseId?: CourseIdentifier,
 ): Promise<Result<DownloadResults, Error>> {
-  const { dialog, settings, langs, userData } = actionContext
-  if (langs.err) {
-    return new Err(new InitializationError("Extension was not initialized properly"))
-  }
+  const { dialog, settings } = actionContext
+  const { langs, userData } = actionContext.startup
   Logger.info("Downloading exercises", exerciseIds)
 
   if (exerciseIds.length === 0) {
@@ -48,11 +46,8 @@ export async function downloadOrUpdateExercises(
     if (courseId) {
       return courseId
     }
-    if (userData.err) {
-      return undefined
-    }
     const wanted = ExerciseIdentifier.unwrap(exerciseId)
-    for (const course of userData.val.getCourses()) {
+    for (const course of userData.getCourses()) {
       if (LocalCourseData.getExercises(course).some((x) => x.data.id === wanted)) {
         return LocalCourseData.getCourseId(course)
       }
@@ -128,7 +123,7 @@ export async function downloadOrUpdateExercises(
         if (ids.length === 0 || cancelled) {
           return undefined
         }
-        const legResult = await langs.val.downloadExercises(
+        const legResult = await langs.downloadExercises(
           ids,
           downloadTemplate,
           onDownloaded,

@@ -12,7 +12,6 @@ import {
   SUBMIT_PROCESS_TIMEOUT,
 } from "../config/constants"
 import type { UserData } from "../config/userdata"
-import { InitializationError } from "../errors"
 import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
 import type {
   BackendKind,
@@ -36,7 +35,7 @@ import { Logger, parseFeedbackQuestion, runSingleFlight } from "../utilities"
 import { getActiveEditorExecutablePath } from "../window"
 import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse"
 import { refreshLocalExercises } from "./refreshLocalExercises"
-import type { ActionContext } from "./types"
+import type { ReadyActionContext } from "./types"
 import { updateCourse } from "./updateCourse"
 
 export const testInterrupts = new Map<number, (() => void)[]>()
@@ -62,17 +61,15 @@ async function safeDeauthenticate(
  * skip the other; each failure gets its own notification, and the returned
  * `Result` reports whichever failed (tmc's, if both did).
  */
-export async function logout(actionContext: ActionContext): Promise<Result<void, Error>> {
-  const { langs, dialog } = actionContext
-  if (langs.err) {
-    return new Err(new InitializationError("Extension was not initialized properly"))
-  }
+export async function logout(actionContext: ReadyActionContext): Promise<Result<void, Error>> {
+  const { dialog } = actionContext
+  const { langs } = actionContext.startup
 
-  const result = await safeDeauthenticate(() => langs.val.deauthenticate())
+  const result = await safeDeauthenticate(() => langs.deauthenticate())
   if (result.err) {
     dialog.reportError(`Failed to log out of ${backendName("tmc")}.`, result.val, "tmc")
   }
-  const moocResult = await safeDeauthenticate(() => langs.val.deauthenticateMooc())
+  const moocResult = await safeDeauthenticate(() => langs.deauthenticateMooc())
   if (moocResult.err) {
     dialog.reportError(`Failed to log out of ${backendName("mooc")}.`, moocResult.val, "mooc")
   }
@@ -91,15 +88,13 @@ export async function logout(actionContext: ActionContext): Promise<Result<void,
  */
 export async function testExercise(
   context: vscode.ExtensionContext,
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-  const { dialog, langs, userData } = actionContext
-  if (!(langs.ok && userData.ok)) {
-    return new Err(new InitializationError("Extension was not initialized properly"))
-  }
+  const { dialog } = actionContext
+  const { langs, userData } = actionContext.startup
 
-  const courseResult = userData.val.getCourseBySlug(exercise.backend, exercise.courseSlug)
+  const courseResult = userData.getCourseBySlug(exercise.backend, exercise.courseSlug)
   if (courseResult.err) {
     return courseResult
   }
@@ -138,12 +133,13 @@ export async function testExercise(
 
       if (!course.data.perhapsExamMode) {
         const executablePath = getActiveEditorExecutablePath(actionContext)
-        const { process: testRunner, interrupt: testInterrupt } = langs.val.runTests(
+        const { process: testRunner, interrupt: testInterrupt } = langs.runTests(
           exercise.uri.fsPath,
           executablePath,
         )
-        const { process: validationRunner, interrupt: validationInterrupt } =
-          langs.val.runCheckstyle(exercise.uri.fsPath)
+        const { process: validationRunner, interrupt: validationInterrupt } = langs.runCheckstyle(
+          exercise.uri.fsPath,
+        )
         testInterrupts.set(testRunId, [testInterrupt, validationInterrupt])
         const exerciseName = exercise.exerciseSlug
 
@@ -313,16 +309,14 @@ function submitterFor(
  */
 export async function submitExercise(
   context: vscode.ExtensionContext,
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-  const { dialog, exerciseDecorationProvider, langs, userData } = actionContext
-  if (!(langs.ok && userData.ok && exerciseDecorationProvider.ok)) {
-    return new Err(new InitializationError("Extension was not initialized properly"))
-  }
+  const { dialog } = actionContext
+  const { exerciseDecorationProvider, langs, userData } = actionContext.startup
   Logger.info(`Submitting exercise ${exercise.exerciseSlug} to ${backendName(exercise.backend)}`)
 
-  const courseResult = userData.val.getCourseBySlug(exercise.backend, exercise.courseSlug)
+  const courseResult = userData.getCourseBySlug(exercise.backend, exercise.courseSlug)
   if (courseResult.err) {
     return courseResult
   }
@@ -335,11 +329,7 @@ export async function submitExercise(
       new Error(`ID for exercise ${exercise.courseSlug}/${exercise.exerciseSlug} was not found.`),
     )
   }
-  const submit = submitterFor(
-    langs.val,
-    exercise.backend,
-    LocalCourseExercise.getId(courseExercise),
-  )
+  const submit = submitterFor(langs, exercise.backend, LocalCourseExercise.getId(courseExercise))
   if (!submit) {
     return Err(
       new Error(`${exercise.exerciseSlug} is not a ${backendName(exercise.backend)} exercise.`),
@@ -378,7 +368,7 @@ export async function submitExercise(
       }
 
       if (outcome.val.passed) {
-        const passedResult = await userData.val.setExerciseAsPassed(
+        const passedResult = await userData.setExerciseAsPassed(
           exercise.backend,
           exercise.courseSlug,
           exercise.exerciseSlug,
@@ -390,7 +380,7 @@ export async function submitExercise(
             exercise.backend,
           )
         } else {
-          exerciseDecorationProvider.val.updateDecorationsForExercises(exercise)
+          exerciseDecorationProvider.updateDecorationsForExercises(exercise)
         }
       }
 
@@ -451,19 +441,17 @@ function pasterFor(
  * `Ok`, so no caller has to check for one.
  */
 async function pasteExercise(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   backend: BackendKind,
   courseSlug: string,
   exerciseName: string,
 ): Promise<Result<string, Error>> {
-  const { langs, userData, workspaceManager, dialog } = actionContext
-  if (!(langs.ok && userData.ok && workspaceManager.ok)) {
-    return new Err(new InitializationError("Extension was not initialized properly"))
-  }
+  const { dialog } = actionContext
+  const { langs, userData, workspaceManager } = actionContext.startup
 
-  const paste = pasterFor(langs.val, userData.val, backend, courseSlug, exerciseName)
-  const exercisePath = workspaceManager.val.getExerciseBySlug(backend, courseSlug, exerciseName)
-    ?.uri.fsPath
+  const paste = pasterFor(langs, userData, backend, courseSlug, exerciseName)
+  const exercisePath = workspaceManager.getExerciseBySlug(backend, courseSlug, exerciseName)?.uri
+    .fsPath
   if (!paste || !exercisePath) {
     return Err(new Error("Failed to resolve exercise id"))
   }
@@ -491,7 +479,7 @@ async function pasteExercise(
 
 /** Sends a tmc exercise to its paste service. The mooc twin is {@link pasteMoocExercise}. */
 export async function pasteTmcExercise(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   courseSlug: string,
   exerciseName: string,
 ): Promise<Result<string, Error>> {
@@ -500,7 +488,7 @@ export async function pasteTmcExercise(
 
 /** Sends a mooc exercise to its paste service. The tmc twin is {@link pasteTmcExercise}. */
 export async function pasteMoocExercise(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   courseSlug: string,
   exerciseName: string,
 ): Promise<Result<string, Error>> {
@@ -523,23 +511,21 @@ export interface CourseUpdateOptions {
  * decides whether a background failure is worth a notification.
  */
 export async function checkForCourseUpdates(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   options: CourseUpdateOptions = {},
 ): Promise<Result<void, Error>> {
-  const { dialog, userData } = actionContext
+  const { dialog } = actionContext
+  const { userData } = actionContext.startup
   const { courseId, onProgress } = options
-  if (userData.err) {
-    return Err(new InitializationError("Extension was not initialized properly"))
-  }
   let courses: LocalCourseData[]
   if (courseId) {
-    const courseResult = userData.val.getCourse(courseId)
+    const courseResult = userData.getCourse(courseId)
     if (courseResult.err) {
       return courseResult
     }
     courses = [courseResult.val]
   } else {
-    courses = userData.val.getCourses()
+    courses = userData.getCourses()
   }
 
   Logger.info(`Checking for course updates for courses`)
@@ -552,7 +538,7 @@ export async function checkForCourseUpdates(
       const id = LocalCourseData.getCourseId(course)
       const updateResult = await updateCourse(actionContext, id)
       onProgress?.(++done, courses.length)
-      const reread = userData.val.getCourse(id)
+      const reread = userData.getCourse(id)
       return {
         name: LocalCourseData.getCourseName(course),
         error: updateResult.err ? updateResult.val : reread.err ? reread.val : undefined,
@@ -598,7 +584,7 @@ export async function checkForCourseUpdates(
         [
           "Remind me later",
           async (): Promise<void> => {
-            const result = await userData.val.setNewExerciseNotifyAfter(
+            const result = await userData.setNewExerciseNotifyAfter(
               id,
               Date.now() + NOTIFICATION_DELAY,
             )
@@ -610,7 +596,7 @@ export async function checkForCourseUpdates(
         [
           "Don't remind about these exercises",
           async (): Promise<void> => {
-            const result = await userData.val.clearFromNewExercises(id)
+            const result = await userData.clearFromNewExercises(id)
             if (result.err) {
               dialog.reportError("Failed to dismiss the new exercises.", result.val, course.kind)
             }
@@ -645,7 +631,7 @@ export async function checkForCourseUpdates(
  * update check quietly.
  */
 export async function refreshEverything(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   options: { silent: boolean } & CourseUpdateOptions,
 ): Promise<Result<void, Error>> {
   const { dialog } = actionContext
@@ -679,18 +665,15 @@ export async function refreshEverything(
  * asks the user first.
  */
 export async function openWorkspace(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   name: string,
   backend: BackendKind,
 ): Promise<void> {
-  const { dialog, resources, workspaceManager } = actionContext
-  if (!(resources.ok && workspaceManager.ok)) {
-    Logger.error("Extension was not initialized properly")
-    return
-  }
+  const { dialog } = actionContext
+  const { resources, workspaceManager } = actionContext.startup
 
   const currentWorkspaceFile = vscode.workspace.workspaceFile
-  const tmcWorkspaceFile = resources.val.getWorkspaceFilePath(name, backend)
+  const tmcWorkspaceFile = resources.getWorkspaceFilePath(name, backend)
   const workspaceAsUri = vscode.Uri.file(tmcWorkspaceFile)
   Logger.info(`Current workspace: ${currentWorkspaceFile?.fsPath}`)
   Logger.info(`${backendName(backend)} workspace: ${tmcWorkspaceFile}`)
@@ -704,7 +687,7 @@ export async function openWorkspace(
   }
 
   const openCourseWorkspace = async (): Promise<void> => {
-    await workspaceManager.val.createWorkspaceFile(name, backend)
+    await workspaceManager.createWorkspaceFile(name, backend)
     await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri)
   }
 
@@ -732,16 +715,13 @@ export async function openWorkspace(
  * @param id ID of the course to remove
  */
 export async function removeCourse(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   id: CourseIdentifier,
 ): Promise<void> {
-  const { langs, ui, userData, workspaceManager, dialog } = actionContext
-  if (!(langs.ok && userData.ok && workspaceManager.ok)) {
-    Logger.error("Extension was not initialized properly")
-    return
-  }
+  const { dialog, ui } = actionContext
+  const { langs, userData, workspaceManager } = actionContext.startup
 
-  const courseResult = userData.val.getCourse(id)
+  const courseResult = userData.getCourse(id)
   if (courseResult.err) {
     dialog.reportError("Failed to remove the course.", courseResult.val, id.kind)
     return
@@ -750,9 +730,7 @@ export async function removeCourse(
   const courseName = LocalCourseData.getCourseName(course)
   Logger.info(`Closing exercises for ${courseName} and removing course data from userData`)
 
-  const unsetResult = await langs.val.unsetSetting(
-    closedExercisesSettingKey(course.kind, courseName),
-  )
+  const unsetResult = await langs.unsetSetting(closedExercisesSettingKey(course.kind, courseName))
   if (unsetResult.err) {
     dialog.reportError(
       `Failed to remove TMC-langs data for "${courseName}".`,
@@ -763,10 +741,7 @@ export async function removeCourse(
 
   // Left behind, it would be reused verbatim if the course is added again, listing
   // folders for exercises the student may have deleted in the meantime.
-  const workspaceFileResult = await workspaceManager.val.deleteWorkspaceFile(
-    courseName,
-    course.kind,
-  )
+  const workspaceFileResult = await workspaceManager.deleteWorkspaceFile(courseName, course.kind)
   if (workspaceFileResult.err) {
     dialog.reportError(
       `Failed to remove the workspace file for "${courseName}".`,
@@ -775,7 +750,7 @@ export async function removeCourse(
     )
   }
 
-  const deleteResult = await userData.val.deleteCourse(id)
+  const deleteResult = await userData.deleteCourse(id)
   if (deleteResult.err) {
     dialog.reportError(
       `Failed to remove "${courseName}" from your courses.`,
@@ -787,8 +762,8 @@ export async function removeCourse(
   ui.treeDP.refresh()
 
   if (
-    workspaceManager.val.activeCourse === courseName &&
-    workspaceManager.val.activeCourseBackend === course.kind
+    workspaceManager.activeCourse === courseName &&
+    workspaceManager.activeCourseBackend === course.kind
   ) {
     Logger.info("Closing course workspace because it was removed.")
     await vscode.commands.executeCommand("workbench.action.closeFolder")

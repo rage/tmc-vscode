@@ -1,7 +1,7 @@
 import { Err, Ok } from "ts-results"
 
 import { checkForExerciseUpdates } from "../../actions"
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type { UserData } from "../../config/userdata"
 import type { LocalCourseData } from "../../shared/shared"
@@ -54,18 +54,17 @@ const moocOutdated = {
 }
 
 suite("checkForExerciseUpdates action", function () {
-  const stubContext = createMockActionContext()
-
   let tmcMock: Langs
   let tmcMockValues: TMCMockValues
   let userDataMock: UserData
   let userDataMockValues: UserDataMockValues
 
-  const actionContext = (authenticated?: { tmc?: boolean; mooc?: boolean }): ActionContext => ({
-    ...stubContext,
+  const actionContext = (authenticated?: {
+    tmc?: boolean
+    mooc?: boolean
+  }): ReadyActionContext => ({
+    ...createMockActionContext({ startup: { langs: tmcMock, userData: userDataMock } }),
     authState: createMockAuthState(authenticated),
-    langs: new Ok(tmcMock),
-    userData: new Ok(userDataMock),
   })
 
   beforeEach(function () {

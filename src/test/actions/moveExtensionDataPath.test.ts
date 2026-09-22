@@ -1,10 +1,10 @@
 import * as path from "path"
 
-import { Err, Ok } from "ts-results"
+import { Err } from "ts-results"
 import * as vscode from "vscode"
 
 import { moveExtensionDataPath } from "../../actions"
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
@@ -30,7 +30,6 @@ suite("moveExtensionDataPath action", function () {
   }
 
   const courseName = "test-python-course"
-  const stubContext = createMockActionContext()
   let root: string
 
   let tmcMock: Langs
@@ -39,12 +38,14 @@ suite("moveExtensionDataPath action", function () {
   let workspaceManagerMock: WorkspaceManager
   let workspaceManagerMockValues: WorkspaceManagerMockValues
 
-  const actionContext = (): ActionContext => ({
-    ...stubContext,
-    langs: new Ok(tmcMock),
-    userData: new Ok(userDataMock),
-    workspaceManager: new Ok(workspaceManagerMock),
-  })
+  const actionContext = (): ReadyActionContext =>
+    createMockActionContext({
+      startup: {
+        langs: tmcMock,
+        userData: userDataMock,
+        workspaceManager: workspaceManagerMock,
+      },
+    })
 
   beforeEach(function () {
     root = makeTmpDirs(virtualFileSystem)

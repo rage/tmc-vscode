@@ -5,7 +5,7 @@ import type * as vscode from "vscode"
 
 import { closeExercises, downloadAndOpenExercises } from "../../actions"
 import { downloadExercisesForUi } from "../../actions/downloadExercisesForUi"
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
@@ -13,6 +13,7 @@ import type { UserData } from "../../config/userdata"
 import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
 import type { MoocLocalCourseData } from "../../storage/data"
+import { createMockActionContext } from "../mocks/actionContext"
 
 vi.mock("../../actions/downloadExercisesForUi", () => ({
   downloadExercisesForUi: vi.fn(async () => Ok([])),
@@ -58,10 +59,7 @@ suite("closeExercises action", function () {
       getCourse: () => Ok(makeMoocKind(moocCourse) as LocalCourseData),
     } as unknown as UserData
 
-    const actionContext = {
-      workspaceManager: new Ok(workspaceManager),
-      userData: new Ok(userData),
-    } as unknown as ActionContext
+    const actionContext = createMockActionContext({ startup: { userData, workspaceManager } })
 
     await closeExercises(
       actionContext,
@@ -89,7 +87,7 @@ async function openExercisesOnMachineWith(totalRamBytes: number) {
 }
 
 function contextWithOpenExercises(openCount: number): {
-  actionContext: ActionContext
+  actionContext: ReadyActionContext
   warningNotification: Mock
 } {
   const warningNotification = vi.fn()
@@ -101,15 +99,19 @@ function contextWithOpenExercises(openCount: number): {
   }))
   return {
     actionContext: {
-      workspaceManager: new Ok({
-        openCourseExercises: vi.fn(async () => Ok.EMPTY),
-        getExercisesByCourseSlug: () => openExerciseList,
-      } as unknown as WorkspaceManager),
-      userData: new Ok({
-        getCourse: () => Ok(makeMoocKind(moocCourse) as LocalCourseData),
-      } as unknown as UserData),
-      dialog: { warningNotification },
-    } as unknown as ActionContext,
+      ...createMockActionContext({
+        startup: {
+          userData: {
+            getCourse: () => Ok(makeMoocKind(moocCourse) as LocalCourseData),
+          } as unknown as UserData,
+          workspaceManager: {
+            openCourseExercises: vi.fn(async () => Ok.EMPTY),
+            getExercisesByCourseSlug: () => openExerciseList,
+          } as unknown as WorkspaceManager,
+        },
+      }),
+      dialog: { warningNotification } as unknown as ReadyActionContext["dialog"],
+    },
     warningNotification,
   }
 }
@@ -160,7 +162,7 @@ suite("downloadAndOpenExercises action", function () {
     },
   ]
 
-  const contextFor = (listing: typeof localListing): ActionContext => {
+  const contextFor = (listing: typeof localListing): ReadyActionContext => {
     const workspaceManager = {
       openCourseExercises: vi.fn(async () => Ok.EMPTY),
       getExercisesByCourseSlug: () => [],
@@ -172,11 +174,9 @@ suite("downloadAndOpenExercises action", function () {
       listLocalCourseExercises: vi.fn(async () => Ok(listing)),
     } as unknown as Langs
     return {
-      workspaceManager: new Ok(workspaceManager),
-      userData: new Ok(userData),
-      langs: new Ok(langs),
-      dialog: { reportError: vi.fn() },
-    } as unknown as ActionContext
+      ...createMockActionContext({ startup: { langs, userData, workspaceManager } }),
+      dialog: { reportError: vi.fn() } as unknown as ReadyActionContext["dialog"],
+    }
   }
 
   beforeEach(function () {

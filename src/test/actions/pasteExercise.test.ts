@@ -3,7 +3,7 @@ import { vi } from "vitest"
 import type * as vscode from "vscode"
 
 import { pasteMoocExercise, pasteTmcExercise } from "../../actions"
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { BottleneckError } from "../../errors"
 import { createMockActionContext } from "../mocks/actionContext"
 
@@ -18,19 +18,20 @@ const EXERCISE_PATH = "/path/to/exercise"
 function contextFor(
   langsMethods: Record<string, unknown>,
   userDataMethods: Record<string, unknown>,
-): ActionContext {
-  return {
-    ...createMockActionContext(),
-    langs: Ok(langsMethods) as unknown as ActionContext["langs"],
-    userData: Ok(userDataMethods) as unknown as ActionContext["userData"],
-    workspaceManager: Ok({
-      getExerciseBySlug: () => ({ uri: { fsPath: EXERCISE_PATH } as unknown as vscode.Uri }),
-    }) as unknown as ActionContext["workspaceManager"],
-  }
+): ReadyActionContext {
+  return createMockActionContext({
+    startup: {
+      langs: langsMethods as unknown as ReadyStartup["langs"],
+      userData: userDataMethods as unknown as ReadyStartup["userData"],
+      workspaceManager: {
+        getExerciseBySlug: () => ({ uri: { fsPath: EXERCISE_PATH } as unknown as vscode.Uri }),
+      } as unknown as ReadyStartup["workspaceManager"],
+    },
+  })
 }
 
 function moocContextWith(pasteResult: unknown): {
-  actionContext: ActionContext
+  actionContext: ReadyActionContext
   submit: ReturnType<typeof vi.fn>
 } {
   const submit = vi.fn().mockResolvedValue(pasteResult)
@@ -42,7 +43,7 @@ function moocContextWith(pasteResult: unknown): {
 }
 
 function tmcContextWith(pasteResult: unknown): {
-  actionContext: ActionContext
+  actionContext: ReadyActionContext
   submit: ReturnType<typeof vi.fn>
 } {
   const submit = vi.fn().mockResolvedValue(pasteResult)
@@ -78,9 +79,8 @@ suite("paste actions", () => {
     // same exercise directory, so they must not overlap.
     let finish!: () => void
     const { actionContext } = moocContextWith(undefined)
-    ;(actionContext.langs.val as unknown as Record<string, unknown>).submitMoocExerciseToPaste = vi
-      .fn()
-      .mockReturnValue(
+    ;(actionContext.startup.langs as unknown as Record<string, unknown>).submitMoocExerciseToPaste =
+      vi.fn().mockReturnValue(
         new Promise((resolve) => {
           finish = () => resolve(Ok("link"))
         }),

@@ -2,7 +2,7 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import type * as vscode from "vscode"
 
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { testExercise } from "../../actions/user"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
@@ -70,17 +70,18 @@ function workspaceExercise(): WorkspaceExercise {
 function contextWithTestRun(
   testRun: unknown,
   checkstyleRun: unknown = Ok({ strategy: "DISABLED", validation_errors: null }),
-): ActionContext {
-  return {
-    ...createMockActionContext(),
-    langs: Ok({
-      runTests: () => ({ process: Promise.resolve(testRun), interrupt: vi.fn() }),
-      runCheckstyle: () => ({ process: Promise.resolve(checkstyleRun), interrupt: vi.fn() }),
-    }) as unknown as ActionContext["langs"],
-    userData: Ok({
-      getCourseBySlug: () => Ok(course),
-    }) as unknown as ActionContext["userData"],
-  }
+): ReadyActionContext {
+  return createMockActionContext({
+    startup: {
+      langs: {
+        runTests: () => ({ process: Promise.resolve(testRun), interrupt: vi.fn() }),
+        runCheckstyle: () => ({ process: Promise.resolve(checkstyleRun), interrupt: vi.fn() }),
+      } as unknown as ReadyStartup["langs"],
+      userData: {
+        getCourseBySlug: () => Ok(course),
+      } as unknown as ReadyStartup["userData"],
+    },
+  })
 }
 
 suite("testExercise action", () => {

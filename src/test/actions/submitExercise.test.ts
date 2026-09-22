@@ -3,7 +3,7 @@ import { vi } from "vitest"
 import type * as vscode from "vscode"
 
 import { submitExercise } from "../../actions"
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { BottleneckError } from "../../errors"
@@ -121,27 +121,28 @@ function contextFor(
   course: LocalCourseData,
   langsMethods: Record<string, unknown>,
 ): {
-  actionContext: ActionContext
+  actionContext: ReadyActionContext
   setPassed: ReturnType<typeof vi.fn>
 } {
   const setPassed = vi.fn().mockResolvedValue(Ok.EMPTY)
-  const actionContext: ActionContext = {
-    ...createMockActionContext(),
-    langs: Ok(langsMethods) as unknown as ActionContext["langs"],
-    userData: Ok({
-      getCourseBySlug: () => Ok(course),
-      getCourse: () => Ok(course),
-      setExerciseAsPassed: setPassed,
-    }) as unknown as ActionContext["userData"],
-    exerciseDecorationProvider: Ok({
-      updateDecorationsForExercises: vi.fn(),
-    }) as unknown as ActionContext["exerciseDecorationProvider"],
-  }
+  const actionContext = createMockActionContext({
+    startup: {
+      langs: langsMethods as unknown as ReadyStartup["langs"],
+      userData: {
+        getCourseBySlug: () => Ok(course),
+        getCourse: () => Ok(course),
+        setExerciseAsPassed: setPassed,
+      } as unknown as ReadyStartup["userData"],
+      exerciseDecorationProvider: {
+        updateDecorationsForExercises: vi.fn(),
+      } as unknown as ReadyStartup["exerciseDecorationProvider"],
+    },
+  })
   return { actionContext, setPassed }
 }
 
 function moocContextWith(submitResult: unknown): {
-  actionContext: ActionContext
+  actionContext: ReadyActionContext
   setPassed: ReturnType<typeof vi.fn>
   submit: ReturnType<typeof vi.fn>
 } {
@@ -155,7 +156,7 @@ function moocContextWith(submitResult: unknown): {
 // Like `moocContextWith`, but the blocking submit resolves to an `Err` (e.g. the
 // submission-throttle BottleneckError or a submit failure).
 function moocContextWithErr(error: Error): {
-  actionContext: ActionContext
+  actionContext: ReadyActionContext
   setPassed: ReturnType<typeof vi.fn>
 } {
   return contextFor(makeMoocKind(moocCourse), {
@@ -164,7 +165,7 @@ function moocContextWithErr(error: Error): {
 }
 
 function tmcContextWith(submitResult: unknown): {
-  actionContext: ActionContext
+  actionContext: ReadyActionContext
   setPassed: ReturnType<typeof vi.fn>
   submit: ReturnType<typeof vi.fn>
 } {

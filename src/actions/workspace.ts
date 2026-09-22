@@ -2,17 +2,16 @@ import * as os from "os"
 
 import { compact } from "lodash"
 import type { Result } from "ts-results"
-import { Err, Ok } from "ts-results"
+import { Ok } from "ts-results"
 import type * as vscode from "vscode"
 
 import { ExerciseStatus } from "../api/workspaceManager"
-import { InitializationError } from "../errors"
 import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { CourseDetailsPanel, CourseIdentifier, ExtensionToWebview } from "../shared/shared"
 import { ExerciseIdentifier, LocalCourseData, LocalCourseExercise, match } from "../shared/shared"
 import { Logger } from "../utilities"
 import { downloadExercisesForUi } from "./downloadExercisesForUi"
-import type { ActionContext } from "./types"
+import type { ReadyActionContext } from "./types"
 
 /**
  * Total RAM, not free RAM: the open-exercise warning is about how many folders the file
@@ -26,18 +25,16 @@ const UNDER_8GB_RAM = os.totalmem() < 8 * 1024 ** 3
  */
 export async function openExercises(
   context: vscode.ExtensionContext,
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   exerciseIdsToOpen: ExerciseIdentifier[],
   courseId: CourseIdentifier,
 ): Promise<Result<ExerciseIdentifier[], Error>> {
   Logger.info("Opening exercises", exerciseIdsToOpen)
 
-  const { workspaceManager, userData, dialog } = actionContext
-  if (!(userData.ok && workspaceManager.ok)) {
-    return Err(new InitializationError("Extension was not initialized properly"))
-  }
+  const { dialog } = actionContext
+  const { userData, workspaceManager } = actionContext.startup
 
-  const courseResult = userData.val.getCourse(courseId)
+  const courseResult = userData.getCourse(courseId)
   if (courseResult.err) {
     return courseResult
   }
@@ -52,7 +49,7 @@ export async function openExercises(
     (tmc) => tmc.name,
     (mooc) => mooc.name,
   )
-  const openResult = await workspaceManager.val.openCourseExercises(
+  const openResult = await workspaceManager.openCourseExercises(
     course.kind,
     courseName,
     exercisesToOpen.map((x) => LocalCourseExercise.getSlug(x)),
@@ -65,7 +62,7 @@ export async function openExercises(
   const weakThreshold = 50
   const strongThreshold = 100
   const warningThreshold = UNDER_8GB_RAM ? weakThreshold : strongThreshold
-  const currentlyOpen = workspaceManager.val
+  const currentlyOpen = workspaceManager
     .getExercisesByCourseSlug(course.kind, courseName)
     .filter((x) => x.status === ExerciseStatus.Open)
   if (currentlyOpen.length > warningThreshold) {
@@ -114,16 +111,14 @@ export async function openExercises(
  */
 export async function downloadAndOpenExercises(
   context: vscode.ExtensionContext,
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   exerciseIdsToOpen: ExerciseIdentifier[],
   courseId: CourseIdentifier,
 ): Promise<Result<ExerciseIdentifier[], Error>> {
-  const { langs, userData, dialog } = actionContext
-  if (!(langs.ok && userData.ok)) {
-    return Err(new InitializationError("Extension was not initialized properly"))
-  }
+  const { dialog } = actionContext
+  const { langs, userData } = actionContext.startup
 
-  const courseResult = userData.val.getCourse(courseId)
+  const courseResult = userData.getCourse(courseId)
   if (courseResult.err) {
     return courseResult
   }
@@ -142,7 +137,7 @@ export async function downloadAndOpenExercises(
   )
   // The mooc local listing is keyed by course id (UUID); TMC by course
   // slug. `getCourseName` returns the slug for both, so pick per backend.
-  const localCourseExercises = await langs.val.listLocalCourseExercises(
+  const localCourseExercises = await langs.listLocalCourseExercises(
     courseId.kind,
     match(
       course,
@@ -188,16 +183,13 @@ export async function downloadAndOpenExercises(
  * @param ids Array of exercise IDs
  */
 export async function closeExercises(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   ids: ExerciseIdentifier[],
   courseId: CourseIdentifier,
 ): Promise<Result<ExerciseIdentifier[], Error>> {
-  const { workspaceManager, userData } = actionContext
-  if (!(userData.ok && workspaceManager.ok)) {
-    return Err(new InitializationError("Extension was not initialized properly"))
-  }
+  const { userData, workspaceManager } = actionContext.startup
 
-  const courseResult = userData.val.getCourse(courseId)
+  const courseResult = userData.getCourse(courseId)
   if (courseResult.err) {
     return courseResult
   }
@@ -215,7 +207,7 @@ export async function closeExercises(
   )
 
   const courseName = LocalCourseData.getCourseName(course)
-  const closeResult = await workspaceManager.val.closeCourseExercises(
+  const closeResult = await workspaceManager.closeCourseExercises(
     course.kind,
     courseName,
     exerciseSlugs,

@@ -1,10 +1,9 @@
 import { first, last } from "lodash"
-import { Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import { downloadOrUpdateExercises } from "../../actions"
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext } from "../../actions/types"
 import Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
 import type Settings from "../../config/settings"
@@ -49,8 +48,6 @@ const createDownloadResult = (
 })
 
 suite("downloadOrUpdateExercises action", function () {
-  const stubContext = createMockActionContext()
-
   let dialogMock: Dialog
   let settingsMock: Settings
   let settingsMockValues: SettingsMockValues
@@ -59,11 +56,10 @@ suite("downloadOrUpdateExercises action", function () {
   let uiMock: UI
   let webviewMessages: ExtensionToWebview[]
 
-  const actionContext = (): ActionContext => ({
-    ...stubContext,
+  const actionContext = (): ReadyActionContext => ({
+    ...createMockActionContext({ startup: { langs: tmcMock } }),
     dialog: dialogMock,
     settings: settingsMock,
-    langs: new Ok(tmcMock),
     ui: uiMock,
   })
 
@@ -378,7 +374,6 @@ function wrapToMessage(exerciseId: number | string, status: ExerciseStatus): Ext
 }
 
 suite("downloadOrUpdateExercises cancellation and progress", function () {
-  const stubContext = createMockActionContext()
   const tmcIds = [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)]
   const moocIds = [ExerciseIdentifier.from("mooc-1"), ExerciseIdentifier.from("mooc-2")]
 
@@ -427,13 +422,12 @@ suite("downloadOrUpdateExercises cancellation and progress", function () {
   let tmcMock: Langs
   let downloadedIdsPerCall: ExerciseIdentifier[][]
 
-  const actionContext = (): ActionContext => ({
-    ...stubContext,
+  const actionContext = (): ReadyActionContext => ({
+    ...createMockActionContext({ startup: { langs: tmcMock } }),
     // The real Dialog, so the fractions the action reports pass through the
     // production increment wrapper before they are asserted on.
     dialog: new Dialog(),
     settings: createSettingsMock()[0],
-    langs: new Ok(tmcMock),
   })
 
   beforeEach(function () {

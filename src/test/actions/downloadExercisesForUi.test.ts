@@ -4,7 +4,7 @@ import { vi } from "vitest"
 import { downloadExercisesForUi } from "../../actions/downloadExercisesForUi"
 import { downloadOrUpdateExercises } from "../../actions/downloadOrUpdateExercises"
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { postUpdateables } from "../../panels/exerciseLists"
 import { TmcPanel } from "../../panels/TmcPanel"
 import { updateablesRegistry } from "../../panels/updateablesRegistry"
@@ -34,16 +34,19 @@ function storedCourse(newExercises: number[]): LocalCourseData {
 
 function contextWith(
   newExercises: number[],
-): [ActionContext, ReturnType<typeof createDialogMock>[0]] {
+): [ReadyActionContext, ReturnType<typeof createDialogMock>[0]] {
   const [dialog] = createDialogMock()
   return [
     {
-      ...createMockActionContext(),
+      ...createMockActionContext({
+        startup: {
+          userData: {
+            getCourse: () => Ok(storedCourse(newExercises)),
+            clearFromNewExercises: async () => Ok.EMPTY,
+          } as unknown as ReadyStartup["userData"],
+        },
+      }),
       dialog,
-      userData: Ok({
-        getCourse: () => Ok(storedCourse(newExercises)),
-        clearFromNewExercises: async () => Ok.EMPTY,
-      }) as unknown as ActionContext["userData"],
     },
     dialog,
   ]
