@@ -1,6 +1,7 @@
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type { ActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import { ConnectionError, ForbiddenError } from "../../errors"
 import { postUpdateables } from "../../panels/exerciseLists"
@@ -14,7 +15,7 @@ import {
   ExerciseSchema,
   makeTmcKind,
 } from "../../shared/shared"
-import { createMockActionContext } from "../mocks/actionContext"
+import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 import { createMockContext } from "../mocks/vscode"
 
 // Fabricates a minimal `WebviewPanel`/`Webview` pair, standing in for the
@@ -89,7 +90,7 @@ suite("TmcPanel moocLogin handling", () => {
       result: Promise.resolve(Ok(undefined)),
       interrupt: vi.fn(),
     })
-    actionContext.langs = Ok({ authenticateMooc } as unknown as Langs)
+    actionContext.startup.langs = { authenticateMooc } as unknown as Langs
 
     // Render the MoocLogin panel standalone, the way `tmc.showMoocLogin` does.
     const loginPanelId = nextPanelId()
@@ -130,7 +131,7 @@ suite("TmcPanel moocLogin handling", () => {
 // Mounts a fresh side panel (resetting any panel state a previous test left
 // behind) and returns the fake webview panel + its captured message listener,
 // so a test can post a message directly and inspect what got posted back.
-async function mountSidePanel(actionContext: ReturnType<typeof createMockActionContext>): Promise<{
+async function mountSidePanel(actionContext: ActionContext): Promise<{
   panel: ReturnType<typeof createFakeWebviewPanel>["panel"]
   listener: (message: unknown) => Promise<void>
 }> {
@@ -160,7 +161,7 @@ suite("TmcPanel initialization guards", () => {
   test("a panel waiting on data is told it is not coming", async () => {
     // Nothing else ever answers `requestMyCoursesData`, so returning silently here
     // leaves the panel on its spinner for the rest of the session.
-    const actionContext = createMockActionContext({ userData: "err" })
+    const actionContext = createDegradedContext()
     const { panel, listener } = await mountSidePanel(actionContext)
     const sourcePanel = { id: 5, type: "MyCourses" as const, courseDeadlines: {} }
 
@@ -177,10 +178,9 @@ suite("TmcPanel initialization guards", () => {
   })
 
   test("a course that cannot be read is reported to the panel showing it", async () => {
-    const actionContext = {
-      ...createMockActionContext(),
-      userData: Ok({ getCourse: () => Err(new Error("no such course")) }),
-    } as unknown as ReturnType<typeof createMockActionContext>
+    const actionContext = createMockActionContext({
+      startup: { userData: { getCourse: () => Err(new Error("no such course")) } as never },
+    })
     const { panel, listener } = await mountSidePanel(actionContext)
     const sourcePanel = {
       id: 5,
@@ -201,7 +201,7 @@ suite("TmcPanel initialization guards", () => {
   })
 
   test("the welcome panel is told when its data is not coming", async () => {
-    const actionContext = createMockActionContext({ resources: "err" })
+    const actionContext = createDegradedContext()
     const { panel, listener } = await mountSidePanel(actionContext)
     const sourcePanel = { id: 9, type: "Welcome" as const }
 
@@ -218,11 +218,12 @@ suite("TmcPanel initialization guards", () => {
   })
 
   test("a request served from stored data is answered without an error", async () => {
-    const actionContext = {
-      ...createMockActionContext(),
-      userData: Ok({ getCourses: () => [] }),
-      resources: Ok({ projectsDirectory: "/tmc" }),
-    } as unknown as ReturnType<typeof createMockActionContext>
+    const actionContext = createMockActionContext({
+      startup: {
+        userData: { getCourses: () => [] } as never,
+        resources: { projectsDirectory: "/tmc" } as never,
+      },
+    })
     const { panel, listener } = await mountSidePanel(actionContext)
     const sourcePanel = { id: 5, type: "MyCourses" as const, courseDeadlines: {} }
 
@@ -236,8 +237,7 @@ suite("TmcPanel initialization guards", () => {
   })
 
   test("a click that cannot be served is reported, with a route to the help panel", async () => {
-    const actionContext = createMockActionContext()
-    actionContext.userData = Err(new Error("no user data"))
+    const actionContext = createDegradedContext()
     const { listener } = await mountSidePanel(actionContext)
 
     await listener({ type: "removeCourse", id: CourseIdentifier.from(1) })
@@ -450,10 +450,9 @@ suite("TmcPanel webview-supplied paths and links", () => {
     // name the webview chose must never reach it.
     const handlers = stubHandlers()
     registerWebviewHandlers(handlers as unknown as WebviewHandlers)
-    const actionContext = {
-      ...createMockActionContext(),
-      userData: Ok({ getCourse: () => Ok(courseWith(0)) }),
-    } as unknown as ReturnType<typeof createMockActionContext>
+    const actionContext = createMockActionContext({
+      startup: { userData: { getCourse: () => Ok(courseWith(0)) } as never },
+    })
     const { listener } = await mountSidePanel(actionContext)
 
     await listener({ type: "openCourseWorkspace", courseId: CourseIdentifier.from(42) })
@@ -656,18 +655,15 @@ suite("TmcPanel requestCourseDetailsData updateables", () => {
   })
 
   function contextWithCourse(): ReturnType<typeof createMockActionContext> {
-    return {
-      ...createMockActionContext(),
-      langs: Ok({
-        getCourseDetails: vi.fn().mockResolvedValue(Err(new Error("offline"))),
-      } as unknown as Langs),
-      userData: Ok({
-        getCourse: () => Ok(localCourse),
-      }) as unknown as ReturnType<typeof createMockActionContext>["userData"],
-      workspaceManager: Ok({
-        getExercises: () => [],
-      }) as unknown as ReturnType<typeof createMockActionContext>["workspaceManager"],
-    }
+    return createMockActionContext({
+      startup: {
+        langs: {
+          getCourseDetails: vi.fn().mockResolvedValue(Err(new Error("offline"))),
+        } as unknown as Langs,
+        userData: { getCourse: () => Ok(localCourse) } as never,
+        workspaceManager: { getExercises: () => [] } as never,
+      },
+    })
   }
 
   afterEach(() => {
@@ -942,14 +938,15 @@ suite("TmcPanel requestCourseDetailsData exercise statuses", () => {
     posted: { type: string }[]
   }> {
     const course = courseWith(exerciseCount, deadline)
-    const actionContext = {
-      ...createMockActionContext(),
-      langs: Ok({
-        getCourseDetails: vi.fn().mockResolvedValue(Ok({})),
-      } as unknown as Langs),
-      userData: Ok({ getCourse: () => Ok(course) }),
-      workspaceManager: Ok({ getExercises: () => [] }),
-    } as unknown as ReturnType<typeof createMockActionContext>
+    const actionContext = createMockActionContext({
+      startup: {
+        langs: {
+          getCourseDetails: vi.fn().mockResolvedValue(Ok({})),
+        } as unknown as Langs,
+        userData: { getCourse: () => Ok(course) } as never,
+        workspaceManager: { getExercises: () => [] } as never,
+      },
+    })
 
     const { panel, listener } = await mountSidePanel(actionContext)
     await listener({
@@ -1022,12 +1019,13 @@ suite("TmcPanel requestCourseDetailsData connectivity probe", () => {
   function contextProbing(
     getCourseDetails: ReturnType<typeof vi.fn>,
   ): ReturnType<typeof createMockActionContext> {
-    return {
-      ...createMockActionContext(),
-      langs: Ok({ getCourseDetails } as unknown as Langs),
-      userData: Ok({ getCourse: () => Ok(courseWith(2)) }),
-      workspaceManager: Ok({ getExercises: () => [] }),
-    } as unknown as ReturnType<typeof createMockActionContext>
+    return createMockActionContext({
+      startup: {
+        langs: { getCourseDetails } as unknown as Langs,
+        userData: { getCourse: () => Ok(courseWith(2)) } as never,
+        workspaceManager: { getExercises: () => [] } as never,
+      },
+    })
   }
 
   test("renders the course without waiting for the backend", async () => {

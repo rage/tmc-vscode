@@ -6,6 +6,7 @@ import * as vscode from "vscode"
 import { z } from "zod"
 
 import type { ActionContext } from "../actions/types"
+import { isReady } from "../actions/types"
 import type Dialog from "../api/dialog"
 import { ConnectionError, InitializationError } from "../errors"
 import type {
@@ -428,9 +429,8 @@ export class TmcPanel {
             break
           }
           case "requestCourseDetailsData": {
-            const { langs, userData, workspaceManager } = actionContext
             const target = panelTarget(message.sourcePanel)
-            if (!(langs.ok && userData.ok && workspaceManager.ok)) {
+            if (!isReady(actionContext)) {
               this._postPanelDataFailed(
                 target,
                 message.requestId,
@@ -438,7 +438,8 @@ export class TmcPanel {
               )
               return
             }
-            const courseResult = userData.val.getCourse(message.sourcePanel.courseId)
+            const { langs, userData, workspaceManager } = actionContext.startup
+            const courseResult = userData.getCourse(message.sourcePanel.courseId)
             if (courseResult.err) {
               actionContext.dialog.reportError("Failed to read the course.", courseResult.val)
               this._postPanelDataFailed(target, message.requestId, courseResult.val)
@@ -471,7 +472,7 @@ export class TmcPanel {
             const buildView = (offlineMode: boolean): CourseDetailsView =>
               buildCourseDetailsView(
                 course,
-                workspaceManager.val.getExercises(),
+                workspaceManager.getExercises(),
                 offlineMode,
                 new Date(),
               )
@@ -500,7 +501,7 @@ export class TmcPanel {
             // can be trusted; the groups are re-posted without them if not. Only an
             // unreachable backend means that -- any other failure leaves the stored
             // deadlines as good as they were.
-            langs.val
+            langs
               .getCourseDetails(message.sourcePanel.courseId)
               .then((apiCourse) => {
                 if (apiCourse.err && apiCourse.val instanceof ConnectionError) {
@@ -520,16 +521,18 @@ export class TmcPanel {
             break
           }
           case "requestMyCoursesData": {
-            const { userData, workspaceManager, resources } = actionContext
             const target = panelTarget(message.sourcePanel)
-            if (
-              !(
-                userData.ok &&
-                workspaceManager.ok &&
-                resources.ok &&
-                resources.val.projectsDirectory
+            if (!isReady(actionContext)) {
+              this._postPanelDataFailed(
+                target,
+                message.requestId,
+                reportNotInitialized(actionContext.dialog),
               )
-            ) {
+              return
+            }
+            const { userData, resources } = actionContext.startup
+            const projectsDirectory = resources.projectsDirectory
+            if (!projectsDirectory) {
               this._postPanelDataFailed(
                 target,
                 message.requestId,
@@ -541,16 +544,16 @@ export class TmcPanel {
             this._postMessage({
               type: "setMyCourses",
               target,
-              courses: userData.val.getCourses(),
+              courses: userData.getCourses(),
             })
             this._postMessage({
               type: "setTmcDataPath",
               target,
-              tmcDataPath: resources.val.projectsDirectory,
+              tmcDataPath: projectsDirectory,
             })
             this._postPanelDataSent(target, message.requestId)
             getFolderSize
-              .loose(resources.val.projectsDirectory)
+              .loose(projectsDirectory)
               .then((size) =>
                 this._postMessage({
                   type: "setTmcDataSize",
@@ -569,9 +572,8 @@ export class TmcPanel {
             break
           }
           case "requestWelcomeData": {
-            const { resources } = actionContext
             const target = panelTarget(message.sourcePanel)
-            if (!resources.ok) {
+            if (!isReady(actionContext)) {
               this._postPanelDataFailed(
                 target,
                 message.requestId,
@@ -583,7 +585,7 @@ export class TmcPanel {
             this._postMessage({
               type: "setWelcomeData",
               target,
-              version: resources.val.extensionVersion,
+              version: actionContext.startup.resources.extensionVersion,
             })
             this._postPanelDataSent(target, message.requestId)
             break
@@ -598,13 +600,12 @@ export class TmcPanel {
             break
           }
           case "removeCourse": {
-            const { userData } = actionContext
-            if (!userData.ok) {
+            if (!isReady(actionContext)) {
               reportNotInitialized(actionContext.dialog)
               return
             }
 
-            const courseResult = userData.val.getCourse(message.id)
+            const courseResult = actionContext.startup.userData.getCourse(message.id)
             if (courseResult.err) {
               actionContext.dialog.reportError("Failed to remove the course.", courseResult.val)
               return
@@ -628,13 +629,12 @@ export class TmcPanel {
             break
           }
           case "openCourseWorkspace": {
-            const { userData } = actionContext
-            if (!userData.ok) {
+            if (!isReady(actionContext)) {
               reportNotInitialized(actionContext.dialog)
               return
             }
 
-            const courseResult = userData.val.getCourse(message.courseId)
+            const courseResult = actionContext.startup.userData.getCourse(message.courseId)
             if (courseResult.err) {
               actionContext.dialog.reportError("Failed to read the course.", courseResult.val)
               return
@@ -677,13 +677,14 @@ export class TmcPanel {
             break
           }
           case "clearNewExercises": {
-            const { userData } = actionContext
-            if (!userData.ok) {
+            if (!isReady(actionContext)) {
               reportNotInitialized(actionContext.dialog)
               return
             }
 
-            const clearResult = await userData.val.clearFromNewExercises(message.courseId)
+            const clearResult = await actionContext.startup.userData.clearFromNewExercises(
+              message.courseId,
+            )
             if (clearResult.err) {
               actionContext.dialog.reportError(
                 "Failed to dismiss the new exercises.",
@@ -812,16 +813,16 @@ export class TmcPanel {
             break
           }
           case "moocLogin": {
-            const { langs } = actionContext
-            if (!langs.ok) {
+            if (!isReady(actionContext)) {
               reportNotInitialized(actionContext.dialog)
               return
             }
+            const { langs } = actionContext.startup
             const moocLoginPanel = message.sourcePanel
             // Set below, after `authenticateMooc` returns; the callback fires
             // asynchronously so it always sees the real id.
             let invocationId = 0
-            const { result, interrupt } = langs.val.authenticateMooc((info) => {
+            const { result, interrupt } = langs.authenticateMooc((info) => {
               // Stay silent if this attempt was superseded or cancelled.
               if (!moocLoginRegistry.isCurrent(invocationId)) {
                 return
@@ -875,19 +876,19 @@ export class TmcPanel {
             break
           }
           case "requestInitializationErrors": {
-            const { exerciseDecorationProvider, resources, langs, userData, workspaceManager } =
-              actionContext
+            const failures =
+              actionContext.startup.kind === "degraded" ? actionContext.startup.failures : {}
 
             TmcPanel.postMessage({
               type: "initializationErrors",
               target: message.sourcePanel,
               cliFolder: cliFolder(extensionContext),
               initializationErrors: {
-                tmc: formatError(langs),
-                userData: formatError(userData),
-                workspaceManager: formatError(workspaceManager),
-                resources: formatError(resources),
-                exerciseDecorationProvider: formatError(exerciseDecorationProvider),
+                tmc: formatError(failures.langs),
+                userData: formatError(failures.userData),
+                workspaceManager: formatError(failures.workspaceManager),
+                resources: formatError(failures.resources),
+                exerciseDecorationProvider: formatError(failures.exerciseDecorationProvider),
               },
             })
             break
@@ -980,16 +981,12 @@ export function nextPanelId(): number {
   return panelIdCounter
 }
 
-function formatError(res: Result<unknown, Error>): { error: string; stack: string } | null {
-  if (res.err) {
-    if (res.val.cause) {
-      const error = `${res.val.message}: ${res.val.cause}`
-      const stack = res.val.stack ?? "no stack trace"
-      return { error, stack }
-    }
-    const error = res.val.message
-    const stack = res.val.stack ?? "no stack trace"
-    return { error, stack }
+function formatError(error: Error | undefined): { error: string; stack: string } | null {
+  if (!error) {
+    return null
   }
-  return null
+  const stack = error.stack ?? "no stack trace"
+  return error.cause
+    ? { error: `${error.message}: ${error.cause}`, stack }
+    : { error: error.message, stack }
 }
