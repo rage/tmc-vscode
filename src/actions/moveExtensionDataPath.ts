@@ -6,10 +6,10 @@ import { Err, Ok } from "ts-results"
 import type * as vscode from "vscode"
 
 import type { FractionProgress } from "../api/dialog"
-import { FileSystemError, InitializationError } from "../errors"
+import { FileSystemError } from "../errors"
 import { Logger } from "../utilities"
 import { refreshLocalExercises } from "./refreshLocalExercises"
-import type { ActionContext } from "./types"
+import type { ReadyActionContext } from "./types"
 
 /**
  * Moves the physical location of all exercises on disk, then refreshes them.
@@ -20,14 +20,11 @@ import type { ActionContext } from "./types"
  * report rather than `newPath`.
  */
 export async function moveExtensionDataPath(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   newPath: vscode.Uri,
   onUpdate?: (progress: FractionProgress) => void,
 ): Promise<Result<string, Error>> {
-  const { resources, langs } = actionContext
-  if (!(langs.ok && resources.ok)) {
-    return new Err(new InitializationError("Extension was not initialized properly"))
-  }
+  const { langs, resources } = actionContext.startup
   Logger.info("Moving extension data path")
 
   let newFsPath = newPath.fsPath
@@ -41,12 +38,12 @@ export async function moveExtensionDataPath(
     newFsPath = path.join(newFsPath, "tmcdata")
   }
 
-  const moveResult = await langs.val.moveProjectsDirectory(newFsPath, onUpdate)
+  const moveResult = await langs.moveProjectsDirectory(newFsPath, onUpdate)
   if (moveResult.err) {
     return moveResult
   }
 
-  resources.val.projectsDirectory = newFsPath
+  resources.projectsDirectory = newFsPath
   const refreshed = await refreshLocalExercises(actionContext)
   return refreshed.ok ? Ok(newFsPath) : refreshed
 }

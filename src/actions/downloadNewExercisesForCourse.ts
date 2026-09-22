@@ -1,6 +1,5 @@
-import { Err, Ok, Result } from "ts-results"
+import { Ok, Result } from "ts-results"
 
-import { InitializationError } from "../errors"
 import { withOptimisticList } from "../panels/exerciseLists"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
@@ -8,7 +7,7 @@ import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises"
 import { refreshLocalExercises } from "./refreshLocalExercises"
-import type { ActionContext } from "./types"
+import type { ReadyActionContext } from "./types"
 
 /**
  * Downloads course's new exercises using relevate data from the context's UserData. Also handles
@@ -17,14 +16,11 @@ import type { ActionContext } from "./types"
  * @param courseId Course to update.
  */
 export async function downloadNewExercisesForCourse(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   courseId: CourseIdentifier,
 ): Promise<Result<void, Error>> {
-  const { userData } = actionContext
-  if (userData.err) {
-    return new Err(new InitializationError("Extension was not initialized properly"))
-  }
-  const courseResult = userData.val.getCourse(courseId)
+  const { userData } = actionContext.startup
+  const courseResult = userData.getCourse(courseId)
   if (courseResult.err) {
     return courseResult
   }
@@ -45,7 +41,7 @@ export async function downloadNewExercisesForCourse(
   // Read the list back from storage rather than restoring the pre-download
   // snapshot, which re-announces the exercises the student just received.
   const postRemainingNewExercises = (): void => {
-    const current = userData.val.getCourse(courseId)
+    const current = userData.getCourse(courseId)
     if (current.err) {
       Logger.error("Failed to read the course's new exercises.", current.val)
       return
@@ -64,7 +60,7 @@ export async function downloadNewExercisesForCourse(
       }
 
       const refreshResult = Result.all(
-        await userData.val.clearFromNewExercises(courseId, downloadResult.val.successful),
+        await userData.clearFromNewExercises(courseId, downloadResult.val.successful),
         await refreshLocalExercises(actionContext),
       )
       if (refreshResult.err) {

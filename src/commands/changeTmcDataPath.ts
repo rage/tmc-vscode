@@ -1,22 +1,23 @@
 import * as vscode from "vscode"
 
 import { moveExtensionDataPath } from "../actions"
-import type { ActionContext } from "../actions/types"
+import type { ReadyActionContext } from "../actions/types"
 import { TmcPanel } from "../panels/TmcPanel"
 import { Logger } from "../utilities"
 
 /**
  * Asks for a new folder for the extension's data and moves the exercises there.
  */
-export async function changeTmcDataPath(actionContext: ActionContext): Promise<void> {
-  const { dialog, resources } = actionContext
+export async function changeTmcDataPath(actionContext: ReadyActionContext): Promise<void> {
+  const { dialog } = actionContext
+  const { resources } = actionContext.startup
   Logger.info("Changing TMC data path")
-  if (!(resources.ok && resources.val.projectsDirectory)) {
-    Logger.error("Extension was not initialized properly")
+  if (!resources.projectsDirectory) {
+    Logger.error("Cannot change the data path: tmc-langs reported no exercise directory")
     return
   }
 
-  const old = resources.val.projectsDirectory
+  const old = resources.projectsDirectory
   const options: vscode.OpenDialogOptions = {
     canSelectFiles: false,
     canSelectFolders: true,
@@ -43,7 +44,7 @@ so a tmcdata subfolder was used.`,
     }
     TmcPanel.postMessage({
       type: "setTmcDataPath",
-      tmcDataPath: resources.val.projectsDirectory,
+      tmcDataPath: resources.projectsDirectory,
       target: {
         type: "MyCourses",
       },

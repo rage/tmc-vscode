@@ -1,16 +1,14 @@
 import type { Result } from "ts-results"
-import { Err } from "ts-results"
 import * as vscode from "vscode"
 import { z } from "zod"
 
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { ExerciseStatus } from "../api/workspaceManager"
 import { closedExercisesSettingKey } from "../config/constants"
-import { InitializationError } from "../errors"
 import type { LocalExercise } from "../shared/langsSchema"
 import { LocalCourseData, match } from "../shared/shared"
 import { Logger } from "../utilities"
-import type { ActionContext } from "./types"
+import type { ReadyActionContext } from "./types"
 
 const closedExercisesSettingSchema = z.array(z.string()).nullable()
 
@@ -27,17 +25,14 @@ function readClosedExercises(settings: Record<string, unknown>, key: string): st
  * Asks for all local exercises from TMC-Langs and passes them to WorkspaceManager.
  */
 export async function refreshLocalExercises(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
 ): Promise<Result<void, Error>> {
-  const { langs, userData, workspaceManager } = actionContext
-  if (!(langs.ok && userData.ok && workspaceManager.ok)) {
-    return new Err(new InitializationError("Extension was not initialized properly"))
-  }
+  const { langs, userData, workspaceManager } = actionContext.startup
   Logger.info("Refreshing local exercises")
 
   const [localExercisesResult, settingsResult] = await Promise.all([
-    langs.val.listLocalExercises(),
-    langs.val.listSettings(),
+    langs.listLocalExercises(),
+    langs.listSettings(),
   ])
   if (localExercisesResult.err) {
     return localExercisesResult
@@ -64,7 +59,7 @@ export async function refreshLocalExercises(
   }
 
   const workspaceExercises: WorkspaceExercise[] = []
-  for (const course of userData.val.getCourses()) {
+  for (const course of userData.getCourses()) {
     const courseSlug = LocalCourseData.getCourseName(course)
     const localExercises = localExercisesByCourse.get(
       match(
@@ -94,5 +89,5 @@ export async function refreshLocalExercises(
     )
   }
 
-  return workspaceManager.val.setExercises(workspaceExercises)
+  return workspaceManager.setExercises(workspaceExercises)
 }

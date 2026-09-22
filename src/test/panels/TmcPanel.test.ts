@@ -1,6 +1,7 @@
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type { ActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import { ConnectionError, ForbiddenError } from "../../errors"
 import { postUpdateables } from "../../panels/exerciseLists"
@@ -14,7 +15,7 @@ import {
   ExerciseSchema,
   makeTmcKind,
 } from "../../shared/shared"
-import { createMockActionContext } from "../mocks/actionContext"
+import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 import { createMockContext } from "../mocks/vscode"
 
 // Fabricates a minimal `WebviewPanel`/`Webview` pair, standing in for the
@@ -89,7 +90,7 @@ suite("TmcPanel moocLogin handling", () => {
       result: Promise.resolve(Ok(undefined)),
       interrupt: vi.fn(),
     })
-    actionContext.langs = Ok({ authenticateMooc } as unknown as Langs)
+    actionContext.startup.langs = { authenticateMooc } as unknown as Langs
 
     // Render the MoocLogin panel standalone, the way `tmc.showMoocLogin` does.
     const loginPanelId = nextPanelId()
@@ -130,7 +131,10 @@ suite("TmcPanel moocLogin handling", () => {
 // Mounts a fresh side panel (resetting any panel state a previous test left
 // behind) and returns the fake webview panel + its captured message listener,
 // so a test can post a message directly and inspect what got posted back.
-async function mountSidePanel(actionContext: ReturnType<typeof createMockActionContext>): Promise<{
+async function mountSidePanel(
+  actionContext: ActionContext,
+  extensionContext: vscode.ExtensionContext = createMockContext(),
+): Promise<{
   panel: ReturnType<typeof createFakeWebviewPanel>["panel"]
   listener: (message: unknown) => Promise<void>
 }> {
@@ -140,7 +144,6 @@ async function mountSidePanel(actionContext: ReturnType<typeof createMockActionC
   const { panel, getMessageListener } = createFakeWebviewPanel()
   vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
 
-  const extensionContext = createMockContext()
   const extensionUri = vscode.Uri.file("/ext")
 
   await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
@@ -160,7 +163,7 @@ suite("TmcPanel initialization guards", () => {
   test("a panel waiting on data is told it is not coming", async () => {
     // Nothing else ever answers `requestMyCoursesData`, so returning silently here
     // leaves the panel on its spinner for the rest of the session.
-    const actionContext = createMockActionContext({ userData: "err" })
+    const actionContext = createDegradedContext()
     const { panel, listener } = await mountSidePanel(actionContext)
     const sourcePanel = { id: 5, type: "MyCourses" as const, courseDeadlines: {} }
 
@@ -177,10 +180,9 @@ suite("TmcPanel initialization guards", () => {
   })
 
   test("a course that cannot be read is reported to the panel showing it", async () => {
-    const actionContext = {
-      ...createMockActionContext(),
-      userData: Ok({ getCourse: () => Err(new Error("no such course")) }),
-    } as unknown as ReturnType<typeof createMockActionContext>
+    const actionContext = createMockActionContext({
+      startup: { userData: { getCourse: () => Err(new Error("no such course")) } as never },
+    })
     const { panel, listener } = await mountSidePanel(actionContext)
     const sourcePanel = {
       id: 5,
@@ -201,7 +203,7 @@ suite("TmcPanel initialization guards", () => {
   })
 
   test("the welcome panel is told when its data is not coming", async () => {
-    const actionContext = createMockActionContext({ resources: "err" })
+    const actionContext = createDegradedContext()
     const { panel, listener } = await mountSidePanel(actionContext)
     const sourcePanel = { id: 9, type: "Welcome" as const }
 
@@ -218,11 +220,12 @@ suite("TmcPanel initialization guards", () => {
   })
 
   test("a request served from stored data is answered without an error", async () => {
-    const actionContext = {
-      ...createMockActionContext(),
-      userData: Ok({ getCourses: () => [] }),
-      resources: Ok({ projectsDirectory: "/tmc" }),
-    } as unknown as ReturnType<typeof createMockActionContext>
+    const actionContext = createMockActionContext({
+      startup: {
+        userData: { getCourses: () => [] } as never,
+        resources: { projectsDirectory: "/tmc" } as never,
+      },
+    })
     const { panel, listener } = await mountSidePanel(actionContext)
     const sourcePanel = { id: 5, type: "MyCourses" as const, courseDeadlines: {} }
 
@@ -236,8 +239,7 @@ suite("TmcPanel initialization guards", () => {
   })
 
   test("a click that cannot be served is reported, with a route to the help panel", async () => {
-    const actionContext = createMockActionContext()
-    actionContext.userData = Err(new Error("no user data"))
+    const actionContext = createDegradedContext()
     const { listener } = await mountSidePanel(actionContext)
 
     await listener({ type: "removeCourse", id: CourseIdentifier.from(1) })
@@ -261,6 +263,104 @@ suite("TmcPanel initialization guards", () => {
     } finally {
       executeCommand.mockRestore()
     }
+  })
+})
+
+// `cliFolder` reads `extensionContext.globalStorageUri`, which the shared
+// `createMockContext()` leaves as an auto-mocked function rather than a `Uri`; give it
+// a real one so this handler's other side effect doesn't crash before posting anything.
+function contextWithGlobalStorage(): vscode.ExtensionContext {
+  const base = createMockContext()
+  return new Proxy(base, {
+    get: (target, prop) =>
+      prop === "globalStorageUri"
+        ? vscode.Uri.file("/mock-global-storage")
+        : Reflect.get(target, prop),
+  }) as vscode.ExtensionContext
+}
+
+suite("TmcPanel requestInitializationErrors", () => {
+  const sourcePanel = { id: 7, type: "InitializationErrorHelp" as const }
+
+  test("a degraded startup renders each failed service's message, keyed by the service", async () => {
+    const actionContext = createDegradedContext({
+      failures: {
+        langs: new Error("langs offline"),
+        userData: new Error("corrupt user data"),
+      },
+    })
+    const { panel, listener } = await mountSidePanel(actionContext, contextWithGlobalStorage())
+
+    await listener({ type: "requestInitializationErrors", sourcePanel })
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "initializationErrors",
+        initializationErrors: expect.objectContaining({
+          tmc: expect.objectContaining({ error: "langs offline" }),
+          userData: expect.objectContaining({ error: "corrupt user data" }),
+        }),
+      }),
+    )
+  })
+
+  test("a ready startup reports no initialization failures", async () => {
+    const actionContext = createMockActionContext()
+    const { panel, listener } = await mountSidePanel(actionContext, contextWithGlobalStorage())
+
+    await listener({ type: "requestInitializationErrors", sourcePanel })
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "initializationErrors",
+        initializationErrors: {
+          tmc: null,
+          userData: null,
+          workspaceManager: null,
+          resources: null,
+          exerciseDecorationProvider: null,
+        },
+      }),
+    )
+  })
+
+  test("a service absent from the failures map is reported as null, not empty or crashing", async () => {
+    // Only `langs` failed; the root cause never touched the other four, which is
+    // distinct from a service that ran and failed itself.
+    const actionContext = createDegradedContext({ failures: { langs: new Error("langs offline") } })
+    const { panel, listener } = await mountSidePanel(actionContext, contextWithGlobalStorage())
+
+    await listener({ type: "requestInitializationErrors", sourcePanel })
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "initializationErrors",
+        initializationErrors: expect.objectContaining({
+          userData: null,
+          workspaceManager: null,
+          resources: null,
+          exerciseDecorationProvider: null,
+        }),
+      }),
+    )
+  })
+
+  test("folds a failure's cause into the reported message", async () => {
+    const actionContext = createDegradedContext({
+      failures: { langs: new Error("langs offline", { cause: "network unreachable" }) },
+    })
+    const { panel, listener } = await mountSidePanel(actionContext, contextWithGlobalStorage())
+
+    await listener({ type: "requestInitializationErrors", sourcePanel })
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "initializationErrors",
+        initializationErrors: expect.objectContaining({
+          tmc: expect.objectContaining({ error: "langs offline: network unreachable" }),
+        }),
+      }),
+    )
   })
 })
 
@@ -409,6 +509,178 @@ suite("TmcPanel handler dispatch", () => {
   })
 })
 
+// A webview mounted before a failed (or since-degraded) activation can still post any
+// of these messages; each must be answered rather than silently dropped.
+suite("TmcPanel handler dispatch, degraded startup", () => {
+  const NOT_INITIALIZED_MESSAGE =
+    "The extension did not initialize properly, so this action is unavailable."
+
+  test("closeExercises reports the failure instead of calling the handler", async () => {
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = createDegradedContext()
+    const { listener } = await mountSidePanel(actionContext)
+
+    await listener({
+      type: "closeExercises",
+      ids: [ExerciseIdentifier.from(101)],
+      courseId: CourseIdentifier.from(42),
+    })
+
+    expect(handlers.closeExercises).not.toHaveBeenCalled()
+    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
+      NOT_INITIALIZED_MESSAGE,
+      expect.any(Error),
+      ["Show help", expect.any(Function)],
+    )
+  })
+
+  test("downloadExercises reports the failure instead of calling the handler", async () => {
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = createDegradedContext()
+    const { listener } = await mountSidePanel(actionContext)
+
+    await listener({
+      type: "downloadExercises",
+      mode: "download",
+      courseId: CourseIdentifier.from(42),
+      ids: [ExerciseIdentifier.from(101)],
+    })
+
+    expect(handlers.downloadExercisesForUi).not.toHaveBeenCalled()
+    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
+      NOT_INITIALIZED_MESSAGE,
+      expect.any(Error),
+      expect.anything(),
+    )
+  })
+
+  test("openExercises reports the failure instead of calling the handler", async () => {
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = createDegradedContext()
+    const { listener } = await mountSidePanel(actionContext)
+
+    await listener({
+      type: "openExercises",
+      ids: [ExerciseIdentifier.from(101)],
+      courseId: CourseIdentifier.from(42),
+    })
+
+    expect(handlers.downloadAndOpenExercises).not.toHaveBeenCalled()
+    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
+      NOT_INITIALIZED_MESSAGE,
+      expect.any(Error),
+      expect.anything(),
+    )
+  })
+
+  test("refreshCourseDetails reports the failure and re-renders nothing", async () => {
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = createDegradedContext()
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener({ type: "refreshCourseDetails", id: CourseIdentifier.from(42), useCache: false })
+
+    expect(handlers.updateCourse).not.toHaveBeenCalled()
+    expect(handlers.refreshLocalExercises).not.toHaveBeenCalled()
+    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
+      NOT_INITIALIZED_MESSAGE,
+      expect.any(Error),
+      expect.anything(),
+    )
+    // No re-render either: a CourseDetails panel would just ask for data nothing
+    // can serve, the same way the initial request would have failed.
+    expect(panel.webview.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "setPanel" }),
+    )
+  })
+
+  // Shared by submitExercise and pasteExercise below: both messages carry the full
+  // course/exercise the schema requires, not just an id.
+  const fixtureCourse = makeTmcKind({
+    id: 42,
+    name: "python-course",
+    title: "Python Course",
+    description: "",
+    organization: "mooc",
+    exercises: [],
+    availablePoints: 0,
+    awardedPoints: 0,
+    perhapsExamMode: false,
+    newExercises: [],
+    notifyAfter: 0,
+    disabled: false,
+    materialUrl: null,
+  })
+  const fixtureExercise = makeTmcKind({
+    id: 101,
+    name: "loops",
+    availablePoints: 1,
+    awardedPoints: 0,
+    deadline: null,
+    passed: false,
+    softDeadline: null,
+  })
+
+  test("submitExercise reports the failure and unsticks the waiting Submit button", async () => {
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = createDegradedContext()
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener({
+      type: "submitExercise",
+      course: fixtureCourse,
+      exercise: fixtureExercise,
+      exerciseUri: vscode.Uri.file("/exercise"),
+    })
+
+    expect(handlers.submitExercise).not.toHaveBeenCalled()
+    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
+      NOT_INITIALIZED_MESSAGE,
+      expect.any(Error),
+      expect.anything(),
+    )
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "submitFailed", target: { type: "ExerciseTests" } }),
+    )
+  })
+
+  const pasteMessage = {
+    type: "pasteExercise",
+    course: fixtureCourse,
+    exercise: fixtureExercise,
+    requestingPanel: { id: 5, type: "ExerciseTests" },
+  }
+
+  test("pasteExercise reports the failure and answers the waiting panel", async () => {
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = createDegradedContext()
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener(pasteMessage)
+
+    expect(handlers.pasteTmcExercise).not.toHaveBeenCalled()
+    expect(handlers.pasteMoocExercise).not.toHaveBeenCalled()
+    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
+      NOT_INITIALIZED_MESSAGE,
+      expect.any(Error),
+      expect.anything(),
+    )
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "pasteError",
+        target: pasteMessage.requestingPanel,
+        error: NOT_INITIALIZED_MESSAGE,
+      }),
+    )
+  })
+})
+
 suite("TmcPanel inbound message guard", () => {
   // The webview is a separate document; its messages are the extension's one untrusted
   // input, and nothing downstream re-checks them.
@@ -450,10 +722,9 @@ suite("TmcPanel webview-supplied paths and links", () => {
     // name the webview chose must never reach it.
     const handlers = stubHandlers()
     registerWebviewHandlers(handlers as unknown as WebviewHandlers)
-    const actionContext = {
-      ...createMockActionContext(),
-      userData: Ok({ getCourse: () => Ok(courseWith(0)) }),
-    } as unknown as ReturnType<typeof createMockActionContext>
+    const actionContext = createMockActionContext({
+      startup: { userData: { getCourse: () => Ok(courseWith(0)) } as never },
+    })
     const { listener } = await mountSidePanel(actionContext)
 
     await listener({ type: "openCourseWorkspace", courseId: CourseIdentifier.from(42) })
@@ -656,18 +927,15 @@ suite("TmcPanel requestCourseDetailsData updateables", () => {
   })
 
   function contextWithCourse(): ReturnType<typeof createMockActionContext> {
-    return {
-      ...createMockActionContext(),
-      langs: Ok({
-        getCourseDetails: vi.fn().mockResolvedValue(Err(new Error("offline"))),
-      } as unknown as Langs),
-      userData: Ok({
-        getCourse: () => Ok(localCourse),
-      }) as unknown as ReturnType<typeof createMockActionContext>["userData"],
-      workspaceManager: Ok({
-        getExercises: () => [],
-      }) as unknown as ReturnType<typeof createMockActionContext>["workspaceManager"],
-    }
+    return createMockActionContext({
+      startup: {
+        langs: {
+          getCourseDetails: vi.fn().mockResolvedValue(Err(new Error("offline"))),
+        } as unknown as Langs,
+        userData: { getCourse: () => Ok(localCourse) } as never,
+        workspaceManager: { getExercises: () => [] } as never,
+      },
+    })
   }
 
   afterEach(() => {
@@ -942,14 +1210,15 @@ suite("TmcPanel requestCourseDetailsData exercise statuses", () => {
     posted: { type: string }[]
   }> {
     const course = courseWith(exerciseCount, deadline)
-    const actionContext = {
-      ...createMockActionContext(),
-      langs: Ok({
-        getCourseDetails: vi.fn().mockResolvedValue(Ok({})),
-      } as unknown as Langs),
-      userData: Ok({ getCourse: () => Ok(course) }),
-      workspaceManager: Ok({ getExercises: () => [] }),
-    } as unknown as ReturnType<typeof createMockActionContext>
+    const actionContext = createMockActionContext({
+      startup: {
+        langs: {
+          getCourseDetails: vi.fn().mockResolvedValue(Ok({})),
+        } as unknown as Langs,
+        userData: { getCourse: () => Ok(course) } as never,
+        workspaceManager: { getExercises: () => [] } as never,
+      },
+    })
 
     const { panel, listener } = await mountSidePanel(actionContext)
     await listener({
@@ -1022,12 +1291,13 @@ suite("TmcPanel requestCourseDetailsData connectivity probe", () => {
   function contextProbing(
     getCourseDetails: ReturnType<typeof vi.fn>,
   ): ReturnType<typeof createMockActionContext> {
-    return {
-      ...createMockActionContext(),
-      langs: Ok({ getCourseDetails } as unknown as Langs),
-      userData: Ok({ getCourse: () => Ok(courseWith(2)) }),
-      workspaceManager: Ok({ getExercises: () => [] }),
-    } as unknown as ReturnType<typeof createMockActionContext>
+    return createMockActionContext({
+      startup: {
+        langs: { getCourseDetails } as unknown as Langs,
+        userData: { getCourse: () => Ok(courseWith(2)) } as never,
+        workspaceManager: { getExercises: () => [] } as never,
+      },
+    })
   }
 
   test("renders the course without waiting for the backend", async () => {

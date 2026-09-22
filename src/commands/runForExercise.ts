@@ -2,7 +2,7 @@ import type { Result } from "ts-results"
 import { Err } from "ts-results"
 import type * as vscode from "vscode"
 
-import type { ActionContext } from "../actions/types"
+import type { ReadyActionContext } from "../actions/types"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { BottleneckError } from "../errors"
 import { Logger } from "../utilities"
@@ -32,21 +32,18 @@ export function failure(headline: string, cause?: Error): Err<Error> {
  * A failure has already been reported by the time this resolves.
  */
 export async function runForExercise<T>(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   resource: vscode.Uri | undefined,
   label: string,
   body: (exercise: WorkspaceExercise) => Promise<Result<T, Error>>,
 ): Promise<Result<T, Error>> {
-  const { dialog, workspaceManager } = actionContext
+  const { dialog } = actionContext
+  const { workspaceManager } = actionContext.startup
   Logger.info(label)
-  if (workspaceManager.err) {
-    Logger.error("Extension was not initialized properly")
-    return workspaceManager
-  }
 
   const exercise = resource
-    ? workspaceManager.val.getExerciseContaining(resource)
-    : workspaceManager.val.activeExercise
+    ? workspaceManager.getExerciseContaining(resource)
+    : workspaceManager.activeExercise
   if (!exercise) {
     const error = new Error("The active editor is not part of a course exercise.")
     dialog.errorNotification(error.message)

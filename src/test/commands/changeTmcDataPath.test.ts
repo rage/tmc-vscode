@@ -3,7 +3,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import * as actions from "../../actions"
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext } from "../../actions/types"
 import { changeTmcDataPath } from "../../commands/changeTmcDataPath"
 import type Resources from "../../config/resources"
 import { TmcPanel } from "../../panels/TmcPanel"
@@ -18,12 +18,13 @@ const OLD_PATH = "/tmp/tmcdata/projects"
 const CHOSEN_PATH = "/tmp/elsewhere"
 
 interface Harness {
-  context: ActionContext
+  context: ReadyActionContext
   notifications: string[]
   errors: string[]
 }
 
-function harness(): Harness {
+/** `"none"` stands for an activation tmc-langs gave no exercise directory. */
+function harness(projectsDirectory: string | "none" = OLD_PATH): Harness {
   const [dialog] = createDialogMock()
   const notifications: string[] = []
   const errors: string[] = []
@@ -35,9 +36,14 @@ function harness(): Harness {
   })
   return {
     context: {
-      ...createMockActionContext(),
+      ...createMockActionContext({
+        startup: {
+          resources: {
+            projectsDirectory: projectsDirectory === "none" ? undefined : projectsDirectory,
+          } as Resources,
+        },
+      }),
       dialog,
-      resources: Ok({ projectsDirectory: OLD_PATH } as Resources),
     },
     notifications,
     errors,
@@ -46,6 +52,10 @@ function harness(): Harness {
 
 suite("Change TMC data path command", function () {
   beforeEach(function () {
+    // `restoreAllMocks` puts jest-mock-vscode's own persistent spy back, call
+    // history and all, so a count assertion needs the history reset instead.
+    vi.mocked(vscode.window.showOpenDialog).mockReset()
+    vi.mocked(actions.moveExtensionDataPath).mockReset()
     vi.spyOn(vscode.window, "showOpenDialog").mockResolvedValue([vscode.Uri.file(CHOSEN_PATH)])
     vi.spyOn(TmcPanel, "postMessage").mockResolvedValue(undefined)
   })
@@ -77,6 +87,17 @@ suite("Change TMC data path command", function () {
     expect(notifications).toHaveLength(1)
     expect(notifications[0]).toContain(used)
     expect(notifications[0]).toContain("not empty")
+  })
+
+  test("asks for nothing when tmc-langs reported no exercise directory", async function () {
+    const { context, notifications, errors } = harness("none")
+
+    await changeTmcDataPath(context)
+
+    expect(vscode.window.showOpenDialog).not.toHaveBeenCalled()
+    expect(actions.moveExtensionDataPath).not.toHaveBeenCalled()
+    expect(notifications).toEqual([])
+    expect(errors).toEqual([])
   })
 
   test("reports a failed move", async function () {

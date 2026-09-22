@@ -1,5 +1,5 @@
 import * as actions from "../actions"
-import type { ActionContext } from "../actions/types"
+import type { ReadyActionContext } from "../actions/types"
 import { NOTIFICATION_DELAY } from "../config/constants"
 import { postUpdateables, withOptimisticList } from "../panels/exerciseLists"
 import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
@@ -15,16 +15,13 @@ import { Logger } from "../utilities"
  * turned automatic updates off.
  */
 export async function updateExercises(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   mode?: "silent" | "loud",
 ): Promise<void> {
-  const { dialog, settings, userData } = actionContext
+  const { dialog, settings } = actionContext
+  const { userData } = actionContext.startup
   const silent = mode === "silent"
   Logger.info("Checking for exercise updates")
-  if (userData.err) {
-    Logger.error("Extension was not initialized properly")
-    return
-  }
 
   const updateablesResult = await actions.checkForExerciseUpdates(actionContext)
   if (updateablesResult.err) {
@@ -37,7 +34,7 @@ export async function updateExercises(
 
   const now = Date.now()
   const exercisesToUpdate = updateablesResult.val.filter((x) => {
-    const course = userData.val.getCourse(x.courseId)
+    const course = userData.getCourse(x.courseId)
     return course.ok && course.val.data.notifyAfter <= now && !course.val.data.disabled
   })
 
@@ -100,7 +97,7 @@ export async function updateExercises(
       async (): Promise<void> => {
         const notifyAfter = Date.now() + NOTIFICATION_DELAY
         for (const courseId of coursesToUpdate.values()) {
-          const result = await userData.val.setNewExerciseNotifyAfter(courseId, notifyAfter)
+          const result = await userData.setNewExerciseNotifyAfter(courseId, notifyAfter)
           if (result.err) {
             dialog.reportError("Failed to postpone the reminder.", result.val)
             return

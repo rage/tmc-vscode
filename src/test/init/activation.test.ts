@@ -15,6 +15,9 @@ import { createMockMemento } from "../mocks/vscode"
 
 const recorded = vi.hoisted(() => ({
   treeEntryIds: [] as string[],
+  registeredCommandIds: [] as string[],
+  /** A snapshot of `registeredCommandIds`, taken when the CLI download step starts. */
+  commandsRegisteredBeforeCliDownload: undefined as string[] | undefined,
   treeLoggedIn: [] as boolean[],
   panelTypes: [] as string[],
   uiDisposals: 0,
@@ -53,6 +56,9 @@ const storedMigration = vi.hoisted(() => ({ outcome: { kind: "done" } as unknown
 
 const registration = vi.hoisted(() => ({ dispose: (): void => {} }))
 
+/** When set, `ensureLangsUpdated` fails with it. */
+const langsDownload = vi.hoisted(() => ({ failure: undefined as Error | undefined }))
+
 // jest-mock-vscode ships neither the `env` nor the `extensions` namespace, and activation
 // reads the editor name and the extension version from them. Its registration functions
 // also return nothing where the real API returns a `Disposable`, and activation puts what
@@ -65,7 +71,10 @@ vi.mock("vscode", async (importOriginal) => {
     extensions: { getExtension: () => ({ packageJSON: { version: "3.0.0" } }) },
     commands: {
       ...(original["commands"] as Record<string, unknown>),
-      registerCommand: () => registration,
+      registerCommand: (id: string) => {
+        recorded.registeredCommandIds.push(id)
+        return registration
+      },
     },
     window: {
       ...(original["window"] as Record<string, unknown>),
@@ -164,7 +173,10 @@ vi.mock("../../storage", () => ({
 }))
 
 vi.mock("../../init/ensureLangsUpdated", () => ({
-  ensureLangsUpdated: async (): Promise<unknown> => Ok("/nonexistent/tmc-langs-cli"),
+  ensureLangsUpdated: async (): Promise<unknown> => {
+    recorded.commandsRegisteredBeforeCliDownload = [...recorded.registeredCommandIds]
+    return langsDownload.failure ? Err(langsDownload.failure) : Ok("/nonexistent/tmc-langs-cli")
+  },
 }))
 
 vi.mock("../../init/verifyCliSchema", () => ({
@@ -226,6 +238,8 @@ function createContextWithBlockedStorage(): vscode.ExtensionContext {
 function resetActivationRecording(): void {
   Logger.configure(LogLevel.None)
   recorded.treeEntryIds.length = 0
+  recorded.registeredCommandIds.length = 0
+  recorded.commandsRegisteredBeforeCliDownload = undefined
   recorded.treeLoggedIn.length = 0
   recorded.panelTypes.length = 0
   recorded.uiDisposals = 0
@@ -238,11 +252,54 @@ function resetActivationRecording(): void {
   langsStub.settingsWritten.length = 0
   langsStub.handlers.clear()
   langsStub.sharedFailure = undefined
+  langsDownload.failure = undefined
   workspaceManagerStub.persistClosedExercises = undefined
   cliSettings.projectsDirectory = tmp.dirSync().name
   // `restoreAllMocks` restores this spy to jest-mock-vscode's own persistent `vi.fn()`,
   // whose call history survives the restore -- `mockReset` is what actually clears it.
   vi.spyOn(vscode.window, "showErrorMessage").mockReset().mockResolvedValue(undefined)
+}
+
+/**
+ * The extension's own commands activation ran but never registered.
+ *
+ * VS Code rejects such a call, and `activateInner` awaits it, so everything after it --
+ * the initialization help panel included -- is skipped.
+ */
+async function unregisteredCommandsRun(context: vscode.ExtensionContext): Promise<string[]> {
+  // `restoreAllMocks` puts jest-mock-vscode's own persistent `vi.fn()` back with its call
+  // history intact, so reading an exact call list needs the reset.
+  const executeCommand = vi
+    .spyOn(vscode.commands, "executeCommand")
+    .mockReset()
+    .mockResolvedValue(undefined)
+
+  await activate(context)
+
+  const registered = new Set(recorded.registeredCommandIds)
+  return executeCommand.mock.calls
+    .map((call) => String(call[0]))
+    .filter((id) => id.startsWith("tmc.") && !registered.has(id))
+}
+
+/** What activation had registered by the time it set the context key `key`. */
+async function commandsRegisteredWhenContextSet(
+  context: vscode.ExtensionContext,
+  key: string,
+): Promise<string[] | undefined> {
+  let registered: string[] | undefined
+  vi.spyOn(vscode.commands, "executeCommand")
+    .mockReset()
+    .mockImplementation(async (command: string, ...args: unknown[]) => {
+      if (command === "setContext" && args[0] === key) {
+        registered = [...recorded.registeredCommandIds]
+      }
+      return undefined
+    })
+
+  await activate(context)
+
+  return registered
 }
 
 suite("activation with unusable storage", function () {
@@ -331,6 +388,10 @@ suite("activation with unreadable stored data", function () {
     expect(recorded.treeEntryIds).toContain("tmc.viewInitializationErrorHelp")
     expect(recorded.panelTypes).toContain("InitializationErrorHelp")
   })
+
+  test("runs no command it left unregistered", async function () {
+    expect(await unregisteredCommandsRun(createContext())).toEqual([])
+  })
 })
 
 suite("activation with usable storage", function () {
@@ -346,6 +407,57 @@ suite("activation with usable storage", function () {
 
     expect(recorded.treeEntryIds).not.toContain("tmc.viewInitializationErrorHelp")
     expect(recorded.panelTypes).toEqual([])
+  })
+
+  // VS Code rejects a command it cannot find, so an entry this key uncovers before its
+  // command exists errors the moment the user picks it.
+  test("registers the commands this key uncovers before setting it", async function () {
+    const registered = await commandsRegisteredWhenContextSet(
+      createContext(),
+      "test-my-code:Initialized",
+    )
+
+    expect(registered).toBeDefined()
+    expect(registered).toContain("tmc.addNewCourse")
+    expect(registered).toContain("tmc.testExercise")
+  })
+
+  // A stalled CLI download shouldn't strand a user with no palette entries at all --
+  // "Show Logs" in particular has to be reachable before the download that might be
+  // the very thing worth looking at the logs for. An end-state assertion can't show
+  // this: the final registered set looks the same whichever step registers it.
+  test("registers the service-free commands before downloading the CLI", async function () {
+    await activate(createContext())
+
+    expect(recorded.commandsRegisteredBeforeCliDownload).toContain("tmc.logs")
+  })
+
+  test("runs no command it left unregistered", async function () {
+    expect(await unregisteredCommandsRun(createContext())).toEqual([])
+  })
+})
+
+// The only failure reachable here that leaves the resources and the stored data intact.
+suite("activation without the CLI", function () {
+  beforeEach(function () {
+    resetActivationRecording()
+    langsDownload.failure = new Error("tmc-langs-cli could not be downloaded")
+  })
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    vi.restoreAllMocks()
+  })
+
+  test("offers the recovery entries instead of aborting", async function () {
+    await activate(createContext())
+
+    expect(recorded.treeEntryIds).toContain("tmc.viewInitializationErrorHelp")
+    expect(recorded.panelTypes).toContain("InitializationErrorHelp")
+  })
+
+  test("runs no command it left unregistered", async function () {
+    expect(await unregisteredCommandsRun(createContext())).toEqual([])
   })
 })
 
@@ -495,11 +607,15 @@ suite("activation in a workspace the migration cannot use in place", function ()
     )
   })
 
-  // The window is about to be replaced, so anything registered here would be
-  // registered twice over the two activations.
-  test("registers nothing before the reload", async function () {
+  // Tree entries never register here (`registerUiActions` runs after this return).
+  // The five service-free commands do, since `registerServiceFreeCommands` now runs
+  // ahead of the migration check -- but `vscode.openFolder` reloads the window into a
+  // fresh extension host process, discarding this one's `context.subscriptions` before
+  // the next activation registers anything, so nothing collides.
+  test("registers no tree entry before the reload", async function () {
     await activate(createContext())
 
     expect(recorded.treeEntryIds).toEqual([])
+    expect(recorded.registeredCommandIds).toContain("tmc.logs")
   })
 })

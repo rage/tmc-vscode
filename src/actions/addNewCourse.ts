@@ -1,7 +1,5 @@
 import type { Result } from "ts-results"
-import { Err } from "ts-results"
 
-import { InitializationError } from "../errors"
 import type { CourseIdentifier } from "../shared/shared"
 import { match } from "../shared/shared"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
@@ -13,26 +11,24 @@ import {
   sumTmcApiCoursePoints,
 } from "../utilities/apiData"
 import { refreshLocalExercises } from "./refreshLocalExercises"
-import type { ActionContext } from "./types"
+import type { ReadyActionContext } from "./types"
 
 /**
  * Adds a new course to user's courses.
  */
 export async function addNewCourse(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   organizationSlug: string,
   course: CourseIdentifier,
 ): Promise<Result<void, Error>> {
-  const { langs, ui, userData, workspaceManager } = actionContext
-  if (!(langs.ok && userData.ok && workspaceManager.ok)) {
-    return new Err(new InitializationError("Extension was not initialized properly"))
-  }
+  const { ui } = actionContext
+  const { langs, userData, workspaceManager } = actionContext.startup
   Logger.info("Adding new course")
 
   return match(
     course,
     async (tmcCourse) => {
-      const courseDataResult = await langs.val.getTmcCourseData(tmcCourse.courseId)
+      const courseDataResult = await langs.getTmcCourseData(tmcCourse.courseId)
       if (courseDataResult.err) {
         return courseDataResult
       }
@@ -55,25 +51,25 @@ export async function addNewCourse(
         disabled: courseData.settings.disabled_status !== "enabled",
         materialUrl: courseData.settings.material_url,
       }
-      const addResult = await userData.val.addCourse({ kind: "tmc", data: localData })
+      const addResult = await userData.addCourse({ kind: "tmc", data: localData })
       if (addResult.err) {
         return addResult
       }
       ui.treeDP.refresh()
-      await workspaceManager.val.createWorkspaceFile(courseData.details.name, "tmc")
+      await workspaceManager.createWorkspaceFile(courseData.details.name, "tmc")
       return refreshLocalExercises(actionContext)
     },
     async (mooc) => {
       // mooc has no course-instance concept: the identifier is the course id,
       // and the CLI call returns the course itself.
-      const courseRes = await langs.val.getMoocCourseData(mooc.instanceId)
+      const courseRes = await langs.getMoocCourseData(mooc.instanceId)
       if (courseRes.err) {
         return courseRes
       }
       const [moocCourse, slides] = courseRes.val
 
       // Non-fatal: a failed fetch just starts the course with zeroed progress.
-      const progressRes = await langs.val.getMoocCourseProgress(mooc.instanceId)
+      const progressRes = await langs.getMoocCourseProgress(mooc.instanceId)
       if (progressRes.err) {
         Logger.warn("Failed to fetch mooc course progress", progressRes.val)
       }
@@ -101,12 +97,12 @@ export async function addNewCourse(
       }
       // A duplicate enrollment of the same course can surface twice from the
       // backend, so an already-added course id is a plausible input here.
-      const addResult = await userData.val.addCourse({ kind: "mooc", data: localData })
+      const addResult = await userData.addCourse({ kind: "mooc", data: localData })
       if (addResult.err) {
         return addResult
       }
       ui.treeDP.refresh()
-      await workspaceManager.val.createWorkspaceFile(moocCourse.slug, "mooc")
+      await workspaceManager.createWorkspaceFile(moocCourse.slug, "mooc")
       return refreshLocalExercises(actionContext)
     },
   )

@@ -2,7 +2,7 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext } from "../../actions/types"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
@@ -20,17 +20,20 @@ suite("Exercise command runner", function () {
     uri,
   }
 
-  let stubContext: ActionContext
+  let stubContext: ReadyActionContext
 
-  function actionContext(): ActionContext {
+  function actionContext(): ReadyActionContext {
     return {
       ...stubContext,
-      workspaceManager: new Ok({
-        get activeExercise() {
-          return exercise
-        },
-        getExerciseContaining: () => exercise,
-      } as unknown as WorkspaceManager),
+      startup: {
+        ...stubContext.startup,
+        workspaceManager: {
+          get activeExercise() {
+            return exercise
+          },
+          getExerciseContaining: () => exercise,
+        } as unknown as WorkspaceManager,
+      },
     }
   }
 
@@ -51,12 +54,15 @@ suite("Exercise command runner", function () {
     const body = vi.fn(async () => Ok.EMPTY)
     const context = {
       ...stubContext,
-      workspaceManager: new Ok({
-        get activeExercise() {
-          return undefined
-        },
-        getExerciseContaining: () => undefined,
-      } as unknown as WorkspaceManager),
+      startup: {
+        ...stubContext.startup,
+        workspaceManager: {
+          get activeExercise() {
+            return undefined
+          },
+          getExerciseContaining: () => undefined,
+        } as unknown as WorkspaceManager,
+      },
     }
 
     const result = await runForExercise(context, undefined, "Testing the exercise", body)
@@ -107,17 +113,6 @@ suite("Exercise command runner", function () {
       failure("Exercise submission failed.", new BottleneckError("too soon")),
     )
 
-    expect(stubContext.dialog.errorNotification).not.toHaveBeenCalled()
-  })
-
-  test("does not resolve an exercise when the extension failed to initialize", async function () {
-    const body = vi.fn(async () => Ok.EMPTY)
-    const context = { ...stubContext, workspaceManager: Err(new Error("no workspace")) }
-
-    const result = await runForExercise(context, uri, "Cleaning the exercise", body)
-
-    expect(body).not.toHaveBeenCalled()
-    expect(result.err).toBe(true)
     expect(stubContext.dialog.errorNotification).not.toHaveBeenCalled()
   })
 })

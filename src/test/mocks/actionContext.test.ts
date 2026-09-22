@@ -1,27 +1,22 @@
-import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
-import { InitializationError } from "../../errors"
-import { createMockActionContext } from "./actionContext"
+import { isReady } from "../../actions/types"
+import { createDegradedContext, createMockActionContext } from "./actionContext"
 
 suite("the mock action context", () => {
-  test("its services report success unambiguously", () => {
-    // An auto-mocked `Result` answers both `.ok` and `.err` truthy, which silently
-    // makes every initialization guard in every action untestable.
-    const context = createMockActionContext()
-    for (const service of [
-      context.exerciseDecorationProvider,
-      context.langs,
-      context.resources,
-      context.userData,
-      context.workspaceManager,
-    ]) {
-      expect(service.ok).toBe(true)
-      expect(service.err).toBe(false)
-    }
+  // Auto-mocking the context wholesale would make `startup.kind` a truthy `vi.fn()`, so
+  // every narrowing would fail and no ready-only code path would ever be reached.
+  test("its default is a startup every narrowing accepts", () => {
+    expect(isReady(createMockActionContext())).toBe(true)
   })
 
-  test("a degraded service reaches an action's initialization-failure arm", async () => {
-    const result = await refreshLocalExercises(createMockActionContext({ langs: "err" }))
-    expect(result.err).toBe(true)
-    expect(result.val).toBeInstanceOf(InitializationError)
+  test("a degraded context reaches the failed-activation arm", () => {
+    const failure = new Error("resource initialization failed")
+    const context = createDegradedContext({ failures: { resources: failure } })
+    expect(isReady(context)).toBe(false)
+    expect(context.startup).toEqual({ kind: "degraded", failures: { resources: failure } })
+  })
+
+  test("a service the test drives replaces the auto-mock", () => {
+    const userData = { getCourses: () => [] } as never
+    expect(createMockActionContext({ startup: { userData } }).startup.userData).toBe(userData)
   })
 })

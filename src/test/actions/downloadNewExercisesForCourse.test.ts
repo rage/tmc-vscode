@@ -4,7 +4,7 @@ import { vi } from "vitest"
 import { downloadNewExercisesForCourse } from "../../actions/downloadNewExercisesForCourse"
 import { downloadOrUpdateExercises } from "../../actions/downloadOrUpdateExercises"
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext } from "../../actions/types"
 import type { UserData } from "../../config/userdata"
 import { TmcPanel } from "../../panels/TmcPanel"
 import type { ExtensionToWebview, LocalCourseData } from "../../shared/shared"
@@ -44,7 +44,7 @@ suite("downloadNewExercisesForCourse action", function () {
 
   // Clears exactly what UserData clears, so the action reads its announcements
   // back out of real state instead of a canned answer.
-  function actionContext(): ActionContext {
+  function actionContext(): ReadyActionContext {
     const userData = {
       getCourse: () => Ok(course),
       clearFromNewExercises: async (
@@ -58,7 +58,7 @@ suite("downloadNewExercisesForCourse action", function () {
         return Ok.EMPTY
       },
     } as unknown as UserData
-    return { ...createMockActionContext(), userData: new Ok(userData) }
+    return createMockActionContext({ startup: { userData } })
   }
 
   const announcedNewExercises = (): ExerciseIdentifier[] | undefined =>

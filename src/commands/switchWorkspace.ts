@@ -1,12 +1,12 @@
 import * as vscode from "vscode"
 
 import * as actions from "../actions"
-import type { ActionContext } from "../actions/types"
+import type { ReadyActionContext } from "../actions/types"
 import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
 import { pickCourse } from "./pickCourse"
 
-export async function switchWorkspace(actionContext: ActionContext): Promise<void> {
+export async function switchWorkspace(actionContext: ReadyActionContext): Promise<void> {
   Logger.info("Switching workspace")
 
   // Workspace files are named `<slug>-<backend>`, so compare against the tagged name.

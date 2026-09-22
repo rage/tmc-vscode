@@ -2,12 +2,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 
 import type Dialog from "../api/dialog"
-import {
-  ConnectionError,
-  ForbiddenError,
-  InitializationError,
-  InsufficientScopeError,
-} from "../errors"
+import { ConnectionError, ForbiddenError, InsufficientScopeError } from "../errors"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { CombinedCourseData, MoocCourse, TmcExerciseSlide } from "../shared/langsSchema"
 import type { CourseIdentifier, Enum, ExerciseIdentifier } from "../shared/shared"
@@ -19,7 +14,7 @@ import {
   sumCoursePoints,
   sumTmcApiCoursePoints,
 } from "../utilities/apiData"
-import type { ActionContext } from "./types"
+import type { ReadyActionContext } from "./types"
 
 const postCourseStatusMessage = (
   id: CourseIdentifier,
@@ -73,16 +68,14 @@ function reportInsufficientScope(dialog: Dialog, error: InsufficientScopeError):
  * @returns Boolean value representing whether the data from server was successfully received.
  */
 export async function updateCourse(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   courseId: CourseIdentifier,
 ): Promise<Result<boolean, Error>> {
-  const { dialog, exerciseDecorationProvider, langs, userData, workspaceManager } = actionContext
-  if (!(langs.ok && userData.ok && workspaceManager.ok && exerciseDecorationProvider.ok)) {
-    return new Err(new InitializationError("Extension was not initialized properly"))
-  }
+  const { dialog } = actionContext
+  const { exerciseDecorationProvider, langs, userData, workspaceManager } = actionContext.startup
   Logger.info("Updating course")
 
-  const storedCourse = userData.val.getCourse(courseId)
+  const storedCourse = userData.getCourse(courseId)
   if (storedCourse.err) {
     return storedCourse
   }
@@ -93,11 +86,11 @@ export async function updateCourse(
   > = await match(
     courseId,
     (tmcId) =>
-      langs.val
+      langs
         .getTmcCourseData(tmcId.courseId, { forceRefresh: true })
         .then((res) => res.map((x) => makeTmcKind(x))),
     (moocId) =>
-      langs.val
+      langs
         .getMoocCourseData(moocId.instanceId, { forceRefresh: true })
         .then((res) => res.map((x) => makeMoocKind(x))),
   )
@@ -113,7 +106,7 @@ export async function updateCourse(
       if (!courseData.data.disabled) {
         Logger.warn(`Failed to access information for course. Marking as disabled.`)
         courseData.data.disabled = true
-        const disableResult = await userData.val.updateCourse(courseData)
+        const disableResult = await userData.updateCourse(courseData)
         if (disableResult.err) {
           return disableResult
         }
@@ -144,12 +137,12 @@ export async function updateCourse(
         materialUrl: settings.material_url,
         perhapsExamMode: settings.hide_submission_results,
       }
-      const stored = await userData.val.updateCourse(courseData)
+      const stored = await userData.updateCourse(courseData)
       if (stored.err) {
         return stored
       }
 
-      return await userData.val.updateExercises(
+      return await userData.updateExercises(
         courseId,
         combineTmcApiExerciseData(details.exercises, exercises).map((x) => makeTmcKind(x)),
       )
@@ -169,7 +162,7 @@ export async function updateCourse(
       }
       // Non-fatal: on a failed fetch, previous local progress is carried over
       // per exercise id so a refresh never wipes known points or passed flags.
-      const progressRes = await langs.val.getMoocCourseProgress(courseData.data.id, {
+      const progressRes = await langs.getMoocCourseProgress(courseData.data.id, {
         forceRefresh: true,
       })
       if (progressRes.err) {
@@ -203,12 +196,12 @@ export async function updateCourse(
         title: moocCourse.name,
         organization: moocCourse.organization_name,
       }
-      const stored = await userData.val.updateCourse(courseData)
+      const stored = await userData.updateCourse(courseData)
       if (stored.err) {
         return stored
       }
 
-      return await userData.val.updateExercises(
+      return await userData.updateExercises(
         courseId,
         localExercises.map((x) => makeMoocKind(x)),
       )
@@ -220,11 +213,11 @@ export async function updateCourse(
 
   const courseName = LocalCourseData.getCourseName(courseData)
   if (
-    courseName === workspaceManager.val.activeCourse &&
-    courseData.kind === workspaceManager.val.activeCourseBackend
+    courseName === workspaceManager.activeCourse &&
+    courseData.kind === workspaceManager.activeCourseBackend
   ) {
-    exerciseDecorationProvider.val.updateDecorationsForExercises(
-      ...workspaceManager.val.getExercisesByCourseSlug(courseData.kind, courseName),
+    exerciseDecorationProvider.updateDecorationsForExercises(
+      ...workspaceManager.getExercisesByCourseSlug(courseData.kind, courseName),
     )
   }
 

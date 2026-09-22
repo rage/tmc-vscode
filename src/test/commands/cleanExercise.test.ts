@@ -1,9 +1,8 @@
 import * as path from "path"
 
-import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
@@ -27,16 +26,19 @@ suite("Clean exercise command", function () {
     uri,
   }
 
-  let stubContext: ActionContext
+  let stubContext: ReadyActionContext
   let tmcMock: Langs
   let workspaceManagerMock: WorkspaceManager
   let workspaceManagerMockValues: WorkspaceManagerMockValues
 
-  function actionContext(): ActionContext {
+  function actionContext(): ReadyActionContext {
     return {
       ...stubContext,
-      langs: new Ok(tmcMock),
-      workspaceManager: new Ok(workspaceManagerMock),
+      startup: {
+        ...stubContext.startup,
+        langs: tmcMock,
+        workspaceManager: workspaceManagerMock,
+      },
     }
   }
 

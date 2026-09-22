@@ -1,7 +1,7 @@
 import { Err, Ok } from "ts-results"
 
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
@@ -18,8 +18,6 @@ import type { WorkspaceManagerMockValues } from "../mocks/workspaceManager"
 import { createWorkspaceMangerMock } from "../mocks/workspaceManager"
 
 suite("refreshLocalExercises action", function () {
-  const stubContext = createMockActionContext()
-
   let tmcMock: Langs
   let tmcMockValues: TMCMockValues
   let userDataMock: UserData
@@ -27,12 +25,14 @@ suite("refreshLocalExercises action", function () {
   let workspaceManagerMock: WorkspaceManager
   let workspaceManagerMockValues: WorkspaceManagerMockValues
 
-  const actionContext = (): ActionContext => ({
-    ...stubContext,
-    langs: new Ok(tmcMock),
-    userData: new Ok(userDataMock),
-    workspaceManager: new Ok(workspaceManagerMock),
-  })
+  const actionContext = (): ReadyActionContext =>
+    createMockActionContext({
+      startup: {
+        langs: tmcMock,
+        userData: userDataMock,
+        workspaceManager: workspaceManagerMock,
+      },
+    })
 
   beforeEach(function () {
     ;[tmcMock, tmcMockValues] = createTMCMock()

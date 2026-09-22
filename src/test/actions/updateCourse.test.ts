@@ -1,6 +1,6 @@
 import { Err, Ok } from "ts-results"
 
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
 import type Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
@@ -43,7 +43,6 @@ const storedMoocCourse: MoocLocalCourseData = {
 }
 
 suite("updateCourse action (mooc)", function () {
-  const stubContext = createMockActionContext()
   const courseId = CourseIdentifier.from("course-uuid-1")
 
   let tmcMock: Langs
@@ -51,16 +50,13 @@ suite("updateCourse action (mooc)", function () {
   let userData: UserData
   let workspaceManagerMock: WorkspaceManager
 
-  const actionContext = (): ActionContext => ({
-    ...stubContext,
-    langs: new Ok(tmcMock),
-    userData: new Ok(userData),
-    workspaceManager: new Ok(workspaceManagerMock),
-    exerciseDecorationProvider: new Ok(autoMock()),
-  })
+  const actionContext = (): ReadyActionContext =>
+    createMockActionContext({
+      startup: { langs: tmcMock, userData, workspaceManager: workspaceManagerMock },
+    })
 
   // A context whose dialog is nobody else's, so its call count is this call's alone.
-  function contextWithOwnDialog(): { context: ActionContext; dialog: Dialog } {
+  function contextWithOwnDialog(): { context: ReadyActionContext; dialog: Dialog } {
     const dialog = autoMock<Dialog>()
     return { context: { ...actionContext(), dialog }, dialog }
   }
@@ -305,7 +301,6 @@ const tmcCourseData: CombinedCourseData = {
 }
 
 suite("updateCourse action (tmc)", function () {
-  const stubContext = createMockActionContext()
   const courseId = CourseIdentifier.from(1)
 
   let langsMock: Langs
@@ -313,13 +308,10 @@ suite("updateCourse action (tmc)", function () {
   let userData: UserData
   let workspaceManagerMock: WorkspaceManager
 
-  const actionContext = (): ActionContext => ({
-    ...stubContext,
-    langs: new Ok(langsMock),
-    userData: new Ok(userData),
-    workspaceManager: new Ok(workspaceManagerMock),
-    exerciseDecorationProvider: new Ok(autoMock()),
-  })
+  const actionContext = (): ReadyActionContext =>
+    createMockActionContext({
+      startup: { langs: langsMock, userData, workspaceManager: workspaceManagerMock },
+    })
 
   beforeEach(async function () {
     ;[langsMock] = createTMCMock()

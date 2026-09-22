@@ -1,24 +1,18 @@
 import type * as vscode from "vscode"
 
-import type { ActionContext } from "../actions/types"
-import { Logger } from "../utilities"
+import type { ReadyActionContext } from "../actions/types"
 import { failure, runForExercise } from "./runForExercise"
 
 /**
  * Removes language specific meta files from exercise directory.
  */
 export async function cleanExercise(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   resource: vscode.Uri | undefined,
 ): Promise<void> {
-  const { langs } = actionContext
-  if (langs.err) {
-    Logger.error("Extension was not initialized properly")
-    return
-  }
-
+  const { langs } = actionContext.startup
   await runForExercise(actionContext, resource, "Cleaning the exercise", async (exercise) => {
-    const result = await langs.val.clean(exercise.uri.fsPath)
+    const result = await langs.clean(exercise.uri.fsPath)
     return result.err ? failure("Failed to clean exercise.", result.val) : result
   })
 }

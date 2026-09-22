@@ -5,10 +5,9 @@ import { TmcPanel } from "../panels/TmcPanel"
 import { updateablesRegistry } from "../panels/updateablesRegistry"
 import type { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { LocalCourseData } from "../shared/shared"
-import { Logger } from "../utilities"
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises"
 import { refreshLocalExercises } from "./refreshLocalExercises"
-import type { ActionContext } from "./types"
+import type { ReadyActionContext } from "./types"
 
 /**
  * Downloads exercises and pushes the resulting state back to the webview.
@@ -17,16 +16,13 @@ import type { ActionContext } from "./types"
  * mode drives the MyCourses "new exercises" list.
  */
 export async function downloadExercisesForUi(
-  actionContext: ActionContext,
+  actionContext: ReadyActionContext,
   mode: string,
   courseId: CourseIdentifier,
   exerciseIds: ExerciseIdentifier[],
 ): Promise<void> {
-  const { dialog, userData } = actionContext
-  if (userData.err) {
-    Logger.error("Extension was not initialized properly")
-    return
-  }
+  const { dialog } = actionContext
+  const { userData } = actionContext.startup
 
   if (mode === "update") {
     const shownBeforeDownload = updateablesRegistry.get(courseId)
@@ -61,7 +57,7 @@ export async function downloadExercisesForUi(
   // Read the list back from storage rather than restoring the pre-download snapshot,
   // which re-announces the exercises the student just received.
   const postRemainingNewExercises = (): void => {
-    const course = userData.val.getCourse(courseId)
+    const course = userData.getCourse(courseId)
     if (course.err) {
       dialog.reportError("Failed to read the course.", course.val, courseId.kind)
       return
@@ -79,7 +75,7 @@ export async function downloadExercisesForUi(
       }
 
       const refreshResult = Result.all(
-        await userData.val.clearFromNewExercises(courseId, downloadResult.val.successful),
+        await userData.clearFromNewExercises(courseId, downloadResult.val.successful),
         await refreshLocalExercises(actionContext),
       )
       if (refreshResult.err) {

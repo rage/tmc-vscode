@@ -1,7 +1,7 @@
-import { Err, Ok } from "ts-results"
+import { Err } from "ts-results"
 
 import { addNewCourse } from "../../actions/addNewCourse"
-import type { ActionContext } from "../../actions/types"
+import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { UserData } from "../../config/userdata"
@@ -16,8 +16,6 @@ import { createMockContext } from "../mocks/vscode"
 import { createWorkspaceMangerMock } from "../mocks/workspaceManager"
 
 suite("addNewCourse action (mooc)", function () {
-  const stubContext = createMockActionContext()
-
   let tmcMock: Langs
   let tmcMockValues: TMCMockValues
   let userData: UserData
@@ -26,11 +24,10 @@ suite("addNewCourse action (mooc)", function () {
   let refresh: ReturnType<typeof vi.fn>
   let createWorkspaceFile: ReturnType<typeof vi.fn>
 
-  const actionContext = (): ActionContext => ({
-    ...stubContext,
-    langs: new Ok(tmcMock),
-    userData: new Ok(userData),
-    workspaceManager: new Ok(workspaceManagerMock),
+  const actionContext = (): ReadyActionContext => ({
+    ...createMockActionContext({
+      startup: { langs: tmcMock, userData, workspaceManager: workspaceManagerMock },
+    }),
     ui: uiMock,
   })
 

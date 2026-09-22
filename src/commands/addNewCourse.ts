@@ -2,7 +2,7 @@ import type { Result } from "ts-results"
 import * as vscode from "vscode"
 
 import * as actions from "../actions"
-import type { ActionContext } from "../actions/types"
+import type { ReadyActionContext } from "../actions/types"
 import type Langs from "../api/langs"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { MoocCourse, Organization } from "../shared/langsSchema"
@@ -49,25 +49,20 @@ async function enrolledMoocCourses(
   return authenticated ? langs.getEnrolledMoocCourses() : MOOC_LOGIN
 }
 
-export async function addNewCourse(actionContext: ActionContext): Promise<void> {
-  const { authState, dialog, langs, userData } = actionContext
+export async function addNewCourse(actionContext: ReadyActionContext): Promise<void> {
+  const { authState, dialog } = actionContext
+  const { langs, userData } = actionContext.startup
   Logger.info("Adding new course")
-  if (langs.err) {
-    Logger.error("Extension was not initialized properly")
-    return
-  }
 
   const [organizations, moocCourses] = await Promise.all([
-    langs.val.getTmcOrganizations(),
-    enrolledMoocCourses(langs.val, authState.mooc),
+    langs.getTmcOrganizations(),
+    enrolledMoocCourses(langs, authState.mooc),
   ])
 
   // Courses the user already has are dimmed rather than hidden: a student
   // looking for one would otherwise be left wondering where it went.
   const addedCourses = new Set(
-    userData.ok
-      ? userData.val.getCourses().map((course) => courseKey(LocalCourseData.getCourseId(course)))
-      : [],
+    userData.getCourses().map((course) => courseKey(LocalCourseData.getCourseId(course))),
   )
 
   const unavailable: string[] = []
@@ -137,7 +132,7 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
   const picked = await match(
     chosen,
     async (organization): Promise<[string, CourseIdentifier] | undefined> => {
-      const courses = await langs.val.getCourses(organization.slug)
+      const courses = await langs.getCourses(organization.slug)
       if (courses.err) {
         dialog.reportError(
           `Failed to fetch organization courses for ${organization.name}.`,
@@ -172,11 +167,9 @@ export async function addNewCourse(actionContext: ActionContext): Promise<void> 
   }
   // A My Courses panel renders the list it was last sent, so it has to be told
   // about the course that was just added.
-  if (userData.ok) {
-    TmcPanel.postMessage({
-      type: "setMyCourses",
-      target: { type: "MyCourses" },
-      courses: userData.val.getCourses(),
-    })
-  }
+  TmcPanel.postMessage({
+    type: "setMyCourses",
+    target: { type: "MyCourses" },
+    courses: userData.getCourses(),
+  })
 }

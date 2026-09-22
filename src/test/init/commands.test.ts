@@ -1,17 +1,24 @@
 import * as fs from "fs"
 import * as path from "path"
 
+import { Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import * as actions from "../../actions"
 import type { ActionContext } from "../../actions/types"
+import * as commands from "../../commands"
 import { EXTENSION_ID, EXTENSION_VERSION } from "../../config/constants"
-import { registerCommands } from "../../init/commands"
+import type Resources from "../../config/resources"
+import { registerCommands, registerServiceFreeCommands } from "../../init/commands"
 import { TmcPanel } from "../../panels/TmcPanel"
-import { createMockActionContext } from "../mocks/actionContext"
+import { CourseIdentifier } from "../../shared/shared"
+import { Logger } from "../../utilities"
+import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 
-// Every command the extension registers. Declared here rather than derived, so a
-// command silently disappearing (or a new one arriving unreviewed) fails.
+// Every command the extension registers, across both `registerServiceFreeCommands` and
+// `registerCommands`. Declared here rather than derived, so a command silently
+// disappearing (or a new one arriving unreviewed) fails.
 const expectedCommands = [
   "tmcView.activateEntry",
   "tmcTreeView.refreshCourses",
@@ -41,16 +48,39 @@ const expectedCommands = [
   "tmc.viewInitializationErrorHelp",
 ]
 
-function registerAndCollect(): {
+// Of those, the ones that reach no service, so a failed activation can still offer them:
+// `registerServiceFreeCommands`'s five, plus `tmc.viewInitializationErrorHelp`, which
+// needs an `ActionContext` but no service and so stays in `registerCommands`.
+const expectedDegradedCommands = [
+  "tmcView.activateEntry",
+  "tmc.settings",
+  "tmc.selectAction",
+  "tmc.logs",
+  "tmc.debug",
+  "tmc.viewInitializationErrorHelp",
+]
+
+// What `registerServiceFreeCommands` registers on its own, regardless of startup state.
+const expectedServiceFreeCommands = [
+  "tmcView.activateEntry",
+  "tmc.settings",
+  "tmc.selectAction",
+  "tmc.logs",
+  "tmc.debug",
+]
+
+function registerAndCollect(actionContext: ActionContext = createMockActionContext()): {
   ids: string[]
-  handlers: Map<string, () => Promise<void>>
+  serviceFreeIds: string[]
+  handlers: Map<string, (...args: unknown[]) => Promise<unknown>>
+  context: vscode.ExtensionContext
   actionContext: ActionContext
 } {
   const ids: string[] = []
-  const handlers = new Map<string, () => Promise<void>>()
+  const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()
   const registerCommand = vi.spyOn(vscode.commands, "registerCommand").mockImplementation(((
     id: string,
-    handler: () => Promise<void>,
+    handler: (...args: unknown[]) => Promise<unknown>,
   ) => {
     ids.push(id)
     handlers.set(id, handler)
@@ -62,10 +92,11 @@ function registerAndCollect(): {
     extensionUri: vscode.Uri.file("/tmp/extension"),
   } as unknown as vscode.ExtensionContext
 
-  const actionContext = createMockActionContext()
+  registerServiceFreeCommands(context, actionContext.dialog, actionContext.ui)
+  const serviceFreeIds = [...ids]
   registerCommands(context, actionContext)
   registerCommand.mockRestore()
-  return { ids, handlers, actionContext }
+  return { ids, serviceFreeIds, handlers, context, actionContext }
 }
 
 interface MenuEntry {
@@ -120,9 +151,24 @@ suite("registerCommands", function () {
     expect(ids.toSorted()).toEqual(expectedCommands.toSorted())
   })
 
+  // Pins the split itself: `registerServiceFreeCommands` must register exactly these
+  // five and nothing `registerCommands` also registers, or the two other set
+  // assertions in this suite would only prove the union is right, not the partition.
+  test("registerServiceFreeCommands registers exactly the ids that need no service", function () {
+    const { serviceFreeIds } = registerAndCollect()
+    expect(serviceFreeIds.toSorted()).toEqual(expectedServiceFreeCommands.toSorted())
+  })
+
+  test("a failed activation registers only the commands it can still run", function () {
+    const { ids } = registerAndCollect(createDegradedContext())
+    expect(ids.toSorted()).toEqual(expectedDegradedCommands.toSorted())
+  })
+
   test("registers no command twice", function () {
-    const { ids } = registerAndCollect()
-    expect(ids).toHaveLength(new Set(ids).size)
+    for (const context of [createMockActionContext(), createDegradedContext()]) {
+      const { ids } = registerAndCollect(context)
+      expect(ids).toHaveLength(new Set(ids).size)
+    }
   })
 
   // A command declared in package.json but never registered fails only when the
@@ -130,6 +176,23 @@ suite("registerCommands", function () {
   test("the registered set and package.json's declarations agree", function () {
     const { ids } = registerAndCollect()
     expect(declaredCommands().toSorted()).toEqual(ids.toSorted())
+  })
+
+  // Unregistering a command does not take its menu entries away: without a gate the
+  // user picks one and gets "command not found" instead of nothing at all.
+  test("every menu entry a failed activation cannot run is gated on the state", function () {
+    const stillRegistered = new Set(expectedDegradedCommands)
+    const { menus } = packageJson().contributes
+    const ungated = Object.entries(menus).flatMap(([menu, entries]) =>
+      entries
+        .filter((entry) => !stillRegistered.has(entry.command))
+        .filter(
+          (entry) =>
+            entry.when !== "false" && !whenTerms(entry.when).includes("test-my-code:Initialized"),
+        )
+        .map((entry) => `${menu}: ${entry.command}`),
+    )
+    expect(ungated).toEqual([])
   })
 
   // The device flow is the only login left; nothing may register a TMC
@@ -166,10 +229,10 @@ suite("registerCommands", function () {
   })
 
   // Without a reachable palette entry a user with no credentials has no way in
-  // besides the tree view; `"when": "false"` (its previous value) hides it.
+  // besides the tree view.
   test("the login command is reachable from the palette while logged out", function () {
     const entry = commandPalette().find((x) => x.command === "tmc.showMoocLogin")
-    expect(entry?.when).toBe("test-my-code:LoggedIn == false")
+    expect(whenTerms(entry?.when)).toContain("test-my-code:LoggedIn == false")
   })
 
   // A menu, keybinding or welcome-view link naming an undeclared command gives
@@ -228,6 +291,280 @@ suite("registerCommands", function () {
       }
     }
     expect(missing).toEqual([])
+  })
+})
+
+suite("registered command handlers", function () {
+  test("tmc.settings opens the extension's settings page", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    executeCommand.mockClear()
+    const { handlers } = registerAndCollect()
+
+    await handlers.get("tmc.settings")?.()
+
+    expect(executeCommand).toHaveBeenCalledWith("workbench.action.openSettings", "TestMyCode")
+  })
+
+  test("tmc.selectAction opens the palette scoped to the extension", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    executeCommand.mockClear()
+    const { handlers } = registerAndCollect()
+
+    await handlers.get("tmc.selectAction")?.()
+
+    expect(executeCommand).toHaveBeenCalledWith("workbench.action.quickOpen", ">TestMyCode: ")
+  })
+
+  test("tmc.logs shows the output channel", async function () {
+    const show = vi.spyOn(Logger, "show").mockImplementation(() => {})
+    const { handlers } = registerAndCollect()
+
+    await handlers.get("tmc.logs")?.()
+
+    expect(show).toHaveBeenCalledOnce()
+  })
+
+  test("tmc.debug clears the output, shows it, then opens the active log file", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    executeCommand.mockClear()
+    const show = vi.spyOn(Logger, "show").mockImplementation(() => {})
+    const { handlers } = registerAndCollect()
+
+    await handlers.get("tmc.debug")?.()
+
+    expect(executeCommand).toHaveBeenNthCalledWith(1, "workbench.output.action.clearOutput")
+    expect(show).toHaveBeenCalledOnce()
+    expect(executeCommand).toHaveBeenNthCalledWith(2, "workbench.action.openActiveLogOutputFile")
+  })
+
+  test("tmc.viewInitializationErrorHelp opens the recovery panel even when degraded", async function () {
+    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockResolvedValue(undefined)
+    const { handlers, context, actionContext } = registerAndCollect(createDegradedContext())
+
+    await handlers.get("tmc.viewInitializationErrorHelp")?.()
+
+    expect(renderMain).toHaveBeenCalledWith(
+      context.extensionUri,
+      context,
+      actionContext,
+      expect.objectContaining({ type: "InitializationErrorHelp" }),
+    )
+  })
+
+  // The task closes over `progress`, so a fake `dialog.progressNotification` has to run it
+  // itself to reach the `onProgress` callback that actually feeds the notification.
+  test("tmcTreeView.refreshCourses reports the fraction of exercises checked so far", async function () {
+    const refreshEverything = vi.spyOn(actions, "refreshEverything").mockResolvedValue(Ok.EMPTY)
+    const report = vi.fn()
+    const { handlers, actionContext } = registerAndCollect()
+    const progressNotification = actionContext.dialog.progressNotification as unknown as {
+      mockImplementation: (
+        impl: (
+          message: string,
+          task: (progress: { report: typeof report }) => Promise<unknown>,
+        ) => Promise<unknown>,
+      ) => void
+    }
+    progressNotification.mockImplementation(async (_message, task) => task({ report }))
+
+    await handlers.get("tmcTreeView.refreshCourses")?.()
+
+    expect(actionContext.dialog.progressNotification).toHaveBeenCalledWith(
+      "Fetching course updates...",
+      expect.any(Function),
+    )
+    expect(refreshEverything).toHaveBeenCalledWith(
+      actionContext,
+      expect.objectContaining({ silent: false, onProgress: expect.any(Function) }),
+    )
+
+    const onProgress = refreshEverything.mock.calls[0]?.[1].onProgress
+    onProgress?.(1, 2)
+    expect(report).toHaveBeenCalledWith({ fraction: 0.5 })
+    onProgress?.(3, 0)
+    expect(report).toHaveBeenCalledWith({ fraction: 1 })
+  })
+
+  test.each([
+    ["tmc.addNewCourse", "addNewCourse"],
+    ["tmc.changeTmcDataPath", "changeTmcDataPath"],
+    ["tmc.downloadNewExercises", "downloadNewExercises"],
+    ["tmc.logout", "logout"],
+    ["tmc.switchWorkspace", "switchWorkspace"],
+  ] as const)(
+    "%s delegates to commands.%s with the ready context",
+    async function (commandId, delegateName) {
+      const delegate = vi.spyOn(commands, delegateName).mockResolvedValue(undefined)
+      const { handlers, actionContext } = registerAndCollect()
+
+      await handlers.get(commandId)?.()
+
+      expect(delegate).toHaveBeenCalledWith(actionContext)
+    },
+  )
+
+  test.each([
+    ["tmc.cleanExercise", "cleanExercise"],
+    ["tmc.closeExercise", "closeExercise"],
+    ["tmc.downloadOldSubmission", "downloadOldSubmission"],
+    ["tmc.pasteExercise", "pasteExercise"],
+    ["tmc.resetExercise", "resetExercise"],
+  ] as const)(
+    "%s delegates to commands.%s with the ready context and the clicked resource",
+    async function (commandId, delegateName) {
+      const delegate = vi.spyOn(commands, delegateName).mockResolvedValue(undefined)
+      const { handlers, actionContext } = registerAndCollect()
+      const resource = vscode.Uri.file("/course/exercise")
+
+      await handlers.get(commandId)?.(resource)
+
+      expect(delegate).toHaveBeenCalledWith(actionContext, resource)
+    },
+  )
+
+  test("tmc.submitExercise delegates to commands.submitExercise with the extension context", async function () {
+    const submitExercise = vi.spyOn(commands, "submitExercise").mockResolvedValue(Ok.EMPTY)
+    const { handlers, context, actionContext } = registerAndCollect()
+    const resource = vscode.Uri.file("/course/exercise")
+
+    await handlers.get("tmc.submitExercise")?.(resource)
+
+    expect(submitExercise).toHaveBeenCalledWith(context, actionContext, resource)
+  })
+
+  test("tmc.testExercise delegates to commands.testExercise with the extension context", async function () {
+    const testExercise = vi.spyOn(commands, "testExercise").mockResolvedValue(undefined)
+    const { handlers, context, actionContext } = registerAndCollect()
+    const resource = vscode.Uri.file("/course/exercise")
+
+    await handlers.get("tmc.testExercise")?.(resource)
+
+    expect(testExercise).toHaveBeenCalledWith(context, actionContext, resource)
+  })
+
+  test.each([[undefined], ["silent" as const]])(
+    "tmc.updateExercises passes the mode %s through to commands.updateExercises",
+    async function (mode) {
+      const updateExercises = vi.spyOn(commands, "updateExercises").mockResolvedValue(undefined)
+      const { handlers, actionContext } = registerAndCollect()
+
+      await handlers.get("tmc.updateExercises")?.(mode)
+
+      expect(updateExercises).toHaveBeenCalledWith(actionContext, mode)
+    },
+  )
+
+  test("tmc.wipe delegates to commands.wipe with the ready context and the extension context", async function () {
+    const wipe = vi.spyOn(commands, "wipe").mockResolvedValue(undefined)
+    const { handlers, context, actionContext } = registerAndCollect()
+
+    await handlers.get("tmc.wipe")?.()
+
+    expect(wipe).toHaveBeenCalledWith(actionContext, context)
+  })
+
+  test("tmc.myCourses opens the courses panel", async function () {
+    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockResolvedValue(undefined)
+    const { handlers, context, actionContext } = registerAndCollect()
+
+    await handlers.get("tmc.myCourses")?.()
+
+    expect(renderMain).toHaveBeenCalledWith(
+      context.extensionUri,
+      context,
+      actionContext,
+      expect.objectContaining({ type: "MyCourses" }),
+    )
+  })
+
+  test("tmc.showWelcome opens the welcome panel", async function () {
+    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockResolvedValue(undefined)
+    const { handlers, context, actionContext } = registerAndCollect()
+
+    await handlers.get("tmc.showWelcome")?.()
+
+    expect(renderMain).toHaveBeenCalledWith(
+      context.extensionUri,
+      context,
+      actionContext,
+      expect.objectContaining({ type: "Welcome" }),
+    )
+  })
+
+  test("tmc.courseDetails opens the given course without asking to pick one", async function () {
+    const pickCourse = vi.spyOn(commands, "pickCourse").mockResolvedValue(undefined)
+    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockResolvedValue(undefined)
+    const { handlers, context, actionContext } = registerAndCollect()
+    const courseId = CourseIdentifier.from(7)
+
+    await handlers.get("tmc.courseDetails")?.(courseId)
+
+    expect(pickCourse).not.toHaveBeenCalled()
+    expect(renderMain).toHaveBeenCalledWith(
+      context.extensionUri,
+      context,
+      actionContext,
+      expect.objectContaining({ type: "CourseDetails", courseId }),
+    )
+  })
+
+  test("tmc.courseDetails asks the user to pick a course when none is given", async function () {
+    const courseId = CourseIdentifier.from("course-uuid")
+    vi.spyOn(commands, "pickCourse").mockResolvedValue(courseId)
+    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockResolvedValue(undefined)
+    const { handlers, context, actionContext } = registerAndCollect()
+
+    await handlers.get("tmc.courseDetails")?.(undefined)
+
+    expect(renderMain).toHaveBeenCalledWith(
+      context.extensionUri,
+      context,
+      actionContext,
+      expect.objectContaining({ type: "CourseDetails", courseId }),
+    )
+  })
+
+  test("tmc.courseDetails opens nothing when the pick is dismissed", async function () {
+    vi.spyOn(commands, "pickCourse").mockResolvedValue(undefined)
+    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockResolvedValue(undefined)
+    const { handlers } = registerAndCollect()
+
+    await handlers.get("tmc.courseDetails")?.(undefined)
+
+    expect(renderMain).not.toHaveBeenCalled()
+  })
+
+  test("tmc.openTMCExercisesFolder reveals the projects directory", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    executeCommand.mockClear()
+    const { handlers } = registerAndCollect(
+      createMockActionContext({
+        startup: { resources: { projectsDirectory: "/tmp/tmcdata/projects" } as Resources },
+      }),
+    )
+
+    await handlers.get("tmc.openTMCExercisesFolder")?.()
+
+    expect(executeCommand).toHaveBeenCalledWith(
+      "revealFileInOS",
+      vscode.Uri.file("/tmp/tmcdata/projects"),
+    )
+  })
+
+  test("tmc.openTMCExercisesFolder does nothing without a known projects directory", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    executeCommand.mockClear()
+    const error = vi.spyOn(Logger, "error").mockImplementation(() => {})
+    const { handlers } = registerAndCollect(
+      createMockActionContext({
+        startup: { resources: { projectsDirectory: undefined } as Resources },
+      }),
+    )
+
+    await handlers.get("tmc.openTMCExercisesFolder")?.()
+
+    expect(executeCommand).not.toHaveBeenCalled()
+    expect(error).toHaveBeenCalledOnce()
   })
 })
 

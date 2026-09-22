@@ -3,7 +3,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import * as actions from "../../actions"
-import type { ActionContext } from "../../actions/types"
+import type { ActionContext, ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import { addNewCourse } from "../../commands/addNewCourse"
 import type { UserData } from "../../config/userdata"
@@ -54,7 +54,7 @@ interface Pick {
 }
 
 interface Harness {
-  context: ActionContext
+  context: ReadyActionContext
   picks: Pick[]
   errors: string[]
   isMoocAuthenticated: ReturnType<typeof vi.fn>
@@ -100,12 +100,17 @@ function harness(options: {
   } as unknown as ActionContext["dialog"]
 
   const courses = options.addedCourses ?? storedCourses
-  const userData = new Ok({ getCourses: () => courses } as unknown as UserData)
+  const userData = { getCourses: () => courses } as unknown as UserData
 
   const authState = createMockAuthState({ mooc: options.moocAuthenticated ?? true })
 
   return {
-    context: { ...base, authState, dialog, langs: new Ok(langs), userData },
+    context: {
+      ...base,
+      authState,
+      dialog,
+      startup: { ...base.startup, langs, userData },
+    },
     picks,
     errors,
     isMoocAuthenticated,
