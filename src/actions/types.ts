@@ -10,7 +10,8 @@ import type Settings from "../config/settings"
 import type { UserData } from "../config/userdata"
 import type UI from "../ui/ui"
 
-// fields may be undefined if something went wrong during initialization
+// `Result`-typed fields are `Err` when that service failed during activation; the
+// rest are always available.
 export interface ActionContext {
   authState: AuthState
   dialog: Dialog
@@ -21,12 +22,4 @@ export interface ActionContext {
   ui: UI
   userData: Result<UserData, Error>
   workspaceManager: Result<WorkspaceManager, Error>
-}
-
-export interface FeedbackQuestion {
-  id: number
-  kind: string
-  lower?: number
-  upper?: number
-  question: string
 }
