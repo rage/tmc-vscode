@@ -3,6 +3,7 @@ import { Err, Ok } from "ts-results"
 import type * as vscode from "vscode"
 
 import type Langs from "../api/langs"
+import { shownInPanel } from "../api/withOperation"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { SUBMIT_PROCESS_TIMEOUT } from "../config/constants"
 import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
@@ -164,7 +165,6 @@ export async function submitExercise(
       key: `submit:${exercisePath}`,
       maxHoldMs: SUBMIT_PROCESS_TIMEOUT + 30_000,
       busyMessage: "A submission for this exercise is already in progress.",
-      onBusy: (message) => dialog.notification(message),
     },
     async () => {
       const panel: ExerciseSubmissionPanel = {
@@ -183,7 +183,7 @@ export async function submitExercise(
           target,
           error: toWebviewError(outcome.val),
         })
-        return outcome
+        return shownInPanel(outcome.val)
       }
 
       if (outcome.val.passed) {

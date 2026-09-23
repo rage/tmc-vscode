@@ -4,9 +4,11 @@ import type * as vscode from "vscode"
 
 import { submitExercise } from "../../actions/submitExercise"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
+import { failure } from "../../api/withOperation"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
-import { BottleneckError } from "../../errors"
+import { runForExercise } from "../../commands/runForExercise"
+import { BottleneckError, InsufficientScopeError } from "../../errors"
 import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
@@ -347,7 +349,9 @@ suite("submitExercise action, mooc", () => {
 
   test("a second submit of the same exercise is rejected while one is in flight", async () => {
     // The guard lives in the action rather than `commands/submitExercise`, because
-    // `TmcPanel` calls the paste actions -- which share this key -- directly.
+    // `TmcPanel` calls the paste actions -- which share this key -- directly. The
+    // notification for the rejection is `withOperation`'s job now, not this action's:
+    // showing it here too would double it once the command layer also reports it.
     let finishFirst!: () => void
     const submit = vi.fn().mockReturnValue(
       new Promise((resolve) => {
@@ -364,9 +368,7 @@ suite("submitExercise action, mooc", () => {
 
     expect(second.err).toBe(true)
     expect(second.val).toBeInstanceOf(BottleneckError)
-    expect(notification).toHaveBeenCalledExactlyOnceWith(
-      "A submission for this exercise is already in progress.",
-    )
+    expect(notification).not.toHaveBeenCalled()
     // the rejected call must not have reached the CLI
     expect(submit).toHaveBeenCalledTimes(1)
 
@@ -379,9 +381,9 @@ suite("submitExercise action, mooc", () => {
   })
 
   test("a BottleneckError from the submission throttle reaches the panel", async () => {
-    // The throttle surfaces as a BottleneckError. It is reported like any other
-    // submission failure so the panel stops waiting; `commands/submitExercise`
-    // is the one place that decides it warrants no error dialog.
+    // The throttle surfaces as a BottleneckError. It is posted to the panel like any
+    // other submission failure so the panel stops waiting; `withOperation`'s busy
+    // handling is what shows it as information rather than an error dialog.
     const error = new BottleneckError("You are submitting too fast, try again later.")
     const { actionContext, setPassed } = moocContextWithErr(error)
 
@@ -414,5 +416,118 @@ suite("submitExercise action, mooc", () => {
     expect(posted).toBeDefined()
     const delivered = JSON.parse(JSON.stringify(posted)) as { error: { message: string } }
     expect(delivered.error.message).toBe("Connection reset by peer")
+  })
+})
+
+// These drive the action through the real `runForExercise`/`withOperation` boundary
+// (bypassing only `commands/submitExercise`'s post-submit refresh) to prove the
+// cross-layer contract: the busy notice is shown exactly once, and O2's rule -- a
+// panel-shown failure toasts only when its presentation offers a remedy -- holds.
+suite("submitExercise action, through the real runForExercise boundary", () => {
+  function contextWithWorkspace(
+    course: LocalCourseData,
+    langsMethods: Record<string, unknown>,
+    exercise: WorkspaceExercise,
+  ): ReadyActionContext {
+    const { actionContext } = contextFor(course, langsMethods)
+    const workspaceManager = {
+      get activeExercise() {
+        return exercise
+      },
+      getExerciseContaining: () => exercise,
+    } as unknown as ReadyStartup["workspaceManager"]
+    return { ...actionContext, startup: { ...actionContext.startup, workspaceManager } }
+  }
+
+  function submitBody(actionContext: ReadyActionContext) {
+    return (exercise: WorkspaceExercise) =>
+      submitExercise(extensionContext, actionContext, exercise).then((result) =>
+        result.err ? failure("Exercise submission failed.", result.val) : result,
+      )
+  }
+
+  test("a busy rejection notifies exactly once and reports no error", async () => {
+    let finishFirst!: () => void
+    const submit = vi.fn().mockReturnValue(
+      new Promise((resolve) => {
+        finishFirst = () => resolve(Ok({ status: "no-grading-yet" }))
+      }),
+    )
+    const actionContext = contextWithWorkspace(
+      makeMoocKind(moocCourse),
+      { submitMoocExerciseAndWaitForResults: submit },
+      moocExercise,
+    )
+    const notification = vi.mocked(actionContext.dialog.notification)
+    const reportError = vi.mocked(actionContext.dialog.reportError)
+
+    const first = runForExercise(
+      actionContext,
+      undefined,
+      "Submitting the exercise",
+      submitBody(actionContext),
+    )
+    const second = await runForExercise(
+      actionContext,
+      undefined,
+      "Submitting the exercise",
+      submitBody(actionContext),
+    )
+
+    expect(second.err).toBe(true)
+    expect(notification).toHaveBeenCalledExactlyOnceWith(
+      "A submission for this exercise is already in progress.",
+    )
+    expect(reportError).not.toHaveBeenCalled()
+
+    finishFirst()
+    await first
+  })
+
+  test("a plain submission failure shows in the panel only (O2)", async () => {
+    const cause = new Error("Connection reset by peer")
+    const actionContext = contextWithWorkspace(
+      makeMoocKind(moocCourse),
+      { submitMoocExerciseAndWaitForResults: vi.fn().mockResolvedValue(Err(cause)) },
+      moocExercise,
+    )
+    const notification = vi.mocked(actionContext.dialog.notification)
+    const reportError = vi.mocked(actionContext.dialog.reportError)
+    const errorNotification = vi.mocked(actionContext.dialog.errorNotification)
+
+    const result = await runForExercise(
+      actionContext,
+      undefined,
+      "Submitting the exercise",
+      submitBody(actionContext),
+    )
+
+    expect(result.err).toBe(true)
+    expect(notification).not.toHaveBeenCalled()
+    expect(reportError).not.toHaveBeenCalled()
+    expect(errorNotification).not.toHaveBeenCalled()
+  })
+
+  test("an insufficient-scope failure also shows a toast with its remedy (O2)", async () => {
+    const cause = new InsufficientScopeError("exercise-services")
+    const actionContext = contextWithWorkspace(
+      makeMoocKind(moocCourse),
+      { submitMoocExerciseAndWaitForResults: vi.fn().mockResolvedValue(Err(cause)) },
+      moocExercise,
+    )
+    const reportError = vi.mocked(actionContext.dialog.reportError)
+
+    await runForExercise(
+      actionContext,
+      undefined,
+      "Submitting the exercise",
+      submitBody(actionContext),
+    )
+
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(
+      "Exercise submission failed.",
+      cause,
+      "mooc",
+    )
   })
 })
