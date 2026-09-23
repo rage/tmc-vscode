@@ -75,6 +75,21 @@ suite("openWorkspace command", function () {
     )
   })
 
+  test("reports a workspace file it cannot write, once, and opens nothing", async function () {
+    openWorkspaceFile(undefined)
+    const error = new Error("disk full")
+    createWorkspaceFile.mockRejectedValue(error)
+
+    await openWorkspace(actionContext(), "python-course", "mooc")
+
+    expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to open the course workspace.",
+      error,
+      "mooc",
+    )
+    expect(executeCommand).not.toHaveBeenCalledWith("vscode.openFolder", expect.anything())
+  })
+
   test("asks before closing a different workspace, and opens nothing when declined", async function () {
     openWorkspaceFile(vscode.Uri.file("/somewhere/else.code-workspace"))
     dialogMockValues.confirmation = false

@@ -21,7 +21,7 @@ export async function switchWorkspace(actionContext: ReadyActionContext): Promis
     },
   })
   if (courseWorkspace) {
-    openWorkspace(
+    await openWorkspace(
       actionContext,
       LocalCourseData.getCourseName(courseWorkspace),
       courseWorkspace.kind,

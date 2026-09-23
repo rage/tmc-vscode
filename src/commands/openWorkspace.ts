@@ -1,6 +1,8 @@
+import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { ReadyActionContext } from "../actions/types"
+import { withOperation } from "../api/withOperation"
 import type { BackendKind } from "../shared/shared"
 import { backendName } from "../shared/shared"
 import { Logger } from "../utilities"
@@ -32,8 +34,15 @@ export async function openWorkspace(
   }
 
   const openCourseWorkspace = async (): Promise<void> => {
-    await workspaceManager.createWorkspaceFile(name, backend)
-    await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri)
+    await withOperation(
+      dialog,
+      { failure: "Failed to open the course workspace.", backend },
+      async () => {
+        await workspaceManager.createWorkspaceFile(name, backend)
+        await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri)
+        return Ok.EMPTY
+      },
+    )
   }
 
   if (
@@ -44,7 +53,7 @@ export async function openWorkspace(
   ) {
     await openCourseWorkspace()
   } else {
-    await dialog.warningNotification(
+    void dialog.warningNotification(
       "Please close the current workspace before opening a course workspace.",
       ["Close current & open Course Workspace", openCourseWorkspace],
     )
