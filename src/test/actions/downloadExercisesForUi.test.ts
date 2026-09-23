@@ -85,23 +85,6 @@ suite("downloadExercisesForUi, updating exercises", function () {
     vi.mocked(TmcPanel.postMessage).mockClear()
   })
 
-  test("puts the update list back when the download fails", async function () {
-    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(Err(new Error("download failed")))
-    const [actionContext, dialog] = contextWith([])
-
-    await downloadExercisesForUi(actionContext, "update", COURSE_ID, requested)
-
-    // The list is emptied while the download runs; leaving it that way tells the
-    // student there is nothing left to update.
-    expect(updateablesPosted()).toEqual([[], [101, 102]])
-    expect(updateablesRegistry.get(COURSE_ID)).toEqual(requested)
-    expect(dialog.reportError).toHaveBeenCalledWith(
-      "Failed to update exercises.",
-      expect.any(Error),
-      "tmc",
-    )
-  })
-
   test("puts the update list back when the download throws", async function () {
     vi.mocked(downloadOrUpdateExercises).mockRejectedValue(new Error("spawn failed"))
     const [actionContext] = contextWith([])
@@ -115,9 +98,10 @@ suite("downloadExercisesForUi, updating exercises", function () {
   })
 
   test("reports only the exercises that failed when the download succeeds", async function () {
-    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(
-      Ok({ successful: [ExerciseIdentifier.from(101)], failed: [ExerciseIdentifier.from(102)] }),
-    )
+    vi.mocked(downloadOrUpdateExercises).mockResolvedValue({
+      successful: [ExerciseIdentifier.from(101)],
+      failed: [ExerciseIdentifier.from(102)],
+    })
     const [actionContext] = contextWith([])
 
     await downloadExercisesForUi(actionContext, "update", COURSE_ID, requested)
@@ -126,7 +110,7 @@ suite("downloadExercisesForUi, updating exercises", function () {
   })
 
   test("refreshes the local exercises it just replaced", async function () {
-    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(Ok({ successful: [], failed: [] }))
+    vi.mocked(downloadOrUpdateExercises).mockResolvedValue({ successful: [], failed: [] })
     vi.mocked(refreshLocalExercises).mockResolvedValue(Err(new Error("refresh failed")))
     const [actionContext, dialog] = contextWith([])
 
@@ -144,20 +128,6 @@ suite("downloadExercisesForUi, updating exercises", function () {
 suite("downloadExercisesForUi, downloading new exercises", function () {
   const requested = [ExerciseIdentifier.from(201), ExerciseIdentifier.from(202)]
 
-  test("puts the new-exercise list back when the download fails", async function () {
-    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(Err(new Error("download failed")))
-    const [actionContext, dialog] = contextWith([201, 202])
-
-    await downloadExercisesForUi(actionContext, "download", COURSE_ID, requested)
-
-    expect(newExercisesPosted()).toEqual([[], [201, 202]])
-    expect(dialog.reportError).toHaveBeenCalledWith(
-      "Failed to download new exercises.",
-      expect.any(Error),
-      "tmc",
-    )
-  })
-
   test("puts the new-exercise list back when the download throws", async function () {
     vi.mocked(downloadOrUpdateExercises).mockRejectedValue(new Error("spawn failed"))
     const [actionContext] = contextWith([201, 202])
@@ -170,9 +140,7 @@ suite("downloadExercisesForUi, downloading new exercises", function () {
   })
 
   test("announces only the exercises storage still calls new after a success", async function () {
-    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(
-      Ok({ successful: requested, failed: [] }),
-    )
+    vi.mocked(downloadOrUpdateExercises).mockResolvedValue({ successful: requested, failed: [] })
     // Storage has been cleared of the downloaded exercises by the time the list is
     // re-read, so restoring the pre-download snapshot would re-announce them.
     const [actionContext] = contextWith([])

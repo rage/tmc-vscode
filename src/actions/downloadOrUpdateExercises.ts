@@ -1,6 +1,3 @@
-import type { Result } from "ts-results"
-import { Ok } from "ts-results"
-
 import type { FractionProgress } from "../api/dialog"
 import type Langs from "../api/langs"
 import { ExerciseUpdateError } from "../errors"
@@ -20,24 +17,26 @@ interface DownloadResults {
 /**
  * Downloads given exercises and opens them in the course workspace.
  *
+ * Never fails as a whole: a failed backend or exercise is reported here and lands in
+ * `failed`, and a cancelled download returns what had completed.
+ *
  * @param exerciseIds Exercises to download.
  * @param courseId Course the exercises belong to, when they all share one. Passed
  *   to the mooc bulk download so it can fetch just that course's slides instead of
  *   scanning every enrolled course. Omit when the exercises span multiple courses
  *   (e.g. the aggregate update flow).
- * @returns Exercise ids for successful downloads.
  */
 export async function downloadOrUpdateExercises(
   actionContext: ReadyActionContext,
   exerciseIds: ExerciseIdentifier[],
   courseId?: CourseIdentifier,
-): Promise<Result<DownloadResults, Error>> {
+): Promise<DownloadResults> {
   const { dialog, settings } = actionContext
   const { langs, userData } = actionContext.startup
   Logger.info("Downloading exercises", exerciseIds)
 
   if (exerciseIds.length === 0) {
-    return Ok({ successful: [], failed: [] })
+    return { successful: [], failed: [] }
   }
 
   // When exerciseIds span multiple courses (no shared `courseId`), resolve
@@ -150,7 +149,7 @@ export async function downloadOrUpdateExercises(
     // The user chose to stop; report what completed instead of erroring.
     postMessages(statuses, resolveCourseId)
     Logger.info("Exercise download cancelled by the user")
-    return Ok(sortResults(statuses))
+    return sortResults(statuses)
   }
 
   const {
@@ -202,7 +201,7 @@ export async function downloadOrUpdateExercises(
     )
   }
 
-  return Ok(sortResults(statuses))
+  return sortResults(statuses)
 }
 
 function postMessages(

@@ -10,10 +10,10 @@ import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
 
 /**
- * Downloads course's new exercises using relevate data from the context's UserData. Also handles
- * messages to UI and refreshing the results.
+ * Downloads a course's new exercises and takes the downloaded ones off its new-exercise list.
  *
- * @param courseId Course to update.
+ * An exercise that fails to download is warned about and stays on the list; the `Err` is for
+ * a course that is not stored or a list or rescan that could not be updated.
  */
 export async function downloadNewExercisesForCourse(
   actionContext: ReadyActionContext,
@@ -53,22 +53,12 @@ export async function downloadNewExercisesForCourse(
     () => postNewExercises([]),
     async (): Promise<Result<void, Error>> => {
       const newExercises = LocalCourseData.getNewExercises(course)
-      const downloadResult = await downloadOrUpdateExercises(actionContext, newExercises, courseId)
-      if (downloadResult.err) {
-        Logger.error("Failed to download new exercises.", downloadResult.val)
-        return downloadResult
-      }
-
+      const { successful } = await downloadOrUpdateExercises(actionContext, newExercises, courseId)
       const refreshResult = Result.all(
-        await userData.clearFromNewExercises(courseId, downloadResult.val.successful),
+        await userData.clearFromNewExercises(courseId, successful),
         await refreshLocalExercises(actionContext),
       )
-      if (refreshResult.err) {
-        Logger.error("Failed to refresh workspace.", refreshResult.val)
-        return refreshResult
-      }
-
-      return Ok.EMPTY
+      return refreshResult.err ? refreshResult : Ok.EMPTY
     },
     postRemainingNewExercises,
   )
