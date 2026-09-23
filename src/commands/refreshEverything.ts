@@ -27,7 +27,9 @@ const REFRESH_FAILED = "Failed to check for course updates."
  * @param courseId Refresh only that course's data; the exercise update check
  * always covers every course.
  * @param silent Logs a failed refresh, or one rejected as already running, instead
- * of notifying, and runs the exercise update check quietly.
+ * of notifying, and runs the exercise update check quietly. A refresh that fails runs
+ * that check quietly either way: its own failure is the one report, and stale course
+ * data cannot vouch for "All exercises are up to date."
  */
 export async function refreshEverything(
   actionContext: ReadyActionContext,
@@ -74,11 +76,9 @@ async function refresh(
       if (refreshed.ok) {
         offerNewExercises(actionContext, refreshed.val.courses)
       }
-      await updateExercises(actionContext, silent ? "silent" : "loud")
-      if (refreshed.err) {
-        return refreshed
-      }
-      return refreshed.val.failure ? Err(refreshed.val.failure) : Ok.EMPTY
+      const failure = refreshed.err ? refreshed.val : refreshed.val.failure
+      await updateExercises(actionContext, silent || failure ? "silent" : "loud")
+      return failure ? Err(failure) : Ok.EMPTY
     },
   )
 }

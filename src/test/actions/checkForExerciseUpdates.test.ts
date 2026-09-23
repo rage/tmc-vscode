@@ -74,7 +74,7 @@ suite("checkForExerciseUpdates action", function () {
 
   test("should return exercise updates", async function () {
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result).toEqual([tmcOutdated])
+    expect(result.outdated).toEqual([tmcOutdated])
   })
 
   test("should respect forceRefresh option", async function () {
@@ -94,7 +94,7 @@ suite("checkForExerciseUpdates action", function () {
   test("should return empty array when there are no updates", async function () {
     tmcMockValues.tmcExerciseUpdates = Ok([])
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result).toEqual([])
+    expect(result.outdated).toEqual([])
   })
 
   test("should filter out unknown exercise ids", async function () {
@@ -103,7 +103,7 @@ suite("checkForExerciseUpdates action", function () {
       ExerciseIdentifier.from(404),
     ])
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result).toEqual([tmcOutdated])
+    expect(result.outdated).toEqual([tmcOutdated])
   })
 
   test("should combine tmc and mooc updates across courses", async function () {
@@ -113,7 +113,7 @@ suite("checkForExerciseUpdates action", function () {
     ]
     tmcMockValues.moocExerciseUpdates = Ok([ExerciseIdentifier.from("mooc-ex-1")])
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result).toEqual([tmcOutdated, moocOutdated])
+    expect(result.outdated).toEqual([tmcOutdated, moocOutdated])
   })
 
   test("should NOT discard mooc results when the tmc check fails", async function () {
@@ -121,10 +121,12 @@ suite("checkForExerciseUpdates action", function () {
       ...userDataMockValues.getCourses,
       makeMoocKind(moocCourse) as LocalCourseData,
     ]
-    tmcMockValues.tmcExerciseUpdates = Err(new Error())
+    const error = new Error("tmc down")
+    tmcMockValues.tmcExerciseUpdates = Err(error)
     tmcMockValues.moocExerciseUpdates = Ok([ExerciseIdentifier.from("mooc-ex-1")])
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result).toEqual([moocOutdated])
+    expect(result.outdated).toEqual([moocOutdated])
+    expect(result.failures).toEqual([{ backend: "tmc", error }])
   })
 
   test("should NOT discard tmc results when the mooc check fails", async function () {
@@ -132,9 +134,17 @@ suite("checkForExerciseUpdates action", function () {
       ...userDataMockValues.getCourses,
       makeMoocKind(moocCourse) as LocalCourseData,
     ]
-    tmcMockValues.moocExerciseUpdates = Err(new Error())
+    const error = new Error("mooc down")
+    tmcMockValues.moocExerciseUpdates = Err(error)
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result).toEqual([tmcOutdated])
+    expect(result.outdated).toEqual([tmcOutdated])
+    expect(result.failures).toEqual([{ backend: "mooc", error }])
+  })
+
+  test("does not name a failed backend the user has no courses on", async function () {
+    tmcMockValues.moocExerciseUpdates = Err(new Error("mooc down"))
+    const result = await checkForExerciseUpdates(actionContext())
+    expect(result).toEqual({ outdated: [tmcOutdated], failures: [] })
   })
 
   // The shared auth state is the only thing asked; a check here would be a second
@@ -146,7 +156,7 @@ suite("checkForExerciseUpdates action", function () {
     ]
     tmcMockValues.moocExerciseUpdates = Ok([ExerciseIdentifier.from("mooc-ex-1")])
     const result = await checkForExerciseUpdates(actionContext({ mooc: false }))
-    expect(result).toEqual([tmcOutdated])
+    expect(result.outdated).toEqual([tmcOutdated])
     expect(tmcMock.checkExerciseUpdates).not.toHaveBeenCalledWith("mooc", expect.anything())
     expect(tmcMock.isMoocAuthenticated).not.toHaveBeenCalled()
   })

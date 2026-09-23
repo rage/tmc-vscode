@@ -609,6 +609,34 @@ suite("reported once: My Courses and course details", function () {
     expect(silent.shown).toEqual([])
   })
 
+  test("an update check a backend with courses fails is one notification, and no all-clear", async function () {
+    const moocFails = {
+      checkExerciseUpdates: async (backend: string) =>
+        backend === "mooc" ? Err(offline()) : Ok([]),
+    }
+    const loud = await harness({ langs: moocFails })
+    const silent = await harness({ langs: moocFails })
+
+    await loud.run("tmc.updateExercises", "loud")
+    await silent.run("tmc.updateExercises", "silent")
+
+    expect(loud.shown).toEqual(["error: Failed to check for exercise updates."])
+    expect(silent.shown).toEqual([])
+  })
+
+  test("an update check that fails where the user has no courses is still an all-clear", async function () {
+    const { run, shown } = await harness({
+      langs: {
+        checkExerciseUpdates: async (backend: string) =>
+          backend === "tmc" ? Err(offline()) : Ok([]),
+      },
+    })
+
+    await run("tmc.updateExercises", "loud")
+
+    expect(shown).toEqual(["info: All exercises are up to date."])
+  })
+
   test("a course that fails to refresh from its panel is one notification", async function () {
     const { post, shown } = await harness({
       langs: {
@@ -644,10 +672,7 @@ suite("reported once: the refresh", function () {
 
     await run("tmcTreeView.refreshCourses")
 
-    expect(shown).toEqual([
-      "info: All exercises are up to date.",
-      "error: Failed to check for course updates.",
-    ])
+    expect(shown).toEqual(["error: Failed to check for course updates."])
   })
 
   test("a lost session scope is warned on a tree refresh too", async function () {

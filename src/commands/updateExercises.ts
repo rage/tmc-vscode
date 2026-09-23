@@ -35,14 +35,21 @@ export async function updateExercises(
     return
   }
 
+  const { outdated, failures } = updateablesResult.val
+  if (!silent) {
+    for (const { backend, error } of failures) {
+      void dialog.reportError("Failed to check for exercise updates.", error, backend)
+    }
+  }
+
   const now = Date.now()
-  const exercisesToUpdate = updateablesResult.val.filter((x) => {
+  const exercisesToUpdate = outdated.filter((x) => {
     const course = userData.getCourse(x.courseId)
     return course.ok && course.val.data.notifyAfter <= now && !course.val.data.disabled
   })
 
   if (exercisesToUpdate.length === 0) {
-    if (!silent) {
+    if (!silent && failures.length === 0) {
       void dialog.notification("All exercises are up to date.")
     }
     return

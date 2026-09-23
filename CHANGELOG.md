@@ -17,6 +17,7 @@
 - An error in a command, or in an action started from My Courses or course details, is now reported under that action's own name instead of a generic message.
 - A paste from the exercise panel that fails now shows its error in the panel only, instead of also as a notification.
 - A course workspace that fails to open is now reported.
+- Checking for exercise updates no longer says "All exercises are up to date." when refreshing the courses failed, or when a site holding your courses could not be checked; that site's failure is reported instead.
 
 ## [3.5.4] - 2026-09-15
 

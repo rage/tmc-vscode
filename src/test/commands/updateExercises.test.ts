@@ -1,6 +1,7 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
+import type { ExerciseUpdateCheck } from "../../actions/checkForExerciseUpdates"
 import type { ReadyActionContext } from "../../actions/types"
 import { updateExercises } from "../../commands/updateExercises"
 import type Settings from "../../config/settings"
@@ -35,6 +36,11 @@ function outdated(
   }
 }
 
+/** A check that reached every backend. */
+function checked(exercises: ExerciseUpdateCheck["outdated"]): ExerciseUpdateCheck {
+  return { outdated: exercises, failures: [] }
+}
+
 function contextWith(
   automaticallyUpdate: boolean,
 ): [ReadyActionContext, ReturnType<typeof createDialogMock>[0], ReturnType<typeof vi.fn>] {
@@ -67,7 +73,9 @@ suite("updateExercises command", function () {
   })
 
   test("postpones the reminder once per course, not once per exercise", async function () {
-    checkForExerciseUpdates.mockResolvedValue([outdated(1, 10), outdated(1, 11), outdated(2, 20)])
+    checkForExerciseUpdates.mockResolvedValue(
+      checked([outdated(1, 10), outdated(1, 11), outdated(2, 20)]),
+    )
     const [actionContext, dialog, setNewExerciseNotifyAfter] = contextWith(false)
 
     await updateExercises(actionContext, "loud")
@@ -85,7 +93,7 @@ suite("updateExercises command", function () {
 
   test("downloads the updates without asking when automatic updates are on", async function () {
     const updates = [outdated(1, 10), outdated(2, 20)]
-    checkForExerciseUpdates.mockResolvedValue(updates)
+    checkForExerciseUpdates.mockResolvedValue(checked(updates))
     const [actionContext, dialog] = contextWith(true)
 
     await updateExercises(actionContext, "loud")
@@ -96,7 +104,7 @@ suite("updateExercises command", function () {
 
   test("downloads the updates the user accepts", async function () {
     const updates = [outdated(1, 10)]
-    checkForExerciseUpdates.mockResolvedValue(updates)
+    checkForExerciseUpdates.mockResolvedValue(checked(updates))
     const [actionContext, dialog] = contextWith(false)
 
     await updateExercises(actionContext, "loud")
@@ -124,9 +132,30 @@ suite("updateExercises command", function () {
     expect(silentDialog.notification).not.toHaveBeenCalled()
   })
 
+  test("reports a backend it could not check when loud, instead of the all-clear", async function () {
+    const error = new Error("offline")
+    checkForExerciseUpdates.mockResolvedValue({
+      outdated: [],
+      failures: [{ backend: "mooc", error }],
+    })
+    const [loudContext, loudDialog] = contextWith(false)
+    const [silentContext, silentDialog] = contextWith(false)
+
+    await updateExercises(loudContext, "loud")
+    await updateExercises(silentContext, "silent")
+
+    expect(loudDialog.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to check for exercise updates.",
+      error,
+      "mooc",
+    )
+    expect(loudDialog.notification).not.toHaveBeenCalled()
+    expect(silentDialog.reportError).not.toHaveBeenCalled()
+  })
+
   test("still offers the updates in a silent run, but not the all-clear", async function () {
-    checkForExerciseUpdates.mockResolvedValueOnce([outdated(1, 10)])
-    checkForExerciseUpdates.mockResolvedValueOnce([])
+    checkForExerciseUpdates.mockResolvedValueOnce(checked([outdated(1, 10)]))
+    checkForExerciseUpdates.mockResolvedValueOnce(checked([]))
     const [actionContext, dialog] = contextWith(false)
 
     await updateExercises(actionContext, "silent")
@@ -140,7 +169,7 @@ suite("updateExercises command", function () {
   })
 
   test("reports a reminder that could not be postponed once", async function () {
-    checkForExerciseUpdates.mockResolvedValue([outdated(1, 10), outdated(2, 20)])
+    checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10), outdated(2, 20)]))
     const [actionContext, dialog, setNewExerciseNotifyAfter] = contextWith(false)
     setNewExerciseNotifyAfter.mockResolvedValue(Err(new Error("storage full")))
 
