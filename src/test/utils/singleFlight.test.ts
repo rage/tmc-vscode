@@ -57,7 +57,6 @@ describe("single-flight keys", () => {
       key: "k",
       maxHoldMs: 1000,
       busyMessage: "busy",
-      onBusy: vi.fn(),
     }
     await expect(runSingleFlight(options, () => Promise.reject(new Error("boom")))).rejects.toThrow(
       "boom",
@@ -67,8 +66,7 @@ describe("single-flight keys", () => {
   })
 
   test("runSingleFlight rejects a concurrent call with a BottleneckError", async () => {
-    const onBusy = vi.fn()
-    const options = { key: "k", maxHoldMs: 60_000, busyMessage: "busy", onBusy }
+    const options = { key: "k", maxHoldMs: 60_000, busyMessage: "busy" }
 
     let releaseFirst!: () => void
     const first = runSingleFlight(
@@ -83,7 +81,6 @@ describe("single-flight keys", () => {
     expect(second.err).toBe(true)
     expect(second.val).toBeInstanceOf(BottleneckError)
     expect((second.val as Error).message).toBe("busy")
-    expect(onBusy).toHaveBeenCalledExactlyOnceWith("busy")
 
     releaseFirst()
     expect((await first).val).toBe("done")
@@ -93,22 +90,10 @@ describe("single-flight keys", () => {
     releaseSingleFlight("k")
   })
 
-  test("runSingleFlight rejects without an onBusy callback", async () => {
-    expect(acquireSingleFlight("k", 1000)).toBe(true)
-
-    const result = await runSingleFlight({ key: "k", maxHoldMs: 1000, busyMessage: "busy" }, () =>
-      Promise.resolve(Ok("unreachable")),
-    )
-
-    expect(result.val).toBeInstanceOf(BottleneckError)
-    releaseSingleFlight("k")
-  })
-
   test("runSingleFlight passes the body's own Err through untouched", async () => {
     const error = new Error("body failed")
-    const result = await runSingleFlight(
-      { key: "k", maxHoldMs: 1000, busyMessage: "busy", onBusy: vi.fn() },
-      () => Promise.resolve(Err(error)),
+    const result = await runSingleFlight({ key: "k", maxHoldMs: 1000, busyMessage: "busy" }, () =>
+      Promise.resolve(Err(error)),
     )
     expect(result.val).toBe(error)
   })
