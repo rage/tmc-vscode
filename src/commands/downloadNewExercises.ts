@@ -1,6 +1,6 @@
 import { Ok } from "ts-results"
 
-import { downloadNewExercisesForCourse } from "../actions/downloadNewExercisesForCourse"
+import { downloadNewExercisesForCourse } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure, withOperation } from "../api/withOperation"
 import { LocalCourseData } from "../shared/shared"
@@ -36,7 +36,7 @@ export async function downloadNewExercises(actionContext: ReadyActionContext): P
       const downloadResult = await downloadNewExercisesForCourse(actionContext, courseId)
       return downloadResult.err
         ? failure(
-            `Failed to download new exercises for course "${courseName}."`,
+            `Failed to download new exercises for course "${courseName}".`,
             downloadResult.val,
           )
         : downloadResult

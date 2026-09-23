@@ -113,7 +113,7 @@ suite("Download new exercises command", function () {
     await downloadNewExercises(context)
 
     expect(context.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-      'Failed to download new exercises for course "python-course."',
+      'Failed to download new exercises for course "python-course".',
       expect.objectContaining({ message: "connection error" }),
       "tmc",
     )
