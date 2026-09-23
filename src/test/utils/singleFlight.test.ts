@@ -93,6 +93,17 @@ describe("single-flight keys", () => {
     releaseSingleFlight("k")
   })
 
+  test("runSingleFlight rejects without an onBusy callback", async () => {
+    expect(acquireSingleFlight("k", 1000)).toBe(true)
+
+    const result = await runSingleFlight({ key: "k", maxHoldMs: 1000, busyMessage: "busy" }, () =>
+      Promise.resolve(Ok("unreachable")),
+    )
+
+    expect(result.val).toBeInstanceOf(BottleneckError)
+    releaseSingleFlight("k")
+  })
+
   test("runSingleFlight passes the body's own Err through untouched", async () => {
     const error = new Error("body failed")
     const result = await runSingleFlight(
