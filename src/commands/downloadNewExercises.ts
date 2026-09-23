@@ -1,5 +1,8 @@
-import * as actions from "../actions"
+import { Ok } from "ts-results"
+
+import { downloadNewExercisesForCourse } from "../actions/downloadNewExercisesForCourse"
 import type { ReadyActionContext } from "../actions/types"
+import { failure, withOperation } from "../api/withOperation"
 import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
 import { pickCourse } from "./pickCourse"
@@ -17,25 +20,26 @@ export async function downloadNewExercises(actionContext: ReadyActionContext): P
     return
   }
 
-  const courseResult = userData.getCourse(courseId)
-  if (courseResult.err) {
-    dialog.reportError("Failed to read the selected course.", courseResult.val, courseId.kind)
-    return
-  }
-  const course = courseResult.val
-  if (LocalCourseData.getNewExercises(course).length === 0) {
-    dialog.notification(
-      `There are no new exercises for the course ${LocalCourseData.getCourseName(course)}.`,
-    )
-    return
-  }
-
-  const downloadResult = await actions.downloadNewExercisesForCourse(actionContext, courseId)
-  if (downloadResult.err) {
-    dialog.reportError(
-      `Failed to download new exercises for course "${LocalCourseData.getCourseName(course)}."`,
-      downloadResult.val,
-      courseId.kind,
-    )
-  }
+  await withOperation(
+    dialog,
+    { failure: "Failed to download new exercises.", backend: courseId.kind },
+    async () => {
+      const courseResult = userData.getCourse(courseId)
+      if (courseResult.err) {
+        return failure("Failed to read the selected course.", courseResult.val)
+      }
+      const courseName = LocalCourseData.getCourseName(courseResult.val)
+      if (LocalCourseData.getNewExercises(courseResult.val).length === 0) {
+        void dialog.notification(`There are no new exercises for the course ${courseName}.`)
+        return Ok.EMPTY
+      }
+      const downloadResult = await downloadNewExercisesForCourse(actionContext, courseId)
+      return downloadResult.err
+        ? failure(
+            `Failed to download new exercises for course "${courseName}."`,
+            downloadResult.val,
+          )
+        : downloadResult
+    },
+  )
 }

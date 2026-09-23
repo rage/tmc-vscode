@@ -2,7 +2,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
-import * as actions from "../../actions"
+import { downloadNewExercisesForCourse } from "../../actions/downloadNewExercisesForCourse"
 import type { ReadyActionContext } from "../../actions/types"
 import type { Item } from "../../api/dialog"
 import { downloadNewExercises } from "../../commands/downloadNewExercises"
@@ -12,7 +12,7 @@ import { CourseIdentifier } from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
-vi.mock("../../actions", () => ({
+vi.mock("../../actions/downloadNewExercisesForCourse", () => ({
   downloadNewExercisesForCourse: vi.fn(async () => Ok.EMPTY),
 }))
 
@@ -61,7 +61,7 @@ function harness(
 
 suite("Download new exercises command", function () {
   beforeEach(function () {
-    vi.mocked(actions.downloadNewExercisesForCourse).mockResolvedValue(Ok.EMPTY)
+    vi.mocked(downloadNewExercisesForCourse).mockResolvedValue(Ok.EMPTY)
   })
 
   test("downloads the new exercises of the course the user picked", async function () {
@@ -70,7 +70,7 @@ suite("Download new exercises command", function () {
     await downloadNewExercises(context)
 
     expect(offered).toEqual(["Python Programming"])
-    expect(actions.downloadNewExercisesForCourse).toHaveBeenCalledExactlyOnceWith(
+    expect(downloadNewExercisesForCourse).toHaveBeenCalledExactlyOnceWith(
       context,
       CourseIdentifier.from(1),
     )
@@ -81,7 +81,7 @@ suite("Download new exercises command", function () {
 
     await downloadNewExercises(context)
 
-    expect(actions.downloadNewExercisesForCourse).not.toHaveBeenCalled()
+    expect(downloadNewExercisesForCourse).not.toHaveBeenCalled()
   })
 
   test("says so, and downloads nothing, when the course has no new exercises", async function () {
@@ -90,7 +90,7 @@ suite("Download new exercises command", function () {
     await downloadNewExercises(context)
 
     expect(notifications).toEqual(["There are no new exercises for the course python-course."])
-    expect(actions.downloadNewExercisesForCourse).not.toHaveBeenCalled()
+    expect(downloadNewExercisesForCourse).not.toHaveBeenCalled()
   })
 
   test("reports a course the stored data cannot read", async function () {
@@ -103,13 +103,11 @@ suite("Download new exercises command", function () {
       expect.objectContaining({ message: "course is missing" }),
       "tmc",
     )
-    expect(actions.downloadNewExercisesForCourse).not.toHaveBeenCalled()
+    expect(downloadNewExercisesForCourse).not.toHaveBeenCalled()
   })
 
   test("reports a failed download, naming the course", async function () {
-    vi.mocked(actions.downloadNewExercisesForCourse).mockResolvedValue(
-      Err(new Error("connection error")),
-    )
+    vi.mocked(downloadNewExercisesForCourse).mockResolvedValue(Err(new Error("connection error")))
     const { context } = harness()
 
     await downloadNewExercises(context)
