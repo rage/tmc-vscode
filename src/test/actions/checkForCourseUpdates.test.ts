@@ -86,14 +86,6 @@ suite("checkForCourseUpdates action", function () {
     expect(refreshLocalExercises).toHaveBeenCalledExactlyOnceWith(actionContext)
   })
 
-  test("does not notify about a course whose reminder is postponed", async function () {
-    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, Date.now() + 60_000, [10])])
-
-    await checkForCourseUpdates(actionContext)
-
-    expect(dialog.notification).not.toHaveBeenCalled()
-  })
-
   test("refreshes the other courses after one fails, and names the failure", async function () {
     vi.mocked(updateCourse).mockImplementation(async (_actionContext, id) =>
       CourseIdentifier.toString(id) === "1" ? Err(new Error("boom")) : Ok(true),
@@ -103,9 +95,33 @@ suite("checkForCourseUpdates action", function () {
     const result = await checkForCourseUpdates(actionContext)
 
     expect(updateCourse).toHaveBeenCalledTimes(2)
-    expect(result.err && result.val.message).toContain("course-1")
-    // The caller decides whether a background failure is worth a toast.
+    expect(result.ok && result.val.failure?.message).toContain("course-1")
+    expect(result.ok && result.val.courses.map((x) => x.data.id)).toEqual([1, 2])
     expect(dialog.reportError).not.toHaveBeenCalled()
+  })
+
+  test("returns the courses as stored after the pass, and no failure", async function () {
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
+
+    const result = await checkForCourseUpdates(actionContext)
+
+    expect(result.ok && result.val).toEqual({
+      courses: [tmcCourse(1, 0, [10])],
+      failure: undefined,
+    })
+    expect(dialog.notification).not.toHaveBeenCalled()
+  })
+
+  test("fails for a requested course that is not stored", async function () {
+    const [actionContext] = contextWithCourses([])
+    actionContext.startup.userData.getCourse = (): Err<Error> => Err(new Error("no such course"))
+
+    const result = await checkForCourseUpdates(actionContext, {
+      courseId: CourseIdentifier.from(9),
+    })
+
+    expect(result.err && result.val.message).toBe("no such course")
+    expect(updateCourse).not.toHaveBeenCalled()
   })
 
   test("reports progress as each course finishes", async function () {
@@ -123,19 +139,5 @@ suite("checkForCourseUpdates action", function () {
       [1, 2],
       [2, 2],
     ])
-  })
-
-  test("refreshes and notifies for a course whose reminder is due", async function () {
-    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
-
-    await checkForCourseUpdates(actionContext)
-
-    expect(updateCourse).toHaveBeenCalledTimes(1)
-    expect(dialog.notification).toHaveBeenCalledWith(
-      expect.stringContaining("1 new exercises"),
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-    )
   })
 })

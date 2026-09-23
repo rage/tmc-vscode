@@ -1,11 +1,9 @@
 import type { Result } from "ts-results"
-import { Err, Ok } from "ts-results"
+import { Ok } from "ts-results"
 
-import { NOTIFICATION_DELAY } from "../config/constants"
 import type { CourseIdentifier } from "../shared/shared"
 import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
-import { downloadNewExercisesForCourse } from "./downloadNewExercisesForCourse"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
 import { updateCourse } from "./updateCourse"
@@ -17,19 +15,24 @@ export interface CourseUpdateOptions {
   onProgress?: ((done: number, total: number) => void) | undefined
 }
 
+/** What a pass of {@link checkForCourseUpdates} left behind. */
+export interface CourseUpdates {
+  /** Every course read back after the pass, whether or not its own refresh succeeded. */
+  courses: LocalCourseData[]
+  /** Names every course that could not be refreshed; the others were. */
+  failure: Error | undefined
+}
+
 /**
- * Re-fetches each added course's data, then offers to download whatever new
- * exercises turned up.
+ * Re-fetches each added course's data.
  *
- * One course failing does not stop the rest; the returned `Err` names every
- * course that could not be refreshed. Nothing is reported here — the caller
- * decides whether a background failure is worth a notification.
+ * One course failing does not stop the rest, so that is reported in `failure` rather than as
+ * an `Err`, which is only for a `courseId` that is not stored.
  */
 export async function checkForCourseUpdates(
   actionContext: ReadyActionContext,
   options: CourseUpdateOptions = {},
-): Promise<Result<void, Error>> {
-  const { dialog } = actionContext
+): Promise<Result<CourseUpdates, Error>> {
   const { userData } = actionContext.startup
   const { courseId, onProgress } = options
   let courses: LocalCourseData[]
@@ -68,63 +71,17 @@ export async function checkForCourseUpdates(
     .map((x) => x.updated)
     .filter((x): x is LocalCourseData => x !== undefined)
   const failures = refreshed.filter((x) => x.error !== undefined)
-  for (const failure of failures) {
-    Logger.warn(`Failed to update course ${failure.name}`, failure.error)
+  for (const failed of failures) {
+    Logger.warn(`Failed to update course ${failed.name}`, failed.error)
   }
 
-  const handleDownload = async (course: LocalCourseData): Promise<void> => {
-    const id = LocalCourseData.getCourseId(course)
-    const downloadResult = await downloadNewExercisesForCourse(actionContext, id)
-    if (downloadResult.err) {
-      dialog.reportError(
-        "Failed to download new exercises for the course.",
-        downloadResult.val,
-        course.kind,
-      )
-    }
-  }
-
-  // `notifyAfter` throttles this toast only: gating the refresh above on it too
-  // would freeze course metadata and point totals for the whole delay, including
-  // the refresh each submit asks for.
-  const now = Date.now()
-  for (const course of updatedCourses) {
-    const newExercises = LocalCourseData.getNewExercises(course)
-    if (newExercises.length > 0 && !course.data.disabled && course.data.notifyAfter <= now) {
-      const id = LocalCourseData.getCourseId(course)
-      const courseName = LocalCourseData.getCourseName(course)
-      dialog.notification(
-        `Found ${newExercises.length} new exercises for ${courseName}. Do you wish to download them now?`,
-        ["Download", async (): Promise<void> => handleDownload(course)],
-        [
-          "Remind me later",
-          async (): Promise<void> => {
-            const result = await userData.setNewExerciseNotifyAfter(
-              id,
-              Date.now() + NOTIFICATION_DELAY,
-            )
-            if (result.err) {
-              dialog.reportError("Failed to postpone the reminder.", result.val, course.kind)
-            }
-          },
-        ],
-        [
-          "Don't remind about these exercises",
-          async (): Promise<void> => {
-            const result = await userData.clearFromNewExercises(id)
-            if (result.err) {
-              dialog.reportError("Failed to dismiss the new exercises.", result.val, course.kind)
-            }
-          },
-        ],
-      )
-    }
-  }
-
-  if (failures.length > 0) {
-    const names = failures.map((x) => x.name).join(", ")
-    const firstMessage = failures[0]?.error?.message ?? "unknown error"
-    return Err(new Error(`Failed to fetch updates for ${names}: ${firstMessage}`))
-  }
-  return Ok.EMPTY
+  const names = failures.map((x) => x.name).join(", ")
+  const firstMessage = failures[0]?.error?.message ?? "unknown error"
+  return Ok({
+    courses: updatedCourses,
+    failure:
+      failures.length > 0
+        ? new Error(`Failed to fetch updates for ${names}: ${firstMessage}`)
+        : undefined,
+  })
 }
