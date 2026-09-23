@@ -49,7 +49,6 @@ export async function pasteExercise(
   courseSlug: string,
   exerciseName: string,
 ): Promise<Result<string, Error>> {
-  const { dialog } = actionContext
   const { langs, userData, workspaceManager } = actionContext.startup
 
   const paste = pasterFor(langs, userData, backend, courseSlug, exerciseName)
@@ -65,7 +64,6 @@ export async function pasteExercise(
       key: `submit:${exercisePath}`,
       maxHoldMs: CLI_PROCESS_TIMEOUT + 30_000,
       busyMessage: "A submission for this exercise is already in progress.",
-      onBusy: (message) => dialog.notification(message),
     },
     async () => {
       const pasteResult = await paste(exercisePath)

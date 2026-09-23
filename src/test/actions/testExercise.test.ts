@@ -4,8 +4,10 @@ import type * as vscode from "vscode"
 
 import { testExercise } from "../../actions/testExercise"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
+import { failure } from "../../api/withOperation"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
+import { runForExercise } from "../../commands/runForExercise"
 import { makeTmcKind } from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
 
@@ -115,5 +117,61 @@ suite("testExercise action", () => {
       .find((message) => message.type === "testError")
     const delivered = JSON.parse(JSON.stringify(posted)) as { error: { message: string } }
     expect(delivered.error.message).toBe("Checkstyle crashed")
+  })
+})
+
+// Drives the action through the real `runForExercise`/`withOperation` boundary to prove
+// the busy notice is shown exactly once now that the action no longer notifies itself.
+suite("testExercise action, through the real runForExercise boundary", () => {
+  function testBody(actionContext: ReadyActionContext) {
+    return (exercise: WorkspaceExercise) =>
+      testExercise(extensionContext, actionContext, exercise).then((result) =>
+        result.err ? failure("Exercise test run failed.", result.val) : result,
+      )
+  }
+
+  test("a busy rejection notifies exactly once and reports no error", async () => {
+    let finishTest!: () => void
+    const running = new Promise((resolve) => {
+      finishTest = () => resolve(Ok({ logs: {}, status: "PASSED", testResults: [] }))
+    })
+    const exercise = workspaceExercise()
+    const base = contextWithTestRun(running)
+    const actionContext: ReadyActionContext = {
+      ...base,
+      startup: {
+        ...base.startup,
+        workspaceManager: {
+          get activeExercise() {
+            return exercise
+          },
+          getExerciseContaining: () => exercise,
+        } as unknown as ReadyStartup["workspaceManager"],
+      },
+    }
+    const notification = vi.mocked(actionContext.dialog.notification)
+    const reportError = vi.mocked(actionContext.dialog.reportError)
+
+    const first = runForExercise(
+      actionContext,
+      undefined,
+      "Testing the exercise",
+      testBody(actionContext),
+    )
+    const second = await runForExercise(
+      actionContext,
+      undefined,
+      "Testing the exercise",
+      testBody(actionContext),
+    )
+
+    expect(second.err).toBe(true)
+    expect(notification).toHaveBeenCalledExactlyOnceWith(
+      "Tests are already running for this exercise.",
+    )
+    expect(reportError).not.toHaveBeenCalled()
+
+    finishTest()
+    await first
   })
 })

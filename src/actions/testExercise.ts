@@ -32,7 +32,6 @@ export async function testExercise(
   actionContext: ReadyActionContext,
   exercise: WorkspaceExercise,
 ): Promise<Result<void, Error>> {
-  const { dialog } = actionContext
   const { langs, userData } = actionContext.startup
 
   const courseResult = userData.getCourseBySlug(exercise.backend, exercise.courseSlug)
@@ -56,7 +55,6 @@ export async function testExercise(
       key: `test:${exercisePath}`,
       maxHoldMs: 2 * CLI_PROCESS_TIMEOUT + 30_000,
       busyMessage: "Tests are already running for this exercise.",
-      onBusy: (message) => dialog.notification(message),
     },
     async () => {
       const testRunId = nextPanelId()

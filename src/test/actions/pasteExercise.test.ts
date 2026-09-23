@@ -4,7 +4,12 @@ import type * as vscode from "vscode"
 
 import { pasteExercise } from "../../actions/pasteExercise"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
+import { failure } from "../../api/withOperation"
+import type { WorkspaceExercise } from "../../api/workspaceManager"
+import { ExerciseStatus } from "../../api/workspaceManager"
+import { runForExercise } from "../../commands/runForExercise"
 import { BottleneckError } from "../../errors"
+import { pasteServiceName } from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
 
 const COURSE_SLUG = "mooc-python-course"
@@ -54,6 +59,21 @@ function tmcContextWith(pasteResult: unknown): {
   return { actionContext, submit }
 }
 
+/** Mirrors `commands/pasteExercise.ts`'s headline-wrapping, for driving the action
+ * through the real `runForExercise`/`withOperation` boundary. */
+function pasteBody(actionContext: ReadyActionContext) {
+  return (exercise: WorkspaceExercise) =>
+    pasteExercise(actionContext, exercise.backend, exercise.courseSlug, exercise.exerciseSlug).then(
+      (result) =>
+        result.ok
+          ? result
+          : failure(
+              `Failed to send the exercise to ${pasteServiceName(exercise.backend)}.`,
+              result.val,
+            ),
+    )
+}
+
 suite("paste action", () => {
   test("a tmc exercise goes to the tmc paste service with its numeric id", async () => {
     const { actionContext, submit } = tmcContextWith(Ok("https://tmc.mooc.fi/paste/abc123"))
@@ -76,7 +96,8 @@ suite("paste action", () => {
 
   test("a paste is rejected while a submit of the same exercise is in flight", async () => {
     // Paste and submit deliberately share one key: both drive the CLI against the
-    // same exercise directory, so they must not overlap.
+    // same exercise directory, so they must not overlap. The busy notice is
+    // `withOperation`'s job at the command layer; showing it here too would double it.
     let finish!: () => void
     const { actionContext } = moocContextWith(undefined)
     ;(actionContext.startup.langs as unknown as Record<string, unknown>).submitMoocExerciseToPaste =
@@ -92,9 +113,7 @@ suite("paste action", () => {
 
     expect(second.err).toBe(true)
     expect(second.val).toBeInstanceOf(BottleneckError)
-    expect(notification).toHaveBeenCalledExactlyOnceWith(
-      "A submission for this exercise is already in progress.",
-    )
+    expect(notification).not.toHaveBeenCalled()
 
     finish()
     expect((await first).val).toBe("link")
@@ -121,5 +140,73 @@ suite("paste action", () => {
     expect(result.err).toBe(true)
     expect((result.val as Error).message).toContain("did not answer with a paste link")
     expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
+  })
+})
+
+// Drives the action through the real `runForExercise`/`withOperation` boundary to prove
+// the busy notice is shown exactly once now that the action no longer notifies itself.
+suite("paste action, through the real runForExercise boundary", () => {
+  function moocWorkspaceContext(): {
+    actionContext: ReadyActionContext
+    exercise: WorkspaceExercise
+  } {
+    const exercise: WorkspaceExercise = {
+      backend: "mooc",
+      courseSlug: COURSE_SLUG,
+      exerciseSlug: EXERCISE_SLUG,
+      status: ExerciseStatus.Open,
+      uri: { fsPath: EXERCISE_PATH } as unknown as vscode.Uri,
+    }
+    const actionContext = createMockActionContext({
+      startup: {
+        langs: {} as unknown as ReadyStartup["langs"],
+        userData: {
+          getMoocExerciseByName: () => ({ id: MOOC_EXERCISE_ID }),
+        } as unknown as ReadyStartup["userData"],
+        workspaceManager: {
+          getExerciseBySlug: () => ({ uri: exercise.uri }),
+          get activeExercise() {
+            return exercise
+          },
+          getExerciseContaining: () => exercise,
+        } as unknown as ReadyStartup["workspaceManager"],
+      },
+    })
+    return { actionContext, exercise }
+  }
+
+  test("a busy rejection notifies exactly once and reports no error", async () => {
+    let finish!: () => void
+    const { actionContext } = moocWorkspaceContext()
+    ;(actionContext.startup.langs as unknown as Record<string, unknown>).submitMoocExerciseToPaste =
+      vi.fn().mockReturnValue(
+        new Promise((resolve) => {
+          finish = () => resolve(Ok("link"))
+        }),
+      )
+    const notification = vi.mocked(actionContext.dialog.notification)
+    const reportError = vi.mocked(actionContext.dialog.reportError)
+
+    const first = runForExercise(
+      actionContext,
+      undefined,
+      "Pasting the exercise",
+      pasteBody(actionContext),
+    )
+    const second = await runForExercise(
+      actionContext,
+      undefined,
+      "Pasting the exercise",
+      pasteBody(actionContext),
+    )
+
+    expect(second.err).toBe(true)
+    expect(notification).toHaveBeenCalledExactlyOnceWith(
+      "A submission for this exercise is already in progress.",
+    )
+    expect(reportError).not.toHaveBeenCalled()
+
+    finish()
+    await first
   })
 })
