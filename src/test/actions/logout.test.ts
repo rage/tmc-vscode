@@ -5,6 +5,7 @@ import { logout } from "../../actions/logout"
 import type { ReadyActionContext } from "../../actions/types"
 import type Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
+import { withOperation } from "../../api/withOperation"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -34,32 +35,26 @@ suite("logout action", function () {
     expect(deauthenticateMooc).toHaveBeenCalledOnce()
   })
 
-  test("still attempts the mooc logout when the tmc logout fails", async function () {
+  test("returns the tmc failure without reporting it, when only tmc fails", async function () {
     const error = new Error("tmc logout failed")
     deauthenticate = vi.fn(async () => Err(error))
     const result = await logout(actionContext())
     expect(deauthenticateMooc).toHaveBeenCalledOnce()
     expect(result.err).toBe(true)
-    expect(result.val).toBe(error)
-    expect(dialogMock.reportError).toHaveBeenCalledWith(
-      expect.stringContaining("Failed to log out"),
-      error,
-      "tmc",
-    )
+    expect((result.val as Error).message).toContain("Failed to log out")
+    expect((result.val as Error).cause).toBe(error)
+    expect(dialogMock.reportError).not.toHaveBeenCalled()
   })
 
-  test("still attempts the tmc logout when the mooc logout fails, and reports it", async function () {
+  test("returns the mooc failure without reporting it, when only mooc fails", async function () {
     const error = new Error("mooc logout failed")
     deauthenticateMooc = vi.fn(async () => Err(error))
     const result = await logout(actionContext())
     expect(deauthenticate).toHaveBeenCalledOnce()
     expect(result.err).toBe(true)
-    expect(result.val).toBe(error)
-    expect(dialogMock.reportError).toHaveBeenCalledWith(
-      expect.stringContaining("courses.mooc.fi"),
-      error,
-      "mooc",
-    )
+    expect((result.val as Error).message).toContain("courses.mooc.fi")
+    expect((result.val as Error).cause).toBe(error)
+    expect(dialogMock.reportError).not.toHaveBeenCalled()
   })
 
   test("still attempts the mooc logout when the tmc logout throws instead of returning an Err", async function () {
@@ -72,12 +67,8 @@ suite("logout action", function () {
     const result = await logout(actionContext())
     expect(deauthenticateMooc).toHaveBeenCalledOnce()
     expect(result.err).toBe(true)
-    expect(result.val).toBe(error)
-    expect(dialogMock.reportError).toHaveBeenCalledWith(
-      expect.stringContaining("Failed to log out"),
-      error,
-      "tmc",
-    )
+    expect((result.val as Error).cause).toBe(error)
+    expect(dialogMock.reportError).not.toHaveBeenCalled()
   })
 
   test("still attempts the tmc logout when the mooc logout throws instead of returning an Err", async function () {
@@ -88,15 +79,11 @@ suite("logout action", function () {
     const result = await logout(actionContext())
     expect(deauthenticate).toHaveBeenCalledOnce()
     expect(result.err).toBe(true)
-    expect(result.val).toBe(error)
-    expect(dialogMock.reportError).toHaveBeenCalledWith(
-      expect.stringContaining("courses.mooc.fi"),
-      error,
-      "mooc",
-    )
+    expect((result.val as Error).cause).toBe(error)
+    expect(dialogMock.reportError).not.toHaveBeenCalled()
   })
 
-  test("attempts both regardless of outcome and surfaces both failures individually", async function () {
+  test("warns the mooc failure it does not return, when both backends fail", async function () {
     const tmcError = new Error("tmc logout failed")
     const moocError = new Error("mooc logout failed")
     deauthenticate = vi.fn(async () => Err(tmcError))
@@ -104,17 +91,31 @@ suite("logout action", function () {
     const result = await logout(actionContext())
     expect(deauthenticate).toHaveBeenCalledOnce()
     expect(deauthenticateMooc).toHaveBeenCalledOnce()
-    expect(dialogMock.reportError).toHaveBeenCalledWith(
-      expect.stringContaining("Failed to log out"),
-      tmcError,
-      "tmc",
-    )
-    expect(dialogMock.reportError).toHaveBeenCalledWith(
+    expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
       expect.stringContaining("courses.mooc.fi"),
       moocError,
       "mooc",
     )
     expect(result.err).toBe(true)
-    expect(result.val).toBe(tmcError)
+    expect((result.val as Error).cause).toBe(tmcError)
+  })
+
+  // Composed exactly like `commands/logout.ts`, to prove the failure is
+  // reported exactly once end to end, not zero or twice.
+  test("withOperation reports exactly one notification when a single backend fails", async function () {
+    deauthenticateMooc = vi.fn(async () => Err(new Error("mooc logout failed")))
+    await withOperation(dialogMock, { failure: "Failed to log out." }, () =>
+      logout(actionContext()),
+    )
+    expect(dialogMock.reportError).toHaveBeenCalledTimes(1)
+  })
+
+  test("withOperation reports exactly two notifications when both backends fail", async function () {
+    deauthenticate = vi.fn(async () => Err(new Error("tmc logout failed")))
+    deauthenticateMooc = vi.fn(async () => Err(new Error("mooc logout failed")))
+    await withOperation(dialogMock, { failure: "Failed to log out." }, () =>
+      logout(actionContext()),
+    )
+    expect(dialogMock.reportError).toHaveBeenCalledTimes(2)
   })
 })

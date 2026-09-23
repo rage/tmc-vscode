@@ -1,6 +1,7 @@
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 
+import { failure } from "../api/withOperation"
 import { backendName } from "../shared/shared"
 import type { ReadyActionContext } from "./types"
 
@@ -22,27 +23,25 @@ async function safeDeauthenticate(
  * Logs the user out of both backends, updating UI state.
  *
  * Both deauthenticate calls run unconditionally so a failure in one doesn't
- * skip the other; each failure gets its own notification, and the returned
- * `Result` reports whichever failed (tmc's, if both did).
+ * skip the other. The returned `Result` carries whichever failed (tmc's, if
+ * both did) for `withOperation` to report; when both fail, the other one is
+ * warned here instead of being lost.
  */
 export async function logout(actionContext: ReadyActionContext): Promise<Result<void, Error>> {
   const { dialog } = actionContext
   const { langs } = actionContext.startup
 
   const result = await safeDeauthenticate(() => langs.deauthenticate())
-  if (result.err) {
-    dialog.reportError(`Failed to log out of ${backendName("tmc")}.`, result.val, "tmc")
-  }
   const moocResult = await safeDeauthenticate(() => langs.deauthenticateMooc())
-  if (moocResult.err) {
-    dialog.reportError(`Failed to log out of ${backendName("mooc")}.`, moocResult.val, "mooc")
-  }
 
   if (result.err) {
-    return result
+    if (moocResult.err) {
+      dialog.reportError(`Failed to log out of ${backendName("mooc")}.`, moocResult.val, "mooc")
+    }
+    return failure(`Failed to log out of ${backendName("tmc")}.`, result.val, "tmc")
   }
   if (moocResult.err) {
-    return moocResult
+    return failure(`Failed to log out of ${backendName("mooc")}.`, moocResult.val, "mooc")
   }
   return Ok.EMPTY
 }

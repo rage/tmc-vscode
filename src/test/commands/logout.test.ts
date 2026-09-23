@@ -40,14 +40,13 @@ suite("logout command", function () {
     expect(dialog.notification).not.toHaveBeenCalled()
   })
 
-  // `actions.logout` already shows the user why, so a second notification here
-  // would say the same thing twice.
-  test("stays quiet on failure, since the action layer already reported it", async function () {
+  test("reports a failure once, through withOperation, and announces no success", async function () {
     vi.mocked(actions.logout).mockResolvedValue(Err(new Error("deauthentication failed")))
     const [context, dialog] = contextWith(true)
 
     await logout(context)
 
     expect(dialog.notification).not.toHaveBeenCalled()
+    expect(dialog.reportError).toHaveBeenCalledOnce()
   })
 })
