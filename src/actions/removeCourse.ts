@@ -1,5 +1,8 @@
+import type { Result } from "ts-results"
+import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import { failure } from "../api/withOperation"
 import { closedExercisesSettingKey } from "../config/constants"
 import type { CourseIdentifier } from "../shared/shared"
 import { LocalCourseData } from "../shared/shared"
@@ -10,21 +13,22 @@ import type { ReadyActionContext } from "./types"
  * Removes a course from the user's courses, along with the extension's own state
  * for it: its closed-exercise setting and its `.code-workspace` file.
  *
- * The exercises already downloaded are deliberately left on disk.
+ * The exercises already downloaded are deliberately left on disk. Failing to clean up the
+ * setting or the workspace file is reported and does not stop the removal; an `Err` means
+ * the course is still in the user's courses.
  *
  * @param id ID of the course to remove
  */
 export async function removeCourse(
   actionContext: ReadyActionContext,
   id: CourseIdentifier,
-): Promise<void> {
+): Promise<Result<void, Error>> {
   const { dialog, ui } = actionContext
   const { langs, userData, workspaceManager } = actionContext.startup
 
   const courseResult = userData.getCourse(id)
   if (courseResult.err) {
-    dialog.reportError("Failed to remove the course.", courseResult.val, id.kind)
-    return
+    return courseResult
   }
   const course = courseResult.val
   const courseName = LocalCourseData.getCourseName(course)
@@ -52,12 +56,11 @@ export async function removeCourse(
 
   const deleteResult = await userData.deleteCourse(id)
   if (deleteResult.err) {
-    dialog.reportError(
+    return failure(
       `Failed to remove "${courseName}" from your courses.`,
       deleteResult.val,
       course.kind,
     )
-    return
   }
   ui.treeDP.refresh()
 
@@ -68,4 +71,5 @@ export async function removeCourse(
     Logger.info("Closing course workspace because it was removed.")
     await vscode.commands.executeCommand("workbench.action.closeFolder")
   }
+  return Ok.EMPTY
 }

@@ -3,11 +3,10 @@ import * as os from "os"
 import { compact } from "lodash"
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
-import type * as vscode from "vscode"
 
 import { ExerciseStatus } from "../api/workspaceManager"
-import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
-import type { CourseDetailsPanel, CourseIdentifier, ExtensionToWebview } from "../shared/shared"
+import { TmcPanel } from "../panels/TmcPanel"
+import type { CourseIdentifier, ExtensionToWebview } from "../shared/shared"
 import { ExerciseIdentifier, LocalCourseData, LocalCourseExercise, match } from "../shared/shared"
 import { Logger } from "../utilities"
 import { downloadExercisesForUi } from "./downloadExercisesForUi"
@@ -19,19 +18,27 @@ import type { ReadyActionContext } from "./types"
  */
 const UNDER_8GB_RAM = os.totalmem() < 8 * 1024 ** 3
 
+/** What {@link openExercises} opened, and whether the course now has too many open. */
+export interface OpenedExercises {
+  ids: ExerciseIdentifier[]
+  /**
+   * The open-exercise limit this machine is warned at, when the course's open count now
+   * exceeds it; the caller tells the user.
+   */
+  exceededOpenLimit: number | undefined
+}
+
 /**
  * Opens given exercises, showing them in the course workspace.
  * @param exerciseIdsToOpen Array of exercise IDs
  */
 export async function openExercises(
-  context: vscode.ExtensionContext,
   actionContext: ReadyActionContext,
   exerciseIdsToOpen: ExerciseIdentifier[],
   courseId: CourseIdentifier,
-): Promise<Result<ExerciseIdentifier[], Error>> {
+): Promise<Result<OpenedExercises, Error>> {
   Logger.info("Opening exercises", exerciseIdsToOpen)
 
-  const { dialog } = actionContext
   const { userData, workspaceManager } = actionContext.startup
 
   const courseResult = userData.getCourse(courseId)
@@ -58,33 +65,10 @@ export async function openExercises(
     return openResult
   }
 
-  // check open exercise count and warn if it's too high
-  const weakThreshold = 50
-  const strongThreshold = 100
-  const warningThreshold = UNDER_8GB_RAM ? weakThreshold : strongThreshold
-  const currentlyOpen = workspaceManager
+  const openLimit = UNDER_8GB_RAM ? 50 : 100
+  const openCount = workspaceManager
     .getExercisesByCourseSlug(course.kind, courseName)
-    .filter((x) => x.status === ExerciseStatus.Open)
-  if (currentlyOpen.length > warningThreshold) {
-    dialog.warningNotification(
-      `You have over ${warningThreshold} exercises open, which may cause performance issues. You can close completed exercises from the TMC extension menu in the sidebar.`,
-      [
-        "Open course details",
-        (): void => {
-          const panel: CourseDetailsPanel = {
-            id: nextPanelId(),
-            type: "CourseDetails",
-            courseId,
-            exerciseStatuses: {
-              tmc: {},
-              mooc: {},
-            },
-          }
-          TmcPanel.renderMain(context.extensionUri, context, actionContext, panel)
-        },
-      ],
-    )
-  }
+    .filter((x) => x.status === ExerciseStatus.Open).length
 
   TmcPanel.postMessage(
     ...exerciseIdsToOpen.map<ExtensionToWebview>((id) => ({
@@ -98,7 +82,10 @@ export async function openExercises(
     })),
   )
 
-  return new Ok(exerciseIdsToOpen)
+  return new Ok({
+    ids: exerciseIdsToOpen,
+    exceededOpenLimit: openCount > openLimit ? openLimit : undefined,
+  })
 }
 
 /**
@@ -108,12 +95,10 @@ export async function openExercises(
  * exercise that has never been downloaded, so opening it has to fetch it first.
  */
 export async function downloadAndOpenExercises(
-  context: vscode.ExtensionContext,
   actionContext: ReadyActionContext,
   exerciseIdsToOpen: ExerciseIdentifier[],
   courseId: CourseIdentifier,
-): Promise<Result<ExerciseIdentifier[], Error>> {
-  const { dialog } = actionContext
+): Promise<Result<OpenedExercises, Error>> {
   const { langs, userData } = actionContext.startup
 
   const courseResult = userData.getCourse(courseId)
@@ -144,11 +129,6 @@ export async function downloadAndOpenExercises(
     ),
   )
   if (localCourseExercises.err) {
-    dialog.reportError(
-      "Error trying to list local exercises while opening selected exercises.",
-      localCourseExercises.val,
-      courseId.kind,
-    )
     return localCourseExercises
   }
 
@@ -169,9 +149,5 @@ export async function downloadAndOpenExercises(
 
   // `openExercises` is responsible for posting the resulting "opened" status
   // changes back to the webview, so don't duplicate that here.
-  const openResult = await openExercises(context, actionContext, exerciseIdsToOpen, courseId)
-  if (openResult.err) {
-    dialog.reportError("Errored while opening selected exercises.", openResult.val, courseId.kind)
-  }
-  return openResult
+  return openExercises(actionContext, exerciseIdsToOpen, courseId)
 }

@@ -1,7 +1,6 @@
-import { Ok } from "ts-results"
-import type { Mock } from "vitest"
+import type { Result } from "ts-results"
+import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
-import type * as vscode from "vscode"
 
 import { downloadExercisesForUi } from "../../actions/downloadExercisesForUi"
 import { downloadAndOpenExercises } from "../../actions/openExercises"
@@ -58,66 +57,61 @@ async function openExercisesOnMachineWith(totalRamBytes: number) {
   return (await import("../../actions/openExercises")).openExercises
 }
 
-function contextWithOpenExercises(openCount: number): {
-  actionContext: ReadyActionContext
-  warningNotification: Mock
-} {
-  const warningNotification = vi.fn()
+function contextWithOpenExercises(openCount: number): ReadyActionContext {
   const openExerciseList = Array.from({ length: openCount }, (_unused, index) => ({
     backend: "mooc",
     courseSlug: "mooc-python-course",
     exerciseSlug: `mooc_hello_${index}`,
     status: ExerciseStatus.Open,
   }))
-  return {
-    actionContext: {
-      ...createMockActionContext({
-        startup: {
-          userData: {
-            getCourse: () => Ok(makeMoocKind(moocCourse) as LocalCourseData),
-          } as unknown as UserData,
-          workspaceManager: {
-            openCourseExercises: vi.fn(async () => Ok.EMPTY),
-            getExercisesByCourseSlug: () => openExerciseList,
-          } as unknown as WorkspaceManager,
-        },
-      }),
-      dialog: { warningNotification } as unknown as ReadyActionContext["dialog"],
+  return createMockActionContext({
+    startup: {
+      userData: {
+        getCourse: () => Ok(makeMoocKind(moocCourse) as LocalCourseData),
+      } as unknown as UserData,
+      workspaceManager: {
+        openCourseExercises: vi.fn(async () => Ok.EMPTY),
+        getExercisesByCourseSlug: () => openExerciseList,
+      } as unknown as WorkspaceManager,
     },
-    warningNotification,
-  }
+  })
 }
 
-async function openOn(totalRamBytes: number, openCount: number): Promise<Mock> {
+/** The open-exercise limit an open on this machine reports exceeded, if any. */
+async function exceededLimitOn(
+  totalRamBytes: number,
+  openCount: number,
+): Promise<number | undefined> {
   const openExercises = await openExercisesOnMachineWith(totalRamBytes)
-  const { actionContext, warningNotification } = contextWithOpenExercises(openCount)
-  await openExercises(
-    {} as vscode.ExtensionContext,
+  const actionContext = contextWithOpenExercises(openCount)
+  const result = await openExercises(
     actionContext,
     [ExerciseIdentifier.from("mooc-ex-uuid-1")],
     CourseIdentifier.from("instance-uuid-1"),
   )
-  return warningNotification
+  // The entry point shows the warning; the operation only reports the limit.
+  expect(actionContext.dialog.warningNotification).not.toHaveBeenCalled()
+  return result.unwrap().exceededOpenLimit
 }
 
-suite("openExercises open-exercise-count warning", function () {
+suite("openExercises open-exercise-count limit", function () {
   afterEach(function () {
     vi.doUnmock("os")
     vi.resetModules()
   })
 
-  test("warns above 50 open exercises on a machine with under 8 GiB of RAM", async function () {
-    expect(await openOn(4 * GIB, 51)).toHaveBeenCalledOnce()
-    expect(await openOn(4 * GIB, 50)).not.toHaveBeenCalled()
+  test("is 50 open exercises on a machine with under 8 GiB of RAM", async function () {
+    expect(await exceededLimitOn(4 * GIB, 51)).toBe(50)
+    expect(await exceededLimitOn(4 * GIB, 50)).toBeUndefined()
   })
 
-  test("warns only above 100 open exercises on a machine with 8 GiB or more", async function () {
-    expect(await openOn(16 * GIB, 51)).not.toHaveBeenCalled()
-    expect(await openOn(16 * GIB, 101)).toHaveBeenCalledOnce()
+  test("is 100 open exercises on a machine with 8 GiB or more", async function () {
+    expect(await exceededLimitOn(16 * GIB, 51)).toBeUndefined()
+    expect(await exceededLimitOn(16 * GIB, 101)).toBe(100)
   })
 
   test("treats exactly 8 GiB as not weak", async function () {
-    expect(await openOn(8 * GIB, 51)).not.toHaveBeenCalled()
+    expect(await exceededLimitOn(8 * GIB, 51)).toBeUndefined()
   })
 })
 
@@ -134,7 +128,7 @@ suite("downloadAndOpenExercises action", function () {
     },
   ]
 
-  const contextFor = (listing: typeof localListing): ReadyActionContext => {
+  const contextFor = (listing: Result<typeof localListing, Error>): ReadyActionContext => {
     const workspaceManager = {
       openCourseExercises: vi.fn(async () => Ok.EMPTY),
       getExercisesByCourseSlug: () => [],
@@ -143,18 +137,14 @@ suite("downloadAndOpenExercises action", function () {
       getCourse: () => Ok(makeMoocKind(moocCourse) as LocalCourseData),
     } as unknown as UserData
     const langs = {
-      listLocalCourseExercises: vi.fn(async () => Ok(listing)),
+      listLocalCourseExercises: vi.fn(async () => listing),
     } as unknown as Langs
-    return {
-      ...createMockActionContext({ startup: { langs, userData, workspaceManager } }),
-      dialog: { reportError: vi.fn() } as unknown as ReadyActionContext["dialog"],
-    }
+    return createMockActionContext({ startup: { langs, userData, workspaceManager } })
   }
 
   test("does not re-download an exercise that is already on disk under another slug", async function () {
     await downloadAndOpenExercises(
-      {} as vscode.ExtensionContext,
-      contextFor(localListing),
+      contextFor(Ok(localListing)),
       [ExerciseIdentifier.from("mooc-ex-uuid-1")],
       CourseIdentifier.from("instance-uuid-1"),
     )
@@ -163,8 +153,7 @@ suite("downloadAndOpenExercises action", function () {
 
   test("downloads an exercise the local listing does not report", async function () {
     await downloadAndOpenExercises(
-      {} as vscode.ExtensionContext,
-      contextFor([]),
+      contextFor(Ok([])),
       [ExerciseIdentifier.from("mooc-ex-uuid-1")],
       CourseIdentifier.from("instance-uuid-1"),
     )
@@ -174,5 +163,20 @@ suite("downloadAndOpenExercises action", function () {
       CourseIdentifier.from("instance-uuid-1"),
       [ExerciseIdentifier.from("mooc-ex-uuid-1")],
     )
+  })
+
+  test("returns a failed local listing without reporting it", async function () {
+    const error = new Error("tmc-langs crashed")
+    const actionContext = contextFor(Err(error))
+
+    const result = await downloadAndOpenExercises(
+      actionContext,
+      [ExerciseIdentifier.from("mooc-ex-uuid-1")],
+      CourseIdentifier.from("instance-uuid-1"),
+    )
+
+    expect(result.err && result.val).toBe(error)
+    expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
+    expect(downloadExercisesForUi).not.toHaveBeenCalled()
   })
 })
