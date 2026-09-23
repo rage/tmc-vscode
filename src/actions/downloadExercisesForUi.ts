@@ -28,17 +28,13 @@ export async function downloadExercisesForUi(
     const shownBeforeDownload = updateablesRegistry.get(courseId)
     await withOptimisticList(
       () => postUpdateables(courseId, []),
-      async (): Promise<ExerciseIdentifier[] | undefined> => {
-        const downloadResult = await downloadOrUpdateExercises(actionContext, exerciseIds, courseId)
-        if (downloadResult.err) {
-          dialog.reportError("Failed to update exercises.", downloadResult.val, courseId.kind)
-          return undefined
-        }
+      async (): Promise<ExerciseIdentifier[]> => {
+        const { failed } = await downloadOrUpdateExercises(actionContext, exerciseIds, courseId)
         const refreshResult = await refreshLocalExercises(actionContext)
         if (refreshResult.err) {
           dialog.reportError("Failed to refresh local exercises.", refreshResult.val, courseId.kind)
         }
-        return downloadResult.val.failed
+        return failed
       },
       (failed) => postUpdateables(courseId, failed ?? shownBeforeDownload),
     )
@@ -68,14 +64,9 @@ export async function downloadExercisesForUi(
   await withOptimisticList(
     () => postNewExercises([]),
     async () => {
-      const downloadResult = await downloadOrUpdateExercises(actionContext, exerciseIds, courseId)
-      if (downloadResult.err) {
-        dialog.reportError("Failed to download new exercises.", downloadResult.val, courseId.kind)
-        return
-      }
-
+      const { successful } = await downloadOrUpdateExercises(actionContext, exerciseIds, courseId)
       const refreshResult = Result.all(
-        await userData.clearFromNewExercises(courseId, downloadResult.val.successful),
+        await userData.clearFromNewExercises(courseId, successful),
         await refreshLocalExercises(actionContext),
       )
       if (refreshResult.err) {

@@ -1,4 +1,4 @@
-import { Err, Ok } from "ts-results"
+import { Ok } from "ts-results"
 import { vi } from "vitest"
 
 import { downloadNewExercisesForCourse } from "../../actions/downloadNewExercisesForCourse"
@@ -81,9 +81,10 @@ suite("downloadNewExercisesForCourse action", function () {
   })
 
   test("announces nothing new once every exercise has been downloaded", async function () {
-    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(
-      Ok({ successful: [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)], failed: [] }),
-    )
+    vi.mocked(downloadOrUpdateExercises).mockResolvedValue({
+      successful: [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
+      failed: [],
+    })
 
     const result = await downloadNewExercisesForCourse(actionContext(), COURSE_ID)
 
@@ -92,9 +93,10 @@ suite("downloadNewExercisesForCourse action", function () {
   })
 
   test("keeps announcing only the exercises that failed to download", async function () {
-    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(
-      Ok({ successful: [ExerciseIdentifier.from(1)], failed: [ExerciseIdentifier.from(2)] }),
-    )
+    vi.mocked(downloadOrUpdateExercises).mockResolvedValue({
+      successful: [ExerciseIdentifier.from(1)],
+      failed: [ExerciseIdentifier.from(2)],
+    })
 
     await downloadNewExercisesForCourse(actionContext(), COURSE_ID)
 
@@ -106,18 +108,6 @@ suite("downloadNewExercisesForCourse action", function () {
 
     await expect(downloadNewExercisesForCourse(actionContext(), COURSE_ID)).rejects.toThrow("boom")
 
-    expect(announcedNewExercises()).toEqual([
-      ExerciseIdentifier.from(1),
-      ExerciseIdentifier.from(2),
-    ])
-  })
-
-  test("restores the announcement when the download fails outright", async function () {
-    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(Err(new Error("boom")))
-
-    const result = await downloadNewExercisesForCourse(actionContext(), COURSE_ID)
-
-    expect(result.err).toBe(true)
     expect(announcedNewExercises()).toEqual([
       ExerciseIdentifier.from(1),
       ExerciseIdentifier.from(2),

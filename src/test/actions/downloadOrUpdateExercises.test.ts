@@ -81,7 +81,7 @@ suite("downloadOrUpdateExercises action", function () {
   })
 
   test("should return empty results if no exercises are given", async function () {
-    const result = (await downloadOrUpdateExercises(actionContext(), [], TEST_COURSE_ID)).unwrap()
+    const result = await downloadOrUpdateExercises(actionContext(), [], TEST_COURSE_ID)
     expect(result.successful.length).toBe(0)
     expect(result.failed.length).toBe(0)
   })
@@ -96,13 +96,11 @@ suite("downloadOrUpdateExercises action", function () {
     // the whole action erroring.
     const error = new Error("boom")
     tmcMockValues.downloadExercises = { ...tmcMockValues.downloadExercises, tmcError: error }
-    const result = (
-      await downloadOrUpdateExercises(
-        actionContext(),
-        [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
-        TEST_COURSE_ID,
-      )
-    ).unwrap()
+    const result = await downloadOrUpdateExercises(
+      actionContext(),
+      [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
+      TEST_COURSE_ID,
+    )
     expect(result.successful).toEqual([])
     expect(result.failed).toEqual([ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)])
     expect(dialogMock.reportError).toHaveBeenCalledWith(
@@ -116,33 +114,31 @@ suite("downloadOrUpdateExercises action", function () {
   // successful/failed; earlier assertions compared against bare numbers.
   test("should return ids of successful downloads", async function () {
     tmcMockValues.downloadExercises = createDownloadResult([helloWorld, otherWorld], [], undefined)
-    const result = (
-      await downloadOrUpdateExercises(
-        actionContext(),
-        [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
-        TEST_COURSE_ID,
-      )
-    ).unwrap()
+    const result = await downloadOrUpdateExercises(
+      actionContext(),
+      [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
+      TEST_COURSE_ID,
+    )
     expect(result.successful).toEqual([ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)])
   })
 
   test("should return ids of skipped downloads as successful", async function () {
     tmcMockValues.downloadExercises = createDownloadResult([], [helloWorld, otherWorld], undefined)
-    const result = (
-      await downloadOrUpdateExercises(
-        actionContext(),
-        [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
-        TEST_COURSE_ID,
-      )
-    ).unwrap()
+    const result = await downloadOrUpdateExercises(
+      actionContext(),
+      [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
+      TEST_COURSE_ID,
+    )
     expect(result.successful).toEqual([ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)])
   })
 
   test("should combine successful and skipped downloads", async function () {
     tmcMockValues.downloadExercises = createDownloadResult([helloWorld], [otherWorld], undefined)
-    const result = (
-      await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
-    ).unwrap()
+    const result = await downloadOrUpdateExercises(
+      actionContext(),
+      [ExerciseIdentifier.from(1)],
+      TEST_COURSE_ID,
+    )
     expect(result.successful).toEqual([ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)])
   })
 
@@ -155,13 +151,11 @@ suite("downloadOrUpdateExercises action", function () {
         [otherWorld, [""]],
       ],
     )
-    const result = (
-      await downloadOrUpdateExercises(
-        actionContext(),
-        [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
-        TEST_COURSE_ID,
-      )
-    ).unwrap()
+    const result = await downloadOrUpdateExercises(
+      actionContext(),
+      [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
+      TEST_COURSE_ID,
+    )
     expect(result.failed).toEqual([ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)])
   })
 
@@ -177,13 +171,11 @@ suite("downloadOrUpdateExercises action", function () {
         skipped: [],
       },
     }
-    const result = (
-      await downloadOrUpdateExercises(
-        actionContext(),
-        [ExerciseIdentifier.from(moocExerciseId)],
-        TEST_COURSE_ID,
-      )
-    ).unwrap()
+    const result = await downloadOrUpdateExercises(
+      actionContext(),
+      [ExerciseIdentifier.from(moocExerciseId)],
+      TEST_COURSE_ID,
+    )
     expect(result.successful).toEqual([ExerciseIdentifier.from(moocExerciseId)])
     expect(result.failed).toEqual([])
   })
@@ -198,13 +190,11 @@ suite("downloadOrUpdateExercises action", function () {
         skipped: [],
       },
     }
-    const result = (
-      await downloadOrUpdateExercises(
-        actionContext(),
-        [ExerciseIdentifier.from(moocExerciseId)],
-        TEST_COURSE_ID,
-      )
-    ).unwrap()
+    const result = await downloadOrUpdateExercises(
+      actionContext(),
+      [ExerciseIdentifier.from(moocExerciseId)],
+      TEST_COURSE_ID,
+    )
     expect(result.failed).toEqual([ExerciseIdentifier.from(moocExerciseId)])
     expect(result.successful).toEqual([])
   })
@@ -221,13 +211,11 @@ suite("downloadOrUpdateExercises action", function () {
       moocError,
     }
 
-    const result = (
-      await downloadOrUpdateExercises(
-        actionContext(),
-        [ExerciseIdentifier.from(downloadedId), ExerciseIdentifier.from(undownloadedId)],
-        TEST_COURSE_ID,
-      )
-    ).unwrap()
+    const result = await downloadOrUpdateExercises(
+      actionContext(),
+      [ExerciseIdentifier.from(downloadedId), ExerciseIdentifier.from(undownloadedId)],
+      TEST_COURSE_ID,
+    )
 
     expect(dialogMock.reportError).toHaveBeenCalledWith(
       "Failed to download exercises from courses.mooc.fi.",
@@ -484,9 +472,11 @@ suite("downloadOrUpdateExercises cancellation and progress", function () {
       },
     ) as Langs["downloadExercises"]
 
-    const result = (
-      await downloadOrUpdateExercises(actionContext(), [...tmcIds, ...moocIds], TEST_COURSE_ID)
-    ).unwrap()
+    const result = await downloadOrUpdateExercises(
+      actionContext(),
+      [...tmcIds, ...moocIds],
+      TEST_COURSE_ID,
+    )
 
     expect(tmcInterrupted).toBe(true)
     expect(downloadedIdsPerCall).toEqual([tmcIds])

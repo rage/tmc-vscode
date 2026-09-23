@@ -94,19 +94,11 @@ export function registerCommands(
   Logger.info("Registering TMC VSCode commands")
 
   registerWebviewHandlers({
-    cancelTests: (testRunId) => {
-      const interrupts = actions.testInterrupts.get(testRunId)
-      if (interrupts) {
-        for (const interrupt of interrupts) {
-          interrupt()
-        }
-        actions.testInterrupts.delete(testRunId)
-      }
-    },
+    cancelTests: actions.cancelTestRun,
     closeExercises: actions.closeExercises,
     downloadAndOpenExercises: actions.downloadAndOpenExercises,
     downloadExercisesForUi: actions.downloadExercisesForUi,
-    openWorkspace: actions.openWorkspace,
+    openWorkspace: commands.openWorkspace,
     pasteExercise: actions.pasteExercise,
     refreshLocalExercises: actions.refreshLocalExercises,
     removeCourse: actions.removeCourse,
@@ -129,16 +121,7 @@ export function registerCommands(
   // A handler outlives this call, and narrowing does not survive into a closure.
   const readyContext: ReadyActionContext = actionContext
 
-  register("tmcTreeView.refreshCourses", async () => {
-    await dialog.progressNotification("Fetching course updates...", async (progress) => {
-      await actions.refreshEverything(readyContext, {
-        silent: false,
-        onProgress: (done, total) => {
-          progress.report({ fraction: total === 0 ? 1 : done / total })
-        },
-      })
-    })
-  })
+  register("tmcTreeView.refreshCourses", async () => commands.refreshCourses(readyContext))
 
   register("tmc.addNewCourse", async () => commands.addNewCourse(readyContext))
 
@@ -183,18 +166,7 @@ export function registerCommands(
     })
   })
 
-  register("tmc.openTMCExercisesFolder", async () => {
-    const { projectsDirectory } = readyContext.startup.resources
-    if (!projectsDirectory) {
-      void dialog.errorNotification(
-        "Opening the exercises folder is unavailable: tmc-langs did not report an exercise directory.",
-        new Error("tmc-langs did not report an exercise directory"),
-      )
-      return
-    }
-
-    await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(projectsDirectory))
-  })
+  register("tmc.openTMCExercisesFolder", async () => commands.openExercisesFolder(readyContext))
 
   register("tmc.pasteExercise", async (resource: vscode.Uri | undefined) =>
     commands.pasteExercise(readyContext, resource),

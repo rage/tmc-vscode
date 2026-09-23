@@ -1,9 +1,9 @@
-import type { Result } from "ts-results"
 import * as vscode from "vscode"
 
 import * as actions from "../actions"
+import { listAddableCourses, listOrganizationCourses, MOOC_LOGIN } from "../actions/courseCatalog"
 import type { ReadyActionContext } from "../actions/types"
-import type Langs from "../api/langs"
+import { withOperation } from "../api/withOperation"
 import type { MoocCourse, Organization } from "../shared/langsSchema"
 import type { CourseIdentifier, Enum } from "../shared/shared"
 import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
@@ -19,15 +19,6 @@ import { Logger } from "../utilities"
  */
 type TopLevelChoice = Enum<Organization, MoocCourse>
 
-/**
- * Stands for both "the user is not logged in to courses.mooc.fi" and the pick
- * entry offering to fix that. The device flow is offered here because the
- * "Log In" command is gated on the `LoggedIn` context key, which a still-valid
- * TMC credential satisfies on its own — so for those users this is the only
- * route to a courses.mooc.fi login.
- */
-const MOOC_LOGIN = "mooc-login"
-
 const TITLE = "Add New Course"
 
 const ALREADY_ADDED = " · already added"
@@ -41,22 +32,12 @@ function courseKey(id: CourseIdentifier): string {
   )
 }
 
-async function enrolledMoocCourses(
-  langs: Langs,
-  authenticated: boolean,
-): Promise<Result<MoocCourse[], Error> | typeof MOOC_LOGIN> {
-  return authenticated ? langs.getEnrolledMoocCourses() : MOOC_LOGIN
-}
-
 export async function addNewCourse(actionContext: ReadyActionContext): Promise<void> {
-  const { authState, dialog } = actionContext
-  const { langs, userData } = actionContext.startup
+  const { dialog } = actionContext
+  const { userData } = actionContext.startup
   Logger.info("Adding new course")
 
-  const [organizations, moocCourses] = await Promise.all([
-    langs.getTmcOrganizations(),
-    enrolledMoocCourses(langs, authState.mooc),
-  ])
+  const { organizations, moocCourses } = await listAddableCourses(actionContext)
 
   // Courses the user already has are dimmed rather than hidden: a student
   // looking for one would otherwise be left wondering where it went.
@@ -131,7 +112,7 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
   const picked = await match(
     chosen,
     async (organization): Promise<[string, CourseIdentifier] | undefined> => {
-      const courses = await langs.getCourses(organization.slug)
+      const courses = await listOrganizationCourses(actionContext, organization.slug)
       if (courses.err) {
         dialog.reportError(
           `Failed to fetch organization courses for ${organization.name}.`,
@@ -159,8 +140,7 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
     return
   }
 
-  const result = await actions.addNewCourse(actionContext, picked[0], picked[1])
-  if (result.err) {
-    dialog.reportError("Failed to add course.", result.val, picked[1].kind)
-  }
+  await withOperation(dialog, { failure: "Failed to add course.", backend: picked[1].kind }, () =>
+    actions.addNewCourse(actionContext, picked[0], picked[1]),
+  )
 }

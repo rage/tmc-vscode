@@ -12,6 +12,7 @@ import type Settings from "../../config/settings"
 import type { UserData } from "../../config/userdata"
 import type UI from "../../ui/ui"
 import { autoMock } from "../support/mock"
+import { createDialogMock } from "./dialog"
 
 export interface MockActionContextOptions {
   /** Which backends hold a session; both do unless said otherwise. */
@@ -37,6 +38,17 @@ export function createMockAuthState(
   }
 }
 
+// A bare auto-mock would return a stub from `progressNotification`, silently skipping
+// every task run under a progress bar.
+function dialogRunningProgressTasks(): Dialog {
+  const fallback = autoMock<Dialog>()
+  const { progressNotification } = createDialogMock()[0]
+  return new Proxy(fallback as object, {
+    get: (target, prop) =>
+      prop === "progressNotification" ? progressNotification : Reflect.get(target, prop),
+  }) as Dialog
+}
+
 /**
  * A loose baseline action context whose activation succeeded.
  *
@@ -48,7 +60,7 @@ export function createMockActionContext(
 ): ReadyActionContext {
   return {
     authState: createMockAuthState(options.authenticated),
-    dialog: autoMock<Dialog>(),
+    dialog: dialogRunningProgressTasks(),
     settings: autoMock<Settings>(),
     ui: autoMock<UI>(),
     startup: {

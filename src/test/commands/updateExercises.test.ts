@@ -1,4 +1,4 @@
-import { Ok } from "ts-results"
+import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
 import type { ReadyActionContext } from "../../actions/types"
@@ -16,10 +16,8 @@ import { createDialogMock } from "../mocks/dialog"
 const checkForExerciseUpdates = vi.hoisted(() => vi.fn())
 const downloadExerciseUpdates = vi.hoisted(() => vi.fn())
 
-vi.mock("../../actions", () => ({
-  checkForExerciseUpdates,
-  downloadExerciseUpdates,
-}))
+vi.mock("../../actions/checkForExerciseUpdates", () => ({ checkForExerciseUpdates }))
+vi.mock("../../actions/downloadExerciseUpdates", () => ({ downloadExerciseUpdates }))
 
 /** An outdated exercise as `checkForExerciseUpdates` reports it: a fresh id object per exercise. */
 function outdated(
@@ -77,9 +75,9 @@ suite("updateExercises command", function () {
     await updateExercises(actionContext, "loud")
 
     const remindMeLater = vi.mocked(dialog.notification).mock.calls[0]?.[2]
-    await remindMeLater?.[1]()
+    remindMeLater?.[1]()
 
-    expect(setNewExerciseNotifyAfter).toHaveBeenCalledTimes(2)
+    await vi.waitFor(() => expect(setNewExerciseNotifyAfter).toHaveBeenCalledTimes(2))
     expect(
       setNewExerciseNotifyAfter.mock.calls.map(([id]) =>
         CourseIdentifierNs.toString(id as CourseIdentifier),
@@ -106,8 +104,58 @@ suite("updateExercises command", function () {
     await updateExercises(actionContext, "loud")
     expect(downloadExerciseUpdates).not.toHaveBeenCalled()
     const download = vi.mocked(dialog.notification).mock.calls[0]?.[1]
-    await download?.[1]()
+    download?.[1]()
 
     expect(downloadExerciseUpdates).toHaveBeenCalledExactlyOnceWith(actionContext, updates)
+  })
+
+  test("reports a failed check once when loud, and only logs it when silent", async function () {
+    checkForExerciseUpdates.mockResolvedValue(Err(new Error("offline")))
+    const [loudContext, loudDialog] = contextWith(false)
+    const [silentContext, silentDialog] = contextWith(false)
+
+    await updateExercises(loudContext, "loud")
+    await updateExercises(silentContext, "silent")
+
+    expect(loudDialog.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to check for exercise updates.",
+      expect.objectContaining({ message: "offline" }),
+      undefined,
+    )
+    expect(silentDialog.reportError).not.toHaveBeenCalled()
+    expect(silentDialog.notification).not.toHaveBeenCalled()
+  })
+
+  test("still offers the updates in a silent run, but not the all-clear", async function () {
+    checkForExerciseUpdates.mockResolvedValueOnce(Ok([outdated(1, 10)]))
+    checkForExerciseUpdates.mockResolvedValueOnce(Ok([]))
+    const [actionContext, dialog] = contextWith(false)
+
+    await updateExercises(actionContext, "silent")
+    await updateExercises(actionContext, "silent")
+
+    expect(dialog.notification).toHaveBeenCalledExactlyOnceWith(
+      "Found updates for 1 exercises. Do you wish to download them?",
+      expect.anything(),
+      expect.anything(),
+    )
+  })
+
+  test("reports a reminder that could not be postponed once", async function () {
+    checkForExerciseUpdates.mockResolvedValue(Ok([outdated(1, 10), outdated(2, 20)]))
+    const [actionContext, dialog, setNewExerciseNotifyAfter] = contextWith(false)
+    setNewExerciseNotifyAfter.mockResolvedValue(Err(new Error("storage full")))
+
+    await updateExercises(actionContext, "silent")
+    vi.mocked(dialog.notification).mock.calls[0]?.[2]?.[1]()
+
+    await vi.waitFor(() =>
+      expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
+        "Failed to postpone the reminder.",
+        expect.objectContaining({ message: "storage full" }),
+        undefined,
+      ),
+    )
+    expect(setNewExerciseNotifyAfter).toHaveBeenCalledTimes(1)
   })
 })

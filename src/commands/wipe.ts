@@ -1,9 +1,8 @@
-import * as fs from "fs-extra"
-import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { ReadyActionContext } from "../actions/types"
-import { FileSystemError } from "../errors"
+import { wipeExtensionData } from "../actions/wipeExtensionData"
+import { withOperation } from "../api/withOperation"
 import { Logger } from "../utilities"
 
 export async function wipe(
@@ -11,7 +10,7 @@ export async function wipe(
   context: vscode.ExtensionContext,
 ): Promise<void> {
   const { authState, dialog } = actionContext
-  const { langs, resources, userData, workspaceManager } = actionContext.startup
+  const { resources, workspaceManager } = actionContext.startup
   Logger.info("Wiping")
   const projectsDirectory = resources.projectsDirectory
   if (!projectsDirectory) {
@@ -54,49 +53,12 @@ and every setting and course this extension has stored will be cleared.",
   // Change to Explorer view to avoid instant restart
   await vscode.commands.executeCommand("workbench.files.action.focusFilesExplorer")
 
-  const message = "Removing extension data..."
-  // Deleting the exercises is the one step that cannot be recovered from, so it
-  // goes last: a failure anywhere before it leaves the student's work on disk.
-  const wipeResult = await dialog.progressNotification(message, async (progress) => {
-    const settingsReset = await langs.resetSettings()
-    if (settingsReset.err) {
-      return settingsReset
-    }
-    progress.report({ message, fraction: 0.2 })
-
-    // `deauthenticate` fires the logout events with `expected: true`, so the
-    // session-expiry warning stays quiet and the auth context updates itself.
-    const tmcLogout = await langs.deauthenticate()
-    if (tmcLogout.err) {
-      return tmcLogout
-    }
-    const moocLogout = await langs.deauthenticateMooc()
-    if (moocLogout.err) {
-      return moocLogout
-    }
-    progress.report({ message, fraction: 0.4 })
-
-    await userData.wipeDataFromStorage()
-    progress.report({ message, fraction: 0.6 })
-
-    const workspaceFilesRemoved = await workspaceManager.deleteAllWorkspaceFiles()
-    if (workspaceFilesRemoved.err) {
-      return workspaceFilesRemoved
-    }
-    progress.report({ message, fraction: 0.8 })
-
-    try {
-      fs.removeSync(projectsDirectory)
-    } catch (e) {
-      return Err(new FileSystemError(e, "Failed to remove projects directory."))
-    }
-    progress.report({ message, fraction: 1 })
-
-    return Ok.EMPTY
-  })
-
+  const wipeResult = await withOperation(
+    dialog,
+    { failure: "Failed to wipe extension data.", progress: "Removing extension data..." },
+    (report) => wipeExtensionData(actionContext, projectsDirectory, report),
+  )
   if (wipeResult.err) {
-    dialog.reportError("Failed to wipe extension data.", wipeResult.val)
     return
   }
 

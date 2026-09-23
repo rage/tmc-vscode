@@ -1,5 +1,10 @@
-import * as actions from "../actions"
+import type { Result } from "ts-results"
+import { Ok } from "ts-results"
+
+import { checkForExerciseUpdates } from "../actions/checkForExerciseUpdates"
+import { downloadExerciseUpdates } from "../actions/downloadExerciseUpdates"
 import type { ReadyActionContext } from "../actions/types"
+import { withOperation } from "../api/withOperation"
 import { NOTIFICATION_DELAY } from "../config/constants"
 import { CourseIdentifier } from "../shared/shared"
 import { Logger } from "../utilities"
@@ -22,12 +27,12 @@ export async function updateExercises(
   const silent = mode === "silent"
   Logger.info("Checking for exercise updates")
 
-  const updateablesResult = await actions.checkForExerciseUpdates(actionContext)
+  const updateablesResult = await withOperation(
+    dialog,
+    { failure: "Failed to check for exercise updates.", silent },
+    () => checkForExerciseUpdates(actionContext),
+  )
   if (updateablesResult.err) {
-    Logger.warn("Failed to check for exercise updates.", updateablesResult.val)
-    if (!silent) {
-      dialog.reportError("Failed to check for exercise updates.", updateablesResult.val)
-    }
     return
   }
 
@@ -39,7 +44,7 @@ export async function updateExercises(
 
   if (exercisesToUpdate.length === 0) {
     if (!silent) {
-      dialog.notification("All exercises are up to date.")
+      void dialog.notification("All exercises are up to date.")
     }
     return
   }
@@ -50,28 +55,35 @@ export async function updateExercises(
     exercisesToUpdate.map((x) => [CourseIdentifier.toString(x.courseId), x.courseId]),
   )
 
-  const downloadHandler = (): Promise<void> =>
-    actions.downloadExerciseUpdates(actionContext, exercisesToUpdate)
-
-  if (settings.getAutomaticallyUpdateExercises()) {
-    return downloadHandler()
+  const download = async (): Promise<void> => {
+    await withOperation(dialog, { failure: "Failed to update exercises." }, async () => {
+      await downloadExerciseUpdates(actionContext, exercisesToUpdate)
+      return Ok.EMPTY
+    })
   }
 
-  dialog.notification(
+  if (settings.getAutomaticallyUpdateExercises()) {
+    return download()
+  }
+
+  const postpone = async (): Promise<Result<void, Error>> => {
+    const notifyAfter = Date.now() + NOTIFICATION_DELAY
+    for (const courseId of coursesToUpdate.values()) {
+      const result = await userData.setNewExerciseNotifyAfter(courseId, notifyAfter)
+      if (result.err) {
+        return result
+      }
+    }
+    return Ok.EMPTY
+  }
+
+  void dialog.notification(
     `Found updates for ${exercisesToUpdate.length} exercises. Do you wish to download them?`,
-    ["Download", downloadHandler],
+    ["Download", (): void => void download()],
     [
       "Remind me later",
-      async (): Promise<void> => {
-        const notifyAfter = Date.now() + NOTIFICATION_DELAY
-        for (const courseId of coursesToUpdate.values()) {
-          const result = await userData.setNewExerciseNotifyAfter(courseId, notifyAfter)
-          if (result.err) {
-            dialog.reportError("Failed to postpone the reminder.", result.val)
-            return
-          }
-        }
-      },
+      (): void =>
+        void withOperation(dialog, { failure: "Failed to postpone the reminder." }, postpone),
     ],
   )
 }

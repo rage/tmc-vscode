@@ -1,9 +1,16 @@
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import { removeCourse } from "../../actions/removeCourse"
 import type { ActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
-import { ConnectionError, ForbiddenError, InitializationError, presentationFor } from "../../errors"
+import {
+  BottleneckError,
+  ConnectionError,
+  ForbiddenError,
+  InitializationError,
+  presentationFor,
+} from "../../errors"
 import { postUpdateables } from "../../panels/exerciseLists"
 import { moocLoginRegistry } from "../../panels/moocLoginRegistry"
 import type { WebviewHandlers } from "../../panels/TmcPanel"
@@ -421,12 +428,14 @@ function stubHandlers(): { [K in keyof WebviewHandlers]: ReturnType<typeof vi.fn
   return {
     cancelTests: vi.fn(),
     closeExercises: vi.fn().mockResolvedValue(Err(new Error("could not close"))),
-    downloadAndOpenExercises: vi.fn().mockResolvedValue(Ok([])),
+    downloadAndOpenExercises: vi
+      .fn()
+      .mockResolvedValue(Ok({ ids: [], exceededOpenLimit: undefined })),
     downloadExercisesForUi: vi.fn().mockResolvedValue(undefined),
     openWorkspace: vi.fn().mockResolvedValue(undefined),
     pasteExercise: vi.fn().mockResolvedValue(Ok("link")),
     refreshLocalExercises: vi.fn().mockResolvedValue(Ok.EMPTY),
-    removeCourse: vi.fn().mockResolvedValue(undefined),
+    removeCourse: vi.fn().mockResolvedValue(Ok.EMPTY),
     submitExercise: vi.fn().mockResolvedValue(Ok(undefined)),
     updateCourse: vi.fn().mockResolvedValue(Ok(true)),
   }
@@ -444,9 +453,10 @@ suite("TmcPanel handler dispatch", () => {
     await listener({ type: "closeExercises", ids, courseId })
 
     expect(handlers.closeExercises).toHaveBeenCalledWith(actionContext, ids, courseId)
-    expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
+    expect(actionContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Failed to close the selected exercises.",
-      expect.any(Error),
+      expect.objectContaining({ message: "could not close" }),
+      "tmc",
     )
   })
 
@@ -454,18 +464,16 @@ suite("TmcPanel handler dispatch", () => {
     // The webview host discards whatever a listener rejects with, so nothing else
     // would tell the user their click failed.
     const handlers = stubHandlers()
-    handlers.closeExercises.mockRejectedValue(new Error("handler exploded"))
+    handlers.openWorkspace.mockRejectedValue(new Error("handler exploded"))
     registerWebviewHandlers(handlers as unknown as WebviewHandlers)
-    const actionContext = createMockActionContext()
+    const actionContext = createMockActionContext({
+      startup: { userData: { getCourse: () => Ok(courseWith(0)) } as never },
+    })
     const { listener } = await mountSidePanel(actionContext)
 
-    await listener({
-      type: "closeExercises",
-      ids: [ExerciseIdentifier.from(101)],
-      courseId: CourseIdentifier.from(42),
-    })
+    await listener({ type: "openCourseWorkspace", courseId: CourseIdentifier.from(42) })
 
-    expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
+    expect(actionContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Something went wrong while handling that action.",
       expect.objectContaining({ message: "handler exploded" }),
     )
@@ -560,6 +568,38 @@ suite("TmcPanel handler dispatch", () => {
     )
   })
 
+  test("a busy paste is answered in the panel alone, with the busy notice", async () => {
+    const handlers = stubHandlers()
+    handlers.pasteExercise.mockResolvedValue(
+      Err(new BottleneckError("A paste is already running.")),
+    )
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = createMockActionContext()
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener(pasteMessage)
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "pasteError", error: "A paste is already running." }),
+    )
+    expectNoNotification(actionContext)
+  })
+
+  test("a paste that throws still answers the waiting panel, and nothing else", async () => {
+    const handlers = stubHandlers()
+    handlers.pasteExercise.mockRejectedValue(new Error("paste exploded"))
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = createMockActionContext()
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener(pasteMessage)
+
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "pasteError", error: "paste exploded" }),
+    )
+    expectNoNotification(actionContext)
+  })
+
   test("a failed paste is reported in the panel, and not also as a notification", async () => {
     // The panel that asked is on screen and renders the failure itself, so a toast
     // would be the second report of one failure.
@@ -576,6 +616,251 @@ suite("TmcPanel handler dispatch", () => {
     )
     expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
     expect(actionContext.dialog.errorNotification).not.toHaveBeenCalled()
+  })
+})
+
+function expectNoNotification(actionContext: ActionContext): void {
+  expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
+  expect(actionContext.dialog.errorNotification).not.toHaveBeenCalled()
+  expect(actionContext.dialog.notification).not.toHaveBeenCalled()
+}
+
+suite("TmcPanel reports a handler's failure once", () => {
+  async function mountWith(
+    handlers: ReturnType<typeof stubHandlers>,
+    actionContext = createMockActionContext(),
+  ): Promise<{
+    actionContext: ReturnType<typeof createMockActionContext>
+    panel: vscode.WebviewPanel
+    listener: (message: unknown) => Promise<void>
+  }> {
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const { panel, listener } = await mountSidePanel(actionContext)
+    return { actionContext, panel, listener }
+  }
+
+  const courseId = CourseIdentifier.from(42)
+  const ids = [ExerciseIdentifier.from(1)]
+
+  suite("for removeCourse", () => {
+    function confirmingContext(
+      startup: Parameters<typeof createMockActionContext>[0] = {},
+    ): ReturnType<typeof createMockActionContext> {
+      const actionContext = createMockActionContext({
+        ...startup,
+        startup: {
+          userData: {
+            getCourse: () => Ok(courseWith(0)),
+            deleteCourse: vi.fn(async () => Err(new Error("globalState is full"))),
+          } as never,
+          langs: { unsetSetting: vi.fn(async () => Ok.EMPTY) } as never,
+          workspaceManager: { deleteWorkspaceFile: vi.fn(async () => Ok.EMPTY) } as never,
+          ...startup.startup,
+        },
+      })
+      vi.mocked(actionContext.dialog.explicitConfirmation).mockResolvedValue(true)
+      return actionContext
+    }
+
+    test("a removal that fails is reported once and never announced as done", async () => {
+      const { actionContext, panel, listener } = await mountWith(
+        { ...stubHandlers(), removeCourse: vi.fn(removeCourse) },
+        confirmingContext(),
+      )
+
+      await listener({ type: "removeCourse", id: courseId })
+
+      expect(actionContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
+        'Failed to remove "python-course" from your courses.',
+        expect.objectContaining({ message: "globalState is full" }),
+        "tmc",
+      )
+      expect(actionContext.dialog.notification).not.toHaveBeenCalled()
+      expect(panel.webview.postMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: "setPanel" }),
+      )
+    })
+
+    test("a removal that succeeds is announced and shows the remaining courses", async () => {
+      const { actionContext, panel, listener } = await mountWith(
+        stubHandlers(),
+        confirmingContext(),
+      )
+
+      await listener({ type: "removeCourse", id: courseId })
+
+      expect(actionContext.dialog.notification).toHaveBeenCalledExactlyOnceWith(
+        "python-course was removed from courses.",
+      )
+      expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
+      expect(panel.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "setPanel",
+          panel: expect.objectContaining({ type: "MyCourses" }),
+        }),
+      )
+    })
+  })
+
+  test("for clearNewExercises", async () => {
+    const error = new Error("globalState is full")
+    const { actionContext, listener } = await mountWith(
+      stubHandlers(),
+      createMockActionContext({
+        startup: { userData: { clearFromNewExercises: vi.fn(async () => Err(error)) } as never },
+      }),
+    )
+
+    await listener({ type: "clearNewExercises", courseId })
+
+    expect(actionContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to dismiss the new exercises.",
+      error,
+      "tmc",
+    )
+  })
+
+  test("for downloadExercises, when the download throws", async () => {
+    const handlers = stubHandlers()
+    handlers.downloadExercisesForUi.mockRejectedValue(new Error("disk full"))
+    const { actionContext, listener } = await mountWith(handlers)
+
+    await listener({ type: "downloadExercises", mode: "download", courseId, ids })
+
+    expect(actionContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to download the exercises.",
+      expect.objectContaining({ message: "disk full" }),
+      "tmc",
+    )
+  })
+
+  suite("for openExercises", () => {
+    test("a failed open", async () => {
+      const handlers = stubHandlers()
+      const error = new Error("tmc-langs crashed")
+      handlers.downloadAndOpenExercises.mockResolvedValue(Err(error))
+      const { actionContext, listener } = await mountWith(handlers)
+
+      await listener({ type: "openExercises", ids, courseId })
+
+      expect(actionContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
+        "Failed to open the selected exercises.",
+        error,
+        "tmc",
+      )
+      expect(actionContext.dialog.warningNotification).not.toHaveBeenCalled()
+    })
+
+    test("warns about the open-exercise limit the operation reports exceeded", async () => {
+      const handlers = stubHandlers()
+      handlers.downloadAndOpenExercises.mockResolvedValue(Ok({ ids, exceededOpenLimit: 50 }))
+      const renderMain = vi.spyOn(TmcPanel, "renderMain").mockImplementation(() => {})
+      onTestFinished(() => renderMain.mockRestore())
+      const { actionContext, listener } = await mountWith(handlers)
+
+      await listener({ type: "openExercises", ids, courseId })
+
+      expect(actionContext.dialog.warningNotification).toHaveBeenCalledExactlyOnceWith(
+        expect.stringContaining("over 50 exercises open"),
+        ["Open course details", expect.any(Function)],
+      )
+      const [, [, openCourseDetails]] = vi.mocked(actionContext.dialog.warningNotification).mock
+        .calls[0] as [string, [string, () => void]]
+      openCourseDetails()
+      expect(renderMain).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        actionContext,
+        expect.objectContaining({ type: "CourseDetails", courseId }),
+      )
+    })
+
+    test("says nothing about a limit that was not exceeded", async () => {
+      const { actionContext, listener } = await mountWith(stubHandlers())
+
+      await listener({ type: "openExercises", ids, courseId })
+
+      expect(actionContext.dialog.warningNotification).not.toHaveBeenCalled()
+      expectNoNotification(actionContext)
+    })
+  })
+
+  test("for refreshCourseDetails, which still re-renders the course", async () => {
+    const handlers = stubHandlers()
+    const error = new Error("tmc-langs crashed")
+    handlers.updateCourse.mockResolvedValue(Err(error))
+    const { actionContext, panel, listener } = await mountWith(handlers)
+
+    await listener({ type: "refreshCourseDetails", id: courseId, useCache: false })
+
+    expect(actionContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to update course.",
+      error,
+      "tmc",
+    )
+    expect(panel.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "setPanel",
+        panel: expect.objectContaining({ type: "CourseDetails" }),
+      }),
+    )
+  })
+
+  suite("for submitExercise", () => {
+    const submitMessage = {
+      type: "submitExercise",
+      course: courseWith(0),
+      exercise: makeTmcKind({
+        id: 101,
+        name: "loops",
+        availablePoints: 1,
+        awardedPoints: 0,
+        deadline: null,
+        passed: false,
+        softDeadline: null,
+      }),
+      exerciseUri: vscode.Uri.file("/exercise"),
+    }
+
+    // The command reports its own failure, so the panel only unsticks its Submit button.
+    test("a failed submission is left to the command to report", async () => {
+      const handlers = stubHandlers()
+      handlers.submitExercise.mockResolvedValue(Err(new Error("offline")))
+      const { actionContext, panel, listener } = await mountWith(handlers)
+
+      await listener(submitMessage)
+
+      expectNoNotification(actionContext)
+      expect(panel.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "submitFailed" }),
+      )
+    })
+
+    test("a submission that throws is reported once and unsticks the Submit button", async () => {
+      const handlers = stubHandlers()
+      handlers.submitExercise.mockRejectedValue(new Error("submit exploded"))
+      const { actionContext, panel, listener } = await mountWith(handlers)
+
+      await listener(submitMessage)
+
+      expect(actionContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
+        expect.any(String),
+        expect.objectContaining({ message: "submit exploded" }),
+      )
+      expect(panel.webview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "submitFailed" }),
+      )
+    })
+
+    test("a submission that succeeds leaves the Submit button to the submission panel", async () => {
+      const { panel, listener } = await mountWith(stubHandlers())
+
+      await listener(submitMessage)
+
+      expect(panel.webview.postMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: "submitFailed" }),
+      )
+    })
   })
 })
 

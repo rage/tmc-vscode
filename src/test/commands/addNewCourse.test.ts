@@ -52,10 +52,17 @@ interface Pick {
   items: [string, unknown, string?][]
 }
 
+interface ReportedError {
+  headline: string
+  cause: unknown
+  backend: string | undefined
+}
+
 interface Harness {
   context: ReadyActionContext
   picks: Pick[]
   errors: string[]
+  reportedErrors: ReportedError[]
   isMoocAuthenticated: ReturnType<typeof vi.fn>
 }
 
@@ -70,6 +77,7 @@ function harness(options: {
   const base = createMockActionContext()
   const picks: Pick[] = []
   const errors: string[] = []
+  const reportedErrors: ReportedError[] = []
   const select = options.select ?? []
 
   const isMoocAuthenticated = vi.fn()
@@ -96,6 +104,9 @@ function harness(options: {
     errorNotification: vi.fn((message: string) => {
       errors.push(message)
     }),
+    reportError: vi.fn((headline: string, cause: unknown, backend?: string) => {
+      reportedErrors.push({ headline, cause, backend })
+    }),
   } as unknown as ActionContext["dialog"]
 
   const courses = options.addedCourses ?? storedCourses
@@ -112,6 +123,7 @@ function harness(options: {
     },
     picks,
     errors,
+    reportedErrors,
     isMoocAuthenticated,
   }
 }
@@ -279,5 +291,17 @@ suite("Add new course command", function () {
       "",
       expect.objectContaining({ kind: "mooc" }),
     )
+  })
+
+  test("reports a failed add once, naming the picked backend", async function () {
+    const { context, reportedErrors } = harness({ select: ["Shared Slug Course"] })
+    const error = new Error("duplicate course")
+    vi.mocked(actions.addNewCourse).mockResolvedValueOnce(Err(error))
+
+    await addNewCourse(context)
+
+    expect(reportedErrors).toEqual([
+      { headline: "Failed to add course.", cause: error, backend: "mooc" },
+    ])
   })
 })

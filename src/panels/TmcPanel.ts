@@ -1,14 +1,16 @@
 import getFolderSize from "get-folder-size"
 import type { Result } from "ts-results"
-import { Err } from "ts-results"
+import { Err, Ok } from "ts-results"
 import type { Disposable, Webview, WebviewPanel } from "vscode"
 import { Uri, ViewColumn, window } from "vscode"
 import * as vscode from "vscode"
 import { z } from "zod"
 
+import type { OpenedExercises } from "../actions/openExercises"
 import type { ActionContext, ReadyActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type Dialog from "../api/dialog"
+import { withOperation } from "../api/withOperation"
 import { ConnectionError, InitializationError } from "../errors"
 import type {
   BackendKind,
@@ -57,11 +59,10 @@ export interface WebviewHandlers {
     courseId: CourseIdentifier,
   ) => Promise<Result<ExerciseIdentifier[], Error>>
   downloadAndOpenExercises: (
-    extensionContext: vscode.ExtensionContext,
     actionContext: ReadyActionContext,
     ids: ExerciseIdentifier[],
     courseId: CourseIdentifier,
-  ) => Promise<Result<ExerciseIdentifier[], Error>>
+  ) => Promise<Result<OpenedExercises, Error>>
   downloadExercisesForUi: (
     actionContext: ReadyActionContext,
     mode: string,
@@ -81,7 +82,10 @@ export interface WebviewHandlers {
   ) => Promise<Result<string, Error>>
   /** Rescans the exercises on disk, so exercises the backend dropped stop showing as open. */
   refreshLocalExercises: (actionContext: ReadyActionContext) => Promise<Result<void, Error>>
-  removeCourse: (actionContext: ReadyActionContext, id: CourseIdentifier) => Promise<void>
+  removeCourse: (
+    actionContext: ReadyActionContext,
+    id: CourseIdentifier,
+  ) => Promise<Result<void, Error>>
   submitExercise: (
     extensionContext: vscode.ExtensionContext,
     actionContext: ReadyActionContext,
@@ -615,13 +619,19 @@ export class TmcPanel {
                                 This won't delete your downloaded exercises.`,
               )
             ) {
-              await handlers().removeCourse(actionContext, message.id)
-              this._renderPanel({
-                id: nextPanelId(),
-                type: "MyCourses",
-                courseDeadlines: {},
-              })
-              actionContext.dialog.notification(`${courseName} was removed from courses.`)
+              const removeResult = await withOperation(
+                actionContext.dialog,
+                { failure: "Failed to remove the course.", backend: message.id.kind },
+                () => handlers().removeCourse(actionContext, message.id),
+              )
+              if (removeResult.ok) {
+                this._renderPanel({
+                  id: nextPanelId(),
+                  type: "MyCourses",
+                  courseDeadlines: {},
+                })
+                actionContext.dialog.notification(`${courseName} was removed from courses.`)
+              }
             }
             break
           }
@@ -636,7 +646,7 @@ export class TmcPanel {
               actionContext.dialog.reportError("Failed to read the course.", courseResult.val)
               return
             }
-            handlers().openWorkspace(
+            await handlers().openWorkspace(
               actionContext,
               LocalCourseData.getCourseName(courseResult.val),
               message.courseId.kind,
@@ -664,17 +674,14 @@ export class TmcPanel {
             if (!readyContext) {
               return
             }
-            const result = await handlers().closeExercises(
-              readyContext,
-              message.ids,
-              message.courseId,
+            await withOperation(
+              actionContext.dialog,
+              {
+                failure: "Failed to close the selected exercises.",
+                backend: message.courseId.kind,
+              },
+              () => handlers().closeExercises(readyContext, message.ids, message.courseId),
             )
-            if (result.err) {
-              actionContext.dialog.reportError(
-                "Failed to close the selected exercises.",
-                result.val,
-              )
-            }
             break
           }
           case "clearNewExercises": {
@@ -683,15 +690,12 @@ export class TmcPanel {
               return
             }
 
-            const clearResult = await actionContext.startup.userData.clearFromNewExercises(
-              message.courseId,
+            const { userData } = actionContext.startup
+            await withOperation(
+              actionContext.dialog,
+              { failure: "Failed to dismiss the new exercises.", backend: message.courseId.kind },
+              () => userData.clearFromNewExercises(message.courseId),
             )
-            if (clearResult.err) {
-              actionContext.dialog.reportError(
-                "Failed to dismiss the new exercises.",
-                clearResult.val,
-              )
-            }
             break
           }
           case "downloadExercises": {
@@ -699,11 +703,18 @@ export class TmcPanel {
             if (!readyContext) {
               return
             }
-            await handlers().downloadExercisesForUi(
-              readyContext,
-              message.mode,
-              message.courseId,
-              message.ids,
+            await withOperation(
+              actionContext.dialog,
+              { failure: "Failed to download the exercises.", backend: message.courseId.kind },
+              async () => {
+                await handlers().downloadExercisesForUi(
+                  readyContext,
+                  message.mode,
+                  message.courseId,
+                  message.ids,
+                )
+                return Ok.EMPTY
+              },
             )
             break
           }
@@ -712,12 +723,37 @@ export class TmcPanel {
             if (!readyContext) {
               return
             }
-            await handlers().downloadAndOpenExercises(
-              extensionContext,
-              readyContext,
-              message.ids,
-              message.courseId,
+            const openResult = await withOperation(
+              actionContext.dialog,
+              {
+                failure: "Failed to open the selected exercises.",
+                backend: message.courseId.kind,
+              },
+              () =>
+                handlers().downloadAndOpenExercises(readyContext, message.ids, message.courseId),
             )
+            const openLimit = openResult.ok ? openResult.val.exceededOpenLimit : undefined
+            if (openLimit !== undefined) {
+              const courseId = message.courseId
+              void actionContext.dialog.warningNotification(
+                `You have over ${openLimit} exercises open, which may cause performance issues. You can close completed exercises from the TMC extension menu in the sidebar.`,
+                [
+                  "Open course details",
+                  (): void =>
+                    TmcPanel.renderMain(
+                      extensionContext.extensionUri,
+                      extensionContext,
+                      actionContext,
+                      {
+                        id: nextPanelId(),
+                        type: "CourseDetails",
+                        courseId,
+                        exerciseStatuses: { tmc: {}, mooc: {} },
+                      },
+                    ),
+                ],
+              )
+            }
             break
           }
           case "refreshCourseDetails": {
@@ -726,10 +762,11 @@ export class TmcPanel {
               return
             }
             const courseId = message.id
-            const updateResult = await handlers().updateCourse(readyContext, courseId)
-            if (updateResult.err) {
-              actionContext.dialog.reportError("Failed to update course.", updateResult.val)
-            }
+            await withOperation(
+              actionContext.dialog,
+              { failure: "Failed to update course.", backend: courseId.kind },
+              () => handlers().updateCourse(readyContext, courseId),
+            )
             // `updateCourse` does not rescan, and the re-render below reads the exercise
             // statuses straight out of the workspace manager.
             const rescanResult = await handlers().refreshLocalExercises(readyContext)
@@ -764,18 +801,19 @@ export class TmcPanel {
               TmcPanel.postMessage({ type: "submitFailed", target: { type: "ExerciseTests" } })
               return
             }
+            // The command reports its own failure; a throw is left to `reportingFailures`.
+            let submitted = false
             try {
               const result = await handlers().submitExercise(
                 extensionContext,
                 readyContext,
                 message.exerciseUri,
               )
-              if (result.err) {
+              submitted = result.ok
+            } finally {
+              if (!submitted) {
                 TmcPanel.postMessage({ type: "submitFailed", target: { type: "ExerciseTests" } })
               }
-            } catch (error) {
-              Logger.error("Unexpected error during exercise submission", error)
-              TmcPanel.postMessage({ type: "submitFailed", target: { type: "ExerciseTests" } })
             }
             break
           }
@@ -790,15 +828,23 @@ export class TmcPanel {
               })
               return
             }
-            const pasteResult = await handlers().pasteExercise(
-              actionContext,
-              message.course.kind,
-              LocalCourseData.getCourseName(message.course),
-              LocalCourseExercise.getSlug(message.exercise),
+            // Silent: the panel that asked is on screen and renders the failure itself.
+            const pasteResult = await withOperation(
+              actionContext.dialog,
+              {
+                failure: "Failed to paste the exercise.",
+                backend: message.course.kind,
+                silent: true,
+              },
+              () =>
+                handlers().pasteExercise(
+                  actionContext,
+                  message.course.kind,
+                  LocalCourseData.getCourseName(message.course),
+                  LocalCourseExercise.getSlug(message.exercise),
+                ),
             )
             if (pasteResult.err) {
-              // No notification: the panel that asked is on screen and renders this
-              // itself, so a toast on top of it would report the same failure twice.
               TmcPanel.postMessage({
                 type: "pasteError",
                 target: message.requestingPanel,
