@@ -3,6 +3,7 @@ import { Err, Ok } from "ts-results"
 import { addNewCourse } from "../../actions/addNewCourse"
 import type { ReadyActionContext } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
+import type { AuthState } from "../../api/authState"
 import type Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
@@ -27,7 +28,7 @@ import {
   moocCourse,
   moocExerciseSlides,
 } from "../fixtures/tmc"
-import { createMockActionContext } from "../mocks/actionContext"
+import { createMockActionContext, createMockAuthState } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
 import { createMockContext } from "../mocks/vscode"
@@ -57,11 +58,15 @@ suite("updateCourse action (mooc)", function () {
   let tmcMockValues: TMCMockValues
   let userData: UserData
   let workspaceManagerMock: WorkspaceManager
+  let authState: AuthState
 
-  const actionContext = (): ReadyActionContext =>
-    createMockActionContext({
+  // One activation's contexts share its auth state.
+  const actionContext = (): ReadyActionContext => ({
+    ...createMockActionContext({
       startup: { langs: tmcMock, userData, workspaceManager: workspaceManagerMock },
-    })
+    }),
+    authState,
+  })
 
   // A context whose dialog is nobody else's, so its call count is this call's alone.
   function contextWithOwnDialog(): { context: ReadyActionContext; dialog: Dialog } {
@@ -79,6 +84,7 @@ suite("updateCourse action (mooc)", function () {
   beforeEach(async function () {
     ;[tmcMock, tmcMockValues] = createTMCMock()
     ;[workspaceManagerMock] = createWorkspaceMangerMock()
+    authState = createMockAuthState()
     await storeCourse(storedMoocCourse)
     vi.spyOn(TmcPanel, "postMessage").mockImplementation(async () => {})
   })
@@ -149,8 +155,6 @@ suite("updateCourse action (mooc)", function () {
   })
 
   test("offers a login once per lapse, and again once the session is renewed", async function () {
-    // A success first, so the report latch starts in a known state.
-    await updateCourse(actionContext(), courseId)
     tmcMockValues.getMoocCourseData = Err(new InsufficientScopeError("no scope"))
 
     const first = contextWithOwnDialog()

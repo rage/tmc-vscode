@@ -650,6 +650,18 @@ suite("reported once: the refresh", function () {
     ])
   })
 
+  test("a lost session scope is warned on a tree refresh too", async function () {
+    const { run, shown } = await harness({
+      langs: {
+        getMoocCourseData: async () => Err(new InsufficientScopeError("exercise-services")),
+      },
+    })
+
+    await run("tmcTreeView.refreshCourses")
+
+    expect(shown).toContain("error: Failed to update course data.")
+  })
+
   test("a background refresh that fails shows nothing", async function () {
     const { actionContext, shown } = await harness({
       langs: { getMoocCourseData: async () => Err(offline()) },
