@@ -2,6 +2,7 @@ import * as vscode from "vscode"
 
 import { moveExtensionDataPath } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
+import { withOperation } from "../api/withOperation"
 import { Logger } from "../utilities"
 
 /**
@@ -29,20 +30,25 @@ export async function changeTmcDataPath(actionContext: ReadyActionContext): Prom
   }
 
   const newPath = (await vscode.window.showOpenDialog(options))?.[0]
-  if (newPath) {
-    const res = await dialog.progressNotification("Moving projects directory...", (progress) => {
-      return moveExtensionDataPath(actionContext, newPath, (update) => progress.report(update))
-    })
-    if (res.ok) {
-      Logger.info(`Moved workspace folder from ${old} to ${res.val}`)
-      dialog.notification(
-        res.val === newPath.fsPath
-          ? `TMC Data was successfully moved to ${res.val}`
-          : `TMC Data was successfully moved to ${res.val} — the folder you chose was not empty, \
+  if (!newPath) {
+    return
+  }
+
+  const res = await withOperation(
+    dialog,
+    {
+      failure: "Failed to move the projects directory.",
+      progress: "Moving projects directory...",
+    },
+    (report) => moveExtensionDataPath(actionContext, newPath, report),
+  )
+  if (res.ok) {
+    Logger.info(`Moved workspace folder from ${old} to ${res.val}`)
+    dialog.notification(
+      res.val === newPath.fsPath
+        ? `TMC Data was successfully moved to ${res.val}`
+        : `TMC Data was successfully moved to ${res.val} — the folder you chose was not empty, \
 so a tmcdata subfolder was used.`,
-      )
-    } else {
-      dialog.reportError("Failed to move the projects directory.", res.val)
-    }
+    )
   }
 }
