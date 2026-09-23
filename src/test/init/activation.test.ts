@@ -196,10 +196,9 @@ vi.mock("../../actions", () => ({
   updateCourse: async (): Promise<unknown> => Ok.EMPTY,
 }))
 
-// `refreshEverything` moved here from `../../actions`; it is the only export the
-// activation background refresh actually invokes. `registerCommands` reads every
-// other one eagerly too, building the webview handler table and its own command
-// closures, so each has to exist here even though none of them runs.
+// `registerCommands` reads every one of these eagerly, building the webview handler
+// table and its own command closures, so each has to be defined here even though only
+// `refreshEverything` (the activation background refresh) actually runs.
 vi.mock("../../commands", () => ({
   refreshEverything: async (): Promise<unknown> => Ok.EMPTY,
   refreshCourses: async (): Promise<void> => {},

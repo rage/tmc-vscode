@@ -156,8 +156,8 @@ export async function submitExercise(
   }
 
   // Key shared with the paste actions, which must not overlap a submit of the same exercise.
-  // Held only until the result is posted: the panel offers Paste from that point on, so
-  // covering the course-update tail below would reject a legitimate click.
+  // Held only until the result is posted: the panel offers Paste from that point on, and
+  // the command layer's post-submit refresh doesn't need the same protection.
   const exercisePath = exercise.uri.fsPath
   const submitted = await runSingleFlight(
     {

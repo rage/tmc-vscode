@@ -349,8 +349,8 @@ suite("registered command handlers", function () {
     )
   })
 
-  // `tmcTreeView.refreshCourses`'s own wiring (progress notification, onProgress ->
-  // fraction) now lives with `refreshCourses` itself, in
+  // `tmcTreeView.refreshCourses`'s wiring (progress notification, onProgress ->
+  // fraction) is tested against `refreshCourses` directly, in
   // `test/commands/refreshEverything.test.ts`; the command-set test above already
   // pins that this id stays registered.
 
