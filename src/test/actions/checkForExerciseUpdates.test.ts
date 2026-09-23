@@ -74,7 +74,7 @@ suite("checkForExerciseUpdates action", function () {
 
   test("should return exercise updates", async function () {
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result.val).toEqual([tmcOutdated])
+    expect(result).toEqual([tmcOutdated])
   })
 
   test("should respect forceRefresh option", async function () {
@@ -94,7 +94,7 @@ suite("checkForExerciseUpdates action", function () {
   test("should return empty array when there are no updates", async function () {
     tmcMockValues.tmcExerciseUpdates = Ok([])
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result.val).toEqual([])
+    expect(result).toEqual([])
   })
 
   test("should filter out unknown exercise ids", async function () {
@@ -103,7 +103,7 @@ suite("checkForExerciseUpdates action", function () {
       ExerciseIdentifier.from(404),
     ])
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result.val).toEqual([tmcOutdated])
+    expect(result).toEqual([tmcOutdated])
   })
 
   test("should combine tmc and mooc updates across courses", async function () {
@@ -113,7 +113,7 @@ suite("checkForExerciseUpdates action", function () {
     ]
     tmcMockValues.moocExerciseUpdates = Ok([ExerciseIdentifier.from("mooc-ex-1")])
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result.val).toEqual([tmcOutdated, moocOutdated])
+    expect(result).toEqual([tmcOutdated, moocOutdated])
   })
 
   test("should NOT discard mooc results when the tmc check fails", async function () {
@@ -124,8 +124,7 @@ suite("checkForExerciseUpdates action", function () {
     tmcMockValues.tmcExerciseUpdates = Err(new Error())
     tmcMockValues.moocExerciseUpdates = Ok([ExerciseIdentifier.from("mooc-ex-1")])
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result.ok).toBe(true)
-    expect(result.val).toEqual([moocOutdated])
+    expect(result).toEqual([moocOutdated])
   })
 
   test("should NOT discard tmc results when the mooc check fails", async function () {
@@ -135,8 +134,7 @@ suite("checkForExerciseUpdates action", function () {
     ]
     tmcMockValues.moocExerciseUpdates = Err(new Error())
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result.ok).toBe(true)
-    expect(result.val).toEqual([tmcOutdated])
+    expect(result).toEqual([tmcOutdated])
   })
 
   // The shared auth state is the only thing asked; a check here would be a second
@@ -148,7 +146,7 @@ suite("checkForExerciseUpdates action", function () {
     ]
     tmcMockValues.moocExerciseUpdates = Ok([ExerciseIdentifier.from("mooc-ex-1")])
     const result = await checkForExerciseUpdates(actionContext({ mooc: false }))
-    expect(result.val).toEqual([tmcOutdated])
+    expect(result).toEqual([tmcOutdated])
     expect(tmcMock.checkExerciseUpdates).not.toHaveBeenCalledWith("mooc", expect.anything())
     expect(tmcMock.isMoocAuthenticated).not.toHaveBeenCalled()
   })

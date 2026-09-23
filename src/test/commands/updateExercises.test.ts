@@ -67,9 +67,7 @@ suite("updateExercises command", function () {
   })
 
   test("postpones the reminder once per course, not once per exercise", async function () {
-    checkForExerciseUpdates.mockResolvedValue(
-      Ok([outdated(1, 10), outdated(1, 11), outdated(2, 20)]),
-    )
+    checkForExerciseUpdates.mockResolvedValue([outdated(1, 10), outdated(1, 11), outdated(2, 20)])
     const [actionContext, dialog, setNewExerciseNotifyAfter] = contextWith(false)
 
     await updateExercises(actionContext, "loud")
@@ -87,7 +85,7 @@ suite("updateExercises command", function () {
 
   test("downloads the updates without asking when automatic updates are on", async function () {
     const updates = [outdated(1, 10), outdated(2, 20)]
-    checkForExerciseUpdates.mockResolvedValue(Ok(updates))
+    checkForExerciseUpdates.mockResolvedValue(updates)
     const [actionContext, dialog] = contextWith(true)
 
     await updateExercises(actionContext, "loud")
@@ -98,7 +96,7 @@ suite("updateExercises command", function () {
 
   test("downloads the updates the user accepts", async function () {
     const updates = [outdated(1, 10)]
-    checkForExerciseUpdates.mockResolvedValue(Ok(updates))
+    checkForExerciseUpdates.mockResolvedValue(updates)
     const [actionContext, dialog] = contextWith(false)
 
     await updateExercises(actionContext, "loud")
@@ -110,7 +108,7 @@ suite("updateExercises command", function () {
   })
 
   test("reports a failed check once when loud, and only logs it when silent", async function () {
-    checkForExerciseUpdates.mockResolvedValue(Err(new Error("offline")))
+    checkForExerciseUpdates.mockRejectedValue(new Error("offline"))
     const [loudContext, loudDialog] = contextWith(false)
     const [silentContext, silentDialog] = contextWith(false)
 
@@ -127,8 +125,8 @@ suite("updateExercises command", function () {
   })
 
   test("still offers the updates in a silent run, but not the all-clear", async function () {
-    checkForExerciseUpdates.mockResolvedValueOnce(Ok([outdated(1, 10)]))
-    checkForExerciseUpdates.mockResolvedValueOnce(Ok([]))
+    checkForExerciseUpdates.mockResolvedValueOnce([outdated(1, 10)])
+    checkForExerciseUpdates.mockResolvedValueOnce([])
     const [actionContext, dialog] = contextWith(false)
 
     await updateExercises(actionContext, "silent")
@@ -142,7 +140,7 @@ suite("updateExercises command", function () {
   })
 
   test("reports a reminder that could not be postponed once", async function () {
-    checkForExerciseUpdates.mockResolvedValue(Ok([outdated(1, 10), outdated(2, 20)]))
+    checkForExerciseUpdates.mockResolvedValue([outdated(1, 10), outdated(2, 20)])
     const [actionContext, dialog, setNewExerciseNotifyAfter] = contextWith(false)
     setNewExerciseNotifyAfter.mockResolvedValue(Err(new Error("storage full")))
 

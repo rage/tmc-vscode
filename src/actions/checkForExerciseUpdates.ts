@@ -1,6 +1,4 @@
 import { flatten } from "lodash"
-import type { Result } from "ts-results"
-import { Ok } from "ts-results"
 
 import type { CourseIdentifier } from "../shared/shared"
 import { ExerciseIdentifier, LocalCourseData, LocalCourseExercise } from "../shared/shared"
@@ -18,12 +16,13 @@ interface OutdatedExercise {
 }
 
 /**
- * Checks all user's courses for exercise updates.
+ * Lists the exercises in the user's courses that have updates. A backend whose check fails
+ * is logged and skipped, so this has no failure of its own.
  */
 export async function checkForExerciseUpdates(
   actionContext: ReadyActionContext,
   options?: Options,
-): Promise<Result<OutdatedExercise[], Error>> {
+): Promise<OutdatedExercise[]> {
   const { authState } = actionContext
   const { langs, userData } = actionContext.startup
   const forceRefresh = options?.forceRefresh ?? false
@@ -71,5 +70,5 @@ export async function checkForExerciseUpdates(
   })
   const outdatedExercises = flatten(outdatedExercisesByCourse)
   Logger.info(`Update check found ${outdatedExercises.length} outdated exercises`)
-  return Ok(outdatedExercises)
+  return outdatedExercises
 }

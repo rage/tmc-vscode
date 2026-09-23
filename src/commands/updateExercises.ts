@@ -1,8 +1,7 @@
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
-import { checkForExerciseUpdates } from "../actions/checkForExerciseUpdates"
-import { downloadExerciseUpdates } from "../actions/downloadExerciseUpdates"
+import { checkForExerciseUpdates, downloadExerciseUpdates } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
 import { NOTIFICATION_DELAY } from "../config/constants"
@@ -30,7 +29,7 @@ export async function updateExercises(
   const updateablesResult = await withOperation(
     dialog,
     { failure: "Failed to check for exercise updates.", silent },
-    () => checkForExerciseUpdates(actionContext),
+    async () => Ok(await checkForExerciseUpdates(actionContext)),
   )
   if (updateablesResult.err) {
     return
