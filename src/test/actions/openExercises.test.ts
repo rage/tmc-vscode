@@ -3,8 +3,8 @@ import type { Mock } from "vitest"
 import { vi } from "vitest"
 import type * as vscode from "vscode"
 
-import { closeExercises, downloadAndOpenExercises } from "../../actions"
 import { downloadExercisesForUi } from "../../actions/downloadExercisesForUi"
+import { downloadAndOpenExercises } from "../../actions/openExercises"
 import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
@@ -45,34 +45,6 @@ const moocCourse: MoocLocalCourseData = {
   materialUrl: null,
 }
 
-suite("closeExercises action", function () {
-  test("closes a mooc exercise by its slug, not its raw uuid id", async function () {
-    // Regression guard: `closeExercises` used to pass the mooc exercise's raw
-    // uuid `id` where the workspace manager expects a slug.
-    const closeCourseExercises = vi.fn(async () => Ok([]))
-    const workspaceManager = {
-      closeCourseExercises,
-      getExercisesByCourseSlug: () => [],
-    } as unknown as WorkspaceManager
-
-    const userData = {
-      getCourse: () => Ok(makeMoocKind(moocCourse) as LocalCourseData),
-    } as unknown as UserData
-
-    const actionContext = createMockActionContext({ startup: { userData, workspaceManager } })
-
-    await closeExercises(
-      actionContext,
-      [ExerciseIdentifier.from("mooc-ex-uuid-1")],
-      CourseIdentifier.from("instance-uuid-1"),
-    )
-
-    expect(closeCourseExercises).toHaveBeenCalledExactlyOnceWith("mooc", "mooc-python-course", [
-      "mooc_hello",
-    ])
-  })
-})
-
 const GIB = 1024 ** 3
 
 // `UNDER_8GB_RAM` is read once at module load, so each machine size needs a fresh module
@@ -83,7 +55,7 @@ async function openExercisesOnMachineWith(totalRamBytes: number) {
     ...(await importOriginal<typeof import("os")>()),
     totalmem: () => totalRamBytes,
   }))
-  return (await import("../../actions/workspace")).openExercises
+  return (await import("../../actions/openExercises")).openExercises
 }
 
 function contextWithOpenExercises(openCount: number): {

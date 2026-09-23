@@ -2,7 +2,7 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import type * as vscode from "vscode"
 
-import { pasteExercise } from "../../actions"
+import { pasteExercise } from "../../actions/pasteExercise"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { BottleneckError } from "../../errors"
 import { createMockActionContext } from "../mocks/actionContext"

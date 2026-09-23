@@ -2,13 +2,13 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import type * as vscode from "vscode"
 
-import { submitExercise } from "../../actions"
+import { submitExercise } from "../../actions/submitExercise"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { BottleneckError } from "../../errors"
 import type { LocalCourseData } from "../../shared/shared"
-import { makeMoocKind, makeTmcKind } from "../../shared/shared"
+import { CourseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
 import { createMockActionContext } from "../mocks/actionContext"
 
@@ -24,20 +24,6 @@ vi.mock("../../panels/TmcPanel", () => ({
   },
 }))
 
-// `submitExercise` ends by refreshing course points through
-// `checkForCourseUpdates` -> `updateCourse`, which would otherwise drive real CLI
-// calls. Stub the module so the refresh is observable without that machinery.
-vi.mock("../../actions/updateCourse", () => ({
-  updateCourse: vi.fn().mockResolvedValue(Ok(true)),
-}))
-
-// The course-update pass ends by rescanning the exercises on disk, which would otherwise
-// drive real CLI calls.
-vi.mock("../../actions/refreshLocalExercises", () => ({
-  refreshLocalExercises: vi.fn(async () => Ok.EMPTY),
-}))
-
-import { updateCourse } from "../../actions/updateCourse"
 import { TmcPanel } from "../../panels/TmcPanel"
 
 const COURSE_SLUG = "mooc-python-course"
@@ -205,10 +191,8 @@ suite("submitExercise action, tmc", () => {
       }),
     )
     expect(setPassed).toHaveBeenCalledWith("tmc", TMC_COURSE_SLUG, EXERCISE_SLUG)
-    expect(updateCourse).toHaveBeenCalledWith(
-      actionContext,
-      expect.objectContaining({ kind: "tmc" }),
-    )
+    // The command layer refreshes this course's totals after a successful submit.
+    expect(result.val).toEqual(CourseIdentifier.from(tmcCourse.id))
   })
 
   test("the submission's page on the server reaches the panel", async () => {
@@ -289,12 +273,8 @@ suite("submitExercise action, mooc", () => {
     )
     // a fully-graded, non-zero score marks the exercise passed
     expect(setPassed).toHaveBeenCalledWith("mooc", COURSE_SLUG, EXERCISE_SLUG)
-    // ...and the course is refreshed so the point totals shown in
-    // CourseDetails/MyCourses reflect the submission, as the tmc path does.
-    expect(updateCourse).toHaveBeenCalledWith(
-      actionContext,
-      expect.objectContaining({ kind: "mooc" }),
-    )
+    // The command layer refreshes this course's totals after a successful submit.
+    expect(result.val).toEqual(CourseIdentifier.from(moocCourse.id))
   })
 
   test("a failed grading does not mark the exercise passed", async () => {
