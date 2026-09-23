@@ -11,6 +11,12 @@
 - Every initialization error notification now offers Show help.
 - Open Exercises Folder, Wipe, Change data path and My Courses now say why they cannot run when TMC-langs reported no exercise directory.
 - Fixed a newly added course's passed exercises not showing as passed right away.
+- Fixed removing a course saying it was removed even when the removal failed.
+- A failed submission is now reported once, in the submission panel; a notification is added only when it offers a fix, such as Log in.
+- Pasting, resetting an exercise or downloading an old submission while submissions are throttled now says so instead of doing nothing.
+- An error in a command, or in an action started from My Courses or course details, is now reported under that action's own name instead of a generic message.
+- A paste from the exercise panel that fails now shows its error in the panel only, instead of also as a notification.
+- A course workspace that fails to open is now reported.
 
 ## [3.5.4] - 2026-09-15
 
