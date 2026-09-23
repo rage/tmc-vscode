@@ -21,9 +21,9 @@ export default defineConfig({
       // trip them and a real drop still does. Raise them when the measured
       // numbers move up, never lower them to make a run pass.
       thresholds: {
-        lines: 79,
-        branches: 68,
-        functions: 77,
+        lines: 80,
+        branches: 70,
+        functions: 78,
       },
     },
   },
