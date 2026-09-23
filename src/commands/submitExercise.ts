@@ -4,8 +4,9 @@ import type * as vscode from "vscode"
 
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
+import { failure } from "../api/withOperation"
 import { refreshEverything } from "./refreshEverything"
-import { failure, runForExercise } from "./runForExercise"
+import { runForExercise } from "./runForExercise"
 
 export async function submitExercise(
   context: vscode.ExtensionContext,

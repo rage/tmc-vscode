@@ -1,9 +1,8 @@
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 
-import type { CourseUpdateOptions } from "../actions/checkForCourseUpdates"
-import { checkForCourseUpdates } from "../actions/checkForCourseUpdates"
-import { downloadNewExercisesForCourse } from "../actions/downloadNewExercisesForCourse"
+import type { CourseUpdateOptions } from "../actions"
+import { checkForCourseUpdates, downloadNewExercisesForCourse } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
 import { EXERCISE_CHECK_INTERVAL, NOTIFICATION_DELAY } from "../config/constants"

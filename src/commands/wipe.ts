@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 
+import { wipeExtensionData } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import { wipeExtensionData } from "../actions/wipeExtensionData"
 import { withOperation } from "../api/withOperation"
 import { Logger } from "../utilities"
 

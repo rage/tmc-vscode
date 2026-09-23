@@ -1,12 +1,13 @@
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { resetExercise as resetExerciseAction } from "../actions/resetExercise"
+import { resetExercise as resetExerciseAction } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
+import { failure } from "../api/withOperation"
 import { backendName, ExerciseIdentifier } from "../shared/shared"
 import { Logger } from "../utilities"
 import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
-import { failure, runForExercise } from "./runForExercise"
+import { runForExercise } from "./runForExercise"
 
 /**
  * Resets an exercise to its initial state, optionally submitting it beforehand.

@@ -1,7 +1,6 @@
 import * as vscode from "vscode"
 
 import * as actions from "../actions"
-import { listAddableCourses, listOrganizationCourses, MOOC_LOGIN } from "../actions/courseCatalog"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
 import type { MoocCourse, Organization } from "../shared/langsSchema"
@@ -37,7 +36,7 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
   const { userData } = actionContext.startup
   Logger.info("Adding new course")
 
-  const { organizations, moocCourses } = await listAddableCourses(actionContext)
+  const { organizations, moocCourses } = await actions.listAddableCourses(actionContext)
 
   // Courses the user already has are dimmed rather than hidden: a student
   // looking for one would otherwise be left wondering where it went.
@@ -46,7 +45,7 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
   )
 
   const unavailable: string[] = []
-  const choices: [string, TopLevelChoice | typeof MOOC_LOGIN, string][] = []
+  const choices: [string, TopLevelChoice | typeof actions.MOOC_LOGIN, string][] = []
 
   if (organizations.err) {
     unavailable.push(backendName("tmc"))
@@ -61,10 +60,10 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
     }
   }
 
-  if (moocCourses === MOOC_LOGIN) {
+  if (moocCourses === actions.MOOC_LOGIN) {
     choices.push([
       `Log in to ${backendName("mooc")}`,
-      MOOC_LOGIN,
+      actions.MOOC_LOGIN,
       "to list the courses you are enrolled in",
     ])
   } else if (moocCourses.err) {
@@ -97,14 +96,14 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
       ? "Which course or organization?"
       : `Which course or organization? (${unavailable.join(" and ")} unavailable, so its courses are missing)`
 
-  const chosen = await dialog.selectItem<TopLevelChoice | typeof MOOC_LOGIN>(
+  const chosen = await dialog.selectItem<TopLevelChoice | typeof actions.MOOC_LOGIN>(
     { title: TITLE, placeHolder },
     ...choices,
   )
   if (chosen === undefined) {
     return
   }
-  if (chosen === MOOC_LOGIN) {
+  if (chosen === actions.MOOC_LOGIN) {
     await vscode.commands.executeCommand("tmc.showMoocLogin")
     return
   }
@@ -112,7 +111,7 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
   const picked = await match(
     chosen,
     async (organization): Promise<[string, CourseIdentifier] | undefined> => {
-      const courses = await listOrganizationCourses(actionContext, organization.slug)
+      const courses = await actions.listOrganizationCourses(actionContext, organization.slug)
       if (courses.err) {
         dialog.reportError(
           `Failed to fetch organization courses for ${organization.name}.`,

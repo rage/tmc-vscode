@@ -2,7 +2,8 @@ import type * as vscode from "vscode"
 
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import { failure, runForExercise } from "./runForExercise"
+import { failure } from "../api/withOperation"
+import { runForExercise } from "./runForExercise"
 
 export async function testExercise(
   context: vscode.ExtensionContext,
