@@ -1,9 +1,9 @@
 import * as vscode from "vscode"
 
-import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
+import { openWorkspace } from "./openWorkspace"
 import { pickCourse } from "./pickCourse"
 
 export async function switchWorkspace(actionContext: ReadyActionContext): Promise<void> {
@@ -21,7 +21,7 @@ export async function switchWorkspace(actionContext: ReadyActionContext): Promis
     },
   })
   if (courseWorkspace) {
-    actions.openWorkspace(
+    openWorkspace(
       actionContext,
       LocalCourseData.getCourseName(courseWorkspace),
       courseWorkspace.kind,

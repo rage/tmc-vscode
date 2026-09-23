@@ -4,7 +4,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { refreshEverything, refreshLocalExercises } from "./actions"
+import { refreshLocalExercises } from "./actions"
 import type { ActionContext, Startup } from "./actions/types"
 import { isReady } from "./actions/types"
 import { createAuthState } from "./api/authState"
@@ -15,6 +15,7 @@ import WorkspaceManager, {
   ensureCourseWorkspaceFile,
   ensureWorkspaceRootFile,
 } from "./api/workspaceManager"
+import { refreshEverything } from "./commands"
 import {
   CLIENT_NAME,
   closedExercisesSettingKey,

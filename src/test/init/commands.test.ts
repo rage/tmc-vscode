@@ -5,7 +5,6 @@ import { Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import * as actions from "../../actions"
 import type { ActionContext } from "../../actions/types"
 import * as commands from "../../commands"
 import { EXTENSION_ID, EXTENSION_VERSION } from "../../config/constants"
@@ -350,39 +349,10 @@ suite("registered command handlers", function () {
     )
   })
 
-  // The task closes over `progress`, so a fake `dialog.progressNotification` has to run it
-  // itself to reach the `onProgress` callback that actually feeds the notification.
-  test("tmcTreeView.refreshCourses reports the fraction of exercises checked so far", async function () {
-    const refreshEverything = vi.spyOn(actions, "refreshEverything").mockResolvedValue(Ok.EMPTY)
-    const report = vi.fn()
-    const { handlers, actionContext } = registerAndCollect()
-    const progressNotification = actionContext.dialog.progressNotification as unknown as {
-      mockImplementation: (
-        impl: (
-          message: string,
-          task: (progress: { report: typeof report }) => Promise<unknown>,
-        ) => Promise<unknown>,
-      ) => void
-    }
-    progressNotification.mockImplementation(async (_message, task) => task({ report }))
-
-    await handlers.get("tmcTreeView.refreshCourses")?.()
-
-    expect(actionContext.dialog.progressNotification).toHaveBeenCalledWith(
-      "Fetching course updates...",
-      expect.any(Function),
-    )
-    expect(refreshEverything).toHaveBeenCalledWith(
-      actionContext,
-      expect.objectContaining({ silent: false, onProgress: expect.any(Function) }),
-    )
-
-    const onProgress = refreshEverything.mock.calls[0]?.[1].onProgress
-    onProgress?.(1, 2)
-    expect(report).toHaveBeenCalledWith({ fraction: 0.5 })
-    onProgress?.(3, 0)
-    expect(report).toHaveBeenCalledWith({ fraction: 1 })
-  })
+  // `tmcTreeView.refreshCourses`'s own wiring (progress notification, onProgress ->
+  // fraction) now lives with `refreshCourses` itself, in
+  // `test/commands/refreshEverything.test.ts`; the command-set test above already
+  // pins that this id stays registered.
 
   test.each([
     ["tmc.addNewCourse", "addNewCourse"],

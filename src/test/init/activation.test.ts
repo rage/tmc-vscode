@@ -186,16 +186,40 @@ vi.mock("../../init/verifyCliSchema", () => ({
 // `registerCommands` reads the handlers it hands the panel layer eagerly, so every one
 // of them has to exist here even though no test drives a webview message.
 vi.mock("../../actions", () => ({
-  refreshEverything: async (): Promise<unknown> => Ok.EMPTY,
   refreshLocalExercises: async (): Promise<unknown> => Ok.EMPTY,
-  testInterrupts: new Map(),
+  cancelTestRun: (): void => {},
   closeExercises: async (): Promise<unknown> => Ok.EMPTY,
   downloadAndOpenExercises: async (): Promise<unknown> => Ok.EMPTY,
   downloadExercisesForUi: async (): Promise<void> => {},
-  openWorkspace: async (): Promise<void> => {},
   pasteExercise: async (): Promise<unknown> => Ok.EMPTY,
   removeCourse: async (): Promise<void> => {},
   updateCourse: async (): Promise<unknown> => Ok.EMPTY,
+}))
+
+// `refreshEverything` moved here from `../../actions`; it is the only export the
+// activation background refresh actually invokes. `registerCommands` reads every
+// other one eagerly too, building the webview handler table and its own command
+// closures, so each has to exist here even though none of them runs.
+vi.mock("../../commands", () => ({
+  refreshEverything: async (): Promise<unknown> => Ok.EMPTY,
+  refreshCourses: async (): Promise<void> => {},
+  addNewCourse: async (): Promise<void> => {},
+  changeTmcDataPath: async (): Promise<void> => {},
+  cleanExercise: async (): Promise<void> => {},
+  closeExercise: async (): Promise<void> => {},
+  downloadNewExercises: async (): Promise<void> => {},
+  downloadOldSubmission: async (): Promise<void> => {},
+  logout: async (): Promise<void> => {},
+  openExercisesFolder: async (): Promise<void> => {},
+  openWorkspace: async (): Promise<void> => {},
+  pasteExercise: async (): Promise<void> => {},
+  pickCourse: async (): Promise<unknown> => undefined,
+  resetExercise: async (): Promise<void> => {},
+  submitExercise: async (): Promise<unknown> => Ok.EMPTY,
+  switchWorkspace: async (): Promise<void> => {},
+  testExercise: async (): Promise<void> => {},
+  updateExercises: async (): Promise<void> => {},
+  wipe: async (): Promise<void> => {},
 }))
 
 /** Contexts handed to `activate`, so a test can shut each one down the way VS Code does. */

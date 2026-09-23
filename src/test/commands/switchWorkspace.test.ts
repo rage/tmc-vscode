@@ -1,16 +1,16 @@
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import type { Item } from "../../api/dialog"
+import { openWorkspace } from "../../commands/openWorkspace"
 import { switchWorkspace } from "../../commands/switchWorkspace"
 import type { UserData } from "../../config/userdata"
 import type { LocalCourseData } from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
-vi.mock("../../actions", () => ({
+vi.mock("../../commands/openWorkspace", () => ({
   openWorkspace: vi.fn(),
 }))
 
@@ -60,7 +60,7 @@ suite("Switch workspace command", function () {
 
     await switchWorkspace(context)
 
-    expect(actions.openWorkspace).toHaveBeenCalledExactlyOnceWith(context, "python-course", "mooc")
+    expect(openWorkspace).toHaveBeenCalledExactlyOnceWith(context, "python-course", "mooc")
   })
 
   test("marks the course whose workspace is already open", async function () {
@@ -86,6 +86,6 @@ suite("Switch workspace command", function () {
 
     await switchWorkspace(context)
 
-    expect(actions.openWorkspace).not.toHaveBeenCalled()
+    expect(openWorkspace).not.toHaveBeenCalled()
   })
 })
