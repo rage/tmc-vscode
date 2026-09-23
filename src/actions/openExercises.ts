@@ -141,7 +141,7 @@ export async function downloadAndOpenExercises(
   if (exercisesToDownload.length > 0) {
     await downloadExercisesForUi(
       actionContext,
-      "",
+      "download",
       courseId,
       exercisesToDownload.map((etd) => LocalCourseExercise.getId(etd)),
     )

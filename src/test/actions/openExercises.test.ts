@@ -159,7 +159,7 @@ suite("downloadAndOpenExercises action", function () {
     )
     expect(downloadExercisesForUi).toHaveBeenCalledWith(
       expect.anything(),
-      "",
+      "download",
       CourseIdentifier.from("instance-uuid-1"),
       [ExerciseIdentifier.from("mooc-ex-uuid-1")],
     )
