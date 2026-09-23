@@ -2,67 +2,17 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type { PickableSubmission } from "../actions/oldSubmissions"
+import { listOldSubmissions, restoreOldSubmission } from "../actions/oldSubmissions"
 import type { ReadyActionContext } from "../actions/types"
-import { CLI_PROCESS_TIMEOUT } from "../config/constants"
-import type {
-  ExerciseSlideSubmissionListItem,
-  MoocOldSubmissionRestore,
-} from "../shared/langsSchema"
-import type { Enum } from "../shared/shared"
-import {
-  assertUnreachable,
-  backendName,
-  ExerciseIdentifier,
-  makeMoocKind,
-  makeTmcKind,
-  match,
-} from "../shared/shared"
-import { dateToString, Logger, parseDate, runSingleFlight } from "../utilities"
+import { BottleneckError } from "../errors"
+import type { MoocOldSubmissionRestore } from "../shared/langsSchema"
+import { backendName, ExerciseIdentifier } from "../shared/shared"
+import { dateToString, Logger, parseDate } from "../utilities"
 import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
 import { failure, runForExercise } from "./runForExercise"
 
 const TITLE = "Download Old Submission"
-
-/**
- * Everything the restore call needs, as one value: the exercise id and the
- * submission id are in different id spaces per backend (integers for TMC, uuid
- * strings for mooc) and pairing them here is what keeps a mismatch unbuildable.
- */
-type RestoreTarget = Enum<
-  { exerciseId: number; submissionId: number },
-  { exerciseId: string; submissionId: string }
->
-
-/**
- * A submission normalized for the picker across both backends: what restoring it
- * takes, a timestamp, and a human-readable status shown next to the date.
- */
-interface PickableSubmission {
-  target: RestoreTarget
-  createdAt: string
-  status: string
-}
-
-/** Human-readable grading status for a mooc submission (score + progress). */
-function moocSubmissionStatus(submission: ExerciseSlideSubmissionListItem): string {
-  const progress = submission.grading_progress
-  if (progress === null) {
-    return "Not graded"
-  }
-  const score = submission.score_given !== null ? ` (score ${submission.score_given})` : ""
-  switch (progress) {
-    case "FullyGraded":
-      return `${(submission.score_given ?? 0) > 0 ? "Passed" : "Not passed"}${score}`
-    case "Failed":
-      return `Failed${score}`
-    case "PendingManual":
-      return `Awaiting manual grading${score}`
-    case "NotReady":
-    case "Pending":
-      return `Pending${score}`
-  }
-  return assertUnreachable(progress)
-}
 
 /**
  * Lets the user pick one of an exercise's earlier submissions and restores it
@@ -75,7 +25,7 @@ export async function downloadOldSubmission(
   resource: vscode.Uri | undefined,
 ): Promise<void> {
   const { dialog } = actionContext
-  const { langs, userData } = actionContext.startup
+  const { userData } = actionContext.startup
   await runForExercise(
     actionContext,
     resource,
@@ -93,38 +43,7 @@ export async function downloadOldSubmission(
 
       const id = ExerciseIdentifier.from(exerciseId)
       Logger.debug("Fetching old submissions")
-      // Normalize both backends' submission shapes into a common pickable list; the
-      // id spaces differ (TMC integer, mooc uuid string) and the status is derived
-      // differently (TMC all_tests_passed vs mooc grading progress + score).
-      const submissionsResult = await match(
-        id,
-        (tmc): Promise<Result<PickableSubmission[], Error>> =>
-          langs.getTmcOldSubmissions(tmc.tmcExerciseId).then((res) =>
-            res.map((submissions) =>
-              submissions.map<PickableSubmission>((submission) => ({
-                target: makeTmcKind({
-                  exerciseId: tmc.tmcExerciseId,
-                  submissionId: submission.id,
-                }),
-                createdAt: submission.created_at,
-                status: submission.all_tests_passed ? "Passed" : "Not passed",
-              })),
-            ),
-          ),
-        (mooc): Promise<Result<PickableSubmission[], Error>> =>
-          langs.getMoocOldSubmissions(mooc.moocExerciseId).then((res) =>
-            res.map((submissions) =>
-              submissions.map<PickableSubmission>((submission) => ({
-                target: makeMoocKind({
-                  exerciseId: mooc.moocExerciseId,
-                  submissionId: submission.id,
-                }),
-                createdAt: submission.created_at,
-                status: moocSubmissionStatus(submission),
-              })),
-            ),
-          ),
-      )
+      const submissionsResult = await listOldSubmissions(actionContext, id)
       if (submissionsResult.err) {
         return failure("Failed to fetch old submissions.", submissionsResult.val)
       }
@@ -161,53 +80,32 @@ export async function downloadOldSubmission(
         return Ok.EMPTY
       }
 
-      // Key shared with the submit and paste actions: restoring overwrites the directory a
-      // submission of the same exercise is reading, and with `submitFirst` it submits itself.
-      return runSingleFlight(
-        {
-          key: `submit:${exercise.uri.fsPath}`,
-          maxHoldMs: CLI_PROCESS_TIMEOUT + 30_000,
-          busyMessage: "A submission for this exercise is already in progress.",
-        },
-        async () => {
-          const editor = vscode.window.activeTextEditor
-          const document = editor?.document.uri
-
-          // The tmc CLI reports no outcome, and only ever restores, so both backends are read
-          // as the mooc outcome the UI below branches on.
-          const restoreResult: Result<MoocOldSubmissionRestore, Error> = await match(
-            submission.target,
-            (tmc) =>
-              langs
-                .downloadTmcOldSubmission(
-                  tmc.exerciseId,
-                  exercise.uri.fsPath,
-                  tmc.submissionId,
-                  submitFirst,
-                )
-                .then((res) => res.map(() => "restored" as const)),
-            (mooc) =>
-              langs.downloadMoocOldSubmission(
-                mooc.exerciseId,
-                exercise.uri.fsPath,
-                mooc.submissionId,
-                submitFirst,
-              ),
-          )
-          if (editor && document) {
-            await vscode.commands.executeCommand("workbench.action.files.revert", document)
-          }
-          if (restoreResult.err) {
-            return failure("Failed to download old submission.", restoreResult.val)
-          }
-          if (restoreResult.val === "nothing-to-download") {
-            // Reachable only for an exercise type with no files at all, so never for a tmc
-            // exercise. Nothing was changed, so this is ordinary news rather than a failure.
-            dialog.notification("That submission has no files to download.")
-          }
-          return Ok.EMPTY
-        },
+      const editor = vscode.window.activeTextEditor
+      const document = editor?.document.uri
+      const restoreResult: Result<MoocOldSubmissionRestore, Error> = await restoreOldSubmission(
+        actionContext,
+        exercise.uri.fsPath,
+        submission.target,
+        submitFirst,
       )
+      // A busy rejection means the restore never ran, so there is nothing on disk to
+      // revert the editor to.
+      if (
+        editor &&
+        document &&
+        !(restoreResult.err && restoreResult.val instanceof BottleneckError)
+      ) {
+        await vscode.commands.executeCommand("workbench.action.files.revert", document)
+      }
+      if (restoreResult.err) {
+        return failure("Failed to download old submission.", restoreResult.val)
+      }
+      if (restoreResult.val === "nothing-to-download") {
+        // Reachable only for an exercise type with no files at all, so never for a tmc
+        // exercise. Nothing was changed, so this is ordinary news rather than a failure.
+        dialog.notification("That submission has no files to download.")
+      }
+      return Ok.EMPTY
     },
   )
 }
