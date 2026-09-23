@@ -94,25 +94,30 @@ suite("Exercise command runner", function () {
       Err(speechless),
     )
 
-    expect(stubContext.dialog.errorNotification).toHaveBeenCalledExactlyOnceWith(
+    expect(stubContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Resetting the exercise failed.",
       speechless,
+      "mooc",
     )
   })
 
-  test("keeps a cancellation out of the user's way", async function () {
+  test("shows a busy rejection once, as information rather than an error", async function () {
     await runForExercise(actionContext(), uri, "Submitting the exercise", async () =>
-      Err(new BottleneckError("too soon")),
+      Err(new BottleneckError("Already submitting.")),
     )
 
+    expect(stubContext.dialog.notification).toHaveBeenCalledExactlyOnceWith("Already submitting.")
     expect(stubContext.dialog.errorNotification).not.toHaveBeenCalled()
+    expect(stubContext.dialog.reportError).not.toHaveBeenCalled()
   })
 
-  test("keeps a cancellation quiet even when the body gave it a headline", async function () {
+  test("shows a busy rejection as information even when the body gave it a headline", async function () {
     await runForExercise(actionContext(), uri, "Submitting the exercise", async () =>
-      failure("Exercise submission failed.", new BottleneckError("too soon")),
+      failure("Exercise submission failed.", new BottleneckError("Already submitting.")),
     )
 
+    expect(stubContext.dialog.notification).toHaveBeenCalledExactlyOnceWith("Already submitting.")
     expect(stubContext.dialog.errorNotification).not.toHaveBeenCalled()
+    expect(stubContext.dialog.reportError).not.toHaveBeenCalled()
   })
 })

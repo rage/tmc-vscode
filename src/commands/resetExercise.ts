@@ -17,7 +17,6 @@ export async function resetExercise(
   actionContext: ReadyActionContext,
   resource: vscode.Uri | undefined,
 ): Promise<void> {
-  const { dialog } = actionContext
   const { langs, userData } = actionContext.startup
   await runForExercise(actionContext, resource, "Resetting the exercise", async (exercise) => {
     // Look up by known backend rather than a name-only match, which could
@@ -47,7 +46,6 @@ export async function resetExercise(
         key: `submit:${exercise.uri.fsPath}`,
         maxHoldMs: CLI_PROCESS_TIMEOUT + 30_000,
         busyMessage: "A submission for this exercise is already in progress.",
-        onBusy: (message) => dialog.notification(message),
       },
       async () => {
         const editor = vscode.window.activeTextEditor

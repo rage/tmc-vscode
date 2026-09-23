@@ -168,7 +168,6 @@ export async function downloadOldSubmission(
           key: `submit:${exercise.uri.fsPath}`,
           maxHoldMs: CLI_PROCESS_TIMEOUT + 30_000,
           busyMessage: "A submission for this exercise is already in progress.",
-          onBusy: (message) => dialog.notification(message),
         },
         async () => {
           const editor = vscode.window.activeTextEditor
