@@ -350,18 +350,25 @@ suite("activation with unusable storage", function () {
     expect(recorded.isCourseViewFilled).toBe(false)
   })
 
-  test("opens the initialization error help panel", async function () {
+  // The notification and the view's welcome content lead to the help page; opening it
+  // unasked would cover whatever the user was doing.
+  test("does not open the initialization error help panel by itself", async function () {
     await activate(createContextWithBlockedStorage())
 
-    expect(recorded.panelTypes).toContain("InitializationErrorHelp")
+    expect(recorded.panelTypes).toEqual([])
   })
 
-  test("reports the failure as an initialization error, not a fatal one", async function () {
+  test("reports the failure once, naming the step, with Show Details", async function () {
     await activate(createContextWithBlockedStorage())
 
-    const messages = vi.mocked(vscode.window.showErrorMessage).mock.calls.map((call) => call[0])
-    expect(messages.join("\n")).not.toContain("Fatal error")
-    expect(messages.join("\n")).toContain("resource initialization")
+    const calls = vi.mocked(vscode.window.showErrorMessage).mock.calls
+    expect(calls).toHaveLength(1)
+    const [message, ...buttons] = calls[0] as [string, ...{ title: string }[]]
+    expect(message).not.toContain("Fatal error")
+    expect(message).toMatch(
+      /^TestMyCode could not start\. Preparing the extension's files failed: /,
+    )
+    expect(buttons.map((button) => button.title)).toEqual(["Show Details", "Show logs"])
   })
 })
 
@@ -375,7 +382,7 @@ suite("initialization error deduplication", function () {
 
   // The authentication check and the datapath lookup are two separate steps that both
   // fail when the CLI is unreachable -- one problem for the user, so one toast.
-  test("shows one notification per distinct initialization failure", async function () {
+  test("shows one notification for every initialization failure together", async function () {
     langsStub.sharedFailure = new Error("tmc-langs-cli is unreachable")
     const logError = vi.spyOn(Logger, "error")
 
@@ -386,14 +393,15 @@ suite("initialization error deduplication", function () {
       .filter((m) => m.includes("Initialization error"))
     // Confirms the scenario genuinely drives two failing steps sharing one cause; with
     // only one, a missing dedup would pass the toast assertion below by accident.
-    expect(loggedSteps.some((m) => m.includes("authentication check"))).toBe(true)
-    expect(loggedSteps.some((m) => m.includes("finding datapath"))).toBe(true)
+    expect(loggedSteps.some((m) => m.includes("Checking your login"))).toBe(true)
+    expect(loggedSteps.some((m) => m.includes("Finding the exercises folder"))).toBe(true)
 
     const toasts = vi
       .mocked(vscode.window.showErrorMessage)
       .mock.calls.map((call) => String(call[0]))
-      .filter((m) => m.includes("Initialization error"))
-    expect(toasts).toHaveLength(1)
+    expect(toasts).toEqual([
+      "TestMyCode started with a problem. Checking your login failed: tmc-langs-cli is unreachable.",
+    ])
   })
 })
 
@@ -416,7 +424,7 @@ suite("activation with unreadable stored data", function () {
     await activate(createContext())
 
     expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(true)
-    expect(recorded.panelTypes).toContain("InitializationErrorHelp")
+    expect(vi.mocked(vscode.window.showErrorMessage)).toHaveBeenCalledOnce()
   })
 
   test("runs no command it left unregistered", async function () {
@@ -485,7 +493,7 @@ suite("activation without the CLI", function () {
     await activate(createContext())
 
     expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(true)
-    expect(recorded.panelTypes).toContain("InitializationErrorHelp")
+    expect(vi.mocked(vscode.window.showErrorMessage)).toHaveBeenCalledOnce()
   })
 
   test("runs no command it left unregistered", async function () {

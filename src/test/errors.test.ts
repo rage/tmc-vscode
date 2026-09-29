@@ -5,6 +5,7 @@ import {
   ObsoleteClientError,
   presentationFor,
   RuntimeError,
+  SpawnError,
   UploadExpiredError,
 } from "../errors"
 import { Logger, LogLevel } from "../utilities/logger"
@@ -49,6 +50,15 @@ suite("presentationFor", function () {
     expect(withoutBackend.message).not.toContain("TMC Server")
   })
 
+  test("a CLI that cannot run points at the antivirus help", function () {
+    const presentation = presentationFor(new SpawnError("spawn EACCES"))
+
+    expect(presentation.message).toContain("antivirus")
+    expect(presentation.actions).toEqual([
+      { label: "Show help", command: "tmc.viewInitializationErrorHelp" },
+    ])
+  })
+
   test("an expired upload and an obsolete client each state their own remedy", function () {
     expect(presentationFor(new UploadExpiredError("410 gone")).message).toContain("try again")
     const obsolete = presentationFor(new ObsoleteClientError("too old"))
@@ -66,6 +76,9 @@ suite("presentationFor", function () {
       "Is the CLI installed?",
     )
     expect(presentationFor(new RuntimeError("")).message).toBe("Runtime Error.")
+    expect(presentationFor(new RuntimeError("tmc-langs-cli exited")).message).toBe(
+      "tmc-langs-cli exited.",
+    )
   })
 
   test("the sentence holds none of a CLI failure's diagnostics", function () {

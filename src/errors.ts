@@ -119,7 +119,10 @@ export interface ErrorPresentation {
  */
 function userSentence(error: Error): string {
   const trimmed = error.message.trim() || error.name
-  const message = trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+  // A leading identifier such as "tmc-langs-cli" keeps its case.
+  const message = /^[a-z]+(\s|$)/.test(trimmed)
+    ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+    : trimmed
   return /[.!?…]$/.test(message) ? message : `${message}.`
 }
 
@@ -163,6 +166,14 @@ export function presentationFor(error: Error, backend?: BackendKind): ErrorPrese
         `${reported} The submission's files expired on the server before the submission` +
         " was accepted. Please try again.",
       actions: [],
+    }
+  }
+  if (error instanceof SpawnError || error instanceof EmptyLangsResponseError) {
+    return {
+      message:
+        `${reported} An antivirus program may be blocking the TestMyCode tools;` +
+        " the help page says how to allow them.",
+      actions: [{ label: "Show help", command: "tmc.viewInitializationErrorHelp" }],
     }
   }
   if (error instanceof InitializationError) {
