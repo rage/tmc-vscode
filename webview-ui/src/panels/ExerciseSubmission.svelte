@@ -1,10 +1,19 @@
 <script lang="ts">
   import Button from "../components/Button.svelte"
+  import CodeBlock from "../components/CodeBlock.svelte"
+  import Disclosure from "../components/Disclosure.svelte"
+  import Meter from "../components/Meter.svelte"
+  import Notice from "../components/Notice.svelte"
+  import PanelHeader from "../components/PanelHeader.svelte"
   import PasteHelpBox from "../components/PasteHelpBox.svelte"
+  import Spinner from "../components/Spinner.svelte"
+  import StatusIcon from "../components/StatusIcon.svelte"
   import TestResults from "../components/TestResults.svelte"
-  import { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../shared/langsSchema"
+  import ToolbarButton from "../components/ToolbarButton.svelte"
+  import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../shared/langsSchema"
   import type { ExerciseSubmissionPanel, WebviewError } from "../shared/shared"
   import { assertUnreachable, unwrap } from "../shared/shared"
+  import { announce } from "../utilities/a11y.svelte"
   import { addMessageListener } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
 
@@ -22,20 +31,59 @@
 
   let submissionStatusUrl = $state<string | undefined>(undefined)
   let progressFraction = $state<number>(0)
-  let progressMessages = $state<Array<string>>([])
-  let submissionError = $state<WebviewError | undefined>(undefined)
-  let submissionResult = $state<SubmissionFinished | undefined>(undefined)
+  // `id` keys the list: the same text can recur once another step came between.
+  let progressSteps = $state.raw<{ id: number; text: string }[]>([])
+  let nextProgressStepId = 0
+  let submissionError = $state.raw<WebviewError | undefined>(undefined)
+  let submissionResult = $state.raw<SubmissionFinished | undefined>(undefined)
   let pasteResult = $state<string | undefined>(undefined)
   let pasteError = $state<string | undefined>(undefined)
-  // mooc grading has no per-test breakdown, so it is stored separately and
-  // rendered as a reduced result (overall progress, score, feedback text)
-  let moocResult = $state<ExerciseTaskSubmissionStatus | undefined>(undefined)
+  // The last message of a mooc submission: the CLI has stopped waiting once it arrives,
+  // whether or not grading finished, so nothing updates the panel after it.
+  let moocResult = $state.raw<ExerciseTaskSubmissionStatus | undefined>(undefined)
   const moocGrading = $derived(moocResult?.status === "grading" ? moocResult.grading : undefined)
-  // Terminal = no more updates coming; only `FullyGraded`/`Failed` qualify, everything
-  // else (including no result yet) can still change.
-  const moocGradingIsTerminal = $derived(
-    moocGrading?.grading_progress === "FullyGraded" || moocGrading?.grading_progress === "Failed",
-  )
+
+  function moocHeadline(result: ExerciseTaskSubmissionStatus): string {
+    if (result.status === "no-grading-yet") {
+      return "Grading has not started yet"
+    }
+    switch (result.grading.grading_progress) {
+      case "FullyGraded":
+        return "Exercise graded"
+      case "Failed":
+        return "Grading failed"
+      case "PendingManual":
+        return "Awaiting manual grading"
+      case "Pending":
+      case "NotReady":
+        return "Grading still in progress"
+      default:
+        return assertUnreachable(result.grading.grading_progress)
+    }
+  }
+
+  function tmcHeadline(result: SubmissionFinished): string {
+    switch (result.status) {
+      case "ok":
+        return result.all_tests_passed
+          ? "All tests passed on the server"
+          : "Some tests failed on the server"
+      case "fail":
+        return "Some tests failed on the server"
+      case "hidden":
+        return "Processing the submission finished"
+      case "error":
+        return "Something went wrong…"
+      case "processing":
+        return "Processing submission…"
+      default:
+        return assertUnreachable(result.status)
+    }
+  }
+
+  function roundScore(score: number): number {
+    return Math.round(score * 100) / 100
+  }
 
   // svelte-ignore state_referenced_locally -- the panel identity (id/type)
   // is fixed for the lifetime of the component, capturing the initial value is intended
@@ -49,24 +97,28 @@
         progressFraction = message.fraction
         // Mooc grading polls every 2 s for up to 3 minutes reporting the same text, so
         // only a changed message starts a new line; the cap bounds an alternating one.
-        if (message.message !== undefined && message.message !== progressMessages.at(-1)) {
-          progressMessages.push(message.message)
-          if (progressMessages.length > progressMessageLimit) {
-            progressMessages.shift()
-          }
+        if (message.message !== undefined && message.message !== progressSteps.at(-1)?.text) {
+          progressSteps = [
+            ...progressSteps,
+            { id: nextProgressStepId++, text: message.message },
+          ].slice(-progressMessageLimit)
+          announce(message.message)
         }
         break
       }
       case "submissionStatusError": {
         submissionError = message.error
+        announce("Submission failed")
         break
       }
       case "submissionResult": {
         submissionResult = message.result
+        announce(tmcHeadline(message.result))
         break
       }
       case "moocSubmissionResult": {
         moocResult = message.result
+        announce(moocHeadline(message.result))
         break
       }
       case "pasteResult": {
@@ -83,181 +135,182 @@
     }
   })
 
-  function runInBackground() {
-    vscode.postMessage({ type: "closeSidePanel" })
-  }
-  function showInBrowser(submissionUrl: string) {
-    vscode.postMessage({
-      type: "openLinkInBrowser",
-      url: submissionUrl,
-    })
-  }
   function closePanel() {
     vscode.postMessage({ type: "closeSidePanel" })
   }
+  function showInBrowser(url: string) {
+    vscode.postMessage({ type: "openLinkInBrowser", url })
+  }
+  function copyToClipboard(text: string) {
+    vscode.postMessage({ type: "copyToClipboard", text })
+  }
 </script>
 
-<!-- Completed steps as ✓ lines, the latest step live with a spinner; shared by the mooc
-     and tmc branches, differing only in the spinner's accessible label. -->
-{#snippet progressList(ariaLabel: string)}
-  {#each progressMessages as message, idx}
-    {#if idx < progressMessages.length - 1}
-      <div>✓ {message}</div>
-    {:else}
-      <div class="current-message">{message}</div>
-      <vscode-progress-ring aria-label={ariaLabel}></vscode-progress-ring>
-    {/if}
-  {/each}
+{#snippet progressList()}
+  <ul class="progress-steps">
+    {#each progressSteps as step, index (step.id)}
+      <li>
+        {#if index < progressSteps.length - 1}
+          <StatusIcon status="passed" label="Done:" isLabelHidden />
+          {step.text}
+        {:else}
+          <Spinner label={step.text} />
+        {/if}
+      </li>
+    {/each}
+  </ul>
 {/snippet}
 
-<div class="close-button">
-  <Button secondary aria-label="Close" onclick={closePanel}>
-    <vscode-icon name="close" aria-hidden="true"></vscode-icon>
-  </Button>
-</div>
+<PanelHeader title={exercise.name} shouldFocusOnMount={false}>
+  {#snippet actions()}
+    <ToolbarButton icon="close" label="Close" onclick={closePanel} />
+  {/snippet}
+</PanelHeader>
 
 {#if submissionError !== undefined}
-  <!-- The error is the last message either backend posts, so it replaces the screen.
-       role="alert", not "status": an unrequested failure must interrupt, not queue. -->
-  <div role="alert">
-    <h1>Submission failed</h1>
-    <div class="error-message">{submissionError.message}</div>
+  <!-- The error is the last message either backend posts, so it replaces the screen. -->
+  <h2>Submission failed</h2>
+  <Notice kind="error">
+    <p>{submissionError.message}</p>
     {#if submissionError.details}
-      <div class="error-message">{submissionError.details}</div>
+      <CodeBlock code={submissionError.details} label="Error details" oncopy={copyToClipboard} />
     {/if}
-  </div>
+  </Notice>
 {:else if isMooc}
-  <!-- Reduced mooc result: overall grading progress, score, feedback text.
-       Mooc grading has no per-test breakdown or feedback questions. -->
-  <div role="status">
-    {#if moocResult === undefined}
-      <h1>Processing submission…</h1>
-      <div class="progress-bar">
-        <vscode-progress-bar aria-label="Waiting for grading" value={progressFraction * 100}
-        ></vscode-progress-bar>
-      </div>
-      <div>{@render progressList("Waiting for grading")}</div>
-    {:else if moocGrading === undefined}
-      <h1>Grading has not started yet</h1>
-    {:else}
-      {#if moocGrading.grading_progress === "FullyGraded"}
-        <h1>Exercise graded</h1>
-      {:else if moocGrading.grading_progress === "Failed"}
-        <h1>Grading failed</h1>
-      {:else if moocGrading.grading_progress === "PendingManual"}
-        <h1>Awaiting manual grading</h1>
-      {:else}
-        <h1>Grading still in progress</h1>
-      {/if}
-      {#if moocGrading.score_given !== null}
-        <div class="mooc-score">Score: {moocGrading.score_given}</div>
-      {/if}
-      {#if moocGrading.feedback_text}
-        <div class="feedback-text">{moocGrading.feedback_text}</div>
-      {/if}
-    {/if}
-  </div>
-
-  {#if !moocGradingIsTerminal}
-    <!-- Stays visible through every non-terminal state, including "PendingManual" which can
-         still take a while, hiding only once grading is truly done. -->
-    <div class="background-button">
-      <Button secondary onclick={runInBackground}>Run in background</Button>
-    </div>
-  {/if}
-{:else}
-  <div role="status">
-    {#if submissionResult === undefined}
-      <h1>Processing submission…</h1>
-    {:else if submissionResult.status === "ok"}
-      {#if submissionResult.all_tests_passed}
-        <h1>All tests passed on the server</h1>
-      {:else}
-        <h1>Some tests failed on the server</h1>
-      {/if}
-    {:else if submissionResult.status === "hidden"}
-      <h1>Processing the submission finished</h1>
-    {:else if submissionResult.status === "fail"}
-      <!-- validation failure etc. -->
-      <h1>Some tests failed on the server</h1>
-    {:else}
-      <h1>Something went wrong…</h1>
-      <div>The submission could not be processed. Please try submitting again.</div>
-    {/if}
-  </div>
-
-  {#if submissionResult && !submissionResult.all_tests_passed}
-    <div class="help-box-container">
-      <PasteHelpBox
-        course={panel.course}
-        exercise={panel.exercise}
-        sourcePanel={{ id: panel.id, type: panel.type }}
-        pasteUrl={pasteResult}
-        {pasteError}
-        onPaste={() => {
-          pasteResult = undefined
-          pasteError = undefined
-        }}
-      />
-    </div>
-  {/if}
-
-  {#if submissionResult === undefined}
-    <div>
-      <Button secondary onclick={runInBackground}>Run in background</Button>
-      <Button
-        secondary
-        onclick={() => submissionStatusUrl && showInBrowser(submissionStatusUrl)}
-        disabled={submissionStatusUrl === undefined}
-      >
-        Show submission in browser
-      </Button>
-    </div>
-
+  <!-- Mooc grading has no per-test breakdown or feedback questions. -->
+  {#if moocResult === undefined}
+    <h2>Processing submission…</h2>
     <div class="progress-bar">
-      <vscode-progress-bar aria-label="Running tests on the server" value={progressFraction * 100}
-      ></vscode-progress-bar>
+      <vscode-progress-bar indeterminate aria-label="Waiting for grading"></vscode-progress-bar>
     </div>
-
-    <div role="status">{@render progressList("Running tests on the server")}</div>
+    {@render progressList()}
+    <div class="actions">
+      <Button secondary onclick={closePanel}>Run in background</Button>
+    </div>
   {:else}
-    <TestResults
-      points={{ awarded: submissionResult.points.length, available: exercise.availablePoints }}
-      testResults={submissionResult.test_cases ?? []}
-      validationResult={submissionResult.validations && {
-        strategy: submissionResult.validations.strategy,
-        validation_errors: submissionResult.validations.validationErrors,
+    <h2>{moocHeadline(moocResult)}</h2>
+    {#if moocGrading && moocGrading.score_given !== null}
+      <div class="score">
+        <Meter
+          label="Score"
+          value={roundScore(moocGrading.score_given)}
+          max={exercise.availablePoints}
+        />
+      </div>
+    {/if}
+    {#if moocGrading?.feedback_text}
+      <p class="feedback-text">{moocGrading.feedback_text}</p>
+    {/if}
+    {#if moocGrading?.grading_progress === "PendingManual"}
+      <p>
+        A teacher will grade this submission. The score will appear in the course progress once it
+        has been graded.
+      </p>
+    {:else if moocGrading?.grading_progress !== "FullyGraded" && moocGrading?.grading_progress !== "Failed"}
+      <p>
+        Grading did not finish while VS Code was waiting. Your submission was received, and its
+        score will appear in the course progress once it has been graded.
+      </p>
+    {/if}
+    <div class="actions">
+      <Button secondary onclick={closePanel}>Close</Button>
+    </div>
+  {/if}
+{:else if submissionResult === undefined}
+  <h2>Processing submission…</h2>
+  <div class="progress-bar">
+    <vscode-progress-bar aria-label="Running tests on the server" value={progressFraction * 100}
+    ></vscode-progress-bar>
+  </div>
+  {@render progressList()}
+  <div class="actions">
+    <Button secondary onclick={closePanel}>Run in background</Button>
+    <Button
+      secondary
+      onclick={() => submissionStatusUrl && showInBrowser(submissionStatusUrl)}
+      disabled={submissionStatusUrl === undefined}
+    >
+      Show submission in browser
+    </Button>
+  </div>
+{:else}
+  <h2>{tmcHeadline(submissionResult)}</h2>
+  {#if submissionResult.status === "error"}
+    <Notice kind="error" title="The submission could not be processed">
+      {#if submissionResult.error}
+        <CodeBlock code={submissionResult.error} label="Server error" oncopy={copyToClipboard} />
+      {/if}
+      <p>Please try submitting again.</p>
+    </Notice>
+  {/if}
+
+  <div class="actions">
+    <Button
+      secondary
+      onclick={() => submissionResult && showInBrowser(submissionResult.submission_url)}
+    >
+      Show submission in browser
+    </Button>
+  </div>
+
+  {#if !submissionResult.all_tests_passed}
+    <PasteHelpBox
+      course={panel.course}
+      exercise={panel.exercise}
+      sourcePanel={{ id: panel.id, type: panel.type }}
+      pasteUrl={pasteResult}
+      {pasteError}
+      onPaste={() => {
+        pasteResult = undefined
+        pasteError = undefined
       }}
-      solutionUrl={submissionResult.solution_url}
     />
+  {/if}
+
+  <TestResults
+    testResults={submissionResult.test_cases ?? []}
+    points={{ awarded: submissionResult.points.length, available: exercise.availablePoints }}
+    validationResult={submissionResult.validations && {
+      strategy: submissionResult.validations.strategy,
+      validation_errors: submissionResult.validations.validationErrors,
+    }}
+    solutionUrl={submissionResult.solution_url}
+    oncopy={copyToClipboard}
+  />
+
+  {#if submissionResult.valgrind}
+    <Disclosure title="Valgrind output">
+      <CodeBlock
+        code={submissionResult.valgrind}
+        label="Valgrind output"
+        oncopy={copyToClipboard}
+      />
+    </Disclosure>
   {/if}
 {/if}
 
 <style>
-  .close-button {
-    position: absolute;
-    top: 0.4rem;
-    right: 0.4rem;
-  }
-  .help-box-container {
-    margin-top: 0.4rem;
-  }
   .progress-bar {
-    margin-top: 1rem;
-    margin-bottom: 1rem;
+    margin: var(--tmc-space-4) 0;
   }
-  .current-message {
-    margin-bottom: 1rem;
+  .progress-steps {
+    list-style: none;
+    padding: 0;
+    margin: 0;
   }
-  .mooc-score {
-    margin-bottom: 0.4rem;
+  .progress-steps li {
+    display: flex;
+    align-items: center;
+    gap: var(--tmc-space-1);
+    margin-bottom: var(--tmc-space-1);
   }
-  .error-message,
+  .score {
+    margin: var(--tmc-space-3) 0;
+  }
   .feedback-text {
     white-space: pre-wrap;
-    margin-top: 0.4rem;
   }
-  .background-button {
-    margin-top: 0.4rem;
+  .actions {
+    margin: var(--tmc-space-3) 0;
   }
 </style>

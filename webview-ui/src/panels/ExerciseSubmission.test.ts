@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/svelte"
+import { fireEvent, render, screen } from "@testing-library/svelte"
 
-import type { ExerciseSubmissionPanel } from "../shared/shared"
+import type { SubmissionFinished } from "../shared/langsSchema"
+import type { ExerciseSubmissionPanel, FeedbackQuestion } from "../shared/shared"
 import { BaseError, toWebviewError } from "../shared/shared"
 import {
   moocLocalCourse,
@@ -16,7 +17,7 @@ const panel: ExerciseSubmissionPanel = {
   id: 12,
   type: "ExerciseSubmission",
   course: tmcLocalCourse(),
-  exercise: tmcLocalExercise(),
+  exercise: tmcLocalExercise({ name: "part01-01_hello", availablePoints: 2 }),
 }
 
 const moocPanel: ExerciseSubmissionPanel = {
@@ -24,6 +25,35 @@ const moocPanel: ExerciseSubmissionPanel = {
   type: "ExerciseSubmission",
   course: moocLocalCourse(),
   exercise: moocLocalExercise(),
+}
+
+function submissionFinished(overrides: Partial<SubmissionFinished> = {}): SubmissionFinished {
+  return {
+    api_version: 7,
+    all_tests_passed: true,
+    user_id: 1,
+    login: "student",
+    course: "python-course",
+    exercise_name: "part01-01_hello",
+    status: "ok",
+    points: ["1.1"],
+    valgrind: null,
+    submission_url: "https://tmc.mooc.fi/submissions/1",
+    solution_url: null,
+    submitted_at: "2026-09-29T00:00:00Z",
+    processing_time: 1,
+    reviewed: false,
+    requests_review: false,
+    paste_url: null,
+    message_for_paste: null,
+    missing_review_points: [],
+    test_cases: [],
+    feedback_questions: null,
+    feedback_answer_url: null,
+    error: null,
+    validations: null,
+    ...overrides,
+  }
 }
 
 // Posts the error that ends a failed submission on either backend. toWebviewError
@@ -45,7 +75,15 @@ function postStatusUpdate(panelId: number, fraction: number, message: string): v
   })
 }
 
-// Posts a mooc grading result to the panel.
+function postTmcResult(result: SubmissionFinished, questions: FeedbackQuestion[] = []): void {
+  dispatchToWebview({
+    type: "submissionResult",
+    target: { type: "ExerciseSubmission", id: panel.id },
+    result,
+    questions,
+  })
+}
+
 function postMoocResult(result: unknown): void {
   dispatchToWebview({
     type: "moocSubmissionResult",
@@ -54,9 +92,35 @@ function postMoocResult(result: unknown): void {
   })
 }
 
+function moocGrading(overrides: Record<string, unknown>): unknown {
+  return {
+    status: "grading",
+    grading: {
+      grading_progress: "FullyGraded",
+      score_given: null,
+      grading_started_at: null,
+      grading_completed_at: null,
+      feedback_text: null,
+      ...overrides,
+    },
+  }
+}
+
+function progressLines(): string[] {
+  return screen
+    .getAllByRole("listitem")
+    .map((item) => (item.textContent ?? "").replaceAll(/\s+/g, " ").trim())
+}
+
+async function clickToolbarButton(label: string): Promise<void> {
+  const host = await screen.findByTitle(label)
+  await fireEvent.click((await withinShadowRoot(host)).getByRole("button"))
+}
+
 suite("ExerciseSubmission panel", () => {
-  test("shows the processing state until a result is pushed to it", () => {
+  test("names the exercise and shows the processing state until a result arrives", () => {
     render(ExerciseSubmission, { props: { panel } })
+    expect(screen.getByRole("heading", { level: 1, name: "part01-01_hello" })).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "Processing submission…" })).toBeInTheDocument()
   })
 
@@ -87,20 +151,34 @@ suite("ExerciseSubmission panel", () => {
     postStatusUpdate(panel.id, 20, "Grading in progress")
     postStatusUpdate(panel.id, 30, "Grading in progress")
 
-    expect(await screen.findByText("Grading in progress")).toBeInTheDocument()
-    // a completed "✓" line would mean the repeat was appended rather than merged
-    expect(screen.queryByText("✓ Grading in progress")).not.toBeInTheDocument()
+    await screen.findByText("Grading in progress")
+    expect(progressLines()).toEqual(["Grading in progress"])
   })
 
-  test("drops the oldest progress lines once the list is full", async () => {
+  test("marks completed steps done and drops the oldest once the list is full", async () => {
     render(ExerciseSubmission, { props: { panel } })
     for (let step = 0; step < 30; step++) {
       postStatusUpdate(panel.id, step, `Step ${step}`)
     }
 
     expect(await screen.findByText("Step 29")).toBeInTheDocument()
-    expect(screen.getByText("✓ Step 10")).toBeInTheDocument()
-    expect(screen.queryByText("✓ Step 9")).not.toBeInTheDocument()
+    const lines = progressLines()
+    expect(lines).toHaveLength(20)
+    expect(lines[0]).toBe("Done: Step 10")
+    expect(lines.at(-1)).toBe("Step 29")
+  })
+
+  test("announces each new step once through the shared live region", async () => {
+    vi.useFakeTimers()
+    try {
+      render(ExerciseSubmission, { props: { panel } })
+      postStatusUpdate(panel.id, 0.1, "Compiling on the server")
+      await vi.runAllTimersAsync()
+
+      expect(screen.getByTestId("announcer")).toHaveTextContent("Compiling on the server")
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   test("replaces the progress view with the failure when the submission errors", async () => {
@@ -119,26 +197,87 @@ suite("ExerciseSubmission panel", () => {
   test("closing the panel posts closeSidePanel", async () => {
     render(ExerciseSubmission, { props: { panel } })
     postedMessages.mockClear()
-    ;(await screen.findByRole("button", { name: "Close" })).click()
+    await clickToolbarButton("Close")
     expect(postedMessages).toHaveBeenCalledWith({ type: "closeSidePanel" })
   })
 })
 
-suite("ExerciseSubmission panel (mooc reduced results)", () => {
-  test("renders the graded status, score and feedback text, no per-test list", async () => {
-    render(ExerciseSubmission, { props: { panel: moocPanel } })
-    postMoocResult({
-      status: "grading",
-      grading: {
-        grading_progress: "FullyGraded",
-        score_given: 3,
-        grading_started_at: "2026-07-21T00:00:00Z",
-        grading_completed_at: "2026-07-21T00:00:01Z",
-        feedback_text: "Great work",
-      },
+suite("ExerciseSubmission panel (tmc results)", () => {
+  test("shows the points against the exercise's available points", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    postTmcResult(submissionFinished({ points: ["1.1"] }))
+
+    expect(
+      await screen.findByRole("heading", { name: "All tests passed on the server" }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("meter", { name: "Points" })).toHaveAttribute(
+      "aria-valuetext",
+      "1 / 2 points",
+    )
+  })
+
+  test("keeps the link to the submission once the result is in", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    postTmcResult(submissionFinished())
+
+    const show = await screen.findByRole("button", { name: "Show submission in browser" })
+    postedMessages.mockClear()
+    show.click()
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "openLinkInBrowser",
+      url: "https://tmc.mooc.fi/submissions/1",
     })
+  })
+
+  test("shows the server's own explanation of a processing error", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    postTmcResult(
+      submissionFinished({
+        status: "error",
+        all_tests_passed: null,
+        error: "Sandbox ran out of memory",
+      }),
+    )
+
+    expect(
+      await screen.findByRole("heading", { name: "Something went wrong…" }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("group", { name: "Server error" })).toHaveTextContent(
+      "Sandbox ran out of memory",
+    )
+  })
+
+  test("valgrind output is available behind a disclosure", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    postTmcResult(submissionFinished({ valgrind: "==1== definitely lost: 8 bytes" }))
+
+    await fireEvent.click(await screen.findByRole("button", { name: "Valgrind output" }))
+    expect(screen.getByRole("group", { name: "Valgrind output" })).toHaveTextContent(
+      "definitely lost: 8 bytes",
+    )
+  })
+})
+
+suite("ExerciseSubmission panel (mooc reduced results)", () => {
+  test("waits for grading on an indeterminate bar, since grading has no fraction", async () => {
+    render(ExerciseSubmission, { props: { panel: moocPanel } })
+    postStatusUpdate(moocPanel.id, 1, "Grading in progress")
+
+    await screen.findByText("Grading in progress")
+    const host = document.querySelector("vscode-progress-bar")!
+    expect(host.indeterminate).toBe(true)
+    expect(await screen.findByRole("button", { name: "Run in background" })).toBeInTheDocument()
+  })
+
+  test("renders the graded status, score out of the maximum and feedback text", async () => {
+    render(ExerciseSubmission, { props: { panel: moocPanel } })
+    postMoocResult(moocGrading({ score_given: 2.666666, feedback_text: "Great work" }))
+
     expect(await screen.findByRole("heading", { name: "Exercise graded" })).toBeInTheDocument()
-    expect(screen.getByText("Score: 3")).toBeInTheDocument()
+    expect(screen.getByRole("meter", { name: "Score" })).toHaveAttribute(
+      "aria-valuetext",
+      "2.67 / 3 points",
+    )
     expect(screen.getByText("Great work")).toBeInTheDocument()
     // the reduced mooc UI shows no per-test results table
     expect(screen.queryByText(/tests? (passed|failed)/i)).not.toBeInTheDocument()
@@ -146,70 +285,53 @@ suite("ExerciseSubmission panel (mooc reduced results)", () => {
 
   test("renders the failed grading state", async () => {
     render(ExerciseSubmission, { props: { panel: moocPanel } })
-    postMoocResult({
-      status: "grading",
-      grading: {
-        grading_progress: "Failed",
-        score_given: 0,
-        grading_started_at: null,
-        grading_completed_at: null,
-        feedback_text: "Some tests failed",
-      },
-    })
+    postMoocResult(moocGrading({ grading_progress: "Failed", score_given: 0 }))
     expect(await screen.findByRole("heading", { name: "Grading failed" })).toBeInTheDocument()
   })
 
-  test("renders the pending-manual (awaiting human) state", async () => {
-    render(ExerciseSubmission, { props: { panel: moocPanel } })
-    postMoocResult({
-      status: "grading",
-      grading: {
-        grading_progress: "PendingManual",
-        score_given: 0.5,
-        grading_started_at: null,
-        grading_completed_at: null,
-        feedback_text: null,
-      },
-    })
-    expect(
-      await screen.findByRole("heading", { name: "Awaiting manual grading" }),
-    ).toBeInTheDocument()
-    expect(screen.getByText("Score: 0.5")).toBeInTheDocument()
-  })
+  for (const [name, result, explanation] of [
+    [
+      "awaiting manual grading",
+      moocGrading({ grading_progress: "PendingManual", score_given: 0.5 }),
+      /A teacher will grade this submission/,
+    ],
+    [
+      "grading still pending",
+      moocGrading({ grading_progress: "Pending" }),
+      /Grading did not finish while VS Code was waiting/,
+    ],
+    [
+      "grading not ready",
+      moocGrading({ grading_progress: "NotReady" }),
+      /Grading did not finish while VS Code was waiting/,
+    ],
+    [
+      "no grading yet",
+      { status: "no-grading-yet" },
+      /Grading did not finish while VS Code was waiting/,
+    ],
+  ] as const) {
+    test(`${name}: the wait is over, so it explains and offers Close, not Run in background`, async () => {
+      render(ExerciseSubmission, { props: { panel: moocPanel } })
+      postMoocResult(result)
 
-  test('keeps "Run in background" visible through non-terminal grading states', async () => {
-    // Must not disappear just because *some* moocResult arrived — only once grading is done.
-    render(ExerciseSubmission, { props: { panel: moocPanel } })
-    expect(await screen.findByRole("button", { name: "Run in background" })).toBeInTheDocument()
-
-    postMoocResult({
-      status: "grading",
-      grading: {
-        grading_progress: "PendingManual",
-        score_given: null,
-        grading_started_at: null,
-        grading_completed_at: null,
-        feedback_text: null,
-      },
+      expect(await screen.findByText(explanation)).toBeInTheDocument()
+      expect(screen.queryByText("Run in background")).not.toBeInTheDocument()
+      const close = await screen.findByRole("button", { name: "Close" })
+      postedMessages.mockClear()
+      close.click()
+      expect(postedMessages).toHaveBeenCalledWith({ type: "closeSidePanel" })
     })
-    await screen.findByRole("heading", { name: "Awaiting manual grading" })
-    expect(await screen.findByRole("button", { name: "Run in background" })).toBeInTheDocument()
-  })
+  }
 
-  test('hides "Run in background" once grading is fully graded', async () => {
+  test("a finished grading offers Close without a waiting explanation", async () => {
     render(ExerciseSubmission, { props: { panel: moocPanel } })
-    postMoocResult({
-      status: "grading",
-      grading: {
-        grading_progress: "FullyGraded",
-        score_given: 1,
-        grading_started_at: null,
-        grading_completed_at: null,
-        feedback_text: null,
-      },
-    })
+    postMoocResult(moocGrading({ score_given: 1 }))
+
     await screen.findByRole("heading", { name: "Exercise graded" })
     expect(screen.queryByText("Run in background")).not.toBeInTheDocument()
+    expect(screen.queryByText(/did not finish/)).not.toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: "Close" })).toBeInTheDocument()
   })
 
   test('shows the failure and hides "Run in background" when the submission errors', async () => {
@@ -218,22 +340,6 @@ suite("ExerciseSubmission panel (mooc reduced results)", () => {
 
     expect(await screen.findByRole("heading", { name: "Submission failed" })).toBeInTheDocument()
     expect(screen.getByRole("alert")).toHaveTextContent("Grading could not be requested")
-    expect(screen.queryByText("Run in background")).not.toBeInTheDocument()
-  })
-
-  test('hides "Run in background" once grading has failed', async () => {
-    render(ExerciseSubmission, { props: { panel: moocPanel } })
-    postMoocResult({
-      status: "grading",
-      grading: {
-        grading_progress: "Failed",
-        score_given: 0,
-        grading_started_at: null,
-        grading_completed_at: null,
-        feedback_text: null,
-      },
-    })
-    await screen.findByRole("heading", { name: "Grading failed" })
     expect(screen.queryByText("Run in background")).not.toBeInTheDocument()
   })
 })

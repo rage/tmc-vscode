@@ -102,6 +102,8 @@ vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ pag
     await expect(gradedHeading).toBeHidden()
     await testResultsPage.submit()
     await expect(gradedHeading).toBeVisible()
-    await expect(testSubmissionPage.getWebview().getByText("Score: 1")).toBeVisible()
+    await expect(
+      testSubmissionPage.getWebview().getByRole("meter", { name: "Score" }),
+    ).toHaveAttribute("aria-valuetext", /^1 \/ \d+ points$/)
   })
 })
