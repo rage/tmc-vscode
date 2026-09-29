@@ -10,32 +10,34 @@ import type { OpenedExercises } from "../actions/openExercises"
 import type { ActionContext, ReadyActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type Dialog from "../api/dialog"
-import { withOperation } from "../api/withOperation"
+import { shownInPanel, withOperation } from "../api/withOperation"
+import { CLI_PROCESS_TIMEOUT, EXTENSION_ID, EXTENSION_VERSION } from "../config/constants"
 import { ConnectionError, InitializationError } from "../errors"
 import type {
   BackendKind,
   CourseDetailsPanel,
-  CourseIdentifier,
   ExerciseGroup,
-  ExerciseIdentifier,
   ExerciseStatus,
   ExtensionToWebview,
+  LocalCourseData as LocalCourseDataType,
   MyCoursesPanel,
   Panel,
   TargetPanel,
   WebviewToExtension,
-  WelcomePanel,
 } from "../shared/shared"
 import {
+  CourseIdentifier,
+  ExerciseIdentifier,
   LocalCourseData,
   LocalCourseExercise,
   panelTarget,
   toWebviewError,
   WebviewToExtensionSchema,
 } from "../shared/shared"
-import { cliFolder, formatSizeInBytes, Logger } from "../utilities"
+import { cliFolder, formatSizeInBytes, Logger, runSingleFlight } from "../utilities"
 import { buildCourseDetailsView } from "./courseDetailsViewModel"
 import type { CourseDetailsView } from "./courseDetailsViewModel"
+import { exerciseStatusRegistry } from "./exerciseStatusRegistry"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { moocLoginRegistry } from "./moocLoginRegistry"
@@ -86,6 +88,12 @@ export interface WebviewHandlers {
     actionContext: ReadyActionContext,
     id: CourseIdentifier,
   ) => Promise<Result<void, Error>>
+  /** Answers a TMC submission's feedback questions; the URL must be one a result named. */
+  sendSubmissionFeedback: (
+    actionContext: ReadyActionContext,
+    feedbackAnswerUrl: string,
+    answers: readonly { questionId: number; answer: string }[],
+  ) => Promise<Result<void, Error>>
   submitExercise: (
     extensionContext: vscode.ExtensionContext,
     actionContext: ReadyActionContext,
@@ -111,10 +119,10 @@ function handlers(): WebviewHandlers {
   return registeredHandlers
 }
 
-type PanelDataTarget =
-  | TargetPanel<WelcomePanel>
-  | TargetPanel<MyCoursesPanel>
-  | TargetPanel<CourseDetailsPanel>
+// One CLI download per backend, then a rescan.
+const DOWNLOAD_MAX_HOLD_MS = 3 * CLI_PROCESS_TIMEOUT
+
+type PanelDataTarget = TargetPanel<MyCoursesPanel> | TargetPanel<CourseDetailsPanel>
 
 /**
  * Manages the rendering of the extension webview panels.
@@ -128,12 +136,18 @@ export class TmcPanel {
 
   private readonly _panel: WebviewPanel
 
+  private readonly _actionContext: ActionContext
+
   // if true, this is the main panel, otherwise this is the side panel
   private readonly _isMain: boolean
 
   // resent on "ready" so a reloaded webview can recover. Per-instance: the main and
   // side panels show different panels.
   private _lastPanel: Panel | undefined
+
+  // Until the first "ready", messages are only buffered: that handshake is the single
+  // path that renders a panel, for a new document and a reloaded one alike.
+  private _isWebviewReady = false
 
   // latest message per type targeted at _lastPanel's id, resent after it on "ready"
   // so a reload doesn't lose one-shot results that already fired
@@ -178,6 +192,9 @@ export class TmcPanel {
     ) {
       this._messageBuffer.set(`${message.target.id}:${message.type}`, message)
     }
+    if (!this._isWebviewReady) {
+      return
+    }
     postMessageToWebview(this._panel.webview, message, this._webviewName)
   }
 
@@ -206,6 +223,82 @@ export class TmcPanel {
     })
   }
 
+  /**
+   * Sends a CourseDetails panel everything it renders for `course`, from stored data.
+   *
+   * The deadlines go out as stored, then are withdrawn by a second `setCourseGroups` if the
+   * backend turns out to be unreachable; nothing here waits on the backend.
+   */
+  private _postCourseDetails(
+    target: TargetPanel<CourseDetailsPanel>,
+    course: LocalCourseDataType,
+    actionContext: ReadyActionContext,
+  ): void {
+    const courseId = LocalCourseData.getCourseId(course)
+    this._postMessage({ type: "setCourseData", target, courseData: course })
+    // Deriving this here would mean re-running `checkForExerciseUpdates`, which
+    // spawns several CLI processes, so it is answered from what was last posted.
+    // Targeted at the requesting panel although the schema is a broadcast one --
+    // `setCourseDisabledStatus` below does the same.
+    this._postMessage({
+      type: "setUpdateables",
+      target,
+      courseId,
+      exerciseIds: updateablesRegistry.get(courseId),
+    })
+    this._postMessage({
+      type: "setCourseDisabledStatus",
+      target,
+      courseId,
+      disabled: course.data.disabled,
+    })
+    const view = courseDetailsView(course, actionContext, false)
+    this._postMessage({
+      type: "setExerciseStatuses",
+      target,
+      courseId,
+      statuses: withInFlightStatuses(view.exerciseStatuses, exerciseStatusRegistry.get(courseId)),
+    })
+    this._postMessage({
+      type: "setCourseGroups",
+      target,
+      offlineMode: false,
+      exerciseGroups: toMessageGroups(view.exerciseGroups),
+    })
+
+    // Only an unreachable backend makes the stored deadlines untrustworthy; any other
+    // failure leaves them as good as they were.
+    actionContext.startup.langs
+      .getCourseDetails(courseId)
+      .then((apiCourse) => {
+        if (apiCourse.err && apiCourse.val instanceof ConnectionError) {
+          this._postMessage({
+            type: "setCourseGroups",
+            target,
+            offlineMode: true,
+            exerciseGroups: toMessageGroups(
+              courseDetailsView(course, actionContext, true).exerciseGroups,
+            ),
+          })
+        }
+      })
+      .catch((error: unknown) => {
+        // The panel is already rendered, so the only loss is the deadline check;
+        // leaving the stored deadlines standing is what an unknown answer means.
+        Logger.error("Failed to check whether the backend is reachable", error)
+      })
+  }
+
+  /** The panel this webview shows, if it is `courseId`'s CourseDetails. */
+  private _courseDetailsShowing(
+    courseId: CourseIdentifier,
+  ): TargetPanel<CourseDetailsPanel> | undefined {
+    const panel = this._lastPanel
+    return panel?.type === "CourseDetails" && isSameCourse(panel.courseId, courseId)
+      ? panelTarget(panel)
+      : undefined
+  }
+
   // renders the `panel` in the main panel
   public static renderMain(
     extensionUri: Uri,
@@ -216,7 +309,7 @@ export class TmcPanel {
     if (TmcPanel.mainPanel !== undefined) {
       Logger.info(`Revealing existing main panel for "${panel.type}"`)
       TmcPanel.mainPanel._renderPanel(panel)
-      TmcPanel.mainPanel._panel.reveal(ViewColumn.One, false)
+      TmcPanel.mainPanel._panel.reveal(undefined, false)
     } else {
       TmcPanel.mainPanel = TmcPanel.renderNew(
         extensionUri,
@@ -235,7 +328,6 @@ export class TmcPanel {
     actionContext: ActionContext,
     panel: Panel,
   ): void {
-    const column = ViewColumn.Two
     // Navigating away from an in-flight mooc login abandons it, so kill its CLI
     // process. Exempt for re-entering MoocLogin: the new `moocLogin` handler
     // interrupt-and-replaces the old attempt itself.
@@ -245,7 +337,7 @@ export class TmcPanel {
     if (TmcPanel.sidePanel !== undefined) {
       Logger.info(`Revealing existing side panel for "${panel.type}"`)
       TmcPanel.sidePanel._renderPanel(panel)
-      TmcPanel.sidePanel._panel.reveal(column, false)
+      TmcPanel.sidePanel._panel.reveal(undefined, !takesFocus(panel))
     } else {
       const currentPanel = TmcPanel.renderNew(
         extensionUri,
@@ -267,22 +359,22 @@ export class TmcPanel {
     panel: Panel,
     isMain: boolean,
   ): TmcPanel {
-    let panelViewType
-    let column
-    if (isMain) {
-      panelViewType = "mainPanel"
-      column = ViewColumn.One
-    } else {
-      panelViewType = "sidePanel"
-      column = ViewColumn.Two
-    }
-    const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", column, {
+    const showOptions = isMain
+      ? { viewColumn: ViewColumn.One, preserveFocus: false }
+      : { viewColumn: ViewColumn.Beside, preserveFocus: !takesFocus(panel) }
+    const panelViewType = isMain ? "mainPanel" : "sidePanel"
+    const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", showOptions, {
       enableScripts: true,
-      // otherwise a hidden-then-revealed panel reloads and drops messages posted
-      // before the reveal
+      enableFindWidget: true,
+      // A reload would restart MoocLogin's device flow and lose UI-only state (selection,
+      // scroll, open parts) that no host registry holds.
       retainContextWhenHidden: true,
       localResourceRoots: [Uri.joinPath(extensionUri, "webview-ui/public/build")],
     })
+    webviewPanel.iconPath = {
+      light: Uri.joinPath(extensionUri, "media", "TMC-light.svg"),
+      dark: Uri.joinPath(extensionUri, "media", "TMC.svg"),
+    }
     const currentPanel = new TmcPanel(
       webviewPanel,
       extensionContext,
@@ -302,6 +394,7 @@ export class TmcPanel {
     isMain: boolean,
   ) {
     this._panel = panel
+    this._actionContext = actionContext
 
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables)
 
@@ -312,7 +405,6 @@ export class TmcPanel {
     this._isMain = isMain
   }
 
-  // disposes the side panel when disposing the main panel as well
   public dispose(): void {
     if (this._isDisposed) {
       return
@@ -322,7 +414,6 @@ export class TmcPanel {
 
     if (this._isMain) {
       TmcPanel.mainPanel = undefined
-      TmcPanel.sidePanel?.dispose()
     } else {
       TmcPanel.sidePanel = undefined
       // Interrupt any in-flight mooc login on side-panel dispose (close/reload)
@@ -338,11 +429,15 @@ export class TmcPanel {
     }
   }
 
-  // remembers `panel` so "ready" can resend it
-  private _renderPanel(panel: Panel): void {
+  // remembers `panel` so "ready" can (re)send it
+  private _renderPanel(request: Panel): void {
+    const panel = completePanel(request, this._actionContext)
     this._lastPanel = panel
     this._messageBuffer.clear()
-    renderPanel(panel, this._panel.webview)
+    this._panel.title = panelTitle(panel, this._actionContext)
+    if (this._isWebviewReady) {
+      renderPanel(panel, this._panel.webview)
+    }
   }
 
   private _getWebviewContent(webview: Webview, extensionUri: Uri): string {
@@ -410,6 +505,7 @@ export class TmcPanel {
         const message = untrustedMessage as WebviewToExtension
         switch (message.type) {
           case "ready": {
+            this._isWebviewReady = true
             Logger.info(
               `Received "ready" from ${this._isMain ? "main" : "side"} webview` +
                 (this._lastPanel
@@ -430,114 +526,34 @@ export class TmcPanel {
           }
           case "requestCourseDetailsData": {
             const target = panelTarget(message.sourcePanel)
+            // The panel shows why inline, so a toast here would report it twice.
             if (!isReady(actionContext)) {
-              this._postPanelDataFailed(
-                target,
-                message.requestId,
-                reportNotInitialized(actionContext.dialog),
-              )
+              this._postPanelDataFailed(target, message.requestId, notInitialized())
               return
             }
-            const { langs, userData, workspaceManager } = actionContext.startup
-            const courseResult = userData.getCourse(message.sourcePanel.courseId)
+            const courseResult = actionContext.startup.userData.getCourse(
+              message.sourcePanel.courseId,
+            )
             if (courseResult.err) {
-              actionContext.dialog.reportError("Failed to read the course.", courseResult.val)
+              Logger.error("Failed to read the course.", courseResult.val)
               this._postPanelDataFailed(target, message.requestId, courseResult.val)
               return
             }
-            const course = courseResult.val
-            this._postMessage({
-              type: "setCourseData",
-              target,
-              courseData: course,
-            })
-            // Deriving this here would mean re-running `checkForExerciseUpdates`, which
-            // spawns several CLI processes, so it is answered from what was last posted.
-            // Targeted at the requesting panel although the schema is a broadcast one --
-            // `setCourseDisabledStatus` below does the same.
-            this._postMessage({
-              type: "setUpdateables",
-              target,
-              courseId: message.sourcePanel.courseId,
-              exerciseIds: updateablesRegistry.get(message.sourcePanel.courseId),
-            })
-
-            this._postMessage({
-              type: "setCourseDisabledStatus",
-              target,
-              courseId: LocalCourseData.getCourseId(course),
-              disabled: course.data.disabled,
-            })
-
-            const buildView = (offlineMode: boolean): CourseDetailsView =>
-              buildCourseDetailsView(
-                course,
-                workspaceManager.getExercises(),
-                offlineMode,
-                new Date(),
-              )
-            const view = buildView(false)
-            this._postMessage({
-              type: "setExerciseStatuses",
-              target,
-              courseId: LocalCourseData.getCourseId(course),
-              statuses: view.exerciseStatuses.map(
-                ({ exerciseId, status }): [ExerciseIdentifier, ExerciseStatus] => [
-                  exerciseId,
-                  status,
-                ],
-              ),
-            })
-            this._postMessage({
-              type: "setCourseGroups",
-              target,
-              offlineMode: false,
-              exerciseGroups: toMessageGroups(view.exerciseGroups),
-            })
+            this._postCourseDetails(target, courseResult.val, actionContext)
             this._postPanelDataSent(target, message.requestId)
-
-            // Everything above comes from stored data, so the panel is rendered by now.
-            // The backend is reached only to find out whether the deadlines just posted
-            // can be trusted; the groups are re-posted without them if not. Only an
-            // unreachable backend means that -- any other failure leaves the stored
-            // deadlines as good as they were.
-            langs
-              .getCourseDetails(message.sourcePanel.courseId)
-              .then((apiCourse) => {
-                if (apiCourse.err && apiCourse.val instanceof ConnectionError) {
-                  this._postMessage({
-                    type: "setCourseGroups",
-                    target,
-                    offlineMode: true,
-                    exerciseGroups: toMessageGroups(buildView(true).exerciseGroups),
-                  })
-                }
-              })
-              .catch((error: unknown) => {
-                // The panel is already rendered, so the only loss is the deadline check;
-                // leaving the stored deadlines standing is what an unknown answer means.
-                Logger.error("Failed to check whether the backend is reachable", error)
-              })
             break
           }
           case "requestMyCoursesData": {
             const target = panelTarget(message.sourcePanel)
             if (!isReady(actionContext)) {
-              this._postPanelDataFailed(
-                target,
-                message.requestId,
-                reportNotInitialized(actionContext.dialog),
-              )
+              this._postPanelDataFailed(target, message.requestId, notInitialized())
               return
             }
             const { userData, resources } = actionContext.startup
             const projectsDirectory = resources.projectsDirectory
             if (!projectsDirectory) {
               const error = new Error("tmc-langs did not report an exercise directory")
-              void actionContext.dialog.errorNotification(
-                "Showing your courses is unavailable: tmc-langs did not report an exercise directory.",
-                error,
-              )
+              Logger.error("Showing your courses is unavailable.", error)
               this._postPanelDataFailed(target, message.requestId, error)
               return
             }
@@ -570,25 +586,6 @@ export class TmcPanel {
                   tmcDataSize: "unknown",
                 })
               })
-            break
-          }
-          case "requestWelcomeData": {
-            const target = panelTarget(message.sourcePanel)
-            if (!isReady(actionContext)) {
-              this._postPanelDataFailed(
-                target,
-                message.requestId,
-                reportNotInitialized(actionContext.dialog),
-              )
-              return
-            }
-
-            this._postMessage({
-              type: "setWelcomeData",
-              target,
-              version: actionContext.startup.resources.extensionVersion,
-            })
-            this._postPanelDataSent(target, message.requestId)
             break
           }
           case "openCourseDetails": {
@@ -628,7 +625,6 @@ export class TmcPanel {
                 this._renderPanel({
                   id: nextPanelId(),
                   type: "MyCourses",
-                  courseDeadlines: {},
                 })
                 actionContext.dialog.notification(`${courseName} was removed from courses.`)
               }
@@ -665,7 +661,6 @@ export class TmcPanel {
             this._renderPanel({
               id: nextPanelId(),
               type: "MyCourses",
-              courseDeadlines: {},
             })
             break
           }
@@ -706,15 +701,25 @@ export class TmcPanel {
             await withOperation(
               actionContext.dialog,
               { failure: "Failed to download the exercises.", backend: message.courseId.kind },
-              async () => {
-                await handlers().downloadExercisesForUi(
-                  readyContext,
-                  message.mode,
-                  message.courseId,
-                  message.ids,
-                )
-                return Ok.EMPTY
-              },
+              () =>
+                // A panel re-opened mid-download re-enables its buttons until the
+                // statuses arrive, so a second click must not start a second download.
+                runSingleFlight(
+                  {
+                    key: `download:${message.courseId.kind}:${CourseIdentifier.toString(message.courseId)}`,
+                    maxHoldMs: DOWNLOAD_MAX_HOLD_MS,
+                    busyMessage: "This course's exercises are already downloading.",
+                  },
+                  async () => {
+                    await handlers().downloadExercisesForUi(
+                      readyContext,
+                      message.mode,
+                      message.courseId,
+                      message.ids,
+                    )
+                    return Ok.EMPTY
+                  },
+                ),
             )
             break
           }
@@ -736,7 +741,7 @@ export class TmcPanel {
             if (openLimit !== undefined) {
               const courseId = message.courseId
               void actionContext.dialog.warningNotification(
-                `You have over ${openLimit} exercises open, which may cause performance issues. You can close completed exercises from the TMC extension menu in the sidebar.`,
+                `You have over ${openLimit} exercises open, which can slow VS Code down. Close the ones you have finished in Course Details.`,
                 [
                   "Open course details",
                   (): void =>
@@ -757,28 +762,54 @@ export class TmcPanel {
             break
           }
           case "refreshCourseDetails": {
-            const readyContext = requireReady(actionContext)
-            if (!readyContext) {
-              return
-            }
             const courseId = message.id
-            await withOperation(
-              actionContext.dialog,
-              { failure: "Failed to update course.", backend: courseId.kind },
-              () => handlers().updateCourse(readyContext, courseId),
-            )
-            // `updateCourse` does not rescan, and the re-render below reads the exercise
-            // statuses straight out of the workspace manager.
-            const rescanResult = await handlers().refreshLocalExercises(readyContext)
-            if (rescanResult.err) {
-              Logger.warn("Failed to rescan the local exercises", rescanResult.val)
+            // The panel waits on `refreshFinished`, so every way out of here sends one.
+            let failure: unknown
+            try {
+              if (!isReady(actionContext)) {
+                failure = notInitialized()
+                return
+              }
+              const updateResult = await withOperation(
+                actionContext.dialog,
+                { failure: "Failed to update course.", backend: courseId.kind },
+                async () => {
+                  const updated = await handlers().updateCourse(actionContext, courseId)
+                  return updated.err ? shownInPanel(updated.val) : updated
+                },
+              )
+              if (updateResult.err) {
+                failure = updateResult.val
+              }
+              // `updateCourse` does not rescan, and the statuses pushed below are read
+              // straight out of the workspace manager.
+              const rescanResult = await handlers().refreshLocalExercises(actionContext)
+              if (rescanResult.err) {
+                Logger.warn("Failed to rescan the local exercises", rescanResult.val)
+              }
+              // Pushed to the panel in place: re-rendering it would reset the student's
+              // selection, and would drag them back here if they had navigated away.
+              const target = this._courseDetailsShowing(courseId)
+              const course = actionContext.startup.userData.getCourse(courseId)
+              if (course.err) {
+                failure = course.val
+              } else if (target) {
+                this._postCourseDetails(target, course.val, actionContext)
+              }
+            } catch (error) {
+              failure = error
+              throw error
+            } finally {
+              const target = this._courseDetailsShowing(courseId)
+              if (target) {
+                this._postMessage({
+                  type: "refreshFinished",
+                  target,
+                  ok: failure === undefined,
+                  ...(failure === undefined ? {} : { error: toWebviewError(failure) }),
+                })
+              }
             }
-            this._renderPanel({
-              id: nextPanelId(),
-              type: "CourseDetails",
-              courseId,
-              exerciseStatuses: { tmc: {}, mooc: {} },
-            })
             break
           }
           case "closeSidePanel": {
@@ -796,9 +827,19 @@ export class TmcPanel {
             // a pre-render here would just flash a second one that's immediately replaced.
             // When it fails there is no such panel, so the ExerciseTests panel still on
             // screen has to be told, or its Submit button stays disabled forever.
+            const submitFailed: ExtensionToWebview = {
+              type: "submitFailed",
+              target: message.sourcePanel,
+            }
             const readyContext = requireReady(actionContext)
             if (!readyContext) {
-              TmcPanel.postMessage({ type: "submitFailed", target: { type: "ExerciseTests" } })
+              this._postMessage(submitFailed)
+              return
+            }
+            const shown = this._lastPanel
+            if (shown?.type !== "ExerciseTests" || shown.id !== message.sourcePanel.id) {
+              Logger.warn("Ignoring a submit from a test results panel that is no longer shown")
+              this._postMessage(submitFailed)
               return
             }
             // The command reports its own failure; a throw is left to `reportingFailures`.
@@ -807,12 +848,12 @@ export class TmcPanel {
               const result = await handlers().submitExercise(
                 extensionContext,
                 readyContext,
-                message.exerciseUri,
+                shown.exerciseUri,
               )
               submitted = result.ok
             } finally {
               if (!submitted) {
-                TmcPanel.postMessage({ type: "submitFailed", target: { type: "ExerciseTests" } })
+                this._postMessage(submitFailed)
               }
             }
             break
@@ -824,7 +865,7 @@ export class TmcPanel {
               TmcPanel.postMessage({
                 type: "pasteError",
                 target: message.requestingPanel,
-                error: reportNotInitialized(actionContext.dialog).message,
+                error: notInitialized().message,
               })
               return
             }
@@ -860,21 +901,66 @@ export class TmcPanel {
             break
           }
           case "openLinkInBrowser": {
-            // Non-strict `Uri.parse` never throws and invents a `file` scheme for a string
-            // without one, so a link from the webview has to be parsed strictly and its
-            // scheme checked before it reaches the OS handler.
-            let link
+            const link = parseWebLink(message.url)
+            if (link) {
+              vscode.env.openExternal(link)
+            }
+            break
+          }
+          case "sendFeedback": {
+            const target = message.sourcePanel
+            if (!isReady(actionContext)) {
+              this._postMessage({
+                type: "feedbackSent",
+                target,
+                ok: false,
+                error: notInitialized().message,
+              })
+              return
+            }
+            const sent = await handlers().sendSubmissionFeedback(
+              actionContext,
+              message.feedbackAnswerUrl,
+              message.answers,
+            )
+            if (sent.err) {
+              Logger.error("Failed to send the submission feedback", sent.val)
+            }
+            this._postMessage({
+              type: "feedbackSent",
+              target,
+              ok: sent.ok,
+              ...(sent.err ? { error: sent.val.message } : {}),
+            })
+            break
+          }
+          case "copyToClipboard": {
+            let isCopied = true
             try {
-              link = vscode.Uri.parse(message.url, true)
+              await vscode.env.clipboard.writeText(message.text)
             } catch (error) {
-              Logger.error("Refusing to open an unparseable link from the webview", error)
-              break
+              Logger.error("Failed to copy to the clipboard", error)
+              isCopied = false
             }
-            if (link.scheme !== "http" && link.scheme !== "https") {
-              Logger.error(`Refusing to open a "${link.scheme}" link from the webview`, message.url)
-              break
+            const shown = this._lastPanel
+            if (shown?.type === "ExerciseTests" || shown?.type === "ExerciseSubmission") {
+              this._postMessage({
+                type: "clipboardCopied",
+                target: panelTarget(shown),
+                ok: isCopied,
+              })
             }
-            vscode.env.openExternal(link)
+            break
+          }
+          case "webviewError": {
+            Logger.error(`${this._webviewName} error: ${message.message}`, message.stack ?? "")
+            break
+          }
+          case "runCommand": {
+            await vscode.commands.executeCommand(
+              message.command,
+              ...runCommandArguments(message.command),
+            )
             break
           }
           case "moocLogin": {
@@ -884,7 +970,7 @@ export class TmcPanel {
               postMessageToWebview(webview, {
                 type: "moocLoginError",
                 target: moocLoginPanel,
-                error: reportNotInitialized(actionContext.dialog).message,
+                error: notInitialized().message,
               })
               return
             }
@@ -976,6 +1062,92 @@ export class TmcPanel {
   }
 }
 
+/** Fills in what the host knows about a panel at render time. */
+function completePanel(request: Panel, actionContext: ActionContext): Panel {
+  return request.type === "Welcome"
+    ? { ...request, version: EXTENSION_VERSION, loggedIn: actionContext.authState.loggedIn }
+    : request
+}
+
+/** The editor tab label for `panel`, so tabs can be told apart in Open Editors and Ctrl+Tab. */
+function panelTitle(panel: Panel, actionContext: ActionContext): string {
+  switch (panel.type) {
+    case "App":
+      return "TestMyCode"
+    case "Welcome":
+      return "Welcome"
+    case "MyCourses":
+      return "My Courses"
+    case "CourseDetails": {
+      const course = isReady(actionContext)
+        ? actionContext.startup.userData.getCourse(panel.courseId)
+        : undefined
+      return course?.ok ? LocalCourseData.getCourseTitle(course.val) : "Course Details"
+    }
+    case "ExerciseTests":
+      return `Tests: ${LocalCourseExercise.getSlug(panel.exercise)}`
+    case "ExerciseSubmission":
+      return `Submission: ${LocalCourseExercise.getSlug(panel.exercise)}`
+    case "MoocLogin":
+      return "Log In"
+    case "InitializationErrorHelp":
+      return "TestMyCode Help"
+    default:
+      return assertUnreachable(panel)
+  }
+}
+
+/**
+ * Whether showing `panel` in the side panel should move keyboard focus into it.
+ *
+ * Only a side panel the user asked for takes focus; test and submission results appear
+ * while the student is typing, and a re-run must not pull their keystrokes away.
+ */
+function takesFocus(panel: Panel): boolean {
+  return panel.type === "MoocLogin"
+}
+
+/**
+ * The on-disk statuses with the downloads still running, or failed, laid over them.
+ *
+ * A failure is shown only while the exercise is still absent from disk: one downloaded
+ * since, by any route, is no longer failed.
+ */
+function withInFlightStatuses(
+  onDisk: CourseDetailsView["exerciseStatuses"],
+  inFlight: [ExerciseIdentifier, ExerciseStatus][],
+): [ExerciseIdentifier, ExerciseStatus][] {
+  const inFlightById = new Map(inFlight.map(([id, status]) => [exerciseKey(id), status]))
+  return onDisk.map(({ exerciseId, status }): [ExerciseIdentifier, ExerciseStatus] => {
+    const override = inFlightById.get(exerciseKey(exerciseId))
+    const isOnDisk = status === "opened" || status === "closed"
+    const shown =
+      override === "downloading" || (override === "downloadFailed" && !isOnDisk) ? override : status
+    return [exerciseId, shown]
+  })
+}
+
+function exerciseKey(id: ExerciseIdentifier): string {
+  return `${id.kind}:${ExerciseIdentifier.toString(id)}`
+}
+
+function isSameCourse(a: CourseIdentifier, b: CourseIdentifier): boolean {
+  return a.kind === b.kind && CourseIdentifier.toString(a) === CourseIdentifier.toString(b)
+}
+
+function courseDetailsView(
+  course: LocalCourseDataType,
+  actionContext: ReadyActionContext,
+  offlineMode: boolean,
+): CourseDetailsView {
+  return buildCourseDetailsView(
+    course,
+    actionContext.startup.workspaceManager.getExercises(),
+    offlineMode,
+    new Date(),
+  )
+}
+
 /**
  * Narrows the view model's rows to the fields `ExerciseSchema` declares.
  *
@@ -985,18 +1157,70 @@ export class TmcPanel {
  * on the far side of a `postMessage`.
  */
 function toMessageGroups(groups: ExerciseGroup[]): ExerciseGroup[] {
-  return groups.map(({ name, nextDeadlineString, exercises }) => ({
+  return groups.map(({ name, nextDeadlineString, defaultOpen, exercises }) => ({
     name,
     nextDeadlineString,
+    defaultOpen,
     exercises: exercises.map((exercise) => ({
       id: exercise.id,
       name: exercise.name,
       isHard: exercise.isHard,
       hardDeadlineString: exercise.hardDeadlineString,
       softDeadlineString: exercise.softDeadlineString,
+      deadlineIso: exercise.deadlineIso,
       passed: exercise.passed,
     })),
   }))
+}
+
+/**
+ * Resolves a link the webview supplied, or `undefined` for anything but http(s).
+ *
+ * Non-strict `Uri.parse` never throws and invents a `file` scheme for a string without
+ * one, so the link is parsed strictly and its scheme checked before the OS handler sees it.
+ */
+function parseWebLink(url: string): vscode.Uri | undefined {
+  let link
+  try {
+    link = vscode.Uri.parse(url, true)
+  } catch (error) {
+    Logger.error("Refusing an unparseable link from the webview", error)
+    return undefined
+  }
+  if (link.scheme !== "http" && link.scheme !== "https") {
+    Logger.error(`Refusing a "${link.scheme}" link from the webview`, url)
+    return undefined
+  }
+  return link
+}
+
+type RunnableCommand = Extract<WebviewToExtension, { type: "runCommand" }>["command"]
+
+/** The arguments the host supplies for a command the webview may run. */
+function runCommandArguments(command: RunnableCommand): unknown[] {
+  switch (command) {
+    case "workbench.action.openSettings":
+      return ["testMyCode.logLevel"]
+    case "workbench.action.openIssueReporter":
+      return [{ extensionId: EXTENSION_ID }]
+    case "tmc.logs":
+    case "tmc.myCourses":
+    case "tmc.showMoocLogin":
+    case "workbench.action.restartExtensionHost":
+      return []
+    default:
+      return assertUnreachable(command)
+  }
+}
+
+/**
+ * The failure a panel waiting on this action is told about when initialization failed.
+ * Logged rather than notified: the panel shows it.
+ */
+function notInitialized(): InitializationError {
+  const error = new InitializationError("The extension did not initialize properly")
+  Logger.error("This action is unavailable.", error)
+  return error
 }
 
 /**

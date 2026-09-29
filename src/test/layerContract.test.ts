@@ -27,10 +27,8 @@ const carriedOnPastWarnings = [
   "downloadExercisesForUi.ts: Failed to refresh local exercises.",
   "downloadExercisesForUi.ts: Failed to read the course.",
   "downloadExercisesForUi.ts: Failed to refresh local exercises.",
-  "downloadOrUpdateExercises.ts: Failed to download exercises from tmc.mooc.fi.",
-  "downloadOrUpdateExercises.ts: Failed to download exercises from courses.mooc.fi.",
-  "downloadOrUpdateExercises.ts: Failed to update exercises.",
-  "downloadOrUpdateExercises.ts: Failed to update exercises.",
+  // one notification for the whole download, naming every exercise that failed
+  "downloadOrUpdateExercises.ts: Failed to download ${describeExercises(names)}.",
   // both backends failed: the tmc half is returned, the mooc half is this
   'logout.ts: Failed to log out of ${backendName("mooc")}.',
   'removeCourse.ts: Failed to remove TMC-langs data for "${courseName}".',

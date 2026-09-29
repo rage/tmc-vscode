@@ -31,9 +31,8 @@ export default defineConfig(({ mode }): UserConfig => {
   const production = mode === "production"
   return {
     plugins: [svelte(), copyCodicons()],
-    // The output dir lives under the default publicDir (public/); disable
-    // publicDir so Vite does not copy public/* (index.html, favicon.png)
-    // into the build output.
+    // The output dir lives under the default publicDir (public/), which Vite would
+    // otherwise copy into itself.
     publicDir: false,
     build: {
       outDir: "public/build",

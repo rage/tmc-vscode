@@ -96,7 +96,12 @@ interface Harness {
   panelFailures: () => string[]
 }
 
-const failureTypes = new Set(["submissionStatusError", "testError", "pasteError"])
+const failureTypes = new Set([
+  "submissionStatusError",
+  "testError",
+  "pasteError",
+  "refreshFinished",
+])
 
 async function harness(
   services: {
@@ -145,6 +150,7 @@ async function harness(
     getExerciseContaining: () => exercise,
     getExerciseBySlug: () => exercise,
     getExercisesByCourseSlug: () => [exercise],
+    getExercises: () => [exercise],
     setExercises: async () => Ok.EMPTY,
     deleteWorkspaceFile: async () => Ok.EMPTY,
     createWorkspaceFile: async () => {},
@@ -192,12 +198,12 @@ async function harness(
   TmcPanel.renderSide(vscode.Uri.file("/ext"), extensionContext, actionContext, {
     id: nextPanelId(),
     type: "MyCourses",
-    courseDeadlines: {},
   })
   const sidePanel = webviews[0]
   if (!sidePanel) {
     throw new Error("the side panel was never created")
   }
+  await sidePanel.sendReady()
 
   return {
     actionContext,
@@ -215,7 +221,7 @@ async function harness(
       webviews
         .flatMap((webview) => vi.mocked(webview.panel.webview.postMessage).mock.calls)
         .map(([message]) => message as ExtensionToWebview)
-        .filter((message) => failureTypes.has(message.type))
+        .filter((message) => failureTypes.has(message.type) && "error" in message)
         .map((message) => {
           const error = (message as { error: string | { message: string } }).error
           return `${message.type}: ${typeof error === "string" ? error : error.message}`
@@ -292,15 +298,26 @@ suite("reported once: exercise commands", function () {
   })
 
   test("a submission from the panel fails in the panel only", async function () {
-    const { post, shown, panelFailures } = await harness({
+    const { actionContext, post, shown, panelFailures } = await harness({
       langs: { submitMoocExerciseAndWaitForResults: async () => Err(new ConnectionError("reset")) },
     })
+    const [storedExercise] = storedCourse().exercises
+    if (!storedExercise) {
+      throw new Error("the stored course has no exercise")
+    }
+    const testsPanel = {
+      id: nextPanelId(),
+      type: "ExerciseTests" as const,
+      course: makeMoocKind(storedCourse()),
+      exercise: makeMoocKind(storedExercise),
+      exerciseUri: exercise.uri,
+      testRunId: nextPanelId(),
+    }
+    TmcPanel.renderSide(vscode.Uri.file("/ext"), createMockContext(), actionContext, testsPanel)
 
     await post({
       type: "submitExercise",
-      course: makeMoocKind(storedCourse()),
-      exercise: makeMoocKind(storedCourse().exercises[0]),
-      exerciseUri: exercise.uri,
+      sourcePanel: { id: testsPanel.id, type: "ExerciseTests" },
     })
 
     expect(shown).toEqual([])
@@ -564,7 +581,7 @@ suite("reported once: My Courses and course details", function () {
         mode,
       })
 
-      expect(shown).toEqual([`error: Failed to download exercises from ${backendName("mooc")}.`])
+      expect(shown).toEqual(["error: Failed to download the exercise loops."])
     },
   )
 
@@ -576,7 +593,7 @@ suite("reported once: My Courses and course details", function () {
 
     await run("tmc.downloadNewExercises")
 
-    expect(shown).toEqual([`error: Failed to download exercises from ${backendName("mooc")}.`])
+    expect(shown).toEqual(["error: Failed to download the exercise loops."])
   })
 
   test("a failed update download from the palette is one warning", async function () {
@@ -590,7 +607,7 @@ suite("reported once: My Courses and course details", function () {
 
     await run("tmc.updateExercises", "loud")
 
-    expect(shown).toEqual([`error: Failed to download exercises from ${backendName("mooc")}.`])
+    expect(shown).toEqual(["error: Failed to download the exercise loops."])
   })
 
   test("an update check that throws is one notification, or none when silent", async function () {
@@ -637,17 +654,20 @@ suite("reported once: My Courses and course details", function () {
     expect(shown).toEqual(["info: All exercises are up to date."])
   })
 
-  test("a course that fails to refresh from its panel is one notification", async function () {
-    const { post, shown } = await harness({
+  test("a course that fails to refresh from its panel shows in the panel only", async function () {
+    const { post, shown, panelFailures } = await harness({
       langs: {
         getMoocCourseData: async () => Err(offline()),
+        getCourseDetails: async () => Err(offline()),
         listLocalExercises: async () => Err(new Error("rescan failed")),
       },
     })
+    await post({ type: "openCourseDetails", courseId: COURSE_ID })
 
-    await post({ type: "refreshCourseDetails", id: COURSE_ID, useCache: false })
+    await post({ type: "refreshCourseDetails", id: COURSE_ID })
 
-    expect(shown).toEqual(["error: Failed to update course."])
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual(["refreshFinished: offline"])
   })
 
   test("a lost session scope is warned once, however often it is hit", async function () {
@@ -657,8 +677,8 @@ suite("reported once: My Courses and course details", function () {
       },
     })
 
-    await post({ type: "refreshCourseDetails", id: COURSE_ID, useCache: false })
-    await post({ type: "refreshCourseDetails", id: COURSE_ID, useCache: false })
+    await post({ type: "refreshCourseDetails", id: COURSE_ID })
+    await post({ type: "refreshCourseDetails", id: COURSE_ID })
 
     expect(shown).toEqual(["error: Failed to update course data."])
   })

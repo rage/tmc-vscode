@@ -1,4 +1,5 @@
-import type { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
+import type { CourseIdentifier, ExerciseIdentifier, ExerciseStatus } from "../shared/shared"
+import { exerciseStatusRegistry } from "./exerciseStatusRegistry"
 import { TmcPanel } from "./TmcPanel"
 import { updateablesRegistry } from "./updateablesRegistry"
 
@@ -18,6 +19,44 @@ export function postUpdateables(
     target: { type: "CourseDetails" },
     courseId,
     exerciseIds,
+  })
+}
+
+/**
+ * Records `courseId`'s exercise statuses **and** posts them to the CourseDetails panels,
+ * one message however many there are.
+ *
+ * The single writer, for the reason given on {@link postUpdateables}.
+ */
+export function postExerciseStatuses(
+  courseId: CourseIdentifier,
+  statuses: [ExerciseIdentifier, ExerciseStatus][],
+): void {
+  if (statuses.length === 0) {
+    return
+  }
+  exerciseStatusRegistry.record(courseId, statuses)
+  TmcPanel.postMessage({
+    type: "setExerciseStatuses",
+    target: { type: "CourseDetails" },
+    courseId,
+    statuses,
+  })
+}
+
+/** {@link postExerciseStatuses} for a single exercise, as it settles mid-download. */
+export function postExerciseStatus(
+  courseId: CourseIdentifier,
+  exerciseId: ExerciseIdentifier,
+  status: ExerciseStatus,
+): void {
+  exerciseStatusRegistry.record(courseId, [[exerciseId, status]])
+  TmcPanel.postMessage({
+    type: "exerciseStatusChange",
+    target: { type: "CourseDetails" },
+    courseId,
+    exerciseId,
+    status,
   })
 }
 

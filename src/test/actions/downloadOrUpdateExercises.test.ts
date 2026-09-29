@@ -7,11 +7,13 @@ import type { ReadyActionContext } from "../../actions/types"
 import Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
 import type Settings from "../../config/settings"
+import * as errors from "../../errors"
 import { InvalidTokenError } from "../../errors"
+import { exerciseStatusRegistry } from "../../panels/exerciseStatusRegistry"
 import { TmcPanel } from "../../panels/TmcPanel"
 import type { TmcExerciseDownload } from "../../shared/langsSchema"
 import type { ExerciseStatus, ExtensionToWebview } from "../../shared/shared"
-import { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
+import { CourseIdentifier, ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
 import type UI from "../../ui/ui"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -38,6 +40,30 @@ const otherWorld: TmcExerciseDownload = {
 // Fixed id shared by all tests, since they all operate within a single course.
 const TEST_COURSE_ID = CourseIdentifier.from(0)
 
+const storedCourse = makeTmcKind({
+  id: 0,
+  name: "python-course",
+  title: "Python Course",
+  description: "",
+  organization: "mooc",
+  exercises: [helloWorld, otherWorld].map((exercise) => ({
+    id: exercise.id,
+    name: exercise["exercise-slug"],
+    availablePoints: 1,
+    awardedPoints: 0,
+    deadline: null,
+    passed: false,
+    softDeadline: null,
+  })),
+  availablePoints: 2,
+  awardedPoints: 0,
+  perhapsExamMode: false,
+  newExercises: [],
+  notifyAfter: 0,
+  disabled: false,
+  materialUrl: null,
+})
+
 const createDownloadResult = (
   downloaded: TmcExerciseDownload[],
   skipped: TmcExerciseDownload[],
@@ -57,7 +83,9 @@ suite("downloadOrUpdateExercises action", function () {
   let webviewMessages: ExtensionToWebview[]
 
   const actionContext = (): ReadyActionContext => ({
-    ...createMockActionContext({ startup: { langs: tmcMock } }),
+    ...createMockActionContext({
+      startup: { langs: tmcMock, userData: { getCourses: () => [storedCourse] } as never },
+    }),
     dialog: dialogMock,
     settings: settingsMock,
     ui: uiMock,
@@ -78,6 +106,7 @@ suite("downloadOrUpdateExercises action", function () {
 
   afterEach(function () {
     vi.restoreAllMocks()
+    exerciseStatusRegistry.clear()
   })
 
   test("should return empty results if no exercises are given", async function () {
@@ -103,11 +132,85 @@ suite("downloadOrUpdateExercises action", function () {
     )
     expect(result.successful).toEqual([])
     expect(result.failed).toEqual([ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)])
-    expect(dialogMock.reportError).toHaveBeenCalledWith(
-      expect.stringContaining("tmc.mooc.fi"),
+    expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to download 2 exercises: hello_world, other_world.",
       error,
       "tmc",
     )
+  })
+
+  test("reports every failed exercise in one notification, by name", async function () {
+    tmcMockValues.downloadExercises = createDownloadResult(
+      [],
+      [],
+      [
+        [helloWorld, ["checksum mismatch"]],
+        [otherWorld, ["checksum mismatch"]],
+      ],
+    )
+
+    await downloadOrUpdateExercises(
+      actionContext(),
+      [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
+      TEST_COURSE_ID,
+    )
+
+    expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to download 2 exercises: hello_world, other_world.",
+      expect.objectContaining({ message: "checksum mismatch" }),
+      undefined,
+    )
+  })
+
+  test("names the backend failure that has a remedy when both backends fail", async function () {
+    const tmcError = new Error("tmc is down")
+    const moocError = new InvalidTokenError("401 unauthorized")
+    tmcMock.downloadExercises = vi.fn(async (ids) =>
+      ids[0]?.kind === "tmc"
+        ? { ...createDownloadResult([], [], []), tmcError }
+        : { ...createDownloadResult([], [], []), moocError },
+    ) as Langs["downloadExercises"]
+    vi.spyOn(errors, "presentationFor").mockImplementation((error) => ({
+      message: error.message,
+      actions: error === moocError ? [{ label: "Log in", command: "tmc.showMoocLogin" }] : [],
+    }))
+
+    await downloadOrUpdateExercises(
+      actionContext(),
+      [ExerciseIdentifier.from(1), ExerciseIdentifier.from("mooc-exercise")],
+      TEST_COURSE_ID,
+    )
+
+    expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to download 2 exercises: hello_world, mooc-exercise.",
+      moocError,
+      "mooc",
+    )
+  })
+
+  test("marks a whole download as started in one message", async function () {
+    const ids = Array.from({ length: 50 }, (_, index) => ExerciseIdentifier.from(index + 1))
+
+    await downloadOrUpdateExercises(actionContext(), ids, TEST_COURSE_ID)
+
+    const started = webviewMessages.filter(
+      (m) => m.type === "setExerciseStatuses" && m.statuses.every(([, s]) => s === "downloading"),
+    )
+    expect(started).toHaveLength(1)
+    expect(webviewMessages.filter((m) => m.type === "exerciseStatusChange")).toHaveLength(0)
+  })
+
+  test("remembers a running download for a panel opened meanwhile, and forgets it after", async function () {
+    let duringDownload: unknown
+    tmcMock.downloadExercises = vi.fn(async () => {
+      duringDownload = exerciseStatusRegistry.get(TEST_COURSE_ID)
+      return createDownloadResult([helloWorld], [], undefined)
+    }) as Langs["downloadExercises"]
+
+    await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
+
+    expect(duringDownload).toEqual([[ExerciseIdentifier.from(1), "downloading"]])
+    expect(exerciseStatusRegistry.get(TEST_COURSE_ID)).toEqual([])
   })
 
   // The action returns ExerciseIdentifier objects (not raw numbers) for
@@ -217,8 +320,8 @@ suite("downloadOrUpdateExercises action", function () {
       TEST_COURSE_ID,
     )
 
-    expect(dialogMock.reportError).toHaveBeenCalledWith(
-      "Failed to download exercises from courses.mooc.fi.",
+    expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to download 2 exercises: exercise-uuid-3, exercise-uuid-4.",
       moocError,
       "mooc",
     )
@@ -249,13 +352,9 @@ suite("downloadOrUpdateExercises action", function () {
       [ExerciseIdentifier.from(closedId), ExerciseIdentifier.from(undownloadedId)],
       TEST_COURSE_ID,
     )
-    // The last message for each id reflects the final broadcast.
-    const lastMessageFor = (id: string): ExtensionToWebview | undefined =>
-      webviewMessages
-        .filter((m) => "exerciseId" in m && ExerciseIdentifier.unwrap(m.exerciseId) === id)
-        .at(-1)
-    expect(lastMessageFor(closedId)).toEqual(wrapToMessage(closedId, "closed"))
-    expect(lastMessageFor(undownloadedId)).toEqual(wrapToMessage(undownloadedId, "downloadFailed"))
+    // The last status for each id reflects the final broadcast.
+    expect(postedStatuses(webviewMessages, closedId).at(-1)).toBe("closed")
+    expect(postedStatuses(webviewMessages, undownloadedId).at(-1)).toBe("downloadFailed")
   })
 
   test("should download template if downloadOldSubmission setting is off", async function () {
@@ -307,33 +406,29 @@ suite("downloadOrUpdateExercises action", function () {
       return createDownloadResult([helloWorld], [], undefined)
     }) as Langs["downloadExercises"]
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
-    expect(webviewMessages.length).toBeGreaterThanOrEqual(2)
-    expect(first(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "downloading"))
-    expect(last(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "closed"))
+    expect(first(postedStatuses(webviewMessages, helloWorld.id))).toBe("downloading")
+    expect(last(postedStatuses(webviewMessages, helloWorld.id))).toBe("closed")
   })
 
   test("should post status updates for skipped download", async function () {
     tmcMockValues.downloadExercises = createDownloadResult([], [helloWorld], undefined)
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
-    expect(webviewMessages.length).toBeGreaterThanOrEqual(2)
-    expect(first(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "downloading"))
-    expect(last(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "closed"))
+    expect(first(postedStatuses(webviewMessages, helloWorld.id))).toBe("downloading")
+    expect(last(postedStatuses(webviewMessages, helloWorld.id))).toBe("closed")
   })
 
   test("should post status updates for failing download", async function () {
     tmcMockValues.downloadExercises = createDownloadResult([], [], [[helloWorld, [""]]])
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
-    expect(webviewMessages.length).toBeGreaterThanOrEqual(2)
-    expect(first(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "downloading"))
-    expect(last(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "downloadFailed"))
+    expect(first(postedStatuses(webviewMessages, helloWorld.id))).toBe("downloading")
+    expect(last(postedStatuses(webviewMessages, helloWorld.id))).toBe("downloadFailed")
   })
 
   test("should post status updates for exercises missing from langs response", async function () {
     tmcMockValues.downloadExercises = createDownloadResult([], [], undefined)
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
-    expect(webviewMessages.length).toBeGreaterThanOrEqual(2)
-    expect(first(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "downloading"))
-    expect(last(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "downloadFailed"))
+    expect(first(postedStatuses(webviewMessages, helloWorld.id))).toBe("downloading")
+    expect(last(postedStatuses(webviewMessages, helloWorld.id))).toBe("downloadFailed")
   })
 
   test("should post status updates when TMC-langs operation fails", async function () {
@@ -342,23 +437,27 @@ suite("downloadOrUpdateExercises action", function () {
       tmcError: new Error(),
     }
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
-    expect(webviewMessages.length).toBeGreaterThanOrEqual(2)
-    expect(first(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "downloading"))
-    expect(last(webviewMessages)).toEqual(wrapToMessage(helloWorld.id, "downloadFailed"))
+    expect(first(postedStatuses(webviewMessages, helloWorld.id))).toBe("downloading")
+    expect(last(postedStatuses(webviewMessages, helloWorld.id))).toBe("downloadFailed")
   })
 })
 
-// Mirrors the message the action posts via TmcPanel.postMessage.
-function wrapToMessage(exerciseId: number | string, status: ExerciseStatus): ExtensionToWebview {
-  return {
-    type: "exerciseStatusChange",
-    target: {
-      type: "CourseDetails",
-    },
-    courseId: TEST_COURSE_ID,
-    exerciseId: ExerciseIdentifier.from(exerciseId),
-    status,
-  }
+// Every status posted for `exerciseId` in order, from single and batched status messages alike.
+function postedStatuses(
+  messages: ExtensionToWebview[],
+  exerciseId: number | string,
+): ExerciseStatus[] {
+  return messages.flatMap((message): ExerciseStatus[] => {
+    if (message.type === "exerciseStatusChange") {
+      return ExerciseIdentifier.unwrap(message.exerciseId) === exerciseId ? [message.status] : []
+    }
+    if (message.type === "setExerciseStatuses") {
+      return message.statuses
+        .filter(([id]) => ExerciseIdentifier.unwrap(id) === exerciseId)
+        .map(([, status]) => status)
+    }
+    return []
+  })
 }
 
 suite("downloadOrUpdateExercises cancellation and progress", function () {

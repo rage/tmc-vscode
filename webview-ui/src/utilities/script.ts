@@ -1,13 +1,38 @@
 import { onDestroy } from "svelte"
 import { z } from "zod"
 
-/**
- * Various utility functions and types for Svelte <script>s
- */
 import type { ExtensionToWebview, Panel, Targeted, WebviewError } from "../shared/shared"
 import { ExtensionToWebviewSchema } from "../shared/shared"
 
 type TargetedMessage<T extends Panel> = Targeted<ExtensionToWebview, T["type"]>
+
+type MessageListener = (message: ExtensionToWebview) => void
+
+const messageListeners = new Set<MessageListener>()
+
+// One window listener for the whole app, so each message is validated once however many
+// components listen.
+function dispatchMessage(event: MessageEvent): void {
+  const validationResult = ExtensionToWebviewSchema.safeParse(event.data)
+  if (!validationResult.success) {
+    console.warn(
+      "Ignoring invalid message to webview:",
+      z.prettifyError(validationResult.error),
+      event.data,
+    )
+    return
+  }
+  // zod strips unknown fields, so the original data is used instead of the parse result
+  const message = event.data as ExtensionToWebview
+  // A listener added while this message is dispatched (a panel it mounted) waits for the next
+  // one; a listener removed meanwhile gets nothing.
+  for (const listener of Array.from(messageListeners)) {
+    if (messageListeners.has(listener)) {
+      listener(message)
+    }
+  }
+}
+window.addEventListener("message", dispatchMessage)
 
 /**
  * Convenience function for listening to messages from the extension host to the webview.
@@ -23,27 +48,17 @@ export function addMessageListener<T extends Panel>(
   listeningPanel: T,
   callback: (message: TargetedMessage<T>) => void,
 ): () => void {
-  const handleMessage = (event: MessageEvent): void => {
-    const validationResult = ExtensionToWebviewSchema.safeParse(event.data)
-    if (!validationResult.success) {
-      console.warn(
-        "Ignoring invalid message to webview:",
-        z.prettifyError(validationResult.error),
-        event.data,
-      )
-      return
-    }
-    // zod strips unknown fields, so the original data is used instead of the parse result
-    const message = event.data as ExtensionToWebview
-    // if no target id is given, accept all messages
-    // if a target id is given, only accept messages with the correct id
+  const listener: MessageListener = (message) => {
+    // a target without an id is a broadcast to every panel of its type
     const correctType = message.target.type === listeningPanel.type
     if (correctType && (!("id" in message.target) || message.target.id === listeningPanel.id)) {
       callback(message as TargetedMessage<T>)
     }
   }
-  window.addEventListener("message", handleMessage)
-  const dispose = (): void => window.removeEventListener("message", handleMessage)
+  messageListeners.add(listener)
+  const dispose = (): void => {
+    messageListeners.delete(listener)
+  }
   onDestroy(dispose)
   return dispose
 }

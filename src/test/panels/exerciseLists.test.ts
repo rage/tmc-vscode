@@ -6,7 +6,12 @@ vi.mock("../../panels/TmcPanel", () => ({
   TmcPanel: { postMessage: vi.fn() },
 }))
 
-import { postUpdateables } from "../../panels/exerciseLists"
+import {
+  postExerciseStatus,
+  postExerciseStatuses,
+  postUpdateables,
+} from "../../panels/exerciseLists"
+import { exerciseStatusRegistry } from "../../panels/exerciseStatusRegistry"
 import { TmcPanel } from "../../panels/TmcPanel"
 import { updateablesRegistry } from "../../panels/updateablesRegistry"
 
@@ -16,6 +21,7 @@ const moocCourse = CourseIdentifier.from("11111111-2222-3333-4444-555555555555")
 
 afterEach(() => {
   updateablesRegistry.clear()
+  exerciseStatusRegistry.clear()
 })
 
 suite("updateables registry", () => {
@@ -63,5 +69,51 @@ suite("updateables registry", () => {
       exerciseIds,
     })
     expect(updateablesRegistry.get(tmcCourse)).toEqual(exerciseIds)
+  })
+})
+
+suite("exercise status registry", () => {
+  const first = ExerciseIdentifier.from(101)
+  const second = ExerciseIdentifier.from(102)
+
+  test("keeps the statuses the workspace cannot derive, per course", () => {
+    postExerciseStatuses(tmcCourse, [
+      [first, "downloading"],
+      [second, "downloadFailed"],
+    ])
+    postExerciseStatuses(otherTmcCourse, [[first, "downloading"]])
+
+    expect(exerciseStatusRegistry.get(CourseIdentifier.from(1))).toEqual([
+      [first, "downloading"],
+      [second, "downloadFailed"],
+    ])
+    expect(exerciseStatusRegistry.get(otherTmcCourse)).toEqual([[first, "downloading"]])
+  })
+
+  test("forgets an exercise once it settles", () => {
+    postExerciseStatuses(tmcCourse, [
+      [first, "downloading"],
+      [second, "downloading"],
+    ])
+
+    postExerciseStatus(tmcCourse, first, "closed")
+
+    expect(exerciseStatusRegistry.get(tmcCourse)).toEqual([[second, "downloading"]])
+  })
+
+  test("posts a batch as one message", () => {
+    const statuses: [ExerciseIdentifier, "downloading"][] = [
+      [first, "downloading"],
+      [second, "downloading"],
+    ]
+
+    postExerciseStatuses(moocCourse, statuses)
+
+    expect(TmcPanel.postMessage).toHaveBeenCalledExactlyOnceWith({
+      type: "setExerciseStatuses",
+      target: { type: "CourseDetails" },
+      courseId: moocCourse,
+      statuses,
+    })
   })
 })
