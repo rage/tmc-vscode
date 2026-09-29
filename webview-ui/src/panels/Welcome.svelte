@@ -18,6 +18,9 @@
   function openMyCourses() {
     vscode.postMessage({ type: "openMyCourses" })
   }
+  function logIn() {
+    vscode.postMessage({ type: "runCommand", command: "tmc.showMoocLogin" })
+  }
 </script>
 
 <div class="welcome">
@@ -44,15 +47,11 @@
           <a href="https://tmc.mooc.fi">tmc.mooc.fi</a>. For setting up the programming environment,
           always refer to your course's own instructions.
         </p>
-        {#if !panel.loggedIn}
-          <p>
-            To get started, choose Log In in the TestMyCode view, or run "TestMyCode: Log In" from
-            the Command Palette.
-          </p>
-        {/if}
         <div class="actions cta">
           {#if panel.loggedIn}
             <Button onclick={openMyCourses}>My Courses</Button>
+          {:else}
+            <Button onclick={logIn}>Log In</Button>
           {/if}
           <Button
             secondary
