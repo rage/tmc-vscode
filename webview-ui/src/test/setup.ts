@@ -69,6 +69,19 @@ globalThis.ResizeObserver ??= class {
   public disconnect(): void {}
 }
 
+// `svelte/motion` queries `prefers-reduced-motion` as soon as it is imported.
+window.matchMedia ??= (query: string): MediaQueryList =>
+  ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    dispatchEvent: () => false,
+  }) as MediaQueryList
+
 // `<vscode-icon>` warns when the codicons stylesheet is missing, passing the element
 // itself as `%o`. Node's inspect of that element reaches `document.styleSheets`, whose
 // jsdom `href` getter throws on a non-branded receiver; the throw escapes as a global
