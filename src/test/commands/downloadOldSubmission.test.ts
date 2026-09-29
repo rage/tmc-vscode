@@ -17,6 +17,7 @@ import type {
 } from "../../shared/langsSchema"
 import { acquireSingleFlight, releaseSingleFlight } from "../../utilities"
 import { createMockActionContext } from "../mocks/actionContext"
+import { createDialogMock } from "../mocks/dialog"
 
 // jest-mock-vscode ships no `env` namespace.
 beforeAll(function () {
@@ -88,8 +89,7 @@ suite("Download old submission command (mooc branch)", function () {
 
     offered = []
     notification = vi.fn()
-    const dialog = {
-      ...base.dialog,
+    const dialog = Object.assign(createDialogMock()[0], {
       // The submission picker: takes the first item.
       selectItem: vi.fn(async (prompt: unknown, ...items: Item<PickableSubmission>[]) => {
         pickPrompt = prompt
@@ -102,7 +102,7 @@ suite("Download old submission command (mooc branch)", function () {
       ),
       errorNotification: vi.fn(),
       notification,
-    } as unknown as ActionContext["dialog"]
+    }) as unknown as ActionContext["dialog"]
 
     return {
       ...base,
@@ -177,6 +177,19 @@ suite("Download old submission command (mooc branch)", function () {
 
     expect(offered).toHaveLength(1)
     expect(offered[0]?.description).toContain("Pending")
+  })
+
+  test("shows progress while fetching and restoring, and says when done", async function () {
+    const context = actionContext()
+
+    await downloadOldSubmission(context, uri)
+
+    expect(
+      vi.mocked(context.dialog.progressNotification).mock.calls.map(([message]) => message),
+    ).toEqual(["Fetching the submissions of ex-1…", "Restoring the old submission of ex-1…"])
+    expect(context.dialog.statusMessage).toHaveBeenCalledExactlyOnceWith(
+      "Restored the old submission of ex-1.",
+    )
   })
 
   test("submits the current state first when the user asks for it", async function () {

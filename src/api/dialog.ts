@@ -27,6 +27,8 @@ type NotificationButton = [label: string, callback: () => void]
 
 type NotificationAction = vscode.MessageItem & { callback: () => void }
 
+const STATUS_MESSAGE_MS = 5000
+
 type ShowNotification = (
   message: string,
   ...actions: NotificationAction[]
@@ -237,6 +239,14 @@ export default class Dialog {
         : { title: prompt.title, placeHolder: prompt.placeHolder }
     const picked = await vscode.window.showQuickPick(items, options)
     return picked?.value
+  }
+
+  /**
+   * Announces a finished operation in the status bar for a few seconds, for news the user
+   * need not act on. Anything with a follow-up belongs in {@link notification}.
+   */
+  public statusMessage(message: string): void {
+    vscode.window.setStatusBarMessage(message, STATUS_MESSAGE_MS)
   }
 
   /**

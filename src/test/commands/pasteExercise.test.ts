@@ -67,6 +67,17 @@ suite("Paste exercise command", function () {
     vscodeMock.env = { openExternal: vi.fn() }
   })
 
+  test("shows progress naming the exercise and the paste service", async function () {
+    const { context } = harness("mooc")
+
+    await pasteExercise(context, undefined)
+
+    expect(context.dialog.progressNotification).toHaveBeenCalledWith(
+      "Sending ex-1 to courses.mooc.fi paste…",
+      expect.any(Function),
+    )
+  })
+
   test("pastes a tmc exercise through the tmc backend and offers its link", async function () {
     const { context, notifications } = harness("tmc")
 

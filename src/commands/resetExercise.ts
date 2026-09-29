@@ -18,6 +18,7 @@ export async function resetExercise(
   actionContext: ReadyActionContext,
   resource: vscode.Uri | undefined,
 ): Promise<void> {
+  const { dialog } = actionContext
   const { userData } = actionContext.startup
   await runForExercise(actionContext, resource, "Resetting the exercise", async (exercise) => {
     // Look up by known backend rather than a name-only match, which could
@@ -43,7 +44,12 @@ export async function resetExercise(
 
     const editor = vscode.window.activeTextEditor
     const document = editor?.document.uri
-    const resetResult = await resetExerciseAction(actionContext, id, exercise, submitFirst)
+    const resetResult = await dialog.progressNotification(
+      submitFirst
+        ? `Submitting and resetting ${exercise.exerciseSlug}…`
+        : `Resetting ${exercise.exerciseSlug}…`,
+      () => resetExerciseAction(actionContext, id, exercise, submitFirst),
+    )
     if (resetResult.err) {
       return failure("Failed to reset exercise.", resetResult.val)
     }
@@ -52,6 +58,7 @@ export async function resetExercise(
       Logger.debug(`Reopening original file "${document.fsPath}"`)
       await vscode.commands.executeCommand("workbench.action.files.revert", document)
     }
+    dialog.statusMessage(`Reset ${exercise.exerciseSlug}.`)
     return Ok.EMPTY
   })
 }

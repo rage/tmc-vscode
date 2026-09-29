@@ -16,11 +16,15 @@ export async function pasteExercise(
     resource,
     "Pasting the exercise",
     async (exercise) => {
-      const result = await actions.pasteExercise(
-        actionContext,
-        exercise.backend,
-        exercise.courseSlug,
-        exercise.exerciseSlug,
+      const result = await dialog.progressNotification(
+        `Sending ${exercise.exerciseSlug} to ${pasteServiceName(exercise.backend)}…`,
+        () =>
+          actions.pasteExercise(
+            actionContext,
+            exercise.backend,
+            exercise.courseSlug,
+            exercise.exerciseSlug,
+          ),
       )
       if (result.ok) {
         return result
