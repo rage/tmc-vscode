@@ -19,7 +19,7 @@ suite("design tokens", () => {
       /--tmc-status-failed: var\(--vscode-testing-iconFailed, var\(--vscode-errorForeground\)\)/,
     )
     expect(tokens).toMatch(
-      /--tmc-status-passed: var\(--vscode-testing-iconPassed, var\(--vscode-charts-green\)\)/,
+      /--tmc-status-passed: var\(--vscode-charts-green, var\(--vscode-testing-iconPassed\)\)/,
     )
   })
 

@@ -58,15 +58,15 @@
     background: var(--notice-background);
   }
   .notice-error {
-    --notice-accent: var(--tmc-fg-error);
+    --notice-accent: var(--tmc-notice-error-accent);
     --notice-background: var(--tmc-notice-error-background);
   }
   .notice-warning {
-    --notice-accent: var(--tmc-fg-warning);
+    --notice-accent: var(--tmc-notice-warning-accent);
     --notice-background: var(--tmc-notice-warning-background);
   }
   .notice-info {
-    --notice-accent: var(--tmc-fg-info);
+    --notice-accent: var(--tmc-notice-info-accent);
     --notice-background: var(--tmc-notice-info-background);
   }
   .notice-icon {
