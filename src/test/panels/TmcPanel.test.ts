@@ -759,26 +759,33 @@ suite("TmcPanel reports a handler's failure once", () => {
   })
 
   suite("for submitExercise", () => {
-    const submitMessage = {
-      type: "submitExercise",
-      course: courseWith(0),
-      exercise: makeTmcKind({
-        id: 101,
-        name: "loops",
-        availablePoints: 1,
-        awardedPoints: 0,
-        deadline: null,
-        passed: false,
-        softDeadline: null,
-      }),
-      exerciseUri: vscode.Uri.file("/exercise"),
+    async function mountTests(
+      handlers: ReturnType<typeof stubHandlers>,
+      actionContext = createMockActionContext(),
+    ): Promise<{
+      actionContext: ReturnType<typeof createMockActionContext>
+      panel: vscode.WebviewPanel
+      listener: (message: unknown) => Promise<void>
+      submitMessage: { type: "submitExercise"; sourcePanel: { id: number; type: "ExerciseTests" } }
+      shown: ReturnType<typeof exerciseTestsPanel>
+    }> {
+      registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+      const shown = exerciseTestsPanel()
+      const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
+      return {
+        actionContext,
+        panel,
+        listener,
+        submitMessage: { type: "submitExercise", sourcePanel: panelTarget(shown) },
+        shown,
+      }
     }
 
     // The command reports its own failure, so the panel only unsticks its Submit button.
     test("a failed submission is left to the command to report", async () => {
       const handlers = stubHandlers()
       handlers.submitExercise.mockResolvedValue(Err(new Error("offline")))
-      const { actionContext, panel, listener } = await mountWith(handlers)
+      const { actionContext, panel, listener, submitMessage } = await mountTests(handlers)
 
       await listener(submitMessage)
 
@@ -791,7 +798,7 @@ suite("TmcPanel reports a handler's failure once", () => {
     test("a submission that throws is reported once and unsticks the Submit button", async () => {
       const handlers = stubHandlers()
       handlers.submitExercise.mockRejectedValue(new Error("submit exploded"))
-      const { actionContext, panel, listener } = await mountWith(handlers)
+      const { actionContext, panel, listener, submitMessage } = await mountTests(handlers)
 
       await listener(submitMessage)
 
@@ -805,11 +812,35 @@ suite("TmcPanel reports a handler's failure once", () => {
     })
 
     test("a submission that succeeds leaves the Submit button to the submission panel", async () => {
-      const { panel, listener } = await mountWith(stubHandlers())
+      const { panel, listener, submitMessage } = await mountTests(stubHandlers())
 
       await listener(submitMessage)
 
       expect(panel.webview.postMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: "submitFailed" }),
+      )
+    })
+
+    test("submits the exercise the panel shows, from the host's own Uri", async () => {
+      // The webview's copy of the Uri is plain JSON, missing `fsPath` unless it
+      // happened to be computed before serialization.
+      const handlers = stubHandlers()
+      const { listener, submitMessage, shown } = await mountTests(handlers)
+
+      await listener(submitMessage)
+
+      const [, , exerciseUri] = handlers.submitExercise.mock.calls[0] ?? []
+      expect(exerciseUri).toBe(shown.exerciseUri)
+    })
+
+    test("refuses a submit from a results panel that is no longer shown", async () => {
+      const handlers = stubHandlers()
+      const { panel, listener } = await mountTests(handlers)
+
+      await listener({ type: "submitExercise", sourcePanel: { id: 9999, type: "ExerciseTests" } })
+
+      expect(handlers.submitExercise).not.toHaveBeenCalled()
+      expect(panel.webview.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({ type: "submitFailed" }),
       )
     })
@@ -929,22 +960,19 @@ suite("TmcPanel handler dispatch, degraded startup", () => {
     const handlers = stubHandlers()
     registerWebviewHandlers(handlers as unknown as WebviewHandlers)
     const actionContext = createDegradedContext()
-    const { panel, listener } = await mountSidePanel(actionContext)
+    const shown = exerciseTestsPanel()
+    const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
 
-    await listener({
-      type: "submitExercise",
-      course: fixtureCourse,
-      exercise: fixtureExercise,
-      exerciseUri: vscode.Uri.file("/exercise"),
-    })
+    await listener({ type: "submitExercise", sourcePanel: panelTarget(shown) })
 
     expect(handlers.submitExercise).not.toHaveBeenCalled()
+    // `submitFailed` carries no reason, so the toast is the only place the user learns it.
     expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
       UNAVAILABLE_ACTION,
       expect.any(InitializationError),
     )
     expect(panel.webview.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "submitFailed", target: { type: "ExerciseTests" } }),
+      expect.objectContaining({ type: "submitFailed", target: panelTarget(shown) }),
     )
   })
 

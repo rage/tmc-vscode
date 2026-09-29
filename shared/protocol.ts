@@ -128,8 +128,7 @@ export const ExerciseTestsPanelSchema = z.object({
   type: z.literal("ExerciseTests"),
   course: LocalCourseDataSchema,
   exercise: LocalCourseExerciseSchema,
-  // `Uri` does not survive `postMessage` serialization as a class instance,
-  // so it is passed through without validation
+  // Read by the host alone: it reaches the webview as a plain object, not a `Uri`.
   exerciseUri: z.custom<Uri>(),
   testRunId: z.number(),
 })
@@ -501,11 +500,11 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     type: z.literal("cancelTests"),
     testRunId: z.number(),
   }),
+  // The host submits the exercise the named panel shows; a path from the webview would
+  // be one the webview chose.
   z.object({
     type: z.literal("submitExercise"),
-    course: LocalCourseDataSchema,
-    exercise: LocalCourseExerciseSchema,
-    exerciseUri: z.custom<Uri>(),
+    sourcePanel: strictTargetPanelSchema("ExerciseTests"),
   }),
   z.object({
     type: z.literal("pasteExercise"),

@@ -299,15 +299,26 @@ suite("reported once: exercise commands", function () {
   })
 
   test("a submission from the panel fails in the panel only", async function () {
-    const { post, shown, panelFailures } = await harness({
+    const { actionContext, post, shown, panelFailures } = await harness({
       langs: { submitMoocExerciseAndWaitForResults: async () => Err(new ConnectionError("reset")) },
     })
+    const [storedExercise] = storedCourse().exercises
+    if (!storedExercise) {
+      throw new Error("the stored course has no exercise")
+    }
+    const testsPanel = {
+      id: nextPanelId(),
+      type: "ExerciseTests" as const,
+      course: makeMoocKind(storedCourse()),
+      exercise: makeMoocKind(storedExercise),
+      exerciseUri: exercise.uri,
+      testRunId: nextPanelId(),
+    }
+    TmcPanel.renderSide(vscode.Uri.file("/ext"), createMockContext(), actionContext, testsPanel)
 
     await post({
       type: "submitExercise",
-      course: makeMoocKind(storedCourse()),
-      exercise: makeMoocKind(storedCourse().exercises[0]),
-      exerciseUri: exercise.uri,
+      sourcePanel: { id: testsPanel.id, type: "ExerciseTests" },
     })
 
     expect(shown).toEqual([])

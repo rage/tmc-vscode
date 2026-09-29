@@ -818,9 +818,19 @@ export class TmcPanel {
             // a pre-render here would just flash a second one that's immediately replaced.
             // When it fails there is no such panel, so the ExerciseTests panel still on
             // screen has to be told, or its Submit button stays disabled forever.
+            const submitFailed: ExtensionToWebview = {
+              type: "submitFailed",
+              target: message.sourcePanel,
+            }
             const readyContext = requireReady(actionContext)
             if (!readyContext) {
-              TmcPanel.postMessage({ type: "submitFailed", target: { type: "ExerciseTests" } })
+              this._postMessage(submitFailed)
+              return
+            }
+            const shown = this._lastPanel
+            if (shown?.type !== "ExerciseTests" || shown.id !== message.sourcePanel.id) {
+              Logger.warn("Ignoring a submit from a test results panel that is no longer shown")
+              this._postMessage(submitFailed)
               return
             }
             // The command reports its own failure; a throw is left to `reportingFailures`.
@@ -829,12 +839,12 @@ export class TmcPanel {
               const result = await handlers().submitExercise(
                 extensionContext,
                 readyContext,
-                message.exerciseUri,
+                shown.exerciseUri,
               )
               submitted = result.ok
             } finally {
               if (!submitted) {
-                TmcPanel.postMessage({ type: "submitFailed", target: { type: "ExerciseTests" } })
+                this._postMessage(submitFailed)
               }
             }
             break
