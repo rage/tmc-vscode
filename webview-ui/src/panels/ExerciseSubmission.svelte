@@ -16,7 +16,7 @@
   import type { ExerciseSubmissionPanel, FeedbackQuestion, WebviewError } from "../shared/shared"
   import { assertUnreachable, unwrap } from "../shared/shared"
   import { announce } from "../utilities/a11y.svelte"
-  import { addMessageListener } from "../utilities/script"
+  import { addMessageListener, createRequester } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -41,8 +41,7 @@
   let feedbackQuestions = $state.raw<FeedbackQuestion[]>([])
   let feedbackStatus = $state<"editing" | "sending" | "sent">("editing")
   let feedbackError = $state<string | undefined>(undefined)
-  let pasteResult = $state<string | undefined>(undefined)
-  let pasteError = $state<string | undefined>(undefined)
+  const request = createRequester()
   // The last message of a mooc submission: the CLI has stopped waiting once it arrives,
   // whether or not grading finished, so nothing updates the panel after it.
   let moocResult = $state.raw<ExerciseTaskSubmissionStatus | undefined>(undefined)
@@ -127,29 +126,6 @@
         announce(moocHeadline(message.result))
         break
       }
-      case "feedbackSent": {
-        if (message.ok) {
-          feedbackStatus = "sent"
-          feedbackError = undefined
-          announce("Feedback sent")
-        } else {
-          feedbackStatus = "editing"
-          feedbackError = message.error ?? "Unknown error"
-        }
-        break
-      }
-      case "pasteResult": {
-        pasteResult = message.pasteLink
-        break
-      }
-      case "pasteError": {
-        pasteError = message.error
-        break
-      }
-      case "clipboardCopied": {
-        announce(message.ok ? "Copied to the clipboard" : "Could not copy to the clipboard")
-        break
-      }
       default: {
         assertUnreachable(message)
       }
@@ -162,18 +138,28 @@
   function showInBrowser(url: string) {
     vscode.postMessage({ type: "openLinkInBrowser", url })
   }
-  function copyToClipboard(text: string) {
-    vscode.postMessage({ type: "copyToClipboard", text })
+  async function copyToClipboard(text: string) {
+    const outcome = await request("copyToClipboard", {
+      sourcePanel: { id: panel.id, type: panel.type },
+      text,
+    })
+    announce(outcome.ok ? "Copied to the clipboard" : "Could not copy to the clipboard")
   }
-  function sendFeedback(feedbackAnswerUrl: string, answers: FeedbackAnswer[]) {
+  async function sendFeedback(feedbackAnswerUrl: string, answers: FeedbackAnswer[]) {
     feedbackStatus = "sending"
     feedbackError = undefined
-    vscode.postMessage({
-      type: "sendFeedback",
+    const outcome = await request("sendFeedback", {
       sourcePanel: { id: panel.id, type: panel.type },
       feedbackAnswerUrl,
       answers,
     })
+    if (outcome.ok) {
+      feedbackStatus = "sent"
+      announce("Feedback sent")
+    } else {
+      feedbackStatus = "editing"
+      feedbackError = outcome.error.message
+    }
   }
 </script>
 
@@ -285,17 +271,7 @@
   </div>
 
   {#if !submissionResult.all_tests_passed}
-    <PasteHelpBox
-      course={panel.course}
-      exercise={panel.exercise}
-      sourcePanel={{ id: panel.id, type: panel.type }}
-      pasteUrl={pasteResult}
-      {pasteError}
-      onPaste={() => {
-        pasteResult = undefined
-        pasteError = undefined
-      }}
-    />
+    <PasteHelpBox course={panel.course} sourcePanel={{ id: panel.id, type: panel.type }} />
   {/if}
 
   {#if feedbackQuestions.length > 0 && submissionResult.feedback_answer_url}

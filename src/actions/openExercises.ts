@@ -20,6 +20,7 @@ const UNDER_8GB_RAM = os.totalmem() < 8 * 1024 ** 3
 
 /** What {@link openExercises} opened, and whether the course now has too many open. */
 export interface OpenedExercises {
+  /** The requested exercises that are on disk, and so were opened. */
   ids: ExerciseIdentifier[]
   /**
    * The open-exercise limit this machine is warned at, when the course's open count now
@@ -64,6 +65,11 @@ export async function openExercises(
   if (openResult.err) {
     return openResult
   }
+  // An exercise not on disk, say one whose download just failed, is not among them.
+  const openedSlugs = new Set(openResult.val.map((x) => x.exerciseSlug))
+  const openedIds = exercisesToOpen
+    .filter((x) => openedSlugs.has(LocalCourseExercise.getSlug(x)))
+    .map((x) => LocalCourseExercise.getId(x))
 
   const openLimit = UNDER_8GB_RAM ? 50 : 100
   const openCount = workspaceManager
@@ -71,7 +77,7 @@ export async function openExercises(
     .filter((x) => x.status === ExerciseStatus.Open).length
 
   TmcPanel.postMessage(
-    ...exerciseIdsToOpen.map<ExtensionToWebview>((id) => ({
+    ...openedIds.map<ExtensionToWebview>((id) => ({
       type: "exerciseStatusChange",
       courseId,
       exerciseId: id,
@@ -83,7 +89,7 @@ export async function openExercises(
   )
 
   return new Ok({
-    ids: exerciseIdsToOpen,
+    ids: openedIds,
     exceededOpenLimit: openCount > openLimit ? openLimit : undefined,
   })
 }

@@ -9,7 +9,7 @@ import {
   tmcLocalCourse,
   tmcLocalExercise,
 } from "../test/fixtures"
-import { dispatchToWebview, postedMessages } from "../test/setup"
+import { dispatchToWebview, postedMessages, replyToRequest } from "../test/setup"
 import { withinShadowRoot } from "../test/shadow"
 import ExerciseSubmission from "./ExerciseSubmission.svelte"
 
@@ -187,11 +187,18 @@ suite("ExerciseSubmission panel", () => {
     vi.useFakeTimers()
     try {
       render(ExerciseSubmission, { props: { panel } })
-      dispatchToWebview({
-        type: "clipboardCopied",
-        target: { type: "ExerciseSubmission", id: panel.id },
-        ok: false,
+      postSubmissionError(panel.id, new BaseError("Failed to submit", "ECONNRESET"))
+      await vi.runAllTimersAsync()
+      const copy = await withinShadowRoot(screen.getByTitle("Copy Error details"))
+      await fireEvent.click(copy.getByRole("button"))
+      expect(postedMessages).toHaveBeenCalledWith({
+        type: "copyToClipboard",
+        requestId: expect.any(Number),
+        sourcePanel: { id: panel.id, type: "ExerciseSubmission" },
+        text: "ECONNRESET",
       })
+
+      replyToRequest("copyToClipboard", { ok: false, error: { message: "no clipboard" } })
       await vi.runAllTimersAsync()
 
       expect(screen.getByTestId("announcer")).toHaveTextContent("Could not copy to the clipboard")
@@ -277,6 +284,14 @@ suite("ExerciseSubmission panel (tmc results)", () => {
   })
 })
 
+/** Answers the feedback form's text question and sends it. */
+async function sendFeedback(): Promise<void> {
+  const textarea = document.querySelector("vscode-textarea")!
+  textarea.value = "Fun exercise"
+  await fireEvent.input(textarea)
+  ;(await screen.findByRole("button", { name: "Send feedback" })).click()
+}
+
 suite("ExerciseSubmission panel (tmc feedback)", () => {
   const questions: FeedbackQuestion[] = [
     { id: 1, kind: "intrange", lower: 1, upper: 5, question: "How difficult was this?" },
@@ -287,15 +302,6 @@ suite("ExerciseSubmission panel (tmc feedback)", () => {
     render(ExerciseSubmission, { props: { panel } })
     postTmcResult(submissionFinished({ feedback_answer_url: FEEDBACK_URL }), questions)
     await screen.findByRole("heading", { name: "Give feedback" })
-  }
-
-  function postFeedbackSent(ok: boolean, error?: string): void {
-    dispatchToWebview({
-      type: "feedbackSent",
-      target: { type: "ExerciseSubmission", id: panel.id },
-      ok,
-      error,
-    })
   }
 
   test("asks the course's questions and sends the answered ones", async () => {
@@ -312,6 +318,7 @@ suite("ExerciseSubmission panel (tmc feedback)", () => {
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "sendFeedback",
+      requestId: expect.any(Number),
       sourcePanel: { id: panel.id, type: "ExerciseSubmission" },
       feedbackAnswerUrl: FEEDBACK_URL,
       answers: [{ questionId: 2, answer: "Fun exercise" }],
@@ -333,7 +340,8 @@ suite("ExerciseSubmission panel (tmc feedback)", () => {
 
   test("thanks the student once the host has sent it", async () => {
     await renderWithFeedback()
-    postFeedbackSent(true)
+    await sendFeedback()
+    replyToRequest("sendFeedback", { ok: true })
 
     expect(await screen.findByText("Thank you for your feedback.")).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Send feedback" })).not.toBeInTheDocument()
@@ -341,7 +349,8 @@ suite("ExerciseSubmission panel (tmc feedback)", () => {
 
   test("a failed send keeps the form and says why", async () => {
     await renderWithFeedback()
-    postFeedbackSent(false, "connection reset")
+    await sendFeedback()
+    replyToRequest("sendFeedback", { ok: false, error: { message: "connection reset" } })
 
     expect(await screen.findByRole("alert")).toHaveTextContent("connection reset")
     expect(await screen.findByRole("button", { name: "Send feedback" })).toBeInTheDocument()

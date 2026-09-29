@@ -4,6 +4,7 @@ import { afterEach, vi } from "vitest"
 import { z } from "zod"
 
 import "../elements"
+import type { RequestMessage, RequestType, WebviewError } from "../shared/shared"
 import { ExtensionToWebviewSchema } from "../shared/shared"
 
 // The webview wrapper (src/utilities/vscode.ts) calls the global
@@ -115,6 +116,31 @@ export function dispatchToWebview(message: unknown): void {
     )
   }
   window.dispatchEvent(new MessageEvent("message", { data: structuredClone(message) }))
+}
+
+/**
+ * Answers the latest `type` request the component under test posted, the way the host does.
+ *
+ * @param requestId answers that request instead, e.g. one the component no longer waits on.
+ */
+export function replyToRequest(
+  type: RequestType,
+  outcome: { ok: true; value?: unknown } | { ok: false; error: WebviewError },
+  requestId?: number,
+): void {
+  const request = postedMessages.mock.calls
+    .map(([message]) => message as RequestMessage)
+    .filter((message) => message.type === type)
+    .at(-1)
+  if (!request) {
+    throw new Error(`No "${type}" request was posted`)
+  }
+  dispatchToWebview({
+    type: "reply",
+    target: { id: request.sourcePanel.id, type: request.sourcePanel.type },
+    requestId: requestId ?? request.requestId,
+    outcome,
+  })
 }
 
 afterEach(() => {

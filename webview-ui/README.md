@@ -127,3 +127,39 @@ as `Button` stopping Space from scrolling or `Checkbox` naming its shadow input.
 Styles use the `--tmc-*` tokens in `src/styles/tokens.css` rather than raw
 `--vscode-*` names or literals; element defaults and utilities (`.muted`,
 `.actions`, `.visually-hidden`, reduced motion) live in `src/styles/base.css`.
+
+## Developing in a browser
+
+`pnpm run harness` serves the app at <http://localhost:5199/> outside VS Code, with hot reload.
+`dev/frame.html` stands in for the webview: it installs a fake `acquireVsCodeApi` whose host
+(`dev/fakeHost.ts`) answers the app from a scenario in `dev/scenarios.ts`, then loads
+`src/main.ts`. The page around it picks the scenario, the theme, a side-panel width and VS Code's
+reduce-motion class, keeps them in the URL, and logs every message the app posts.
+
+A scenario is a panel plus the host's replies to what that panel posts, and any messages pushed
+after it mounts, as a test run's results are. Replies are validated against
+`ExtensionToWebviewSchema`, so a scenario that drifts from the protocol throws instead of leaving
+the panel silently waiting. Add a scenario for a state you want to look at; the accessibility
+tests pick it up.
+
+The themes are real: `dev/vscodeThemes.json` holds the `--vscode-*` variables VS Code gives a
+webview under each default theme (Dark/Light Modern, Dark/Light 2026 and both High Contrast
+themes), limited to the ones `src/` and `@vscode-elements/elements` read, along with the host
+stylesheet every webview gets. `pnpm run themes:refresh [vscode-executable]` recaptures them from a
+running VS Code, by default the newest one in `../.vscode-test`. Run it after using a
+`--vscode-*` variable for the first time or when a VS Code release changes the default themes.
+
+## Theme and accessibility tests
+
+`src/styles/contrast.test.ts` (part of `pnpm test`) resolves each text and status colour the app
+paints, through the `--tmc-*` tokens and their fallbacks, against every captured theme, and
+requires WCAG's 4.5:1 for text and 3:1 for icons, meters and focus rings. A new colour token has
+to be paired there or listed as needing no contrast.
+
+`pnpm run test:a11y` builds the harness and loads every scenario in headless Chromium, then checks
+Chromium's accessibility tree: every control has a name, each panel has one level-1 heading, no
+spinner raises an alert or live regions nest, and each disclosure's `aria-expanded` matches what
+it shows. Install the browser once with `pnpm exec playwright install chromium`.
+
+Both suites list the checks that fail today in `KNOWN_FAILURES`, each a bug still to fix. Such a
+check is expected to fail, so fixing the bug fails the suite until its entry is deleted.

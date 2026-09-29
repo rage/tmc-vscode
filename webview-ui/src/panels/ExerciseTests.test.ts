@@ -11,7 +11,7 @@ import {
   tmcLocalCourse,
   tmcLocalExercise,
 } from "../test/fixtures"
-import { dispatchToWebview, postedMessages } from "../test/setup"
+import { dispatchToWebview, postedMessages, replyToRequest } from "../test/setup"
 import { withinShadowRoot } from "../test/shadow"
 import ExerciseTests from "./ExerciseTests.svelte"
 
@@ -73,6 +73,7 @@ suite("ExerciseTests panel", () => {
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "submitExercise",
+      requestId: expect.any(Number),
       sourcePanel: { id: panel.id, type: "ExerciseTests" },
     })
   })
@@ -90,14 +91,14 @@ suite("ExerciseTests panel", () => {
     expect(postedMessages).not.toHaveBeenCalled()
   })
 
-  test("submitFailed re-enables submitting, since no submission panel replaced this one", async () => {
+  test("a reply re-enables submitting, since no submission panel replaced this one", async () => {
     render(ExerciseTests, { props: { panel } })
     postTestResults(testResultData())
     expect(await screen.findByRole("heading", { name: "Tests passed" })).toBeInTheDocument()
 
     const submit = await screen.findByRole("button", { name: "Submit to server" })
     submit.click()
-    dispatchToWebview({ type: "submitFailed", target: { type: "ExerciseTests" } })
+    replyToRequest("submitExercise", { ok: true })
     await tick()
 
     postedMessages.mockClear()
@@ -105,6 +106,7 @@ suite("ExerciseTests panel", () => {
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "submitExercise",
+      requestId: expect.any(Number),
       sourcePanel: { id: panel.id, type: "ExerciseTests" },
     })
   })
@@ -154,6 +156,7 @@ suite("ExerciseTests panel", () => {
     ;(await screen.findByRole("button", { name: "Submit to server" })).click()
     expect(postedMessages).toHaveBeenCalledWith({
       type: "submitExercise",
+      requestId: expect.any(Number),
       sourcePanel: { id: panel.id, type: "ExerciseTests" },
     })
   })
@@ -209,20 +212,32 @@ suite("ExerciseTests panel", () => {
 
     postedMessages.mockClear()
     await clickToolbarButton("Copy Standard error")
-    expect(postedMessages).toHaveBeenCalledWith({ type: "copyToClipboard", text: "boom" })
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "copyToClipboard",
+      requestId: expect.any(Number),
+      sourcePanel: { id: panel.id, type: "ExerciseTests" },
+      text: "boom",
+    })
   })
 
   test("announces whether the host managed to copy", async () => {
     vi.useFakeTimers()
     try {
       render(ExerciseTests, { props: { panel } })
-      const target = { type: "ExerciseTests", id: panel.id }
+      postTestResults(
+        testResultData({
+          testResult: { logs: { stderr: "boom" }, status: "COMPILE_FAILED", testResults: [] },
+        }),
+      )
+      await vi.runAllTimersAsync()
 
-      dispatchToWebview({ type: "clipboardCopied", target, ok: true })
+      await clickToolbarButton("Copy Standard error")
+      replyToRequest("copyToClipboard", { ok: true })
       await vi.runAllTimersAsync()
       expect(screen.getByTestId("announcer")).toHaveTextContent("Copied to the clipboard")
 
-      dispatchToWebview({ type: "clipboardCopied", target, ok: false })
+      await clickToolbarButton("Copy Standard error")
+      replyToRequest("copyToClipboard", { ok: false, error: { message: "no clipboard" } })
       await vi.runAllTimersAsync()
       expect(screen.getByTestId("announcer")).toHaveTextContent("Could not copy to the clipboard")
     } finally {

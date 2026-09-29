@@ -9,6 +9,7 @@ import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
+import { TmcPanel } from "../../panels/TmcPanel"
 import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
 import type { MoocLocalCourseData } from "../../storage/data"
@@ -70,7 +71,7 @@ function contextWithOpenExercises(openCount: number): ReadyActionContext {
         getCourse: () => Ok(makeMoocKind(moocCourse) as LocalCourseData),
       } as unknown as UserData,
       workspaceManager: {
-        openCourseExercises: vi.fn(async () => Ok.EMPTY),
+        openCourseExercises: vi.fn(async () => Ok(openExerciseList)),
         getExercisesByCourseSlug: () => openExerciseList,
       } as unknown as WorkspaceManager,
     },
@@ -128,9 +129,14 @@ suite("downloadAndOpenExercises action", function () {
     },
   ]
 
-  const contextFor = (listing: Result<typeof localListing, Error>): ReadyActionContext => {
+  const contextFor = (
+    listing: Result<typeof localListing, Error>,
+    onDisk: { exerciseSlug: string }[] = [],
+  ): ReadyActionContext => {
     const workspaceManager = {
-      openCourseExercises: vi.fn(async () => Ok.EMPTY),
+      openCourseExercises: vi.fn(async (_backend: string, _course: string, slugs: string[]) =>
+        Ok(onDisk.filter((x) => slugs.includes(x.exerciseSlug))),
+      ),
       getExercisesByCourseSlug: () => [],
     } as unknown as WorkspaceManager
     const userData = {
@@ -163,6 +169,43 @@ suite("downloadAndOpenExercises action", function () {
       CourseIdentifier.from("instance-uuid-1"),
       [ExerciseIdentifier.from("mooc-ex-uuid-1")],
     )
+  })
+
+  test("marks only the exercises on disk as opened when a download fails", async function () {
+    const postMessage = vi.spyOn(TmcPanel, "postMessage").mockImplementation(() => {})
+    const course = makeMoocKind({
+      ...moocCourse,
+      exercises: [
+        ...moocCourse.exercises,
+        {
+          id: "mooc-ex-uuid-2",
+          name: "mooc_loops",
+          availablePoints: 1,
+          awardedPoints: 0,
+          deadline: null,
+          passed: false,
+          softDeadline: null,
+        },
+      ],
+    }) as LocalCourseData
+    const actionContext = contextFor(Ok([]), [{ exerciseSlug: "mooc_hello" }])
+    actionContext.startup.userData = { getCourse: () => Ok(course) } as unknown as UserData
+
+    const result = await downloadAndOpenExercises(
+      actionContext,
+      [ExerciseIdentifier.from("mooc-ex-uuid-1"), ExerciseIdentifier.from("mooc-ex-uuid-2")],
+      CourseIdentifier.from("instance-uuid-1"),
+    )
+
+    expect(result.unwrap().ids).toEqual([ExerciseIdentifier.from("mooc-ex-uuid-1")])
+    expect(postMessage).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        type: "exerciseStatusChange",
+        exerciseId: ExerciseIdentifier.from("mooc-ex-uuid-1"),
+        status: "opened",
+      }),
+    )
+    postMessage.mockRestore()
   })
 
   test("returns a failed local listing without reporting it", async function () {

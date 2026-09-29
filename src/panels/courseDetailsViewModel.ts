@@ -187,3 +187,27 @@ function mapStatus(
       return isNewExercise ? "new" : "missing"
   }
 }
+
+/**
+ * The on-disk statuses with the downloads still running, or failed, laid over them.
+ *
+ * A failure is shown only while the exercise is still absent from disk: one downloaded
+ * since, by any route, is no longer failed.
+ */
+export function withInFlightStatuses(
+  onDisk: CourseDetailsView["exerciseStatuses"],
+  inFlight: [ExerciseIdentifier, PanelExerciseStatus][],
+): [ExerciseIdentifier, PanelExerciseStatus][] {
+  const inFlightById = new Map(inFlight.map(([id, status]) => [exerciseKey(id), status]))
+  return onDisk.map(({ exerciseId, status }): [ExerciseIdentifier, PanelExerciseStatus] => {
+    const override = inFlightById.get(exerciseKey(exerciseId))
+    const isOnDisk = status === "opened" || status === "closed"
+    const shown =
+      override === "downloading" || (override === "downloadFailed" && !isOnDisk) ? override : status
+    return [exerciseId, shown]
+  })
+}
+
+function exerciseKey(id: ExerciseIdentifier): string {
+  return `${id.kind}:${ExerciseIdentifier.toString(id)}`
+}

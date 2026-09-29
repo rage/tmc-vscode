@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/svelte"
 import { tick } from "svelte"
 
 import type { MoocLoginPanel } from "../shared/shared"
-import { dispatchToWebview, postedMessages } from "../test/setup"
+import { dispatchToWebview, postedMessages, replyToRequest } from "../test/setup"
 import MoocLogin from "./MoocLogin.svelte"
 
 const panel: MoocLoginPanel = { id: 7, type: "MoocLogin" }
@@ -38,6 +38,7 @@ suite("MoocLogin panel", () => {
     render(MoocLogin, { props: { panel } })
     expect(postedMessages).toHaveBeenCalledWith({
       type: "moocLogin",
+      requestId: expect.any(Number),
       sourcePanel: panel,
     })
   })
@@ -161,6 +162,43 @@ suite("MoocLogin panel", () => {
     })
   })
 
+  test("keeps the watchdog's message when the abandoned login's reply comes in", async () => {
+    vi.useFakeTimers()
+    try {
+      render(MoocLogin, { props: { panel } })
+      await vi.advanceTimersByTimeAsync(60_000)
+    } finally {
+      vi.useRealTimers()
+    }
+
+    replyToRequest("moocLogin", { ok: false, error: { message: "The login was cancelled." } })
+    await tick()
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("no sign-in code arrived in time")
+  })
+
+  test("ignores the reply to an attempt that Try again replaced", async () => {
+    vi.useFakeTimers()
+    try {
+      render(MoocLogin, { props: { panel } })
+      await vi.advanceTimersByTimeAsync(60_000)
+    } finally {
+      vi.useRealTimers()
+    }
+    const firstAttempt = postedMessages.mock.calls
+      .map(([message]) => message as { type: string; requestId: number })
+      .find((message) => message.type === "moocLogin")
+    ;(await screen.findByRole("button", { name: "Try again" })).click()
+    dispatchToWebview(deviceCodeMessage)
+    await screen.findByRole("button", { name: "WXYZ-1234" })
+
+    replyToRequest("moocLogin", { ok: false, error: { message: "stale" } }, firstAttempt?.requestId)
+    await tick()
+
+    expect(screen.getByRole("button", { name: "WXYZ-1234" })).toBeInTheDocument()
+    expect(screen.queryByText(/stale/)).not.toBeInTheDocument()
+  })
+
   test("waits for approval for as long as it takes", async () => {
     vi.useFakeTimers()
     try {
@@ -176,13 +214,9 @@ suite("MoocLogin panel", () => {
     expect(postedMessages).not.toHaveBeenCalled()
   })
 
-  test("shows the error state on a moocLoginError message", async () => {
+  test("shows the error state when the login fails", async () => {
     render(MoocLogin, { props: { panel } })
-    dispatchToWebview({
-      type: "moocLoginError",
-      target: { type: "MoocLogin", id: panel.id },
-      error: "device flow expired",
-    })
+    replyToRequest("moocLogin", { ok: false, error: { message: "device flow expired" } })
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent("device flow expired")
       expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument()

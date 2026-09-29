@@ -4,7 +4,7 @@ import { tick } from "svelte"
 import type { MyCoursesPanel } from "../shared/shared"
 import { makeMoocKind, makeTmcKind } from "../shared/shared"
 import { MOOC_INSTANCE_ID, moocLocalCourse, tmcLocalCourse } from "../test/fixtures"
-import { dispatchToWebview as dispatch, postedMessages } from "../test/setup"
+import { dispatchToWebview as dispatch, postedMessages, replyToRequest } from "../test/setup"
 import { withinShadowRoot } from "../test/shadow"
 import MyCourses from "./MyCourses.svelte"
 
@@ -148,10 +148,8 @@ suite("MyCourses panel", () => {
     render(MyCourses, { props: { panel } })
     expect(screen.getByText("Loading courses")).toBeInTheDocument()
 
-    dispatch({
-      type: "panelDataResult",
-      target: { id: panel.id, type: "MyCourses" },
-      requestId: dataRequestId(),
+    replyToRequest("requestMyCoursesData", {
+      ok: false,
       error: { message: "Storage is unavailable" },
     })
 
@@ -188,16 +186,13 @@ suite("MyCourses panel", () => {
     render(MyCourses, { props: { panel } })
     const requestId = dataRequestId()
 
-    dispatch({
-      type: "panelDataResult",
-      target: { id: panel.id, type: "MyCourses" },
-      requestId: requestId + 1000,
-      error: { message: "Answer to someone else's request" },
-    })
-    dispatch({
-      type: "panelDataResult",
-      target: { id: panel.id, type: "MyCourses" },
-      requestId,
+    replyToRequest(
+      "requestMyCoursesData",
+      { ok: false, error: { message: "Answer to someone else's request" } },
+      requestId + 1000,
+    )
+    replyToRequest("requestMyCoursesData", {
+      ok: false,
       error: { message: "Storage is unavailable" },
     })
 

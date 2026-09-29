@@ -114,6 +114,7 @@ vi.mock("../../ui/ui", () => ({
         recorded.treeLoggedIn.push(loggedIn)
       },
       refresh: (): void => {},
+      onDidChangeTreeData: (): { dispose: () => void } => ({ dispose: () => {} }),
     }
     public dispose = (): void => {
       recorded.uiDisposals += 1
@@ -123,7 +124,6 @@ vi.mock("../../ui/ui", () => ({
 
 vi.mock("../../panels/TmcPanel", () => ({
   nextPanelId: () => 1,
-  registerWebviewHandlers: () => {},
   TmcPanel: {
     renderMain: (
       _uri: unknown,
@@ -679,20 +679,22 @@ suite("the first start of a new version", function () {
     vi.restoreAllMocks()
   })
 
-  test("a fresh install opens the welcome page", async function () {
+  test("a fresh install opens the walkthrough", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
 
     await activate(createContext())
 
     expect(executeCommand).toHaveBeenCalledWith("tmc.showWelcome")
+    expect(recorded.panelTypes).not.toContain("Welcome")
   })
 
   // Opening a panel unasked on every update covers whatever the user was doing.
-  test("an update offers the release notes in a notification instead", async function () {
+  test("an update offers the changelog in a notification instead", async function () {
     sessionState.previousVersion = "1.0.0"
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const context = createContext()
 
-    await activate(createContext())
+    await activate(context)
 
     expect(executeCommand).not.toHaveBeenCalledWith("tmc.showWelcome")
     const [message, whatsNew] = vi.mocked(vscode.window.showInformationMessage).mock.calls[0] as [
@@ -702,7 +704,11 @@ suite("the first start of a new version", function () {
     expect(message).toBe(`TestMyCode was updated to ${EXTENSION_VERSION}.`)
     expect(whatsNew.title).toBe("What's New")
     whatsNew.callback()
-    expect(executeCommand).toHaveBeenCalledWith("tmc.showWelcome")
+    expect(executeCommand).toHaveBeenCalledWith(
+      "markdown.showPreview",
+      vscode.Uri.joinPath(context.extensionUri, "CHANGELOG.md"),
+    )
+    expect(executeCommand).not.toHaveBeenCalledWith("tmc.showWelcome")
   })
 
   test("a patch release says nothing", async function () {
@@ -711,5 +717,54 @@ suite("the first start of a new version", function () {
     await activate(createContext())
 
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
+  })
+})
+
+function createdStatusBarItemIds(): unknown[] {
+  return vi.mocked(vscode.window.createStatusBarItem).mock.calls.map(([id]) => id)
+}
+
+suite("status bar", function () {
+  beforeEach(function () {
+    resetActivationRecording()
+  })
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    vi.restoreAllMocks()
+  })
+
+  test("a ready activation shows the account and exercise items", async function () {
+    vi.mocked(vscode.window.createStatusBarItem).mockClear()
+
+    await activate(createContext())
+
+    expect(createdStatusBarItemIds()).toEqual(["tmc.account", "tmc.activeExercise"])
+    expect(recorded.contextKeys.get("test-my-code:HasCourses")).toBe(false)
+  })
+
+  // Their commands are registered only when ready, and a click would say "command not found".
+  test("a failed activation shows neither", async function () {
+    vi.mocked(vscode.window.createStatusBarItem).mockClear()
+    langsDownload.failure = new Error("no network")
+
+    await activate(createContext())
+
+    expect(createdStatusBarItemIds()).toEqual([])
+  })
+
+  test("an unexpected logout marks the account item's session expired", async function () {
+    langsStub.moocAuthenticated = true
+    vi.mocked(vscode.window.createStatusBarItem).mockClear()
+    vi.spyOn(vscode.window, "showWarningMessage").mockResolvedValue(undefined)
+
+    await activate(createContext())
+    const account = vi.mocked(vscode.window.createStatusBarItem).mock.results[0]
+      ?.value as vscode.StatusBarItem
+    expect(account.text).toContain("courses.mooc.fi")
+
+    await (langsStub.handlers.get("mooc-logout") as (expected: boolean) => Promise<void>)(false)
+
+    expect(account.text).toContain("Session Expired")
   })
 })

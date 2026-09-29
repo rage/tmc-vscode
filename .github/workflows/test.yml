@@ -153,6 +153,39 @@ jobs:
       - name: Mock backend tests (node:test)
         run: bash bin/runMockBackendTests.sh
 
+  webview_a11y_tests:
+    name: Webview accessibility tests
+    permissions:
+      contents: read
+    env:
+      CI: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Its own job rather than a step of `playwright_tests`: it needs plain Chromium instead of
+      # VS Code, and neither the mock backend, the submodules nor xvfb, so it finishes in about a
+      # minute beside that job instead of lengthening it.
+      - name: Install Chromium
+        run: pnpm --dir webview-ui exec playwright install --with-deps chromium
+
+      - name: Webview accessibility tests (Playwright)
+        run: pnpm --dir webview-ui run test:a11y
+
+      - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        if: failure()
+        with:
+          name: webview-a11y-results
+          path: ./test-results/webview-a11y/
+          if-no-files-found: ignore
+
   gates:
     name: Gates can fail
     permissions:

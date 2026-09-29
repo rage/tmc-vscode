@@ -25,7 +25,7 @@
     match,
     unwrap,
   } from "../shared/shared"
-  import { addMessageListener, createPanelDataRequester } from "../utilities/script"
+  import { addMessageListener, createRequester, HOST_STATE_TIMEOUT_MS } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -34,7 +34,7 @@
 
   let { panel }: Props = $props()
 
-  const panelData = createPanelDataRequester()
+  const request = createRequester()
 
   // Set when the request for this panel's data is answered with a failure, or goes
   // unanswered; rendered where the course list would be, so neither is a permanent spinner.
@@ -45,13 +45,12 @@
 
   async function requestData() {
     dataError = undefined
-    dataError = await panelData.request((requestId) =>
-      vscode.postMessage({
-        type: "requestMyCoursesData",
-        requestId,
-        sourcePanel: panel,
-      }),
+    const outcome = await request(
+      "requestMyCoursesData",
+      { sourcePanel: { id: panel.id, type: panel.type } },
+      { timeoutMs: HOST_STATE_TIMEOUT_MS },
     )
+    dataError = outcome.ok ? undefined : outcome.error
   }
 
   onMount(() => {
@@ -93,10 +92,6 @@
               }),
           ),
         )
-        break
-      }
-      case "panelDataResult": {
-        panelData.answer(message)
         break
       }
       case "setCourseDisabledStatus": {

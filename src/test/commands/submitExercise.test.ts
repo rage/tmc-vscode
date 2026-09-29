@@ -10,6 +10,7 @@ import { ExerciseStatus } from "../../api/workspaceManager"
 import { refreshEverything } from "../../commands/refreshEverything"
 import { submitExercise } from "../../commands/submitExercise"
 import { CourseIdentifier } from "../../shared/shared"
+import { exerciseActivity } from "../../ui/statusBarActivity"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -49,6 +50,19 @@ suite("Submit exercise command", function () {
   beforeEach(function () {
     vi.mocked(actions.submitExercise).mockResolvedValue(Ok(courseId))
     vi.mocked(refreshEverything).mockResolvedValue(Ok.EMPTY)
+  })
+
+  test("marks the exercise as being submitted until grading ends", async function () {
+    let during: unknown
+    vi.mocked(actions.submitExercise).mockImplementation(async () => {
+      during = exerciseActivity.current(uri)
+      return Ok(courseId)
+    })
+
+    await submitExercise(extensionContext, contextWith(exercise), uri)
+
+    expect(during).toBe("submitting")
+    expect(exerciseActivity.current(uri)).toBeUndefined()
   })
 
   test("submits the exercise the resource resolves to, and says it succeeded", async function () {

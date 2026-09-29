@@ -1,4 +1,5 @@
 import { expect } from "@playwright/test"
+import type { Locator, Page } from "@playwright/test"
 
 import { vsCodeTest } from "../fixtures"
 import { CoursePage } from "../pages/course"
@@ -12,6 +13,8 @@ interface Exercise {
   name: string
   file_path: string[]
   file_contents: string
+  /** The test's name as the Test Results view labels it. */
+  test_name: string
   expected_result: "pass" | "fail"
 }
 
@@ -21,6 +24,7 @@ const exercises: Exercise[] = [
     name: "01_passing_exercise",
     file_path: ["src", "passing_exercise.py"],
     file_contents: "def hello()",
+    test_name: "PassingExercise: test_passing",
     expected_result: "pass",
   },
   {
@@ -28,6 +32,7 @@ const exercises: Exercise[] = [
     name: "02_failing_exercise",
     file_path: ["src", "failing_exercise.py"],
     file_contents: "def hello()",
+    test_name: "FailingExercise: test_failing",
     expected_result: "fail",
   },
 ]
@@ -72,19 +77,22 @@ for (const exercise of exercises) {
     })
 
     await vsCodeTest.step("run tests", async () => {
-      const expectedString = expectedResultInTestView(exercise.expected_result)
       await page.getByText(exercise.file_contents).click()
-      const resultMessage = testResultsPage
-        .getWebview()
-        .getByRole("heading", { name: expectedString })
-      await expect(resultMessage).toBeHidden()
       // The editor-title action is contributed under `test-my-code:ActiveEditorIsExercise`
       // (package.json), so it renders only once the extension has recognised the
       // open exercise.
       const runTests = page.getByLabel("Run Tests", { exact: true })
       await expect(runTests).toBeVisible()
       await runTests.click()
-      await expect(resultMessage).toBeVisible()
+      if (exercise.expected_result === "pass") {
+        await expect(allPassedToast(page)).toBeVisible()
+      }
+      await testResultsPage.open()
+      await expect(testResultsPage.result(exercise.test_name).first()).toBeVisible()
+      if (exercise.expected_result === "fail") {
+        await expect(testResultsPage.result("1 of 1 tests failed.").first()).toBeVisible()
+        await expect(allPassedToast(page)).toBeHidden()
+      }
     })
 
     await vsCodeTest.step("submit exercise", async () => {
@@ -92,7 +100,11 @@ for (const exercise of exercises) {
       await expect(
         testSubmissionPage.getWebview().getByRole("heading", { name: expectedString }),
       ).toBeHidden()
-      await testResultsPage.submit()
+      if (exercise.expected_result === "pass") {
+        await allPassedToast(page).getByRole("button", { name: "Submit" }).click()
+      } else {
+        await page.getByLabel("Submit Solution", { exact: true }).click()
+      }
       await expect(
         testSubmissionPage.getWebview().getByRole("heading", { name: expectedString }),
       ).toBeVisible()
@@ -100,11 +112,11 @@ for (const exercise of exercises) {
   })
 }
 
-function expectedResultInTestView(expectedResult: "pass" | "fail"): string {
-  if (expectedResult === "pass") {
-    return "Tests passed"
-  }
-  return "Tests failed"
+/** The notification that offers Submit after an all-passing local run. */
+function allPassedToast(page: Page): Locator {
+  return page
+    .locator(".notifications-toasts .notification-toast")
+    .filter({ hasText: /All tests of .+ passed\./ })
 }
 
 function expectedResultInSubmissionView(expectedResult: "pass" | "fail"): string {

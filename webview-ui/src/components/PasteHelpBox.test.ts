@@ -1,50 +1,56 @@
 import { render, screen } from "@testing-library/svelte"
 import { vi } from "vitest"
 
-import { moocLocalCourse, tmcLocalCourse, tmcLocalExercise } from "../test/fixtures"
-import { postedMessages } from "../test/setup"
+import { moocLocalCourse, tmcLocalCourse } from "../test/fixtures"
+import { postedMessages, replyToRequest } from "../test/setup"
 import PasteHelpBox from "./PasteHelpBox.svelte"
 
 const sourcePanel = { id: 1, type: "ExerciseTests" } as const
 const course = tmcLocalCourse()
-const exercise = tmcLocalExercise()
+
+/** Opens the help and starts a paste. */
+async function paste(): Promise<HTMLElement> {
+  ;(await screen.findByRole("button", { name: "Need help?" })).click()
+  const submit = await screen.findByRole("button", { name: "Submit to TMC Server paste" })
+  submit.click()
+  return submit
+}
 
 suite("PasteHelpBox component", () => {
-  test("posts a pasteExercise message with the course, exercise and requesting panel", async () => {
-    render(PasteHelpBox, { props: { course, exercise, sourcePanel } })
+  test("asks the host to paste the exercise the panel shows", async () => {
+    render(PasteHelpBox, { props: { course, sourcePanel } })
 
-    // reveal the help section, then trigger the paste
-    ;(await screen.findByRole("button", { name: "Need help?" })).click()
-    const submit = await screen.findByRole("button", { name: "Submit to TMC Server paste" })
-    postedMessages.mockClear()
-    submit.click()
+    await paste()
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "pasteExercise",
-      course,
-      exercise,
-      requestingPanel: sourcePanel,
+      requestId: expect.any(Number),
+      sourcePanel,
     })
   })
 
-  test("shows the paste link once it is available and the help is open", async () => {
-    render(PasteHelpBox, {
-      props: {
-        course,
-        exercise,
-        sourcePanel,
-        pasteUrl: "https://paste.example/abc",
-      },
-    })
+  test("shows the paste link the host answers with", async () => {
+    render(PasteHelpBox, { props: { course, sourcePanel } })
+    await paste()
 
-    ;(await screen.findByRole("button", { name: "Need help?" })).click()
+    replyToRequest("pasteExercise", { ok: true, value: "https://paste.example/abc" })
+
     const link = await screen.findByRole("link", { name: "https://paste.example/abc" })
     expect(link).toBeVisible()
   })
 
+  test("says why a paste failed", async () => {
+    render(PasteHelpBox, { props: { course, sourcePanel } })
+    await paste()
+
+    replyToRequest("pasteExercise", { ok: false, error: { message: "paste service is down" } })
+
+    expect(await screen.findByText(/paste service is down/)).toBeInTheDocument()
+  })
+
   test("names the backend the code is sent to", async () => {
     render(PasteHelpBox, {
-      props: { course: moocLocalCourse(), exercise, sourcePanel },
+      props: { course: moocLocalCourse(), sourcePanel },
     })
 
     ;(await screen.findByRole("button", { name: "Need help?" })).click()
@@ -54,7 +60,7 @@ suite("PasteHelpBox component", () => {
   })
 
   test("the toggle says whether the help is open", async () => {
-    render(PasteHelpBox, { props: { course, exercise, sourcePanel } })
+    render(PasteHelpBox, { props: { course, sourcePanel } })
 
     const toggle = await screen.findByRole("button", { name: "Need help?" })
     expect(toggle).toHaveAttribute("aria-expanded", "false")
@@ -63,34 +69,33 @@ suite("PasteHelpBox component", () => {
   })
 
   test("a paste in flight cannot be started again", async () => {
-    const { rerender } = render(PasteHelpBox, { props: { course, exercise, sourcePanel } })
-    ;(await screen.findByRole("button", { name: "Need help?" })).click()
-    const submit = await screen.findByRole("button", { name: "Submit to TMC Server paste" })
+    render(PasteHelpBox, { props: { course, sourcePanel } })
 
-    submit.click()
+    const submit = await paste()
     await vi.waitFor(() => expect(submit).toHaveAttribute("disabled"))
     expect(screen.getByText("Sending to TMC Server paste…")).toBeInTheDocument()
 
-    await rerender({ course, exercise, sourcePanel, pasteUrl: "https://paste.example/abc" })
+    replyToRequest("pasteExercise", { ok: true, value: "https://paste.example/abc" })
     await vi.waitFor(() => expect(submit).not.toHaveAttribute("disabled"))
   })
 
   test("copies the paste link through the host", async () => {
-    render(PasteHelpBox, {
-      props: { course, exercise, sourcePanel, pasteUrl: "https://paste.example/abc" },
-    })
-    ;(await screen.findByRole("button", { name: "Need help?" })).click()
+    render(PasteHelpBox, { props: { course, sourcePanel } })
+    await paste()
+    replyToRequest("pasteExercise", { ok: true, value: "https://paste.example/abc" })
 
     postedMessages.mockClear()
     ;(await screen.findByRole("button", { name: "Copy link" })).click()
     expect(postedMessages).toHaveBeenCalledWith({
       type: "copyToClipboard",
+      requestId: expect.any(Number),
+      sourcePanel,
       text: "https://paste.example/abc",
     })
   })
 
   test("warns that a courses.mooc.fi paste is also a graded submission", async () => {
-    render(PasteHelpBox, { props: { course: moocLocalCourse(), exercise, sourcePanel } })
+    render(PasteHelpBox, { props: { course: moocLocalCourse(), sourcePanel } })
     ;(await screen.findByRole("button", { name: "Need help?" })).click()
 
     expect(await screen.findByText(/also submits your answer for grading/)).toBeInTheDocument()

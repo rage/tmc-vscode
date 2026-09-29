@@ -4,7 +4,7 @@
   import Button from "../components/Button.svelte"
   import type { MoocLoginPanel } from "../shared/shared"
   import { assertUnreachable } from "../shared/shared"
-  import { addMessageListener } from "../utilities/script"
+  import { addMessageListener, createRequester } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -52,15 +52,26 @@
     return () => clearTimeout(watchdog)
   })
 
-  function startLogin() {
+  const request = createRequester()
+  // Tells the latest attempt from one "Try again" replaced.
+  let attempt = 0
+
+  async function startLogin() {
+    const thisAttempt = ++attempt
     status = "starting"
     device = null
     errorMessage = null
     copyStatus = "idle"
-    vscode.postMessage({
-      type: "moocLogin",
-      sourcePanel: panel,
+    const outcome = await request("moocLogin", {
+      sourcePanel: { id: panel.id, type: panel.type },
     })
+    // A cancel, or the watchdog, already ended the attempt; its "process was killed" reply
+    // must not replace what they show. A success closes this panel.
+    const isWaiting = status === "starting" || status === "awaiting"
+    if (thisAttempt === attempt && !outcome.ok && isWaiting) {
+      errorMessage = outcome.error.message
+      status = "error"
+    }
   }
 
   onMount(startLogin)
@@ -80,17 +91,8 @@
         }
         break
       }
-      case "moocLoginError": {
-        // A cancel already killed the process; keep the cancelled state rather
-        // than overwriting it with the resulting "process was killed" error.
-        if (status !== "cancelled") {
-          errorMessage = message.error
-          status = "error"
-        }
-        break
-      }
       default:
-        assertUnreachable(message)
+        assertUnreachable(message.type)
     }
   })
 

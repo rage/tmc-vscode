@@ -26,8 +26,10 @@ class VSCodeAPIWrapper {
    *
    * `$state` proxies anywhere in the message are unwrapped here, so callers pass state as is. A
    * message the shared schema rejects is logged and dropped.
+   *
+   * @returns whether the message was posted.
    */
-  public postMessage(message: WebviewToExtension): void {
+  public postMessage(message: WebviewToExtension): boolean {
     const plainMessage = snapshot(message)
     const validationResult = WebviewToExtensionSchema.safeParse(plainMessage)
     if (!validationResult.success) {
@@ -36,14 +38,15 @@ class VSCodeAPIWrapper {
         z.prettifyError(validationResult.error),
         plainMessage,
       )
-      return
+      return false
+    }
+    if (!this.vsCodeApi) {
+      console.error("No vsCodeApi")
+      return false
     }
     // Not zod's parse result, which drops fields the schema does not declare.
-    if (this.vsCodeApi) {
-      this.vsCodeApi.postMessage(plainMessage)
-    } else {
-      console.error("No vsCodeApi")
-    }
+    this.vsCodeApi.postMessage(plainMessage)
+    return true
   }
 }
 

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/svelte"
 
 import type { InitializationErrorHelpPanel } from "../shared/shared"
-import { dispatchToWebview, postedMessages } from "../test/setup"
+import { postedMessages, replyToRequest } from "../test/setup"
 import InitializationErrorHelp from "./InitializationErrorHelp.svelte"
 
 const panel: InitializationErrorHelpPanel = { id: 4, type: "InitializationErrorHelp" }
@@ -16,22 +16,39 @@ suite("InitializationErrorHelp panel", () => {
     ).toBeInTheDocument()
     expect(postedMessages).toHaveBeenCalledWith({
       type: "requestInitializationErrors",
+      requestId: expect.any(Number),
       sourcePanel: panel,
     })
   })
 
+  test("says why when the errors cannot be loaded", async () => {
+    render(InitializationErrorHelp, { props: { panel } })
+
+    replyToRequest("requestInitializationErrors", {
+      ok: false,
+      error: { message: "The extension did not answer in time." },
+    })
+
+    expect(
+      await screen.findByText(
+        "Could not load the error data: The extension did not answer in time.",
+      ),
+    ).toBeInTheDocument()
+  })
+
   test("renders a specific initialization error once it arrives", async () => {
     render(InitializationErrorHelp, { props: { panel } })
-    dispatchToWebview({
-      type: "initializationErrors",
-      target: { type: "InitializationErrorHelp", id: panel.id },
-      cliFolder: "/tmp/cli",
-      initializationErrors: {
-        tmc: { error: "langs boom", stack: "at foo" },
-        userData: noError,
-        workspaceManager: noError,
-        exerciseDecorationProvider: noError,
-        resources: noError,
+    replyToRequest("requestInitializationErrors", {
+      ok: true,
+      value: {
+        cliFolder: "/tmp/cli",
+        initializationErrors: {
+          tmc: { error: "langs boom", stack: "at foo" },
+          userData: noError,
+          workspaceManager: noError,
+          exerciseDecorationProvider: noError,
+          resources: noError,
+        },
       },
     })
 
@@ -43,16 +60,17 @@ suite("InitializationErrorHelp panel", () => {
 
   test("reports a non-tmc error without also claiming there is no error data", async () => {
     render(InitializationErrorHelp, { props: { panel } })
-    dispatchToWebview({
-      type: "initializationErrors",
-      target: { type: "InitializationErrorHelp", id: panel.id },
-      cliFolder: "/tmp/cli",
-      initializationErrors: {
-        tmc: noError,
-        userData: noError,
-        workspaceManager: { error: "workspace boom", stack: "at bar" },
-        exerciseDecorationProvider: noError,
-        resources: noError,
+    replyToRequest("requestInitializationErrors", {
+      ok: true,
+      value: {
+        cliFolder: "/tmp/cli",
+        initializationErrors: {
+          tmc: noError,
+          userData: noError,
+          workspaceManager: { error: "workspace boom", stack: "at bar" },
+          exerciseDecorationProvider: noError,
+          resources: noError,
+        },
       },
     })
 
@@ -65,16 +83,17 @@ suite("InitializationErrorHelp panel", () => {
 
   test("shows the empty-state message only when every error is null", async () => {
     render(InitializationErrorHelp, { props: { panel } })
-    dispatchToWebview({
-      type: "initializationErrors",
-      target: { type: "InitializationErrorHelp", id: panel.id },
-      cliFolder: "/tmp/cli",
-      initializationErrors: {
-        tmc: noError,
-        userData: noError,
-        workspaceManager: noError,
-        exerciseDecorationProvider: noError,
-        resources: noError,
+    replyToRequest("requestInitializationErrors", {
+      ok: true,
+      value: {
+        cliFolder: "/tmp/cli",
+        initializationErrors: {
+          tmc: noError,
+          userData: noError,
+          workspaceManager: noError,
+          exerciseDecorationProvider: noError,
+          resources: noError,
+        },
       },
     })
 
@@ -85,16 +104,17 @@ suite("InitializationErrorHelp panel", () => {
 
   test("lists each failure with its stack trace behind a disclosure", async () => {
     render(InitializationErrorHelp, { props: { panel } })
-    dispatchToWebview({
-      type: "initializationErrors",
-      target: { type: "InitializationErrorHelp", id: panel.id },
-      cliFolder: "/tmp/cli",
-      initializationErrors: {
-        tmc: noError,
-        userData: { error: "userdata boom", stack: "at userData" },
-        workspaceManager: noError,
-        exerciseDecorationProvider: noError,
-        resources: { error: "resources boom", stack: "at resources" },
+    replyToRequest("requestInitializationErrors", {
+      ok: true,
+      value: {
+        cliFolder: "/tmp/cli",
+        initializationErrors: {
+          tmc: noError,
+          userData: { error: "userdata boom", stack: "at userData" },
+          workspaceManager: noError,
+          exerciseDecorationProvider: noError,
+          resources: { error: "resources boom", stack: "at resources" },
+        },
       },
     })
 

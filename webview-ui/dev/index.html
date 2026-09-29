@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>TestMyCode webview harness</title>
+    <link rel="stylesheet" href="./harness.css" />
+    <script type="module" src="./harness.ts"></script>
+  </head>
+  <body>
+    <form class="toolbar" aria-label="Harness settings">
+      <label
+        >Scenario
+        <select name="scenario"></select
+      ></label>
+      <label
+        >Theme
+        <select name="theme"></select
+      ></label>
+      <label>
+        Width
+        <select name="width">
+          <option value="">Editor</option>
+          <option value="400">Side panel (400px)</option>
+          <option value="300">Narrow (300px)</option>
+        </select>
+      </label>
+      <label><input type="checkbox" name="reduceMotion" /> Reduce motion</label>
+      <button type="button" name="reload">Reload webview</button>
+    </form>
+    <main class="stage">
+      <iframe title="Webview"></iframe>
+      <section class="log" aria-label="Messages posted to the extension host">
+        <h2>Posted to the host</h2>
+        <button type="button" name="clearLog">Clear</button>
+        <ol></ol>
+      </section>
+    </main>
+  </body>
+</html>

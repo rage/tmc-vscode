@@ -6,10 +6,16 @@ import { isReady } from "../actions/types"
 import type Dialog from "../api/dialog"
 import * as commands from "../commands"
 import { EXTENSION_ID } from "../config/constants"
-import { nextPanelId, registerWebviewHandlers, TmcPanel } from "../panels/TmcPanel"
+import { registerPanelActions } from "../panels/panelActions"
+import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
+import { showAccountMenu } from "../ui/statusBarAccount"
+import { showExerciseActions } from "../ui/statusBarExercise"
 import { CourseTreeItem } from "../ui/treeview/treeview"
 import { Logger } from "../utilities"
+
+/** Must match the `walkthroughs` entry's `id` in package.json. */
+const WALKTHROUGH_ID = "gettingStarted"
 
 /** A course command's argument: a course id from code, or the Courses view item it runs on. */
 type CourseTarget = CourseIdentifier | CourseTreeItem
@@ -101,7 +107,7 @@ export function registerCommands(
   const { dialog } = actionContext
   Logger.info("Registering TMC VSCode commands")
 
-  registerWebviewHandlers({
+  registerPanelActions({
     cancelTests: actions.cancelTestRun,
     closeExercises: actions.closeExercises,
     downloadAndOpenExercises: actions.downloadAndOpenExercises,
@@ -156,7 +162,6 @@ export function registerCommands(
         id: nextPanelId(),
         type: "CourseDetails",
         courseId,
-        exerciseStatuses: { tmc: {}, mooc: {} },
       })
     }
   })
@@ -196,11 +201,18 @@ export function registerCommands(
     commands.resetExercise(readyContext, resource),
   )
 
-  register("tmc.showWelcome", () => {
-    TmcPanel.renderMain(context.extensionUri, context, readyContext, {
-      id: nextPanelId(),
-      type: "Welcome",
-    })
+  register("tmc.showAccountMenu", async () => showAccountMenu())
+
+  register("tmc.showExerciseActions", async (resource: vscode.Uri | undefined) =>
+    showExerciseActions(readyContext.startup, readyContext.authState.loggedIn, resource),
+  )
+
+  register("tmc.showWelcome", async () => {
+    await vscode.commands.executeCommand(
+      "workbench.action.openWalkthrough",
+      `${EXTENSION_ID}#${WALKTHROUGH_ID}`,
+      false,
+    )
   })
 
   // The extension's only login: the courses.mooc.fi device flow.

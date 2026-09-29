@@ -6,8 +6,12 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch --mode development",
-    "check": "node -e \"require('node:fs').rmSync('.svelte-check',{recursive:true,force:true})\" && svelte-check --tsconfig ./tsconfig.json --tsgo",
-    "check:tsc": "svelte-check --tsconfig ./tsconfig.json"
+    "check": "node -e \"require('node:fs').rmSync('.svelte-check',{recursive:true,force:true})\" && svelte-check --tsconfig ./tsconfig.json --tsgo && tsgo --noEmit -p tsconfig.node.json",
+    "check:tsc": "svelte-check --tsconfig ./tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "harness": "vite --config dev/vite.config.ts",
+    "harness:build": "vite build --config dev/vite.config.ts",
+    "test:a11y": "vite build --config dev/vite.config.ts && playwright test",
+    "themes:refresh": "xvfb-maybe -a -- node dev/refreshThemes.mjs"
   },
   "dependencies": {
     "@vscode-elements/elements": "^2.5.1",
@@ -15,6 +19,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
     "@sveltejs/vite-plugin-svelte": "^7.2.0",
     "@types/vscode-webview": "^1.57.4",
     "svelte": "^5.56.4",
