@@ -711,6 +711,9 @@ suite("TmcPanel reports a handler's failure once", () => {
         expect.stringContaining("over 50 exercises open"),
         ["Open course details", expect.any(Function)],
       )
+      // Course Details is where Close lives, and the button below goes there.
+      const [warning] = vi.mocked(actionContext.dialog.warningNotification).mock.calls[0] ?? []
+      expect(warning).toContain("in Course Details")
       const [, [, openCourseDetails]] = vi.mocked(actionContext.dialog.warningNotification).mock
         .calls[0] as [string, [string, () => void]]
       openCourseDetails()

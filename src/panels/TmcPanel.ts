@@ -747,7 +747,7 @@ export class TmcPanel {
             if (openLimit !== undefined) {
               const courseId = message.courseId
               void actionContext.dialog.warningNotification(
-                `You have over ${openLimit} exercises open, which may cause performance issues. You can close completed exercises from the TMC extension menu in the sidebar.`,
+                `You have over ${openLimit} exercises open, which can slow VS Code down. Close the ones you have finished in Course Details.`,
                 [
                   "Open course details",
                   (): void =>
