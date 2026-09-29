@@ -1,9 +1,10 @@
 {
-  // The Node side of the dev harness.
+  // The Node side of the dev harness and the accessibility tests. The DOM lib is for the
+  // callbacks Playwright runs in the page.
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "types": ["node"]
   },
-  "include": ["dev/vite.config.ts"]
+  "include": ["a11y/**/*", "playwright.config.ts", "dev/vite.config.ts"]
 }

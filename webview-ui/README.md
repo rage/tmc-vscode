@@ -148,3 +148,18 @@ themes), limited to the ones `src/` and `@vscode-elements/elements` read, along 
 stylesheet every webview gets. `pnpm run themes:refresh [vscode-executable]` recaptures them from a
 running VS Code, by default the newest one in `../.vscode-test`. Run it after using a
 `--vscode-*` variable for the first time or when a VS Code release changes the default themes.
+
+## Theme and accessibility tests
+
+`src/styles/contrast.test.ts` (part of `pnpm test`) resolves each text and status colour the app
+paints, through the `--tmc-*` tokens and their fallbacks, against every captured theme, and
+requires WCAG's 4.5:1 for text and 3:1 for icons, meters and focus rings. A new colour token has
+to be paired there or listed as needing no contrast.
+
+`pnpm run test:a11y` builds the harness and loads every scenario in headless Chromium, then checks
+Chromium's accessibility tree: every control has a name, each panel has one level-1 heading, no
+spinner raises an alert or live regions nest, and each disclosure's `aria-expanded` matches what
+it shows. Install the browser once with `pnpm exec playwright install chromium`.
+
+Both suites list the checks that fail today in `KNOWN_FAILURES`, each a bug still to fix. Such a
+check is expected to fail, so fixing the bug fails the suite until its entry is deleted.
