@@ -126,8 +126,9 @@ Do not thread raw ids around.
 under `shared/generated/langs/` are generated from `shared/bindings.schema.json`,
 which is vendored from tmc-langs-rust — do not hand-edit either:
 
-- `pnpm run vendor:langs-schema` re-vendors the JSON Schema from a sibling
-  `../tmc-langs-rust` checkout
+- `pnpm run vendor:langs-schema` re-vendors the JSON Schema from the
+  tmc-langs-rust release `config.js` pins (its `bindings.schema-<version>.json`
+  asset)
 - `pnpm run generate:langs-schema` regenerates the zod/TS files from it
 
 CI re-runs the generate step and diffs, so a stale generated file fails the

@@ -84,7 +84,7 @@ export const BrowserTestRuntime = zBrowserTestRuntime;
 export type BrowserTestRuntime = z.infer<typeof BrowserTestRuntime>;
 
 /**
- * In-browser test spec produced by the `tmc` exercise service: the script to
+ * In-browser test spec from the `tmc` exercise service: the script to
  * run in the client plus an optional error set when the build failed.
  */
 export const BrowserTestSpec = zBrowserTestSpec;
@@ -223,8 +223,6 @@ export type Kind = z.infer<typeof Kind>;
 
 /**
  * An exercise in the projects directory, tagged with the backend it came from.
- * Both arms carry the ids needed to identify the exercise and its course, so a
- * client can key off them without a second lookup.
  */
 export const LocalExercise = zLocalExercise;
 export type LocalExercise = z.infer<typeof LocalExercise>;
@@ -262,8 +260,8 @@ export const MoocCourse = zMoocCourse;
 export type MoocCourse = z.infer<typeof MoocCourse>;
 
 /**
- * The data attached to a `mooc-device-login` status update. Mirrors the
- * relevant fields of the RFC 8628 device authorization response.
+ * Payload of a `mooc-device-login` status update; a subset of the RFC 8628
+ * device authorization response.
  */
 export const MoocDeviceLogin = zMoocDeviceLogin;
 export type MoocDeviceLogin = z.infer<typeof MoocDeviceLogin>;
@@ -272,9 +270,8 @@ export const MoocExerciseDownload = zMoocExerciseDownload;
 export type MoocExerciseDownload = z.infer<typeof MoocExerciseDownload>;
 
 /**
- * A local mooc exercise whose server-side version has changed. Shaped like
- * [`UpdatedExercise`] so clients can treat the two backends' update checks
- * alike; only the id type differs.
+ * A local mooc exercise whose server-side version has changed; like
+ * [`UpdatedExercise`] but keyed by UUID.
  */
 export const MoocUpdatedExercise = zMoocUpdatedExercise;
 export type MoocUpdatedExercise = z.infer<typeof MoocUpdatedExercise>;

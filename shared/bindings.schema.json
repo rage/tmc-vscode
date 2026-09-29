@@ -54,7 +54,7 @@
       ]
     },
     "BrowserTestSpec": {
-      "description": "In-browser test spec produced by the `tmc` exercise service: the script to\nrun in the client plus an optional error set when the build failed.",
+      "description": "In-browser test spec from the `tmc` exercise service: the script to\nrun in the client plus an optional error set when the build failed.",
       "type": "object",
       "properties": {
         "error": {
@@ -2013,19 +2013,19 @@
           "const": "not-enrolled"
         },
         {
-          "description": "A submitted file's retention window elapsed before the submission naming\nit was accepted (backend `message_key: \"upload_expired\"`, HTTP 422). The\nupload is retried once first, so this means the retry failed too.",
+          "description": "A submitted file expired before the submission naming it was accepted\n(backend `message_key: \"upload_expired\"`, HTTP 422), even after one retry.",
           "type": "string",
           "const": "upload-expired"
         },
         {
-          "description": "A submission named a file that was never uploaded for that exercise by\nthat user (backend `message_key: \"unknown_upload\"`, HTTP 422). Indicates\na client bug or tampering, never a race.",
+          "description": "A submission named a file this user never uploaded for the exercise\n(backend `message_key: \"unknown_upload\"`, HTTP 422). A client bug or tampering.",
           "type": "string",
           "const": "unknown-upload"
         }
       ]
     },
     "LocalExercise": {
-      "description": "An exercise in the projects directory, tagged with the backend it came from.\nBoth arms carry the ids needed to identify the exercise and its course, so a\nclient can key off them without a second lookup.",
+      "description": "An exercise in the projects directory, tagged with the backend it came from.",
       "oneOf": [
         {
           "type": "object",
@@ -2075,7 +2075,7 @@
           "type": "string"
         },
         "exercise-slug": {
-          "description": "The exercise's on-disk directory name, used as its slug when building a\nworkspace entry (mirrors the TMC slug); stable since names are unique per\ncourse.",
+          "description": "The exercise's on-disk directory name, used as its slug (mirrors the TMC\nslug); stable since names are unique per course.",
           "type": "string"
         }
       },
@@ -2188,7 +2188,7 @@
       ]
     },
     "MoocDeviceLogin": {
-      "description": "The data attached to a `mooc-device-login` status update. Mirrors the\nrelevant fields of the RFC 8628 device authorization response.",
+      "description": "Payload of a `mooc-device-login` status update; a subset of the RFC 8628\ndevice authorization response.",
       "type": "object",
       "properties": {
         "expires_in": {
@@ -2231,7 +2231,7 @@
       "type": "object",
       "properties": {
         "exercise-id": {
-          "description": "The requested exercise's id; results are keyed by it so callers can\ncorrelate each download/skip/failure back to the exercise (not the internal\neditor task id).",
+          "description": "The requested exercise's id (not the internal editor task id), so callers\ncan match each download/skip/failure to the exercise.",
           "type": "string",
           "format": "uuid"
         },
@@ -2260,7 +2260,7 @@
       ]
     },
     "MoocUpdatedExercise": {
-      "description": "A local mooc exercise whose server-side version has changed. Shaped like\n[`UpdatedExercise`] so clients can treat the two backends' update checks\nalike; only the id type differs.",
+      "description": "A local mooc exercise whose server-side version has changed; like\n[`UpdatedExercise`] but keyed by UUID.",
       "type": "object",
       "properties": {
         "id": {
@@ -2837,7 +2837,7 @@
           ]
         },
         {
-          "description": "Mooc's per-exercise download progress, mirroring `ClientUpdateData` for\nmooc's UUID-keyed exercises.",
+          "description": "Per-exercise download progress for mooc's UUID-keyed exercises.",
           "type": "object",
           "properties": {
             "update-data-kind": {
@@ -2851,7 +2851,7 @@
           ]
         },
         {
-          "description": "Emitted once at the start of `mooc login`, before the CLI blocks polling:\ncarries the verification URL and user code the client shows the user to\ncomplete the OAuth2 device authorization login.",
+          "description": "Emitted once at the start of `mooc login`, before the CLI blocks polling;\ncarries the URL and code the client shows the user.",
           "type": "object",
           "properties": {
             "update-data-kind": {
@@ -3461,7 +3461,7 @@
       "type": "object",
       "properties": {
         "course_id": {
-          "description": "The course the exercise belongs to, so a client can locate it without a\nseparate lookup or an enrolled-course scan.",
+          "description": "Lets a client locate the exercise's course without a separate lookup.",
           "type": "string",
           "format": "uuid"
         },

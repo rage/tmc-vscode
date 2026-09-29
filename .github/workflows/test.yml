@@ -70,6 +70,11 @@ jobs:
       - name: Vendored langs schema stamp
         run: pnpm run vendor:langs-schema -- --check-stamp
 
+      # Fetches the schema attached to the pinned release and byte-compares, which
+      # is what catches TMC_LANGS_RUST_VERSION bumped without a re-vendor.
+      - name: Vendored langs schema source
+        run: pnpm run vendor:langs-schema -- --check
+
       - name: Vendored OpenAPI spec stamp
         run: pnpm run vendor:langs-openapi -- --check-stamp
 
