@@ -205,8 +205,12 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
     await run(context)
   },
   webview: async ({ page }, run) => {
-    const webviewFrame = page.frameLocator("iframe.webview.ready").last()
-    const tmcFrame = webviewFrame.frameLocator('iframe#active-frame[title="TestMyCode"]')
+    // The inner frame's title follows the panel's tab title, so the extension is
+    // matched on the id VS Code puts in the outer frame's URL instead.
+    const webviewFrame = page
+      .frameLocator('iframe.webview.ready[src*="extensionId=moocfi.test-my-code"]')
+      .last()
+    const tmcFrame = webviewFrame.frameLocator("iframe#active-frame")
     await run(tmcFrame)
   },
 }
