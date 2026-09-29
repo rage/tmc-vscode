@@ -1,14 +1,9 @@
 import type { WebviewToExtension } from "../shared/shared"
 import { postedMessages } from "../test/setup"
+import { deepState } from "../test/state.svelte"
 import { vscode } from "./vscode"
 
-// The webview→host boundary is the last place a malformed message can be stopped: VS Code
-// structured-clones every payload, so a non-serializable one (a Svelte 5 `$state` proxy, a
-// whole panel where `{id, type}` is expected) fails with an opaque DataCloneError, and a
-// merely wrong-shaped one reaches a host handler that cannot read it.
-
 beforeEach(() => {
-  vi.spyOn(console, "log").mockImplementation(() => {})
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
 
@@ -22,17 +17,38 @@ suite("the webview's postMessage", () => {
     expect(postedMessages).toHaveBeenCalledWith({ type: "ready" })
   })
 
-  test("posts the original message object, not zod's parse result", () => {
-    // The parse result is a copy with everything the schema does not declare dropped,
-    // and the host reads fields the schema cannot express (a `vscode.Uri` behind
-    // `z.custom`), so the object posted must be the caller's own.
-    const message: WebviewToExtension = {
+  test("keeps fields the schema does not declare", () => {
+    // The host reads fields the schema cannot express (a `vscode.Uri` behind `z.custom`),
+    // which zod's parse result would drop.
+    const exerciseUri = { scheme: "file", path: "/exercise", fsPath: "/exercise" }
+    const message = {
       type: "requestMyCoursesData",
       requestId: 1,
       sourcePanel: { id: 3, type: "MyCourses", courseDeadlines: {} },
-    }
+      exerciseUri,
+    } as WebviewToExtension
     vscode.postMessage(message)
-    expect(postedMessages.mock.calls[0]?.[0]).toBe(message)
+    expect(postedMessages).toHaveBeenCalledWith(message)
+  })
+
+  test("posts a message holding `$state` proxies as plain data", () => {
+    const sourcePanel = deepState({ id: 3, type: "MyCourses" as const, courseDeadlines: {} })
+    const message: WebviewToExtension = { type: "requestMyCoursesData", requestId: 1, sourcePanel }
+    expect(() => structuredClone(message)).toThrow()
+
+    vscode.postMessage(message)
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "requestMyCoursesData",
+      requestId: 1,
+      sourcePanel: { id: 3, type: "MyCourses", courseDeadlines: {} },
+    })
+  })
+
+  test("does not log messages it posts", () => {
+    const log = vi.spyOn(console, "log")
+    vscode.postMessage({ type: "ready" })
+    expect(log).not.toHaveBeenCalled()
   })
 
   test("refuses a message missing a field the host handler reads", () => {
