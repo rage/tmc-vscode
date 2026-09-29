@@ -2,7 +2,6 @@ import { render, screen, waitFor } from "@testing-library/svelte"
 import { tick } from "svelte"
 
 import App from "./App.svelte"
-import { findButton } from "./test/dom"
 import { tmcLocalCourse } from "./test/fixtures"
 import { dispatchToWebview, postedMessages } from "./test/setup"
 
@@ -50,7 +49,7 @@ suite("App global error handling", () => {
     })
 
     postedMessages.mockClear()
-    ;(await findButton("Reload")).click()
+    ;(await screen.findByRole("button", { name: "Reload" })).click()
 
     await waitFor(() => {
       expect(document.body.innerHTML).not.toContain("This is a bug in the extension.")

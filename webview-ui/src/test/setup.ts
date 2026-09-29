@@ -3,6 +3,7 @@ import { cleanup } from "@testing-library/svelte"
 import { afterEach, vi } from "vitest"
 import { z } from "zod"
 
+import "../elements"
 import { ExtensionToWebviewSchema } from "../shared/shared"
 
 // The webview wrapper (src/utilities/vscode.ts) calls the global
@@ -12,23 +13,12 @@ interface MockVsCodeApi {
   postMessage: ReturnType<typeof vi.fn>
 }
 
-// DataCloneError regression guard: VS Code structured-clones every value passed
-// to `postMessage`, so a non-cloneable one (a Svelte 5 `$state` proxy that wasn't
-// `$state.snapshot`-ed, a function, a class instance) crashes the real
-// webview<->host boundary with an opaque `DataCloneError`. Running the same
-// `structuredClone` in the mock makes such a payload fail inside the test that
-// posted it instead of only in production. The clone result is discarded; the spy
-// still records the original message for shape assertions.
-const cloneGuard =
-  typeof structuredClone === "function"
-    ? structuredClone
-    : // extremely defensive fallback for a jsdom build without structuredClone;
-      // JSON round-trip rejects functions/undefined-valued cycles similarly enough
-      (value: unknown): unknown => JSON.parse(JSON.stringify(value))
-
+// VS Code structured-clones every value passed to `postMessage`, so a non-cloneable one (an
+// unsnapshotted `$state` proxy, a function) fails there with an opaque `DataCloneError`. Cloning
+// here makes it fail in the test that posted it instead.
 const vsCodeApi: MockVsCodeApi = {
   postMessage: vi.fn((message: unknown) => {
-    cloneGuard(message)
+    structuredClone(message)
   }),
 }
 
@@ -70,6 +60,13 @@ if (
 ) {
   ElementInternals.prototype.setFormValue = () => {}
   ElementInternals.prototype.setValidity = () => {}
+}
+
+// jsdom has no layout, so `vscode-table`'s ResizeObserver never needs to fire.
+globalThis.ResizeObserver ??= class {
+  public observe(): void {}
+  public unobserve(): void {}
+  public disconnect(): void {}
 }
 
 // `<vscode-icon>` warns when the codicons stylesheet is missing, passing the element

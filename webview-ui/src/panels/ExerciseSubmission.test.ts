@@ -2,7 +2,6 @@ import { render, screen } from "@testing-library/svelte"
 
 import type { ExerciseSubmissionPanel } from "../shared/shared"
 import { BaseError, toWebviewError } from "../shared/shared"
-import { getButton } from "../test/dom"
 import {
   moocLocalCourse,
   moocLocalExercise,
@@ -112,10 +111,10 @@ suite("ExerciseSubmission panel", () => {
     expect(screen.queryByText("Run in background")).not.toBeInTheDocument()
   })
 
-  test("closing the panel posts closeSidePanel", () => {
+  test("closing the panel posts closeSidePanel", async () => {
     render(ExerciseSubmission, { props: { panel } })
     postedMessages.mockClear()
-    getButton("Close").click()
+    ;(await screen.findByRole("button", { name: "Close" })).click()
     expect(postedMessages).toHaveBeenCalledWith({ type: "closeSidePanel" })
   })
 })
@@ -176,7 +175,7 @@ suite("ExerciseSubmission panel (mooc reduced results)", () => {
   test('keeps "Run in background" visible through non-terminal grading states', async () => {
     // Must not disappear just because *some* moocResult arrived — only once grading is done.
     render(ExerciseSubmission, { props: { panel: moocPanel } })
-    expect(getButton("Run in background")).toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: "Run in background" })).toBeInTheDocument()
 
     postMoocResult({
       status: "grading",
@@ -189,7 +188,7 @@ suite("ExerciseSubmission panel (mooc reduced results)", () => {
       },
     })
     await screen.findByRole("heading", { name: "Awaiting manual grading" })
-    expect(getButton("Run in background")).toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: "Run in background" })).toBeInTheDocument()
   })
 
   test('hides "Run in background" once grading is fully graded', async () => {

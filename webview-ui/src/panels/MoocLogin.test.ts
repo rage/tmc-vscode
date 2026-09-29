@@ -2,7 +2,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/svelte"
 import { tick } from "svelte"
 
 import type { MoocLoginPanel } from "../shared/shared"
-import { findButton, getButton } from "../test/dom"
 import { dispatchToWebview, postedMessages } from "../test/setup"
 import MoocLogin from "./MoocLogin.svelte"
 
@@ -49,14 +48,14 @@ suite("MoocLogin panel", () => {
     await waitFor(() => {
       // a real button, so it is reachable by keyboard and activates on Enter/Space only
       expect(screen.getByRole("button", { name: "WXYZ-1234" })).toBeInTheDocument()
-      expect(getButton("Open in browser")).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "Open in browser" })).toBeInTheDocument()
     })
   })
 
   test("Open in browser opens the complete verification URL", async () => {
     render(MoocLogin, { props: { panel } })
     dispatchToWebview(deviceCodeMessage)
-    const button = await findButton("Open in browser")
+    const button = await screen.findByRole("button", { name: "Open in browser" })
     postedMessages.mockClear()
     await fireEvent.click(button)
     expect(postedMessages).toHaveBeenCalledWith({
@@ -70,7 +69,7 @@ suite("MoocLogin panel", () => {
     dispatchToWebview(deviceCodeMessage)
     // Wait for the awaiting-state re-render so the Cancel button grabbed below is the live one.
     await screen.findByText("WXYZ-1234")
-    const button = getButton("Cancel")
+    const button = await screen.findByRole("button", { name: "Cancel" })
     postedMessages.mockClear()
     await fireEvent.click(button)
     expect(postedMessages).toHaveBeenCalledWith({
@@ -155,7 +154,7 @@ suite("MoocLogin panel", () => {
     }
 
     expect(await screen.findByRole("alert")).toHaveTextContent("no sign-in code arrived in time")
-    expect(getButton("Try again")).toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: "Try again" })).toBeInTheDocument()
     expect(postedMessages).toHaveBeenCalledWith({
       type: "cancelMoocLogin",
       sourcePanel: { id: panel.id, type: panel.type },
@@ -186,7 +185,7 @@ suite("MoocLogin panel", () => {
     })
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent("device flow expired")
-      expect(getButton("Try again")).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument()
     })
   })
 })

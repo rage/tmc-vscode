@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte"
+import type { VscodeCollapsible } from "@vscode-elements/elements"
 
 import type { CourseDetailsPanel } from "../shared/shared"
 import { makeMoocKind, makeTmcKind } from "../shared/shared"
-import { findButton } from "../test/dom"
 import {
   MOOC_EXERCISE_ID,
   MOOC_INSTANCE_ID,
@@ -14,20 +14,18 @@ import {
 import { dispatchToWebview as dispatch, postedMessages } from "../test/setup"
 import CourseDetails from "./CourseDetails.svelte"
 
-// vscode-checkbox is inert under jsdom, so set `.checked` and dispatch `change` directly;
-// the first checkbox in the group is the select-all.
+// The first checkbox in the group is the select-all.
 async function checkSelectAll(container: HTMLElement): Promise<void> {
-  const selectAll = container.querySelector<HTMLElement & { checked: boolean }>("vscode-checkbox")
+  const selectAll = container.querySelector("vscode-checkbox")
   expect(selectAll).not.toBeNull()
-  selectAll!.checked = true
-  await fireEvent.change(selectAll!)
+  await fireEvent.keyDown(selectAll!, { key: " " })
 }
 
-// The collapsible's heading lives in shadow DOM, which isn't upgraded under jsdom, so
-// match on the light-DOM element's heading attribute instead of a heading role.
-function findExerciseGroup(container: HTMLElement): Promise<HTMLElement> {
+function findExerciseGroup(container: HTMLElement): Promise<VscodeCollapsible> {
   return waitFor(() => {
-    const el = container.querySelector<HTMLElement>('vscode-collapsible[heading="part01"]')
+    const el = Array.from(container.querySelectorAll("vscode-collapsible")).find(
+      (collapsible) => collapsible.heading === "part01",
+    )
     if (!el) {
       throw new Error("exercise group not rendered yet")
     }
@@ -207,7 +205,7 @@ suite("CourseDetails panel", () => {
 
     await checkSelectAll(container)
 
-    const download = await findButton("Download")
+    const download = await screen.findByRole("button", { name: "Download" })
     postedMessages.mockClear()
     download.click()
 
@@ -233,7 +231,7 @@ suite("CourseDetails panel", () => {
 
     await checkSelectAll(container)
 
-    const download = await findButton("Download")
+    const download = await screen.findByRole("button", { name: "Download" })
     postedMessages.mockClear()
     download.click()
 
@@ -304,7 +302,7 @@ suite("CourseDetails panel", () => {
     })
     await screen.findByRole("heading", { name: /MOOC Python/ })
 
-    const open = await findButton("Open workspace")
+    const open = await screen.findByRole("button", { name: "Open workspace" })
     postedMessages.mockClear()
     open.click()
 
@@ -329,7 +327,7 @@ suite("CourseDetails panel", () => {
       exerciseIds: [makeMoocKind({ moocExerciseId: MOOC_EXERCISE_ID })],
     })
 
-    const update = await findButton("Update exercises")
+    const update = await screen.findByRole("button", { name: "Update exercises" })
     postedMessages.mockClear()
     update.click()
 
@@ -370,7 +368,7 @@ suite("CourseDetails panel", () => {
     expect(screen.queryByLabelText("Loading")).not.toBeInTheDocument()
 
     postedMessages.mockClear()
-    ;(await findButton("Retry")).click()
+    ;(await screen.findByRole("button", { name: "Retry" })).click()
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "requestCourseDetailsData",
@@ -395,7 +393,7 @@ suite("CourseDetails panel", () => {
     })
     postedMessages.mockClear()
 
-    const refresh = await findButton("Refresh")
+    const refresh = await screen.findByRole("button", { name: "Refresh" })
     refresh.click()
 
     await waitFor(() => {

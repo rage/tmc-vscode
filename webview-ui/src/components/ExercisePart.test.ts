@@ -4,7 +4,6 @@ import { vi } from "vitest"
 
 import type { ExerciseIdentifier } from "../shared/shared"
 import { makeTmcKind } from "../shared/shared"
-import { getButton } from "../test/dom"
 import { tmcExerciseGroup } from "../test/fixtures"
 import ExercisePart from "./ExercisePart.svelte"
 
@@ -24,8 +23,7 @@ suite("ExercisePart component", () => {
       },
     })
 
-    // The heading lives in shadow DOM, which doesn't upgrade under jsdom, so assert the attribute.
-    expect(container.querySelector("vscode-collapsible")?.getAttribute("heading")).toBe("part01")
+    expect(container.querySelector("vscode-collapsible")?.heading).toBe("part01")
     expect(screen.getByText("Completed: 1 / 1")).toBeInTheDocument()
   })
 
@@ -82,7 +80,7 @@ suite("ExercisePart component", () => {
     expect(screen.getByText(/Hard deadline: 2026-02-28/)).toBeInTheDocument()
   })
 
-  test("Download all passes every exercise identifier back to the callback", () => {
+  test("Download all passes every exercise identifier back to the callback", async () => {
     const onDownloadAll = vi.fn()
     render(ExercisePart, {
       props: {
@@ -95,7 +93,7 @@ suite("ExercisePart component", () => {
       },
     })
 
-    getButton("Download all").click()
+    ;(await screen.findByRole("button", { name: "Download all" })).click()
 
     expect(onDownloadAll).toHaveBeenCalledWith([makeTmcKind({ tmcExerciseId: 101 })])
   })
@@ -114,16 +112,13 @@ suite("ExercisePart component", () => {
       },
     })
 
-    // vscode-checkbox is inert under jsdom, so set `.checked` and dispatch `change` directly.
-    const selectAll = container.querySelector<HTMLElement & { checked: boolean }>("vscode-checkbox")
+    const selectAll = container.querySelector("vscode-checkbox")
     expect(selectAll).not.toBeNull()
 
-    selectAll!.checked = true
-    await fireEvent.change(selectAll!)
+    await fireEvent.keyDown(selectAll!, { key: " " })
     expect([...checkedExercises.values()]).toEqual([makeTmcKind({ tmcExerciseId: 101 })])
 
-    selectAll!.checked = false
-    await fireEvent.change(selectAll!)
+    await fireEvent.keyDown(selectAll!, { key: " " })
     expect(checkedExercises.size).toBe(0)
   })
 })

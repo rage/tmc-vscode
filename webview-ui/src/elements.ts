@@ -1,0 +1,15 @@
+// The single registration point for the `vscode-*` custom elements, shared by the app and the
+// component tests so tests render the same upgraded elements users get.
+import "@vscode-elements/elements/dist/vscode-badge/index.js"
+import "@vscode-elements/elements/dist/vscode-button/index.js"
+import "@vscode-elements/elements/dist/vscode-button-group/index.js"
+import "@vscode-elements/elements/dist/vscode-checkbox/index.js"
+import "@vscode-elements/elements/dist/vscode-collapsible/index.js"
+import "@vscode-elements/elements/dist/vscode-icon/index.js"
+import "@vscode-elements/elements/dist/vscode-progress-ring/index.js"
+import "@vscode-elements/elements/dist/vscode-table/index.js"
+import "@vscode-elements/elements/dist/vscode-table-body/index.js"
+import "@vscode-elements/elements/dist/vscode-table-cell/index.js"
+import "@vscode-elements/elements/dist/vscode-table-header/index.js"
+import "@vscode-elements/elements/dist/vscode-table-header-cell/index.js"
+import "@vscode-elements/elements/dist/vscode-table-row/index.js"

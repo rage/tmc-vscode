@@ -33,8 +33,8 @@ suite("Button component", () => {
       props: { secondary: true, disabled: true, "aria-label": "Close", children: label("×") },
     })
     const button = container.querySelector("vscode-button")!
-    expect(button.hasAttribute("secondary")).toBe(true)
-    expect(button.hasAttribute("disabled")).toBe(true)
+    expect(button.secondary).toBe(true)
+    expect(button.disabled).toBe(true)
     expect(button.getAttribute("aria-label")).toBe("Close")
   })
 
@@ -43,7 +43,7 @@ suite("Button component", () => {
       props: { secondary: false, disabled: false, children: label("Plain") },
     })
     const button = container.querySelector("vscode-button")!
-    expect(button.hasAttribute("secondary")).toBe(false)
-    expect(button.hasAttribute("disabled")).toBe(false)
+    expect(button.secondary).toBeFalsy()
+    expect(button.disabled).toBeFalsy()
   })
 })

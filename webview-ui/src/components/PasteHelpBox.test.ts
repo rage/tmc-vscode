@@ -1,6 +1,5 @@
 import { render, screen } from "@testing-library/svelte"
 
-import { findButton, getButton } from "../test/dom"
 import { moocLocalCourse, tmcLocalCourse, tmcLocalExercise } from "../test/fixtures"
 import { postedMessages } from "../test/setup"
 import PasteHelpBox from "./PasteHelpBox.svelte"
@@ -14,8 +13,8 @@ suite("PasteHelpBox component", () => {
     render(PasteHelpBox, { props: { course, exercise, sourcePanel } })
 
     // reveal the help section, then trigger the paste
-    getButton("Need help?").click()
-    const submit = await findButton("Submit to TMC Server paste")
+    ;(await screen.findByRole("button", { name: "Need help?" })).click()
+    const submit = await screen.findByRole("button", { name: "Submit to TMC Server paste" })
     postedMessages.mockClear()
     submit.click()
 
@@ -37,7 +36,7 @@ suite("PasteHelpBox component", () => {
       },
     })
 
-    getButton("Need help?").click()
+    ;(await screen.findByRole("button", { name: "Need help?" })).click()
     const link = await screen.findByRole("link", { name: "https://paste.example/abc" })
     expect(link).toBeVisible()
   })
@@ -47,7 +46,9 @@ suite("PasteHelpBox component", () => {
       props: { course: moocLocalCourse(), exercise, sourcePanel },
     })
 
-    getButton("Need help?").click()
-    expect(await findButton("Submit to courses.mooc.fi paste")).toBeInTheDocument()
+    ;(await screen.findByRole("button", { name: "Need help?" })).click()
+    expect(
+      await screen.findByRole("button", { name: "Submit to courses.mooc.fi paste" }),
+    ).toBeInTheDocument()
   })
 })

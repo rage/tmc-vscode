@@ -5,8 +5,6 @@ import Checkbox from "./Checkbox.svelte"
 
 type CheckboxElement = HTMLElement & { checked: boolean; indeterminate: boolean }
 
-// vscode-checkbox is inert under jsdom, so setting `.checked` and dispatching `change`
-// stands in for a real user toggle.
 function renderCheckbox(props: Record<string, unknown>): {
   el: CheckboxElement
   container: HTMLElement
@@ -41,8 +39,7 @@ suite("Checkbox component", () => {
     const onClick = vi.fn()
     const { el } = renderCheckbox({ checked: false, onClick })
 
-    el.checked = true
-    await fireEvent.change(el)
+    await fireEvent.keyDown(el, { key: " " })
 
     expect(onClick).toHaveBeenCalledTimes(1)
     expect(onClick).toHaveBeenLastCalledWith(true)
@@ -52,10 +49,8 @@ suite("Checkbox component", () => {
     const onClick = vi.fn()
     const { el } = renderCheckbox({ checked: false, onClick })
 
-    el.checked = true
-    await fireEvent.change(el)
-    el.checked = false
-    await fireEvent.change(el)
+    await fireEvent.keyDown(el, { key: " " })
+    await fireEvent.keyDown(el, { key: " " })
 
     expect(onClick.mock.calls).toEqual([[true], [false]])
   })
