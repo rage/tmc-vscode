@@ -719,3 +719,52 @@ suite("the first start of a new version", function () {
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
   })
 })
+
+function createdStatusBarItemIds(): unknown[] {
+  return vi.mocked(vscode.window.createStatusBarItem).mock.calls.map(([id]) => id)
+}
+
+suite("status bar", function () {
+  beforeEach(function () {
+    resetActivationRecording()
+  })
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    vi.restoreAllMocks()
+  })
+
+  test("a ready activation shows the account and exercise items", async function () {
+    vi.mocked(vscode.window.createStatusBarItem).mockClear()
+
+    await activate(createContext())
+
+    expect(createdStatusBarItemIds()).toEqual(["tmc.account", "tmc.activeExercise"])
+    expect(recorded.contextKeys.get("test-my-code:HasCourses")).toBe(false)
+  })
+
+  // Their commands are registered only when ready, and a click would say "command not found".
+  test("a failed activation shows neither", async function () {
+    vi.mocked(vscode.window.createStatusBarItem).mockClear()
+    langsDownload.failure = new Error("no network")
+
+    await activate(createContext())
+
+    expect(createdStatusBarItemIds()).toEqual([])
+  })
+
+  test("an unexpected logout marks the account item's session expired", async function () {
+    langsStub.moocAuthenticated = true
+    vi.mocked(vscode.window.createStatusBarItem).mockClear()
+    vi.spyOn(vscode.window, "showWarningMessage").mockResolvedValue(undefined)
+
+    await activate(createContext())
+    const account = vi.mocked(vscode.window.createStatusBarItem).mock.results[0]
+      ?.value as vscode.StatusBarItem
+    expect(account.text).toContain("courses.mooc.fi")
+
+    await (langsStub.handlers.get("mooc-logout") as (expected: boolean) => Promise<void>)(false)
+
+    expect(account.text).toContain("Session Expired")
+  })
+})

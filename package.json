@@ -186,8 +186,18 @@
         "category": "TestMyCode"
       },
       {
+        "command": "tmc.showAccountMenu",
+        "title": "Show Account Actions...",
+        "category": "TestMyCode"
+      },
+      {
         "command": "tmc.showMoocLogin",
         "title": "Log In",
+        "category": "TestMyCode"
+      },
+      {
+        "command": "tmc.showExerciseActions",
+        "title": "Show Exercise Actions...",
         "category": "TestMyCode"
       },
       {
@@ -407,6 +417,14 @@
         {
           "command": "tmc.testing.pasteExercise",
           "when": "false"
+        },
+        {
+          "command": "tmc.showAccountMenu",
+          "when": "false"
+        },
+        {
+          "command": "tmc.showExerciseActions",
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise"
         }
       ],
       "editor/title": [

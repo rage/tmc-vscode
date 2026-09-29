@@ -9,6 +9,8 @@ import { EXTENSION_ID } from "../config/constants"
 import { registerPanelActions } from "../panels/panelActions"
 import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
+import { showAccountMenu } from "../ui/statusBarAccount"
+import { showExerciseActions } from "../ui/statusBarExercise"
 import { CourseTreeItem } from "../ui/treeview/treeview"
 import { Logger } from "../utilities"
 
@@ -197,6 +199,12 @@ export function registerCommands(
 
   register("tmc.resetExercise", async (resource: vscode.Uri | undefined) =>
     commands.resetExercise(readyContext, resource),
+  )
+
+  register("tmc.showAccountMenu", async () => showAccountMenu())
+
+  register("tmc.showExerciseActions", async (resource: vscode.Uri | undefined) =>
+    showExerciseActions(readyContext.startup, readyContext.authState.loggedIn, resource),
   )
 
   register("tmc.showWelcome", async () => {

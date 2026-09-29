@@ -22,7 +22,7 @@ After installing, the **Get Started with TestMyCode** walkthrough takes you from
 
 ### Commands
 
-Every command is in the Command Palette under **TestMyCode**. While an exercise file is open, Run Tests and Submit Solution are in the editor's title bar.
+Every command is in the Command Palette under **TestMyCode**. While an exercise file is open, Run Tests and Submit Solution are in the editor's title bar, and the exercise's item in the status bar lists the other exercise actions.
 
 ## Data collected by the extension
 

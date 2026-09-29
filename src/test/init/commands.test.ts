@@ -39,6 +39,8 @@ const expectedCommands = [
   "tmc.openTMCExercisesFolder",
   "tmc.pasteExercise",
   "tmc.resetExercise",
+  "tmc.showAccountMenu",
+  "tmc.showExerciseActions",
   "tmc.showWelcome",
   "tmc.showMoocLogin",
   "tmc.submitExercise",

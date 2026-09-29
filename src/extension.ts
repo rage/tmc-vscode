@@ -35,6 +35,9 @@ import { createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
 import { trackActiveEditorExercise } from "./ui/activeExerciseContext"
 import { trackHasCourses } from "./ui/hasCoursesContext"
+import { AccountStatusBarItem } from "./ui/statusBarAccount"
+import { exerciseActivity } from "./ui/statusBarActivity"
+import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
 import { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import UI from "./ui/ui"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
@@ -255,9 +258,13 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   context.subscriptions.push({ dispose: () => setMaintenancePollArmed(false) })
   authState.subscribe(setMaintenancePollArmed)
 
+  // Created once the commands it runs are registered, which is after the listeners below.
+  let accountStatus: AccountStatusBarItem | undefined
+
   // Both backends are authenticated by the same courses.mooc.fi credential, so
   // either one expiring is fixed by the same device-flow login.
   const sessionExpiredWarning = (): void => {
+    accountStatus?.markSessionExpired()
     dialog.warningNotification("Your session has expired, please log in.", [
       "Log in",
       (): void => {
@@ -279,6 +286,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     })
     langs.val.on("mooc-login", async () => {
       await authState.set("mooc", true)
+      accountStatus?.setLoggedIn(true)
       sessionExpiry.onLogin("mooc")
       // A CLI that authenticates the tmc backend with the mooc token resolves an
       // earlier tmc expiry too. Whether it does is a property of the pinned CLI,
@@ -424,7 +432,19 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     init.registerTesting(context, readyContext)
     // Every change to the stored courses re-renders the Courses view.
     const onDidChangeCourses = ui.treeDP.onDidChangeTreeData
-    context.subscriptions.push(trackHasCourses(readyContext.startup.userData, onDidChangeCourses))
+    const account = new AccountStatusBarItem(authState.loggedIn)
+    authState.subscribe((loggedIn) => account.setLoggedIn(loggedIn))
+    accountStatus = account
+    context.subscriptions.push(
+      account,
+      new ExerciseStatusBarItem({
+        workspaceManager: readyContext.startup.workspaceManager,
+        userData: readyContext.startup.userData,
+        activity: exerciseActivity,
+        onDidChangeCourses,
+      }),
+      trackHasCourses(readyContext.startup.userData, onDidChangeCourses),
+    )
   }
 
   // The palette and the explorer menus uncover their entries on this key, and VS Code

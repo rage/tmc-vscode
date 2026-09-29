@@ -5,6 +5,7 @@ import type * as vscode from "vscode"
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure } from "../api/withOperation"
+import { exerciseActivity } from "../ui/statusBarActivity"
 import { refreshEverything } from "./refreshEverything"
 import { runForExercise } from "./runForExercise"
 
@@ -18,7 +19,9 @@ export async function submitExercise(
     resource,
     "Submitting the exercise",
     async (exercise) => {
-      const result = await actions.submitExercise(context, actionContext, exercise)
+      const result = await exerciseActivity.run(exercise.uri, "submitting", () =>
+        actions.submitExercise(context, actionContext, exercise),
+      )
       return result.err ? failure("Exercise submission failed.", result.val) : result
     },
   )
