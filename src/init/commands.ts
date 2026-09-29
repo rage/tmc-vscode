@@ -175,7 +175,6 @@ export function registerCommands(
     TmcPanel.renderMain(context.extensionUri, context, readyContext, {
       id: nextPanelId(),
       type: "MyCourses",
-      courseDeadlines: {},
     })
   })
 

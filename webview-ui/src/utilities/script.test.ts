@@ -3,7 +3,7 @@ import { render } from "@testing-library/svelte"
 import MessageListenerProbe from "../test/MessageListenerProbe.svelte"
 import { dispatchToWebview } from "../test/setup"
 
-const myCourses = { id: 5, type: "MyCourses" as const, courseDeadlines: {} }
+const myCourses = { id: 5, type: "MyCourses" as const }
 const setMyCourses = {
   type: "setMyCourses",
   target: { id: 5, type: "MyCourses" },

@@ -8,7 +8,7 @@ import { dispatchToWebview as dispatch, postedMessages } from "../test/setup"
 import { withinShadowRoot } from "../test/shadow"
 import MyCourses from "./MyCourses.svelte"
 
-const panel: MyCoursesPanel = { id: 7, type: "MyCourses", courseDeadlines: {} }
+const panel: MyCoursesPanel = { id: 7, type: "MyCourses" }
 
 /** The id the panel's mount-time data request carries; its answer has to quote it. */
 function dataRequestId(): number {

@@ -24,7 +24,7 @@ suite("the webview's postMessage", () => {
     const message = {
       type: "requestMyCoursesData",
       requestId: 1,
-      sourcePanel: { id: 3, type: "MyCourses", courseDeadlines: {} },
+      sourcePanel: { id: 3, type: "MyCourses" },
       exerciseUri,
     } as WebviewToExtension
     vscode.postMessage(message)
@@ -32,7 +32,7 @@ suite("the webview's postMessage", () => {
   })
 
   test("posts a message holding `$state` proxies as plain data", () => {
-    const sourcePanel = deepState({ id: 3, type: "MyCourses" as const, courseDeadlines: {} })
+    const sourcePanel = deepState({ id: 3, type: "MyCourses" as const })
     const message: WebviewToExtension = { type: "requestMyCoursesData", requestId: 1, sourcePanel }
     expect(() => structuredClone(message)).toThrow()
 
@@ -41,7 +41,7 @@ suite("the webview's postMessage", () => {
     expect(postedMessages).toHaveBeenCalledWith({
       type: "requestMyCoursesData",
       requestId: 1,
-      sourcePanel: { id: 3, type: "MyCourses", courseDeadlines: {} },
+      sourcePanel: { id: 3, type: "MyCourses" },
     })
   })
 
