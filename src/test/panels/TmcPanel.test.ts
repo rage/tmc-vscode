@@ -1323,7 +1323,8 @@ suite("TmcPanel main panel lifecycle", () => {
 
     expect(createWebviewPanel).toHaveBeenCalledTimes(1)
     expect(dispose).not.toHaveBeenCalled()
-    expect(panel.reveal).toHaveBeenCalledWith(vscode.ViewColumn.One, false)
+    // `undefined` keeps the panel in whichever column the user moved it to.
+    expect(panel.reveal).toHaveBeenCalledWith(undefined, false)
     expect(panel.webview.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "setPanel",
@@ -1361,6 +1362,20 @@ suite("TmcPanel main panel lifecycle", () => {
     expect(TmcPanel.sidePanel).toBeDefined()
   })
 
+  test("closing the main panel leaves the side panel standing", async () => {
+    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
+    createWebviewPanel.mockReturnValue(createFakeWebviewPanel().panel)
+    renderMain({ id: nextPanelId(), type: "MyCourses", courseDeadlines: {} })
+    const side = createFakeWebviewPanel()
+    createWebviewPanel.mockReturnValue(side.panel)
+    renderSide({ id: nextPanelId(), type: "MyCourses", courseDeadlines: {} })
+
+    TmcPanel.mainPanel?.dispose()
+
+    expect(side.dispose).not.toHaveBeenCalled()
+    expect(TmcPanel.sidePanel).toBeDefined()
+  })
+
   test("re-entering dispose tears the panel down only once", async () => {
     const { panel, dispose } = createFakeWebviewPanel()
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
@@ -1377,6 +1392,86 @@ suite("TmcPanel main panel lifecycle", () => {
 
     expect(dispose).toHaveBeenCalledTimes(1)
     expect(TmcPanel.mainPanel).toBeUndefined()
+  })
+})
+
+function renderMain(panel: Parameters<typeof TmcPanel.renderMain>[3]): void {
+  TmcPanel.renderMain(
+    vscode.Uri.file("/ext"),
+    createMockContext(),
+    createMockActionContext(),
+    panel,
+  )
+}
+
+function renderSide(panel: Parameters<typeof TmcPanel.renderSide>[3]): void {
+  TmcPanel.renderSide(
+    vscode.Uri.file("/ext"),
+    createMockContext(),
+    createMockActionContext(),
+    panel,
+  )
+}
+
+suite("TmcPanel side panel placement", () => {
+  beforeEach(resetPanels)
+  afterEach(resetPanels)
+
+  const testsPanel = (): Parameters<typeof renderSide>[0] => ({
+    id: nextPanelId(),
+    type: "ExerciseTests",
+    course: courseWith(1),
+    exercise: makeTmcKind({
+      id: 1,
+      name: "part01-01_hello",
+      availablePoints: 1,
+      awardedPoints: 0,
+      deadline: null,
+      passed: false,
+      softDeadline: null,
+    }),
+    exerciseUri: vscode.Uri.file("/exercise"),
+    testRunId: nextPanelId(),
+  })
+
+  test("opens test results beside the editor without taking its focus", () => {
+    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
+    createWebviewPanel.mockClear()
+    createWebviewPanel.mockReturnValue(createFakeWebviewPanel().panel)
+
+    renderSide(testsPanel())
+
+    expect(createWebviewPanel).toHaveBeenCalledWith(
+      "sidePanel",
+      expect.any(String),
+      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+      expect.anything(),
+    )
+  })
+
+  test("re-shows test results where the user left them, still without focus", () => {
+    const { panel } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    renderSide(testsPanel())
+
+    renderSide(testsPanel())
+
+    expect(panel.reveal).toHaveBeenCalledExactlyOnceWith(undefined, true)
+  })
+
+  test("focuses the login panel the user opened", () => {
+    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
+    createWebviewPanel.mockClear()
+    createWebviewPanel.mockReturnValue(createFakeWebviewPanel().panel)
+
+    renderSide({ id: nextPanelId(), type: "MoocLogin" })
+
+    expect(createWebviewPanel).toHaveBeenCalledWith(
+      "sidePanel",
+      expect.any(String),
+      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
+      expect.anything(),
+    )
   })
 })
 

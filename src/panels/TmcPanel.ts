@@ -216,7 +216,7 @@ export class TmcPanel {
     if (TmcPanel.mainPanel !== undefined) {
       Logger.info(`Revealing existing main panel for "${panel.type}"`)
       TmcPanel.mainPanel._renderPanel(panel)
-      TmcPanel.mainPanel._panel.reveal(ViewColumn.One, false)
+      TmcPanel.mainPanel._panel.reveal(undefined, false)
     } else {
       TmcPanel.mainPanel = TmcPanel.renderNew(
         extensionUri,
@@ -235,7 +235,6 @@ export class TmcPanel {
     actionContext: ActionContext,
     panel: Panel,
   ): void {
-    const column = ViewColumn.Two
     // Navigating away from an in-flight mooc login abandons it, so kill its CLI
     // process. Exempt for re-entering MoocLogin: the new `moocLogin` handler
     // interrupt-and-replaces the old attempt itself.
@@ -245,7 +244,7 @@ export class TmcPanel {
     if (TmcPanel.sidePanel !== undefined) {
       Logger.info(`Revealing existing side panel for "${panel.type}"`)
       TmcPanel.sidePanel._renderPanel(panel)
-      TmcPanel.sidePanel._panel.reveal(column, false)
+      TmcPanel.sidePanel._panel.reveal(undefined, !takesFocus(panel))
     } else {
       const currentPanel = TmcPanel.renderNew(
         extensionUri,
@@ -267,16 +266,11 @@ export class TmcPanel {
     panel: Panel,
     isMain: boolean,
   ): TmcPanel {
-    let panelViewType
-    let column
-    if (isMain) {
-      panelViewType = "mainPanel"
-      column = ViewColumn.One
-    } else {
-      panelViewType = "sidePanel"
-      column = ViewColumn.Two
-    }
-    const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", column, {
+    const showOptions = isMain
+      ? { viewColumn: ViewColumn.One, preserveFocus: false }
+      : { viewColumn: ViewColumn.Beside, preserveFocus: !takesFocus(panel) }
+    const panelViewType = isMain ? "mainPanel" : "sidePanel"
+    const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", showOptions, {
       enableScripts: true,
       // otherwise a hidden-then-revealed panel reloads and drops messages posted
       // before the reveal
@@ -312,7 +306,6 @@ export class TmcPanel {
     this._isMain = isMain
   }
 
-  // disposes the side panel when disposing the main panel as well
   public dispose(): void {
     if (this._isDisposed) {
       return
@@ -322,7 +315,6 @@ export class TmcPanel {
 
     if (this._isMain) {
       TmcPanel.mainPanel = undefined
-      TmcPanel.sidePanel?.dispose()
     } else {
       TmcPanel.sidePanel = undefined
       // Interrupt any in-flight mooc login on side-panel dispose (close/reload)
@@ -974,6 +966,16 @@ export class TmcPanel {
       this._disposables,
     )
   }
+}
+
+/**
+ * Whether showing `panel` in the side panel should move keyboard focus into it.
+ *
+ * Only a side panel the user asked for takes focus; test and submission results appear
+ * while the student is typing, and a re-run must not pull their keystrokes away.
+ */
+function takesFocus(panel: Panel): boolean {
+  return panel.type === "MoocLogin"
 }
 
 /**
