@@ -213,6 +213,24 @@ suite("ExerciseTests panel", () => {
     expect(postedMessages).toHaveBeenCalledWith({ type: "copyToClipboard", text: "boom" })
   })
 
+  test("announces whether the host managed to copy", async () => {
+    vi.useFakeTimers()
+    try {
+      render(ExerciseTests, { props: { panel } })
+      const target = { type: "ExerciseTests", id: panel.id }
+
+      dispatchToWebview({ type: "clipboardCopied", target, ok: true })
+      await vi.runAllTimersAsync()
+      expect(screen.getByTestId("announcer")).toHaveTextContent("Copied to the clipboard")
+
+      dispatchToWebview({ type: "clipboardCopied", target, ok: false })
+      await vi.runAllTimersAsync()
+      expect(screen.getByTestId("announcer")).toHaveTextContent("Could not copy to the clipboard")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test("python-style results: 1 of 3 tests passing awards only that test's point", async () => {
     render(ExerciseTests, { props: { panel } })
     postTestResults(

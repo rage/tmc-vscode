@@ -108,6 +108,10 @@
         submitting = false
         break
       }
+      case "clipboardCopied": {
+        announce(message.ok ? "Copied to the clipboard" : "Could not copy to the clipboard")
+        break
+      }
       case "willNotRunTestsForExam": {
         tryingToRunTestsForExam = true
         break
