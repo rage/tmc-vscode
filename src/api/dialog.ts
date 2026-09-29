@@ -220,7 +220,7 @@ export default class Dialog {
     buttons: NotificationButton[],
   ): Promise<void> {
     const actions = buttons.map(([title, callback]) => ({ title, callback }))
-    const pressed = await show(`TestMyCode: ${message}`, ...actions)
+    const pressed = await show(message, ...actions)
     pressed?.callback()
   }
 

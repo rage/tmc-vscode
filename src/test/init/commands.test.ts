@@ -215,7 +215,12 @@ suite("registerCommands", function () {
 
   // VS Code discards a rejected handler promise, so a command that throws would
   // otherwise leave the user staring at an unchanged screen.
-  test("a failing command reports instead of rejecting", async function () {
+  test("a failing command reports under its title instead of rejecting", async function () {
+    // The mock module has no `extensions` namespace at all.
+    Object.defineProperty(vscode, "extensions", {
+      value: { getExtension: () => ({ packageJSON: packageJson() }) },
+      configurable: true,
+    })
     vi.spyOn(TmcPanel, "renderSide").mockImplementation(() => {
       throw new Error("the panel could not open")
     })
@@ -224,7 +229,7 @@ suite("registerCommands", function () {
     await expect(handlers.get("tmc.showMoocLogin")?.()).resolves.toBeUndefined()
 
     expect(vi.mocked(actionContext.dialog.reportError)).toHaveBeenCalledWith(
-      "Failed to run tmc.showMoocLogin.",
+      "Failed to run Log In.",
       expect.objectContaining({ message: "the panel could not open" }),
     )
   })

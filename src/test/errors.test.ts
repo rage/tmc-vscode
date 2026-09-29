@@ -18,7 +18,7 @@ suite("presentationFor", function () {
   test("an unmapped error is its own message with nothing to press", function () {
     const presentation = presentationFor(new RuntimeError("the CLI exited with 1"))
 
-    expect(presentation.message).toBe("Runtime Error: the CLI exited with 1.")
+    expect(presentation.message).toBe("The CLI exited with 1.")
     expect(presentation.actions).toEqual([])
   })
 
@@ -33,7 +33,7 @@ suite("presentationFor", function () {
     const presentation = presentationFor(new InitializationError("langs is missing"))
 
     expect(presentation.message).toBe(
-      "Initialization Error: langs is missing. The help page lists what failed and how to fix it.",
+      "Langs is missing. The help page lists what failed and how to fix it.",
     )
     expect(presentation.actions).toEqual([
       { label: "Show help", command: "tmc.viewInitializationErrorHelp" },
@@ -51,7 +51,21 @@ suite("presentationFor", function () {
 
   test("an expired upload and an obsolete client each state their own remedy", function () {
     expect(presentationFor(new UploadExpiredError("410 gone")).message).toContain("try again")
-    expect(presentationFor(new ObsoleteClientError("too old")).message).toContain("out of date")
+    const obsolete = presentationFor(new ObsoleteClientError("too old"))
+    expect(obsolete.message).toContain("out of date")
+    expect(obsolete.actions).toEqual([
+      { label: "Update Extension", command: "workbench.extensions.action.checkForUpdates" },
+    ])
+  })
+
+  test("the sentence names no error class and ends in exactly one stop", function () {
+    expect(presentationFor(new RuntimeError("The server sent no paste link.")).message).toBe(
+      "The server sent no paste link.",
+    )
+    expect(presentationFor(new Error("Is the CLI installed?")).message).toBe(
+      "Is the CLI installed?",
+    )
+    expect(presentationFor(new RuntimeError("")).message).toBe("Runtime Error.")
   })
 
   test("the sentence holds none of a CLI failure's diagnostics", function () {
@@ -67,7 +81,7 @@ suite("presentationFor", function () {
     const { message } = presentationFor(error)
 
     expect(error.stack).toBeTruthy()
-    expect(message).toBe("Runtime Error: the CLI exited with 1.")
+    expect(message).toBe("The CLI exited with 1.")
     for (const line of details.split("\n").filter(Boolean)) {
       expect(message).not.toContain(line)
     }

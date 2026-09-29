@@ -182,11 +182,11 @@ for (const { name, showMethod, notify } of notificationWrappers) {
       expect(pressed).toEqual(["second"])
     })
 
-    test("prefixes the message and offers one button per item", async function () {
+    test("shows the message unprefixed and offers one button per item", async function () {
       const show = stubMessage(showMethod, () => undefined)
       await notify(new Dialog(), "Exercise downloaded", ["Open", (): void => {}])
 
-      expect(show.mock.calls[0]?.[0]).toBe("TestMyCode: Exercise downloaded")
+      expect(show.mock.calls[0]?.[0]).toBe("Exercise downloaded")
       expect(buttonTitles(show)).toEqual(["Open"])
     })
 
@@ -294,9 +294,7 @@ suite("Dialog.reportError", function () {
     const boom = new RuntimeError("the CLI exited with 1")
     await new Dialog().reportError("Could not run the tests.", boom)
 
-    expect(show.mock.calls[0]?.[0]).toBe(
-      "TestMyCode: Could not run the tests. Runtime Error: the CLI exited with 1.",
-    )
+    expect(show.mock.calls[0]?.[0]).toBe("Could not run the tests. The CLI exited with 1.")
     expect(logError).toHaveBeenCalledOnce()
     expect(buttonTitles(show)).toEqual(["Show logs"])
   })
@@ -316,9 +314,7 @@ suite("Dialog.reportError", function () {
     await new Dialog().reportError("Could not run the tests.", boom)
 
     const notification = show.mock.calls[0]?.[0] as string
-    expect(notification).toBe(
-      "TestMyCode: Could not run the tests. Runtime Error: the CLI exited with 1.",
-    )
+    expect(notification).toBe("Could not run the tests. The CLI exited with 1.")
     const logged = lines.join("\n")
     for (const line of details.split("\n").filter(Boolean)) {
       expect(notification).not.toContain(line)
