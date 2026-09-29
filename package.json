@@ -110,11 +110,12 @@
       {
         "command": "tmc.addNewCourse",
         "title": "Add New Course...",
-        "category": "TestMyCode"
+        "category": "TestMyCode",
+        "icon": "$(add)"
       },
       {
         "command": "tmc.changeTmcDataPath",
-        "title": "Change TMC Data Path",
+        "title": "Move Exercises Folder...",
         "category": "TestMyCode"
       },
       {
@@ -134,12 +135,13 @@
       },
       {
         "command": "tmc.downloadNewExercises",
-        "title": "Download New Exercises For Course...",
-        "category": "TestMyCode"
+        "title": "Download New Exercises...",
+        "category": "TestMyCode",
+        "icon": "$(cloud-download)"
       },
       {
         "command": "tmc.downloadOldSubmission",
-        "title": "Download Old Submission",
+        "title": "Download Old Submission...",
         "category": "TestMyCode"
       },
       {
@@ -149,36 +151,38 @@
       },
       {
         "command": "tmc.myCourses",
-        "title": "Display My Courses",
+        "title": "Show My Courses",
+        "category": "TestMyCode"
+      },
+      {
+        "command": "tmc.openCourseWorkspace",
+        "title": "Open Course Workspace",
+        "icon": "$(folder-opened)",
         "category": "TestMyCode"
       },
       {
         "command": "tmc.settings",
-        "title": "Settings",
+        "title": "Open Settings",
         "category": "TestMyCode"
       },
       {
         "command": "tmc.openTMCExercisesFolder",
-        "title": "Open TMC Data Folder",
+        "title": "Open Exercises Folder",
         "category": "TestMyCode"
       },
       {
         "command": "tmc.pasteExercise",
-        "title": "Send Exercise To Paste",
+        "title": "Share Exercise via Paste",
+        "category": "TestMyCode"
+      },
+      {
+        "command": "tmc.removeCourse",
+        "title": "Remove Course...",
         "category": "TestMyCode"
       },
       {
         "command": "tmc.resetExercise",
         "title": "Reset Exercise",
-        "category": "TestMyCode"
-      },
-      {
-        "command": "tmc.selectAction",
-        "title": "Action Menu",
-        "icon": {
-          "dark": "resources/dark/menu.svg",
-          "light": "resources/light/menu.svg"
-        },
         "category": "TestMyCode"
       },
       {
@@ -188,26 +192,24 @@
       },
       {
         "command": "tmc.showWelcome",
-        "title": "Welcome",
+        "title": "Show Welcome Page",
         "category": "TestMyCode"
       },
       {
         "command": "tmc.submitExercise",
         "title": "Submit Solution",
-        "category": "TestMyCode"
+        "category": "TestMyCode",
+        "icon": "$(cloud-upload)"
       },
       {
         "command": "tmc.switchWorkspace",
-        "title": "Switch Course Workspace",
+        "title": "Switch Course Workspace...",
         "category": "TestMyCode"
       },
       {
         "command": "tmc.testExercise",
         "title": "Run Tests",
-        "icon": {
-          "dark": "resources/dark/test.svg",
-          "light": "resources/light/test.svg"
-        },
+        "icon": "$(beaker)",
         "category": "TestMyCode"
       },
       {
@@ -222,32 +224,24 @@
       },
       {
         "command": "tmc.debug",
-        "title": "Show Debug View",
+        "title": "Show Logs (Debug)",
         "category": "TestMyCode"
       },
       {
         "command": "tmc.wipe",
         "category": "TestMyCode",
-        "title": "Wipe all extension data"
+        "title": "Wipe All Extension Data..."
       },
       {
         "command": "tmc.viewInitializationErrorHelp",
-        "title": "View initialization error help",
+        "title": "Show Initialization Error Help",
         "category": "TestMyCode"
       },
       {
         "command": "tmcTreeView.refreshCourses",
-        "title": "Fetch Course Updates",
+        "title": "Refresh Courses",
         "category": "TestMyCode",
-        "icon": {
-          "light": "resources/light/refresh.svg",
-          "dark": "resources/dark/refresh.svg"
-        }
-      },
-      {
-        "command": "tmcView.activateEntry",
-        "title": "Activate",
-        "category": "TestMyCode"
+        "icon": "$(refresh)"
       }
     ],
     "configuration": {
@@ -256,12 +250,14 @@
         "testMyCode.downloadOldSubmission": {
           "type": "boolean",
           "default": true,
-          "description": "When downloading exercises, download your latest submission instead of the exercise template."
+          "description": "When downloading exercises, download your latest submission instead of the exercise template.",
+          "order": 0
         },
         "testMyCode.hideMetaFiles": {
           "type": "boolean",
           "default": true,
-          "description": "Hide exercise meta files that are not relevant for completing exercises."
+          "description": "Hide exercise meta files that are not relevant for completing exercises.",
+          "order": 2
         },
         "testMyCode.logLevel": {
           "type": "string",
@@ -276,18 +272,22 @@
             "No extension logging.",
             "Log only warning and error messages.",
             "Log info, warning and error messages."
-          ]
+          ],
+          "order": 4,
+          "description": "How much TestMyCode writes to its log, which Show Logs opens."
         },
         "testMyCode.updateExercisesAutomatically": {
           "type": "boolean",
           "default": true,
-          "description": "Download exercise updates automatically."
+          "description": "Download exercise updates automatically.",
+          "order": 1
         },
         "testMyCode.javaHome": {
           "type": "string",
           "scope": "machine-overridable",
           "default": "",
-          "description": "Path to the JDK used for Java exercises, such as /usr/lib/jvm/java-21. Leave empty to use the Java found on your PATH."
+          "description": "Path to the JDK used for Java exercises, such as /usr/lib/jvm/java-21. Leave empty to use the Java found on your PATH.",
+          "order": 3
         }
       }
     },
@@ -307,7 +307,7 @@
         },
         {
           "command": "tmc.downloadOldSubmission",
-          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.logout",
@@ -319,11 +319,11 @@
         },
         {
           "command": "tmc.pasteExercise",
-          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.resetExercise",
-          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.showMoocLogin",
@@ -331,7 +331,7 @@
         },
         {
           "command": "tmc.submitExercise",
-          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.updateExercises",
@@ -346,20 +346,16 @@
           "when": "false"
         },
         {
-          "command": "tmcView.activateEntry",
-          "when": "false"
-        },
-        {
           "command": "tmc.testExercise",
-          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise"
         },
         {
           "command": "tmc.closeExercise",
-          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise"
         },
         {
           "command": "tmc.cleanExercise",
-          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise"
         },
         {
           "command": "tmc.debug",
@@ -382,83 +378,185 @@
           "when": "test-my-code:Initialized && test-my-code:LoggedIn"
         },
         {
-          "command": "tmc.selectAction",
-          "when": "test-my-code:WorkspaceActive"
-        },
-        {
           "command": "tmc.showWelcome",
           "when": "test-my-code:Initialized"
+        },
+        {
+          "command": "tmc.openCourseWorkspace",
+          "when": "false"
+        },
+        {
+          "command": "tmc.removeCourse",
+          "when": "test-my-code:Initialized && test-my-code:LoggedIn"
         }
       ],
       "editor/title": [
         {
-          "command": "tmc.selectAction",
-          "group": "navigation@1",
-          "when": "resourceScheme == file && test-my-code:WorkspaceActive"
-        },
-        {
           "command": "tmc.testExercise",
           "group": "navigation@0",
-          "when": "resourceScheme == file && test-my-code:Initialized && test-my-code:WorkspaceActive"
+          "when": "test-my-code:Initialized && test-my-code:ActiveEditorIsExercise"
+        },
+        {
+          "command": "tmc.submitExercise",
+          "group": "navigation@1",
+          "when": "test-my-code:Initialized && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn"
+        },
+        {
+          "submenu": "tmc.exercise",
+          "group": "1_testmycode",
+          "when": "test-my-code:Initialized && test-my-code:ActiveEditorIsExercise"
         }
       ],
       "explorer/context": [
         {
-          "command": "tmc.cleanExercise",
-          "group": "TestMyCode@6",
+          "submenu": "tmc.exercise",
+          "group": "testmycode",
           "when": "resourceScheme == file && test-my-code:Initialized && test-my-code:WorkspaceActive"
-        },
+        }
+      ],
+      "tmc.exercise": [
         {
-          "command": "tmc.closeExercise",
-          "group": "TestMyCode@3",
-          "when": "resourceScheme == file && test-my-code:Initialized && test-my-code:WorkspaceActive"
-        },
-        {
-          "command": "tmc.downloadOldSubmission",
-          "group": "TestMyCode@5",
-          "when": "resourceScheme == file && test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
-        },
-        {
-          "command": "tmc.pasteExercise",
-          "group": "TestMyCode@2",
-          "when": "resourceScheme == file && test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
-        },
-        {
-          "command": "tmc.resetExercise",
-          "group": "TestMyCode@4",
-          "when": "resourceScheme == file && test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+          "command": "tmc.testExercise",
+          "group": "1_check@1",
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive"
         },
         {
           "command": "tmc.submitExercise",
-          "group": "TestMyCode@1",
-          "when": "resourceScheme == file && test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+          "group": "1_check@2",
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
         },
         {
-          "command": "tmc.testExercise",
-          "group": "TestMyCode@0",
-          "when": "resourceScheme == file && test-my-code:Initialized && test-my-code:WorkspaceActive"
+          "command": "tmc.pasteExercise",
+          "group": "1_check@3",
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.downloadOldSubmission",
+          "group": "2_restore@1",
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.resetExercise",
+          "group": "2_restore@2",
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.cleanExercise",
+          "group": "3_close@1",
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive"
+        },
+        {
+          "command": "tmc.closeExercise",
+          "group": "3_close@2",
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive"
         }
       ],
       "view/title": [
         {
           "command": "tmc.addNewCourse",
+          "group": "navigation@1",
           "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn"
         },
         {
           "command": "tmcTreeView.refreshCourses",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn",
-          "group": "navigation"
+          "group": "navigation@2",
+          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.myCourses",
+          "group": "1_courses@1",
+          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.openTMCExercisesFolder",
+          "group": "1_courses@2",
+          "when": "view == tmcView && test-my-code:Initialized"
+        },
+        {
+          "command": "tmc.logout",
+          "group": "2_account@1",
+          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.settings",
+          "group": "3_help@1",
+          "when": "view == tmcView"
+        },
+        {
+          "command": "tmc.logs",
+          "group": "3_help@2",
+          "when": "view == tmcView"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "tmc.downloadNewExercises",
+          "group": "inline@1",
+          "when": "view == tmcView && viewItem =~ /\\.hasNew$/ && test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.openCourseWorkspace",
+          "group": "inline@2",
+          "when": "view == tmcView && viewItem =~ /^course\\./ && test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.courseDetails",
+          "group": "1_course@1",
+          "when": "view == tmcView && viewItem =~ /^course\\./ && test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.openCourseWorkspace",
+          "group": "1_course@2",
+          "when": "view == tmcView && viewItem =~ /^course\\./ && test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.downloadNewExercises",
+          "group": "1_course@3",
+          "when": "view == tmcView && viewItem =~ /\\.hasNew$/ && test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.removeCourse",
+          "group": "9_remove@1",
+          "when": "view == tmcView && viewItem =~ /^course\\./ && test-my-code:Initialized && test-my-code:LoggedIn"
         }
       ]
     },
+    "submenus": [
+      {
+        "id": "tmc.exercise",
+        "label": "TestMyCode"
+      }
+    ],
     "views": {
       "tmc": [
         {
           "id": "tmcView",
-          "name": "Menu"
+          "name": "Courses"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "tmcView",
+        "when": "!test-my-code:Initialized && !test-my-code:Degraded",
+        "contents": "Starting TestMyCode…\n[Show Logs](command:tmc.logs)"
+      },
+      {
+        "view": "tmcView",
+        "when": "test-my-code:Degraded",
+        "contents": "TestMyCode could not start, so its courses and exercises are unavailable.\n[Show Details](command:tmc.viewInitializationErrorHelp)\n[Restart Extension Host](command:workbench.action.restartExtensionHost)\n[Show Logs](command:tmc.logs)"
+      },
+      {
+        "view": "tmcView",
+        "when": "test-my-code:Initialized && !test-my-code:LoggedIn",
+        "contents": "Log in with your courses.mooc.fi account to download, test and submit exercises.\n[Log In](command:tmc.showMoocLogin)\n[Read the installation guide](https://www.mooc.fi/en/installation/vscode)"
+      },
+      {
+        "view": "tmcView",
+        "when": "test-my-code:Initialized && test-my-code:LoggedIn",
+        "contents": "You have not added any courses yet.\n[Add a Course](command:tmc.addNewCourse)\n[Open My Courses](command:tmc.myCourses)"
+      }
+    ],
     "viewsContainers": {
       "activitybar": [
         {

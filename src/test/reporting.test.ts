@@ -121,6 +121,9 @@ async function harness(
     errorNotification: toast("error"),
     warningNotification: toast("warning"),
     notification: toast("info"),
+    statusMessage: vi.fn((message: string) => {
+      shown.push(`status: ${message}`)
+    }),
     confirm: vi.fn(async () => true),
     explicitConfirmation: vi.fn(async () => true),
     // Takes the first offer of every prompt: the course, the submission, "Submit and …".
@@ -252,7 +255,8 @@ beforeEach(function () {
 
 // jest-mock-vscode ships no `env` namespace; the old-submission picker formats dates with it.
 beforeAll(function () {
-  Object.defineProperty(vscode, "env", { value: { language: "en" }, configurable: true })
+  const vscodeModule: object = vscode
+  Object.defineProperty(vscodeModule, "env", { value: { language: "en" }, configurable: true })
 })
 
 suite("reported once: exercise commands", function () {
@@ -480,7 +484,25 @@ suite("reported once: course administration", function () {
       },
     })
 
-    await run("tmc.addNewCourse")
+    // A quick pick that accepts the first course row as soon as one is listed.
+    const accept = new vscode.EventEmitter<void>()
+    const quickPick = {
+      items: [] as { choice?: unknown }[],
+      selectedItems: [] as unknown[],
+      buttons: [],
+      onDidAccept: accept.event,
+      onDidHide: () => ({ dispose() {} }),
+      onDidTriggerButton: () => ({ dispose() {} }),
+      show() {},
+      hide() {},
+      dispose() {},
+    }
+    vi.spyOn(vscode.window, "createQuickPick").mockReturnValue(quickPick as never)
+    const running = run("tmc.addNewCourse")
+    await vi.waitFor(() => expect(quickPick.items.some((x) => x.choice)).toBe(true))
+    quickPick.selectedItems = [quickPick.items.find((x) => x.choice)]
+    accept.fire()
+    await running
 
     expect(shown).toEqual(["error: Failed to add course."])
   })
@@ -495,7 +517,7 @@ suite("reported once: course administration", function () {
     await run("tmc.changeTmcDataPath")
     fs.removeSync(target)
 
-    expect(shown).toEqual(["error: Failed to move the projects directory."])
+    expect(shown).toEqual(["error: Failed to move the exercises folder."])
   })
 
   test("a wipe that fails is one notification, and does not reload", async function () {
@@ -646,7 +668,7 @@ suite("reported once: My Courses and course details", function () {
     await loud.run("tmc.updateExercises", "loud")
     await silent.run("tmc.updateExercises", "silent")
 
-    expect(loud.shown).toEqual(["error: Failed to check for exercise updates."])
+    expect(loud.shown).toEqual(["error: Failed to check courses.mooc.fi for exercise updates."])
     expect(silent.shown).toEqual([])
   })
 
@@ -660,7 +682,7 @@ suite("reported once: My Courses and course details", function () {
 
     await run("tmc.updateExercises", "loud")
 
-    expect(shown).toEqual(["info: All exercises are up to date."])
+    expect(shown).toEqual(["status: All exercises are up to date."])
   })
 
   test("a course that fails to refresh from its panel shows in the panel only", async function () {
@@ -735,14 +757,14 @@ suite("reported once: the refresh", function () {
     await commands.refreshEverything(actionContext, { silent: true })
     const offer = vi
       .mocked(actionContext.dialog.notification)
-      .mock.calls.find(([message]) => message.startsWith("Found 1 new exercises"))
+      .mock.calls.find(([message]) => message.includes("new exercise"))
     vi.spyOn(storage, "updateUserData").mockRejectedValue(new Error("disk full"))
     offer?.[2]?.[1]()
 
     await vi.waitFor(() =>
       expect(shown).toEqual([
-        `info: Found 1 new exercises for ${COURSE}. Do you wish to download them now?`,
-        "error: Failed to postpone the reminder.",
+        "info: Mooc Course has 1 new exercise. Download it now?",
+        "error: Failed to postpone the reminder for Mooc Course.",
       ]),
     )
   })

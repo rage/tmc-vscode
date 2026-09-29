@@ -20,7 +20,7 @@ function contextWith(
       ...createMockActionContext({
         startup: {
           langs: { unsetSetting } as unknown as ReadyStartup["langs"],
-          userData: userData as ReadyStartup["userData"],
+          userData: { getCourses: () => [], ...userData } as ReadyStartup["userData"],
           workspaceManager: {
             activeCourse: undefined,
             activeCourseBackend: undefined,

@@ -11,6 +11,7 @@ import { resetExercise } from "../../commands/resetExercise"
 import type { UserData } from "../../config/userdata"
 import { acquireSingleFlight, releaseSingleFlight } from "../../utilities"
 import { createMockActionContext } from "../mocks/actionContext"
+import { createDialogMock } from "../mocks/dialog"
 
 suite("Reset exercise command", function () {
   const uri = vscode.Uri.file("/workspace/mooc/course/ex-1")
@@ -32,14 +33,13 @@ suite("Reset exercise command", function () {
     reset = vi.fn(async () => Ok.EMPTY)
     notification = vi.fn()
     prompts = []
-    const dialog = {
-      ...base.dialog,
+    const dialog = Object.assign(createDialogMock()[0], {
       choose: vi.fn(async (message: string, _options: unknown, ...choices: [string, unknown][]) => {
         prompts.push({ message, labels: choices.map(([label]) => label) })
         return choices.find(([label]) => label === answer)?.[1]
       }),
       notification,
-    } as unknown as ActionContext["dialog"]
+    }) as unknown as ActionContext["dialog"]
 
     return {
       ...base,
@@ -77,6 +77,18 @@ suite("Reset exercise command", function () {
     await resetExercise(actionContext("Submit and Reset"), uri)
 
     expect(reset).toHaveBeenCalledExactlyOnceWith(expect.anything(), uri.fsPath, true)
+  })
+
+  test("shows progress while resetting and says in the status bar when done", async function () {
+    const context = actionContext("Reset Without Submitting")
+
+    await resetExercise(context, uri)
+
+    expect(context.dialog.progressNotification).toHaveBeenCalledWith(
+      "Resetting ex-1…",
+      expect.any(Function),
+    )
+    expect(context.dialog.statusMessage).toHaveBeenCalledExactlyOnceWith("Reset ex-1.")
   })
 
   test("resets nothing when the confirmation is cancelled", async function () {

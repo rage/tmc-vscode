@@ -57,7 +57,7 @@ That function is the single source of those names: "TMC Server" and
 ### One login
 
 There is a single login: the courses.mooc.fi device flow (`tmc.showMoocLogin`,
-reached from the Command Palette, the tree view's "Log in" entry and the
+reached from the Command Palette, the Courses view's logged-out welcome content and the
 session-expired prompt). The TMC username/password login is gone; `tmc-server`
 accepts courses.mooc.fi access tokens by introspecting them, so the CLI
 authenticates the tmc backend with the same credential. A tmc token already in
@@ -158,7 +158,7 @@ and its `WebviewApi<never>` says the webview's own state bag stays empty.
 
 **Panels are deliberately not restored across a window reload.** No
 `WebviewPanelSerializer` is registered: after a reload the TestMyCode panel is
-gone and the user reopens it from the tree view or the command palette. Making it
+gone and the user reopens it from the Courses view or the command palette. Making it
 survive would mean persisting panel state where the extension host cannot see it
 and reconstructing it from data that may since have changed; reopening is one
 click. If that changes, register the serializer in `activateInner` and validate

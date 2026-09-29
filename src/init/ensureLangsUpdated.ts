@@ -265,7 +265,7 @@ async function downloadLangs(
   const tempPath = path.join(cliFolder, `temp-${executable}`)
 
   Logger.info(`Downloading TMC-langs from ${cliUrl} to temporary file ${tempPath}`)
-  const message = `Downloading TMC-langs ${version}...`
+  const message = `Downloading the TestMyCode tools (${version})…`
   const langsDownloadResult = await dialog.progressNotification(
     message,
     async (progress, token) => {

@@ -80,6 +80,40 @@ suite("Settings", function () {
     ])
   })
 
+  // The workspace file keeps its own copy, which would otherwise shadow the User tab for as
+  // long as the course workspace is open.
+  test("a User-tab edit reaches the subscriber over a stale workspace copy", async function () {
+    const notified: boolean[] = []
+    settings.onChangeDownloadOldSubmission = (value): void => void notified.push(value)
+    stubConfiguration({
+      downloadOldSubmission: { defaultValue: false, globalValue: true, workspaceValue: true },
+    })
+    await changeSection("testMyCode.downloadOldSubmission")
+    stubConfiguration({
+      downloadOldSubmission: { defaultValue: false, globalValue: false, workspaceValue: true },
+    })
+    await changeSection("testMyCode.downloadOldSubmission")
+
+    expect(notified).toEqual([true, false])
+  })
+
+  test("a workspace edit leaves the User value alone", async function () {
+    const notified: boolean[] = []
+    settings.onChangeDownloadOldSubmission = (value): void => void notified.push(value)
+    stubConfiguration({
+      downloadOldSubmission: { defaultValue: false, globalValue: false, workspaceValue: false },
+    })
+    await changeSection("testMyCode.downloadOldSubmission")
+
+    expect(notified).toEqual([false])
+  })
+
+  test("a setting the workspace has no copy of reads the User value", function () {
+    stubConfiguration({ updateExercisesAutomatically: { defaultValue: true, globalValue: false } })
+
+    expect(settings.getAutomaticallyUpdateExercises()).toBe(false)
+  })
+
   test("a change to an unrelated section notifies nobody", async function () {
     const configure = vi.spyOn(Logger, "configure").mockImplementation(() => {})
     const notified: string[] = []

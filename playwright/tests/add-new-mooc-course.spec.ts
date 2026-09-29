@@ -83,7 +83,7 @@ vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ pag
       .getByRole("heading", { name: "Tests passed" })
     await page.getByText(fileContents).click()
     await expect(successMessage).toBeHidden()
-    // The editor-title action is contributed under `test-my-code:WorkspaceActive`
+    // The editor-title action is contributed under `test-my-code:ActiveEditorIsExercise`
     // (package.json), so it renders only once the extension has recognised the
     // open exercise.
     const runTests = page.getByLabel("Run Tests", { exact: true })

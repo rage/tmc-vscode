@@ -14,7 +14,7 @@ export type AuthCheck = Record<BackendKind, Result<boolean, Error>>
  *
  * Every consumer reads it from here rather than asking the CLI: a check is a
  * cold process start, and the answers have to agree across the context key, the
- * tree view, the background poll and the actions.
+ * Courses view, the background poll and the actions.
  */
 export interface AuthState {
   /** Whether the tmc backend can be authenticated. */
@@ -48,7 +48,7 @@ export interface AuthState {
   insufficientScopeReported: boolean
 }
 
-/** The part of the tree view {@link createAuthState} keeps in step with the session. */
+/** The part of the Courses view {@link createAuthState} keeps in step with the session. */
 interface LoggedInView {
   treeDP: { setLoggedIn: (loggedIn: boolean) => void }
 }
@@ -56,7 +56,7 @@ interface LoggedInView {
 /**
  * Builds the {@link AuthState} for one activation.
  *
- * It applies `test-my-code:LoggedIn` and the tree view's logged-in half itself,
+ * It applies `test-my-code:LoggedIn` and the Courses view's logged-in state itself,
  * so nothing else may set either.
  */
 export function createAuthState(langs: Result<Langs, Error>, ui: LoggedInView): AuthState {

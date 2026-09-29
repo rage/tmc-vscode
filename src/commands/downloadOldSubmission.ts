@@ -10,7 +10,7 @@ import { failure } from "../api/withOperation"
 import { BottleneckError } from "../errors"
 import type { MoocOldSubmissionRestore } from "../shared/langsSchema"
 import { backendName, ExerciseIdentifier } from "../shared/shared"
-import { Logger, parseDate } from "../utilities"
+import { parseDate } from "../utilities"
 import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
 import { runForExercise } from "./runForExercise"
 
@@ -67,8 +67,10 @@ export async function downloadOldSubmission(
       }
 
       const id = ExerciseIdentifier.from(exerciseId)
-      Logger.debug("Fetching old submissions")
-      const submissionsResult = await listOldSubmissions(actionContext, id)
+      const submissionsResult = await dialog.progressNotification(
+        `Fetching the submissions of ${exercise.exerciseSlug}…`,
+        () => listOldSubmissions(actionContext, id),
+      )
       if (submissionsResult.err) {
         return failure("Failed to fetch old submissions.", submissionsResult.val)
       }
@@ -101,12 +103,19 @@ export async function downloadOldSubmission(
 
       const editor = vscode.window.activeTextEditor
       const document = editor?.document.uri
-      const restoreResult: Result<MoocOldSubmissionRestore, Error> = await restoreOldSubmission(
-        actionContext,
-        exercise.uri.fsPath,
-        submission.target,
-        submitFirst,
-      )
+      const restoreResult: Result<MoocOldSubmissionRestore, Error> =
+        await dialog.progressNotification(
+          submitFirst
+            ? `Submitting ${exercise.exerciseSlug} and restoring the old submission…`
+            : `Restoring the old submission of ${exercise.exerciseSlug}…`,
+          () =>
+            restoreOldSubmission(
+              actionContext,
+              exercise.uri.fsPath,
+              submission.target,
+              submitFirst,
+            ),
+        )
       // A busy rejection means the restore never ran, so there is nothing on disk to
       // revert the editor to.
       if (
@@ -123,6 +132,8 @@ export async function downloadOldSubmission(
         // Reachable only for an exercise type with no files at all, so never for a tmc
         // exercise. Nothing was changed, so this is ordinary news rather than a failure.
         dialog.notification("That submission has no files to download.")
+      } else {
+        dialog.statusMessage(`Restored the old submission of ${exercise.exerciseSlug}.`)
       }
       return Ok.EMPTY
     },

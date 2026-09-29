@@ -14,6 +14,10 @@ export async function cleanExercise(
 ): Promise<void> {
   await runForExercise(actionContext, resource, "Cleaning the exercise", async (exercise) => {
     const result = await cleanExerciseAction(actionContext, exercise)
-    return result.err ? failure("Failed to clean exercise.", result.val) : result
+    if (result.err) {
+      return failure("Failed to clean exercise.", result.val)
+    }
+    actionContext.dialog.statusMessage(`Cleaned ${exercise.exerciseSlug}.`)
+    return result
   })
 }

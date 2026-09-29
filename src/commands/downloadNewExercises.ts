@@ -3,19 +3,30 @@ import { Ok } from "ts-results"
 import { downloadNewExercisesForCourse } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure, withOperation } from "../api/withOperation"
+import type { CourseIdentifier } from "../shared/shared"
 import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
 import { pickCourse } from "./pickCourse"
 
-export async function downloadNewExercises(actionContext: ReadyActionContext): Promise<void> {
+/**
+ * Downloads the exercises a course has gained since they were last downloaded.
+ *
+ * @param target The course; asks the user to pick one when omitted.
+ */
+export async function downloadNewExercises(
+  actionContext: ReadyActionContext,
+  target?: CourseIdentifier,
+): Promise<void> {
   const { dialog } = actionContext
   const { userData } = actionContext.startup
   Logger.info("Downloading new exercises")
 
-  const courseId = await pickCourse(actionContext, {
-    title: "Download New Exercises",
-    placeHolder: "Download new exercises for course?",
-  })
+  const courseId =
+    target ??
+    (await pickCourse(actionContext, {
+      title: "Download New Exercises",
+      placeHolder: "Which course's new exercises do you want to download?",
+    }))
   if (!courseId) {
     return
   }

@@ -29,43 +29,55 @@ import {
 } from "./config/constants"
 import Settings from "./config/settings"
 import { UserData } from "./config/userdata"
-import { EmptyLangsResponseError, FileSystemError, InitializationError, SpawnError } from "./errors"
+import { FileSystemError, InitializationError, presentationFor } from "./errors"
 import * as init from "./init"
-import { nextPanelId, TmcPanel } from "./panels/TmcPanel"
 import { createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
+import { trackActiveEditorExercise } from "./ui/activeExerciseContext"
+import { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import UI from "./ui/ui"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
 
-/**
- * Builds the reporter an activation uses for the initialization steps that fail.
- *
- * One root cause -- an unreachable CLI, say -- fails most of the steps that follow, so the
- * reporter notifies once per distinct error and only logs the repeats. Each activation
- * needs its own, or a later one would stay silent about a failure it shares with the first.
- */
-function makeInitializationErrorReporter(
-  dialog: Dialog,
-  langsFolder: string,
-): (step: string, error: Error) => void {
-  const alreadyReported = new Set<string>()
-  return (step, error) => {
-    const message =
-      `Initialization error during ${step}. If this issue is not resolved, the extension may` +
-      " not function properly."
-    const signature = `${error.name}\n${error.message}`
-    if (alreadyReported.has(signature)) {
-      Logger.error(message, error)
-      return
-    }
-    alreadyReported.add(signature)
-    void dialog.reportError(message, error)
-    if (error instanceof EmptyLangsResponseError || error instanceof SpawnError) {
+interface InitializationErrorReporter {
+  /** Logs a failed step; the user hears about it from {@link notify}. */
+  record: (step: string, error: Error) => void
+  /**
+   * Shows one notification for everything recorded, if anything was: one root cause, an
+   * unreachable CLI say, fails most of the steps after it.
+   */
+  notify: (isDegraded: boolean) => void
+}
+
+/** Builds the reporter an activation uses for its initialization steps that fail. */
+function makeInitializationErrorReporter(dialog: Dialog): InitializationErrorReporter {
+  const failures: { step: string; error: Error }[] = []
+  return {
+    record: (step, error) => {
+      Logger.error(`Initialization error: ${step} failed.`, error)
+      failures.push({ step, error })
+    },
+    notify: (isDegraded) => {
+      const [first] = failures
+      if (!first) {
+        return
+      }
+      const { message } = presentationFor(first.error)
+      const others =
+        new Set(failures.map(({ error }) => `${error.name}\n${error.message}`)).size - 1
+      const more =
+        others > 0
+          ? ` ${others} more ${others === 1 ? "problem is" : "problems are"} in the logs.`
+          : ""
       void dialog.errorNotification(
-        "This error may have been caused by an interfering antivirus program. " +
-          `Please try adding an exception for the following folder: ${langsFolder}`,
+        `TestMyCode ${isDegraded ? "could not start" : "started with a problem"}. ` +
+          `${first.step} failed: ${message}${more}`,
+        first.error,
+        [
+          "Show Details",
+          (): void => void vscode.commands.executeCommand("tmc.viewInitializationErrorHelp"),
+        ],
       )
-    }
+    },
   }
 }
 
@@ -99,7 +111,11 @@ async function reopenInMigratedWorkspace(
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   try {
-    await activateInner(context)
+    // The Courses view shows "Starting TestMyCode…" until activation settles; this gives it
+    // a progress bar too.
+    await vscode.window.withProgress({ location: { viewId: COURSES_VIEW_ID } }, () =>
+      activateInner(context),
+    )
   } catch (e) {
     // this should never occur, we always want to activate the extension even if only partially
     Logger.error("Fatal error during initialization:", e)
@@ -132,11 +148,11 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   const dialog = new Dialog()
   const ui = new UI()
   context.subscriptions.push(ui)
-  init.registerServiceFreeCommands(context, dialog, ui)
-  const cliFolderPath = cliFolder(context)
-  const reportInitializationError = makeInitializationErrorReporter(dialog, cliFolderPath)
+  init.registerServiceFreeCommands(context, dialog)
+  const initializationErrors = makeInitializationErrorReporter(dialog)
+  const reportInitializationError = initializationErrors.record
   const cliPathResult = await init.ensureLangsUpdated(
-    cliFolderPath,
+    cliFolder(context),
     dialog,
     { downloadUrl: TMC_LANGS_DL_URL, version: TMC_LANGS_VERSION },
     context.globalState,
@@ -146,7 +162,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   let langs: Result<Langs, Error>
   if (cliPathResult.err) {
     langs = cliPathResult
-    reportInitializationError("tmc-langs setup", cliPathResult.val)
+    reportInitializationError("Setting up the TestMyCode tools", cliPathResult.val)
   } else {
     // fire-and-forget: verify the CLI's output contract matches this build's schema
     void init.verifyCliSchema(cliPathResult.val, context.extensionPath)
@@ -162,7 +178,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   const authState = createAuthState(langs, ui)
   const initialAuthCheck = await authState.refresh({ timeout: 15000 })
   if (initialAuthCheck.tmc.err) {
-    reportInitializationError("authentication check", initialAuthCheck.tmc.val)
+    reportInitializationError("Checking your login", initialAuthCheck.tmc.val)
   }
   if (initialAuthCheck.mooc.err) {
     Logger.warn("Could not check mooc login status", initialAuthCheck.mooc.val)
@@ -184,9 +200,9 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
         Logger.warn("Extension expected to restart to migrate the open workspace")
         return
       }
-      reportInitializationError("migration", reopened.val)
+      reportInitializationError("Migrating stored data", reopened.val)
     } else if (migration.kind === "failed") {
-      reportInitializationError("migration", migration.error)
+      reportInitializationError("Migrating stored data", migration.error)
     }
   } else {
     Logger.warn("Skipped data migration")
@@ -201,10 +217,10 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     )
     if (dataPathResult.err) {
       Logger.error("Failed to define datapath:", dataPathResult.val)
-      reportInitializationError("finding datapath", dataPathResult.val)
+      reportInitializationError("Finding the exercises folder", dataPathResult.val)
     } else if (dataPathResult.val === undefined) {
       Logger.error("Failed to define datapath: no value found.")
-      reportInitializationError("finding datapath", new Error("No value for datapath."))
+      reportInitializationError("Finding the exercises folder", new Error("No value for datapath."))
     } else {
       tmcDataPath = dataPathResult.val
     }
@@ -218,7 +234,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     workspaceFileFolder,
   )
   if (resources.err) {
-    reportInitializationError("resource initialization", resources.val)
+    reportInitializationError("Preparing the extension's files", resources.val)
   }
 
   // Armed only while logged in: each round is two cold CLI starts, and a session can only
@@ -280,7 +296,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     Logger.warn("Skipped login command setup")
   }
 
-  let showWelcome = false
+  let versionChange: "installed" | "updated" | undefined
   if (resources.ok) {
     const currentVersion = resources.val.extensionVersion
     try {
@@ -289,8 +305,10 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
         storage.updateSessionState({ extensionVersion: currentVersion })
       }
       const versionDiff = semVerCompare(currentVersion, previousVersion || "", "minor")
-      if (versionDiff === undefined || versionDiff > 0) {
-        showWelcome = true
+      if (versionDiff === undefined) {
+        versionChange = "installed"
+      } else if (versionDiff > 0) {
+        versionChange = "updated"
       }
     } catch (e) {
       // An unreadable session state costs the welcome page, nothing else.
@@ -316,7 +334,10 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
             ),
       ),
     )
-    context.subscriptions.push(workspaceManager.val)
+    context.subscriptions.push(
+      workspaceManager.val,
+      trackActiveEditorExercise(workspaceManager.val),
+    )
     if (workspaceManager.val.activeCourse) {
       await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true)
       await workspaceManager.val.verifyWorkspaceSettingsIntegrity()
@@ -327,7 +348,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     } catch (e) {
       const error =
         e instanceof Error ? e : new InitializationError(e, "Could not read stored user data")
-      reportInitializationError("reading stored course data", error)
+      reportInitializationError("Reading your stored courses", error)
       userData = new Err(error)
     }
     exerciseDecorationProvider = userData.ok
@@ -395,7 +416,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     }
   }
 
-  init.registerUiActions(actionContext)
+  init.fillCoursesView(actionContext)
   init.registerCommands(context, actionContext)
   if (readyContext) {
     init.registerSettingsCallbacks(readyContext)
@@ -407,6 +428,11 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     "setContext",
     "test-my-code:Initialized",
     startup.kind === "ready",
+  )
+  await vscode.commands.executeCommand(
+    "setContext",
+    "test-my-code:Degraded",
+    startup.kind === "degraded",
   )
 
   if (exerciseDecorationProvider.ok) {
@@ -447,17 +473,17 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   setMaintenancePollArmed(authState.loggedIn)
 
   // `tmc.showWelcome` is registered only in the ready case, and VS Code rejects a command
-  // it cannot find -- which would abort the rest of this function, help panel included.
-  if (showWelcome && readyContext) {
+  // it cannot find -- which would abort the rest of this function.
+  if (readyContext && versionChange === "installed") {
     await vscode.commands.executeCommand("tmc.showWelcome")
+  } else if (readyContext && versionChange === "updated") {
+    void dialog.notification(`TestMyCode was updated to ${EXTENSION_VERSION}.`, [
+      "What's New",
+      (): void => void vscode.commands.executeCommand("tmc.showWelcome"),
+    ])
   }
 
-  if (!readyContext) {
-    TmcPanel.renderMain(context.extensionUri, context, actionContext, {
-      id: nextPanelId(),
-      type: "InitializationErrorHelp",
-    })
-  }
+  initializationErrors.notify(!readyContext)
 }
 
 // Everything activation starts is registered in `context.subscriptions`, which VS Code

@@ -2,8 +2,9 @@ import { Ok } from "ts-results"
 import { vi } from "vitest"
 
 import {
-  listAddableCourses,
+  listEnrolledMoocCourses,
   listOrganizationCourses,
+  listTmcOrganizations,
   MOOC_LOGIN,
 } from "../../actions/courseCatalog"
 import type { ReadyActionContext } from "../../actions/types"
@@ -40,22 +41,19 @@ function context(options: {
   })
 }
 
-suite("listAddableCourses", function () {
-  test("fetches both backends' listings when the mooc session is authenticated", async function () {
+suite("listEnrolledMoocCourses and listTmcOrganizations", function () {
+  test("fetch each backend's listing when the mooc session is authenticated", async function () {
     const ctx = context({})
-    const result = await listAddableCourses(ctx)
 
-    expect(result.organizations).toEqual(Ok(organizations))
-    expect(result.moocCourses).toEqual(Ok(moocCourses))
-    expect(ctx.startup.langs.getEnrolledMoocCourses).toHaveBeenCalledOnce()
+    expect(await listTmcOrganizations(ctx)).toEqual(Ok(organizations))
+    expect(await listEnrolledMoocCourses(ctx)).toEqual(Ok(moocCourses))
   })
 
   test("stands for a mooc login instead of fetching, when there is no mooc session", async function () {
     const getEnrolledMoocCourses = vi.fn(async () => Ok(moocCourses))
     const ctx = context({ moocAuthenticated: false, getEnrolledMoocCourses })
-    const result = await listAddableCourses(ctx)
 
-    expect(result.moocCourses).toBe(MOOC_LOGIN)
+    expect(await listEnrolledMoocCourses(ctx)).toBe(MOOC_LOGIN)
     expect(getEnrolledMoocCourses).not.toHaveBeenCalled()
   })
 })

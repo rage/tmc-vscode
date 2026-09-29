@@ -330,20 +330,20 @@ suite("Dialog.reportError", function () {
   })
 })
 
+function stubModal(press: (items: vscode.MessageItem[]) => vscode.MessageItem | undefined) {
+  return vi
+    .spyOn(vscode.window, "showWarningMessage")
+    .mockImplementation((async (
+      _message: string,
+      _options: unknown,
+      ...items: vscode.MessageItem[]
+    ) => press(items)) as never)
+}
+
 suite("Dialog.confirm and Dialog.choose", function () {
   afterEach(function () {
     vi.restoreAllMocks()
   })
-
-  function stubModal(press: (items: vscode.MessageItem[]) => vscode.MessageItem | undefined) {
-    return vi
-      .spyOn(vscode.window, "showWarningMessage")
-      .mockImplementation((async (
-        _message: string,
-        _options: unknown,
-        ...items: vscode.MessageItem[]
-      ) => press(items)) as never)
-  }
 
   test("confirm shows a modal whose one button is the given verb", async function () {
     const show = stubModal((items) => items[0])

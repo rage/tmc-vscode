@@ -3,12 +3,12 @@ import { clickUntilVisible, TmcPage } from "./tmc"
 // The courses.mooc.fi device-flow login screen, shown when no mooc credentials
 // are stored.
 export class MoocLoginPage extends TmcPage {
-  // Only reachable with no credentials at all: the entry is hidden once the
-  // extension considers the user logged in.
-  public async gotoFromTreeView(): Promise<void> {
+  // Only reachable with no credentials at all: the Courses view shows this welcome
+  // content only while the extension considers the user logged out.
+  public async gotoFromCoursesView(): Promise<void> {
     await this.openMenu()
     await clickUntilVisible(
-      this.page.getByRole("treeitem", { name: "Log in" }).locator("a"),
+      this.coursesViewWelcomeButton("Log In"),
       this.heading(),
       "the login screen did not open",
     )

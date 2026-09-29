@@ -129,7 +129,7 @@ suite("Wipe command", function () {
     expect(stepsRun).toEqual([])
     expect(context.dialog.confirm).not.toHaveBeenCalled()
     expect(context.dialog.errorNotification).toHaveBeenCalledWith(
-      "Wiping the extension data is unavailable: tmc-langs did not report an exercise directory.",
+      "Wiping the extension data is unavailable: the TestMyCode tools did not report where the exercises folder is.",
       expect.any(Error),
     )
   })

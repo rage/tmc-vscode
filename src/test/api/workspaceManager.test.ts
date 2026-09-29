@@ -199,6 +199,17 @@ suite("WorkspaceManager class", function () {
       expect(result.ok).toBe(true)
       expect(updateWorkspaceFolders).not.toHaveBeenCalled()
     })
+
+    test("announces each replacement of the known exercises", async function () {
+      const open = exercise("mooc", "my python course", "hello_world", ExerciseStatus.Open)
+      const manager = new WorkspaceManager(resources, persistForCourse)
+      const changed = vi.fn()
+      manager.onDidChangeExercises(changed)
+
+      await manager.setExercises([open])
+
+      expect(changed).toHaveBeenCalledOnce()
+    })
   })
 
   suite("exercise lookup by path", function () {

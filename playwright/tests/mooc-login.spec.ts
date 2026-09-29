@@ -9,7 +9,7 @@ import { MyCoursesPage } from "../pages/my-courses"
 // exercise-services spec.
 //
 // The fixture seeds tmc credentials, so the extension starts logged in and the
-// tree view's "Log in" entry is hidden; these specs reach the device flow through
+// Courses view offers no Log In; these specs reach the device flow through
 // the add-course quick pick, which offers it while the (separate, absent) mooc
 // credentials are missing.
 
@@ -101,17 +101,20 @@ vsCodeTest.describe(() => {
   )
 })
 
-// The route a brand-new user takes: no credentials at all, so the tree view's
-// "Log in" entry is the only way in. It runs the same command as the Command
+// The route a brand-new user takes: no credentials at all, so the Courses view's
+// welcome content offers Log In. It runs the same command as the Command
 // Palette's "TestMyCode: Log In".
 vsCodeTest.describe(() => {
   vsCodeTest.use({ seedTmcCredentials: false })
 
-  vsCodeTest("the tree view's Log in entry starts the device flow", async ({ page, webview }) => {
-    const moocLoginPage = new MoocLoginPage(page, webview)
+  vsCodeTest(
+    "the Courses view's Log In button starts the device flow",
+    async ({ page, webview }) => {
+      const moocLoginPage = new MoocLoginPage(page, webview)
 
-    await moocLoginPage.gotoFromTreeView()
-    await expect(moocLoginPage.heading()).toBeVisible()
-    await expect(moocLoginPage.userCode()).toBeVisible()
-  })
+      await moocLoginPage.gotoFromCoursesView()
+      await expect(moocLoginPage.heading()).toBeVisible()
+      await expect(moocLoginPage.userCode()).toBeVisible()
+    },
+  )
 })

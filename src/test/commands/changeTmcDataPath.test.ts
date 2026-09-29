@@ -68,7 +68,7 @@ suite("Change TMC data path command", function () {
     await changeTmcDataPath(context)
 
     expect(notifications).toEqual([
-      `TMC Data was successfully moved to ${vscode.Uri.file(CHOSEN_PATH).fsPath}`,
+      `Moved the exercises folder to ${vscode.Uri.file(CHOSEN_PATH).fsPath}.`,
     ])
   })
 
@@ -90,7 +90,7 @@ suite("Change TMC data path command", function () {
     await changeTmcDataPath(context)
 
     expect(context.dialog.errorNotification).toHaveBeenCalledExactlyOnceWith(
-      "Changing the data path is unavailable: tmc-langs did not report an exercise directory.",
+      "Moving the exercises folder is unavailable: the TestMyCode tools did not report where the exercises folder is.",
       expect.any(Error),
     )
     expect(vscode.window.showOpenDialog).not.toHaveBeenCalled()
@@ -108,6 +108,6 @@ suite("Change TMC data path command", function () {
     await changeTmcDataPath(context)
 
     expect(notifications).toEqual([])
-    expect(errors).toEqual(["Failed to move the projects directory."])
+    expect(errors).toEqual(["Failed to move the exercises folder."])
   })
 })

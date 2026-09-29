@@ -63,7 +63,7 @@ export function createMockActionContext(
     authState: createMockAuthState(options.authenticated),
     dialog: dialogRunningProgressTasks(),
     settings: autoMock<Settings>(),
-    ui: autoMock<UI>(),
+    ui: { treeDP: autoMock<UI["treeDP"]>() } as unknown as UI,
     startup: {
       kind: "ready",
       exerciseDecorationProvider: autoMock<ExerciseDecorationProvider>(),

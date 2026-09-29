@@ -454,7 +454,7 @@ suite("Langs CLI process cancellation", function () {
     endProcess(langsProcess)
 
     const result = await login.result
-    expect((result.val as Error).message).toContain("killed")
+    expect((result.val as Error).message).toBe("The TestMyCode tools were stopped.")
     expect(killedProcessTrees()).toContain(langsProcess.pid)
   })
 
