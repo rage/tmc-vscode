@@ -169,10 +169,10 @@ export function testResultData(overrides: Partial<TestResultData> = {}): TestRes
   }
 }
 
-// a single-part exercise group referencing a mooc (uuid) exercise id
+// the one group a mooc course has, named after it, referencing a mooc (uuid) exercise id
 export function moocExerciseGroup(overrides: Partial<ExerciseGroup> = {}): ExerciseGroup {
   return {
-    name: "part01",
+    name: "MOOC Python",
     nextDeadlineString: "No deadline",
     exercises: [
       {

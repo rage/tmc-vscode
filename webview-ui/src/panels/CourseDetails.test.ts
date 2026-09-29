@@ -1,5 +1,4 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte"
-import type { VscodeCollapsible } from "@vscode-elements/elements"
 
 import type { CourseDetailsPanel } from "../shared/shared"
 import { makeMoocKind, makeTmcKind } from "../shared/shared"
@@ -21,16 +20,8 @@ async function checkSelectAll(container: HTMLElement): Promise<void> {
   await fireEvent.keyDown(selectAll!, { key: " " })
 }
 
-function findExerciseGroup(container: HTMLElement): Promise<VscodeCollapsible> {
-  return waitFor(() => {
-    const el = Array.from(container.querySelectorAll("vscode-collapsible")).find(
-      (collapsible) => collapsible.heading === "part01",
-    )
-    if (!el) {
-      throw new Error("exercise group not rendered yet")
-    }
-    return el
-  })
+function findExerciseGroup(name = "part01"): Promise<HTMLElement> {
+  return screen.findByRole("heading", { level: 2, name: new RegExp(`^${name}`) })
 }
 
 function tmcPanel(): CourseDetailsPanel {
@@ -70,7 +61,7 @@ suite("CourseDetails panel", () => {
 
   test("renders a tmc course header and its exercise group", async () => {
     const panel = tmcPanel()
-    const { container } = render(CourseDetails, { props: { panel } })
+    render(CourseDetails, { props: { panel } })
 
     dispatch({
       type: "setCourseData",
@@ -85,9 +76,9 @@ suite("CourseDetails panel", () => {
     })
 
     expect(await screen.findByRole("heading", { name: /Python Course/ })).toBeInTheDocument()
-    await findExerciseGroup(container)
+    await findExerciseGroup()
     // one exercise, marked passed
-    expect(screen.getByText("Completed: 1 / 1")).toBeInTheDocument()
+    expect(screen.getByText("1 / 1 completed")).toBeInTheDocument()
   })
 
   test("renders a mooc course header and its exercise group", async () => {
@@ -106,20 +97,23 @@ suite("CourseDetails panel", () => {
       exerciseGroups: [moocExerciseGroup()],
     })
 
-    expect(await screen.findByRole("heading", { name: /MOOC Python/ })).toBeInTheDocument()
-    expect(screen.getByText("Completed: 0 / 1")).toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { level: 1, name: /MOOC Python/ }),
+    ).toBeInTheDocument()
+    await findExerciseGroup("MOOC Python")
+    expect(screen.getByText("0 / 1 completed")).toBeInTheDocument()
   })
 
   test("reflects an exerciseStatusChange broadcast in the status badge", async () => {
     const panel = tmcPanel()
-    const { container } = render(CourseDetails, { props: { panel } })
+    render(CourseDetails, { props: { panel } })
     dispatch({
       type: "setCourseGroups",
       target: { type: "CourseDetails", id: panel.id },
       offlineMode: false,
       exerciseGroups: [tmcExerciseGroup()],
     })
-    await findExerciseGroup(container)
+    await findExerciseGroup()
     // before the status arrives the badge shows the loading placeholder
     expect(screen.getByText("Loading…")).toBeInTheDocument()
 
@@ -137,14 +131,14 @@ suite("CourseDetails panel", () => {
 
   test("applies the whole course's statuses from one setExerciseStatuses", async () => {
     const panel = tmcPanel()
-    const { container } = render(CourseDetails, { props: { panel } })
+    render(CourseDetails, { props: { panel } })
     dispatch({
       type: "setCourseGroups",
       target: { type: "CourseDetails", id: panel.id },
       offlineMode: false,
       exerciseGroups: [tmcExerciseGroup()],
     })
-    await findExerciseGroup(container)
+    await findExerciseGroup()
 
     dispatch({
       type: "setExerciseStatuses",
@@ -158,14 +152,14 @@ suite("CourseDetails panel", () => {
 
   test("ignores a setExerciseStatuses meant for another course", async () => {
     const panel = tmcPanel()
-    const { container } = render(CourseDetails, { props: { panel } })
+    render(CourseDetails, { props: { panel } })
     dispatch({
       type: "setCourseGroups",
       target: { type: "CourseDetails", id: panel.id },
       offlineMode: false,
       exerciseGroups: [tmcExerciseGroup()],
     })
-    await findExerciseGroup(container)
+    await findExerciseGroup()
 
     dispatch({
       type: "setExerciseStatuses",
@@ -201,7 +195,7 @@ suite("CourseDetails panel", () => {
       offlineMode: false,
       exerciseGroups: [tmcExerciseGroup()],
     })
-    await findExerciseGroup(container)
+    await findExerciseGroup()
 
     await checkSelectAll(container)
 
@@ -227,7 +221,7 @@ suite("CourseDetails panel", () => {
       offlineMode: false,
       exerciseGroups: [moocExerciseGroup()],
     })
-    await findExerciseGroup(container)
+    await findExerciseGroup("MOOC Python")
 
     await checkSelectAll(container)
 
@@ -245,14 +239,14 @@ suite("CourseDetails panel", () => {
 
   test("shows the 'Updates found' banner only when there are updateable exercises", async () => {
     const panel = tmcPanel()
-    const { container } = render(CourseDetails, { props: { panel } })
+    render(CourseDetails, { props: { panel } })
     dispatch({
       type: "setCourseGroups",
       target: { type: "CourseDetails", id: panel.id },
       offlineMode: false,
       exerciseGroups: [tmcExerciseGroup()],
     })
-    await findExerciseGroup(container)
+    await findExerciseGroup()
 
     // The live region is mounted from the start, empty, so the announcement is a change
     // inside it rather than the insertion of an already-populated region.

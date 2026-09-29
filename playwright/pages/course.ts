@@ -12,15 +12,13 @@ export class CoursePage extends TmcPage {
     return this.webview.getByRole("heading", { level: 2, name })
   }
 
-  // Setting <vscode-collapsible>'s `open` property directly is more reliable
-  // than clicking the toggle it renders in its shadow DOM.
+  /** Expands every collapsed exercise group (part). */
   public async showExercises(): Promise<void> {
-    const groups = this.getSidePanel().locator("vscode-collapsible")
-    const count = await groups.count()
-    for (let i = 0; i < count; i++) {
-      await groups.nth(i).evaluate((el) => {
-        ;(el as unknown as { open: boolean }).open = true
-      })
+    const collapsed = this.getSidePanel()
+      .getByRole("heading", { level: 2 })
+      .getByRole("button", { expanded: false })
+    while ((await collapsed.count()) > 0) {
+      await collapsed.first().click()
     }
   }
 
