@@ -56,6 +56,7 @@
   addMessageListener(appPanel, (message) => {
     switch (message.type) {
       case "setPanel": {
+        crash = null
         appState = { panel: message.panel }
         break
       }
@@ -89,8 +90,8 @@
         vscode.postMessage({ type: "ready" })
       })}
     {:else}
-      <svelte:boundary>
-        {#key appState.panel.id}
+      {#key appState.panel.id}
+        <svelte:boundary>
           {#if appState.panel.type === "Welcome"}
             <Welcome panel={appState.panel} />
           {:else if appState.panel.type === "MyCourses"}
@@ -110,22 +111,22 @@
           {:else}
             {assertUnreachable(appState.panel)}
           {/if}
-        {/key}
 
-        {#snippet failed(error: unknown, reset: () => void)}
-          {@render crashView(
-            "Uncaught error",
-            error instanceof Error ? error.message : String(error),
-            error instanceof Error ? error.stack : undefined,
-            () => {
-              // The boundary keeps rendering its fallback until `reset`; asking the
-              // extension to resend the panel alone would change nothing on screen.
-              reset()
-              vscode.postMessage({ type: "ready" })
-            },
-          )}
-        {/snippet}
-      </svelte:boundary>
+          {#snippet failed(error: unknown, reset: () => void)}
+            {@render crashView(
+              "Uncaught error",
+              error instanceof Error ? error.message : String(error),
+              error instanceof Error ? error.stack : undefined,
+              () => {
+                // The boundary keeps rendering its fallback until `reset`; asking the
+                // extension to resend the panel alone would change nothing on screen.
+                reset()
+                vscode.postMessage({ type: "ready" })
+              },
+            )}
+          {/snippet}
+        </svelte:boundary>
+      {/key}
     {/if}
   </div>
 </main>

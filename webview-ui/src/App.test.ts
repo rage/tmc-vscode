@@ -89,3 +89,27 @@ suite("App reload handshake", () => {
     expect(await screen.findByText("Ordering Course")).toBeInTheDocument()
   })
 })
+
+suite("App navigation after a crash", () => {
+  test("a new panel from the extension replaces the crash view", async () => {
+    render(App)
+    window.dispatchEvent(new ErrorEvent("error", { message: "boom", error: new Error("boom") }))
+    await waitFor(() => {
+      expect(document.body.innerHTML).toContain("Uncaught error: boom")
+    })
+
+    postedMessages.mockClear()
+    dispatchToWebview({
+      type: "setPanel",
+      target: { id: 0, type: "App" },
+      panel: { id: 2, type: "MyCourses", courseDeadlines: {} },
+    })
+
+    await waitFor(() => {
+      expect(document.body.innerHTML).not.toContain("Uncaught error: boom")
+    })
+    expect(postedMessages).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "requestMyCoursesData" }),
+    )
+  })
+})
