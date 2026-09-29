@@ -113,7 +113,7 @@ export async function v1_migrateFromV0(
 
   const unmigrated: string[] = []
   const message =
-    "Migrating exercises on disk for extension version 2. Please do not close the editor..."
+    "Migrating exercises on disk for extension version 2. Please do not close the editor…"
   const result = await dialog.progressNotification(message, async (progress) => {
     let atLeastOneSuccess = false
     let index = 0
@@ -171,7 +171,7 @@ export default async function migrateExerciseDataToLatest(
       supersededKeys.push(data.v0.EXERCISE_DATA_KEY)
     } else {
       Logger.error("Exercises left unmigrated:", unmigrated.join(", "))
-      await dialog.warningNotification(
+      void dialog.warningNotification(
         `${unmigrated.length} exercise(s) could not be migrated and were left where they are. ` +
           "The migration will try again the next time the extension starts.",
       )

@@ -109,5 +109,18 @@ suite("Exercise data migration", function () {
       expect(migrated.supersededKeys).toEqual([])
       expect(dialogMock.warningNotification).toHaveBeenCalled()
     })
+
+    // Activation awaits the migration, and a notification's promise settles only when the
+    // user dismisses it.
+    test("does not wait for the warning to be dismissed", async function () {
+      const dataPath = makeTmpDirs(virtualFileSystem)
+      await memento.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_1_0(dataPath))
+      vi.mocked(tmcMock.migrateExercise)
+        .mockResolvedValueOnce(Ok.EMPTY)
+        .mockResolvedValueOnce(Err(new Error("langs refused the exercise")))
+      vi.mocked(dialogMock.warningNotification).mockReturnValue(new Promise(() => {}))
+
+      await expect(migrateExerciseDataToLatest(memento, dialogMock, tmcMock)).resolves.toBeDefined()
+    })
   })
 })
