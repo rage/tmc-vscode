@@ -96,7 +96,12 @@ interface Harness {
   panelFailures: () => string[]
 }
 
-const failureTypes = new Set(["submissionStatusError", "testError", "pasteError"])
+const failureTypes = new Set([
+  "submissionStatusError",
+  "testError",
+  "pasteError",
+  "refreshFinished",
+])
 
 async function harness(
   services: {
@@ -145,6 +150,7 @@ async function harness(
     getExerciseContaining: () => exercise,
     getExerciseBySlug: () => exercise,
     getExercisesByCourseSlug: () => [exercise],
+    getExercises: () => [exercise],
     setExercises: async () => Ok.EMPTY,
     deleteWorkspaceFile: async () => Ok.EMPTY,
     createWorkspaceFile: async () => {},
@@ -216,7 +222,7 @@ async function harness(
       webviews
         .flatMap((webview) => vi.mocked(webview.panel.webview.postMessage).mock.calls)
         .map(([message]) => message as ExtensionToWebview)
-        .filter((message) => failureTypes.has(message.type))
+        .filter((message) => failureTypes.has(message.type) && "error" in message)
         .map((message) => {
           const error = (message as { error: string | { message: string } }).error
           return `${message.type}: ${typeof error === "string" ? error : error.message}`
@@ -638,17 +644,20 @@ suite("reported once: My Courses and course details", function () {
     expect(shown).toEqual(["info: All exercises are up to date."])
   })
 
-  test("a course that fails to refresh from its panel is one notification", async function () {
-    const { post, shown } = await harness({
+  test("a course that fails to refresh from its panel shows in the panel only", async function () {
+    const { post, shown, panelFailures } = await harness({
       langs: {
         getMoocCourseData: async () => Err(offline()),
+        getCourseDetails: async () => Err(offline()),
         listLocalExercises: async () => Err(new Error("rescan failed")),
       },
     })
+    await post({ type: "openCourseDetails", courseId: COURSE_ID })
 
-    await post({ type: "refreshCourseDetails", id: COURSE_ID, useCache: false })
+    await post({ type: "refreshCourseDetails", id: COURSE_ID })
 
-    expect(shown).toEqual(["error: Failed to update course."])
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual(["refreshFinished: offline"])
   })
 
   test("a lost session scope is warned once, however often it is hit", async function () {
@@ -658,8 +667,8 @@ suite("reported once: My Courses and course details", function () {
       },
     })
 
-    await post({ type: "refreshCourseDetails", id: COURSE_ID, useCache: false })
-    await post({ type: "refreshCourseDetails", id: COURSE_ID, useCache: false })
+    await post({ type: "refreshCourseDetails", id: COURSE_ID })
+    await post({ type: "refreshCourseDetails", id: COURSE_ID })
 
     expect(shown).toEqual(["error: Failed to update course data."])
   })

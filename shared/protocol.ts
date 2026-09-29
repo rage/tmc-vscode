@@ -23,7 +23,8 @@ export type AppPanel = z.infer<typeof AppPanelSchema>
 export const WelcomePanelSchema = z.object({
   id: z.number(),
   type: z.literal("Welcome"),
-  version: z.string().optional(),
+  version: z.string(),
+  loggedIn: z.boolean(),
 })
 
 export type WelcomePanel = z.infer<typeof WelcomePanelSchema>
@@ -35,8 +36,8 @@ export const MyCoursesPanelSchema = z.object({
   courses: z.array(LocalCourseDataSchema).optional(),
   tmcDataPath: z.string().optional(),
   tmcDataSize: z.string().optional(),
-  // keyed by `CourseIdentifier.toString` (course id for tmc, instance id for mooc)
-  courseDeadlines: z.record(z.string(), z.string()),
+  // read by nothing; kept only until its last caller stops passing it
+  courseDeadlines: z.record(z.string(), z.string()).optional(),
 })
 
 export type MyCoursesPanel = z.infer<typeof MyCoursesPanelSchema>
@@ -84,7 +85,9 @@ export type TargetPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"]
  * for its `id` and `type` alone, and the rest is serialized through `postMessage` on
  * every send for nothing.
  */
-export function panelTarget<T extends Panel>(panel: T): { id: number; type: T["type"] } {
+export function panelTarget<T extends { id: number; type: PanelType }>(
+  panel: T,
+): { id: number; type: T["type"] } {
   return { id: panel.id, type: panel.type }
 }
 
@@ -105,12 +108,9 @@ export function broadcastPanelSchema<T extends PanelType>(...types: [T, ...T[]])
 
 // stricter variant of `targetPanelSchema`, rejecting unknown keys.
 //
-// Used only for the *webview → extension host* direction (`sourcePanel` fields
-// in `WebviewToExtensionSchema`): the webview should never legitimately need to
-// send more than `{id, type}` there, so this acts as a guard against
-// accidentally posting a whole (potentially Svelte 5 `$state`-proxied) panel
-// object, which would otherwise fail with an opaque `DataCloneError` instead of
-// failing loudly.
+// Used only for the *webview → extension host* direction, where the webview never needs
+// to send more than `{id, type}`: a whole panel posted by mistake, with every course and
+// exercise it holds, is rejected instead of being serialized and validated for nothing.
 //
 // Deliberately NOT used for `ExtensionToWebviewSchema`'s `target` fields: a
 // broadcast target there may carry an `id` on top of the `type` it declares,
@@ -227,11 +227,6 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     panel: PanelSchema,
   }),
   z.object({
-    type: z.literal("setWelcomeData"),
-    target: targetPanelSchema("Welcome"),
-    version: z.string(),
-  }),
-  z.object({
     type: z.literal("setMyCourses"),
     target: broadcastPanelSchema("MyCourses"),
     courses: z.array(LocalCourseDataSchema),
@@ -256,6 +251,14 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     target: targetPanelSchema("CourseDetails"),
     offlineMode: z.boolean(),
     exerciseGroups: z.array(ExerciseGroupSchema),
+  }),
+  // The one answer to `refreshCourseDetails`, sent after the refreshed data whether or not
+  // the refresh worked.
+  z.object({
+    type: z.literal("refreshFinished"),
+    target: targetPanelSchema("CourseDetails"),
+    ok: z.boolean(),
+    error: WebviewErrorSchema.optional(),
   }),
   z.object({
     type: z.literal("setCourseDisabledStatus"),
@@ -355,7 +358,7 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
   // request handler has to send it, or the panel waits out its own timeout instead.
   z.object({
     type: z.literal("panelDataResult"),
-    target: targetPanelSchema("Welcome", "MyCourses", "CourseDetails"),
+    target: targetPanelSchema("MyCourses", "CourseDetails"),
     requestId: z.number(),
     // absent once the data itself has been sent
     error: WebviewErrorSchema.optional(),
@@ -432,20 +435,16 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   }),
   // Each `request*Data` message carries the id the host echoes back in its
   // `panelDataResult`; the webview times the request out on its own if none arrives.
+  // `sourcePanel` names the requesting panel; any other panel fields are stripped unread.
   z.object({
     type: z.literal("requestCourseDetailsData"),
     requestId: z.number(),
-    sourcePanel: CourseDetailsPanelSchema,
+    sourcePanel: targetPanelSchema("CourseDetails").extend({ courseId: CourseIdentifierSchema }),
   }),
   z.object({
     type: z.literal("requestMyCoursesData"),
     requestId: z.number(),
-    sourcePanel: MyCoursesPanelSchema,
-  }),
-  z.object({
-    type: z.literal("requestWelcomeData"),
-    requestId: z.number(),
-    sourcePanel: WelcomePanelSchema,
+    sourcePanel: targetPanelSchema("MyCourses"),
   }),
   z.object({
     type: z.literal("removeCourse"),
@@ -480,10 +479,10 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("openMyCourses"),
   }),
+  // answered with `refreshFinished`
   z.object({
     type: z.literal("refreshCourseDetails"),
     id: CourseIdentifierSchema,
-    useCache: z.boolean(),
   }),
   z.object({
     type: z.literal("openExercises"),
