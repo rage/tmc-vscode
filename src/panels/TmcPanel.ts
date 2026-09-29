@@ -88,6 +88,12 @@ export interface WebviewHandlers {
     actionContext: ReadyActionContext,
     id: CourseIdentifier,
   ) => Promise<Result<void, Error>>
+  /** Answers a TMC submission's feedback questions; the URL must be one a result named. */
+  sendSubmissionFeedback: (
+    actionContext: ReadyActionContext,
+    feedbackAnswerUrl: string,
+    answers: readonly { questionId: number; answer: string }[],
+  ) => Promise<Result<void, Error>>
   submitExercise: (
     extensionContext: vscode.ExtensionContext,
     actionContext: ReadyActionContext,
@@ -909,24 +915,10 @@ export class TmcPanel {
               })
               return
             }
-            const feedbackUrl = parseWebLink(message.feedbackAnswerUrl)
-            if (!feedbackUrl) {
-              this._postMessage({
-                type: "feedbackSent",
-                target,
-                ok: false,
-                error: "The feedback address is not a web address.",
-              })
-              return
-            }
-            const sent = await actionContext.startup.langs.submitSubmissionFeedback(
-              feedbackUrl.toString(true),
-              {
-                status: message.answers.map(({ questionId, answer }) => ({
-                  question_id: questionId,
-                  answer,
-                })),
-              },
+            const sent = await handlers().sendSubmissionFeedback(
+              actionContext,
+              message.feedbackAnswerUrl,
+              message.answers,
             )
             if (sent.err) {
               Logger.error("Failed to send the submission feedback", sent.val)
@@ -1158,8 +1150,7 @@ function toMessageGroups(groups: ExerciseGroup[]): ExerciseGroup[] {
  * Resolves a link the webview supplied, or `undefined` for anything but http(s).
  *
  * Non-strict `Uri.parse` never throws and invents a `file` scheme for a string without
- * one, so the link is parsed strictly and its scheme checked before the OS or tmc-langs
- * sees it.
+ * one, so the link is parsed strictly and its scheme checked before the OS handler sees it.
  */
 function parseWebLink(url: string): vscode.Uri | undefined {
   let link

@@ -388,6 +388,7 @@ function stubHandlers(): { [K in keyof WebviewHandlers]: ReturnType<typeof vi.fn
     pasteExercise: vi.fn().mockResolvedValue(Ok("link")),
     refreshLocalExercises: vi.fn().mockResolvedValue(Ok.EMPTY),
     removeCourse: vi.fn().mockResolvedValue(Ok.EMPTY),
+    sendSubmissionFeedback: vi.fn().mockResolvedValue(Ok.EMPTY),
     submitExercise: vi.fn().mockResolvedValue(Ok(undefined)),
     updateCourse: vi.fn().mockResolvedValue(Ok(true)),
   }
@@ -1473,23 +1474,24 @@ suite("TmcPanel host services for the webview", () => {
 
   const feedbackPanel = { id: 31, type: "ExerciseSubmission" as const }
 
-  test("sends feedback answers to tmc-langs in its own field names", async () => {
-    const submitSubmissionFeedback = vi.fn().mockResolvedValue(Ok({}))
-    const actionContext = createMockActionContext({
-      startup: { langs: { submitSubmissionFeedback } as unknown as Langs },
-    })
+  test("hands feedback answers to the feedback action and says it went", async () => {
+    const handlers = stubHandlers()
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = createMockActionContext()
     const { panel, listener } = await mountSidePanel(actionContext)
+    const answers = [{ questionId: 3, answer: "4" }]
 
     await listener({
       type: "sendFeedback",
       sourcePanel: feedbackPanel,
       feedbackAnswerUrl: "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback",
-      answers: [{ questionId: 3, answer: "4" }],
+      answers,
     })
 
-    expect(submitSubmissionFeedback).toHaveBeenCalledWith(
+    expect(handlers.sendSubmissionFeedback).toHaveBeenCalledWith(
+      actionContext,
       "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback",
-      { status: [{ question_id: 3, answer: "4" }] },
+      answers,
     )
     expect(lastMessageOf(panel, "feedbackSent")).toEqual({
       type: "feedbackSent",
@@ -1499,11 +1501,10 @@ suite("TmcPanel host services for the webview", () => {
   })
 
   test("reports a feedback failure to the form that sent it", async () => {
-    const submitSubmissionFeedback = vi.fn().mockResolvedValue(Err(new Error("server said no")))
-    const actionContext = createMockActionContext({
-      startup: { langs: { submitSubmissionFeedback } as unknown as Langs },
-    })
-    const { panel, listener } = await mountSidePanel(actionContext)
+    const handlers = stubHandlers()
+    handlers.sendSubmissionFeedback.mockResolvedValue(Err(new Error("server said no")))
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const { panel, listener } = await mountSidePanel(createMockActionContext())
 
     await listener({
       type: "sendFeedback",
@@ -1518,24 +1519,6 @@ suite("TmcPanel host services for the webview", () => {
       ok: false,
       error: "server said no",
     })
-  })
-
-  test("never hands tmc-langs a feedback address that is not a web address", async () => {
-    const submitSubmissionFeedback = vi.fn()
-    const actionContext = createMockActionContext({
-      startup: { langs: { submitSubmissionFeedback } as unknown as Langs },
-    })
-    const { panel, listener } = await mountSidePanel(actionContext)
-
-    await listener({
-      type: "sendFeedback",
-      sourcePanel: feedbackPanel,
-      feedbackAnswerUrl: "file:///etc/passwd",
-      answers: [],
-    })
-
-    expect(submitSubmissionFeedback).not.toHaveBeenCalled()
-    expect(lastMessageOf(panel, "feedbackSent")).toMatchObject({ ok: false })
   })
 
   test("logs a webview crash at error level", async () => {
