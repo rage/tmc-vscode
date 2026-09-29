@@ -7,6 +7,7 @@ import { CLI_PROCESS_TIMEOUT } from "../config/constants"
 import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseTestsPanel, TestResultData } from "../shared/shared"
 import { LocalCourseData, LocalCourseExercise, panelTarget, toWebviewError } from "../shared/shared"
+import type { CheckstyleDiagnostics } from "../testing/checkstyleDiagnostics"
 import { Logger, runSingleFlight } from "../utilities"
 import { resolvePythonInterpreter } from "../window"
 import type { ReadyActionContext } from "./types"
@@ -26,11 +27,14 @@ export function cancelTestRun(testRunId: number): void {
 
 /**
  * Tests an exercise while keeping the user informed
+ *
+ * @param diagnostics Where the code quality findings go; they are left alone when omitted.
  */
 export async function testExercise(
   context: vscode.ExtensionContext,
   actionContext: ReadyActionContext,
   exercise: WorkspaceExercise,
+  diagnostics?: CheckstyleDiagnostics,
 ): Promise<Result<void, Error>> {
   const { langs, userData } = actionContext.startup
 
@@ -104,6 +108,10 @@ export async function testExercise(
               validationResults.val,
             )
           }
+          await diagnostics?.report(
+            exercise.uri,
+            validationResults.ok ? validationResults.val : null,
+          )
 
           const data: TestResultData = {
             testResult: testResults.val,
@@ -130,6 +138,7 @@ export async function testExercise(
           testInterrupts.delete(testRunId)
         }
       } else {
+        diagnostics?.clear(exercise.uri)
         // exam
         TmcPanel.postMessage({
           type: "willNotRunTestsForExam",

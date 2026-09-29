@@ -25,6 +25,38 @@ if (vscode.QuickInputButtons === undefined) {
   vscode.QuickInputButtons = { Back: { iconPath: new vscode.ThemeIcon("arrow-left") } }
 }
 
+// jest-mock-vscode's `createDiagnosticCollection` returns nothing. This one keeps what is set
+// on it, keyed like the real one by the uri's string form.
+vscode.languages.createDiagnosticCollection = vi.fn((name = "") => {
+  const entries = new Map()
+  const collection = {
+    name,
+    set: (uri, diagnostics) => {
+      if (diagnostics === undefined) {
+        entries.delete(uri.toString())
+      } else {
+        entries.set(uri.toString(), { uri, diagnostics })
+      }
+    },
+    delete: (uri) => void entries.delete(uri.toString()),
+    clear: () => entries.clear(),
+    get: (uri) => entries.get(uri.toString())?.diagnostics,
+    has: (uri) => entries.has(uri.toString()),
+    forEach: (callback) => {
+      for (const { uri, diagnostics } of entries.values()) {
+        callback(uri, diagnostics, collection)
+      }
+    },
+    dispose: () => entries.clear(),
+    *[Symbol.iterator]() {
+      for (const { uri, diagnostics } of entries.values()) {
+        yield [uri, diagnostics]
+      }
+    },
+  }
+  return collection
+})
+
 // jest-mock-vscode returns `undefined` where the real API returns a `Disposable`, and
 // the extension pushes what these return into `context.subscriptions`. Without a real
 // disposable, a test that shuts a context down the way VS Code does walks an array of

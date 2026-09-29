@@ -55,6 +55,7 @@ suite("Test exercise command", function () {
       extensionContext,
       context,
       activeExercise,
+      undefined,
     )
   })
 
@@ -67,6 +68,7 @@ suite("Test exercise command", function () {
       extensionContext,
       context,
       pointedAtExercise,
+      undefined,
     )
   })
 

@@ -3,6 +3,7 @@ import type * as vscode from "vscode"
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure } from "../api/withOperation"
+import { activeLocalTesting } from "../testing/localTesting"
 import { runForExercise } from "./runForExercise"
 
 export async function testExercise(
@@ -11,7 +12,12 @@ export async function testExercise(
   resource: vscode.Uri | undefined,
 ): Promise<void> {
   await runForExercise(actionContext, resource, "Testing the exercise", async (exercise) => {
-    const result = await actions.testExercise(context, actionContext, exercise)
+    const result = await actions.testExercise(
+      context,
+      actionContext,
+      exercise,
+      activeLocalTesting()?.diagnostics,
+    )
     return result.err ? failure("Exercise test run failed.", result.val) : result
   })
 }

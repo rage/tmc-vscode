@@ -420,6 +420,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   init.registerCommands(context, actionContext)
   if (readyContext) {
     init.registerSettingsCallbacks(readyContext)
+    init.registerTesting(context, readyContext)
   }
 
   // The palette and the explorer menus uncover their entries on this key, and VS Code

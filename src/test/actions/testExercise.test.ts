@@ -9,6 +9,7 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
 import { makeTmcKind } from "../../shared/shared"
+import type { CheckstyleDiagnostics } from "../../testing/checkstyleDiagnostics"
 import { createMockActionContext } from "../mocks/actionContext"
 
 // TmcPanel talks to the vscode webview API, so the whole module is mocked; the
@@ -139,6 +140,39 @@ suite("testExercise action", () => {
         }),
       }),
     )
+  })
+})
+
+function diagnosticsSpy(): CheckstyleDiagnostics {
+  return { report: vi.fn(async () => {}), clear: vi.fn() } as unknown as CheckstyleDiagnostics
+}
+
+suite("testExercise action, code quality diagnostics", () => {
+  test("reports the code quality result for the exercise", async () => {
+    const validation = { strategy: "FAIL", validation_errors: {} }
+    const actionContext = contextWithTestRun(
+      Ok({ logs: {}, status: "PASSED", testResults: [] }),
+      Ok(validation),
+    )
+    const diagnostics = diagnosticsSpy()
+    const exercise = workspaceExercise()
+
+    await testExercise(extensionContext, actionContext, exercise, diagnostics)
+
+    expect(diagnostics.report).toHaveBeenCalledExactlyOnceWith(exercise.uri, validation)
+  })
+
+  test("a code quality check that fails to run clears the stale findings", async () => {
+    const actionContext = contextWithTestRun(
+      Ok({ logs: {}, status: "PASSED", testResults: [] }),
+      Err(new Error("Checkstyle crashed")),
+    )
+    const diagnostics = diagnosticsSpy()
+    const exercise = workspaceExercise()
+
+    await testExercise(extensionContext, actionContext, exercise, diagnostics)
+
+    expect(diagnostics.report).toHaveBeenCalledExactlyOnceWith(exercise.uri, null)
   })
 })
 
