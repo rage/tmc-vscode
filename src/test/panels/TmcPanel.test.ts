@@ -4,6 +4,7 @@ import * as vscode from "vscode"
 import { removeCourse } from "../../actions/removeCourse"
 import type { ActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
+import { ExerciseStatus } from "../../api/workspaceManager"
 import {
   BottleneckError,
   ConnectionError,
@@ -11,7 +12,8 @@ import {
   InitializationError,
   presentationFor,
 } from "../../errors"
-import { postUpdateables } from "../../panels/exerciseLists"
+import { postExerciseStatuses, postUpdateables } from "../../panels/exerciseLists"
+import { exerciseStatusRegistry } from "../../panels/exerciseStatusRegistry"
 import { moocLoginRegistry } from "../../panels/moocLoginRegistry"
 import type { PanelRequest, WebviewHandlers } from "../../panels/TmcPanel"
 import { nextPanelId, registerWebviewHandlers, TmcPanel } from "../../panels/TmcPanel"
@@ -126,7 +128,7 @@ suite("TmcPanel moocLogin handling", () => {
 async function mountSidePanel(
   actionContext: ActionContext,
   extensionContext: vscode.ExtensionContext = createMockContext(),
-  shownPanel: PanelRequest = { id: nextPanelId(), type: "MyCourses" },
+  shownPanel?: PanelRequest,
 ): Promise<{
   panel: ReturnType<typeof createFakeWebviewPanel>["panel"]
   listener: (message: unknown) => Promise<void>
@@ -139,7 +141,12 @@ async function mountSidePanel(
 
   const extensionUri = vscode.Uri.file("/ext")
 
-  TmcPanel.renderSide(extensionUri, extensionContext, actionContext, shownPanel)
+  TmcPanel.renderSide(
+    extensionUri,
+    extensionContext,
+    actionContext,
+    shownPanel ?? { id: nextPanelId(), type: "MyCourses" },
+  )
   await sendReady()
   const listener = getMessageListener()
   // Clear the initial mount's `setPanel` post so assertions below only see
@@ -1216,7 +1223,7 @@ suite("TmcPanel ready handshake", () => {
       courseId: CourseIdentifier.from(42),
       exerciseStatuses: { tmc: {}, mooc: {} },
     }
-    renderMain(courseDetails)
+    renderMainPanel(courseDetails)
     TmcPanel.postMessage({
       type: "setCourseGroups",
       target: { id: courseDetails.id, type: "CourseDetails" },
@@ -1336,6 +1343,74 @@ suite("TmcPanel requestCourseDetailsData updateables", () => {
   })
 })
 
+suite("TmcPanel in-flight downloads", () => {
+  afterEach(() => exerciseStatusRegistry.clear())
+
+  test("a course opened mid-download shows the download, not a Download button", async () => {
+    const courseId = CourseIdentifier.from(42)
+    postExerciseStatuses(courseId, [[ExerciseIdentifier.from(1), "downloading"]])
+    const { panel, listener, shown } = await mountCourseDetails(courseDetailsContext())
+
+    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel: shown })
+
+    const { statuses } = lastMessageOf(panel, "setExerciseStatuses") as {
+      statuses: [ExerciseIdentifier, string][]
+    }
+    expect(statuses[0]).toEqual([ExerciseIdentifier.from(1), "downloading"])
+  })
+
+  test("a failed download stays failed, until the exercise is on disk after all", async () => {
+    const courseId = CourseIdentifier.from(42)
+    postExerciseStatuses(courseId, [
+      [ExerciseIdentifier.from(1), "downloadFailed"],
+      [ExerciseIdentifier.from(2), "downloadFailed"],
+    ])
+    const actionContext = courseDetailsContext()
+    const onDisk = {
+      backend: "tmc",
+      courseSlug: "python-course",
+      exerciseSlug: "part01-001_exercise",
+      status: ExerciseStatus.Closed,
+    }
+    actionContext.startup.workspaceManager = { getExercises: () => [onDisk] } as never
+    const { panel, listener, shown } = await mountCourseDetails(actionContext)
+
+    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel: shown })
+
+    expect(lastMessageOf(panel, "setExerciseStatuses")).toMatchObject({
+      statuses: [
+        [ExerciseIdentifier.from(1), "downloadFailed"],
+        [ExerciseIdentifier.from(2), "closed"],
+      ],
+    })
+  })
+
+  test("a second download of the same course is turned away while one runs", async () => {
+    const handlers = stubHandlers()
+    const download = Promise.withResolvers<void>()
+    handlers.downloadExercisesForUi.mockReturnValue(download.promise)
+    registerWebviewHandlers(handlers as unknown as WebviewHandlers)
+    const actionContext = createMockActionContext()
+    const { listener } = await mountSidePanel(actionContext)
+    const downloadMessage = {
+      type: "downloadExercises",
+      mode: "download",
+      courseId: CourseIdentifier.from(42),
+      ids: [ExerciseIdentifier.from(1)],
+    }
+
+    const first = listener(downloadMessage)
+    await listener(downloadMessage)
+    download.resolve()
+    await first
+
+    expect(handlers.downloadExercisesForUi).toHaveBeenCalledTimes(1)
+    expect(actionContext.dialog.notification).toHaveBeenCalledWith(
+      "This course's exercises are already downloading.",
+    )
+  })
+})
+
 // A ready context whose stored course 42 and workspace the CourseDetails handlers can read.
 function courseDetailsContext(): ReturnType<typeof createMockActionContext> {
   return createMockActionContext({
@@ -1392,12 +1467,8 @@ suite("TmcPanel refreshCourseDetails", () => {
 
   test("does not pull the student back to a course they navigated away from", async () => {
     const handlers = stubHandlers()
-    let finishUpdate: (value: unknown) => void = () => {}
-    handlers.updateCourse.mockReturnValue(
-      new Promise((resolve) => {
-        finishUpdate = resolve
-      }),
-    )
+    const update = Promise.withResolvers<unknown>()
+    handlers.updateCourse.mockReturnValue(update.promise)
     registerWebviewHandlers(handlers as unknown as WebviewHandlers)
     const actionContext = courseDetailsContext()
     const { panel, listener, shown } = await mountCourseDetails(actionContext)
@@ -1405,7 +1476,7 @@ suite("TmcPanel refreshCourseDetails", () => {
     const refreshing = listener({ type: "refreshCourseDetails", id: shown.courseId })
     await listener({ type: "openMyCourses" })
     vi.mocked(panel.webview.postMessage).mockClear()
-    finishUpdate(Ok(true))
+    update.resolve(Ok(true))
     await refreshing
 
     expect(postedMessages(panel)).toEqual([])
@@ -1635,10 +1706,10 @@ suite("TmcPanel main panel lifecycle", () => {
   test("closing the main panel leaves the side panel standing", async () => {
     const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
     createWebviewPanel.mockReturnValue(createFakeWebviewPanel().panel)
-    renderMain({ id: nextPanelId(), type: "MyCourses", courseDeadlines: {} })
+    renderMainPanel({ id: nextPanelId(), type: "MyCourses", courseDeadlines: {} })
     const side = createFakeWebviewPanel()
     createWebviewPanel.mockReturnValue(side.panel)
-    renderSide({ id: nextPanelId(), type: "MyCourses", courseDeadlines: {} })
+    renderSidePanel({ id: nextPanelId(), type: "MyCourses", courseDeadlines: {} })
 
     TmcPanel.mainPanel?.dispose()
 
@@ -1665,7 +1736,7 @@ suite("TmcPanel main panel lifecycle", () => {
   })
 })
 
-function renderMain(panel: Parameters<typeof TmcPanel.renderMain>[3]): void {
+function renderMainPanel(panel: PanelRequest): void {
   TmcPanel.renderMain(
     vscode.Uri.file("/ext"),
     createMockContext(),
@@ -1674,7 +1745,7 @@ function renderMain(panel: Parameters<typeof TmcPanel.renderMain>[3]): void {
   )
 }
 
-function renderSide(panel: Parameters<typeof TmcPanel.renderSide>[3]): void {
+function renderSidePanel(panel: PanelRequest): void {
   TmcPanel.renderSide(
     vscode.Uri.file("/ext"),
     createMockContext(),
@@ -1687,7 +1758,7 @@ suite("TmcPanel side panel placement", () => {
   beforeEach(resetPanels)
   afterEach(resetPanels)
 
-  const testsPanel = (): Parameters<typeof renderSide>[0] => ({
+  const testsPanel = (): PanelRequest => ({
     id: nextPanelId(),
     type: "ExerciseTests",
     course: courseWith(1),
@@ -1709,7 +1780,7 @@ suite("TmcPanel side panel placement", () => {
     createWebviewPanel.mockClear()
     createWebviewPanel.mockReturnValue(createFakeWebviewPanel().panel)
 
-    renderSide(testsPanel())
+    renderSidePanel(testsPanel())
 
     expect(createWebviewPanel).toHaveBeenCalledWith(
       "sidePanel",
@@ -1722,9 +1793,9 @@ suite("TmcPanel side panel placement", () => {
   test("re-shows test results where the user left them, still without focus", () => {
     const { panel } = createFakeWebviewPanel()
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
-    renderSide(testsPanel())
+    renderSidePanel(testsPanel())
 
-    renderSide(testsPanel())
+    renderSidePanel(testsPanel())
 
     expect(panel.reveal).toHaveBeenCalledExactlyOnceWith(undefined, true)
   })
@@ -1734,7 +1805,7 @@ suite("TmcPanel side panel placement", () => {
     createWebviewPanel.mockClear()
     createWebviewPanel.mockReturnValue(createFakeWebviewPanel().panel)
 
-    renderSide({ id: nextPanelId(), type: "MoocLogin" })
+    renderSidePanel({ id: nextPanelId(), type: "MoocLogin" })
 
     expect(createWebviewPanel).toHaveBeenCalledWith(
       "sidePanel",
@@ -1750,7 +1821,7 @@ suite("TmcPanel tab identity", () => {
   afterEach(resetPanels)
 
   function mainPanelTitleFor(
-    panel: Parameters<typeof renderMain>[0],
+    panel: PanelRequest,
     actionContext: ActionContext = createMockActionContext(),
   ): string {
     resetPanels()
@@ -1809,9 +1880,9 @@ suite("TmcPanel tab identity", () => {
   test("retitles a reused tab when it navigates", () => {
     const { panel } = createFakeWebviewPanel()
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
-    renderMain({ id: nextPanelId(), type: "Welcome" })
+    renderMainPanel({ id: nextPanelId(), type: "Welcome" })
 
-    renderMain({ id: nextPanelId(), type: "MyCourses", courseDeadlines: {} })
+    renderMainPanel({ id: nextPanelId(), type: "MyCourses", courseDeadlines: {} })
 
     expect(panel.title).toBe("My Courses")
   })
@@ -1822,7 +1893,7 @@ suite("TmcPanel tab identity", () => {
     createWebviewPanel.mockClear()
     createWebviewPanel.mockReturnValue(panel)
 
-    renderMain({ id: nextPanelId(), type: "Welcome" })
+    renderMainPanel({ id: nextPanelId(), type: "Welcome" })
 
     expect(panel.iconPath).toEqual({
       light: vscode.Uri.joinPath(vscode.Uri.file("/ext"), "media", "TMC-light.svg"),

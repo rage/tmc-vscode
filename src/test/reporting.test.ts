@@ -582,7 +582,7 @@ suite("reported once: My Courses and course details", function () {
         mode,
       })
 
-      expect(shown).toEqual([`error: Failed to download exercises from ${backendName("mooc")}.`])
+      expect(shown).toEqual(["error: Failed to download the exercise loops."])
     },
   )
 
@@ -594,7 +594,7 @@ suite("reported once: My Courses and course details", function () {
 
     await run("tmc.downloadNewExercises")
 
-    expect(shown).toEqual([`error: Failed to download exercises from ${backendName("mooc")}.`])
+    expect(shown).toEqual(["error: Failed to download the exercise loops."])
   })
 
   test("a failed update download from the palette is one warning", async function () {
@@ -608,7 +608,7 @@ suite("reported once: My Courses and course details", function () {
 
     await run("tmc.updateExercises", "loud")
 
-    expect(shown).toEqual([`error: Failed to download exercises from ${backendName("mooc")}.`])
+    expect(shown).toEqual(["error: Failed to download the exercise loops."])
   })
 
   test("an update check that throws is one notification, or none when silent", async function () {

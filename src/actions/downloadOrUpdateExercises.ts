@@ -1,9 +1,15 @@
 import type { FractionProgress } from "../api/dialog"
 import type Langs from "../api/langs"
-import { ExerciseUpdateError } from "../errors"
-import { TmcPanel } from "../panels/TmcPanel"
-import type { CourseIdentifier, ExerciseStatus, ExtensionToWebview } from "../shared/shared"
-import { ExerciseIdentifier, LocalCourseData, match } from "../shared/shared"
+import { ExerciseUpdateError, presentationFor } from "../errors"
+import { postExerciseStatus, postExerciseStatuses } from "../panels/exerciseLists"
+import type { BackendKind, CourseIdentifier, ExerciseStatus } from "../shared/shared"
+import {
+  CourseIdentifier as CourseIdentifierNs,
+  ExerciseIdentifier,
+  LocalCourseData,
+  LocalCourseExercise,
+  match,
+} from "../shared/shared"
 import { Logger } from "../utilities"
 import type { ReadyActionContext } from "./types"
 
@@ -17,8 +23,8 @@ interface DownloadResults {
 /**
  * Downloads given exercises and opens them in the course workspace.
  *
- * Never fails as a whole: a failed backend or exercise is reported here and lands in
- * `failed`, and a cancelled download returns what had completed.
+ * Never fails as a whole: every failure is reported here, in one notification naming the
+ * exercises, and lands in `failed`; a cancelled download returns what had completed.
  *
  * @param exerciseIds Exercises to download.
  * @param courseId Course the exercises belong to, when they all share one. Passed
@@ -54,13 +60,12 @@ export async function downloadOrUpdateExercises(
     return undefined
   }
 
-  TmcPanel.postMessage(
-    ...exerciseIds
-      .map((x) => wrapToMessage(x, "downloading", resolveCourseId(x)))
-      .filter((x): x is ExtensionToWebview => x !== undefined),
-  )
   const statuses = new Map<number | string, ExerciseStatus>(
     exerciseIds.map((x) => [ExerciseIdentifier.unwrap(x), "downloadFailed"]),
+  )
+  postStatuses(
+    new Map(exerciseIds.map((x) => [ExerciseIdentifier.unwrap(x), "downloading"])),
+    resolveCourseId,
   )
 
   // A mooc CourseIdentifier's `instanceId` holds the course UUID, which is the
@@ -78,7 +83,7 @@ export async function downloadOrUpdateExercises(
   const moocExerciseIds = exerciseIds.filter((x) => x.kind === "mooc")
   let cancelled = false
   const downloadResult = await dialog.progressNotification(
-    "Downloading exercises...",
+    "Downloading exercises…",
     async (progress, token) => {
       // Cancelling kills the CLI download process; already-written exercises stay downloaded.
       let interruptDownload: (() => void) | undefined
@@ -107,9 +112,9 @@ export async function downloadOrUpdateExercises(
         }
         statuses.set(id, "closed")
         progress.report({ fraction: completed / exerciseIds.length, message: download.message })
-        const message = wrapToMessage(download.id, "closed", resolveCourseId(download.id))
-        if (message) {
-          TmcPanel.postMessage(message)
+        const exerciseCourseId = resolveCourseId(download.id)
+        if (exerciseCourseId) {
+          postExerciseStatus(exerciseCourseId, download.id, "closed")
         }
       }
 
@@ -147,7 +152,7 @@ export async function downloadOrUpdateExercises(
   )
   if (cancelled) {
     // The user chose to stop; report what completed instead of erroring.
-    postMessages(statuses, resolveCourseId)
+    postStatuses(statuses, resolveCourseId)
     Logger.info("Exercise download cancelled by the user")
     return sortResults(statuses)
   }
@@ -158,12 +163,11 @@ export async function downloadOrUpdateExercises(
     tmcError,
     moocError,
   } = downloadResult
-  // Both backends were attempted independently; surface each one's failure separately.
   if (tmcError) {
-    dialog.reportError("Failed to download exercises from tmc.mooc.fi.", tmcError, "tmc")
+    Logger.error("Failed to download exercises from tmc.mooc.fi", tmcError)
   }
   if (moocError) {
-    dialog.reportError("Failed to download exercises from courses.mooc.fi.", moocError, "mooc")
+    Logger.error("Failed to download exercises from courses.mooc.fi", moocError)
   }
   if (tmcSkipped.length > 0) {
     Logger.warn(`${tmcSkipped.length} downloads were skipped.`)
@@ -183,59 +187,96 @@ export async function downloadOrUpdateExercises(
     Logger.error(`Failed to download exercise ${exercise["exercise-id"]}: ${reason}`)
     statuses.set(exercise["exercise-id"], "downloadFailed")
   })
-  postMessages(statuses, resolveCourseId)
-  if (tmcFailed && tmcFailed.length > 0) {
-    const failedDownloads = tmcFailed.map(([f]) => f["exercise-slug"])
-    dialog.reportError(
-      "Failed to update exercises.",
-      new ExerciseUpdateError(failedDownloads.join(", ")),
-      "tmc",
-    )
-  }
-  if (moocFailed && moocFailed.length > 0) {
-    const failedDownloads = moocFailed.map(([f]) => f["exercise-id"])
-    dialog.reportError(
-      "Failed to update exercises.",
-      new ExerciseUpdateError(failedDownloads.join(", ")),
-      "mooc",
-    )
-  }
+  postStatuses(statuses, resolveCourseId)
 
-  return sortResults(statuses)
+  const results = sortResults(statuses)
+  if (results.failed.length > 0) {
+    const names = results.failed.map((id) => exerciseName(actionContext, id))
+    const [cause, backend] = failureCause(
+      [
+        [tmcError, "tmc"],
+        [moocError, "mooc"],
+      ],
+      [...(tmcFailed ?? []), ...(moocFailed ?? [])].map(([, reasons]) => reasons),
+    )
+    dialog.reportError(`Failed to download ${describeExercises(names)}.`, cause, backend)
+  }
+  return results
 }
 
-function postMessages(
+/**
+ * The one error a failed download is reported with.
+ *
+ * A backend that failed as a whole is the cause worth naming, preferring one whose
+ * presentation carries a remedy (e.g. "Log in"); otherwise the per-exercise reasons.
+ */
+function failureCause(
+  legErrors: [Error | undefined, BackendKind][],
+  exerciseReasons: string[][],
+): [Error, BackendKind | undefined] {
+  const failedLegs = legErrors.filter((leg): leg is [Error, BackendKind] => leg[0] !== undefined)
+  const leg =
+    failedLegs.find(([error, backend]) => presentationFor(error, backend).actions.length > 0) ??
+    failedLegs[0]
+  if (leg) {
+    return leg
+  }
+  const reasons = [...new Set(exerciseReasons.flat().filter((reason) => reason !== ""))]
+  return [
+    new ExerciseUpdateError(
+      reasons.length > 0 ? reasons.join("; ") : "tmc-langs did not report them as downloaded",
+    ),
+    undefined,
+  ]
+}
+
+/**
+ * Posts `statuses` as one message per course: an exercise list can span courses, and each
+ * CourseDetails panel keeps only its own course's.
+ */
+function postStatuses(
   statuses: Map<number | string, ExerciseStatus>,
   resolveCourseId: (exerciseId: ExerciseIdentifier) => CourseIdentifier | undefined,
 ): void {
-  TmcPanel.postMessage(
-    ...Array.from(statuses.entries())
-      .map(([id, s]) => {
-        const exerciseId = ExerciseIdentifier.from(id)
-        return wrapToMessage(exerciseId, s, resolveCourseId(exerciseId))
-      })
-      .filter((x): x is ExtensionToWebview => x !== undefined),
-  )
+  const byCourse = new Map<string, [CourseIdentifier, [ExerciseIdentifier, ExerciseStatus][]]>()
+  for (const [id, status] of statuses) {
+    const exerciseId = ExerciseIdentifier.from(id)
+    const courseId = resolveCourseId(exerciseId)
+    // Dropped rather than broadcast unscoped when no course resolves.
+    if (!courseId) {
+      continue
+    }
+    const key = `${courseId.kind}:${CourseIdentifierNs.toString(courseId)}`
+    const entry = byCourse.get(key) ?? [courseId, []]
+    entry[1].push([exerciseId, status])
+    byCourse.set(key, entry)
+  }
+  for (const [courseId, courseStatuses] of byCourse.values()) {
+    postExerciseStatuses(courseId, courseStatuses)
+  }
 }
 
-function wrapToMessage(
-  exerciseId: ExerciseIdentifier,
-  status: ExerciseStatus,
-  courseId: CourseIdentifier | undefined,
-): ExtensionToWebview | undefined {
-  // Drop the message rather than broadcast it unscoped when no course resolves.
-  if (!courseId) {
-    return undefined
+/** The name the student knows `exerciseId` by, or its id if no stored course has it. */
+function exerciseName(actionContext: ReadyActionContext, exerciseId: ExerciseIdentifier): string {
+  const wanted = ExerciseIdentifier.unwrap(exerciseId)
+  for (const course of actionContext.startup.userData.getCourses()) {
+    const exercise = LocalCourseData.getExercises(course).find((x) => x.data.id === wanted)
+    if (exercise) {
+      return LocalCourseExercise.getSlug(exercise)
+    }
   }
-  return {
-    type: "exerciseStatusChange",
-    target: {
-      type: "CourseDetails",
-    },
-    courseId,
-    exerciseId,
-    status,
+  return String(wanted)
+}
+
+const LISTED_EXERCISE_LIMIT = 5
+
+function describeExercises(names: string[]): string {
+  const listed = names.slice(0, LISTED_EXERCISE_LIMIT).join(", ")
+  const rest = names.length - LISTED_EXERCISE_LIMIT
+  if (names.length === 1) {
+    return `the exercise ${listed}`
   }
+  return `${names.length} exercises: ${listed}${rest > 0 ? ` and ${rest} more` : ""}`
 }
 
 function sortResults(statuses: Map<number | string, ExerciseStatus>): DownloadResults {

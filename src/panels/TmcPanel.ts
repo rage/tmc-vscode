@@ -11,13 +11,12 @@ import type { ActionContext, ReadyActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type Dialog from "../api/dialog"
 import { shownInPanel, withOperation } from "../api/withOperation"
-import { EXTENSION_ID, EXTENSION_VERSION } from "../config/constants"
+import { CLI_PROCESS_TIMEOUT, EXTENSION_ID, EXTENSION_VERSION } from "../config/constants"
 import { ConnectionError, InitializationError } from "../errors"
 import type {
   BackendKind,
   CourseDetailsPanel,
   ExerciseGroup,
-  ExerciseIdentifier,
   ExerciseStatus,
   ExtensionToWebview,
   LocalCourseData as LocalCourseDataType,
@@ -29,15 +28,17 @@ import type {
 } from "../shared/shared"
 import {
   CourseIdentifier,
+  ExerciseIdentifier,
   LocalCourseData,
   LocalCourseExercise,
   panelTarget,
   toWebviewError,
   WebviewToExtensionSchema,
 } from "../shared/shared"
-import { cliFolder, formatSizeInBytes, Logger } from "../utilities"
+import { cliFolder, formatSizeInBytes, Logger, runSingleFlight } from "../utilities"
 import { buildCourseDetailsView } from "./courseDetailsViewModel"
 import type { CourseDetailsView } from "./courseDetailsViewModel"
+import { exerciseStatusRegistry } from "./exerciseStatusRegistry"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { moocLoginRegistry } from "./moocLoginRegistry"
@@ -118,6 +119,9 @@ function handlers(): WebviewHandlers {
   }
   return registeredHandlers
 }
+
+// One CLI download per backend, then a rescan.
+const DOWNLOAD_MAX_HOLD_MS = 3 * CLI_PROCESS_TIMEOUT
 
 type PanelDataTarget = TargetPanel<MyCoursesPanel> | TargetPanel<CourseDetailsPanel>
 
@@ -260,9 +264,7 @@ export class TmcPanel {
       type: "setExerciseStatuses",
       target,
       courseId,
-      statuses: view.exerciseStatuses.map(
-        ({ exerciseId, status }): [ExerciseIdentifier, ExerciseStatus] => [exerciseId, status],
-      ),
+      statuses: withInFlightStatuses(view.exerciseStatuses, exerciseStatusRegistry.get(courseId)),
     })
     this._postMessage({
       type: "setCourseGroups",
@@ -708,15 +710,25 @@ export class TmcPanel {
             await withOperation(
               actionContext.dialog,
               { failure: "Failed to download the exercises.", backend: message.courseId.kind },
-              async () => {
-                await handlers().downloadExercisesForUi(
-                  readyContext,
-                  message.mode,
-                  message.courseId,
-                  message.ids,
-                )
-                return Ok.EMPTY
-              },
+              () =>
+                // A panel re-opened mid-download re-enables its buttons until the
+                // statuses arrive, so a second click must not start a second download.
+                runSingleFlight(
+                  {
+                    key: `download:${message.courseId.kind}:${CourseIdentifier.toString(message.courseId)}`,
+                    maxHoldMs: DOWNLOAD_MAX_HOLD_MS,
+                    busyMessage: "This course's exercises are already downloading.",
+                  },
+                  async () => {
+                    await handlers().downloadExercisesForUi(
+                      readyContext,
+                      message.mode,
+                      message.courseId,
+                      message.ids,
+                    )
+                    return Ok.EMPTY
+                  },
+                ),
             )
             break
           }
@@ -1102,6 +1114,30 @@ function panelTitle(panel: Panel, actionContext: ActionContext): string {
  */
 function takesFocus(panel: PanelRequest): boolean {
   return panel.type === "MoocLogin"
+}
+
+/**
+ * The on-disk statuses with the downloads still running, or failed, laid over them.
+ *
+ * A failure is shown only while the exercise is still absent from disk: one downloaded
+ * since, by any route, is no longer failed.
+ */
+function withInFlightStatuses(
+  onDisk: CourseDetailsView["exerciseStatuses"],
+  inFlight: [ExerciseIdentifier, ExerciseStatus][],
+): [ExerciseIdentifier, ExerciseStatus][] {
+  const inFlightById = new Map(inFlight.map(([id, status]) => [exerciseKey(id), status]))
+  return onDisk.map(({ exerciseId, status }): [ExerciseIdentifier, ExerciseStatus] => {
+    const override = inFlightById.get(exerciseKey(exerciseId))
+    const isOnDisk = status === "opened" || status === "closed"
+    const shown =
+      override === "downloading" || (override === "downloadFailed" && !isOnDisk) ? override : status
+    return [exerciseId, shown]
+  })
+}
+
+function exerciseKey(id: ExerciseIdentifier): string {
+  return `${id.kind}:${ExerciseIdentifier.toString(id)}`
 }
 
 function isSameCourse(a: CourseIdentifier, b: CourseIdentifier): boolean {
