@@ -19,6 +19,7 @@
 - A course workspace that fails to open is now reported.
 - Checking for exercise updates no longer says "All exercises are up to date." when refreshing the courses failed, or when a site holding your courses could not be checked; that site's failure is reported instead.
 - Updated TMC-langs to 0.40.0.
+- Removed the Ctrl+Shift+T (Run Tests), Ctrl+Shift+C (Close Exercise) and Ctrl+Shift+A (Action Menu) shortcuts. They replaced VS Code's Reopen Closed Editor, terminal Copy and Toggle Block Comment in every course workspace, and copying from the terminal on Linux could close an exercise. To keep a shortcut for running tests, bind "TestMyCode: Run Tests" in Keyboard Shortcuts (Ctrl+K Ctrl+S).
 
 ## [3.5.4] - 2026-09-15
 
