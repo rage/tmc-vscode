@@ -557,14 +557,14 @@ suite("registered command handlers", function () {
     expect(submitExercise).toHaveBeenCalledWith(context, actionContext, resource)
   })
 
-  test("tmc.testExercise delegates to commands.testExercise with the extension context", async function () {
+  test("tmc.testExercise delegates to commands.testExercise", async function () {
     const testExercise = vi.spyOn(commands, "testExercise").mockResolvedValue(undefined)
-    const { handlers, context, actionContext } = registerAndCollect()
+    const { handlers, actionContext } = registerAndCollect()
     const resource = vscode.Uri.file("/course/exercise")
 
     await handlers.get("tmc.testExercise")?.(resource)
 
-    expect(testExercise).toHaveBeenCalledWith(context, actionContext, resource)
+    expect(testExercise).toHaveBeenCalledWith(actionContext, resource)
   })
 
   test.each([[undefined], ["silent" as const]])(

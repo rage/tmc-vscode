@@ -230,7 +230,7 @@ export function registerCommands(
   register("tmc.switchWorkspace", async () => commands.switchWorkspace(readyContext))
 
   register("tmc.testExercise", async (resource: vscode.Uri | undefined) =>
-    commands.testExercise(context, readyContext, resource),
+    commands.testExercise(readyContext, resource),
   )
 
   register("tmc.updateExercises", async (mode?: "silent" | "loud") =>
