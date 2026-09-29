@@ -9,6 +9,7 @@ import type { WorkspaceExercise } from "../api/workspaceManager"
 import { BottleneckError } from "../errors"
 import type { RunResult, TestResult } from "../shared/langsSchema"
 import { BaseError } from "../shared/shared"
+import { exerciseActivity } from "../ui/statusBarActivity"
 import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
 import { openCourseExercises } from "./openExercises"
 import { failureMessage } from "./testMessages"
@@ -173,7 +174,9 @@ export class ExerciseTestController implements vscode.Disposable {
     exercise: WorkspaceExercise,
     token: vscode.CancellationToken,
   ): Promise<Result<ExerciseTestOutcome, Error>> {
-    return testExercise(this._actionContext, exercise, token)
+    return exerciseActivity.run(exercise.uri, "testing", () =>
+      testExercise(this._actionContext, exercise, token),
+    )
   }
 
   private _reportError(run: vscode.TestRun, item: vscode.TestItem, error: Error): void {

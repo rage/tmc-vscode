@@ -51,5 +51,5 @@ export function createExerciseActivity(): ExerciseActivity {
   }
 }
 
-/** The one tracker the commands report to and the status bar reads. */
+/** The one tracker the commands and the test controller report to and the status bar reads. */
 export const exerciseActivity: ExerciseActivity = createExerciseActivity()
