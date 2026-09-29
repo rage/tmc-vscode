@@ -1,205 +1,115 @@
 import * as vscode from "vscode"
 
-import { TmcTreeNode } from "./treenode"
+import type { CourseIdentifier } from "../../shared/shared"
+import { backendName, LocalCourseData } from "../../shared/shared"
 
-/** A leaf under a tree entry, such as one course under "My Courses". */
-export interface TreeEntryChild {
-  label: string
-  id: string
-  command: vscode.Command
-  /** Rendered dimmed, beside the label. */
-  description?: string | undefined
-}
+/** The id of the TestMyCode view, for `withProgress({ location: { viewId } })` too. */
+export const COURSES_VIEW_ID = "tmcView"
 
 /**
- * When an entry shows. `"loggedIn"` and `"loggedOut"` are the two halves of
- * {@link TmcMenuTree.setLoggedIn}: an entry that needs a session, and the entry
- * that stands in its place without one.
+ * One of the user's courses in the Courses view.
+ *
+ * The view's context-menu and inline commands receive this item, so they read the course
+ * from {@link courseId}. `contextValue` is `course.<backend>`, with `.hasNew` appended while
+ * the course has exercises the user has not downloaded; package.json's `viewItem` clauses
+ * match on both parts.
  */
-export type TreeEntryVisibility = "always" | "loggedIn" | "loggedOut"
+export class CourseTreeItem extends vscode.TreeItem {
+  public readonly courseId: CourseIdentifier
 
-export interface TreeEntry {
-  label: string
-  /** Unique across the tree; registering the same id twice throws. */
-  id: string
-  command: vscode.Command
-  visible: TreeEntryVisibility
-  /**
-   * Called on every render, so the children track their source without a separate
-   * update path; call `refresh` once that source changes. A leaf entry omits it.
-   */
-  children?: () => TreeEntryChild[]
-  iconId?: string
-}
+  public constructor(course: LocalCourseData) {
+    const title = LocalCourseData.getCourseTitle(course)
+    super(title, vscode.TreeItemCollapsibleState.None)
+    this.courseId = LocalCourseData.getCourseId(course)
+    const newExercises = LocalCourseData.getNewExercises(course).length
+    const { awardedPoints, availablePoints } = course.data
+    const points = availablePoints > 0 ? `${awardedPoints}/${availablePoints}` : undefined
+    const backend = backendName(course.kind)
 
-/**
- * A class for managing the TMC menu treeview.
- */
-export default class TmcMenuTree {
-  private readonly _treeDP: TmcMenuTreeDataProvider
-  private readonly _treeView: vscode.TreeView<TmcTreeNode>
-
-  /**
-   * Creates and registers a new instance of TMCMenuTree with given viewId.
-   * @param viewId Id of the view passed to `vscode.window.registerTreeDataProvider`
-   */
-  public constructor(viewId: string) {
-    this._treeDP = new TmcMenuTreeDataProvider()
-    this._treeView = vscode.window.createTreeView(viewId, { treeDataProvider: this._treeDP })
-  }
-
-  public dispose(): void {
-    this._treeView.dispose()
-    this._treeDP.dispose()
-  }
-
-  /**
-   * Registers an action to be shown in the action treeview.
-   *
-   * @throws if `entry.id` is already registered.
-   */
-  public registerAction(entry: TreeEntry): void {
-    this._treeDP.registerAction(entry)
-  }
-
-  /** Re-renders the tree, picking up whatever the entries' `children` now yield. */
-  public refresh(): void {
-    this._treeDP.refresh()
-  }
-
-  /**
-   * Swaps the entries that need a session for the ones that stand in without
-   * one. Entries registered afterwards pick up the state that was last set.
-   */
-  public setLoggedIn(loggedIn: boolean): void {
-    this._treeDP.setLoggedIn(loggedIn)
-  }
-}
-
-/**
- * A class required by VSCode to fulfill the role of a data provider for the action treeview
- */
-export class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeNode> {
-  /**
-   * @implements {vscode.TreeDataProvider<TmcTreeNode>}
-   */
-  public readonly onDidChangeTreeData: vscode.Event<TmcTreeNode | undefined>
-
-  /**
-   * @implements {vscode.TreeDataProvider<TmcTreeNode>}
-   */
-  private readonly _refreshEventEmitter: vscode.EventEmitter<TmcTreeNode | undefined>
-
-  private _entries: Map<string, TreeEntry>
-  private _loggedIn = false
-
-  /**
-   * Creates new instance of TMC treeview.
-   */
-  public constructor() {
-    this._refreshEventEmitter = new vscode.EventEmitter<TmcTreeNode | undefined>()
-    this.onDidChangeTreeData = this._refreshEventEmitter.event
-    this._entries = new Map<string, TreeEntry>()
-  }
-
-  public dispose(): void {
-    this._refreshEventEmitter.dispose()
-  }
-
-  /**
-   * @implements {vscode.TreeDataProvider<TmcTreeNode>}
-   */
-  public getChildren(element?: TmcTreeNode): Thenable<TmcTreeNode[]> {
-    if (element) {
-      const parent = this._entries.get(element.id)
-      if (!parent || !this._isVisible(parent)) {
-        return Promise.resolve([])
-      }
-      const children = parent.children?.() ?? []
-      return Promise.resolve(
-        children.map(
-          (child) =>
-            new TmcTreeNode(
-              child.label,
-              child.id,
-              child.command,
-              "child",
-              undefined,
-              undefined,
-              child.description,
-            ),
-        ),
-      )
+    this.id = `${course.kind}:${course.data.id}`
+    // Titles are only unique within one backend, so the backend is always shown.
+    this.description = points ? `${points} · ${backend}` : backend
+    this.iconPath = new vscode.ThemeIcon("book")
+    this.contextValue = `course.${course.kind}${newExercises > 0 ? ".hasNew" : ""}`
+    this.tooltip = new vscode.MarkdownString(
+      [
+        `**${title}**`,
+        backend,
+        ...(points ? [`${points} points`] : []),
+        ...(newExercises > 0
+          ? [`${newExercises} new ${newExercises === 1 ? "exercise" : "exercises"}`]
+          : []),
+      ].join("\n\n"),
+    )
+    this.command = {
+      command: "tmc.courseDetails",
+      title: "Go To Course Details",
+      arguments: [this.courseId],
     }
-    const roots = [...this._entries.values()]
-      .filter((entry) => this._isVisible(entry))
-      .map((entry) => TmcMenuTreeDataProvider._rootNode(entry))
-    return Promise.resolve(roots)
+  }
+}
+
+/**
+ * The Courses view: the user's courses while logged in, and nothing otherwise, so that
+ * package.json's `viewsWelcome` explains the empty, logged-out and failed states.
+ */
+export default class CoursesTree implements vscode.TreeDataProvider<CourseTreeItem> {
+  private readonly _changed = new vscode.EventEmitter<undefined>()
+  public readonly onDidChangeTreeData = this._changed.event
+  private readonly _view: vscode.TreeView<CourseTreeItem>
+  private _courses: (() => LocalCourseData[]) | undefined
+  private _isLoggedIn = false
+
+  public constructor() {
+    this._view = vscode.window.createTreeView(COURSES_VIEW_ID, { treeDataProvider: this })
   }
 
-  /**
-   * @implements {vscode.TreeDataProvider<TmcTreeNode>}
-   */
-  public getTreeItem(element: TmcTreeNode): TmcTreeNode {
+  public dispose(): void {
+    this._view.dispose()
+    this._changed.dispose()
+  }
+
+  /** Sets where the courses come from; read on every render. Call once activation has them. */
+  public setCourseSource(courses: () => LocalCourseData[]): void {
+    this._courses = courses
+    this.refresh()
+  }
+
+  public setLoggedIn(isLoggedIn: boolean): void {
+    if (isLoggedIn !== this._isLoggedIn) {
+      this._isLoggedIn = isLoggedIn
+      this.refresh()
+    }
+  }
+
+  /** Re-renders the view; call after the user's courses change. */
+  public refresh(): void {
+    const newExercises = this._visibleCourses().reduce(
+      (total, course) => total + LocalCourseData.getNewExercises(course).length,
+      0,
+    )
+    this._view.badge =
+      newExercises > 0
+        ? {
+            value: newExercises,
+            tooltip: `${newExercises} new ${newExercises === 1 ? "exercise" : "exercises"}`,
+          }
+        : undefined
+    this._changed.fire(undefined)
+  }
+
+  public getChildren(element?: CourseTreeItem): CourseTreeItem[] {
+    if (element) {
+      return []
+    }
+    return this._visibleCourses().map((course) => new CourseTreeItem(course))
+  }
+
+  public getTreeItem(element: CourseTreeItem): CourseTreeItem {
     return element
   }
 
-  /**
-   * @implements {vscode.TreeDataProvider<TmcTreeNode>}
-   */
-  public getParent(): TmcTreeNode | undefined {
-    return undefined
-  }
-
-  public registerAction(entry: TreeEntry): void {
-    if (this._entries.has(entry.id)) {
-      throw new Error(`Action "${entry.id}" already registered`)
-    }
-    this._entries.set(entry.id, entry)
-    this.refresh()
-  }
-
-  public setLoggedIn(loggedIn: boolean): void {
-    if (loggedIn === this._loggedIn) {
-      return
-    }
-    this._loggedIn = loggedIn
-    this.refresh()
-  }
-
-  /**
-   * Triggers a treeview refresh
-   */
-  public refresh(): void {
-    this._refreshEventEmitter.fire(undefined)
-  }
-
-  private _isVisible(entry: TreeEntry): boolean {
-    switch (entry.visible) {
-      case "always":
-        return true
-      case "loggedIn":
-        return this._loggedIn
-      case "loggedOut":
-        return !this._loggedIn
-    }
-  }
-
-  private static _rootNode(entry: TreeEntry): TmcTreeNode {
-    const childCount = entry.children?.().length
-    const collapsibleState =
-      childCount === undefined
-        ? vscode.TreeItemCollapsibleState.None
-        : childCount > 0
-          ? vscode.TreeItemCollapsibleState.Expanded
-          : vscode.TreeItemCollapsibleState.Collapsed
-    return new TmcTreeNode(
-      entry.label,
-      entry.id,
-      entry.command,
-      "parent",
-      collapsibleState,
-      entry.iconId,
-    )
+  private _visibleCourses(): LocalCourseData[] {
+    return this._isLoggedIn && this._courses ? this._courses() : []
   }
 }

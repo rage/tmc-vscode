@@ -14,7 +14,10 @@ import { Logger, LogLevel } from "../../utilities"
 import { createMockMemento } from "../mocks/vscode"
 
 const recorded = vi.hoisted(() => ({
-  treeEntryIds: [] as string[],
+  /** Whether activation handed the Courses view its courses. */
+  isCourseViewFilled: false,
+  /** The last value activation gave each context key it set. */
+  contextKeys: new Map<string, unknown>(),
   registeredCommandIds: [] as string[],
   /** A snapshot of `registeredCommandIds`, taken when the CLI download step starts. */
   commandsRegisteredBeforeCliDownload: undefined as string[] | undefined,
@@ -71,6 +74,12 @@ vi.mock("vscode", async (importOriginal) => {
     extensions: { getExtension: () => ({ packageJSON: { version: "3.0.0" } }) },
     commands: {
       ...(original["commands"] as Record<string, unknown>),
+      executeCommand: async (command: string, ...args: unknown[]) => {
+        if (command === "setContext") {
+          recorded.contextKeys.set(String(args[0]), args[1])
+        }
+        return undefined
+      },
       registerCommand: (id: string) => {
         recorded.registeredCommandIds.push(id)
         return registration
@@ -79,6 +88,9 @@ vi.mock("vscode", async (importOriginal) => {
     window: {
       ...(original["window"] as Record<string, unknown>),
       registerFileDecorationProvider: () => registration,
+      onDidChangeActiveTextEditor: () => registration,
+      withProgress: (_options: unknown, task: (progress: unknown, token: unknown) => unknown) =>
+        task({ report: () => {} }, { isCancellationRequested: false }),
     },
     workspace: {
       ...(original["workspace"] as Record<string, unknown>),
@@ -92,14 +104,14 @@ vi.mock("vscode", async (importOriginal) => {
 vi.mock("../../ui/ui", () => ({
   default: class {
     public treeDP = {
-      registerAction: ({ id }: { id: string }): void => {
-        recorded.treeEntryIds.push(id)
+      setCourseSource: (): void => {
+        recorded.isCourseViewFilled = true
       },
       setLoggedIn: (loggedIn: boolean): void => {
         recorded.treeLoggedIn.push(loggedIn)
       },
+      refresh: (): void => {},
     }
-    public createUiActionHandler = (): unknown => (): void => {}
     public dispose = (): void => {
       recorded.uiDisposals += 1
     }
@@ -209,10 +221,12 @@ vi.mock("../../commands", () => ({
   downloadNewExercises: async (): Promise<void> => {},
   downloadOldSubmission: async (): Promise<void> => {},
   logout: async (): Promise<void> => {},
+  openCourseWorkspace: async (): Promise<void> => {},
   openExercisesFolder: async (): Promise<void> => {},
   openWorkspace: async (): Promise<void> => {},
   pasteExercise: async (): Promise<void> => {},
   pickCourse: async (): Promise<unknown> => undefined,
+  removeCourse: async (): Promise<void> => {},
   resetExercise: async (): Promise<void> => {},
   submitExercise: async (): Promise<unknown> => Ok.EMPTY,
   switchWorkspace: async (): Promise<void> => {},
@@ -259,7 +273,8 @@ function createContextWithBlockedStorage(): vscode.ExtensionContext {
 
 function resetActivationRecording(): void {
   Logger.configure(LogLevel.None)
-  recorded.treeEntryIds.length = 0
+  recorded.isCourseViewFilled = false
+  recorded.contextKeys.clear()
   recorded.registeredCommandIds.length = 0
   recorded.commandsRegisteredBeforeCliDownload = undefined
   recorded.treeLoggedIn.length = 0
@@ -325,14 +340,14 @@ suite("activation with unusable storage", function () {
     vi.restoreAllMocks()
   })
 
-  // Every branch written for a failed initialization -- the recovery entries, the help
+  // Every branch written for a failed initialization -- the recovery view, the help
   // panel, the commands -- runs after resource initialization, so a throw there reaches
   // none of them and the user is left with an error message and an empty sidebar.
-  test("offers the recovery entries instead of aborting", async function () {
+  test("offers the recovery view instead of aborting", async function () {
     await activate(createContextWithBlockedStorage())
 
-    expect(recorded.treeEntryIds).toContain("tmc.viewInitializationErrorHelp")
-    expect(recorded.treeEntryIds).toContain("workbench.action.restartExtensionHost")
+    expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(true)
+    expect(recorded.isCourseViewFilled).toBe(false)
   })
 
   test("opens the initialization error help panel", async function () {
@@ -397,10 +412,10 @@ suite("activation with unreadable stored data", function () {
 
   // Stored data this version cannot parse is recoverable -- the wipe command, a
   // downgrade -- but only if the user is given somewhere to start.
-  test("offers the recovery entries instead of aborting", async function () {
+  test("offers the recovery view instead of aborting", async function () {
     await activate(createContext())
 
-    expect(recorded.treeEntryIds).toContain("tmc.viewInitializationErrorHelp")
+    expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(true)
     expect(recorded.panelTypes).toContain("InitializationErrorHelp")
   })
 
@@ -417,10 +432,12 @@ suite("activation with usable storage", function () {
     vi.restoreAllMocks()
   })
 
-  test("offers no recovery entries", async function () {
+  test("fills the Courses view and offers no recovery", async function () {
     await activate(createContext())
 
-    expect(recorded.treeEntryIds).not.toContain("tmc.viewInitializationErrorHelp")
+    expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(false)
+    expect(recorded.contextKeys.get("test-my-code:Initialized")).toBe(true)
+    expect(recorded.isCourseViewFilled).toBe(true)
     expect(recorded.panelTypes).toEqual([])
   })
 
@@ -464,10 +481,10 @@ suite("activation without the CLI", function () {
     vi.restoreAllMocks()
   })
 
-  test("offers the recovery entries instead of aborting", async function () {
+  test("offers the recovery view instead of aborting", async function () {
     await activate(createContext())
 
-    expect(recorded.treeEntryIds).toContain("tmc.viewInitializationErrorHelp")
+    expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(true)
     expect(recorded.panelTypes).toContain("InitializationErrorHelp")
   })
 
@@ -622,15 +639,15 @@ suite("activation in a workspace the migration cannot use in place", function ()
     )
   })
 
-  // Tree entries never register here (`registerUiActions` runs after this return).
-  // The five service-free commands do, since `registerServiceFreeCommands` now runs
+  // The Courses view is never filled here (`fillCoursesView` runs after this return).
+  // The service-free commands do register, since `registerServiceFreeCommands` runs
   // ahead of the migration check -- but `vscode.openFolder` reloads the window into a
   // fresh extension host process, discarding this one's `context.subscriptions` before
   // the next activation registers anything, so nothing collides.
-  test("registers no tree entry before the reload", async function () {
+  test("fills no view before the reload", async function () {
     await activate(createContext())
 
-    expect(recorded.treeEntryIds).toEqual([])
+    expect(recorded.isCourseViewFilled).toBe(false)
     expect(recorded.registeredCommandIds).toContain("tmc.logs")
   })
 })

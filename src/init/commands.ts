@@ -8,8 +8,15 @@ import * as commands from "../commands"
 import { EXTENSION_ID } from "../config/constants"
 import { nextPanelId, registerWebviewHandlers, TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
-import type UI from "../ui/ui"
+import { CourseTreeItem } from "../ui/treeview/treeview"
 import { Logger } from "../utilities"
+
+/** A course command's argument: a course id from code, or the Courses view item it runs on. */
+type CourseTarget = CourseIdentifier | CourseTreeItem
+
+function courseIdOf(target: CourseTarget | undefined): CourseIdentifier | undefined {
+  return target instanceof CourseTreeItem ? target.courseId : target
+}
 
 /** A command's title as the manifest declares it, without a trailing ellipsis; else its id. */
 function commandTitle(id: string): string {
@@ -60,12 +67,8 @@ function commandRegistrar(
 export function registerServiceFreeCommands(
   context: vscode.ExtensionContext,
   dialog: Dialog,
-  ui: UI,
 ): void {
   const register = commandRegistrar(context, dialog)
-
-  // `tmcView.activateEntry` is how every tree entry runs, recovery ones too.
-  register("tmcView.activateEntry", ui.createUiActionHandler())
 
   register("tmc.settings", async () => {
     await vscode.commands.executeCommand("workbench.action.openSettings", "TestMyCode")
@@ -84,7 +87,7 @@ export function registerServiceFreeCommands(
 
 /**
  * Registers the commands that need the startup state, i.e. everything except
- * {@link registerServiceFreeCommands}'s four.
+ * {@link registerServiceFreeCommands}'s three.
  *
  * A degraded activation still reaches `tmc.viewInitializationErrorHelp`, the one
  * exception that needs an `ActionContext` but no service; every id after it requires
@@ -140,11 +143,13 @@ export function registerCommands(
     commands.closeExercise(readyContext, resource),
   )
 
-  register("tmc.courseDetails", async (courseId?: CourseIdentifier) => {
-    courseId ??= await commands.pickCourse(readyContext, {
-      title: "Course Details",
-      placeHolder: "Which course page do you want to open?",
-    })
+  register("tmc.courseDetails", async (target?: CourseTarget) => {
+    const courseId =
+      courseIdOf(target) ??
+      (await commands.pickCourse(readyContext, {
+        title: "Course Details",
+        placeHolder: "Which course page do you want to open?",
+      }))
     if (courseId) {
       TmcPanel.renderMain(context.extensionUri, context, readyContext, {
         id: nextPanelId(),
@@ -155,7 +160,9 @@ export function registerCommands(
     }
   })
 
-  register("tmc.downloadNewExercises", async () => commands.downloadNewExercises(readyContext))
+  register("tmc.downloadNewExercises", async (target?: CourseTarget) =>
+    commands.downloadNewExercises(readyContext, courseIdOf(target)),
+  )
 
   register("tmc.downloadOldSubmission", async (resource: vscode.Uri | undefined) =>
     commands.downloadOldSubmission(readyContext, resource),
@@ -171,10 +178,18 @@ export function registerCommands(
     })
   })
 
+  register("tmc.openCourseWorkspace", async (target?: CourseTarget) =>
+    commands.openCourseWorkspace(readyContext, courseIdOf(target)),
+  )
+
   register("tmc.openTMCExercisesFolder", async () => commands.openExercisesFolder(readyContext))
 
   register("tmc.pasteExercise", async (resource: vscode.Uri | undefined) =>
     commands.pasteExercise(readyContext, resource),
+  )
+
+  register("tmc.removeCourse", async (target?: CourseTarget) =>
+    commands.removeCourse(readyContext, courseIdOf(target)),
   )
 
   register("tmc.resetExercise", async (resource: vscode.Uri | undefined) =>

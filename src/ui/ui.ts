@@ -1,31 +1,16 @@
-import TmcMenuTree from "./treeview/treeview"
+import CoursesTree from "./treeview/treeview"
 
-/**
- * A class for interacting with the user through graphical means
- */
+/** The extension's native views. */
 export default class UI {
-  /**
-   * A TmcTDP object for interacting with the treeview panel
-   */
-  public treeDP: TmcMenuTree
+  /** The Courses view in the TestMyCode sidebar. */
+  public readonly treeDP: CoursesTree
 
-  /**
-   * Creates a UI object with an empty treeview.
-   */
+  /** Creates the views empty; their `viewsWelcome` shows until activation fills them. */
   public constructor() {
-    this.treeDP = new TmcMenuTree("tmcView")
+    this.treeDP = new CoursesTree()
   }
 
   public dispose(): void {
     this.treeDP.dispose()
-  }
-
-  /**
-   * @return A handler callback for the tmcView.activateEntry command
-   */
-  public createUiActionHandler(): (onClick: () => void) => void {
-    return (onClick: () => void): void => {
-      onClick()
-    }
   }
 }

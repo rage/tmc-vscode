@@ -62,9 +62,21 @@ export class TmcPage {
       .locator("a")
     await clickUntilVisible(
       activityBarEntry,
-      this.page.getByRole("heading", { name: "TestMyCode: Menu" }),
-      "the TestMyCode menu did not open",
+      this.page.getByRole("heading", { name: "TestMyCode: Courses" }),
+      "the TestMyCode Courses view did not open",
     )
+  }
+
+  /** A button in the Courses view's welcome content, shown while the view has no courses. */
+  public coursesViewWelcomeButton(name: string): Locator {
+    return this.page.locator(".welcome-view-content").getByRole("button", { name, exact: true })
+  }
+
+  /** Opens My Courses from the Command Palette. */
+  public async openMyCourses(): Promise<void> {
+    await this.page.keyboard.press("F1")
+    await this.page.keyboard.type("TestMyCode: Display My Courses")
+    await this.page.keyboard.press("Enter")
   }
 
   /**

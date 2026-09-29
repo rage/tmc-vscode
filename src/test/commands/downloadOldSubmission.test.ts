@@ -21,7 +21,8 @@ import { createDialogMock } from "../mocks/dialog"
 
 // jest-mock-vscode ships no `env` namespace.
 beforeAll(function () {
-  Object.defineProperty(vscode, "env", { value: { language: "en" }, configurable: true })
+  const vscodeModule: object = vscode
+  Object.defineProperty(vscodeModule, "env", { value: { language: "en" }, configurable: true })
 })
 
 suite("Download old submission command (mooc branch)", function () {

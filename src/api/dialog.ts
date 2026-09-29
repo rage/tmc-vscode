@@ -34,6 +34,9 @@ type ShowNotification = (
   ...actions: NotificationAction[]
 ) => Thenable<NotificationAction | undefined>
 
+/** Where a progress indicator shows. */
+export type ProgressLocation = vscode.ProgressLocation | { viewId: string }
+
 /** A progress report giving absolute completion as a 0..1 fraction. */
 export interface FractionProgress {
   message?: string | undefined
@@ -196,7 +199,8 @@ export default class Dialog {
    * @param message A prompt to be displayed to the user.
    * @param task Long task that determines the duration of the notification.
    * The cancellation token only fires when `cancellable` is set.
-   * @param options Set `cancellable` to offer a Cancel button.
+   * @param options Set `cancellable` to offer a Cancel button. `location` defaults to a
+   * notification; a view location shows the view's own progress bar instead, and no message.
    */
   public async progressNotification<T>(
     message: string,
@@ -204,11 +208,11 @@ export default class Dialog {
       progress: vscode.Progress<FractionProgress>,
       token: vscode.CancellationToken,
     ) => Promise<T>,
-    options?: { cancellable?: boolean },
+    options?: { cancellable?: boolean; location?: ProgressLocation },
   ): Promise<T> {
     return vscode.window.withProgress(
       {
-        location: vscode.ProgressLocation.Notification,
+        location: options?.location ?? vscode.ProgressLocation.Notification,
         title: "TestMyCode",
         cancellable: options?.cancellable ?? false,
       },

@@ -252,7 +252,8 @@ beforeEach(function () {
 
 // jest-mock-vscode ships no `env` namespace; the old-submission picker formats dates with it.
 beforeAll(function () {
-  Object.defineProperty(vscode, "env", { value: { language: "en" }, configurable: true })
+  const vscodeModule: object = vscode
+  Object.defineProperty(vscodeModule, "env", { value: { language: "en" }, configurable: true })
 })
 
 suite("reported once: exercise commands", function () {

@@ -7,6 +7,7 @@ import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
 import { EXERCISE_CHECK_INTERVAL, NOTIFICATION_DELAY } from "../config/constants"
 import { LocalCourseData } from "../shared/shared"
+import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
 import { runSingleFlight } from "../utilities"
 import { updateExercises } from "./updateExercises"
 
@@ -16,7 +17,7 @@ const REFRESH_FAILED = "Failed to check for course updates."
  * The extension's one background refresh: course data first, then the exercise
  * update check.
  *
- * Activation, the maintenance poll, the tree view's refresh button and the tail
+ * Activation, the maintenance poll, the Courses view's refresh button and the tail
  * of each submit all want this, and two passes overlapping would interleave
  * writes to `UserData` and prompt twice about the same exercises. They share one
  * key, so a call made while another is running comes back as a
@@ -44,13 +45,17 @@ export async function refreshEverything(
 }
 
 /**
- * {@link refreshEverything} for the tree view's refresh button: loud, with each finished
- * course advancing a progress bar.
+ * {@link refreshEverything} for the Courses view's refresh button: loud, with each finished
+ * course advancing the view's progress bar.
  */
 export async function refreshCourses(actionContext: ReadyActionContext): Promise<void> {
   await withOperation(
     actionContext.dialog,
-    { failure: REFRESH_FAILED, progress: "Fetching course updates..." },
+    {
+      failure: REFRESH_FAILED,
+      progress: "Fetching course updates…",
+      progressLocation: { viewId: COURSES_VIEW_ID },
+    },
     (report) =>
       refresh(actionContext, {
         silent: false,
@@ -73,6 +78,7 @@ async function refresh(
     },
     async () => {
       const refreshed = await checkForCourseUpdates(actionContext, { courseId, onProgress })
+      actionContext.ui.treeDP.refresh()
       if (refreshed.ok) {
         offerNewExercises(actionContext, refreshed.val.courses)
       }

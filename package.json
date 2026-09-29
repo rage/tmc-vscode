@@ -136,7 +136,8 @@
       {
         "command": "tmc.downloadNewExercises",
         "title": "Download New Exercises For Course...",
-        "category": "TestMyCode"
+        "category": "TestMyCode",
+        "icon": "$(cloud-download)"
       },
       {
         "command": "tmc.downloadOldSubmission",
@@ -154,6 +155,12 @@
         "category": "TestMyCode"
       },
       {
+        "command": "tmc.openCourseWorkspace",
+        "title": "Open Course Workspace",
+        "icon": "$(folder-opened)",
+        "category": "TestMyCode"
+      },
+      {
         "command": "tmc.settings",
         "title": "Settings",
         "category": "TestMyCode"
@@ -166,6 +173,11 @@
       {
         "command": "tmc.pasteExercise",
         "title": "Send Exercise To Paste",
+        "category": "TestMyCode"
+      },
+      {
+        "command": "tmc.removeCourse",
+        "title": "Remove Course…",
         "category": "TestMyCode"
       },
       {
@@ -230,11 +242,6 @@
         "title": "Fetch Course Updates",
         "category": "TestMyCode",
         "icon": "$(refresh)"
-      },
-      {
-        "command": "tmcView.activateEntry",
-        "title": "Activate",
-        "category": "TestMyCode"
       }
     ],
     "configuration": {
@@ -333,10 +340,6 @@
           "when": "false"
         },
         {
-          "command": "tmcView.activateEntry",
-          "when": "false"
-        },
-        {
           "command": "tmc.testExercise",
           "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise"
         },
@@ -371,6 +374,14 @@
         {
           "command": "tmc.showWelcome",
           "when": "test-my-code:Initialized"
+        },
+        {
+          "command": "tmc.openCourseWorkspace",
+          "when": "false"
+        },
+        {
+          "command": "tmc.removeCourse",
+          "when": "test-my-code:Initialized && test-my-code:LoggedIn"
         }
       ],
       "editor/title": [
@@ -437,12 +448,70 @@
       "view/title": [
         {
           "command": "tmc.addNewCourse",
+          "group": "navigation@1",
           "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn"
         },
         {
           "command": "tmcTreeView.refreshCourses",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn",
-          "group": "navigation"
+          "group": "navigation@2",
+          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.myCourses",
+          "group": "1_courses@1",
+          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.openTMCExercisesFolder",
+          "group": "1_courses@2",
+          "when": "view == tmcView && test-my-code:Initialized"
+        },
+        {
+          "command": "tmc.logout",
+          "group": "2_account@1",
+          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.settings",
+          "group": "3_help@1",
+          "when": "view == tmcView"
+        },
+        {
+          "command": "tmc.logs",
+          "group": "3_help@2",
+          "when": "view == tmcView"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "tmc.downloadNewExercises",
+          "group": "inline@1",
+          "when": "view == tmcView && viewItem =~ /\\.hasNew$/ && test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.openCourseWorkspace",
+          "group": "inline@2",
+          "when": "view == tmcView && viewItem =~ /^course\\./ && test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.courseDetails",
+          "group": "1_course@1",
+          "when": "view == tmcView && viewItem =~ /^course\\./ && test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.openCourseWorkspace",
+          "group": "1_course@2",
+          "when": "view == tmcView && viewItem =~ /^course\\./ && test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.downloadNewExercises",
+          "group": "1_course@3",
+          "when": "view == tmcView && viewItem =~ /\\.hasNew$/ && test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.removeCourse",
+          "group": "9_remove@1",
+          "when": "view == tmcView && viewItem =~ /^course\\./ && test-my-code:Initialized && test-my-code:LoggedIn"
         }
       ]
     },
@@ -456,10 +525,32 @@
       "tmc": [
         {
           "id": "tmcView",
-          "name": "Menu"
+          "name": "Courses"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "tmcView",
+        "when": "!test-my-code:Initialized && !test-my-code:Degraded",
+        "contents": "Starting TestMyCode…\n[Show Logs](command:tmc.logs)"
+      },
+      {
+        "view": "tmcView",
+        "when": "test-my-code:Degraded",
+        "contents": "TestMyCode could not start, so its courses and exercises are unavailable.\n[Show Details](command:tmc.viewInitializationErrorHelp)\n[Restart Extension Host](command:workbench.action.restartExtensionHost)\n[Show Logs](command:tmc.logs)"
+      },
+      {
+        "view": "tmcView",
+        "when": "test-my-code:Initialized && !test-my-code:LoggedIn",
+        "contents": "Log in with your courses.mooc.fi account to download, test and submit exercises.\n[Log In](command:tmc.showMoocLogin)\n[Read the installation guide](https://www.mooc.fi/en/installation/vscode)"
+      },
+      {
+        "view": "tmcView",
+        "when": "test-my-code:Initialized && test-my-code:LoggedIn",
+        "contents": "You have not added any courses yet.\n[Add a Course](command:tmc.addNewCourse)\n[Open My Courses](command:tmc.myCourses)"
+      }
+    ],
     "viewsContainers": {
       "activitybar": [
         {

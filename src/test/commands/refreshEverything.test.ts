@@ -330,9 +330,11 @@ suite("refreshCourses command", function () {
 
     await refreshCourses(actionContext)
 
+    // In the Courses view, whose refresh button this is, rather than a notification.
     expect(dialog.progressNotification).toHaveBeenCalledWith(
-      "Fetching course updates...",
+      "Fetching course updates…",
       expect.any(Function),
+      { location: { viewId: "tmcView" } },
     )
     expect(updateCourse).toHaveBeenCalledTimes(2)
     expect(report).toHaveBeenCalledWith({ fraction: 0.5 })

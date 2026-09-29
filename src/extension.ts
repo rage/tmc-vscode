@@ -35,6 +35,7 @@ import { nextPanelId, TmcPanel } from "./panels/TmcPanel"
 import { createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
 import { trackActiveEditorExercise } from "./ui/activeExerciseContext"
+import { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import UI from "./ui/ui"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
 
@@ -100,7 +101,11 @@ async function reopenInMigratedWorkspace(
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   try {
-    await activateInner(context)
+    // The Courses view shows "Starting TestMyCode…" until activation settles; this gives it
+    // a progress bar too.
+    await vscode.window.withProgress({ location: { viewId: COURSES_VIEW_ID } }, () =>
+      activateInner(context),
+    )
   } catch (e) {
     // this should never occur, we always want to activate the extension even if only partially
     Logger.error("Fatal error during initialization:", e)
@@ -133,7 +138,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   const dialog = new Dialog()
   const ui = new UI()
   context.subscriptions.push(ui)
-  init.registerServiceFreeCommands(context, dialog, ui)
+  init.registerServiceFreeCommands(context, dialog)
   const cliFolderPath = cliFolder(context)
   const reportInitializationError = makeInitializationErrorReporter(dialog, cliFolderPath)
   const cliPathResult = await init.ensureLangsUpdated(
@@ -399,7 +404,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     }
   }
 
-  init.registerUiActions(actionContext)
+  init.fillCoursesView(actionContext)
   init.registerCommands(context, actionContext)
   if (readyContext) {
     init.registerSettingsCallbacks(readyContext)
@@ -411,6 +416,11 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     "setContext",
     "test-my-code:Initialized",
     startup.kind === "ready",
+  )
+  await vscode.commands.executeCommand(
+    "setContext",
+    "test-my-code:Degraded",
+    startup.kind === "degraded",
   )
 
   if (exerciseDecorationProvider.ok) {

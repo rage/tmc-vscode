@@ -12,6 +12,7 @@ import type Resources from "../../config/resources"
 import { registerCommands, registerServiceFreeCommands } from "../../init/commands"
 import { TmcPanel } from "../../panels/TmcPanel"
 import { CourseIdentifier } from "../../shared/shared"
+import { CourseTreeItem } from "../../ui/treeview/treeview"
 import { Logger } from "../../utilities"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 
@@ -19,7 +20,6 @@ import { createDegradedContext, createMockActionContext } from "../mocks/actionC
 // `registerCommands`. Declared here rather than derived, so a command silently
 // disappearing (or a new one arriving unreviewed) fails.
 const expectedCommands = [
-  "tmcView.activateEntry",
   "tmcTreeView.refreshCourses",
   "tmc.addNewCourse",
   "tmc.changeTmcDataPath",
@@ -30,6 +30,8 @@ const expectedCommands = [
   "tmc.downloadOldSubmission",
   "tmc.logout",
   "tmc.myCourses",
+  "tmc.openCourseWorkspace",
+  "tmc.removeCourse",
   "tmc.settings",
   "tmc.openTMCExercisesFolder",
   "tmc.pasteExercise",
@@ -47,10 +49,9 @@ const expectedCommands = [
 ]
 
 // Of those, the ones that reach no service, so a failed activation can still offer them:
-// `registerServiceFreeCommands`'s four, plus `tmc.viewInitializationErrorHelp`, which
+// `registerServiceFreeCommands`'s three, plus `tmc.viewInitializationErrorHelp`, which
 // needs an `ActionContext` but no service and so stays in `registerCommands`.
 const expectedDegradedCommands = [
-  "tmcView.activateEntry",
   "tmc.settings",
   "tmc.logs",
   "tmc.debug",
@@ -58,12 +59,7 @@ const expectedDegradedCommands = [
 ]
 
 // What `registerServiceFreeCommands` registers on its own, regardless of startup state.
-const expectedServiceFreeCommands = [
-  "tmcView.activateEntry",
-  "tmc.settings",
-  "tmc.logs",
-  "tmc.debug",
-]
+const expectedServiceFreeCommands = ["tmc.settings", "tmc.logs", "tmc.debug"]
 
 function registerAndCollect(actionContext: ActionContext = createMockActionContext()): {
   ids: string[]
@@ -88,7 +84,7 @@ function registerAndCollect(actionContext: ActionContext = createMockActionConte
     extensionUri: vscode.Uri.file("/tmp/extension"),
   } as unknown as vscode.ExtensionContext
 
-  registerServiceFreeCommands(context, actionContext.dialog, actionContext.ui)
+  registerServiceFreeCommands(context, actionContext.dialog)
   const serviceFreeIds = [...ids]
   registerCommands(context, actionContext)
   registerCommand.mockRestore()
@@ -155,7 +151,7 @@ suite("registerCommands", function () {
   })
 
   // Pins the split itself: `registerServiceFreeCommands` must register exactly these
-  // four and nothing `registerCommands` also registers, or the two other set
+  // three and nothing `registerCommands` also registers, or the two other set
   // assertions in this suite would only prove the union is right, not the partition.
   test("registerServiceFreeCommands registers exactly the ids that need no service", function () {
     const { serviceFreeIds } = registerAndCollect()
@@ -221,7 +217,8 @@ suite("registerCommands", function () {
   // otherwise leave the user staring at an unchanged screen.
   test("a failing command reports under its title instead of rejecting", async function () {
     // The mock module has no `extensions` namespace at all.
-    Object.defineProperty(vscode, "extensions", {
+    const vscodeModule: object = vscode
+    Object.defineProperty(vscodeModule, "extensions", {
       value: { getExtension: () => ({ packageJSON: packageJson() }) },
       configurable: true,
     })
@@ -255,7 +252,7 @@ suite("registerCommands", function () {
       ...viewsWelcome.flatMap((x) =>
         [...x.contents.matchAll(/command:([\w.-]+)/g)].flatMap((m) => m[1] ?? []),
       ),
-    ]
+    ].filter((command) => !command.startsWith("workbench."))
     const declared = new Set(declaredCommands())
     expect([...new Set(referenced)].filter((x) => !declared.has(x))).toEqual([])
   })
@@ -384,7 +381,6 @@ suite("registered command handlers", function () {
   test.each([
     ["tmc.addNewCourse", "addNewCourse"],
     ["tmc.changeTmcDataPath", "changeTmcDataPath"],
-    ["tmc.downloadNewExercises", "downloadNewExercises"],
     ["tmc.logout", "logout"],
     ["tmc.switchWorkspace", "switchWorkspace"],
   ] as const)(
@@ -396,6 +392,33 @@ suite("registered command handlers", function () {
       await handlers.get(commandId)?.()
 
       expect(delegate).toHaveBeenCalledWith(actionContext)
+    },
+  )
+
+  // The Courses view hands its commands the item they ran on; code hands them a course id.
+  test.each([
+    ["tmc.downloadNewExercises", "downloadNewExercises"],
+    ["tmc.openCourseWorkspace", "openCourseWorkspace"],
+    ["tmc.removeCourse", "removeCourse"],
+  ] as const)(
+    "%s passes commands.%s the course, from an id, a Courses view item or neither",
+    async function (commandId, delegateName) {
+      const delegate = vi.spyOn(commands, delegateName).mockResolvedValue(undefined)
+      const { handlers, actionContext } = registerAndCollect()
+      const courseId = CourseIdentifier.from("course-uuid")
+      const item = Object.assign(Object.create(CourseTreeItem.prototype) as CourseTreeItem, {
+        courseId,
+      })
+
+      await handlers.get(commandId)?.(courseId)
+      await handlers.get(commandId)?.(item)
+      await handlers.get(commandId)?.()
+
+      expect(delegate.mock.calls).toEqual([
+        [actionContext, courseId],
+        [actionContext, courseId],
+        [actionContext, undefined],
+      ])
     },
   )
 

@@ -5,7 +5,7 @@ import { BottleneckError, presentationFor } from "../errors"
 import type { BackendKind } from "../shared/shared"
 import { Logger } from "../utilities"
 import type Dialog from "./dialog"
-import type { FractionProgress } from "./dialog"
+import type { FractionProgress, ProgressLocation } from "./dialog"
 
 /** Options for {@link withOperation}. */
 export interface OperationOptions {
@@ -21,6 +21,8 @@ export interface OperationOptions {
   silent?: boolean
   /** Runs `body` under a progress notification with this message. */
   progress?: string
+  /** Shows {@link progress} there instead of in a notification. */
+  progressLocation?: ProgressLocation
 }
 
 class OperationFailure extends Error {
@@ -77,8 +79,10 @@ export async function withOperation<T>(
   let result: Result<T, Error>
   try {
     result = options.progress
-      ? await dialog.progressNotification(options.progress, (progress) =>
-          body((fraction) => progress.report(fraction)),
+      ? await dialog.progressNotification(
+          options.progress,
+          (progress) => body((fraction) => progress.report(fraction)),
+          options.progressLocation ? { location: options.progressLocation } : undefined,
         )
       : await body(() => {})
   } catch (thrown) {

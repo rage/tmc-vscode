@@ -117,7 +117,9 @@ interface Deferred<T> {
 
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((r) => (resolve = r))
+  const promise = new Promise<T>((r) => {
+    resolve = r
+  })
   return { promise, resolve }
 }
 
@@ -214,6 +216,7 @@ suite("Add New Course command", function () {
     expect(context.dialog.progressNotification).toHaveBeenCalledWith(
       "Adding Shared Slug Course…",
       expect.any(Function),
+      undefined,
     )
     const [message, [label, open]] = vi.mocked(context.dialog.notification).mock.calls[0] as [
       string,

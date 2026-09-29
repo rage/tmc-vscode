@@ -219,7 +219,23 @@ suite("withOperation", function () {
 
     expect(result.val).toBe("done")
     expect(body).toHaveBeenCalledOnce()
-    expect(dialog.progressNotification).toHaveBeenCalledWith("Moving data...", expect.any(Function))
+    expect(dialog.progressNotification).toHaveBeenCalledWith(
+      "Moving data...",
+      expect.any(Function),
+      undefined,
+    )
+  })
+
+  test("shows the progress where the options say", async function () {
+    await withOperation(
+      dialog,
+      { failure: "Failed.", progress: "Refreshing…", progressLocation: { viewId: "tmcView" } },
+      async () => Ok.EMPTY,
+    )
+
+    expect(dialog.progressNotification).toHaveBeenCalledWith("Refreshing…", expect.any(Function), {
+      location: { viewId: "tmcView" },
+    })
   })
 
   test("forwards the body's reports to the progress bar", async function () {
