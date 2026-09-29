@@ -9,8 +9,7 @@ const path = require("path")
 // Zero tests are zero failures, so a suite that stopped reaching the bundle
 // would pass. Raise this with the suite; mocha counts a pending test in
 // `stats.tests`, so the figure is the number of cases src/test-integration
-// declares and does not move when the CLI-version gate skips the
-// migration-contract cases.
+// declares.
 const MINIMUM_TESTS = 63
 
 function run() {

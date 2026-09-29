@@ -31,7 +31,7 @@ export const MOCK_USER_CODE = "WXYZ-1234"
 export const EXERCISE_SERVICES_SCOPE = "exercise-services"
 
 // Well-known seeded tokens for tests that skip the device flow (e.g. writing
-// credentials_mooc.json directly). Recognised without being minted via the OAuth
+// the credentials file directly). Recognised without being minted via the OAuth
 // endpoints, and exempt from the lifetime and single-use rules a minted token
 // obeys, so a fixture can reuse one across tests:
 //   - scoped access token        -> 200 (until expireMoocAccessToken names it)

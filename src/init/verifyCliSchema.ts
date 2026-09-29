@@ -2,8 +2,7 @@ import * as cp from "child_process"
 import * as fs from "fs"
 import * as path from "path"
 
-import { MIGRATION_CONTRACT_VERSION, TMC_LANGS_VERSION } from "../config/constants"
-import { Logger, semVerCompare } from "../utilities"
+import { Logger } from "../utilities"
 
 /**
  * Startup self-check for the tmc-langs-cli output contract.
@@ -17,24 +16,8 @@ import { Logger, semVerCompare } from "../utilities"
  *
  * Diagnostic only: never throws; a mismatch is reported via `Logger.warn`
  * instead of failing activation.
- *
- * Skipped for a pinned CLI older than {@link MIGRATION_CONTRACT_VERSION}, which
- * has no `schema` subcommand: the check cannot run there, and warning about it
- * on every activation is noise the user can do nothing about.
  */
-export async function verifyCliSchema(
-  cliPath: string,
-  extensionPath: string,
-  cliVersion: string = TMC_LANGS_VERSION,
-): Promise<void> {
-  const comparison = semVerCompare(cliVersion, MIGRATION_CONTRACT_VERSION, "patch")
-  if (comparison === undefined || comparison < 0) {
-    Logger.debug(
-      `Skipping the tmc-langs-cli output schema check: ${cliVersion} predates the ` +
-        `\`schema\` subcommand (added in ${MIGRATION_CONTRACT_VERSION}).`,
-    )
-    return
-  }
+export async function verifyCliSchema(cliPath: string, extensionPath: string): Promise<void> {
   try {
     const vendoredSchemaPath = path.join(extensionPath, "shared", "bindings.schema.json")
     const vendoredSchema = await fs.promises.readFile(vendoredSchemaPath, "utf8")
@@ -60,13 +43,6 @@ export async function verifyCliSchema(
       )
     }
   } catch (error) {
-    // e.g. a missing vendored schema file, or a CLI installed under a pinned
-    // filename that is older than it claims -- best-effort by design
-    const message = error instanceof Error ? error.message : String(error)
-    if (message.includes("unrecognized subcommand")) {
-      Logger.debug(`The tmc-langs-cli at ${cliPath} has no \`schema\` subcommand; check skipped.`)
-      return
-    }
     Logger.warn(
       "Failed to check the tmc-langs-cli output schema against the bundled contract schema.",
       error,

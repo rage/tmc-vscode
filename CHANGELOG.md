@@ -18,6 +18,7 @@
 - A paste from the exercise panel that fails now shows its error in the panel only, instead of also as a notification.
 - A course workspace that fails to open is now reported.
 - Checking for exercise updates no longer says "All exercises are up to date." when refreshing the courses failed, or when a site holding your courses could not be checked; that site's failure is reported instead.
+- Updated TMC-langs to 0.40.0.
 
 ## [3.5.4] - 2026-09-15
 

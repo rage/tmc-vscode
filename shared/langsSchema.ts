@@ -62,51 +62,7 @@ export interface SubmissionFeedbackAnswer {
   answer: string
 }
 
-/**
- * The released CLI that `TMC_LANGS_RUST_VERSION` pins reports a partially failed
- * tmc batch download as a structured `{ "failed-exercise-download": ... }` error
- * kind. The current CLI reports that case as a plain `generic` error, so the
- * variant is absent from the generated contract — but the pinned binary is the
- * one shipped to users, and its error output must still validate. Nothing here
- * consumes the structured form (the human-readable `message` carries the
- * detail), so fold it into `generic` rather than carrying a second output shape
- * through every type that intersects `OutputData`.
- */
-function normalizeReleasedErrorKind(output: unknown): unknown {
-  if (
-    output === null ||
-    typeof output !== "object" ||
-    (output as { "output-kind"?: unknown })["output-kind"] !== "output-data"
-  ) {
-    return output
-  }
-  const data = (output as { data?: unknown }).data
-  if (
-    data === null ||
-    typeof data !== "object" ||
-    (data as { "output-data-kind"?: unknown })["output-data-kind"] !== "error"
-  ) {
-    return output
-  }
-  const errorData = (data as { "output-data"?: unknown })["output-data"]
-  if (errorData === null || typeof errorData !== "object") {
-    return output
-  }
-  const kind = (errorData as { kind?: unknown }).kind
-  if (
-    kind === null ||
-    typeof kind !== "object" ||
-    !("failed-exercise-download" in (kind as object))
-  ) {
-    return output
-  }
-  return {
-    ...output,
-    data: { ...data, "output-data": { ...errorData, kind: "generic" } },
-  }
-}
-
-export const CliOutput = z.preprocess(normalizeReleasedErrorKind, zCliOutput)
+export const CliOutput = zCliOutput
 export type CliOutput = z.infer<typeof CliOutput>
 
 /**
@@ -116,23 +72,18 @@ export type CliOutput = z.infer<typeof CliOutput>
  * measuring every line against all three; `CliOutput` leads with the `output-data` branch,
  * whose payload union has 44 members.
  */
-export const CliNotification = z.preprocess(
-  normalizeReleasedErrorKind,
-  zNotification.and(z.object({ "output-kind": z.literal("notification") })),
+export const CliNotification = zNotification.and(
+  z.object({ "output-kind": z.literal("notification") }),
 )
 export type CliNotification = z.infer<typeof CliNotification>
 
 /** An `output-data` line: `CliOutput`'s first branch on its own. See {@link CliNotification}. */
-export const CliOutputData = z.preprocess(
-  normalizeReleasedErrorKind,
-  zOutputData.and(z.object({ "output-kind": z.literal("output-data") })),
-)
+export const CliOutputData = zOutputData.and(z.object({ "output-kind": z.literal("output-data") }))
 export type CliOutputData = z.infer<typeof CliOutputData>
 
 /** A `status-update` line: `CliOutput`'s second branch on its own. See {@link CliNotification}. */
-export const CliStatusUpdate = z.preprocess(
-  normalizeReleasedErrorKind,
-  zStatusUpdateData.and(z.object({ "output-kind": z.literal("status-update") })),
+export const CliStatusUpdate = zStatusUpdateData.and(
+  z.object({ "output-kind": z.literal("status-update") }),
 )
 export type CliStatusUpdate = z.infer<typeof CliStatusUpdate>
 

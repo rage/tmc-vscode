@@ -382,45 +382,6 @@ const validCliOutputFixtures: CliOutputFixture[] = [
       },
     },
   },
-  {
-    name: "error: failed-exercise-download (released CLI only)",
-    value: {
-      "output-kind": "output-data",
-      status: "finished",
-      message: "Failed to download exercises",
-      result: "error",
-      data: {
-        "output-data-kind": "error",
-        "output-data": {
-          kind: {
-            "failed-exercise-download": {
-              completed: [
-                {
-                  id: 1,
-                  "course-slug": "course",
-                  "exercise-slug": "ex1",
-                  path: "/p/ex1",
-                },
-              ],
-              skipped: [],
-              failed: [
-                [
-                  {
-                    id: 2,
-                    "course-slug": "course",
-                    "exercise-slug": "ex2",
-                    path: "/p/ex2",
-                  },
-                  ["download failed"],
-                ],
-              ],
-            },
-          },
-          trace: ["error"],
-        },
-      },
-    },
-  },
   // one fixture per remaining DataKind variant
   {
     name: "validation (result)",

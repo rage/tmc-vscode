@@ -238,26 +238,14 @@ against localhost 401s.
 
 What it does **not** prove:
 
-- **The mooc paths.** Both out-of-process tiers download the `tmc-langs-cli`
-  release `config.js` pins, currently `0.39.6`, which predates the mooc client
-  contract. Every mooc case is gated on the CLI reporting at least `0.40.0`
-  (`src/test-integration/tmc_langs_cli.spec.ts`, `playwright/migration-gate.ts`)
-  and skips in CI, and `src/init/verifyCliSchema.ts`'s schema self-check is
-  gated the same way. Their only evidence is a local run against a sibling
-  tmc-langs build — see below. Delete the three gates once the pin moves to a
-  released 0.40.0, not before: against the old binary those cases fail.
-- **That the vendored OpenAPI spec matches its recorded source rev.** The
-  `Vendored OpenAPI spec source` step is `continue-on-error` until
-  secret-project-331 PR #1769 lands, because the rev it fetches lives only on
-  that unmerged branch.
 - **A production-mode build.** The `.vsix` is packaged only by the
   master-triggered `build-and-upload.yml`.
 
 ## Using a locally-built tmc-langs CLI
 
 By default the dev/test flow downloads the released `tmc-langs-cli` pinned in
-`config.js` (`TMC_LANGS_RUST_VERSION`). To test against the current
-`tmc-langs-rust` migration branch instead, build and install it locally:
+`config.js` (`TMC_LANGS_RUST_VERSION`). To test against an unreleased
+`tmc-langs-rust` change instead, build and install it locally:
 
 ```
 bin/useLocalLangs.bash
@@ -266,10 +254,8 @@ bin/useLocalLangs.bash
 This expects a sibling `../tmc-langs-rust` checkout (override with
 `TMC_LANGS_RUST_DIR`). It builds `tmc-langs-cli` in release mode and installs it
 into `backend/cli` under the pinned filename with a regenerated `.sha256`, so
-both the integration tier and Playwright pick it up transparently. The binary
-still reports its real version (`--version`), which the integration suite uses
-to decide whether to run the migration-contract tests; against the released CLI
-those skip gracefully. `backend/cli` is gitignored — the local build is never
+both the integration tier and Playwright pick it up transparently.
+`backend/cli` is gitignored — the local build is never
 committed.
 
 - Integration: `pnpm run test:integration`

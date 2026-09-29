@@ -4,7 +4,7 @@
   "compilerOptions": {
     "lib": ["ESNext"],
     "types": ["node"],
-    // migration-gate.ts reads the pinned CLI version from ../config.js
+    // fixtures.ts reads the VS Code test version from ../config.js
     "allowJs": true
   },
   "include": ["**/*", "../playwright.config.ts"]
