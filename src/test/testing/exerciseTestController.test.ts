@@ -465,4 +465,14 @@ suite("ExerciseTestController", function () {
     expect(several.runTests).toHaveBeenCalledTimes(2)
     expect(several.actionContext.dialog.notification).not.toHaveBeenCalled()
   })
+
+  test("a test's exercise folder is found through its parent", async function () {
+    const s = setup()
+    await s.controller.runExercise(exerciseAt(s))
+    const item = itemOf(s, exerciseAt(s))
+    const [, child] = [...item.children][0] as [string, vscode.TestItem]
+
+    expect(s.controller.exerciseUriOf(child)).toBe(exerciseAt(s).uri)
+    expect(s.controller.exerciseUriOf(undefined)).toBeUndefined()
+  })
 })

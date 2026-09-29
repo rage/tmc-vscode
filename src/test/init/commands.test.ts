@@ -6,18 +6,21 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { ActionContext } from "../../actions/types"
+import { isReady } from "../../actions/types"
+import type WorkspaceManager from "../../api/workspaceManager"
 import * as commands from "../../commands"
 import { EXTENSION_ID, EXTENSION_VERSION } from "../../config/constants"
 import type Resources from "../../config/resources"
 import { registerCommands, registerServiceFreeCommands } from "../../init/commands"
+import { registerTesting } from "../../init/testing"
 import { TmcPanel } from "../../panels/TmcPanel"
 import { CourseIdentifier } from "../../shared/shared"
 import { CourseTreeItem } from "../../ui/treeview/treeview"
 import { Logger } from "../../utilities"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 
-// Every command the extension registers, across both `registerServiceFreeCommands` and
-// `registerCommands`. Declared here rather than derived, so a command silently
+// Every command the extension registers, across `registerServiceFreeCommands`,
+// `registerCommands` and `registerTesting`. Declared here rather than derived, so a command silently
 // disappearing (or a new one arriving unreviewed) fails.
 const expectedCommands = [
   "tmcTreeView.refreshCourses",
@@ -41,6 +44,8 @@ const expectedCommands = [
   "tmc.submitExercise",
   "tmc.switchWorkspace",
   "tmc.testExercise",
+  "tmc.testing.pasteExercise",
+  "tmc.testing.submitExercise",
   "tmc.updateExercises",
   "tmc.logs",
   "tmc.debug",
@@ -87,6 +92,18 @@ function registerAndCollect(actionContext: ActionContext = createMockActionConte
   registerServiceFreeCommands(context, actionContext.dialog)
   const serviceFreeIds = [...ids]
   registerCommands(context, actionContext)
+  if (isReady(actionContext)) {
+    registerTesting(context, {
+      ...actionContext,
+      startup: {
+        ...actionContext.startup,
+        workspaceManager: {
+          activeCourse: undefined,
+          onDidChangeExercises: () => ({ dispose: vi.fn() }),
+        } as unknown as WorkspaceManager,
+      },
+    })
+  }
   registerCommand.mockRestore()
   return { ids, serviceFreeIds, handlers, context, actionContext }
 }

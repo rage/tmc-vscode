@@ -213,6 +213,17 @@
         "category": "TestMyCode"
       },
       {
+        "command": "tmc.testing.submitExercise",
+        "title": "Submit Solution",
+        "category": "TestMyCode",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "tmc.testing.pasteExercise",
+        "title": "Share Exercise via Paste",
+        "category": "TestMyCode"
+      },
+      {
         "command": "tmc.updateExercises",
         "title": "Update Exercises",
         "category": "TestMyCode"
@@ -388,6 +399,14 @@
         {
           "command": "tmc.removeCourse",
           "when": "test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.testing.submitExercise",
+          "when": "false"
+        },
+        {
+          "command": "tmc.testing.pasteExercise",
+          "when": "false"
         }
       ],
       "editor/title": [
@@ -518,6 +537,18 @@
           "command": "tmc.removeCourse",
           "group": "9_remove@1",
           "when": "view == tmcView && viewItem =~ /^course\\./ && test-my-code:Initialized && test-my-code:LoggedIn"
+        }
+      ],
+      "testing/item/context": [
+        {
+          "command": "tmc.testing.submitExercise",
+          "group": "1_testmycode@1",
+          "when": "controllerId == tmc && test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.testing.pasteExercise",
+          "group": "1_testmycode@2",
+          "when": "controllerId == tmc && test-my-code:Initialized && test-my-code:LoggedIn"
         }
       ]
     },

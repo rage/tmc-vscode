@@ -73,6 +73,22 @@ suite("registerTesting", function () {
     expect(controllerItems().get(exercise.uri.toString())?.label).toBe("part01-01_hello")
   })
 
+  test("the test item commands forward the item's exercise folder", async function () {
+    const { exercises, fireExercisesChanged, commands } = register()
+    exercises.push(exercise)
+    fireExercisesChanged()
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const item = controllerItems().get(exercise.uri.toString())
+
+    await commands.get("tmc.testing.submitExercise")?.(item)
+    await commands.get("tmc.testing.pasteExercise")?.(item)
+
+    expect(executeCommand.mock.calls).toEqual([
+      ["tmc.submitExercise", exercise.uri],
+      ["tmc.pasteExercise", exercise.uri],
+    ])
+  })
+
   test("disposing the activation retires the controller", function () {
     const { context } = register()
     expect(activeTestController()).toBeDefined()

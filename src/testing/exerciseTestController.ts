@@ -75,6 +75,15 @@ export class ExerciseTestController implements vscode.Disposable {
     }
   }
 
+  /** The exercise folder of a test item, or of the exercise a test belongs to. */
+  public exerciseUriOf(item: vscode.TestItem | undefined): vscode.Uri | undefined {
+    let root = item
+    while (root?.parent) {
+      root = root.parent
+    }
+    return root && this._exercisesByItemId.get(root.id)?.uri
+  }
+
   public dispose(): void {
     this._controller.dispose()
   }
