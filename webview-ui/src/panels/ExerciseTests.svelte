@@ -140,9 +140,7 @@
     submitting = true
     vscode.postMessage({
       type: "submitExercise",
-      course: panel.course,
-      exercise: panel.exercise,
-      exerciseUri: panel.exerciseUri,
+      sourcePanel: { id: panel.id, type: panel.type },
     })
   }
 </script>

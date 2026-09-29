@@ -73,9 +73,7 @@ suite("ExerciseTests panel", () => {
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "submitExercise",
-      course: panel.course,
-      exercise: panel.exercise,
-      exerciseUri,
+      sourcePanel: { id: panel.id, type: "ExerciseTests" },
     })
   })
 
@@ -107,9 +105,7 @@ suite("ExerciseTests panel", () => {
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "submitExercise",
-      course: panel.course,
-      exercise: panel.exercise,
-      exerciseUri,
+      sourcePanel: { id: panel.id, type: "ExerciseTests" },
     })
   })
 
@@ -156,7 +152,10 @@ suite("ExerciseTests panel", () => {
 
     postedMessages.mockClear()
     ;(await screen.findByRole("button", { name: "Submit to server" })).click()
-    expect(postedMessages).toHaveBeenCalledWith(expect.objectContaining({ type: "submitExercise" }))
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "submitExercise",
+      sourcePanel: { id: panel.id, type: "ExerciseTests" },
+    })
   })
 
   test("a compile failure shows the compiler output, open, and no points meter", async () => {
