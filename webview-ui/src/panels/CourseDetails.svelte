@@ -3,7 +3,13 @@
   import { SvelteMap } from "svelte/reactivity"
 
   import Button from "../components/Button.svelte"
+  import CodeBlock from "../components/CodeBlock.svelte"
   import ExercisePart from "../components/ExercisePart.svelte"
+  import LinkButton from "../components/LinkButton.svelte"
+  import Meter from "../components/Meter.svelte"
+  import Notice from "../components/Notice.svelte"
+  import PanelHeader from "../components/PanelHeader.svelte"
+  import Spinner from "../components/Spinner.svelte"
   import type { CourseDetailsPanel, WebviewError } from "../shared/shared"
   import {
     assertUnreachable,
@@ -14,6 +20,7 @@
     CourseIdentifier,
     ExerciseIdentifier,
   } from "../shared/shared"
+  import { announce, reducedMotion } from "../utilities/a11y.svelte"
   import { addMessageListener, createPanelDataRequester } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
 
@@ -21,11 +28,10 @@
     panel: CourseDetailsPanel
   }
 
-  let { panel = $bindable() }: Props = $props()
+  let { panel }: Props = $props()
 
-  // `refresh()` remounts the panel under a fresh id, so `refreshing` resets on its own
-  // via `{#key}`.
   let refreshing = $state<boolean>(false)
+  let refreshError = $state<WebviewError | undefined>(undefined)
   // Membership is the checked state; the key keeps a tmc and a mooc exercise apart.
   const checkedExercises = new SvelteMap<string, ExerciseIdentifier>()
   const checkedExercisesCount = $derived(checkedExercises.size)
@@ -39,6 +45,10 @@
   )
   // common course fields, independent of the course's backend
   const course = $derived(panel.course === undefined ? undefined : unwrap(panel.course))
+  const hasSoftDeadlines = $derived(
+    panel.exerciseGroups?.some((group) => group.exercises.some((exercise) => !exercise.isHard)) ??
+      false,
+  )
 
   const panelData = createPanelDataRequester()
 
@@ -46,15 +56,17 @@
   // unanswered; rendered where the exercise list would be, so neither is a permanent spinner.
   let dataError = $state<WebviewError | undefined>(undefined)
 
+  const title = $derived(
+    course?.title ?? (dataError ? "Could not load this course" : "Loading course…"),
+  )
+
   async function requestData() {
     dataError = undefined
     dataError = await panelData.request((requestId) =>
       vscode.postMessage({
         type: "requestCourseDetailsData",
         requestId,
-        // `panel` is a `$state` proxy once a message has reassigned it; snapshot it or
-        // posting fails structured clone with a `DataCloneError`
-        sourcePanel: $state.snapshot(panel),
+        sourcePanel: panel,
       }),
     )
   }
@@ -62,7 +74,6 @@
   onMount(() => {
     void requestData()
   })
-  // props aren't deeply reactive in Svelte 5, so panel is reassigned rather than mutated
   addMessageListener(panel, (message) => {
     switch (message.type) {
       case "setCourseData": {
@@ -140,6 +151,14 @@
         panelData.answer(message)
         break
       }
+      case "refreshFinished": {
+        refreshing = false
+        refreshError = message.error
+        if (message.ok) {
+          announce("Course refreshed")
+        }
+        break
+      }
       case "setUpdateables": {
         // Broadcast to every CourseDetails panel; only apply it if it's for our course.
         if (
@@ -159,54 +178,55 @@
       type: "openMyCourses",
     })
   }
-  function refresh(id: CourseIdentifier) {
+  function refresh() {
+    // `aria-disabled` rather than `disabled` while busy, so the button keeps focus.
+    if (refreshing) {
+      return
+    }
     refreshing = true
+    refreshError = undefined
     vscode.postMessage({
       type: "refreshCourseDetails",
-      // `id` is nested in the `$state`-proxied `panel`; snapshot it or posting
-      // fails structured clone with a `DataCloneError`
-      id: $state.snapshot(id),
+      id: panel.courseId,
       useCache: false,
     })
   }
-  function openWorkspace(p: CourseDetailsPanel) {
+  function openWorkspace() {
     vscode.postMessage({
       type: "openCourseWorkspace",
-      courseId: $state.snapshot(p.courseId),
+      courseId: panel.courseId,
     })
   }
-  function downloadExercises(p: CourseDetailsPanel, ids: Array<ExerciseIdentifier>) {
+  function downloadExercises(ids: Array<ExerciseIdentifier>) {
     vscode.postMessage({
       type: "downloadExercises",
-      // `ids`/`p.courseId` may be `$state` proxies once `panel` is reassigned;
-      // snapshot before posting or it fails structured clone with a `DataCloneError`
-      ids: $state.snapshot(ids),
-      courseId: $state.snapshot(p.courseId),
+      ids,
+      courseId: panel.courseId,
       mode: "download",
     })
   }
-  function openExercises(p: CourseDetailsPanel, ids: Array<ExerciseIdentifier>) {
+  function openExercises(ids: Array<ExerciseIdentifier>) {
     vscode.postMessage({
       type: "openExercises",
-      ids: $state.snapshot(ids),
-      courseId: $state.snapshot(p.courseId),
+      ids,
+      courseId: panel.courseId,
     })
   }
-  function closeExercises(p: CourseDetailsPanel, ids: Array<ExerciseIdentifier>) {
+  function closeExercises(ids: Array<ExerciseIdentifier>) {
     vscode.postMessage({
       type: "closeExercises",
-      ids: $state.snapshot(ids),
-      courseId: $state.snapshot(p.courseId),
+      ids,
+      courseId: panel.courseId,
     })
   }
   function clearSelectedExercises() {
     checkedExercises.clear()
   }
-  function updateExercises(p: CourseDetailsPanel) {
+  function updateExercises() {
     vscode.postMessage({
       type: "downloadExercises",
-      ids: $state.snapshot(p.updateableExercises ?? []),
-      courseId: $state.snapshot(p.courseId),
+      ids: panel.updateableExercises ?? [],
+      courseId: panel.courseId,
       mode: "update",
     })
   }
@@ -215,185 +235,139 @@
   }
 </script>
 
-<nav>
-  <button id="back-to-my-courses" type="button" class="my-courses-link" onclick={openMyCourses}>
-    My courses
-  </button>
-  /
-  {course?.title ?? "Loading course…"}
-</nav>
-<div class="header">
-  {#if course === undefined}
-    <h1 class="course-heading">Loading course…</h1>
-  {:else}
-    <h1 class="course-heading">{course.title} <small class="muted">({course.name})</small></h1>
-  {/if}
+<PanelHeader {title}>
+  {#snippet breadcrumb()}
+    <nav aria-label="Breadcrumb">
+      <LinkButton onclick={openMyCourses}>My Courses</LinkButton>
+      /
+      <span aria-current="page">{course?.title ?? "Course"}</span>
+    </nav>
+  {/snippet}
+  {#snippet actions()}
+    {#if course}
+      <Button
+        secondary
+        icon="refresh"
+        icon-spin={refreshing && !reducedMotion.current}
+        aria-disabled={refreshing}
+        disabled={totalDownloading > 0}
+        onclick={refresh}
+      >
+        {refreshing ? "Refreshing…" : "Refresh"}
+      </Button>
+    {/if}
+  {/snippet}
+</PanelHeader>
 
-  <div>
-    {course?.description ?? "Loading description…"}
-  </div>
-
-  <div>
-    <Button
-      class="refresh"
-      aria-label="Refresh"
-      onclick={() => refresh(panel.courseId)}
-      disabled={refreshing || totalDownloading > 0}
-      secondary
-    >
-      {#if refreshing}
-        Refreshing <vscode-icon name="loading" spin aria-hidden="true"></vscode-icon>
-      {:else}
-        Refresh
-      {/if}
-    </Button>
-  </div>
-
-  <div>
-    Points gained: {course
-      ? `${course.awardedPoints} / ${course.availablePoints}`
-      : "Loading points…"}
-  </div>
-
-  {#if course?.materialUrl}
-    <div>
-      Material: <a href={course.materialUrl}>{course.materialUrl}</a>
+{#if course}
+  <div class="course-summary stack">
+    <p class="muted">{course.name}</p>
+    {#if course.description}
+      <p>{course.description}</p>
+    {/if}
+    <Meter label="Points" value={course.awardedPoints} max={course.availablePoints} />
+    {#if course.materialUrl}
+      <p><a href={course.materialUrl}>Course material</a></p>
+    {/if}
+    {#if hasSoftDeadlines}
+      <p class="muted">
+        A soft deadline can be exceeded: exercises submitted after it still count, but award only
+        75% of the exercise points. A hard deadline cannot be exceeded.
+      </p>
+    {/if}
+    <div class="actions">
+      <Button onclick={openWorkspace}>Open workspace</Button>
     </div>
+  </div>
+
+  {#if refreshError}
+    <Notice
+      kind="error"
+      title="Could not refresh this course"
+      ondismiss={() => (refreshError = undefined)}
+      dismissLabel="Dismiss refresh error"
+    >
+      <p>{refreshError.message}</p>
+    </Notice>
   {/if}
+  {#if (panel.updateableExercises?.length ?? 0) > 0}
+    <Notice kind="info" title="Updates found for exercises">
+      {#snippet actions()}
+        <Button secondary onclick={updateExercises}>Update exercises</Button>
+      {/snippet}
+    </Notice>
+  {/if}
+  {#if course.perhapsExamMode}
+    <Notice kind="info">
+      <p>This is an exam. Exercise submission results will not be shown.</p>
+    </Notice>
+  {/if}
+  {#if course.disabled}
+    <Notice kind="warning">
+      <p>This course has been disabled. Exercises cannot be downloaded or submitted.</p>
+    </Notice>
+  {/if}
+{/if}
+{#if panel.offlineMode}
+  <Notice kind="warning">
+    <p>Unable to fetch exercise data from server. Displaying local exercises.</p>
+  </Notice>
+{/if}
 
-  <div class="open-workspace-button">
-    <Button aria-label="Open workspace" onclick={() => openWorkspace(panel)}>Open workspace</Button>
+{#if checkedExercisesCount > 0}
+  <div class="selection-bar actions" role="region" aria-label="Selected exercises">
+    <span>{checkedExercisesCount} selected</span>
+    <Button onclick={() => downloadExercises(getCheckedExercises())}>Download</Button>
+    <Button secondary onclick={() => openExercises(getCheckedExercises())}>Open</Button>
+    <Button secondary onclick={() => closeExercises(getCheckedExercises())}>Close</Button>
+    <Button secondary onclick={clearSelectedExercises}>Clear selection</Button>
   </div>
-
-  <!-- Both live regions stay mounted and empty until there is something to say: a screen
-       reader announces a change inside a region it already knows, not one inserted
-       already populated, and not one that merely stops being `hidden`. -->
-  <div role="alert">
-    {#if (panel.updateableExercises?.length ?? 0) > 0}
-      Updates found for exercises
-      <Button onclick={() => updateExercises(panel)}>Update exercises</Button>
-    {/if}
-  </div>
-  <div role="alert">
-    {#if panel.offlineMode}
-      <div>Unable to fetch exercise data from server. Displaying local exercises.</div>
-    {/if}
-    {#if course?.perhapsExamMode}
-      <div>This is an exam. Exercise submission results will not be shown.</div>
-    {/if}
-    {#if course?.disabled}
-      <div>This course has been disabled. Exercises cannot be downloaded or submitted.</div>
-    {/if}
-  </div>
-</div>
+{/if}
 
 {#if panel.exerciseGroups !== undefined}
-  {#each panel.exerciseGroups as exerciseGroup}
+  {#each panel.exerciseGroups as exerciseGroup (exerciseGroup.name)}
     <div class="exercise-part">
       <ExercisePart
         {exerciseGroup}
         exerciseStatuses={panel.exerciseStatuses}
         {checkedExercises}
-        onDownloadAll={(exercises) => downloadExercises(panel, exercises)}
-        onOpenAll={(exercises) => openExercises(panel, exercises)}
-        onCloseAll={(exercises) => closeExercises(panel, exercises)}
+        onDownloadAll={downloadExercises}
+        onOpenAll={openExercises}
+        onCloseAll={closeExercises}
       />
     </div>
   {/each}
 {:else if dataError}
-  <div role="alert">
-    <h2>Could not load this course</h2>
-    <div class="error-message">{dataError.message}</div>
+  <Notice kind="error">
+    <p>{dataError.message}</p>
     {#if dataError.details}
-      <code>{dataError.details}</code>
+      <CodeBlock code={dataError.details} label="Error details" />
     {/if}
-  </div>
-  <Button onclick={() => void requestData()}>Retry</Button>
+    {#snippet actions()}
+      <Button onclick={() => void requestData()}>Retry</Button>
+    {/snippet}
+  </Notice>
 {:else}
-  <vscode-progress-ring aria-label="Loading"></vscode-progress-ring>
-{/if}
-
-{#if checkedExercisesCount > 0}
-  <div class="action-bar-container">
-    <div class="action-bar">
-      <div class="action-bar-text">
-        Select action for {checkedExercisesCount} selected items
-      </div>
-      <vscode-button-group class="action-bar-buttons">
-        <Button onclick={() => downloadExercises(panel, getCheckedExercises())}>Download</Button>
-        <Button onclick={() => openExercises(panel, getCheckedExercises())}>Open</Button>
-        <Button onclick={() => closeExercises(panel, getCheckedExercises())}>Close</Button>
-        <Button secondary onclick={() => clearSelectedExercises()}>Clear selection</Button>
-      </vscode-button-group>
-    </div>
-  </div>
+  <Spinner label="Loading exercises" />
 {/if}
 
 <style>
-  .header {
-    position: relative;
-    margin-bottom: 0.8rem;
+  .course-summary {
+    margin-bottom: var(--tmc-space-4);
   }
-  /* Reserve space so a long title/description does not run under the absolutely-positioned
-     Refresh button. */
-  .course-heading {
-    padding-right: 7rem;
+  .course-summary p {
+    margin: 0;
   }
-  /* Targets the <vscode-button> rendered inside the Button wrapper. */
-  .header :global(.refresh) {
-    position: absolute;
-    top: 0rem;
-    right: 0rem;
-  }
-  .action-bar-container {
-    position: fixed;
-    bottom: 0.8rem;
-    left: 0;
-    right: 0;
-    justify-content: center;
-    display: flex;
-  }
-  .action-bar {
-    display: flex;
-    flex-direction: column;
-    background-color: var(--vscode-editorWidget-background, #252526);
-    padding: 0.4rem;
-    border: 1px solid var(--vscode-widget-border, transparent);
-    border-radius: 0.4rem;
-  }
-  .action-bar-text {
-    text-align: center;
-  }
-  .action-bar-buttons {
-    display: block;
-  }
-  .open-workspace-button {
-    margin-top: 0.4rem;
-    margin-bottom: 0.4rem;
-  }
-  .muted {
-    opacity: 90%;
-  }
-  .error-message,
-  code {
-    white-space: pre-wrap;
+  /* Sticky above the parts, in DOM order before them, so it never covers a focused row. */
+  .selection-bar {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: var(--tmc-space-2) 0;
+    background: var(--vscode-editor-background);
+    border-bottom: 1px solid var(--tmc-surface-border);
   }
   .exercise-part {
-    margin-bottom: 1rem;
-  }
-  /* Resets the native button to look like the plain nav text around it. */
-  .my-courses-link {
-    all: unset;
-    cursor: pointer;
-    color: inherit;
-    font: inherit;
-    display: inline;
-  }
-  .my-courses-link:hover {
-    text-decoration: underline;
-  }
-  .my-courses-link:focus-visible {
-    outline: 1px solid var(--vscode-focusBorder, #007fd4);
-    outline-offset: 2px;
+    margin-bottom: var(--tmc-space-4);
   }
 </style>
