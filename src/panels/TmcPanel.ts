@@ -1034,15 +1034,17 @@ function takesFocus(panel: Panel): boolean {
  * on the far side of a `postMessage`.
  */
 function toMessageGroups(groups: ExerciseGroup[]): ExerciseGroup[] {
-  return groups.map(({ name, nextDeadlineString, exercises }) => ({
+  return groups.map(({ name, nextDeadlineString, defaultOpen, exercises }) => ({
     name,
     nextDeadlineString,
+    defaultOpen,
     exercises: exercises.map((exercise) => ({
       id: exercise.id,
       name: exercise.name,
       isHard: exercise.isHard,
       hardDeadlineString: exercise.hardDeadlineString,
       softDeadlineString: exercise.softDeadlineString,
+      deadlineIso: exercise.deadlineIso,
       passed: exercise.passed,
     })),
   }))
