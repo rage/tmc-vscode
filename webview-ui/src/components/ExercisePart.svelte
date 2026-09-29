@@ -129,7 +129,7 @@
       </div>
     {/if}
 
-    <vscode-table zebra responsive breakpoint="480">
+    <vscode-table zebra responsive breakpoint={480}>
       <vscode-table-header slot="header">
         <vscode-table-header-cell class="checkbox-cell">
           <Checkbox
