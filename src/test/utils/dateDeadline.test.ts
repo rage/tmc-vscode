@@ -1,9 +1,13 @@
 import {
   dateToString,
   findNextDateAfter,
+  formatDeadline,
   parseDate,
   parseNextDeadlineAfter,
 } from "../../utilities/dateDeadline"
+
+const absolute = (date: Date, locale: string): string =>
+  new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date)
 
 suite("Date utils", () => {
   const CURRENT_TIME = new Date(2020, 3, 1)
@@ -50,7 +54,7 @@ suite("Date utils", () => {
 
     const parsedTarget = parseNextDeadlineAfter(CURRENT_TIME, [{ date: TARGET_TIME, active: true }])
     expect(parsedTarget, "Parsed deadline from one active target time should be that").toBe(
-      `Next deadline: ${dateToString(TARGET_TIME)}`,
+      `Next deadline: ${formatDeadline(TARGET_TIME, CURRENT_TIME, undefined)}`,
     )
     expect(
       parseNextDeadlineAfter(
@@ -92,7 +96,7 @@ suite("Date utils", () => {
       "A lone unparseable deadline is no deadline.",
     ).toBe("No deadline")
 
-    const expected = `Next deadline: ${dateToString(TARGET_TIME)}`
+    const expected = `Next deadline: ${formatDeadline(TARGET_TIME, CURRENT_TIME, undefined)}`
     expect(
       parseNextDeadlineAfter(CURRENT_TIME, [
         { date: invalid, active: true },
@@ -110,5 +114,28 @@ suite("Date utils", () => {
 
     expect(findNextDateAfter(CURRENT_TIME, [invalid, TARGET_TIME])).toBe(TARGET_TIME)
     expect(findNextDateAfter(CURRENT_TIME, [TARGET_TIME, invalid])).toBe(TARGET_TIME)
+  })
+
+  suite("formatDeadline", () => {
+    const NOW = new Date("2026-06-01T12:00:00Z")
+
+    test("renders a distant deadline in the given language, without a hint", () => {
+      const date = new Date("2026-09-01T12:00:00Z")
+      expect(formatDeadline(date, NOW, "fi")).toBe(absolute(date, "fi"))
+      expect(formatDeadline(date, NOW, "en-US")).not.toMatch(/GMT|\(/)
+    })
+
+    test("adds a relative hint within a week, either side of now", () => {
+      const soon = new Date("2026-06-04T12:00:00Z")
+      expect(formatDeadline(soon, NOW, "en-US")).toBe(`${absolute(soon, "en-US")} (in 3 days)`)
+      const hoursAgo = new Date("2026-06-01T07:00:00Z")
+      expect(formatDeadline(hoursAgo, NOW, "en-US")).toBe(
+        `${absolute(hoursAgo, "en-US")} (5 hours ago)`,
+      )
+    })
+
+    test("renders nothing for a date that cannot be rendered", () => {
+      expect(formatDeadline(new Date(NaN), NOW, "en-US")).toBe("")
+    })
   })
 })

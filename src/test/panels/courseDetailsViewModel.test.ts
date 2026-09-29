@@ -12,6 +12,8 @@ import type {
 import { makeMoocKind, makeTmcKind } from "../../shared/shared"
 
 const COURSE_NAME = "python-course"
+const formatInFinnish = (iso: string): string =>
+  new Intl.DateTimeFormat("fi", { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso))
 const NOW = new Date("2026-06-01T12:00:00Z")
 
 function exercise(overrides: Partial<SharedTmcCourseExercise> = {}): SharedTmcCourseExercise {
@@ -254,5 +256,104 @@ suite("buildCourseDetailsView", () => {
     )
 
     expect(view.exerciseGroups[0]?.nextDeadlineString).toBe("Next deadline: Not available")
+  })
+
+  test("renders deadlines in the display language and exposes the shown one as ISO", () => {
+    const view = buildCourseDetailsView(
+      course([
+        exercise({ id: 1, name: "part01-01_hello", deadline: "2026-09-01T12:00:00Z" }),
+        exercise({
+          id: 2,
+          name: "part01-02_world",
+          softDeadline: "2026-08-01T12:00:00Z",
+          deadline: "2026-09-01T12:00:00Z",
+        }),
+      ]),
+      [],
+      false,
+      NOW,
+      "fi",
+    )
+
+    const [hard, soft] = view.exerciseGroups[0]?.exercises ?? []
+    expect(hard?.hardDeadlineString).toBe(formatInFinnish("2026-09-01T12:00:00Z"))
+    expect(hard?.deadlineIso).toBe("2026-09-01T12:00:00.000Z")
+    expect(soft?.softDeadlineString).toBe(formatInFinnish("2026-08-01T12:00:00Z"))
+    expect(soft?.deadlineIso).toBe("2026-08-01T12:00:00.000Z")
+    expect(view.exerciseGroups[0]?.nextDeadlineString).toBe(
+      `Next deadline: ${formatInFinnish("2026-08-01T12:00:00Z")}`,
+    )
+  })
+
+  test("sends only what the panel renders, with no Date objects", () => {
+    const view = buildCourseDetailsView(
+      course([exercise({ name: "part01-01_hello", deadline: "2026-07-01T00:00:00Z" })]),
+      [],
+      false,
+      NOW,
+      "en",
+    )
+
+    expect(Object.keys(view.exerciseGroups[0]?.exercises[0] ?? {}).toSorted()).toEqual([
+      "deadlineIso",
+      "hardDeadlineString",
+      "id",
+      "isHard",
+      "name",
+      "passed",
+      "softDeadlineString",
+    ])
+  })
+
+  test("opens every part of a course with three or fewer", () => {
+    const view = buildCourseDetailsView(
+      course([
+        exercise({ id: 1, name: "part01-01_a" }),
+        exercise({ id: 2, name: "part02-01_b" }),
+        exercise({ id: 3, name: "part03-01_c" }),
+      ]),
+      [],
+      false,
+      NOW,
+    )
+
+    expect(view.exerciseGroups.map((group) => group.defaultOpen)).toEqual([true, true, true])
+  })
+
+  test("opens only the part with the soonest unmet deadline in a longer course", () => {
+    const view = buildCourseDetailsView(
+      course([
+        exercise({ id: 1, name: "part01-01_a", deadline: "2026-05-01T00:00:00Z" }),
+        exercise({ id: 2, name: "part02-01_b", deadline: "2026-06-10T00:00:00Z", passed: true }),
+        exercise({ id: 3, name: "part03-01_c", deadline: "2026-06-20T00:00:00Z" }),
+        exercise({ id: 4, name: "part04-01_d", deadline: "2026-07-01T00:00:00Z" }),
+      ]),
+      [],
+      false,
+      NOW,
+    )
+
+    expect(view.exerciseGroups.map((group) => group.defaultOpen)).toEqual([
+      false,
+      false,
+      true,
+      false,
+    ])
+  })
+
+  test("opens the first part of a longer course that has no upcoming deadline", () => {
+    const view = buildCourseDetailsView(
+      course([1, 2, 3, 4].map((n) => exercise({ id: n, name: `part0${n}-01_x` }))),
+      [],
+      false,
+      NOW,
+    )
+
+    expect(view.exerciseGroups.map((group) => group.defaultOpen)).toEqual([
+      true,
+      false,
+      false,
+      false,
+    ])
   })
 })
