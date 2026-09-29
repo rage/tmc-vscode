@@ -250,12 +250,14 @@
         "testMyCode.downloadOldSubmission": {
           "type": "boolean",
           "default": true,
-          "description": "When downloading exercises, download your latest submission instead of the exercise template."
+          "description": "When downloading exercises, download your latest submission instead of the exercise template.",
+          "order": 0
         },
         "testMyCode.hideMetaFiles": {
           "type": "boolean",
           "default": true,
-          "description": "Hide exercise meta files that are not relevant for completing exercises."
+          "description": "Hide exercise meta files that are not relevant for completing exercises.",
+          "order": 2
         },
         "testMyCode.logLevel": {
           "type": "string",
@@ -270,18 +272,22 @@
             "No extension logging.",
             "Log only warning and error messages.",
             "Log info, warning and error messages."
-          ]
+          ],
+          "order": 4,
+          "description": "How much TestMyCode writes to its log, which Show Logs opens."
         },
         "testMyCode.updateExercisesAutomatically": {
           "type": "boolean",
           "default": true,
-          "description": "Download exercise updates automatically."
+          "description": "Download exercise updates automatically.",
+          "order": 1
         },
         "testMyCode.javaHome": {
           "type": "string",
           "scope": "machine-overridable",
           "default": "",
-          "description": "Path to the JDK used for Java exercises, such as /usr/lib/jvm/java-21. Leave empty to use the Java found on your PATH."
+          "description": "Path to the JDK used for Java exercises, such as /usr/lib/jvm/java-21. Leave empty to use the Java found on your PATH.",
+          "order": 3
         }
       }
     },

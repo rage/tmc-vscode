@@ -3,6 +3,18 @@ import * as vscode from "vscode"
 import { Logger, LogLevel } from "../utilities/logger"
 
 /**
+ * The settings a course workspace file keeps its own copy of (`WorkspaceManager`'s integrity
+ * pass writes them), because a multi-root workspace reads them from there.
+ */
+type MirroredSetting = "hideMetaFiles" | "downloadOldSubmission" | "updateExercisesAutomatically"
+
+const MIRRORED_SETTINGS: MirroredSetting[] = [
+  "hideMetaFiles",
+  "downloadOldSubmission",
+  "updateExercisesAutomatically",
+]
+
+/**
  * Class to manage VSCode setting changes and trigger events based on changes.
  *
  * Handle multi-root workspace changes by creating callbacks in extension.ts,
@@ -14,8 +26,13 @@ export default class Settings implements vscode.Disposable {
   private _onChangeUpdateExercisesAutomatically?: (value: boolean) => void
 
   private _disposables: vscode.Disposable[]
+  /** Each mirrored setting's User-scope value as last seen, to tell which scope changed. */
+  private readonly _userValues = new Map<MirroredSetting, boolean | undefined>()
 
   public constructor() {
+    for (const section of MIRRORED_SETTINGS) {
+      this._userValues.set(section, Settings._inspect(section)?.globalValue)
+    }
     this._disposables = [
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration("testMyCode.logLevel")) {
@@ -25,18 +42,16 @@ export default class Settings implements vscode.Disposable {
           Logger.configure(value)
         }
 
-        // Workspace settings
         if (event.affectsConfiguration("testMyCode.hideMetaFiles")) {
-          const value = this._getWorkspaceSettingValue("hideMetaFiles")
-          this._onChangeHideMetaFiles?.(value)
+          this._onChangeHideMetaFiles?.(this._changedValue("hideMetaFiles"))
         }
         if (event.affectsConfiguration("testMyCode.downloadOldSubmission")) {
-          const value = this._getWorkspaceSettingValue("downloadOldSubmission")
-          this._onChangeDownloadOldSubmission?.(value)
+          this._onChangeDownloadOldSubmission?.(this._changedValue("downloadOldSubmission"))
         }
         if (event.affectsConfiguration("testMyCode.updateExercisesAutomatically")) {
-          const value = this._getWorkspaceSettingValue("updateExercisesAutomatically")
-          this._onChangeUpdateExercisesAutomatically?.(value)
+          this._onChangeUpdateExercisesAutomatically?.(
+            this._changedValue("updateExercisesAutomatically"),
+          )
         }
       }),
     ]
@@ -80,19 +95,28 @@ export default class Settings implements vscode.Disposable {
     return vscode.workspace.getConfiguration("testMyCode").get<string>("javaHome", "").trim()
   }
 
+  /** A mirrored setting's value: the workspace copy, else the User value, else the default. */
+  private _getWorkspaceSettingValue(section: MirroredSetting): boolean {
+    const scopes = Settings._inspect(section)
+    return !!(scopes?.workspaceValue ?? scopes?.globalValue ?? scopes?.defaultValue)
+  }
+
   /**
-   * Used to fetch boolean values from VSCode settings API Workspace scope
-   *
-   * workspaceValue is undefined in multi-root workspace if it matches defaultValue
-   * We want to "force" the value in the multi-root workspace, because then
-   * the workspace scope > user scope.
+   * The value a mirrored setting has just changed to. An edit in the User tab wins over the
+   * workspace copy, which would otherwise shadow it for as long as that course is open.
    */
-  private _getWorkspaceSettingValue(section: string): boolean {
-    const configuration = vscode.workspace.getConfiguration("testMyCode")
-    const scopeSettings = configuration.inspect<boolean>(section)
-    if (scopeSettings?.workspaceValue === undefined) {
-      return !!scopeSettings?.defaultValue
-    }
-    return scopeSettings.workspaceValue
+  private _changedValue(section: MirroredSetting): boolean {
+    const userValue = Settings._inspect(section)?.globalValue
+    const isUserEdit = userValue !== this._userValues.get(section)
+    this._userValues.set(section, userValue)
+    return isUserEdit && userValue !== undefined
+      ? userValue
+      : this._getWorkspaceSettingValue(section)
+  }
+
+  private static _inspect(
+    section: MirroredSetting,
+  ): { defaultValue?: boolean; globalValue?: boolean; workspaceValue?: boolean } | undefined {
+    return vscode.workspace.getConfiguration("testMyCode").inspect<boolean>(section)
   }
 }
