@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/svelte"
+import { fireEvent, render, screen } from "@testing-library/svelte"
 
 import type { InitializationErrorHelpPanel } from "../shared/shared"
 import { dispatchToWebview, postedMessages } from "../test/setup"
@@ -78,6 +78,47 @@ suite("InitializationErrorHelp panel", () => {
       },
     })
 
-    expect(await screen.findByText("No error data found")).toBeInTheDocument()
+    const empty = await screen.findByText("No error data found")
+    expect(empty.closest("ul")).toBeNull()
+    expect(screen.queryByRole("list")).not.toBeInTheDocument()
+  })
+
+  test("lists each failure with its stack trace behind a disclosure", async () => {
+    render(InitializationErrorHelp, { props: { panel } })
+    dispatchToWebview({
+      type: "initializationErrors",
+      target: { type: "InitializationErrorHelp", id: panel.id },
+      cliFolder: "/tmp/cli",
+      initializationErrors: {
+        tmc: noError,
+        userData: { error: "userdata boom", stack: "at userData" },
+        workspaceManager: noError,
+        exerciseDecorationProvider: noError,
+        resources: { error: "resources boom", stack: "at resources" },
+      },
+    })
+
+    const items = await screen.findAllByRole("listitem")
+    expect(items.map((item) => item.querySelector("p")?.textContent)).toEqual([
+      "Failed to initialize user data: userdata boom",
+      "Failed to initialize resources: resources boom",
+    ])
+    const toggle = screen.getByRole("button", { name: "Stack trace of resources" })
+    expect(toggle).toHaveAttribute("aria-expanded", "false")
+    await fireEvent.click(toggle)
+    expect(screen.getByRole("group", { name: "Stack trace of resources" })).toHaveTextContent(
+      "at resources",
+    )
+  })
+
+  test.each([
+    ["Restart extension host", "workbench.action.restartExtensionHost"],
+    ["Show logs", "tmc.logs"],
+    ["Open log level setting", "workbench.action.openSettings"],
+    ["Report an issue", "workbench.action.openIssueReporter"],
+  ])("%s runs %s in the extension host", async (name, command) => {
+    render(InitializationErrorHelp, { props: { panel } })
+    ;(await screen.findByRole("button", { name })).click()
+    expect(postedMessages).toHaveBeenCalledWith({ type: "runCommand", command })
   })
 })
