@@ -5,7 +5,7 @@ import { checkForExerciseUpdates, downloadExerciseUpdates } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
 import { NOTIFICATION_DELAY } from "../config/constants"
-import { CourseIdentifier } from "../shared/shared"
+import { backendName, CourseIdentifier } from "../shared/shared"
 import { Logger } from "../utilities"
 
 /**
@@ -36,10 +36,18 @@ export async function updateExercises(
   }
 
   const { outdated, failures } = updateablesResult.val
-  if (!silent) {
-    for (const { backend, error } of failures) {
-      void dialog.reportError("Failed to check for exercise updates.", error, backend)
+  const [firstFailure] = failures
+  if (!silent && firstFailure) {
+    // One notification however many sites failed; the log has each one's error.
+    const sites = failures.map(({ backend }) => backendName(backend)).join(" and ")
+    for (const { backend, error } of failures.slice(1)) {
+      Logger.error(`Failed to check ${backendName(backend)} for exercise updates.`, error)
     }
+    void dialog.reportError(
+      `Failed to check ${sites} for exercise updates.`,
+      firstFailure.error,
+      failures.length === 1 ? firstFailure.backend : undefined,
+    )
   }
 
   const now = Date.now()
@@ -50,7 +58,7 @@ export async function updateExercises(
 
   if (exercisesToUpdate.length === 0) {
     if (!silent && failures.length === 0) {
-      void dialog.notification("All exercises are up to date.")
+      dialog.statusMessage("All exercises are up to date.")
     }
     return
   }
@@ -84,10 +92,12 @@ export async function updateExercises(
   }
 
   void dialog.notification(
-    `Found updates for ${exercisesToUpdate.length} exercises. Do you wish to download them?`,
+    exercisesToUpdate.length === 1
+      ? "1 exercise has an update. Download it now?"
+      : `${exercisesToUpdate.length} exercises have updates. Download them now?`,
     ["Download", (): void => void download()],
     [
-      "Remind me later",
+      "Remind Me Later",
       (): void =>
         void withOperation(dialog, { failure: "Failed to postpone the reminder." }, postpone),
     ],

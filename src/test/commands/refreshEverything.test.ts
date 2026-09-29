@@ -215,16 +215,32 @@ suite("refreshEverything's new-exercises prompt", function () {
     await refreshEverything(actionContext, { silent: true })
 
     expect(dialog.notification).toHaveBeenCalledExactlyOnceWith(
-      "Found 1 new exercises for course-1. Do you wish to download them now?",
+      "Course 1 has 1 new exercise. Download it now?",
       expect.anything(),
       expect.anything(),
       expect.anything(),
     )
     expect(buttons(dialog).map(([label]) => label)).toEqual([
       "Download",
-      "Remind me later",
-      "Don't remind about these exercises",
+      "Remind Me Later",
+      "Don't Remind Again",
     ])
+  })
+
+  test("offers several courses' new exercises in one notification, acting on all", async function () {
+    const [actionContext, dialog] = contextWithCourses([
+      tmcCourse(1, 0, [10, 11]),
+      tmcCourse(2, 0, [20]),
+    ])
+    await refreshEverything(actionContext, { silent: true })
+
+    expect(dialog.notification).toHaveBeenCalledOnce()
+    expect(vi.mocked(dialog.notification).mock.calls[0]?.[0]).toBe(
+      "New exercises in 2 courses: Course 1 (2), Course 2 (1). Download them now?",
+    )
+    press(dialog, "Download All")
+
+    await vi.waitFor(() => expect(downloadNewExercisesForCourse).toHaveBeenCalledTimes(2))
   })
 
   test("does not offer the exercises of a course whose reminder is postponed", async function () {
@@ -260,7 +276,7 @@ suite("refreshEverything's new-exercises prompt", function () {
 
     await vi.waitFor(() =>
       expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-        "Failed to download new exercises for the course.",
+        "Failed to download the new exercises of Course 1.",
         expect.objectContaining({ message: "disk full" }),
         "tmc",
       ),
@@ -272,8 +288,8 @@ suite("refreshEverything's new-exercises prompt", function () {
     const { userData } = actionContext.startup
     await refreshEverything(actionContext, { silent: true })
 
-    press(dialog, "Remind me later")
-    press(dialog, "Don't remind about these exercises")
+    press(dialog, "Remind Me Later")
+    press(dialog, "Don't Remind Again")
 
     await vi.waitFor(() => {
       expect(userData.setNewExerciseNotifyAfter).toHaveBeenCalledExactlyOnceWith(
@@ -293,11 +309,11 @@ suite("refreshEverything's new-exercises prompt", function () {
     )
     await refreshEverything(actionContext, { silent: true })
 
-    press(dialog, "Remind me later")
+    press(dialog, "Remind Me Later")
 
     await vi.waitFor(() =>
       expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-        "Failed to postpone the reminder.",
+        "Failed to postpone the reminder for Course 1.",
         expect.objectContaining({ message: "storage full" }),
         "tmc",
       ),

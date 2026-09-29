@@ -4,7 +4,7 @@ import { Err, Ok } from "ts-results"
 import type { CourseUpdateOptions } from "../actions"
 import { checkForCourseUpdates, downloadNewExercisesForCourse } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import { withOperation } from "../api/withOperation"
+import { failure, withOperation } from "../api/withOperation"
 import { EXERCISE_CHECK_INTERVAL, NOTIFICATION_DELAY } from "../config/constants"
 import { LocalCourseData } from "../shared/shared"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
@@ -82,13 +82,17 @@ async function refresh(
       if (refreshed.ok) {
         offerNewExercises(actionContext, refreshed.val.courses)
       }
-      const failure = refreshed.err ? refreshed.val : refreshed.val.failure
-      await updateExercises(actionContext, silent || failure ? "silent" : "loud")
-      return failure ? Err(failure) : Ok.EMPTY
+      const refreshFailure = refreshed.err ? refreshed.val : refreshed.val.failure
+      await updateExercises(actionContext, silent || refreshFailure ? "silent" : "loud")
+      return refreshFailure ? Err(refreshFailure) : Ok.EMPTY
     },
   )
 }
 
+/**
+ * Offers, in one notification, the new exercises of every course whose reminder is due; each
+ * button acts on all of those courses.
+ */
 function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCourseData[]): void {
   const { dialog } = actionContext
   const { userData } = actionContext.startup
@@ -97,33 +101,77 @@ function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCour
   // freeze course metadata and point totals for the whole delay, including the
   // refresh each submit asks for.
   const now = Date.now()
-  for (const course of courses) {
-    const newExercises = LocalCourseData.getNewExercises(course)
-    if (newExercises.length === 0 || course.data.disabled || course.data.notifyAfter > now) {
-      continue
-    }
-    const id = LocalCourseData.getCourseId(course)
-    const courseName = LocalCourseData.getCourseName(course)
-    const button = (failure: string, body: () => Promise<Result<void, Error>>) => (): void =>
-      void withOperation(dialog, { failure, backend: course.kind }, body)
-    void dialog.notification(
-      `Found ${newExercises.length} new exercises for ${courseName}. Do you wish to download them now?`,
-      [
-        "Download",
-        button("Failed to download new exercises for the course.", () =>
-          downloadNewExercisesForCourse(actionContext, id),
-        ),
-      ],
-      [
-        "Remind me later",
-        button("Failed to postpone the reminder.", () =>
-          userData.setNewExerciseNotifyAfter(id, Date.now() + NOTIFICATION_DELAY),
-        ),
-      ],
-      [
-        "Don't remind about these exercises",
-        button("Failed to dismiss the new exercises.", () => userData.clearFromNewExercises(id)),
-      ],
-    )
+  const offered = courses.filter(
+    (course) =>
+      LocalCourseData.getNewExercises(course).length > 0 &&
+      !course.data.disabled &&
+      course.data.notifyAfter <= now,
+  )
+  if (offered.length === 0) {
+    return
   }
+
+  const forEachCourse =
+    (
+      headline: (title: string) => string,
+      step: (course: LocalCourseData) => Promise<Result<void, Error>>,
+    ) =>
+    (): void =>
+      void withOperation(dialog, { failure: headline("a course") }, async () => {
+        for (const course of offered) {
+          const result = await step(course)
+          if (result.err) {
+            return failure(
+              headline(LocalCourseData.getCourseTitle(course)),
+              result.val,
+              course.kind,
+            )
+          }
+        }
+        return Ok.EMPTY
+      })
+
+  void dialog.notification(
+    newExercisesMessage(offered),
+    [
+      offered.length === 1 ? "Download" : "Download All",
+      forEachCourse(
+        (title) => `Failed to download the new exercises of ${title}.`,
+        (course) =>
+          downloadNewExercisesForCourse(actionContext, LocalCourseData.getCourseId(course)),
+      ),
+    ],
+    [
+      "Remind Me Later",
+      forEachCourse(
+        (title) => `Failed to postpone the reminder for ${title}.`,
+        (course) =>
+          userData.setNewExerciseNotifyAfter(
+            LocalCourseData.getCourseId(course),
+            Date.now() + NOTIFICATION_DELAY,
+          ),
+      ),
+    ],
+    [
+      "Don't Remind Again",
+      forEachCourse(
+        (title) => `Failed to dismiss the new exercises of ${title}.`,
+        (course) => userData.clearFromNewExercises(LocalCourseData.getCourseId(course)),
+      ),
+    ],
+  )
+}
+
+function newExercisesMessage(courses: LocalCourseData[]): string {
+  const counted = courses.map((course) => ({
+    title: LocalCourseData.getCourseTitle(course),
+    count: LocalCourseData.getNewExercises(course).length,
+  }))
+  const [only] = counted
+  if (only && counted.length === 1) {
+    const exercises = only.count === 1 ? "1 new exercise" : `${only.count} new exercises`
+    return `${only.title} has ${exercises}. Download ${only.count === 1 ? "it" : "them"} now?`
+  }
+  const list = counted.map(({ title, count }) => `${title} (${count})`).join(", ")
+  return `New exercises in ${counted.length} courses: ${list}. Download them now?`
 }

@@ -145,12 +145,43 @@ suite("updateExercises command", function () {
     await updateExercises(silentContext, "silent")
 
     expect(loudDialog.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to check for exercise updates.",
+      "Failed to check courses.mooc.fi for exercise updates.",
       error,
       "mooc",
     )
     expect(loudDialog.notification).not.toHaveBeenCalled()
+    expect(loudDialog.statusMessage).not.toHaveBeenCalled()
     expect(silentDialog.reportError).not.toHaveBeenCalled()
+  })
+
+  test("reports both backends failing in one notification", async function () {
+    const tmcError = new Error("tmc offline")
+    checkForExerciseUpdates.mockResolvedValue({
+      outdated: [],
+      failures: [
+        { backend: "tmc", error: tmcError },
+        { backend: "mooc", error: new Error("mooc offline") },
+      ],
+    })
+    const [context, dialog] = contextWith(false)
+
+    await updateExercises(context, "loud")
+
+    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to check TMC Server and courses.mooc.fi for exercise updates.",
+      tmcError,
+      undefined,
+    )
+  })
+
+  test("says in the status bar, not a notification, that everything is up to date", async function () {
+    checkForExerciseUpdates.mockResolvedValue(checked([]))
+    const [context, dialog] = contextWith(false)
+
+    await updateExercises(context, "loud")
+
+    expect(dialog.statusMessage).toHaveBeenCalledExactlyOnceWith("All exercises are up to date.")
+    expect(dialog.notification).not.toHaveBeenCalled()
   })
 
   test("still offers the updates in a silent run, but not the all-clear", async function () {
@@ -162,7 +193,7 @@ suite("updateExercises command", function () {
     await updateExercises(actionContext, "silent")
 
     expect(dialog.notification).toHaveBeenCalledExactlyOnceWith(
-      "Found updates for 1 exercises. Do you wish to download them?",
+      "1 exercise has an update. Download it now?",
       expect.anything(),
       expect.anything(),
     )
