@@ -192,7 +192,7 @@
       },
       {
         "command": "tmc.showWelcome",
-        "title": "Show Welcome Page",
+        "title": "Get Started",
         "category": "TestMyCode"
       },
       {
@@ -586,6 +586,81 @@
         "view": "tmcView",
         "when": "test-my-code:Initialized && test-my-code:LoggedIn",
         "contents": "You have not added any courses yet.\n[Add a Course](command:tmc.addNewCourse)\n[Open My Courses](command:tmc.myCourses)"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "gettingStarted",
+        "title": "Get Started with TestMyCode",
+        "description": "Log in, add your course, and test and submit your first exercise.",
+        "steps": [
+          {
+            "id": "logIn",
+            "title": "Log in with courses.mooc.fi",
+            "description": "Use your courses.mooc.fi account. Logging in opens courses.mooc.fi in your browser.\n[Log In](command:tmc.showMoocLogin)",
+            "media": {
+              "markdown": "media/walkthrough/log-in.md"
+            },
+            "completionEvents": [
+              "onContext:test-my-code:LoggedIn"
+            ]
+          },
+          {
+            "id": "addCourse",
+            "title": "Add a course",
+            "description": "Pick the course you are taking.\n[Add a Course](command:tmc.addNewCourse)",
+            "media": {
+              "markdown": "media/walkthrough/add-course.md"
+            },
+            "completionEvents": [
+              "onContext:test-my-code:HasCourses"
+            ]
+          },
+          {
+            "id": "openExercises",
+            "title": "Download and open exercises",
+            "description": "Download the course's exercises and open its workspace.\n[Show Course Details](command:tmc.courseDetails)\n[Open Course Workspace](command:tmc.openCourseWorkspace)",
+            "media": {
+              "markdown": "media/walkthrough/open-exercises.md"
+            },
+            "completionEvents": [
+              "onContext:test-my-code:WorkspaceActive"
+            ]
+          },
+          {
+            "id": "runTests",
+            "title": "Run the tests",
+            "description": "Open a file of an exercise and run its tests on your computer.\n[Run Tests](command:tmc.testExercise)",
+            "media": {
+              "markdown": "media/walkthrough/run-tests.md"
+            },
+            "completionEvents": [
+              "onCommand:tmc.testExercise"
+            ]
+          },
+          {
+            "id": "submit",
+            "title": "Submit your solution",
+            "description": "Send the exercise for grading to earn its points.\n[Submit Solution](command:tmc.submitExercise)",
+            "media": {
+              "markdown": "media/walkthrough/submit.md"
+            },
+            "completionEvents": [
+              "onCommand:tmc.submitExercise"
+            ]
+          },
+          {
+            "id": "getHelp",
+            "title": "Get help",
+            "description": "Where to find instructions and report problems, and what data the extension sends.\n[Read the Installation Guide](https://www.mooc.fi/en/installation/vscode)\n[Show Logs](command:tmc.logs)",
+            "media": {
+              "markdown": "media/walkthrough/get-help.md"
+            },
+            "completionEvents": [
+              "onStepSelected"
+            ]
+          }
+        ]
       }
     ],
     "viewsContainers": {

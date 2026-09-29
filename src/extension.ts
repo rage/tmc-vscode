@@ -34,6 +34,7 @@ import * as init from "./init"
 import { createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
 import { trackActiveEditorExercise } from "./ui/activeExerciseContext"
+import { trackHasCourses } from "./ui/hasCoursesContext"
 import { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import UI from "./ui/ui"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
@@ -311,7 +312,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
         versionChange = "updated"
       }
     } catch (e) {
-      // An unreadable session state costs the welcome page, nothing else.
+      // An unreadable session state costs the walkthrough or the update notice, nothing else.
       Logger.warn("Skipped version check", e)
     }
   } else {
@@ -421,6 +422,9 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   if (readyContext) {
     init.registerSettingsCallbacks(readyContext)
     init.registerTesting(context, readyContext)
+    // Every change to the stored courses re-renders the Courses view.
+    const onDidChangeCourses = ui.treeDP.onDidChangeTreeData
+    context.subscriptions.push(trackHasCourses(readyContext.startup.userData, onDidChangeCourses))
   }
 
   // The palette and the explorer menus uncover their entries on this key, and VS Code
@@ -480,7 +484,11 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   } else if (readyContext && versionChange === "updated") {
     void dialog.notification(`TestMyCode was updated to ${EXTENSION_VERSION}.`, [
       "What's New",
-      (): void => void vscode.commands.executeCommand("tmc.showWelcome"),
+      (): void =>
+        void vscode.commands.executeCommand(
+          "markdown.showPreview",
+          vscode.Uri.joinPath(context.extensionUri, "CHANGELOG.md"),
+        ),
     ])
   }
 

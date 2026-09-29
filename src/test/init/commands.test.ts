@@ -115,6 +115,16 @@ interface MenuEntry {
   when?: string
 }
 
+interface Walkthrough {
+  id: string
+  steps: {
+    id: string
+    description: string
+    media: { markdown?: string; svg?: string; image?: string }
+    completionEvents?: string[]
+  }[]
+}
+
 function packageJson(): {
   name: string
   publisher: string
@@ -125,11 +135,17 @@ function packageJson(): {
     keybindings?: { command: string; key: string; when?: string }[]
     menus: Record<string, MenuEntry[]>
     viewsWelcome?: { contents: string; when?: string }[]
+    walkthroughs?: Walkthrough[]
   }
 } {
   return JSON.parse(
     fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),
   ) as ReturnType<typeof packageJson>
+}
+
+/** The commands a markdown string's `command:` links run. */
+function linkedCommands(markdown: string): string[] {
+  return [...markdown.matchAll(/command:([\w.-]+)/g)].flatMap((m) => m[1] ?? [])
 }
 
 function declaredCommands(): string[] {
@@ -262,12 +278,20 @@ suite("registerCommands", function () {
   // A menu, keybinding or welcome-view link naming an undeclared command gives
   // the user an entry that resolves to "command not found" when they pick it.
   test("every command a contribution points at is declared", function () {
-    const { menus, keybindings = [], viewsWelcome = [] } = packageJson().contributes
+    const {
+      menus,
+      keybindings = [],
+      viewsWelcome = [],
+      walkthroughs = [],
+    } = packageJson().contributes
+    const steps = walkthroughs.flatMap((x) => x.steps)
     const referenced = [
       ...Object.values(menus).flatMap((entries) => entries.flatMap((x) => x.command ?? [])),
       ...keybindings.map((x) => x.command),
-      ...viewsWelcome.flatMap((x) =>
-        [...x.contents.matchAll(/command:([\w.-]+)/g)].flatMap((m) => m[1] ?? []),
+      ...viewsWelcome.flatMap((x) => linkedCommands(x.contents)),
+      ...steps.flatMap((x) => linkedCommands(x.description)),
+      ...steps.flatMap((x) =>
+        (x.completionEvents ?? []).flatMap((event) => /^onCommand:(.+)$/.exec(event)?.[1] ?? []),
       ),
     ].filter((command) => !command.startsWith("workbench."))
     const declared = new Set(declaredCommands())
@@ -336,11 +360,20 @@ suite("registerCommands", function () {
         ])
         .flatMap((match) => match[1] ?? []),
     )
-    const { menus, keybindings = [], viewsWelcome = [] } = packageJson().contributes
+    const {
+      menus,
+      keybindings = [],
+      viewsWelcome = [],
+      walkthroughs = [],
+    } = packageJson().contributes
     const gated = [...Object.values(menus).flat(), ...keybindings, ...viewsWelcome]
-    const referenced = new Set(
-      gated.flatMap((x) => [...(x.when ?? "").matchAll(/test-my-code:\w+/g)].map((m) => m[0])),
-    )
+    const referenced = new Set([
+      ...gated.flatMap((x) => [...(x.when ?? "").matchAll(/test-my-code:\w+/g)].map((m) => m[0])),
+      ...walkthroughs
+        .flatMap((x) => x.steps)
+        .flatMap((x) => x.completionEvents ?? [])
+        .flatMap((event) => /^onContext:(test-my-code:\w+)$/.exec(event)?.[1] ?? []),
+    ])
     expect([...referenced].filter((key) => !settable.has(key)).toSorted()).toEqual([])
   })
 
@@ -364,6 +397,35 @@ suite("registerCommands", function () {
       }
     }
     expect(missing).toEqual([])
+  })
+})
+
+suite("walkthrough", function () {
+  test("is the single walkthrough, and every step has media that exists", function () {
+    const walkthroughs = packageJson().contributes.walkthroughs ?? []
+    expect(walkthroughs).toHaveLength(1)
+    const root = path.join(__dirname, "..", "..", "..")
+    const missing = (walkthroughs[0]?.steps ?? [])
+      .map((step) => step.media.markdown ?? step.media.svg ?? step.media.image ?? step.id)
+      .filter((media) => !fs.existsSync(path.join(root, media)))
+    expect(missing).toEqual([])
+  })
+
+  // A step without a way to act on it is a paragraph, not a step.
+  test("every step offers a button", function () {
+    const steps = packageJson().contributes.walkthroughs?.[0]?.steps ?? []
+    const withoutButton = steps.filter((step) => !/^\[[^\]]+\]\([^)]+\)$/m.test(step.description))
+    expect(withoutButton.map((x) => x.id)).toEqual([])
+  })
+
+  // The walkthrough is the onboarding a new user sees, so the privacy notice has to be in it.
+  test("a step carries the data-collection notice", function () {
+    const root = path.join(__dirname, "..", "..", "..")
+    const media = (packageJson().contributes.walkthroughs?.[0]?.steps ?? []).flatMap(
+      (step) => step.media.markdown ?? [],
+    )
+    const texts = media.map((file) => fs.readFileSync(path.join(root, file), "utf8"))
+    expect(texts.some((text) => text.includes("Data collected by the extension"))).toBe(true)
   })
 })
 
@@ -538,18 +600,20 @@ suite("registered command handlers", function () {
     )
   })
 
-  test("tmc.showWelcome opens the welcome panel", async function () {
+  test("tmc.showWelcome opens the walkthrough package.json contributes", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
-    const { handlers, context, actionContext } = registerAndCollect()
+    const { handlers } = registerAndCollect()
+    const [walkthrough] = packageJson().contributes.walkthroughs ?? []
 
     await handlers.get("tmc.showWelcome")?.()
 
-    expect(renderMain).toHaveBeenCalledWith(
-      context.extensionUri,
-      context,
-      actionContext,
-      expect.objectContaining({ type: "Welcome" }),
+    expect(executeCommand).toHaveBeenCalledWith(
+      "workbench.action.openWalkthrough",
+      `${EXTENSION_ID}#${walkthrough?.id}`,
+      false,
     )
+    expect(renderMain).not.toHaveBeenCalled()
   })
 
   test("tmc.courseDetails opens the given course without asking to pick one", async function () {

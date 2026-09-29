@@ -12,6 +12,9 @@ import type { CourseIdentifier } from "../shared/shared"
 import { CourseTreeItem } from "../ui/treeview/treeview"
 import { Logger } from "../utilities"
 
+/** Must match the `walkthroughs` entry's `id` in package.json. */
+const WALKTHROUGH_ID = "gettingStarted"
+
 /** A course command's argument: a course id from code, or the Courses view item it runs on. */
 type CourseTarget = CourseIdentifier | CourseTreeItem
 
@@ -196,11 +199,12 @@ export function registerCommands(
     commands.resetExercise(readyContext, resource),
   )
 
-  register("tmc.showWelcome", () => {
-    TmcPanel.renderMain(context.extensionUri, context, readyContext, {
-      id: nextPanelId(),
-      type: "Welcome",
-    })
+  register("tmc.showWelcome", async () => {
+    await vscode.commands.executeCommand(
+      "workbench.action.openWalkthrough",
+      `${EXTENSION_ID}#${WALKTHROUGH_ID}`,
+      false,
+    )
   })
 
   // The extension's only login: the courses.mooc.fi device flow.

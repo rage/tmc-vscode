@@ -114,6 +114,7 @@ vi.mock("../../ui/ui", () => ({
         recorded.treeLoggedIn.push(loggedIn)
       },
       refresh: (): void => {},
+      onDidChangeTreeData: (): { dispose: () => void } => ({ dispose: () => {} }),
     }
     public dispose = (): void => {
       recorded.uiDisposals += 1
@@ -678,20 +679,22 @@ suite("the first start of a new version", function () {
     vi.restoreAllMocks()
   })
 
-  test("a fresh install opens the welcome page", async function () {
+  test("a fresh install opens the walkthrough", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
 
     await activate(createContext())
 
     expect(executeCommand).toHaveBeenCalledWith("tmc.showWelcome")
+    expect(recorded.panelTypes).not.toContain("Welcome")
   })
 
   // Opening a panel unasked on every update covers whatever the user was doing.
-  test("an update offers the release notes in a notification instead", async function () {
+  test("an update offers the changelog in a notification instead", async function () {
     sessionState.previousVersion = "1.0.0"
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const context = createContext()
 
-    await activate(createContext())
+    await activate(context)
 
     expect(executeCommand).not.toHaveBeenCalledWith("tmc.showWelcome")
     const [message, whatsNew] = vi.mocked(vscode.window.showInformationMessage).mock.calls[0] as [
@@ -701,7 +704,11 @@ suite("the first start of a new version", function () {
     expect(message).toBe(`TestMyCode was updated to ${EXTENSION_VERSION}.`)
     expect(whatsNew.title).toBe("What's New")
     whatsNew.callback()
-    expect(executeCommand).toHaveBeenCalledWith("tmc.showWelcome")
+    expect(executeCommand).toHaveBeenCalledWith(
+      "markdown.showPreview",
+      vscode.Uri.joinPath(context.extensionUri, "CHANGELOG.md"),
+    )
+    expect(executeCommand).not.toHaveBeenCalledWith("tmc.showWelcome")
   })
 
   test("a patch release says nothing", async function () {

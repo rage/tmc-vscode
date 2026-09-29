@@ -10,17 +10,19 @@ The source code for the extension is available at https://github.com/rage/tmc-vs
 
 ## Prerequisites
 
-- Visual Studio Code version 1.52.xx or above
-- [TestMyCode](https://tmc.mooc.fi/) account
+- Visual Studio Code version 1.100 or above
+- A [courses.mooc.fi](https://courses.mooc.fi/) account
 - Course-specific system environment
 
 ## Getting started
 
 Instructions on how to install and use the extension in Visual Studio Code can be found [here](https://www.mooc.fi/en/installation/vscode).
 
+After installing, the **Get Started with TestMyCode** walkthrough takes you from logging in to your first submission. Reopen it any time with **TestMyCode: Get Started** from the Command Palette.
+
 ### Commands
 
-A list of all available commands can be found under the `TMC Commands Menu` button located at the top right for an active editor.
+Every command is in the Command Palette under **TestMyCode**. While an exercise file is open, Run Tests and Submit Solution are in the editor's title bar.
 
 ## Data collected by the extension
 
@@ -28,7 +30,7 @@ The extension does not have trackers or telemetry. It’s open source, and anyon
 
 If you choose to submit your answer to a programming exercise to be graded to our server, the extension will send us the folder of that specific exercise. This folder contains only your solution to the exercise, and no other files are sent. This information will also include the language the server should use for error messages. The error message language is currently your computer’s locale. We may check the answers you submit for plagiarism, and we may use the IP address of the computer that submitted the exercise for blocking spam and preventing abuse.
 
-The same applies if you choose to submit your answer to the TMC pastebin for sharing your solution to other students.
+The same applies if you choose to share your solution with other students via the tmc.mooc.fi or courses.mooc.fi paste.
 
 When you interact with our server, e.g. log in, download, or submit exercises, we will send the version of this plugin in the requests. This is used for blocking outdated and potentially misbehaving plugin versions.
 
