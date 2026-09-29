@@ -34,6 +34,7 @@ import * as init from "./init"
 import { nextPanelId, TmcPanel } from "./panels/TmcPanel"
 import { createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
+import { trackActiveEditorExercise } from "./ui/activeExerciseContext"
 import UI from "./ui/ui"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
 
@@ -316,7 +317,10 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
             ),
       ),
     )
-    context.subscriptions.push(workspaceManager.val)
+    context.subscriptions.push(
+      workspaceManager.val,
+      trackActiveEditorExercise(workspaceManager.val),
+    )
     if (workspaceManager.val.activeCourse) {
       await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true)
       await workspaceManager.val.verifyWorkspaceSettingsIntegrity()

@@ -33,6 +33,7 @@ const registrationsReturningDisposables = [
   [vscode.commands, "registerCommand"],
   [vscode.window, "registerFileDecorationProvider"],
   [vscode.window, "registerTreeDataProvider"],
+  [vscode.window, "onDidChangeActiveTextEditor"],
   [vscode.workspace, "onDidChangeConfiguration"],
   [vscode.workspace, "onDidChangeWorkspaceFolders"],
   [vscode.workspace, "onDidOpenTextDocument"],

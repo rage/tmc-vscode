@@ -71,10 +71,6 @@ export function registerServiceFreeCommands(
     await vscode.commands.executeCommand("workbench.action.openSettings", "TestMyCode")
   })
 
-  register("tmc.selectAction", async () => {
-    await vscode.commands.executeCommand("workbench.action.quickOpen", ">TestMyCode: ")
-  })
-
   register("tmc.logs", async () => {
     Logger.show()
   })
@@ -88,7 +84,7 @@ export function registerServiceFreeCommands(
 
 /**
  * Registers the commands that need the startup state, i.e. everything except
- * {@link registerServiceFreeCommands}'s five.
+ * {@link registerServiceFreeCommands}'s four.
  *
  * A degraded activation still reaches `tmc.viewInitializationErrorHelp`, the one
  * exception that needs an `ActionContext` but no service; every id after it requires

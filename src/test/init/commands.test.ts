@@ -34,7 +34,6 @@ const expectedCommands = [
   "tmc.openTMCExercisesFolder",
   "tmc.pasteExercise",
   "tmc.resetExercise",
-  "tmc.selectAction",
   "tmc.showWelcome",
   "tmc.showMoocLogin",
   "tmc.submitExercise",
@@ -48,12 +47,11 @@ const expectedCommands = [
 ]
 
 // Of those, the ones that reach no service, so a failed activation can still offer them:
-// `registerServiceFreeCommands`'s five, plus `tmc.viewInitializationErrorHelp`, which
+// `registerServiceFreeCommands`'s four, plus `tmc.viewInitializationErrorHelp`, which
 // needs an `ActionContext` but no service and so stays in `registerCommands`.
 const expectedDegradedCommands = [
   "tmcView.activateEntry",
   "tmc.settings",
-  "tmc.selectAction",
   "tmc.logs",
   "tmc.debug",
   "tmc.viewInitializationErrorHelp",
@@ -63,7 +61,6 @@ const expectedDegradedCommands = [
 const expectedServiceFreeCommands = [
   "tmcView.activateEntry",
   "tmc.settings",
-  "tmc.selectAction",
   "tmc.logs",
   "tmc.debug",
 ]
@@ -98,8 +95,10 @@ function registerAndCollect(actionContext: ActionContext = createMockActionConte
   return { ids, serviceFreeIds, handlers, context, actionContext }
 }
 
+/** A menu item: a command, or a submenu (`tmc.exercise`) whose own items are a menu too. */
 interface MenuEntry {
-  command: string
+  command?: string
+  submenu?: string
   when?: string
 }
 
@@ -108,7 +107,8 @@ function packageJson(): {
   publisher: string
   version: string
   contributes: {
-    commands: { command: string }[]
+    commands: { command: string; icon?: unknown }[]
+    submenus?: { id: string }[]
     keybindings?: { command: string; key: string; when?: string }[]
     menus: Record<string, MenuEntry[]>
     viewsWelcome?: { contents: string }[]
@@ -123,13 +123,17 @@ function declaredCommands(): string[] {
   return packageJson().contributes.commands.map((x) => x.command)
 }
 
+function declaredCommandIcons(): unknown[] {
+  return packageJson().contributes.commands.flatMap((x) => (x.icon === undefined ? [] : [x.icon]))
+}
+
 function commandPalette(): MenuEntry[] {
   return packageJson().contributes.menus.commandPalette ?? []
 }
 
 // Menus attached to a file, whose `when` therefore carries the gates the same
 // command needs when it is reached from the palette instead.
-const resourceMenus = ["explorer/context", "editor/title"]
+const resourceMenus = ["explorer/context", "editor/title", "tmc.exercise"]
 
 // A `when` is a conjunction; comparing term sets rather than strings lets the
 // palette and the menus spell the same gate in a different order.
@@ -151,7 +155,7 @@ suite("registerCommands", function () {
   })
 
   // Pins the split itself: `registerServiceFreeCommands` must register exactly these
-  // five and nothing `registerCommands` also registers, or the two other set
+  // four and nothing `registerCommands` also registers, or the two other set
   // assertions in this suite would only prove the union is right, not the partition.
   test("registerServiceFreeCommands registers exactly the ids that need no service", function () {
     const { serviceFreeIds } = registerAndCollect()
@@ -184,12 +188,12 @@ suite("registerCommands", function () {
     const { menus } = packageJson().contributes
     const ungated = Object.entries(menus).flatMap(([menu, entries]) =>
       entries
-        .filter((entry) => !stillRegistered.has(entry.command))
+        .filter((entry) => entry.command === undefined || !stillRegistered.has(entry.command))
         .filter(
           (entry) =>
             entry.when !== "false" && !whenTerms(entry.when).includes("test-my-code:Initialized"),
         )
-        .map((entry) => `${menu}: ${entry.command}`),
+        .map((entry) => `${menu}: ${entry.command ?? entry.submenu}`),
     )
     expect(ungated).toEqual([])
   })
@@ -246,7 +250,7 @@ suite("registerCommands", function () {
   test("every command a contribution points at is declared", function () {
     const { menus, keybindings = [], viewsWelcome = [] } = packageJson().contributes
     const referenced = [
-      ...Object.values(menus).flatMap((entries) => entries.map((x) => x.command)),
+      ...Object.values(menus).flatMap((entries) => entries.flatMap((x) => x.command ?? [])),
       ...keybindings.map((x) => x.command),
       ...viewsWelcome.flatMap((x) =>
         [...x.contents.matchAll(/command:([\w.-]+)/g)].flatMap((m) => m[1] ?? []),
@@ -254,6 +258,33 @@ suite("registerCommands", function () {
     ]
     const declared = new Set(declaredCommands())
     expect([...new Set(referenced)].filter((x) => !declared.has(x))).toEqual([])
+  })
+
+  test("every submenu a menu points at is declared", function () {
+    const { menus, submenus = [] } = packageJson().contributes
+    const declared = new Set(submenus.map((x) => x.id))
+    const referenced = Object.values(menus).flatMap((entries) =>
+      entries.flatMap((x) => x.submenu ?? []),
+    )
+    expect(referenced.filter((x) => !declared.has(x))).toEqual([])
+  })
+
+  // An action that shows on every file answers most clicks with "not part of a course
+  // exercise".
+  test("editor title actions show only on an exercise's files", function () {
+    const entries = packageJson().contributes.menus["editor/title"] ?? []
+    expect(entries.length).toBeGreaterThan(0)
+    for (const entry of entries) {
+      expect(whenTerms(entry.when)).toContain("test-my-code:ActiveEditorIsExercise")
+    }
+  })
+
+  // A file icon ignores the theme and high contrast; a codicon follows both.
+  test("every command icon is a codicon", function () {
+    const icons = declaredCommandIcons()
+    expect(
+      icons.filter((icon) => typeof icon !== "string" || !/^\$\([\w-]+\)$/.test(icon)),
+    ).toEqual([])
   })
 
   // A `when` naming a key nothing ever sets is never true, so the entry it
@@ -308,15 +339,6 @@ suite("registered command handlers", function () {
     await handlers.get("tmc.settings")?.()
 
     expect(executeCommand).toHaveBeenCalledWith("workbench.action.openSettings", "TestMyCode")
-  })
-
-  test("tmc.selectAction opens the palette scoped to the extension", async function () {
-    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
-    const { handlers } = registerAndCollect()
-
-    await handlers.get("tmc.selectAction")?.()
-
-    expect(executeCommand).toHaveBeenCalledWith("workbench.action.quickOpen", ">TestMyCode: ")
   })
 
   test("tmc.logs shows the output channel", async function () {

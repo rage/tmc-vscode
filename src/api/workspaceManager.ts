@@ -108,6 +108,10 @@ export default class WorkspaceManager implements vscode.Disposable {
   private readonly _disposables: vscode.Disposable[]
   private readonly _persistClosedExercises: PersistClosedCourseExercises
   private _recordedClosedExercises: Map<string, string>
+  private readonly _exercisesChanged = new vscode.EventEmitter<void>()
+
+  /** Fires after {@link setExercises} replaces the known exercises. */
+  public readonly onDidChangeExercises = this._exercisesChanged.event
 
   /**
    * Creates a new instance of the WorkspaceManager class.
@@ -215,6 +219,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     this._exercises = exercises
     this._exercisesByPath = WorkspaceManager._indexByPath(exercises)
     this._recordedClosedExercises = WorkspaceManager._closedByCourse(exercises)
+    this._exercisesChanged.fire()
     return this._refreshActiveCourseWorkspace()
   }
 
@@ -373,6 +378,7 @@ export default class WorkspaceManager implements vscode.Disposable {
 
   public dispose(): void {
     this._disposables.forEach((x) => x.dispose())
+    this._exercisesChanged.dispose()
   }
 
   public async excludeMetaFilesInWorkspace(hide: boolean): Promise<void> {

@@ -36,12 +36,15 @@ export class ExplorerPage {
   }
 
   /**
-   * Runs one of the extension's `explorer/context` commands (package.json, group
-   * `TestMyCode`) on a file node. The group renders as flat items in the one
-   * context menu, not a submenu.
+   * Runs one of the extension's exercise commands on a file node, through the
+   * "TestMyCode" submenu the explorer context menu contributes (package.json,
+   * `tmc.exercise`).
    */
   public async runContextMenuCommand(filename: string, command: string): Promise<void> {
     await this.page.locator(".explorer-folders-view").getByText(filename).click({ button: "right" })
+    const submenu = this.page.locator(".monaco-menu").getByRole("menuitem", { name: "TestMyCode" })
+    await expect(submenu).toBeVisible()
+    await submenu.hover()
     const item = this.page.locator(".monaco-menu").getByRole("menuitem", { name: command })
     await expect(item).toBeVisible()
     // A synthetic click on a monaco menu item does not activate it -- the menu
