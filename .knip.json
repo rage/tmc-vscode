@@ -36,9 +36,6 @@
       ]
     },
     "webview-ui": {
-      // global.ts carries a triple-slash type reference rather than exports, so
-      // nothing imports it; tsconfig's `include` is what pulls it in.
-      "entry": ["src/global.ts"],
       "project": ["src/**/*.{ts,svelte}", "!src/generated/**", "*.ts"]
     },
     "backend": {
