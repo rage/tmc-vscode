@@ -211,6 +211,7 @@ vi.mock("../../actions", () => ({
   downloadExercisesForUi: async (): Promise<void> => {},
   pasteExercise: async (): Promise<unknown> => Ok.EMPTY,
   removeCourse: async (): Promise<void> => {},
+  sendSubmissionFeedback: async (): Promise<unknown> => Ok.EMPTY,
   updateCourse: async (): Promise<unknown> => Ok.EMPTY,
 }))
 
