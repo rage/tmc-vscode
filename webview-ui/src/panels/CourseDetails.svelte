@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte"
+  import { onMount, untrack } from "svelte"
   import { SvelteMap } from "svelte/reactivity"
 
   import Button from "../components/Button.svelte"
@@ -74,7 +74,9 @@
   onMount(() => {
     void requestData()
   })
-  addMessageListener(panel, (message) => {
+  // Its id and type are all the listener filters on, and they never change: a new panel remounts.
+  const listeningPanel = untrack(() => panel)
+  addMessageListener(listeningPanel, (message) => {
     switch (message.type) {
       case "setCourseData": {
         panel = { ...panel, course: message.courseData }
