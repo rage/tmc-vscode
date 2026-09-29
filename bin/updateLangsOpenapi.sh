@@ -13,9 +13,8 @@
 # cannot silently drift from the real API because every request AND response is
 # validated against this document at runtime (see backend/mooc/router.ts).
 #
-# For now this copies from a local secret-project-331 checkout, because the
-# extension currently tracks the unreleased `programming-exercise-migration`
-# work.
+# Copies from a local secret-project-331 checkout; vendor from a pushed
+# `master` so `--check-source` can fetch the recorded rev.
 #
 # Drift gating (three layers):
 #   * Byte-compare against the sibling checkout (`--check`) needs that checkout,
