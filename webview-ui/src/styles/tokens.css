@@ -28,6 +28,7 @@
   --tmc-fg-warning: var(--vscode-editorWarning-foreground);
   --tmc-fg-info: var(--vscode-editorInfo-foreground, var(--vscode-foreground));
   --tmc-fg-link: var(--vscode-textLink-foreground);
+  --tmc-fg-link-active: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));
 
   /* Icon colours only: the testing tokens fail text contrast on light themes. */
   --tmc-status-passed: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
