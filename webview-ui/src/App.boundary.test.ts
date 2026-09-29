@@ -16,6 +16,11 @@ suite("App render-crash boundary", () => {
       panel: { id: 1, type: "Welcome" },
     })
     expect(await screen.findByText("Uncaught error: render boom")).toBeInTheDocument()
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "webviewError",
+      message: "Uncaught error: render boom",
+      stack: expect.stringContaining("render boom"),
+    })
 
     postedMessages.mockClear()
     dispatchToWebview({

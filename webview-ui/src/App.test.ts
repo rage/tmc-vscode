@@ -25,6 +25,11 @@ suite("App global error handling", () => {
       expect(document.body.innerHTML).toContain("Uncaught error: boom")
       expect(document.body.innerHTML).toContain("This is a bug in the extension.")
     })
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "webviewError",
+      message: "Uncaught error: boom",
+      stack: expect.stringContaining("boom"),
+    })
   })
 
   test("shows an error message on an unhandled rejection", async () => {
@@ -39,6 +44,49 @@ suite("App global error handling", () => {
       expect(document.body.innerHTML).toContain("Unhandled rejection: rejected")
       expect(document.body.innerHTML).toContain("This is a bug in the extension.")
     })
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "webviewError",
+      message: "Unhandled rejection: rejected",
+      stack: expect.stringContaining("rejected"),
+    })
+  })
+
+  test("reports a rejection without a stack using only its message", async () => {
+    render(App)
+
+    const event = new Event("unhandledrejection") as Event & { reason: unknown }
+    event.reason = "plain string"
+    window.dispatchEvent(event)
+
+    await waitFor(() => {
+      expect(postedMessages).toHaveBeenCalledWith({
+        type: "webviewError",
+        message: "Unhandled rejection: plain string",
+      })
+    })
+  })
+
+  test("ignores the benign ResizeObserver loop notice", async () => {
+    render(App)
+    window.dispatchEvent(
+      new ErrorEvent("error", {
+        message: "ResizeObserver loop completed with undelivered notifications.",
+      }),
+    )
+    await tick()
+    expect(document.body.innerHTML).not.toContain("This is a bug in the extension.")
+    expect(postedMessages).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "webviewError" }),
+    )
+  })
+
+  test("the crash view opens the extension logs", async () => {
+    render(App)
+    window.dispatchEvent(new ErrorEvent("error", { message: "boom", error: new Error("boom") }))
+
+    ;(await screen.findByRole("button", { name: "Show logs" })).click()
+
+    expect(postedMessages).toHaveBeenCalledWith({ type: "runCommand", command: "tmc.logs" })
   })
 
   test("the crash view offers a way back to the panel that crashed", async () => {
