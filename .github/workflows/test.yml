@@ -184,7 +184,7 @@ jobs:
       contents: read
     env:
       CI: true
-      VSCODE_TEST_VERSION: ${{ matrix.vscode == 'minimum' && '' || matrix.vscode }}
+      VSCODE_TEST_VERSION: ${{ matrix.vscode != 'minimum' && matrix.vscode || '' }}
     strategy:
       # A platform-specific failure must not cancel the other two, or their real
       # state is unknown on exactly the runs where it matters.
