@@ -1,6 +1,5 @@
 import type { Result } from "ts-results"
 
-import type Langs from "../api/langs"
 import type { Course, MoocCourse, Organization } from "../shared/langsSchema"
 import type { ReadyActionContext } from "./types"
 
@@ -13,29 +12,24 @@ import type { ReadyActionContext } from "./types"
  */
 export const MOOC_LOGIN = "mooc-login"
 
-export interface AddableCourses {
-  organizations: Result<Organization[], Error>
-  moocCourses: Result<MoocCourse[], Error> | typeof MOOC_LOGIN
-}
-
-async function enrolledMoocCourses(
-  langs: Langs,
-  authenticated: boolean,
-): Promise<Result<MoocCourse[], Error> | typeof MOOC_LOGIN> {
-  return authenticated ? langs.getEnrolledMoocCourses() : MOOC_LOGIN
-}
-
-/** Lists what the add-course pick can offer, from both backends at once. */
-export async function listAddableCourses(
+/**
+ * Lists the courses.mooc.fi courses the user is enrolled in, or {@link MOOC_LOGIN} without a
+ * session. Independent of {@link listTmcOrganizations}, so a picker can show whichever
+ * answers first.
+ */
+export async function listEnrolledMoocCourses(
   actionContext: ReadyActionContext,
-): Promise<AddableCourses> {
-  const { authState } = actionContext
-  const { langs } = actionContext.startup
-  const [organizations, moocCourses] = await Promise.all([
-    langs.getTmcOrganizations(),
-    enrolledMoocCourses(langs, authState.mooc),
-  ])
-  return { organizations, moocCourses }
+): Promise<Result<MoocCourse[], Error> | typeof MOOC_LOGIN> {
+  return actionContext.authState.mooc
+    ? actionContext.startup.langs.getEnrolledMoocCourses()
+    : MOOC_LOGIN
+}
+
+/** Lists the TMC organizations, the add-course pick's way into TMC courses. */
+export async function listTmcOrganizations(
+  actionContext: ReadyActionContext,
+): Promise<Result<Organization[], Error>> {
+  return actionContext.startup.langs.getTmcOrganizations()
 }
 
 /** Lists a TMC organization's courses, for the add-course pick's second step. */

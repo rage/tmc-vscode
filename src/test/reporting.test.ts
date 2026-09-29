@@ -480,7 +480,25 @@ suite("reported once: course administration", function () {
       },
     })
 
-    await run("tmc.addNewCourse")
+    // A quick pick that accepts the first course row as soon as one is listed.
+    const accept = new vscode.EventEmitter<void>()
+    const quickPick = {
+      items: [] as { choice?: unknown }[],
+      selectedItems: [] as unknown[],
+      buttons: [],
+      onDidAccept: accept.event,
+      onDidHide: () => ({ dispose() {} }),
+      onDidTriggerButton: () => ({ dispose() {} }),
+      show() {},
+      hide() {},
+      dispose() {},
+    }
+    vi.spyOn(vscode.window, "createQuickPick").mockReturnValue(quickPick as never)
+    const running = run("tmc.addNewCourse")
+    await vi.waitFor(() => expect(quickPick.items.some((x) => x.choice)).toBe(true))
+    quickPick.selectedItems = [quickPick.items.find((x) => x.choice)]
+    accept.fire()
+    await running
 
     expect(shown).toEqual(["error: Failed to add course."])
   })

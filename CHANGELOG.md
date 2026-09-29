@@ -24,6 +24,7 @@
 - Removed the Insider Version setting, which did nothing.
 - Notifications no longer start with "TestMyCode:", and error messages no longer show internal error class names, command ids or a doubled period. An out-of-date extension error now offers Update Extension.
 - Logging out, closing an unfinished exercise and opening another course workspace now confirm in a dialog with a named button instead of a Yes/No list that closed when clicked away from. Reset and Download Old Submission ask once, with "Submit and Reset" and "Reset Without Submitting" style buttons, instead of twice. Wiping all data asks in a dialog and then to type DELETE.
+- Add New Course opens at once and fills in as each site answers, lists your courses.mooc.fi courses first under their own heading, searches organization names too, and has a Back button on the TMC organization step. Picking a course you already have opens it instead of adding it again, and a new course is confirmed with an Open Course button.
 - Resetting an exercise, downloading an old submission and sharing an exercise via paste now show progress, and reset, restore and clean say in the status bar when they are done.
 - Download Old Submission lists the newest submission first, marked Latest, with a readable local date and the result beside it.
 

@@ -18,6 +18,13 @@ if (typeof vscode.FileDecoration !== "function") {
   }
 }
 
+if (vscode.QuickPickItemKind === undefined) {
+  vscode.QuickPickItemKind = { Separator: -1, Default: 0 }
+}
+if (vscode.QuickInputButtons === undefined) {
+  vscode.QuickInputButtons = { Back: { iconPath: new vscode.ThemeIcon("arrow-left") } }
+}
+
 // jest-mock-vscode returns `undefined` where the real API returns a `Disposable`, and
 // the extension pushes what these return into `context.subscriptions`. Without a real
 // disposable, a test that shuts a context down the way VS Code does walks an array of

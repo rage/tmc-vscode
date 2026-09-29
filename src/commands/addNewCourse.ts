@@ -1,27 +1,26 @@
+import type { Result } from "ts-results"
 import * as vscode from "vscode"
 
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import type { Item } from "../api/dialog"
 import { withOperation } from "../api/withOperation"
-import type { MoocCourse, Organization } from "../shared/langsSchema"
-import type { CourseIdentifier, Enum } from "../shared/shared"
+import type { Course, MoocCourse, Organization } from "../shared/langsSchema"
+import type { CourseIdentifier } from "../shared/shared"
 import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
 import { Logger } from "../utilities"
 
-/**
- * What picking a top-level entry means. courses.mooc.fi has no organization
- * concept and only ever returns the courses the user is enrolled in, so a mooc
- * course is addable straight from the first list; TMC Server exposes thousands
- * of courses behind organizations, so its arm can only offer the organizations
- * and needs a second pick. Listing both in one pick keeps the mooc path — the
- * one being migrated to — down to a single step, without a platform question.
- */
-type TopLevelChoice = Enum<Organization, MoocCourse>
-
 const TITLE = "Add New Course"
 
-const ALREADY_ADDED = " · already added"
+/** What accepting a row of the pick does. */
+type Choice =
+  | { kind: "login" }
+  | { kind: "organization"; organization: Organization }
+  | { kind: "course"; courseId: CourseIdentifier; name: string; organizationSlug: string }
+  | { kind: "added"; courseId: CourseIdentifier }
+
+interface ChoiceItem extends vscode.QuickPickItem {
+  choice?: Choice
+}
 
 /** Keys a course across both backends, whose id spaces would otherwise collide. */
 function courseKey(id: CourseIdentifier): string {
@@ -32,119 +31,248 @@ function courseKey(id: CourseIdentifier): string {
   )
 }
 
+function separator(label: string): ChoiceItem {
+  return { label, kind: vscode.QuickPickItemKind.Separator }
+}
+
+/**
+ * A course row. Courses the user already has stay listed rather than hidden, where a
+ * student looking for one would wonder where it went, and picking one opens it.
+ */
+function courseItem(
+  courseId: CourseIdentifier,
+  name: string,
+  organizationSlug: string,
+  isAdded: boolean,
+  description?: string,
+): ChoiceItem {
+  const note = isAdded ? "Already added" : undefined
+  return {
+    label: name,
+    description: [description, note].filter(Boolean).join(" · "),
+    iconPath: new vscode.ThemeIcon(isAdded ? "check" : "mortar-board"),
+    choice: isAdded
+      ? { kind: "added", courseId }
+      : { kind: "course", courseId, name, organizationSlug },
+  }
+}
+
+/**
+ * Lets the user pick a course from either backend and adds it.
+ *
+ * courses.mooc.fi lists only the courses the user is enrolled in, so they come first and add in
+ * one step. TMC Server hides thousands of courses behind its organizations, so picking one of
+ * those opens a second step, with Back, listing its courses. Each backend's rows appear as soon
+ * as it answers.
+ */
 export async function addNewCourse(actionContext: ReadyActionContext): Promise<void> {
   const { dialog } = actionContext
   const { userData } = actionContext.startup
   Logger.info("Adding new course")
 
-  const { organizations, moocCourses } = await actions.listAddableCourses(actionContext)
-
-  // Courses the user already has are dimmed rather than hidden: a student
-  // looking for one would otherwise be left wondering where it went.
   const addedCourses = new Set(
     userData.getCourses().map((course) => courseKey(LocalCourseData.getCourseId(course))),
   )
+  const isAdded = (id: CourseIdentifier): boolean => addedCourses.has(courseKey(id))
 
-  const unavailable: string[] = []
-  const choices: Item<TopLevelChoice | typeof actions.MOOC_LOGIN>[] = []
-
-  if (organizations.err) {
-    unavailable.push(backendName("tmc"))
-    Logger.warn("Failed to fetch TMC organizations.", organizations.val)
-  } else {
-    for (const organization of organizations.val) {
-      choices.push({
-        label: organization.name,
-        value: makeTmcKind(organization),
-        description: `${backendName("tmc")} · browse courses`,
-      })
-    }
-  }
-
-  if (moocCourses === actions.MOOC_LOGIN) {
-    choices.push({
-      label: `Log in to ${backendName("mooc")}`,
-      value: actions.MOOC_LOGIN,
-      description: "to list the courses you are enrolled in",
-    })
-  } else if (moocCourses.err) {
-    unavailable.push(backendName("mooc"))
-    Logger.warn(`Failed to fetch ${backendName("mooc")} courses. ${moocCourses.val}`)
-  } else {
-    for (const course of moocCourses.val) {
-      const added = addedCourses.has(courseKey(makeMoocKind({ instanceId: course.id })))
-      choices.push({
-        label: course.name,
-        value: makeMoocKind(course),
-        description: `${backendName("mooc")} · ${course.organization_name}${added ? ALREADY_ADDED : ""}`,
-      })
-    }
-  }
-
-  if (choices.length === 0) {
-    dialog.errorNotification(
-      `Failed to fetch courses from ${unavailable.join(" or ")}. ` +
-        "Check your network connection and that you are logged in.",
-    )
+  const chosen = await pickCourse(actionContext, isAdded)
+  if (!chosen) {
     return
   }
-
-  // Naming the missing backend in the placeholder keeps it visible for as long
-  // as the pick is open, so a half-populated list is never mistaken for a
-  // complete one.
-  const placeHolder =
-    unavailable.length === 0
-      ? "Which course or organization?"
-      : `Which course or organization? (${unavailable.join(" and ")} unavailable, so its courses are missing)`
-
-  const chosen = await dialog.selectItem<TopLevelChoice | typeof actions.MOOC_LOGIN>(
-    { title: TITLE, placeHolder },
-    ...choices,
-  )
-  if (chosen === undefined) {
-    return
-  }
-  if (chosen === actions.MOOC_LOGIN) {
+  if (chosen.kind === "login") {
     await vscode.commands.executeCommand("tmc.showMoocLogin")
     return
   }
+  if (chosen.kind === "added") {
+    await vscode.commands.executeCommand("tmc.courseDetails", chosen.courseId)
+    return
+  }
+  const added = await withOperation(
+    dialog,
+    {
+      failure: "Failed to add course.",
+      backend: chosen.courseId.kind,
+      progress: `Adding ${chosen.name}…`,
+    },
+    () => actions.addNewCourse(actionContext, chosen.organizationSlug, chosen.courseId),
+  )
+  if (added.ok) {
+    void dialog.notification(`Added ${chosen.name}.`, [
+      "Open Course",
+      (): void => void vscode.commands.executeCommand("tmc.courseDetails", chosen.courseId),
+    ])
+  }
+}
 
-  const picked = await match(
-    chosen,
-    async (organization): Promise<[string, CourseIdentifier] | undefined> => {
+/** Runs the pick to a course, a login request, or `undefined` when dismissed. */
+function pickCourse(
+  actionContext: ReadyActionContext,
+  isAdded: (id: CourseIdentifier) => boolean,
+): Promise<Exclude<Choice, { kind: "organization" }> | undefined> {
+  const { dialog } = actionContext
+  const quickPick = vscode.window.createQuickPick<ChoiceItem>()
+  quickPick.title = TITLE
+  quickPick.matchOnDescription = true
+  quickPick.ignoreFocusOut = true
+
+  let moocRows: ChoiceItem[] | undefined
+  let tmcRows: ChoiceItem[] | undefined
+  const unavailable: string[] = []
+  // In display order, not in the order the backends failed.
+  const unavailableNames = (): string[] =>
+    [backendName("mooc"), backendName("tmc")].filter((name) => unavailable.includes(name))
+  let step: 1 | 2 = 1
+
+  const showFirstStep = (): void => {
+    step = 1
+    quickPick.step = undefined
+    quickPick.totalSteps = undefined
+    quickPick.buttons = []
+    quickPick.value = ""
+    // Naming the missing backend in the placeholder keeps it visible for as long as the pick
+    // is open, so a half-populated list is never mistaken for a complete one.
+    quickPick.placeholder =
+      unavailable.length === 0
+        ? "Search your courses or TMC organizations"
+        : `Search your courses or TMC organizations (${unavailableNames().join(" and ")} unavailable)`
+    quickPick.items = [
+      ...(moocRows?.length
+        ? [separator(`${backendName("mooc")} — your courses`), ...moocRows]
+        : []),
+      ...(tmcRows?.length ? [separator(`${backendName("tmc")} — organizations`), ...tmcRows] : []),
+    ]
+    quickPick.busy = moocRows === undefined || tmcRows === undefined
+  }
+
+  const moocListing = actions.listEnrolledMoocCourses(actionContext).then((listing) => {
+    moocRows = moocListingRows(listing, isAdded, unavailable)
+  })
+  const tmcListing = actions.listTmcOrganizations(actionContext).then((listing) => {
+    tmcRows = tmcListingRows(listing, unavailable)
+  })
+
+  return new Promise((resolve) => {
+    let isSettled = false
+    const settle = (choice: Exclude<Choice, { kind: "organization" }> | undefined): void => {
+      if (!isSettled) {
+        isSettled = true
+        resolve(choice)
+        quickPick.hide()
+      }
+    }
+
+    const showOrganization = async (organization: Organization): Promise<void> => {
+      step = 2
+      quickPick.step = 2
+      quickPick.totalSteps = 2
+      quickPick.buttons = [vscode.QuickInputButtons.Back]
+      quickPick.value = ""
+      quickPick.placeholder = `Which course in ${organization.name}?`
+      quickPick.items = []
+      quickPick.busy = true
       const courses = await actions.listOrganizationCourses(actionContext, organization.slug)
+      if (step !== 2 || isSettled) {
+        return
+      }
+      quickPick.busy = false
       if (courses.err) {
-        dialog.reportError(
+        void dialog.reportError(
           `Failed to fetch organization courses for ${organization.name}.`,
           courses.val,
           "tmc",
         )
-        return undefined
+        settle(undefined)
+        return
       }
-      const course = await dialog.selectItem<CourseIdentifier>(
-        { title: TITLE, placeHolder: `Which course in ${organization.name}?` },
-        ...courses.val.map<Item<CourseIdentifier>>((c) => {
-          const id = makeTmcKind({ courseId: c.id })
-          const added = addedCourses.has(courseKey(id))
-          return {
-            label: c.title,
-            value: id,
-            description: `${backendName("tmc")}${added ? ALREADY_ADDED : ""}`,
-          }
-        }),
-      )
-      return course === undefined ? undefined : [organization.slug, course]
-    },
-    async (course): Promise<[string, CourseIdentifier] | undefined> =>
-      // The mooc arm of the action takes the organization from the course it
-      // fetches, so no slug is passed here.
-      ["", makeMoocKind({ instanceId: course.id })],
-  )
-  if (picked === undefined) {
-    return
-  }
+      quickPick.items = courses.val.map((course: Course) => {
+        const id = makeTmcKind({ courseId: course.id })
+        return courseItem(id, course.title, organization.slug, isAdded(id), course.name)
+      })
+    }
 
-  await withOperation(dialog, { failure: "Failed to add course.", backend: picked[1].kind }, () =>
-    actions.addNewCourse(actionContext, picked[0], picked[1]),
-  )
+    quickPick.onDidAccept(() => {
+      const choice = quickPick.selectedItems[0]?.choice
+      if (!choice) {
+        return
+      }
+      if (choice.kind === "organization") {
+        void showOrganization(choice.organization)
+      } else {
+        settle(choice)
+      }
+    })
+    quickPick.onDidTriggerButton((button) => {
+      if (button === vscode.QuickInputButtons.Back) {
+        showFirstStep()
+      }
+    })
+    quickPick.onDidHide(() => {
+      settle(undefined)
+      quickPick.dispose()
+    })
+
+    const refreshFirstStep = (): void => {
+      if (step === 1 && !isSettled) {
+        showFirstStep()
+      }
+    }
+    void moocListing.then(refreshFirstStep)
+    void tmcListing.then(refreshFirstStep)
+    void Promise.all([moocListing, tmcListing]).then(() => {
+      if (step === 1 && !isSettled && quickPick.items.length === 0) {
+        void dialog.errorNotification(
+          `Failed to fetch courses from ${unavailableNames().join(" or ")}. ` +
+            "Check your network connection and that you are logged in.",
+        )
+        settle(undefined)
+      }
+    })
+
+    showFirstStep()
+    quickPick.show()
+  })
+}
+
+function moocListingRows(
+  listing: Result<MoocCourse[], Error> | typeof actions.MOOC_LOGIN,
+  isAdded: (id: CourseIdentifier) => boolean,
+  unavailable: string[],
+): ChoiceItem[] {
+  if (listing === actions.MOOC_LOGIN) {
+    return [
+      {
+        label: `Log in to ${backendName("mooc")}`,
+        description: "to list the courses you are enrolled in",
+        iconPath: new vscode.ThemeIcon("sign-in"),
+        choice: { kind: "login" },
+      },
+    ]
+  }
+  if (listing.err) {
+    unavailable.push(backendName("mooc"))
+    Logger.warn(`Failed to fetch ${backendName("mooc")} courses.`, listing.val)
+    return []
+  }
+  return listing.val.map((course) => {
+    const id = makeMoocKind({ instanceId: course.id })
+    // The mooc arm of the action takes the organization from the course it fetches.
+    return courseItem(id, course.name, "", isAdded(id), course.organization_name)
+  })
+}
+
+function tmcListingRows(
+  listing: Result<Organization[], Error>,
+  unavailable: string[],
+): ChoiceItem[] {
+  if (listing.err) {
+    unavailable.push(backendName("tmc"))
+    Logger.warn("Failed to fetch TMC organizations.", listing.val)
+    return []
+  }
+  return listing.val.map((organization) => ({
+    label: organization.name,
+    description: "Browse courses",
+    iconPath: new vscode.ThemeIcon("organization"),
+    choice: { kind: "organization", organization },
+  }))
 }
