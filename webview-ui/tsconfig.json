@@ -12,5 +12,5 @@
     // position, enable source maps
     "sourceMap": true
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "dev/**/*.ts"]
 }

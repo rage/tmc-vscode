@@ -7,7 +7,8 @@
     "build": "vite build",
     "dev": "vite build --watch --mode development",
     "check": "node -e \"require('node:fs').rmSync('.svelte-check',{recursive:true,force:true})\" && svelte-check --tsconfig ./tsconfig.json --tsgo",
-    "check:tsc": "svelte-check --tsconfig ./tsconfig.json"
+    "check:tsc": "svelte-check --tsconfig ./tsconfig.json",
+    "themes:refresh": "xvfb-maybe -a -- node dev/refreshThemes.mjs"
   },
   "dependencies": {
     "@vscode-elements/elements": "^2.5.1",
