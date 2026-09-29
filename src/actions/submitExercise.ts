@@ -44,6 +44,9 @@ type ExerciseSubmitter = (
   exercisePath: string,
 ) => Promise<Result<SubmissionOutcome, Error>>
 
+// Answering only URLs a submission result named keeps the webview from choosing where to post.
+const answerableFeedbackUrls = new Set<string>()
+
 function tmcSubmitter(langs: Langs, exerciseId: number): ExerciseSubmitter {
   return async (target, exercisePath) => {
     const submission = await langs.submitTmcExerciseAndWaitForResults(
@@ -60,16 +63,15 @@ function tmcSubmitter(langs: Langs, exerciseId: number): ExerciseSubmitter {
       return submission
     }
     const result = submission.val
+    const questions = result.feedback_questions
+      ? parseFeedbackQuestion(result.feedback_questions)
+      : []
+    if (result.feedback_answer_url && questions.length > 0) {
+      answerableFeedbackUrls.add(result.feedback_answer_url)
+    }
     const outcome: SubmissionOutcome = {
       passed: result.status === "ok" && result.all_tests_passed === true,
-      resultMessage: {
-        type: "submissionResult",
-        target,
-        result,
-        questions: result.feedback_questions
-          ? parseFeedbackQuestion(result.feedback_questions)
-          : [],
-      },
+      resultMessage: { type: "submissionResult", target, result, questions },
     }
     return Ok(outcome)
   }
@@ -216,4 +218,34 @@ export async function submitExercise(
   }
 
   return Ok(LocalCourseData.getCourseId(course))
+}
+
+/** One answer to a TMC submission's feedback question. */
+export interface FeedbackAnswer {
+  questionId: number
+  answer: string
+}
+
+/**
+ * Sends a student's answers to the feedback questions a TMC submission result asked.
+ *
+ * `feedbackAnswerUrl` must be one a submission result named this session; each is answered
+ * once. A failed send can be retried.
+ */
+export async function sendSubmissionFeedback(
+  actionContext: ReadyActionContext,
+  feedbackAnswerUrl: string,
+  answers: readonly FeedbackAnswer[],
+): Promise<Result<void, Error>> {
+  if (!answerableFeedbackUrls.has(feedbackAnswerUrl)) {
+    return Err(new Error("This submission's feedback was already sent or was never asked for."))
+  }
+  const sent = await actionContext.startup.langs.submitSubmissionFeedback(feedbackAnswerUrl, {
+    status: answers.map(({ questionId, answer }) => ({ question_id: questionId, answer })),
+  })
+  if (sent.err) {
+    return sent
+  }
+  answerableFeedbackUrls.delete(feedbackAnswerUrl)
+  return Ok.EMPTY
 }

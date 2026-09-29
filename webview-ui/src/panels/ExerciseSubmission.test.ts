@@ -27,6 +27,8 @@ const moocPanel: ExerciseSubmissionPanel = {
   exercise: moocLocalExercise(),
 }
 
+const FEEDBACK_URL = "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback"
+
 function submissionFinished(overrides: Partial<SubmissionFinished> = {}): SubmissionFinished {
   return {
     api_version: 7,
@@ -255,6 +257,85 @@ suite("ExerciseSubmission panel (tmc results)", () => {
     expect(screen.getByRole("group", { name: "Valgrind output" })).toHaveTextContent(
       "definitely lost: 8 bytes",
     )
+  })
+})
+
+suite("ExerciseSubmission panel (tmc feedback)", () => {
+  const questions: FeedbackQuestion[] = [
+    { id: 1, kind: "intrange", lower: 1, upper: 5, question: "How difficult was this?" },
+    { id: 2, kind: "text", question: "Free feedback" },
+  ]
+
+  async function renderWithFeedback(): Promise<void> {
+    render(ExerciseSubmission, { props: { panel } })
+    postTmcResult(submissionFinished({ feedback_answer_url: FEEDBACK_URL }), questions)
+    await screen.findByRole("heading", { name: "Give feedback" })
+  }
+
+  function postFeedbackSent(ok: boolean, error?: string): void {
+    dispatchToWebview({
+      type: "feedbackSent",
+      target: { type: "ExerciseSubmission", id: panel.id },
+      ok,
+      error,
+    })
+  }
+
+  test("asks the course's questions and sends the answered ones", async () => {
+    await renderWithFeedback()
+    expect(screen.getByRole("radiogroup", { name: "How difficult was this?" })).toBeInTheDocument()
+    const send = await screen.findByRole("button", { name: "Send feedback" })
+    expect(send).toHaveAttribute("disabled")
+
+    const textarea = document.querySelector("vscode-textarea")!
+    textarea.value = "Fun exercise"
+    await fireEvent.input(textarea)
+    postedMessages.mockClear()
+    send.click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "sendFeedback",
+      sourcePanel: { id: panel.id, type: "ExerciseSubmission" },
+      feedbackAnswerUrl: FEEDBACK_URL,
+      answers: [{ questionId: 2, answer: "Fun exercise" }],
+    })
+  })
+
+  test("a chosen rating is sent as its number", async () => {
+    await renderWithFeedback()
+    const radio = [...document.querySelectorAll("vscode-radio")].find((r) => r.value === "4")!
+    radio.checked = true
+    radio.dispatchEvent(new Event("change", { bubbles: true }))
+
+    postedMessages.mockClear()
+    ;(await screen.findByRole("button", { name: "Send feedback" })).click()
+    expect(postedMessages).toHaveBeenCalledWith(
+      expect.objectContaining({ answers: [{ questionId: 1, answer: "4" }] }),
+    )
+  })
+
+  test("thanks the student once the host has sent it", async () => {
+    await renderWithFeedback()
+    postFeedbackSent(true)
+
+    expect(await screen.findByText("Thank you for your feedback.")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Send feedback" })).not.toBeInTheDocument()
+  })
+
+  test("a failed send keeps the form and says why", async () => {
+    await renderWithFeedback()
+    postFeedbackSent(false, "connection reset")
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("connection reset")
+    expect(await screen.findByRole("button", { name: "Send feedback" })).toBeInTheDocument()
+  })
+
+  test("no questions, no form", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    postTmcResult(submissionFinished({ feedback_answer_url: FEEDBACK_URL }))
+
+    await screen.findByRole("heading", { name: "All tests passed on the server" })
+    expect(screen.queryByRole("heading", { name: "Give feedback" })).not.toBeInTheDocument()
   })
 })
 

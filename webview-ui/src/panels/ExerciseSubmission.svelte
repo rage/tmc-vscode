@@ -8,10 +8,12 @@
   import PasteHelpBox from "../components/PasteHelpBox.svelte"
   import Spinner from "../components/Spinner.svelte"
   import StatusIcon from "../components/StatusIcon.svelte"
+  import type { FeedbackAnswer } from "../components/SubmissionFeedbackForm.svelte"
+  import SubmissionFeedbackForm from "../components/SubmissionFeedbackForm.svelte"
   import TestResults from "../components/TestResults.svelte"
   import ToolbarButton from "../components/ToolbarButton.svelte"
   import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../shared/langsSchema"
-  import type { ExerciseSubmissionPanel, WebviewError } from "../shared/shared"
+  import type { ExerciseSubmissionPanel, FeedbackQuestion, WebviewError } from "../shared/shared"
   import { assertUnreachable, unwrap } from "../shared/shared"
   import { announce } from "../utilities/a11y.svelte"
   import { addMessageListener } from "../utilities/script"
@@ -36,6 +38,9 @@
   let nextProgressStepId = 0
   let submissionError = $state.raw<WebviewError | undefined>(undefined)
   let submissionResult = $state.raw<SubmissionFinished | undefined>(undefined)
+  let feedbackQuestions = $state.raw<FeedbackQuestion[]>([])
+  let feedbackStatus = $state<"editing" | "sending" | "sent">("editing")
+  let feedbackError = $state<string | undefined>(undefined)
   let pasteResult = $state<string | undefined>(undefined)
   let pasteError = $state<string | undefined>(undefined)
   // The last message of a mooc submission: the CLI has stopped waiting once it arrives,
@@ -113,12 +118,24 @@
       }
       case "submissionResult": {
         submissionResult = message.result
+        feedbackQuestions = message.questions
         announce(tmcHeadline(message.result))
         break
       }
       case "moocSubmissionResult": {
         moocResult = message.result
         announce(moocHeadline(message.result))
+        break
+      }
+      case "feedbackSent": {
+        if (message.ok) {
+          feedbackStatus = "sent"
+          feedbackError = undefined
+          announce("Feedback sent")
+        } else {
+          feedbackStatus = "editing"
+          feedbackError = message.error ?? "Unknown error"
+        }
         break
       }
       case "pasteResult": {
@@ -143,6 +160,16 @@
   }
   function copyToClipboard(text: string) {
     vscode.postMessage({ type: "copyToClipboard", text })
+  }
+  function sendFeedback(feedbackAnswerUrl: string, answers: FeedbackAnswer[]) {
+    feedbackStatus = "sending"
+    feedbackError = undefined
+    vscode.postMessage({
+      type: "sendFeedback",
+      sourcePanel: { id: panel.id, type: panel.type },
+      feedbackAnswerUrl,
+      answers,
+    })
   }
 </script>
 
@@ -264,6 +291,16 @@
         pasteResult = undefined
         pasteError = undefined
       }}
+    />
+  {/if}
+
+  {#if feedbackQuestions.length > 0 && submissionResult.feedback_answer_url}
+    {@const feedbackAnswerUrl = submissionResult.feedback_answer_url}
+    <SubmissionFeedbackForm
+      questions={feedbackQuestions}
+      status={feedbackStatus}
+      error={feedbackError}
+      onsend={(answers) => sendFeedback(feedbackAnswerUrl, answers)}
     />
   {/if}
 
