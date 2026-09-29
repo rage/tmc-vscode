@@ -15,10 +15,10 @@ import {
 import { postExerciseStatuses, postUpdateables } from "../../panels/exerciseLists"
 import { exerciseStatusRegistry } from "../../panels/exerciseStatusRegistry"
 import { moocLoginRegistry } from "../../panels/moocLoginRegistry"
-import type { PanelRequest, WebviewHandlers } from "../../panels/TmcPanel"
+import type { WebviewHandlers } from "../../panels/TmcPanel"
 import { nextPanelId, registerWebviewHandlers, TmcPanel } from "../../panels/TmcPanel"
 import { updateablesRegistry } from "../../panels/updateablesRegistry"
-import type { CourseDetailsPanel } from "../../shared/shared"
+import type { CourseDetailsPanel, Panel } from "../../shared/shared"
 import {
   CourseIdentifier,
   ExerciseIdentifier,
@@ -128,7 +128,7 @@ suite("TmcPanel moocLogin handling", () => {
 async function mountSidePanel(
   actionContext: ActionContext,
   extensionContext: vscode.ExtensionContext = createMockContext(),
-  shownPanel?: PanelRequest,
+  shownPanel?: Panel,
 ): Promise<{
   panel: ReturnType<typeof createFakeWebviewPanel>["panel"]
   listener: (message: unknown) => Promise<void>
@@ -1604,6 +1604,8 @@ suite("TmcPanel host services for the webview", () => {
 
   test.each([
     ["tmc.logs", []],
+    ["tmc.myCourses", []],
+    ["tmc.showMoocLogin", []],
     ["workbench.action.restartExtensionHost", []],
     ["workbench.action.openSettings", ["testMyCode.logLevel"]],
     ["workbench.action.openIssueReporter", [{ extensionId: "moocfi.test-my-code" }]],
@@ -1732,7 +1734,7 @@ suite("TmcPanel main panel lifecycle", () => {
   })
 })
 
-function renderMainPanel(panel: PanelRequest): void {
+function renderMainPanel(panel: Panel): void {
   TmcPanel.renderMain(
     vscode.Uri.file("/ext"),
     createMockContext(),
@@ -1741,7 +1743,7 @@ function renderMainPanel(panel: PanelRequest): void {
   )
 }
 
-function renderSidePanel(panel: PanelRequest): void {
+function renderSidePanel(panel: Panel): void {
   TmcPanel.renderSide(
     vscode.Uri.file("/ext"),
     createMockContext(),
@@ -1754,7 +1756,7 @@ suite("TmcPanel side panel placement", () => {
   beforeEach(resetPanels)
   afterEach(resetPanels)
 
-  const testsPanel = (): PanelRequest => ({
+  const testsPanel = (): Panel => ({
     id: nextPanelId(),
     type: "ExerciseTests",
     course: courseWith(1),
@@ -1817,7 +1819,7 @@ suite("TmcPanel tab identity", () => {
   afterEach(resetPanels)
 
   function mainPanelTitleFor(
-    panel: PanelRequest,
+    panel: Panel,
     actionContext: ActionContext = createMockActionContext(),
   ): string {
     resetPanels()
@@ -1979,7 +1981,7 @@ suite("TmcPanel webview document", () => {
   })
 })
 
-function exerciseTestsPanel(): Extract<PanelRequest, { type: "ExerciseTests" }> {
+function exerciseTestsPanel(): Extract<Panel, { type: "ExerciseTests" }> {
   return {
     id: nextPanelId(),
     type: "ExerciseTests",

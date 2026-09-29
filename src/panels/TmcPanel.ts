@@ -24,7 +24,6 @@ import type {
   Panel,
   TargetPanel,
   WebviewToExtension,
-  WelcomePanel,
 } from "../shared/shared"
 import {
   CourseIdentifier,
@@ -124,12 +123,6 @@ function handlers(): WebviewHandlers {
 const DOWNLOAD_MAX_HOLD_MS = 3 * CLI_PROCESS_TIMEOUT
 
 type PanelDataTarget = TargetPanel<MyCoursesPanel> | TargetPanel<CourseDetailsPanel>
-
-/**
- * A panel as callers ask for it: the host fills in Welcome's `version` and `loggedIn`
- * when it renders the panel.
- */
-export type PanelRequest = Exclude<Panel, WelcomePanel> | Pick<WelcomePanel, "id" | "type">
 
 /**
  * Manages the rendering of the extension webview panels.
@@ -311,7 +304,7 @@ export class TmcPanel {
     extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
-    panel: PanelRequest,
+    panel: Panel,
   ): void {
     if (TmcPanel.mainPanel !== undefined) {
       Logger.info(`Revealing existing main panel for "${panel.type}"`)
@@ -333,7 +326,7 @@ export class TmcPanel {
     extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
-    panel: PanelRequest,
+    panel: Panel,
   ): void {
     // Navigating away from an in-flight mooc login abandons it, so kill its CLI
     // process. Exempt for re-entering MoocLogin: the new `moocLogin` handler
@@ -363,7 +356,7 @@ export class TmcPanel {
     extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
-    panel: PanelRequest,
+    panel: Panel,
     isMain: boolean,
   ): TmcPanel {
     const showOptions = isMain
@@ -437,7 +430,7 @@ export class TmcPanel {
   }
 
   // remembers `panel` so "ready" can (re)send it
-  private _renderPanel(request: PanelRequest): void {
+  private _renderPanel(request: Panel): void {
     const panel = completePanel(request, this._actionContext)
     this._lastPanel = panel
     this._messageBuffer.clear()
@@ -1070,7 +1063,7 @@ export class TmcPanel {
 }
 
 /** Fills in what the host knows about a panel at render time. */
-function completePanel(request: PanelRequest, actionContext: ActionContext): Panel {
+function completePanel(request: Panel, actionContext: ActionContext): Panel {
   return request.type === "Welcome"
     ? { ...request, version: EXTENSION_VERSION, loggedIn: actionContext.authState.loggedIn }
     : request
@@ -1110,7 +1103,7 @@ function panelTitle(panel: Panel, actionContext: ActionContext): string {
  * Only a side panel the user asked for takes focus; test and submission results appear
  * while the student is typing, and a re-run must not pull their keystrokes away.
  */
-function takesFocus(panel: PanelRequest): boolean {
+function takesFocus(panel: Panel): boolean {
   return panel.type === "MoocLogin"
 }
 
@@ -1211,6 +1204,8 @@ function runCommandArguments(command: RunnableCommand): unknown[] {
     case "workbench.action.openIssueReporter":
       return [{ extensionId: EXTENSION_ID }]
     case "tmc.logs":
+    case "tmc.myCourses":
+    case "tmc.showMoocLogin":
     case "workbench.action.restartExtensionHost":
       return []
     default:

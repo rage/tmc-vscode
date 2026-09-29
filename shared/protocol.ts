@@ -23,8 +23,8 @@ export type AppPanel = z.infer<typeof AppPanelSchema>
 export const WelcomePanelSchema = z.object({
   id: z.number(),
   type: z.literal("Welcome"),
-  version: z.string(),
-  loggedIn: z.boolean(),
+  version: z.string().optional(),
+  loggedIn: z.boolean().optional(),
 })
 
 export type WelcomePanel = z.infer<typeof WelcomePanelSchema>
@@ -537,6 +537,8 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     // openSettings and this extension's id for openIssueReporter.
     command: z.enum([
       "tmc.logs",
+      "tmc.myCourses",
+      "tmc.showMoocLogin",
       "workbench.action.restartExtensionHost",
       "workbench.action.openSettings",
       "workbench.action.openIssueReporter",
