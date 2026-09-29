@@ -373,8 +373,8 @@ export class TmcPanel {
     const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", showOptions, {
       enableScripts: true,
       enableFindWidget: true,
-      // otherwise a hidden-then-revealed panel reloads and drops messages posted
-      // before the reveal
+      // A reload would restart MoocLogin's device flow and lose UI-only state (selection,
+      // scroll, open parts) that no host registry holds.
       retainContextWhenHidden: true,
       localResourceRoots: [Uri.joinPath(extensionUri, "webview-ui/public/build")],
     })
@@ -632,7 +632,6 @@ export class TmcPanel {
                 this._renderPanel({
                   id: nextPanelId(),
                   type: "MyCourses",
-                  courseDeadlines: {},
                 })
                 actionContext.dialog.notification(`${courseName} was removed from courses.`)
               }
@@ -669,7 +668,6 @@ export class TmcPanel {
             this._renderPanel({
               id: nextPanelId(),
               type: "MyCourses",
-              courseDeadlines: {},
             })
             break
           }

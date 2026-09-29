@@ -233,7 +233,7 @@ suite("TmcPanel initialization guards", () => {
       },
     })
     const { panel, listener } = await mountSidePanel(actionContext)
-    const sourcePanel = { id: 5, type: "MyCourses" as const, courseDeadlines: {} }
+    const sourcePanel = { id: 5, type: "MyCourses" as const }
 
     await listener({ type: "requestMyCoursesData", requestId: 3, sourcePanel })
 
@@ -255,7 +255,7 @@ suite("TmcPanel initialization guards", () => {
       },
     })
     const { panel, listener } = await mountSidePanel(actionContext)
-    const sourcePanel = { id: 5, type: "MyCourses" as const, courseDeadlines: {} }
+    const sourcePanel = { id: 5, type: "MyCourses" as const }
 
     await listener({ type: "requestMyCoursesData", requestId: 7, sourcePanel })
 
@@ -1653,7 +1653,6 @@ suite("TmcPanel main panel lifecycle", () => {
     TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
       id: nextPanelId(),
       type: "MyCourses",
-      courseDeadlines: {},
     })
     await sendReady()
     vi.mocked(panel.webview.postMessage).mockClear()
@@ -1684,14 +1683,12 @@ suite("TmcPanel main panel lifecycle", () => {
     TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
       id: nextPanelId(),
       type: "MyCourses",
-      courseDeadlines: {},
     })
     const side = createFakeWebviewPanel()
     createWebviewPanel.mockReturnValue(side.panel)
     TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
       id: nextPanelId(),
       type: "MyCourses",
-      courseDeadlines: {},
     })
 
     TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
@@ -1706,10 +1703,10 @@ suite("TmcPanel main panel lifecycle", () => {
   test("closing the main panel leaves the side panel standing", async () => {
     const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
     createWebviewPanel.mockReturnValue(createFakeWebviewPanel().panel)
-    renderMainPanel({ id: nextPanelId(), type: "MyCourses", courseDeadlines: {} })
+    renderMainPanel({ id: nextPanelId(), type: "MyCourses" })
     const side = createFakeWebviewPanel()
     createWebviewPanel.mockReturnValue(side.panel)
-    renderSidePanel({ id: nextPanelId(), type: "MyCourses", courseDeadlines: {} })
+    renderSidePanel({ id: nextPanelId(), type: "MyCourses" })
 
     TmcPanel.mainPanel?.dispose()
 
@@ -1724,7 +1721,6 @@ suite("TmcPanel main panel lifecycle", () => {
     TmcPanel.renderMain(vscode.Uri.file("/ext"), createMockContext(), createMockActionContext(), {
       id: nextPanelId(),
       type: "MyCourses",
-      courseDeadlines: {},
     })
     const mainPanel = TmcPanel.mainPanel
     expect(mainPanel).toBeDefined()
@@ -1832,9 +1828,7 @@ suite("TmcPanel tab identity", () => {
   }
 
   test("names each screen instead of calling every tab TestMyCode", () => {
-    expect(mainPanelTitleFor({ id: nextPanelId(), type: "MyCourses", courseDeadlines: {} })).toBe(
-      "My Courses",
-    )
+    expect(mainPanelTitleFor({ id: nextPanelId(), type: "MyCourses" })).toBe("My Courses")
     expect(mainPanelTitleFor({ id: nextPanelId(), type: "Welcome" })).toBe("Welcome")
     expect(mainPanelTitleFor({ id: nextPanelId(), type: "MoocLogin" })).toBe("Log In")
   })
@@ -1882,7 +1876,7 @@ suite("TmcPanel tab identity", () => {
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
     renderMainPanel({ id: nextPanelId(), type: "Welcome" })
 
-    renderMainPanel({ id: nextPanelId(), type: "MyCourses", courseDeadlines: {} })
+    renderMainPanel({ id: nextPanelId(), type: "MyCourses" })
 
     expect(panel.title).toBe("My Courses")
   })
@@ -1912,7 +1906,6 @@ async function mountedWebviewHtml(): Promise<string> {
   TmcPanel.renderMain(vscode.Uri.file("/ext"), createMockContext(), createMockActionContext(), {
     id: nextPanelId(),
     type: "MyCourses",
-    courseDeadlines: {},
   })
   return panel.webview.html
 }

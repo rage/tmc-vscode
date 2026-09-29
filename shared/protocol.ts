@@ -410,14 +410,7 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
  * For use with `webview.postMessage` in `TmcPanel`.
  * Handled by the Svelte app.
  */
-export type ExtensionToWebview =
-  | z.infer<typeof ExtensionToWebviewSchema>
-  // exists only to make TypeScript treat every panel as having at least two
-  // message types, rather than one
-  | {
-      type: never
-      target: never
-    }
+export type ExtensionToWebview = z.infer<typeof ExtensionToWebviewSchema>
 
 // helper type for messages from the extension to a specific panel
 export type TargetedExtensionToWebview<T extends PanelType> = Targeted<ExtensionToWebview, T>
@@ -567,9 +560,7 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
  */
 export type WebviewToExtension = z.infer<typeof WebviewToExtensionSchema>
 
-// excludes from the message union all variants where the
-// target type doesn't have the panel type
-// works...somehow
+// The messages a panel of type T can receive: those whose target admits T.
 export type Targeted<M, T extends PanelType> = Exclude<
   M,
   { target: { type: Exclude<PanelType, T> } }

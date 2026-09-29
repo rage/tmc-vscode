@@ -198,7 +198,6 @@ async function harness(
   TmcPanel.renderSide(vscode.Uri.file("/ext"), extensionContext, actionContext, {
     id: nextPanelId(),
     type: "MyCourses",
-    courseDeadlines: {},
   })
   const sidePanel = webviews[0]
   if (!sidePanel) {
