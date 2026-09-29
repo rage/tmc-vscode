@@ -3,7 +3,13 @@
 
   import Button from "../components/Button.svelte"
   import Card from "../components/Card.svelte"
+  import CodeBlock from "../components/CodeBlock.svelte"
+  import LinkButton from "../components/LinkButton.svelte"
   import Meter from "../components/Meter.svelte"
+  import Notice from "../components/Notice.svelte"
+  import PanelHeader from "../components/PanelHeader.svelte"
+  import Spinner from "../components/Spinner.svelte"
+  import ToolbarButton from "../components/ToolbarButton.svelte"
   import type {
     LocalCourseData as LocalCourseDataType,
     MyCoursesPanel,
@@ -26,7 +32,7 @@
     panel: MyCoursesPanel
   }
 
-  let { panel = $bindable() }: Props = $props()
+  let { panel }: Props = $props()
 
   const panelData = createPanelDataRequester()
 
@@ -34,15 +40,16 @@
   // unanswered; rendered where the course list would be, so neither is a permanent spinner.
   let dataError = $state<WebviewError | undefined>(undefined)
 
+  // Where focus goes once a card's notice is dismissed, keyed like the cards.
+  const openWorkspaceButtons = new Map<string, HTMLElement>()
+
   async function requestData() {
     dataError = undefined
     dataError = await panelData.request((requestId) =>
       vscode.postMessage({
         type: "requestMyCoursesData",
         requestId,
-        // `panel` is a `$state` proxy once a message has reassigned it; snapshot it or
-        // posting fails structured clone with a `DataCloneError`
-        sourcePanel: $state.snapshot(panel),
+        sourcePanel: panel,
       }),
     )
   }
@@ -50,7 +57,6 @@
   onMount(() => {
     void requestData()
   })
-  // props aren't deeply reactive in Svelte 5, so panel is reassigned rather than mutated
   addMessageListener(panel, (message) => {
     switch (message.type) {
       case "setMyCourses": {
@@ -106,17 +112,18 @@
     }
   })
 
+  function courseKey(course: LocalCourseDataType): string {
+    return CourseIdentifier.toString(LocalCourseData.getCourseId(course))
+  }
   function replaceCourse(
     courseId: CourseIdentifier,
     replacement: (course: LocalCourseDataType) => LocalCourseDataType,
   ) {
-    const courseKey = CourseIdentifier.toString(courseId)
+    const key = CourseIdentifier.toString(courseId)
     panel = {
       ...panel,
       courses: (panel.courses ?? []).map((course) =>
-        CourseIdentifier.toString(LocalCourseData.getCourseId(course)) === courseKey
-          ? replacement(course)
-          : course,
+        courseKey(course) === key ? replacement(course) : course,
       ),
     }
   }
@@ -145,7 +152,7 @@
   function openWorkspace(courseId: CourseIdentifier) {
     vscode.postMessage({
       type: "openCourseWorkspace",
-      courseId: $state.snapshot(courseId),
+      courseId,
     })
   }
   function downloadExercises(ids: Array<ExerciseIdentifier>, courseId: CourseIdentifier) {
@@ -156,175 +163,153 @@
       mode: "download",
     })
   }
-  function clearNewExercises(courseId: CourseIdentifier) {
+  function clearNewExercises(course: LocalCourseDataType) {
+    openWorkspaceButtons.get(courseKey(course))?.focus()
     vscode.postMessage({
       type: "clearNewExercises",
-      courseId,
+      courseId: LocalCourseData.getCourseId(course),
     })
+  }
+  function registerOpenWorkspaceButton(key: string) {
+    return (button: HTMLElement) => {
+      openWorkspaceButtons.set(key, button)
+      return () => {
+        openWorkspaceButtons.delete(key)
+      }
+    }
   }
 </script>
 
-<div>
-  <h1>My courses</h1>
+<PanelHeader title="My Courses">
+  {#snippet actions()}
+    <Button onclick={addNewCourse}>Add new course</Button>
+  {/snippet}
+</PanelHeader>
 
-  <div class="top-container">
-    <div>
-      <div>
-        Currently your exercises ({panel.tmcDataSize ?? "loading size…"}) are located at:
-        <span class="data-path">{panel.tmcDataPath ?? "loading path…"}</span>
-      </div>
-      <Button class="change-path-button" secondary onclick={changeTmcDataPath}>Change path</Button>
-    </div>
-  </div>
+{#if panel.courses !== undefined}
+  {#if panel.courses.length > 0}
+    <ul class="course-list" role="list">
+      {#each panel.courses as course (courseKey(course))}
+        {@const courseData = unwrap(course)}
+        {@const courseId = LocalCourseData.getCourseId(course)}
+        {@const newExerciseCount = courseData.newExercises.length}
+        <li>
+          <Card>
+            <div class="course-header">
+              <h2 class="course-title">
+                <LinkButton onclick={() => openCourseDetails(courseId)}>
+                  {courseData.title}
+                </LinkButton>
+                <small class="muted">({courseData.name})</small>
+              </h2>
+              <ToolbarButton
+                icon="close"
+                label={`Remove ${courseData.title}`}
+                onclick={() => removeCourse(courseId)}
+              />
+            </div>
+            {#if courseData.description}
+              <p class="course-description">{courseData.description}</p>
+            {/if}
+            <Meter
+              label="Programming exercise points"
+              value={courseData.awardedPoints}
+              max={courseData.availablePoints}
+            />
+            <div class="actions card-actions">
+              <Button
+                secondary
+                aria-label={`Open workspace for ${courseData.title}`}
+                onclick={() => openWorkspace(courseId)}
+                {@attach registerOpenWorkspaceButton(courseKey(course))}
+              >
+                Open workspace
+              </Button>
+            </div>
 
-  {#if panel.courses !== undefined}
-    {#each panel.courses as course}
-      {@const courseData = unwrap(course)}
-      {@const courseId = LocalCourseData.getCourseId(course)}
-      <Card>
-        <div class="course-header">
-          <h3 class="course-title">
-            <!-- A native button avoids nesting interactive controls inside an interactive
-                 ancestor, which would collapse the whole card into one giant "button" for AT. -->
-            <button
-              type="button"
-              class="course-title-button"
-              onclick={() => openCourseDetails(courseId)}
-            >
-              {courseData.title} <small class="muted">({courseData.name})</small>
-            </button>
-          </h3>
-          <Button
-            class="remove-button"
-            secondary
-            aria-label="remove course"
-            onclick={() => removeCourse(courseId)}
-          >
-            <vscode-icon name="close" aria-hidden="true"></vscode-icon>
-          </Button>
-        </div>
-        {#if courseData.description}
-          <p class="course-description">{courseData.description}</p>
-        {/if}
-        <div class="progress-bar-container">
-          <Meter
-            label="Programming exercise points"
-            value={courseData.awardedPoints}
-            max={courseData.availablePoints}
-          />
-        </div>
-        <Button aria-label="Open workspace" onclick={() => openWorkspace(courseId)}>
-          Open workspace
-        </Button>
-
-        <!-- The region stays mounted and empty until there is something to say: a screen
-             reader announces a change inside a region it already knows, not one inserted
-             already populated. -->
-        <div role="alert">
-          {#if courseData.disabled}
-            This course has been disabled. Exercises cannot be downloaded or submitted.
-          {:else if courseData.newExercises.length > 0}
-            {courseData.newExercises.length} new exercises found for this course.
-            <Button
-              onclick={() => downloadExercises(LocalCourseData.getNewExercises(course), courseId)}
-            >
-              Download them!
-            </Button>
-            <Button aria-label="Close" onclick={() => clearNewExercises(courseId)}>
-              <vscode-icon name="close" aria-hidden="true"></vscode-icon>
-            </Button>
-          {/if}
-        </div>
-      </Card>
-    {/each}
-    {#if panel.courses.length === 0}
-      <div>Add courses to start completing exercises.</div>
-    {/if}
-  {:else if dataError}
-    <div role="alert">
-      <h2>Could not load your courses</h2>
-      <div class="error-message">{dataError.message}</div>
-      {#if dataError.details}
-        <code>{dataError.details}</code>
-      {/if}
-    </div>
-    <Button onclick={() => void requestData()}>Retry</Button>
+            <!-- Rendered on every open, so a live region here would re-announce it each time. -->
+            {#if courseData.disabled}
+              <Notice kind="warning" role="none">
+                <p>This course has been disabled. Exercises cannot be downloaded or submitted.</p>
+              </Notice>
+            {:else if newExerciseCount > 0}
+              <Notice
+                kind="info"
+                role="none"
+                ondismiss={() => clearNewExercises(course)}
+                dismissLabel={`Dismiss new exercises for ${courseData.title}`}
+              >
+                <p>
+                  {newExerciseCount === 1
+                    ? "1 new exercise found for this course."
+                    : `${newExerciseCount} new exercises found for this course.`}
+                </p>
+                {#snippet actions()}
+                  <Button
+                    secondary
+                    aria-label={`Download new exercises for ${courseData.title}`}
+                    onclick={() =>
+                      downloadExercises(LocalCourseData.getNewExercises(course), courseId)}
+                  >
+                    Download
+                  </Button>
+                {/snippet}
+              </Notice>
+            {/if}
+          </Card>
+        </li>
+      {/each}
+    </ul>
   {:else}
-    <vscode-progress-ring aria-label="Loading"></vscode-progress-ring>
+    <p>Add a course to start completing exercises.</p>
   {/if}
-</div>
+{:else if dataError}
+  <Notice kind="error" title="Could not load your courses">
+    <p>{dataError.message}</p>
+    {#if dataError.details}
+      <CodeBlock code={dataError.details} label="Error details" />
+    {/if}
+    {#snippet actions()}
+      <Button onclick={() => void requestData()}>Retry</Button>
+    {/snippet}
+  </Notice>
+{:else}
+  <Spinner label="Loading courses" />
+{/if}
 
-<div class="add-new-course-container">
-  <Button class="add-new-course" onclick={addNewCourse}>Add new course</Button>
-</div>
+<p class="storage muted">
+  Your exercises ({panel.tmcDataSize ?? "size unknown"}) are stored in
+  <span class="data-path">{panel.tmcDataPath ?? "…"}</span>.
+  <LinkButton onclick={changeTmcDataPath}>Change path</LinkButton>
+</p>
 
 <style>
-  .muted {
-    opacity: 90%;
-  }
-  /* targets the <vscode-button> rendered inside the Button wrapper */
-  .add-new-course-container :global(.add-new-course) {
-    margin-bottom: 0.4rem;
+  .course-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
   }
   .course-header {
     display: flex;
+    align-items: flex-start;
+    gap: var(--tmc-space-2);
   }
   .course-title {
-    margin-top: 0.2rem;
-    flex-grow: 1;
-  }
-  /* Resets the native button to look like plain heading text. */
-  .course-title-button {
-    all: unset;
-    cursor: pointer;
-    color: inherit;
-    font: inherit;
-    display: inline;
-  }
-  .course-title-button:hover {
-    text-decoration: underline;
-  }
-  .course-title-button:focus-visible {
-    outline: 1px solid var(--vscode-focusBorder, #007fd4);
-    outline-offset: 2px;
-  }
-  .data-path {
-    white-space: normal;
-    font-family: monospace;
-  }
-  .error-message,
-  code {
-    white-space: pre-wrap;
-  }
-  .top-container :global(.change-path-button) {
-    margin-top: 0.4rem;
-  }
-  .course-header :global(.remove-button) {
-    align-self: start;
-    margin: 0.4rem;
-  }
-  .top-container {
-    display: grid;
-    grid-auto-flow: row;
-    grid-auto-columns: 1fr;
-    margin-bottom: 0.8rem;
-  }
-  .add-new-course-container {
-    align-self: end;
-  }
-  .progress-bar-container {
-    margin-bottom: 0.8rem;
+    flex: 1;
+    min-width: 0;
+    margin-top: 0;
   }
   .course-description {
-    margin-top: 0rem;
+    margin-top: 0;
   }
-
-  @media (orientation: landscape) {
-    .add-new-course-container :global(.add-new-course) {
-      margin-bottom: 0rem;
-    }
-    .top-container {
-      grid-auto-flow: column;
-    }
+  .card-actions {
+    margin-top: var(--tmc-space-2);
+  }
+  .storage {
+    margin-top: var(--tmc-space-6);
+  }
+  .data-path {
+    font-family: var(--tmc-font-mono);
+    overflow-wrap: anywhere;
   }
 </style>
