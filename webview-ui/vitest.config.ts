@@ -17,6 +17,8 @@ export default defineConfig({
     environment: "jsdom",
     include: ["src/**/*.test.ts"],
     setupFiles: ["./src/test/setup.ts"],
+    // Vitest stubs CSS to an empty module unless included here; the stylesheet tests read it.
+    css: { include: [/src\/styles\/.+\.css/] },
     // @testing-library/svelte ships a .svelte wrapper that must be run through
     // vite-plugin-svelte rather than Node's native loader.
     server: {

@@ -3,7 +3,6 @@ import { tick } from "svelte"
 
 import type { MyCoursesPanel } from "../shared/shared"
 import { makeTmcKind } from "../shared/shared"
-import { findButton } from "../test/dom"
 import { moocLocalCourse, tmcLocalCourse } from "../test/fixtures"
 import { dispatchToWebview as dispatch, postedMessages } from "../test/setup"
 import MyCourses from "./MyCourses.svelte"
@@ -27,7 +26,7 @@ suite("MyCourses panel", () => {
     render(MyCourses, { props: { panel } })
     postedMessages.mockClear()
 
-    const addNewCourseButton = await findButton("Add new course")
+    const addNewCourseButton = await screen.findByRole("button", { name: "Add new course" })
     addNewCourseButton.click()
 
     expect(postedMessages).toHaveBeenCalledWith({ type: "addNewCourse" })
@@ -122,7 +121,7 @@ suite("MyCourses panel", () => {
       courses: [tmcLocalCourse()],
     })
 
-    const open = await findButton("Open workspace")
+    const open = await screen.findByRole("button", { name: "Open workspace" })
     postedMessages.mockClear()
     open.click()
 
@@ -147,7 +146,7 @@ suite("MyCourses panel", () => {
     expect(screen.queryByLabelText("Loading")).not.toBeInTheDocument()
 
     postedMessages.mockClear()
-    ;(await findButton("Retry")).click()
+    ;(await screen.findByRole("button", { name: "Retry" })).click()
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "requestMyCoursesData",

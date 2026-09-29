@@ -3,7 +3,7 @@
 
   import Button from "../components/Button.svelte"
   import Card from "../components/Card.svelte"
-  import ProgressBar from "../components/ProgressBar.svelte"
+  import Meter from "../components/Meter.svelte"
   import type {
     LocalCourseData as LocalCourseDataType,
     MyCoursesPanel,
@@ -181,10 +181,6 @@
     {#each panel.courses as course}
       {@const courseData = unwrap(course)}
       {@const courseId = LocalCourseData.getCourseId(course)}
-      {@const completed =
-        courseData.availablePoints > 0
-          ? ((courseData.awardedPoints / courseData.availablePoints) * 100).toFixed(2)
-          : "0.00"}
       <Card>
         <div class="course-header">
           <h3 class="course-title">
@@ -211,8 +207,8 @@
           <p class="course-description">{courseData.description}</p>
         {/if}
         <div class="progress-bar-container">
-          <ProgressBar
-            label={`Programming exercise progress: ${completed}%`}
+          <Meter
+            label="Programming exercise points"
             value={courseData.awardedPoints}
             max={courseData.availablePoints}
           />

@@ -12,11 +12,10 @@
 
 <style>
   .card {
-    background-color: var(--vscode-editorInlayHint-background, rgba(97, 97, 97, 0.1));
-    border-radius: 0.4rem;
-    margin-top: 0.4rem;
-    margin-bottom: 1rem;
-    padding: 0.8rem;
-    border: 1px solid var(--vscode-button-border, transparent);
+    background-color: var(--tmc-surface);
+    border: 1px solid var(--tmc-surface-border);
+    border-radius: var(--tmc-radius-large);
+    margin: var(--tmc-space-2) 0 var(--tmc-space-4);
+    padding: var(--tmc-space-3);
   }
 </style>

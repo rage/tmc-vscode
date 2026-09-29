@@ -3,7 +3,6 @@ import { tick } from "svelte"
 import type { Uri } from "vscode"
 
 import type { ExerciseTestsPanel } from "../shared/shared"
-import { findButton, getButton } from "../test/dom"
 import { testResult, testResultData, tmcLocalCourse, tmcLocalExercise } from "../test/fixtures"
 import { dispatchToWebview, postedMessages } from "../test/setup"
 import ExerciseTests from "./ExerciseTests.svelte"
@@ -40,10 +39,10 @@ suite("ExerciseTests panel", () => {
     expect(screen.getByRole("heading", { name: "Running tests" })).toBeInTheDocument()
   })
 
-  test("cancelling posts cancelTests and closes the panel", () => {
+  test("cancelling posts cancelTests and closes the panel", async () => {
     render(ExerciseTests, { props: { panel } })
     postedMessages.mockClear()
-    getButton("Cancel").click()
+    ;(await screen.findByRole("button", { name: "Cancel" })).click()
 
     expect(postedMessages).toHaveBeenCalledWith({ type: "cancelTests", testRunId: 1 })
     expect(postedMessages).toHaveBeenCalledWith({ type: "closeSidePanel" })
@@ -55,7 +54,7 @@ suite("ExerciseTests panel", () => {
 
     expect(await screen.findByRole("heading", { name: "Tests passed" })).toBeInTheDocument()
 
-    const submit = getButton("Submit to server")
+    const submit = await screen.findByRole("button", { name: "Submit to server" })
     postedMessages.mockClear()
     submit.click()
 
@@ -72,7 +71,7 @@ suite("ExerciseTests panel", () => {
     postTestResults(testResultData())
     expect(await screen.findByRole("heading", { name: "Tests passed" })).toBeInTheDocument()
 
-    const submit = getButton("Submit to server")
+    const submit = await screen.findByRole("button", { name: "Submit to server" })
     submit.click()
     postedMessages.mockClear()
     submit.click()
@@ -85,13 +84,13 @@ suite("ExerciseTests panel", () => {
     postTestResults(testResultData())
     expect(await screen.findByRole("heading", { name: "Tests passed" })).toBeInTheDocument()
 
-    const submit = getButton("Submit to server")
+    const submit = await screen.findByRole("button", { name: "Submit to server" })
     submit.click()
     dispatchToWebview({ type: "submitFailed", target: { type: "ExerciseTests" } })
     await tick()
 
     postedMessages.mockClear()
-    getButton("Submit to server").click()
+    ;(await screen.findByRole("button", { name: "Submit to server" })).click()
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "submitExercise",
@@ -116,7 +115,7 @@ suite("ExerciseTests panel", () => {
         },
       }),
     )
-    expect(await findButton("Need help?")).toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: "Need help?" })).toBeInTheDocument()
   })
 
   test("a failed test run shows the failure, the choice and a working Close button", async () => {
@@ -129,7 +128,7 @@ suite("ExerciseTests panel", () => {
     expect(screen.getByText(/You can still submit your answer to the server/)).toBeInTheDocument()
 
     postedMessages.mockClear()
-    getButton("Close").click()
+    ;(await screen.findByRole("button", { name: "Close" })).click()
     expect(postedMessages).toHaveBeenCalledWith({ type: "closeSidePanel" })
   })
 
@@ -137,13 +136,13 @@ suite("ExerciseTests panel", () => {
     render(ExerciseTests, { props: { panel } })
     postTestResults(testResultData())
     expect(await screen.findByRole("heading", { name: "Tests passed" })).toBeInTheDocument()
-    getButton("Submit to server").click()
+    ;(await screen.findByRole("button", { name: "Submit to server" })).click()
 
     postTestError({ message: "boom" })
     await tick()
 
     postedMessages.mockClear()
-    getButton("Submit to server").click()
+    ;(await screen.findByRole("button", { name: "Submit to server" })).click()
     expect(postedMessages).toHaveBeenCalledWith(expect.objectContaining({ type: "submitExercise" }))
   })
 })

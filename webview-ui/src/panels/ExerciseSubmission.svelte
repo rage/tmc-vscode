@@ -1,7 +1,6 @@
 <script lang="ts">
   import Button from "../components/Button.svelte"
   import PasteHelpBox from "../components/PasteHelpBox.svelte"
-  import ProgressBar from "../components/ProgressBar.svelte"
   import TestResults from "../components/TestResults.svelte"
   import { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../shared/langsSchema"
   import type { ExerciseSubmissionPanel, WebviewError } from "../shared/shared"
@@ -134,7 +133,8 @@
     {#if moocResult === undefined}
       <h1>Processing submission…</h1>
       <div class="progress-bar">
-        <ProgressBar label={"Waiting for grading"} value={progressFraction} max={1} />
+        <vscode-progress-bar aria-label="Waiting for grading" value={progressFraction * 100}
+        ></vscode-progress-bar>
       </div>
       <div>{@render progressList("Waiting for grading")}</div>
     {:else if moocGrading === undefined}
@@ -215,7 +215,8 @@
     </div>
 
     <div class="progress-bar">
-      <ProgressBar label={"Running tests on the server"} value={progressFraction} max={1} />
+      <vscode-progress-bar aria-label="Running tests on the server" value={progressFraction * 100}
+      ></vscode-progress-bar>
     </div>
 
     <div role="status">{@render progressList("Running tests on the server")}</div>
