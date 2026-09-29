@@ -32,6 +32,12 @@ import { createDegradedContext, createMockActionContext } from "../mocks/actionC
 import { createMockContext } from "../mocks/vscode"
 import { createFakeWebviewPanel } from "../support/webviewPanel"
 
+// Course details render deadlines in `vscode.env.language`, and the mock ships no `env`.
+beforeEach(() => {
+  const vscodeModule: object = vscode
+  Object.defineProperty(vscodeModule, "env", { value: {}, writable: true, configurable: true })
+})
+
 suite("TmcPanel moocLogin handling", () => {
   test("a successful login closes the side panel and offers add-new-course", async () => {
     // Isolate from any panel state a previous test in this file may have left behind.
@@ -2090,6 +2096,21 @@ suite("TmcPanel requestCourseDetailsData exercise statuses", () => {
     expect(exercise).toBeDefined()
     expect(Object.keys(exercise ?? {}).toSorted()).toEqual(
       Object.keys(ExerciseSchema.shape).toSorted(),
+    )
+  })
+
+  test("renders deadlines in VS Code's display language", async () => {
+    const deadline = "2030-01-01T00:00:00.000Z"
+    ;(vscode as unknown as { env: unknown }).env = { language: "fi" }
+    const { posted } = await openCourseDetails(1, deadline)
+
+    const groups = posted.find((m) => m.type === "setCourseGroups") as unknown as {
+      exerciseGroups: { exercises: { hardDeadlineString: string }[] }[]
+    }
+    expect(groups.exerciseGroups[0]?.exercises[0]?.hardDeadlineString).toBe(
+      new Intl.DateTimeFormat("fi", { dateStyle: "medium", timeStyle: "short" }).format(
+        new Date(deadline),
+      ),
     )
   })
 

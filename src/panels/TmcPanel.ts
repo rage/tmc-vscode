@@ -16,7 +16,6 @@ import { ConnectionError, InitializationError } from "../errors"
 import type {
   BackendKind,
   CourseDetailsPanel,
-  ExerciseGroup,
   ExerciseStatus,
   ExtensionToWebview,
   LocalCourseData as LocalCourseDataType,
@@ -263,7 +262,7 @@ export class TmcPanel {
       type: "setCourseGroups",
       target,
       offlineMode: false,
-      exerciseGroups: toMessageGroups(view.exerciseGroups),
+      exerciseGroups: view.exerciseGroups,
     })
 
     // Only an unreachable backend makes the stored deadlines untrustworthy; any other
@@ -276,9 +275,7 @@ export class TmcPanel {
             type: "setCourseGroups",
             target,
             offlineMode: true,
-            exerciseGroups: toMessageGroups(
-              courseDetailsView(course, actionContext, true).exerciseGroups,
-            ),
+            exerciseGroups: courseDetailsView(course, actionContext, true).exerciseGroups,
           })
         }
       })
@@ -1145,32 +1142,8 @@ function courseDetailsView(
     actionContext.startup.workspaceManager.getExercises(),
     offlineMode,
     new Date(),
+    vscode.env.language,
   )
-}
-
-/**
- * Narrows the view model's rows to the fields `ExerciseSchema` declares.
- *
- * `buildCourseDetailsView` assembles its groups out of `CourseDetailsExercise` rows,
- * which also carry the parsed `Date` deadlines it needs to sort and compare; the
- * message contract declares only their rendered strings, and a `Date` has no place
- * on the far side of a `postMessage`.
- */
-function toMessageGroups(groups: ExerciseGroup[]): ExerciseGroup[] {
-  return groups.map(({ name, nextDeadlineString, defaultOpen, exercises }) => ({
-    name,
-    nextDeadlineString,
-    defaultOpen,
-    exercises: exercises.map((exercise) => ({
-      id: exercise.id,
-      name: exercise.name,
-      isHard: exercise.isHard,
-      hardDeadlineString: exercise.hardDeadlineString,
-      softDeadlineString: exercise.softDeadlineString,
-      deadlineIso: exercise.deadlineIso,
-      passed: exercise.passed,
-    })),
-  }))
 }
 
 /**
