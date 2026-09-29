@@ -5,8 +5,8 @@ extension host decides what to show and supplies everything on it, and the app
 posts the user's actions back. All communication is `postMessage` in both
 directions — the webview cannot import extension code, and vice versa.
 
-`src/shared/` is a set of symlinks into the repository-root `shared/`, so both
-sides import the same schemas from one file.
+`src/shared/` re-exports the repository-root `shared/`, so both sides import the
+same schemas from one file.
 
 ## Panels
 
@@ -36,11 +36,12 @@ messages it buffered for that panel — see `_messageBuffer` in
 `shared/protocol.ts` defines both directions as zod unions:
 `ExtensionToWebviewSchema` and `WebviewToExtensionSchema`. Both are validated at
 both ends. On the way out, `vscode.postMessage` (`src/utilities/vscode.ts`)
-refuses to post a message that does not parse — otherwise a Svelte `$state`
-proxy would fail structured clone with an opaque `DataCloneError`. On the way
-in, `addMessageListener` (`src/utilities/script.ts`) drops what does not parse.
-The original object is passed on rather than zod's output, because parsing
-strips fields the receiver needs.
+unwraps any `$state` proxies with `$state.snapshot`, so callers post state as is,
+and refuses a message that does not parse. On the way in, one `window` listener
+(`src/utilities/script.ts`) validates each message once and drops what does not
+parse before handing it to the matching `addMessageListener` callbacks. The
+message itself is passed on rather than zod's output, because parsing strips
+fields the receiver needs.
 
 A panel asks for its data in `onMount` and receives it through
 `addMessageListener`:
@@ -56,8 +57,7 @@ async function requestData() {
     vscode.postMessage({
       type: "requestMyCoursesData",
       requestId,
-      // `panel` is a `$state` proxy once a message has reassigned it
-      sourcePanel: $state.snapshot(panel),
+      sourcePanel: panel,
     }),
   )
 }
@@ -84,8 +84,8 @@ addMessageListener(panel, (message) => {
 
 `addMessageListener` and `createPanelDataRequester` must both be called during
 component initialization, like any other Svelte lifecycle function; they remove
-their `window` listener and clear their pending timers in `onDestroy`, so a
-recreated component leaves nothing behind.
+their listener and clear their pending timers in `onDestroy`, so a recreated
+component leaves nothing behind.
 
 The host answers every `request*Data` message with one `panelDataResult` quoting
 the request's `requestId`, whether or not it could assemble the data. A request
@@ -106,9 +106,7 @@ panel object is rejected at the schema rather than failing later on the wire.
 
 Props are not deeply reactive in Svelte 5, so an incoming message replaces the
 panel rather than mutating it — `panel = { ...panel, courses }`, with
-`let { panel = $bindable() }: Props = $props()`. `App.svelte` holds its own
-state as `$state.raw` for the same reason the snapshot above exists: a deep
-proxy cannot be posted.
+`let { panel = $bindable() }: Props = $props()`.
 
 `ExerciseTests` and `ExerciseSubmission` are the exception. Their content is not
 panel data but a running operation's output — progress lines, test results,
