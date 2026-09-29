@@ -120,4 +120,12 @@ identity the run was started with.
 
 `src/components/` holds the pieces shared across panels. Anything resembling a
 native VS Code control should come from `@vscode-elements/elements`, registered
-by the side-effect imports at the top of `App.svelte`.
+once in `src/elements.ts` (imported by `main.ts` and by the test setup, so
+component tests render the real elements) and typed for markup in
+`src/vscode-elements.d.ts`. Use a `vscode-*` tag directly unless a component in
+`src/components/` wraps it; a wrapper exists only where it adds behaviour, such
+as `Button` stopping Space from scrolling or `Checkbox` naming its shadow input.
+
+Styles use the `--tmc-*` tokens in `src/styles/tokens.css` rather than raw
+`--vscode-*` names or literals; element defaults and utilities (`.muted`,
+`.actions`, `.visually-hidden`, reduced motion) live in `src/styles/base.css`.
