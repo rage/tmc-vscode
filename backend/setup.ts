@@ -1,5 +1,6 @@
 import fs from "fs"
 import path from "path"
+import { finished } from "stream/promises"
 
 import { ZipArchive } from "archiver"
 import { ncp } from "ncp"
@@ -25,23 +26,26 @@ const copyTMCPythonModules = async (): Promise<void> => {
     .readdirSync(courseDirectory, { withFileTypes: true })
     .filter((x) => x.isDirectory())
     .map((x) => path.join(courseDirectory, x.name))
-  pythonExercises.forEach((exercise) => {
-    const target = path.join(exercise, "tmc")
-    console.log(`Copying tmc module from ${module} to ${target}`)
-    ncp(module, target, () => {})
-  })
+  await Promise.all(
+    pythonExercises.map(async (exercise) => {
+      const target = path.join(exercise, "tmc")
+      console.log(`Copying tmc module from ${module} to ${target}`)
+      await new Promise<void>((resolve, reject) => {
+        ncp(module, target, (errors) => (errors ? reject(errors[0]) : resolve()))
+      })
+    }),
+  )
   console.log("Modules copied!")
-  await new Promise((res) => {
-    setTimeout(res, 1000)
-  })
   await Promise.all(
     pythonExercises.map(async (exercise) => {
       console.log(`Creating download archive for ${exercise}`)
       const archive = new ZipArchive()
-      const archivePath = fs.createWriteStream(exercise + ".zip")
-      archive.pipe(archivePath)
+      const archiveFile = fs.createWriteStream(exercise + ".zip")
+      archive.pipe(archiveFile)
       archive.directory(exercise, false)
       await archive.finalize()
+      // `finalize` settles before the file is flushed, and `main` exits the process right after.
+      await finished(archiveFile)
     }),
   )
   console.log("Archives created!")
