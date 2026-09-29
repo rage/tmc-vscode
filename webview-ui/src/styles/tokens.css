@@ -1,0 +1,67 @@
+/*
+ * App-level design tokens. Components use these instead of raw `--vscode-*` names or literals.
+ * Size tokens are only exported by VS Code >= 1.137 and the engine floor is 1.100, hence the px
+ * fallbacks. Colour chains end in a token every theme kind defines: several `--vscode-*` colours
+ * are absent in High Contrast, and an absent variable renders its fallback.
+ */
+:root {
+  --tmc-space-1: var(--vscode-spacing-size40, 4px);
+  --tmc-space-2: var(--vscode-spacing-size80, 8px);
+  --tmc-space-3: var(--vscode-spacing-size120, 12px);
+  --tmc-space-4: var(--vscode-spacing-size160, 16px);
+  --tmc-space-6: var(--vscode-spacing-size240, 24px);
+
+  --tmc-radius: var(--vscode-cornerRadius-small, 4px);
+  --tmc-radius-large: var(--vscode-cornerRadius-medium, 6px);
+
+  --tmc-font-size-small: var(--vscode-bodyFontSize-small, 12px);
+  --tmc-font-size-body: var(--vscode-font-size, 13px);
+  --tmc-font-size-heading: var(--vscode-fontSize-heading2, 18px);
+  --tmc-font-size-page-title: var(--vscode-fontSize-heading1, 26px);
+  --tmc-font-mono: var(--vscode-editor-font-family, monospace);
+  --tmc-font-size-mono: var(--vscode-editor-font-size, 13px);
+
+  --tmc-fg: var(--vscode-foreground);
+  --tmc-fg-muted: var(--vscode-descriptionForeground);
+  --tmc-fg-disabled: var(--vscode-disabledForeground);
+  --tmc-fg-error: var(--vscode-errorForeground);
+  --tmc-fg-warning: var(--vscode-editorWarning-foreground);
+  --tmc-fg-info: var(--vscode-editorInfo-foreground, var(--vscode-foreground));
+  --tmc-fg-link: var(--vscode-textLink-foreground);
+
+  /* Icon colours only: the testing tokens fail text contrast on light themes. */
+  --tmc-status-passed: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+  --tmc-status-failed: var(--vscode-testing-iconFailed, var(--vscode-errorForeground));
+  --tmc-status-unset: var(--vscode-testing-iconUnset, var(--vscode-disabledForeground));
+  --tmc-status-warning: var(--vscode-editorWarning-foreground);
+
+  --tmc-surface: var(--vscode-welcomePage-tileBackground, var(--vscode-editorWidget-background));
+  --tmc-surface-border: var(
+    --vscode-welcomePage-tileBorder,
+    var(--vscode-contrastBorder, transparent)
+  );
+  --tmc-overlay-border: var(--vscode-widget-border, var(--vscode-contrastBorder, transparent));
+  --tmc-overlay-shadow: var(--vscode-widget-shadow, transparent);
+  --tmc-hc-outline: var(--vscode-contrastBorder, transparent);
+  --tmc-hc-active-outline: var(--vscode-contrastActiveBorder, transparent);
+  --tmc-focus-border: var(--vscode-focusBorder);
+
+  --tmc-code-background: var(--vscode-textCodeBlock-background, transparent);
+
+  --tmc-meter-fill: var(--vscode-button-background);
+  --tmc-meter-track-border: var(
+    --vscode-input-border,
+    var(--vscode-contrastBorder, var(--vscode-widget-border, var(--vscode-foreground)))
+  );
+
+  --tmc-notice-error-background: var(--vscode-inputValidation-errorBackground, transparent);
+  --tmc-notice-warning-background: var(--vscode-inputValidation-warningBackground, transparent);
+  --tmc-notice-info-background: var(--vscode-inputValidation-infoBackground, transparent);
+
+  --tmc-section-header-background: var(--vscode-sideBarSectionHeader-background, transparent);
+  --tmc-section-header-foreground: var(--vscode-sideBarSectionHeader-foreground, inherit);
+  --tmc-section-header-border: var(
+    --vscode-sideBarSectionHeader-border,
+    var(--vscode-contrastBorder, transparent)
+  );
+}

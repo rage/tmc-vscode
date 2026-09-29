@@ -1,0 +1,119 @@
+/* Element defaults and shared utilities. Components keep only layout-specific rules. */
+
+h1,
+h2,
+h3 {
+  font-weight: 600;
+  line-height: 1.3;
+  margin: var(--tmc-space-4) 0 var(--tmc-space-2);
+}
+h1 {
+  font-size: var(--tmc-font-size-heading);
+}
+h2,
+h3 {
+  font-size: var(--tmc-font-size-body);
+}
+.page-title {
+  font-size: var(--tmc-font-size-page-title);
+}
+
+pre,
+.code-block {
+  font-family: var(--tmc-font-mono);
+  font-size: var(--tmc-font-size-mono);
+  background: var(--tmc-code-background);
+  padding: var(--tmc-space-2);
+  border-radius: var(--tmc-radius);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  color: var(--tmc-fg-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tmc-space-2);
+}
+
+.stack > * + * {
+  margin-top: var(--tmc-space-2);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Matches vscode-button's ring; the host stylesheet only rings a/input/select/textarea. */
+button:focus-visible,
+a:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 1px solid var(--tmc-focus-border);
+  outline-offset: 2px;
+}
+/* Headings take programmatic focus (focusOnMount) to move the reading position, not to be acted on. */
+[tabindex="-1"]:focus {
+  outline: none;
+}
+
+/* Avoids a flash of unstyled light DOM before the elements upgrade. */
+:where(
+  vscode-badge,
+  vscode-button,
+  vscode-checkbox,
+  vscode-collapsible,
+  vscode-icon,
+  vscode-progress-bar,
+  vscode-progress-ring,
+  vscode-table,
+  vscode-toolbar-button
+):not(:defined) {
+  visibility: hidden;
+}
+
+/*
+ * VS Code's own `workbench.reduceMotion` reaches a webview only as this body class, not through
+ * the media query. Rules here do not pierce shadow roots, hence the `::part` rules.
+ */
+body.vscode-reduce-motion *,
+body.vscode-reduce-motion *::before,
+body.vscode-reduce-motion *::after {
+  transition-duration: 0s !important;
+  animation-duration: 0s !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+}
+body.vscode-reduce-motion vscode-progress-ring::part(indeterminate-indicator-1) {
+  animation-duration: 6s !important;
+  animation-iteration-count: infinite !important;
+}
+body.vscode-reduce-motion vscode-progress-bar::part(indicator) {
+  animation: none !important;
+  width: 100%;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+  vscode-progress-ring::part(indeterminate-indicator-1) {
+    animation-duration: 6s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
