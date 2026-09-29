@@ -108,6 +108,7 @@ export function tmcExerciseGroup(overrides: Partial<ExerciseGroup> = {}): Exerci
   return {
     name: "part01",
     nextDeadlineString: "No deadline",
+    defaultOpen: true,
     exercises: [
       {
         id: makeTmcKind({ tmcExerciseId: 101 }),
@@ -115,6 +116,7 @@ export function tmcExerciseGroup(overrides: Partial<ExerciseGroup> = {}): Exerci
         isHard: false,
         hardDeadlineString: "",
         softDeadlineString: "",
+        deadlineIso: null,
         passed: true,
       },
     ],
@@ -174,6 +176,7 @@ export function moocExerciseGroup(overrides: Partial<ExerciseGroup> = {}): Exerc
   return {
     name: "MOOC Python",
     nextDeadlineString: "No deadline",
+    defaultOpen: true,
     exercises: [
       {
         id: makeMoocKind({ moocExerciseId: MOOC_EXERCISE_ID }),
@@ -181,6 +184,7 @@ export function moocExerciseGroup(overrides: Partial<ExerciseGroup> = {}): Exerc
         isHard: false,
         hardDeadlineString: "",
         softDeadlineString: "",
+        deadlineIso: null,
         passed: false,
       },
     ],

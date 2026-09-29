@@ -179,7 +179,7 @@ export const ExerciseSchema = z.object({
   hardDeadlineString: z.string(),
   softDeadlineString: z.string(),
   /** The deadline the row shows (hard when `isHard`, else soft), for `<time datetime>`. */
-  deadlineIso: z.string().nullable().optional(),
+  deadlineIso: z.string().nullable(),
   passed: z.boolean(),
 })
 
@@ -188,7 +188,7 @@ export const ExerciseGroupSchema = z.object({
   exercises: z.array(ExerciseSchema),
   nextDeadlineString: z.string(),
   /** Whether the part starts expanded: every part of a short course, else the next due. */
-  defaultOpen: z.boolean().optional(),
+  defaultOpen: z.boolean(),
 })
 
 export type ExerciseGroup = z.infer<typeof ExerciseGroupSchema>
