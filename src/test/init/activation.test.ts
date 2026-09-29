@@ -205,7 +205,6 @@ vi.mock("../../init/verifyCliSchema", () => ({
 // of them has to exist here even though no test drives a webview message.
 vi.mock("../../actions", () => ({
   refreshLocalExercises: async (): Promise<unknown> => Ok.EMPTY,
-  cancelTestRun: (): void => {},
   closeExercises: async (): Promise<unknown> => Ok.EMPTY,
   downloadAndOpenExercises: async (): Promise<unknown> => Ok.EMPTY,
   downloadExercisesForUi: async (): Promise<void> => {},

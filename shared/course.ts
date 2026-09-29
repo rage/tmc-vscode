@@ -9,7 +9,6 @@ import {
   makeTmcKind,
   match,
 } from "./enum"
-import { RunResult, StyleValidationResult } from "./langsSchema"
 
 // duplicated from the data module; keep in sync manually
 export const SharedTmcCourseExerciseSchema = z.object({
@@ -192,20 +191,6 @@ export const ExerciseGroupSchema = z.object({
 })
 
 export type ExerciseGroup = z.infer<typeof ExerciseGroupSchema>
-
-export const TestResultDataSchema = z.object({
-  testResult: RunResult,
-  id: ExerciseIdentifierSchema,
-  courseSlug: z.string(),
-  exerciseName: z.string(),
-  pasteLink: z.string().optional(),
-  disabled: z.boolean().optional(),
-  styleValidationResult: StyleValidationResult.nullable().optional(),
-  // set when the code quality check itself could not run; the test results still stand
-  styleValidationError: z.string().optional(),
-})
-
-export type TestResultData = z.infer<typeof TestResultDataSchema>
 
 export const FeedbackQuestionSchema = z.object({
   id: z.number(),

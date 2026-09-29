@@ -6,7 +6,6 @@
   import Spinner from "./components/Spinner.svelte"
   import CourseDetails from "./panels/CourseDetails.svelte"
   import ExerciseSubmission from "./panels/ExerciseSubmission.svelte"
-  import ExerciseTests from "./panels/ExerciseTests.svelte"
   import InitializationErrorHelp from "./panels/InitializationErrorHelp.svelte"
   import MoocLogin from "./panels/MoocLogin.svelte"
   import MyCourses from "./panels/MyCourses.svelte"
@@ -128,8 +127,6 @@
             <MyCourses panel={appState.panel} />
           {:else if appState.panel.type === "CourseDetails"}
             <CourseDetails panel={appState.panel} />
-          {:else if appState.panel.type === "ExerciseTests"}
-            <ExerciseTests panel={appState.panel} />
           {:else if appState.panel.type === "ExerciseSubmission"}
             <ExerciseSubmission panel={appState.panel} />
           {:else if appState.panel.type === "MoocLogin"}

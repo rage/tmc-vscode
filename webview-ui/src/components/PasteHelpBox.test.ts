@@ -5,7 +5,7 @@ import { moocLocalCourse, tmcLocalCourse } from "../test/fixtures"
 import { postedMessages, replyToRequest } from "../test/setup"
 import PasteHelpBox from "./PasteHelpBox.svelte"
 
-const sourcePanel = { id: 1, type: "ExerciseTests" } as const
+const sourcePanel = { id: 1, type: "ExerciseSubmission" } as const
 const course = tmcLocalCourse()
 
 /** Opens the help and starts a paste. */

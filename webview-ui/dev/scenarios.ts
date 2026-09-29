@@ -2,7 +2,6 @@ import type { SubmissionFinished } from "../src/shared/langsSchema"
 import type {
   CourseDetailsPanel,
   ExerciseGroup,
-  ExerciseTestsPanel,
   ExtensionToWebview,
   Panel,
   WebviewToExtension,
@@ -13,8 +12,6 @@ import {
   moocExerciseGroup,
   moocLocalCourse,
   moocLocalExercise,
-  testResult,
-  testResultData,
   tmcLocalCourse,
   tmcLocalExercise,
 } from "../src/test/fixtures"
@@ -119,17 +116,6 @@ function answerMyCourses(courses: (typeof tmcCourse)[]) {
   }
 }
 
-const testsPanel: ExerciseTestsPanel = {
-  id: 20,
-  type: "ExerciseTests",
-  course: tmcCourse,
-  exercise: tmcLocalExercise({ id: 103, name: "part01-03_exercise", availablePoints: 2 }),
-  // The host's `Uri`; the webview never reads it.
-  exerciseUri: {} as ExerciseTestsPanel["exerciseUri"],
-  testRunId: 1,
-}
-const testsTarget = { type: "ExerciseTests" as const, id: testsPanel.id }
-
 const submissionPanel = {
   id: 30,
   type: "ExerciseSubmission" as const,
@@ -209,56 +195,6 @@ export const SCENARIOS: Scenario[] = [
   },
   // Never answered, so the panel shows its loading state until the request times out.
   { id: "course-details/loading", panel: courseDetailsPanel(5, makeTmcKind({ courseId: 42 })) },
-  { id: "exercise-tests/running", panel: testsPanel },
-  {
-    id: "exercise-tests/passed",
-    panel: testsPanel,
-    pushes: [{ type: "testResults", target: testsTarget, testResults: testResultData() }],
-  },
-  {
-    id: "exercise-tests/failed",
-    panel: testsPanel,
-    pushes: [
-      {
-        type: "testResults",
-        target: testsTarget,
-        testResults: testResultData({
-          testResult: {
-            logs: { stdout: "Hello\n" },
-            status: "TESTS_FAILED",
-            testResults: [
-              testResult({ name: "test_prints_hello" }),
-              testResult({
-                name: "test_sum",
-                successful: false,
-                message: "Expected 3 but got 2",
-                exception: ["Traceback (most recent call last):", '  File "test.py", line 4'],
-              }),
-            ],
-          },
-          styleValidationResult: {
-            strategy: "WARN",
-            validation_errors: {
-              "src/main.py": [
-                { column: 1, line: 3, message: "Missing docstring", source_name: "pylint" },
-              ],
-            },
-          },
-        }),
-      },
-    ],
-  },
-  {
-    id: "exercise-tests/error",
-    panel: testsPanel,
-    pushes: [
-      {
-        type: "testError",
-        target: testsTarget,
-        error: { message: "Running the tests failed", details: "python3: not found" },
-      },
-    ],
-  },
   {
     id: "exercise-submission/processing",
     panel: submissionPanel,

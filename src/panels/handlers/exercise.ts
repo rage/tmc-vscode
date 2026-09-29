@@ -3,34 +3,14 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import { withOperation } from "../../api/withOperation"
-import type { ExerciseSubmissionPanel, ExerciseTestsPanel } from "../../shared/shared"
+import type { ExerciseSubmissionPanel } from "../../shared/shared"
 import { LocalCourseData, LocalCourseExercise } from "../../shared/shared"
 import { Logger } from "../../utilities"
 import { panelActions } from "../panelActions"
 import type { HandlerMap, PanelHost } from "../router"
 
-/** The test-results and submission screens' messages. */
+/** The submission screen's messages. */
 export const exerciseHandlers = {
-  cancelTests: {
-    requiresReady: false,
-    handle(message): void {
-      panelActions().cancelTests(message.testRunId)
-    },
-  },
-  submitExercise: {
-    requiresReady: true,
-    async handle(message, { host, actionContext, extensionContext }) {
-      const shown = shownExercisePanel(host, message.sourcePanel.id)
-      if (shown?.type !== "ExerciseTests") {
-        Logger.warn("Ignoring a submit from a test results panel that is no longer shown")
-        return Err(new Error("These test results are no longer shown."))
-      }
-      // The command renders its own ExerciseSubmission panel and reports its own failure, so
-      // the reply only says the submit is over.
-      await panelActions().submitExercise(extensionContext, actionContext, shown.exerciseUri)
-      return Ok(undefined)
-    },
-  },
   pasteExercise: {
     requiresReady: true,
     async handle(message, { host, actionContext }): Promise<Result<string, Error>> {
@@ -83,18 +63,12 @@ export const exerciseHandlers = {
 } satisfies Partial<HandlerMap>
 
 /**
- * The exercise panel `host` shows, if it is still panel `id`.
+ * The submission panel `host` shows, if it is still panel `id`.
  *
  * The host acts on its own copy of the exercise rather than one the webview sends: the
  * exercise names files it reads and a backend it talks to.
  */
-function shownExercisePanel(
-  host: PanelHost,
-  id: number,
-): ExerciseTestsPanel | ExerciseSubmissionPanel | undefined {
+function shownExercisePanel(host: PanelHost, id: number): ExerciseSubmissionPanel | undefined {
   const route = host.route
-  return (route?.type === "ExerciseTests" || route?.type === "ExerciseSubmission") &&
-    route.id === id
-    ? route
-    : undefined
+  return route?.type === "ExerciseSubmission" && route.id === id ? route : undefined
 }

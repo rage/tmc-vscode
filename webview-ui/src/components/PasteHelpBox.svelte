@@ -3,12 +3,7 @@
 
   import { slide } from "svelte/transition"
 
-  import type {
-    ExerciseSubmissionPanel,
-    ExerciseTestsPanel,
-    LocalCourseData,
-    TargetPanel,
-  } from "../shared/shared"
+  import type { ExerciseSubmissionPanel, LocalCourseData, TargetPanel } from "../shared/shared"
   import { pasteServiceName } from "../shared/shared"
   import { announce, reducedMotion } from "../utilities/a11y.svelte"
   import { createRequester } from "../utilities/script"
@@ -19,7 +14,7 @@
   interface Props {
     // names the paste service; the host pastes the exercise `sourcePanel` shows
     course: LocalCourseData
-    sourcePanel: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>
+    sourcePanel: TargetPanel<ExerciseSubmissionPanel>
   }
 
   let { course, sourcePanel }: Props = $props()

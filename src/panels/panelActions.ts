@@ -1,5 +1,4 @@
 import type { Result } from "ts-results"
-import type * as vscode from "vscode"
 
 import type { OpenedExercises } from "../actions/openExercises"
 import type { ReadyActionContext } from "../actions/types"
@@ -15,8 +14,6 @@ import type { BackendKind, CourseIdentifier, ExerciseIdentifier } from "../share
  * functions where `registerPanelActions` is called.
  */
 export interface PanelActions {
-  /** Stops the test run `testRunId`. Does nothing if it already finished. */
-  cancelTests: (testRunId: number) => void
   closeExercises: (
     actionContext: ReadyActionContext,
     ids: ExerciseIdentifier[],
@@ -55,11 +52,6 @@ export interface PanelActions {
     actionContext: ReadyActionContext,
     feedbackAnswerUrl: string,
     answers: readonly { questionId: number; answer: string }[],
-  ) => Promise<Result<void, Error>>
-  submitExercise: (
-    extensionContext: vscode.ExtensionContext,
-    actionContext: ReadyActionContext,
-    exerciseUri: vscode.Uri,
   ) => Promise<Result<void, Error>>
   updateCourse: (
     actionContext: ReadyActionContext,

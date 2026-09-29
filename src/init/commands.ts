@@ -108,7 +108,6 @@ export function registerCommands(
   Logger.info("Registering TMC VSCode commands")
 
   registerPanelActions({
-    cancelTests: actions.cancelTestRun,
     closeExercises: actions.closeExercises,
     downloadAndOpenExercises: actions.downloadAndOpenExercises,
     downloadExercisesForUi: actions.downloadExercisesForUi,
@@ -117,7 +116,6 @@ export function registerCommands(
     refreshLocalExercises: actions.refreshLocalExercises,
     removeCourse: actions.removeCourse,
     sendSubmissionFeedback: actions.sendSubmissionFeedback,
-    submitExercise: commands.submitExercise,
     updateCourse: actions.updateCourse,
   })
 
