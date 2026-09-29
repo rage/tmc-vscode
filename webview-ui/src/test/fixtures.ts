@@ -165,7 +165,6 @@ export function testResultData(overrides: Partial<TestResultData> = {}): TestRes
     id: makeTmcKind({ tmcExerciseId: 101 }),
     courseSlug: "python-course",
     exerciseName: "part01-01_hello",
-    tmcLogs: {},
     ...overrides,
   }
 }

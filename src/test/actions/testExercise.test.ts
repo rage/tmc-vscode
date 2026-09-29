@@ -72,12 +72,16 @@ function workspaceExercise(): WorkspaceExercise {
 function contextWithTestRun(
   testRun: unknown,
   checkstyleRun: unknown = Ok({ strategy: "DISABLED", validation_errors: null }),
+  checkstyleInterrupt: () => void = vi.fn(),
 ): ReadyActionContext {
   return createMockActionContext({
     startup: {
       langs: {
         runTests: () => ({ process: Promise.resolve(testRun), interrupt: vi.fn() }),
-        runCheckstyle: () => ({ process: Promise.resolve(checkstyleRun), interrupt: vi.fn() }),
+        runCheckstyle: () => ({
+          process: Promise.resolve(checkstyleRun),
+          interrupt: checkstyleInterrupt,
+        }),
       } as unknown as ReadyStartup["langs"],
       userData: {
         getCourseBySlug: () => Ok(course),
@@ -103,20 +107,38 @@ suite("testExercise action", () => {
     expect(delivered.error.message).toBe("No compiler on PATH")
   })
 
-  test("a failed style validation reaches the panel the same way", async () => {
+  test("a failed test run stops the code quality check running beside it", async () => {
+    const checkstyleInterrupt = vi.fn()
     const actionContext = contextWithTestRun(
-      Ok({ logs: {}, status: "PASSED", testResults: [] }),
-      Err(new Error("Checkstyle crashed")),
+      Err(new Error("No compiler on PATH")),
+      new Promise(() => {}),
+      checkstyleInterrupt,
     )
 
     await testExercise(extensionContext, actionContext, workspaceExercise())
 
-    const posted = vi
-      .mocked(TmcPanel.postMessage)
-      .mock.calls.flat()
-      .find((message) => message.type === "testError")
-    const delivered = JSON.parse(JSON.stringify(posted)) as { error: { message: string } }
-    expect(delivered.error.message).toBe("Checkstyle crashed")
+    expect(checkstyleInterrupt).toHaveBeenCalledOnce()
+  })
+
+  test("a code quality check that fails to run keeps the test results", async () => {
+    vi.mocked(TmcPanel.postMessage).mockClear()
+    const runResult = { logs: {}, status: "PASSED", testResults: [] }
+    const actionContext = contextWithTestRun(Ok(runResult), Err(new Error("Checkstyle crashed")))
+
+    await testExercise(extensionContext, actionContext, workspaceExercise())
+
+    const types = vi.mocked(TmcPanel.postMessage).mock.calls.map(([message]) => message?.type)
+    expect(types).not.toContain("testError")
+    expect(TmcPanel.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "testResults",
+        testResults: expect.objectContaining({
+          testResult: runResult,
+          styleValidationResult: null,
+          styleValidationError: "Checkstyle crashed",
+        }),
+      }),
+    )
   })
 })
 

@@ -87,6 +87,7 @@ export async function testExercise(
           Logger.info(`Tests finished for ${exerciseName}`)
 
           if (testResults.err) {
+            validationInterrupt()
             TmcPanel.postMessage({
               type: "testError",
               target,
@@ -97,14 +98,11 @@ export async function testExercise(
 
           const validationResults = await validationRunner
           Logger.info(`Validations finished for ${exerciseName}`)
-
           if (validationResults.err) {
-            TmcPanel.postMessage({
-              type: "testError",
-              target,
-              error: toWebviewError(validationResults.val),
-            })
-            return Ok.EMPTY
+            Logger.error(
+              `Code quality checks failed to run for ${exerciseName}`,
+              validationResults.val,
+            )
           }
 
           const data: TestResultData = {
@@ -112,9 +110,9 @@ export async function testExercise(
             id: LocalCourseExercise.getId(courseExercise),
             courseSlug: LocalCourseData.getCourseName(course),
             exerciseName,
-            tmcLogs: testResults.val.logs,
             disabled: course.data.disabled,
-            styleValidationResult: validationResults.val,
+            styleValidationResult: validationResults.ok ? validationResults.val : null,
+            styleValidationError: validationResults.err ? validationResults.val.message : undefined,
           }
 
           if (TmcPanel.sidePanel === undefined) {
