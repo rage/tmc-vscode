@@ -1475,6 +1475,93 @@ suite("TmcPanel side panel placement", () => {
   })
 })
 
+suite("TmcPanel tab identity", () => {
+  beforeEach(resetPanels)
+  afterEach(resetPanels)
+
+  function mainPanelTitleFor(
+    panel: Parameters<typeof renderMain>[0],
+    actionContext: ActionContext = createMockActionContext(),
+  ): string {
+    resetPanels()
+    const { panel: webviewPanel } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(webviewPanel)
+    TmcPanel.renderMain(vscode.Uri.file("/ext"), createMockContext(), actionContext, panel)
+    return webviewPanel.title
+  }
+
+  test("names each screen instead of calling every tab TestMyCode", () => {
+    expect(mainPanelTitleFor({ id: nextPanelId(), type: "MyCourses", courseDeadlines: {} })).toBe(
+      "My Courses",
+    )
+    expect(mainPanelTitleFor({ id: nextPanelId(), type: "Welcome" })).toBe("Welcome")
+    expect(mainPanelTitleFor({ id: nextPanelId(), type: "MoocLogin" })).toBe("Log In")
+  })
+
+  test("titles a course's tab with the course title, not its slug", () => {
+    const actionContext = createMockActionContext({
+      startup: { userData: { getCourse: () => Ok(courseWith(0)) } as never },
+    })
+    const title = mainPanelTitleFor(
+      {
+        id: nextPanelId(),
+        type: "CourseDetails",
+        courseId: CourseIdentifier.from(42),
+        exerciseStatuses: { tmc: {}, mooc: {} },
+      },
+      actionContext,
+    )
+
+    expect(title).toBe("Python Course")
+  })
+
+  test("names the exercise a results tab belongs to", () => {
+    const exercise = makeTmcKind({
+      id: 1,
+      name: "part01-01_hello",
+      availablePoints: 1,
+      awardedPoints: 0,
+      deadline: null,
+      passed: false,
+      softDeadline: null,
+    })
+
+    const title = mainPanelTitleFor({
+      id: nextPanelId(),
+      type: "ExerciseSubmission",
+      course: courseWith(1),
+      exercise,
+    })
+
+    expect(title).toBe("Submission: part01-01_hello")
+  })
+
+  test("retitles a reused tab when it navigates", () => {
+    const { panel } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    renderMain({ id: nextPanelId(), type: "Welcome" })
+
+    renderMain({ id: nextPanelId(), type: "MyCourses", courseDeadlines: {} })
+
+    expect(panel.title).toBe("My Courses")
+  })
+
+  test("carries the extension's icon for both theme kinds, and a find widget", () => {
+    const { panel } = createFakeWebviewPanel()
+    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
+    createWebviewPanel.mockClear()
+    createWebviewPanel.mockReturnValue(panel)
+
+    renderMain({ id: nextPanelId(), type: "Welcome" })
+
+    expect(panel.iconPath).toEqual({
+      light: vscode.Uri.joinPath(vscode.Uri.file("/ext"), "media", "TMC-light.svg"),
+      dark: vscode.Uri.joinPath(vscode.Uri.file("/ext"), "media", "TMC.svg"),
+    })
+    expect(createWebviewPanel.mock.calls[0]?.[3]).toMatchObject({ enableFindWidget: true })
+  })
+})
+
 // Returns the document `TmcPanel`'s constructor hands the webview host.
 async function mountedWebviewHtml(): Promise<string> {
   resetPanels()

@@ -128,6 +128,8 @@ export class TmcPanel {
 
   private readonly _panel: WebviewPanel
 
+  private readonly _actionContext: ActionContext
+
   // if true, this is the main panel, otherwise this is the side panel
   private readonly _isMain: boolean
 
@@ -272,11 +274,16 @@ export class TmcPanel {
     const panelViewType = isMain ? "mainPanel" : "sidePanel"
     const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", showOptions, {
       enableScripts: true,
+      enableFindWidget: true,
       // otherwise a hidden-then-revealed panel reloads and drops messages posted
       // before the reveal
       retainContextWhenHidden: true,
       localResourceRoots: [Uri.joinPath(extensionUri, "webview-ui/public/build")],
     })
+    webviewPanel.iconPath = {
+      light: Uri.joinPath(extensionUri, "media", "TMC-light.svg"),
+      dark: Uri.joinPath(extensionUri, "media", "TMC.svg"),
+    }
     const currentPanel = new TmcPanel(
       webviewPanel,
       extensionContext,
@@ -296,6 +303,7 @@ export class TmcPanel {
     isMain: boolean,
   ) {
     this._panel = panel
+    this._actionContext = actionContext
 
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables)
 
@@ -334,6 +342,7 @@ export class TmcPanel {
   private _renderPanel(panel: Panel): void {
     this._lastPanel = panel
     this._messageBuffer.clear()
+    this._panel.title = panelTitle(panel, this._actionContext)
     renderPanel(panel, this._panel.webview)
   }
 
@@ -965,6 +974,34 @@ export class TmcPanel {
       undefined,
       this._disposables,
     )
+  }
+}
+
+/** The editor tab label for `panel`, so tabs can be told apart in Open Editors and Ctrl+Tab. */
+function panelTitle(panel: Panel, actionContext: ActionContext): string {
+  switch (panel.type) {
+    case "App":
+      return "TestMyCode"
+    case "Welcome":
+      return "Welcome"
+    case "MyCourses":
+      return "My Courses"
+    case "CourseDetails": {
+      const course = isReady(actionContext)
+        ? actionContext.startup.userData.getCourse(panel.courseId)
+        : undefined
+      return course?.ok ? LocalCourseData.getCourseTitle(course.val) : "Course Details"
+    }
+    case "ExerciseTests":
+      return `Tests: ${LocalCourseExercise.getSlug(panel.exercise)}`
+    case "ExerciseSubmission":
+      return `Submission: ${LocalCourseExercise.getSlug(panel.exercise)}`
+    case "MoocLogin":
+      return "Log In"
+    case "InitializationErrorHelp":
+      return "TestMyCode Help"
+    default:
+      return assertUnreachable(panel)
   }
 }
 
