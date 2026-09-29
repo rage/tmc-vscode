@@ -152,6 +152,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     void init.verifyCliSchema(cliPathResult.val, context.extensionPath)
     const langsInstance = new Langs(cliPathResult.val, CLIENT_NAME, EXTENSION_VERSION, {
       cliConfigDir: TMC_LANGS_CONFIG_DIR,
+      javaHome: () => settings.getJavaHome(),
     })
     // A submit or paste would otherwise keep polling the backend past shutdown.
     context.subscriptions.push({ dispose: () => langsInstance.killAllProcesses() })

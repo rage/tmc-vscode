@@ -165,15 +165,14 @@ export function testResultData(overrides: Partial<TestResultData> = {}): TestRes
     id: makeTmcKind({ tmcExerciseId: 101 }),
     courseSlug: "python-course",
     exerciseName: "part01-01_hello",
-    tmcLogs: {},
     ...overrides,
   }
 }
 
-// a single-part exercise group referencing a mooc (uuid) exercise id
+// the one group a mooc course has, named after it, referencing a mooc (uuid) exercise id
 export function moocExerciseGroup(overrides: Partial<ExerciseGroup> = {}): ExerciseGroup {
   return {
-    name: "part01",
+    name: "MOOC Python",
     nextDeadlineString: "No deadline",
     exercises: [
       {

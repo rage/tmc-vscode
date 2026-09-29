@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte"
   import type { SvelteMap } from "svelte/reactivity"
 
   import type {
@@ -10,6 +11,9 @@
   import { ExerciseIdentifier, match } from "../shared/shared"
   import Button from "./Button.svelte"
   import Checkbox from "./Checkbox.svelte"
+  import Disclosure from "./Disclosure.svelte"
+  import StatusIcon from "./StatusIcon.svelte"
+  import type { Status } from "./StatusIcon.svelte"
 
   // exercise statuses, keyed by the backend-specific exercise id
   type PerBackend<T> = {
@@ -36,14 +40,17 @@
     exerciseStatuses,
   }: Props = $props()
 
-  const statusLabels: Record<ExerciseStatus, string> = {
-    closed: "Closed",
-    downloading: "Downloading",
-    downloadFailed: "Download failed",
-    expired: "Expired",
-    missing: "Not downloaded",
-    new: "New",
-    opened: "Opened",
+  // Seeded once: a re-posted group must not collapse a part the user opened.
+  let isOpen = $state(untrack(() => exerciseGroup.defaultOpen ?? true))
+
+  const statusAppearances: Record<ExerciseStatus, { status: Status; label: string }> = {
+    closed: { status: "closed", label: "Closed" },
+    downloading: { status: "downloading", label: "Downloading" },
+    downloadFailed: { status: "downloadFailed", label: "Download failed" },
+    expired: { status: "expired", label: "Expired" },
+    missing: { status: "missing", label: "Not downloaded" },
+    new: { status: "missing", label: "New" },
+    opened: { status: "opened", label: "Opened" },
   }
 
   function getStatus(id: ExerciseIdentifier): ExerciseStatus | undefined {
@@ -52,10 +59,6 @@
       (tmc) => exerciseStatuses.tmc[tmc.tmcExerciseId],
       (mooc) => exerciseStatuses.mooc[mooc.moocExerciseId],
     )
-  }
-  function getStatusLabel(id: ExerciseIdentifier): string {
-    const status = getStatus(id)
-    return status === undefined ? "Loading…" : statusLabels[status]
   }
   function isChecked(id: ExerciseIdentifier): boolean {
     return checkedExercises.has(ExerciseIdentifier.toString(id))
@@ -71,6 +74,7 @@
     }
   }
 
+  const exerciseIds = $derived(exerciseGroup.exercises.map((exercise) => exercise.id))
   const completedExercises = $derived(exerciseGroup.exercises.filter((e) => e.passed).length)
   const downloadedExercises = $derived(
     exerciseGroup.exercises.filter((e) => {
@@ -82,172 +86,119 @@
     exerciseGroup.exercises.filter((e) => getStatus(e.id) === "opened").length,
   )
   const totalExercises = $derived(exerciseGroup.exercises.length)
-  const hasSoftDeadline = $derived(exerciseGroup.exercises.some((exercise) => !exercise.isHard))
-  const allExercisesAreChecked = $derived(
-    exerciseGroup.exercises.every((exercise) => isChecked(exercise.id)),
-  )
-  const someExercisesAreChecked = $derived(
-    exerciseGroup.exercises.some((exercise) => isChecked(exercise.id)),
-  )
-
-  function checkAllExercises(checked: boolean) {
-    setChecked(
-      exerciseGroup.exercises.map((exercise) => exercise.id),
-      checked,
-    )
-  }
+  const allExercisesAreChecked = $derived(exerciseIds.every((id) => isChecked(id)))
+  const someExercisesAreChecked = $derived(exerciseIds.some((id) => isChecked(id)))
 </script>
 
-<vscode-collapsible class="exercise-part" heading={exerciseGroup.name}>
-  <vscode-badge slot="decorations">Completed {completedExercises}/{totalExercises}</vscode-badge>
-
-  <div class="part-body">
-    <vscode-button-group class="part-buttons">
-      <Button secondary onclick={() => onDownloadAll(exerciseGroup.exercises.map((e) => e.id))}>
-        Download all
-      </Button>
-      <Button secondary onclick={() => onOpenAll(exerciseGroup.exercises.map((e) => e.id))}>
-        Open all
-      </Button>
-      <Button secondary onclick={() => onCloseAll(exerciseGroup.exercises.map((e) => e.id))}>
-        Close all
-      </Button>
-    </vscode-button-group>
-
-    <div class="part-counts">
-      <div>Completed: {completedExercises} / {totalExercises}</div>
-      <div>Downloaded: {downloadedExercises} / {totalExercises}</div>
-      <div>Opened: {openedExercises} / {totalExercises}</div>
-    </div>
-
-    <div class="next-deadline">{exerciseGroup.nextDeadlineString}</div>
-
-    {#if hasSoftDeadline}
-      <div class="deadline-policy">
-        A soft deadline can be exceeded: exercises submitted after it still count, but award only
-        75% of the exercise points. A hard deadline cannot be exceeded.
-      </div>
-    {/if}
-
-    <vscode-table zebra responsive breakpoint={480}>
-      <vscode-table-header slot="header">
-        <vscode-table-header-cell class="checkbox-cell">
-          <Checkbox
-            accessibleName={`Select all in ${exerciseGroup.name}`}
-            checked={allExercisesAreChecked}
-            indeterminate={someExercisesAreChecked && !allExercisesAreChecked}
-            oncheckedchange={(checked) => {
-              checkAllExercises(checked)
-            }}
-          />
-        </vscode-table-header-cell>
-        <vscode-table-header-cell>Exercise</vscode-table-header-cell>
-        <vscode-table-header-cell>Deadline</vscode-table-header-cell>
-        <vscode-table-header-cell>Completed</vscode-table-header-cell>
-        <vscode-table-header-cell>Status</vscode-table-header-cell>
-      </vscode-table-header>
-      <vscode-table-body slot="body">
-        {#each exerciseGroup.exercises as exercise}
-          <vscode-table-row id={ExerciseIdentifier.toString(exercise.id)}>
-            <vscode-table-cell class="checkbox-cell">
-              <Checkbox
-                accessibleName={`Select ${exercise.name}`}
-                checked={isChecked(exercise.id)}
-                oncheckedchange={(checked) => {
-                  setChecked([exercise.id], checked)
-                }}
-              />
-            </vscode-table-cell>
-            <vscode-table-cell>{exercise.name}</vscode-table-cell>
-            <vscode-table-cell>
-              {#if exercise.isHard}
-                {exercise.hardDeadlineString}
-              {:else}
-                <span class="soft-deadline">
-                  {exercise.softDeadlineString}
-                  <span
-                    class="deadline-info"
-                    title={`Hard deadline: ${exercise.hardDeadlineString}`}
-                  >
-                    <vscode-icon name="info"></vscode-icon>
-                  </span>
-                  <!-- `title` is unreachable without a pointer, so the same text is also
-                       exposed to assistive technology. -->
-                  <span class="visually-hidden">
-                    Hard deadline: {exercise.hardDeadlineString}
-                  </span>
-                </span>
-              {/if}
-            </vscode-table-cell>
-            <vscode-table-cell>
-              {#if exercise.passed}
-                <vscode-icon name="pass-filled" class="pass-icon"></vscode-icon>
-                <span class="visually-hidden">Passed</span>
-              {:else}
-                <vscode-icon name="error" class="fail-icon"></vscode-icon>
-                <span class="visually-hidden">Not passed</span>
-              {/if}
-            </vscode-table-cell>
-            <vscode-table-cell>
-              <vscode-badge>{getStatusLabel(exercise.id)}</vscode-badge>
-            </vscode-table-cell>
-          </vscode-table-row>
-        {/each}
-      </vscode-table-body>
-    </vscode-table>
+<Disclosure
+  title={exerciseGroup.name}
+  bind:open={isOpen}
+  description={`${completedExercises} / ${totalExercises} completed`}
+>
+  <div class="actions part-actions">
+    <Button
+      secondary
+      icon="cloud-download"
+      aria-label={`Download all in ${exerciseGroup.name}`}
+      disabled={downloadedExercises === totalExercises}
+      onclick={() => onDownloadAll(exerciseIds)}
+    >
+      Download all
+    </Button>
+    <Button
+      secondary
+      icon="folder-opened"
+      aria-label={`Open all in ${exerciseGroup.name}`}
+      disabled={openedExercises === totalExercises}
+      onclick={() => onOpenAll(exerciseIds)}
+    >
+      Open all
+    </Button>
+    <Button
+      secondary
+      icon="close-all"
+      aria-label={`Close all in ${exerciseGroup.name}`}
+      disabled={openedExercises === 0}
+      onclick={() => onCloseAll(exerciseIds)}
+    >
+      Close all
+    </Button>
   </div>
-</vscode-collapsible>
+
+  <p class="next-deadline muted">{exerciseGroup.nextDeadlineString}</p>
+
+  <vscode-table zebra responsive breakpoint={480} columns={["32px", "auto", "200px", "160px"]}>
+    <!-- The library leaves the header cells without a row, which breaks header/cell association. -->
+    <vscode-table-header slot="header" role="row">
+      <vscode-table-header-cell>
+        <Checkbox
+          accessibleName={`Select all in ${exerciseGroup.name}`}
+          checked={allExercisesAreChecked}
+          indeterminate={someExercisesAreChecked && !allExercisesAreChecked}
+          oncheckedchange={(checked) => {
+            setChecked(exerciseIds, checked)
+          }}
+        />
+      </vscode-table-header-cell>
+      <vscode-table-header-cell>Exercise</vscode-table-header-cell>
+      <vscode-table-header-cell>Deadline</vscode-table-header-cell>
+      <vscode-table-header-cell>Status</vscode-table-header-cell>
+    </vscode-table-header>
+    <vscode-table-body slot="body">
+      {#each exerciseGroup.exercises as exercise (ExerciseIdentifier.toString(exercise.id))}
+        {@const status = getStatus(exercise.id)}
+        <vscode-table-row id={ExerciseIdentifier.toString(exercise.id)}>
+          <vscode-table-cell>
+            <Checkbox
+              accessibleName={`Select ${exercise.name}`}
+              checked={isChecked(exercise.id)}
+              oncheckedchange={(checked) => {
+                setChecked([exercise.id], checked)
+              }}
+            />
+          </vscode-table-cell>
+          <vscode-table-cell>{exercise.name}</vscode-table-cell>
+          <vscode-table-cell>
+            <time datetime={exercise.deadlineIso ?? undefined}>
+              {exercise.isHard ? exercise.hardDeadlineString : exercise.softDeadlineString}
+            </time>
+            {#if !exercise.isHard}
+              <span class="hard-deadline muted">hard: {exercise.hardDeadlineString}</span>
+            {/if}
+          </vscode-table-cell>
+          <vscode-table-cell>
+            <span class="status">
+              <StatusIcon
+                status={exercise.passed ? "passed" : "unset"}
+                label={exercise.passed ? "Passed" : "Not passed"}
+                isLabelHidden
+              />
+              {#if status === undefined}
+                <span class="muted">Loading…</span>
+              {:else}
+                <StatusIcon {...statusAppearances[status]} />
+              {/if}
+            </span>
+          </vscode-table-cell>
+        </vscode-table-row>
+      {/each}
+    </vscode-table-body>
+  </vscode-table>
+</Disclosure>
 
 <style>
-  .exercise-part {
-    display: block;
-    margin-bottom: 1rem;
-  }
-  .part-body {
-    padding: 0.4rem;
-  }
-  .part-buttons {
-    display: block;
-    width: 100%;
-    margin-bottom: 0.8rem;
-  }
-  .part-counts {
-    margin-bottom: 0.4rem;
+  .part-actions {
+    margin-bottom: var(--tmc-space-2);
   }
   .next-deadline {
-    margin-bottom: 0.8rem;
+    margin: 0 0 var(--tmc-space-2);
   }
-  .deadline-policy {
-    margin-bottom: 0.8rem;
-    opacity: 90%;
+  .hard-deadline {
+    display: block;
   }
-  .checkbox-cell {
-    width: 2rem;
-  }
-  .soft-deadline {
+  .status {
     display: inline-flex;
     align-items: center;
-    gap: 0.2rem;
-  }
-  .deadline-info {
-    display: inline-flex;
-    cursor: help;
-  }
-  .pass-icon {
-    color: var(--vscode-testing-iconPassed, #73c991);
-  }
-  .fail-icon {
-    color: var(--vscode-testing-iconFailed, #f14c4c);
-  }
-  .visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
+    gap: var(--tmc-space-2);
   }
 </style>

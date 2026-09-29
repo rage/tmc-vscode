@@ -4,7 +4,8 @@ import type Dialog from "../../api/dialog"
 import { autoMock } from "../support/mock"
 
 export interface DialogMockValues {
-  confirmation: boolean | undefined
+  /** What {@link Dialog.confirm} answers. */
+  confirmation: boolean
 }
 
 export function createDialogMock(): [Dialog, DialogMockValues] {
@@ -13,7 +14,12 @@ export function createDialogMock(): [Dialog, DialogMockValues] {
   }
 
   const explicit: Partial<Record<keyof Dialog, unknown>> = {
-    confirmation: vi.fn(async () => values.confirmation),
+    confirm: vi.fn(async () => values.confirmation),
+    // Takes the first way offered, as a user pressing the default button does.
+    choose: vi.fn(
+      async (_message: string, _options: unknown, ...choices: [string, unknown][]) =>
+        choices[0]?.[1],
+    ),
     progressNotification: vi.fn(
       (
         _message: string,

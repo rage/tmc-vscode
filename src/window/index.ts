@@ -1,6 +1,5 @@
 import * as vscode from "vscode"
 
-import type { ActionContext } from "../actions/types"
 import { Logger } from "../utilities/logger"
 
 const PYTHON_EXTENSION_ID = "ms-python.python"
@@ -13,40 +12,27 @@ interface PythonExtensionApi {
 }
 
 /**
- * Resolves the interpreter the CLI should run the active editor's exercise with.
+ * Resolves the Python interpreter for the exercise at `exerciseUri`, as the Python extension or
+ * the settings name it for that folder. The CLI reads it only for Python exercises.
  *
- * @returns `undefined` for a language that needs no interpreter named, and whenever none
- * can be resolved — the CLI then chooses one itself.
+ * @returns `undefined` when none can be resolved; the CLI then chooses one itself.
  */
-export function getActiveEditorExecutablePath(_actionContext: ActionContext): string | undefined {
-  const resource = vscode.window.activeTextEditor
-  if (!resource) {
-    return undefined
-  }
-  Logger.info("Active text document language:", resource.document.languageId)
-  switch (resource.document.languageId) {
-    case "python":
-      return getPythonPath(resource.document)
-  }
-  return undefined
-}
-
-function getPythonPath(document: vscode.TextDocument): string | undefined {
+export function resolvePythonInterpreter(exerciseUri: vscode.Uri): string | undefined {
   try {
     const extension = vscode.extensions.getExtension(PYTHON_EXTENSION_ID)
     if (!extension) {
-      Logger.warn(`${PYTHON_EXTENSION_ID} is not installed.`)
-      return interpreterFromSettings(document)
+      Logger.debug(`${PYTHON_EXTENSION_ID} is not installed.`)
+      return interpreterFromSettings(exerciseUri)
     }
     if (!extension.isActive) {
-      Logger.warn(`${PYTHON_EXTENSION_ID} has not activated yet.`)
-      return interpreterFromSettings(document)
+      Logger.debug(`${PYTHON_EXTENSION_ID} has not activated yet.`)
+      return interpreterFromSettings(exerciseUri)
     }
     const api = extension.exports as PythonExtensionApi | undefined
-    const activePath = api?.environments?.getActiveEnvironmentPath?.(document.uri)?.path
+    const activePath = api?.environments?.getActiveEnvironmentPath?.(exerciseUri)?.path
     if (!activePath) {
-      Logger.warn(`${PYTHON_EXTENSION_ID} names no environment for ${document.uri.fsPath}.`)
-      return interpreterFromSettings(document)
+      Logger.debug(`${PYTHON_EXTENSION_ID} names no environment for ${exerciseUri.fsPath}.`)
+      return interpreterFromSettings(exerciseUri)
     }
     return activePath
   } catch (error) {
@@ -55,13 +41,13 @@ function getPythonPath(document: vscode.TextDocument): string | undefined {
   }
 }
 
-/** Reads the interpreter at the document's own folder scope, not the window's. */
-function interpreterFromSettings(document: vscode.TextDocument): string | undefined {
+/** Reads the interpreter at the exercise folder's own scope, not the window's. */
+function interpreterFromSettings(exerciseUri: vscode.Uri): string | undefined {
   const configured = vscode.workspace
-    .getConfiguration("python", document.uri)
+    .getConfiguration("python", exerciseUri)
     .get<string>("defaultInterpreterPath")
   if (!configured) {
-    Logger.warn("No python.defaultInterpreterPath is set; letting the CLI choose.")
+    Logger.debug("No python.defaultInterpreterPath is set; letting the CLI choose.")
     return undefined
   }
   return configured

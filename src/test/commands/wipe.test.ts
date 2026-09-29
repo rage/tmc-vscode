@@ -32,8 +32,8 @@ function step<T>(name: string, outcome: () => T): () => Promise<T> {
 
 function wipeContext(
   options: {
-    /** Answers to the two explicit confirmations, in order. */
-    confirmations?: boolean[]
+    /** Answers to the modal confirmation, then to the typed one. */
+    confirmations?: [boolean, boolean]
     noProjectsDirectory?: boolean
     resetSettings?: Result<void, Error>
     deleteAllWorkspaceFiles?: Result<void, Error>
@@ -41,8 +41,8 @@ function wipeContext(
 ): ReadyActionContext {
   const confirmations = options.confirmations ?? [true, true]
   const [dialog] = createDialogMock()
-  let asked = 0
-  dialog.explicitConfirmation = vi.fn(async () => confirmations[asked++] ?? false)
+  dialog.confirm = vi.fn(async () => confirmations[0])
+  dialog.explicitConfirmation = vi.fn(async () => confirmations[1])
   return {
     ...createMockActionContext({
       startup: {
@@ -127,18 +127,28 @@ suite("Wipe command", function () {
     await wipe(context, extensionContext)
 
     expect(stepsRun).toEqual([])
-    expect(context.dialog.explicitConfirmation).not.toHaveBeenCalled()
+    expect(context.dialog.confirm).not.toHaveBeenCalled()
     expect(context.dialog.errorNotification).toHaveBeenCalledWith(
       "Wiping the extension data is unavailable: tmc-langs did not report an exercise directory.",
       expect.any(Error),
     )
   })
 
-  test("deletes nothing when the user declines the second confirmation", async function () {
+  test("deletes nothing when the user cancels the modal", async function () {
+    const context = wipeContext({ confirmations: [false, true] })
+
+    await wipe(context, extensionContext)
+
+    expect(context.dialog.explicitConfirmation).not.toHaveBeenCalled()
+    expect(fs.removeSync).not.toHaveBeenCalled()
+  })
+
+  test("deletes nothing unless the user also types the confirmation", async function () {
     const context = wipeContext({ confirmations: [true, false] })
 
     await wipe(context, extensionContext)
 
+    expect(context.dialog.explicitConfirmation).toHaveBeenCalledWith(expect.any(String), "DELETE")
     expect(fs.removeSync).not.toHaveBeenCalled()
   })
 })

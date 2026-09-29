@@ -25,7 +25,7 @@ vsCodeTest(
     const quickPick = new QuickPickPage(page)
 
     const courseTitle = "MOOC Python Course"
-    const exerciseName = "01_passing_exercise"
+    const exerciseName = "passing_exercise"
     const fileName = "passing_exercise.py"
     const fileContents = "def hello()"
     // backend/mooc/fixtures.ts; same exercise the integration tier seeds against.
@@ -37,7 +37,7 @@ vsCodeTest(
       await myCoursesPage.selectCourse(courseTitle)
       // The exercise group must have rendered before showExercises can expand it;
       // otherwise its checkbox stays hidden inside a collapsed group.
-      await expect(webview.getByRole("heading", { name: "part01" })).toBeVisible()
+      await expect(coursePage.exerciseGroupHeading(courseTitle)).toBeVisible()
       await coursePage.showExercises()
       await coursePage.openExercises([exerciseName])
       await expect(webview.getByRole("cell", { name: "opened" })).toBeVisible()

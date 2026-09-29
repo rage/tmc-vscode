@@ -1,10 +1,19 @@
 <script lang="ts">
   import Button from "../components/Button.svelte"
+  import CodeBlock from "../components/CodeBlock.svelte"
+  import Disclosure from "../components/Disclosure.svelte"
+  import Notice from "../components/Notice.svelte"
+  import PanelHeader from "../components/PanelHeader.svelte"
   import PasteHelpBox from "../components/PasteHelpBox.svelte"
+  import Spinner from "../components/Spinner.svelte"
   import TestResults from "../components/TestResults.svelte"
+  import ToolbarButton from "../components/ToolbarButton.svelte"
+  import type { RunStatus } from "../shared/langsSchema"
   import type { ExerciseTestsPanel, TestResultData, WebviewError } from "../shared/shared"
   import { assertUnreachable, unwrap } from "../shared/shared"
+  import { announce } from "../utilities/a11y.svelte"
   import { addMessageListener } from "../utilities/script"
+  import { awardedPoints } from "../utilities/testPoints"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -17,26 +26,18 @@
   const course = $derived(unwrap(panel.course))
   const exercise = $derived(unwrap(panel.exercise))
 
-  let testError = $state<WebviewError | undefined>(undefined)
+  let testError = $state.raw<WebviewError | undefined>(undefined)
   let pasteResult = $state<string | undefined>(undefined)
   let pasteError = $state<string | undefined>(undefined)
-  let testResults = $state<TestResultData | undefined>(undefined)
+  let testResults = $state.raw<TestResultData | undefined>(undefined)
   let tryingToRunTestsForExam = $state<boolean | undefined>(undefined)
+  // Guards against a rapid double-click sending two submits. Normally the submission
+  // panel replaces this one, but a submit that never starts leaves this panel on
+  // screen, so `submitFailed` resets the flag.
+  let submitting = $state(false)
 
-  const successPoints = $derived(
-    (testResults?.testResult.testResults ?? [])
-      .filter((tr) => tr.successful)
-      .map((tr) => tr.points.length)
-      .reduce((prev, curr) => prev + curr, 0),
-  )
-  const totalPoints = $derived(
-    (testResults?.testResult.testResults ?? [])
-      .map((tr) => tr.points.length)
-      .reduce((prev, curr) => prev + curr, 0),
-  )
-  const allSuccessful = $derived(
-    testResults && !testResults.testResult.testResults.some((tr) => !tr.successful),
-  )
+  const results = $derived(testResults?.testResult.testResults ?? [])
+  const allSuccessful = $derived(testResults && !results.some((tr) => !tr.successful))
   const validationsFailed = $derived.by(() => {
     const validationStrategy = testResults?.styleValidationResult?.strategy
     const validationErrors = Object.entries(
@@ -44,6 +45,36 @@
     ).length
     return validationStrategy === "FAIL" && validationErrors > 0
   })
+  // A mooc exercise's available points are a score maximum, not point names, so only a TMC
+  // exercise's local points can be compared against them.
+  const points = $derived(
+    panel.exercise.kind === "tmc" && results.length > 0
+      ? { awarded: awardedPoints(results).size, available: exercise.availablePoints }
+      : undefined,
+  )
+  const stdout = $derived(testResults?.testResult.logs.stdout ?? "")
+  const stderr = $derived(testResults?.testResult.logs.stderr ?? "")
+  // Compiler errors arrive only as output, with no test results.
+  const isOutputOpenInitially = $derived(
+    testResults?.testResult.status === "COMPILE_FAILED" || results.length === 0,
+  )
+
+  function statusHeadline(status: RunStatus): string {
+    switch (status) {
+      case "PASSED":
+        return "Tests passed"
+      case "TESTS_FAILED":
+        return "Tests failed"
+      case "COMPILE_FAILED":
+        return "Compilation failed"
+      case "TESTRUN_INTERRUPTED":
+        return "The test run was interrupted"
+      case "GENERIC_ERROR":
+        return "An error occurred during the test run"
+      default:
+        return assertUnreachable(status)
+    }
+  }
 
   // svelte-ignore state_referenced_locally -- the panel identity (id/type)
   // is fixed for the lifetime of the component, capturing the initial value is intended
@@ -51,6 +82,13 @@
     switch (message.type) {
       case "testResults": {
         testResults = message.testResults
+        const { status, testResults: run } = message.testResults.testResult
+        const passed = run.filter((tr) => tr.successful).length
+        announce(
+          run.length > 0
+            ? `${statusHeadline(status)}. ${passed} of ${run.length} tests passed.`
+            : statusHeadline(status),
+        )
         break
       }
       case "pasteResult": {
@@ -88,10 +126,9 @@
       type: "closeSidePanel",
     })
   }
-  // Guards against a rapid double-click sending two submits. Normally the submission
-  // panel replaces this one, but a submit that never starts leaves this panel on
-  // screen, so `submitFailed` resets the flag.
-  let submitting = $state(false)
+  function copyToClipboard(text: string) {
+    vscode.postMessage({ type: "copyToClipboard", text })
+  }
   function submit() {
     if (submitting) {
       return
@@ -106,124 +143,94 @@
   }
 </script>
 
-<div class="close-button">
-  <Button secondary aria-label="Close" onclick={closePanel}>
-    <vscode-icon name="close" aria-hidden="true"></vscode-icon>
-  </Button>
-</div>
+<PanelHeader title={exercise.name} shouldFocusOnMount={false}>
+  {#snippet actions()}
+    <ToolbarButton icon="close" label="Close" onclick={closePanel} />
+  {/snippet}
+</PanelHeader>
 
 {#if !tryingToRunTestsForExam && !testError}
-  <h1 class="exercise-heading">{exercise.name}</h1>
-  <div role="status">
-    {#if testResults === undefined}
-      <h2>Running tests</h2>
-    {:else if testResults.testResult.status === "PASSED"}
-      <h2>Tests passed</h2>
-    {:else if testResults.testResult.status === "TESTS_FAILED"}
-      <h2>Tests failed</h2>
-    {:else if testResults.testResult.status === "COMPILE_FAILED"}
-      <h2>Compilation failed</h2>
-    {:else if testResults.testResult.status === "TESTRUN_INTERRUPTED"}
-      <h2>The test run was interrupted</h2>
-    {:else if testResults.testResult.status === "GENERIC_ERROR"}
-      <h2>An error occurred during the test run</h2>
-    {:else}
-      {assertUnreachable(testResults.testResult.status)}
-    {/if}
-    {#if validationsFailed}
-      <h2>Code quality checks failed</h2>
-    {/if}
-  </div>
-
   {#if testResults === undefined}
-    <div class="button-container">
+    <h2>Running tests</h2>
+    <Spinner label="Running tests" isLabelHidden />
+    <div class="actions">
       <Button secondary onclick={closePanel}>Run in background</Button>
       <Button secondary onclick={cancelTests}>Cancel</Button>
     </div>
-    <vscode-progress-ring aria-label="Running tests"></vscode-progress-ring>
   {:else}
+    <h2>{statusHeadline(testResults.testResult.status)}</h2>
+    {#if validationsFailed}
+      <h2>Code quality checks failed</h2>
+    {/if}
+    {#if testResults.styleValidationError}
+      <Notice kind="warning" title="Code quality checks could not be run">
+        {testResults.styleValidationError}
+      </Notice>
+    {/if}
+
     {#if course.disabled}
-      <div>
+      <p>
         Sending the solution or pasting to the server is not available for this exercise, because
         the course is disabled.
-      </div>
+      </p>
     {:else}
-      <div class="header-container">
+      <div class="actions">
         <Button onclick={submit} disabled={submitting}>Submit to server</Button>
-        {#if !allSuccessful}
-          <span class="help-box-container">
-            <PasteHelpBox
-              course={panel.course}
-              exercise={panel.exercise}
-              sourcePanel={{ id: panel.id, type: panel.type }}
-              pasteUrl={pasteResult}
-              {pasteError}
-              onPaste={() => {
-                pasteResult = undefined
-                pasteError = undefined
-              }}
-            />
-          </span>
-        {/if}
       </div>
+      {#if !allSuccessful}
+        <PasteHelpBox
+          course={panel.course}
+          exercise={panel.exercise}
+          sourcePanel={{ id: panel.id, type: panel.type }}
+          pasteUrl={pasteResult}
+          {pasteError}
+          onPaste={() => {
+            pasteResult = undefined
+            pasteError = undefined
+          }}
+        />
+      {/if}
     {/if}
     <TestResults
-      {totalPoints}
-      {successPoints}
-      testResults={testResults.testResult.testResults}
+      testResults={results}
+      {points}
       validationResult={testResults.styleValidationResult ?? null}
       solutionUrl={null}
+      oncopy={copyToClipboard}
     />
+    {#if stdout || stderr}
+      <Disclosure title="Output" open={isOutputOpenInitially}>
+        {#if stdout}
+          <CodeBlock code={stdout} label="Standard output" oncopy={copyToClipboard} />
+        {/if}
+        {#if stderr}
+          <CodeBlock code={stderr} label="Standard error" oncopy={copyToClipboard} />
+        {/if}
+      </Disclosure>
+    {/if}
   {/if}
 {:else}
-  <h1 class="exercise-heading">{exercise.name}</h1>
-
   {#if testError}
-    <div role="alert">
-      <h2>Error while trying to run tests</h2>
-      <div class="error-message">{testError.message}</div>
+    <Notice kind="error" title="Error while trying to run tests">
+      <p>{testError.message}</p>
       {#if testError.details}
-        <code>{testError.details}</code>
+        <CodeBlock code={testError.details} label="Error details" oncopy={copyToClipboard} />
       {/if}
-    </div>
-    <div>
+    </Notice>
+    <p>
       The tests could not be run locally. You can still submit your answer to the server, or close
       this panel and try again.
-    </div>
+    </p>
   {:else}
-    <div>You can submit your answer with the button below.</div>
+    <p>You can submit your answer with the button below.</p>
   {/if}
-  <div class="exam-submission-button-container">
+  <div class="actions">
     <Button onclick={submit} disabled={submitting}>Submit to server</Button>
   </div>
 {/if}
 
 <style>
-  .exercise-heading {
-    /* leave room for the absolutely-positioned close button */
-    padding-right: 2.5rem;
-  }
-  .close-button {
-    position: absolute;
-    top: 0.4rem;
-    right: 0.4rem;
-  }
-  .button-container {
-    margin-bottom: 0.4rem;
-  }
-  .help-box-container {
-    margin-top: 0.4rem;
-    margin-bottom: 0.4rem;
-  }
-  .header-container {
-    display: flex;
-  }
-  .exam-submission-button-container {
-    margin-top: 1rem;
-    margin-bottom: 1rem;
-  }
-  .error-message,
-  code {
-    white-space: pre-wrap;
+  .actions {
+    margin: var(--tmc-space-3) 0;
   }
 </style>

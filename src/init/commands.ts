@@ -5,10 +5,19 @@ import type { ActionContext, ReadyActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type Dialog from "../api/dialog"
 import * as commands from "../commands"
+import { EXTENSION_ID } from "../config/constants"
 import { nextPanelId, registerWebviewHandlers, TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
 import type UI from "../ui/ui"
 import { Logger } from "../utilities"
+
+/** A command's title as the manifest declares it, without a trailing ellipsis; else its id. */
+function commandTitle(id: string): string {
+  const declared: { command: string; title: string }[] =
+    vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON?.contributes?.commands ?? []
+  const title = declared.find((x) => x.command === id)?.title
+  return title ? title.replace(/(\.\.\.|…)$/, "") : id
+}
 
 /**
  * Builds the `register` both registration passes use.
@@ -30,7 +39,7 @@ function commandRegistrar(
           return await run(...args)
         } catch (e) {
           void dialog.reportError(
-            `Failed to run ${id}.`,
+            `Failed to run ${commandTitle(id)}.`,
             e instanceof Error ? e : new Error(String(e)),
           )
           return undefined

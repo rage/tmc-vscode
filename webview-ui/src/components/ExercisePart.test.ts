@@ -2,8 +2,8 @@ import { fireEvent, render, screen } from "@testing-library/svelte"
 import { SvelteMap } from "svelte/reactivity"
 import { vi } from "vitest"
 
-import type { ExerciseIdentifier } from "../shared/shared"
-import { makeTmcKind } from "../shared/shared"
+import type { ExerciseGroup, ExerciseStatus } from "../shared/shared"
+import { ExerciseIdentifier, makeTmcKind } from "../shared/shared"
 import { tmcExerciseGroup } from "../test/fixtures"
 import { withinShadowRoot } from "../test/shadow"
 import ExercisePart from "./ExercisePart.svelte"
@@ -11,105 +11,146 @@ import ExercisePart from "./ExercisePart.svelte"
 const noop = () => {}
 const emptySelection = () => new SvelteMap<string, ExerciseIdentifier>()
 
+const twoExerciseGroup = (): ExerciseGroup =>
+  tmcExerciseGroup({
+    exercises: [
+      {
+        id: makeTmcKind({ tmcExerciseId: 101 }),
+        name: "01_hello",
+        isHard: false,
+        hardDeadlineString: "Jan 31, 2026, 12:00 PM",
+        softDeadlineString: "Jan 1, 2026, 12:00 PM",
+        deadlineIso: "2026-01-01T12:00:00.000Z",
+        passed: true,
+      },
+      {
+        id: makeTmcKind({ tmcExerciseId: 102 }),
+        name: "02_bye",
+        isHard: true,
+        hardDeadlineString: "Feb 28, 2026, 12:00 PM",
+        softDeadlineString: "-",
+        deadlineIso: "2026-02-28T12:00:00.000Z",
+        passed: false,
+      },
+    ],
+  })
+
+function renderPart(
+  overrides: {
+    exerciseGroup?: ExerciseGroup
+    statuses?: Record<number, ExerciseStatus>
+    checkedExercises?: SvelteMap<string, ExerciseIdentifier>
+    onDownloadAll?: (ids: ExerciseIdentifier[]) => void
+    onOpenAll?: (ids: ExerciseIdentifier[]) => void
+    onCloseAll?: (ids: ExerciseIdentifier[]) => void
+  } = {},
+) {
+  return render(ExercisePart, {
+    props: {
+      exerciseGroup: overrides.exerciseGroup ?? tmcExerciseGroup(),
+      onDownloadAll: overrides.onDownloadAll ?? noop,
+      onOpenAll: overrides.onOpenAll ?? noop,
+      onCloseAll: overrides.onCloseAll ?? noop,
+      checkedExercises: overrides.checkedExercises ?? emptySelection(),
+      exerciseStatuses: { tmc: overrides.statuses ?? {}, mooc: {} },
+    },
+  })
+}
+
 suite("ExercisePart component", () => {
-  test("renders the group name and completion counts", () => {
-    const { container } = render(ExercisePart, {
-      props: {
-        exerciseGroup: tmcExerciseGroup(),
-        onDownloadAll: noop,
-        onOpenAll: noop,
-        onCloseAll: noop,
-        checkedExercises: emptySelection(),
-        exerciseStatuses: { tmc: {}, mooc: {} },
-      },
-    })
+  test("is a named heading toggle that states the part's completion", () => {
+    renderPart()
 
-    expect(container.querySelector("vscode-collapsible")?.heading).toBe("part01")
-    expect(screen.getByText("Completed: 1 / 1")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { level: 2, name: /part01/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "part01 1 / 1 completed" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    )
   })
 
-  test("resolves each exercise's status via the identifier match", () => {
-    render(ExercisePart, {
-      props: {
-        exerciseGroup: tmcExerciseGroup(),
-        onDownloadAll: noop,
-        onOpenAll: noop,
-        onCloseAll: noop,
-        checkedExercises: emptySelection(),
-        exerciseStatuses: { tmc: { 101: "opened" }, mooc: {} },
-      },
-    })
+  test("starts collapsed when the view model says so", () => {
+    renderPart({ exerciseGroup: tmcExerciseGroup({ defaultOpen: false }) })
 
-    // The raw "opened" enum is rendered as a friendly label.
+    expect(screen.getByRole("button", { name: /^part01/ })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    )
+  })
+
+  test("says each exercise's local state and completion in words", () => {
+    renderPart({ exerciseGroup: twoExerciseGroup(), statuses: { 101: "opened", 102: "missing" } })
+
     expect(screen.getByText("Opened")).toBeInTheDocument()
+    expect(screen.getByText("Not downloaded")).toBeInTheDocument()
+    expect(screen.getByText("Passed")).toBeInTheDocument()
+    expect(screen.getByText("Not passed")).toBeInTheDocument()
   })
 
-  test("states the soft-deadline policy once, with only the date in each row", () => {
-    const group = tmcExerciseGroup({
-      exercises: [
-        {
-          id: makeTmcKind({ tmcExerciseId: 101 }),
-          name: "part01-01_hello",
-          isHard: false,
-          hardDeadlineString: "2026-01-31",
-          softDeadlineString: "2026-01-01",
-          passed: true,
-        },
-        {
-          id: makeTmcKind({ tmcExerciseId: 102 }),
-          name: "part01-02_bye",
-          isHard: false,
-          hardDeadlineString: "2026-02-28",
-          softDeadlineString: "2026-02-01",
-          passed: false,
-        },
-      ],
-    })
-    render(ExercisePart, {
-      props: {
-        exerciseGroup: group,
-        onDownloadAll: noop,
-        onOpenAll: noop,
-        onCloseAll: noop,
-        checkedExercises: emptySelection(),
-        exerciseStatuses: { tmc: {}, mooc: {} },
-      },
-    })
+  test("shows the deadline in effect as a machine-readable time, with the hard one beside it", () => {
+    renderPart({ exerciseGroup: twoExerciseGroup() })
 
-    expect(screen.getAllByText(/award only 75% of the exercise points/)).toHaveLength(1)
-    expect(screen.getByText(/Hard deadline: 2026-01-31/)).toBeInTheDocument()
-    expect(screen.getByText(/Hard deadline: 2026-02-28/)).toBeInTheDocument()
+    const soft = screen.getByText("Jan 1, 2026, 12:00 PM")
+    expect(soft.tagName).toBe("TIME")
+    expect(soft).toHaveAttribute("datetime", "2026-01-01T12:00:00.000Z")
+    expect(screen.getByText("hard: Jan 31, 2026, 12:00 PM")).toBeInTheDocument()
+    expect(screen.queryByText("hard: Feb 28, 2026, 12:00 PM")).not.toBeInTheDocument()
   })
 
-  test("Download all passes every exercise identifier back to the callback", async () => {
+  test("sizes its columns instead of splitting the width evenly", async () => {
+    const { container } = renderPart()
+
+    expect(container.querySelector("vscode-table")?.columns).toEqual([
+      "32px",
+      "auto",
+      "200px",
+      "160px",
+    ])
+    const header = container.querySelector("vscode-table-header")!
+    await header.updateComplete
+    expect(header).toHaveAttribute("role", "row")
+  })
+
+  test("each bulk action passes every exercise in the part to its callback", async () => {
     const onDownloadAll = vi.fn()
-    render(ExercisePart, {
-      props: {
-        exerciseGroup: tmcExerciseGroup(),
-        onDownloadAll,
-        onOpenAll: noop,
-        onCloseAll: noop,
-        checkedExercises: emptySelection(),
-        exerciseStatuses: { tmc: {}, mooc: {} },
-      },
+    const onOpenAll = vi.fn()
+    const onCloseAll = vi.fn()
+    renderPart({
+      exerciseGroup: twoExerciseGroup(),
+      statuses: { 101: "opened", 102: "missing" },
+      onDownloadAll,
+      onOpenAll,
+      onCloseAll,
     })
+    const ids = [makeTmcKind({ tmcExerciseId: 101 }), makeTmcKind({ tmcExerciseId: 102 })]
 
-    ;(await screen.findByRole("button", { name: "Download all" })).click()
+    ;(await screen.findByRole("button", { name: "Download all in part01" })).click()
+    ;(await screen.findByRole("button", { name: "Open all in part01" })).click()
+    ;(await screen.findByRole("button", { name: "Close all in part01" })).click()
 
-    expect(onDownloadAll).toHaveBeenCalledWith([makeTmcKind({ tmcExerciseId: 101 })])
+    expect(onDownloadAll).toHaveBeenCalledWith(ids)
+    expect(onOpenAll).toHaveBeenCalledWith(ids)
+    expect(onCloseAll).toHaveBeenCalledWith(ids)
+  })
+
+  test("disables a bulk action that has nothing left to do", async () => {
+    renderPart({ statuses: { 101: "closed" } })
+
+    expect(await screen.findByRole("button", { name: "Download all in part01" })).toHaveProperty(
+      "disabled",
+      true,
+    )
+    expect(await screen.findByRole("button", { name: "Open all in part01" })).toHaveProperty(
+      "disabled",
+      false,
+    )
+    expect(await screen.findByRole("button", { name: "Close all in part01" })).toHaveProperty(
+      "disabled",
+      true,
+    )
   })
 
   test("names each checkbox after what it selects", async () => {
-    const { container } = render(ExercisePart, {
-      props: {
-        exerciseGroup: tmcExerciseGroup(),
-        onDownloadAll: noop,
-        onOpenAll: noop,
-        onCloseAll: noop,
-        checkedExercises: emptySelection(),
-        exerciseStatuses: { tmc: {}, mooc: {} },
-      },
-    })
+    const { container } = renderPart()
 
     const [selectAll, row] = container.querySelectorAll("vscode-checkbox")
     const selectAllInput = (await withinShadowRoot(selectAll!)).getByRole("checkbox")
@@ -118,19 +159,21 @@ suite("ExercisePart component", () => {
     expect(rowInput).toHaveAccessibleName("Select part01-01_hello")
   })
 
+  test("marks select-all as mixed while only some exercises are selected", async () => {
+    const checkedExercises = emptySelection()
+    const hello = makeTmcKind({ tmcExerciseId: 101 })
+    checkedExercises.set(ExerciseIdentifier.toString(hello), hello)
+    const { container } = renderPart({ exerciseGroup: twoExerciseGroup(), checkedExercises })
+
+    const selectAll = container.querySelector("vscode-checkbox")!
+    const input = (await withinShadowRoot(selectAll)).getByRole("checkbox")
+    expect(input).toHaveProperty("indeterminate", true)
+  })
+
   // Unchecking has to remove the entry, not record `false`: the panel counts entries.
   test("adds a checked exercise to the selection and drops it again when unchecked", async () => {
     const checkedExercises = emptySelection()
-    const { container } = render(ExercisePart, {
-      props: {
-        exerciseGroup: tmcExerciseGroup(),
-        onDownloadAll: noop,
-        onOpenAll: noop,
-        onCloseAll: noop,
-        checkedExercises,
-        exerciseStatuses: { tmc: {}, mooc: {} },
-      },
-    })
+    const { container } = renderPart({ checkedExercises })
 
     const selectAll = container.querySelector("vscode-checkbox")
     expect(selectAll).not.toBeNull()

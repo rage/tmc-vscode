@@ -2,7 +2,7 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import type * as vscode from "vscode"
 
-import { submitExercise } from "../../actions/submitExercise"
+import { sendSubmissionFeedback, submitExercise } from "../../actions/submitExercise"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { failure } from "../../api/withOperation"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
@@ -529,5 +529,82 @@ suite("submitExercise action, through the real runForExercise boundary", () => {
       cause,
       "mooc",
     )
+  })
+})
+
+suite("sendSubmissionFeedback action", () => {
+  const FEEDBACK_URL = "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback"
+
+  async function submitAskingFeedback(feedbackUrl: string): Promise<ReadyActionContext> {
+    const submitFeedback = vi.fn().mockResolvedValue(Ok({ api_version: 8, status: "ok" }))
+    const { actionContext } = contextFor(makeTmcKind(tmcCourse), {
+      submitTmcExerciseAndWaitForResults: vi.fn().mockResolvedValue(
+        Ok({
+          status: "ok",
+          all_tests_passed: true,
+          points: [],
+          test_cases: [],
+          feedback_answer_url: feedbackUrl,
+          feedback_questions: [{ id: 3, question: "How was it?", kind: "Text" }],
+        }),
+      ),
+      submitSubmissionFeedback: submitFeedback,
+    })
+    await submitExercise(extensionContext, actionContext, tmcExercise)
+    return actionContext
+  }
+
+  test("sends the answers to the URL the submission result asked them at", async () => {
+    const actionContext = await submitAskingFeedback(FEEDBACK_URL)
+
+    const sent = await sendSubmissionFeedback(actionContext, FEEDBACK_URL, [
+      { questionId: 3, answer: "Fun" },
+    ])
+
+    expect(sent.ok).toBe(true)
+    expect(actionContext.startup.langs.submitSubmissionFeedback).toHaveBeenCalledWith(
+      FEEDBACK_URL,
+      { status: [{ question_id: 3, answer: "Fun" }] },
+    )
+  })
+
+  test("refuses a URL no submission result named", async () => {
+    const actionContext = await submitAskingFeedback(`${FEEDBACK_URL}?asked`)
+
+    const sent = await sendSubmissionFeedback(actionContext, "https://attacker.example/", [
+      { questionId: 3, answer: "Fun" },
+    ])
+
+    expect(sent.err).toBe(true)
+    expect(actionContext.startup.langs.submitSubmissionFeedback).not.toHaveBeenCalled()
+  })
+
+  test("answers each submission's questions once", async () => {
+    const url = `${FEEDBACK_URL}?once`
+    const actionContext = await submitAskingFeedback(url)
+
+    await sendSubmissionFeedback(actionContext, url, [{ questionId: 3, answer: "Fun" }])
+    const second = await sendSubmissionFeedback(actionContext, url, [
+      { questionId: 3, answer: "Again" },
+    ])
+
+    expect(second.err).toBe(true)
+    expect(actionContext.startup.langs.submitSubmissionFeedback).toHaveBeenCalledOnce()
+  })
+
+  test("a failed send can be retried", async () => {
+    const url = `${FEEDBACK_URL}?retry`
+    const actionContext = await submitAskingFeedback(url)
+    vi.mocked(actionContext.startup.langs.submitSubmissionFeedback).mockResolvedValueOnce(
+      Err(new Error("connection reset")),
+    )
+
+    const first = await sendSubmissionFeedback(actionContext, url, [{ questionId: 3, answer: "a" }])
+    const second = await sendSubmissionFeedback(actionContext, url, [
+      { questionId: 3, answer: "a" },
+    ])
+
+    expect(first.err).toBe(true)
+    expect(second.ok).toBe(true)
   })
 })

@@ -1,63 +1,30 @@
 <script lang="ts">
-  import { onMount } from "svelte"
-
   import Button from "../components/Button.svelte"
   import { releaseNotes } from "../generated/releaseNotes"
   import type { WelcomePanel } from "../shared/shared"
-  import { assertUnreachable, pasteServiceName } from "../shared/shared"
-  import { addMessageListener, createPanelDataRequester } from "../utilities/script"
+  import { pasteServiceName } from "../shared/shared"
+  import { focusOnMount } from "../utilities/a11y.svelte"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
     panel: WelcomePanel
   }
 
-  let { panel = $bindable() }: Props = $props()
-
-  const panelData = createPanelDataRequester()
-
-  // Everything on this page but the version is static, so a request that fails or goes
-  // unanswered only costs the version -- and the host has already told the user why.
-  async function requestVersion() {
-    const error = await panelData.request((requestId) =>
-      vscode.postMessage({
-        type: "requestWelcomeData",
-        requestId,
-        sourcePanel: panel,
-      }),
-    )
-    if (error !== undefined) {
-      console.warn("Could not read the extension version:", error.message)
-    }
-  }
-
-  onMount(() => {
-    void requestVersion()
-  })
-  addMessageListener(panel, (message) => {
-    switch (message.type) {
-      case "setWelcomeData": {
-        // props aren't deeply reactive in Svelte 5, so panel is reassigned rather than mutated
-        panel = { ...panel, version: message.version }
-        break
-      }
-      case "panelDataResult": {
-        panelData.answer(message)
-        break
-      }
-      default:
-        assertUnreachable(message)
-    }
-  })
+  let { panel }: Props = $props()
 
   function openInBrowser(url: string) {
     vscode.postMessage({ type: "openLinkInBrowser", url })
+  }
+  function openMyCourses() {
+    vscode.postMessage({ type: "openMyCourses" })
   }
 </script>
 
 <div class="welcome">
   <header>
-    <h1>Welcome to TestMyCode{panel.version ? ` ${panel.version}` : ""}!</h1>
+    <h1 class="page-title" tabindex="-1" {@attach focusOnMount}>
+      Welcome to TestMyCode{panel.version ? ` ${panel.version}` : ""}!
+    </h1>
   </header>
 
   <div class="welcome-body">
@@ -72,18 +39,23 @@
           Education Research group (RAGE) at University of Helsinki.
         </p>
         <p>
-          To use the TestMyCode environment you need an account with one of the two supported
-          platforms: <a href="https://tmc.mooc.fi">https://tmc.mooc.fi</a>, or the newer
-          <a href="https://courses.mooc.fi">https://courses.mooc.fi</a>. Which one you need depends
-          on the course you're taking, so for setting up the programming environment you should
-          always refer to the course specific instructions.
+          Log in with your <a href="https://courses.mooc.fi">courses.mooc.fi</a> account. The same
+          account works for courses on both courses.mooc.fi and
+          <a href="https://tmc.mooc.fi">tmc.mooc.fi</a>. For setting up the programming environment,
+          always refer to your course's own instructions.
         </p>
-        <p>
-          Are you new to the TestMyCode extension in VS Code? Read the instructions on how you can
-          complete your first programming exercise by clicking the button below.
-        </p>
-        <div class="cta">
+        {#if !panel.loggedIn}
+          <p>
+            To get started, choose Log In in the TestMyCode view, or run "TestMyCode: Log In" from
+            the Command Palette.
+          </p>
+        {/if}
+        <div class="actions cta">
+          {#if panel.loggedIn}
+            <Button onclick={openMyCourses}>My Courses</Button>
+          {/if}
           <Button
+            secondary
             onclick={() =>
               openInBrowser("https://www.mooc.fi/en/installation/vscode#start-programming")}
           >
@@ -140,7 +112,7 @@
 
     <aside class="sidebar">
       <div class="sidebar-group">
-        <h3>Help</h3>
+        <h2>Help</h2>
         <ul>
           <li><a href="https://www.mooc.fi/en/installation/vscode">Installing environment</a></li>
           <li>
@@ -153,7 +125,7 @@
         </ul>
       </div>
       <div class="sidebar-group">
-        <h3>Resources</h3>
+        <h2>Resources</h2>
         <ul>
           <li>
             <a href="https://www.helsinki.fi/en/researchgroups/data-driven-education">Website</a>
@@ -176,7 +148,7 @@
         </ul>
       </div>
       <div class="sidebar-group">
-        <h3>TestMyCode Resources</h3>
+        <h2>TestMyCode Resources</h2>
         <ul>
           <li><a href="http://mooc.fi/">mooc.fi</a></li>
           <li><a href="https://tmc.mooc.fi">tmc.mooc.fi</a></li>
@@ -191,21 +163,21 @@
   .welcome-body {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 1.5rem;
+    gap: var(--tmc-space-6);
   }
   .main {
     min-width: 0;
   }
   .cta {
-    margin: 1rem 0;
+    margin: var(--tmc-space-4) 0;
   }
   .sidebar {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: var(--tmc-space-4);
   }
-  .sidebar-group h3 {
-    margin-bottom: 0.4rem;
+  .sidebar-group h2 {
+    margin-bottom: var(--tmc-space-2);
   }
   .sidebar-group ul {
     list-style: none;
@@ -213,13 +185,13 @@
     margin: 0;
   }
   .sidebar-group li {
-    margin: 0.2rem 0;
+    margin: var(--tmc-space-1) 0;
   }
 
   /* Two-column layout once the panel is wide enough, e.g. opened as an editor tab. */
-  @media (min-width: 45rem) {
+  @media (min-width: 720px) {
     .welcome-body {
-      grid-template-columns: minmax(0, 3fr) minmax(12rem, 1fr);
+      grid-template-columns: minmax(0, 3fr) minmax(192px, 1fr);
     }
   }
 </style>

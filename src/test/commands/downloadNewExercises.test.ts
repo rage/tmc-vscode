@@ -43,8 +43,8 @@ function harness(
     notifications.push(message)
   })
   dialog.selectItem = vi.fn(async (_prompt: unknown, ...items: Item<unknown>[]) => {
-    offered.push(...items.map(([label]) => label))
-    return options.dismissPick ? undefined : items[0]?.[1]
+    offered.push(...items.map(({ label }) => label))
+    return options.dismissPick ? undefined : items[0]?.value
   }) as unknown as typeof dialog.selectItem
 
   const userData = {

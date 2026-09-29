@@ -215,7 +215,12 @@ suite("registerCommands", function () {
 
   // VS Code discards a rejected handler promise, so a command that throws would
   // otherwise leave the user staring at an unchanged screen.
-  test("a failing command reports instead of rejecting", async function () {
+  test("a failing command reports under its title instead of rejecting", async function () {
+    // The mock module has no `extensions` namespace at all.
+    Object.defineProperty(vscode, "extensions", {
+      value: { getExtension: () => ({ packageJSON: packageJson() }) },
+      configurable: true,
+    })
     vi.spyOn(TmcPanel, "renderSide").mockImplementation(() => {
       throw new Error("the panel could not open")
     })
@@ -224,7 +229,7 @@ suite("registerCommands", function () {
     await expect(handlers.get("tmc.showMoocLogin")?.()).resolves.toBeUndefined()
 
     expect(vi.mocked(actionContext.dialog.reportError)).toHaveBeenCalledWith(
-      "Failed to run tmc.showMoocLogin.",
+      "Failed to run Log In.",
       expect.objectContaining({ message: "the panel could not open" }),
     )
   })
@@ -540,6 +545,7 @@ suite("registered command handlers", function () {
 // equal specificity outranks a default, so any key claimed from here is
 // shadowed wherever the binding's `when` holds.
 const vsCodeDefaultKeys: Record<string, string> = {
+  "ctrl+shift+a": "editor.action.blockComment",
   "ctrl+shift+b": "workbench.action.tasks.build",
   "ctrl+shift+c": "workbench.action.terminal.openNativeConsole",
   "ctrl+shift+d": "workbench.view.debug",
@@ -564,10 +570,6 @@ const vsCodeDefaultKeys: Record<string, string> = {
   "ctrl+shift+z": "redo",
 }
 
-// Shadowing kept deliberately: both keys shipped years ago and students have
-// learned them, which outweighs losing the defaults inside a course workspace.
-const acceptedShadowedKeys = ["ctrl+shift+c", "ctrl+shift+t"]
-
 // Neither constant is read from the manifest at runtime: the id is what VS Code
 // resolves the extension by, and the version is what both backends receive as
 // `--client-version`, so a manifest edit that leaves them behind is silent.
@@ -583,27 +585,17 @@ suite("extension identity", function () {
 })
 
 suite("keybindings", function () {
-  // Adding a binding means editing this list, which is what puts the shadowing
-  // check below in front of whoever adds it.
+  // A binding outranks whatever VS Code, the desktop or an input method has on the same
+  // chord. Adding one means editing this list, which puts the check below in front of
+  // whoever adds it.
   test("claims exactly the reviewed keys", function () {
-    expect(packageJson().contributes.keybindings).toEqual([
-      { command: "tmc.closeExercise", key: "ctrl+shift+c", when: "test-my-code:WorkspaceActive" },
-      { command: "tmc.selectAction", key: "ctrl+shift+a", when: "test-my-code:WorkspaceActive" },
-      { command: "tmc.testExercise", key: "ctrl+shift+t", when: "test-my-code:WorkspaceActive" },
-    ])
+    expect(packageJson().contributes.keybindings ?? []).toEqual([])
   })
 
-  test("shadows no VS Code default beyond the two accepted ones", function () {
+  test("shadows no VS Code default", function () {
     const shadowed = (packageJson().contributes.keybindings ?? [])
       .map((x) => x.key)
-      .filter((key) => key in vsCodeDefaultKeys && !acceptedShadowedKeys.includes(key))
+      .filter((key) => key in vsCodeDefaultKeys)
     expect(shadowed).toEqual([])
-  })
-
-  // A binding with no `when` applies in every window, course workspace or not.
-  test("gates every key on an open course workspace", function () {
-    for (const binding of packageJson().contributes.keybindings ?? []) {
-      expect(binding.when).toBe("test-my-code:WorkspaceActive")
-    }
   })
 })

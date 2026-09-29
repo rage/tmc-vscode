@@ -47,15 +47,11 @@ export async function openWorkspace(
 
   if (
     !currentWorkspaceFile ||
-    (await dialog.confirmation(
-      `Do you want to open the ${backendName(backend)} workspace and close the current one?`,
-    ))
+    (await dialog.confirm(`Open the ${backendName(backend)} course workspace?`, {
+      confirmLabel: "Open Workspace",
+      detail: "The workspace open in this window will be closed.",
+    }))
   ) {
     await openCourseWorkspace()
-  } else {
-    void dialog.warningNotification(
-      "Please close the current workspace before opening a course workspace.",
-      ["Close current & open Course Workspace", openCourseWorkspace],
-    )
   }
 }

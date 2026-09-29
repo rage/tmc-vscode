@@ -46,7 +46,6 @@ suite("the settings mock", () => {
     expect(settings.getDownloadOldSubmission()).toBe(false)
     expect(settings.getAutomaticallyUpdateExercises()).toBe(false)
     expect(settings.getLogLevel()).toBe(LogLevel.Errors)
-    expect(settings.isInsider()).toBe(false)
     expect(settings.getJavaHome()).toBe("")
   })
 })

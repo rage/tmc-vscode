@@ -56,11 +56,6 @@ suite("Extension settings migration", function () {
       await memento.update(SESSION_STATE_KEY_V1, { extensionVersion: "2.0.2" })
       await migrateExtensionSettings(memento, settingsMock)
       expect(settingsMock.update).toHaveBeenCalledWith(
-        "testMyCode.insiderVersion",
-        extensionSettings.v2_0_0.insiderVersion,
-        expect.anything(),
-      )
-      expect(settingsMock.update).toHaveBeenCalledWith(
         "testMyCode.downloadOldSubmission",
         extensionSettings.v2_0_0.downloadOldSubmission,
         expect.anything(),
@@ -105,7 +100,13 @@ suite("Extension settings migration", function () {
     test("should succeed with version 0.9.0 data", async function () {
       await memento.update(EXTENSION_SETTINGS_KEY_V0, extensionSettings.v0_9_0(root))
       await migrateExtensionSettings(memento, settingsMock)
-      expectWritten("testMyCode.insiderVersion", true)
+      expectWritten("testMyCode.logLevel", "verbose")
+      // VS Code rejects a write to a setting the manifest no longer declares.
+      expect(settingsMock.update).not.toHaveBeenCalledWith(
+        "testMyCode.insiderVersion",
+        expect.anything(),
+        expect.anything(),
+      )
     })
 
     test("should succeed with version 1.0.0 data", async function () {
@@ -147,11 +148,6 @@ suite("Extension settings migration", function () {
       expect(settingsMock.update).toHaveBeenCalledWith(
         "testMyCode.hideMetaFiles",
         true,
-        expect.anything(),
-      )
-      expect(settingsMock.update).toHaveBeenCalledWith(
-        "testMyCode.insiderVersion",
-        false,
         expect.anything(),
       )
       expect(settingsMock.update).toHaveBeenCalledWith(

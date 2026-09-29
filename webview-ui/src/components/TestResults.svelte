@@ -3,7 +3,10 @@
   import { vscode } from "../utilities/vscode"
   import Button from "./Button.svelte"
   import Checkbox from "./Checkbox.svelte"
+  import CodeBlock from "./CodeBlock.svelte"
+  import Disclosure from "./Disclosure.svelte"
   import Meter from "./Meter.svelte"
+  import StatusIcon from "./StatusIcon.svelte"
 
   // structural subset of both StyleValidationResult (local test runs) and
   // TmcStyleValidationResult (server submissions), which differ only in the
@@ -17,27 +20,31 @@
   }
 
   interface Props {
-    totalPoints: number
-    successPoints: number
     testResults: Array<TestResult | TestCase>
+    /** Omitted where the awarded points are not known in the exercise's own unit. */
+    points?: { awarded: number; available: number } | undefined
     validationResult: ValidationResult | null
     solutionUrl: string | null
+    /** Copies a code block's text through the host. */
+    oncopy?: ((text: string) => void) | undefined
   }
 
-  let { totalPoints, successPoints, testResults, validationResult, solutionUrl }: Props = $props()
+  let { testResults, points, validationResult, solutionUrl, oncopy }: Props = $props()
 
   const validationStrategy: StyleValidationStrategy = $derived(
     validationResult?.strategy ?? "DISABLED",
   )
-  const validationErrors = $derived(validationResult?.validation_errors ?? {})
-  const validationErrorsEntries = $derived(Object.entries(validationErrors))
+  const validationErrorsEntries = $derived(
+    Object.entries(validationResult?.validation_errors ?? {}),
+  )
   // validations pass if strategy is not set to fail, or if there are no validation errors
   const validationsPassed = $derived(
     validationStrategy !== "FAIL" || validationErrorsEntries.length === 0,
   )
 
-  const allTestsFailed = $derived(!testResults.some((tr) => tr.successful))
-  const allTestsPassed = $derived(!testResults.some((tr) => !tr.successful))
+  const passedCount = $derived(testResults.filter((tr) => tr.successful).length)
+  const allTestsFailed = $derived(passedCount === 0)
+  const allTestsPassed = $derived(passedCount === testResults.length)
   const exercisePassed = $derived(allTestsPassed && validationsPassed)
   // if all tests failed or passed, no need to show the checkbox
   const alwaysShowPassedTests = $derived(allTestsFailed || exercisePassed)
@@ -45,18 +52,69 @@
   let showPassedTestsChecked = $state(false)
   const showPassedTests = $derived(alwaysShowPassedTests || showPassedTestsChecked)
 
-  function showInBrowser(submissionUrl: string) {
-    vscode.postMessage({
-      type: "openLinkInBrowser",
-      url: submissionUrl,
+  // Test names are not guaranteed unique, and a duplicate `{#each}` key throws.
+  const rows = $derived.by(() => {
+    const seen = new Map<string, number>()
+    return testResults.map((result) => {
+      const occurrence = seen.get(result.name) ?? 0
+      seen.set(result.name, occurrence + 1)
+      return { key: occurrence === 0 ? result.name : `${result.name}#${occurrence}`, result }
     })
+  })
+
+  function showInBrowser(url: string) {
+    vscode.postMessage({ type: "openLinkInBrowser", url })
+  }
+
+  function detailedMessage(result: TestResult | TestCase): string | null {
+    return "detailed_message" in result ? result.detailed_message : null
   }
 </script>
 
-<div class="points-display">
-  <Meter label="Points" value={successPoints} max={totalPoints} />
-</div>
-<div>
+{#if testResults.length > 0}
+  <p>{passedCount} of {testResults.length} tests passed</p>
+{/if}
+{#if points}
+  <div class="points">
+    <Meter label="Points" value={points.awarded} max={points.available} />
+  </div>
+{/if}
+
+{#if solutionUrl !== null}
+  <div class="actions">
+    <Button secondary onclick={() => solutionUrl && showInBrowser(solutionUrl)}>
+      Show model solution in browser
+    </Button>
+  </div>
+{/if}
+
+{#if validationErrorsEntries.length > 0}
+  <h2>
+    {validationStrategy === "FAIL" ? "Code quality errors found" : "Code quality warnings found"}
+  </h2>
+  <ul class="results">
+    {#each validationErrorsEntries as [path, errors] (path)}
+      <li>
+        <h3 class="result-name">
+          <StatusIcon
+            status={validationStrategy === "FAIL" ? "failed" : "warning"}
+            label={validationStrategy === "FAIL" ? "Error" : "Warning"}
+            isLabelHidden
+          />
+          {path}
+        </h3>
+        <ul class="validation-errors">
+          {#each errors as error, index (index)}
+            <li>Line {error.line}, column {error.column}: {error.message}</li>
+          {/each}
+        </ul>
+      </li>
+    {/each}
+  </ul>
+{/if}
+
+{#if testResults.length > 0}
+  <h2>Tests</h2>
   <Checkbox
     hidden={alwaysShowPassedTests}
     checked={showPassedTestsChecked}
@@ -64,108 +122,58 @@
   >
     Show passed tests
   </Checkbox>
-</div>
-
-<div class="solution-button-container" hidden={solutionUrl === null}>
-  <Button onclick={() => solutionUrl && showInBrowser(solutionUrl)}>
-    Show model solution in browser
-  </Button>
-</div>
-
-<!-- FAIL vs. non-FAIL differ only in container/heading class and heading text, so
-     share this snippet. -->
-{#snippet validationBlock(
-  path: string,
-  errors: Array<{ column: number; line: number; message: string }>,
-  containerClass: string,
-  headingClass: string,
-  heading: string,
-)}
-  <div class="test {containerClass}">
-    <h2 class={headingClass}>{heading}</h2>
-    <h3>File: {path}</h3>
-    {#each errors as pathValidationError}
-      <pre
-        class="test-message">Line {pathValidationError.line}, column {pathValidationError.column}: {pathValidationError.message}</pre>
+  <ul class="results">
+    {#each rows as { key, result } (key)}
+      <li hidden={result.successful && !showPassedTests}>
+        <h3 class="result-name">
+          <StatusIcon
+            status={result.successful ? "passed" : "failed"}
+            label={result.successful ? "Passed" : "Failed"}
+            isLabelHidden
+          />
+          {result.name}
+        </h3>
+        {#if !result.successful}
+          {#if result.message}
+            <CodeBlock code={result.message} />
+          {/if}
+          {@const details = detailedMessage(result)}
+          {#if details}
+            <CodeBlock code={details} label="Details" {oncopy} />
+          {/if}
+          {#if result.exception && result.exception.length > 0}
+            <Disclosure title="Stack trace" headingLevel={4}>
+              <CodeBlock code={result.exception.join("\n")} label="Stack trace" {oncopy} />
+            </Disclosure>
+          {/if}
+        {/if}
+      </li>
     {/each}
-  </div>
-{/snippet}
-
-<div class="test-results-container">
-  {#each validationErrorsEntries as [path, pathValidationErrors]}
-    {#if validationStrategy === "FAIL"}
-      {@render validationBlock(
-        path,
-        pathValidationErrors,
-        "failed-container",
-        "failed",
-        "Code quality errors found",
-      )}
-    {:else}
-      {@render validationBlock(
-        path,
-        pathValidationErrors,
-        "warning-container",
-        "warning",
-        "Code quality warnings found",
-      )}
-    {/if}
-  {/each}
-  {#each testResults as testResult}
-    {#if testResult.successful}
-      <div class="test passed-container" hidden={!showPassedTests}>
-        <h2 class="passed">Test passed!</h2>
-        <h3>{testResult.name}</h3>
-      </div>
-    {:else}
-      <div class="test failed-container">
-        <h2 class="failed">Test failed</h2>
-        <h3>{testResult.name}</h3>
-        <pre class="test-message">{testResult.message}</pre>
-      </div>
-    {/if}
-  {/each}
-</div>
+  </ul>
+{/if}
 
 <style>
-  .test {
-    border: 1px dashed;
-    border-left: 0.4rem solid;
-    padding: 0.4rem;
-    margin-top: 0.4rem;
-    margin-bottom: 0.4rem;
+  .points,
+  .actions {
+    margin: var(--tmc-space-4) 0;
   }
-  .passed {
-    color: var(--vscode-testing-iconPassed, #73c991);
+  .results,
+  .validation-errors {
+    list-style: none;
+    padding: 0;
+    margin: 0;
   }
-  .passed-container {
-    border-color: var(--vscode-testing-iconPassed, #73c991);
+  .results > li {
+    margin-bottom: var(--tmc-space-3);
   }
-  .failed {
-    color: var(--vscode-testing-iconFailed, #f14c4c);
+  .result-name {
+    display: flex;
+    align-items: center;
+    gap: var(--tmc-space-1);
+    margin-bottom: var(--tmc-space-1);
   }
-  .failed-container {
-    border-color: var(--vscode-testing-iconFailed, #f14c4c);
-  }
-  .warning {
-    color: var(--vscode-testing-iconQueued, #cca700);
-  }
-  .warning-container {
-    border-color: var(--vscode-testing-iconQueued, #cca700);
-  }
-  .test-message {
-    white-space: break-spaces;
-  }
-  .points-display {
-    margin-top: 1rem;
-    margin-bottom: 1rem;
-  }
-  .solution-button-container {
-    margin-top: 1rem;
-    margin-bottom: 1rem;
-  }
-  .test-results-container {
-    margin-top: 1rem;
-    margin-bottom: 1rem;
+  .validation-errors {
+    font-family: var(--tmc-font-mono);
+    font-size: var(--tmc-font-size-mono);
   }
 </style>

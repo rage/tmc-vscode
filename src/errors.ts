@@ -109,16 +109,18 @@ export interface ErrorPresentation {
 }
 
 /**
- * The error as one sentence for the user: its class and its message, and nothing else.
+ * The error as one sentence for the user: its message, and nothing else.
  *
- * Deliberately not the logger's formatter, which also appends `details` — on a CLI failure
- * that is the process's backtrace and the tail of its stderr — the `cause` chain, and the
- * stack. Those diagnose a failure rather than describe it, and a notification is the one
- * place they cannot be scrolled or copied. The logger still writes all of them to the
- * output channel, which the "Show logs" button reveals.
+ * Deliberately not the logger's formatter, which also appends the class name, `details` —
+ * on a CLI failure that is the process's backtrace and the tail of its stderr — the `cause`
+ * chain, and the stack. Those diagnose a failure rather than describe it, and a notification
+ * is the one place they cannot be scrolled or copied. The logger still writes all of them to
+ * the output channel, which the "Show logs" button reveals.
  */
 function userSentence(error: Error): string {
-  return `${error.name}: ${error.message}.`
+  const trimmed = error.message.trim() || error.name
+  const message = trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+  return /[.!?…]$/.test(message) ? message : `${message}.`
 }
 
 /**
@@ -171,10 +173,10 @@ export function presentationFor(error: Error, backend?: BackendKind): ErrorPrese
   }
   if (error instanceof ObsoleteClientError) {
     return {
-      message:
-        `${reported} This extension is out of date, please update it.` +
-        " https://code.visualstudio.com/docs/editor/extension-gallery",
-      actions: [],
+      message: `${reported} This extension is out of date, please update it.`,
+      actions: [
+        { label: "Update Extension", command: "workbench.extensions.action.checkForUpdates" },
+      ],
     }
   }
   return { message: reported, actions: [] }

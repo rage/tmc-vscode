@@ -1,3 +1,5 @@
+import type { Locator } from "@playwright/test"
+
 import { TmcPage } from "./tmc"
 
 export class CoursePage extends TmcPage {
@@ -5,15 +7,18 @@ export class CoursePage extends TmcPage {
     await this.webview.getByRole("button", { name: "Open workspace" }).first().click()
   }
 
-  // Setting <vscode-collapsible>'s `open` property directly is more reliable
-  // than clicking the toggle it renders in its shadow DOM.
+  /** The heading of the exercise group (part) named `name`; a mooc course has one, named after it. */
+  public exerciseGroupHeading(name: string): Locator {
+    return this.webview.getByRole("heading", { level: 2, name })
+  }
+
+  /** Expands every collapsed exercise group (part). */
   public async showExercises(): Promise<void> {
-    const groups = this.getSidePanel().locator("vscode-collapsible")
-    const count = await groups.count()
-    for (let i = 0; i < count; i++) {
-      await groups.nth(i).evaluate((el) => {
-        ;(el as unknown as { open: boolean }).open = true
-      })
+    const collapsed = this.getSidePanel()
+      .getByRole("heading", { level: 2 })
+      .getByRole("button", { expanded: false })
+    while ((await collapsed.count()) > 0) {
+      await collapsed.first().click()
     }
   }
 

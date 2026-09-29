@@ -97,14 +97,14 @@ function treeEntries(startup: Startup): TreeEntry[] {
         title: "Go to My Courses",
       },
       children: (): TreeEntryChild[] =>
-        courseSelectionItems(userData.getCourses()).map(([title, courseId, backend]) => ({
-          label: title,
-          description: backend,
-          id: CourseIdentifier.toString(courseId),
+        courseSelectionItems(userData.getCourses()).map(({ label, value, description }) => ({
+          label,
+          description,
+          id: CourseIdentifier.toString(value),
           command: {
             command: "tmc.courseDetails",
             title: "Go to course details",
-            arguments: [courseId],
+            arguments: [value],
           },
         })),
       iconId: "book",

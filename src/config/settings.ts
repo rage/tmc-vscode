@@ -75,16 +75,9 @@ export default class Settings implements vscode.Disposable {
     return this._getWorkspaceSettingValue("updateExercisesAutomatically")
   }
 
-  public isInsider(): boolean {
-    return vscode.workspace.getConfiguration("testMyCode").get<boolean>("insiderVersion", false)
-  }
-
-  public async configureIsInsider(value: boolean): Promise<void> {
-    await vscode.workspace.getConfiguration("testMyCode").update("insiderVersion", value, true)
-  }
-
+  /** The JDK directory Java exercises run with, or `""` for the one on `PATH`. */
   public getJavaHome(): string {
-    return this._getWorkspaceSettingString("javaHome")
+    return vscode.workspace.getConfiguration("testMyCode").get<string>("javaHome", "").trim()
   }
 
   /**
@@ -99,22 +92,6 @@ export default class Settings implements vscode.Disposable {
     const scopeSettings = configuration.inspect<boolean>(section)
     if (scopeSettings?.workspaceValue === undefined) {
       return !!scopeSettings?.defaultValue
-    }
-    return scopeSettings.workspaceValue
-  }
-
-  /**
-   * Used to fetch string values from VSCode settings API Workspace scope
-   *
-   * workspaceValue is undefined in multi-root workspace if it matches defaultValue
-   * We want to "force" the value in the multi-root workspace, because then
-   * the workspace scope > user scope.
-   */
-  private _getWorkspaceSettingString(section: string): string {
-    const configuration = vscode.workspace.getConfiguration("testMyCode")
-    const scopeSettings = configuration.inspect<string>(section)
-    if (scopeSettings?.workspaceValue === undefined) {
-      return scopeSettings?.defaultValue ?? ""
     }
     return scopeSettings.workspaceValue
   }

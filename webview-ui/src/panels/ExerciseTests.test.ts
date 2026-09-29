@@ -1,10 +1,18 @@
-import { render, screen } from "@testing-library/svelte"
+import { fireEvent, render, screen } from "@testing-library/svelte"
 import { tick } from "svelte"
 import type { Uri } from "vscode"
 
 import type { ExerciseTestsPanel } from "../shared/shared"
-import { testResult, testResultData, tmcLocalCourse, tmcLocalExercise } from "../test/fixtures"
+import {
+  moocLocalCourse,
+  moocLocalExercise,
+  testResult,
+  testResultData,
+  tmcLocalCourse,
+  tmcLocalExercise,
+} from "../test/fixtures"
 import { dispatchToWebview, postedMessages } from "../test/setup"
+import { withinShadowRoot } from "../test/shadow"
 import ExerciseTests from "./ExerciseTests.svelte"
 
 const exerciseUri = { fsPath: "/ex", scheme: "file" } as unknown as Uri
@@ -12,7 +20,7 @@ const panel: ExerciseTestsPanel = {
   id: 11,
   type: "ExerciseTests",
   course: tmcLocalCourse(),
-  exercise: tmcLocalExercise({ name: "part01-01_hello" }),
+  exercise: tmcLocalExercise({ name: "part01-01_hello", availablePoints: 3 }),
   exerciseUri,
   testRunId: 1,
 }
@@ -31,6 +39,11 @@ function postTestResults(testResults: unknown): void {
     target: { type: "ExerciseTests", id: panel.id },
     testResults,
   })
+}
+
+async function clickToolbarButton(label: string): Promise<void> {
+  const host = await screen.findByTitle(label)
+  await fireEvent.click((await withinShadowRoot(host)).getByRole("button"))
 }
 
 suite("ExerciseTests panel", () => {
@@ -128,7 +141,7 @@ suite("ExerciseTests panel", () => {
     expect(screen.getByText(/You can still submit your answer to the server/)).toBeInTheDocument()
 
     postedMessages.mockClear()
-    ;(await screen.findByRole("button", { name: "Close" })).click()
+    await clickToolbarButton("Close")
     expect(postedMessages).toHaveBeenCalledWith({ type: "closeSidePanel" })
   })
 
@@ -144,5 +157,129 @@ suite("ExerciseTests panel", () => {
     postedMessages.mockClear()
     ;(await screen.findByRole("button", { name: "Submit to server" })).click()
     expect(postedMessages).toHaveBeenCalledWith(expect.objectContaining({ type: "submitExercise" }))
+  })
+
+  test("a compile failure shows the compiler output, open, and no points meter", async () => {
+    render(ExerciseTests, { props: { panel } })
+    postTestResults(
+      testResultData({
+        testResult: {
+          logs: { stdout: "", stderr: "Main.java:3: error: ';' expected" },
+          status: "COMPILE_FAILED",
+          testResults: [],
+        },
+      }),
+    )
+
+    expect(await screen.findByRole("heading", { name: "Compilation failed" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Output" })).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByRole("group", { name: "Standard error" })).toHaveTextContent(
+      "Main.java:3: error: ';' expected",
+    )
+    expect(screen.queryByRole("group", { name: "Standard output" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("meter")).not.toBeInTheDocument()
+  })
+
+  test("program output of a run with results is available but collapsed", async () => {
+    render(ExerciseTests, { props: { panel } })
+    postTestResults(
+      testResultData({
+        testResult: {
+          logs: { stdout: "Hello from print()" },
+          status: "PASSED",
+          testResults: [testResult()],
+        },
+      }),
+    )
+
+    const toggle = await screen.findByRole("button", { name: "Output" })
+    expect(toggle).toHaveAttribute("aria-expanded", "false")
+    expect(screen.getByRole("group", { name: "Standard output", hidden: true })).toHaveTextContent(
+      "Hello from print()",
+    )
+  })
+
+  test("copying output posts copyToClipboard with its text", async () => {
+    render(ExerciseTests, { props: { panel } })
+    postTestResults(
+      testResultData({
+        testResult: { logs: { stderr: "boom" }, status: "COMPILE_FAILED", testResults: [] },
+      }),
+    )
+    await screen.findByRole("heading", { name: "Compilation failed" })
+
+    postedMessages.mockClear()
+    await clickToolbarButton("Copy Standard error")
+    expect(postedMessages).toHaveBeenCalledWith({ type: "copyToClipboard", text: "boom" })
+  })
+
+  test("python-style results: 1 of 3 tests passing awards only that test's point", async () => {
+    render(ExerciseTests, { props: { panel } })
+    postTestResults(
+      testResultData({
+        testResult: {
+          logs: {},
+          status: "TESTS_FAILED",
+          testResults: [
+            testResult({ name: "a", successful: true, points: ["1.1"] }),
+            testResult({ name: "b", successful: false, points: [] }),
+            testResult({ name: "c", successful: false, points: [] }),
+          ],
+        },
+      }),
+    )
+
+    expect(await screen.findByText("1 of 3 tests passed")).toBeInTheDocument()
+    expect(screen.getByRole("meter", { name: "Points" })).toHaveAttribute(
+      "aria-valuetext",
+      "1 / 3 points",
+    )
+  })
+
+  test("java-style results: a shared point with a failing test is not awarded", async () => {
+    render(ExerciseTests, { props: { panel } })
+    postTestResults(
+      testResultData({
+        testResult: {
+          logs: {},
+          status: "TESTS_FAILED",
+          testResults: [
+            testResult({ name: "a", successful: true, points: ["1.1"] }),
+            testResult({ name: "b", successful: true, points: ["1.1"] }),
+            testResult({ name: "c", successful: false, points: ["1.1"] }),
+          ],
+        },
+      }),
+    )
+
+    expect(await screen.findByText("2 of 3 tests passed")).toBeInTheDocument()
+    expect(screen.getByRole("meter", { name: "Points" })).toHaveAttribute(
+      "aria-valuetext",
+      "0 / 3 points",
+    )
+  })
+
+  test("a mooc run counts tests but shows no points, whose unit is the score maximum", async () => {
+    render(ExerciseTests, {
+      props: {
+        panel: { ...panel, course: moocLocalCourse(), exercise: moocLocalExercise() },
+      },
+    })
+    postTestResults(testResultData())
+
+    expect(await screen.findByText("1 of 1 tests passed")).toBeInTheDocument()
+    expect(screen.queryByRole("meter")).not.toBeInTheDocument()
+  })
+
+  test("a code quality check that could not run is a warning beside the results", async () => {
+    render(ExerciseTests, { props: { panel } })
+    postTestResults(testResultData({ styleValidationError: "Checkstyle crashed" }))
+
+    expect(await screen.findByRole("heading", { name: "Tests passed" })).toBeInTheDocument()
+    const warning = screen
+      .getByText("Code quality checks could not be run")
+      .closest("[role=status]")
+    expect(warning).toHaveTextContent("Checkstyle crashed")
+    expect(screen.getByText("1 of 1 tests passed")).toBeInTheDocument()
   })
 })

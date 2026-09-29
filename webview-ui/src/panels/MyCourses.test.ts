@@ -1,10 +1,11 @@
-import { render, screen } from "@testing-library/svelte"
+import { render, screen, within } from "@testing-library/svelte"
 import { tick } from "svelte"
 
 import type { MyCoursesPanel } from "../shared/shared"
-import { makeTmcKind } from "../shared/shared"
-import { moocLocalCourse, tmcLocalCourse } from "../test/fixtures"
+import { makeMoocKind, makeTmcKind } from "../shared/shared"
+import { MOOC_INSTANCE_ID, moocLocalCourse, tmcLocalCourse } from "../test/fixtures"
 import { dispatchToWebview as dispatch, postedMessages } from "../test/setup"
+import { withinShadowRoot } from "../test/shadow"
 import MyCourses from "./MyCourses.svelte"
 
 const panel: MyCoursesPanel = { id: 7, type: "MyCourses", courseDeadlines: {} }
@@ -56,6 +57,18 @@ suite("MyCourses panel", () => {
     })
 
     expect(await screen.findByText(/2 new exercises found for this course/)).toBeInTheDocument()
+  })
+
+  test("says a single new exercise in the singular", async () => {
+    render(MyCourses, { props: { panel } })
+
+    dispatch({
+      type: "setMyCourses",
+      target: { id: panel.id, type: "MyCourses" },
+      courses: [tmcLocalCourse({ newExercises: [101] })],
+    })
+
+    expect(await screen.findByText("1 new exercise found for this course.")).toBeInTheDocument()
   })
 
   test("renders the disabled notice from setMyCourses alone", async () => {
@@ -121,7 +134,7 @@ suite("MyCourses panel", () => {
       courses: [tmcLocalCourse()],
     })
 
-    const open = await screen.findByRole("button", { name: "Open workspace" })
+    const open = await screen.findByRole("button", { name: "Open workspace for Python Course" })
     postedMessages.mockClear()
     open.click()
 
@@ -133,7 +146,7 @@ suite("MyCourses panel", () => {
 
   test("shows why the courses could not be loaded, and offers to ask again", async () => {
     render(MyCourses, { props: { panel } })
-    expect(screen.getByLabelText("Loading")).toBeInTheDocument()
+    expect(screen.getByText("Loading courses")).toBeInTheDocument()
 
     dispatch({
       type: "panelDataResult",
@@ -142,8 +155,8 @@ suite("MyCourses panel", () => {
       error: { message: "Storage is unavailable" },
     })
 
-    expect(await screen.findByText("Storage is unavailable")).toBeInTheDocument()
-    expect(screen.queryByLabelText("Loading")).not.toBeInTheDocument()
+    expect(await screen.findByRole("alert")).toHaveTextContent("Storage is unavailable")
+    expect(screen.queryByText("Loading courses")).not.toBeInTheDocument()
 
     postedMessages.mockClear()
     ;(await screen.findByRole("button", { name: "Retry" })).click()
@@ -160,13 +173,13 @@ suite("MyCourses panel", () => {
   test("gives up when the extension host never answers", async () => {
     vi.useFakeTimers()
     render(MyCourses, { props: { panel } })
-    expect(screen.getByLabelText("Loading")).toBeInTheDocument()
+    expect(screen.getByText("Loading courses")).toBeInTheDocument()
 
     await vi.advanceTimersByTimeAsync(30_000)
     await tick()
 
     expect(screen.getByText("The extension did not answer in time.")).toBeInTheDocument()
-    expect(screen.queryByLabelText("Loading")).not.toBeInTheDocument()
+    expect(screen.queryByText("Loading courses")).not.toBeInTheDocument()
   })
 
   // Without the id, the answer to a request the panel has already given up on would
@@ -204,18 +217,117 @@ suite("MyCourses panel", () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  // The announcement is a change inside a region the screen reader already knows, so the
-  // region has to be there before there is anything to announce.
-  test("keeps each course's live region mounted while it has nothing to say", async () => {
+  // A card is rendered on every open, so a live region in it would announce a standing
+  // notice again each time My Courses is shown.
+  test("renders course notices without live regions", async () => {
     render(MyCourses, { props: { panel } })
 
     dispatch({
       type: "setMyCourses",
       target: { id: panel.id, type: "MyCourses" },
-      courses: [tmcLocalCourse()],
+      courses: [tmcLocalCourse({ disabled: true }), moocLocalCourse({ newExercises: [] })],
     })
 
-    await screen.findByRole("heading", { name: /Python Course/ })
-    expect(screen.getByRole("alert")).toBeEmptyDOMElement()
+    await screen.findByText(/This course has been disabled/)
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    expect(screen.queryByRole("status")).not.toBeInTheDocument()
+  })
+
+  test("lists the courses, naming every control after its course", async () => {
+    render(MyCourses, { props: { panel } })
+
+    dispatch({
+      type: "setMyCourses",
+      target: { id: panel.id, type: "MyCourses" },
+      courses: [tmcLocalCourse(), moocLocalCourse()],
+    })
+
+    const list = await screen.findByRole("list")
+    const [tmc, mooc] = within(list).getAllByRole("listitem")
+    expect(within(tmc!).getByRole("heading", { level: 2 })).toHaveTextContent("Python Course")
+    expect(
+      await within(tmc!).findByRole("button", { name: "Open workspace for Python Course" }),
+    ).toBeInTheDocument()
+    expect(
+      await within(mooc!).findByRole("button", { name: "Open workspace for MOOC Python" }),
+    ).toBeInTheDocument()
+    const remove = mooc!.querySelector("vscode-toolbar-button")!
+    expect(
+      (await withinShadowRoot(remove)).getByRole("button", { name: "Remove MOOC Python" }),
+    ).toBeInTheDocument()
+  })
+
+  test("posts the course id when a card's remove, title or new-exercise controls are used", async () => {
+    render(MyCourses, { props: { panel } })
+    dispatch({
+      type: "setMyCourses",
+      target: { id: panel.id, type: "MyCourses" },
+      courses: [moocLocalCourse({ newExercises: ["cccccccc-cccc-4ccc-accc-cccccccccccc"] })],
+    })
+    const courseId = makeMoocKind({ instanceId: MOOC_INSTANCE_ID })
+    await screen.findByRole("heading", { level: 2, name: /MOOC Python/ })
+    postedMessages.mockClear()
+
+    screen.getByRole("button", { name: "MOOC Python" }).click()
+    ;(await screen.findByRole("button", { name: "Download new exercises for MOOC Python" })).click()
+    const [remove, dismiss] = document.querySelectorAll("vscode-toolbar-button")
+    ;(await withinShadowRoot(remove!)).getByRole("button").click()
+    ;(await withinShadowRoot(dismiss!)).getByRole("button").click()
+
+    expect(postedMessages.mock.calls.map(([message]) => message)).toEqual([
+      { type: "openCourseDetails", courseId },
+      {
+        type: "downloadExercises",
+        ids: [makeMoocKind({ moocExerciseId: "cccccccc-cccc-4ccc-accc-cccccccccccc" })],
+        courseId,
+        mode: "download",
+      },
+      { type: "removeCourse", id: courseId },
+      { type: "clearNewExercises", courseId },
+    ])
+  })
+
+  test("moves focus to the card's workspace button when its notice is dismissed", async () => {
+    render(MyCourses, { props: { panel } })
+    dispatch({
+      type: "setMyCourses",
+      target: { id: panel.id, type: "MyCourses" },
+      courses: [tmcLocalCourse({ newExercises: [101] })],
+    })
+    const open = await screen.findByRole("button", { name: "Open workspace for Python Course" })
+    const dismiss = document.querySelectorAll("vscode-toolbar-button")[1]!
+
+    ;(await withinShadowRoot(dismiss)).getByRole("button").click()
+
+    expect(document.activeElement).toBe(open)
+  })
+
+  test("asks the extension to change the exercise folder", async () => {
+    render(MyCourses, { props: { panel } })
+    dispatch({
+      type: "setTmcDataPath",
+      target: { type: "MyCourses" },
+      tmcDataPath: "/home/student/tmcdata",
+    })
+    expect(await screen.findByText("/home/student/tmcdata")).toBeInTheDocument()
+    postedMessages.mockClear()
+
+    screen.getByRole("button", { name: "Change path" }).click()
+
+    expect(postedMessages).toHaveBeenCalledWith({ type: "changeTmcDataPath" })
+  })
+
+  test("says how to start when there are no courses", async () => {
+    render(MyCourses, { props: { panel } })
+    dispatch({
+      type: "setMyCourses",
+      target: { id: panel.id, type: "MyCourses" },
+      courses: [],
+    })
+
+    expect(
+      await screen.findByText("Add a course to start completing exercises."),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole("list")).not.toBeInTheDocument()
   })
 })

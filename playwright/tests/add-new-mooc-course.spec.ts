@@ -33,7 +33,7 @@ vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ pag
   // course + exercise are served by backend/mooc/fixtures.ts; the exercise packs
   // the same python resource the TMC course uses, so its tests run locally.
   const courseTitle = "MOOC Python Course"
-  const exerciseName = "01_passing_exercise"
+  const exerciseName = "passing_exercise"
   const filePath = ["src", "passing_exercise.py"]
   const fileContents = "def hello()"
 
@@ -52,8 +52,7 @@ vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ pag
 
   await vsCodeTest.step("open the course details and see its exercises", async () => {
     await myCoursesPage.selectCourse(courseTitle)
-    // the exercise group parsed from the "part01-..." exercise slug renders
-    await expect(webview.getByRole("heading", { name: "part01" })).toBeVisible()
+    await expect(coursePage.exerciseGroupHeading(courseTitle)).toBeVisible()
   })
 
   await vsCodeTest.step("select and open an exercise", async () => {
@@ -87,7 +86,7 @@ vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ pag
     // The editor-title action is contributed under `test-my-code:WorkspaceActive`
     // (package.json), so it renders only once the extension has recognised the
     // open exercise.
-    const runTests = page.getByLabel("Run Tests (Ctrl+Shift+T)")
+    const runTests = page.getByLabel("Run Tests", { exact: true })
     await expect(runTests).toBeVisible()
     await runTests.click()
     await expect(successMessage).toBeVisible()
@@ -102,6 +101,8 @@ vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ pag
     await expect(gradedHeading).toBeHidden()
     await testResultsPage.submit()
     await expect(gradedHeading).toBeVisible()
-    await expect(testSubmissionPage.getWebview().getByText("Score: 1")).toBeVisible()
+    await expect(
+      testSubmissionPage.getWebview().getByRole("meter", { name: "Score" }),
+    ).toHaveAttribute("aria-valuetext", /^1 \/ \d+ points$/)
   })
 })

@@ -198,13 +198,11 @@ export const TestResultDataSchema = z.object({
   id: ExerciseIdentifierSchema,
   courseSlug: z.string(),
   exerciseName: z.string(),
-  tmcLogs: z.object({
-    stdout: z.string().optional(),
-    stderr: z.string().optional(),
-  }),
   pasteLink: z.string().optional(),
   disabled: z.boolean().optional(),
   styleValidationResult: StyleValidationResult.nullable().optional(),
+  // set when the code quality check itself could not run; the test results still stand
+  styleValidationError: z.string().optional(),
 })
 
 export type TestResultData = z.infer<typeof TestResultDataSchema>

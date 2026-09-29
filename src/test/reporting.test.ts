@@ -121,10 +121,14 @@ async function harness(
     errorNotification: toast("error"),
     warningNotification: toast("warning"),
     notification: toast("info"),
-    confirmation: vi.fn(async () => true),
+    confirm: vi.fn(async () => true),
     explicitConfirmation: vi.fn(async () => true),
-    // Picks the first offer of every pick: the course, the submission, "Submit to server".
-    selectItem: vi.fn(async (_options: unknown, ...items: [string, unknown][]) => items[0]?.[1]),
+    // Takes the first offer of every prompt: the course, the submission, "Submit and …".
+    choose: vi.fn(
+      async (_message: string, _options: unknown, ...choices: [string, unknown][]) =>
+        choices[0]?.[1],
+    ),
+    selectItem: vi.fn(async (_options: unknown, ...items: { value: unknown }[]) => items[0]?.value),
     progressNotification: vi.fn(
       (_message: string, task: (progress: unknown, token: unknown) => unknown) =>
         task(
@@ -244,6 +248,11 @@ const pending = <T>(): { promise: Promise<T>; resolve: (value: T) => void } => {
 
 beforeEach(function () {
   vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+})
+
+// jest-mock-vscode ships no `env` namespace; the old-submission picker formats dates with it.
+beforeAll(function () {
+  Object.defineProperty(vscode, "env", { value: { language: "en" }, configurable: true })
 })
 
 suite("reported once: exercise commands", function () {

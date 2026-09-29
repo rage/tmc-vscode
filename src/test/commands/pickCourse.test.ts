@@ -67,15 +67,19 @@ suite("pickCourse", function () {
     const [prompt, ...items] = selectItem.mock.calls[0] ?? []
     expect(prompt).toEqual({ title: "Course Details", placeHolder: "Which course?" })
     expect(items).toEqual([
-      ["The Python Course", CourseIdentifier.from(1), "TMC Server"],
-      ["Introduction to CS", CourseIdentifier.from("course-uuid"), "courses.mooc.fi"],
+      { label: "The Python Course", value: CourseIdentifier.from(1), description: "TMC Server" },
+      {
+        label: "Introduction to CS",
+        value: CourseIdentifier.from("course-uuid"),
+        description: "courses.mooc.fi",
+      },
     ])
   })
 
   test("returns the course identifier the user picked", async function () {
     const [context, dialog] = contextWith(courses)
     dialog.selectItem = vi.fn(
-      async (_prompt: SelectPrompt, ...items: Item<unknown>[]) => items[1]?.[1],
+      async (_prompt: SelectPrompt, ...items: Item<unknown>[]) => items[1]?.value,
     ) as unknown as typeof dialog.selectItem
 
     const picked = await pickCourse(context, { title: "Title", placeHolder: "Pick one" })
@@ -86,7 +90,7 @@ suite("pickCourse", function () {
   test("value picks what a selection yields, and decorate replaces the label", async function () {
     const [context, dialog] = contextWith(courses)
     dialog.selectItem = vi.fn(
-      async (_prompt: SelectPrompt, ...items: Item<unknown>[]) => items[0]?.[1],
+      async (_prompt: SelectPrompt, ...items: Item<unknown>[]) => items[0]?.value,
     ) as unknown as typeof dialog.selectItem
 
     const picked = await pickCourse(context, {
@@ -98,7 +102,7 @@ suite("pickCourse", function () {
 
     expect(picked).toEqual(courses[0])
     const [, ...items] = vi.mocked(dialog.selectItem).mock.calls[0] ?? []
-    expect(items.map((item) => item[0])).toEqual([
+    expect(items.map((item) => item.label)).toEqual([
       "The Python Course (Currently open)",
       "Introduction to CS (Currently open)",
     ])

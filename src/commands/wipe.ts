@@ -35,18 +35,21 @@ Please close the workspace and any related files before running this command aga
     return
   }
 
-  const confirmed = await dialog.explicitConfirmation(
-    "Are you sure you want to wipe all data for the TMC Extension?",
-  )
+  const confirmed = await dialog.confirm("Delete all TestMyCode data?", {
+    confirmLabel: "Delete All Data",
+    detail:
+      "This cannot be undone. Your downloaded exercises will be deleted, you will be logged out," +
+      " and every setting and course this extension has stored will be cleared.",
+  })
   if (!confirmed) {
     return
   }
 
-  const reallyWipe = await dialog.explicitConfirmation(
-    "This cannot be undone. Your downloaded exercises will be deleted, you will be logged out, \
-and every setting and course this extension has stored will be cleared.",
+  const typed = await dialog.explicitConfirmation(
+    "Type DELETE to delete your exercises and all other TestMyCode data.",
+    "DELETE",
   )
-  if (!reallyWipe) {
+  if (!typed) {
     return
   }
 

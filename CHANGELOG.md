@@ -19,6 +19,12 @@
 - A course workspace that fails to open is now reported.
 - Checking for exercise updates no longer says "All exercises are up to date." when refreshing the courses failed, or when a site holding your courses could not be checked; that site's failure is reported instead.
 - Updated TMC-langs to 0.40.0.
+- Removed the Ctrl+Shift+T (Run Tests), Ctrl+Shift+C (Close Exercise) and Ctrl+Shift+A (Action Menu) shortcuts. They replaced VS Code's Reopen Closed Editor, terminal Copy and Toggle Block Comment in every course workspace, and copying from the terminal on Linux could close an exercise. To keep a shortcut for running tests, bind "TestMyCode: Run Tests" in Keyboard Shortcuts (Ctrl+K Ctrl+S).
+- The Java Home setting now takes effect: Java exercises run with the JDK it names. It had been ignored.
+- Removed the Insider Version setting, which did nothing.
+- Notifications no longer start with "TestMyCode:", and error messages no longer show internal error class names, command ids or a doubled period. An out-of-date extension error now offers Update Extension.
+- Logging out, closing an unfinished exercise and opening another course workspace now confirm in a dialog with a named button instead of a Yes/No list that closed when clicked away from. Reset and Download Old Submission ask once, with "Submit and Reset" and "Reset Without Submitting" style buttons, instead of twice. Wiping all data asks in a dialog and then to type DELETE.
+- Download Old Submission lists the newest submission first, marked Latest, with a readable local date and the result beside it.
 
 ## [3.5.4] - 2026-09-15
 
