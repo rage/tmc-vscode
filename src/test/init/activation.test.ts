@@ -6,7 +6,7 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import { EXERCISE_CHECK_INTERVAL } from "../../config/constants"
+import { EXERCISE_CHECK_INTERVAL, EXTENSION_VERSION } from "../../config/constants"
 import { CorruptStoredDataError } from "../../errors"
 import { activate } from "../../extension"
 import type { BackendKind } from "../../shared/shared"
@@ -54,6 +54,9 @@ const workspaceManagerStub = vi.hoisted(() => ({
 const storedUserData = vi.hoisted(() => ({ read: (): unknown => undefined }))
 
 const cliSettings = vi.hoisted(() => ({ projectsDirectory: "" }))
+
+/** The extension version the previous session recorded. */
+const sessionState = vi.hoisted(() => ({ previousVersion: undefined as string | undefined }))
 
 const storedMigration = vi.hoisted(() => ({ outcome: { kind: "done" } as unknown }))
 
@@ -178,7 +181,10 @@ vi.mock("../../api/langs", () => ({
 vi.mock("../../storage", () => ({
   default: class {
     public getUserData = (): unknown => storedUserData.read()
-    public getSessionState = (): undefined => undefined
+    public getSessionState = (): unknown =>
+      sessionState.previousVersion === undefined
+        ? undefined
+        : { extensionVersion: sessionState.previousVersion }
     public updateSessionState = async (): Promise<void> => {}
     public migrateToLatest = async (): Promise<unknown> => storedMigration.outcome
   },
@@ -282,6 +288,7 @@ function resetActivationRecording(): void {
   recorded.uiDisposals = 0
   storedUserData.read = (): unknown => undefined
   storedMigration.outcome = { kind: "done" }
+  sessionState.previousVersion = undefined
   langsStub.tmcAuthenticated = false
   langsStub.moocAuthenticated = false
   langsStub.authChecks = 0
@@ -657,5 +664,51 @@ suite("activation in a workspace the migration cannot use in place", function ()
 
     expect(recorded.isCourseViewFilled).toBe(false)
     expect(recorded.registeredCommandIds).toContain("tmc.logs")
+  })
+})
+
+suite("the first start of a new version", function () {
+  beforeEach(function () {
+    resetActivationRecording()
+    vi.spyOn(vscode.window, "showInformationMessage").mockResolvedValue(undefined)
+  })
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    vi.restoreAllMocks()
+  })
+
+  test("a fresh install opens the welcome page", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await activate(createContext())
+
+    expect(executeCommand).toHaveBeenCalledWith("tmc.showWelcome")
+  })
+
+  // Opening a panel unasked on every update covers whatever the user was doing.
+  test("an update offers the release notes in a notification instead", async function () {
+    sessionState.previousVersion = "1.0.0"
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await activate(createContext())
+
+    expect(executeCommand).not.toHaveBeenCalledWith("tmc.showWelcome")
+    const [message, whatsNew] = vi.mocked(vscode.window.showInformationMessage).mock.calls[0] as [
+      string,
+      { title: string; callback: () => void },
+    ]
+    expect(message).toBe(`TestMyCode was updated to ${EXTENSION_VERSION}.`)
+    expect(whatsNew.title).toBe("What's New")
+    whatsNew.callback()
+    expect(executeCommand).toHaveBeenCalledWith("tmc.showWelcome")
+  })
+
+  test("a patch release says nothing", async function () {
+    sessionState.previousVersion = EXTENSION_VERSION.replace(/\d+$/, "0")
+
+    await activate(createContext())
+
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
   })
 })

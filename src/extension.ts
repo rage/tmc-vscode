@@ -296,7 +296,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     Logger.warn("Skipped login command setup")
   }
 
-  let showWelcome = false
+  let versionChange: "installed" | "updated" | undefined
   if (resources.ok) {
     const currentVersion = resources.val.extensionVersion
     try {
@@ -305,8 +305,10 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
         storage.updateSessionState({ extensionVersion: currentVersion })
       }
       const versionDiff = semVerCompare(currentVersion, previousVersion || "", "minor")
-      if (versionDiff === undefined || versionDiff > 0) {
-        showWelcome = true
+      if (versionDiff === undefined) {
+        versionChange = "installed"
+      } else if (versionDiff > 0) {
+        versionChange = "updated"
       }
     } catch (e) {
       // An unreadable session state costs the welcome page, nothing else.
@@ -471,9 +473,14 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
   setMaintenancePollArmed(authState.loggedIn)
 
   // `tmc.showWelcome` is registered only in the ready case, and VS Code rejects a command
-  // it cannot find -- which would abort the rest of this function, help panel included.
-  if (showWelcome && readyContext) {
+  // it cannot find -- which would abort the rest of this function.
+  if (readyContext && versionChange === "installed") {
     await vscode.commands.executeCommand("tmc.showWelcome")
+  } else if (readyContext && versionChange === "updated") {
+    void dialog.notification(`TestMyCode was updated to ${EXTENSION_VERSION}.`, [
+      "What's New",
+      (): void => void vscode.commands.executeCommand("tmc.showWelcome"),
+    ])
   }
 
   initializationErrors.notify(!readyContext)
