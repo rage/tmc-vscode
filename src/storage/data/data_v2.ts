@@ -11,7 +11,6 @@ export import SESSION_STATE_KEY = v1.SESSION_STATE_KEY
 export const TMC_DOWNLOAD_OLD_SUBMISSION_KEY = "testMyCode.downloadOldSubmission"
 export const TMC_HIDE_META_FILES_KEY = "testMyCode.hideMetaFiles"
 export const TMC_UPDATE_EXERCISES_AUTOMATICALLY_KEY = "testMyCode.updateExercisesAutomatically"
-export const TMC_INSIDER_VERSION_KEY = "testMyCode.insiderVersion"
 export const TMC_LOG_LEVEL_KEY = "testMyCode.logLevel"
 
 // data types

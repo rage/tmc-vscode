@@ -1,4 +1,5 @@
 import * as cp from "child_process"
+import * as path from "path"
 
 import kill from "tree-kill"
 import type { Result } from "ts-results"
@@ -74,6 +75,8 @@ import type { FractionProgress } from "./dialog"
 
 interface Options {
   cliConfigDir?: string | undefined
+  /** The JDK the CLI's Java plugin should use, read per spawn; empty for the one on `PATH`. */
+  javaHome?: (() => string) | undefined
 }
 
 interface ExecutionOptions {
@@ -241,6 +244,26 @@ class BoundedStderr {
 /**
  * A Class that provides an interface to all langs functionality.
  */
+/**
+ * The environment that points the CLI at `javaHome`, or none for an empty one.
+ *
+ * The Java plugin finds its JVM through `JAVA_HOME` but runs Ant exercises with the `java`
+ * on `PATH`, so both have to name the same JDK.
+ */
+function javaHomeEnv(javaHome: string): Record<string, string> {
+  if (javaHome === "") {
+    return {}
+  }
+  // On Windows the key is usually "Path"; adding "PATH" beside it would give the child two.
+  const pathKey = Object.keys(process.env).find((key) => key.toUpperCase() === "PATH") ?? "PATH"
+  const inherited = process.env[pathKey]
+  const javaBin = path.join(javaHome, "bin")
+  return {
+    JAVA_HOME: javaHome,
+    [pathKey]: inherited ? `${javaBin}${path.delimiter}${inherited}` : javaBin,
+  }
+}
+
 export default class Langs {
   // Per-backend: tmc.mooc.fi and courses.mooc.fi are unrelated servers, so one must not throttle the other.
   private readonly _nextSubmissionAllowedTimestamp: Record<BackendKind, number>
@@ -1795,6 +1818,7 @@ export default class Langs {
           TMC_LANGS_MOOC_ROOT_URL: moocBackendUrl,
           TMC_LANGS_CONFIG_DIR: tmcLangsConfigDir,
           ...moocEnv,
+          ...javaHomeEnv(this._options.javaHome?.() ?? ""),
         },
       })
     } catch (error) {

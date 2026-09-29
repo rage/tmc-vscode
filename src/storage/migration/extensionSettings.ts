@@ -63,7 +63,6 @@ export async function vscodeapi_migrateFromV1(
     storageSettings.updateExercisesAutomatically,
     true,
   )
-  await settings.update(data.v2.TMC_INSIDER_VERSION_KEY, storageSettings.insiderVersion, true)
   await settings.update(data.v2.TMC_LOG_LEVEL_KEY, storageSettings.logLevel, true)
 }
 

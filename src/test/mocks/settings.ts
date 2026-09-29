@@ -14,7 +14,6 @@ export interface SettingsMockValues {
   updateExercisesAutomatically: boolean
   javaHome: string
   logLevel: LogLevel
-  insiderVersion: boolean
 }
 
 /**
@@ -35,7 +34,6 @@ export function createSettingsMock(): [Settings, SettingsMockValues, SettingsMoc
     updateExercisesAutomatically: false,
     javaHome: "",
     logLevel: LogLevel.Errors,
-    insiderVersion: false,
   }
 
   let onChangeDownloadOldSubmission: ((value: boolean) => void) | undefined
@@ -47,10 +45,6 @@ export function createSettingsMock(): [Settings, SettingsMockValues, SettingsMoc
     getAutomaticallyUpdateExercises: vi.fn(() => values.updateExercisesAutomatically),
     getJavaHome: vi.fn(() => values.javaHome),
     getLogLevel: vi.fn(() => values.logLevel),
-    isInsider: vi.fn(() => values.insiderVersion),
-    configureIsInsider: vi.fn(async (value: boolean) => {
-      values.insiderVersion = value
-    }),
     dispose: vi.fn(),
     set onChangeDownloadOldSubmission(callback: (value: boolean) => void) {
       onChangeDownloadOldSubmission = callback

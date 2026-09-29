@@ -39,7 +39,6 @@ suite("Settings", function () {
         globalValue: true,
         workspaceValue: false,
       },
-      insiderVersion: { defaultValue: false, globalValue: true },
       javaHome: {
         defaultValue: "",
         globalValue: "/user/java",
@@ -96,6 +95,13 @@ suite("Settings", function () {
   test("the workspace scope wins over the user scope for a workspace setting", function () {
     expect(settings.getDownloadOldSubmission()).toBe(true)
     expect(settings.getAutomaticallyUpdateExercises()).toBe(false)
+  })
+
+  // Machine-overridable, unlike the booleans: a JDK path belongs to the machine, and the
+  // course workspace file must not pin one.
+  test("the Java home is the effective value, trimmed", function () {
+    stubConfiguration({ javaHome: { defaultValue: "", globalValue: " /usr/lib/jvm/java-21 " } })
+
     expect(settings.getJavaHome()).toBe("/usr/lib/jvm/java-21")
   })
 
@@ -105,17 +111,14 @@ suite("Settings", function () {
     stubConfiguration({
       downloadOldSubmission: { defaultValue: true },
       updateExercisesAutomatically: { defaultValue: false, workspaceValue: true },
-      javaHome: { defaultValue: "/opt/java" },
     })
 
     expect(settings.getDownloadOldSubmission()).toBe(true)
     expect(settings.getAutomaticallyUpdateExercises()).toBe(true)
-    expect(settings.getJavaHome()).toBe("/opt/java")
   })
 
-  test("the log level and insider flag come from the user scope", function () {
+  test("the log level comes from the user scope", function () {
     expect(settings.getLogLevel()).toBe(LogLevel.Verbose)
-    expect(settings.isInsider()).toBe(true)
   })
 
   test("disposing stops the configuration listener", function () {

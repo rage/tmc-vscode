@@ -1,3 +1,5 @@
+import * as path from "path"
+
 import { vi } from "vitest"
 
 import Langs from "../../api/langs"
@@ -81,5 +83,29 @@ suite("Langs CLI environment", function () {
     const captured = spawnCalls[0]
     expect(captured?.env && "TMC_LANGS_MOOC_CLIENT_ID" in captured.env).toBe(false)
     expect(captured?.env && "TMC_LANGS_MOOC_TRUST_LOCALHOST" in captured.env).toBe(false)
+  })
+
+  test("a configured Java home becomes JAVA_HOME and leads PATH", async function () {
+    const javaHome = path.join("/opt", "jdk-21")
+    const langs = new Langs("dummy-cli-path", "test-client", "1.0.0", { javaHome: () => javaHome })
+
+    langs.runTests("/exercise")
+    await Promise.resolve()
+
+    const env = spawnCalls[0]?.env ?? {}
+    const pathKey = Object.keys(env).find((key) => key.toUpperCase() === "PATH") ?? "PATH"
+    expect(env.JAVA_HOME).toBe(javaHome)
+    expect(env[pathKey]?.split(path.delimiter)[0]).toBe(path.join(javaHome, "bin"))
+    expect(Object.keys(env).filter((key) => key.toUpperCase() === "PATH")).toHaveLength(1)
+  })
+
+  test("an empty Java home leaves the inherited JAVA_HOME and PATH alone", async function () {
+    const langs = new Langs("dummy-cli-path", "test-client", "1.0.0", { javaHome: () => "" })
+
+    await langs.isAuthenticated()
+
+    const env = spawnCalls[0]?.env ?? {}
+    expect(env.JAVA_HOME).toBe(process.env.JAVA_HOME)
+    expect(env.PATH).toBe(process.env.PATH)
   })
 })

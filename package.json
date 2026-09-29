@@ -263,12 +263,6 @@
           "default": true,
           "description": "Hide exercise meta files that are not relevant for completing exercises."
         },
-        "testMyCode.insiderVersion": {
-          "type": "boolean",
-          "scope": "application",
-          "default": false,
-          "description": "Insider version to test new features for the TestMyCode extension."
-        },
         "testMyCode.logLevel": {
           "type": "string",
           "scope": "application",
@@ -291,8 +285,9 @@
         },
         "testMyCode.javaHome": {
           "type": "string",
+          "scope": "machine-overridable",
           "default": "",
-          "description": "If set, the Java (JDK) version in this path is used for Java exercises."
+          "description": "Path to the JDK used for Java exercises, such as /usr/lib/jvm/java-21. Leave empty to use the Java found on your PATH."
         }
       }
     },
