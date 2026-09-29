@@ -61,7 +61,11 @@
   <ProgressBar label={`Points: ${pointsPercent}%`} value={successPoints} max={totalPoints} />
 </div>
 <div>
-  <Checkbox hidden={alwaysShowPassedTests} bind:checked={showPassedTestsChecked}>
+  <Checkbox
+    hidden={alwaysShowPassedTests}
+    checked={showPassedTestsChecked}
+    oncheckedchange={(checked) => (showPassedTestsChecked = checked)}
+  >
     Show passed tests
   </Checkbox>
 </div>

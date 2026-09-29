@@ -5,6 +5,7 @@ import { vi } from "vitest"
 import type { ExerciseIdentifier } from "../shared/shared"
 import { makeTmcKind } from "../shared/shared"
 import { tmcExerciseGroup } from "../test/fixtures"
+import { withinShadowRoot } from "../test/shadow"
 import ExercisePart from "./ExercisePart.svelte"
 
 const noop = () => {}
@@ -96,6 +97,25 @@ suite("ExercisePart component", () => {
     ;(await screen.findByRole("button", { name: "Download all" })).click()
 
     expect(onDownloadAll).toHaveBeenCalledWith([makeTmcKind({ tmcExerciseId: 101 })])
+  })
+
+  test("names each checkbox after what it selects", async () => {
+    const { container } = render(ExercisePart, {
+      props: {
+        exerciseGroup: tmcExerciseGroup(),
+        onDownloadAll: noop,
+        onOpenAll: noop,
+        onCloseAll: noop,
+        checkedExercises: emptySelection(),
+        exerciseStatuses: { tmc: {}, mooc: {} },
+      },
+    })
+
+    const [selectAll, row] = container.querySelectorAll("vscode-checkbox")
+    const selectAllInput = (await withinShadowRoot(selectAll!)).getByRole("checkbox")
+    const rowInput = (await withinShadowRoot(row!)).getByRole("checkbox")
+    expect(selectAllInput).toHaveAccessibleName("Select all in part01")
+    expect(rowInput).toHaveAccessibleName("Select part01-01_hello")
   })
 
   // Unchecking has to remove the entry, not record `false`: the panel counts entries.

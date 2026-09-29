@@ -133,10 +133,10 @@
       <vscode-table-header slot="header">
         <vscode-table-header-cell class="checkbox-cell">
           <Checkbox
-            aria-label="Select all exercises"
+            accessibleName={`Select all in ${exerciseGroup.name}`}
             checked={allExercisesAreChecked}
             indeterminate={someExercisesAreChecked && !allExercisesAreChecked}
-            onClick={(checked) => {
+            oncheckedchange={(checked) => {
               checkAllExercises(checked)
             }}
           />
@@ -151,9 +151,9 @@
           <vscode-table-row id={ExerciseIdentifier.toString(exercise.id)}>
             <vscode-table-cell class="checkbox-cell">
               <Checkbox
-                aria-label={exercise.name}
+                accessibleName={`Select ${exercise.name}`}
                 checked={isChecked(exercise.id)}
-                onClick={(checked) => {
+                oncheckedchange={(checked) => {
                   setChecked([exercise.id], checked)
                 }}
               />

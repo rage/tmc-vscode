@@ -1,57 +1,86 @@
-import { fireEvent, render, waitFor } from "@testing-library/svelte"
+import { fireEvent, render } from "@testing-library/svelte"
+import type { VscodeCheckbox } from "@vscode-elements/elements"
+import { createRawSnippet } from "svelte"
 import { vi } from "vitest"
 
+import { withinShadowRoot } from "../test/shadow"
 import Checkbox from "./Checkbox.svelte"
 
-type CheckboxElement = HTMLElement & { checked: boolean; indeterminate: boolean }
-
-function renderCheckbox(props: Record<string, unknown>): {
-  el: CheckboxElement
-  container: HTMLElement
-} {
-  const { container } = render(Checkbox, { props })
-  const el = container.querySelector("vscode-checkbox") as CheckboxElement
-  return { el, container }
+async function renderCheckbox(props: Record<string, unknown>): Promise<{
+  element: VscodeCheckbox
+  input: HTMLInputElement
+  rerender: (p: object) => Promise<void>
+}> {
+  const { container, rerender } = render(Checkbox, { props: { checked: false, ...props } })
+  const element = container.querySelector("vscode-checkbox")!
+  await element.updateComplete
+  const input = element.shadowRoot!.querySelector("input")!
+  return {
+    element,
+    input,
+    rerender: async (next) => {
+      await rerender(next)
+      await element.updateComplete
+    },
+  }
 }
 
 suite("Checkbox component", () => {
-  test("renders a single checkbox element, not a role=button span", () => {
-    const { el, container } = renderCheckbox({ checked: false })
-    expect(el).not.toBeNull()
-    // the old span+role="button" wrapper (two tab stops, wrong role) is gone
-    expect(container.querySelector('[role="button"]')).toBeNull()
+  test("names the focusable inner input from accessibleName", async () => {
+    const { element } = await renderCheckbox({ accessibleName: "Select part01-01" })
+    expect((await withinShadowRoot(element)).getByRole("checkbox")).toHaveAccessibleName(
+      "Select part01-01",
+    )
   })
 
-  test("exposes an accessible name via aria-label", () => {
-    const { el } = renderCheckbox({ checked: false, "aria-label": "Select all exercises" })
-    expect(el.getAttribute("aria-label")).toBe("Select all exercises")
-  })
-
-  test("mirrors the controlled checked/indeterminate props onto the element", async () => {
-    const { el } = renderCheckbox({ checked: true, indeterminate: true })
-    await waitFor(() => {
-      expect(el.checked).toBe(true)
-      expect(el.indeterminate).toBe(true)
+  test("names the inner input from visible slotted text", async () => {
+    const { element } = await renderCheckbox({
+      children: createRawSnippet(() => ({ render: () => "<span>Show passed tests</span>" })),
     })
+    expect((await withinShadowRoot(element)).getByRole("checkbox")).toHaveAccessibleName(
+      "Show passed tests",
+    )
   })
 
-  test("fires onClick exactly once with the toggled value on change", async () => {
-    const onClick = vi.fn()
-    const { el } = renderCheckbox({ checked: false, onClick })
+  test("exposes the indeterminate state on the inner input", async () => {
+    const { input, rerender } = await renderCheckbox({ indeterminate: true })
+    await vi.waitFor(() => expect(input.indeterminate).toBe(true))
 
-    await fireEvent.keyDown(el, { key: " " })
-
-    expect(onClick).toHaveBeenCalledTimes(1)
-    expect(onClick).toHaveBeenLastCalledWith(true)
+    await rerender({ indeterminate: false })
+    await vi.waitFor(() => expect(input.indeterminate).toBe(false))
   })
 
-  test("reports the new value on each successive toggle", async () => {
-    const onClick = vi.fn()
-    const { el } = renderCheckbox({ checked: false, onClick })
+  test("reports the requested state without moving until the parent agrees", async () => {
+    const oncheckedchange = vi.fn()
+    const { element } = await renderCheckbox({ oncheckedchange })
 
-    await fireEvent.keyDown(el, { key: " " })
-    await fireEvent.keyDown(el, { key: " " })
+    await fireEvent.keyDown(element, { key: " " })
 
-    expect(onClick.mock.calls).toEqual([[true], [false]])
+    expect(oncheckedchange).toHaveBeenCalledExactlyOnceWith(true)
+    expect(element.checked).toBe(false)
+  })
+
+  test("follows checked once the parent accepts the toggle", async () => {
+    const { element, rerender } = await renderCheckbox({
+      oncheckedchange: (next: boolean) => void rerender({ checked: next }),
+    })
+
+    await fireEvent.keyDown(element, { key: " " })
+
+    await vi.waitFor(() => expect(element.checked).toBe(true))
+  })
+
+  test("keeps indeterminate after a toggle the parent ignores", async () => {
+    const { element } = await renderCheckbox({ indeterminate: true })
+
+    await fireEvent.keyDown(element, { key: " " })
+
+    expect(element.indeterminate).toBe(true)
+  })
+
+  test("passes element props through", async () => {
+    const { element } = await renderCheckbox({ disabled: true, hidden: true })
+    expect(element.disabled).toBe(true)
+    expect(element).toHaveAttribute("hidden")
   })
 })

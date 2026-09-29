@@ -18,9 +18,12 @@ export class CoursePage extends TmcPage {
   }
 
   public async openExercises(names: string[]): Promise<void> {
+    const panel = this.getSidePanel()
     for (const name of names) {
-      await this.getSidePanel().locator(`vscode-checkbox[aria-label="${name}"]`).click()
+      // The named input is visually hidden inside the element; clicking the host is what a user does.
+      const input = panel.getByRole("checkbox", { name: `Select ${name}`, exact: true })
+      await panel.locator("vscode-checkbox").filter({ has: input }).click()
     }
-    await this.getSidePanel().getByRole("button", { name: "Open", exact: true }).first().click()
+    await panel.getByRole("button", { name: "Open", exact: true }).first().click()
   }
 }
