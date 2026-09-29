@@ -39,8 +39,8 @@ function harness(pick: number | "dismissed" = 0): Harness {
   const [dialog] = createDialogMock()
   const offered: string[] = []
   dialog.selectItem = vi.fn(async (_prompt: unknown, ...items: Item<unknown>[]) => {
-    offered.push(...items.map(([label]) => label))
-    return pick === "dismissed" ? undefined : items[pick]?.[1]
+    offered.push(...items.map(({ label }) => label))
+    return pick === "dismissed" ? undefined : items[pick]?.value
   }) as unknown as typeof dialog.selectItem
 
   const userData = { getCourses: () => courses } as unknown as UserData

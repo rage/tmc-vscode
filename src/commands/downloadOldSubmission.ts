@@ -5,15 +5,39 @@ import * as vscode from "vscode"
 import type { PickableSubmission } from "../actions"
 import { listOldSubmissions, restoreOldSubmission } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
+import type { Item } from "../api/dialog"
 import { failure } from "../api/withOperation"
 import { BottleneckError } from "../errors"
 import type { MoocOldSubmissionRestore } from "../shared/langsSchema"
 import { backendName, ExerciseIdentifier } from "../shared/shared"
-import { dateToString, Logger, parseDate } from "../utilities"
+import { Logger, parseDate } from "../utilities"
 import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
 import { runForExercise } from "./runForExercise"
 
 const TITLE = "Download Old Submission"
+
+/** Picker rows for `submissions`, newest first, which is the one a student almost always wants. */
+function submissionItems(submissions: PickableSubmission[]): Item<PickableSubmission>[] {
+  const format = new Intl.DateTimeFormat(vscode.env.language, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  })
+  return submissions
+    .map((submission) => ({ submission, createdAt: parseDate(submission.createdAt) }))
+    .toSorted((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
+    .map(({ submission, createdAt }, index) => {
+      const passed = submission.status.startsWith("Passed")
+      const item: Item<PickableSubmission> = {
+        label: createdAt ? format.format(createdAt) : "Unknown date",
+        value: submission,
+        description: submission.status,
+        iconPath: passed
+          ? new vscode.ThemeIcon("pass", new vscode.ThemeColor("testing.iconPassed"))
+          : new vscode.ThemeIcon("circle-large-outline"),
+      }
+      return index === 0 ? { ...item, detail: "Latest" } : item
+    })
+}
 
 /**
  * Lets the user pick one of an exercise's earlier submissions and restores it
@@ -49,24 +73,17 @@ export async function downloadOldSubmission(
         return failure("Failed to fetch old submissions.", submissionsResult.val)
       }
 
-      submissionsResult.val.sort(
-        (a, b) =>
-          (parseDate(a.createdAt)?.getTime() ?? 0) - (parseDate(b.createdAt)?.getTime() ?? 0),
-      )
       if (submissionsResult.val.length === 0) {
-        dialog.notification(`No previous submissions found for exercise ${exercise.exerciseSlug}`)
+        dialog.notification(`${exercise.exerciseSlug} has no earlier submissions.`)
         return Ok.EMPTY
       }
 
       const submission = await dialog.selectItem(
         {
-          title: TITLE,
-          placeHolder: exercise.exerciseSlug + ": Select a submission",
+          title: `${TITLE} — ${exercise.exerciseSlug}`,
+          placeHolder: "Pick a submission to restore",
         },
-        ...submissionsResult.val.map<[string, PickableSubmission]>((pickable) => {
-          const createdAt = parseDate(pickable.createdAt)
-          return [`${createdAt ? dateToString(createdAt) : ""}| ${pickable.status}`, pickable]
-        }),
+        ...submissionItems(submissionsResult.val),
       )
       if (!submission) {
         return Ok.EMPTY

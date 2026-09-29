@@ -2,6 +2,7 @@ import * as vscode from "vscode"
 
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
+import type { Item } from "../api/dialog"
 import { withOperation } from "../api/withOperation"
 import type { MoocCourse, Organization } from "../shared/langsSchema"
 import type { CourseIdentifier, Enum } from "../shared/shared"
@@ -45,38 +46,38 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
   )
 
   const unavailable: string[] = []
-  const choices: [string, TopLevelChoice | typeof actions.MOOC_LOGIN, string][] = []
+  const choices: Item<TopLevelChoice | typeof actions.MOOC_LOGIN>[] = []
 
   if (organizations.err) {
     unavailable.push(backendName("tmc"))
     Logger.warn("Failed to fetch TMC organizations.", organizations.val)
   } else {
     for (const organization of organizations.val) {
-      choices.push([
-        organization.name,
-        makeTmcKind(organization),
-        `${backendName("tmc")} · browse courses`,
-      ])
+      choices.push({
+        label: organization.name,
+        value: makeTmcKind(organization),
+        description: `${backendName("tmc")} · browse courses`,
+      })
     }
   }
 
   if (moocCourses === actions.MOOC_LOGIN) {
-    choices.push([
-      `Log in to ${backendName("mooc")}`,
-      actions.MOOC_LOGIN,
-      "to list the courses you are enrolled in",
-    ])
+    choices.push({
+      label: `Log in to ${backendName("mooc")}`,
+      value: actions.MOOC_LOGIN,
+      description: "to list the courses you are enrolled in",
+    })
   } else if (moocCourses.err) {
     unavailable.push(backendName("mooc"))
     Logger.warn(`Failed to fetch ${backendName("mooc")} courses. ${moocCourses.val}`)
   } else {
     for (const course of moocCourses.val) {
       const added = addedCourses.has(courseKey(makeMoocKind({ instanceId: course.id })))
-      choices.push([
-        course.name,
-        makeMoocKind(course),
-        `${backendName("mooc")} · ${course.organization_name}${added ? ALREADY_ADDED : ""}`,
-      ])
+      choices.push({
+        label: course.name,
+        value: makeMoocKind(course),
+        description: `${backendName("mooc")} · ${course.organization_name}${added ? ALREADY_ADDED : ""}`,
+      })
     }
   }
 
@@ -122,10 +123,14 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
       }
       const course = await dialog.selectItem<CourseIdentifier>(
         { title: TITLE, placeHolder: `Which course in ${organization.name}?` },
-        ...courses.val.map<[string, CourseIdentifier, string]>((c) => {
+        ...courses.val.map<Item<CourseIdentifier>>((c) => {
           const id = makeTmcKind({ courseId: c.id })
           const added = addedCourses.has(courseKey(id))
-          return [c.title, id, `${backendName("tmc")}${added ? ALREADY_ADDED : ""}`]
+          return {
+            label: c.title,
+            value: id,
+            description: `${backendName("tmc")}${added ? ALREADY_ADDED : ""}`,
+          }
         }),
       )
       return course === undefined ? undefined : [organization.slug, course]

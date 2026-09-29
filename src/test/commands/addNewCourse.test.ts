@@ -49,7 +49,7 @@ const storedCourses = [{ kind: "tmc", data: { id: 999 } }] as LocalCourseData[]
 
 interface Pick {
   prompt: { title: string; placeHolder: string } | string
-  items: [string, unknown, string?][]
+  items: [string, unknown, string | undefined][]
 }
 
 interface ReportedError {
@@ -93,12 +93,12 @@ function harness(options: {
     selectItem: vi.fn(
       async (
         prompt: { title: string; placeHolder: string } | string,
-        ...items: [string, unknown, string?][]
+        ...items: { label: string; value: unknown; description?: string }[]
       ) => {
         const index = picks.length
-        picks.push({ prompt, items })
+        picks.push({ prompt, items: items.map((x) => [x.label, x.value, x.description]) })
         const wanted = select[index]
-        return wanted === undefined ? undefined : items.find(([label]) => label === wanted)?.[1]
+        return wanted === undefined ? undefined : items.find(({ label }) => label === wanted)?.value
       },
     ),
     errorNotification: vi.fn((message: string) => {

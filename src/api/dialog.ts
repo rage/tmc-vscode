@@ -6,10 +6,18 @@ import { backendName, LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
 
 /**
- * One row of a quick pick: what the user reads, what picking it yields, and an optional
- * dimmed note beside the label. Rows are resolved by identity, so two may share a label.
+ * One row of a quick pick: what the user reads and what picking it yields. Rows are
+ * resolved by identity, so two may share a label.
  */
-export type Item<T> = [label: string, value: T, description?: string]
+export interface Item<T> {
+  label: string
+  value: T
+  /** Dimmed, beside the label. */
+  description?: string
+  /** Dimmed, on a line of its own. */
+  detail?: string
+  iconPath?: vscode.ThemeIcon
+}
 
 /**
  * A notification button: its label, and what pressing it does. Buttons are
@@ -63,7 +71,11 @@ export function courseSelectionItems<T>(
   return courses.map((course) => {
     const title = LocalCourseData.getCourseTitle(course)
     const value = options?.value ? options.value(course) : LocalCourseData.getCourseId(course)
-    return [options?.decorate?.(course, title) ?? title, value, backendName(course.kind)]
+    return {
+      label: options?.decorate?.(course, title) ?? title,
+      value,
+      description: backendName(course.kind),
+    }
   })
 }
 
@@ -212,10 +224,8 @@ export default class Dialog {
    *
    * @param prompt The quick pick's placeholder, or an object also giving the
    * pick a title for context.
-   * @param items `[label, value]` tuples, optionally with a third element shown
-   * dimmed next to the label. Items are resolved by identity rather than by
-   * label, so two items may share a label as long as the description
-   * distinguishes them.
+   * @param items The rows, resolved by identity: two may share a label as long as the
+   * description tells them apart.
    */
   public async selectItem<T>(
     prompt: string | { title: string; placeHolder: string },
@@ -225,12 +235,8 @@ export default class Dialog {
       typeof prompt === "string"
         ? { placeHolder: prompt }
         : { title: prompt.title, placeHolder: prompt.placeHolder }
-    const picks = items.map(([label, value, description]) => ({
-      label,
-      value,
-      ...(description !== undefined ? { description } : {}),
-    }))
-    return vscode.window.showQuickPick(picks, options).then((selection) => selection?.value)
+    const picked = await vscode.window.showQuickPick(items, options)
+    return picked?.value
   }
 
   /**

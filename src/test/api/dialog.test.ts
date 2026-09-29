@@ -26,20 +26,19 @@ suite("Dialog.selectItem", function () {
     showQuickPick.mockRestore()
   })
 
-  test("passes the optional third tuple element through as the item description", async function () {
+  test("shows the items as given, with their descriptions", async function () {
     stubPick(() => undefined)
-    await new Dialog().selectItem(
-      { title: "Add New Course", placeHolder: "Which course?" },
-      ["Programming 1", "a", "TMC Server"],
-      ["Programming 1", "b", "courses.mooc.fi"],
-      ["No description", "c"],
-    )
-
-    expect(showQuickPick.mock.calls[0]?.[0]).toEqual([
+    const items = [
       { label: "Programming 1", value: "a", description: "TMC Server" },
       { label: "Programming 1", value: "b", description: "courses.mooc.fi" },
       { label: "No description", value: "c" },
-    ])
+    ]
+    await new Dialog().selectItem(
+      { title: "Add New Course", placeHolder: "Which course?" },
+      ...items,
+    )
+
+    expect(showQuickPick.mock.calls[0]?.[0]).toEqual(items)
     expect(showQuickPick.mock.calls[0]?.[1]).toEqual({
       title: "Add New Course",
       placeHolder: "Which course?",
@@ -52,15 +51,15 @@ suite("Dialog.selectItem", function () {
     stubPick((items) => items[1])
     const picked = await new Dialog().selectItem(
       "Which course?",
-      ["shared-slug", "tmc-course", "TMC Server"],
-      ["shared-slug", "mooc-course", "courses.mooc.fi"],
+      { label: "shared-slug", value: "tmc-course", description: "TMC Server" },
+      { label: "shared-slug", value: "mooc-course", description: "courses.mooc.fi" },
     )
     expect(picked).toBe("mooc-course")
   })
 
   test("returns undefined when the pick is dismissed", async function () {
     stubPick(() => undefined)
-    expect(await new Dialog().selectItem("Which course?", ["a", 1])).toBeUndefined()
+    expect(await new Dialog().selectItem("Which course?", { label: "a", value: 1 })).toBeUndefined()
   })
 })
 
@@ -248,8 +247,12 @@ suite("courseSelectionItems", function () {
 
   test("labels a course by its title and describes it by its backend", function () {
     expect(courseSelectionItems(courses)).toEqual([
-      ["Programming 1", makeTmcKind({ courseId: 3 }), "TMC Server"],
-      ["Programming 1", makeMoocKind({ instanceId: "course-uuid" }), "courses.mooc.fi"],
+      { label: "Programming 1", value: makeTmcKind({ courseId: 3 }), description: "TMC Server" },
+      {
+        label: "Programming 1",
+        value: makeMoocKind({ instanceId: "course-uuid" }),
+        description: "courses.mooc.fi",
+      },
     ])
   })
 
@@ -258,7 +261,7 @@ suite("courseSelectionItems", function () {
       decorate: (course, title) => (course.kind === "mooc" ? `${title} (Currently open)` : title),
     })
 
-    expect(items.map(([label]) => label)).toEqual([
+    expect(items.map(({ label }) => label)).toEqual([
       "Programming 1",
       "Programming 1 (Currently open)",
     ])
@@ -267,7 +270,7 @@ suite("courseSelectionItems", function () {
   test("value chooses what picking a row yields", function () {
     const items = courseSelectionItems(courses, { value: (course) => course })
 
-    expect(items.map(([, value]) => value)).toEqual(courses)
+    expect(items.map(({ value }) => value)).toEqual(courses)
   })
 })
 
