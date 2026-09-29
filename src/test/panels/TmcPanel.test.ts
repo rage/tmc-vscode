@@ -130,7 +130,7 @@ async function mountSidePanel(
   TmcPanel.sidePanel?.dispose()
   TmcPanel.sidePanel = undefined
 
-  const { panel, getMessageListener } = createFakeWebviewPanel()
+  const { panel, getMessageListener, sendReady } = createFakeWebviewPanel()
   vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
 
   const extensionUri = vscode.Uri.file("/ext")
@@ -140,6 +140,7 @@ async function mountSidePanel(
     type: "MyCourses",
     courseDeadlines: {},
   })
+  await sendReady()
   const listener = getMessageListener()
   // Clear the initial mount's `setPanel` post so assertions below only see
   // what the handler under test itself posts.
@@ -1176,6 +1177,34 @@ suite("TmcPanel ready handshake", () => {
     expect(types).toEqual(["setPanel"])
   })
 
+  test("renders a new panel once, when its document says it is ready", async () => {
+    resetPanels()
+    const { panel, sendReady } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    const courseDetails = {
+      id: nextPanelId(),
+      type: "CourseDetails" as const,
+      courseId: CourseIdentifier.from(42),
+      exerciseStatuses: { tmc: {}, mooc: {} },
+    }
+    renderMain(courseDetails)
+    TmcPanel.postMessage({
+      type: "setCourseGroups",
+      target: { id: courseDetails.id, type: "CourseDetails" },
+      offlineMode: false,
+      exerciseGroups: [],
+    })
+
+    expect(panel.webview.postMessage).not.toHaveBeenCalled()
+
+    await sendReady()
+
+    const types = vi
+      .mocked(panel.webview.postMessage)
+      .mock.calls.map(([message]) => (message as { type: string }).type)
+    expect(types).toEqual(["setPanel", "setCourseGroups"])
+  })
+
   test("a webview that has rendered nothing gets nothing resent", async () => {
     const actionContext = createMockActionContext()
     const { panel, listener } = await mountSidePanel(actionContext)
@@ -1301,7 +1330,7 @@ suite("TmcPanel main panel lifecycle", () => {
   afterEach(resetPanels)
 
   test("navigating the main panel reuses its webview instead of recreating it", async () => {
-    const { panel, dispose } = createFakeWebviewPanel()
+    const { panel, dispose, sendReady } = createFakeWebviewPanel()
     const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
     createWebviewPanel.mockClear()
     createWebviewPanel.mockReturnValue(panel)
@@ -1315,6 +1344,7 @@ suite("TmcPanel main panel lifecycle", () => {
       type: "MyCourses",
       courseDeadlines: {},
     })
+    await sendReady()
     vi.mocked(panel.webview.postMessage).mockClear()
     TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
       id: nextPanelId(),

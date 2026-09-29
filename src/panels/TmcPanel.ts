@@ -137,6 +137,10 @@ export class TmcPanel {
   // side panels show different panels.
   private _lastPanel: Panel | undefined
 
+  // Until the first "ready", messages are only buffered: that handshake is the single
+  // path that renders a panel, for a new document and a reloaded one alike.
+  private _isWebviewReady = false
+
   // latest message per type targeted at _lastPanel's id, resent after it on "ready"
   // so a reload doesn't lose one-shot results that already fired
   private _messageBuffer = new Map<string, ExtensionToWebview>()
@@ -179,6 +183,9 @@ export class TmcPanel {
       message.target.id === this._lastPanel?.id
     ) {
       this._messageBuffer.set(`${message.target.id}:${message.type}`, message)
+    }
+    if (!this._isWebviewReady) {
+      return
     }
     postMessageToWebview(this._panel.webview, message, this._webviewName)
   }
@@ -338,12 +345,14 @@ export class TmcPanel {
     }
   }
 
-  // remembers `panel` so "ready" can resend it
+  // remembers `panel` so "ready" can (re)send it
   private _renderPanel(panel: Panel): void {
     this._lastPanel = panel
     this._messageBuffer.clear()
     this._panel.title = panelTitle(panel, this._actionContext)
-    renderPanel(panel, this._panel.webview)
+    if (this._isWebviewReady) {
+      renderPanel(panel, this._panel.webview)
+    }
   }
 
   private _getWebviewContent(webview: Webview, extensionUri: Uri): string {
@@ -411,6 +420,7 @@ export class TmcPanel {
         const message = untrustedMessage as WebviewToExtension
         switch (message.type) {
           case "ready": {
+            this._isWebviewReady = true
             Logger.info(
               `Received "ready" from ${this._isMain ? "main" : "side"} webview` +
                 (this._lastPanel

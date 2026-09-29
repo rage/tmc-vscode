@@ -198,6 +198,7 @@ async function harness(
   if (!sidePanel) {
     throw new Error("the side panel was never created")
   }
+  await sidePanel.sendReady()
 
   return {
     actionContext,

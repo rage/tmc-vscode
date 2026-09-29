@@ -9,6 +9,8 @@ export function createFakeWebviewPanel(): {
   panel: vscode.WebviewPanel
   dispose: ReturnType<typeof vi.fn>
   getMessageListener: () => (message: unknown) => Promise<void>
+  /** Posts the "ready" a loaded webview document sends, which is what makes `TmcPanel` render. */
+  sendReady: () => Promise<void>
 } {
   let listener: ((message: unknown) => Promise<void>) | undefined
   let disposeListener: (() => void) | undefined
@@ -42,14 +44,16 @@ export function createFakeWebviewPanel(): {
     reveal: vi.fn(),
     dispose,
   }
+  const getMessageListener = (): ((message: unknown) => Promise<void>) => {
+    if (!listener) {
+      throw new Error("webview message listener was never registered")
+    }
+    return listener
+  }
   return {
     panel: panel as unknown as vscode.WebviewPanel,
     dispose,
-    getMessageListener: () => {
-      if (!listener) {
-        throw new Error("webview message listener was never registered")
-      }
-      return listener
-    },
+    getMessageListener,
+    sendReady: () => getMessageListener()({ type: "ready" }),
   }
 }
