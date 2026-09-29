@@ -247,7 +247,10 @@ suite("TmcPanel initialization guards", () => {
       expect.objectContaining({
         type: "panelDataResult",
         requestId: 3,
-        error: { message: "tmc-langs did not report an exercise directory" },
+        error: {
+          message:
+            "Showing your courses is unavailable: the TestMyCode tools did not report where the exercises folder is.",
+        },
       }),
     )
     expectNoNotification(actionContext)

@@ -549,8 +549,10 @@ export class TmcPanel {
             const { userData, resources } = actionContext.startup
             const projectsDirectory = resources.projectsDirectory
             if (!projectsDirectory) {
-              const error = new Error("tmc-langs did not report an exercise directory")
-              Logger.error("Showing your courses is unavailable.", error)
+              const error = new Error(
+                "Showing your courses is unavailable: the TestMyCode tools did not report where the exercises folder is.",
+              )
+              Logger.error(error.message)
               this._postPanelDataFailed(target, message.requestId, error)
               return
             }
