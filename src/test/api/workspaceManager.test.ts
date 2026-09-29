@@ -306,6 +306,25 @@ suite("WorkspaceManager class", function () {
       expect(record).toHaveBeenCalledExactlyOnceWith("tmc", courseSlug, [])
       expect(closed.status).toBe(ExerciseStatus.Open)
     })
+
+    test("announces an exercise opening or closing", async function () {
+      const changed = vi.fn()
+      manager.onDidChangeExercises(changed)
+
+      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+
+      expect(changed).toHaveBeenCalled()
+    })
+
+    test("announces nothing when the closed set cannot be recorded", async function () {
+      record.mockResolvedValue(Err(new Error("settings are read-only")))
+      const changed = vi.fn()
+      manager.onDidChangeExercises(changed)
+
+      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+
+      expect(changed).not.toHaveBeenCalled()
+    })
   })
 
   // VS Code reports a folder change the extension itself made, so the handler
@@ -368,6 +387,15 @@ suite("WorkspaceManager class", function () {
         "part02-01_greeting",
       ])
       expect(open.status).toBe(ExerciseStatus.Closed)
+    })
+
+    test("announces a folder the user removed by hand", function () {
+      const changed = vi.fn()
+      manager.onDidChangeExercises(changed)
+
+      notifyFolderChange?.({ added: [], removed: [folderOf(open.uri, open.exerciseSlug)] })
+
+      expect(changed).toHaveBeenCalledOnce()
     })
 
     // The workspace move each call makes re-enters the handler, so an
