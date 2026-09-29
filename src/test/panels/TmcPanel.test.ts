@@ -241,31 +241,6 @@ suite("TmcPanel initialization guards", () => {
     )
   })
 
-  test("the welcome panel arrives with the version and login state, with nothing to ask for", async () => {
-    // Asked for even in a degraded startup, where no request could have been served.
-    const actionContext = createDegradedContext()
-    const { panel, sendReady } = createFakeWebviewPanel()
-    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
-    resetPanels()
-
-    TmcPanel.renderMain(vscode.Uri.file("/ext"), createMockContext(), actionContext, {
-      id: nextPanelId(),
-      type: "Welcome",
-    })
-    await sendReady()
-
-    expect(panel.webview.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "setPanel",
-        panel: expect.objectContaining({
-          type: "Welcome",
-          version: expect.any(String),
-          loggedIn: actionContext.authState.loggedIn,
-        }),
-      }),
-    )
-  })
-
   test("a courses request without an exercise directory says why, in the panel alone", async () => {
     const actionContext = createMockActionContext({
       startup: {
@@ -1635,7 +1610,7 @@ suite("TmcPanel main panel lifecycle", () => {
     vi.mocked(panel.webview.postMessage).mockClear()
     TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
       id: nextPanelId(),
-      type: "Welcome",
+      type: "InitializationErrorHelp",
     })
 
     expect(createWebviewPanel).toHaveBeenCalledTimes(1)
@@ -1645,7 +1620,7 @@ suite("TmcPanel main panel lifecycle", () => {
     expect(panel.webview.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "setPanel",
-        panel: expect.objectContaining({ type: "Welcome" }),
+        panel: expect.objectContaining({ type: "InitializationErrorHelp" }),
       }),
     )
   })
@@ -1670,7 +1645,7 @@ suite("TmcPanel main panel lifecycle", () => {
 
     TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
       id: nextPanelId(),
-      type: "Welcome",
+      type: "InitializationErrorHelp",
     })
 
     expect(side.dispose).not.toHaveBeenCalled()
@@ -1789,7 +1764,9 @@ suite("TmcPanel tab identity", () => {
 
   test("names each screen instead of calling every tab TestMyCode", () => {
     expect(mainPanelTitleFor({ id: nextPanelId(), type: "MyCourses" })).toBe("My Courses")
-    expect(mainPanelTitleFor({ id: nextPanelId(), type: "Welcome" })).toBe("Welcome")
+    expect(mainPanelTitleFor({ id: nextPanelId(), type: "InitializationErrorHelp" })).toBe(
+      "TestMyCode Help",
+    )
     expect(mainPanelTitleFor({ id: nextPanelId(), type: "MoocLogin" })).toBe("Log In")
   })
 
@@ -1833,7 +1810,7 @@ suite("TmcPanel tab identity", () => {
   test("retitles a reused tab when it navigates", () => {
     const { panel } = createFakeWebviewPanel()
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
-    renderMainPanel({ id: nextPanelId(), type: "Welcome" })
+    renderMainPanel({ id: nextPanelId(), type: "InitializationErrorHelp" })
 
     renderMainPanel({ id: nextPanelId(), type: "MyCourses" })
 
@@ -1846,7 +1823,7 @@ suite("TmcPanel tab identity", () => {
     createWebviewPanel.mockClear()
     createWebviewPanel.mockReturnValue(panel)
 
-    renderMainPanel({ id: nextPanelId(), type: "Welcome" })
+    renderMainPanel({ id: nextPanelId(), type: "InitializationErrorHelp" })
 
     expect(panel.iconPath).toEqual({
       light: vscode.Uri.joinPath(vscode.Uri.file("/ext"), "media", "TMC-light.svg"),

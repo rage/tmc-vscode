@@ -263,7 +263,7 @@ export class TmcPanel {
     this._messageBuffer.clear()
     this._panel.title = panelTitle(route, this._actionContext)
     if (this._isWebviewReady && !this._isDisposed) {
-      renderPanel(completePanel(route, this._actionContext), this._panel.webview)
+      renderPanel(completePanel(route), this._panel.webview)
     }
   }
 
@@ -281,7 +281,7 @@ export class TmcPanel {
     // lost the code it was showing, and MoocLogin's mount posts `moocLogin` again, which
     // interrupts the now-unreachable CLI process.
     // Not `_render`, which would clear the buffer about to be resent.
-    renderPanel(completePanel(route, this._actionContext), this._panel.webview)
+    renderPanel(completePanel(route), this._panel.webview)
     for (const buffered of this._messageBuffer.values()) {
       postMessageToWebview(this._panel.webview, buffered, this._webviewName)
     }

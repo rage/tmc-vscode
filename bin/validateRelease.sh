@@ -45,14 +45,6 @@ validateRelease() {
         exitCode=1
     fi
 
-    local welcomeEntry
-    welcomeEntry=$(grep -Ec "<h3>$tagVersion - [0-9]{4}(-[0-9]{2}){2}</h3>" webview-ui/src/panels/Welcome.svelte)
-    if [[ $welcomeEntry != 1 ]]
-    then
-        echo "Error: Version entry for '${tagVersion}' in the Welcome panel changelog (./webview-ui/src/panels/Welcome.svelte) is either missing or not formatted properly."
-        exitCode=1
-    fi
-
     if ! node --import tsx ./bin/verifyThatLangsBuildsExist.ts
     then
         echo "Error: Failed to verify that all Langs builds exist."

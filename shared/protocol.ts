@@ -18,15 +18,6 @@ export const AppPanelSchema = z.object({
 
 export type AppPanel = z.infer<typeof AppPanelSchema>
 
-export const WelcomePanelSchema = z.object({
-  id: z.number(),
-  type: z.literal("Welcome"),
-  version: z.string().optional(),
-  loggedIn: z.boolean().optional(),
-})
-
-export type WelcomePanel = z.infer<typeof WelcomePanelSchema>
-
 export const MyCoursesPanelSchema = z.object({
   id: z.number(),
   type: z.literal("MyCourses"),
@@ -61,7 +52,6 @@ export type CourseDetailsPanel = z.infer<typeof CourseDetailsPanelSchema>
 // the `_panelTypesMatch` assertion below `Panel` keeps this in sync with `PanelSchema`
 export type PanelType =
   | "App"
-  | "Welcome"
   | "MyCourses"
   | "CourseDetails"
   | "ExerciseSubmission"
@@ -148,7 +138,6 @@ export type MoocLoginPanel = z.infer<typeof MoocLoginPanelSchema>
  */
 export const PanelSchema = z.discriminatedUnion("type", [
   AppPanelSchema,
-  WelcomePanelSchema,
   MyCoursesPanelSchema,
   CourseDetailsPanelSchema,
   ExerciseSubmissionPanelSchema,

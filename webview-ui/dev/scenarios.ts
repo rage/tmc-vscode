@@ -166,11 +166,6 @@ const statusUpdates = (fractions: [number, string][]): ExtensionToWebview[] =>
 /** Every scenario the dev harness offers and the accessibility tests walk through. */
 export const SCENARIOS: Scenario[] = [
   {
-    id: "welcome/logged-out",
-    panel: { id: 1, type: "Welcome", version: "3.5.3", loggedIn: false },
-  },
-  { id: "welcome/logged-in", panel: { id: 1, type: "Welcome", version: "3.5.3", loggedIn: true } },
-  {
     id: "my-courses/two-courses",
     panel: { id: 2, type: "MyCourses" },
     reply: answerMyCourses([tmcCourse, moocCourse]),

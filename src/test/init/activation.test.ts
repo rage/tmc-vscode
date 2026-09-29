@@ -684,7 +684,7 @@ suite("the first start of a new version", function () {
     await activate(createContext())
 
     expect(executeCommand).toHaveBeenCalledWith("tmc.showWelcome")
-    expect(recorded.panelTypes).not.toContain("Welcome")
+    expect(recorded.panelTypes).toEqual([])
   })
 
   // Opening a panel unasked on every update covers whatever the user was doing.
