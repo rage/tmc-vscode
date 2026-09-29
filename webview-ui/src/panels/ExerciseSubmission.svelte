@@ -222,8 +222,7 @@
     <div role="status">{@render progressList("Running tests on the server")}</div>
   {:else}
     <TestResults
-      totalPoints={exercise.availablePoints}
-      successPoints={submissionResult.points.length}
+      points={{ awarded: submissionResult.points.length, available: exercise.availablePoints }}
       testResults={submissionResult.test_cases ?? []}
       validationResult={submissionResult.validations && {
         strategy: submissionResult.validations.strategy,
