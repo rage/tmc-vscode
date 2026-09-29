@@ -99,7 +99,7 @@ function answerCourseDetails(
         courseId: message.sourcePanel.courseId,
         statuses,
       },
-      { type: "panelDataResult", target, requestId: message.requestId },
+      { type: "reply", target, requestId: message.requestId, outcome: { ok: true } },
     ]
   }
 }
@@ -114,7 +114,7 @@ function answerMyCourses(courses: (typeof tmcCourse)[]) {
       { type: "setMyCourses", target, courses },
       { type: "setTmcDataPath", target, tmcDataPath: "/home/student/tmcdata" },
       { type: "setTmcDataSize", target, tmcDataSize: "12.3 MB" },
-      { type: "panelDataResult", target, requestId: message.requestId },
+      { type: "reply", target, requestId: message.requestId, outcome: { ok: true } },
     ]
   }
 }
@@ -381,9 +381,10 @@ export const SCENARIOS: Scenario[] = [
       message.type === "moocLogin"
         ? [
             {
-              type: "moocLoginError",
+              type: "reply",
               target: { type: "MoocLogin", id: 41 },
-              error: "the sign-in code expired.",
+              requestId: message.requestId,
+              outcome: { ok: false, error: { message: "the sign-in code expired." } },
             },
           ]
         : [],
@@ -395,15 +396,24 @@ export const SCENARIOS: Scenario[] = [
       message.type === "requestInitializationErrors"
         ? [
             {
-              type: "initializationErrors",
+              type: "reply",
               target: { type: "InitializationErrorHelp", id: 50 },
-              cliFolder: "/home/student/.local/share/tmc/cli",
-              initializationErrors: {
-                tmc: { error: "Failed to download the TMC-langs CLI", stack: "Error: ENOTFOUND" },
-                userData: null,
-                workspaceManager: null,
-                exerciseDecorationProvider: null,
-                resources: null,
+              requestId: message.requestId,
+              outcome: {
+                ok: true,
+                value: {
+                  cliFolder: "/home/student/.local/share/tmc/cli",
+                  initializationErrors: {
+                    tmc: {
+                      error: "Failed to download the TMC-langs CLI",
+                      stack: "Error: ENOTFOUND",
+                    },
+                    userData: null,
+                    workspaceManager: null,
+                    exerciseDecorationProvider: null,
+                    resources: null,
+                  },
+                },
               },
             },
           ]
