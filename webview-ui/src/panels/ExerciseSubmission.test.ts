@@ -9,6 +9,7 @@ import {
   tmcLocalExercise,
 } from "../test/fixtures"
 import { dispatchToWebview, postedMessages } from "../test/setup"
+import { withinShadowRoot } from "../test/shadow"
 import ExerciseSubmission from "./ExerciseSubmission.svelte"
 
 const panel: ExerciseSubmissionPanel = {
@@ -70,9 +71,13 @@ suite("ExerciseSubmission panel", () => {
     render(ExerciseSubmission, { props: { panel } })
     postStatusUpdate(panel.id, 0.4, "Compiling on the server")
 
-    const bar = await screen.findByRole("progressbar", { name: "Running tests on the server" })
-    expect(bar).toHaveAttribute("aria-valuenow", "0.4")
-    expect(bar).toHaveAttribute("aria-valuemax", "1")
+    await screen.findByText("Compiling on the server")
+    const host = document.querySelector("vscode-progress-bar")!
+    const bar = (await withinShadowRoot(host)).getByRole("progressbar", {
+      name: "Running tests on the server",
+    })
+    expect(bar).toHaveAttribute("aria-valuenow", "40")
+    expect(bar).toHaveAttribute("aria-valuemax", "100")
     expect(bar).toHaveAttribute("aria-valuemin", "0")
   })
 

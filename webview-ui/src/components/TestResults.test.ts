@@ -44,7 +44,7 @@ suite("TestResults component", () => {
     expect(screen.getByText(/bad style/)).toBeInTheDocument()
   })
 
-  test("formats the points percentage the same way when the exercise has no points", () => {
+  test("shows an empty points meter when the exercise has no points", () => {
     render(TestResults, {
       props: {
         totalPoints: 0,
@@ -55,6 +55,9 @@ suite("TestResults component", () => {
       },
     })
 
-    expect(screen.getByText("Points: 0.00%")).toBeInTheDocument()
+    expect(screen.getByRole("meter", { name: "Points" })).toHaveAttribute(
+      "aria-valuetext",
+      "0 / 0 points",
+    )
   })
 })

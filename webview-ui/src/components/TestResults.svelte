@@ -3,7 +3,7 @@
   import { vscode } from "../utilities/vscode"
   import Button from "./Button.svelte"
   import Checkbox from "./Checkbox.svelte"
-  import ProgressBar from "./ProgressBar.svelte"
+  import Meter from "./Meter.svelte"
 
   // structural subset of both StyleValidationResult (local test runs) and
   // TmcStyleValidationResult (server submissions), which differ only in the
@@ -45,10 +45,6 @@
   let showPassedTestsChecked = $state(false)
   const showPassedTests = $derived(alwaysShowPassedTests || showPassedTestsChecked)
 
-  const pointsPercent = $derived(
-    totalPoints > 0 ? ((successPoints / totalPoints) * 100.0).toFixed(2) : "0.00",
-  )
-
   function showInBrowser(submissionUrl: string) {
     vscode.postMessage({
       type: "openLinkInBrowser",
@@ -58,7 +54,7 @@
 </script>
 
 <div class="points-display">
-  <ProgressBar label={`Points: ${pointsPercent}%`} value={successPoints} max={totalPoints} />
+  <Meter label="Points" value={successPoints} max={totalPoints} />
 </div>
 <div>
   <Checkbox
