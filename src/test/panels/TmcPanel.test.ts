@@ -25,61 +25,7 @@ import {
 } from "../../shared/shared"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 import { createMockContext } from "../mocks/vscode"
-
-// Fabricates a minimal `WebviewPanel`/`Webview` pair, standing in for the
-// real VS Code webview host: just enough for `TmcPanel`'s constructor
-// (`_getWebviewContent`, `_setWebviewMessageListener`) and `dispose()` to run,
-// while capturing the registered message listener so a test can drive it
-// directly, and the `dispose` spy so the "close on standalone login success"
-// behavior is observable.
-function createFakeWebviewPanel(): {
-  panel: vscode.WebviewPanel
-  dispose: ReturnType<typeof vi.fn>
-  getMessageListener: () => (message: unknown) => Promise<void>
-} {
-  let listener: ((message: unknown) => Promise<void>) | undefined
-  let disposeListener: (() => void) | undefined
-  let panelDisposed = false
-  // the real host calls back into `TmcPanel.dispose()` from here, once
-  const dispose = vi.fn(() => {
-    if (panelDisposed) {
-      return
-    }
-    panelDisposed = true
-    disposeListener?.()
-  })
-  const webview = {
-    html: "",
-    cspSource: "self",
-    // the real API resolves to whether the webview received it; `postMessageToWebview`
-    // reads that to warn about undelivered messages
-    postMessage: vi.fn(() => Promise.resolve(true)),
-    asWebviewUri: (uri: vscode.Uri) => uri,
-    onDidReceiveMessage: vi.fn((callback: (message: unknown) => Promise<void>) => {
-      listener = callback
-      return { dispose: vi.fn() }
-    }),
-  }
-  const panel = {
-    webview,
-    onDidDispose: vi.fn((callback: () => void) => {
-      disposeListener = callback
-      return { dispose: vi.fn() }
-    }),
-    reveal: vi.fn(),
-    dispose,
-  }
-  return {
-    panel: panel as unknown as vscode.WebviewPanel,
-    dispose,
-    getMessageListener: () => {
-      if (!listener) {
-        throw new Error("webview message listener was never registered")
-      }
-      return listener
-    },
-  }
-}
+import { createFakeWebviewPanel } from "../support/webviewPanel"
 
 suite("TmcPanel moocLogin handling", () => {
   test("a successful login closes the side panel and offers add-new-course", async () => {

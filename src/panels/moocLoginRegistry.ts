@@ -4,7 +4,7 @@
 // the CLI's `mooc login` process can poll for ~15 minutes and outlives the
 // panel that started it unless interrupted. This registry kills orphaned
 // processes on close/navigate-away/reload, and prevents two processes from
-// racing on `credentials_mooc.json` when the user retries.
+// racing on the stored mooc credentials when the user retries.
 //
 // Each attempt gets a monotonic invocation id; work after the long `await` is
 // gated on the attempt still being current, so a stale attempt stays silent.

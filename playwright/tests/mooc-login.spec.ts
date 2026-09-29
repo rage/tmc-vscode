@@ -1,7 +1,6 @@
 import { expect } from "@playwright/test"
 
 import { vsCodeTest } from "../fixtures"
-import { migrationTest } from "../migration-gate"
 import { MoocLoginPage } from "../pages/mooc-login"
 import { MyCoursesPage } from "../pages/my-courses"
 
@@ -14,7 +13,7 @@ import { MyCoursesPage } from "../pages/my-courses"
 // the add-course quick pick, which offers it while the (separate, absent) mooc
 // credentials are missing.
 
-migrationTest(
+vsCodeTest(
   "shows the device code and makes the enrolled courses addable",
   async ({ page, webview }) => {
     const myCoursesPage = new MyCoursesPage(page, webview)
@@ -46,7 +45,7 @@ migrationTest(
 vsCodeTest.describe(() => {
   vsCodeTest.use({ moocClientId: "mooc-mock-never" })
 
-  migrationTest("can cancel a pending device login", async ({ page, webview }) => {
+  vsCodeTest("can cancel a pending device login", async ({ page, webview }) => {
     const myCoursesPage = new MyCoursesPage(page, webview)
     const moocLoginPage = new MoocLoginPage(page, webview)
 
@@ -68,7 +67,7 @@ vsCodeTest.describe(() => {
 
   // Regression for orphaned/concurrent logins: cancel-then-retry must start a
   // clean attempt, unaffected by the old (killed) invocation resolving late.
-  migrationTest(
+  vsCodeTest(
     "cancel then retry starts a clean login with no error flash",
     async ({ page, webview }) => {
       const myCoursesPage = new MyCoursesPage(page, webview)
@@ -108,14 +107,11 @@ vsCodeTest.describe(() => {
 vsCodeTest.describe(() => {
   vsCodeTest.use({ seedTmcCredentials: false })
 
-  migrationTest(
-    "the tree view's Log in entry starts the device flow",
-    async ({ page, webview }) => {
-      const moocLoginPage = new MoocLoginPage(page, webview)
+  vsCodeTest("the tree view's Log in entry starts the device flow", async ({ page, webview }) => {
+    const moocLoginPage = new MoocLoginPage(page, webview)
 
-      await moocLoginPage.gotoFromTreeView()
-      await expect(moocLoginPage.heading()).toBeVisible()
-      await expect(moocLoginPage.userCode()).toBeVisible()
-    },
-  )
+    await moocLoginPage.gotoFromTreeView()
+    await expect(moocLoginPage.heading()).toBeVisible()
+    await expect(moocLoginPage.userCode()).toBeVisible()
+  })
 })

@@ -126,8 +126,9 @@ Do not thread raw ids around.
 under `shared/generated/langs/` are generated from `shared/bindings.schema.json`,
 which is vendored from tmc-langs-rust — do not hand-edit either:
 
-- `pnpm run vendor:langs-schema` re-vendors the JSON Schema from a sibling
-  `../tmc-langs-rust` checkout
+- `pnpm run vendor:langs-schema` re-vendors the JSON Schema from the
+  tmc-langs-rust release `config.js` pins (its `bindings.schema-<version>.json`
+  asset)
 - `pnpm run generate:langs-schema` regenerates the zod/TS files from it
 
 CI re-runs the generate step and diffs, so a stale generated file fails the
@@ -162,6 +163,37 @@ survive would mean persisting panel state where the extension host cannot see it
 and reconstructing it from data that may since have changed; reopening is one
 click. If that changes, register the serializer in `activateInner` and validate
 the restored state before rendering it.
+
+## Operations and entry points
+
+Code that does something on the user's behalf is split in two layers:
+
+- **Operations** (`src/actions/`) change state through the services, broadcast it to
+  the panels (`TmcPanel.postMessage`, `renderSide`, the tree view) and return a
+  `Result`. They never prompt, never show a notification of their own and never
+  report the failure they return. The one exception is a failure they carried on
+  past — a cleanup step, one backend of two — which they report with
+  `dialog.reportError` and do not return.
+- **Entry points** (`src/commands/`, the `TmcPanel` message handlers,
+  `src/init/commands.ts`, `src/extension.ts`, notification buttons) resolve
+  arguments, prompt, announce success, and run the operation inside
+  `withOperation` (`src/api/withOperation.ts`). Commands never call `langs`.
+
+`withOperation` reports how the operation failed, exactly once: a thrown error
+becomes an `Err`, a `BottleneckError` (the operation was already running, or the
+submission throttle refused it) is shown as information rather than an error,
+and `silent` logs instead of notifying, for runs the user did not ask for.
+`failure(headline, cause)` lets an operation's `Err` carry its own sentence;
+`shownInPanel(error)` marks one a panel already renders, which is then only
+notified when its presentation offers a remedy button such as "Log in".
+Exercise commands go through `runForExercise`, which resolves the exercise and
+wraps the rest in `withOperation`.
+
+`.oxlintrc.json` rejects prompts, notifications and `vscode.window` in
+`src/actions/` and `langs` in `src/commands/`. `src/test/layerContract.test.ts`
+lists every failure an operation may report itself, and
+`src/test/reporting.test.ts` drives each entry point over the real operations to
+check that a failure reaches the user once.
 
 ## Mock backends
 
@@ -207,26 +239,14 @@ against localhost 401s.
 
 What it does **not** prove:
 
-- **The mooc paths.** Both out-of-process tiers download the `tmc-langs-cli`
-  release `config.js` pins, currently `0.39.6`, which predates the mooc client
-  contract. Every mooc case is gated on the CLI reporting at least `0.40.0`
-  (`src/test-integration/tmc_langs_cli.spec.ts`, `playwright/migration-gate.ts`)
-  and skips in CI, and `src/init/verifyCliSchema.ts`'s schema self-check is
-  gated the same way. Their only evidence is a local run against a sibling
-  tmc-langs build — see below. Delete the three gates once the pin moves to a
-  released 0.40.0, not before: against the old binary those cases fail.
-- **That the vendored OpenAPI spec matches its recorded source rev.** The
-  `Vendored OpenAPI spec source` step is `continue-on-error` until
-  secret-project-331 PR #1769 lands, because the rev it fetches lives only on
-  that unmerged branch.
 - **A production-mode build.** The `.vsix` is packaged only by the
   master-triggered `build-and-upload.yml`.
 
 ## Using a locally-built tmc-langs CLI
 
 By default the dev/test flow downloads the released `tmc-langs-cli` pinned in
-`config.js` (`TMC_LANGS_RUST_VERSION`). To test against the current
-`tmc-langs-rust` migration branch instead, build and install it locally:
+`config.js` (`TMC_LANGS_RUST_VERSION`). To test against an unreleased
+`tmc-langs-rust` change instead, build and install it locally:
 
 ```
 bin/useLocalLangs.bash
@@ -235,10 +255,8 @@ bin/useLocalLangs.bash
 This expects a sibling `../tmc-langs-rust` checkout (override with
 `TMC_LANGS_RUST_DIR`). It builds `tmc-langs-cli` in release mode and installs it
 into `backend/cli` under the pinned filename with a regenerated `.sha256`, so
-both the integration tier and Playwright pick it up transparently. The binary
-still reports its real version (`--version`), which the integration suite uses
-to decide whether to run the migration-contract tests; against the released CLI
-those skip gracefully. `backend/cli` is gitignored — the local build is never
+both the integration tier and Playwright pick it up transparently.
+`backend/cli` is gitignored — the local build is never
 committed.
 
 - Integration: `pnpm run test:integration`

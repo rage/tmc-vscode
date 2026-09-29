@@ -7,8 +7,7 @@ import { vi } from "vitest"
 import { verifyCliSchema } from "../../init/verifyCliSchema"
 import { Logger } from "../../utilities"
 
-// Stands in for `<cli> schema`: either prints a schema or fails the way clap does
-// for a subcommand the binary does not know. Mocked rather than faked with a real
+// Stands in for `<cli> schema`. Mocked rather than faked with a real
 // executable, since the unit tier also runs on Windows.
 const cli = vi.hoisted(() => ({ schema: undefined as string | undefined }))
 
@@ -20,7 +19,7 @@ vi.mock("child_process", () => ({
     callback: (error: Error | null, stdout: string) => void,
   ) => {
     if (cli.schema === undefined) {
-      callback(new Error("Command failed\nerror: unrecognized subcommand 'schema'"), "")
+      callback(new Error("Command failed"), "")
     } else {
       callback(null, cli.schema)
     }
@@ -48,30 +47,11 @@ suite("verifyCliSchema", function () {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  // The released CLI the extension pins has no `schema` subcommand, so before
-  // this gate the check warned on every single activation about something the
-  // user could not act on.
-  test("does not warn for a pinned CLI older than the `schema` subcommand", async function () {
-    writeVendoredSchema(dir, "{}")
-
-    await verifyCliSchema("fake-cli", dir, "0.39.6")
-
-    expect(warn).not.toHaveBeenCalled()
-  })
-
-  test("stays quiet when a CLI claiming support still rejects `schema`", async function () {
-    writeVendoredSchema(dir, "{}")
-
-    await verifyCliSchema("fake-cli", dir, "0.40.0")
-
-    expect(warn).not.toHaveBeenCalled()
-  })
-
   test("stays quiet when the schemas match", async function () {
     cli.schema = '{"title":"CliOutput"}'
     writeVendoredSchema(dir, cli.schema)
 
-    await verifyCliSchema("fake-cli", dir, "0.40.0")
+    await verifyCliSchema("fake-cli", dir)
 
     expect(warn).not.toHaveBeenCalled()
   })
@@ -80,9 +60,18 @@ suite("verifyCliSchema", function () {
     cli.schema = '{"title":"CliOutput","x":1}'
     writeVendoredSchema(dir, '{"title":"CliOutput"}')
 
-    await verifyCliSchema("fake-cli", dir, "0.40.0")
+    await verifyCliSchema("fake-cli", dir)
 
     expect(warn).toHaveBeenCalledOnce()
     expect(String(warn.mock.calls[0]?.[0])).toContain("output contract mismatch")
+  })
+
+  test("warns when the CLI cannot print its schema", async function () {
+    writeVendoredSchema(dir, "{}")
+
+    await verifyCliSchema("fake-cli", dir)
+
+    expect(warn).toHaveBeenCalledOnce()
+    expect(String(warn.mock.calls[0]?.[0])).toContain("Failed to check")
   })
 })

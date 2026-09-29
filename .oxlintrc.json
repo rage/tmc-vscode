@@ -325,6 +325,50 @@
               }
             ]
           }
+        ],
+        "no-restricted-properties": [
+          "error",
+          {
+            "property": "langs",
+            "message": "Commands resolve arguments, prompt and report; the CLI call belongs in an operation in src/actions."
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/actions/**/*"],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "property": "confirmation",
+            "message": "Operations never prompt or toast. Return the outcome; the entry point shows it inside withOperation."
+          },
+          {
+            "property": "explicitConfirmation",
+            "message": "Operations never prompt or toast. Return the outcome; the entry point shows it inside withOperation."
+          },
+          {
+            "property": "selectItem",
+            "message": "Operations never prompt or toast. Return the outcome; the entry point shows it inside withOperation."
+          },
+          {
+            "property": "notification",
+            "message": "Operations never prompt or toast. Return the outcome; the entry point shows it inside withOperation."
+          },
+          {
+            "property": "warningNotification",
+            "message": "Operations never prompt or toast. Return the outcome; the entry point shows it inside withOperation."
+          },
+          {
+            "property": "errorNotification",
+            "message": "Operations never prompt or toast. Return the outcome; the entry point shows it inside withOperation."
+          },
+          {
+            "object": "vscode",
+            "property": "window",
+            "message": "Operations never talk to the user. Return the outcome; the entry point shows it."
+          }
         ]
       }
     },

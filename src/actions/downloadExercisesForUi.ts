@@ -12,12 +12,12 @@ import type { ReadyActionContext } from "./types"
 /**
  * Downloads exercises and pushes the resulting state back to the webview.
  *
- * `mode === "update"` drives the CourseDetails "update available" list; any other
- * mode drives the MyCourses "new exercises" list.
+ * `"update"` drives the CourseDetails "update available" list, `"download"` the MyCourses
+ * "new exercises" list.
  */
 export async function downloadExercisesForUi(
   actionContext: ReadyActionContext,
-  mode: string,
+  mode: "download" | "update",
   courseId: CourseIdentifier,
   exerciseIds: ExerciseIdentifier[],
 ): Promise<void> {

@@ -41,6 +41,11 @@ export interface AuthState {
   clear: () => Promise<void>
   /** Called whenever {@link loggedIn} changes, after the change is applied. */
   subscribe: (listener: (loggedIn: boolean) => void) => void
+  /**
+   * Whether the user has been told the courses.mooc.fi session lacks the programming-exercise
+   * scope. Whoever reports that sets it, and a fetch the session is granted clears it.
+   */
+  insufficientScopeReported: boolean
 }
 
 /** The part of the tree view {@link createAuthState} keeps in step with the session. */
@@ -113,5 +118,6 @@ export function createAuthState(langs: Result<Langs, Error>, ui: LoggedInView): 
     subscribe(listener): void {
       listeners.push(listener)
     },
+    insufficientScopeReported: false,
   }
 }

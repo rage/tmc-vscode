@@ -3,10 +3,11 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { ReadyActionContext } from "../../actions/types"
+import { failure } from "../../api/withOperation"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
-import { failure, runForExercise } from "../../commands/runForExercise"
+import { runForExercise } from "../../commands/runForExercise"
 import { BottleneckError } from "../../errors"
 import { createMockActionContext } from "../mocks/actionContext"
 

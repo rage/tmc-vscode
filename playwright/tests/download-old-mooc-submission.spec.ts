@@ -1,7 +1,6 @@
 import { expect } from "@playwright/test"
 
 import { vsCodeTest } from "../fixtures"
-import { migrationTest } from "../migration-gate"
 import { CoursePage } from "../pages/course"
 import { ExplorerPage } from "../pages/explorer"
 import { MyCoursesPage } from "../pages/my-courses"
@@ -17,7 +16,7 @@ import { QuickPickPage } from "../pages/quick-pick"
 // covers the CLI's `nothing-to-download` result directly; this walks the UI that
 // reports it -- the explorer context menu and the three quick picks in
 // src/commands/downloadOldSubmission.ts.
-migrationTest(
+vsCodeTest(
   "reports a mooc submission with no downloadable files without touching the exercise",
   async ({ page, webview }) => {
     const myCoursesPage = new MyCoursesPage(page, webview)

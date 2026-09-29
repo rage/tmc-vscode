@@ -5,7 +5,7 @@ import * as z from 'zod';
 export const zBrowserTestRuntime = z.enum(['python']);
 
 /**
- * In-browser test spec produced by the `tmc` exercise service: the script to
+ * In-browser test spec from the `tmc` exercise service: the script to
  * run in the client plus an optional error set when the build failed.
  */
 export const zBrowserTestSpec = z.object({
@@ -286,8 +286,6 @@ export const zLocalTmcExercise = z.object({
 
 /**
  * An exercise in the projects directory, tagged with the backend it came from.
- * Both arms carry the ids needed to identify the exercise and its course, so a
- * client can key off them without a second lookup.
  */
 export const zLocalExercise = z.union([
     zLocalTmcExercise.and(z.object({
@@ -329,8 +327,8 @@ export const zMoocCourse = z.object({
 });
 
 /**
- * The data attached to a `mooc-device-login` status update. Mirrors the
- * relevant fields of the RFC 8628 device authorization response.
+ * Payload of a `mooc-device-login` status update; a subset of the RFC 8628
+ * device authorization response.
  */
 export const zMoocDeviceLogin = z.object({
     expires_in: z.int().gte(0).max(4294967295, { error: 'Invalid value: Expected uint32 to be <= 4294967295' }),
@@ -360,9 +358,8 @@ export const zMoocOldSubmissionRestore = z.union([
 ]);
 
 /**
- * A local mooc exercise whose server-side version has changed. Shaped like
- * [`UpdatedExercise`] so clients can treat the two backends' update checks
- * alike; only the id type differs.
+ * A local mooc exercise whose server-side version has changed; like
+ * [`UpdatedExercise`] but keyed by UUID.
  */
 export const zMoocUpdatedExercise = z.object({
     id: z.uuid()

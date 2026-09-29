@@ -34,8 +34,6 @@ export interface SingleFlightOptions {
   key: string
   maxHoldMs: number
   busyMessage: string
-  /** Called with `busyMessage` on rejection, so this module needs no `ActionContext`. */
-  onBusy?: (message: string) => void
 }
 
 /**
@@ -43,16 +41,15 @@ export interface SingleFlightOptions {
  * operation already holds it.
  *
  * A rejection comes back as a [`BottleneckError`] carrying `busyMessage`, which
- * `withOperation` shows; `onBusy`, when given, is called with it as well.
+ * `withOperation` shows.
  */
 export async function runSingleFlight<T>(
   options: SingleFlightOptions,
   body: () => Promise<Result<T, Error>>,
 ): Promise<Result<T, Error>> {
-  const { key, maxHoldMs, busyMessage, onBusy } = options
+  const { key, maxHoldMs, busyMessage } = options
   if (!acquireSingleFlight(key, maxHoldMs)) {
     Logger.warn(`Rejected ${key}, already in flight`)
-    onBusy?.(busyMessage)
     return Err(new BottleneckError(busyMessage))
   }
   try {

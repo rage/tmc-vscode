@@ -65,7 +65,7 @@ export interface WebviewHandlers {
   ) => Promise<Result<OpenedExercises, Error>>
   downloadExercisesForUi: (
     actionContext: ReadyActionContext,
-    mode: string,
+    mode: "download" | "update",
     courseId: CourseIdentifier,
     ids: ExerciseIdentifier[],
   ) => Promise<void>

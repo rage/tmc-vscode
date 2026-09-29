@@ -1,8 +1,9 @@
 import type * as vscode from "vscode"
 
-import { cleanExercise as cleanExerciseAction } from "../actions/cleanExercise"
+import { cleanExercise as cleanExerciseAction } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import { failure, runForExercise } from "./runForExercise"
+import { failure } from "../api/withOperation"
+import { runForExercise } from "./runForExercise"
 
 /**
  * Removes language specific meta files from exercise directory.

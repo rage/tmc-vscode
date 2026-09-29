@@ -1,8 +1,7 @@
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
-import { checkForExerciseUpdates } from "../actions/checkForExerciseUpdates"
-import { downloadExerciseUpdates } from "../actions/downloadExerciseUpdates"
+import { checkForExerciseUpdates, downloadExerciseUpdates } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
 import { NOTIFICATION_DELAY } from "../config/constants"
@@ -30,20 +29,27 @@ export async function updateExercises(
   const updateablesResult = await withOperation(
     dialog,
     { failure: "Failed to check for exercise updates.", silent },
-    () => checkForExerciseUpdates(actionContext),
+    async () => Ok(await checkForExerciseUpdates(actionContext)),
   )
   if (updateablesResult.err) {
     return
   }
 
+  const { outdated, failures } = updateablesResult.val
+  if (!silent) {
+    for (const { backend, error } of failures) {
+      void dialog.reportError("Failed to check for exercise updates.", error, backend)
+    }
+  }
+
   const now = Date.now()
-  const exercisesToUpdate = updateablesResult.val.filter((x) => {
+  const exercisesToUpdate = outdated.filter((x) => {
     const course = userData.getCourse(x.courseId)
     return course.ok && course.val.data.notifyAfter <= now && !course.val.data.disabled
   })
 
   if (exercisesToUpdate.length === 0) {
-    if (!silent) {
+    if (!silent && failures.length === 0) {
       void dialog.notification("All exercises are up to date.")
     }
     return

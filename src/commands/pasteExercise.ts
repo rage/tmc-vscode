@@ -2,8 +2,9 @@ import * as vscode from "vscode"
 
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
+import { failure } from "../api/withOperation"
 import { pasteServiceName } from "../shared/shared"
-import { failure, runForExercise } from "./runForExercise"
+import { runForExercise } from "./runForExercise"
 
 export async function pasteExercise(
   actionContext: ReadyActionContext,

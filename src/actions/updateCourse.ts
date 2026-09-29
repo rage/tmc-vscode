@@ -1,7 +1,6 @@
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 
-import type Dialog from "../api/dialog"
 import { ConnectionError, ForbiddenError, InsufficientScopeError } from "../errors"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { CombinedCourseData, MoocCourse, TmcExerciseSlide } from "../shared/langsSchema"
@@ -58,19 +57,20 @@ function mismatchedBackend(courseId: CourseIdentifier, expected: BackendKind): E
   )
 }
 
-let insufficientScopeReported = false
-
 /**
  * Tells the user their session has to be renewed, and stays quiet until one is.
  *
  * `updateCourse` runs once per course and from a half-hourly background poll, so an
  * unguarded dialog would repeat for every course on every refresh.
  */
-function reportInsufficientScope(dialog: Dialog, error: InsufficientScopeError): void {
-  if (insufficientScopeReported) {
+function reportInsufficientScope(
+  { authState, dialog }: ReadyActionContext,
+  error: InsufficientScopeError,
+): void {
+  if (authState.insufficientScopeReported) {
     return
   }
-  insufficientScopeReported = true
+  authState.insufficientScopeReported = true
   dialog.reportError("Failed to update course data.", error)
 }
 
@@ -88,7 +88,6 @@ export async function updateCourse(
   actionContext: ReadyActionContext,
   courseId: CourseIdentifier,
 ): Promise<Result<boolean, Error>> {
-  const { dialog } = actionContext
   const { exerciseDecorationProvider, langs, userData, workspaceManager } = actionContext.startup
   Logger.info("Updating course")
 
@@ -115,7 +114,7 @@ export async function updateCourse(
     if (updateResult.val instanceof InsufficientScopeError) {
       // Says nothing about the course, so nothing stored about it is touched.
       Logger.warn("The current session does not grant access to programming exercises.")
-      reportInsufficientScope(dialog, updateResult.val)
+      reportInsufficientScope(actionContext, updateResult.val)
       return Ok(false)
     }
     if (updateResult.val instanceof ForbiddenError) {
@@ -156,7 +155,7 @@ export async function updateCourse(
     async ([moocCourse, slides]): Promise<Result<RefreshedCourse, Error>> => {
       // The fetch the session was refused before has now gone through, so the next
       // lapse is worth telling the user about again.
-      insufficientScopeReported = false
+      actionContext.authState.insufficientScopeReported = false
       if (courseData.kind !== "mooc") {
         return Err(mismatchedBackend(courseId, "mooc"))
       }

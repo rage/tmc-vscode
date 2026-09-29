@@ -223,12 +223,16 @@ const createOldSubmission = (params: CreateOldSubmissionParams): OldSubmission =
   }
 }
 
+// A failed send must still answer, or the client waits out its headers timeout.
 const respondWithFile = (res: Response, file: string): void =>
-  res.sendFile(file, (error) => {
+  res.sendFile(file, (error: (Error & { status?: number }) | undefined) => {
     if (!error) {
       console.log("Sent", file)
-    } else {
-      console.error("Failed to send requested file:", JSON.stringify(error))
+      return
+    }
+    console.error("Failed to send requested file:", JSON.stringify(error))
+    if (!res.headersSent) {
+      res.status(error.status ?? 500).end()
     }
   })
 

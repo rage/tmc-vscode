@@ -95,11 +95,9 @@ function launchArgs(userDataDir: string): string[] {
 // (src/config/constants.ts CLIENT_NAME).
 const CLIENT_CONFIG_DIR_NAME = "tmc-vscode_plugin"
 
-// The extension no longer has a TMC username/password login -- the only login is
-// the courses.mooc.fi device flow, which needs a CLI carrying the mooc contract
-// (see migration-gate.ts). Seeding a tmc token instead is the "existing
-// credentials keep working" path, and it is what lets the tmc specs start from a
-// logged-in extension against the pinned released CLI.
+// The only login is the courses.mooc.fi device flow. Seeding a stored tmc token
+// exercises the "existing credentials keep working" path and lets the tmc specs
+// start logged in without a device-flow round trip.
 function seedTmcCredentials(configDir: string): void {
   const clientConfigDir = join(configDir, CLIENT_CONFIG_DIR_NAME)
   fs.mkdirSync(clientConfigDir, { recursive: true })

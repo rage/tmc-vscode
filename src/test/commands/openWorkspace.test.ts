@@ -71,7 +71,7 @@ suite("openWorkspace command", function () {
     expect(dialogMock.confirmation).not.toHaveBeenCalled()
     expect(executeCommand).toHaveBeenCalledWith(
       "vscode.openFolder",
-      expect.objectContaining({ fsPath: courseWorkspaceFile }),
+      expect.objectContaining({ fsPath: vscode.Uri.file(courseWorkspaceFile).fsPath }),
     )
   })
 

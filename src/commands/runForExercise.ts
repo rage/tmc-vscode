@@ -7,8 +7,6 @@ import { withOperation } from "../api/withOperation"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { Logger } from "../utilities"
 
-export { failure } from "../api/withOperation"
-
 /**
  * Runs an exercise command's own work against the exercise it targets, supplying the
  * prologue and the failure reporting that every exercise command shares.
