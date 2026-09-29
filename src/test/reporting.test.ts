@@ -544,7 +544,7 @@ suite("reported once: course administration", function () {
     await post({ type: "removeCourse", id: COURSE_ID })
 
     expect(shown).toEqual([
-      `error: Failed to remove TMC-langs data for "${COURSE}".`,
+      `error: Failed to clear the record of closed exercises for "${COURSE}".`,
       "status: Removed Mooc Course.",
     ])
   })
