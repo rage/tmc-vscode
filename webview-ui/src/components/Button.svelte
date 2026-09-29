@@ -4,7 +4,7 @@
   /**
    * A `vscode-button` whose props, events and attachments pass straight through. Use it rather
    * than the bare element: it needs no a11y ignores at call sites, and Space activates it without
-   * also scrolling the page. For icon-only close/dismiss controls use `vscode-toolbar-button`.
+   * also scrolling the page. For icon-only close/dismiss controls use `ToolbarButton`.
    */
   let { children, onkeydown, ...rest }: SvelteHTMLElements["vscode-button"] = $props()
 
