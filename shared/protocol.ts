@@ -344,6 +344,12 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     target: targetPanelSchema("ExerciseSubmission"),
     error: WebviewErrorSchema,
   }),
+  z.object({
+    type: z.literal("feedbackSent"),
+    target: targetPanelSchema("ExerciseSubmission"),
+    ok: z.boolean(),
+    error: z.string().optional(),
+  }),
   // The one answer a `request*Data` message gets, naming the request it answers so a
   // panel ignores the answer to one it has already given up on. Every path out of a
   // request handler has to send it, or the panel waits out its own timeout instead.
@@ -378,6 +384,11 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     type: z.literal("moocLoginError"),
     target: targetPanelSchema("MoocLogin"),
     error: z.string(),
+  }),
+  z.object({
+    type: z.literal("clipboardCopied"),
+    target: targetPanelSchema("ExerciseTests", "ExerciseSubmission"),
+    ok: z.boolean(),
   }),
   z.object({
     type: z.literal("initializationErrors"),
@@ -504,6 +515,16 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     requestingPanel: strictTargetPanelSchema("ExerciseTests", "ExerciseSubmission"),
   }),
   z.object({
+    type: z.literal("sendFeedback"),
+    sourcePanel: strictTargetPanelSchema("ExerciseSubmission"),
+    feedbackAnswerUrl: z.url(),
+    answers: z.array(z.object({ questionId: z.number(), answer: z.string() })),
+  }),
+  z.object({
+    type: z.literal("copyToClipboard"),
+    text: z.string(),
+  }),
+  z.object({
     type: z.literal("openLinkInBrowser"),
     // Most senders carry a backend-supplied string; the handler additionally restricts
     // the scheme, which this does not.
@@ -512,6 +533,23 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("requestInitializationErrors"),
     sourcePanel: InitializationErrorHelpPanelSchema,
+  }),
+  // an uncaught webview error, for the extension log
+  z.object({
+    type: z.literal("webviewError"),
+    message: z.string(),
+    stack: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("runCommand"),
+    // The webview cannot pass arguments: the host supplies them, `testMyCode.logLevel` for
+    // openSettings and this extension's id for openIssueReporter.
+    command: z.enum([
+      "tmc.logs",
+      "workbench.action.restartExtensionHost",
+      "workbench.action.openSettings",
+      "workbench.action.openIssueReporter",
+    ]),
   }),
   z.object({
     // Posted on MoocLogin mount; starts the CLI device-flow login, streamed back as `moocDeviceCode`.

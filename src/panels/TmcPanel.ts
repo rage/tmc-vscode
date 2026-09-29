@@ -11,6 +11,7 @@ import type { ActionContext, ReadyActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type Dialog from "../api/dialog"
 import { withOperation } from "../api/withOperation"
+import { EXTENSION_ID } from "../config/constants"
 import { ConnectionError, InitializationError } from "../errors"
 import type {
   BackendKind,
@@ -871,21 +872,80 @@ export class TmcPanel {
             break
           }
           case "openLinkInBrowser": {
-            // Non-strict `Uri.parse` never throws and invents a `file` scheme for a string
-            // without one, so a link from the webview has to be parsed strictly and its
-            // scheme checked before it reaches the OS handler.
-            let link
+            const link = parseWebLink(message.url)
+            if (link) {
+              vscode.env.openExternal(link)
+            }
+            break
+          }
+          case "sendFeedback": {
+            const target = message.sourcePanel
+            if (!isReady(actionContext)) {
+              this._postMessage({
+                type: "feedbackSent",
+                target,
+                ok: false,
+                error: reportNotInitialized(actionContext.dialog).message,
+              })
+              return
+            }
+            const feedbackUrl = parseWebLink(message.feedbackAnswerUrl)
+            if (!feedbackUrl) {
+              this._postMessage({
+                type: "feedbackSent",
+                target,
+                ok: false,
+                error: "The feedback address is not a web address.",
+              })
+              return
+            }
+            const sent = await actionContext.startup.langs.submitSubmissionFeedback(
+              feedbackUrl.toString(true),
+              {
+                status: message.answers.map(({ questionId, answer }) => ({
+                  question_id: questionId,
+                  answer,
+                })),
+              },
+            )
+            if (sent.err) {
+              Logger.error("Failed to send the submission feedback", sent.val)
+            }
+            this._postMessage({
+              type: "feedbackSent",
+              target,
+              ok: sent.ok,
+              ...(sent.err ? { error: sent.val.message } : {}),
+            })
+            break
+          }
+          case "copyToClipboard": {
+            let isCopied = true
             try {
-              link = vscode.Uri.parse(message.url, true)
+              await vscode.env.clipboard.writeText(message.text)
             } catch (error) {
-              Logger.error("Refusing to open an unparseable link from the webview", error)
-              break
+              Logger.error("Failed to copy to the clipboard", error)
+              isCopied = false
             }
-            if (link.scheme !== "http" && link.scheme !== "https") {
-              Logger.error(`Refusing to open a "${link.scheme}" link from the webview`, message.url)
-              break
+            const shown = this._lastPanel
+            if (shown?.type === "ExerciseTests" || shown?.type === "ExerciseSubmission") {
+              this._postMessage({
+                type: "clipboardCopied",
+                target: panelTarget(shown),
+                ok: isCopied,
+              })
             }
-            vscode.env.openExternal(link)
+            break
+          }
+          case "webviewError": {
+            Logger.error(`${this._webviewName} error: ${message.message}`, message.stack ?? "")
+            break
+          }
+          case "runCommand": {
+            await vscode.commands.executeCommand(
+              message.command,
+              ...runCommandArguments(message.command),
+            )
             break
           }
           case "moocLogin": {
@@ -1048,6 +1108,45 @@ function toMessageGroups(groups: ExerciseGroup[]): ExerciseGroup[] {
       passed: exercise.passed,
     })),
   }))
+}
+
+/**
+ * Resolves a link the webview supplied, or `undefined` for anything but http(s).
+ *
+ * Non-strict `Uri.parse` never throws and invents a `file` scheme for a string without
+ * one, so the link is parsed strictly and its scheme checked before the OS or tmc-langs
+ * sees it.
+ */
+function parseWebLink(url: string): vscode.Uri | undefined {
+  let link
+  try {
+    link = vscode.Uri.parse(url, true)
+  } catch (error) {
+    Logger.error("Refusing an unparseable link from the webview", error)
+    return undefined
+  }
+  if (link.scheme !== "http" && link.scheme !== "https") {
+    Logger.error(`Refusing a "${link.scheme}" link from the webview`, url)
+    return undefined
+  }
+  return link
+}
+
+type RunnableCommand = Extract<WebviewToExtension, { type: "runCommand" }>["command"]
+
+/** The arguments the host supplies for a command the webview may run. */
+function runCommandArguments(command: RunnableCommand): unknown[] {
+  switch (command) {
+    case "workbench.action.openSettings":
+      return ["testMyCode.logLevel"]
+    case "workbench.action.openIssueReporter":
+      return [{ extensionId: EXTENSION_ID }]
+    case "tmc.logs":
+    case "workbench.action.restartExtensionHost":
+      return []
+    default:
+      return assertUnreachable(command)
+  }
 }
 
 /**

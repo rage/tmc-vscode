@@ -16,13 +16,16 @@ import { moocLoginRegistry } from "../../panels/moocLoginRegistry"
 import type { WebviewHandlers } from "../../panels/TmcPanel"
 import { nextPanelId, registerWebviewHandlers, TmcPanel } from "../../panels/TmcPanel"
 import { updateablesRegistry } from "../../panels/updateablesRegistry"
+import type { Panel } from "../../shared/shared"
 import {
   CourseIdentifier,
   ExerciseIdentifier,
   ExerciseSchema,
   makeMoocKind,
   makeTmcKind,
+  panelTarget,
 } from "../../shared/shared"
+import { Logger } from "../../utilities"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 import { createMockContext } from "../mocks/vscode"
 import { createFakeWebviewPanel } from "../support/webviewPanel"
@@ -123,6 +126,7 @@ suite("TmcPanel moocLogin handling", () => {
 async function mountSidePanel(
   actionContext: ActionContext,
   extensionContext: vscode.ExtensionContext = createMockContext(),
+  shownPanel: Panel = { id: nextPanelId(), type: "MyCourses", courseDeadlines: {} },
 ): Promise<{
   panel: ReturnType<typeof createFakeWebviewPanel>["panel"]
   listener: (message: unknown) => Promise<void>
@@ -135,11 +139,7 @@ async function mountSidePanel(
 
   const extensionUri = vscode.Uri.file("/ext")
 
-  TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
-    id: nextPanelId(),
-    type: "MyCourses",
-    courseDeadlines: {},
-  })
+  TmcPanel.renderSide(extensionUri, extensionContext, actionContext, shownPanel)
   await sendReady()
   const listener = getMessageListener()
   // Clear the initial mount's `setPanel` post so assertions below only see
@@ -1310,6 +1310,16 @@ suite("TmcPanel requestCourseDetailsData updateables", () => {
   })
 })
 
+function postedMessages(panel: vscode.WebviewPanel): { type: string }[] {
+  return vi.mocked(panel.webview.postMessage).mock.calls.map(([m]) => m as { type: string })
+}
+
+function lastMessageOf(panel: vscode.WebviewPanel, type: string): unknown {
+  return postedMessages(panel)
+    .filter((m) => m.type === type)
+    .at(-1)
+}
+
 // `jest-mock-vscode` ships no `env` namespace, so the tests that drive link opening
 // install one on the mock the `vscode` alias resolves to.
 const vscodeMock = vscode as unknown as { env: { openExternal: (uri: vscode.Uri) => void } }
@@ -1319,6 +1329,144 @@ function stubOpenExternal(): ReturnType<typeof vi.fn> {
   vscodeMock.env = { openExternal }
   return openExternal
 }
+
+suite("TmcPanel host services for the webview", () => {
+  test("copies text through VS Code's clipboard and tells the panel it did", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    ;(vscode as unknown as { env: unknown }).env = { clipboard: { writeText } }
+    const shown = exerciseTestsPanel()
+    const { panel, listener } = await mountSidePanel(
+      createMockActionContext(),
+      createMockContext(),
+      shown,
+    )
+
+    await listener({ type: "copyToClipboard", text: "Traceback (most recent call last)" })
+
+    expect(writeText).toHaveBeenCalledWith("Traceback (most recent call last)")
+    expect(lastMessageOf(panel, "clipboardCopied")).toEqual({
+      type: "clipboardCopied",
+      target: panelTarget(shown),
+      ok: true,
+    })
+  })
+
+  test("says so when the clipboard refuses the text", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("no clipboard"))
+    ;(vscode as unknown as { env: unknown }).env = { clipboard: { writeText } }
+    const { panel, listener } = await mountSidePanel(
+      createMockActionContext(),
+      createMockContext(),
+      exerciseTestsPanel(),
+    )
+
+    await listener({ type: "copyToClipboard", text: "x" })
+
+    expect(lastMessageOf(panel, "clipboardCopied")).toMatchObject({ ok: false })
+  })
+
+  const feedbackPanel = { id: 31, type: "ExerciseSubmission" as const }
+
+  test("sends feedback answers to tmc-langs in its own field names", async () => {
+    const submitSubmissionFeedback = vi.fn().mockResolvedValue(Ok({}))
+    const actionContext = createMockActionContext({
+      startup: { langs: { submitSubmissionFeedback } as unknown as Langs },
+    })
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener({
+      type: "sendFeedback",
+      sourcePanel: feedbackPanel,
+      feedbackAnswerUrl: "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback",
+      answers: [{ questionId: 3, answer: "4" }],
+    })
+
+    expect(submitSubmissionFeedback).toHaveBeenCalledWith(
+      "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback",
+      { status: [{ question_id: 3, answer: "4" }] },
+    )
+    expect(lastMessageOf(panel, "feedbackSent")).toEqual({
+      type: "feedbackSent",
+      target: feedbackPanel,
+      ok: true,
+    })
+  })
+
+  test("reports a feedback failure to the form that sent it", async () => {
+    const submitSubmissionFeedback = vi.fn().mockResolvedValue(Err(new Error("server said no")))
+    const actionContext = createMockActionContext({
+      startup: { langs: { submitSubmissionFeedback } as unknown as Langs },
+    })
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener({
+      type: "sendFeedback",
+      sourcePanel: feedbackPanel,
+      feedbackAnswerUrl: "https://tmc.mooc.fi/feedback",
+      answers: [],
+    })
+
+    expect(lastMessageOf(panel, "feedbackSent")).toEqual({
+      type: "feedbackSent",
+      target: feedbackPanel,
+      ok: false,
+      error: "server said no",
+    })
+  })
+
+  test("never hands tmc-langs a feedback address that is not a web address", async () => {
+    const submitSubmissionFeedback = vi.fn()
+    const actionContext = createMockActionContext({
+      startup: { langs: { submitSubmissionFeedback } as unknown as Langs },
+    })
+    const { panel, listener } = await mountSidePanel(actionContext)
+
+    await listener({
+      type: "sendFeedback",
+      sourcePanel: feedbackPanel,
+      feedbackAnswerUrl: "file:///etc/passwd",
+      answers: [],
+    })
+
+    expect(submitSubmissionFeedback).not.toHaveBeenCalled()
+    expect(lastMessageOf(panel, "feedbackSent")).toMatchObject({ ok: false })
+  })
+
+  test("logs a webview crash at error level", async () => {
+    const error = vi.spyOn(Logger, "error").mockImplementation(() => {})
+    onTestFinished(() => error.mockRestore())
+    const { listener } = await mountSidePanel(createMockActionContext())
+
+    await listener({ type: "webviewError", message: "boom", stack: "at App.svelte:1" })
+
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("boom"), "at App.svelte:1")
+  })
+
+  test.each([
+    ["tmc.logs", []],
+    ["workbench.action.restartExtensionHost", []],
+    ["workbench.action.openSettings", ["testMyCode.logLevel"]],
+    ["workbench.action.openIssueReporter", [{ extensionId: "moocfi.test-my-code" }]],
+  ])("runs %s with the arguments the host chooses", async (command, args) => {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    onTestFinished(() => executeCommand.mockRestore())
+    const { listener } = await mountSidePanel(createMockActionContext())
+
+    await listener({ type: "runCommand", command })
+
+    expect(executeCommand).toHaveBeenCalledExactlyOnceWith(command, ...args)
+  })
+
+  test("runs no command outside the allow-list", async () => {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    onTestFinished(() => executeCommand.mockRestore())
+    const { listener } = await mountSidePanel(createMockActionContext())
+
+    await listener({ type: "runCommand", command: "tmc.wipe" })
+
+    expect(executeCommand).not.toHaveBeenCalled()
+  })
+})
 
 // Discards whatever panels a previous test left mounted.
 function resetPanels(): void {
@@ -1677,6 +1825,25 @@ suite("TmcPanel webview document", () => {
     ])
   })
 })
+
+function exerciseTestsPanel(): Extract<Panel, { type: "ExerciseTests" }> {
+  return {
+    id: nextPanelId(),
+    type: "ExerciseTests",
+    course: courseWith(1),
+    exercise: makeTmcKind({
+      id: 1,
+      name: "part01-01_hello",
+      availablePoints: 1,
+      awardedPoints: 0,
+      deadline: null,
+      passed: false,
+      softDeadline: null,
+    }),
+    exerciseUri: vscode.Uri.file("/exercise"),
+    testRunId: nextPanelId(),
+  }
+}
 
 function courseWith(exerciseCount: number, deadline: string | null = null) {
   return makeTmcKind({
