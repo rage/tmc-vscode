@@ -72,11 +72,16 @@ export class TmcPage {
     return this.page.locator(".welcome-view-content").getByRole("button", { name, exact: true })
   }
 
-  /** Opens My Courses from the Command Palette. */
+  /**
+   * Opens My Courses from the Courses view's welcome content, which shows only while the
+   * user has no courses; call {@link openMenu} first.
+   */
   public async openMyCourses(): Promise<void> {
-    await this.page.keyboard.press("F1")
-    await this.page.keyboard.type("TestMyCode: Show My Courses")
-    await this.page.keyboard.press("Enter")
+    await clickUntilVisible(
+      this.coursesViewWelcomeButton("Open My Courses"),
+      this.webview.getByRole("button", { name: "Add new course" }).first(),
+      "My Courses did not open",
+    )
   }
 
   /**
