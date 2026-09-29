@@ -624,7 +624,7 @@ suite("TmcPanel reports a handler's failure once", () => {
           ...startup.startup,
         },
       })
-      vi.mocked(actionContext.dialog.explicitConfirmation).mockResolvedValue(true)
+      vi.mocked(actionContext.dialog.confirm).mockResolvedValue(true)
       return actionContext
     }
 
@@ -641,10 +641,25 @@ suite("TmcPanel reports a handler's failure once", () => {
         expect.objectContaining({ message: "globalState is full" }),
         "tmc",
       )
-      expect(actionContext.dialog.notification).not.toHaveBeenCalled()
+      expect(actionContext.dialog.statusMessage).not.toHaveBeenCalled()
       expect(panel.webview.postMessage).not.toHaveBeenCalledWith(
         expect.objectContaining({ type: "setPanel" }),
       )
+    })
+
+    test("asks in a modal dialog and removes nothing when the user cancels", async () => {
+      const handlers = stubHandlers()
+      const actionContext = confirmingContext()
+      vi.mocked(actionContext.dialog.confirm).mockResolvedValue(false)
+      const { listener } = await mountWith(handlers, actionContext)
+
+      await listener({ type: "removeCourse", id: courseId })
+
+      expect(actionContext.dialog.confirm).toHaveBeenCalledExactlyOnceWith(
+        "Remove Python Course from your courses?",
+        expect.objectContaining({ confirmLabel: "Remove Course" }),
+      )
+      expect(handlers.removeCourse).not.toHaveBeenCalled()
     })
 
     test("a removal that succeeds is announced and shows the remaining courses", async () => {
@@ -655,8 +670,8 @@ suite("TmcPanel reports a handler's failure once", () => {
 
       await listener({ type: "removeCourse", id: courseId })
 
-      expect(actionContext.dialog.notification).toHaveBeenCalledExactlyOnceWith(
-        "python-course was removed from courses.",
+      expect(actionContext.dialog.statusMessage).toHaveBeenCalledExactlyOnceWith(
+        "Removed Python Course.",
       )
       expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
       expect(panel.webview.postMessage).toHaveBeenCalledWith(

@@ -545,7 +545,7 @@ suite("reported once: course administration", function () {
 
     expect(shown).toEqual([
       `error: Failed to remove TMC-langs data for "${COURSE}".`,
-      `info: ${COURSE} was removed from courses.`,
+      "status: Removed Mooc Course.",
     ])
   })
 

@@ -605,13 +605,13 @@ export class TmcPanel {
               actionContext.dialog.reportError("Failed to remove the course.", courseResult.val)
               return
             }
-            const course = courseResult.val
-            const courseName = LocalCourseData.getCourseName(course)
+            const title = LocalCourseData.getCourseTitle(courseResult.val)
             if (
-              await actionContext.dialog.explicitConfirmation(
-                `Do you want to remove ${LocalCourseData.getCourseName(course)} from your courses? \
-                                This won't delete your downloaded exercises.`,
-              )
+              await actionContext.dialog.confirm(`Remove ${title} from your courses?`, {
+                confirmLabel: "Remove Course",
+                detail:
+                  "Your downloaded exercises stay on disk, and you can add the course again later.",
+              })
             ) {
               const removeResult = await withOperation(
                 actionContext.dialog,
@@ -623,7 +623,7 @@ export class TmcPanel {
                   id: nextPanelId(),
                   type: "MyCourses",
                 })
-                actionContext.dialog.notification(`${courseName} was removed from courses.`)
+                actionContext.dialog.statusMessage(`Removed ${title}.`)
               }
             }
             break
