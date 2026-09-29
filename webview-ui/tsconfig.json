@@ -7,7 +7,7 @@
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
     // explicit so tsc and tsgo agree on which globals-providing packages are in scope
-    "types": ["vscode-webview", "vitest/globals", "@testing-library/jest-dom"],
+    "types": ["vscode-webview", "vite/client", "vitest/globals", "@testing-library/jest-dom"],
     // to have warnings/errors of the Svelte compiler at the correct
     // position, enable source maps
     "sourceMap": true

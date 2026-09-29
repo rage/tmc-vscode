@@ -27,17 +27,21 @@ const messageListeners = new Set<MessageListener>()
 /** Settles one outstanding request, keyed by its `requestId`. */
 const pendingRequests = new Map<number, (reply: ReplyMessage) => void>()
 
-// One window listener for the whole app, so each message is validated once however many
+// One window listener for the whole app, so each message is handled once however many
 // components listen.
 function dispatchMessage(event: MessageEvent): void {
-  const validationResult = ExtensionToWebviewSchema.safeParse(event.data)
-  if (!validationResult.success) {
-    console.warn(
-      "Ignoring invalid message to webview:",
-      z.prettifyError(validationResult.error),
-      event.data,
-    )
-    return
+  // The host validates every message it posts against the same schema, so checking again
+  // here only guards this side of the contract while it is being developed.
+  if (import.meta.env.DEV) {
+    const validationResult = ExtensionToWebviewSchema.safeParse(event.data)
+    if (!validationResult.success) {
+      console.warn(
+        "Ignoring invalid message to webview:",
+        z.prettifyError(validationResult.error),
+        event.data,
+      )
+      return
+    }
   }
   // zod strips unknown fields, so the original data is used instead of the parse result
   const message = event.data as ExtensionToWebview
@@ -155,11 +159,10 @@ export function createRequester(): Request {
         resolve(outcome)
       }
       pendingRequests.set(requestId, ({ outcome }) => {
-        if (outcome.ok) {
+        if (outcome.ok && import.meta.env.DEV) {
           const valueResult = ReplyValueSchemas[type].safeParse(outcome.value)
           if (!valueResult.success) {
-            console.warn(`Ignoring an invalid "${type}" reply:`, z.prettifyError(valueResult.error))
-            return
+            console.warn(`Invalid "${type}" reply:`, z.prettifyError(valueResult.error))
           }
         }
         settle(outcome as ReplyOutcome<K>)
