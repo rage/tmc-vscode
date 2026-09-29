@@ -12,5 +12,7 @@
     // position, enable source maps
     "sourceMap": true
   },
-  "include": ["src/**/*", "dev/**/*.ts"]
+  "include": ["src/**/*", "dev/**/*.ts"],
+  // Runs under Node; tsconfig.node.json checks it.
+  "exclude": ["dev/vite.config.ts"]
 }

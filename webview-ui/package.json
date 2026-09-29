@@ -6,8 +6,10 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch --mode development",
-    "check": "node -e \"require('node:fs').rmSync('.svelte-check',{recursive:true,force:true})\" && svelte-check --tsconfig ./tsconfig.json --tsgo",
-    "check:tsc": "svelte-check --tsconfig ./tsconfig.json",
+    "check": "node -e \"require('node:fs').rmSync('.svelte-check',{recursive:true,force:true})\" && svelte-check --tsconfig ./tsconfig.json --tsgo && tsgo --noEmit -p tsconfig.node.json",
+    "check:tsc": "svelte-check --tsconfig ./tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "harness": "vite --config dev/vite.config.ts",
+    "harness:build": "vite build --config dev/vite.config.ts",
     "themes:refresh": "xvfb-maybe -a -- node dev/refreshThemes.mjs"
   },
   "dependencies": {

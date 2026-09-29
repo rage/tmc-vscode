@@ -1,0 +1,51 @@
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+body {
+  display: flex;
+  flex-direction: column;
+  font:
+    13px system-ui,
+    sans-serif;
+  color: var(--vscode-editor-foreground);
+  background: var(--vscode-editor-background);
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--vscode-editorGroup-border, #8884);
+}
+.stage {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+iframe {
+  flex: 1;
+  border: 0;
+  border-right: 1px solid var(--vscode-editorGroup-border, #8884);
+}
+.log {
+  flex: 0 0 320px;
+  margin-left: auto;
+  overflow: auto;
+  padding: 0 12px;
+}
+.log h2 {
+  font-size: 13px;
+}
+.log ol {
+  padding-left: 20px;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+}
+.log li {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-bottom: 4px;
+}

@@ -1,0 +1,9 @@
+{
+  // The Node side of the dev harness.
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": ["dev/vite.config.ts"]
+}
