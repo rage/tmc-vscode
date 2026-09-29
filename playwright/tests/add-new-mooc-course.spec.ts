@@ -77,19 +77,22 @@ vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ pag
     await expect(contents).toBeVisible()
   })
 
+  const allPassed = page
+    .locator(".notifications-toasts .notification-toast")
+    .filter({ hasText: "All tests of passing_exercise passed." })
+
   await vsCodeTest.step("run tests", async () => {
-    const successMessage = testResultsPage
-      .getWebview()
-      .getByRole("heading", { name: "Tests passed" })
     await page.getByText(fileContents).click()
-    await expect(successMessage).toBeHidden()
+    await expect(allPassed).toBeHidden()
     // The editor-title action is contributed under `test-my-code:ActiveEditorIsExercise`
     // (package.json), so it renders only once the extension has recognised the
     // open exercise.
     const runTests = page.getByLabel("Run Tests", { exact: true })
     await expect(runTests).toBeVisible()
     await runTests.click()
-    await expect(successMessage).toBeVisible()
+    await expect(allPassed).toBeVisible()
+    await testResultsPage.open()
+    await expect(testResultsPage.result("PassingExercise: test_passing").first()).toBeVisible()
   })
 
   await vsCodeTest.step("submit exercise and see the reduced mooc result", async () => {
@@ -99,7 +102,7 @@ vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ pag
       name: "Exercise graded",
     })
     await expect(gradedHeading).toBeHidden()
-    await testResultsPage.submit()
+    await allPassed.getByRole("button", { name: "Submit" }).click()
     await expect(gradedHeading).toBeVisible()
     await expect(
       testSubmissionPage.getWebview().getByRole("meter", { name: "Score" }),

@@ -1,19 +1,17 @@
+import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { testExercise } from "../../commands/testExercise"
+import type { ExerciseTestController } from "../../testing/exerciseTestController"
+import { setActiveTestController } from "../../testing/localTesting"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
-
-vi.mock("../../actions", () => ({
-  testExercise: vi.fn(async () => Ok.EMPTY),
-}))
 
 const uri = vscode.Uri.file("/workspace/tmc/python-course/ex-1")
 const activeExercise: WorkspaceExercise = {
@@ -25,7 +23,7 @@ const activeExercise: WorkspaceExercise = {
 }
 const pointedAtExercise: WorkspaceExercise = { ...activeExercise, exerciseSlug: "ex-2" }
 
-// `testExercise` reads nothing off the extension context; it only hands it on.
+// `testExercise` reads nothing off the extension context.
 const extensionContext = {} as vscode.ExtensionContext
 
 function contextWith(
@@ -42,21 +40,24 @@ function contextWith(
 }
 
 suite("Test exercise command", function () {
+  const runExercise = vi.fn(async (): Promise<Result<void, Error>> => Ok.EMPTY)
+  let registration: vscode.Disposable
+
   beforeEach(function () {
-    vi.mocked(actions.testExercise).mockResolvedValue(Ok.EMPTY)
+    runExercise.mockResolvedValue(Ok.EMPTY)
+    registration = setActiveTestController({ runExercise } as unknown as ExerciseTestController)
   })
 
-  test("runs the tests of the active exercise when no resource is given", async function () {
+  afterEach(function () {
+    registration.dispose()
+  })
+
+  test("runs the tests of the active exercise through the controller", async function () {
     const context = contextWith({ active: activeExercise, containing: pointedAtExercise })
 
     await testExercise(extensionContext, context, undefined)
 
-    expect(actions.testExercise).toHaveBeenCalledExactlyOnceWith(
-      extensionContext,
-      context,
-      activeExercise,
-      undefined,
-    )
+    expect(runExercise).toHaveBeenCalledExactlyOnceWith(activeExercise)
   })
 
   test("runs the tests of the exercise the resource points at", async function () {
@@ -64,23 +65,18 @@ suite("Test exercise command", function () {
 
     await testExercise(extensionContext, context, uri)
 
-    expect(actions.testExercise).toHaveBeenCalledExactlyOnceWith(
-      extensionContext,
-      context,
-      pointedAtExercise,
-      undefined,
-    )
+    expect(runExercise).toHaveBeenCalledExactlyOnceWith(pointedAtExercise)
   })
 
-  test("reports a failed test run under its own headline", async function () {
-    const cause = new Error("langs exited with 1")
-    vi.mocked(actions.testExercise).mockResolvedValue(Err(cause))
+  test("reports a run the controller refused under its own headline", async function () {
+    const cause = new Error("controller refused")
+    runExercise.mockResolvedValue(Err(cause))
     const context = contextWith({ active: activeExercise })
 
     await testExercise(extensionContext, context, undefined)
 
     expect(context.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Exercise test run failed.",
+      "Testing the exercise failed.",
       cause,
       "tmc",
     )
@@ -91,7 +87,7 @@ suite("Test exercise command", function () {
 
     await testExercise(extensionContext, context, uri)
 
-    expect(actions.testExercise).not.toHaveBeenCalled()
+    expect(runExercise).not.toHaveBeenCalled()
     expect(context.dialog.errorNotification).toHaveBeenCalledOnce()
   })
 })

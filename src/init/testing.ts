@@ -2,22 +2,27 @@ import * as vscode from "vscode"
 
 import type { ReadyActionContext } from "../actions/types"
 import { CheckstyleDiagnostics } from "../testing/checkstyleDiagnostics"
-import { setActiveLocalTesting } from "../testing/localTesting"
-import { openCourseExercises } from "../testing/openExercises"
+import { ExerciseTestController } from "../testing/exerciseTestController"
+import { setActiveTestController } from "../testing/localTesting"
 
-/** Sets up how local test runs are reported in the editor, for the rest of the activation. */
+/**
+ * Sets up the reporting of local test runs for the rest of the activation: the test
+ * controller and the code quality diagnostics.
+ */
 export function registerTesting(
   context: vscode.ExtensionContext,
   actionContext: ReadyActionContext,
 ): void {
   const { workspaceManager } = actionContext.startup
   const diagnostics = new CheckstyleDiagnostics()
-  const clearClosedExercises = (): void =>
-    diagnostics.retain(openCourseExercises(workspaceManager).map((exercise) => exercise.uri))
+  const controller = new ExerciseTestController(actionContext, diagnostics)
+  const syncExercises = (): void => controller.syncExercises()
   context.subscriptions.push(
     diagnostics,
-    setActiveLocalTesting({ diagnostics }),
-    workspaceManager.onDidChangeExercises(clearClosedExercises),
-    vscode.workspace.onDidChangeWorkspaceFolders(clearClosedExercises),
+    controller,
+    setActiveTestController(controller),
+    workspaceManager.onDidChangeExercises(syncExercises),
+    // Opening and closing exercises moves workspace folders without replacing the exercises.
+    vscode.workspace.onDidChangeWorkspaceFolders(syncExercises),
   )
 }

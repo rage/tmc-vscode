@@ -16,6 +16,7 @@ import type Resources from "../config/resources"
 import { UserData } from "../config/userdata"
 import { BottleneckError, ConnectionError, InsufficientScopeError } from "../errors"
 import { registerCommands } from "../init/commands"
+import { registerTesting } from "../init/testing"
 import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { ExtensionToWebview } from "../shared/shared"
 import { backendName, CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../shared/shared"
@@ -189,6 +190,7 @@ async function harness(
     get: (target, prop) => (prop === "subscriptions" ? subscriptions : Reflect.get(target, prop)),
   })
   registerCommands(extensionContext, actionContext)
+  registerTesting(extensionContext, actionContext)
   registerCommand.mockRestore()
 
   const webviews: ReturnType<typeof createFakeWebviewPanel>[] = []
@@ -280,6 +282,16 @@ const pending = <T>(): { promise: Promise<T>; resolve: (value: T) => void } => {
   return { promise, resolve }
 }
 
+/** The messages the latest local test run errored its items with. */
+function lastTestRunErrors(): string[] {
+  const controller = vi.mocked(vscode.tests.createTestController).mock.results.at(-1)?.value as {
+    runs: { results: [string, string, vscode.TestMessage?][] }[]
+  }
+  return (controller.runs.at(-1)?.results ?? [])
+    .filter(([state]) => state === "errored")
+    .map(([, , message]) => String(message?.message))
+}
+
 beforeEach(function () {
   vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
 })
@@ -291,8 +303,8 @@ beforeAll(function () {
 })
 
 suite("reported once: exercise commands", function () {
-  test("a failed test run shows in its panel, and nothing else", async function () {
-    const { run, shown, panelFailures } = await harness({
+  test("a failed test run shows in Test Results, and nothing else", async function () {
+    const { run, shown } = await harness({
       langs: {
         runTests: () => ({
           process: Promise.resolve(Err(new Error("compile failed"))),
@@ -305,15 +317,18 @@ suite("reported once: exercise commands", function () {
     await run("tmc.testExercise")
 
     expect(shown).toEqual([])
-    expect(panelFailures()).toEqual(["testError: compile failed"])
+    expect(lastTestRunErrors()).toEqual(["The tests could not be run: compile failed"])
   })
 
-  test("a test run that cannot start is one notification", async function () {
+  test("a test run that cannot start shows in Test Results, and nothing else", async function () {
     const { run, shown } = await harness({ course: storedCourse({ name: "renamed" }) })
 
     await run("tmc.testExercise")
 
-    expect(shown).toEqual(["error: Exercise test run failed."])
+    expect(shown).toEqual([])
+    expect(lastTestRunErrors()).toEqual([
+      "The tests could not be run: No mooc course with slug mooc-course",
+    ])
   })
 
   test("a failed submission shows in its panel only", async function () {

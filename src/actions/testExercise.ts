@@ -4,38 +4,44 @@ import type * as vscode from "vscode"
 
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { CLI_PROCESS_TIMEOUT } from "../config/constants"
-import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
-import type { ExerciseTestsPanel, TestResultData } from "../shared/shared"
-import { LocalCourseData, LocalCourseExercise, panelTarget, toWebviewError } from "../shared/shared"
-import type { CheckstyleDiagnostics } from "../testing/checkstyleDiagnostics"
+import type { RunResult, StyleValidationResult } from "../shared/langsSchema"
+import { LocalCourseData, LocalCourseExercise } from "../shared/shared"
 import { Logger, runSingleFlight } from "../utilities"
 import { resolvePythonInterpreter } from "../window"
 import type { ReadyActionContext } from "./types"
 
-export const testInterrupts = new Map<number, (() => void)[]>()
-
-/** Stops the test run `testRunId`. Does nothing if it already finished. */
-export function cancelTestRun(testRunId: number): void {
-  const interrupts = testInterrupts.get(testRunId)
-  if (interrupts) {
-    for (const interrupt of interrupts) {
-      interrupt()
+/** What running an exercise's tests locally produced. */
+export type ExerciseTestOutcome =
+  | { kind: "examMode" }
+  | {
+      kind: "ran"
+      runResult: RunResult
+      /** `Ok(null)` when the exercise's language has no code quality checks. */
+      styleValidation: Result<StyleValidationResult | null, Error>
+      isCourseDisabled: boolean
     }
-    testInterrupts.delete(testRunId)
-  }
-}
 
 /**
- * Tests an exercise while keeping the user informed
+ * Handles the `ExerciseTests` panel's Cancel. No local run reports to that panel, so there
+ * is nothing to stop: runs are cancelled through {@link testExercise}'s token.
+ */
+export function cancelTestRun(_testRunId: number): void {}
+
+/**
+ * Runs an exercise's tests and code quality checks locally.
  *
- * @param diagnostics Where the code quality findings go; they are left alone when omitted.
+ * Reports nothing to the user: the Testing API controller in `src/testing` does that.
+ *
+ * @param token Stops both CLI processes. A cancelled run resolves with whatever the CLI
+ * made of being interrupted, so check the token before reporting the outcome.
+ * @returns `Err(BottleneckError)` while another run of the same exercise is in flight, and
+ * `Err` when the tests could not be run at all.
  */
 export async function testExercise(
-  context: vscode.ExtensionContext,
   actionContext: ReadyActionContext,
   exercise: WorkspaceExercise,
-  diagnostics?: CheckstyleDiagnostics,
-): Promise<Result<void, Error>> {
+  token: vscode.CancellationToken,
+): Promise<Result<ExerciseTestOutcome, Error>> {
   const { langs, userData } = actionContext.startup
 
   const courseResult = userData.getCourseBySlug(exercise.backend, exercise.courseSlug)
@@ -51,6 +57,9 @@ export async function testExercise(
       new Error(`ID for exercise ${exercise.courseSlug}/${exercise.exerciseSlug} was not found.`),
     )
   }
+  if (course.data.perhapsExamMode) {
+    return Ok({ kind: "examMode" })
+  }
 
   // guards the run-tests + checkstyle pair as one unit against a second click
   const exercisePath = exercise.uri.fsPath
@@ -60,93 +69,42 @@ export async function testExercise(
       maxHoldMs: 2 * CLI_PROCESS_TIMEOUT + 30_000,
       busyMessage: "Tests are already running for this exercise.",
     },
-    async () => {
-      const testRunId = nextPanelId()
-      // render panel
-      const panel: ExerciseTestsPanel = {
-        id: nextPanelId(),
-        type: "ExerciseTests",
-        course: course,
-        exercise: courseExercise,
-        exerciseUri: exercise.uri,
-        testRunId,
-      }
-      TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
-      const target = panelTarget(panel)
+    async (): Promise<Result<ExerciseTestOutcome, Error>> => {
+      const { process: testRunner, interrupt: testInterrupt } = langs.runTests(
+        exercisePath,
+        resolvePythonInterpreter(exercise.uri),
+      )
+      const { process: validationRunner, interrupt: validationInterrupt } =
+        langs.runCheckstyle(exercisePath)
+      const cancellation = token.onCancellationRequested(() => {
+        testInterrupt()
+        validationInterrupt()
+      })
+      const exerciseName = exercise.exerciseSlug
 
-      if (!course.data.perhapsExamMode) {
-        const { process: testRunner, interrupt: testInterrupt } = langs.runTests(
-          exercise.uri.fsPath,
-          resolvePythonInterpreter(exercise.uri),
-        )
-        const { process: validationRunner, interrupt: validationInterrupt } = langs.runCheckstyle(
-          exercise.uri.fsPath,
-        )
-        testInterrupts.set(testRunId, [testInterrupt, validationInterrupt])
-        const exerciseName = exercise.exerciseSlug
-
-        try {
-          Logger.info(`Running local tests and validations for ${exerciseName}`)
-          const testResults = await testRunner
-          Logger.info(`Tests finished for ${exerciseName}`)
-
-          if (testResults.err) {
-            validationInterrupt()
-            TmcPanel.postMessage({
-              type: "testError",
-              target,
-              error: toWebviewError(testResults.val),
-            })
-            return Ok.EMPTY
-          }
-
-          const validationResults = await validationRunner
-          Logger.info(`Validations finished for ${exerciseName}`)
-          if (validationResults.err) {
-            Logger.error(
-              `Code quality checks failed to run for ${exerciseName}`,
-              validationResults.val,
-            )
-          }
-          await diagnostics?.report(
-            exercise.uri,
-            validationResults.ok ? validationResults.val : null,
-          )
-
-          const data: TestResultData = {
-            testResult: testResults.val,
-            id: LocalCourseExercise.getId(courseExercise),
-            courseSlug: LocalCourseData.getCourseName(course),
-            exerciseName,
-            disabled: course.data.disabled,
-            styleValidationResult: validationResults.ok ? validationResults.val : null,
-            styleValidationError: validationResults.err ? validationResults.val.message : undefined,
-          }
-
-          if (TmcPanel.sidePanel === undefined) {
-            // user closed panel, re-render
-            TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
-          }
-          TmcPanel.postMessage({
-            type: "testResults",
-            target,
-            testResults: data,
-          })
-        } finally {
-          // Only an explicit cancel removes this otherwise, so every other exit from the
-          // run would keep both interrupt closures — and the dead pids they hold — alive.
-          testInterrupts.delete(testRunId)
+      try {
+        Logger.info(`Running local tests and validations for ${exerciseName}`)
+        const testResults = await testRunner
+        Logger.info(`Tests finished for ${exerciseName}`)
+        if (testResults.err) {
+          validationInterrupt()
+          return testResults
         }
-      } else {
-        diagnostics?.clear(exercise.uri)
-        // exam
-        TmcPanel.postMessage({
-          type: "willNotRunTestsForExam",
-          target,
-        })
-      }
 
-      return Ok.EMPTY
+        const styleValidation = await validationRunner
+        Logger.info(`Validations finished for ${exerciseName}`)
+        if (styleValidation.err) {
+          Logger.error(`Code quality checks failed to run for ${exerciseName}`, styleValidation.val)
+        }
+        return Ok({
+          kind: "ran",
+          runResult: testResults.val,
+          styleValidation,
+          isCourseDisabled: course.data.disabled,
+        })
+      } finally {
+        cancellation.dispose()
+      }
     },
   )
 }

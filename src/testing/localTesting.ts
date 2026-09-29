@@ -1,24 +1,19 @@
 import * as vscode from "vscode"
 
-import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
+import type { ExerciseTestController } from "./exerciseTestController"
 
-/** What reports local test runs to the editor, once activation has set it up. */
-export interface LocalTesting {
-  diagnostics: CheckstyleDiagnostics
-}
+let active: ExerciseTestController | undefined
 
-let active: LocalTesting | undefined
-
-/** The activation's {@link LocalTesting}; `undefined` before `registerTesting` or after dispose. */
-export function activeLocalTesting(): LocalTesting | undefined {
+/** The activation's test controller; `undefined` before `registerTesting` or after dispose. */
+export function activeTestController(): ExerciseTestController | undefined {
   return active
 }
 
-/** Makes `testing` the active one until the returned disposable is disposed. */
-export function setActiveLocalTesting(testing: LocalTesting): vscode.Disposable {
-  active = testing
+/** Makes `controller` the active one until the returned disposable is disposed. */
+export function setActiveTestController(controller: ExerciseTestController): vscode.Disposable {
+  active = controller
   return new vscode.Disposable(() => {
-    if (active === testing) {
+    if (active === controller) {
       active = undefined
     }
   })

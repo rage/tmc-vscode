@@ -1,6 +1,6 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
-import type * as vscode from "vscode"
+import * as vscode from "vscode"
 
 import { testExercise } from "../../actions/testExercise"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
@@ -8,54 +8,45 @@ import { failure } from "../../api/withOperation"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
+import { BottleneckError } from "../../errors"
 import { makeTmcKind } from "../../shared/shared"
-import type { CheckstyleDiagnostics } from "../../testing/checkstyleDiagnostics"
 import { createMockActionContext } from "../mocks/actionContext"
 
-// TmcPanel talks to the vscode webview API, so the whole module is mocked; the
-// action only needs renderSide (a no-op), postMessage (asserted), and a defined
-// sidePanel so the re-render branch is skipped.
-vi.mock("../../panels/TmcPanel", () => ({
-  nextPanelId: () => 1,
-  TmcPanel: {
-    renderSide: vi.fn(),
-    postMessage: vi.fn(),
-    sidePanel: {},
-  },
-}))
-
-import { TmcPanel } from "../../panels/TmcPanel"
+vi.mock("../../window", () => ({ resolvePythonInterpreter: () => undefined }))
 
 const COURSE_SLUG = "python-course"
 const EXERCISE_SLUG = "part01-01_hello"
 
-const course = makeTmcKind({
-  id: 42,
-  name: COURSE_SLUG,
-  title: "Python Course",
-  description: "",
-  organization: "mooc",
-  exercises: [
-    {
-      id: 1,
-      name: EXERCISE_SLUG,
-      availablePoints: 1,
-      awardedPoints: 0,
-      deadline: null,
-      passed: false,
-      softDeadline: null,
-    },
-  ],
-  availablePoints: 1,
-  awardedPoints: 0,
-  perhapsExamMode: false,
-  newExercises: [],
-  notifyAfter: 0,
-  disabled: false,
-  materialUrl: null,
-})
+function course(perhapsExamMode = false) {
+  return makeTmcKind({
+    id: 42,
+    name: COURSE_SLUG,
+    title: "Python Course",
+    description: "",
+    organization: "mooc",
+    exercises: [
+      {
+        id: 1,
+        name: EXERCISE_SLUG,
+        availablePoints: 1,
+        awardedPoints: 0,
+        deadline: null,
+        passed: false,
+        softDeadline: null,
+      },
+    ],
+    availablePoints: 1,
+    awardedPoints: 0,
+    perhapsExamMode,
+    newExercises: [],
+    notifyAfter: 0,
+    disabled: false,
+    materialUrl: null,
+  })
+}
 
-const extensionContext = { extensionUri: {} } as unknown as vscode.ExtensionContext
+const passingRun = { logs: {}, status: "PASSED", testResults: [] }
+const noToken = new vscode.CancellationTokenSource().token
 
 // A distinct path per test, so the single-flight key one test holds can't reject the next.
 let exerciseCounter = 0
@@ -66,130 +57,145 @@ function workspaceExercise(): WorkspaceExercise {
     courseSlug: COURSE_SLUG,
     exerciseSlug: EXERCISE_SLUG,
     status: ExerciseStatus.Open,
-    uri: { fsPath: `/exercises/${exerciseCounter}` } as unknown as vscode.Uri,
+    uri: vscode.Uri.file(`/exercises/${exerciseCounter}`),
   }
 }
 
 function contextWithTestRun(
   testRun: unknown,
-  checkstyleRun: unknown = Ok({ strategy: "DISABLED", validation_errors: null }),
-  checkstyleInterrupt: () => void = vi.fn(),
+  options: {
+    checkstyleRun?: unknown
+    testInterrupt?: () => void
+    checkstyleInterrupt?: () => void
+    examMode?: boolean
+  } = {},
 ): ReadyActionContext {
   return createMockActionContext({
     startup: {
       langs: {
-        runTests: () => ({ process: Promise.resolve(testRun), interrupt: vi.fn() }),
+        runTests: vi.fn(() => ({
+          process: Promise.resolve(testRun),
+          interrupt: options.testInterrupt ?? vi.fn(),
+        })),
         runCheckstyle: () => ({
-          process: Promise.resolve(checkstyleRun),
-          interrupt: checkstyleInterrupt,
+          process: Promise.resolve(
+            options.checkstyleRun ?? Ok({ strategy: "DISABLED", validation_errors: null }),
+          ),
+          interrupt: options.checkstyleInterrupt ?? vi.fn(),
         }),
       } as unknown as ReadyStartup["langs"],
       userData: {
-        getCourseBySlug: () => Ok(course),
+        getCourseBySlug: () => Ok(course(options.examMode)),
       } as unknown as ReadyStartup["userData"],
     },
   })
 }
 
 suite("testExercise action", () => {
-  test("a failed test run survives the webview boundary with its message intact", async () => {
-    // The panel reads `error.message`, and the webview bridge serializes the message
-    // as JSON -- which drops a live Error's non-enumerable `message`.
-    const actionContext = contextWithTestRun(Err(new Error("No compiler on PATH")))
+  test("hands back the test and code quality results", async () => {
+    const validation = { strategy: "FAIL", validation_errors: {} }
+    const actionContext = contextWithTestRun(Ok(passingRun), { checkstyleRun: Ok(validation) })
 
-    await testExercise(extensionContext, actionContext, workspaceExercise())
+    const outcome = await testExercise(actionContext, workspaceExercise(), noToken)
 
-    const posted = vi
-      .mocked(TmcPanel.postMessage)
-      .mock.calls.flat()
-      .find((message) => message.type === "testError")
-    expect(posted).toBeDefined()
-    const delivered = JSON.parse(JSON.stringify(posted)) as { error: { message: string } }
-    expect(delivered.error.message).toBe("No compiler on PATH")
+    expect(outcome.ok && outcome.val).toEqual({
+      kind: "ran",
+      runResult: passingRun,
+      styleValidation: Ok(validation),
+      isCourseDisabled: false,
+    })
   })
 
   test("a failed test run stops the code quality check running beside it", async () => {
     const checkstyleInterrupt = vi.fn()
-    const actionContext = contextWithTestRun(
-      Err(new Error("No compiler on PATH")),
-      new Promise(() => {}),
+    const actionContext = contextWithTestRun(Err(new Error("No compiler on PATH")), {
+      checkstyleRun: new Promise(() => {}),
       checkstyleInterrupt,
-    )
+    })
 
-    await testExercise(extensionContext, actionContext, workspaceExercise())
+    const outcome = await testExercise(actionContext, workspaceExercise(), noToken)
 
+    expect(outcome.err && outcome.val.message).toBe("No compiler on PATH")
     expect(checkstyleInterrupt).toHaveBeenCalledOnce()
   })
 
   test("a code quality check that fails to run keeps the test results", async () => {
-    vi.mocked(TmcPanel.postMessage).mockClear()
-    const runResult = { logs: {}, status: "PASSED", testResults: [] }
-    const actionContext = contextWithTestRun(Ok(runResult), Err(new Error("Checkstyle crashed")))
+    const actionContext = contextWithTestRun(Ok(passingRun), {
+      checkstyleRun: Err(new Error("Checkstyle crashed")),
+    })
 
-    await testExercise(extensionContext, actionContext, workspaceExercise())
+    const outcome = await testExercise(actionContext, workspaceExercise(), noToken)
 
-    const types = vi.mocked(TmcPanel.postMessage).mock.calls.map(([message]) => message?.type)
-    expect(types).not.toContain("testError")
-    expect(TmcPanel.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "testResults",
-        testResults: expect.objectContaining({
-          testResult: runResult,
-          styleValidationResult: null,
-          styleValidationError: "Checkstyle crashed",
-        }),
+    expect(outcome.ok && outcome.val.kind === "ran" && outcome.val.runResult).toBe(passingRun)
+    expect(outcome.ok && outcome.val.kind === "ran" && outcome.val.styleValidation.err).toBeTruthy()
+  })
+
+  test("cancelling stops both CLI processes", async () => {
+    const testInterrupt = vi.fn()
+    const checkstyleInterrupt = vi.fn()
+    let finish!: (value: unknown) => void
+    const actionContext = contextWithTestRun(
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+      {
+        testInterrupt,
+        checkstyleInterrupt,
+      },
+    )
+    const cancellation = new vscode.CancellationTokenSource()
+
+    const running = testExercise(actionContext, workspaceExercise(), cancellation.token)
+    await vi.waitFor(() => expect(actionContext.startup.langs.runTests).toHaveBeenCalled())
+    cancellation.cancel()
+    finish(Ok({ logs: {}, status: "TESTRUN_INTERRUPTED", testResults: [] }))
+    await running
+
+    expect(testInterrupt).toHaveBeenCalledOnce()
+    expect(checkstyleInterrupt).toHaveBeenCalledOnce()
+  })
+
+  test("runs nothing in exam mode", async () => {
+    const actionContext = contextWithTestRun(Ok(passingRun), { examMode: true })
+
+    const outcome = await testExercise(actionContext, workspaceExercise(), noToken)
+
+    expect(outcome.ok && outcome.val).toEqual({ kind: "examMode" })
+    expect(actionContext.startup.langs.runTests).not.toHaveBeenCalled()
+  })
+
+  test("a second run of the same exercise is rejected as busy", async () => {
+    let finish!: (value: unknown) => void
+    const actionContext = contextWithTestRun(
+      new Promise((resolve) => {
+        finish = resolve
       }),
     )
-  })
-})
-
-function diagnosticsSpy(): CheckstyleDiagnostics {
-  return { report: vi.fn(async () => {}), clear: vi.fn() } as unknown as CheckstyleDiagnostics
-}
-
-suite("testExercise action, code quality diagnostics", () => {
-  test("reports the code quality result for the exercise", async () => {
-    const validation = { strategy: "FAIL", validation_errors: {} }
-    const actionContext = contextWithTestRun(
-      Ok({ logs: {}, status: "PASSED", testResults: [] }),
-      Ok(validation),
-    )
-    const diagnostics = diagnosticsSpy()
     const exercise = workspaceExercise()
 
-    await testExercise(extensionContext, actionContext, exercise, diagnostics)
+    const first = testExercise(actionContext, exercise, noToken)
+    const second = await testExercise(actionContext, exercise, noToken)
+    finish(Ok(passingRun))
+    await first
 
-    expect(diagnostics.report).toHaveBeenCalledExactlyOnceWith(exercise.uri, validation)
-  })
-
-  test("a code quality check that fails to run clears the stale findings", async () => {
-    const actionContext = contextWithTestRun(
-      Ok({ logs: {}, status: "PASSED", testResults: [] }),
-      Err(new Error("Checkstyle crashed")),
-    )
-    const diagnostics = diagnosticsSpy()
-    const exercise = workspaceExercise()
-
-    await testExercise(extensionContext, actionContext, exercise, diagnostics)
-
-    expect(diagnostics.report).toHaveBeenCalledExactlyOnceWith(exercise.uri, null)
+    expect(second.err && second.val).toBeInstanceOf(BottleneckError)
   })
 })
 
 // Drives the action through the real `runForExercise`/`withOperation` boundary to prove
-// the busy notice is shown exactly once now that the action no longer notifies itself.
+// the busy notice is shown exactly once, as information rather than an error.
 suite("testExercise action, through the real runForExercise boundary", () => {
   function testBody(actionContext: ReadyActionContext) {
     return (exercise: WorkspaceExercise) =>
-      testExercise(extensionContext, actionContext, exercise).then((result) =>
-        result.err ? failure("Exercise test run failed.", result.val) : result,
+      testExercise(actionContext, exercise, noToken).then((result) =>
+        result.err ? failure("Exercise test run failed.", result.val) : Ok.EMPTY,
       )
   }
 
   test("a busy rejection notifies exactly once and reports no error", async () => {
     let finishTest!: () => void
     const running = new Promise((resolve) => {
-      finishTest = () => resolve(Ok({ logs: {}, status: "PASSED", testResults: [] }))
+      finishTest = () => resolve(Ok(passingRun))
     })
     const exercise = workspaceExercise()
     const base = contextWithTestRun(running)

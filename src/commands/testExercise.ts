@@ -1,23 +1,20 @@
+import { Err } from "ts-results"
 import type * as vscode from "vscode"
 
-import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import { failure } from "../api/withOperation"
-import { activeLocalTesting } from "../testing/localTesting"
+import { activeTestController } from "../testing/localTesting"
 import { runForExercise } from "./runForExercise"
 
+/** Runs an exercise's tests through the test controller, so the results land in Test Results. */
 export async function testExercise(
-  context: vscode.ExtensionContext,
+  _context: vscode.ExtensionContext,
   actionContext: ReadyActionContext,
   resource: vscode.Uri | undefined,
 ): Promise<void> {
   await runForExercise(actionContext, resource, "Testing the exercise", async (exercise) => {
-    const result = await actions.testExercise(
-      context,
-      actionContext,
-      exercise,
-      activeLocalTesting()?.diagnostics,
-    )
-    return result.err ? failure("Exercise test run failed.", result.val) : result
+    const controller = activeTestController()
+    return controller
+      ? controller.runExercise(exercise)
+      : Err(new Error("Local testing is not available."))
   })
 }
