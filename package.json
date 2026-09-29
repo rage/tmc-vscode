@@ -436,11 +436,6 @@
           "command": "tmc.submitExercise",
           "group": "navigation@1",
           "when": "test-my-code:Initialized && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn"
-        },
-        {
-          "submenu": "tmc.exercise",
-          "group": "1_testmycode",
-          "when": "test-my-code:Initialized && test-my-code:ActiveEditorIsExercise"
         }
       ],
       "explorer/context": [

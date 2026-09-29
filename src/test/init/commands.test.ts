@@ -341,6 +341,15 @@ suite("registerCommands", function () {
     }
   })
 
+  // The exercise status bar item's quick pick is the editor's route to the other actions.
+  test("the editor title offers only Run Tests and Submit", function () {
+    const entries = packageJson().contributes.menus["editor/title"] ?? []
+    expect(entries.map((entry) => entry.command ?? entry.submenu)).toEqual([
+      "tmc.testExercise",
+      "tmc.submitExercise",
+    ])
+  })
+
   // A file icon ignores the theme and high contrast; a codicon follows both.
   test("every command icon is a codicon", function () {
     const icons = declaredCommandIcons()
