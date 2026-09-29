@@ -3,8 +3,13 @@ import * as vscode from "vscode"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { buildCourseDetailsView } from "../../panels/courseDetailsViewModel"
-import type { LocalCourseData, SharedTmcCourseExercise } from "../../shared/shared"
-import { makeTmcKind } from "../../shared/shared"
+import type {
+  LocalCourseData,
+  SharedMoocCourseExercise,
+  SharedTmcCourseData,
+  SharedTmcCourseExercise,
+} from "../../shared/shared"
+import { makeMoocKind, makeTmcKind } from "../../shared/shared"
 
 const COURSE_NAME = "python-course"
 const NOW = new Date("2026-06-01T12:00:00Z")
@@ -22,12 +27,51 @@ function exercise(overrides: Partial<SharedTmcCourseExercise> = {}): SharedTmcCo
   }
 }
 
-function course(exercises: SharedTmcCourseExercise[]): LocalCourseData {
+function course(
+  exercises: SharedTmcCourseExercise[],
+  overrides: Partial<SharedTmcCourseData> = {},
+): LocalCourseData {
   return makeTmcKind({
     id: 42,
     name: COURSE_NAME,
     title: "Python Course",
     description: "",
+    organization: "mooc",
+    exercises,
+    availablePoints: 0,
+    awardedPoints: 0,
+    perhapsExamMode: false,
+    newExercises: [],
+    notifyAfter: 0,
+    disabled: false,
+    materialUrl: null,
+    ...overrides,
+  })
+}
+
+function moocExercise(
+  id: string,
+  name: string,
+  overrides: Partial<SharedMoocCourseExercise> = {},
+): SharedMoocCourseExercise {
+  return {
+    id,
+    availablePoints: 1,
+    awardedPoints: 0,
+    name,
+    deadline: null,
+    passed: false,
+    softDeadline: null,
+    ...overrides,
+  }
+}
+
+function moocCourse(exercises: SharedMoocCourseExercise[]): LocalCourseData {
+  return makeMoocKind({
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    name: "mooc-python",
+    title: "MOOC Python",
+    description: null,
     organization: "mooc",
     exercises,
     availablePoints: 0,
@@ -99,7 +143,67 @@ suite("buildCourseDetailsView", () => {
       NOW,
     )
 
-    expect(view.exerciseStatuses[0]?.status).toBe("new")
+    expect(view.exerciseStatuses[0]?.status).toBe("missing")
+  })
+
+  test("calls an undownloaded exercise new only when the course published it as new", () => {
+    const view = buildCourseDetailsView(
+      course(
+        [
+          exercise({ id: 1, name: "part01-01_hello" }),
+          exercise({ id: 2, name: "part01-02_world" }),
+        ],
+        { newExercises: [2] },
+      ),
+      [],
+      false,
+      NOW,
+    )
+
+    expect(view.exerciseStatuses.map((entry) => entry.status)).toEqual(["missing", "new"])
+  })
+
+  test("sorts part and exercise numbers numerically", () => {
+    const view = buildCourseDetailsView(
+      course([
+        exercise({ id: 1, name: "part10-01_last" }),
+        exercise({ id: 2, name: "part2-10_ten" }),
+        exercise({ id: 3, name: "part2-9_nine" }),
+      ]),
+      [],
+      false,
+      NOW,
+    )
+
+    expect(view.exerciseGroups.map((group) => group.name)).toEqual(["part2", "part10"])
+    expect(view.exerciseGroups[0]?.exercises.map((ex) => ex.name)).toEqual(["9_nine", "10_ten"])
+  })
+
+  test("names a tmc exercise without a part prefix by its whole slug", () => {
+    const view = buildCourseDetailsView(course([exercise({ name: "Tehtävä-1" })]), [], false, NOW)
+
+    expect(view.exerciseGroups.map((group) => group.name)).toEqual(["Python Course"])
+    expect(view.exerciseGroups[0]?.exercises[0]?.name).toBe("Tehtävä-1")
+  })
+
+  test("lists mooc exercises by their full name, in course order, under the course title", () => {
+    const view = buildCourseDetailsView(
+      moocCourse([
+        moocExercise("cccccccc-cccc-4ccc-accc-000000000001", "python3_simple"),
+        moocExercise("cccccccc-cccc-4ccc-accc-000000000002", "Hello world"),
+        moocExercise("cccccccc-cccc-4ccc-accc-000000000003", "part01-01_hello"),
+      ]),
+      [],
+      false,
+      NOW,
+    )
+
+    expect(view.exerciseGroups.map((group) => group.name)).toEqual(["MOOC Python"])
+    expect(view.exerciseGroups[0]?.exercises.map((ex) => ex.name)).toEqual([
+      "python3_simple",
+      "Hello world",
+      "part01-01_hello",
+    ])
   })
 
   test("marks an undownloaded exercise past its hard deadline as expired", () => {
@@ -113,7 +217,7 @@ suite("buildCourseDetailsView", () => {
       NOW,
     )
 
-    expect(view.exerciseStatuses.map((entry) => entry.status)).toEqual(["expired", "new"])
+    expect(view.exerciseStatuses.map((entry) => entry.status)).toEqual(["expired", "missing"])
   })
 
   test("carries each exercise's own passed flag", () => {

@@ -1,11 +1,7 @@
 import { ExerciseStatus } from "../api/workspaceManager"
 import type { WorkspaceExercise } from "../api/workspaceManager"
-import { LocalCourseData, LocalCourseExercise } from "../shared/shared"
-import type {
-  ExerciseGroup,
-  ExerciseIdentifier,
-  ExerciseStatus as PanelExerciseStatus,
-} from "../shared/shared"
+import { ExerciseIdentifier, LocalCourseData, LocalCourseExercise, match } from "../shared/shared"
+import type { ExerciseGroup, ExerciseStatus as PanelExerciseStatus } from "../shared/shared"
 import { dateToString, Logger, parseDate, parseNextDeadlineAfter } from "../utilities"
 
 /**
@@ -54,6 +50,10 @@ export function buildCourseDetailsView(
   now: Date,
 ): CourseDetailsView {
   const courseName = LocalCourseData.getCourseName(course)
+  const courseTitle = LocalCourseData.getCourseTitle(course)
+  const newExerciseKeys = new Set(
+    LocalCourseData.getNewExercises(course).map((id) => ExerciseIdentifier.toString(id)),
+  )
   const statusBySlug = new Map<string, ExerciseStatus>()
   for (const exercise of workspaceExercises) {
     if (exercise.backend === course.kind && exercise.courseSlug === courseName) {
@@ -65,10 +65,8 @@ export function buildCourseDetailsView(
   const groupsByName = new Map<string, CourseDetailsExerciseGroup>()
   for (const ex of LocalCourseData.getExercises(course)) {
     const slug = LocalCourseExercise.getSlug(ex)
-    const nameMatch = slug.match(/(\w+)-(.+)/)
-    const groupName = nameMatch?.[1] || ""
+    const { groupName, name } = placeExercise(course, slug, courseTitle)
     const group = groupsByName.get(groupName)
-    const name = nameMatch?.[2] || ""
     const status = statusBySlug.get(slug)
     if (status === undefined) {
       Logger.debug(`Exercise ${slug} has not been downloaded yet`)
@@ -83,6 +81,7 @@ export function buildCourseDetailsView(
       status: mapStatus(
         status ?? ExerciseStatus.Missing,
         hardDeadline !== null && now >= hardDeadline,
+        newExerciseKeys.has(ExerciseIdentifier.toString(exerciseId)),
       ),
     })
     const entry: CourseDetailsExercise = {
@@ -102,11 +101,15 @@ export function buildCourseDetailsView(
     })
   }
 
+  // A mooc course lists its exercises in the order its material presents them.
+  const isSortedByName = course.kind === "tmc"
   const exerciseGroups: ExerciseGroup[] = Array.from(groupsByName.values())
-    .toSorted((a, b) => (a.name > b.name ? 1 : -1))
+    .toSorted((a, b) => compareNames(a.name, b.name))
     .map((e) => ({
       name: e.name,
-      exercises: e.exercises.toSorted((a, b) => (a.name > b.name ? 1 : -1)),
+      exercises: isSortedByName
+        ? e.exercises.toSorted((a, b) => compareNames(a.name, b.name))
+        : e.exercises,
       nextDeadlineString: offlineMode
         ? "Next deadline: Not available"
         : parseNextDeadlineAfter(
@@ -121,13 +124,45 @@ export function buildCourseDetailsView(
   return { exerciseStatuses, exerciseGroups }
 }
 
-function mapStatus(status: ExerciseStatus, expired: boolean): PanelExerciseStatus {
+/**
+ * A tmc slug encodes its part as a `part01-` prefix. A mooc slug is the name the course
+ * author typed, with no part in it, so every mooc exercise goes in one group named after
+ * the course until the backend exposes chapters.
+ */
+function placeExercise(
+  course: LocalCourseData,
+  slug: string,
+  courseTitle: string,
+): { groupName: string; name: string } {
+  const ungrouped = { groupName: courseTitle, name: slug }
+  return match(
+    course,
+    () => {
+      const [, groupName, name] = slug.match(/^(\w+)-(.+)$/) ?? []
+      return groupName && name ? { groupName, name } : ungrouped
+    },
+    () => ungrouped,
+  )
+}
+
+function compareNames(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true })
+}
+
+function mapStatus(
+  status: ExerciseStatus,
+  expired: boolean,
+  isNewExercise: boolean,
+): PanelExerciseStatus {
   switch (status) {
     case ExerciseStatus.Closed:
       return "closed"
     case ExerciseStatus.Open:
       return "opened"
-    default:
-      return expired ? "expired" : "new"
+    case ExerciseStatus.Missing:
+      if (expired) {
+        return "expired"
+      }
+      return isNewExercise ? "new" : "missing"
   }
 }

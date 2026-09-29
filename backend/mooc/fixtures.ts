@@ -288,17 +288,15 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
   // bulk download-or-update path resolve exercise -> course by scanning ALL
   // enrolled courses' slides (there is no exercise->course API endpoint), which
   // is exactly the semantic the CLI relies on.
-  // exercise_name is a slug-like, hyphenated string ("part<NN>-<rest>") so the
-  // extension's course-details view groups it the same way it groups tmc
-  // exercises (it splits on the first hyphen into group + exercise name). It also
-  // matches the packed source directory name.
+  // exercise_name is the author's free-form name, as on courses.mooc.fi: no
+  // tmc-style "part<NN>-" prefix for the course-details view to group on.
   const passingExercise = makeExercise({
     baseUrl,
     exerciseId: "a1a1a1a1-0000-4000-8000-000000000001",
     slideId: "a1a1a1a1-0000-4000-8000-000000000101",
     courseId: pythonCourse.id,
     tasks: [{ taskId: "a1a1a1a1-0000-4000-8000-000000000201", type: "editor" }],
-    name: "part01-01_passing_exercise",
+    name: "passing_exercise",
     order: 0,
     archiveSlug: "passing-exercise",
     sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
@@ -312,7 +310,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     slideId: "b2b2b2b2-0000-4000-8000-000000000101",
     courseId: extraCourse.id,
     tasks: [{ taskId: "b2b2b2b2-0000-4000-8000-000000000201", type: "editor" }],
-    name: "part01-02_failing_exercise",
+    name: "failing_exercise",
     order: 0,
     archiveSlug: "failing-exercise",
     sourceDir: path.join(RESOURCES, "part01-02_failing_exercise"),
@@ -330,7 +328,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     slideId: "c3c3c3c3-0000-4000-8000-000000000101",
     courseId: extraCourse.id,
     tasks: [{ taskId: "c3c3c3c3-0000-4000-8000-000000000201", type: "editor" }],
-    name: "part01-03_pending_manual_exercise",
+    name: "pending_manual_exercise",
     order: 1,
     archiveSlug: "pending-manual-exercise",
     sourceDir: path.join(RESOURCES, "part01-02_failing_exercise"),
@@ -348,7 +346,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     slideId: "d4d4d4d4-0000-4000-8000-000000000101",
     courseId: variantsCourse.id,
     tasks: [{ taskId: "d4d4d4d4-0000-4000-8000-000000000201", type: "browser" }],
-    name: "part02-01_browser_exercise",
+    name: "browser_exercise",
     order: 0,
     archiveSlug: "browser-exercise",
     sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
@@ -367,7 +365,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
       { taskId: "e5e5e5e5-0000-4000-8000-000000000201", type: "browser" },
       { taskId: "e5e5e5e5-0000-4000-8000-000000000202", type: "editor" },
     ],
-    name: "part02-02_mixed_task_exercise",
+    name: "mixed_task_exercise",
     order: 1,
     archiveSlug: "mixed-task-exercise",
     sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
@@ -381,7 +379,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     slideId: "f6f6f6f6-0000-4000-8000-000000000101",
     courseId: variantsCourse.id,
     tasks: [{ taskId: "f6f6f6f6-0000-4000-8000-000000000201", type: "editor" }],
-    name: "part02-03_past_deadline_exercise",
+    name: "past_deadline_exercise",
     order: 2,
     archiveSlug: "past-deadline-exercise",
     sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
@@ -398,7 +396,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     slideId: "a7a7a7a7-0000-4000-8000-000000000101",
     courseId: variantsCourse.id,
     tasks: [{ taskId: "a7a7a7a7-0000-4000-8000-000000000201", type: "editor" }],
-    name: "part02-04_future_deadline_exercise",
+    name: "future_deadline_exercise",
     order: 3,
     archiveSlug: "future-deadline-exercise",
     sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
@@ -417,7 +415,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     slideId: "b8b8b8b8-0000-4000-8000-000000000101",
     courseId: variantsCourse.id,
     tasks: [{ taskId: "b8b8b8b8-0000-4000-8000-000000000201", type: "editor" }],
-    name: "part02-05_limited_tries_exercise",
+    name: "limited_tries_exercise",
     order: 4,
     archiveSlug: "limited-tries-exercise",
     sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
@@ -437,7 +435,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     tasks: [
       { taskId: "c9c9c9c9-0000-4000-8000-000000000201", type: "editor", serviceSlug: "quizzes" },
     ],
-    name: "part02-06_quiz_exercise",
+    name: "quiz_exercise",
     order: 5,
     archiveSlug: "quiz-exercise",
     sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
@@ -451,7 +449,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     slideId: "eeeeeeee-0000-4000-8000-000000000101",
     courseId: notEnrolledCourse.id,
     tasks: [{ taskId: "eeeeeeee-0000-4000-8000-000000000201", type: "editor" }],
-    name: "part03-01_unenrolled_exercise",
+    name: "unenrolled_exercise",
     order: 0,
     archiveSlug: "unenrolled-exercise",
     sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),

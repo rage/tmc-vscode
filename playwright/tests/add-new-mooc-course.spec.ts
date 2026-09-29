@@ -33,7 +33,7 @@ vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ pag
   // course + exercise are served by backend/mooc/fixtures.ts; the exercise packs
   // the same python resource the TMC course uses, so its tests run locally.
   const courseTitle = "MOOC Python Course"
-  const exerciseName = "01_passing_exercise"
+  const exerciseName = "passing_exercise"
   const filePath = ["src", "passing_exercise.py"]
   const fileContents = "def hello()"
 
@@ -52,8 +52,7 @@ vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ pag
 
   await vsCodeTest.step("open the course details and see its exercises", async () => {
     await myCoursesPage.selectCourse(courseTitle)
-    // the exercise group parsed from the "part01-..." exercise slug renders
-    await expect(webview.getByRole("heading", { name: "part01" })).toBeVisible()
+    await expect(coursePage.exerciseGroupHeading(courseTitle)).toBeVisible()
   })
 
   await vsCodeTest.step("select and open an exercise", async () => {

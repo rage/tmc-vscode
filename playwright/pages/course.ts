@@ -1,8 +1,15 @@
+import type { Locator } from "@playwright/test"
+
 import { TmcPage } from "./tmc"
 
 export class CoursePage extends TmcPage {
   public async openWorkspace(): Promise<void> {
     await this.webview.getByRole("button", { name: "Open workspace" }).first().click()
+  }
+
+  /** The heading of the exercise group (part) named `name`; a mooc course has one, named after it. */
+  public exerciseGroupHeading(name: string): Locator {
+    return this.webview.getByRole("heading", { level: 2, name })
   }
 
   // Setting <vscode-collapsible>'s `open` property directly is more reliable
