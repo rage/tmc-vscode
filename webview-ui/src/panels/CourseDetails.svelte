@@ -278,7 +278,7 @@
       </p>
     {/if}
     <div class="actions">
-      <Button onclick={openWorkspace}>Open workspace</Button>
+      <Button secondary onclick={openWorkspace}>Open workspace</Button>
     </div>
   </div>
 
