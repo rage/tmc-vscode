@@ -6,7 +6,8 @@ import { isReady } from "../actions/types"
 import type Dialog from "../api/dialog"
 import * as commands from "../commands"
 import { EXTENSION_ID } from "../config/constants"
-import { nextPanelId, registerWebviewHandlers, TmcPanel } from "../panels/TmcPanel"
+import { registerPanelActions } from "../panels/panelActions"
+import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
 import { CourseTreeItem } from "../ui/treeview/treeview"
 import { Logger } from "../utilities"
@@ -101,7 +102,7 @@ export function registerCommands(
   const { dialog } = actionContext
   Logger.info("Registering TMC VSCode commands")
 
-  registerWebviewHandlers({
+  registerPanelActions({
     cancelTests: actions.cancelTestRun,
     closeExercises: actions.closeExercises,
     downloadAndOpenExercises: actions.downloadAndOpenExercises,
@@ -156,7 +157,6 @@ export function registerCommands(
         id: nextPanelId(),
         type: "CourseDetails",
         courseId,
-        exerciseStatuses: { tmc: {}, mooc: {} },
       })
     }
   })

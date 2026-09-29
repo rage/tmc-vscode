@@ -123,7 +123,6 @@ vi.mock("../../ui/ui", () => ({
 
 vi.mock("../../panels/TmcPanel", () => ({
   nextPanelId: () => 1,
-  registerWebviewHandlers: () => {},
   TmcPanel: {
     renderMain: (
       _uri: unknown,

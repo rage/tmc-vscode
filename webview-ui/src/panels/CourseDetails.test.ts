@@ -10,7 +10,7 @@ import {
   tmcExerciseGroup,
   tmcLocalCourse,
 } from "../test/fixtures"
-import { dispatchToWebview as dispatch, postedMessages } from "../test/setup"
+import { dispatchToWebview as dispatch, postedMessages, replyToRequest } from "../test/setup"
 import CourseDetails from "./CourseDetails.svelte"
 
 // The first checkbox in the group is the select-all.
@@ -51,12 +51,6 @@ function sendGroups(panel: CourseDetailsPanel, exerciseGroups: ExerciseGroup[]):
   })
 }
 
-/** The id the panel's mount-time data request carries; its answer has to quote it. */
-function dataRequestId(): number {
-  const request = postedMessages.mock.calls[0]?.[0] as { requestId: number }
-  return request.requestId
-}
-
 suite("CourseDetails panel", () => {
   test("requests its course data on mount", () => {
     const panel = tmcPanel()
@@ -64,7 +58,7 @@ suite("CourseDetails panel", () => {
     expect(postedMessages).toHaveBeenCalledWith({
       type: "requestCourseDetailsData",
       requestId: expect.any(Number),
-      sourcePanel: panel,
+      sourcePanel: { id: panel.id, type: panel.type, courseId: panel.courseId },
     })
   })
 
@@ -397,10 +391,8 @@ suite("CourseDetails panel", () => {
     render(CourseDetails, { props: { panel } })
     expect(screen.getByText("Loading exercises")).toBeInTheDocument()
 
-    dispatch({
-      type: "panelDataResult",
-      target: { id: panel.id, type: "CourseDetails" },
-      requestId: dataRequestId(),
+    replyToRequest("requestCourseDetailsData", {
+      ok: false,
       error: { message: "Failed to read the course.", details: "no such course" },
     })
 
@@ -417,7 +409,7 @@ suite("CourseDetails panel", () => {
     expect(postedMessages).toHaveBeenCalledWith({
       type: "requestCourseDetailsData",
       requestId: expect.any(Number),
-      sourcePanel: panel,
+      sourcePanel: { id: panel.id, type: panel.type, courseId: panel.courseId },
     })
   })
 
@@ -436,6 +428,8 @@ suite("CourseDetails panel", () => {
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "refreshCourseDetails",
+      requestId: expect.any(Number),
+      sourcePanel: { id: panel.id, type: "CourseDetails" },
       id: makeTmcKind({ courseId: 42 }),
     })
   })
@@ -452,9 +446,7 @@ suite("CourseDetails panel", () => {
     const busy = await screen.findByRole("button", { name: "Refreshing…" })
     expect(busy).toHaveAttribute("aria-disabled", "true")
 
-    dispatch({
-      type: "refreshFinished",
-      target: { id: panel.id, type: "CourseDetails" },
+    replyToRequest("refreshCourseDetails", {
       ok: false,
       error: { message: "The server did not answer." },
     })

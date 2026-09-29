@@ -7,56 +7,50 @@
     ExerciseSubmissionPanel,
     ExerciseTestsPanel,
     LocalCourseData,
-    LocalCourseExercise,
     TargetPanel,
   } from "../shared/shared"
   import { pasteServiceName } from "../shared/shared"
-  import { reducedMotion } from "../utilities/a11y.svelte"
-  import { vscode } from "../utilities/vscode"
+  import { announce, reducedMotion } from "../utilities/a11y.svelte"
+  import { createRequester } from "../utilities/script"
   import Button from "./Button.svelte"
   import Notice from "./Notice.svelte"
   import Spinner from "./Spinner.svelte"
 
   interface Props {
-    // matches the `pasteExercise` message sent to the extension host
+    // names the paste service; the host pastes the exercise `sourcePanel` shows
     course: LocalCourseData
-    exercise: LocalCourseExercise
     sourcePanel: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>
-    // Owned by the parent (arrive via a postMessage it listens for); plain one-way props.
-    pasteUrl?: string | undefined
-    pasteError?: string | undefined
-    // asks the parent to clear any stale paste result before a new paste starts
-    onPaste?: () => void
   }
 
-  let { course, exercise, sourcePanel, pasteUrl, pasteError, onPaste }: Props = $props()
+  let { course, sourcePanel }: Props = $props()
 
   const pasteService = $derived(pasteServiceName(course.kind))
   const regionId = $props.id()
+  const request = createRequester()
 
-  let hasRequestedPaste = $state<boolean>(false)
+  let isPasting = $state<boolean>(false)
+  let pasteUrl = $state<string | undefined>(undefined)
+  let pasteError = $state<string | undefined>(undefined)
   let showHelp = $state<boolean>(false)
-  const isPasting = $derived(
-    hasRequestedPaste && pasteUrl === undefined && pasteError === undefined,
-  )
 
   function toggleShowHelp() {
     showHelp = !showHelp
   }
-  function paste() {
-    // Clearing the previous result is the parent's concern; mutating its props here
-    // would be silently clobbered on the next parent render.
-    onPaste?.()
-    hasRequestedPaste = true
-    vscode.postMessage({
-      type: "pasteExercise",
-      course: course,
-      exercise: exercise,
-      requestingPanel: sourcePanel,
-    })
+  async function paste() {
+    isPasting = true
+    pasteUrl = undefined
+    pasteError = undefined
+    const outcome = await request("pasteExercise", { sourcePanel })
+    isPasting = false
+    if (outcome.ok) {
+      pasteUrl = outcome.value
+    } else {
+      pasteError = outcome.error.message
+    }
   }
-  function copyLink(url: string) {
-    vscode.postMessage({ type: "copyToClipboard", text: url })
+  async function copyLink(url: string) {
+    const outcome = await request("copyToClipboard", { sourcePanel, text: url })
+    announce(outcome.ok ? "Copied to the clipboard" : "Could not copy to the clipboard")
   }
 </script>
 

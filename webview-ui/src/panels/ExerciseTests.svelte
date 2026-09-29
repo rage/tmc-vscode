@@ -12,7 +12,7 @@
   import type { ExerciseTestsPanel, TestResultData, WebviewError } from "../shared/shared"
   import { assertUnreachable, unwrap } from "../shared/shared"
   import { announce } from "../utilities/a11y.svelte"
-  import { addMessageListener } from "../utilities/script"
+  import { addMessageListener, createRequester } from "../utilities/script"
   import { awardedPoints } from "../utilities/testPoints"
   import { vscode } from "../utilities/vscode"
 
@@ -27,14 +27,12 @@
   const exercise = $derived(unwrap(panel.exercise))
 
   let testError = $state.raw<WebviewError | undefined>(undefined)
-  let pasteResult = $state<string | undefined>(undefined)
-  let pasteError = $state<string | undefined>(undefined)
   let testResults = $state.raw<TestResultData | undefined>(undefined)
   let tryingToRunTestsForExam = $state<boolean | undefined>(undefined)
   // Guards against a rapid double-click sending two submits. Normally the submission
-  // panel replaces this one, but a submit that never starts leaves this panel on
-  // screen, so `submitFailed` resets the flag.
+  // panel replaces this one, so a reply that reaches it means that panel never appeared.
   let submitting = $state(false)
+  const request = createRequester()
 
   const results = $derived(testResults?.testResult.testResults ?? [])
   const allSuccessful = $derived(testResults && !results.some((tr) => !tr.successful))
@@ -91,25 +89,9 @@
         )
         break
       }
-      case "pasteResult": {
-        pasteResult = message.pasteLink
-        break
-      }
-      case "pasteError": {
-        pasteError = message.error
-        break
-      }
       case "testError": {
         testError = message.error
         submitting = false
-        break
-      }
-      case "submitFailed": {
-        submitting = false
-        break
-      }
-      case "clipboardCopied": {
-        announce(message.ok ? "Copied to the clipboard" : "Could not copy to the clipboard")
         break
       }
       case "willNotRunTestsForExam": {
@@ -130,18 +112,20 @@
       type: "closeSidePanel",
     })
   }
-  function copyToClipboard(text: string) {
-    vscode.postMessage({ type: "copyToClipboard", text })
+  async function copyToClipboard(text: string) {
+    const outcome = await request("copyToClipboard", {
+      sourcePanel: { id: panel.id, type: panel.type },
+      text,
+    })
+    announce(outcome.ok ? "Copied to the clipboard" : "Could not copy to the clipboard")
   }
-  function submit() {
+  async function submit() {
     if (submitting) {
       return
     }
     submitting = true
-    vscode.postMessage({
-      type: "submitExercise",
-      sourcePanel: { id: panel.id, type: panel.type },
-    })
+    await request("submitExercise", { sourcePanel: { id: panel.id, type: panel.type } })
+    submitting = false
   }
 </script>
 
@@ -180,17 +164,7 @@
         <Button onclick={submit} disabled={submitting}>Submit to server</Button>
       </div>
       {#if !allSuccessful}
-        <PasteHelpBox
-          course={panel.course}
-          exercise={panel.exercise}
-          sourcePanel={{ id: panel.id, type: panel.type }}
-          pasteUrl={pasteResult}
-          {pasteError}
-          onPaste={() => {
-            pasteResult = undefined
-            pasteError = undefined
-          }}
-        />
+        <PasteHelpBox course={panel.course} sourcePanel={{ id: panel.id, type: panel.type }} />
       {/if}
     {/if}
     <TestResults

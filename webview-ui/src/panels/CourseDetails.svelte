@@ -21,7 +21,7 @@
     ExerciseIdentifier,
   } from "../shared/shared"
   import { announce, reducedMotion } from "../utilities/a11y.svelte"
-  import { addMessageListener, createPanelDataRequester } from "../utilities/script"
+  import { addMessageListener, createRequester, HOST_STATE_TIMEOUT_MS } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -50,7 +50,7 @@
       false,
   )
 
-  const panelData = createPanelDataRequester()
+  const request = createRequester()
 
   // Set when the request for this panel's data is answered with a failure, or goes
   // unanswered; rendered where the exercise list would be, so neither is a permanent spinner.
@@ -62,13 +62,13 @@
 
   async function requestData() {
     dataError = undefined
-    dataError = await panelData.request((requestId) =>
-      vscode.postMessage({
-        type: "requestCourseDetailsData",
-        requestId,
-        sourcePanel: panel,
-      }),
+    const { id, type, courseId } = panel
+    const outcome = await request(
+      "requestCourseDetailsData",
+      { sourcePanel: { id, type, courseId } },
+      { timeoutMs: HOST_STATE_TIMEOUT_MS },
     )
+    dataError = outcome.ok ? undefined : outcome.error
   }
 
   onMount(() => {
@@ -149,18 +149,6 @@
         panel = { ...panel, exerciseStatuses: { tmc, mooc } }
         break
       }
-      case "panelDataResult": {
-        panelData.answer(message)
-        break
-      }
-      case "refreshFinished": {
-        refreshing = false
-        refreshError = message.error
-        if (message.ok) {
-          announce("Course refreshed")
-        }
-        break
-      }
       case "setUpdateables": {
         // Broadcast to every CourseDetails panel; only apply it if it's for our course.
         if (
@@ -180,17 +168,23 @@
       type: "openMyCourses",
     })
   }
-  function refresh() {
+  async function refresh() {
     // `aria-disabled` rather than `disabled` while busy, so the button keeps focus.
     if (refreshing) {
       return
     }
     refreshing = true
     refreshError = undefined
-    vscode.postMessage({
-      type: "refreshCourseDetails",
+    const outcome = await request("refreshCourseDetails", {
+      sourcePanel: { id: panel.id, type: panel.type },
       id: panel.courseId,
     })
+    refreshing = false
+    if (outcome.ok) {
+      announce("Course refreshed")
+    } else {
+      refreshError = outcome.error
+    }
   }
   function openWorkspace() {
     vscode.postMessage({

@@ -92,16 +92,13 @@ interface Harness {
   post: (message: unknown) => Promise<void>
   /** Every notification shown, as `kind: sentence`, in order. */
   shown: string[]
-  /** Every failure a webview was told to render, as `type: message`. */
+  /** Every failure a webview was told to render, as `type: message`; a reply by its request's type. */
   panelFailures: () => string[]
+  /** The id and type of the panel the side webview shows. */
+  shownPanel: () => { id: number; type: string }
 }
 
-const failureTypes = new Set([
-  "submissionStatusError",
-  "testError",
-  "pasteError",
-  "refreshFinished",
-])
+const failureTypes = new Set(["submissionStatusError", "testError"])
 
 async function harness(
   services: {
@@ -195,6 +192,7 @@ async function harness(
   registerCommand.mockRestore()
 
   const webviews: ReturnType<typeof createFakeWebviewPanel>[] = []
+  const requestTypes = new Map<number, string>()
   vi.mocked(vscode.window.createWebviewPanel).mockImplementation(() => {
     const webview = createFakeWebviewPanel()
     webviews.push(webview)
@@ -222,18 +220,51 @@ async function harness(
       }
       return handler(...args)
     },
-    post: (message) => sidePanel.getMessageListener()(message),
+    post: (message) => {
+      const request = message as { type: string; requestId?: number }
+      if (request.requestId !== undefined) {
+        requestTypes.set(request.requestId, request.type)
+      }
+      return sidePanel.getMessageListener()(message)
+    },
     shown,
     panelFailures: () =>
       webviews
         .flatMap((webview) => vi.mocked(webview.panel.webview.postMessage).mock.calls)
         .map(([message]) => message as ExtensionToWebview)
-        .filter((message) => failureTypes.has(message.type) && "error" in message)
-        .map((message) => {
-          const error = (message as { error: string | { message: string } }).error
-          return `${message.type}: ${typeof error === "string" ? error : error.message}`
+        .flatMap((message) => {
+          if (message.type === "reply") {
+            return message.outcome.ok
+              ? []
+              : [`${requestTypes.get(message.requestId)}: ${message.outcome.error.message}`]
+          }
+          return failureTypes.has(message.type) && "error" in message
+            ? [`${message.type}: ${(message.error as { message: string }).message}`]
+            : []
         }),
+    shownPanel: () => {
+      const { id, type } = (
+        TmcPanel.sidePanel as unknown as { _route: { id: number; type: string } }
+      )._route
+      return { id, type }
+    },
   }
+}
+
+/** Shows the stored exercise's test results in the side panel, as a test run does. */
+function showTestResults(actionContext: ReadyActionContext): void {
+  const [storedExercise] = storedCourse().exercises
+  if (!storedExercise) {
+    throw new Error("the stored course has no exercise")
+  }
+  TmcPanel.renderSide(vscode.Uri.file("/ext"), createMockContext(), actionContext, {
+    id: nextPanelId(),
+    type: "ExerciseTests",
+    course: makeMoocKind(storedCourse()),
+    exercise: makeMoocKind(storedExercise),
+    exerciseUri: exercise.uri,
+    testRunId: nextPanelId(),
+  })
 }
 
 const offline = (): Error => new Error("offline")
@@ -311,27 +342,12 @@ suite("reported once: exercise commands", function () {
   })
 
   test("a submission from the panel fails in the panel only", async function () {
-    const { actionContext, post, shown, panelFailures } = await harness({
+    const { actionContext, post, shown, panelFailures, shownPanel } = await harness({
       langs: { submitMoocExerciseAndWaitForResults: async () => Err(new ConnectionError("reset")) },
     })
-    const [storedExercise] = storedCourse().exercises
-    if (!storedExercise) {
-      throw new Error("the stored course has no exercise")
-    }
-    const testsPanel = {
-      id: nextPanelId(),
-      type: "ExerciseTests" as const,
-      course: makeMoocKind(storedCourse()),
-      exercise: makeMoocKind(storedExercise),
-      exerciseUri: exercise.uri,
-      testRunId: nextPanelId(),
-    }
-    TmcPanel.renderSide(vscode.Uri.file("/ext"), createMockContext(), actionContext, testsPanel)
+    showTestResults(actionContext)
 
-    await post({
-      type: "submitExercise",
-      sourcePanel: { id: testsPanel.id, type: "ExerciseTests" },
-    })
+    await post({ type: "submitExercise", requestId: 1, sourcePanel: shownPanel() })
 
     expect(shown).toEqual([])
     expect(panelFailures()).toEqual(["submissionStatusError: reset"])
@@ -362,40 +378,32 @@ suite("reported once: exercise commands", function () {
   })
 
   test("a failed paste from the panel shows in the panel only", async function () {
-    const { post, shown, panelFailures } = await harness({
+    const { actionContext, post, shown, panelFailures, shownPanel } = await harness({
       langs: { submitMoocExerciseToPaste: async () => Err(offline()) },
     })
+    showTestResults(actionContext)
 
-    await post({
-      type: "pasteExercise",
-      requestingPanel: { id: 1, type: "ExerciseTests" },
-      course: makeMoocKind(storedCourse()),
-      exercise: makeMoocKind(storedCourse().exercises[0]),
-    })
+    await post({ type: "pasteExercise", requestId: 1, sourcePanel: shownPanel() })
 
     expect(shown).toEqual([])
-    expect(panelFailures()).toEqual(["pasteError: offline"])
+    expect(panelFailures()).toEqual(["pasteExercise: offline"])
   })
 
   test("a panel paste that finds a submission in flight shows in the panel only", async function () {
     const submission = pending<Err<Error>>()
-    const { run, post, shown, panelFailures } = await harness({
+    const { actionContext, run, post, shown, panelFailures, shownPanel } = await harness({
       langs: { submitMoocExerciseAndWaitForResults: () => submission.promise },
     })
+    showTestResults(actionContext)
 
     const submitting = run("tmc.submitExercise")
-    await post({
-      type: "pasteExercise",
-      requestingPanel: { id: 1, type: "ExerciseTests" },
-      course: makeMoocKind(storedCourse()),
-      exercise: makeMoocKind(storedCourse().exercises[0]),
-    })
+    await post({ type: "pasteExercise", requestId: 1, sourcePanel: shownPanel() })
     submission.resolve(Err(new ConnectionError("reset")))
     await submitting
 
     expect(shown).toEqual([])
     expect(panelFailures()).toEqual([
-      "pasteError: A submission for this exercise is already in progress.",
+      "pasteExercise: A submission for this exercise is already in progress.",
       "submissionStatusError: reset",
     ])
   })
@@ -686,7 +694,7 @@ suite("reported once: My Courses and course details", function () {
   })
 
   test("a course that fails to refresh from its panel shows in the panel only", async function () {
-    const { post, shown, panelFailures } = await harness({
+    const { post, shown, panelFailures, shownPanel } = await harness({
       langs: {
         getMoocCourseData: async () => Err(offline()),
         getCourseDetails: async () => Err(offline()),
@@ -695,10 +703,15 @@ suite("reported once: My Courses and course details", function () {
     })
     await post({ type: "openCourseDetails", courseId: COURSE_ID })
 
-    await post({ type: "refreshCourseDetails", id: COURSE_ID })
+    await post({
+      type: "refreshCourseDetails",
+      requestId: 1,
+      sourcePanel: shownPanel(),
+      id: COURSE_ID,
+    })
 
     expect(shown).toEqual([])
-    expect(panelFailures()).toEqual(["refreshFinished: offline"])
+    expect(panelFailures()).toEqual(["refreshCourseDetails: offline"])
   })
 
   test("a lost session scope is warned once, however often it is hit", async function () {
@@ -707,9 +720,10 @@ suite("reported once: My Courses and course details", function () {
         getMoocCourseData: async () => Err(new InsufficientScopeError("exercise-services")),
       },
     })
+    const sourcePanel = { id: 1, type: "CourseDetails" }
 
-    await post({ type: "refreshCourseDetails", id: COURSE_ID })
-    await post({ type: "refreshCourseDetails", id: COURSE_ID })
+    await post({ type: "refreshCourseDetails", requestId: 1, sourcePanel, id: COURSE_ID })
+    await post({ type: "refreshCourseDetails", requestId: 2, sourcePanel, id: COURSE_ID })
 
     expect(shown).toEqual(["error: Failed to update course data."])
   })

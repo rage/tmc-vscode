@@ -213,6 +213,19 @@ const initializationErrorSchema = z
   })
   .nullable()
 
+export const InitializationErrorsSchema = z.object({
+  cliFolder: z.string(),
+  initializationErrors: z.object({
+    tmc: initializationErrorSchema,
+    userData: initializationErrorSchema,
+    workspaceManager: initializationErrorSchema,
+    exerciseDecorationProvider: initializationErrorSchema,
+    resources: initializationErrorSchema,
+  }),
+})
+
+export type InitializationErrors = z.infer<typeof InitializationErrorsSchema>
+
 /**
  * For use with `webview.postMessage` in `TmcPanel`.
  * Handled by the Svelte app.
@@ -248,14 +261,6 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     target: targetPanelSchema("CourseDetails"),
     offlineMode: z.boolean(),
     exerciseGroups: z.array(ExerciseGroupSchema),
-  }),
-  // The one answer to `refreshCourseDetails`, sent after the refreshed data whether or not
-  // the refresh worked.
-  z.object({
-    type: z.literal("refreshFinished"),
-    target: targetPanelSchema("CourseDetails"),
-    ok: z.boolean(),
-    error: WebviewErrorSchema.optional(),
   }),
   z.object({
     type: z.literal("setCourseDisabledStatus"),
@@ -297,22 +302,6 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     target: targetPanelSchema("ExerciseTests"),
     error: WebviewErrorSchema,
   }),
-  // the submit never started, so the panel it would have opened never appears;
-  // tells the ExerciseTests panel still on screen to re-enable its buttons
-  z.object({
-    type: z.literal("submitFailed"),
-    target: broadcastPanelSchema("ExerciseTests"),
-  }),
-  z.object({
-    type: z.literal("pasteResult"),
-    target: targetPanelSchema("ExerciseTests", "ExerciseSubmission"),
-    pasteLink: z.string(),
-  }),
-  z.object({
-    type: z.literal("pasteError"),
-    target: targetPanelSchema("ExerciseTests", "ExerciseSubmission"),
-    error: z.string(),
-  }),
   z.object({
     type: z.literal("submissionStatusUrl"),
     target: targetPanelSchema("ExerciseSubmission"),
@@ -345,22 +334,6 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     error: WebviewErrorSchema,
   }),
   z.object({
-    type: z.literal("feedbackSent"),
-    target: targetPanelSchema("ExerciseSubmission"),
-    ok: z.boolean(),
-    error: z.string().optional(),
-  }),
-  // The one answer a `request*Data` message gets, naming the request it answers so a
-  // panel ignores the answer to one it has already given up on. Every path out of a
-  // request handler has to send it, or the panel waits out its own timeout instead.
-  z.object({
-    type: z.literal("panelDataResult"),
-    target: targetPanelSchema("MyCourses", "CourseDetails"),
-    requestId: z.number(),
-    // absent once the data itself has been sent
-    error: WebviewErrorSchema.optional(),
-  }),
-  z.object({
     type: z.literal("setNewExercises"),
     target: broadcastPanelSchema("MyCourses"),
     courseId: CourseIdentifierSchema,
@@ -380,27 +353,23 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     expiresIn: z.number(),
     interval: z.number(),
   }),
+  // The one answer to a request, see `RequestMessage`.
   z.object({
-    type: z.literal("moocLoginError"),
-    target: targetPanelSchema("MoocLogin"),
-    error: z.string(),
-  }),
-  z.object({
-    type: z.literal("clipboardCopied"),
-    target: targetPanelSchema("ExerciseTests", "ExerciseSubmission"),
-    ok: z.boolean(),
-  }),
-  z.object({
-    type: z.literal("initializationErrors"),
-    target: targetPanelSchema("InitializationErrorHelp"),
-    cliFolder: z.string(),
-    initializationErrors: z.object({
-      tmc: initializationErrorSchema,
-      userData: initializationErrorSchema,
-      workspaceManager: initializationErrorSchema,
-      exerciseDecorationProvider: initializationErrorSchema,
-      resources: initializationErrorSchema,
-    }),
+    type: z.literal("reply"),
+    target: targetPanelSchema(
+      "MyCourses",
+      "CourseDetails",
+      "ExerciseTests",
+      "ExerciseSubmission",
+      "MoocLogin",
+      "InitializationErrorHelp",
+    ),
+    requestId: z.number(),
+    outcome: z.discriminatedUnion("ok", [
+      // `value` is checked against `ReplyValueSchemas` by the side that knows the request.
+      z.object({ ok: z.literal(true), value: z.unknown().optional() }),
+      z.object({ ok: z.literal(false), error: WebviewErrorSchema }),
+    ]),
   }),
 ])
 
@@ -423,8 +392,6 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("ready"),
   }),
-  // Each `request*Data` message carries the id the host echoes back in its
-  // `panelDataResult`; the webview times the request out on its own if none arrives.
   // `sourcePanel` names the requesting panel; any other panel fields are stripped unread.
   z.object({
     type: z.literal("requestCourseDetailsData"),
@@ -469,9 +436,10 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("openMyCourses"),
   }),
-  // answered with `refreshFinished`
   z.object({
     type: z.literal("refreshCourseDetails"),
+    requestId: z.number(),
+    sourcePanel: strictTargetPanelSchema("CourseDetails"),
     id: CourseIdentifierSchema,
   }),
   z.object({
@@ -495,22 +463,26 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   // be one the webview chose.
   z.object({
     type: z.literal("submitExercise"),
+    requestId: z.number(),
     sourcePanel: strictTargetPanelSchema("ExerciseTests"),
   }),
+  // Pastes the exercise the named panel shows, for the reason given on `submitExercise`.
   z.object({
     type: z.literal("pasteExercise"),
-    course: LocalCourseDataSchema,
-    exercise: LocalCourseExerciseSchema,
-    requestingPanel: strictTargetPanelSchema("ExerciseTests", "ExerciseSubmission"),
+    requestId: z.number(),
+    sourcePanel: strictTargetPanelSchema("ExerciseTests", "ExerciseSubmission"),
   }),
   z.object({
     type: z.literal("sendFeedback"),
+    requestId: z.number(),
     sourcePanel: strictTargetPanelSchema("ExerciseSubmission"),
     feedbackAnswerUrl: z.url(),
     answers: z.array(z.object({ questionId: z.number(), answer: z.string() })),
   }),
   z.object({
     type: z.literal("copyToClipboard"),
+    requestId: z.number(),
+    sourcePanel: strictTargetPanelSchema("ExerciseTests", "ExerciseSubmission"),
     text: z.string(),
   }),
   z.object({
@@ -521,7 +493,8 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("requestInitializationErrors"),
-    sourcePanel: InitializationErrorHelpPanelSchema,
+    requestId: z.number(),
+    sourcePanel: strictTargetPanelSchema("InitializationErrorHelp"),
   }),
   // an uncaught webview error, for the extension log
   z.object({
@@ -542,10 +515,12 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
       "workbench.action.openIssueReporter",
     ]),
   }),
+  // Posted on MoocLogin mount; starts the CLI device-flow login. The code is streamed back as
+  // `moocDeviceCode`, and the reply comes once the login is over.
   z.object({
-    // Posted on MoocLogin mount; starts the CLI device-flow login, streamed back as `moocDeviceCode`.
     type: z.literal("moocLogin"),
-    sourcePanel: MoocLoginPanelSchema,
+    requestId: z.number(),
+    sourcePanel: strictTargetPanelSchema("MoocLogin"),
   }),
   z.object({
     // Kills the in-progress device-flow login CLI process, keyed by panel id.
@@ -559,6 +534,37 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
  * Handled by the extension host in `TmcPanel`.
  */
 export type WebviewToExtension = z.infer<typeof WebviewToExtensionSchema>
+
+/**
+ * A webview message that expects an outcome.
+ *
+ * The host answers every one with exactly one `reply` carrying the same `requestId`, addressed
+ * to `sourcePanel`, whether the request succeeded, failed or threw.
+ */
+export type RequestMessage = Extract<WebviewToExtension, { requestId: number }>
+
+export type RequestType = RequestMessage["type"]
+
+/** What a successful `reply` carries, per request type. */
+export const ReplyValueSchemas = {
+  requestCourseDetailsData: z.undefined(),
+  requestMyCoursesData: z.undefined(),
+  refreshCourseDetails: z.undefined(),
+  submitExercise: z.undefined(),
+  // the paste link
+  pasteExercise: z.string(),
+  sendFeedback: z.undefined(),
+  copyToClipboard: z.undefined(),
+  moocLogin: z.undefined(),
+  requestInitializationErrors: InitializationErrorsSchema,
+} satisfies Record<RequestType, z.ZodType>
+
+export type ReplyValue<K extends RequestType> = z.infer<(typeof ReplyValueSchemas)[K]>
+
+/** How a request ended, as its `reply` says. */
+export type ReplyOutcome<K extends RequestType> =
+  | { ok: true; value: ReplyValue<K> }
+  | { ok: false; error: WebviewError }
 
 // The messages a panel of type T can receive: those whose target admits T.
 export type Targeted<M, T extends PanelType> = Exclude<

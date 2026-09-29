@@ -8,11 +8,11 @@
   import Spinner from "../components/Spinner.svelte"
   import type {
     InitializationErrorHelpPanel,
-    TargetedExtensionToWebview,
+    InitializationErrors as InitializationErrorsReply,
+    WebviewError,
     WebviewToExtension,
   } from "../shared/shared"
-  import { assertUnreachable } from "../shared/shared"
-  import { addMessageListener } from "../utilities/script"
+  import { createRequester, HOST_STATE_TIMEOUT_MS } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -21,10 +21,7 @@
 
   let { panel }: Props = $props()
 
-  type InitializationErrors = Extract<
-    TargetedExtensionToWebview<"InitializationErrorHelp">,
-    { type: "initializationErrors" }
-  >["initializationErrors"]
+  type InitializationErrors = InitializationErrorsReply["initializationErrors"]
   type RunnableCommand = Extract<WebviewToExtension, { type: "runCommand" }>["command"]
 
   interface InitializationFailure {
@@ -44,32 +41,27 @@
   ]
 
   let failures = $state.raw<InitializationFailure[] | undefined>(undefined)
+  let loadError = $state.raw<WebviewError | undefined>(undefined)
+  const request = createRequester()
 
-  onMount(() => {
-    vscode.postMessage({
-      type: "requestInitializationErrors",
-      sourcePanel: panel,
-    })
-  })
-  // svelte-ignore state_referenced_locally -- the panel identity (id/type)
-  // is fixed for the lifetime of the component, capturing the initial value is intended
-  addMessageListener(panel, (message) => {
-    switch (message.type) {
-      case "initializationErrors": {
-        const cliHint =
-          "A proxy, firewall or antivirus program blocking network requests can cause this. " +
-          `Try adding an exception for the directory '${message.cliFolder}'.`
-        failures = components.flatMap(({ key, label }) => {
-          const failure = message.initializationErrors[key]
-          return failure
-            ? [{ key, label, ...failure, hint: key === "tmc" ? cliHint : undefined }]
-            : []
-        })
-        break
-      }
-      default:
-        assertUnreachable(message.type)
+  onMount(async () => {
+    const outcome = await request(
+      "requestInitializationErrors",
+      { sourcePanel: { id: panel.id, type: panel.type } },
+      { timeoutMs: HOST_STATE_TIMEOUT_MS },
+    )
+    if (!outcome.ok) {
+      loadError = outcome.error
+      return
     }
+    const { cliFolder, initializationErrors } = outcome.value
+    const cliHint =
+      "A proxy, firewall or antivirus program blocking network requests can cause this. " +
+      `Try adding an exception for the directory '${cliFolder}'.`
+    failures = components.flatMap(({ key, label }) => {
+      const failure = initializationErrors[key]
+      return failure ? [{ key, label, ...failure, hint: key === "tmc" ? cliHint : undefined }] : []
+    })
   })
 
   function runCommand(command: RunnableCommand) {
@@ -81,7 +73,9 @@
 <p>Something went wrong while initializing the extension.</p>
 
 <h2>What failed</h2>
-{#if failures === undefined}
+{#if loadError}
+  <p>Could not load the error data: {loadError.message}</p>
+{:else if failures === undefined}
   <Spinner label="Loading error data…" />
 {:else if failures.length === 0}
   <p>No error data found</p>
