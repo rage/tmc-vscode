@@ -11,10 +11,10 @@ import { Logger } from "../utilities"
 export async function changeTmcDataPath(actionContext: ReadyActionContext): Promise<void> {
   const { dialog } = actionContext
   const { resources } = actionContext.startup
-  Logger.info("Changing TMC data path")
+  Logger.info("Moving the exercises folder")
   if (!resources.projectsDirectory) {
     await dialog.errorNotification(
-      "Changing the data path is unavailable: tmc-langs did not report an exercise directory.",
+      "Moving the exercises folder is unavailable: the TestMyCode tools did not report where the exercises folder is.",
       new Error("tmc-langs did not report an exercise directory"),
     )
     return
@@ -25,7 +25,7 @@ export async function changeTmcDataPath(actionContext: ReadyActionContext): Prom
     canSelectFiles: false,
     canSelectFolders: true,
     canSelectMany: false,
-    openLabel: "Select folder",
+    openLabel: "Move Here",
     defaultUri: vscode.Uri.file(old),
   }
 
@@ -37,8 +37,8 @@ export async function changeTmcDataPath(actionContext: ReadyActionContext): Prom
   const res = await withOperation(
     dialog,
     {
-      failure: "Failed to move the projects directory.",
-      progress: "Moving projects directory...",
+      failure: "Failed to move the exercises folder.",
+      progress: "Moving the exercises folder…",
     },
     (report) => moveExtensionDataPath(actionContext, newPath, report),
   )
@@ -46,9 +46,9 @@ export async function changeTmcDataPath(actionContext: ReadyActionContext): Prom
     Logger.info(`Moved workspace folder from ${old} to ${res.val}`)
     dialog.notification(
       res.val === newPath.fsPath
-        ? `TMC Data was successfully moved to ${res.val}`
-        : `TMC Data was successfully moved to ${res.val} — the folder you chose was not empty, \
-so a tmcdata subfolder was used.`,
+        ? `Moved the exercises folder to ${res.val}.`
+        : `Moved the exercises folder to ${res.val}. The folder you chose was not empty, so a` +
+            " tmcdata subfolder was used.",
     )
   }
 }

@@ -517,7 +517,7 @@ suite("reported once: course administration", function () {
     await run("tmc.changeTmcDataPath")
     fs.removeSync(target)
 
-    expect(shown).toEqual(["error: Failed to move the projects directory."])
+    expect(shown).toEqual(["error: Failed to move the exercises folder."])
   })
 
   test("a wipe that fails is one notification, and does not reload", async function () {

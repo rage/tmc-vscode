@@ -335,7 +335,10 @@ suite("registered command handlers", function () {
 
     await handlers.get("tmc.settings")?.()
 
-    expect(executeCommand).toHaveBeenCalledWith("workbench.action.openSettings", "TestMyCode")
+    expect(executeCommand).toHaveBeenCalledWith(
+      "workbench.action.openSettings",
+      "@ext:moocfi.test-my-code",
+    )
   })
 
   test("tmc.logs shows the output channel", async function () {
@@ -580,7 +583,7 @@ suite("registered command handlers", function () {
 
     expect(executeCommand).not.toHaveBeenCalled()
     expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
-      "Opening the exercises folder is unavailable: tmc-langs did not report an exercise directory.",
+      "Opening the exercises folder is unavailable: the TestMyCode tools did not report where the exercises folder is.",
       expect.any(Error),
     )
   })

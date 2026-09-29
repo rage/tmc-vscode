@@ -115,7 +115,7 @@
       },
       {
         "command": "tmc.changeTmcDataPath",
-        "title": "Change TMC Data Path",
+        "title": "Move Exercises Folder...",
         "category": "TestMyCode"
       },
       {
@@ -135,13 +135,13 @@
       },
       {
         "command": "tmc.downloadNewExercises",
-        "title": "Download New Exercises For Course...",
+        "title": "Download New Exercises...",
         "category": "TestMyCode",
         "icon": "$(cloud-download)"
       },
       {
         "command": "tmc.downloadOldSubmission",
-        "title": "Download Old Submission",
+        "title": "Download Old Submission...",
         "category": "TestMyCode"
       },
       {
@@ -151,7 +151,7 @@
       },
       {
         "command": "tmc.myCourses",
-        "title": "Display My Courses",
+        "title": "Show My Courses",
         "category": "TestMyCode"
       },
       {
@@ -162,22 +162,22 @@
       },
       {
         "command": "tmc.settings",
-        "title": "Settings",
+        "title": "Open Settings",
         "category": "TestMyCode"
       },
       {
         "command": "tmc.openTMCExercisesFolder",
-        "title": "Open TMC Data Folder",
+        "title": "Open Exercises Folder",
         "category": "TestMyCode"
       },
       {
         "command": "tmc.pasteExercise",
-        "title": "Send Exercise To Paste",
+        "title": "Share Exercise via Paste",
         "category": "TestMyCode"
       },
       {
         "command": "tmc.removeCourse",
-        "title": "Remove Course…",
+        "title": "Remove Course...",
         "category": "TestMyCode"
       },
       {
@@ -192,7 +192,7 @@
       },
       {
         "command": "tmc.showWelcome",
-        "title": "Welcome",
+        "title": "Show Welcome Page",
         "category": "TestMyCode"
       },
       {
@@ -203,7 +203,7 @@
       },
       {
         "command": "tmc.switchWorkspace",
-        "title": "Switch Course Workspace",
+        "title": "Switch Course Workspace...",
         "category": "TestMyCode"
       },
       {
@@ -224,22 +224,22 @@
       },
       {
         "command": "tmc.debug",
-        "title": "Show Debug View",
+        "title": "Show Logs (Debug)",
         "category": "TestMyCode"
       },
       {
         "command": "tmc.wipe",
         "category": "TestMyCode",
-        "title": "Wipe all extension data"
+        "title": "Wipe All Extension Data..."
       },
       {
         "command": "tmc.viewInitializationErrorHelp",
-        "title": "View initialization error help",
+        "title": "Show Initialization Error Help",
         "category": "TestMyCode"
       },
       {
         "command": "tmcTreeView.refreshCourses",
-        "title": "Fetch Course Updates",
+        "title": "Refresh Courses",
         "category": "TestMyCode",
         "icon": "$(refresh)"
       }

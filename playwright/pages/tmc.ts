@@ -75,7 +75,7 @@ export class TmcPage {
   /** Opens My Courses from the Command Palette. */
   public async openMyCourses(): Promise<void> {
     await this.page.keyboard.press("F1")
-    await this.page.keyboard.type("TestMyCode: Display My Courses")
+    await this.page.keyboard.type("TestMyCode: Show My Courses")
     await this.page.keyboard.press("Enter")
   }
 

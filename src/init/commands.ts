@@ -71,7 +71,7 @@ export function registerServiceFreeCommands(
   const register = commandRegistrar(context, dialog)
 
   register("tmc.settings", async () => {
-    await vscode.commands.executeCommand("workbench.action.openSettings", "TestMyCode")
+    await vscode.commands.executeCommand("workbench.action.openSettings", `@ext:${EXTENSION_ID}`)
   })
 
   register("tmc.logs", async () => {

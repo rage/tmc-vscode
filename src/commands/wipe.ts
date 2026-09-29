@@ -15,7 +15,7 @@ export async function wipe(
   const projectsDirectory = resources.projectsDirectory
   if (!projectsDirectory) {
     void dialog.errorNotification(
-      "Wiping the extension data is unavailable: tmc-langs did not report an exercise directory.",
+      "Wiping the extension data is unavailable: the TestMyCode tools did not report where the exercises folder is.",
       new Error("tmc-langs did not report an exercise directory"),
     )
     return
@@ -58,7 +58,7 @@ Please close the workspace and any related files before running this command aga
 
   const wipeResult = await withOperation(
     dialog,
-    { failure: "Failed to wipe extension data.", progress: "Removing extension data..." },
+    { failure: "Failed to wipe extension data.", progress: "Removing extension data…" },
     (report) => wipeExtensionData(actionContext, projectsDirectory, report),
   )
   if (wipeResult.err) {

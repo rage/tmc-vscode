@@ -1944,7 +1944,7 @@ ${error.message}`
       }
 
       if (interrupted) {
-        return Err(new RuntimeError("TMC Langs process was killed.", stderr.text()))
+        return Err(new RuntimeError("The TestMyCode tools were stopped.", stderr.text()))
       }
 
       if (stdoutBuffer !== "") {

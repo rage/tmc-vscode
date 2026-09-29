@@ -8,7 +8,7 @@ export async function openExercisesFolder(actionContext: ReadyActionContext): Pr
   const { projectsDirectory } = actionContext.startup.resources
   if (!projectsDirectory) {
     void dialog.errorNotification(
-      "Opening the exercises folder is unavailable: tmc-langs did not report an exercise directory.",
+      "Opening the exercises folder is unavailable: the TestMyCode tools did not report where the exercises folder is.",
       new Error("tmc-langs did not report an exercise directory"),
     )
     return
