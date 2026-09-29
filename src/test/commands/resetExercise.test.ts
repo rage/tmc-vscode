@@ -24,21 +24,19 @@ suite("Reset exercise command", function () {
 
   let reset: ReturnType<typeof vi.fn>
   let notification: ReturnType<typeof vi.fn>
-  let prompts: string[]
+  let prompts: { message: string; labels: string[] }[]
 
-  /** @param answers labels to pick at each prompt; `undefined` dismisses it. */
-  function actionContext(answers: (string | undefined)[]): ReadyActionContext {
+  /** @param answer The button to press in the confirmation; `undefined` cancels it. */
+  function actionContext(answer: string | undefined): ReadyActionContext {
     const base = createMockActionContext()
     reset = vi.fn(async () => Ok.EMPTY)
     notification = vi.fn()
     prompts = []
-    let call = 0
     const dialog = {
       ...base.dialog,
-      selectItem: vi.fn(async (prompt: { placeHolder: string }, ...items: [string, unknown][]) => {
-        prompts.push(prompt.placeHolder)
-        const wanted = answers[call++]
-        return wanted === undefined ? undefined : items.find(([label]) => label === wanted)?.[1]
+      choose: vi.fn(async (message: string, _options: unknown, ...choices: [string, unknown][]) => {
+        prompts.push({ message, labels: choices.map(([label]) => label) })
+        return choices.find(([label]) => label === answer)?.[1]
       }),
       notification,
     } as unknown as ActionContext["dialog"]
@@ -62,10 +60,12 @@ suite("Reset exercise command", function () {
     }
   }
 
-  test("asks twice before discarding the current state", async function () {
-    await resetExercise(actionContext(["Discard current state", "Yes, discard current state"]), uri)
+  test("asks once, naming the exercise, whether to submit before resetting", async function () {
+    await resetExercise(actionContext("Reset Without Submitting"), uri)
 
-    expect(prompts).toHaveLength(2)
+    expect(prompts).toEqual([
+      { message: "Reset ex-1?", labels: ["Submit and Reset", "Reset Without Submitting"] },
+    ])
     expect(reset).toHaveBeenCalledExactlyOnceWith(
       { kind: "mooc", data: { moocExerciseId: "mooc-ex-uuid" } },
       uri.fsPath,
@@ -73,15 +73,14 @@ suite("Reset exercise command", function () {
     )
   })
 
-  test("asks once when the current state is submitted first", async function () {
-    await resetExercise(actionContext(["Submit to server"]), uri)
+  test("submits first when asked to", async function () {
+    await resetExercise(actionContext("Submit and Reset"), uri)
 
-    expect(prompts).toHaveLength(1)
     expect(reset).toHaveBeenCalledExactlyOnceWith(expect.anything(), uri.fsPath, true)
   })
 
-  test("resets nothing when the second question is dismissed", async function () {
-    await resetExercise(actionContext(["Discard current state", undefined]), uri)
+  test("resets nothing when the confirmation is cancelled", async function () {
+    await resetExercise(actionContext(undefined), uri)
 
     expect(reset).not.toHaveBeenCalled()
   })
@@ -91,7 +90,7 @@ suite("Reset exercise command", function () {
     const submitKey = `submit:${uri.fsPath}`
     expect(acquireSingleFlight(submitKey, 60_000)).toBe(true)
     try {
-      await resetExercise(actionContext(["Submit to server"]), uri)
+      await resetExercise(actionContext("Submit and Reset"), uri)
     } finally {
       releaseSingleFlight(submitKey)
     }

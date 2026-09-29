@@ -29,9 +29,11 @@ export async function closeExercise(
     const exerciseId = LocalCourseExercise.getId(localExercise)
     const confirmed =
       userData.getPassed(exerciseId) ||
-      (await dialog.confirmation(
-        `Are you sure you want to close uncompleted exercise ${exercise.exerciseSlug}?`,
-      ))
+      (await dialog.confirm(`Close ${exercise.exerciseSlug}?`, {
+        confirmLabel: "Close Exercise",
+        detail:
+          "You have not passed this exercise yet. Its files are kept, and you can open it again from the course's details.",
+      }))
     if (!confirmed) {
       return Ok.EMPTY
     }

@@ -46,7 +46,7 @@ function harness(
 ): Harness {
   const [dialog] = createDialogMock()
   const confirmation = vi.fn(async () => options.confirmed ?? true)
-  dialog.confirmation = confirmation
+  dialog.confirm = confirmation
 
   const getExerciseByName = vi.fn(() =>
     "localExercise" in options ? options.localExercise : localExercise,

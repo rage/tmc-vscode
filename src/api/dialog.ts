@@ -74,13 +74,41 @@ export default class Dialog {
   private static readonly _logsButton: NotificationButton = ["Show logs", (): void => Logger.show()]
 
   /**
-   * Prompts the user with a yes/no dialog.
+   * Asks the user to confirm an action, in a modal dialog.
    *
-   * @param prompt A prompt to present to the user.
-   * @returns A Boolean indicating the answer or `undefined` if dialogue was dismissed.
+   * @param message The question, naming what the action acts on, e.g. "Close part01-01?".
+   * @param options `confirmLabel` is the verb on the confirm button, e.g. "Close Exercise";
+   * the dialog adds Cancel itself. `detail` says what follows from confirming.
+   * @returns Whether the user confirmed. Cancel, Escape and closing the dialog all say no.
    */
-  public async confirmation(prompt: string): Promise<boolean | undefined> {
-    return this.selectItem(prompt, ["Yes", true], ["No", false])
+  public async confirm(
+    message: string,
+    options: { confirmLabel: string; detail?: string },
+  ): Promise<boolean> {
+    const confirmed = await this.choose(message, options, [options.confirmLabel, true])
+    return confirmed === true
+  }
+
+  /**
+   * Offers the user several ways to go ahead with an action, in a modal dialog.
+   *
+   * For one way plus Cancel, use {@link confirm}.
+   *
+   * @param choices `[label, value]` pairs, one button each; the dialog adds Cancel itself.
+   * @returns The chosen value, or `undefined` for Cancel.
+   */
+  public async choose<T>(
+    message: string,
+    options: { detail?: string },
+    ...choices: [label: string, value: T][]
+  ): Promise<T | undefined> {
+    const items = choices.map(([title, value]) => ({ title, value }))
+    const modal: vscode.MessageOptions = { modal: true }
+    if (options.detail !== undefined) {
+      modal.detail = options.detail
+    }
+    const chosen = await vscode.window.showWarningMessage(message, modal, ...items)
+    return chosen?.value
   }
 
   /**
@@ -121,18 +149,23 @@ export default class Dialog {
   }
 
   /**
-   * Prompts the user with a text input that requires explicitly typing a confirmation.
+   * Asks the user to type `word` to confirm, for an action nothing can undo.
    *
-   * @param prompt A prompt to be displayed to the user.
-   * @returns True if and only if user typed `yes`.
+   * Everything else confirms with {@link confirm}: typing is friction only data loss earns.
+   *
+   * @returns Whether the user typed `word`, ignoring case. Escape says no.
    */
-  public async explicitConfirmation(prompt: string): Promise<boolean> {
-    return vscode.window
-      .showInputBox({
-        placeHolder: "Write 'Yes' to confirm or 'No' to cancel and press 'Enter'.",
-        prompt,
-      })
-      .then((x) => x?.toLocaleLowerCase() === "yes")
+  public async explicitConfirmation(prompt: string, word = "Yes"): Promise<boolean> {
+    const matches = (value: string): boolean =>
+      value.trim().toLocaleLowerCase() === word.toLocaleLowerCase()
+    const typed = await vscode.window.showInputBox({
+      prompt,
+      placeHolder: `Type ${word} to confirm, or press Escape to cancel`,
+      ignoreFocusOut: true,
+      validateInput: (value) =>
+        value === "" || matches(value) ? undefined : `Type ${word} to confirm.`,
+    })
+    return typed !== undefined && matches(typed)
   }
 
   /**

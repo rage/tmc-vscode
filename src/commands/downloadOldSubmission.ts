@@ -72,11 +72,12 @@ export async function downloadOldSubmission(
         return Ok.EMPTY
       }
 
-      const submitFirst = await confirmSubmitBeforeDestructiveAction(
-        actionContext,
-        TITLE,
-        backendName(id.kind),
-      )
+      const submitFirst = await confirmSubmitBeforeDestructiveAction(actionContext, {
+        message: `Restore this submission of ${exercise.exerciseSlug}?`,
+        replacement: "the submission",
+        verb: "Restore",
+        serverName: backendName(id.kind),
+      })
       if (submitFirst === undefined) {
         return Ok.EMPTY
       }

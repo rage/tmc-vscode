@@ -121,9 +121,13 @@ async function harness(
     errorNotification: toast("error"),
     warningNotification: toast("warning"),
     notification: toast("info"),
-    confirmation: vi.fn(async () => true),
+    confirm: vi.fn(async () => true),
     explicitConfirmation: vi.fn(async () => true),
-    // Picks the first offer of every pick: the course, the submission, "Submit to server".
+    // Takes the first offer of every prompt: the course, the submission, "Submit and …".
+    choose: vi.fn(
+      async (_message: string, _options: unknown, ...choices: [string, unknown][]) =>
+        choices[0]?.[1],
+    ),
     selectItem: vi.fn(async (_options: unknown, ...items: [string, unknown][]) => items[0]?.[1]),
     progressNotification: vi.fn(
       (_message: string, task: (progress: unknown, token: unknown) => unknown) =>

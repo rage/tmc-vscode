@@ -58,7 +58,7 @@ suite("openWorkspace command", function () {
 
     await openWorkspace(actionContext(), "python-course", "tmc")
 
-    expect(dialogMock.confirmation).not.toHaveBeenCalled()
+    expect(dialogMock.confirm).not.toHaveBeenCalled()
     expect(executeCommand).not.toHaveBeenCalledWith("vscode.openFolder", expect.anything())
     expect(executeCommand).toHaveBeenCalledWith("workbench.files.action.focusFilesExplorer")
   })
@@ -68,7 +68,7 @@ suite("openWorkspace command", function () {
 
     await openWorkspace(actionContext(), "python-course", "tmc")
 
-    expect(dialogMock.confirmation).not.toHaveBeenCalled()
+    expect(dialogMock.confirm).not.toHaveBeenCalled()
     expect(executeCommand).toHaveBeenCalledWith(
       "vscode.openFolder",
       expect.objectContaining({ fsPath: vscode.Uri.file(courseWorkspaceFile).fsPath }),
@@ -96,8 +96,12 @@ suite("openWorkspace command", function () {
 
     await openWorkspace(actionContext(), "python-course", "tmc")
 
-    expect(dialogMock.confirmation).toHaveBeenCalled()
+    expect(dialogMock.confirm).toHaveBeenCalledWith(
+      "Open the TMC Server course workspace?",
+      expect.objectContaining({ confirmLabel: "Open Workspace" }),
+    )
     expect(executeCommand).not.toHaveBeenCalledWith("vscode.openFolder", expect.anything())
-    expect(dialogMock.warningNotification).toHaveBeenCalled()
+    // Declining is the answer; a toast offering the declined action again is not.
+    expect(dialogMock.warningNotification).not.toHaveBeenCalled()
   })
 })

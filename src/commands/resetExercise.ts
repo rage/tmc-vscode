@@ -31,11 +31,12 @@ export async function resetExercise(
     }
 
     const id = ExerciseIdentifier.from(exerciseDetails.id)
-    const submitFirst = await confirmSubmitBeforeDestructiveAction(
-      actionContext,
-      "Reset Exercise",
-      backendName(id.kind),
-    )
+    const submitFirst = await confirmSubmitBeforeDestructiveAction(actionContext, {
+      message: `Reset ${exercise.exerciseSlug}?`,
+      replacement: "the exercise template",
+      verb: "Reset",
+      serverName: backendName(id.kind),
+    })
     if (submitFirst === undefined) {
       return Ok.EMPTY
     }

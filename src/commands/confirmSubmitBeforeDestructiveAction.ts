@@ -1,41 +1,36 @@
 import type { ActionContext } from "../actions/types"
-import { Logger } from "../utilities"
+
+interface DestructiveActionPrompt {
+  /** The question, naming the exercise, e.g. "Reset part01-01?". */
+  message: string
+  /** What replaces the current code, e.g. "the exercise template". */
+  replacement: string
+  /** The action's verb for the buttons, e.g. "Reset". */
+  verb: string
+  /** Backend the exercise would be submitted to. */
+  serverName: string
+}
 
 /**
- * Asks whether to submit the exercise before an operation that throws its
- * current state away, and asks again when the answer is "discard".
+ * Asks, in one modal, whether to go ahead with an operation that throws the exercise's
+ * current state away, and whether to submit that state first so a copy survives.
  *
- * @param title Quick pick title, naming the command that is asking.
- * @param serverName Backend the exercise would be submitted to.
- * @returns Whether to submit first, or `undefined` when the user dismissed
- * either question — the caller must then do nothing at all.
+ * @returns Whether to submit first, or `undefined` when the user cancelled — the caller
+ * must then do nothing at all.
  */
 export async function confirmSubmitBeforeDestructiveAction(
   actionContext: ActionContext,
-  title: string,
-  serverName: string,
+  prompt: DestructiveActionPrompt,
 ): Promise<boolean | undefined> {
-  const { dialog } = actionContext
-  const submitFirst = await dialog.selectItem<boolean>(
+  const { message, replacement, verb, serverName } = prompt
+  return actionContext.dialog.choose(
+    message,
     {
-      title,
-      placeHolder: `Do you want to save the current state of the exercise by submitting it to ${serverName}?`,
+      detail:
+        `Your current code will be replaced by ${replacement}. ` +
+        `Submit it to ${serverName} first to keep a copy you can download later.`,
     },
-    ["Submit to server", true],
-    ["Discard current state", false],
-  )
-  if (submitFirst === undefined) {
-    Logger.debug("Answer for submitting first not provided, returning early.")
-    return undefined
-  }
-  // Submitting first loses nothing, so only discarding is worth a second question.
-  if (submitFirst) {
-    return true
-  }
-
-  return dialog.selectItem<boolean>(
-    { title, placeHolder: "Are you sure?" },
-    ["No, save the current exercise state", true],
-    ["Yes, discard current state", false],
+    [`Submit and ${verb}`, true],
+    [`${verb} Without Submitting`, false],
   )
 }
