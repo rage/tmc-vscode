@@ -36,8 +36,6 @@ export const MyCoursesPanelSchema = z.object({
   courses: z.array(LocalCourseDataSchema).optional(),
   tmcDataPath: z.string().optional(),
   tmcDataSize: z.string().optional(),
-  // read by nothing; kept only until its last caller stops passing it
-  courseDeadlines: z.record(z.string(), z.string()).optional(),
 })
 
 export type MyCoursesPanel = z.infer<typeof MyCoursesPanelSchema>

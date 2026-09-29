@@ -108,6 +108,10 @@
         submitting = false
         break
       }
+      case "clipboardCopied": {
+        announce(message.ok ? "Copied to the clipboard" : "Could not copy to the clipboard")
+        break
+      }
       case "willNotRunTestsForExam": {
         tryingToRunTestsForExam = true
         break
@@ -136,9 +140,7 @@
     submitting = true
     vscode.postMessage({
       type: "submitExercise",
-      course: panel.course,
-      exercise: panel.exercise,
-      exerciseUri: panel.exerciseUri,
+      sourcePanel: { id: panel.id, type: panel.type },
     })
   }
 </script>

@@ -146,6 +146,10 @@
         pasteError = message.error
         break
       }
+      case "clipboardCopied": {
+        announce(message.ok ? "Copied to the clipboard" : "Could not copy to the clipboard")
+        break
+      }
       default: {
         assertUnreachable(message)
       }

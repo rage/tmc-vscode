@@ -39,7 +39,7 @@ export async function removeCourse(
   const unsetResult = await langs.unsetSetting(closedExercisesSettingKey(course.kind, courseName))
   if (unsetResult.err) {
     dialog.reportError(
-      `Failed to remove TMC-langs data for "${courseName}".`,
+      `Failed to clear the record of closed exercises for "${courseName}".`,
       unsetResult.val,
       course.kind,
     )

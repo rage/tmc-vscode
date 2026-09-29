@@ -32,6 +32,12 @@ import { createDegradedContext, createMockActionContext } from "../mocks/actionC
 import { createMockContext } from "../mocks/vscode"
 import { createFakeWebviewPanel } from "../support/webviewPanel"
 
+// Course details render deadlines in `vscode.env.language`, and the mock ships no `env`.
+beforeEach(() => {
+  const vscodeModule: object = vscode
+  Object.defineProperty(vscodeModule, "env", { value: {}, writable: true, configurable: true })
+})
+
 suite("TmcPanel moocLogin handling", () => {
   test("a successful login closes the side panel and offers add-new-course", async () => {
     // Isolate from any panel state a previous test in this file may have left behind.
@@ -241,7 +247,10 @@ suite("TmcPanel initialization guards", () => {
       expect.objectContaining({
         type: "panelDataResult",
         requestId: 3,
-        error: { message: "tmc-langs did not report an exercise directory" },
+        error: {
+          message:
+            "Showing your courses is unavailable: the TestMyCode tools did not report where the exercises folder is.",
+        },
       }),
     )
     expectNoNotification(actionContext)
@@ -618,7 +627,7 @@ suite("TmcPanel reports a handler's failure once", () => {
           ...startup.startup,
         },
       })
-      vi.mocked(actionContext.dialog.explicitConfirmation).mockResolvedValue(true)
+      vi.mocked(actionContext.dialog.confirm).mockResolvedValue(true)
       return actionContext
     }
 
@@ -635,10 +644,25 @@ suite("TmcPanel reports a handler's failure once", () => {
         expect.objectContaining({ message: "globalState is full" }),
         "tmc",
       )
-      expect(actionContext.dialog.notification).not.toHaveBeenCalled()
+      expect(actionContext.dialog.statusMessage).not.toHaveBeenCalled()
       expect(panel.webview.postMessage).not.toHaveBeenCalledWith(
         expect.objectContaining({ type: "setPanel" }),
       )
+    })
+
+    test("asks in a modal dialog and removes nothing when the user cancels", async () => {
+      const handlers = stubHandlers()
+      const actionContext = confirmingContext()
+      vi.mocked(actionContext.dialog.confirm).mockResolvedValue(false)
+      const { listener } = await mountWith(handlers, actionContext)
+
+      await listener({ type: "removeCourse", id: courseId })
+
+      expect(actionContext.dialog.confirm).toHaveBeenCalledExactlyOnceWith(
+        "Remove Python Course from your courses?",
+        expect.objectContaining({ confirmLabel: "Remove Course" }),
+      )
+      expect(handlers.removeCourse).not.toHaveBeenCalled()
     })
 
     test("a removal that succeeds is announced and shows the remaining courses", async () => {
@@ -649,8 +673,8 @@ suite("TmcPanel reports a handler's failure once", () => {
 
       await listener({ type: "removeCourse", id: courseId })
 
-      expect(actionContext.dialog.notification).toHaveBeenCalledExactlyOnceWith(
-        "python-course was removed from courses.",
+      expect(actionContext.dialog.statusMessage).toHaveBeenCalledExactlyOnceWith(
+        "Removed Python Course.",
       )
       expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
       expect(panel.webview.postMessage).toHaveBeenCalledWith(
@@ -2090,6 +2114,21 @@ suite("TmcPanel requestCourseDetailsData exercise statuses", () => {
     expect(exercise).toBeDefined()
     expect(Object.keys(exercise ?? {}).toSorted()).toEqual(
       Object.keys(ExerciseSchema.shape).toSorted(),
+    )
+  })
+
+  test("renders deadlines in VS Code's display language", async () => {
+    const deadline = "2030-01-01T00:00:00.000Z"
+    ;(vscode as unknown as { env: unknown }).env = { language: "fi" }
+    const { posted } = await openCourseDetails(1, deadline)
+
+    const groups = posted.find((m) => m.type === "setCourseGroups") as unknown as {
+      exerciseGroups: { exercises: { hardDeadlineString: string }[] }[]
+    }
+    expect(groups.exerciseGroups[0]?.exercises[0]?.hardDeadlineString).toBe(
+      new Intl.DateTimeFormat("fi", { dateStyle: "medium", timeStyle: "short" }).format(
+        new Date(deadline),
+      ),
     )
   })
 

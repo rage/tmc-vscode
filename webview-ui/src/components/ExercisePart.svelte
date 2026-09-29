@@ -41,7 +41,7 @@
   }: Props = $props()
 
   // Seeded once: a re-posted group must not collapse a part the user opened.
-  let isOpen = $state(untrack(() => exerciseGroup.defaultOpen ?? true))
+  let isOpen = $state(untrack(() => exerciseGroup.defaultOpen))
 
   const statusAppearances: Record<ExerciseStatus, { status: Status; label: string }> = {
     closed: { status: "closed", label: "Closed" },

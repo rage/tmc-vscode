@@ -190,7 +190,6 @@
     vscode.postMessage({
       type: "refreshCourseDetails",
       id: panel.courseId,
-      useCache: false,
     })
   }
   function openWorkspace() {

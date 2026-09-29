@@ -61,14 +61,15 @@ vsCodeTest(
     await vsCodeTest.step("pick the submission from the explorer context menu", async () => {
       await explorerPage.runContextMenuCommand(fileName, "Download Old Submission")
 
-      await quickPick.waitForTitle("Download Old Submission")
+      await quickPick.waitForTitle(/^Download Old Submission — /)
       // The seeded one is the only submission: nothing has been submitted from here.
       await quickPick.selectOnlyItem()
-
-      await quickPick.selectByLabel("Discard current state")
-      // Discarding asks again, since the current state would be lost.
-      await quickPick.selectByLabel("Yes, discard current state")
       await quickPick.expectClosed()
+
+      await page
+        .locator(".monaco-dialog-box")
+        .getByRole("button", { name: "Restore Without Submitting" })
+        .click()
     })
 
     await vsCodeTest.step("see it reported as a normal outcome", async () => {

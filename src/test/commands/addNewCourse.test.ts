@@ -103,7 +103,7 @@ class FakeQuickPick {
   }
 }
 
-/** Resolves once every pending promise callback has run. */
+/** Lets the command's pending promise callbacks run. */
 async function flush(): Promise<void> {
   for (let i = 0; i < 10; i++) {
     await Promise.resolve()

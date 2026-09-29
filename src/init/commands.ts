@@ -110,6 +110,7 @@ export function registerCommands(
     pasteExercise: actions.pasteExercise,
     refreshLocalExercises: actions.refreshLocalExercises,
     removeCourse: actions.removeCourse,
+    sendSubmissionFeedback: actions.sendSubmissionFeedback,
     submitExercise: commands.submitExercise,
     updateCourse: actions.updateCourse,
   })
@@ -174,7 +175,6 @@ export function registerCommands(
     TmcPanel.renderMain(context.extensionUri, context, readyContext, {
       id: nextPanelId(),
       type: "MyCourses",
-      courseDeadlines: {},
     })
   })
 

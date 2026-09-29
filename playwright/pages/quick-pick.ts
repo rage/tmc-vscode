@@ -18,7 +18,7 @@ export class QuickPickPage {
   }
 
   /** Waits for a quick pick carrying `title` to be the one on screen. */
-  public async waitForTitle(title: string): Promise<void> {
+  public async waitForTitle(title: string | RegExp): Promise<void> {
     await expect(this.widget().locator(".quick-input-title")).toHaveText(title)
   }
 

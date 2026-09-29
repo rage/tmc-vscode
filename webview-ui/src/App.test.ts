@@ -124,7 +124,7 @@ suite("App reload handshake", () => {
     dispatchToWebview({
       type: "setPanel",
       target: { id: 0, type: "App" },
-      panel: { id: 7, type: "MyCourses", courseDeadlines: {} },
+      panel: { id: 7, type: "MyCourses" },
     })
     await tick()
 
@@ -150,7 +150,7 @@ suite("App navigation after a crash", () => {
     dispatchToWebview({
       type: "setPanel",
       target: { id: 0, type: "App" },
-      panel: { id: 2, type: "MyCourses", courseDeadlines: {} },
+      panel: { id: 2, type: "MyCourses" },
     })
 
     await waitFor(() => {

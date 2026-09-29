@@ -211,6 +211,7 @@ vi.mock("../../actions", () => ({
   downloadExercisesForUi: async (): Promise<void> => {},
   pasteExercise: async (): Promise<unknown> => Ok.EMPTY,
   removeCourse: async (): Promise<void> => {},
+  sendSubmissionFeedback: async (): Promise<unknown> => Ok.EMPTY,
   updateCourse: async (): Promise<unknown> => Ok.EMPTY,
 }))
 
@@ -370,7 +371,7 @@ suite("activation with unusable storage", function () {
 
     const calls = vi.mocked(vscode.window.showErrorMessage).mock.calls
     expect(calls).toHaveLength(1)
-    const [message, ...buttons] = calls[0] as [string, ...{ title: string }[]]
+    const [message, ...buttons] = calls[0] as unknown as [string, ...{ title: string }[]]
     expect(message).not.toContain("Fatal error")
     expect(message).toMatch(
       /^TestMyCode could not start\. Preparing the extension's files failed: /,

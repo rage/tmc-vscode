@@ -31,7 +31,7 @@ const carriedOnPastWarnings = [
   "downloadOrUpdateExercises.ts: Failed to download ${describeExercises(names)}.",
   // both backends failed: the tmc half is returned, the mooc half is this
   'logout.ts: Failed to log out of ${backendName("mooc")}.',
-  'removeCourse.ts: Failed to remove TMC-langs data for "${courseName}".',
+  'removeCourse.ts: Failed to clear the record of closed exercises for "${courseName}".',
   'removeCourse.ts: Failed to remove the workspace file for "${courseName}".',
   "submitExercise.ts: Failed to record the exercise as passed.",
   // once per session; the only way a background poll tells the user their scope is gone

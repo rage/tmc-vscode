@@ -107,7 +107,7 @@ function packageJson(): {
     submenus?: { id: string }[]
     keybindings?: { command: string; key: string; when?: string }[]
     menus: Record<string, MenuEntry[]>
-    viewsWelcome?: { contents: string }[]
+    viewsWelcome?: { contents: string; when?: string }[]
   }
 } {
   return JSON.parse(
@@ -266,6 +266,28 @@ suite("registerCommands", function () {
     expect(referenced.filter((x) => !declared.has(x))).toEqual([])
   })
 
+  // Welcome content shows only while the view is empty, so each state needs its own entry,
+  // and two entries true at once stack their buttons.
+  test("the Courses view has exactly one welcome for each startup and login state", function () {
+    const { viewsWelcome = [] } = packageJson().contributes
+    const states = [
+      { Initialized: false, Degraded: false, LoggedIn: false },
+      { Initialized: false, Degraded: true, LoggedIn: false },
+      { Initialized: true, Degraded: false, LoggedIn: false },
+      { Initialized: true, Degraded: false, LoggedIn: true },
+    ]
+    for (const state of states) {
+      const shown = viewsWelcome.filter((entry) =>
+        whenTerms(entry.when).every((term) => {
+          const negated = term.startsWith("!")
+          const key = term.replace(/^!?test-my-code:/, "") as keyof typeof state
+          return state[key] !== negated
+        }),
+      )
+      expect(shown, JSON.stringify(state)).toHaveLength(1)
+    }
+  })
+
   // An action that shows on every file answers most clicks with "not part of a course
   // exercise".
   test("editor title actions show only on an exercise's files", function () {
@@ -297,8 +319,8 @@ suite("registerCommands", function () {
         ])
         .flatMap((match) => match[1] ?? []),
     )
-    const { menus, keybindings = [] } = packageJson().contributes
-    const gated = [...Object.values(menus).flat(), ...keybindings]
+    const { menus, keybindings = [], viewsWelcome = [] } = packageJson().contributes
+    const gated = [...Object.values(menus).flat(), ...keybindings, ...viewsWelcome]
     const referenced = new Set(
       gated.flatMap((x) => [...(x.when ?? "").matchAll(/test-my-code:\w+/g)].map((m) => m[0])),
     )

@@ -437,7 +437,6 @@ suite("CourseDetails panel", () => {
     expect(postedMessages).toHaveBeenCalledWith({
       type: "refreshCourseDetails",
       id: makeTmcKind({ courseId: 42 }),
-      useCache: false,
     })
   })
 

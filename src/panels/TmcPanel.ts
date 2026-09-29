@@ -16,7 +16,6 @@ import { ConnectionError, InitializationError } from "../errors"
 import type {
   BackendKind,
   CourseDetailsPanel,
-  ExerciseGroup,
   ExerciseStatus,
   ExtensionToWebview,
   LocalCourseData as LocalCourseDataType,
@@ -263,7 +262,7 @@ export class TmcPanel {
       type: "setCourseGroups",
       target,
       offlineMode: false,
-      exerciseGroups: toMessageGroups(view.exerciseGroups),
+      exerciseGroups: view.exerciseGroups,
     })
 
     // Only an unreachable backend makes the stored deadlines untrustworthy; any other
@@ -276,9 +275,7 @@ export class TmcPanel {
             type: "setCourseGroups",
             target,
             offlineMode: true,
-            exerciseGroups: toMessageGroups(
-              courseDetailsView(course, actionContext, true).exerciseGroups,
-            ),
+            exerciseGroups: courseDetailsView(course, actionContext, true).exerciseGroups,
           })
         }
       })
@@ -552,8 +549,10 @@ export class TmcPanel {
             const { userData, resources } = actionContext.startup
             const projectsDirectory = resources.projectsDirectory
             if (!projectsDirectory) {
-              const error = new Error("tmc-langs did not report an exercise directory")
-              Logger.error("Showing your courses is unavailable.", error)
+              const error = new Error(
+                "Showing your courses is unavailable: the TestMyCode tools did not report where the exercises folder is.",
+              )
+              Logger.error(error.message)
               this._postPanelDataFailed(target, message.requestId, error)
               return
             }
@@ -608,13 +607,13 @@ export class TmcPanel {
               actionContext.dialog.reportError("Failed to remove the course.", courseResult.val)
               return
             }
-            const course = courseResult.val
-            const courseName = LocalCourseData.getCourseName(course)
+            const title = LocalCourseData.getCourseTitle(courseResult.val)
             if (
-              await actionContext.dialog.explicitConfirmation(
-                `Do you want to remove ${LocalCourseData.getCourseName(course)} from your courses? \
-                                This won't delete your downloaded exercises.`,
-              )
+              await actionContext.dialog.confirm(`Remove ${title} from your courses?`, {
+                confirmLabel: "Remove Course",
+                detail:
+                  "Your downloaded exercises stay on disk, and you can add the course again later.",
+              })
             ) {
               const removeResult = await withOperation(
                 actionContext.dialog,
@@ -626,7 +625,7 @@ export class TmcPanel {
                   id: nextPanelId(),
                   type: "MyCourses",
                 })
-                actionContext.dialog.notification(`${courseName} was removed from courses.`)
+                actionContext.dialog.statusMessage(`Removed ${title}.`)
               }
             }
             break
@@ -1145,32 +1144,8 @@ function courseDetailsView(
     actionContext.startup.workspaceManager.getExercises(),
     offlineMode,
     new Date(),
+    vscode.env.language,
   )
-}
-
-/**
- * Narrows the view model's rows to the fields `ExerciseSchema` declares.
- *
- * `buildCourseDetailsView` assembles its groups out of `CourseDetailsExercise` rows,
- * which also carry the parsed `Date` deadlines it needs to sort and compare; the
- * message contract declares only their rendered strings, and a `Date` has no place
- * on the far side of a `postMessage`.
- */
-function toMessageGroups(groups: ExerciseGroup[]): ExerciseGroup[] {
-  return groups.map(({ name, nextDeadlineString, defaultOpen, exercises }) => ({
-    name,
-    nextDeadlineString,
-    defaultOpen,
-    exercises: exercises.map((exercise) => ({
-      id: exercise.id,
-      name: exercise.name,
-      isHard: exercise.isHard,
-      hardDeadlineString: exercise.hardDeadlineString,
-      softDeadlineString: exercise.softDeadlineString,
-      deadlineIso: exercise.deadlineIso,
-      passed: exercise.passed,
-    })),
-  }))
 }
 
 /**

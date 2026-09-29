@@ -26,7 +26,7 @@ suite("App render-crash boundary", () => {
     dispatchToWebview({
       type: "setPanel",
       target: { id: 0, type: "App" },
-      panel: { id: 2, type: "MyCourses", courseDeadlines: {} },
+      panel: { id: 2, type: "MyCourses" },
     })
 
     await waitFor(() => {

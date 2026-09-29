@@ -27,14 +27,19 @@ suite("Welcome panel", () => {
     ;(await screen.findByRole("button", { name: "My Courses" })).click()
 
     expect(postedMessages).toHaveBeenCalledWith({ type: "openMyCourses" })
-    expect(screen.queryByText(/To get started/)).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Log In" })).not.toBeInTheDocument()
   })
 
-  test("tells a logged-out student where to log in", async () => {
+  test("offers a logged-out student Log In, which runs the login command", async () => {
     render(Welcome, { props: { panel: { ...panel, loggedIn: false } } })
+    postedMessages.mockClear()
 
-    expect(screen.getByText(/To get started/)).toHaveTextContent("TestMyCode: Log In")
-    await screen.findByRole("button", { name: "Read instructions" })
+    ;(await screen.findByRole("button", { name: "Log In" })).click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "runCommand",
+      command: "tmc.showMoocLogin",
+    })
     expect(screen.queryByRole("button", { name: "My Courses" })).not.toBeInTheDocument()
   })
 

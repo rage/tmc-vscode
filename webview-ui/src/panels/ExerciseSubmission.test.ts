@@ -183,6 +183,23 @@ suite("ExerciseSubmission panel", () => {
     }
   })
 
+  test("announces whether the host managed to copy", async () => {
+    vi.useFakeTimers()
+    try {
+      render(ExerciseSubmission, { props: { panel } })
+      dispatchToWebview({
+        type: "clipboardCopied",
+        target: { type: "ExerciseSubmission", id: panel.id },
+        ok: false,
+      })
+      await vi.runAllTimersAsync()
+
+      expect(screen.getByTestId("announcer")).toHaveTextContent("Could not copy to the clipboard")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test("replaces the progress view with the failure when the submission errors", async () => {
     render(ExerciseSubmission, { props: { panel } })
     postSubmissionError(panel.id, new BaseError("Failed to submit: connection reset", "ECONNRESET"))

@@ -148,6 +148,13 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
     const configDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-config"))
     const projectsDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-projects"))
     const userDataDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-user"))
+    // A native dialog is outside the page, where Playwright cannot press its buttons; the
+    // extension's confirmations are modal dialogs.
+    fs.mkdirSync(join(userDataDir, "User"))
+    fs.writeFileSync(
+      join(userDataDir, "User", "settings.json"),
+      JSON.stringify({ "window.dialogStyle": "custom" }),
+    )
     if (shouldSeedTmcCredentials) {
       seedTmcCredentials(configDir)
     }

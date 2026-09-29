@@ -1677,7 +1677,7 @@ export default class Langs {
         "Unexpected TMC-langs response.",
         `result: ${langsResponse.result}, output-data-kind: ${langsResponse.data?.["output-data-kind"]}`,
       )
-      return Err(new BaseError("Unexpected TMC-langs response.", stderr))
+      return Err(new BaseError("Unexpected response from the TestMyCode tools.", stderr))
     }
     if (langsResponse.result !== "error") {
       return Ok(langsResponse)

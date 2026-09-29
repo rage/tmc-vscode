@@ -77,7 +77,10 @@ a:focus-visible,
   vscode-icon,
   vscode-progress-bar,
   vscode-progress-ring,
+  vscode-radio,
+  vscode-radio-group,
   vscode-table,
+  vscode-textarea,
   vscode-toolbar-button
 ):not(:defined) {
   visibility: hidden;

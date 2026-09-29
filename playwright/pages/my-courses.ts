@@ -6,7 +6,7 @@ import { TmcPage } from "./tmc"
 export class MyCoursesPage extends TmcPage {
   public async goto(): Promise<void> {
     await this.openMenu()
-    await this.page.getByRole("treeitem", { name: "My Courses" }).locator("a").click()
+    await this.openMyCourses()
   }
 
   /** Opens the add-course quick pick from the My Courses button. */
