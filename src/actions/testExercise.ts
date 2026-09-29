@@ -8,7 +8,7 @@ import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseTestsPanel, TestResultData } from "../shared/shared"
 import { LocalCourseData, LocalCourseExercise, panelTarget, toWebviewError } from "../shared/shared"
 import { Logger, runSingleFlight } from "../utilities"
-import { getActiveEditorExecutablePath } from "../window"
+import { resolvePythonInterpreter } from "../window"
 import type { ReadyActionContext } from "./types"
 
 export const testInterrupts = new Map<number, (() => void)[]>()
@@ -71,10 +71,9 @@ export async function testExercise(
       const target = panelTarget(panel)
 
       if (!course.data.perhapsExamMode) {
-        const executablePath = getActiveEditorExecutablePath(actionContext)
         const { process: testRunner, interrupt: testInterrupt } = langs.runTests(
           exercise.uri.fsPath,
-          executablePath,
+          resolvePythonInterpreter(exercise.uri),
         )
         const { process: validationRunner, interrupt: validationInterrupt } = langs.runCheckstyle(
           exercise.uri.fsPath,
