@@ -1,10 +1,9 @@
 import { render, screen } from "@testing-library/svelte"
-import { tick } from "svelte"
 
 import { releaseNotes } from "../generated/releaseNotes"
 import type { WelcomePanel } from "../shared/shared"
 import { pasteServiceName } from "../shared/shared"
-import { dispatchToWebview, postedMessages } from "../test/setup"
+import { postedMessages } from "../test/setup"
 import Welcome from "./Welcome.svelte"
 
 const panel: WelcomePanel = { id: 2, type: "Welcome", version: "3.5.3" }
@@ -15,54 +14,37 @@ suite("Welcome panel", () => {
     expect(screen.getByRole("heading", { name: /Welcome to TestMyCode 3.5.3/ })).toBeInTheDocument()
   })
 
-  test("requests its welcome data on mount", () => {
-    render(Welcome, { props: { panel } })
-    expect(postedMessages).toHaveBeenCalledWith({
-      type: "requestWelcomeData",
-      requestId: expect.any(Number),
-      sourcePanel: panel,
-    })
-  })
-
-  // Nothing on the page depends on the answer, so the one place a failure can be seen
-  // is the log; the host raises the user-facing notification itself.
-  test("logs a request the extension host could not serve", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
-    render(Welcome, { props: { panel: { id: 2, type: "Welcome" } } })
-    const request = postedMessages.mock.calls[0]?.[0] as { requestId: number }
-
-    dispatchToWebview({
-      type: "panelDataResult",
-      target: { id: 2, type: "Welcome" },
-      requestId: request.requestId,
-      error: { message: "The extension did not initialize properly" },
-    })
-    await tick()
-
-    expect(warn).toHaveBeenCalledWith(
-      "Could not read the extension version:",
-      "The extension did not initialize properly",
-    )
-    warn.mockRestore()
-  })
-
-  // The version arrives in a message, so until it does -- or if it never does -- the
-  // heading has to read as a finished sentence rather than one with a hole in it.
-  test("renders the heading without a gap before the version arrives", () => {
+  // Without the version the heading still has to read as a finished sentence.
+  test("renders the heading without a gap when the version is unknown", () => {
     render(Welcome, { props: { panel: { id: 2, type: "Welcome" } } })
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Welcome to TestMyCode!")
   })
 
-  test("updates the version when setWelcomeData arrives", async () => {
-    render(Welcome, { props: { panel: { id: 2, type: "Welcome" } } })
-    dispatchToWebview({
-      type: "setWelcomeData",
-      target: { type: "Welcome", id: 2 },
-      version: "9.9.9",
-    })
-    expect(
-      await screen.findByRole("heading", { name: /Welcome to TestMyCode 9.9.9/ }),
-    ).toBeInTheDocument()
+  test("offers My Courses once logged in", async () => {
+    render(Welcome, { props: { panel: { ...panel, loggedIn: true } } })
+    postedMessages.mockClear()
+
+    ;(await screen.findByRole("button", { name: "My Courses" })).click()
+
+    expect(postedMessages).toHaveBeenCalledWith({ type: "openMyCourses" })
+    expect(screen.queryByText(/To get started/)).not.toBeInTheDocument()
+  })
+
+  test("tells a logged-out student where to log in", async () => {
+    render(Welcome, { props: { panel: { ...panel, loggedIn: false } } })
+
+    expect(screen.getByText(/To get started/)).toHaveTextContent("TestMyCode: Log In")
+    await screen.findByRole("button", { name: "Read instructions" })
+    expect(screen.queryByRole("button", { name: "My Courses" })).not.toBeInTheDocument()
+  })
+
+  // One login covers both backends, so the page must not ask the student to pick an account.
+  test("names courses.mooc.fi as the one account to log in with", () => {
+    render(Welcome, { props: { panel } })
+    expect(screen.getByText(/Log in with your/)).toHaveTextContent(
+      "Log in with your courses.mooc.fi account. The same account works for courses on both",
+    )
+    expect(screen.queryByText(/one of the two supported platforms/)).not.toBeInTheDocument()
   })
 
   // The notice covers both backends, so it names each paste service through the shared
