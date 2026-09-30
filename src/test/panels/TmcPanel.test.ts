@@ -1185,7 +1185,7 @@ suite("TmcPanel side panel placement", () => {
     renderSidePanel(exerciseSubmissionPanel())
 
     expect(createWebviewPanel).toHaveBeenCalledWith(
-      "sidePanel",
+      "tmc.sidePanel",
       expect.any(String),
       { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
       expect.anything(),

@@ -16,6 +16,10 @@ import { panelTitle } from "./routes"
 
 export { nextPanelId } from "./routes"
 
+// Namespaced: webview types are one registry shared by every extension.
+const MAIN_PANEL_VIEW_TYPE = "tmc.mainPanel"
+const SIDE_PANEL_VIEW_TYPE = "tmc.sidePanel"
+
 /**
  * Manages the extension's two webview panels: their lifecycle, and the transport to and
  * from each. What a message does is up to its handler in `./handlers`.
@@ -151,7 +155,7 @@ export class TmcPanel {
     const showOptions = isMain
       ? { viewColumn: ViewColumn.One, preserveFocus: false }
       : { viewColumn: ViewColumn.Beside, preserveFocus: true }
-    const panelViewType = isMain ? "mainPanel" : "sidePanel"
+    const panelViewType = isMain ? MAIN_PANEL_VIEW_TYPE : SIDE_PANEL_VIEW_TYPE
     const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", showOptions, {
       enableScripts: true,
       enableFindWidget: true,
