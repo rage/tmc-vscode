@@ -3,6 +3,7 @@ import * as os from "os"
 import * as path from "path"
 
 import type { TestResult } from "../../shared/langsSchema"
+import { createSourceFileFinder } from "../../testing/sourceFiles"
 import { parseStackTrace } from "../../testing/stackTrace"
 import { failureMessage } from "../../testing/testMessages"
 
@@ -74,6 +75,36 @@ suite("stack traces of failed tests", function () {
     const { frames } = await parseStackTrace(["\tat Hello$Inner.run(Hello.java:4)"], exercisePath)
 
     expect(frames).toEqual([{ label: "Hello$Inner.run", file: source, line: 4 }])
+  })
+
+  test("never looks for the JDK's or a test framework's classes in the exercise", async function () {
+    const findFile = vi.fn(createSourceFileFinder(exercisePath))
+
+    await parseStackTrace(
+      [
+        "\tat Hello.a(Hello.java:4)",
+        "\tat org.junit.Assert.fail(Assert.java:89)",
+        "\tat java.base/java.lang.Thread.run(Thread.java:1583)",
+      ],
+      exercisePath,
+      findFile,
+    )
+
+    expect(findFile.mock.calls).toEqual([["Hello.java"]])
+  })
+
+  test("a source file finder checks the disk once per file", async function () {
+    const source = writeSource("src/Hello.java")
+    const access = vi.spyOn(fs.promises, "access")
+    const findFile = createSourceFileFinder(exercisePath)
+
+    expect(await findFile("Hello.java")).toBe(source)
+    const probes = access.mock.calls.length
+    expect(probes).toBeGreaterThan(0)
+    expect(await findFile("Hello.java")).toBe(source)
+
+    expect(access).toHaveBeenCalledTimes(probes)
+    access.mockRestore()
   })
 
   test("lines of an unknown format are kept as details", async function () {

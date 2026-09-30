@@ -11,6 +11,7 @@ import type { RunResult, TestResult } from "../shared/langsSchema"
 import { BaseError } from "../shared/shared"
 import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
 import { openCourseExercises } from "./openExercises"
+import { createSourceFileFinder } from "./sourceFiles"
 import { failureMessage } from "./testMessages"
 
 /** The `controllerId` that package.json's `testing/*` menus match on. */
@@ -279,11 +280,20 @@ export class ExerciseTestController implements vscode.Disposable {
       children.set(id, [child, result])
     }
     item.children.replace([...children.values()].map(([child]) => child))
-    for (const [child, result] of children.values()) {
-      if (result.successful) {
-        run.passed(child)
+    const findFile = createSourceFileFinder(exercise.uri.fsPath)
+    const outcomes = await Promise.all(
+      [...children.values()].map(async ([child, result]) => ({
+        child,
+        failure: result.successful
+          ? undefined
+          : await failureMessage(result, exercise.uri.fsPath, findFile),
+      })),
+    )
+    for (const { child, failure } of outcomes) {
+      if (failure) {
+        run.failed(child, failure)
       } else {
-        run.failed(child, await failureMessage(result, exercise.uri.fsPath))
+        run.passed(child)
       }
     }
   }

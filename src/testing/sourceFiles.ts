@@ -33,3 +33,22 @@ export async function findSourceFile(
   }
   return undefined
 }
+
+/** {@link findSourceFile} bound to one exercise. */
+export type SourceFileFinder = (relativePath: string) => Promise<string | undefined>
+
+/**
+ * A {@link SourceFileFinder} for `exercisePath` that remembers each answer, so make one per
+ * test run: files may appear or go between runs.
+ */
+export function createSourceFileFinder(exercisePath: string): SourceFileFinder {
+  const found = new Map<string, Promise<string | undefined>>()
+  return (relativePath) => {
+    let file = found.get(relativePath)
+    if (!file) {
+      file = findSourceFile(exercisePath, relativePath)
+      found.set(relativePath, file)
+    }
+    return file
+  }
+}
