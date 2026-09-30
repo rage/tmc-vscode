@@ -129,6 +129,7 @@ function harness(
     moocCourses?: Promise<ReturnType<typeof Ok> | ReturnType<typeof Err>>
     moocAuthenticated?: boolean
     organizationCourses?: ReturnType<typeof Ok> | ReturnType<typeof Err>
+    coursesOf?: (slug: string) => Promise<ReturnType<typeof Ok> | ReturnType<typeof Err>>
     addedCourses?: LocalCourseData[]
   } = {},
 ): { context: ReadyActionContext; quickPick: FakeQuickPick; done: Promise<void> } {
@@ -137,7 +138,9 @@ function harness(
   const langs = {
     getTmcOrganizations: vi.fn(() => options.organizations ?? Promise.resolve(Ok(organizations))),
     getEnrolledMoocCourses: vi.fn(() => options.moocCourses ?? Promise.resolve(Ok([moocCourse]))),
-    getCourses: vi.fn(async () => options.organizationCourses ?? Ok(tmcCourses)),
+    getCourses: vi.fn(
+      options.coursesOf ?? (async () => options.organizationCourses ?? Ok(tmcCourses)),
+    ),
   } as unknown as Langs
   const userData = {
     getCourses: () => options.addedCourses ?? [],
@@ -254,6 +257,63 @@ suite("Add New Course command", function () {
       "test",
       makeTmcKind({ courseId: 1 }),
     )
+  })
+
+  test("keeps the user's filter text when a backend's rows arrive", async function () {
+    const tmc = deferred<ReturnType<typeof Ok>>()
+    const { quickPick } = harness({ organizations: tmc.promise })
+    await flush()
+
+    quickPick.value = "pyth"
+    tmc.resolve(Ok(organizations))
+    await flush()
+
+    expect(quickPick.value).toBe("pyth")
+    expect(quickPick.rows).toHaveLength(5)
+  })
+
+  test("ignores a late course listing for an organization the user backed out of", async function () {
+    const mooc = deferred<ReturnType<typeof Ok>>()
+    const test = deferred<ReturnType<typeof Ok>>()
+    const otherCourse = { ...tmcCourses[0], id: 2, name: "other", title: "Other Course" }
+    const { context, quickPick, done } = harness({
+      coursesOf: (slug) => (slug === "mooc" ? mooc.promise : test.promise),
+    })
+    await flush()
+
+    quickPick.accept("MOOC")
+    await flush()
+    quickPick.back()
+    quickPick.accept("Test org")
+    await flush()
+    test.resolve(Ok(tmcCourses))
+    await flush()
+    mooc.resolve(Ok([otherCourse]))
+    await flush()
+
+    expect(quickPick.placeholder).toBe("Which course in Test org?")
+    expect(quickPick.rows).toEqual(["Python Programming"])
+    quickPick.accept("Python Programming")
+    await done
+    expect(actions.addNewCourse).toHaveBeenCalledExactlyOnceWith(
+      context,
+      "test",
+      makeTmcKind({ courseId: 1 }),
+    )
+  })
+
+  test("reuses an organization's course listing when the user goes back to it", async function () {
+    const { context, quickPick } = harness()
+    await flush()
+
+    quickPick.accept("Test org")
+    await flush()
+    quickPick.back()
+    quickPick.accept("Test org")
+    await flush()
+
+    expect(quickPick.rows).toEqual(["Python Programming"])
+    expect(context.startup.langs.getCourses).toHaveBeenCalledOnce()
   })
 
   test("names an unreachable backend and still offers the other", async function () {

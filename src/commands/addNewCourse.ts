@@ -120,13 +120,22 @@ function pickCourse(
   const unavailableNames = (): string[] =>
     [backendName("mooc"), backendName("tmc")].filter((name) => unavailable.includes(name))
   let step: 1 | 2 = 1
+  // Bumped whenever the shown step changes, so a late listing for a step the user left is dropped.
+  let stepGeneration = 0
+  const organizationCourses = new Map<string, ReturnType<typeof actions.listOrganizationCourses>>()
 
-  const showFirstStep = (): void => {
+  const enterFirstStep = (): void => {
     step = 1
+    stepGeneration++
     quickPick.step = undefined
     quickPick.totalSteps = undefined
     quickPick.buttons = []
     quickPick.value = ""
+    renderFirstStep()
+  }
+
+  /** Redraws the first step's rows without touching the user's filter text. */
+  const renderFirstStep = (): void => {
     // Naming the missing backend in the placeholder keeps it visible for as long as the pick
     // is open, so a half-populated list is never mistaken for a complete one.
     quickPick.placeholder =
@@ -161,6 +170,7 @@ function pickCourse(
 
     const showOrganization = async (organization: Organization): Promise<void> => {
       step = 2
+      const generation = ++stepGeneration
       quickPick.step = 2
       quickPick.totalSteps = 2
       quickPick.buttons = [vscode.QuickInputButtons.Back]
@@ -168,8 +178,13 @@ function pickCourse(
       quickPick.placeholder = `Which course in ${organization.name}?`
       quickPick.items = []
       quickPick.busy = true
-      const courses = await actions.listOrganizationCourses(actionContext, organization.slug)
-      if (step !== 2 || isSettled) {
+      let listing = organizationCourses.get(organization.slug)
+      if (!listing) {
+        listing = actions.listOrganizationCourses(actionContext, organization.slug)
+        organizationCourses.set(organization.slug, listing)
+      }
+      const courses = await listing
+      if (generation !== stepGeneration || isSettled) {
         return
       }
       quickPick.busy = false
@@ -201,7 +216,7 @@ function pickCourse(
     })
     quickPick.onDidTriggerButton((button) => {
       if (button === vscode.QuickInputButtons.Back) {
-        showFirstStep()
+        enterFirstStep()
       }
     })
     quickPick.onDidHide(() => {
@@ -211,7 +226,7 @@ function pickCourse(
 
     const refreshFirstStep = (): void => {
       if (step === 1 && !isSettled) {
-        showFirstStep()
+        renderFirstStep()
       }
     }
     void moocListing.then(refreshFirstStep)
@@ -226,7 +241,7 @@ function pickCourse(
       }
     })
 
-    showFirstStep()
+    enterFirstStep()
     quickPick.show()
   })
 }
