@@ -12,25 +12,25 @@
 
 ## Where can I find all actions related to TMC?
 
-When the extension is active, you can press `CTRL + SHIFT + A` to see all the registered commands for the extension. Some of these commands only work when an exercise is open.
+Open the Command Palette (`CTRL + SHIFT + P`) and type `TestMyCode` to see all the extension's commands. Some of them are offered only while an exercise file is open. With an exercise file open, its item in the status bar lists that exercise's actions.
 
 ## How can I download the next part's exercises?
 
-On the left of Visual Studio Code, press the TMC icon to open the Courses view and expand your course. Each part lists its exercises; use the download button on a part, or on an exercise, to download it. A part appears once it is unlocked.
+On the left of Visual Studio Code, press the TestMyCode icon to open the Courses view and expand your course. Each part lists its exercises; use the download button on a part, or on an exercise, to download it. A part appears once it is unlocked.
 
 ## How can I download unlocked/new exercises for my course?
 
 Visual Studio Code will occasionally prompt you to download new exercises.
-You can also download new exercises by pressing the TMC icon on the left in Visual Studio Code and using the download button beside your course in the Courses view.  
-You can also download new exercises by pressing `CTRL + SHIFT + A` and select action `Download new exercise for course...`.
+You can also download new exercises by pressing the TestMyCode icon on the left in Visual Studio Code and using the download button beside your course in the Courses view.  
+You can also run `TestMyCode: Download New Exercises...` from the Command Palette (`CTRL + SHIFT + P`).
 
 ## How do I download updates for exercises?
 
 Visual Studio Code will occasionally prompt you to download updates for exercises.
-You can also download updates by pressing the TMC icon on the left in Visual Studio Code: if updates are available, your course in the Courses view has an `Update Exercises` button beside it.  
-You can also download updates by pressing `CTRL + SHIFT + A` and select action `Update Exercises...`.
+You can also download updates by pressing the TestMyCode icon on the left in Visual Studio Code: if updates are available, your course in the Courses view has an `Update Exercises` button beside it.  
+You can also run `TestMyCode: Update Exercises` from the Command Palette (`CTRL + SHIFT + P`).
 
 ## How do I wipe all data related to the TMC Extension?
 
-If open, close course workspace, press `CTRL + SHIFT + P` and search for `TMC-WipeMyCode: Wipe all extension data`.  
+If open, close course workspace, press `CTRL + SHIFT + P` and run `TestMyCode: Wipe All Extension Data...`.  
 This will delete all files and folders under the tmcdata folder and vscode storage, i.e. your course workspaces, exercises, settings, user data...
