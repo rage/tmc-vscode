@@ -184,13 +184,8 @@
 
   {#if view.testCases.length > 0 || view.validations}
     <TestResults
-      testResults={view.testCases}
-      validationResult={view.validations
-        ? {
-            strategy: view.validations.strategy,
-            validation_errors: view.validations.validationErrors,
-          }
-        : null}
+      testCases={view.testCases}
+      validations={view.validations}
       oncopy={copyToClipboard}
     />
   {/if}

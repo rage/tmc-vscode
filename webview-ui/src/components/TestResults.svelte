@@ -1,45 +1,30 @@
 <script lang="ts">
-  import { StyleValidationStrategy, TestCase, TestResult } from "../shared/langsSchema"
+  import type { TestCase, TmcStyleValidationResult } from "../shared/langsSchema"
   import { uiState } from "../utilities/uiState.svelte"
   import Checkbox from "./Checkbox.svelte"
   import CodeBlock from "./CodeBlock.svelte"
   import Disclosure from "./Disclosure.svelte"
   import StatusIcon from "./StatusIcon.svelte"
 
-  // structural subset of both StyleValidationResult (local test runs) and
-  // TmcStyleValidationResult (server submissions), which differ only in the
-  // shape of fields this component does not use
-  interface ValidationResult {
-    strategy: StyleValidationStrategy
-    validation_errors: Record<
-      string,
-      Array<{ column: number; line: number; message: string }>
-    > | null
-  }
-
   interface Props {
-    testResults: Array<TestResult | TestCase>
-    validationResult: ValidationResult | null
+    testCases: TestCase[]
+    validations: TmcStyleValidationResult | undefined
     /** Copies a code block's text through the host. */
     oncopy?: ((text: string) => void) | undefined
   }
 
-  let { testResults, validationResult, oncopy }: Props = $props()
+  let { testCases, validations, oncopy }: Props = $props()
 
-  const validationStrategy: StyleValidationStrategy = $derived(
-    validationResult?.strategy ?? "DISABLED",
-  )
-  const validationErrorsEntries = $derived(
-    Object.entries(validationResult?.validation_errors ?? {}),
-  )
+  const validationStrategy = $derived(validations?.strategy ?? "DISABLED")
+  const validationErrorsEntries = $derived(Object.entries(validations?.validationErrors ?? {}))
   // validations pass if strategy is not set to fail, or if there are no validation errors
   const validationsPassed = $derived(
     validationStrategy !== "FAIL" || validationErrorsEntries.length === 0,
   )
 
-  const passedCount = $derived(testResults.filter((tr) => tr.successful).length)
+  const passedCount = $derived(testCases.filter((tr) => tr.successful).length)
   const allTestsFailed = $derived(passedCount === 0)
-  const allTestsPassed = $derived(passedCount === testResults.length)
+  const allTestsPassed = $derived(passedCount === testCases.length)
   const exercisePassed = $derived(allTestsPassed && validationsPassed)
   // if all tests failed or passed, no need to show the checkbox
   const alwaysShowPassedTests = $derived(allTestsFailed || exercisePassed)
@@ -50,20 +35,16 @@
   // Test names are not guaranteed unique, and a duplicate `{#each}` key throws.
   const rows = $derived.by(() => {
     const seen = new Map<string, number>()
-    return testResults.map((result) => {
+    return testCases.map((result) => {
       const occurrence = seen.get(result.name) ?? 0
       seen.set(result.name, occurrence + 1)
       return { key: occurrence === 0 ? result.name : `${result.name}#${occurrence}`, result }
     })
   })
-
-  function detailedMessage(result: TestResult | TestCase): string | null {
-    return "detailed_message" in result ? result.detailed_message : null
-  }
 </script>
 
-{#if testResults.length > 0}
-  <p>{passedCount} of {testResults.length} tests passed</p>
+{#if testCases.length > 0}
+  <p>{passedCount} of {testCases.length} tests passed</p>
 {/if}
 {#if validationErrorsEntries.length > 0}
   <h2>
@@ -90,7 +71,7 @@
   </ul>
 {/if}
 
-{#if testResults.length > 0}
+{#if testCases.length > 0}
   <h2>Tests</h2>
   <Checkbox
     hidden={alwaysShowPassedTests}
@@ -114,9 +95,8 @@
           {#if result.message}
             <CodeBlock code={result.message} />
           {/if}
-          {@const details = detailedMessage(result)}
-          {#if details}
-            <CodeBlock code={details} label="Details" {oncopy} />
+          {#if result.detailed_message}
+            <CodeBlock code={result.detailed_message} label="Details" {oncopy} />
           {/if}
           {#if result.exception && result.exception.length > 0}
             <Disclosure title="Stack trace" headingLevel={4} persistAs="stackTrace:{key}">

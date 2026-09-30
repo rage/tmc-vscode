@@ -3,7 +3,7 @@
 // `MessageToWebviewSchema.safeParse` gate in `addMessageListener` and a click
 // handler's posted payload survives `WebviewToExtensionSchema.safeParse`.
 
-import type { TestResult } from "../shared/langsSchema"
+import type { TestCase } from "../shared/langsSchema"
 import type {
   LocalCourseData,
   SharedMoocCourseData,
@@ -99,12 +99,12 @@ export function tmcExercise(
   }
 }
 
-export function testResult(overrides: Partial<TestResult> = {}): TestResult {
+export function testCase(overrides: Partial<TestCase> = {}): TestCase {
   return {
     name: "test_case",
     successful: true,
     message: "",
-    points: ["1"],
+    detailed_message: null,
     exception: [],
     ...overrides,
   }
