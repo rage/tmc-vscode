@@ -6,7 +6,7 @@ import { backendName } from "../shared/shared"
 const SITE = backendName("mooc")
 
 /** The courses.mooc.fi session as the account status bar item shows it. */
-export type AccountStatus = "loggedIn" | "loggedOut" | "sessionExpired"
+type AccountStatus = "loggedIn" | "loggedOut" | "sessionExpired"
 
 interface AccountPresentation {
   text: string
@@ -53,10 +53,6 @@ export class AccountStatusBarItem implements vscode.Disposable {
     this._status = isLoggedIn ? "loggedIn" : "loggedOut"
     this._render()
     this._item.show()
-  }
-
-  public get status(): AccountStatus {
-    return this._status
   }
 
   /**
