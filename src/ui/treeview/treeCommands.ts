@@ -2,13 +2,13 @@ import { Ok } from "ts-results"
 
 import {
   closeExercises as closeExercisesAction,
+  courseDownloadFlight,
   downloadAndOpenExercises,
   downloadExercisesForUi,
 } from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import { withOperation } from "../../api/withOperation"
 import { ExerciseStatus } from "../../api/workspaceManager"
-import { CLI_PROCESS_TIMEOUT } from "../../config/constants"
 import type { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
 import {
   CourseIdentifier as CourseIdentifierNs,
@@ -19,9 +19,6 @@ import { runSingleFlight } from "../../utilities"
 import { updateablesRegistry } from "../updateablesRegistry"
 import type { CoursesTreeItem, ExerciseTreeItem } from "./treeview"
 import { exerciseItems, isDownloadable } from "./treeview"
-
-// One CLI download per backend, then a rescan.
-const DOWNLOAD_MAX_HOLD_MS = 3 * CLI_PROCESS_TIMEOUT
 
 /**
  * The rows a Courses view command acts on: the whole selection when the clicked row is part
@@ -50,17 +47,10 @@ export async function downloadExercises(
       actionContext.dialog,
       { failure: "Failed to download the exercises.", backend: courseId.kind },
       () =>
-        runSingleFlight(
-          {
-            key: `download:${courseId.kind}:${CourseIdentifierNs.toString(courseId)}`,
-            maxHoldMs: DOWNLOAD_MAX_HOLD_MS,
-            busyMessage: "This course's exercises are already downloading.",
-          },
-          async () => {
-            await downloadExercisesForUi(actionContext, "download", courseId, ids)
-            return Ok.EMPTY
-          },
-        ),
+        runSingleFlight(courseDownloadFlight(courseId), async () => {
+          await downloadExercisesForUi(actionContext, "download", courseId, ids)
+          return Ok.EMPTY
+        }),
     )
   }
 }
