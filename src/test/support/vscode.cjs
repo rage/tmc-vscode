@@ -200,6 +200,9 @@ vscode.authentication = {
   registerAuthenticationProvider: vi.fn(() => new vscode.Disposable(() => {})),
 }
 
+// jest-mock-vscode has no `extensions` namespace; this one sees no extension installed.
+vscode.extensions = { all: [], getExtension: vi.fn(), onDidChange: vi.fn() }
+
 // jest-mock-vscode returns `undefined` where the real API returns a `Disposable`, and
 // the extension pushes what these return into `context.subscriptions`. Without a real
 // disposable, a test that shuts a context down the way VS Code does walks an array of

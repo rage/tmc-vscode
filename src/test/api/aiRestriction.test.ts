@@ -1,7 +1,9 @@
+import * as _ from "lodash"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import AiRestriction, { isActiveCourseAiAllowed, isAiAllowed } from "../../api/aiRestriction"
+import type { SettingInspection, WorkspaceFileProblem } from "../../api/workspaceManager"
 import { AI_OFF_SETTINGS } from "../../config/constants"
 import { makeMoocKind, makeTmcKind } from "../../shared/shared"
 import type { LocalCourseData } from "../../shared/shared"
@@ -9,31 +11,99 @@ import { Logger } from "../../utilities"
 import { createMockMemento } from "../mocks/vscode"
 
 const AI_SECTIONS = Object.keys(AI_OFF_SETTINGS)
+const INLINE_SUGGEST = "editor.inlineSuggest.enabled"
+const WORKSPACE_FILE = vscode.Uri.file("/tmc/workspaces/python-course.code-workspace")
+const EXERCISE_FOLDER = vscode.Uri.file("/tmc/projects/python-course/loops")
 
-/** A course workspace file as `AiRestriction` sees it, with every write recorded. */
+function keyOf(section: string, languageId?: string): string {
+  return languageId === undefined ? section : `[${languageId}]${section}`
+}
+
+/**
+ * A course workspace as `AiRestriction` sees it, with every write recorded. Each scope maps
+ * `section`, or `[languageId]section` for a language override, to its value.
+ */
 class FakeCourseWorkspace {
   public activeCourse: string | undefined = "python-course"
+  public workspaceFileUri: vscode.Uri | undefined = WORKSPACE_FILE
+  /** The workspace file. */
   public readonly stored = new Map<string, unknown>()
+  public readonly user = new Map<string, unknown>()
+  /** The exercise folder's `.vscode/settings.json`, which counts only for a resource inside it. */
+  public readonly folder = new Map<string, unknown>()
+  public readonly defaults = new Map<string, unknown>([[INLINE_SUGGEST, true]])
+  /** Keys whose writes VS Code refuses. */
   public readonly rejected = new Set<string>()
-  public onWrite: (section: string) => void = () => {}
-  public readonly replaceWorkspaceSetting = vi.fn(async (section: string, value: unknown) => {
-    if (this.rejected.has(section)) {
-      throw new Error(`Unable to write ${section}`)
-    }
-    if (value === undefined) {
-      this.stored.delete(section)
-    } else {
-      this.stored.set(section, value)
-    }
-    this.onWrite(section)
-  })
+  public problem: WorkspaceFileProblem | undefined
+  public onWrite: (section: string, languageId: string | undefined) => void = () => {}
+  public readonly replaceWorkspaceSetting = vi.fn(
+    async (section: string, value: unknown, languageId?: string) => {
+      const key = keyOf(section, languageId)
+      if (this.rejected.has(key)) {
+        throw new Error("Unable to write into the workspace configuration file.")
+      }
+      if (value === undefined) {
+        this.stored.delete(key)
+      } else {
+        this.stored.set(key, value)
+      }
+      this.onWrite(section, languageId)
+    },
+  )
 
-  public getStoredWorkspaceSetting(section: string): unknown {
-    return this.stored.get(section)
+  public readonly workspaceFileProblem = vi.fn(async () => this.problem)
+
+  public getStoredWorkspaceSetting(section: string, languageId?: string): unknown {
+    return this.stored.get(keyOf(section, languageId))
   }
 
-  public writtenSections(): string[] {
-    return this.replaceWorkspaceSetting.mock.calls.map(([section]) => section)
+  /** Resolves like VS Code: a language override at any scope beats every scope's plain value. */
+  public inspectSetting(
+    section: string,
+    languageId?: string,
+    resource?: vscode.Uri,
+  ): SettingInspection {
+    const folder = resource ? this.folder : new Map<string, unknown>()
+    const plain = [this.defaults, this.user, this.stored, folder].map((s) => s.get(section))
+    const language =
+      languageId === undefined
+        ? []
+        : [this.defaults, this.user, this.stored, folder].map((s) =>
+            s.get(keyOf(section, languageId)),
+          )
+    const effectiveValue = [...plain, ...language].reduce<unknown>((winner, value) => {
+      if (value === undefined) {
+        return winner
+      }
+      return _.isPlainObject(winner) && _.isPlainObject(value)
+        ? { ...(winner as object), ...(value as object) }
+        : value
+    }, undefined)
+    const languageIds = [this.user, this.stored, this.folder].flatMap((scope) =>
+      [...scope.keys()].flatMap((key) => {
+        const match = /^\[(.+)\](.+)$/.exec(key)
+        return match?.[2] === section ? [match[1] as string] : []
+      }),
+    )
+    return {
+      key: section,
+      defaultValue: plain[0],
+      globalValue: plain[1],
+      workspaceValue: plain[2],
+      workspaceFolderValue: plain[3],
+      defaultLanguageValue: language[0],
+      globalLanguageValue: language[1],
+      workspaceLanguageValue: language[2],
+      workspaceFolderLanguageValue: language[3],
+      languageIds: _.uniq(languageIds),
+      effectiveValue,
+    }
+  }
+
+  public writtenKeys(): string[] {
+    return this.replaceWorkspaceSetting.mock.calls.map(([section, , languageId]) =>
+      keyOf(section, languageId),
+    )
   }
 }
 
@@ -49,8 +119,25 @@ function changeListener(): (event: vscode.ConfigurationChangeEvent) => void {
   return vi.mocked(vscode.workspace.onDidChangeConfiguration).mock.calls.at(-1)?.[0] as never
 }
 
+function openListener(): (document: vscode.TextDocument) => void {
+  return vi.mocked(vscode.workspace.onDidOpenTextDocument).mock.calls.at(-1)?.[0] as never
+}
+
 function changeOf(section: string): vscode.ConfigurationChangeEvent {
   return { affectsConfiguration: (asked: string) => asked === section }
+}
+
+function holdEverySetting(workspace: FakeCourseWorkspace): void {
+  for (const [section, value] of Object.entries(AI_OFF_SETTINGS)) {
+    workspace.stored.set(section, value)
+  }
+}
+
+function withOpenDocuments(languageIds: string[]): void {
+  const documents = languageIds.map((languageId) => ({ languageId }))
+  vi.spyOn(vscode.workspace, "textDocuments", "get").mockReturnValue(
+    documents as unknown as vscode.TextDocument[],
+  )
 }
 
 suite("AI restriction", function () {
@@ -68,13 +155,19 @@ suite("AI restriction", function () {
     ownership = createMockMemento()
     isAllowed = false
     declare(AI_SECTIONS)
+    Object.defineProperty(vscode.workspace, "textDocuments", {
+      get: () => [],
+      configurable: true,
+    })
     vi.spyOn(Logger, "info").mockImplementation(() => undefined)
     vi.spyOn(Logger, "debug").mockImplementation(() => undefined)
+    vi.spyOn(Logger, "warn").mockImplementation(() => undefined)
     restriction = createRestriction()
   })
 
   afterEach(function () {
     restriction.dispose()
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -83,13 +176,11 @@ suite("AI restriction", function () {
       await restriction.apply()
 
       expect(Object.fromEntries(workspace.stored)).toEqual(AI_OFF_SETTINGS)
-      expect(workspace.writtenSections().at(-1)).toBe("chat.disableAIFeatures")
+      expect(workspace.writtenKeys().at(-1)).toBe("chat.disableAIFeatures")
     })
 
     test("writes nothing when the workspace file already holds the settings", async function () {
-      for (const [section, value] of Object.entries(AI_OFF_SETTINGS)) {
-        workspace.stored.set(section, value)
-      }
+      holdEverySetting(workspace)
 
       await restriction.apply()
 
@@ -97,17 +188,12 @@ suite("AI restriction", function () {
     })
 
     test("writes only the setting that drifted", async function () {
-      for (const [section, value] of Object.entries(AI_OFF_SETTINGS)) {
-        workspace.stored.set(section, value)
-      }
+      holdEverySetting(workspace)
       workspace.stored.set("chat.disableAIFeatures", false)
 
       await restriction.apply()
 
-      expect(workspace.replaceWorkspaceSetting).toHaveBeenCalledExactlyOnceWith(
-        "chat.disableAIFeatures",
-        true,
-      )
+      expect(workspace.writtenKeys()).toEqual(["chat.disableAIFeatures"])
     })
 
     test("turns off each course language in a per-language map and keeps other entries", async function () {
@@ -126,19 +212,17 @@ suite("AI restriction", function () {
 
       await restriction.apply()
 
-      expect(workspace.writtenSections().filter((s) => s.startsWith("codeium."))).toEqual([])
+      expect(workspace.writtenKeys().filter((s) => s.startsWith("codeium."))).toEqual([])
       expect(workspace.stored.get("chat.disableAIFeatures")).toBe(true)
     })
 
     test("a rejected write neither stops the others nor rejects", async function () {
-      const warn = vi.spyOn(Logger, "warn").mockImplementation(() => undefined)
       workspace.rejected.add("chat.mcp.access")
 
       await expect(restriction.apply()).resolves.toBeUndefined()
 
       expect(workspace.stored.has("chat.mcp.access")).toBe(false)
       expect(workspace.stored.get("chat.disableAIFeatures")).toBe(true)
-      expect(warn).toHaveBeenCalledOnce()
     })
 
     test("touches nothing outside a course workspace", async function () {
@@ -147,6 +231,67 @@ suite("AI restriction", function () {
       await restriction.apply()
 
       expect(workspace.replaceWorkspaceSetting).not.toHaveBeenCalled()
+    })
+  })
+
+  suite("language overrides", function () {
+    test("a user-scope language override is beaten by a workspace one of its own", async function () {
+      holdEverySetting(workspace)
+      workspace.user.set(keyOf(INLINE_SUGGEST, "python"), true)
+
+      await restriction.apply()
+
+      expect(workspace.writtenKeys()).toEqual([keyOf(INLINE_SUGGEST, "python")])
+      expect(workspace.inspectSetting(INLINE_SUGGEST, "python").effectiveValue).toBe(false)
+      await expect(restriction.enforce()).resolves.toBeUndefined()
+    })
+
+    test("a language outside the course languages is covered once something overrides it", async function () {
+      holdEverySetting(workspace)
+      workspace.user.set(keyOf(INLINE_SUGGEST, "haskell"), true)
+
+      await restriction.apply()
+
+      expect(workspace.stored.get(keyOf(INLINE_SUGGEST, "haskell"))).toBe(false)
+    })
+
+    test("covers the language of an open document", async function () {
+      holdEverySetting(workspace)
+      // A contributed language default, which no scope the student edits lists.
+      workspace.defaults.set(keyOf(INLINE_SUGGEST, "ruby"), true)
+      withOpenDocuments(["ruby"])
+
+      await restriction.apply()
+
+      expect(workspace.stored.get(keyOf(INLINE_SUGGEST, "ruby"))).toBe(false)
+    })
+
+    test("a document opening in a language not seen before starts a pass", async function () {
+      holdEverySetting(workspace)
+      await restriction.apply()
+      workspace.defaults.set(keyOf(INLINE_SUGGEST, "ruby"), true)
+      withOpenDocuments(["ruby"])
+
+      openListener()({ languageId: "ruby" } as vscode.TextDocument)
+      await restriction.apply()
+
+      expect(workspace.stored.get(keyOf(INLINE_SUGGEST, "ruby"))).toBe(false)
+    })
+
+    test("writes no language block where the workspace file's own value already wins", async function () {
+      await restriction.apply()
+
+      expect(workspace.writtenKeys().filter((key) => key.startsWith("["))).toEqual([])
+    })
+
+    test("removes the language blocks it wrote once the course allows AI", async function () {
+      workspace.user.set(keyOf(INLINE_SUGGEST, "python"), true)
+      await restriction.apply()
+      isAllowed = true
+
+      await restriction.apply()
+
+      expect(workspace.stored.size).toBe(0)
     })
   })
 
@@ -230,24 +375,6 @@ suite("AI restriction", function () {
       expect(workspace.replaceWorkspaceSetting).toHaveBeenCalledTimes(AI_SECTIONS.length)
     })
 
-    test("gives up on a setting something keeps flipping back, and says so once", async function () {
-      const warn = vi.spyOn(Logger, "warn").mockImplementation(() => undefined)
-      const listener = changeListener()
-      workspace.onWrite = (section): void => {
-        if (section === "chat.disableAIFeatures") {
-          workspace.stored.set(section, false)
-          listener(changeOf(section))
-        }
-      }
-
-      await restriction.apply()
-
-      expect(
-        workspace.writtenSections().filter((s) => s === "chat.disableAIFeatures"),
-      ).toHaveLength(10)
-      expect(warn).toHaveBeenCalledOnce()
-    })
-
     test("a course data change re-decides", async function () {
       let notifyCoursesChanged: (() => void) | undefined
       restriction.dispose()
@@ -262,6 +389,169 @@ suite("AI restriction", function () {
       await restriction.apply()
 
       expect(workspace.stored.size).toBe(0)
+    })
+  })
+
+  suite("backoff", function () {
+    const FLAPPED = "chat.agent.enabled"
+
+    /** Something that turns `FLAPPED` back on each time it is written, until stopped. */
+    function flapUntilStopped(): () => void {
+      let isFlapping = true
+      const listener = changeListener()
+      workspace.onWrite = (section): void => {
+        if (isFlapping && section === FLAPPED) {
+          workspace.stored.set(section, true)
+          listener(changeOf(section))
+        }
+      }
+      return () => {
+        isFlapping = false
+      }
+    }
+
+    beforeEach(function () {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] })
+      holdEverySetting(workspace)
+    })
+
+    test("leaves a setting that keeps flipping back alone after a few writes", async function () {
+      flapUntilStopped()
+      workspace.stored.set(FLAPPED, true)
+
+      await restriction.apply()
+
+      expect(workspace.writtenKeys().filter((key) => key === FLAPPED)).toHaveLength(5)
+    })
+
+    test("flapping one setting does not stop the others being put back", async function () {
+      flapUntilStopped()
+      workspace.stored.set(FLAPPED, true)
+      await restriction.apply()
+
+      workspace.stored.set("cody.suggestions.mode", "autocomplete")
+      changeListener()(changeOf("cody.suggestions.mode"))
+      await restriction.apply()
+
+      expect(workspace.stored.get("cody.suggestions.mode")).toBe("off")
+      expect(workspace.stored.get(FLAPPED)).toBe(true)
+    })
+
+    test("puts the setting back once its backoff ends, with nothing else changing", async function () {
+      const stop = flapUntilStopped()
+      workspace.stored.set(FLAPPED, true)
+      await restriction.apply()
+      stop()
+
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      expect(workspace.stored.get(FLAPPED)).toBe(false)
+    })
+
+    test("each backoff of the same setting lasts twice as long", async function () {
+      flapUntilStopped()
+      workspace.stored.set(FLAPPED, true)
+      await restriction.apply()
+      await vi.advanceTimersByTimeAsync(5_000)
+      const writesAfterFirstBackoff = workspace.writtenKeys().length
+
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(workspace.writtenKeys()).toHaveLength(writesAfterFirstBackoff)
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(workspace.writtenKeys().length).toBeGreaterThan(writesAfterFirstBackoff)
+    })
+
+    test("enforce writes a backed-off setting anyway", async function () {
+      const stop = flapUntilStopped()
+      workspace.stored.set(FLAPPED, true)
+      await restriction.apply()
+      stop()
+
+      await expect(restriction.enforce()).resolves.toBeUndefined()
+
+      expect(workspace.stored.get(FLAPPED)).toBe(false)
+    })
+  })
+
+  suite("enforce", function () {
+    test("the restriction is in force once every setting holds", async function () {
+      await expect(restriction.enforce()).resolves.toBeUndefined()
+    })
+
+    test.each<[string, WorkspaceFileProblem | undefined]>([
+      ["has unsaved changes", "unsaved"],
+      ["is read-only", "readOnly"],
+      ["has a syntax error", undefined],
+    ])(
+      "is not in force while the workspace file %s and refuses writes",
+      async function (_case, problem) {
+        workspace.problem = problem
+        workspace.rejected.add("chat.mcp.access")
+
+        await expect(restriction.enforce()).resolves.toEqual({
+          kind: "workspaceFileUnwritable",
+          file: WORKSPACE_FILE,
+          problem,
+          reason: "Unable to write into the workspace configuration file.",
+        })
+      },
+    )
+
+    test("a write refused in the background still counts once nothing has changed", async function () {
+      workspace.rejected.add("chat.mcp.access")
+      await restriction.apply()
+
+      workspace.rejected.clear()
+      await expect(restriction.enforce()).resolves.toBeUndefined()
+
+      expect(workspace.stored.get("chat.mcp.access")).toBe("none")
+    })
+
+    test("a refused top-level write is not also tried for every language", async function () {
+      workspace.rejected.add(INLINE_SUGGEST)
+
+      await restriction.enforce()
+
+      expect(workspace.writtenKeys().filter((key) => key.startsWith("["))).toEqual([])
+    })
+
+    test("is not in force while the exercise folder's own settings turn a setting back on", async function () {
+      workspace.folder.set(INLINE_SUGGEST, true)
+      vi.spyOn(vscode.workspace, "getWorkspaceFolder").mockReturnValue({
+        uri: EXERCISE_FOLDER,
+        name: "loops",
+        index: 1,
+      })
+
+      await expect(restriction.enforce(EXERCISE_FOLDER)).resolves.toEqual({
+        kind: "settingOverridden",
+        section: INLINE_SUGGEST,
+        languageId: undefined,
+        source: { kind: "folder", folder: EXERCISE_FOLDER },
+      })
+    })
+
+    test("a value nothing the student set wins is not held against them", async function () {
+      await restriction.apply()
+      // e.g. a machine policy; no scope the student edits holds the value.
+      vi.spyOn(workspace, "inspectSetting").mockImplementation((section) => ({
+        key: section,
+        effectiveValue: section === "chat.mcp.access" ? "all" : AI_OFF_SETTINGS[section],
+      }))
+
+      await expect(restriction.enforce()).resolves.toBeUndefined()
+    })
+
+    test("is not in force outside a course workspace", async function () {
+      workspace.activeCourse = undefined
+
+      await expect(restriction.enforce()).resolves.toEqual({ kind: "outsideCourseWorkspace" })
+    })
+
+    test("is not in force when the open course allows AI", async function () {
+      isAllowed = true
+
+      await expect(restriction.enforce()).resolves.toEqual({ kind: "outsideCourseWorkspace" })
     })
   })
 })

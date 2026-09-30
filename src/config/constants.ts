@@ -72,7 +72,7 @@ export const WATCHER_EXCLUDE = {
 }
 
 /** VS Code language ids of the exercises the language plugins handle, plus the prose files around them. */
-const COURSE_LANGUAGE_IDS = [
+export const COURSE_LANGUAGE_IDS = [
   "c",
   "cpp",
   "csharp",

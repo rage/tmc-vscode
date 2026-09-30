@@ -23,6 +23,14 @@ import { FileSystemError } from "../errors"
 import type { BackendKind } from "../shared/shared"
 import { Logger } from "../utilities"
 
+/** What keeps VS Code from writing a course's `.code-workspace`. */
+export type WorkspaceFileProblem = "unsaved" | "readOnly"
+
+/** `WorkspaceConfiguration.inspect`'s answer, with the value that wins among them. */
+export type SettingInspection = NonNullable<
+  ReturnType<vscode.WorkspaceConfiguration["inspect"]>
+> & { effectiveValue: unknown }
+
 export enum ExerciseStatus {
   Closed = "closed",
   Missing = "missing",
@@ -196,10 +204,8 @@ export default class WorkspaceManager implements vscode.Disposable {
     return uri && this.getExerciseContaining(uri)
   }
 
-  /**
-   * Currently active course workspace uri, or `undefined` otherwise.
-   */
-  private get _workspaceFileUri(): vscode.Uri | undefined {
+  /** The open course workspace's `.code-workspace` file, or `undefined` outside one. */
+  public get workspaceFileUri(): vscode.Uri | undefined {
     const workspaceFile = vscode.workspace.workspaceFile
     if (
       !workspaceFile ||
@@ -393,7 +399,7 @@ export default class WorkspaceManager implements vscode.Disposable {
    */
   public getWorkspaceSettings(section?: string): vscode.WorkspaceConfiguration {
     if (this.activeCourse) {
-      return vscode.workspace.getConfiguration(section, this._workspaceFileUri)
+      return vscode.workspace.getConfiguration(section, this.workspaceFileUri)
     }
     return vscode.workspace.getConfiguration(section)
   }
@@ -431,25 +437,90 @@ export default class WorkspaceManager implements vscode.Disposable {
   /**
    * The value the open course's `.code-workspace` itself stores for `section`, or `undefined`
    * when it stores none — never a user-scope value or a default.
+   *
+   * @param languageId Reads the file's `[languageId]` block instead of its top level.
    */
-  public getStoredWorkspaceSetting(section: string): unknown {
+  public getStoredWorkspaceSetting(section: string, languageId?: string): unknown {
     // `inspect`, not `get`: the effective configuration would materialize
     // every VS Code default into the workspace file as an explicit entry.
-    return this.getWorkspaceSettings().inspect<unknown>(section)?.workspaceValue
+    const inspection = this.inspectSetting(section, languageId)
+    return languageId === undefined
+      ? inspection?.workspaceValue
+      : inspection?.workspaceLanguageValue
+  }
+
+  /**
+   * Every scope's value of `section` as an editor of `languageId` inside `resource` would
+   * resolve it, and the language ids anything overrides it for.
+   *
+   * @param resource An exercise folder, whose own `.vscode/settings.json` then counts; the
+   * workspace file when omitted.
+   */
+  public inspectSetting(
+    section: string,
+    languageId?: string,
+    resource?: vscode.Uri,
+  ): SettingInspection | undefined {
+    const uri = resource ?? this.workspaceFileUri
+    const scope = languageId === undefined ? uri : { ...(uri && { uri }), languageId }
+    const configuration = vscode.workspace.getConfiguration(undefined, scope)
+    const inspection = configuration.inspect<unknown>(section)
+    return inspection && { ...inspection, effectiveValue: configuration.get<unknown>(section) }
   }
 
   /**
    * Writes `value` into the open course's `.code-workspace` as is, replacing a stored object
    * rather than merging into it (compare {@link updateWorkspaceSetting}); `undefined` removes
    * the section. Rejects when VS Code refuses the write, e.g. for a setting no installed
-   * extension declares. A no-op outside a course workspace.
+   * extension declares, or while the file has unsaved changes. A no-op outside a course
+   * workspace.
+   *
+   * @param languageId Writes into the file's `[languageId]` block, which only a
+   * language-overridable setting may appear in.
    */
-  public async replaceWorkspaceSetting(section: string, value: unknown): Promise<void> {
-    await this._courseWorkspaceConfiguration()?.update(
+  public async replaceWorkspaceSetting(
+    section: string,
+    value: unknown,
+    languageId?: string,
+  ): Promise<void> {
+    if (languageId === undefined) {
+      await this._courseWorkspaceConfiguration()?.update(
+        section,
+        value,
+        vscode.ConfigurationTarget.Workspace,
+      )
+      return
+    }
+    await this._courseWorkspaceConfiguration(languageId)?.update(
       section,
       value,
       vscode.ConfigurationTarget.Workspace,
+      true,
     )
+  }
+
+  /**
+   * Why VS Code cannot write the open course's `.code-workspace` at the moment, as far as the
+   * file itself shows it, or `undefined` when nothing does.
+   */
+  public async workspaceFileProblem(): Promise<WorkspaceFileProblem | undefined> {
+    const uri = this.workspaceFileUri
+    if (!uri) {
+      return undefined
+    }
+    // VS Code refuses every extension write to a settings file with unsaved changes.
+    if (vscode.workspace.textDocuments.some((d) => d.isDirty && d.uri.fsPath === uri.fsPath)) {
+      return "unsaved"
+    }
+    try {
+      await fs.access(uri.fsPath, fs.constants.W_OK)
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code
+      if (code === "EACCES" || code === "EPERM") {
+        return "readOnly"
+      }
+    }
+    return undefined
   }
 
   /**
@@ -484,19 +555,22 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
   }
 
-  private _courseWorkspaceConfiguration(): vscode.WorkspaceConfiguration | undefined {
+  private _courseWorkspaceConfiguration(
+    languageId?: string,
+  ): vscode.WorkspaceConfiguration | undefined {
     const activeCourseWorkspace = this._activeCourseWorkspace
     if (!activeCourseWorkspace) {
       return undefined
     }
+    const uri = vscode.Uri.file(
+      this._resources.getWorkspaceFilePath(
+        activeCourseWorkspace.slug,
+        activeCourseWorkspace.backend,
+      ),
+    )
     return vscode.workspace.getConfiguration(
       undefined,
-      vscode.Uri.file(
-        this._resources.getWorkspaceFilePath(
-          activeCourseWorkspace.slug,
-          activeCourseWorkspace.backend,
-        ),
-      ),
+      languageId === undefined ? uri : { uri, languageId },
     )
   }
 

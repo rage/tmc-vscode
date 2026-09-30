@@ -54,6 +54,7 @@ interface WorkspaceStubs {
   workspaceFolders: vscode.WorkspaceFolder[] | undefined
   onDidChangeWorkspaceFolders: () => vscode.Disposable
   onDidOpenTextDocument: () => vscode.Disposable
+  textDocuments: Pick<vscode.TextDocument, "uri" | "isDirty">[]
   getConfiguration: (section?: string, scope?: unknown) => vscode.WorkspaceConfiguration
   updateWorkspaceFolders: (
     start: number,
@@ -566,6 +567,107 @@ suite("WorkspaceManager class", function () {
       )
 
       expect(update).not.toHaveBeenCalled()
+    })
+
+    test("writes a language's value into that language's block of the workspace file", async function () {
+      const getConfiguration = vi.fn((_section?: string, _scope?: unknown) =>
+        configurationStub(update),
+      )
+      stubWorkspace("getConfiguration", getConfiguration)
+
+      await new WorkspaceManager(resources, persistForCourse).replaceWorkspaceSetting(
+        "editor.inlineSuggest.enabled",
+        false,
+        "python",
+      )
+
+      expect(getConfiguration).toHaveBeenCalledWith(undefined, {
+        uri: vscode.Uri.file(
+          path.join(WORKSPACE_FILE_FOLDER, workspaceFileName("test-python-course", "tmc")),
+        ),
+        languageId: "python",
+      })
+      expect(update).toHaveBeenCalledExactlyOnceWith(
+        "editor.inlineSuggest.enabled",
+        false,
+        vscode.ConfigurationTarget.Workspace,
+        true,
+      )
+    })
+
+    test("reads a language's stored value from that language's block, and the winning value", function () {
+      stubWorkspace(
+        "getConfiguration",
+        (_section, scope) =>
+          ({
+            ...configurationStub(update),
+            get: () => (scope as { languageId?: string }).languageId === "python",
+            inspect: (section: string) => ({
+              key: section,
+              workspaceValue: false,
+              workspaceLanguageValue: "python-block",
+            }),
+          }) as unknown as vscode.WorkspaceConfiguration,
+      )
+      const manager = new WorkspaceManager(resources, persistForCourse)
+
+      expect(manager.getStoredWorkspaceSetting("editor.inlineSuggest.enabled")).toBe(false)
+      expect(manager.getStoredWorkspaceSetting("editor.inlineSuggest.enabled", "python")).toBe(
+        "python-block",
+      )
+      expect(manager.inspectSetting("editor.inlineSuggest.enabled", "python")?.effectiveValue).toBe(
+        true,
+      )
+    })
+  })
+
+  suite("workspaceFileProblem", function () {
+    let workspaceFileFolder: string
+    let workspaceFile: string
+    let manager: WorkspaceManager
+
+    beforeEach(function () {
+      workspaceFileFolder = fs.mkdtempSync(path.join(os.tmpdir(), "workspace-manager-"))
+      resources = new Resources(
+        "/css",
+        "1.0.0",
+        "/html",
+        "/media",
+        workspaceFileFolder,
+        PROJECTS_DIRECTORY,
+      )
+      workspaceFile = resources.getWorkspaceFilePath("test-python-course", "tmc")
+      fs.writeFileSync(workspaceFile, "{}")
+      stubWorkspace("workspaceFile", vscode.Uri.file(workspaceFile))
+      stubWorkspace("textDocuments", [])
+      manager = new WorkspaceManager(resources, persistForCourse)
+    })
+
+    afterEach(function () {
+      fs.chmodSync(workspaceFile, 0o644)
+      fs.rmSync(workspaceFileFolder, { recursive: true, force: true })
+    })
+
+    test("finds nothing wrong with a saved, writable file", async function () {
+      await expect(manager.workspaceFileProblem()).resolves.toBeUndefined()
+    })
+
+    test("finds unsaved changes in an editor", async function () {
+      stubWorkspace("textDocuments", [{ uri: vscode.Uri.file(workspaceFile), isDirty: true }])
+
+      await expect(manager.workspaceFileProblem()).resolves.toBe("unsaved")
+    })
+
+    test("finds a read-only file", async function () {
+      fs.chmodSync(workspaceFile, 0o444)
+
+      await expect(manager.workspaceFileProblem()).resolves.toBe("readOnly")
+    })
+
+    test("finds nothing outside a course workspace", async function () {
+      stubWorkspace("workspaceFile", undefined)
+
+      await expect(manager.workspaceFileProblem()).resolves.toBeUndefined()
     })
   })
 
