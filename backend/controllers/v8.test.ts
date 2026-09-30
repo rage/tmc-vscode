@@ -186,6 +186,17 @@ describe("legacy TMC mock contract", () => {
     assert.equal(body.exercises[0]!.checksum, passingExercise.checksum)
   })
 
+  test("GET core/exercises/details takes several ids as one comma-separated value", async () => {
+    const res = await authFetch(
+      `${mock.base}/api/v8/core/exercises/details?ids=${passingExerciseId},${failingExerciseId}`,
+    )
+    const body = (await res.json()) as { exercises: { id: number }[] }
+    assert.deepEqual(
+      body.exercises.map((e) => e.id),
+      [passingExerciseId, failingExerciseId],
+    )
+  })
+
   test("POST submissions answers with URLs on the origin the request arrived at", async () => {
     const res = await authFetch(
       `${mock.base}/api/v8/core/exercises/${passingExerciseId}/submissions`,
