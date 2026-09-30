@@ -205,8 +205,11 @@ async function harness(
   const extensionContext = new Proxy(createMockContext(), {
     get: (target, prop) => (prop === "subscriptions" ? subscriptions : Reflect.get(target, prop)),
   })
-  registerCommands(extensionContext, actionContext)
-  registerTesting(extensionContext, actionContext)
+  registerCommands(
+    extensionContext,
+    actionContext,
+    registerTesting(extensionContext, actionContext),
+  )
   registerCommand.mockRestore()
 
   const webviews: ReturnType<typeof createFakeWebviewPanel>[] = []

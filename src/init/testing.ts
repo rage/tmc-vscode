@@ -3,16 +3,17 @@ import * as vscode from "vscode"
 import type { ReadyActionContext } from "../actions/types"
 import { CheckstyleDiagnostics } from "../testing/checkstyleDiagnostics"
 import { ExerciseTestController } from "../testing/exerciseTestController"
-import { setActiveTestController } from "../testing/localTesting"
 
 /**
  * Sets up the reporting of local test runs for the rest of the activation: the test
  * controller, the code quality diagnostics, and the test item commands.
+ *
+ * @returns the controller, which `tmc.testExercise` runs tests through.
  */
 export function registerTesting(
   context: vscode.ExtensionContext,
   actionContext: ReadyActionContext,
-): void {
+): ExerciseTestController {
   const { workspaceManager } = actionContext.startup
   const diagnostics = new CheckstyleDiagnostics()
   const controller = new ExerciseTestController(actionContext, diagnostics)
@@ -25,7 +26,6 @@ export function registerTesting(
   context.subscriptions.push(
     diagnostics,
     controller,
-    setActiveTestController(controller),
     workspaceManager.onDidChangeExercises(syncExercises),
     vscode.commands.registerCommand(
       "tmc.testing.submitExercise",
@@ -36,4 +36,5 @@ export function registerTesting(
       forwardToExercise("tmc.pasteExercise"),
     ),
   )
+  return controller
 }

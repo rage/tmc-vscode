@@ -449,11 +449,11 @@ async function activateInner(
     })
   }
 
-  init.registerCommands(context, actionContext)
+  const testController = readyContext && init.registerTesting(context, readyContext)
+  init.registerCommands(context, actionContext, testController)
   context.subscriptions.push(TmcPanel.registerSerializer(context, actionContext))
   if (readyContext) {
     init.registerSettingsCallbacks(readyContext)
-    init.registerTesting(context, readyContext)
     const account = new AccountStatusBarItem(authState.loggedIn)
     authState.subscribe((loggedIn) => account.setLoggedIn(loggedIn))
     accountStatus = account

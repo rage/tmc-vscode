@@ -5,7 +5,7 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { registerTesting } from "../../init/testing"
-import { activeTestController } from "../../testing/localTesting"
+import type { ExerciseTestController } from "../../testing/exerciseTestController"
 import { createMockActionContext } from "../mocks/actionContext"
 
 const exercise: WorkspaceExercise = {
@@ -21,6 +21,7 @@ function register(): {
   exercises: WorkspaceExercise[]
   fireExercisesChanged: () => void
   commands: Map<string, (...args: unknown[]) => unknown>
+  controller: ExerciseTestController
 } {
   const exercises: WorkspaceExercise[] = []
   const listeners: (() => void)[] = []
@@ -42,9 +43,13 @@ function register(): {
     },
   } as unknown as WorkspaceManager
   const context = { subscriptions: [] } as unknown as vscode.ExtensionContext
-  registerTesting(context, createMockActionContext({ startup: { workspaceManager } }))
+  const controller = registerTesting(
+    context,
+    createMockActionContext({ startup: { workspaceManager } }),
+  )
   return {
     context,
+    controller,
     exercises,
     fireExercisesChanged: () => listeners.forEach((listener) => listener()),
     commands,
@@ -89,14 +94,14 @@ suite("registerTesting", function () {
     ])
   })
 
-  test("disposing the activation retires the controller", function () {
-    const { context } = register()
-    expect(activeTestController()).toBeDefined()
+  test("disposing the activation disposes the controller", function () {
+    const { context, controller } = register()
+    const dispose = vi.spyOn(controller, "dispose")
 
     for (const subscription of context.subscriptions) {
       subscription.dispose()
     }
 
-    expect(activeTestController()).toBeUndefined()
+    expect(dispose).toHaveBeenCalledOnce()
   })
 })

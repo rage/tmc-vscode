@@ -9,6 +9,7 @@ import { EXTENSION_ID } from "../config/constants"
 import { registerPanelActions } from "../panels/panelActions"
 import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
+import type { ExerciseTestController } from "../testing/exerciseTestController"
 import { showAccountMenu } from "../ui/statusBarAccount"
 import { showExerciseActions } from "../ui/statusBarExercise"
 import * as treeCommands from "../ui/treeview/treeCommands"
@@ -108,10 +109,14 @@ export function registerServiceFreeCommands(
  * exception that needs an `ActionContext` but no service; every id after it requires
  * `startup.kind === "ready"`. `package.json` hides the ready-only ones from the palette
  * through `test-my-code:Initialized`.
+ *
+ * @param testController What `tmc.testExercise` runs tests through; `undefined` when the
+ * activation is degraded.
  */
 export function registerCommands(
   context: vscode.ExtensionContext,
   actionContext: ActionContext,
+  testController: ExerciseTestController | undefined,
 ): void {
   const { dialog } = actionContext
   Logger.info("Registering TMC VSCode commands")
@@ -269,7 +274,7 @@ export function registerCommands(
   register("tmc.switchWorkspace", async () => commands.switchWorkspace(readyContext))
 
   register("tmc.testExercise", async (target: ExerciseTarget | undefined) =>
-    commands.testExercise(readyContext, resourceOf(target)),
+    commands.testExercise(readyContext, testController, resourceOf(target)),
   )
 
   register("tmc.updateExercises", async (mode?: "silent" | "loud") =>
