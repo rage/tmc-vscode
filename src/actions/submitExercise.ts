@@ -3,7 +3,6 @@ import { Err, Ok } from "ts-results"
 import type * as vscode from "vscode"
 
 import type Langs from "../api/langs"
-import { shownInPanel } from "../api/withOperation"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { SUBMIT_PROCESS_TIMEOUT } from "../config/constants"
 import { nextPanelId } from "../panels/routes"
@@ -17,6 +16,7 @@ import {
   withProgressStep,
 } from "../panels/submissionView"
 import { TmcPanel } from "../panels/TmcPanel"
+import { toWebviewError } from "../panels/webviewError"
 import type {
   BackendKind,
   CourseIdentifier,
@@ -25,14 +25,7 @@ import type {
   FeedbackAnswer,
   SubmissionView,
 } from "../shared/shared"
-import {
-  backendName,
-  LocalCourseData,
-  LocalCourseExercise,
-  match,
-  toWebviewError,
-  unwrap,
-} from "../shared/shared"
+import { backendName, LocalCourseData, LocalCourseExercise, match, unwrap } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { Logger, parseFeedbackQuestion } from "../utilities"
 import type { ReadyActionContext } from "./types"
@@ -171,7 +164,7 @@ async function waitForMoocGrading(
   if (waited.err) {
     Logger.error("Failed to wait for the grading of a submission", waited.val)
     unfinishedGradings.set(panel.id, grading)
-    return { passed: false, view: gradingUnavailableView(toWebviewError(waited.val)) }
+    return { passed: false, view: gradingUnavailableView(toWebviewError(waited.val, "mooc")) }
   }
   const status = waited.val
   const view = moocGradingView(status, grading.availablePoints)
@@ -241,14 +234,16 @@ async function showOutcome(
  * Submits an exercise to the backend it belongs to and shows the grading in a side panel.
  *
  * Records the exercise as passed locally when the backend graded it so. Returns the
- * exercise's course id on success, so the caller can refresh that course's totals. A
- * submit or paste already in flight for the same exercise makes this a `BottleneckError`.
+ * exercise's course id once graded, so the caller can refresh that course's totals, and
+ * `undefined` when the submission failed and the panel shows why. Errs for a failure before
+ * the panel opens: a submit or paste already in flight for the same exercise is a
+ * `BottleneckError`.
  */
 export async function submitExercise(
   context: vscode.ExtensionContext,
   actionContext: ReadyActionContext,
   exercise: WorkspaceExercise,
-): Promise<Result<CourseIdentifier, Error>> {
+): Promise<Result<CourseIdentifier | undefined, Error>> {
   const { langs, userData } = actionContext.startup
   Logger.info(`Submitting exercise ${exercise.exerciseSlug} to ${backendName(exercise.backend)}`)
 
@@ -276,7 +271,7 @@ export async function submitExercise(
 
   // Held only until the result is posted: the panel offers Paste from that point on, and
   // the command layer's post-submit refresh doesn't need the same protection.
-  const submitted = await exerciseOperations.run(
+  return exerciseOperations.run(
     exerciseId,
     "submitting",
     SUBMIT_PROCESS_TIMEOUT + 30_000,
@@ -302,18 +297,15 @@ export async function submitExercise(
 
       const outcome = await submit(submission)
       if (outcome.err) {
-        showSubmissionView(submission.panel, submitFailedView(toWebviewError(outcome.val)))
-        return shownInPanel(outcome.val)
+        Logger.error("Exercise submission failed", outcome.val)
+        const error = toWebviewError(outcome.val, exercise.backend)
+        showSubmissionView(submission.panel, submitFailedView(error))
+        return Ok(undefined)
       }
       await showOutcome(context, actionContext, submission, outcome.val)
-      return Ok.EMPTY
+      return Ok(courseId)
     },
   )
-  if (submitted.err) {
-    return submitted
-  }
-
-  return Ok(courseId)
 }
 
 /**

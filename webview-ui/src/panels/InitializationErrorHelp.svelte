@@ -5,7 +5,7 @@
   import CodeBlock from "../components/CodeBlock.svelte"
   import Disclosure from "../components/Disclosure.svelte"
   import PanelHeader from "../components/PanelHeader.svelte"
-  import type { InitializationErrorHelpPanel, WebviewToExtension } from "../shared/shared"
+  import type { InitializationErrorHelpPanel, RunnableCommand } from "../shared/shared"
   import { restoreScroll } from "../utilities/uiState.svelte"
   import { vscode } from "../utilities/vscode"
 
@@ -16,7 +16,6 @@
   let { panel }: Props = $props()
 
   type InitializationErrors = InitializationErrorHelpPanel["initializationErrors"]
-  type RunnableCommand = Extract<WebviewToExtension, { type: "runCommand" }>["command"]
 
   const components: ReadonlyArray<{ key: keyof InitializationErrors; label: string }> = [
     { key: "tmc", label: "tmc-langs" },

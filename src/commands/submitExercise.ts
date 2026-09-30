@@ -22,8 +22,8 @@ export async function submitExercise(
       return result.err ? failure("Exercise submission failed.", result.val) : result
     },
   )
-  if (submitted.err) {
-    return submitted
+  if (submitted.err || submitted.val === undefined) {
+    return submitted.err ? submitted : Ok.EMPTY
   }
 
   // Point totals come from the backend, so without this refresh the Courses view and

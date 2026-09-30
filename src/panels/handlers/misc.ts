@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 
 import { EXTENSION_ID } from "../../config/constants"
-import type { WebviewToExtension } from "../../shared/shared"
+import type { RunnableCommand } from "../../shared/shared"
 import { assertUnreachable } from "../../shared/shared"
 import { Logger } from "../../utilities"
 import type { HandlerMap } from "../router"
@@ -58,8 +58,6 @@ function parseWebLink(url: string): vscode.Uri | undefined {
   return link
 }
 
-type RunnableCommand = Extract<WebviewToExtension, { type: "runCommand" }>["command"]
-
 /** The arguments the host supplies for a command the webview may run. */
 function runCommandArguments(command: RunnableCommand): unknown[] {
   switch (command) {
@@ -70,7 +68,9 @@ function runCommandArguments(command: RunnableCommand): unknown[] {
     case "tmc.logs":
     case "tmc.myCourses":
     case "tmc.showMoocLogin":
+    case "tmc.viewInitializationErrorHelp":
     case "workbench.action.restartExtensionHost":
+    case "workbench.extensions.action.checkForUpdates":
       return []
     default:
       return assertUnreachable(command)

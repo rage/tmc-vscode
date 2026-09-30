@@ -1,7 +1,7 @@
 import type { Result } from "ts-results"
 import { Err } from "ts-results"
 
-import { shownInPanel, withOperation } from "../../api/withOperation"
+import { withOperation } from "../../api/withOperation"
 import { LocalCourseData } from "../../shared/shared"
 import { Logger } from "../../utilities"
 import { panelActions } from "../panelActions"
@@ -27,13 +27,11 @@ export const courseDetailsHandlers = {
         return Err(new Error("This panel no longer shows a course."))
       }
       const { courseId } = route
+      // Silent: the panel that asked shows the failure, remedies included.
       const updateResult = await withOperation(
         actionContext.dialog,
-        { failure: "Failed to update course.", backend: courseId.kind },
-        async () => {
-          const updated = await panelActions().updateCourse(actionContext, courseId)
-          return updated.err ? shownInPanel(updated.val) : updated
-        },
+        { failure: "Failed to update course.", backend: courseId.kind, silent: true },
+        () => panelActions().updateCourse(actionContext, courseId),
       )
       // `updateCourse` does not rescan, and a course update can drop exercises still on disk.
       const rescanResult = await panelActions().refreshLocalExercises(actionContext)

@@ -72,6 +72,16 @@ suite("Submit exercise command", function () {
     })
   })
 
+  test("refreshes nothing after a failure its panel shows", async function () {
+    vi.mocked(actions.submitExercise).mockResolvedValue(Ok(undefined))
+    const context = contextWith(exercise)
+
+    const result = await submitExercise(extensionContext, context, uri)
+
+    expect(result.ok).toBe(true)
+    expect(refreshEverything).not.toHaveBeenCalled()
+  })
+
   test("reports a failed submission under its own headline", async function () {
     const cause = new Error("langs exited with 1")
     vi.mocked(actions.submitExercise).mockResolvedValue(Err(cause))

@@ -3,7 +3,6 @@ import { z } from "zod"
 import { FeedbackQuestionSchema, LocalCourseDataSchema } from "./course"
 import type { BackendKind } from "./enum"
 import { CourseIdentifierSchema } from "./enum"
-import { BaseError } from "./errors"
 import { TestCase, TmcStyleValidationResult } from "./langsSchema"
 
 export const CourseDetailsPanelSchema = z.object({
@@ -98,28 +97,38 @@ export const WebviewStateSchema = z.object({
 export type WebviewState = z.infer<typeof WebviewStateSchema>
 
 /**
- * A failure flattened for display in a webview.
+ * A command a webview may ask the host to run. The webview cannot pass arguments: the host
+ * supplies them, `testMyCode.logLevel` for openSettings and this extension's id for
+ * openIssueReporter.
+ */
+export const RunnableCommandSchema = z.enum([
+  "tmc.logs",
+  "tmc.myCourses",
+  "tmc.showMoocLogin",
+  "tmc.viewInitializationErrorHelp",
+  "workbench.action.restartExtensionHost",
+  "workbench.action.openSettings",
+  "workbench.action.openIssueReporter",
+  "workbench.extensions.action.checkForUpdates",
+])
+
+export type RunnableCommand = z.infer<typeof RunnableCommandSchema>
+
+/**
+ * A failure flattened for display in a webview, as the host's `toWebviewError` builds it.
  *
  * The host-to-webview bridge serializes a message as JSON and `Error.message` is
- * non-enumerable, so a live `Error` arrives as `{}`. Build one with
- * {@link toWebviewError} at the send site.
+ * non-enumerable, so a live `Error` arrives as `{}`.
  */
 export const WebviewErrorSchema = z.object({
+  /** The sentence a notification of the same failure would show. */
   message: z.string(),
   details: z.string().optional(),
+  /** The remedies for the failure, shown as buttons that run `command`. */
+  actions: z.array(z.object({ label: z.string(), command: RunnableCommandSchema })).optional(),
 })
 
 export type WebviewError = z.infer<typeof WebviewErrorSchema>
-
-/** Flattens anything thrown into a {@link WebviewError}. */
-export function toWebviewError(error: unknown): WebviewError {
-  const base = error instanceof BaseError ? error : undefined
-  const message = error instanceof Error ? error.message : String(error)
-  return {
-    message: message || "Unknown error",
-    ...(base?.details ? { details: base.details } : {}),
-  }
-}
 
 /** Where a submission is, from sending it to its final grade. */
 const SubmissionPhaseSchema = z.enum([
@@ -287,16 +296,7 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("runCommand"),
-    // The webview cannot pass arguments: the host supplies them, `testMyCode.logLevel` for
-    // openSettings and this extension's id for openIssueReporter.
-    command: z.enum([
-      "tmc.logs",
-      "tmc.myCourses",
-      "tmc.showMoocLogin",
-      "workbench.action.restartExtensionHost",
-      "workbench.action.openSettings",
-      "workbench.action.openIssueReporter",
-    ]),
+    command: RunnableCommandSchema,
   }),
 ])
 

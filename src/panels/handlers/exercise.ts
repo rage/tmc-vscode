@@ -18,7 +18,7 @@ export const exerciseHandlers = {
         Logger.warn("Ignoring a paste from a panel that is no longer shown")
         return Err(new Error("This exercise is no longer shown."))
       }
-      // Silent: the panel that asked is on screen and renders the failure itself.
+      // Silent: the panel that asked shows the failure, remedies included.
       return withOperation(
         actionContext.dialog,
         { failure: "Failed to paste the exercise.", backend: shown.backend, silent: true },

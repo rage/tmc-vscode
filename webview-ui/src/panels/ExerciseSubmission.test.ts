@@ -7,9 +7,10 @@ import {
   submitFailedView,
   tmcResultView,
 } from "../../../src/panels/submissionView"
+import { toWebviewError } from "../../../src/panels/webviewError"
 import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../shared/langsSchema"
 import type { ExerciseSubmissionPanel, FeedbackQuestion, SubmissionView } from "../shared/shared"
-import { BaseError, toWebviewError } from "../shared/shared"
+import { BaseError } from "../shared/shared"
 import { dispatchToWebview, postedMessages, reloadDocument, replyToRequest } from "../test/setup"
 import { withinShadowRoot } from "../test/shadow"
 import { enterScreen } from "../utilities/uiState.svelte"
@@ -213,6 +214,24 @@ suite("ExerciseSubmission panel (failures)", () => {
     expect(document.querySelector("vscode-progress-bar")).toBeNull()
     expect(screen.queryByText("Run in background")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument()
+  })
+
+  test("offers the failure's remedy", async () => {
+    render(ExerciseSubmission, { props: { panel: moocPanel } })
+    showView(
+      moocPanel.id,
+      submitFailedView({
+        message: "Log in again to continue.",
+        actions: [{ label: "Log in", command: "tmc.showMoocLogin" }],
+      }),
+    )
+
+    ;(await screen.findByRole("button", { name: "Log in" })).click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "runCommand",
+      command: "tmc.showMoocLogin",
+    })
   })
 
   test("announces whether the host managed to copy the error details", async () => {

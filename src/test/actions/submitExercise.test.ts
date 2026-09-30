@@ -407,7 +407,7 @@ suite("submitExercise action, mooc", () => {
     expect(lastView()).toMatchObject({
       phase: "failed",
       canKeepWaiting: true,
-      error: { message: "Connection reset by peer" },
+      error: { message: "Connection reset by peer." },
     })
   })
 
@@ -453,16 +453,12 @@ suite("submitExercise action, mooc", () => {
     expect(submit).toHaveBeenCalledTimes(2)
   })
 
-  test("a BottleneckError from the submission throttle reaches the panel", async () => {
-    // The throttle surfaces as a BottleneckError. It is posted to the panel like any
-    // other submission failure so the panel stops waiting; `withOperation`'s busy
-    // handling is what shows it as information rather than an error dialog.
+  test("a BottleneckError from the submission throttle is shown in the panel", async () => {
     const error = new BottleneckError("You are submitting too fast, try again later.")
     const { actionContext, setPassed } = moocContextWithErr(error)
 
     const result = await submitExercise(extensionContext, actionContext, moocExercise)
-    expect(result.err).toBe(true)
-    expect(result.val).toBe(error)
+    expect(result).toEqual(Ok(undefined))
     expect(setPassed).not.toHaveBeenCalled()
     expect(lastView()).toMatchObject({
       phase: "failed",
@@ -479,14 +475,14 @@ suite("submitExercise action, mooc", () => {
     await submitExercise(extensionContext, actionContext, moocExercise)
 
     const delivered = JSON.parse(JSON.stringify(lastView())) as SubmissionView
-    expect(delivered.error?.message).toBe("Connection reset by peer")
+    expect(delivered.error?.message).toBe("Connection reset by peer.")
   })
 })
 
 // These drive the action through the real `runForExercise`/`withOperation` boundary
 // (bypassing only `commands/submitExercise`'s post-submit refresh) to prove the
-// cross-layer contract: the busy notice is shown exactly once, and O2's rule -- a
-// panel-shown failure toasts only when its presentation offers a remedy -- holds.
+// cross-layer contract: the busy notice is shown exactly once, and a failure the panel
+// shows, remedies included, is not also notified.
 suite("submitExercise action, through the real runForExercise boundary", () => {
   function contextWithWorkspace(
     course: LocalCourseData,
@@ -548,7 +544,7 @@ suite("submitExercise action, through the real runForExercise boundary", () => {
     await first
   })
 
-  test("a plain submission failure shows in the panel only (O2)", async () => {
+  test("a plain submission failure shows in the panel only", async () => {
     const cause = new Error("Connection reset by peer")
     const actionContext = contextWithWorkspace(
       makeMoocKind(moocCourse),
@@ -566,13 +562,13 @@ suite("submitExercise action, through the real runForExercise boundary", () => {
       submitBody(actionContext),
     )
 
-    expect(result.err).toBe(true)
+    expect(result.ok).toBe(true)
     expect(notification).not.toHaveBeenCalled()
     expect(reportError).not.toHaveBeenCalled()
     expect(errorNotification).not.toHaveBeenCalled()
   })
 
-  test("an insufficient-scope failure also shows a toast with its remedy (O2)", async () => {
+  test("an insufficient-scope failure offers its remedy in the panel, not a toast", async () => {
     const cause = new InsufficientScopeError("exercise-services")
     const actionContext = contextWithWorkspace(
       makeMoocKind(moocCourse),
@@ -588,11 +584,8 @@ suite("submitExercise action, through the real runForExercise boundary", () => {
       submitBody(actionContext),
     )
 
-    expect(reportError).toHaveBeenCalledExactlyOnceWith(
-      "Exercise submission failed.",
-      cause,
-      "mooc",
-    )
+    expect(reportError).not.toHaveBeenCalled()
+    expect(lastView()?.error?.actions).toEqual([{ label: "Log in", command: "tmc.showMoocLogin" }])
   })
 })
 

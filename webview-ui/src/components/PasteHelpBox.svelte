@@ -3,13 +3,18 @@
 
   import { slide } from "svelte/transition"
 
-  import type { BackendKind, ExerciseSubmissionPanel, TargetPanel } from "../shared/shared"
+  import type {
+    BackendKind,
+    ExerciseSubmissionPanel,
+    TargetPanel,
+    WebviewError,
+  } from "../shared/shared"
   import { pasteServiceName } from "../shared/shared"
   import { reducedMotion } from "../utilities/a11y.svelte"
   import { createRequester } from "../utilities/script"
   import { uiState } from "../utilities/uiState.svelte"
   import Button from "./Button.svelte"
-  import Notice from "./Notice.svelte"
+  import ErrorNotice from "./ErrorNotice.svelte"
   import Spinner from "./Spinner.svelte"
 
   interface Props {
@@ -29,7 +34,7 @@
   let isPasting = $state<boolean>(false)
   // The host answers a paste once, so its link is kept here for the panel to show again.
   const pasteUrl = uiState<string | null>("pasteUrl", null)
-  let pasteError = $state<string | undefined>(undefined)
+  let pasteError = $state<WebviewError | undefined>(undefined)
   const showHelp = uiState("showPasteHelp", false)
 
   function toggleShowHelp() {
@@ -44,7 +49,7 @@
     if (outcome.ok) {
       pasteUrl.current = outcome.value
     } else {
-      pasteError = outcome.error.message
+      pasteError = outcome.error
     }
   }
 </script>
@@ -80,7 +85,7 @@
       </div>
     {/if}
     {#if pasteError !== undefined}
-      <Notice kind="error">Failed to submit to {pasteService}: {pasteError}</Notice>
+      <ErrorNotice error={pasteError} title="Failed to submit to {pasteService}" />
     {/if}
     {#if isPasting}
       <Spinner label="Sending to {pasteService}…" />

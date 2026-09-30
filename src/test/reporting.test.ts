@@ -360,10 +360,10 @@ suite("reported once: exercise commands", function () {
     await run("tmc.submitExercise")
 
     expect(shown).toEqual([])
-    expect(panelFailures()).toEqual(["submissionView: reset"])
+    expect(panelFailures()).toEqual(["submissionView: Reset."])
   })
 
-  test("a failed submission with a remedy is also notified, once", async function () {
+  test("a failed submission with a remedy shows in its panel only, remedy included", async function () {
     const { run, shown, panelFailures } = await harness({
       langs: {
         submitMoocExercise: async () => Err(new InsufficientScopeError("exercise-services")),
@@ -372,8 +372,10 @@ suite("reported once: exercise commands", function () {
 
     await run("tmc.submitExercise")
 
-    expect(shown).toEqual(["error: Exercise submission failed."])
-    expect(panelFailures()).toHaveLength(1)
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual([
+      expect.stringMatching(/^submissionView: .*Log in again to continue\.$/),
+    ])
   })
 
   test("a failed paste from the palette is one notification", async function () {
@@ -409,7 +411,7 @@ suite("reported once: exercise commands", function () {
     await post({ type: "pasteExercise", requestId: 1, sourcePanel: shownPanel() })
 
     expect(shown).toEqual([])
-    expect(panelFailures()).toEqual(["pasteExercise: offline"])
+    expect(panelFailures()).toEqual(["pasteExercise: Offline."])
   })
 
   test("a panel paste that finds a submission in flight shows in the panel only", async function () {
@@ -427,7 +429,7 @@ suite("reported once: exercise commands", function () {
     expect(shown).toEqual([])
     expect(panelFailures()).toEqual([
       "pasteExercise: A submission for this exercise is already in progress.",
-      "submissionView: reset",
+      "submissionView: Reset.",
     ])
   })
 
@@ -724,7 +726,7 @@ suite("reported once: the Courses view and course details", function () {
     })
 
     expect(shown).toEqual([])
-    expect(panelFailures()).toEqual(["refreshCourseDetails: offline"])
+    expect(panelFailures()).toEqual(["refreshCourseDetails: Offline."])
   })
 
   test("a lost session scope is warned once, however often it is hit", async function () {

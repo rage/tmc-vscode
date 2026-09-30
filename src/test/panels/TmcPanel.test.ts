@@ -80,10 +80,7 @@ suite("TmcPanel initialization guards", () => {
       type: "reply",
       target: { id: sourcePanel.id, type: sourcePanel.type },
       requestId: 1,
-      outcome: {
-        ok: false,
-        error: { message: expect.stringContaining("did not initialize properly") },
-      },
+      outcome: { ok: false, error: notInitialized },
     })
     expectNoNotification(actionContext)
   })
@@ -102,7 +99,7 @@ suite("TmcPanel initialization guards", () => {
     await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel })
 
     expect(replyTo(panel, 1)).toMatchObject({
-      outcome: { ok: false, error: { message: "no such course" } },
+      outcome: { ok: false, error: { message: "No such course." } },
     })
   })
 
@@ -124,7 +121,7 @@ suite("TmcPanel initialization guards", () => {
     await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel })
 
     expect(replyTo(panel, 1)).toMatchObject({
-      outcome: { ok: false, error: { message: "storage exploded" } },
+      outcome: { ok: false, error: { message: "Storage exploded." } },
     })
     expect(actionContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Something went wrong while handling that action.",
@@ -367,7 +364,7 @@ suite("TmcPanel handler dispatch", () => {
     const { panel } = await paste(actionContext)
 
     expect(replyTo(panel, 1)).toMatchObject({
-      outcome: { ok: false, error: { message: "paste exploded" } },
+      outcome: { ok: false, error: { message: "Paste exploded." } },
     })
     expectNoNotification(actionContext)
   })
@@ -383,7 +380,7 @@ suite("TmcPanel handler dispatch", () => {
     const { panel } = await paste(actionContext)
 
     expect(replyTo(panel, 1)).toMatchObject({
-      outcome: { ok: false, error: { message: "paste service is down" } },
+      outcome: { ok: false, error: { message: "Paste service is down." } },
     })
     expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
     expect(actionContext.dialog.errorNotification).not.toHaveBeenCalled()
@@ -411,7 +408,7 @@ suite("TmcPanel reports a handler's failure once", () => {
       type: "reply",
       target: { id: shown.id, type: "CourseDetails" },
       requestId: 1,
-      outcome: { ok: false, error: { message: "tmc-langs crashed" } },
+      outcome: { ok: false, error: { message: "tmc-langs crashed." } },
     })
   })
 })
@@ -431,7 +428,7 @@ suite("TmcPanel handler dispatch, degraded startup", () => {
     expect(handlers.refreshLocalExercises).not.toHaveBeenCalled()
     expectNoNotification(actionContext)
     expect(replyTo(panel, 1)).toMatchObject({
-      outcome: { ok: false, error: { message: "The extension did not initialize properly" } },
+      outcome: { ok: false, error: notInitialized },
     })
     expect(panel.webview.postMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: "setPanel" }),
@@ -453,7 +450,7 @@ suite("TmcPanel handler dispatch, degraded startup", () => {
       type: "reply",
       target: targetOf(shown),
       requestId: 1,
-      outcome: { ok: false, error: { message: "The extension did not initialize properly" } },
+      outcome: { ok: false, error: notInitialized },
     })
   })
 })
@@ -872,7 +869,7 @@ suite("TmcPanel refreshCourseDetails", () => {
     await listener(refreshRequest(shown))
 
     expect(replyTo(panel, 1)).toMatchObject({
-      outcome: { ok: false, error: { message: "rescan exploded" } },
+      outcome: { ok: false, error: { message: "Rescan exploded." } },
     })
   })
 })
@@ -932,7 +929,7 @@ suite("TmcPanel host services for the webview", () => {
     })
 
     expect(replyTo(panel, 1)).toMatchObject({
-      outcome: { ok: false, error: { message: "no clipboard" } },
+      outcome: { ok: false, error: { message: "No clipboard." } },
     })
   })
 
@@ -977,7 +974,7 @@ suite("TmcPanel host services for the webview", () => {
       type: "reply",
       target: targetOf(shown),
       requestId: 1,
-      outcome: { ok: false, error: { message: "server said no" } },
+      outcome: { ok: false, error: { message: "Server said no." } },
     })
   })
 
@@ -1395,6 +1392,12 @@ suite("TmcPanel webview document", () => {
     ])
   })
 })
+
+/** The failure a panel is answered with before activation succeeded, remedy included. */
+const notInitialized = {
+  message: expect.stringContaining("did not initialize properly"),
+  actions: [{ label: "Show help", command: "tmc.viewInitializationErrorHelp" }],
+}
 
 function helpPanel(): Panel {
   return initializationErrorHelpPanel(createMockActionContext(), createMockContext())

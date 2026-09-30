@@ -2,7 +2,7 @@
   import { onMount, tick, untrack } from "svelte"
 
   import Button from "../components/Button.svelte"
-  import CodeBlock from "../components/CodeBlock.svelte"
+  import ErrorNotice from "../components/ErrorNotice.svelte"
   import Meter from "../components/Meter.svelte"
   import Notice from "../components/Notice.svelte"
   import PanelHeader from "../components/PanelHeader.svelte"
@@ -141,14 +141,12 @@
   </div>
 
   {#if refreshError}
-    <Notice
-      kind="error"
+    <ErrorNotice
+      error={refreshError}
       title="Could not refresh this course"
       ondismiss={() => (refreshError = undefined)}
       dismissLabel="Dismiss refresh error"
-    >
-      <p>{refreshError.message}</p>
-    </Notice>
+    />
   {/if}
   {#if course.perhapsExamMode}
     <Notice kind="info">
@@ -161,15 +159,11 @@
     </Notice>
   {/if}
 {:else if dataError}
-  <Notice kind="error">
-    <p>{dataError.message}</p>
-    {#if dataError.details}
-      <CodeBlock code={dataError.details} label="Error details" />
-    {/if}
+  <ErrorNotice error={dataError}>
     {#snippet actions()}
       <Button onclick={() => void requestData()}>Retry</Button>
     {/snippet}
-  </Notice>
+  </ErrorNotice>
 {:else}
   <Spinner label="Loading course" />
 {/if}

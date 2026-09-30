@@ -1,7 +1,7 @@
 import type { Result } from "ts-results"
 import { Err } from "ts-results"
 
-import { BottleneckError, presentationFor } from "../errors"
+import { BottleneckError } from "../errors"
 import type { BackendKind } from "../shared/shared"
 import { Logger } from "../utilities"
 import type Dialog from "./dialog"
@@ -35,8 +35,6 @@ class OperationFailure extends Error {
   }
 }
 
-const shownInPanelErrors = new WeakSet<Error>()
-
 /**
  * An `Err` whose sentence the notification leads with, instead of `OperationOptions.failure`.
  *
@@ -47,18 +45,6 @@ const shownInPanelErrors = new WeakSet<Error>()
  */
 export function failure(headline: string, cause?: Error, backend?: BackendKind): Err<Error> {
   return Err(new OperationFailure(headline, cause, backend))
-}
-
-/**
- * An `Err` for a failure a panel already shows. {@link withOperation} only logs it, unless
- * its presentation offers a remedy button the panel cannot, and then notifies as well.
- *
- * The `Err` carries `error` itself, and the mark survives wrapping it as a {@link failure}'s
- * cause.
- */
-export function shownInPanel(error: Error): Err<Error> {
-  shownInPanelErrors.add(error)
-  return Err(error)
 }
 
 /**
@@ -109,14 +95,6 @@ function reportFailure(dialog: Dialog, options: OperationOptions, error: Error):
     Logger.warn(headline, busy)
     if (!options.silent) {
       void dialog.notification(busy.message)
-    }
-    return
-  }
-
-  if (shownInPanelErrors.has(error) || (detail && shownInPanelErrors.has(detail))) {
-    Logger.warn(headline, detail)
-    if (!options.silent && detail && presentationFor(detail, backend).actions.length > 0) {
-      void dialog.reportError(headline, detail, backend)
     }
     return
   }

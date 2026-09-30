@@ -2,7 +2,7 @@ import type * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
-import type { InitializationErrorHelpPanel, Panel } from "../shared/shared"
+import type { BackendKind, InitializationErrorHelpPanel, Panel } from "../shared/shared"
 import { assertUnreachable, LocalCourseData } from "../shared/shared"
 import { cliFolder } from "../utilities"
 
@@ -21,6 +21,18 @@ export function panelTitle(route: Panel, actionContext: ActionContext): string {
       return "TestMyCode Help"
     default:
       return assertUnreachable(route)
+  }
+}
+
+/** The backend `route` shows data of, if it shows any. */
+export function backendOf(route: Panel | undefined): BackendKind | undefined {
+  switch (route?.type) {
+    case "CourseDetails":
+      return route.courseId.kind
+    case "ExerciseSubmission":
+      return route.backend
+    default:
+      return undefined
   }
 }
 

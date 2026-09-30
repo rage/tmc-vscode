@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { FeedbackAnswer, FeedbackQuestion } from "../shared/shared"
+  import type { FeedbackAnswer, FeedbackQuestion, WebviewError } from "../shared/shared"
   import { uiState } from "../utilities/uiState.svelte"
   import Button from "./Button.svelte"
-  import Notice from "./Notice.svelte"
+  import ErrorNotice from "./ErrorNotice.svelte"
 
   interface Props {
     /** The questions the course's teachers ask after a TMC submission. */
@@ -10,7 +10,7 @@
     /** `sending` disables the form until the host answers; `sent` replaces it with thanks. */
     status: "editing" | "sending" | "sent"
     /** Why the last send failed; the answers stay so the student can retry. */
-    error?: string | undefined
+    error?: WebviewError | undefined
     /** Receives only the answered questions. */
     onsend: (answers: FeedbackAnswer[]) => void
   }
@@ -81,7 +81,7 @@
       </div>
     {/each}
     {#if error}
-      <Notice kind="error" title="Feedback could not be sent">{error}</Notice>
+      <ErrorNotice {error} title="Feedback could not be sent" />
     {/if}
     <div class="actions">
       <Button

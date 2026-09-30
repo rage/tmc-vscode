@@ -4,8 +4,8 @@
   import Button from "../components/Button.svelte"
   import CodeBlock from "../components/CodeBlock.svelte"
   import Disclosure from "../components/Disclosure.svelte"
+  import ErrorNotice from "../components/ErrorNotice.svelte"
   import Meter from "../components/Meter.svelte"
-  import Notice from "../components/Notice.svelte"
   import PanelHeader from "../components/PanelHeader.svelte"
   import PasteHelpBox from "../components/PasteHelpBox.svelte"
   import Spinner from "../components/Spinner.svelte"
@@ -13,7 +13,12 @@
   import SubmissionFeedbackForm from "../components/SubmissionFeedbackForm.svelte"
   import TestResults from "../components/TestResults.svelte"
   import ToolbarButton from "../components/ToolbarButton.svelte"
-  import type { ExerciseSubmissionPanel, FeedbackAnswer, SubmissionView } from "../shared/shared"
+  import type {
+    ExerciseSubmissionPanel,
+    FeedbackAnswer,
+    SubmissionView,
+    WebviewError,
+  } from "../shared/shared"
   import { announce } from "../utilities/a11y.svelte"
   import { addMessageListener, createRequester } from "../utilities/script"
   import { restoreScroll } from "../utilities/uiState.svelte"
@@ -34,9 +39,9 @@
   const feedbackStatus = $derived(
     view?.feedback?.isSent ? "sent" : isFeedbackSending ? "sending" : "editing",
   )
-  let feedbackError = $state<string | undefined>(undefined)
+  let feedbackError = $state<WebviewError | undefined>(undefined)
   let isKeepWaitingRequested = $state(false)
-  let keepWaitingError = $state<string | undefined>(undefined)
+  let keepWaitingError = $state<WebviewError | undefined>(undefined)
 
   const isInProgress = $derived(
     view === undefined || view.phase === "uploading" || view.phase === "grading",
@@ -73,7 +78,7 @@
     const outcome = await request("keepWaitingForGrading", { sourcePanel })
     isKeepWaitingRequested = false
     if (!outcome.ok) {
-      keepWaitingError = outcome.error.message
+      keepWaitingError = outcome.error
     }
   }
   async function copyToClipboard(text: string) {
@@ -88,7 +93,7 @@
     if (outcome.ok) {
       announce("Feedback sent")
     } else {
-      feedbackError = outcome.error.message
+      feedbackError = outcome.error
     }
   }
 </script>
@@ -131,12 +136,7 @@
   {/if}
 
   {#if view.error}
-    <Notice kind="error">
-      <p>{view.error.message}</p>
-      {#if view.error.details}
-        <CodeBlock code={view.error.details} label="Error details" oncopy={copyToClipboard} />
-      {/if}
-    </Notice>
+    <ErrorNotice error={view.error} oncopy={copyToClipboard} />
   {/if}
 
   {#if view.points}
@@ -172,7 +172,7 @@
     {/if}
   </div>
   {#if keepWaitingError}
-    <Notice kind="error" title="Could not keep waiting">{keepWaitingError}</Notice>
+    <ErrorNotice error={keepWaitingError} title="Could not keep waiting" />
   {/if}
 
   {#if view.canPaste}

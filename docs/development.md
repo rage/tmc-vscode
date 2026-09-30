@@ -202,7 +202,7 @@ extension host's memory.
 Code that does something on the user's behalf is split in two layers:
 
 - **Operations** (`src/actions/`) change state through the services, broadcast it to
-  the panels (`TmcPanel.postMessage`, `renderSide`, the tree view) and return a
+  the panels (`TmcPanel.postToSidePanel`, `renderSide`, the tree view) and return a
   `Result`. They never prompt, never show a notification of their own and never
   report the failure they return. The one exception is a failure they carried on
   past — a cleanup step, one backend of two — which they report with
@@ -215,10 +215,10 @@ Code that does something on the user's behalf is split in two layers:
 `withOperation` reports how the operation failed, exactly once: a thrown error
 becomes an `Err`, a `BottleneckError` (the operation was already running, or the
 submission throttle refused it) is shown as information rather than an error,
-and `silent` logs instead of notifying, for runs the user did not ask for.
-`failure(headline, cause)` lets an operation's `Err` carry its own sentence;
-`shownInPanel(error)` marks one a panel already renders, which is then only
-notified when its presentation offers a remedy button such as "Log in".
+and `silent` logs instead of notifying, for runs the user did not ask for and for
+panel requests: a panel renders the failure itself, with its presentation's remedy
+buttons such as "Log in" (`src/panels/webviewError.ts`).
+`failure(headline, cause)` lets an operation's `Err` carry its own sentence.
 Exercise commands go through `runForExercise`, which resolves the exercise and
 wraps the rest in `withOperation`.
 
