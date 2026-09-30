@@ -191,14 +191,14 @@ for (const scenarioId of SCENARIO_IDS) {
 
 test("a disclosure reports the state it toggles to", async ({ context, page }) => {
   await serveHarness(context)
-  await page.goto(`${ORIGIN}/frame.html?scenario=course-details%2Ftmc`)
-  const toggle = page.getByRole("button", { name: /^part02/ })
+  await page.goto(`${ORIGIN}/frame.html?scenario=initialization-error-help%2Ferrors`)
+  const toggle = page.getByRole("button", { name: /^Stack trace of / })
   await expect(toggle).toHaveAttribute("aria-expanded", "false")
   await toggle.click()
   const cdp = await context.newCDPSession(page)
   const { nodes } = (await cdp.send("Accessibility.getFullAXTree")) as { nodes: AxNode[] }
   const axToggle = nodes.find(
-    (node) => node.role?.value === "button" && node.name?.value.startsWith("part02"),
+    (node) => node.role?.value === "button" && node.name?.value.startsWith("Stack trace of "),
   )
   expect(axToggle && property(axToggle, "expanded")).toBe(true)
 })

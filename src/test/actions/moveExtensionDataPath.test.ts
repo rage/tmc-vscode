@@ -9,7 +9,6 @@ import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type Resources from "../../config/resources"
 import type { UserData } from "../../config/userdata"
-import { TmcPanel } from "../../panels/TmcPanel"
 import { createMockActionContext } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
@@ -60,7 +59,6 @@ suite("moveExtensionDataPath action", function () {
     ;[workspaceManagerMock, workspaceManagerMockValues] = createWorkspaceMangerMock()
     workspaceManagerMockValues.activeCourse = courseName
     resources = { projectsDirectory: OLD_PATH } as Resources
-    vi.spyOn(TmcPanel, "postMessage").mockResolvedValue(undefined)
   })
 
   afterEach(function () {
@@ -106,24 +104,5 @@ suite("moveExtensionDataPath action", function () {
     tmcMockValues.moveProjectsDirectory = Err(new Error())
     const result = await moveExtensionDataPath(actionContext(), emptyFolder(root))
     expect(result.val).toBeInstanceOf(Error)
-  })
-
-  test("tells a My Courses panel the new path after a move", async function () {
-    await moveExtensionDataPath(actionContext(), emptyFolder(root))
-    expect(TmcPanel.postMessage).toHaveBeenCalledExactlyOnceWith({
-      type: "setTmcDataPath",
-      tmcDataPath: emptyFolder(root).fsPath,
-      target: { type: "MyCourses" },
-    })
-  })
-
-  test("tells a My Courses panel the unchanged path after a failed move", async function () {
-    tmcMockValues.moveProjectsDirectory = Err(new Error())
-    await moveExtensionDataPath(actionContext(), emptyFolder(root))
-    expect(TmcPanel.postMessage).toHaveBeenCalledExactlyOnceWith({
-      type: "setTmcDataPath",
-      tmcDataPath: OLD_PATH,
-      target: { type: "MyCourses" },
-    })
   })
 })

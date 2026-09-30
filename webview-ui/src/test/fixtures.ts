@@ -5,7 +5,6 @@
 
 import type { TestResult } from "../shared/langsSchema"
 import type {
-  ExerciseGroup,
   LocalCourseData,
   LocalCourseExercise,
   SharedMoocCourseData,
@@ -17,7 +16,7 @@ import { makeMoocKind, makeTmcKind } from "../shared/shared"
 
 // valid v4 UUIDs (version nibble 4, variant nibble 8-b); mooc ids validate as `z.uuid()`
 export const MOOC_INSTANCE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
-export const MOOC_EXERCISE_ID = "cccccccc-cccc-4ccc-accc-cccccccccccc"
+const MOOC_EXERCISE_ID = "cccccccc-cccc-4ccc-accc-cccccccccccc"
 
 export function tmcCourseData(overrides: Partial<SharedTmcCourseData> = {}): SharedTmcCourseData {
   return {
@@ -102,27 +101,6 @@ export function moocLocalExercise(
   })
 }
 
-// a single-part exercise group referencing a tmc exercise id
-export function tmcExerciseGroup(overrides: Partial<ExerciseGroup> = {}): ExerciseGroup {
-  return {
-    name: "part01",
-    nextDeadlineString: "No deadline",
-    defaultOpen: true,
-    exercises: [
-      {
-        id: makeTmcKind({ tmcExerciseId: 101 }),
-        name: "part01-01_hello",
-        isHard: false,
-        hardDeadlineString: "",
-        softDeadlineString: "",
-        deadlineIso: null,
-        passed: true,
-      },
-    ],
-    ...overrides,
-  }
-}
-
 export function tmcExercise(
   overrides: Partial<SharedTmcCourseExercise> = {},
 ): SharedTmcCourseExercise {
@@ -151,27 +129,6 @@ export function testResult(overrides: Partial<TestResult> = {}): TestResult {
     message: "",
     points: ["1"],
     exception: [],
-    ...overrides,
-  }
-}
-
-// the one group a mooc course has, named after it, referencing a mooc (uuid) exercise id
-export function moocExerciseGroup(overrides: Partial<ExerciseGroup> = {}): ExerciseGroup {
-  return {
-    name: "MOOC Python",
-    nextDeadlineString: "No deadline",
-    defaultOpen: true,
-    exercises: [
-      {
-        id: makeMoocKind({ moocExerciseId: MOOC_EXERCISE_ID }),
-        name: "loops",
-        isHard: false,
-        hardDeadlineString: "",
-        softDeadlineString: "",
-        deadlineIso: null,
-        passed: false,
-      },
-    ],
     ...overrides,
   }
 }

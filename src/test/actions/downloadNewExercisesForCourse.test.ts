@@ -6,8 +6,7 @@ import { downloadOrUpdateExercises } from "../../actions/downloadOrUpdateExercis
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
 import type { ReadyActionContext } from "../../actions/types"
 import type { UserData } from "../../config/userdata"
-import { TmcPanel } from "../../panels/TmcPanel"
-import type { ExtensionToWebview, LocalCourseData } from "../../shared/shared"
+import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
 
@@ -40,10 +39,8 @@ function courseWithNewExercises(newExercises: number[]): LocalCourseData {
 
 suite("downloadNewExercisesForCourse action", function () {
   let course: LocalCourseData
-  let webviewMessages: ExtensionToWebview[]
 
-  // Clears exactly what UserData clears, so the action reads its announcements
-  // back out of real state instead of a canned answer.
+  // Clears exactly what UserData clears, so the course's new exercises are real state.
   function actionContext(): ReadyActionContext {
     const userData = {
       getCourse: () => Ok(course),
@@ -61,18 +58,10 @@ suite("downloadNewExercisesForCourse action", function () {
     return createMockActionContext({ startup: { userData } })
   }
 
-  const announcedNewExercises = (): ExerciseIdentifier[] | undefined =>
-    webviewMessages
-      .filter((message) => message.type === "setNewExercises")
-      .at(-1)
-      ?.exerciseIds.slice()
+  const stillNew = (): number[] => (course.kind === "tmc" ? course.data.newExercises : [])
 
   beforeEach(function () {
     course = courseWithNewExercises([1, 2])
-    webviewMessages = []
-    vi.spyOn(TmcPanel, "postMessage").mockImplementation(async (...messages) => {
-      webviewMessages.push(...messages)
-    })
     vi.mocked(refreshLocalExercises).mockResolvedValue(Ok.EMPTY)
   })
 
@@ -80,7 +69,7 @@ suite("downloadNewExercisesForCourse action", function () {
     vi.restoreAllMocks()
   })
 
-  test("announces nothing new once every exercise has been downloaded", async function () {
+  test("leaves nothing new once every exercise has been downloaded", async function () {
     vi.mocked(downloadOrUpdateExercises).mockResolvedValue({
       successful: [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
       failed: [],
@@ -89,10 +78,10 @@ suite("downloadNewExercisesForCourse action", function () {
     const result = await downloadNewExercisesForCourse(actionContext(), COURSE_ID)
 
     expect(result.ok).toBe(true)
-    expect(announcedNewExercises()).toEqual([])
+    expect(stillNew()).toEqual([])
   })
 
-  test("keeps announcing only the exercises that failed to download", async function () {
+  test("keeps only the exercises that failed to download new", async function () {
     vi.mocked(downloadOrUpdateExercises).mockResolvedValue({
       successful: [ExerciseIdentifier.from(1)],
       failed: [ExerciseIdentifier.from(2)],
@@ -100,17 +89,14 @@ suite("downloadNewExercisesForCourse action", function () {
 
     await downloadNewExercisesForCourse(actionContext(), COURSE_ID)
 
-    expect(announcedNewExercises()).toEqual([ExerciseIdentifier.from(2)])
+    expect(stillNew()).toEqual([2])
   })
 
-  test("restores the announcement when the download throws", async function () {
+  test("keeps every exercise new when the download throws", async function () {
     vi.mocked(downloadOrUpdateExercises).mockRejectedValue(new Error("boom"))
 
     await expect(downloadNewExercisesForCourse(actionContext(), COURSE_ID)).rejects.toThrow("boom")
 
-    expect(announcedNewExercises()).toEqual([
-      ExerciseIdentifier.from(1),
-      ExerciseIdentifier.from(2),
-    ])
+    expect(stillNew()).toEqual([1, 2])
   })
 })

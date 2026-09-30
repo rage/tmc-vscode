@@ -1,6 +1,7 @@
 import { screen, render, waitFor } from "@testing-library/svelte"
 
 import App from "./App.svelte"
+import { makeTmcKind } from "./shared/shared"
 import { dispatchToWebview, postedMessages } from "./test/setup"
 
 vi.mock("./panels/InitializationErrorHelp.svelte", async () => ({
@@ -26,14 +27,14 @@ suite("App render-crash boundary", () => {
     dispatchToWebview({
       type: "setPanel",
       target: { id: 0, type: "App" },
-      panel: { id: 2, type: "MyCourses" },
+      panel: { id: 2, type: "CourseDetails", courseId: makeTmcKind({ courseId: 42 }) },
     })
 
     await waitFor(() => {
       expect(screen.queryByText("Uncaught error: render boom")).not.toBeInTheDocument()
     })
     expect(postedMessages).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "requestMyCoursesData" }),
+      expect.objectContaining({ type: "requestCourseDetailsData" }),
     )
   })
 })

@@ -9,11 +9,10 @@ import type Langs from "../../api/langs"
 import type Settings from "../../config/settings"
 import * as errors from "../../errors"
 import { InvalidTokenError } from "../../errors"
-import { exerciseStatusRegistry } from "../../panels/exerciseStatusRegistry"
-import { TmcPanel } from "../../panels/TmcPanel"
 import type { TmcExerciseDownload } from "../../shared/langsSchema"
-import type { ExerciseStatus, ExtensionToWebview } from "../../shared/shared"
+import type { ExerciseStatus } from "../../shared/shared"
 import { CourseIdentifier, ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
+import { exerciseStatusRegistry } from "../../ui/exerciseStatusRegistry"
 import type UI from "../../ui/ui"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -80,7 +79,7 @@ suite("downloadOrUpdateExercises action", function () {
   let tmcMock: Langs
   let tmcMockValues: TMCMockValues
   let uiMock: UI
-  let webviewMessages: ExtensionToWebview[]
+  let recorded: [ExerciseIdentifier, ExerciseStatus][][]
 
   const actionContext = (): ReadyActionContext => ({
     ...createMockActionContext({
@@ -96,11 +95,11 @@ suite("downloadOrUpdateExercises action", function () {
     ;[settingsMock, settingsMockValues] = createSettingsMock()
     ;[tmcMock, tmcMockValues] = createTMCMock()
     ;[uiMock] = createUIMock()
-    webviewMessages = []
-    // The action posts exercise-status updates through the static
-    // TmcPanel.postMessage sink; capture them so the tests can assert on them.
-    vi.spyOn(TmcPanel, "postMessage").mockImplementation(async (...messages) => {
-      webviewMessages.push(...messages)
+    recorded = []
+    const record = exerciseStatusRegistry.record.bind(exerciseStatusRegistry)
+    vi.spyOn(exerciseStatusRegistry, "record").mockImplementation((courseId, statuses) => {
+      recorded.push(statuses)
+      record(courseId, statuses)
     })
   })
 
@@ -188,16 +187,13 @@ suite("downloadOrUpdateExercises action", function () {
     )
   })
 
-  test("marks a whole download as started in one message", async function () {
+  test("records a whole download as started at once", async function () {
     const ids = Array.from({ length: 50 }, (_, index) => ExerciseIdentifier.from(index + 1))
 
     await downloadOrUpdateExercises(actionContext(), ids, TEST_COURSE_ID)
 
-    const started = webviewMessages.filter(
-      (m) => m.type === "setExerciseStatuses" && m.statuses.every(([, s]) => s === "downloading"),
-    )
-    expect(started).toHaveLength(1)
-    expect(webviewMessages.filter((m) => m.type === "exerciseStatusChange")).toHaveLength(0)
+    const started = recorded.filter((statuses) => statuses.every(([, s]) => s === "downloading"))
+    expect(started).toEqual([ids.map((id) => [id, "downloading"])])
   })
 
   test("remembers a running download for a panel opened meanwhile, and forgets it after", async function () {
@@ -353,8 +349,8 @@ suite("downloadOrUpdateExercises action", function () {
       TEST_COURSE_ID,
     )
     // The last status for each id reflects the final broadcast.
-    expect(postedStatuses(webviewMessages, closedId).at(-1)).toBe("closed")
-    expect(postedStatuses(webviewMessages, undownloadedId).at(-1)).toBe("downloadFailed")
+    expect(recordedStatuses(recorded, closedId).at(-1)).toBe("closed")
+    expect(recordedStatuses(recorded, undownloadedId).at(-1)).toBe("downloadFailed")
   })
 
   test("should download template if downloadOldSubmission setting is off", async function () {
@@ -406,29 +402,29 @@ suite("downloadOrUpdateExercises action", function () {
       return createDownloadResult([helloWorld], [], undefined)
     }) as Langs["downloadExercises"]
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
-    expect(first(postedStatuses(webviewMessages, helloWorld.id))).toBe("downloading")
-    expect(last(postedStatuses(webviewMessages, helloWorld.id))).toBe("closed")
+    expect(first(recordedStatuses(recorded, helloWorld.id))).toBe("downloading")
+    expect(last(recordedStatuses(recorded, helloWorld.id))).toBe("closed")
   })
 
   test("should post status updates for skipped download", async function () {
     tmcMockValues.downloadExercises = createDownloadResult([], [helloWorld], undefined)
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
-    expect(first(postedStatuses(webviewMessages, helloWorld.id))).toBe("downloading")
-    expect(last(postedStatuses(webviewMessages, helloWorld.id))).toBe("closed")
+    expect(first(recordedStatuses(recorded, helloWorld.id))).toBe("downloading")
+    expect(last(recordedStatuses(recorded, helloWorld.id))).toBe("closed")
   })
 
   test("should post status updates for failing download", async function () {
     tmcMockValues.downloadExercises = createDownloadResult([], [], [[helloWorld, [""]]])
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
-    expect(first(postedStatuses(webviewMessages, helloWorld.id))).toBe("downloading")
-    expect(last(postedStatuses(webviewMessages, helloWorld.id))).toBe("downloadFailed")
+    expect(first(recordedStatuses(recorded, helloWorld.id))).toBe("downloading")
+    expect(last(recordedStatuses(recorded, helloWorld.id))).toBe("downloadFailed")
   })
 
   test("should post status updates for exercises missing from langs response", async function () {
     tmcMockValues.downloadExercises = createDownloadResult([], [], undefined)
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
-    expect(first(postedStatuses(webviewMessages, helloWorld.id))).toBe("downloading")
-    expect(last(postedStatuses(webviewMessages, helloWorld.id))).toBe("downloadFailed")
+    expect(first(recordedStatuses(recorded, helloWorld.id))).toBe("downloading")
+    expect(last(recordedStatuses(recorded, helloWorld.id))).toBe("downloadFailed")
   })
 
   test("should post status updates when TMC-langs operation fails", async function () {
@@ -437,27 +433,21 @@ suite("downloadOrUpdateExercises action", function () {
       tmcError: new Error(),
     }
     await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
-    expect(first(postedStatuses(webviewMessages, helloWorld.id))).toBe("downloading")
-    expect(last(postedStatuses(webviewMessages, helloWorld.id))).toBe("downloadFailed")
+    expect(first(recordedStatuses(recorded, helloWorld.id))).toBe("downloading")
+    expect(last(recordedStatuses(recorded, helloWorld.id))).toBe("downloadFailed")
   })
 })
 
-// Every status posted for `exerciseId` in order, from single and batched status messages alike.
-function postedStatuses(
-  messages: ExtensionToWebview[],
+// Every status recorded for `exerciseId`, in order.
+function recordedStatuses(
+  records: [ExerciseIdentifier, ExerciseStatus][][],
   exerciseId: number | string,
 ): ExerciseStatus[] {
-  return messages.flatMap((message): ExerciseStatus[] => {
-    if (message.type === "exerciseStatusChange") {
-      return ExerciseIdentifier.unwrap(message.exerciseId) === exerciseId ? [message.status] : []
-    }
-    if (message.type === "setExerciseStatuses") {
-      return message.statuses
-        .filter(([id]) => ExerciseIdentifier.unwrap(id) === exerciseId)
-        .map(([, status]) => status)
-    }
-    return []
-  })
+  return records.flatMap((statuses) =>
+    statuses
+      .filter(([id]) => ExerciseIdentifier.unwrap(id) === exerciseId)
+      .map(([, status]) => status),
+  )
 }
 
 suite("downloadOrUpdateExercises cancellation and progress", function () {
@@ -551,7 +541,6 @@ suite("downloadOrUpdateExercises cancellation and progress", function () {
         },
         token,
       )) as unknown as typeof vscode.window.withProgress)
-    vi.spyOn(TmcPanel, "postMessage").mockResolvedValue(undefined)
   })
 
   afterEach(function () {

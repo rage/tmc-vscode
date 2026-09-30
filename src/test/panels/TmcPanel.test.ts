@@ -1,43 +1,23 @@
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { removeCourse } from "../../actions/removeCourse"
 import type { ActionContext } from "../../actions/types"
-import type Langs from "../../api/langs"
-import { ExerciseStatus } from "../../api/workspaceManager"
-import {
-  BottleneckError,
-  ConnectionError,
-  ForbiddenError,
-  InitializationError,
-  presentationFor,
-} from "../../errors"
-import { postExerciseStatuses, postUpdateables } from "../../panels/exerciseLists"
-import { exerciseStatusRegistry } from "../../panels/exerciseStatusRegistry"
+import { BottleneckError, InitializationError, presentationFor } from "../../errors"
 import type { PanelActions } from "../../panels/panelActions"
 import { registerPanelActions } from "../../panels/panelActions"
 import type { PanelRoute } from "../../panels/routes"
 import { nextPanelId, TmcPanel } from "../../panels/TmcPanel"
-import { updateablesRegistry } from "../../panels/updateablesRegistry"
-import type { LocalCourseData, LocalCourseExercise, Panel } from "../../shared/shared"
-import {
-  CourseIdentifier,
-  ExerciseIdentifier,
-  ExerciseSchema,
-  makeMoocKind,
-  makeTmcKind,
-  panelTarget,
+import type {
+  ExtensionToWebview,
+  LocalCourseData,
+  LocalCourseExercise,
+  Panel,
 } from "../../shared/shared"
+import { CourseIdentifier, makeMoocKind, makeTmcKind, panelTarget } from "../../shared/shared"
 import { Logger } from "../../utilities"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 import { createMockContext } from "../mocks/vscode"
 import { createFakeWebviewPanel } from "../support/webviewPanel"
-
-// Course details render deadlines in `vscode.env.language`, and the mock ships no `env`.
-beforeEach(() => {
-  const vscodeModule: object = vscode
-  Object.defineProperty(vscodeModule, "env", { value: {}, writable: true, configurable: true })
-})
 
 // Mounts a fresh side panel (resetting any panel state a previous test left
 // behind) and returns the fake webview panel + its captured message listener,
@@ -62,7 +42,7 @@ async function mountSidePanel(
     extensionUri,
     extensionContext,
     actionContext,
-    shownPanel ?? { id: nextPanelId(), type: "MyCourses" },
+    shownPanel ?? { id: nextPanelId(), type: "InitializationErrorHelp" },
   )
   await sendReady()
   const listener = getMessageListener()
@@ -83,13 +63,17 @@ function replyTo(panel: vscode.WebviewPanel, requestId: number): unknown {
 
 suite("TmcPanel initialization guards", () => {
   test("a panel waiting on data is told it is not coming, and nothing else is", async () => {
-    // Nothing else ever answers `requestMyCoursesData`, so returning silently here
+    // Nothing else ever answers `requestCourseDetailsData`, so returning silently here
     // leaves the panel on its spinner for the rest of the session.
     const actionContext = createDegradedContext()
     const { panel, listener } = await mountSidePanel(actionContext)
-    const sourcePanel = { id: 5, type: "MyCourses" as const }
+    const sourcePanel = {
+      id: 5,
+      type: "CourseDetails" as const,
+      courseId: CourseIdentifier.from(42),
+    }
 
-    await listener({ type: "requestMyCoursesData", requestId: 1, sourcePanel })
+    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel })
 
     expect(replyTo(panel, 1)).toEqual({
       type: "reply",
@@ -149,41 +133,18 @@ suite("TmcPanel initialization guards", () => {
     )
   })
 
-  test("a courses request without an exercise directory says why, in the panel alone", async () => {
-    const actionContext = createMockActionContext({
-      startup: {
-        userData: { getCourses: () => [] } as never,
-        resources: { projectsDirectory: undefined } as never,
-      },
-    })
-    const { panel, listener } = await mountSidePanel(actionContext)
-    const sourcePanel = { id: 5, type: "MyCourses" as const }
-
-    await listener({ type: "requestMyCoursesData", requestId: 3, sourcePanel })
-
-    expect(replyTo(panel, 3)).toMatchObject({
-      outcome: {
-        ok: false,
-        error: {
-          message:
-            "Showing your courses is unavailable: the TestMyCode tools did not report where the exercises folder is.",
-        },
-      },
-    })
-    expectNoNotification(actionContext)
-  })
-
   test("a request served from stored data is answered without an error", async () => {
     const actionContext = createMockActionContext({
-      startup: {
-        userData: { getCourses: () => [] } as never,
-        resources: { projectsDirectory: "/tmc" } as never,
-      },
+      startup: { userData: { getCourse: () => Ok(courseWith(0)) } as never },
     })
     const { panel, listener } = await mountSidePanel(actionContext)
-    const sourcePanel = { id: 5, type: "MyCourses" as const }
+    const sourcePanel = {
+      id: 5,
+      type: "CourseDetails" as const,
+      courseId: CourseIdentifier.from(42),
+    }
 
-    await listener({ type: "requestMyCoursesData", requestId: 7, sourcePanel })
+    await listener({ type: "requestCourseDetailsData", requestId: 7, sourcePanel })
 
     expect(replyTo(panel, 7)).toEqual({
       type: "reply",
@@ -197,7 +158,7 @@ suite("TmcPanel initialization guards", () => {
     const actionContext = createDegradedContext()
     const { listener } = await mountSidePanel(actionContext)
 
-    await listener({ type: "removeCourse", id: CourseIdentifier.from(1) })
+    await listener({ type: "openCourseWorkspace", courseId: CourseIdentifier.from(1) })
 
     expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
       "This action is unavailable.",
@@ -320,40 +281,16 @@ suite("TmcPanel requestInitializationErrors", () => {
 // runtime import cycle, so every one of those calls goes through this record instead.
 function stubHandlers(): { [K in keyof PanelActions]: ReturnType<typeof vi.fn> } {
   return {
-    closeExercises: vi.fn().mockResolvedValue(Err(new Error("could not close"))),
-    downloadAndOpenExercises: vi
-      .fn()
-      .mockResolvedValue(Ok({ ids: [], exceededOpenLimit: undefined })),
-    downloadExercisesForUi: vi.fn().mockResolvedValue(undefined),
     keepWaitingForGrading: vi.fn().mockResolvedValue(Ok.EMPTY),
     openWorkspace: vi.fn().mockResolvedValue(undefined),
     pasteExercise: vi.fn().mockResolvedValue(Ok("link")),
     refreshLocalExercises: vi.fn().mockResolvedValue(Ok.EMPTY),
-    removeCourse: vi.fn().mockResolvedValue(Ok.EMPTY),
     sendSubmissionFeedback: vi.fn().mockResolvedValue(Ok.EMPTY),
     updateCourse: vi.fn().mockResolvedValue(Ok(true)),
   }
 }
 
 suite("TmcPanel handler dispatch", () => {
-  test("closes exercises through the registered handler and reports its failure", async () => {
-    const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
-    const actionContext = createMockActionContext()
-    const { listener } = await mountSidePanel(actionContext)
-    const courseId = CourseIdentifier.from(42)
-    const ids = [ExerciseIdentifier.from(101)]
-
-    await listener({ type: "closeExercises", ids, courseId })
-
-    expect(handlers.closeExercises).toHaveBeenCalledWith(actionContext, ids, courseId)
-    expect(actionContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to close the selected exercises.",
-      expect.objectContaining({ message: "could not close" }),
-      "tmc",
-    )
-  })
-
   test("reports a handler that rejects instead of dropping it", async () => {
     // The webview host discards whatever a listener rejects with, so nothing else
     // would tell the user their click failed.
@@ -373,9 +310,8 @@ suite("TmcPanel handler dispatch", () => {
     )
   })
 
-  test("a course refresh rescans the exercises on disk before posting them", async () => {
-    // `updateCourse` does not rescan, and the statuses posted next are read out of the
-    // workspace manager.
+  test("a course refresh rescans the exercises on disk", async () => {
+    // `updateCourse` does not rescan, and the Courses view shows what is on disk.
     const handlers = stubHandlers()
     registerPanelActions(handlers as unknown as PanelActions)
     const actionContext = createMockActionContext()
@@ -536,182 +472,7 @@ function expectNoNotification(actionContext: ActionContext): void {
 }
 
 suite("TmcPanel reports a handler's failure once", () => {
-  async function mountWith(
-    handlers: ReturnType<typeof stubHandlers>,
-    actionContext = createMockActionContext(),
-  ): Promise<{
-    actionContext: ReturnType<typeof createMockActionContext>
-    panel: vscode.WebviewPanel
-    listener: (message: unknown) => Promise<void>
-  }> {
-    registerPanelActions(handlers as unknown as PanelActions)
-    const { panel, listener } = await mountSidePanel(actionContext)
-    return { actionContext, panel, listener }
-  }
-
   const courseId = CourseIdentifier.from(42)
-  const ids = [ExerciseIdentifier.from(1)]
-
-  suite("for removeCourse", () => {
-    function confirmingContext(
-      startup: Parameters<typeof createMockActionContext>[0] = {},
-    ): ReturnType<typeof createMockActionContext> {
-      const actionContext = createMockActionContext({
-        ...startup,
-        startup: {
-          userData: {
-            getCourse: () => Ok(courseWith(0)),
-            deleteCourse: vi.fn(async () => Err(new Error("globalState is full"))),
-          } as never,
-          langs: { unsetSetting: vi.fn(async () => Ok.EMPTY) } as never,
-          workspaceManager: { deleteWorkspaceFile: vi.fn(async () => Ok.EMPTY) } as never,
-          ...startup.startup,
-        },
-      })
-      vi.mocked(actionContext.dialog.confirm).mockResolvedValue(true)
-      return actionContext
-    }
-
-    test("a removal that fails is reported once and never announced as done", async () => {
-      const { actionContext, panel, listener } = await mountWith(
-        { ...stubHandlers(), removeCourse: vi.fn(removeCourse) },
-        confirmingContext(),
-      )
-
-      await listener({ type: "removeCourse", id: courseId })
-
-      expect(actionContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-        'Failed to remove "python-course" from your courses.',
-        expect.objectContaining({ message: "globalState is full" }),
-        "tmc",
-      )
-      expect(actionContext.dialog.statusMessage).not.toHaveBeenCalled()
-      expect(panel.webview.postMessage).not.toHaveBeenCalledWith(
-        expect.objectContaining({ type: "setPanel" }),
-      )
-    })
-
-    test("asks in a modal dialog and removes nothing when the user cancels", async () => {
-      const handlers = stubHandlers()
-      const actionContext = confirmingContext()
-      vi.mocked(actionContext.dialog.confirm).mockResolvedValue(false)
-      const { listener } = await mountWith(handlers, actionContext)
-
-      await listener({ type: "removeCourse", id: courseId })
-
-      expect(actionContext.dialog.confirm).toHaveBeenCalledExactlyOnceWith(
-        "Remove Python Course from your courses?",
-        expect.objectContaining({ confirmLabel: "Remove Course" }),
-      )
-      expect(handlers.removeCourse).not.toHaveBeenCalled()
-    })
-
-    test("a removal that succeeds is announced and shows the remaining courses", async () => {
-      const { actionContext, panel, listener } = await mountWith(
-        stubHandlers(),
-        confirmingContext(),
-      )
-
-      await listener({ type: "removeCourse", id: courseId })
-
-      expect(actionContext.dialog.statusMessage).toHaveBeenCalledExactlyOnceWith(
-        "Removed Python Course.",
-      )
-      expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
-      expect(panel.webview.postMessage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: "setPanel",
-          panel: expect.objectContaining({ type: "MyCourses" }),
-        }),
-      )
-    })
-  })
-
-  test("for clearNewExercises", async () => {
-    const error = new Error("globalState is full")
-    const { actionContext, listener } = await mountWith(
-      stubHandlers(),
-      createMockActionContext({
-        startup: { userData: { clearFromNewExercises: vi.fn(async () => Err(error)) } as never },
-      }),
-    )
-
-    await listener({ type: "clearNewExercises", courseId })
-
-    expect(actionContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to dismiss the new exercises.",
-      error,
-      "tmc",
-    )
-  })
-
-  test("for downloadExercises, when the download throws", async () => {
-    const handlers = stubHandlers()
-    handlers.downloadExercisesForUi.mockRejectedValue(new Error("disk full"))
-    const { actionContext, listener } = await mountWith(handlers)
-
-    await listener({ type: "downloadExercises", mode: "download", courseId, ids })
-
-    expect(actionContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to download the exercises.",
-      expect.objectContaining({ message: "disk full" }),
-      "tmc",
-    )
-  })
-
-  suite("for openExercises", () => {
-    test("a failed open", async () => {
-      const handlers = stubHandlers()
-      const error = new Error("tmc-langs crashed")
-      handlers.downloadAndOpenExercises.mockResolvedValue(Err(error))
-      const { actionContext, listener } = await mountWith(handlers)
-
-      await listener({ type: "openExercises", ids, courseId })
-
-      expect(actionContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-        "Failed to open the selected exercises.",
-        error,
-        "tmc",
-      )
-      expect(actionContext.dialog.warningNotification).not.toHaveBeenCalled()
-    })
-
-    test("warns about the open-exercise limit the operation reports exceeded", async () => {
-      const handlers = stubHandlers()
-      handlers.downloadAndOpenExercises.mockResolvedValue(Ok({ ids, exceededOpenLimit: 50 }))
-      const renderMain = vi.spyOn(TmcPanel, "renderMain").mockImplementation(() => {})
-      onTestFinished(() => renderMain.mockRestore())
-      const { actionContext, listener } = await mountWith(handlers)
-
-      await listener({ type: "openExercises", ids, courseId })
-
-      expect(actionContext.dialog.warningNotification).toHaveBeenCalledExactlyOnceWith(
-        expect.stringContaining("over 50 exercises open"),
-        ["Open course details", expect.any(Function)],
-      )
-      // Course Details is where Close lives, and the button below goes there.
-      const [warning] = vi.mocked(actionContext.dialog.warningNotification).mock.calls[0] ?? []
-      expect(warning).toContain("in Course Details")
-      const [, [, openCourseDetails]] = vi.mocked(actionContext.dialog.warningNotification).mock
-        .calls[0] as [string, [string, () => void]]
-      openCourseDetails()
-      expect(renderMain).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.anything(),
-        actionContext,
-        expect.objectContaining({ type: "CourseDetails", courseId }),
-      )
-    })
-
-    test("says nothing about a limit that was not exceeded", async () => {
-      const { actionContext, listener } = await mountWith(stubHandlers())
-
-      await listener({ type: "openExercises", ids, courseId })
-
-      expect(actionContext.dialog.warningNotification).not.toHaveBeenCalled()
-      expectNoNotification(actionContext)
-    })
-  })
 
   test("for refreshCourseDetails, in the panel that asked", async () => {
     const handlers = stubHandlers()
@@ -735,66 +496,6 @@ suite("TmcPanel reports a handler's failure once", () => {
 // A webview mounted before a failed (or since-degraded) activation can still post any
 // of these messages; each must be answered rather than silently dropped.
 suite("TmcPanel handler dispatch, degraded startup", () => {
-  const UNAVAILABLE_ACTION = "This action is unavailable."
-
-  test("closeExercises reports the failure instead of calling the handler", async () => {
-    const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
-    const actionContext = createDegradedContext()
-    const { listener } = await mountSidePanel(actionContext)
-
-    await listener({
-      type: "closeExercises",
-      ids: [ExerciseIdentifier.from(101)],
-      courseId: CourseIdentifier.from(42),
-    })
-
-    expect(handlers.closeExercises).not.toHaveBeenCalled()
-    expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
-      UNAVAILABLE_ACTION,
-      expect.any(InitializationError),
-    )
-  })
-
-  test("downloadExercises reports the failure instead of calling the handler", async () => {
-    const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
-    const actionContext = createDegradedContext()
-    const { listener } = await mountSidePanel(actionContext)
-
-    await listener({
-      type: "downloadExercises",
-      mode: "download",
-      courseId: CourseIdentifier.from(42),
-      ids: [ExerciseIdentifier.from(101)],
-    })
-
-    expect(handlers.downloadExercisesForUi).not.toHaveBeenCalled()
-    expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
-      UNAVAILABLE_ACTION,
-      expect.any(InitializationError),
-    )
-  })
-
-  test("openExercises reports the failure instead of calling the handler", async () => {
-    const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
-    const actionContext = createDegradedContext()
-    const { listener } = await mountSidePanel(actionContext)
-
-    await listener({
-      type: "openExercises",
-      ids: [ExerciseIdentifier.from(101)],
-      courseId: CourseIdentifier.from(42),
-    })
-
-    expect(handlers.downloadAndOpenExercises).not.toHaveBeenCalled()
-    expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
-      UNAVAILABLE_ACTION,
-      expect.any(InitializationError),
-    )
-  })
-
   test("refreshCourseDetails tells the waiting panel why, and re-renders nothing", async () => {
     const handlers = stubHandlers()
     registerPanelActions(handlers as unknown as PanelActions)
@@ -843,32 +544,34 @@ suite("TmcPanel inbound message guard", () => {
   }> {
     const handlers = stubHandlers()
     registerPanelActions(handlers as unknown as PanelActions)
-    const { panel, listener } = await mountSidePanel(createMockActionContext())
+    const actionContext = createMockActionContext({
+      startup: { userData: { getCourse: () => Ok(courseWith(0)) } as never },
+    })
+    const { panel, listener } = await mountSidePanel(actionContext)
     await listener(message)
     return { handlers, posted: vi.mocked(panel.webview.postMessage) }
   }
 
   const courseId = CourseIdentifier.from(42)
-  const ids = [ExerciseIdentifier.from(101)]
 
   test("ignores a message whose type it does not know", async () => {
-    const { handlers, posted } = await drive({ type: "notAKnownMessage", ids, courseId })
+    const { handlers, posted } = await drive({ type: "notAKnownMessage", courseId })
 
-    expect(handlers.closeExercises).not.toHaveBeenCalled()
+    expect(handlers.openWorkspace).not.toHaveBeenCalled()
     expect(posted).not.toHaveBeenCalled()
   })
 
   test("ignores a known message that is missing a required field", async () => {
-    const { handlers, posted } = await drive({ type: "closeExercises", ids })
+    const { handlers, posted } = await drive({ type: "openCourseWorkspace" })
 
-    expect(handlers.closeExercises).not.toHaveBeenCalled()
+    expect(handlers.openWorkspace).not.toHaveBeenCalled()
     expect(posted).not.toHaveBeenCalled()
   })
 
   test("acts on the same message once it carries the field", async () => {
-    const { handlers } = await drive({ type: "closeExercises", ids, courseId })
+    const { handlers } = await drive({ type: "openCourseWorkspace", courseId })
 
-    expect(handlers.closeExercises).toHaveBeenCalledWith(expect.anything(), ids, courseId)
+    expect(handlers.openWorkspace).toHaveBeenCalledWith(expect.anything(), "python-course", "tmc")
   })
 })
 
@@ -911,22 +614,6 @@ suite("TmcPanel webview-supplied paths and links", () => {
   })
 })
 
-suite("TmcPanel addNewCourse handling", () => {
-  test("runs the add-course command rather than opening a selection webview", async () => {
-    const actionContext = createMockActionContext()
-    const { listener } = await mountSidePanel(actionContext)
-
-    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
-    try {
-      await listener({ type: "addNewCourse" })
-
-      expect(executeCommand).toHaveBeenCalledWith("tmc.addNewCourse")
-    } finally {
-      executeCommand.mockRestore()
-    }
-  })
-})
-
 suite("TmcPanel ready handshake", () => {
   test("resends the last rendered panel", async () => {
     const actionContext = createMockActionContext()
@@ -937,7 +624,7 @@ suite("TmcPanel ready handshake", () => {
     expect(panel.webview.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "setPanel",
-        panel: expect.objectContaining({ type: "MyCourses" }),
+        panel: expect.objectContaining({ type: "InitializationErrorHelp" }),
       }),
     )
   })
@@ -948,7 +635,11 @@ suite("TmcPanel ready handshake", () => {
     const actionContext = createMockActionContext()
     const { panel, listener } = await mountSidePanel(actionContext)
 
-    await listener({ type: "openCourseDetails", courseId: makeTmcKind({ courseId: 1 }) })
+    TmcPanel.renderSide(vscode.Uri.file("/ext"), createMockContext(), actionContext, {
+      id: nextPanelId(),
+      type: "CourseDetails",
+      courseId: makeTmcKind({ courseId: 1 }),
+    })
     vi.mocked(panel.webview.postMessage).mockClear()
     await listener({ type: "ready" })
 
@@ -961,15 +652,9 @@ suite("TmcPanel ready handshake", () => {
   })
 
   test("replays a buffered message for the current panel, after the panel itself", async () => {
-    const actionContext = createMockActionContext()
-    const { panel, listener } = await mountSidePanel(actionContext)
+    const { panel, listener, shown } = await mountCourseDetails(createMockActionContext())
 
-    const lastPanel = (TmcPanel.sidePanel as unknown as { _route: { id: number } })._route
-    TmcPanel.postMessage({
-      type: "setTmcDataSize",
-      target: { id: lastPanel.id, type: "MyCourses" },
-      tmcDataSize: "1.2 MB",
-    })
+    TmcPanel.postMessage(courseDataFor(shown))
     vi.mocked(panel.webview.postMessage).mockClear()
 
     await listener({ type: "ready" })
@@ -977,20 +662,15 @@ suite("TmcPanel ready handshake", () => {
     const types = vi
       .mocked(panel.webview.postMessage)
       .mock.calls.map(([message]) => (message as { type: string }).type)
-    expect(types).toEqual(["setPanel", "setTmcDataSize"])
+    expect(types).toEqual(["setPanel", "setCourseData"])
   })
 
   test("does not replay a message aimed at a panel that is no longer shown", async () => {
-    const actionContext = createMockActionContext()
-    const { panel, listener } = await mountSidePanel(actionContext)
+    const { panel, listener } = await mountCourseDetails(createMockActionContext())
 
     // an id that was never rendered here; buffering it would resend it to a panel
     // that cannot interpret it
-    TmcPanel.postMessage({
-      type: "setTmcDataSize",
-      target: { id: 9999, type: "MyCourses" },
-      tmcDataSize: "1.2 MB",
-    })
+    TmcPanel.postMessage(courseDataFor({ id: 9999 }))
     vi.mocked(panel.webview.postMessage).mockClear()
 
     await listener({ type: "ready" })
@@ -1003,15 +683,14 @@ suite("TmcPanel ready handshake", () => {
 
   test("rendering a new panel drops the previous panel's buffered messages", async () => {
     const actionContext = createMockActionContext()
-    const { panel, listener } = await mountSidePanel(actionContext)
+    const { panel, listener, shown } = await mountCourseDetails(actionContext)
 
-    const lastPanel = (TmcPanel.sidePanel as unknown as { _route: { id: number } })._route
-    TmcPanel.postMessage({
-      type: "setTmcDataSize",
-      target: { id: lastPanel.id, type: "MyCourses" },
-      tmcDataSize: "1.2 MB",
+    TmcPanel.postMessage(courseDataFor(shown))
+    TmcPanel.renderSide(vscode.Uri.file("/ext"), createMockContext(), actionContext, {
+      id: nextPanelId(),
+      type: "CourseDetails",
+      courseId: makeTmcKind({ courseId: 1 }),
     })
-    await listener({ type: "openCourseDetails", courseId: makeTmcKind({ courseId: 1 }) })
     vi.mocked(panel.webview.postMessage).mockClear()
 
     await listener({ type: "ready" })
@@ -1032,12 +711,7 @@ suite("TmcPanel ready handshake", () => {
       courseId: CourseIdentifier.from(42),
     }
     renderMainPanel(courseDetails)
-    TmcPanel.postMessage({
-      type: "setCourseGroups",
-      target: { id: courseDetails.id, type: "CourseDetails" },
-      offlineMode: false,
-      exerciseGroups: [],
-    })
+    TmcPanel.postMessage(courseDataFor(courseDetails))
 
     expect(panel.webview.postMessage).not.toHaveBeenCalled()
 
@@ -1046,7 +720,7 @@ suite("TmcPanel ready handshake", () => {
     const types = vi
       .mocked(panel.webview.postMessage)
       .mock.calls.map(([message]) => (message as { type: string }).type)
-    expect(types).toEqual(["setPanel", "setCourseGroups"])
+    expect(types).toEqual(["setPanel", "setCourseData"])
   })
 
   test("a webview that has rendered nothing gets nothing resent", async () => {
@@ -1072,159 +746,19 @@ suite("TmcPanel ready handshake", () => {
   })
 })
 
-suite("TmcPanel requestCourseDetailsData updateables", () => {
-  const COURSE_ID = CourseIdentifier.from(42)
-  const OTHER_COURSE_ID = CourseIdentifier.from(43)
-
-  const localCourse = makeTmcKind({
-    id: 42,
-    name: "python-course",
-    title: "Python Course",
-    description: "",
-    organization: "mooc",
-    exercises: [],
-    availablePoints: 0,
-    awardedPoints: 0,
-    perhapsExamMode: false,
-    newExercises: [],
-    notifyAfter: 0,
-    disabled: false,
-    materialUrl: null,
-  })
-
-  function contextWithCourse(): ReturnType<typeof createMockActionContext> {
-    return createMockActionContext({
-      startup: {
-        langs: {
-          getCourseDetails: vi.fn().mockResolvedValue(Err(new Error("offline"))),
-        } as unknown as Langs,
-        userData: { getCourse: () => Ok(localCourse) } as never,
-        workspaceManager: { getExercises: () => [] } as never,
-      },
-    })
+/** A `setCourseData` addressed to `panel`. */
+function courseDataFor(panel: { id: number }): ExtensionToWebview {
+  return {
+    type: "setCourseData",
+    target: { id: panel.id, type: "CourseDetails" },
+    courseData: courseWith(0),
   }
+}
 
-  afterEach(() => {
-    updateablesRegistry.clear()
-  })
-
-  test("answers with the course's own updateables, not another course's", async () => {
-    // A reloaded CourseDetails panel can only get this from the extension: re-deriving
-    // it would mean re-running checkForExerciseUpdates.
-    postUpdateables(COURSE_ID, [ExerciseIdentifier.from(101)])
-    postUpdateables(OTHER_COURSE_ID, [ExerciseIdentifier.from(202), ExerciseIdentifier.from(203)])
-
-    const actionContext = contextWithCourse()
-    const { panel, listener } = await mountSidePanel(actionContext)
-    const sourcePanel = {
-      id: 5,
-      type: "CourseDetails" as const,
-      courseId: COURSE_ID,
-    }
-
-    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel })
-
-    expect(panel.webview.postMessage).toHaveBeenCalledWith({
-      type: "setUpdateables",
-      target: { id: sourcePanel.id, type: sourcePanel.type },
-      courseId: COURSE_ID,
-      exerciseIds: [ExerciseIdentifier.from(101)],
-    })
-  })
-
-  test("answers with an empty list for a course that has no updates", async () => {
-    const actionContext = contextWithCourse()
-    const { panel, listener } = await mountSidePanel(actionContext)
-    const sourcePanel = {
-      id: 5,
-      type: "CourseDetails" as const,
-      courseId: COURSE_ID,
-    }
-
-    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel })
-
-    expect(panel.webview.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "setUpdateables", exerciseIds: [] }),
-    )
-  })
-})
-
-suite("TmcPanel in-flight downloads", () => {
-  afterEach(() => exerciseStatusRegistry.clear())
-
-  test("a course opened mid-download shows the download, not a Download button", async () => {
-    const courseId = CourseIdentifier.from(42)
-    postExerciseStatuses(courseId, [[ExerciseIdentifier.from(1), "downloading"]])
-    const { panel, listener, shown } = await mountCourseDetails(courseDetailsContext())
-
-    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel: shown })
-
-    const { statuses } = lastMessageOf(panel, "setExerciseStatuses") as {
-      statuses: [ExerciseIdentifier, string][]
-    }
-    expect(statuses[0]).toEqual([ExerciseIdentifier.from(1), "downloading"])
-  })
-
-  test("a failed download stays failed, until the exercise is on disk after all", async () => {
-    const courseId = CourseIdentifier.from(42)
-    postExerciseStatuses(courseId, [
-      [ExerciseIdentifier.from(1), "downloadFailed"],
-      [ExerciseIdentifier.from(2), "downloadFailed"],
-    ])
-    const actionContext = courseDetailsContext()
-    const onDisk = {
-      backend: "tmc",
-      courseSlug: "python-course",
-      exerciseSlug: "part01-001_exercise",
-      status: ExerciseStatus.Closed,
-    }
-    actionContext.startup.workspaceManager = { getExercises: () => [onDisk] } as never
-    const { panel, listener, shown } = await mountCourseDetails(actionContext)
-
-    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel: shown })
-
-    expect(lastMessageOf(panel, "setExerciseStatuses")).toMatchObject({
-      statuses: [
-        [ExerciseIdentifier.from(1), "downloadFailed"],
-        [ExerciseIdentifier.from(2), "closed"],
-      ],
-    })
-  })
-
-  test("a second download of the same course is turned away while one runs", async () => {
-    const handlers = stubHandlers()
-    const download = Promise.withResolvers<void>()
-    handlers.downloadExercisesForUi.mockReturnValue(download.promise)
-    registerPanelActions(handlers as unknown as PanelActions)
-    const actionContext = createMockActionContext()
-    const { listener } = await mountSidePanel(actionContext)
-    const downloadMessage = {
-      type: "downloadExercises",
-      mode: "download",
-      courseId: CourseIdentifier.from(42),
-      ids: [ExerciseIdentifier.from(1)],
-    }
-
-    const first = listener(downloadMessage)
-    await listener(downloadMessage)
-    download.resolve()
-    await first
-
-    expect(handlers.downloadExercisesForUi).toHaveBeenCalledTimes(1)
-    expect(actionContext.dialog.notification).toHaveBeenCalledWith(
-      "This course's exercises are already downloading.",
-    )
-  })
-})
-
-// A ready context whose stored course 42 and workspace the CourseDetails handlers can read.
+// A ready context whose stored course 42 the CourseDetails handlers can read.
 function courseDetailsContext(): ReturnType<typeof createMockActionContext> {
   return createMockActionContext({
-    startup: {
-      langs: { getCourseDetails: vi.fn().mockResolvedValue(Ok({})) } as unknown as Langs,
-      userData: { getCourse: () => Ok(courseWith(2)) } as never,
-      workspaceManager: { getExercises: () => [] } as never,
-    },
+    startup: { userData: { getCourse: () => Ok(courseWith(2)) } as never },
   })
 }
 
@@ -1261,12 +795,6 @@ function postedMessages(panel: vscode.WebviewPanel): { type: string }[] {
   return vi.mocked(panel.webview.postMessage).mock.calls.map(([m]) => m as { type: string })
 }
 
-function lastMessageOf(panel: vscode.WebviewPanel, type: string): unknown {
-  return postedMessages(panel)
-    .filter((m) => m.type === type)
-    .at(-1)
-}
-
 suite("TmcPanel refreshCourseDetails", () => {
   test("refreshes the panel in place, then says the refresh is over", async () => {
     const handlers = stubHandlers()
@@ -1277,10 +805,10 @@ suite("TmcPanel refreshCourseDetails", () => {
     await listener(refreshRequest(shown.courseId, shown))
 
     const posted = postedMessages(panel)
-    // A new panel id would remount it, losing the student's selection and scroll.
+    // A new panel id would remount it, losing the student's scroll.
     expect(posted.map((m) => m.type)).not.toContain("setPanel")
     expect(posted).toContainEqual(
-      expect.objectContaining({ type: "setCourseGroups", target: panelTarget(shown) }),
+      expect.objectContaining({ type: "setCourseData", target: panelTarget(shown) }),
     )
     expect(posted.at(-1)).toEqual({
       type: "reply",
@@ -1299,7 +827,10 @@ suite("TmcPanel refreshCourseDetails", () => {
     const { panel, listener, shown } = await mountCourseDetails(actionContext)
 
     const refreshing = listener(refreshRequest(shown.courseId, shown))
-    await listener({ type: "openMyCourses" })
+    TmcPanel.renderSide(vscode.Uri.file("/ext"), createMockContext(), actionContext, {
+      id: nextPanelId(),
+      type: "InitializationErrorHelp",
+    })
     vi.mocked(panel.webview.postMessage).mockClear()
     update.resolve(Ok(true))
     await refreshing
@@ -1532,7 +1063,8 @@ suite("TmcPanel main panel lifecycle", () => {
 
     TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
       id: nextPanelId(),
-      type: "MyCourses",
+      type: "CourseDetails",
+      courseId: CourseIdentifier.from(42),
     })
     await sendReady()
     vi.mocked(panel.webview.postMessage).mockClear()
@@ -1562,13 +1094,15 @@ suite("TmcPanel main panel lifecycle", () => {
     createWebviewPanel.mockReturnValue(createFakeWebviewPanel().panel)
     TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
       id: nextPanelId(),
-      type: "MyCourses",
+      type: "CourseDetails",
+      courseId: CourseIdentifier.from(42),
     })
     const side = createFakeWebviewPanel()
     createWebviewPanel.mockReturnValue(side.panel)
     TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
       id: nextPanelId(),
-      type: "MyCourses",
+      type: "CourseDetails",
+      courseId: CourseIdentifier.from(42),
     })
 
     TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
@@ -1583,10 +1117,18 @@ suite("TmcPanel main panel lifecycle", () => {
   test("closing the main panel leaves the side panel standing", async () => {
     const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
     createWebviewPanel.mockReturnValue(createFakeWebviewPanel().panel)
-    renderMainPanel({ id: nextPanelId(), type: "MyCourses" })
+    renderMainPanel({
+      id: nextPanelId(),
+      type: "CourseDetails",
+      courseId: CourseIdentifier.from(42),
+    })
     const side = createFakeWebviewPanel()
     createWebviewPanel.mockReturnValue(side.panel)
-    renderSidePanel({ id: nextPanelId(), type: "MyCourses" })
+    renderSidePanel({
+      id: nextPanelId(),
+      type: "CourseDetails",
+      courseId: CourseIdentifier.from(42),
+    })
 
     TmcPanel.mainPanel?.dispose()
 
@@ -1600,7 +1142,8 @@ suite("TmcPanel main panel lifecycle", () => {
 
     TmcPanel.renderMain(vscode.Uri.file("/ext"), createMockContext(), createMockActionContext(), {
       id: nextPanelId(),
-      type: "MyCourses",
+      type: "CourseDetails",
+      courseId: CourseIdentifier.from(42),
     })
     const mainPanel = TmcPanel.mainPanel
     expect(mainPanel).toBeDefined()
@@ -1676,7 +1219,6 @@ suite("TmcPanel tab identity", () => {
   }
 
   test("names each screen instead of calling every tab TestMyCode", () => {
-    expect(mainPanelTitleFor({ id: nextPanelId(), type: "MyCourses" })).toBe("My Courses")
     expect(mainPanelTitleFor({ id: nextPanelId(), type: "InitializationErrorHelp" })).toBe(
       "TestMyCode Help",
     )
@@ -1724,9 +1266,13 @@ suite("TmcPanel tab identity", () => {
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
     renderMainPanel({ id: nextPanelId(), type: "InitializationErrorHelp" })
 
-    renderMainPanel({ id: nextPanelId(), type: "MyCourses" })
+    renderMainPanel({
+      id: nextPanelId(),
+      type: "CourseDetails",
+      courseId: CourseIdentifier.from(42),
+    })
 
-    expect(panel.title).toBe("My Courses")
+    expect(panel.title).toBe("Course Details")
   })
 
   test("carries the extension's icon for both theme kinds, and a find widget", () => {
@@ -1753,7 +1299,8 @@ async function mountedWebviewHtml(): Promise<string> {
 
   TmcPanel.renderMain(vscode.Uri.file("/ext"), createMockContext(), createMockActionContext(), {
     id: nextPanelId(),
-    type: "MyCourses",
+    type: "CourseDetails",
+    courseId: CourseIdentifier.from(42),
   })
   return panel.webview.html
 }
@@ -1870,214 +1417,28 @@ function courseWith(exerciseCount: number, deadline: string | null = null) {
   })
 }
 
-suite("TmcPanel requestCourseDetailsData exercise statuses", () => {
-  const COURSE_ID = CourseIdentifier.from(42)
-  // Large enough that one message per exercise would be obvious in the count.
-  const EXERCISE_COUNT = 150
+suite("TmcPanel requestCourseDetailsData", () => {
+  test("sends the stored course to the panel that asked", async () => {
+    const { panel, listener, shown } = await mountCourseDetails(courseDetailsContext())
 
-  async function openCourseDetails(
-    exerciseCount: number,
-    deadline: string | null = null,
-  ): Promise<{
-    posted: { type: string }[]
-  }> {
-    const course = courseWith(exerciseCount, deadline)
-    const actionContext = createMockActionContext({
-      startup: {
-        langs: {
-          getCourseDetails: vi.fn().mockResolvedValue(Ok({})),
-        } as unknown as Langs,
-        userData: { getCourse: () => Ok(course) } as never,
-        workspaceManager: { getExercises: () => [] } as never,
-      },
-    })
+    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel: shown })
 
-    const { panel, listener } = await mountSidePanel(actionContext)
-    await listener({
-      type: "requestCourseDetailsData",
-      requestId: 1,
-      sourcePanel: {
-        id: 5,
-        type: "CourseDetails",
-        courseId: COURSE_ID,
-      },
-    })
-    // The connectivity probe resolves on a later tick; let its continuation run.
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0)
-    })
-
-    return {
-      posted: vi.mocked(panel.webview.postMessage).mock.calls.map(([m]) => m as { type: string }),
-    }
-  }
-
-  test("costs the same number of messages however many exercises the course has", async () => {
-    const small = await openCourseDetails(1)
-    const large = await openCourseDetails(EXERCISE_COUNT)
-
-    expect(large.posted).toHaveLength(small.posted.length)
-    expect(large.posted.filter((m) => m.type === "exerciseStatusChange")).toHaveLength(0)
-  })
-
-  test("ships only the fields the exercise contract declares", async () => {
-    // The view model's rows also carry parsed `Date` deadlines it needs internally.
-    // Those are not part of the message contract, and a `Date` has no business
-    // crossing a `postMessage`.
-    const { posted } = await openCourseDetails(1, "2030-01-01T00:00:00.000Z")
-
-    const groups = posted.find((m) => m.type === "setCourseGroups") as unknown as {
-      exerciseGroups: { exercises: Record<string, unknown>[] }[]
-    }
-    const exercise = groups.exerciseGroups[0]?.exercises[0]
-    expect(exercise).toBeDefined()
-    expect(Object.keys(exercise ?? {}).toSorted()).toEqual(
-      Object.keys(ExerciseSchema.shape).toSorted(),
-    )
-  })
-
-  test("renders deadlines in VS Code's display language", async () => {
-    const deadline = "2030-01-01T00:00:00.000Z"
-    ;(vscode as unknown as { env: unknown }).env = { language: "fi" }
-    const { posted } = await openCourseDetails(1, deadline)
-
-    const groups = posted.find((m) => m.type === "setCourseGroups") as unknown as {
-      exerciseGroups: { exercises: { hardDeadlineString: string }[] }[]
-    }
-    expect(groups.exerciseGroups[0]?.exercises[0]?.hardDeadlineString).toBe(
-      new Intl.DateTimeFormat("fi", { dateStyle: "medium", timeStyle: "short" }).format(
-        new Date(deadline),
-      ),
-    )
-  })
-
-  test("reports every exercise's status in one message", async () => {
-    const { posted } = await openCourseDetails(EXERCISE_COUNT)
-
-    const statuses = posted.filter(
-      (m): m is { type: string; courseId: unknown; statuses: unknown[] } =>
-        m.type === "setExerciseStatuses",
-    )
-    expect(statuses).toHaveLength(1)
-    expect(statuses[0]?.courseId).toEqual(COURSE_ID)
-    expect(statuses[0]?.statuses).toHaveLength(EXERCISE_COUNT)
-  })
-})
-
-suite("TmcPanel requestCourseDetailsData connectivity probe", () => {
-  const COURSE_ID = CourseIdentifier.from(42)
-
-  const sourcePanel = {
-    id: 5,
-    type: "CourseDetails" as const,
-    courseId: COURSE_ID,
-  }
-
-  function contextProbing(
-    getCourseDetails: ReturnType<typeof vi.fn>,
-  ): ReturnType<typeof createMockActionContext> {
-    return createMockActionContext({
-      startup: {
-        langs: { getCourseDetails } as unknown as Langs,
-        userData: { getCourse: () => Ok(courseWith(2)) } as never,
-        workspaceManager: { getExercises: () => [] } as never,
-      },
-    })
-  }
-
-  test("renders the course without waiting for the backend", async () => {
-    // Never resolves, standing in for a slow or hanging CLI invocation.
-    const actionContext = contextProbing(vi.fn().mockReturnValue(new Promise(() => {})))
-    const { panel, listener } = await mountSidePanel(actionContext)
-
-    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel })
-
-    const posted = vi
-      .mocked(panel.webview.postMessage)
-      .mock.calls.map(([m]) => m as { type: string })
-    expect(posted.map((m) => m.type)).toEqual([
-      "setCourseData",
-      "setUpdateables",
-      "setCourseDisabledStatus",
-      "setExerciseStatuses",
-      "setCourseGroups",
-      "reply",
+    expect(postedMessages(panel)).toEqual([
+      { type: "setCourseData", target: panelTarget(shown), courseData: courseWith(2) },
+      { type: "reply", target: panelTarget(shown), requestId: 1, outcome: { ok: true } },
     ])
-    expect(posted.at(-2)).toMatchObject({ offlineMode: false })
-    // The answer goes out after the data the panel renders, and carries no error, so the
-    // panel stops waiting on a request that was served rather than on its own timeout.
-    expect(posted.at(-1)).toEqual({
-      type: "reply",
-      target: { id: sourcePanel.id, type: sourcePanel.type },
-      requestId: 1,
-      outcome: { ok: true },
-    })
-  })
-
-  test("corrects the view with one message when the backend is unreachable", async () => {
-    const actionContext = contextProbing(
-      vi.fn().mockResolvedValue(Err(new ConnectionError("down"))),
-    )
-    const { panel, listener } = await mountSidePanel(actionContext)
-
-    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel })
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0)
-    })
-
-    const posted = vi
-      .mocked(panel.webview.postMessage)
-      .mock.calls.map(([m]) => m as { type: string })
-    const groups = posted.filter((m) => m.type === "setCourseGroups")
-    expect(groups).toHaveLength(2)
-    expect(groups[1]).toMatchObject({ offlineMode: true })
   })
 
   test("resends the course-details reply after the webview reloads", async () => {
     // A reload loses everything the panel was told; only what the host buffered
     // comes back, and a reply the host did not buffer is gone for good.
-    const actionContext = contextProbing(vi.fn().mockResolvedValue(Ok({})))
-    TmcPanel.sidePanel?.dispose()
-    TmcPanel.sidePanel = undefined
-    const { panel, getMessageListener } = createFakeWebviewPanel()
-    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
-    const courseDetails = {
-      id: nextPanelId(),
-      type: "CourseDetails" as const,
-      courseId: COURSE_ID,
-    }
-    TmcPanel.renderSide(vscode.Uri.file("/ext"), createMockContext(), actionContext, courseDetails)
-    const listener = getMessageListener()
-    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel: courseDetails })
+    const { panel, listener, shown } = await mountCourseDetails(courseDetailsContext())
+    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel: shown })
     vi.mocked(panel.webview.postMessage).mockClear()
 
     await listener({ type: "ready" })
 
-    const types = vi
-      .mocked(panel.webview.postMessage)
-      .mock.calls.map(([m]) => (m as { type: string }).type)
-    expect(types).toContain("setPanel")
-    expect(types).toContain("setCourseData")
-    expect(types).toContain("setCourseGroups")
-    // The reloaded webview asks again and its request ids start over, so an answer kept
-    // from before the reload could settle a request it does not belong to.
-    expect(types).not.toContain("reply")
-  })
-
-  test("leaves the deadlines standing when the backend answers with a failure", async () => {
-    // Only an unreachable backend makes the stored deadlines untrustworthy; a reachable
-    // one refusing the request says nothing about them.
-    const actionContext = contextProbing(vi.fn().mockResolvedValue(Err(new ForbiddenError("no"))))
-    const { panel, listener } = await mountSidePanel(actionContext)
-
-    await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel })
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0)
-    })
-
-    const posted = vi
-      .mocked(panel.webview.postMessage)
-      .mock.calls.map(([m]) => m as { type: string })
-    expect(posted.filter((m) => m.type === "setCourseGroups")).toHaveLength(1)
+    const types = postedMessages(panel).map((m) => m.type)
+    expect(types).toEqual(["setPanel", "setCourseData"])
   })
 })

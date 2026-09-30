@@ -84,9 +84,6 @@ export namespace CourseIdentifier {
   }
 }
 
-export type TmcExerciseId = number
-export type MoocExerciseId = string
-
 export const ExerciseIdentifierSchema = EnumSchema(
   z.object({ tmcExerciseId: z.number() }),
   z.object({ moocExerciseId: z.string() }),

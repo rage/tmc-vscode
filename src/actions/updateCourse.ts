@@ -4,7 +4,7 @@ import { Err, Ok } from "ts-results"
 import { ConnectionError, ForbiddenError, InsufficientScopeError } from "../errors"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { CombinedCourseData, MoocCourse, TmcExerciseSlide } from "../shared/langsSchema"
-import type { BackendKind, Enum, ExerciseIdentifier, LocalCourseExercise } from "../shared/shared"
+import type { BackendKind, Enum, LocalCourseExercise } from "../shared/shared"
 import {
   backendName,
   CourseIdentifier,
@@ -17,29 +17,13 @@ import { Logger } from "../utilities"
 import { toStoredMoocCourse, toStoredTmcCourse } from "../utilities/apiData"
 import type { ReadyActionContext } from "./types"
 
-const postCourseStatusMessage = (
-  id: CourseIdentifier,
-  disabled: boolean,
-  exerciseIds: ExerciseIdentifier[],
-): void => {
-  TmcPanel.postMessage(
-    {
-      type: "setNewExercises",
-      target: {
-        type: "MyCourses",
-      },
-      courseId: id,
-      exerciseIds,
-    },
-    {
-      type: "setCourseDisabledStatus",
-      target: {
-        type: "CourseDetails",
-      },
-      courseId: id,
-      disabled,
-    },
-  )
+const postCourseDisabledStatus = (id: CourseIdentifier, disabled: boolean): void => {
+  TmcPanel.postMessage({
+    type: "setCourseDisabledStatus",
+    target: { type: "CourseDetails" },
+    courseId: id,
+    disabled,
+  })
 }
 
 interface RefreshedCourse {
@@ -129,7 +113,7 @@ export async function updateCourse(
       } else {
         Logger.warn(`ForbiddenError above probably caused by course still being disabled`)
       }
-      postCourseStatusMessage(courseIdent, true, [])
+      postCourseDisabledStatus(courseIdent, true)
       return Ok(false)
     } else if (updateResult.val instanceof ConnectionError) {
       Logger.warn(`Failed to fetch data from ${backendName(courseId.kind)}, data not updated.`)
@@ -206,11 +190,7 @@ export async function updateCourse(
     )
   }
 
-  postCourseStatusMessage(
-    LocalCourseData.getCourseId(course),
-    course.data.disabled,
-    LocalCourseData.getNewExercises(course),
-  )
+  postCourseDisabledStatus(LocalCourseData.getCourseId(course), course.data.disabled)
 
   return Ok(true)
 }

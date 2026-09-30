@@ -1,6 +1,6 @@
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
-import type { CourseDetailsPanel, MyCoursesPanel, Panel } from "../shared/shared"
+import type { CourseDetailsPanel, Panel } from "../shared/shared"
 import { assertUnreachable, LocalCourseData, LocalCourseExercise } from "../shared/shared"
 
 /**
@@ -10,24 +10,14 @@ import { assertUnreachable, LocalCourseData, LocalCourseExercise } from "../shar
  * reaches it separately, as messages, so remembering a route never goes stale.
  */
 export type PanelRoute =
-  | Exclude<Panel, CourseDetailsPanel | MyCoursesPanel>
+  | Exclude<Panel, CourseDetailsPanel>
   | Pick<CourseDetailsPanel, "id" | "type" | "courseId">
-  | Pick<MyCoursesPanel, "id" | "type">
-
-/** The panel `setPanel` renders for `route`, as of now. */
-export function completePanel(route: PanelRoute): Panel {
-  return route.type === "CourseDetails"
-    ? { ...route, exerciseStatuses: { tmc: {}, mooc: {} } }
-    : route
-}
 
 /** The editor tab label for `route`, so tabs can be told apart in Open Editors and Ctrl+Tab. */
 export function panelTitle(route: PanelRoute, actionContext: ActionContext): string {
   switch (route.type) {
     case "App":
       return "TestMyCode"
-    case "MyCourses":
-      return "My Courses"
     case "CourseDetails": {
       const course = isReady(actionContext)
         ? actionContext.startup.userData.getCourse(route.courseId)

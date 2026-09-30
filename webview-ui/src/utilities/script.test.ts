@@ -1,15 +1,21 @@
 import { render } from "@testing-library/svelte"
 
+import { makeTmcKind } from "../shared/shared"
+import { tmcLocalCourse } from "../test/fixtures"
 import MessageListenerProbe from "../test/MessageListenerProbe.svelte"
 import RequesterProbe from "../test/RequesterProbe.svelte"
 import { dispatchToWebview, postedMessages, replyToRequest } from "../test/setup"
 import type { Request } from "./script"
 
-const myCourses = { id: 5, type: "MyCourses" as const }
-const setMyCourses = {
-  type: "setMyCourses",
-  target: { id: 5, type: "MyCourses" },
-  courses: [],
+const courseDetails = {
+  id: 5,
+  type: "CourseDetails" as const,
+  courseId: makeTmcKind({ courseId: 42 }),
+}
+const setCourseData = {
+  type: "setCourseData",
+  target: { id: 5, type: "CourseDetails" },
+  courseData: tmcLocalCourse(),
 } as const
 
 afterEach(() => {
@@ -20,22 +26,22 @@ suite("addMessageListener", () => {
   test("delivers a message only to listeners of its target panel", () => {
     const listening = vi.fn()
     const other = vi.fn()
-    render(MessageListenerProbe, { props: { panel: myCourses, onmessage: listening } })
+    render(MessageListenerProbe, { props: { panel: courseDetails, onmessage: listening } })
     render(MessageListenerProbe, {
-      props: { panel: { ...myCourses, id: 6 }, onmessage: other },
+      props: { panel: { ...courseDetails, id: 6 }, onmessage: other },
     })
 
-    dispatchToWebview(setMyCourses)
+    dispatchToWebview(setCourseData)
 
-    expect(listening).toHaveBeenCalledWith(setMyCourses)
+    expect(listening).toHaveBeenCalledWith(setCourseData)
     expect(other).not.toHaveBeenCalled()
   })
 
   test("validates an invalid message once however many components listen", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
     const listener = vi.fn()
-    render(MessageListenerProbe, { props: { panel: myCourses, onmessage: listener } })
-    render(MessageListenerProbe, { props: { panel: myCourses, onmessage: listener } })
+    render(MessageListenerProbe, { props: { panel: courseDetails, onmessage: listener } })
+    render(MessageListenerProbe, { props: { panel: courseDetails, onmessage: listener } })
 
     window.dispatchEvent(new MessageEvent("message", { data: { type: "notAMessage" } }))
 
@@ -46,11 +52,11 @@ suite("addMessageListener", () => {
   test("stops delivering once the listening component is destroyed", () => {
     const listener = vi.fn()
     const { unmount } = render(MessageListenerProbe, {
-      props: { panel: myCourses, onmessage: listener },
+      props: { panel: courseDetails, onmessage: listener },
     })
     unmount()
 
-    dispatchToWebview(setMyCourses)
+    dispatchToWebview(setCourseData)
 
     expect(listener).not.toHaveBeenCalled()
   })
@@ -73,13 +79,13 @@ function mountRequester(): { request: Request; unmount: () => void } {
 }
 
 suite("createRequester", () => {
-  const sourcePanel = { id: 5, type: "MyCourses" as const }
+  const sourcePanel = courseDetails
 
   test("resolves to the reply naming its request", async () => {
     const { request } = mountRequester()
 
-    const outcome = request("requestMyCoursesData", { sourcePanel })
-    replyToRequest("requestMyCoursesData", { ok: false, error: { message: "no courses" } })
+    const outcome = request("requestCourseDetailsData", { sourcePanel })
+    replyToRequest("requestCourseDetailsData", { ok: false, error: { message: "no courses" } })
 
     await expect(outcome).resolves.toEqual({ ok: false, error: { message: "no courses" } })
   })
@@ -88,9 +94,9 @@ suite("createRequester", () => {
     const { request } = mountRequester()
     const settled = vi.fn()
 
-    void request("requestMyCoursesData", { sourcePanel }).then(settled)
+    void request("requestCourseDetailsData", { sourcePanel }).then(settled)
     const posted = postedMessages.mock.calls.at(-1)?.[0] as { requestId: number }
-    replyToRequest("requestMyCoursesData", { ok: true }, posted.requestId + 1)
+    replyToRequest("requestCourseDetailsData", { ok: true }, posted.requestId + 1)
     await Promise.resolve()
 
     expect(settled).not.toHaveBeenCalled()
@@ -103,7 +109,7 @@ suite("createRequester", () => {
     })
     const { request } = mountRequester()
 
-    const outcome = request("requestMyCoursesData", { sourcePanel }, { timeoutMs: 1000 })
+    const outcome = request("requestCourseDetailsData", { sourcePanel }, { timeoutMs: 1000 })
     await vi.advanceTimersByTimeAsync(1000)
 
     await expect(outcome).resolves.toEqual({
@@ -132,11 +138,11 @@ suite("createRequester", () => {
     const { request, unmount } = mountRequester()
     const settled = vi.fn()
 
-    void request("requestMyCoursesData", { sourcePanel }, { timeoutMs: 1000 }).then(settled)
+    void request("requestCourseDetailsData", { sourcePanel }, { timeoutMs: 1000 }).then(settled)
     unmount()
 
     expect(vi.getTimerCount()).toBe(0)
-    replyToRequest("requestMyCoursesData", { ok: true })
+    replyToRequest("requestCourseDetailsData", { ok: true })
     await vi.advanceTimersByTimeAsync(0)
     expect(settled).not.toHaveBeenCalled()
   })
@@ -146,8 +152,8 @@ suite("createRequester", () => {
     render(MessageListenerProbe, { props: { panel: sourcePanel, onmessage: listener } })
     const { request } = mountRequester()
 
-    void request("requestMyCoursesData", { sourcePanel })
-    replyToRequest("requestMyCoursesData", { ok: true })
+    void request("requestCourseDetailsData", { sourcePanel })
+    replyToRequest("requestCourseDetailsData", { ok: true })
 
     expect(listener).not.toHaveBeenCalled()
   })

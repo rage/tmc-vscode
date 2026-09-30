@@ -8,7 +8,6 @@ import type { ReadyActionContext } from "../../actions/types"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
-import { updateablesRegistry } from "../../panels/updateablesRegistry"
 import type { CourseIdentifier, ExerciseStatus as RowStatus } from "../../shared/shared"
 import { makeMoocKind, makeTmcKind } from "../../shared/shared"
 import {
@@ -21,6 +20,7 @@ import {
   updateCourseExercises,
 } from "../../ui/treeview/treeCommands"
 import { ExerciseTreeItem, PartTreeItem } from "../../ui/treeview/treeview"
+import { updateablesRegistry } from "../../ui/updateablesRegistry"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 

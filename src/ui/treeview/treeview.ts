@@ -1,11 +1,11 @@
 import * as vscode from "vscode"
 
 import type WorkspaceManager from "../../api/workspaceManager"
-import { exerciseStatusRegistry } from "../../panels/exerciseStatusRegistry"
-import { updateablesRegistry } from "../../panels/updateablesRegistry"
 import type { BackendKind, CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
 import { backendName, LocalCourseData } from "../../shared/shared"
 import { formatDeadline } from "../../utilities"
+import { exerciseStatusRegistry } from "../exerciseStatusRegistry"
+import { updateablesRegistry } from "../updateablesRegistry"
 import type { ExerciseView, PartView } from "./courseViewModel"
 import { buildCourseView, shownDeadline } from "./courseViewModel"
 

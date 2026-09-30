@@ -7,7 +7,6 @@ import {
 import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../src/shared/langsSchema"
 import type {
   CourseDetailsPanel,
-  ExerciseGroup,
   ExtensionToWebview,
   Panel,
   SubmissionView,
@@ -16,7 +15,6 @@ import type {
 import { makeMoocKind, makeTmcKind } from "../src/shared/shared"
 import {
   MOOC_INSTANCE_ID,
-  moocExerciseGroup,
   moocLocalCourse,
   moocLocalExercise,
   tmcLocalCourse,
@@ -41,54 +39,21 @@ const tmcCourse = tmcLocalCourse({
     availablePoints: 2,
     awardedPoints: index < 2 ? 2 : 0,
     name: `part01-0${index + 1}_exercise`,
-    deadline: null,
+    deadline: index === 3 ? "2026-12-31T21:59:00Z" : null,
     passed: index < 2,
-    softDeadline: null,
+    softDeadline: index === 3 ? "2026-12-24T21:59:00Z" : null,
   })),
   availablePoints: 12,
   awardedPoints: 4,
+  materialUrl: "https://example.com/python-programming-2026",
 })
 const moocCourse = moocLocalCourse({ newExercises: [] })
 
-function groupExercise(index: number, passed: boolean): ExerciseGroup["exercises"][number] {
-  return {
-    id: makeTmcKind({ tmcExerciseId: 101 + index }),
-    name: `part0${Math.floor(index / 3) + 1}-0${(index % 3) + 1}_exercise`,
-    isHard: index % 2 === 0,
-    hardDeadlineString: "Deadline: 31.12.2026 23:59",
-    softDeadlineString: "Soft deadline: 24.12.2026 23:59",
-    deadlineIso: "2026-12-31T23:59:00Z",
-    passed,
-  }
-}
-
-function tmcGroups(): ExerciseGroup[] {
-  return [
-    {
-      name: "part01",
-      nextDeadlineString: "Next deadline: 31.12.2026 23:59",
-      defaultOpen: true,
-      exercises: [groupExercise(0, true), groupExercise(1, true), groupExercise(2, false)],
-    },
-    {
-      name: "part02",
-      nextDeadlineString: "Next deadline: 31.12.2026 23:59",
-      defaultOpen: false,
-      exercises: [groupExercise(3, false), groupExercise(4, false), groupExercise(5, false)],
-    },
-  ]
-}
-
 function courseDetailsPanel(id: number, courseId: CourseDetailsPanel["courseId"]): Panel {
-  return { id, type: "CourseDetails", courseId, exerciseStatuses: { tmc: {}, mooc: {} } }
+  return { id, type: "CourseDetails", courseId }
 }
 
-function answerCourseDetails(
-  panel: { id: number },
-  course: typeof tmcCourse,
-  groups: ExerciseGroup[],
-  statuses: Extract<ExtensionToWebview, { type: "setExerciseStatuses" }>["statuses"],
-) {
+function answerCourseDetails(panel: { id: number }, course: typeof tmcCourse) {
   return (message: WebviewToExtension): ExtensionToWebview[] => {
     if (message.type !== "requestCourseDetailsData") {
       return []
@@ -96,28 +61,6 @@ function answerCourseDetails(
     const target = { type: "CourseDetails" as const, id: panel.id }
     return [
       { type: "setCourseData", target, courseData: course },
-      { type: "setCourseGroups", target, offlineMode: false, exerciseGroups: groups },
-      {
-        type: "setExerciseStatuses",
-        target: { type: "CourseDetails" },
-        courseId: message.sourcePanel.courseId,
-        statuses,
-      },
-      { type: "reply", target, requestId: message.requestId, outcome: { ok: true } },
-    ]
-  }
-}
-
-function answerMyCourses(courses: (typeof tmcCourse)[]) {
-  return (message: WebviewToExtension): ExtensionToWebview[] => {
-    if (message.type !== "requestMyCoursesData") {
-      return []
-    }
-    const target = { type: "MyCourses" as const, id: message.sourcePanel.id }
-    return [
-      { type: "setMyCourses", target, courses },
-      { type: "setTmcDataPath", target, tmcDataPath: "/home/student/tmcdata" },
-      { type: "setTmcDataSize", target, tmcDataSize: "12.3 MB" },
       { type: "reply", target, requestId: message.requestId, outcome: { ok: true } },
     ]
   }
@@ -191,27 +134,14 @@ function moocGrading(
 /** Every scenario the dev harness offers and the accessibility tests walk through. */
 export const SCENARIOS: Scenario[] = [
   {
-    id: "my-courses/two-courses",
-    panel: { id: 2, type: "MyCourses" },
-    reply: answerMyCourses([tmcCourse, moocCourse]),
-  },
-  { id: "my-courses/empty", panel: { id: 2, type: "MyCourses" }, reply: answerMyCourses([]) },
-  {
     id: "course-details/tmc",
     panel: courseDetailsPanel(3, makeTmcKind({ courseId: 42 })),
-    reply: answerCourseDetails({ id: 3 }, tmcCourse, tmcGroups(), [
-      [makeTmcKind({ tmcExerciseId: 101 }), "opened"],
-      [makeTmcKind({ tmcExerciseId: 102 }), "closed"],
-      [makeTmcKind({ tmcExerciseId: 103 }), "missing"],
-      [makeTmcKind({ tmcExerciseId: 104 }), "downloading"],
-      [makeTmcKind({ tmcExerciseId: 105 }), "downloadFailed"],
-      [makeTmcKind({ tmcExerciseId: 106 }), "expired"],
-    ]),
+    reply: answerCourseDetails({ id: 3 }, tmcCourse),
   },
   {
     id: "course-details/mooc",
     panel: courseDetailsPanel(4, makeMoocKind({ instanceId: MOOC_INSTANCE_ID })),
-    reply: answerCourseDetails({ id: 4 }, moocCourse, [moocExerciseGroup()], []),
+    reply: answerCourseDetails({ id: 4 }, moocCourse),
   },
   // Never answered, so the panel shows its loading state until the request times out.
   { id: "course-details/loading", panel: courseDetailsPanel(5, makeTmcKind({ courseId: 42 })) },

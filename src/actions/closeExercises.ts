@@ -2,8 +2,7 @@ import { compact } from "lodash"
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
-import { TmcPanel } from "../panels/TmcPanel"
-import type { CourseIdentifier, ExtensionToWebview } from "../shared/shared"
+import type { CourseIdentifier } from "../shared/shared"
 import { ExerciseIdentifier, LocalCourseData, LocalCourseExercise } from "../shared/shared"
 import type { ReadyActionContext } from "./types"
 
@@ -54,18 +53,6 @@ export async function closeExercises(
   const closedIds = closeResult.val
     .map((exercise) => slugToId.get(exercise.exerciseSlug))
     .filter((e) => e !== undefined)
-
-  TmcPanel.postMessage(
-    ...closedIds.map<ExtensionToWebview>((id) => ({
-      type: "exerciseStatusChange",
-      courseId,
-      exerciseId: id,
-      status: "closed",
-      target: {
-        type: "CourseDetails",
-      },
-    })),
-  )
 
   return new Ok(closedIds)
 }

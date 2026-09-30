@@ -9,7 +9,6 @@ import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
-import { TmcPanel } from "../../panels/TmcPanel"
 import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
 import type { MoocLocalCourseData } from "../../storage/data"
@@ -171,8 +170,7 @@ suite("downloadAndOpenExercises action", function () {
     )
   })
 
-  test("marks only the exercises on disk as opened when a download fails", async function () {
-    const postMessage = vi.spyOn(TmcPanel, "postMessage").mockImplementation(() => {})
+  test("reports only the exercises on disk as opened when a download fails", async function () {
     const course = makeMoocKind({
       ...moocCourse,
       exercises: [
@@ -198,14 +196,6 @@ suite("downloadAndOpenExercises action", function () {
     )
 
     expect(result.unwrap().ids).toEqual([ExerciseIdentifier.from("mooc-ex-uuid-1")])
-    expect(postMessage).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        type: "exerciseStatusChange",
-        exerciseId: ExerciseIdentifier.from("mooc-ex-uuid-1"),
-        status: "opened",
-      }),
-    )
-    postMessage.mockRestore()
   })
 
   test("returns a failed local listing without reporting it", async function () {

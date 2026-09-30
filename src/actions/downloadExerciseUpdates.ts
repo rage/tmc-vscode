@@ -1,5 +1,6 @@
-import { postUpdateables, withOptimisticList } from "../panels/exerciseLists"
+import { withOptimisticList } from "../panels/exerciseLists"
 import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
+import { updateablesRegistry } from "../ui/updateablesRegistry"
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises"
 import type { ReadyActionContext } from "./types"
 
@@ -13,7 +14,7 @@ interface ExerciseUpdate {
  * "update available" list while the download runs and leaving only the exercises
  * that failed.
  *
- * For one course's list driven from its own panel, see `downloadExercisesForUi`.
+ * For one course's list, see `downloadExercisesForUi`.
  */
 export async function downloadExerciseUpdates(
   actionContext: ReadyActionContext,
@@ -23,11 +24,10 @@ export async function downloadExerciseUpdates(
   // anything comparing them by reference sees every exercise as its own course.
   const courseIds = new Map(updates.map((x) => [CourseIdentifier.toString(x.courseId), x.courseId]))
 
-  // Broadcast per course so a CourseDetails panel only applies its own list.
-  const postUpdateablesByCourse = (exerciseIds: ExerciseIdentifier[]): void => {
+  const setUpdateablesByCourse = (exerciseIds: ExerciseIdentifier[]): void => {
     const wanted = new Set(exerciseIds.map((x) => ExerciseIdentifier.unwrap(x)))
     for (const [key, courseId] of courseIds) {
-      postUpdateables(
+      updateablesRegistry.set(
         courseId,
         updates
           .filter(
@@ -41,7 +41,7 @@ export async function downloadExerciseUpdates(
   }
 
   await withOptimisticList(
-    () => postUpdateablesByCourse([]),
+    () => setUpdateablesByCourse([]),
     async (): Promise<ExerciseIdentifier[]> => {
       const { failed } = await downloadOrUpdateExercises(
         actionContext,
@@ -49,6 +49,6 @@ export async function downloadExerciseUpdates(
       )
       return failed
     },
-    (failed) => postUpdateablesByCourse(failed ?? updates.map((x) => x.exerciseId)),
+    (failed) => setUpdateablesByCourse(failed ?? updates.map((x) => x.exerciseId)),
   )
 }

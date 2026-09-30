@@ -667,18 +667,15 @@ suite("registered command handlers", function () {
     expect(wipe).toHaveBeenCalledWith(actionContext, context)
   })
 
-  test("tmc.myCourses opens the courses panel", async function () {
+  test("tmc.myCourses focuses the Courses view instead of opening a panel", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
-    const { handlers, context, actionContext } = registerAndCollect()
+    const { handlers } = registerAndCollect()
 
     await handlers.get("tmc.myCourses")?.()
 
-    expect(renderMain).toHaveBeenCalledWith(
-      context.extensionUri,
-      context,
-      actionContext,
-      expect.objectContaining({ type: "MyCourses" }),
-    )
+    expect(executeCommand).toHaveBeenCalledWith("tmcView.focus")
+    expect(renderMain).not.toHaveBeenCalled()
   })
 
   test("tmc.showWelcome opens the walkthrough package.json contributes", async function () {

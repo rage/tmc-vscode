@@ -13,7 +13,7 @@ import { showAccountMenu } from "../ui/statusBarAccount"
 import { showExerciseActions } from "../ui/statusBarExercise"
 import * as treeCommands from "../ui/treeview/treeCommands"
 import type { CoursesTreeItem } from "../ui/treeview/treeview"
-import { CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
+import { COURSES_VIEW_ID, CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
 import { Logger } from "../utilities"
 
 /** Must match the `walkthroughs` entry's `id` in package.json. */
@@ -117,14 +117,10 @@ export function registerCommands(
   Logger.info("Registering TMC VSCode commands")
 
   registerPanelActions({
-    closeExercises: actions.closeExercises,
-    downloadAndOpenExercises: actions.downloadAndOpenExercises,
-    downloadExercisesForUi: actions.downloadExercisesForUi,
     openWorkspace: commands.openWorkspace,
     keepWaitingForGrading: commands.keepWaitingForGrading,
     pasteExercise: actions.pasteExercise,
     refreshLocalExercises: actions.refreshLocalExercises,
-    removeCourse: actions.removeCourse,
     sendSubmissionFeedback: actions.sendSubmissionFeedback,
     updateCourse: actions.updateCourse,
   })
@@ -216,11 +212,8 @@ export function registerCommands(
 
   register("tmc.logout", async () => commands.logout(readyContext))
 
-  register("tmc.myCourses", () => {
-    TmcPanel.renderMain(context.extensionUri, context, readyContext, {
-      id: nextPanelId(),
-      type: "MyCourses",
-    })
+  register("tmc.myCourses", async () => {
+    await vscode.commands.executeCommand(`${COURSES_VIEW_ID}.focus`)
   })
 
   register("tmc.openCourseWorkspace", async (target?: CourseTarget) =>

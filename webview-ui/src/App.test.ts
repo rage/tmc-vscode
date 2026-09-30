@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/svelte"
 import { tick } from "svelte"
 
 import App from "./App.svelte"
+import { makeTmcKind } from "./shared/shared"
 import { tmcLocalCourse } from "./test/fixtures"
 import { dispatchToWebview, postedMessages } from "./test/setup"
 
@@ -124,14 +125,14 @@ suite("App reload handshake", () => {
     dispatchToWebview({
       type: "setPanel",
       target: { id: 0, type: "App" },
-      panel: { id: 7, type: "MyCourses" },
+      panel: { id: 7, type: "CourseDetails", courseId: makeTmcKind({ courseId: 42 }) },
     })
     await tick()
 
     dispatchToWebview({
-      type: "setMyCourses",
-      target: { id: 7, type: "MyCourses" },
-      courses: [course],
+      type: "setCourseData",
+      target: { id: 7, type: "CourseDetails" },
+      courseData: course,
     })
 
     expect(await screen.findByText("Ordering Course")).toBeInTheDocument()
@@ -150,14 +151,14 @@ suite("App navigation after a crash", () => {
     dispatchToWebview({
       type: "setPanel",
       target: { id: 0, type: "App" },
-      panel: { id: 2, type: "MyCourses" },
+      panel: { id: 2, type: "CourseDetails", courseId: makeTmcKind({ courseId: 42 }) },
     })
 
     await waitFor(() => {
       expect(document.body.innerHTML).not.toContain("Uncaught error: boom")
     })
     expect(postedMessages).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "requestMyCoursesData" }),
+      expect.objectContaining({ type: "requestCourseDetailsData" }),
     )
   })
 })

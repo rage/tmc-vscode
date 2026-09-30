@@ -3,10 +3,9 @@ import * as vscode from "vscode"
 
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
-import { exerciseStatusRegistry } from "../../panels/exerciseStatusRegistry"
-import { updateablesRegistry } from "../../panels/updateablesRegistry"
 import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
+import { exerciseStatusRegistry } from "../../ui/exerciseStatusRegistry"
 import type { CoursesTreeItem, CoursesTreeSource } from "../../ui/treeview/treeview"
 import CoursesTree, {
   CourseTreeItem,
@@ -14,6 +13,7 @@ import CoursesTree, {
   exerciseItems,
   PartTreeItem,
 } from "../../ui/treeview/treeview"
+import { updateablesRegistry } from "../../ui/updateablesRegistry"
 
 const NOW = new Date("2026-06-01T12:00:00Z")
 

@@ -5,17 +5,11 @@ import { downloadExercisesForUi } from "../../actions/downloadExercisesForUi"
 import { downloadOrUpdateExercises } from "../../actions/downloadOrUpdateExercises"
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
-import { postUpdateables } from "../../panels/exerciseLists"
-import { TmcPanel } from "../../panels/TmcPanel"
-import { updateablesRegistry } from "../../panels/updateablesRegistry"
 import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
+import { updateablesRegistry } from "../../ui/updateablesRegistry"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
-
-vi.mock("../../panels/TmcPanel", () => ({
-  TmcPanel: { postMessage: vi.fn() },
-}))
 
 vi.mock("../../actions/downloadOrUpdateExercises", () => ({
   downloadOrUpdateExercises: vi.fn(),
@@ -32,6 +26,8 @@ function storedCourse(newExercises: number[]): LocalCourseData {
   return { kind: "tmc", data: { newExercises } } as unknown as LocalCourseData
 }
 
+const clearFromNewExercises = vi.fn(async () => Ok.EMPTY)
+
 function contextWith(
   newExercises: number[],
 ): [ReadyActionContext, ReturnType<typeof createDialogMock>[0]] {
@@ -42,7 +38,7 @@ function contextWith(
         startup: {
           userData: {
             getCourse: () => Ok(storedCourse(newExercises)),
-            clearFromNewExercises: async () => Ok.EMPTY,
+            clearFromNewExercises,
           } as unknown as ReadyStartup["userData"],
         },
       }),
@@ -52,27 +48,20 @@ function contextWith(
   ]
 }
 
-/** The exercise ids of every `setUpdateables` posted, in order. */
-function updateablesPosted(): number[][] {
+/** The exercise ids of every update list recorded, in order. */
+function updateablesRecorded(): number[][] {
   return vi
-    .mocked(TmcPanel.postMessage)
-    .mock.calls.flat()
-    .filter((message) => message.type === "setUpdateables")
-    .map((message) => message.exerciseIds.map((x) => ExerciseIdentifier.unwrap(x) as number))
-}
-
-/** The exercise ids of every `setNewExercises` posted, in order. */
-function newExercisesPosted(): number[][] {
-  return vi
-    .mocked(TmcPanel.postMessage)
-    .mock.calls.flat()
-    .filter((message) => message.type === "setNewExercises")
-    .map((message) => message.exerciseIds.map((x) => ExerciseIdentifier.unwrap(x) as number))
+    .mocked(updateablesRegistry.set)
+    .mock.calls.map(([, exerciseIds]) =>
+      exerciseIds.map((x) => ExerciseIdentifier.unwrap(x) as number),
+    )
 }
 
 beforeEach(() => {
   updateablesRegistry.clear()
-  vi.mocked(TmcPanel.postMessage).mockReset()
+  vi.restoreAllMocks()
+  vi.spyOn(updateablesRegistry, "set")
+  clearFromNewExercises.mockClear()
   vi.mocked(downloadOrUpdateExercises).mockReset()
   vi.mocked(refreshLocalExercises).mockReset().mockResolvedValue(Ok.EMPTY)
 })
@@ -81,8 +70,8 @@ suite("downloadExercisesForUi, updating exercises", function () {
   const requested = [ExerciseIdentifier.from(101), ExerciseIdentifier.from(102)]
 
   beforeEach(function () {
-    postUpdateables(COURSE_ID, requested)
-    vi.mocked(TmcPanel.postMessage).mockClear()
+    updateablesRegistry.set(COURSE_ID, requested)
+    vi.mocked(updateablesRegistry.set).mockClear()
   })
 
   test("puts the update list back when the download throws", async function () {
@@ -93,7 +82,7 @@ suite("downloadExercisesForUi, updating exercises", function () {
       downloadExercisesForUi(actionContext, "update", COURSE_ID, requested),
     ).rejects.toThrow("spawn failed")
 
-    expect(updateablesPosted()).toEqual([[], [101, 102]])
+    expect(updateablesRecorded()).toEqual([[], [101, 102]])
     expect(updateablesRegistry.get(COURSE_ID)).toEqual(requested)
   })
 
@@ -106,7 +95,7 @@ suite("downloadExercisesForUi, updating exercises", function () {
 
     await downloadExercisesForUi(actionContext, "update", COURSE_ID, requested)
 
-    expect(updateablesPosted()).toEqual([[], [102]])
+    expect(updateablesRecorded()).toEqual([[], [102]])
   })
 
   test("refreshes the local exercises it just replaced", async function () {
@@ -128,25 +117,30 @@ suite("downloadExercisesForUi, updating exercises", function () {
 suite("downloadExercisesForUi, downloading new exercises", function () {
   const requested = [ExerciseIdentifier.from(201), ExerciseIdentifier.from(202)]
 
-  test("puts the new-exercise list back when the download throws", async function () {
-    vi.mocked(downloadOrUpdateExercises).mockRejectedValue(new Error("spawn failed"))
+  test("takes what it downloaded off the course's new exercises, then rescans", async function () {
+    vi.mocked(downloadOrUpdateExercises).mockResolvedValue({
+      successful: [ExerciseIdentifier.from(201)],
+      failed: [ExerciseIdentifier.from(202)],
+    })
     const [actionContext] = contextWith([201, 202])
-
-    await expect(
-      downloadExercisesForUi(actionContext, "download", COURSE_ID, requested),
-    ).rejects.toThrow("spawn failed")
-
-    expect(newExercisesPosted()).toEqual([[], [201, 202]])
-  })
-
-  test("announces only the exercises storage still calls new after a success", async function () {
-    vi.mocked(downloadOrUpdateExercises).mockResolvedValue({ successful: requested, failed: [] })
-    // Storage has been cleared of the downloaded exercises by the time the list is
-    // re-read, so restoring the pre-download snapshot would re-announce them.
-    const [actionContext] = contextWith([])
 
     await downloadExercisesForUi(actionContext, "download", COURSE_ID, requested)
 
-    expect(newExercisesPosted()).toEqual([[], []])
+    expect(clearFromNewExercises).toHaveBeenCalledWith(COURSE_ID, [ExerciseIdentifier.from(201)])
+    expect(refreshLocalExercises).toHaveBeenCalledOnce()
+  })
+
+  test("reports a rescan that fails", async function () {
+    vi.mocked(downloadOrUpdateExercises).mockResolvedValue({ successful: requested, failed: [] })
+    vi.mocked(refreshLocalExercises).mockResolvedValue(Err(new Error("refresh failed")))
+    const [actionContext, dialog] = contextWith([201, 202])
+
+    await downloadExercisesForUi(actionContext, "download", COURSE_ID, requested)
+
+    expect(dialog.reportError).toHaveBeenCalledWith(
+      "Failed to refresh local exercises.",
+      expect.any(Error),
+      "tmc",
+    )
   })
 })

@@ -18,11 +18,13 @@ import { BottleneckError, ConnectionError, InsufficientScopeError } from "../err
 import { registerCommands } from "../init/commands"
 import { registerTesting } from "../init/testing"
 import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
-import type { ExtensionToWebview } from "../shared/shared"
+import type { ExerciseStatus as RowStatus, ExtensionToWebview } from "../shared/shared"
 import { backendName, CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../shared/shared"
 import Storage from "../storage"
 import type { MoocLocalCourseData } from "../storage/data"
+import { CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
 import type UI from "../ui/ui"
+import { updateablesRegistry } from "../ui/updateablesRegistry"
 import { createMockActionContext } from "./mocks/actionContext"
 import { createMockContext } from "./mocks/vscode"
 import { autoMock } from "./support/mock"
@@ -36,6 +38,22 @@ const COURSE = "mooc-course"
 const EXERCISE = "loops"
 const EXERCISE_ID = "mooc-ex-1"
 const COURSE_ID = CourseIdentifier.from("instance-1")
+
+/** The stored exercise's row in the Courses view, as its commands receive it. */
+function exerciseRow(status: RowStatus): ExerciseTreeItem {
+  return Object.assign(Object.create(ExerciseTreeItem.prototype) as ExerciseTreeItem, {
+    id: EXERCISE_ID,
+    courseId: COURSE_ID,
+    exerciseId: ExerciseIdentifier.from(EXERCISE_ID),
+    status,
+  })
+}
+
+function courseRow(): CourseTreeItem {
+  return Object.assign(Object.create(CourseTreeItem.prototype) as CourseTreeItem, {
+    courseId: COURSE_ID,
+  })
+}
 
 function storedCourse(overrides: Partial<MoocLocalCourseData> = {}): MoocLocalCourseData {
   return {
@@ -202,7 +220,8 @@ async function harness(
   TmcPanel.sidePanel?.dispose()
   TmcPanel.renderSide(vscode.Uri.file("/ext"), extensionContext, actionContext, {
     id: nextPanelId(),
-    type: "MyCourses",
+    type: "CourseDetails",
+    courseId: COURSE_ID,
   })
   const sidePanel = webviews[0]
   if (!sidePanel) {
@@ -290,6 +309,7 @@ function lastTestRunErrors(): string[] {
 
 beforeEach(function () {
   vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+  updateablesRegistry.clear()
 })
 
 // jest-mock-vscode ships no `env` namespace; the old-submission picker formats dates with it.
@@ -536,18 +556,18 @@ suite("reported once: course administration", function () {
   })
 
   test("a removal that fails is one notification, and is not announced", async function () {
-    const { post, shown, storage } = await harness()
+    const { run, shown, storage } = await harness()
     vi.spyOn(storage, "updateUserData").mockRejectedValue(new Error("disk full"))
 
-    await post({ type: "removeCourse", id: COURSE_ID })
+    await run("tmc.removeCourse", COURSE_ID)
 
     expect(shown).toEqual([`error: Failed to remove "${COURSE}" from your courses.`])
   })
 
   test("a removal whose cleanup fails warns once, and still announces it", async function () {
-    const { post, shown } = await harness({ langs: { unsetSetting: async () => Err(offline()) } })
+    const { run, shown } = await harness({ langs: { unsetSetting: async () => Err(offline()) } })
 
-    await post({ type: "removeCourse", id: COURSE_ID })
+    await run("tmc.removeCourse", COURSE_ID)
 
     expect(shown).toEqual([
       `error: Failed to clear the record of closed exercises for "${COURSE}".`,
@@ -570,33 +590,25 @@ suite("reported once: course administration", function () {
   })
 })
 
-suite("reported once: My Courses and course details", function () {
+suite("reported once: the Courses view and course details", function () {
   test("exercises that fail to open are one notification", async function () {
-    const { post, shown } = await harness({
+    const { run, shown } = await harness({
       workspaceManager: { openCourseExercises: async () => Err(offline()) },
     })
 
-    await post({
-      type: "openExercises",
-      ids: [ExerciseIdentifier.from(EXERCISE_ID)],
-      courseId: COURSE_ID,
-    })
+    await run("tmc.openExercises", exerciseRow("closed"))
 
-    expect(shown).toEqual(["error: Failed to open the selected exercises."])
+    expect(shown).toEqual(["error: Failed to open the exercises."])
   })
 
   test("exercises that fail to close are one notification", async function () {
-    const { post, shown } = await harness({
+    const { run, shown } = await harness({
       workspaceManager: { closeCourseExercises: async () => Err(offline()) },
     })
 
-    await post({
-      type: "closeExercises",
-      ids: [ExerciseIdentifier.from(EXERCISE_ID)],
-      courseId: COURSE_ID,
-    })
+    await run("tmc.closeExercises", exerciseRow("opened"))
 
-    expect(shown).toEqual(["error: Failed to close the selected exercises."])
+    expect(shown).toEqual(["error: Failed to close the exercises."])
   })
 
   const moocDownloadFails = {
@@ -606,21 +618,22 @@ suite("reported once: My Courses and course details", function () {
     }),
   }
 
-  test.each(["download", "update"])(
-    "a failed %s from a panel is one warning",
-    async function (mode) {
-      const { post, shown } = await harness({ langs: moocDownloadFails })
+  test("a failed download from the Courses view is one warning", async function () {
+    const { run, shown } = await harness({ langs: moocDownloadFails })
 
-      await post({
-        type: "downloadExercises",
-        ids: [ExerciseIdentifier.from(EXERCISE_ID)],
-        courseId: COURSE_ID,
-        mode,
-      })
+    await run("tmc.downloadExercises", exerciseRow("missing"))
 
-      expect(shown).toEqual(["error: Failed to download the exercise loops."])
-    },
-  )
+    expect(shown).toEqual(["error: Failed to download the exercise loops."])
+  })
+
+  test("a failed update from the Courses view is one warning", async function () {
+    const { run, shown } = await harness({ langs: moocDownloadFails })
+    updateablesRegistry.set(COURSE_ID, [ExerciseIdentifier.from(EXERCISE_ID)])
+
+    await run("tmc.updateCourseExercises", courseRow())
+
+    expect(shown).toEqual(["error: Failed to download the exercise loops."])
+  })
 
   test("a failed new-exercise download from the palette is one warning", async function () {
     const { run, shown } = await harness({
@@ -695,11 +708,9 @@ suite("reported once: My Courses and course details", function () {
     const { post, shown, panelFailures, shownPanel } = await harness({
       langs: {
         getMoocCourseData: async () => Err(offline()),
-        getCourseDetails: async () => Err(offline()),
         listLocalExercises: async () => Err(new Error("rescan failed")),
       },
     })
-    await post({ type: "openCourseDetails", courseId: COURSE_ID })
 
     await post({
       type: "refreshCourseDetails",

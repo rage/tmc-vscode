@@ -1,10 +1,9 @@
 import type { Result } from "ts-results"
 import type * as vscode from "vscode"
 
-import type { OpenedExercises } from "../actions/openExercises"
 import type { ReadyActionContext } from "../actions/types"
 import { InitializationError } from "../errors"
-import type { BackendKind, CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
+import type { BackendKind, CourseIdentifier } from "../shared/shared"
 
 /**
  * The action- and command-layer entry points the webview message handlers invoke.
@@ -15,22 +14,6 @@ import type { BackendKind, CourseIdentifier, ExerciseIdentifier } from "../share
  * functions where `registerPanelActions` is called.
  */
 export interface PanelActions {
-  closeExercises: (
-    actionContext: ReadyActionContext,
-    ids: ExerciseIdentifier[],
-    courseId: CourseIdentifier,
-  ) => Promise<Result<ExerciseIdentifier[], Error>>
-  downloadAndOpenExercises: (
-    actionContext: ReadyActionContext,
-    ids: ExerciseIdentifier[],
-    courseId: CourseIdentifier,
-  ) => Promise<Result<OpenedExercises, Error>>
-  downloadExercisesForUi: (
-    actionContext: ReadyActionContext,
-    mode: "download" | "update",
-    courseId: CourseIdentifier,
-    ids: ExerciseIdentifier[],
-  ) => Promise<void>
   openWorkspace: (
     actionContext: ReadyActionContext,
     courseName: string,
@@ -50,10 +33,6 @@ export interface PanelActions {
   ) => Promise<Result<void, Error>>
   /** Rescans the exercises on disk, so exercises the backend dropped stop showing as open. */
   refreshLocalExercises: (actionContext: ReadyActionContext) => Promise<Result<void, Error>>
-  removeCourse: (
-    actionContext: ReadyActionContext,
-    id: CourseIdentifier,
-  ) => Promise<Result<void, Error>>
   /** Answers a TMC submission's feedback questions; the URL must be one a result named. */
   sendSubmissionFeedback: (
     actionContext: ReadyActionContext,

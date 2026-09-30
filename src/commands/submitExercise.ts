@@ -29,8 +29,8 @@ export async function submitExercise(
     return submitted
   }
 
-  // Point totals come from the backend, so without this refresh the CourseDetails and
-  // MyCourses totals stay stale until the user refreshes by hand.
+  // Point totals come from the backend, so without this refresh the Courses view and
+  // Course Details totals stay stale until the user refreshes by hand.
   await refreshEverything(actionContext, { silent: true, courseId: submitted.val })
   return Ok.EMPTY
 }

@@ -1,19 +1,17 @@
 import { Result } from "ts-results"
 
-import { postUpdateables, withOptimisticList } from "../panels/exerciseLists"
-import { TmcPanel } from "../panels/TmcPanel"
-import { updateablesRegistry } from "../panels/updateablesRegistry"
+import { withOptimisticList } from "../panels/exerciseLists"
 import type { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
-import { LocalCourseData } from "../shared/shared"
+import { updateablesRegistry } from "../ui/updateablesRegistry"
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
 
 /**
- * Downloads exercises and pushes the resulting state back to the webview.
+ * Downloads exercises and rescans the disk, so the Courses view shows the result.
  *
- * `"update"` drives the CourseDetails "update available" list, `"download"` the MyCourses
- * "new exercises" list.
+ * `"update"` works through the course's updates and keeps the ones that failed listed;
+ * `"download"` takes the downloaded exercises off the course's new-exercise list.
  */
 export async function downloadExercisesForUi(
   actionContext: ReadyActionContext,
@@ -27,7 +25,7 @@ export async function downloadExercisesForUi(
   if (mode === "update") {
     const shownBeforeDownload = updateablesRegistry.get(courseId)
     await withOptimisticList(
-      () => postUpdateables(courseId, []),
+      () => updateablesRegistry.set(courseId, []),
       async (): Promise<ExerciseIdentifier[]> => {
         const { failed } = await downloadOrUpdateExercises(actionContext, exerciseIds, courseId)
         const refreshResult = await refreshLocalExercises(actionContext)
@@ -36,46 +34,17 @@ export async function downloadExercisesForUi(
         }
         return failed
       },
-      (failed) => postUpdateables(courseId, failed ?? shownBeforeDownload),
+      (failed) => updateablesRegistry.set(courseId, failed ?? shownBeforeDownload),
     )
     return
   }
 
-  const postNewExercises = (newExerciseIds: ExerciseIdentifier[]): void => {
-    TmcPanel.postMessage({
-      type: "setNewExercises",
-      target: { type: "MyCourses" },
-      courseId,
-      exerciseIds: newExerciseIds,
-    })
-  }
-
-  // Read the list back from storage rather than restoring the pre-download snapshot,
-  // which re-announces the exercises the student just received.
-  const postRemainingNewExercises = (): void => {
-    const course = userData.getCourse(courseId)
-    if (course.err) {
-      dialog.reportError("Failed to read the course.", course.val, courseId.kind)
-      return
-    }
-    postNewExercises(LocalCourseData.getNewExercises(course.val))
-  }
-
-  await withOptimisticList(
-    () => postNewExercises([]),
-    async () => {
-      const { successful } = await downloadOrUpdateExercises(actionContext, exerciseIds, courseId)
-      const refreshResult = Result.all(
-        await userData.clearFromNewExercises(courseId, successful),
-        await refreshLocalExercises(actionContext),
-      )
-      if (refreshResult.err) {
-        dialog.reportError("Failed to refresh local exercises.", refreshResult.val, courseId.kind)
-      }
-    },
-    postRemainingNewExercises,
+  const { successful } = await downloadOrUpdateExercises(actionContext, exerciseIds, courseId)
+  const refreshResult = Result.all(
+    await userData.clearFromNewExercises(courseId, successful),
+    await refreshLocalExercises(actionContext),
   )
-  // Per-exercise status is already posted by `downloadOrUpdateExercises`, keyed by
-  // exercise id on both backends. Re-posting a blanket "closed" for every input id
-  // here would also mark the exercises whose download failed as closed.
+  if (refreshResult.err) {
+    dialog.reportError("Failed to refresh local exercises.", refreshResult.val, courseId.kind)
+  }
 }

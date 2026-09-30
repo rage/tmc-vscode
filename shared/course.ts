@@ -1,14 +1,7 @@
 import { z } from "zod"
 
 import type { CourseIdentifier, Enum } from "./enum"
-import {
-  EnumSchema,
-  ExerciseIdentifier,
-  ExerciseIdentifierSchema,
-  makeMoocKind,
-  makeTmcKind,
-  match,
-} from "./enum"
+import { EnumSchema, ExerciseIdentifier, makeMoocKind, makeTmcKind, match } from "./enum"
 
 // duplicated from the data module; keep in sync manually
 export const SharedTmcCourseExerciseSchema = z.object({
@@ -159,38 +152,19 @@ export namespace LocalCourseData {
   }
 }
 
-export const ExerciseStatusSchema = z.enum([
-  "closed",
-  "downloading",
-  "downloadFailed",
-  "expired",
-  "missing",
-  "new",
-  "opened",
-])
-
-export type ExerciseStatus = z.infer<typeof ExerciseStatusSchema>
-
-export const ExerciseSchema = z.object({
-  id: ExerciseIdentifierSchema,
-  name: z.string(),
-  isHard: z.boolean(),
-  hardDeadlineString: z.string(),
-  softDeadlineString: z.string(),
-  /** The deadline the row shows (hard when `isHard`, else soft), for `<time datetime>`. */
-  deadlineIso: z.string().nullable(),
-  passed: z.boolean(),
-})
-
-export const ExerciseGroupSchema = z.object({
-  name: z.string(),
-  exercises: z.array(ExerciseSchema),
-  nextDeadlineString: z.string(),
-  /** Whether the part starts expanded: every part of a short course, else the next due. */
-  defaultOpen: z.boolean(),
-})
-
-export type ExerciseGroup = z.infer<typeof ExerciseGroupSchema>
+/**
+ * An exercise's state as the Courses view shows it: on disk (`opened`, `closed`), on its way
+ * (`downloading`, `downloadFailed`), or not downloaded (`missing`, `new` when the course
+ * announced it, `expired` past its hard deadline).
+ */
+export type ExerciseStatus =
+  | "closed"
+  | "downloading"
+  | "downloadFailed"
+  | "expired"
+  | "missing"
+  | "new"
+  | "opened"
 
 export const FeedbackQuestionSchema = z.object({
   id: z.number(),

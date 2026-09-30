@@ -6,11 +6,12 @@ import type { ReadyActionContext } from "../../actions/types"
 import { updateExercises } from "../../commands/updateExercises"
 import type Settings from "../../config/settings"
 import type { UserData } from "../../config/userdata"
-import type { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
+import type { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../../shared/shared"
 import {
   CourseIdentifier as CourseIdentifierNs,
   ExerciseIdentifier as ExerciseIdentifierNs,
 } from "../../shared/shared"
+import { updateablesRegistry } from "../../ui/updateablesRegistry"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -36,6 +37,12 @@ function outdated(
   }
 }
 
+function tmcCourse(id: number): LocalCourseData {
+  return { kind: "tmc", data: { id } } as LocalCourseData
+}
+
+const moocCourse = { kind: "mooc", data: { id: "mooc-course" } } as LocalCourseData
+
 /** A check that reached every backend. */
 function checked(exercises: ExerciseUpdateCheck["outdated"]): ExerciseUpdateCheck {
   return { outdated: exercises, failures: [] }
@@ -51,6 +58,7 @@ function contextWith(
       ...createMockActionContext({
         startup: {
           userData: {
+            getCourses: () => [tmcCourse(1), tmcCourse(2), moocCourse],
             getCourse: () => Ok({ data: { notifyAfter: 0, disabled: false } }),
             setNewExerciseNotifyAfter,
           } as unknown as UserData,
@@ -70,6 +78,27 @@ suite("updateExercises command", function () {
   beforeEach(function () {
     checkForExerciseUpdates.mockReset()
     downloadExerciseUpdates.mockReset()
+    updateablesRegistry.clear()
+  })
+
+  test("records what it found per course, keeping a failed backend's last answer", async function () {
+    const staleMooc = [ExerciseIdentifierNs.from("mooc-exercise")]
+    updateablesRegistry.set(CourseIdentifierNs.from(2), [ExerciseIdentifierNs.from(99)])
+    updateablesRegistry.set(CourseIdentifierNs.from("mooc-course"), staleMooc)
+    checkForExerciseUpdates.mockResolvedValue({
+      outdated: [outdated(1, 10), outdated(1, 11)],
+      failures: [{ backend: "mooc", error: new Error("offline") }],
+    })
+    const [actionContext] = contextWith(true)
+
+    await updateExercises(actionContext, "silent")
+
+    expect(updateablesRegistry.get(CourseIdentifierNs.from(1))).toEqual([
+      ExerciseIdentifierNs.from(10),
+      ExerciseIdentifierNs.from(11),
+    ])
+    expect(updateablesRegistry.get(CourseIdentifierNs.from(2))).toEqual([])
+    expect(updateablesRegistry.get(CourseIdentifierNs.from("mooc-course"))).toEqual(staleMooc)
   })
 
   test("postpones the reminder once per course, not once per exercise", async function () {

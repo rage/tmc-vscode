@@ -10,7 +10,7 @@ same schemas from one file.
 
 ## Panels
 
-A panel is one screen: `MyCourses`, `CourseDetails`, `ExerciseSubmission`, … Each has
+A panel is one screen: `CourseDetails`, `ExerciseSubmission`, `MoocLogin`, … Each has
 a schema in `shared/protocol.ts` and a component of the same name in `src/panels/`.
 The schemas form the `Panel` discriminated union, so adding a screen means
 adding a variant there and a branch in `App.svelte`; `assertUnreachable` turns a
@@ -47,19 +47,16 @@ A panel asks for its data in `onMount` and receives it through
 `addMessageListener`:
 
 ```ts
-const panelData = createPanelDataRequester()
+const request = createRequester()
 
 let dataError = $state<WebviewError | undefined>(undefined)
 
 async function requestData() {
-  dataError = undefined
-  dataError = await panelData.request((requestId) =>
-    vscode.postMessage({
-      type: "requestMyCoursesData",
-      requestId,
-      sourcePanel: panel,
-    }),
-  )
+  const { id, type, courseId } = panel
+  const outcome = await request("requestCourseDetailsData", {
+    sourcePanel: { id, type, courseId },
+  })
+  dataError = outcome.ok ? undefined : outcome.error
 }
 
 onMount(() => {
@@ -68,12 +65,8 @@ onMount(() => {
 
 addMessageListener(panel, (message) => {
   switch (message.type) {
-    case "setMyCourses": {
-      panel = { ...panel, courses: message.courses }
-      break
-    }
-    case "panelDataResult": {
-      panelData.answer(message)
+    case "setCourseData": {
+      panel = { ...panel, course: message.courseData }
       break
     }
     default:
@@ -82,13 +75,13 @@ addMessageListener(panel, (message) => {
 })
 ```
 
-`addMessageListener` and `createPanelDataRequester` must both be called during
+`addMessageListener` and `createRequester` must both be called during
 component initialization, like any other Svelte lifecycle function; they remove
 their listener and clear their pending timers in `onDestroy`, so a recreated
 component leaves nothing behind.
 
-The host answers every `request*Data` message with one `panelDataResult` quoting
-the request's `requestId`, whether or not it could assemble the data. A request
+The host answers every request with one `reply` quoting the request's
+`requestId`, whether or not it could assemble the data. A request
 that goes unanswered — a crashed host, a dropped message, a handler that returns
 without sending one — resolves as a timeout instead, so a panel shows why it has
 no data rather than a spinner that never stops.
@@ -97,7 +90,7 @@ Which messages reach a listener is decided by the `target` on the message. A
 target of `{type, id}` reaches only that instance — an exercise's test results
 belong to the panel that started the run. A target of `{type}` alone is a
 broadcast to every panel of that type, used for state more than one screen
-shows, such as an exercise's status changing.
+shows, such as a course being disabled.
 
 The `sourcePanel` a webview sends back is a strict `{id, type}`: passing a whole
 panel object is rejected at the schema rather than failing later on the wire.
@@ -105,8 +98,8 @@ panel object is rejected at the schema rather than failing later on the wire.
 ## Panel state
 
 Props are not deeply reactive in Svelte 5, so an incoming message replaces the
-panel rather than mutating it — `panel = { ...panel, courses }`, with
-`let { panel = $bindable() }: Props = $props()`.
+panel rather than mutating it — `panel = { ...panel, course }`, with
+`let { panel }: Props = $props()`.
 
 `ExerciseSubmission` is the exception. Its content is not panel data but a
 running operation's output — progress lines, test results, grading updates —

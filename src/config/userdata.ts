@@ -237,7 +237,7 @@ export class UserData {
         if (this._tmcCourses.has(course.data.id)) {
           return Err(new Error(`Course ${course.data.name} has already been added`))
         }
-        Logger.info(`Adding course ${course.data.name} to My Courses`)
+        Logger.info(`Adding course ${course.data.name} to the stored courses`)
         this._tmcCourses.set(course.data.id, course.data)
         break
       }
@@ -246,7 +246,7 @@ export class UserData {
         if (this._moocCourses.has(course.data.id)) {
           return Err(new Error(`Course ${course.data.name} has already been added`))
         }
-        Logger.info(`Adding course ${course.data.name} to My Courses`)
+        Logger.info(`Adding course ${course.data.name} to the stored courses`)
         this._moocCourses.set(course.data.id, course.data)
         break
       }

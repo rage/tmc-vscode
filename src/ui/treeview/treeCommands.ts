@@ -9,7 +9,6 @@ import type { ReadyActionContext } from "../../actions/types"
 import { withOperation } from "../../api/withOperation"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { CLI_PROCESS_TIMEOUT } from "../../config/constants"
-import { updateablesRegistry } from "../../panels/updateablesRegistry"
 import type { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
 import {
   CourseIdentifier as CourseIdentifierNs,
@@ -17,6 +16,7 @@ import {
   LocalCourseExercise,
 } from "../../shared/shared"
 import { runSingleFlight } from "../../utilities"
+import { updateablesRegistry } from "../updateablesRegistry"
 import type { CoursesTreeItem, ExerciseTreeItem } from "./treeview"
 import { exerciseItems, isDownloadable } from "./treeview"
 
