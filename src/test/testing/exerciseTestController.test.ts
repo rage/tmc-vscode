@@ -15,6 +15,7 @@ import type { RunResult, StyleValidationResult } from "../../shared/langsSchema"
 import { BaseError, makeTmcKind } from "../../shared/shared"
 import { CheckstyleDiagnostics } from "../../testing/checkstyleDiagnostics"
 import { ExerciseTestController } from "../../testing/exerciseTestController"
+import { exerciseActivity } from "../../ui/statusBarActivity"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -303,6 +304,21 @@ suite("ExerciseTestController", function () {
     expect(messagesOf(states.get(item.id)).map((m) => m.message)).toEqual(["1 of 2 tests failed."])
     expect(item.description).toBe("1/2 tests passed")
     expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+  })
+
+  test("marks the exercise as being tested while the run lasts", async function () {
+    const s = setup()
+    const exercise = exerciseAt(s)
+    let during: unknown
+    s.runTests.mockImplementation(() => {
+      during = exerciseActivity.current(exercise.uri)
+      return { process: Promise.resolve(Ok(passingRun)), interrupt: vi.fn() }
+    })
+
+    await s.controller.runExercise(exercise)
+
+    expect(during).toBe("testing")
+    expect(exerciseActivity.current(exercise.uri)).toBeUndefined()
   })
 
   test("running one test runs its whole exercise once", async function () {

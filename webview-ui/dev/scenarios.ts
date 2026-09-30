@@ -2,7 +2,6 @@ import type { SubmissionFinished } from "../src/shared/langsSchema"
 import type {
   CourseDetailsPanel,
   ExerciseGroup,
-  ExerciseTestsPanel,
   ExtensionToWebview,
   Panel,
   WebviewToExtension,
@@ -13,8 +12,6 @@ import {
   moocExerciseGroup,
   moocLocalCourse,
   moocLocalExercise,
-  testResult,
-  testResultData,
   tmcLocalCourse,
   tmcLocalExercise,
 } from "../src/test/fixtures"
@@ -99,7 +96,7 @@ function answerCourseDetails(
         courseId: message.sourcePanel.courseId,
         statuses,
       },
-      { type: "panelDataResult", target, requestId: message.requestId },
+      { type: "reply", target, requestId: message.requestId, outcome: { ok: true } },
     ]
   }
 }
@@ -114,21 +111,10 @@ function answerMyCourses(courses: (typeof tmcCourse)[]) {
       { type: "setMyCourses", target, courses },
       { type: "setTmcDataPath", target, tmcDataPath: "/home/student/tmcdata" },
       { type: "setTmcDataSize", target, tmcDataSize: "12.3 MB" },
-      { type: "panelDataResult", target, requestId: message.requestId },
+      { type: "reply", target, requestId: message.requestId, outcome: { ok: true } },
     ]
   }
 }
-
-const testsPanel: ExerciseTestsPanel = {
-  id: 20,
-  type: "ExerciseTests",
-  course: tmcCourse,
-  exercise: tmcLocalExercise({ id: 103, name: "part01-03_exercise", availablePoints: 2 }),
-  // The host's `Uri`; the webview never reads it.
-  exerciseUri: {} as ExerciseTestsPanel["exerciseUri"],
-  testRunId: 1,
-}
-const testsTarget = { type: "ExerciseTests" as const, id: testsPanel.id }
 
 const submissionPanel = {
   id: 30,
@@ -180,11 +166,6 @@ const statusUpdates = (fractions: [number, string][]): ExtensionToWebview[] =>
 /** Every scenario the dev harness offers and the accessibility tests walk through. */
 export const SCENARIOS: Scenario[] = [
   {
-    id: "welcome/logged-out",
-    panel: { id: 1, type: "Welcome", version: "3.5.3", loggedIn: false },
-  },
-  { id: "welcome/logged-in", panel: { id: 1, type: "Welcome", version: "3.5.3", loggedIn: true } },
-  {
     id: "my-courses/two-courses",
     panel: { id: 2, type: "MyCourses" },
     reply: answerMyCourses([tmcCourse, moocCourse]),
@@ -209,56 +190,6 @@ export const SCENARIOS: Scenario[] = [
   },
   // Never answered, so the panel shows its loading state until the request times out.
   { id: "course-details/loading", panel: courseDetailsPanel(5, makeTmcKind({ courseId: 42 })) },
-  { id: "exercise-tests/running", panel: testsPanel },
-  {
-    id: "exercise-tests/passed",
-    panel: testsPanel,
-    pushes: [{ type: "testResults", target: testsTarget, testResults: testResultData() }],
-  },
-  {
-    id: "exercise-tests/failed",
-    panel: testsPanel,
-    pushes: [
-      {
-        type: "testResults",
-        target: testsTarget,
-        testResults: testResultData({
-          testResult: {
-            logs: { stdout: "Hello\n" },
-            status: "TESTS_FAILED",
-            testResults: [
-              testResult({ name: "test_prints_hello" }),
-              testResult({
-                name: "test_sum",
-                successful: false,
-                message: "Expected 3 but got 2",
-                exception: ["Traceback (most recent call last):", '  File "test.py", line 4'],
-              }),
-            ],
-          },
-          styleValidationResult: {
-            strategy: "WARN",
-            validation_errors: {
-              "src/main.py": [
-                { column: 1, line: 3, message: "Missing docstring", source_name: "pylint" },
-              ],
-            },
-          },
-        }),
-      },
-    ],
-  },
-  {
-    id: "exercise-tests/error",
-    panel: testsPanel,
-    pushes: [
-      {
-        type: "testError",
-        target: testsTarget,
-        error: { message: "Running the tests failed", details: "python3: not found" },
-      },
-    ],
-  },
   {
     id: "exercise-submission/processing",
     panel: submissionPanel,
@@ -357,53 +288,30 @@ export const SCENARIOS: Scenario[] = [
     ],
   },
   {
-    id: "mooc-login/awaiting",
-    panel: { id: 40, type: "MoocLogin" },
-    reply: (message) =>
-      message.type === "moocLogin"
-        ? [
-            {
-              type: "moocDeviceCode",
-              target: { type: "MoocLogin", id: 40 },
-              userCode: "WDJB-MJHT",
-              verificationUri: "https://courses.mooc.fi/device",
-              verificationUriComplete: "https://courses.mooc.fi/device?user_code=WDJB-MJHT",
-              expiresIn: 900,
-              interval: 5,
-            },
-          ]
-        : [],
-  },
-  {
-    id: "mooc-login/error",
-    panel: { id: 41, type: "MoocLogin" },
-    reply: (message) =>
-      message.type === "moocLogin"
-        ? [
-            {
-              type: "moocLoginError",
-              target: { type: "MoocLogin", id: 41 },
-              error: "the sign-in code expired.",
-            },
-          ]
-        : [],
-  },
-  {
     id: "initialization-error-help/errors",
     panel: { id: 50, type: "InitializationErrorHelp" },
     reply: (message) =>
       message.type === "requestInitializationErrors"
         ? [
             {
-              type: "initializationErrors",
+              type: "reply",
               target: { type: "InitializationErrorHelp", id: 50 },
-              cliFolder: "/home/student/.local/share/tmc/cli",
-              initializationErrors: {
-                tmc: { error: "Failed to download the TMC-langs CLI", stack: "Error: ENOTFOUND" },
-                userData: null,
-                workspaceManager: null,
-                exerciseDecorationProvider: null,
-                resources: null,
+              requestId: message.requestId,
+              outcome: {
+                ok: true,
+                value: {
+                  cliFolder: "/home/student/.local/share/tmc/cli",
+                  initializationErrors: {
+                    tmc: {
+                      error: "Failed to download the TMC-langs CLI",
+                      stack: "Error: ENOTFOUND",
+                    },
+                    userData: null,
+                    workspaceManager: null,
+                    exerciseDecorationProvider: null,
+                    resources: null,
+                  },
+                },
               },
             },
           ]

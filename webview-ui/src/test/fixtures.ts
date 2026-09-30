@@ -12,7 +12,6 @@ import type {
   SharedMoocCourseExercise,
   SharedTmcCourseData,
   SharedTmcCourseExercise,
-  TestResultData,
 } from "../shared/shared"
 import { makeMoocKind, makeTmcKind } from "../shared/shared"
 
@@ -152,21 +151,6 @@ export function testResult(overrides: Partial<TestResult> = {}): TestResult {
     message: "",
     points: ["1"],
     exception: [],
-    ...overrides,
-  }
-}
-
-// a passing TmcExercise test-run result, for the `testResults` webview message
-export function testResultData(overrides: Partial<TestResultData> = {}): TestResultData {
-  return {
-    testResult: {
-      logs: {},
-      status: "PASSED",
-      testResults: [testResult()],
-    },
-    id: makeTmcKind({ tmcExerciseId: 101 }),
-    courseSlug: "python-course",
-    exerciseName: "part01-01_hello",
     ...overrides,
   }
 }

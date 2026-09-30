@@ -55,7 +55,7 @@ export class TmcPage {
   ) {}
 
   public async openMenu(): Promise<void> {
-    // Specific enough not to conflict with the "Welcome to TestMyCode" tab.
+    // Scoped to the activity bar: editor tabs such as "TestMyCode Help" share the name.
     const activityBarEntry = this.page
       .locator('[id="workbench\\.parts\\.activitybar"]')
       .getByRole("tab", { name: "TestMyCode" })

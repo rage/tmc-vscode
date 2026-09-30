@@ -1,5 +1,6 @@
 import { expect } from "@playwright/test"
 
+import { MoocLoginPage } from "./mooc-login"
 import { QuickPickPage } from "./quick-pick"
 import { TmcPage } from "./tmc"
 
@@ -45,6 +46,7 @@ export class MyCoursesPage extends TmcPage {
   /** Runs the device flow to completion against the mock's auto-approving client. */
   public async logInToMooc(): Promise<void> {
     await this.startMoocLogin()
+    await new MoocLoginPage(this.page, this.webview).copyAndOpen()
     await expect(this.notificationToast("Logged in to courses.mooc.fi.")).toBeVisible()
   }
 

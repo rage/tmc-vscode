@@ -41,6 +41,8 @@ export interface AuthState {
   clear: () => Promise<void>
   /** Called whenever {@link loggedIn} changes, after the change is applied. */
   subscribe: (listener: (loggedIn: boolean) => void) => void
+  /** Called whenever {@link mooc} changes, after the change is applied. */
+  subscribeMooc: (listener: (authenticated: boolean) => void) => void
   /**
    * Whether the user has been told the courses.mooc.fi session lacks the programming-exercise
    * scope. Whoever reports that sets it, and a fetch the session is granted clears it.
@@ -62,18 +64,25 @@ interface LoggedInView {
 export function createAuthState(langs: Result<Langs, Error>, ui: LoggedInView): AuthState {
   const authenticated: Record<BackendKind, boolean> = { tmc: false, mooc: false }
   const listeners: ((loggedIn: boolean) => void)[] = []
+  const moocListeners: ((authenticated: boolean) => void)[] = []
   let applied: boolean | undefined
+  let appliedMooc = false
 
   const apply = async (): Promise<void> => {
     const loggedIn = authenticated.tmc || authenticated.mooc
-    if (loggedIn === applied) {
-      return
+    if (loggedIn !== applied) {
+      applied = loggedIn
+      await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", loggedIn)
+      ui.treeDP.setLoggedIn(loggedIn)
+      for (const listener of listeners) {
+        listener(loggedIn)
+      }
     }
-    applied = loggedIn
-    await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", loggedIn)
-    ui.treeDP.setLoggedIn(loggedIn)
-    for (const listener of listeners) {
-      listener(loggedIn)
+    if (authenticated.mooc !== appliedMooc) {
+      appliedMooc = authenticated.mooc
+      for (const listener of moocListeners) {
+        listener(appliedMooc)
+      }
     }
   }
 
@@ -117,6 +126,9 @@ export function createAuthState(langs: Result<Langs, Error>, ui: LoggedInView): 
     },
     subscribe(listener): void {
       listeners.push(listener)
+    },
+    subscribeMooc(listener): void {
+      moocListeners.push(listener)
     },
     insufficientScopeReported: false,
   }

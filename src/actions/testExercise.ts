@@ -22,12 +22,6 @@ export type ExerciseTestOutcome =
     }
 
 /**
- * Handles the `ExerciseTests` panel's Cancel. No local run reports to that panel, so there
- * is nothing to stop: runs are cancelled through {@link testExercise}'s token.
- */
-export function cancelTestRun(_testRunId: number): void {}
-
-/**
  * Runs an exercise's tests and code quality checks locally.
  *
  * Reports nothing to the user: the Testing API controller in `src/testing` does that.

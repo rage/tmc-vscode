@@ -1,4 +1,3 @@
-import type { Uri } from "vscode"
 import { z } from "zod"
 
 import {
@@ -7,7 +6,6 @@ import {
   FeedbackQuestionSchema,
   LocalCourseDataSchema,
   LocalCourseExerciseSchema,
-  TestResultDataSchema,
 } from "./course"
 import { CourseIdentifierSchema, ExerciseIdentifierSchema } from "./enum"
 import { BaseError } from "./errors"
@@ -19,15 +17,6 @@ export const AppPanelSchema = z.object({
 })
 
 export type AppPanel = z.infer<typeof AppPanelSchema>
-
-export const WelcomePanelSchema = z.object({
-  id: z.number(),
-  type: z.literal("Welcome"),
-  version: z.string().optional(),
-  loggedIn: z.boolean().optional(),
-})
-
-export type WelcomePanel = z.infer<typeof WelcomePanelSchema>
 
 export const MyCoursesPanelSchema = z.object({
   id: z.number(),
@@ -63,17 +52,14 @@ export type CourseDetailsPanel = z.infer<typeof CourseDetailsPanelSchema>
 // the `_panelTypesMatch` assertion below `Panel` keeps this in sync with `PanelSchema`
 export type PanelType =
   | "App"
-  | "Welcome"
   | "MyCourses"
   | "CourseDetails"
-  | "ExerciseTests"
   | "ExerciseSubmission"
-  | "MoocLogin"
   | "InitializationErrorHelp"
 
 // used to define messages that should only be sent to a specific instance of a panel
-// for example, an exercise's test results should only be sent to the ExerciseTests
-// panel that started the run, not to another one that happens to be open
+// for example, a submission's result should only be sent to the ExerciseSubmission
+// panel that made it, not to another one that happens to be open
 export type TargetPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"] }>, "id" | "type">
 
 /**
@@ -121,18 +107,6 @@ function strictTargetPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
   })
 }
 
-export const ExerciseTestsPanelSchema = z.object({
-  id: z.number(),
-  type: z.literal("ExerciseTests"),
-  course: LocalCourseDataSchema,
-  exercise: LocalCourseExerciseSchema,
-  // Read by the host alone: it reaches the webview as a plain object, not a `Uri`.
-  exerciseUri: z.custom<Uri>(),
-  testRunId: z.number(),
-})
-
-export type ExerciseTestsPanel = z.infer<typeof ExerciseTestsPanelSchema>
-
 export const ExerciseSubmissionPanelSchema = z.object({
   id: z.number(),
   type: z.literal("ExerciseSubmission"),
@@ -149,13 +123,6 @@ export const InitializationErrorHelpPanelSchema = z.object({
 
 export type InitializationErrorHelpPanel = z.infer<typeof InitializationErrorHelpPanelSchema>
 
-export const MoocLoginPanelSchema = z.object({
-  id: z.number(),
-  type: z.literal("MoocLogin"),
-})
-
-export type MoocLoginPanel = z.infer<typeof MoocLoginPanelSchema>
-
 /**
  * Represents a panel that is rendered by the webview.
  *
@@ -163,12 +130,9 @@ export type MoocLoginPanel = z.infer<typeof MoocLoginPanelSchema>
  */
 export const PanelSchema = z.discriminatedUnion("type", [
   AppPanelSchema,
-  WelcomePanelSchema,
   MyCoursesPanelSchema,
   CourseDetailsPanelSchema,
-  ExerciseTestsPanelSchema,
   ExerciseSubmissionPanelSchema,
-  MoocLoginPanelSchema,
   InitializationErrorHelpPanelSchema,
 ])
 
@@ -293,16 +257,6 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     exerciseIds: z.array(ExerciseIdentifierSchema),
   }),
   z.object({
-    type: z.literal("testResults"),
-    target: targetPanelSchema("ExerciseTests"),
-    testResults: TestResultDataSchema,
-  }),
-  z.object({
-    type: z.literal("testError"),
-    target: targetPanelSchema("ExerciseTests"),
-    error: WebviewErrorSchema,
-  }),
-  z.object({
     type: z.literal("submissionStatusUrl"),
     target: targetPanelSchema("ExerciseSubmission"),
     url: z.string(),
@@ -339,29 +293,13 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     courseId: CourseIdentifierSchema,
     exerciseIds: z.array(ExerciseIdentifierSchema),
   }),
-  z.object({
-    type: z.literal("willNotRunTestsForExam"),
-    target: targetPanelSchema("ExerciseTests"),
-  }),
-  // Device-authorization info the CLI emits before blocking on polling; snake_case CLI fields mapped to camelCase.
-  z.object({
-    type: z.literal("moocDeviceCode"),
-    target: targetPanelSchema("MoocLogin"),
-    userCode: z.string(),
-    verificationUri: z.string(),
-    verificationUriComplete: z.string().nullable(),
-    expiresIn: z.number(),
-    interval: z.number(),
-  }),
   // The one answer to a request, see `RequestMessage`.
   z.object({
     type: z.literal("reply"),
     target: targetPanelSchema(
       "MyCourses",
       "CourseDetails",
-      "ExerciseTests",
       "ExerciseSubmission",
-      "MoocLogin",
       "InitializationErrorHelp",
     ),
     requestId: z.number(),
@@ -455,22 +393,12 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("closeSidePanel"),
   }),
-  z.object({
-    type: z.literal("cancelTests"),
-    testRunId: z.number(),
-  }),
-  // The host submits the exercise the named panel shows; a path from the webview would
-  // be one the webview chose.
-  z.object({
-    type: z.literal("submitExercise"),
-    requestId: z.number(),
-    sourcePanel: strictTargetPanelSchema("ExerciseTests"),
-  }),
-  // Pastes the exercise the named panel shows, for the reason given on `submitExercise`.
+  // Pastes the exercise the named panel shows; a path from the webview would be one the
+  // webview chose.
   z.object({
     type: z.literal("pasteExercise"),
     requestId: z.number(),
-    sourcePanel: strictTargetPanelSchema("ExerciseTests", "ExerciseSubmission"),
+    sourcePanel: strictTargetPanelSchema("ExerciseSubmission"),
   }),
   z.object({
     type: z.literal("sendFeedback"),
@@ -482,7 +410,7 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("copyToClipboard"),
     requestId: z.number(),
-    sourcePanel: strictTargetPanelSchema("ExerciseTests", "ExerciseSubmission"),
+    sourcePanel: strictTargetPanelSchema("ExerciseSubmission"),
     text: z.string(),
   }),
   z.object({
@@ -515,18 +443,6 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
       "workbench.action.openIssueReporter",
     ]),
   }),
-  // Posted on MoocLogin mount; starts the CLI device-flow login. The code is streamed back as
-  // `moocDeviceCode`, and the reply comes once the login is over.
-  z.object({
-    type: z.literal("moocLogin"),
-    requestId: z.number(),
-    sourcePanel: strictTargetPanelSchema("MoocLogin"),
-  }),
-  z.object({
-    // Kills the in-progress device-flow login CLI process, keyed by panel id.
-    type: z.literal("cancelMoocLogin"),
-    sourcePanel: strictTargetPanelSchema("MoocLogin"),
-  }),
 ])
 
 /**
@@ -550,12 +466,10 @@ export const ReplyValueSchemas = {
   requestCourseDetailsData: z.undefined(),
   requestMyCoursesData: z.undefined(),
   refreshCourseDetails: z.undefined(),
-  submitExercise: z.undefined(),
   // the paste link
   pasteExercise: z.string(),
   sendFeedback: z.undefined(),
   copyToClipboard: z.undefined(),
-  moocLogin: z.undefined(),
   requestInitializationErrors: InitializationErrorsSchema,
 } satisfies Record<RequestType, z.ZodType>
 

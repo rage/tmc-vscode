@@ -36,7 +36,7 @@
       ]
     },
     "webview-ui": {
-      "project": ["src/**/*.{ts,svelte}", "!src/generated/**", "*.ts"]
+      "project": ["src/**/*.{ts,svelte}", "*.ts"]
     },
     "backend": {
       "project": ["**/*.ts", "!cli/**", "!resources/**"]

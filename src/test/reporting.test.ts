@@ -99,7 +99,7 @@ interface Harness {
   shownPanel: () => { id: number; type: string }
 }
 
-const failureTypes = new Set(["submissionStatusError", "testError"])
+const failureTypes = new Set(["submissionStatusError"])
 
 async function harness(
   services: {
@@ -253,19 +253,17 @@ async function harness(
   }
 }
 
-/** Shows the stored exercise's test results in the side panel, as a test run does. */
-function showTestResults(actionContext: ReadyActionContext): void {
+/** Shows the stored exercise's submission panel on the side, as submitting does. */
+function showSubmission(actionContext: ReadyActionContext): void {
   const [storedExercise] = storedCourse().exercises
   if (!storedExercise) {
     throw new Error("the stored course has no exercise")
   }
   TmcPanel.renderSide(vscode.Uri.file("/ext"), createMockContext(), actionContext, {
     id: nextPanelId(),
-    type: "ExerciseTests",
+    type: "ExerciseSubmission",
     course: makeMoocKind(storedCourse()),
     exercise: makeMoocKind(storedExercise),
-    exerciseUri: exercise.uri,
-    testRunId: nextPanelId(),
   })
 }
 
@@ -356,18 +354,6 @@ suite("reported once: exercise commands", function () {
     expect(panelFailures()).toHaveLength(1)
   })
 
-  test("a submission from the panel fails in the panel only", async function () {
-    const { actionContext, post, shown, panelFailures, shownPanel } = await harness({
-      langs: { submitMoocExerciseAndWaitForResults: async () => Err(new ConnectionError("reset")) },
-    })
-    showTestResults(actionContext)
-
-    await post({ type: "submitExercise", requestId: 1, sourcePanel: shownPanel() })
-
-    expect(shown).toEqual([])
-    expect(panelFailures()).toEqual(["submissionStatusError: reset"])
-  })
-
   test("a failed paste from the palette is one notification", async function () {
     const { run, shown } = await harness({
       langs: { submitMoocExerciseToPaste: async () => Err(offline()) },
@@ -396,7 +382,7 @@ suite("reported once: exercise commands", function () {
     const { actionContext, post, shown, panelFailures, shownPanel } = await harness({
       langs: { submitMoocExerciseToPaste: async () => Err(offline()) },
     })
-    showTestResults(actionContext)
+    showSubmission(actionContext)
 
     await post({ type: "pasteExercise", requestId: 1, sourcePanel: shownPanel() })
 
@@ -409,7 +395,7 @@ suite("reported once: exercise commands", function () {
     const { actionContext, run, post, shown, panelFailures, shownPanel } = await harness({
       langs: { submitMoocExerciseAndWaitForResults: () => submission.promise },
     })
-    showTestResults(actionContext)
+    showSubmission(actionContext)
 
     const submitting = run("tmc.submitExercise")
     await post({ type: "pasteExercise", requestId: 1, sourcePanel: shownPanel() })

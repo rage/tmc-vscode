@@ -7,7 +7,6 @@ import { runForExercise } from "./runForExercise"
 
 /** Runs an exercise's tests through the test controller, so the results land in Test Results. */
 export async function testExercise(
-  _context: vscode.ExtensionContext,
   actionContext: ReadyActionContext,
   resource: vscode.Uri | undefined,
 ): Promise<void> {

@@ -108,7 +108,6 @@ export function registerCommands(
   Logger.info("Registering TMC VSCode commands")
 
   registerPanelActions({
-    cancelTests: actions.cancelTestRun,
     closeExercises: actions.closeExercises,
     downloadAndOpenExercises: actions.downloadAndOpenExercises,
     downloadExercisesForUi: actions.downloadExercisesForUi,
@@ -117,7 +116,6 @@ export function registerCommands(
     refreshLocalExercises: actions.refreshLocalExercises,
     removeCourse: actions.removeCourse,
     sendSubmissionFeedback: actions.sendSubmissionFeedback,
-    submitExercise: commands.submitExercise,
     updateCourse: actions.updateCourse,
   })
 
@@ -215,13 +213,7 @@ export function registerCommands(
     )
   })
 
-  // The extension's only login: the courses.mooc.fi device flow.
-  register("tmc.showMoocLogin", () => {
-    TmcPanel.renderSide(context.extensionUri, context, readyContext, {
-      id: nextPanelId(),
-      type: "MoocLogin",
-    })
-  })
+  register("tmc.showMoocLogin", async () => commands.login(readyContext))
 
   register("tmc.submitExercise", async (resource: vscode.Uri | undefined) =>
     commands.submitExercise(context, readyContext, resource),
@@ -230,7 +222,7 @@ export function registerCommands(
   register("tmc.switchWorkspace", async () => commands.switchWorkspace(readyContext))
 
   register("tmc.testExercise", async (resource: vscode.Uri | undefined) =>
-    commands.testExercise(context, readyContext, resource),
+    commands.testExercise(readyContext, resource),
   )
 
   register("tmc.updateExercises", async (mode?: "silent" | "loud") =>

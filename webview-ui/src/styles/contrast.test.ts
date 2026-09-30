@@ -60,7 +60,7 @@ const PAIRINGS: Pairing[] = [
     },
     {
       name: `${kind} notice icon and accent`,
-      foreground: `var(--tmc-fg-${kind})`,
+      foreground: `var(--tmc-notice-${kind}-accent)`,
       background: `var(--tmc-notice-${kind}-background)`,
       minimum: NON_TEXT,
     },
@@ -105,31 +105,7 @@ const UNPAIRED_COLOUR_TOKENS: Record<string, string> = {
  * Pairings that fail today, keyed `"<pairing> in <theme>"`. Each is a product bug: fix the token
  * and delete the entry, and the test starts guarding it.
  */
-const KNOWN_FAILURES: Record<string, string> = {
-  ...inThemes(
-    "meter track outline",
-    ["Dark Modern", "Light Modern", "Dark 2026", "Light 2026"],
-    "input.border is a faint hairline, so the meter's full extent is barely visible",
-  ),
-  ...inThemes(
-    "passed status icon",
-    ["Light Modern", "Light 2026"],
-    "testing.iconPassed is #73c991 in light themes too",
-  ),
-  ...inThemes(
-    "warning notice icon and accent",
-    ["Light Modern", "Light 2026"],
-    "editorWarning.foreground on inputValidation.warningBackground",
-  ),
-  "error notice icon and accent in Light Modern":
-    "errorForeground on inputValidation.errorBackground",
-  "muted card text in Dark 2026": "descriptionForeground on welcomePage.tileBackground",
-  "meter fill in Default High Contrast": "button.background is the page colour, #000000",
-}
-
-function inThemes(pairing: string, themes: string[], reason: string): Record<string, string> {
-  return Object.fromEntries(themes.map((theme) => [`${pairing} in ${theme}`, reason]))
-}
+const KNOWN_FAILURES: Record<string, string> = {}
 
 const tokenDefinitions = new Map(
   [...tokens.replaceAll(/\/\*[\s\S]*?\*\//g, "").matchAll(/(--tmc-[\w-]+):\s*([^;]+);/g)].map(

@@ -238,14 +238,13 @@ suite("registerCommands", function () {
     expect(ids).toContain("tmc.showMoocLogin")
   })
 
-  test("the login command opens the courses.mooc.fi device flow", async function () {
-    const renderSide = vi.spyOn(TmcPanel, "renderSide").mockReturnValue(undefined)
+  test("the login command runs the courses.mooc.fi device flow", async function () {
+    const login = vi.spyOn(commands, "login").mockResolvedValue("loggedIn")
     const { handlers } = registerAndCollect()
 
     await handlers.get("tmc.showMoocLogin")?.()
 
-    expect(renderSide).toHaveBeenCalledOnce()
-    expect(renderSide.mock.calls[0]?.[3]).toMatchObject({ type: "MoocLogin" })
+    expect(login).toHaveBeenCalledOnce()
   })
 
   // VS Code discards a rejected handler promise, so a command that throws would
@@ -257,16 +256,14 @@ suite("registerCommands", function () {
       value: { getExtension: () => ({ packageJSON: packageJson() }) },
       configurable: true,
     })
-    vi.spyOn(TmcPanel, "renderSide").mockImplementation(() => {
-      throw new Error("the panel could not open")
-    })
+    vi.spyOn(commands, "login").mockRejectedValue(new Error("the CLI could not start"))
     const { handlers, actionContext } = registerAndCollect()
 
     await expect(handlers.get("tmc.showMoocLogin")?.()).resolves.toBeUndefined()
 
     expect(vi.mocked(actionContext.dialog.reportError)).toHaveBeenCalledWith(
       "Failed to run Log In.",
-      expect.objectContaining({ message: "the panel could not open" }),
+      expect.objectContaining({ message: "the CLI could not start" }),
     )
   })
 
@@ -339,6 +336,15 @@ suite("registerCommands", function () {
     for (const entry of entries) {
       expect(whenTerms(entry.when)).toContain("test-my-code:ActiveEditorIsExercise")
     }
+  })
+
+  // The exercise status bar item's quick pick is the editor's route to the other actions.
+  test("the editor title offers only Run Tests and Submit", function () {
+    const entries = packageJson().contributes.menus["editor/title"] ?? []
+    expect(entries.map((entry) => entry.command ?? entry.submenu)).toEqual([
+      "tmc.testExercise",
+      "tmc.submitExercise",
+    ])
   })
 
   // A file icon ignores the theme and high contrast; a codicon follows both.
@@ -557,14 +563,14 @@ suite("registered command handlers", function () {
     expect(submitExercise).toHaveBeenCalledWith(context, actionContext, resource)
   })
 
-  test("tmc.testExercise delegates to commands.testExercise with the extension context", async function () {
+  test("tmc.testExercise delegates to commands.testExercise", async function () {
     const testExercise = vi.spyOn(commands, "testExercise").mockResolvedValue(undefined)
-    const { handlers, context, actionContext } = registerAndCollect()
+    const { handlers, actionContext } = registerAndCollect()
     const resource = vscode.Uri.file("/course/exercise")
 
     await handlers.get("tmc.testExercise")?.(resource)
 
-    expect(testExercise).toHaveBeenCalledWith(context, actionContext, resource)
+    expect(testExercise).toHaveBeenCalledWith(actionContext, resource)
   })
 
   test.each([[undefined], ["silent" as const]])(

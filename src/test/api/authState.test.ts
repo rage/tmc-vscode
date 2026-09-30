@@ -136,4 +136,17 @@ suite("AuthState", function () {
     expect(authState.mooc).toBe(true)
     expect(authState.tmc).toBe(false)
   })
+
+  test("tells mooc subscribers only when the courses.mooc.fi session changes", async function () {
+    const { authState } = harness({ tmc: [true, true, true], mooc: [false, true, true] })
+    const moocListener = vi.fn()
+    authState.subscribeMooc(moocListener)
+
+    await authState.refresh()
+    await authState.refresh()
+    await authState.refresh()
+    await authState.set("mooc", false)
+
+    expect(moocListener.mock.calls).toEqual([[true], [false]])
+  })
 })

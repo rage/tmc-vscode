@@ -205,7 +205,6 @@ vi.mock("../../init/verifyCliSchema", () => ({
 // of them has to exist here even though no test drives a webview message.
 vi.mock("../../actions", () => ({
   refreshLocalExercises: async (): Promise<unknown> => Ok.EMPTY,
-  cancelTestRun: (): void => {},
   closeExercises: async (): Promise<unknown> => Ok.EMPTY,
   downloadAndOpenExercises: async (): Promise<unknown> => Ok.EMPTY,
   downloadExercisesForUi: async (): Promise<void> => {},
@@ -685,7 +684,7 @@ suite("the first start of a new version", function () {
     await activate(createContext())
 
     expect(executeCommand).toHaveBeenCalledWith("tmc.showWelcome")
-    expect(recorded.panelTypes).not.toContain("Welcome")
+    expect(recorded.panelTypes).toEqual([])
   })
 
   // Opening a panel unasked on every update covers whatever the user was doing.

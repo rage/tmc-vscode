@@ -25,18 +25,22 @@
   --tmc-fg-muted: var(--vscode-descriptionForeground);
   --tmc-fg-disabled: var(--vscode-disabledForeground);
   --tmc-fg-error: var(--vscode-errorForeground);
-  --tmc-fg-warning: var(--vscode-editorWarning-foreground);
   --tmc-fg-info: var(--vscode-editorInfo-foreground, var(--vscode-foreground));
   --tmc-fg-link: var(--vscode-textLink-foreground);
   --tmc-fg-link-active: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));
 
-  /* Icon colours only: the testing tokens fail text contrast on light themes. */
-  --tmc-status-passed: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+  /* Icon colours only: these fail text contrast on light themes. charts.green comes first
+     because testing.iconPassed stays #73c991, 2:1 on white, in light themes. */
+  --tmc-status-passed: var(--vscode-charts-green, var(--vscode-testing-iconPassed));
   --tmc-status-failed: var(--vscode-testing-iconFailed, var(--vscode-errorForeground));
   --tmc-status-unset: var(--vscode-testing-iconUnset, var(--vscode-disabledForeground));
   --tmc-status-warning: var(--vscode-editorWarning-foreground);
 
-  --tmc-surface: var(--vscode-welcomePage-tileBackground, var(--vscode-editorWidget-background));
+  /* Not welcomePage.tileBackground first: muted text on it is 4.2:1 in Dark 2026. */
+  --tmc-surface: var(
+    --vscode-textBlockQuote-background,
+    var(--vscode-welcomePage-tileBackground, var(--vscode-editorWidget-background))
+  );
   --tmc-surface-border: var(
     --vscode-welcomePage-tileBorder,
     var(--vscode-contrastBorder, transparent)
@@ -49,18 +53,24 @@
 
   --tmc-code-background: var(--vscode-textCodeBlock-background, transparent);
 
+  /* High Contrast's button.background is the page colour. */
   --tmc-meter-fill: var(
-    --vscode-button-background,
-    var(--vscode-contrastActiveBorder, var(--vscode-foreground))
+    --vscode-contrastActiveBorder,
+    var(--vscode-button-background, var(--vscode-foreground))
   );
-  --tmc-meter-track-border: var(
-    --vscode-input-border,
-    var(--vscode-contrastBorder, var(--vscode-widget-border, var(--vscode-foreground)))
-  );
+  /* input.border is a hairline outside High Contrast, too faint to show the track's extent. */
+  --tmc-meter-track-border: var(--vscode-contrastBorder, var(--vscode-descriptionForeground));
 
   --tmc-notice-error-background: var(--vscode-inputValidation-errorBackground, transparent);
   --tmc-notice-warning-background: var(--vscode-inputValidation-warningBackground, transparent);
   --tmc-notice-info-background: var(--vscode-inputValidation-infoBackground, transparent);
+  /* errorForeground and editorWarning.foreground are under 3:1 on their tints in light themes. */
+  --tmc-notice-error-accent: var(--tmc-status-failed);
+  --tmc-notice-warning-accent: var(
+    --vscode-list-warningForeground,
+    var(--vscode-editorWarning-foreground)
+  );
+  --tmc-notice-info-accent: var(--tmc-fg-info);
 
   --tmc-section-header-background: var(--vscode-sideBarSectionHeader-background, transparent);
   --tmc-section-header-foreground: var(--vscode-sideBarSectionHeader-foreground, inherit);

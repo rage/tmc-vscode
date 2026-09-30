@@ -110,7 +110,6 @@ To release, create a release with the tag in the format `vMAJOR.MINOR.PATCH`, fo
 A script, `./bin/validateRelease.sh`, is ran during the release process to ensure that
 
 - the `CHANGELOG.md` has an entry for the tagged version
-- the Welcome panel changelog (`./webview-ui/src/panels/Welcome.svelte`) has an entry for the tagged version
 - the `package.json` version matches the tagged version
 - all configured tmc-langs builds referenced from `config.js` exist on the download server
 

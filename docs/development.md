@@ -65,6 +65,12 @@ authenticates the tmc backend with the same credential. A tmc token already in
 one, and `tmc logout` (the only thing that removes it) does not touch the mooc
 credentials.
 
+The login is native UI (`src/commands/login.ts`): a modal with the code, then a cancellable
+progress notification, and the browser opens the verification page so an existing
+courses.mooc.fi browser session is reused. `MoocAuthenticationProvider` puts the session in
+the Accounts menu; its `accessToken` is empty, because the CLI owns the real tokens and no
+other extension may obtain them through VS Code.
+
 Consequence for the CLI environment: the mooc knobs
 (`TMC_LANGS_MOOC_ROOT_URL`, `TMC_LANGS_MOOC_CLIENT_ID`,
 `TMC_LANGS_MOOC_TRUST_LOCALHOST`) apply to `tmc` commands too, not just `mooc`

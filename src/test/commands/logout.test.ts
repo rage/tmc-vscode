@@ -3,7 +3,7 @@ import { vi } from "vitest"
 
 import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
-import { logout } from "../../commands/logout"
+import { logout, logoutConfirmed } from "../../commands/logout"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -48,5 +48,18 @@ suite("logout command", function () {
 
     expect(dialog.notification).not.toHaveBeenCalled()
     expect(dialog.reportError).toHaveBeenCalledOnce()
+  })
+})
+
+suite("logoutConfirmed", function () {
+  test("logs out without asking again", async function () {
+    vi.mocked(actions.logout).mockResolvedValue(Ok.EMPTY)
+    const [context, dialog] = contextWith(false)
+
+    await logoutConfirmed(context)
+
+    expect(dialog.confirm).not.toHaveBeenCalled()
+    expect(actions.logout).toHaveBeenCalledOnce()
+    expect(vi.mocked(dialog.notification)).toHaveBeenCalledExactlyOnceWith("Logged out.")
   })
 })
