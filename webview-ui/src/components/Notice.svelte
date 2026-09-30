@@ -4,14 +4,13 @@
   import ToolbarButton from "./ToolbarButton.svelte"
 
   interface Props {
+    /**
+     * An error is an `alert`, the rest a `status`. A region only announces changes made after it
+     * mounts, so an outcome worth hearing that appears together with the notice needs
+     * `announce()` as well.
+     */
     kind: "info" | "warning" | "error"
     title?: string | undefined
-    /**
-     * Defaults to `alert` for errors and `status` for the rest. A region only announces changes
-     * made after it is mounted, so for an outcome worth hearing that appears together with this
-     * notice, call `announce()` as well, or pass `"none"` and announce instead.
-     */
-    role?: "alert" | "status" | "none" | undefined
     /** Renders a dismiss button; `dismissLabel` should say what goes away. */
     ondismiss?: (() => void) | undefined
     dismissLabel?: string | undefined
@@ -20,20 +19,12 @@
     children?: Snippet | undefined
   }
 
-  let {
-    kind,
-    title,
-    role = kind === "error" ? "alert" : "status",
-    ondismiss,
-    dismissLabel = "Dismiss",
-    actions,
-    children,
-  }: Props = $props()
+  let { kind, title, ondismiss, dismissLabel = "Dismiss", actions, children }: Props = $props()
 
   const icons = { info: "info", warning: "warning", error: "error" } as const
 </script>
 
-<div class="notice notice-{kind}" role={role === "none" ? undefined : role}>
+<div class="notice notice-{kind}" role={kind === "error" ? "alert" : "status"}>
   <vscode-icon class="notice-icon" name={icons[kind]}></vscode-icon>
   <div class="notice-body">
     {#if title}<p class="notice-title">{title}</p>{/if}

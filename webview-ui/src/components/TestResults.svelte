@@ -57,7 +57,6 @@
           <StatusIcon
             status={validationStrategy === "FAIL" ? "failed" : "warning"}
             label={validationStrategy === "FAIL" ? "Error" : "Warning"}
-            isLabelHidden
           />
           {path}
         </h3>
@@ -87,7 +86,6 @@
           <StatusIcon
             status={result.successful ? "passed" : "failed"}
             label={result.successful ? "Passed" : "Failed"}
-            isLabelHidden
           />
           {result.name}
         </h3>

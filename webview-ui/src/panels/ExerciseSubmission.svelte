@@ -109,7 +109,7 @@
     {#each view?.progressSteps ?? [] as step, index (index)}
       <li>
         {#if index < (view?.progressSteps.length ?? 0) - 1}
-          <StatusIcon status="passed" label="Done:" isLabelHidden />
+          <StatusIcon status="passed" label="Done:" />
           {step}
         {:else}
           <Spinner label={step} />

@@ -18,8 +18,8 @@ suite("Meter component", () => {
   })
 
   test("shows the count beside the label", () => {
-    render(Meter, { props: { label: "Tests", value: 1, max: 3, unit: "passed" } })
-    expect(screen.getByText("1 / 3 passed")).toBeInTheDocument()
+    render(Meter, { props: { label: "Points", value: 1, max: 3 } })
+    expect(screen.getByText("1 / 3 points")).toBeInTheDocument()
   })
 
   test("keeps a valid range when there is nothing to score", () => {

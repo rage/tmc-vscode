@@ -2,14 +2,9 @@
   interface Props {
     /** What is being waited for, e.g. "Loading courses". */
     label: string
-    /**
-     * Hides the label visually. The ring then becomes a polite status itself; otherwise it is
-     * hidden from assistive technology and the visible label carries the meaning.
-     */
-    isLabelHidden?: boolean
   }
 
-  let { label, isLabelHidden = false }: Props = $props()
+  let { label }: Props = $props()
 </script>
 
 <!--
@@ -17,13 +12,8 @@
   interrupts speech on every mount and nests inside surrounding live regions.
 -->
 <span class="spinner">
-  {#if isLabelHidden}
-    <vscode-progress-ring role="status" aria-live="polite" aria-label={label}
-    ></vscode-progress-ring>
-  {:else}
-    <vscode-progress-ring role="presentation" aria-hidden="true"></vscode-progress-ring>
-    <span>{label}</span>
-  {/if}
+  <vscode-progress-ring role="presentation" aria-hidden="true"></vscode-progress-ring>
+  <span>{label}</span>
 </span>
 
 <style>

@@ -23,17 +23,13 @@ suite("PanelHeader component", () => {
     expect(screen.getByRole("heading", { level: 1 })).not.toHaveFocus()
   })
 
-  test("renders the breadcrumb and trailing actions", () => {
+  test("renders trailing actions", () => {
     render(PanelHeader, {
       props: {
         title: "Python Course",
-        breadcrumb: createRawSnippet(() => ({
-          render: () => `<nav aria-label="Breadcrumb">My Courses</nav>`,
-        })),
         actions: createRawSnippet(() => ({ render: () => "<button>Refresh</button>" })),
       },
     })
-    expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Refresh" })).toBeInTheDocument()
   })
 })
