@@ -1,6 +1,6 @@
 import { vi } from "vitest"
 
-import { UserData } from "../../config/userdata"
+import { findStoredExercise, UserData } from "../../config/userdata"
 import { CorruptStoredDataError } from "../../errors"
 import type { LocalCourseExercise } from "../../shared/shared"
 import {
@@ -307,6 +307,31 @@ suite("UserData course add/get/update/delete", function () {
     })
     const result = await userData.addCourse(makeMoocKind(moocCourse({ id: "instance-uuid-1" })))
     expect(result.err).toBe(true)
+  })
+
+  test("finds a downloaded exercise's stored course and exercise within its backend", async function () {
+    const [userData] = await makeUserData({
+      courses: [tmcCourse({ name: "shared", exercises: [tmcExercise({ id: 1, name: "ex" })] })],
+      mooc_courses: [
+        moocCourse({ name: "shared", exercises: [moocExercise({ id: "m", name: "ex" })] }),
+      ],
+    })
+
+    const stored = findStoredExercise(userData, {
+      backend: "mooc",
+      courseSlug: "shared",
+      exerciseSlug: "ex",
+    })
+
+    expect(stored.unwrap().course.kind).toBe("mooc")
+    expect(stored.unwrap().exercise.data.id).toBe("m")
+    expect(
+      findStoredExercise(userData, { backend: "tmc", courseSlug: "shared", exerciseSlug: "gone" })
+        .err,
+    ).toBe(true)
+    expect(
+      findStoredExercise(userData, { backend: "tmc", courseSlug: "gone", exerciseSlug: "ex" }).err,
+    ).toBe(true)
   })
 
   test("getCourse errs for a nonexistent course", async function () {

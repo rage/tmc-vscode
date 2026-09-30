@@ -1,11 +1,12 @@
 import type { Result } from "ts-results"
-import { Err, Ok } from "ts-results"
+import { Ok } from "ts-results"
 import type * as vscode from "vscode"
 
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { CLI_PROCESS_TIMEOUT } from "../config/constants"
+import { findStoredExercise } from "../config/userdata"
 import type { RunResult, StyleValidationResult } from "../shared/langsSchema"
-import { LocalCourseData, LocalCourseExercise } from "../shared/shared"
+import { LocalCourseExercise } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { Logger } from "../utilities"
 import { resolvePythonInterpreter } from "../window"
@@ -39,19 +40,11 @@ export async function testExercise(
 ): Promise<Result<ExerciseTestOutcome, Error>> {
   const { langs, userData } = actionContext.startup
 
-  const courseResult = userData.getCourseBySlug(exercise.backend, exercise.courseSlug)
-  if (courseResult.err) {
-    return courseResult
+  const stored = findStoredExercise(userData, exercise)
+  if (stored.err) {
+    return stored
   }
-  const course = courseResult.val
-  const courseExercise = LocalCourseData.getExercises(course).find(
-    (x) => LocalCourseExercise.getSlug(x) === exercise.exerciseSlug,
-  )
-  if (!courseExercise) {
-    return Err(
-      new Error(`ID for exercise ${exercise.courseSlug}/${exercise.exerciseSlug} was not found.`),
-    )
-  }
+  const { course, exercise: courseExercise } = stored.val
   if (course.data.perhapsExamMode) {
     return Ok({ kind: "examMode" })
   }
