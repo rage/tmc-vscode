@@ -1,10 +1,9 @@
-import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import { EXTENSION_ID } from "../../config/constants"
 import type { WebviewToExtension } from "../../shared/shared"
 import { assertUnreachable } from "../../shared/shared"
-import { cliFolder, Logger } from "../../utilities"
+import { Logger } from "../../utilities"
 import type { HandlerMap } from "../router"
 
 /** Messages any screen may send. */
@@ -34,23 +33,6 @@ export const miscHandlers = {
     requiresReady: false,
     async handle(message): Promise<void> {
       await vscode.commands.executeCommand(message.command, ...runCommandArguments(message.command))
-    },
-  },
-  requestInitializationErrors: {
-    requiresReady: false,
-    handle(_message, { actionContext, extensionContext }) {
-      const failures =
-        actionContext.startup.kind === "degraded" ? actionContext.startup.failures : {}
-      return Ok({
-        cliFolder: cliFolder(extensionContext),
-        initializationErrors: {
-          tmc: formatError(failures.langs),
-          userData: formatError(failures.userData),
-          workspaceManager: formatError(failures.workspaceManager),
-          resources: formatError(failures.resources),
-          exerciseDecorationProvider: formatError(failures.exerciseDecorationProvider),
-        },
-      })
     },
   },
 } satisfies Partial<HandlerMap>
@@ -93,14 +75,4 @@ function runCommandArguments(command: RunnableCommand): unknown[] {
     default:
       return assertUnreachable(command)
   }
-}
-
-function formatError(error: Error | undefined): { error: string; stack: string } | null {
-  if (!error) {
-    return null
-  }
-  const stack = error.stack ?? "no stack trace"
-  return error.cause
-    ? { error: `${error.message}: ${error.cause}`, stack }
-    : { error: error.message, stack }
 }

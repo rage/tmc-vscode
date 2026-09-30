@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/svelte"
 import { createRawSnippet } from "svelte"
 
+import { initializationErrorHelpPanel } from "../test/fixtures"
 import { reloadDocument } from "../test/setup"
 import { enterScreen } from "../utilities/uiState.svelte"
 import Disclosure from "./Disclosure.svelte"
@@ -37,7 +38,7 @@ suite("Disclosure component", () => {
   })
 
   test("a persisted one comes back open after its document reloads", async () => {
-    const helpPanel = { id: 1, type: "InitializationErrorHelp" } as const
+    const helpPanel = initializationErrorHelpPanel()
     enterScreen(helpPanel)
     render(Disclosure, { props: { title: "Stack trace", persistAs: "stack", children: body } })
     await fireEvent.click(screen.getByRole("button", { name: "Stack trace" }))

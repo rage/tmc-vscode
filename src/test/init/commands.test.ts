@@ -98,6 +98,7 @@ function registerAndCollect(actionContext: ActionContext = createMockActionConte
   const context = {
     subscriptions: [],
     extensionUri: vscode.Uri.file("/tmp/extension"),
+    globalStorageUri: vscode.Uri.file("/tmp/global-storage"),
   } as unknown as vscode.ExtensionContext
 
   registerServiceFreeCommands(context, actionContext.dialog)

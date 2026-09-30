@@ -5,6 +5,7 @@
 
 import type { TestCase } from "../shared/langsSchema"
 import type {
+  InitializationErrorHelpPanel,
   LocalCourseData,
   SharedMoocCourseData,
   SharedTmcCourseData,
@@ -107,5 +108,23 @@ export function testCase(overrides: Partial<TestCase> = {}): TestCase {
     detailed_message: null,
     exception: [],
     ...overrides,
+  }
+}
+
+export function initializationErrorHelpPanel(
+  initializationErrors: Partial<InitializationErrorHelpPanel["initializationErrors"]> = {},
+): InitializationErrorHelpPanel {
+  return {
+    id: 4,
+    type: "InitializationErrorHelp",
+    cliFolder: "/tmp/cli",
+    initializationErrors: {
+      tmc: null,
+      userData: null,
+      workspaceManager: null,
+      exerciseDecorationProvider: null,
+      resources: null,
+      ...initializationErrors,
+    },
   }
 }

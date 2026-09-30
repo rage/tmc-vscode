@@ -1,18 +1,9 @@
 <script lang="ts">
-  import { onMount } from "svelte"
-
   import Button from "../components/Button.svelte"
   import CodeBlock from "../components/CodeBlock.svelte"
   import Disclosure from "../components/Disclosure.svelte"
   import PanelHeader from "../components/PanelHeader.svelte"
-  import Spinner from "../components/Spinner.svelte"
-  import type {
-    InitializationErrorHelpPanel,
-    InitializationErrors as InitializationErrorsReply,
-    WebviewError,
-    WebviewToExtension,
-  } from "../shared/shared"
-  import { createRequester, HOST_STATE_TIMEOUT_MS } from "../utilities/script"
+  import type { InitializationErrorHelpPanel, WebviewToExtension } from "../shared/shared"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -21,16 +12,8 @@
 
   let { panel }: Props = $props()
 
-  type InitializationErrors = InitializationErrorsReply["initializationErrors"]
+  type InitializationErrors = InitializationErrorHelpPanel["initializationErrors"]
   type RunnableCommand = Extract<WebviewToExtension, { type: "runCommand" }>["command"]
-
-  interface InitializationFailure {
-    key: keyof InitializationErrors
-    label: string
-    error: string
-    stack: string
-    hint?: string | undefined
-  }
 
   const components: ReadonlyArray<{ key: keyof InitializationErrors; label: string }> = [
     { key: "tmc", label: "tmc-langs" },
@@ -40,26 +23,12 @@
     { key: "resources", label: "resources" },
   ]
 
-  let failures = $state.raw<InitializationFailure[] | undefined>(undefined)
-  let loadError = $state.raw<WebviewError | undefined>(undefined)
-  const request = createRequester()
-
-  onMount(async () => {
-    const outcome = await request(
-      "requestInitializationErrors",
-      { sourcePanel: { id: panel.id, type: panel.type } },
-      { timeoutMs: HOST_STATE_TIMEOUT_MS },
-    )
-    if (!outcome.ok) {
-      loadError = outcome.error
-      return
-    }
-    const { cliFolder, initializationErrors } = outcome.value
+  const failures = $derived.by(() => {
     const cliHint =
       "A proxy, firewall or antivirus program blocking network requests can cause this. " +
-      `Try adding an exception for the directory '${cliFolder}'.`
-    failures = components.flatMap(({ key, label }) => {
-      const failure = initializationErrors[key]
+      `Try adding an exception for the directory '${panel.cliFolder}'.`
+    return components.flatMap(({ key, label }) => {
+      const failure = panel.initializationErrors[key]
       return failure ? [{ key, label, ...failure, hint: key === "tmc" ? cliHint : undefined }] : []
     })
   })
@@ -73,11 +42,7 @@
 <p>Something went wrong while initializing the extension.</p>
 
 <h2>What failed</h2>
-{#if loadError}
-  <p>Could not load the error data: {loadError.message}</p>
-{:else if failures === undefined}
-  <Spinner label="Loading error data…" />
-{:else if failures.length === 0}
+{#if failures.length === 0}
   <p>No error data found</p>
 {:else}
   <ul class="failures">

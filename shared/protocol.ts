@@ -40,9 +40,21 @@ export const ExerciseSubmissionPanelSchema = z.object({
 
 export type ExerciseSubmissionPanel = z.infer<typeof ExerciseSubmissionPanelSchema>
 
+const InitializationFailureSchema = z.object({ error: z.string(), stack: z.string() }).nullable()
+
 export const InitializationErrorHelpPanelSchema = z.object({
   id: z.number(),
   type: z.literal("InitializationErrorHelp"),
+  /** Where the tmc-langs CLI is kept, for a firewall or antivirus exception. */
+  cliFolder: z.string(),
+  /** Each service's activation failure; `null` for one that did not fail. */
+  initializationErrors: z.object({
+    tmc: InitializationFailureSchema,
+    userData: InitializationFailureSchema,
+    workspaceManager: InitializationFailureSchema,
+    exerciseDecorationProvider: InitializationFailureSchema,
+    resources: InitializationFailureSchema,
+  }),
 })
 
 export type InitializationErrorHelpPanel = z.infer<typeof InitializationErrorHelpPanelSchema>
@@ -164,26 +176,6 @@ const FeedbackAnswerSchema = z.object({ questionId: z.number(), answer: z.string
 
 export type FeedbackAnswer = z.infer<typeof FeedbackAnswerSchema>
 
-const initializationErrorSchema = z
-  .object({
-    error: z.string(),
-    stack: z.string(),
-  })
-  .nullable()
-
-export const InitializationErrorsSchema = z.object({
-  cliFolder: z.string(),
-  initializationErrors: z.object({
-    tmc: initializationErrorSchema,
-    userData: initializationErrorSchema,
-    workspaceManager: initializationErrorSchema,
-    exerciseDecorationProvider: initializationErrorSchema,
-    resources: initializationErrorSchema,
-  }),
-})
-
-export type InitializationErrors = z.infer<typeof InitializationErrorsSchema>
-
 /**
  * For use with `webview.postMessage` in `TmcPanel`.
  * Handled by the Svelte app.
@@ -287,11 +279,6 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     // the scheme, which this does not.
     url: z.url(),
   }),
-  z.object({
-    type: z.literal("requestInitializationErrors"),
-    requestId: z.number(),
-    sourcePanel: targetPanelSchema("InitializationErrorHelp"),
-  }),
   // an uncaught webview error, for the extension log
   z.object({
     type: z.literal("webviewError"),
@@ -338,7 +325,6 @@ export const ReplyValueSchemas = {
   keepWaitingForGrading: z.undefined(),
   sendFeedback: z.undefined(),
   copyToClipboard: z.undefined(),
-  requestInitializationErrors: InitializationErrorsSchema,
 } satisfies Record<RequestType, z.ZodType>
 
 export type ReplyValue<K extends RequestType> = z.infer<(typeof ReplyValueSchemas)[K]>

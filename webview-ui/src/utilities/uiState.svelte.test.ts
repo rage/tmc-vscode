@@ -3,6 +3,7 @@ import { render } from "@testing-library/svelte"
 import App from "../App.svelte"
 import type { Panel } from "../shared/shared"
 import { makeMoocKind, makeTmcKind } from "../shared/shared"
+import { initializationErrorHelpPanel } from "../test/fixtures"
 import { dispatchToWebview, reloadDocument, savedWebviewState } from "../test/setup"
 import { enterScreen, uiState } from "./uiState.svelte"
 
@@ -61,7 +62,7 @@ suite("UI state across a document reload", () => {
   test("a component of a screen already left writes nothing into the next", () => {
     enterScreen(courseDetails)
     const stale = uiState("showPassedTests", false)
-    enterScreen({ id: 6, type: "InitializationErrorHelp" })
+    enterScreen(initializationErrorHelpPanel())
 
     stale.current = true
 

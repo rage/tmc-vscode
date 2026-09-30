@@ -272,33 +272,18 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: "initialization-error-help/errors",
-    panel: { id: 50, type: "InitializationErrorHelp" },
-    reply: (message) =>
-      message.type === "requestInitializationErrors"
-        ? [
-            {
-              type: "reply",
-              target: { type: "InitializationErrorHelp", id: 50 },
-              requestId: message.requestId,
-              outcome: {
-                ok: true,
-                value: {
-                  cliFolder: "/home/student/.local/share/tmc/cli",
-                  initializationErrors: {
-                    tmc: {
-                      error: "Failed to download the TMC-langs CLI",
-                      stack: "Error: ENOTFOUND",
-                    },
-                    userData: null,
-                    workspaceManager: null,
-                    exerciseDecorationProvider: null,
-                    resources: null,
-                  },
-                },
-              },
-            },
-          ]
-        : [],
+    panel: {
+      id: 50,
+      type: "InitializationErrorHelp",
+      cliFolder: "/home/student/.local/share/tmc/cli",
+      initializationErrors: {
+        tmc: { error: "Failed to download the TMC-langs CLI", stack: "Error: ENOTFOUND" },
+        userData: null,
+        workspaceManager: null,
+        exerciseDecorationProvider: null,
+        resources: null,
+      },
+    },
   },
 ]
 

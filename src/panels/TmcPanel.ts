@@ -5,7 +5,7 @@ import type * as vscode from "vscode"
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type { Panel } from "../shared/shared"
-import { WebviewStateSchema } from "../shared/shared"
+import { assertUnreachable, WebviewStateSchema } from "../shared/shared"
 import { Logger } from "../utilities"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
@@ -13,7 +13,7 @@ import { messageHandlers } from "./handlers"
 import { postMessageToWebview, renderPanel } from "./panel"
 import type { HandlerContext, PanelHost, PanelMessage } from "./router"
 import { dispatch } from "./router"
-import { nextPanelId, panelTitle } from "./routes"
+import { initializationErrorHelpPanel, nextPanelId, panelTitle } from "./routes"
 
 /**
  * The main panel's webview type, which its serializer is registered for.
@@ -148,7 +148,7 @@ export class TmcPanel {
   ): Disposable {
     return window.registerWebviewPanelSerializer(MAIN_PANEL_VIEW_TYPE, {
       deserializeWebviewPanel: async (webviewPanel, state) => {
-        const route = restoredRoute(state, actionContext)
+        const route = restoredRoute(state, actionContext, extensionContext)
         if (!route || TmcPanel.mainPanel !== undefined) {
           Logger.info("Closing a restored main panel, which has no screen to show")
           webviewPanel.dispose()
@@ -323,15 +323,26 @@ function webviewOptions(extensionUri: Uri): WebviewOptions {
 }
 
 /** The screen a restored main panel's saved `state` names, if it can still be shown. */
-function restoredRoute(state: unknown, actionContext: ActionContext): Panel | undefined {
+function restoredRoute(
+  state: unknown,
+  actionContext: ActionContext,
+  extensionContext: vscode.ExtensionContext,
+): Panel | undefined {
   const saved = WebviewStateSchema.safeParse(state)
   const route = saved.success ? saved.data.route : undefined
-  if (route?.type === "CourseDetails") {
-    const isCourseStored =
-      isReady(actionContext) && actionContext.startup.userData.getCourse(route.courseId).ok
-    return isCourseStored ? { id: nextPanelId(), ...route } : undefined
+  switch (route?.type) {
+    case "CourseDetails": {
+      const isCourseStored =
+        isReady(actionContext) && actionContext.startup.userData.getCourse(route.courseId).ok
+      return isCourseStored ? { id: nextPanelId(), ...route } : undefined
+    }
+    case "InitializationErrorHelp":
+      return initializationErrorHelpPanel(actionContext, extensionContext)
+    case undefined:
+      return undefined
+    default:
+      return assertUnreachable(route)
   }
-  return route && { id: nextPanelId(), ...route }
 }
 
 function webviewContent(webview: Webview, extensionUri: Uri): string {

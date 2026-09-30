@@ -10,7 +10,7 @@ import { BottleneckError, InitializationError, presentationFor } from "../../err
 import type { PanelActions } from "../../panels/panelActions"
 import { registerPanelActions } from "../../panels/panelActions"
 import type { PanelMessage } from "../../panels/router"
-import { nextPanelId } from "../../panels/routes"
+import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
 import { MAIN_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
 import type { BackendKind, ExtensionToWebview, LocalCourseData, Panel } from "../../shared/shared"
 import { CourseIdentifier, makeTmcKind } from "../../shared/shared"
@@ -36,11 +36,7 @@ async function mountSidePanel(
   const { panel, getMessageListener, sendReady } = createFakeWebviewPanel()
   vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
 
-  TmcPanel.renderSide(
-    extensionContext,
-    actionContext,
-    shownPanel ?? { id: nextPanelId(), type: "InitializationErrorHelp" },
-  )
+  TmcPanel.renderSide(extensionContext, actionContext, shownPanel ?? helpPanel())
   await sendReady()
   const listener = getMessageListener()
   // Clear the initial mount's `setPanel` post so assertions below only see
@@ -174,108 +170,60 @@ suite("TmcPanel initialization guards", () => {
   })
 })
 
-// `cliFolder` reads `extensionContext.globalStorageUri`, which the shared
-// `createMockContext()` leaves as an auto-mocked function rather than a `Uri`; give it
-// a real one so this handler's other side effect doesn't crash before posting anything.
-function contextWithGlobalStorage(): vscode.ExtensionContext {
-  const base = createMockContext()
-  return new Proxy(base, {
-    get: (target, prop) =>
-      prop === "globalStorageUri"
-        ? vscode.Uri.file("/mock-global-storage")
-        : Reflect.get(target, prop),
-  }) as vscode.ExtensionContext
-}
-
-suite("TmcPanel requestInitializationErrors", () => {
-  const sourcePanel = { id: 7, type: "InitializationErrorHelp" as const }
-
-  test("a degraded startup renders each failed service's message, keyed by the service", async () => {
+suite("initializationErrorHelpPanel", () => {
+  test("carries each failed service's message, keyed by the service", () => {
     const actionContext = createDegradedContext({
       failures: {
         langs: new Error("langs offline"),
         userData: new Error("corrupt user data"),
       },
     })
-    const { panel, listener } = await mountSidePanel(actionContext, contextWithGlobalStorage())
 
-    await listener({ type: "requestInitializationErrors", requestId: 1, sourcePanel })
+    const panel = initializationErrorHelpPanel(actionContext, createMockContext())
 
-    expect(replyTo(panel, 1)).toMatchObject({
-      outcome: {
-        ok: true,
-        value: expect.objectContaining({
-          initializationErrors: expect.objectContaining({
-            tmc: expect.objectContaining({ error: "langs offline" }),
-            userData: expect.objectContaining({ error: "corrupt user data" }),
-          }),
-        }),
-      },
+    expect(path.basename(panel.cliFolder)).toBe("cli")
+    expect(panel.initializationErrors).toMatchObject({
+      tmc: { error: "langs offline" },
+      userData: { error: "corrupt user data" },
     })
   })
 
-  test("a ready startup reports no initialization failures", async () => {
-    const actionContext = createMockActionContext()
-    const { panel, listener } = await mountSidePanel(actionContext, contextWithGlobalStorage())
+  test("a ready startup carries no initialization failures", () => {
+    const panel = initializationErrorHelpPanel(createMockActionContext(), createMockContext())
 
-    await listener({ type: "requestInitializationErrors", requestId: 1, sourcePanel })
-
-    expect(replyTo(panel, 1)).toMatchObject({
-      outcome: {
-        ok: true,
-        value: expect.objectContaining({
-          initializationErrors: {
-            tmc: null,
-            userData: null,
-            workspaceManager: null,
-            resources: null,
-            exerciseDecorationProvider: null,
-          },
-        }),
-      },
+    expect(panel.initializationErrors).toEqual({
+      tmc: null,
+      userData: null,
+      workspaceManager: null,
+      resources: null,
+      exerciseDecorationProvider: null,
     })
   })
 
-  test("a service absent from the failures map is reported as null, not empty or crashing", async () => {
+  test("a service absent from the failures map is null, not empty or crashing", () => {
     // Only `langs` failed; the root cause never touched the other four, which is
     // distinct from a service that ran and failed itself.
     const actionContext = createDegradedContext({ failures: { langs: new Error("langs offline") } })
-    const { panel, listener } = await mountSidePanel(actionContext, contextWithGlobalStorage())
 
-    await listener({ type: "requestInitializationErrors", requestId: 1, sourcePanel })
+    const panel = initializationErrorHelpPanel(actionContext, createMockContext())
 
-    expect(replyTo(panel, 1)).toMatchObject({
-      outcome: {
-        ok: true,
-        value: expect.objectContaining({
-          initializationErrors: expect.objectContaining({
-            userData: null,
-            workspaceManager: null,
-            resources: null,
-            exerciseDecorationProvider: null,
-          }),
-        }),
-      },
+    expect(panel.initializationErrors).toMatchObject({
+      userData: null,
+      workspaceManager: null,
+      resources: null,
+      exerciseDecorationProvider: null,
     })
   })
 
-  test("folds a failure's cause into the reported message", async () => {
+  test("folds a failure's cause into the message", () => {
     const actionContext = createDegradedContext({
       failures: { langs: new Error("langs offline", { cause: "network unreachable" }) },
     })
-    const { panel, listener } = await mountSidePanel(actionContext, contextWithGlobalStorage())
 
-    await listener({ type: "requestInitializationErrors", requestId: 1, sourcePanel })
+    const panel = initializationErrorHelpPanel(actionContext, createMockContext())
 
-    expect(replyTo(panel, 1)).toMatchObject({
-      outcome: {
-        ok: true,
-        value: expect.objectContaining({
-          initializationErrors: expect.objectContaining({
-            tmc: expect.objectContaining({ error: "langs offline: network unreachable" }),
-          }),
-        }),
-      },
+    expect(panel.initializationErrors.tmc).toMatchObject({
+      error: "langs offline: network unreachable",
     })
   })
 })
@@ -905,10 +853,7 @@ suite("TmcPanel refreshCourseDetails", () => {
     const { panel, listener, shown } = await mountCourseDetails(actionContext)
 
     const refreshing = listener(refreshRequest(shown))
-    TmcPanel.renderSide(createMockContext(), actionContext, {
-      id: nextPanelId(),
-      type: "InitializationErrorHelp",
-    })
+    TmcPanel.renderSide(createMockContext(), actionContext, helpPanel())
     vi.mocked(panel.webview.postMessage).mockClear()
     update.resolve(Ok(true))
     await refreshing
@@ -1158,10 +1103,7 @@ suite("TmcPanel main panel lifecycle", () => {
     })
     await sendReady()
     vi.mocked(panel.webview.postMessage).mockClear()
-    TmcPanel.renderMain(extensionContext, actionContext, {
-      id: nextPanelId(),
-      type: "InitializationErrorHelp",
-    })
+    TmcPanel.renderMain(extensionContext, actionContext, helpPanel())
 
     expect(createWebviewPanel).toHaveBeenCalledTimes(1)
     expect(dispose).not.toHaveBeenCalled()
@@ -1194,10 +1136,7 @@ suite("TmcPanel main panel lifecycle", () => {
       courseId: CourseIdentifier.from(42),
     })
 
-    TmcPanel.renderMain(extensionContext, actionContext, {
-      id: nextPanelId(),
-      type: "InitializationErrorHelp",
-    })
+    TmcPanel.renderMain(extensionContext, actionContext, helpPanel())
 
     expect(side.dispose).not.toHaveBeenCalled()
     expect(TmcPanel.sidePanel).toBeDefined()
@@ -1287,7 +1226,7 @@ suite("TmcPanel side panel placement", () => {
     vi.mocked(vscode.window.createWebviewPanel)
       .mockReturnValueOnce(main.panel)
       .mockReturnValueOnce(side.panel)
-    renderMainPanel({ id: nextPanelId(), type: "InitializationErrorHelp" })
+    renderMainPanel(helpPanel())
     const shown = exerciseSubmissionPanel()
     renderSidePanel(shown)
     await main.sendReady()
@@ -1319,9 +1258,7 @@ suite("TmcPanel tab identity", () => {
   }
 
   test("names each screen instead of calling every tab TestMyCode", () => {
-    expect(mainPanelTitleFor({ id: nextPanelId(), type: "InitializationErrorHelp" })).toBe(
-      "TestMyCode Help",
-    )
+    expect(mainPanelTitleFor(helpPanel())).toBe("TestMyCode Help")
   })
 
   test("titles a course's tab with the course title, not its slug", () => {
@@ -1349,7 +1286,7 @@ suite("TmcPanel tab identity", () => {
   test("retitles a reused tab when it navigates", () => {
     const { panel } = createFakeWebviewPanel()
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
-    renderMainPanel({ id: nextPanelId(), type: "InitializationErrorHelp" })
+    renderMainPanel(helpPanel())
 
     renderMainPanel({
       id: nextPanelId(),
@@ -1366,7 +1303,7 @@ suite("TmcPanel tab identity", () => {
     createWebviewPanel.mockClear()
     createWebviewPanel.mockReturnValue(panel)
 
-    renderMainPanel({ id: nextPanelId(), type: "InitializationErrorHelp" })
+    renderMainPanel(helpPanel())
 
     expect(panel.iconPath).toEqual({
       light: vscode.Uri.joinPath(vscode.Uri.file("/ext"), "media", "TMC-light.svg"),
@@ -1458,6 +1395,10 @@ suite("TmcPanel webview document", () => {
     ])
   })
 })
+
+function helpPanel(): Panel {
+  return initializationErrorHelpPanel(createMockActionContext(), createMockContext())
+}
 
 function targetOf(panel: Panel): { id: number; type: Panel["type"] } {
   return { id: panel.id, type: panel.type }
@@ -1587,11 +1528,7 @@ async function restore(
 ): Promise<void> {
   const register = vi.mocked(vscode.window.registerWebviewPanelSerializer)
   register.mockClear()
-  const extensionUri = vscode.Uri.file("/ext")
-  const extensionContext = new Proxy(createMockContext(), {
-    get: (target, prop) => (prop === "extensionUri" ? extensionUri : Reflect.get(target, prop)),
-  })
-  TmcPanel.registerSerializer(extensionContext, actionContext)
+  TmcPanel.registerSerializer(createMockContext(), actionContext)
   const serializer = register.mock.calls[0]?.[1]
   await serializer?.deserializeWebviewPanel(fake.panel, state)
 }
@@ -1650,7 +1587,7 @@ suite("TmcPanel main panel restore after a window reload", () => {
     await fake.sendReady()
     vi.mocked(fake.panel.webview.postMessage).mockClear()
 
-    renderMainPanel({ id: nextPanelId(), type: "InitializationErrorHelp" })
+    renderMainPanel(helpPanel())
 
     expect(postedMessages(fake.panel)).toEqual([
       expect.objectContaining({
@@ -1699,7 +1636,7 @@ suite("TmcPanel main panel restore after a window reload", () => {
 
   test("closes a restored panel when a main panel is already open", async () => {
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(createFakeWebviewPanel().panel)
-    renderMainPanel({ id: nextPanelId(), type: "InitializationErrorHelp" })
+    renderMainPanel(helpPanel())
     const existing = TmcPanel.mainPanel
     const fake = createFakeWebviewPanel()
 

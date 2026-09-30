@@ -7,7 +7,7 @@ import type Dialog from "../api/dialog"
 import * as commands from "../commands"
 import { EXTENSION_ID } from "../config/constants"
 import { registerPanelActions } from "../panels/panelActions"
-import { nextPanelId } from "../panels/routes"
+import { initializationErrorHelpPanel, nextPanelId } from "../panels/routes"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
 import type { ExerciseTestController } from "../testing/exerciseTestController"
@@ -134,10 +134,11 @@ export function registerCommands(
   const register = commandRegistrar(context, dialog)
 
   register("tmc.viewInitializationErrorHelp", () => {
-    TmcPanel.renderMain(context, actionContext, {
-      id: nextPanelId(),
-      type: "InitializationErrorHelp",
-    })
+    TmcPanel.renderMain(
+      context,
+      actionContext,
+      initializationErrorHelpPanel(actionContext, context),
+    )
   })
 
   if (!isReady(actionContext)) {
