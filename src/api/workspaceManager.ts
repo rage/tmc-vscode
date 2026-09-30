@@ -658,6 +658,11 @@ export default class WorkspaceManager implements vscode.Disposable {
     const activeCourseWorkspace = this._activeCourseWorkspace
 
     let incorrectFolderAdded = false
+    let isStatusChanged = false
+    const setStatus = (exercise: WorkspaceExercise, status: ExerciseStatus): void => {
+      isStatusChanged ||= exercise.status !== status
+      exercise.status = status
+    }
     e.added.forEach((added) => {
       const exercise = this._exercisesByPath.get(added.uri.fsPath)
       if (!exercise) {
@@ -666,21 +671,24 @@ export default class WorkspaceManager implements vscode.Disposable {
         exercise.courseSlug === activeCourseWorkspace?.slug &&
         exercise.backend === activeCourseWorkspace?.backend
       ) {
-        exercise.status = ExerciseStatus.Open
+        setStatus(exercise, ExerciseStatus.Open)
       }
     })
 
     e.removed.forEach((removed) => {
       const exercise = this._exercisesByPath.get(removed.uri.fsPath)
       if (exercise) {
-        exercise.status = ExerciseStatus.Closed
+        setStatus(exercise, ExerciseStatus.Closed)
       }
     })
 
     if (activeCourseWorkspace) {
       void this._recordClosedExercises(activeCourseWorkspace.backend, activeCourseWorkspace.slug)
     }
-    this._exercisesChanged.fire()
+    // The folder moves that open and close make only confirm the status `_setOpen` announced.
+    if (isStatusChanged) {
+      this._exercisesChanged.fire()
+    }
 
     if (incorrectFolderAdded) {
       Logger.warn(

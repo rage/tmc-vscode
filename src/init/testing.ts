@@ -27,8 +27,6 @@ export function registerTesting(
     controller,
     setActiveTestController(controller),
     workspaceManager.onDidChangeExercises(syncExercises),
-    // Opening and closing exercises moves workspace folders without replacing the exercises.
-    vscode.workspace.onDidChangeWorkspaceFolders(syncExercises),
     vscode.commands.registerCommand(
       "tmc.testing.submitExercise",
       forwardToExercise("tmc.submitExercise"),
