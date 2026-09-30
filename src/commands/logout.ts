@@ -9,11 +9,17 @@ export async function logout(actionContext: ReadyActionContext): Promise<void> {
     detail: "You need to log in again to download or submit exercises.",
   })
   if (confirmed) {
-    const result = await withOperation(dialog, { failure: "Failed to log out." }, () =>
-      actions.logout(actionContext),
-    )
-    if (result.ok) {
-      dialog.notification("Logged out.")
-    }
+    await logoutConfirmed(actionContext)
+  }
+}
+
+/** Logs out and says how it went, for a caller that has already asked the user. */
+export async function logoutConfirmed(actionContext: ReadyActionContext): Promise<void> {
+  const { dialog } = actionContext
+  const result = await withOperation(dialog, { failure: "Failed to log out." }, () =>
+    actions.logout(actionContext),
+  )
+  if (result.ok) {
+    dialog.notification("Logged out.")
   }
 }

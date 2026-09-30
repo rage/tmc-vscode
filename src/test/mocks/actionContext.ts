@@ -35,6 +35,7 @@ export function createMockAuthState(
     set: vi.fn(async () => {}),
     clear: vi.fn(async () => {}),
     subscribe: vi.fn(),
+    subscribeMooc: vi.fn(),
     insufficientScopeReported: false,
   }
 }

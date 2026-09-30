@@ -11,11 +11,15 @@ import { createAuthState } from "./api/authState"
 import Dialog from "./api/dialog"
 import ExerciseDecorationProvider from "./api/exerciseDecorationProvider"
 import Langs from "./api/langs"
+import {
+  MOOC_AUTHENTICATION_PROVIDER_ID,
+  MoocAuthenticationProvider,
+} from "./api/moocAuthenticationProvider"
 import WorkspaceManager, {
   ensureCourseWorkspaceFile,
   ensureWorkspaceRootFile,
 } from "./api/workspaceManager"
-import { refreshEverything } from "./commands"
+import { login, logoutConfirmed, refreshEverything } from "./commands"
 import {
   CLIENT_NAME,
   closedExercisesSettingKey,
@@ -435,7 +439,19 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     const account = new AccountStatusBarItem(authState.loggedIn)
     authState.subscribe((loggedIn) => account.setLoggedIn(loggedIn))
     accountStatus = account
+    const moocAccount = new MoocAuthenticationProvider({
+      isLoggedIn: () => authState.mooc,
+      login: async () => (await login(readyContext)) === "loggedIn",
+      logout: () => logoutConfirmed(readyContext),
+    })
+    authState.subscribeMooc((authenticated) => moocAccount.setLoggedIn(authenticated))
     context.subscriptions.push(
+      moocAccount,
+      vscode.authentication.registerAuthenticationProvider(
+        MOOC_AUTHENTICATION_PROVIDER_ID,
+        "courses.mooc.fi",
+        moocAccount,
+      ),
       account,
       new ExerciseStatusBarItem({
         workspaceManager: readyContext.startup.workspaceManager,

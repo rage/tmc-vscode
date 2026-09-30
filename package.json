@@ -105,6 +105,12 @@
     "xvfb-maybe": "^0.2.1"
   },
   "contributes": {
+    "authentication": [
+      {
+        "id": "courses-mooc-fi",
+        "label": "courses.mooc.fi"
+      }
+    ],
     "commands": [
       {
         "command": "tmc.addNewCourse",

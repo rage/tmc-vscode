@@ -125,4 +125,15 @@ vsCodeTest.describe(() => {
       await expect(moocLoginPage.codeDialog()).toBeVisible()
     },
   )
+
+  vsCodeTest("the account shows in the Accounts menu once logged in", async ({ page, webview }) => {
+    const moocLoginPage = new MoocLoginPage(page, webview)
+
+    await moocLoginPage.gotoFromCoursesView()
+    await moocLoginPage.copyAndOpen()
+    await expect(moocLoginPage.notificationToast("Logged in to courses.mooc.fi.")).toBeVisible()
+
+    await page.getByRole("button", { name: "Accounts" }).click()
+    await expect(page.getByRole("menuitem", { name: /courses\.mooc\.fi/ })).toBeVisible()
+  })
 })
