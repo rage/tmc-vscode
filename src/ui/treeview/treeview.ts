@@ -323,6 +323,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
   private readonly _unreachableBackends = new Set<BackendKind>()
   private _views: CourseView[] | undefined
   private _roots: CourseTreeItem[] | undefined
+  private _exerciseItemsByPath: Map<string, ExerciseTreeItem> | undefined
   private _pendingRender: ReturnType<typeof setTimeout> | undefined
   /** A render happened while the view was hidden, so VS Code still shows the one before. */
   private _isShownStale = false
@@ -395,6 +396,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
   public refresh(): void {
     this._views = undefined
     this._roots = undefined
+    this._exerciseItemsByPath = undefined
     if (this._isDisposed) {
       return
     }
@@ -493,9 +495,12 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
     if (!exercise) {
       return undefined
     }
-    return this._currentRoots()
-      .flatMap((child) => exerciseItems(child))
-      .find((candidate) => candidate.exerciseUri?.fsPath === exercise.uri.fsPath)
+    this._exerciseItemsByPath ??= new Map(
+      this._currentRoots()
+        .flatMap((root) => exerciseItems(root))
+        .flatMap((item) => (item.exerciseUri ? [[item.exerciseUri.fsPath, item] as const] : [])),
+    )
+    return this._exerciseItemsByPath.get(exercise.uri.fsPath)
   }
 
   private _currentViews(): CourseView[] {
