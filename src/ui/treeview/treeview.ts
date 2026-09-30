@@ -315,6 +315,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
     this._source = source
     this._sourceSubscription = source.workspaceManager.onDidChangeExercises(() => this.refresh())
     this.refresh()
+    void this.revealActiveExercise()
   }
 
   public setLoggedIn(isLoggedIn: boolean): void {

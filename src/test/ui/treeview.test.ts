@@ -459,6 +459,16 @@ suite("CoursesTree", function () {
       expect(options).toEqual({ select: true, focus: false })
     })
 
+    test("selects the exercise already open when the view first fills", function () {
+      vi.spyOn(vscode.window, "activeTextEditor", "get").mockReturnValue({
+        document: { uri: vscode.Uri.file("/exercises/tmc-slug/part01-01_hello/src/hello.py") },
+      } as vscode.TextEditor)
+
+      tree.setSource(source())
+
+      expect(view.reveal).toHaveBeenCalledOnce()
+    })
+
     test("leaves a hidden view alone", function () {
       view.visible = false
       openEditorOn("/exercises/tmc-slug/part01-01_hello/src/hello.py")
