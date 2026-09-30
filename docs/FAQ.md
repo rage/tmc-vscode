@@ -39,3 +39,5 @@ This will delete all files and folders under the tmcdata folder and vscode stora
 ## Why are Copilot and other AI features off?
 
 Course workspaces turn off Copilot, inline suggestions and, wherever a setting can, the AI features of other extensions. AI assistance is not allowed in course exercises unless your course allows it.
+
+Submitting (also before a reset or restore), running tests and sharing via paste are refused while AI assistance may be on: when the course workspace's AI settings can't be applied (its `.code-workspace` file has unsaved changes or can't be written, or one of your User settings or an exercise folder's `.vscode/settings.json` turns one back on), or while an AI extension that no setting turns off is enabled, such as Cline, Roo Code, Claude Code, Codex or Continue. The message says what to change. To keep such an extension for other projects, disable it only for the course workspace with Extensions → Disable (Workspace). Nothing about this is sent anywhere.

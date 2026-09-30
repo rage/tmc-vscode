@@ -2,7 +2,8 @@
 
 ## [Unreleased]
 
-- Course workspaces now turn off Copilot, inline suggestions and, wherever a setting can, the AI features of other extensions, and turn them back off when they are switched on.
+- Course workspaces now turn off Copilot, inline suggestions and, wherever a setting can, the AI features of other extensions, and turn them back off when they are switched on, including through a language-specific User setting.
+- Submitting, including before a reset or restore, running tests and sharing via paste are refused, with what to change, while the course workspace's AI settings can't be applied or an AI extension no setting turns off, such as Cline or Claude Code, is enabled.
 - Logging in now always uses the courses.mooc.fi account (a browser-based device-code login); the TestMyCode username and password form has been removed. An existing TestMyCode session keeps working until it expires.
 - Raised the minimum required VS Code version to 1.100.
 - The extension now declares itself unsupported in untrusted (restricted-mode) workspaces, since it downloads and runs the TMC-langs CLI against workspace files.
