@@ -24,7 +24,8 @@ function firstArguments(source: string, callee: string): string[] {
 // Failures an operation carried on past, so no entry point hears of them. The failure an
 // operation returns is never reported by the operation: `withOperation` does that.
 const carriedOnPastWarnings = [
-  "downloadExercisesForUi.ts: Failed to refresh local exercises.",
+  "downloadCourseExercises.ts: Failed to refresh local exercises.",
+  "downloadExerciseUpdates.ts: Failed to refresh local exercises.",
   // one notification for the whole download, naming every exercise that failed
   "downloadOrUpdateExercises.ts: Failed to download ${describeExercises(names)}.",
   // both backends failed: the tmc half is returned, the mooc half is this

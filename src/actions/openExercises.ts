@@ -8,7 +8,7 @@ import { ExerciseStatus } from "../api/workspaceManager"
 import type { CourseIdentifier } from "../shared/shared"
 import { ExerciseIdentifier, LocalCourseData, LocalCourseExercise, match } from "../shared/shared"
 import { Logger } from "../utilities"
-import { downloadExercisesForUi } from "./downloadExercisesForUi"
+import { downloadCourseExercises } from "./downloadCourseExercises"
 import type { ReadyActionContext } from "./types"
 
 /**
@@ -129,9 +129,8 @@ export async function downloadAndOpenExercises(
     (eto) => !localExerciseIds.has(ExerciseIdentifier.unwrap(LocalCourseExercise.getId(eto))),
   )
   if (exercisesToDownload.length > 0) {
-    const downloaded = await downloadExercisesForUi(
+    const downloaded = await downloadCourseExercises(
       actionContext,
-      "download",
       courseId,
       exercisesToDownload.map((etd) => LocalCourseExercise.getId(etd)),
     )
