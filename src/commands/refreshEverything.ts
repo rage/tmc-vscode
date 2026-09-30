@@ -6,9 +6,10 @@ import { checkForCourseUpdates, downloadNewExercisesForCourse } from "../actions
 import type { ReadyActionContext } from "../actions/types"
 import { failure, withOperation } from "../api/withOperation"
 import { EXERCISE_CHECK_INTERVAL, NOTIFICATION_DELAY } from "../config/constants"
-import { LocalCourseData } from "../shared/shared"
+import { BottleneckError } from "../errors"
+import { CourseIdentifier, LocalCourseData } from "../shared/shared"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
-import { runSingleFlight } from "../utilities"
+import { Logger } from "../utilities"
 import { updateExercises } from "./updateExercises"
 
 const REFRESH_FAILED = "Failed to check for course updates."
@@ -19,9 +20,8 @@ const REFRESH_FAILED = "Failed to check for course updates."
  *
  * Activation, the maintenance poll, the Courses view's refresh button and the tail
  * of each submit all want this, and two passes overlapping would interleave
- * writes to `UserData` and prompt twice about the same exercises. They share one
- * key, so a call made while another is running comes back as a
- * `BottleneckError` rather than queueing.
+ * writes to `UserData` and prompt twice about the same exercises. A call made while
+ * another is running comes back as a `BottleneckError`, unless it asks to be queued.
  *
  * Offers to download the new exercises it finds, silent or not.
  *
@@ -31,10 +31,12 @@ const REFRESH_FAILED = "Failed to check for course updates."
  * of notifying, and runs the exercise update check quietly. A refresh that fails runs
  * that check quietly either way: its own failure is the one report, and stale course
  * data cannot vouch for "All exercises are up to date."
+ * @param isQueuedWhenBusy While another refresh runs, runs this one silently once that one
+ * ends, and returns `Ok` at once. Calls queued meanwhile run together, as one refresh.
  */
 export async function refreshEverything(
   actionContext: ReadyActionContext,
-  options: { silent: boolean } & CourseUpdateOptions,
+  options: { silent: boolean; isQueuedWhenBusy?: boolean } & CourseUpdateOptions,
 ): Promise<Result<void, Error>> {
   const { silent, courseId } = options
   return withOperation(
@@ -64,28 +66,55 @@ export async function refreshCourses(actionContext: ReadyActionContext): Promise
   )
 }
 
+/** When the refresh in progress started, in epoch milliseconds, if one is. */
+let runningSince: number | undefined
+
+/** The refresh to run once the one in progress ends; no `courseId` means every course. */
+let queued: { courseId?: CourseIdentifier | undefined } | undefined
+
 async function refresh(
   actionContext: ReadyActionContext,
-  options: { silent: boolean } & CourseUpdateOptions,
+  options: { silent: boolean; isQueuedWhenBusy?: boolean } & CourseUpdateOptions,
 ): Promise<Result<void, Error>> {
-  const { silent, courseId, onProgress } = options
-  return runSingleFlight(
-    {
-      key: "refresh:all",
-      // A wedged refresh releases the key by the time the next poll wants it.
-      maxHoldMs: EXERCISE_CHECK_INTERVAL,
-      busyMessage: "A refresh is already in progress.",
-    },
-    async () => {
-      const refreshed = await checkForCourseUpdates(actionContext, { courseId, onProgress })
-      if (refreshed.ok) {
-        offerNewExercises(actionContext, refreshed.val.courses)
-      }
-      const refreshFailure = refreshed.err ? refreshed.val : refreshed.val.failure
-      await updateExercises(actionContext, silent || refreshFailure ? "silent" : "loud")
-      return refreshFailure ? Err(refreshFailure) : Ok.EMPTY
-    },
-  )
+  const { silent, courseId, onProgress, isQueuedWhenBusy } = options
+  // A wedged refresh stops counting as running by the time the next poll wants one.
+  if (runningSince !== undefined && Date.now() - runningSince < EXERCISE_CHECK_INTERVAL) {
+    if (isQueuedWhenBusy) {
+      const isSameCourse =
+        queued === undefined ||
+        (queued.courseId !== undefined &&
+          courseId !== undefined &&
+          CourseIdentifier.equals(queued.courseId, courseId))
+      queued = { courseId: isSameCourse ? courseId : undefined }
+      return Ok.EMPTY
+    }
+    Logger.warn("Rejected a refresh, one is already in flight")
+    return Err(new BottleneckError("A refresh is already in progress."))
+  }
+  const startedAt = Date.now()
+  runningSince = startedAt
+  try {
+    const refreshed = await checkForCourseUpdates(actionContext, { courseId, onProgress })
+    if (refreshed.ok) {
+      offerNewExercises(actionContext, refreshed.val.courses)
+    }
+    const refreshFailure = refreshed.err ? refreshed.val : refreshed.val.failure
+    await updateExercises(actionContext, silent || refreshFailure ? "silent" : "loud")
+    return refreshFailure ? Err(refreshFailure) : Ok.EMPTY
+  } finally {
+    if (runningSince === startedAt) {
+      runningSince = undefined
+    }
+    const next = queued
+    queued = undefined
+    if (next) {
+      void refreshEverything(actionContext, {
+        silent: true,
+        isQueuedWhenBusy: true,
+        ...next,
+      }).catch((e) => Logger.error("Queued refresh failed", e))
+    }
+  }
 }
 
 /**

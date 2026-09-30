@@ -28,7 +28,11 @@ export async function submitExercise(
 
   // Point totals come from the backend, so without this refresh the Courses view and
   // Course Details totals stay stale until the user refreshes by hand.
-  await refreshEverything(actionContext, { silent: true, courseId: submitted.val })
+  await refreshEverything(actionContext, {
+    silent: true,
+    isQueuedWhenBusy: true,
+    courseId: submitted.val,
+  })
   return Ok.EMPTY
 }
 
@@ -45,6 +49,10 @@ export async function keepWaitingForGrading(
   if (waited.err) {
     return waited
   }
-  await refreshEverything(actionContext, { silent: true, courseId: waited.val })
+  await refreshEverything(actionContext, {
+    silent: true,
+    isQueuedWhenBusy: true,
+    courseId: waited.val,
+  })
   return Ok.EMPTY
 }

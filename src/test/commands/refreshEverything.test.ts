@@ -121,6 +121,37 @@ suite("refreshEverything command", function () {
     expect(updateCourse).toHaveBeenCalledTimes(1)
   })
 
+  // The refresh after a submit is what fetches its points; dropping it leaves them stale.
+  test("runs refreshes queued while one is running once, after it", async function () {
+    let release!: () => void
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    vi.mocked(updateCourse).mockImplementationOnce(async () => {
+      await blocked
+      return Ok(true)
+    })
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [])])
+    const queuedOptions = {
+      silent: true,
+      isQueuedWhenBusy: true,
+      courseId: CourseIdentifier.from(1),
+    }
+
+    const first = refreshEverything(actionContext, { silent: true })
+    const queued = await Promise.all([
+      refreshEverything(actionContext, queuedOptions),
+      refreshEverything(actionContext, queuedOptions),
+    ])
+    expect(queued.every((result) => result.ok)).toBe(true)
+    release()
+    await first
+
+    await vi.waitFor(() => expect(updateExercises).toHaveBeenCalledTimes(2))
+    expect(updateCourse).toHaveBeenCalledTimes(2)
+    expect(dialog.notification).not.toHaveBeenCalled()
+  })
+
   test("says nothing when a silent refresh is the one rejected", async function () {
     let release!: () => void
     const blocked = new Promise<void>((resolve) => {

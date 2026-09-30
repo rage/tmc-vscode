@@ -67,6 +67,7 @@ suite("Submit exercise command", function () {
     // once the submission the action resolved to has been recorded.
     expect(refreshEverything).toHaveBeenCalledExactlyOnceWith(context, {
       silent: true,
+      isQueuedWhenBusy: true,
       courseId,
     })
   })
@@ -114,6 +115,7 @@ suite("Keep waiting for grading command", function () {
     )
     expect(refreshEverything).toHaveBeenCalledWith(expect.anything(), {
       silent: true,
+      isQueuedWhenBusy: true,
       courseId,
     })
   })
