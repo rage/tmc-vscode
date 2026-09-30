@@ -38,17 +38,20 @@ export async function updateExercises(
 
   const { outdated, failures } = updateablesResult.val
   // What a failed backend's courses last showed is still the best answer for them.
-  for (const course of userData.getCourses()) {
-    if (failures.every(({ backend }) => backend !== course.kind)) {
-      const courseId = LocalCourseData.getCourseId(course)
-      updateablesRegistry.set(
-        courseId,
-        outdated
-          .filter((x) => CourseIdentifier.equals(x.courseId, courseId))
-          .map((x) => x.exerciseId),
-      )
-    }
-  }
+  updateablesRegistry.setMany(
+    userData
+      .getCourses()
+      .filter((course) => failures.every(({ backend }) => backend !== course.kind))
+      .map((course) => {
+        const courseId = LocalCourseData.getCourseId(course)
+        return [
+          courseId,
+          outdated
+            .filter((x) => CourseIdentifier.equals(x.courseId, courseId))
+            .map((x) => x.exerciseId),
+        ]
+      }),
+  )
   const [firstFailure] = failures
   if (!silent && firstFailure) {
     // One notification however many sites failed; the log has each one's error.

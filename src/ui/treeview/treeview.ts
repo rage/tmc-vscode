@@ -49,8 +49,9 @@ export type CoursesTreeItem = CourseTreeItem | PartTreeItem | ExerciseTreeItem
 export class CourseTreeItem extends vscode.TreeItem {
   public readonly courseId: CourseIdentifier
   public readonly parent: undefined = undefined
-  /** The course's parts, or its exercises directly when none of them names a part. */
-  public readonly children: (PartTreeItem | ExerciseTreeItem)[]
+  private readonly _tooltipLines: string[]
+  private readonly _buildChildren: () => (PartTreeItem | ExerciseTreeItem)[]
+  private _children: (PartTreeItem | ExerciseTreeItem)[] | undefined
 
   public constructor(course: LocalCourseData, parts: PartView[], context: RenderContext) {
     const title = LocalCourseData.getCourseTitle(course)
@@ -86,19 +87,16 @@ export class CourseTreeItem extends vscode.TreeItem {
       ...(updateCount > 0 ? ["hasUpdates"] : []),
       ...(hasCompleted ? ["hasCompleted"] : []),
     ].join(".")
-    const tooltip = new vscode.MarkdownString()
-    tooltip.appendMarkdown("**").appendText(title).appendMarkdown("**\n\n").appendText(backend)
-    for (const line of [
-      points && `${points} points`,
-      newCount > 0 && countOf(newCount, "new exercise"),
-      updateCount > 0 && countOf(updateCount, "exercise update"),
-      disabled && "This course is disabled: its exercises cannot be downloaded or submitted.",
-    ]) {
-      if (line) {
-        tooltip.appendMarkdown("\n\n").appendText(line)
-      }
-    }
-    this.tooltip = tooltip
+    this._tooltipLines = [
+      title,
+      backend,
+      ...[
+        points && `${points} points`,
+        newCount > 0 && countOf(newCount, "new exercise"),
+        updateCount > 0 && countOf(updateCount, "exercise update"),
+        disabled && "This course is disabled: its exercises cannot be downloaded or submitted.",
+      ].filter((line) => typeof line === "string"),
+    ]
     this.accessibilityInformation = {
       label: [
         title,
@@ -109,10 +107,20 @@ export class CourseTreeItem extends vscode.TreeItem {
         ...(updateCount > 0 ? [countOf(updateCount, "exercise update")] : []),
       ].join(", "),
     }
-    this.children =
+    this._buildChildren = () =>
       parts.length === 1 && parts[0]?.isUngrouped
         ? exercises.map((ex) => new ExerciseTreeItem(this, this.courseId, ex, context))
         : parts.map((part) => new PartTreeItem(this, part, context))
+  }
+
+  /** The course's parts, or its exercises directly when none of them names a part. */
+  public get children(): (PartTreeItem | ExerciseTreeItem)[] {
+    this._children ??= this._buildChildren()
+    return this._children
+  }
+
+  public buildTooltip(): vscode.MarkdownString {
+    return tooltipOf(this._tooltipLines)
   }
 }
 
@@ -123,6 +131,7 @@ export class CourseTreeItem extends vscode.TreeItem {
 export class PartTreeItem extends vscode.TreeItem {
   public readonly courseId: CourseIdentifier
   public readonly children: ExerciseTreeItem[]
+  private readonly _tooltipLines: string[]
 
   public constructor(
     public readonly parent: CourseTreeItem,
@@ -166,19 +175,18 @@ export class PartTreeItem extends vscode.TreeItem {
       ...(part.exercises.some((ex) => ex.status === "closed") ? ["hasClosed"] : []),
       ...(part.exercises.some((ex) => ex.status === "opened") ? ["hasOpened"] : []),
     ].join(".")
-    const tooltip = new vscode.MarkdownString()
-    tooltip
-      .appendMarkdown("**")
-      .appendText(label)
-      .appendMarkdown("**\n\n")
-      .appendText(`${passed} of ${part.exercises.length} exercises passed`)
-    if (nextDeadline) {
-      tooltip.appendMarkdown("\n\n").appendText(`Next deadline: ${nextDeadline}`)
-    }
-    this.tooltip = tooltip
+    this._tooltipLines = [
+      label,
+      `${passed} of ${part.exercises.length} exercises passed`,
+      ...(nextDeadline ? [`Next deadline: ${nextDeadline}`] : []),
+    ]
     this.children = part.exercises.map(
       (ex) => new ExerciseTreeItem(this, this.courseId, ex, context),
     )
+  }
+
+  public buildTooltip(): vscode.MarkdownString {
+    return tooltipOf(this._tooltipLines)
   }
 }
 
@@ -203,6 +211,8 @@ export class ExerciseTreeItem extends vscode.TreeItem {
   public readonly status: ExerciseView["status"]
   public readonly isPassed: boolean
   public readonly isUpdateable: boolean
+  private readonly _exercise: ExerciseView
+  private readonly _context: RenderContext
 
   public constructor(
     public readonly parent: CourseTreeItem | PartTreeItem,
@@ -217,6 +227,8 @@ export class ExerciseTreeItem extends vscode.TreeItem {
     this.status = exercise.status
     this.isPassed = exercise.passed
     this.isUpdateable = exercise.isUpdateable
+    this._exercise = exercise
+    this._context = context
 
     const deadline = shownDeadline(exercise)
     const isDue = !exercise.passed && deadline !== null && deadline > context.now
@@ -250,25 +262,48 @@ export class ExerciseTreeItem extends vscode.TreeItem {
         ...(isDue ? [`due ${deadlineText}`] : []),
       ].join(", "),
     }
-
-    const tooltip = new vscode.MarkdownString()
-    tooltip.appendMarkdown("**").appendText(exercise.name).appendMarkdown("**\n\n")
-    tooltip.appendText(`${exercise.passed ? "Passed" : "Not passed"} · ${status}`)
-    for (const line of [
-      points,
-      exercise.isUpdateable && "An update is available.",
-      exercise.softDeadline &&
-        !exercise.isHard &&
-        `Soft deadline: ${formatDeadline(exercise.softDeadline, context.now, context.locale)}. Submitted after it, the exercise awards 75% of its points.`,
-      exercise.hardDeadline &&
-        `Deadline: ${formatDeadline(exercise.hardDeadline, context.now, context.locale)}`,
-    ]) {
-      if (line) {
-        tooltip.appendMarkdown("\n\n").appendText(line)
-      }
-    }
-    this.tooltip = tooltip
   }
+
+  public buildTooltip(): vscode.MarkdownString {
+    const exercise = this._exercise
+    const { now, locale } = this._context
+    const status = STATUS_LABELS[exercise.status]
+    return tooltipOf([
+      exercise.name,
+      `${exercise.passed ? "Passed" : "Not passed"} · ${status}`,
+      ...[
+        exercise.availablePoints > 0 &&
+          `${exercise.awardedPoints}/${exercise.availablePoints} points`,
+        exercise.isUpdateable && "An update is available.",
+        exercise.softDeadline &&
+          !exercise.isHard &&
+          `Soft deadline: ${formatDeadline(exercise.softDeadline, now, locale)}. Submitted after it, the exercise awards 75% of its points.`,
+        exercise.hardDeadline && `Deadline: ${formatDeadline(exercise.hardDeadline, now, locale)}`,
+      ].filter((line) => typeof line === "string"),
+    ])
+  }
+}
+
+/** A row's hover: its bold title, then one paragraph per line. */
+function tooltipOf([title, ...lines]: string[]): vscode.MarkdownString {
+  const tooltip = new vscode.MarkdownString()
+  tooltip
+    .appendMarkdown("**")
+    .appendText(title ?? "")
+    .appendMarkdown("**")
+  for (const line of lines) {
+    tooltip.appendMarkdown("\n\n").appendText(line)
+  }
+  return tooltip
+}
+
+/** How long a burst of changes, such as one per downloaded exercise, is gathered into one render. */
+const RENDER_DELAY_MS = 50
+
+/** A course with its exercises grouped and resolved, before any tree item is built. */
+interface CourseView {
+  course: LocalCourseData
+  parts: PartView[]
 }
 
 /**
@@ -285,7 +320,12 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
   private _sourceSubscriptions: vscode.Disposable[] = []
   private _isLoggedIn = false
   private readonly _unreachableBackends = new Set<BackendKind>()
+  private _views: CourseView[] | undefined
   private _roots: CourseTreeItem[] | undefined
+  private _pendingRender: ReturnType<typeof setTimeout> | undefined
+  /** A render happened while the view was hidden, so VS Code still shows the one before. */
+  private _isShownStale = false
+  private _isDisposed = false
 
   public constructor() {
     this._view = vscode.window.createTreeView(COURSES_VIEW_ID, {
@@ -299,11 +339,14 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
       exerciseStatusRegistry.onDidChange(() => this.refresh()),
       updateablesRegistry.onDidChange(() => this.refresh()),
       vscode.window.onDidChangeActiveTextEditor(() => void this.revealActiveExercise()),
-      this._view.onDidChangeVisibility(() => void this.revealActiveExercise()),
+      this._view.onDidChangeVisibility(() => this._onDidChangeVisibility()),
     ]
   }
 
   public dispose(): void {
+    this._isDisposed = true
+    clearTimeout(this._pendingRender)
+    this._pendingRender = undefined
     this._sourceSubscriptions.forEach((subscription) => subscription.dispose())
     for (const disposable of this._disposables) {
       disposable.dispose()
@@ -343,17 +386,29 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
     this.refresh()
   }
 
-  /** Re-renders the view. */
+  /**
+   * Re-renders the view. The rows VS Code asks for from now on are current; the badge and
+   * the change event follow after {@link RENDER_DELAY_MS}, once per burst of calls.
+   */
   public refresh(): void {
+    this._views = undefined
     this._roots = undefined
-    const roots = this._currentRoots()
-    const newCount = this._visibleCourses().reduce(
-      (total, course) => total + LocalCourseData.getNewExercises(course).length,
+    if (this._isDisposed) {
+      return
+    }
+    this._pendingRender ??= setTimeout(() => this._render(), RENDER_DELAY_MS)
+  }
+
+  private _render(): void {
+    this._pendingRender = undefined
+    const views = this._currentViews()
+    const newCount = views.reduce(
+      (total, { course }) => total + LocalCourseData.getNewExercises(course).length,
       0,
     )
-    const updateCount = roots
-      .flatMap((child) => exerciseItems(child))
-      .filter((item) => item.isUpdateable).length
+    const updateCount = views
+      .flatMap(({ parts }) => parts.flatMap((part) => part.exercises))
+      .filter((exercise) => exercise.isUpdateable).length
     const counts = [
       ...(newCount > 0 ? [countOf(newCount, "new exercise")] : []),
       ...(updateCount > 0 ? [countOf(updateCount, "exercise update")] : []),
@@ -363,10 +418,22 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
     const unreachable = [...this._unreachableBackends].map((backend) => backendName(backend))
     // An empty message hides it; the typings do not admit `undefined`.
     this._view.message =
-      unreachable.length > 0 && roots.length > 0
+      unreachable.length > 0 && views.length > 0
         ? `${unreachable.join(" and ")} could not be reached. Showing the exercises saved on this computer; deadlines may be out of date.`
         : ""
-    this._changed.fire(undefined)
+    if (this._view.visible) {
+      this._changed.fire(undefined)
+    } else {
+      this._isShownStale = true
+    }
+  }
+
+  private _onDidChangeVisibility(): void {
+    if (this._view.visible && this._isShownStale) {
+      this._isShownStale = false
+      this._changed.fire(undefined)
+    }
+    void this.revealActiveExercise()
   }
 
   public getChildren(element?: CoursesTreeItem): CoursesTreeItem[] {
@@ -380,6 +447,12 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
     return element
   }
 
+  /** Builds a row's hover only when it is hovered. */
+  public resolveTreeItem(_item: vscode.TreeItem, element: CoursesTreeItem): CoursesTreeItem {
+    element.tooltip ??= element.buildTooltip()
+    return element
+  }
+
   public getParent(element: CoursesTreeItem): CoursesTreeItem | undefined {
     return element.parent
   }
@@ -389,9 +462,12 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
    * the view is visible: revealing into a hidden view would open the sidebar.
    */
   public async revealActiveExercise(): Promise<void> {
+    if (!this._view.visible) {
+      return
+    }
     const uri = vscode.window.activeTextEditor?.document.uri
     const item = uri && this._exerciseItemContaining(uri)
-    if (item && this._view.visible) {
+    if (item) {
       await this._view.reveal(item, { select: true, focus: false })
     }
   }
@@ -420,15 +496,11 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
       .find((candidate) => candidate.exerciseUri?.fsPath === exercise.uri.fsPath)
   }
 
-  private _currentRoots(): CourseTreeItem[] {
-    if (!this._roots) {
-      const workspaceManager = this._source?.workspaceManager
-      const workspaceExercises = workspaceManager?.getExercises() ?? []
+  private _currentViews(): CourseView[] {
+    if (!this._views) {
+      const workspaceExercises = this._source?.workspaceManager.getExercises() ?? []
       const now = new Date()
-      const slug = workspaceManager?.activeCourse
-      const backend = workspaceManager?.activeCourseBackend
-      const activeCourse = slug && backend ? { slug, backend } : undefined
-      this._roots = this._visibleCourses().map((course) => {
+      this._views = this._visibleCourses().map((course) => {
         const courseId = LocalCourseData.getCourseId(course)
         const parts = buildCourseView(course, {
           workspaceExercises,
@@ -436,13 +508,28 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
           updateable: updateablesRegistry.get(courseId),
           now,
         })
-        return new CourseTreeItem(course, parts, {
-          now,
-          locale: vscode.env.language,
-          isOffline: this._unreachableBackends.has(course.kind),
-          activeCourse,
-        })
+        return { course, parts }
       })
+    }
+    return this._views
+  }
+
+  private _currentRoots(): CourseTreeItem[] {
+    if (!this._roots) {
+      const workspaceManager = this._source?.workspaceManager
+      const now = new Date()
+      const slug = workspaceManager?.activeCourse
+      const backend = workspaceManager?.activeCourseBackend
+      const activeCourse = slug && backend ? { slug, backend } : undefined
+      this._roots = this._currentViews().map(
+        ({ course, parts }) =>
+          new CourseTreeItem(course, parts, {
+            now,
+            locale: vscode.env.language,
+            isOffline: this._unreachableBackends.has(course.kind),
+            activeCourse,
+          }),
+      )
     }
     return this._roots
   }

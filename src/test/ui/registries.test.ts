@@ -63,6 +63,20 @@ suite("updateables registry", () => {
 
     expect(changed).toHaveBeenCalledTimes(2)
   })
+
+  test("sets several courses as one change", () => {
+    const changed = vi.fn()
+    const subscription = updateablesRegistry.onDidChange(changed)
+
+    updateablesRegistry.setMany([
+      [tmcCourse, [ExerciseIdentifier.from(101)]],
+      [moocCourse, []],
+    ])
+    subscription.dispose()
+
+    expect(changed).toHaveBeenCalledOnce()
+    expect(updateablesRegistry.get(tmcCourse)).toEqual([ExerciseIdentifier.from(101)])
+  })
 })
 
 suite("exercise status registry", () => {

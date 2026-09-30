@@ -25,8 +25,8 @@ export async function downloadExerciseUpdates(
 
   const setUpdateablesByCourse = (exerciseIds: ExerciseIdentifier[]): void => {
     const wanted = new Set(exerciseIds.map((x) => ExerciseIdentifier.key(x)))
-    for (const [key, courseId] of courseIds) {
-      updateablesRegistry.set(
+    updateablesRegistry.setMany(
+      Array.from(courseIds, ([key, courseId]) => [
         courseId,
         updates
           .filter(
@@ -35,8 +35,8 @@ export async function downloadExerciseUpdates(
               wanted.has(ExerciseIdentifier.key(x.exerciseId)),
           )
           .map((x) => x.exerciseId),
-      )
-    }
+      ]),
+    )
   }
 
   await withOptimisticList(

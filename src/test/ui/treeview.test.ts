@@ -92,6 +92,11 @@ function icon(item: ExerciseTreeItem): [string, string | undefined] {
   return [themeIcon.id, (themeIcon.color ?? themeIcon.themeColor)?.id]
 }
 
+/** Lets the view's delayed render, with its badge and change event, happen. */
+function settle(): void {
+  vi.runOnlyPendingTimers()
+}
+
 interface FakeView {
   badge: vscode.ViewBadge | undefined
   message: string | undefined
@@ -129,11 +134,16 @@ suite("CoursesTree", function () {
     courses = shown
     tree.setLoggedIn(true)
     tree.setSource(source())
+    settle()
     return tree.getChildren()
   }
 
+  function tooltipOf(item: CoursesTreeItem | undefined): string {
+    return item ? (tree.resolveTreeItem(item, item).tooltip as vscode.MarkdownString).value : ""
+  }
+
   beforeEach(function () {
-    vi.useFakeTimers({ now: NOW, toFake: ["Date"] })
+    vi.useFakeTimers({ now: NOW, toFake: ["Date", "setTimeout", "clearTimeout"] })
     courses = []
     workspaceExercises = []
     exercisesChanged = new vscode.EventEmitter<void>()
@@ -209,14 +219,14 @@ suite("CoursesTree", function () {
     const item = first(show(tmcCourse({ disabled: true })))
 
     expect(item.description).toBe("12/40 · TMC Server · disabled")
-    expect((item.tooltip as vscode.MarkdownString).value).toContain("disabled")
+    expect(tooltipOf(item)).toContain("disabled")
   })
 
   test("a course with new exercises is marked for the inline download action", function () {
     const item = first(show(moocCourse({ newExercises: ["a", "b"] })))
 
     expect(item.contextValue).toBe("course.mooc.hasNew")
-    expect((item.tooltip as vscode.MarkdownString).value).toContain("2 new exercises")
+    expect(tooltipOf(item)).toContain("2 new exercises")
   })
 
   test("a course with a passed exercise still open is marked for closing it", function () {
@@ -381,7 +391,8 @@ suite("CoursesTree", function () {
       })
 
       expect(item.description).toMatch(/^not downloaded · 0\/1 points · due /)
-      const tooltip = (item.tooltip as vscode.MarkdownString).value
+      expect(item.tooltip).toBeUndefined()
+      const tooltip = tooltipOf(item)
       expect(tooltip).toContain("Soft deadline: ")
       expect(tooltip).toContain("75%")
       expect(tooltip).toContain("Deadline: ")
@@ -403,6 +414,7 @@ suite("CoursesTree", function () {
       expect(item.contextValue).toBe("exercise.opened.updateable")
       expect(item.description).toBe("update available · 0/1 points")
       expect(tree.getChildren()[0]?.contextValue).toBe("course.tmc.hasUpdates")
+      settle()
       expect(view.badge).toEqual({ value: 1, tooltip: "1 exercise update" })
     })
   })
@@ -413,6 +425,7 @@ suite("CoursesTree", function () {
     expect(view.badge).toEqual({ value: 2, tooltip: "2 new exercises" })
 
     tree.setLoggedIn(false)
+    settle()
     expect(view.badge).toBeUndefined()
   })
 
@@ -421,6 +434,7 @@ suite("CoursesTree", function () {
 
     courses = [tmcCourse()]
     coursesChanged.fire()
+    settle()
 
     expect(view.badge).toBeUndefined()
   })
@@ -429,25 +443,71 @@ suite("CoursesTree", function () {
     show(tmcCourse())
 
     tree.setBackendReachable("tmc", false)
+    settle()
     expect(view.message).toMatch(/^TMC Server could not be reached\./)
 
     tree.setBackendReachable("tmc", true)
+    settle()
     expect(view.message).toBe("")
   })
 
-  test("re-renders on each download status and each change on disk", function () {
+  test("re-renders on each download status, change on disk and change to the courses", function () {
+    show(tmcCourse())
+    const refreshed: unknown[] = []
+    tree.onDidChangeTreeData((node) => refreshed.push(node))
+    const changes = [
+      () =>
+        exerciseStatusRegistry.record(CourseIdentifier.from(1), [
+          [makeTmcKind({ tmcExerciseId: 1 }), "downloading"],
+        ]),
+      () => updateablesRegistry.set(CourseIdentifier.from(1), []),
+      () => exercisesChanged.fire(),
+      () => coursesChanged.fire(),
+    ]
+
+    for (const change of changes) {
+      change()
+      settle()
+    }
+
+    expect(refreshed).toEqual([undefined, undefined, undefined, undefined])
+  })
+
+  test("renders a burst of changes once", function () {
     show(tmcCourse())
     const refreshed: unknown[] = []
     tree.onDidChangeTreeData((node) => refreshed.push(node))
 
-    exerciseStatusRegistry.record(CourseIdentifier.from(1), [
-      [makeTmcKind({ tmcExerciseId: 1 }), "downloading"],
-    ])
-    updateablesRegistry.set(CourseIdentifier.from(1), [])
-    exercisesChanged.fire()
-    coursesChanged.fire()
+    for (let id = 1; id <= 20; id++) {
+      exerciseStatusRegistry.record(CourseIdentifier.from(1), [
+        [makeTmcKind({ tmcExerciseId: id }), "downloading"],
+      ])
+    }
+    expect(refreshed).toEqual([])
+    settle()
 
-    expect(refreshed).toEqual([undefined, undefined, undefined, undefined])
+    expect(refreshed).toEqual([undefined])
+  })
+
+  test("a hidden view keeps its badge current and repaints once shown", function () {
+    const visibilityChanged = new vscode.EventEmitter<unknown>()
+    view.onDidChangeVisibility = visibilityChanged.event
+    tree.dispose()
+    tree = new CoursesTree()
+    show(tmcCourse())
+    const refreshed: unknown[] = []
+    tree.onDidChangeTreeData((node) => refreshed.push(node))
+    view.visible = false
+
+    courses = [tmcCourse({ newExercises: [7] })]
+    coursesChanged.fire()
+    settle()
+
+    expect(view.badge).toEqual({ value: 1, tooltip: "1 new exercise" })
+    expect(refreshed).toEqual([])
+    view.visible = true
+    visibilityChanged.fire(undefined)
+    expect(refreshed).toEqual([undefined])
   })
 
   suite("revealing the active exercise", function () {
@@ -518,6 +578,7 @@ suite("CoursesTree", function () {
     const refreshed: unknown[] = []
     tree.onDidChangeTreeData((node) => refreshed.push(node))
     tree.refresh()
+    settle()
 
     expect(refreshed).toEqual([undefined])
   })
@@ -528,6 +589,7 @@ suite("CoursesTree", function () {
     tree.dispose()
     tree.refresh()
     exerciseStatusRegistry.clear()
+    settle()
 
     expect(view.dispose).toHaveBeenCalledOnce()
     expect(refreshed).toEqual([])
