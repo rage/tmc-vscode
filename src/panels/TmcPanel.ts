@@ -42,8 +42,8 @@ export class TmcPanel {
   // side panels show different panels.
   private _route: PanelRoute | undefined
 
-  // Until the first "ready", messages are only buffered: that handshake is the single
-  // path that renders a panel, for a new document and a reloaded one alike.
+  // Until "ready", messages are only buffered: that handshake is the single path that
+  // renders a panel, for a new document and one reloaded after being hidden alike.
   private _isWebviewReady = false
 
   // latest message per type targeted at _route's id, resent after it on "ready"
@@ -159,9 +159,6 @@ export class TmcPanel {
     const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", showOptions, {
       enableScripts: true,
       enableFindWidget: true,
-      // A reload would lose UI-only state (selection, scroll, open parts) that no host
-      // registry holds.
-      retainContextWhenHidden: true,
       localResourceRoots: [Uri.joinPath(extensionUri, "webview-ui/public/build")],
     })
     webviewPanel.iconPath = {
@@ -191,6 +188,16 @@ export class TmcPanel {
     this._isMain = isMain
 
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables)
+    // A hidden webview's document is destroyed; the one VS Code loads on reveal sends "ready".
+    this._panel.onDidChangeViewState(
+      ({ webviewPanel }) => {
+        if (!webviewPanel.visible) {
+          this._isWebviewReady = false
+        }
+      },
+      null,
+      this._disposables,
+    )
 
     this._panel.webview.html = webviewContent(this._panel.webview, extensionUri)
 

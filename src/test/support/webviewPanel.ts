@@ -11,9 +11,14 @@ export function createFakeWebviewPanel(): {
   getMessageListener: () => (message: unknown) => Promise<void>
   /** Posts the "ready" a loaded webview document sends, which is what makes `TmcPanel` render. */
   sendReady: () => Promise<void>
+  /** Hides the panel, as switching to another tab does, which destroys its document. */
+  hide: () => void
+  /** Shows the panel again with a fresh document, which says it is ready. */
+  reveal: () => Promise<void>
 } {
   let listener: ((message: unknown) => Promise<void>) | undefined
   let disposeListener: (() => void) | undefined
+  let viewStateListener: ((event: vscode.WebviewPanelOnDidChangeViewStateEvent) => void) | undefined
   let panelDisposed = false
   // the real host calls back into `TmcPanel.dispose()` from here, once
   const dispose = vi.fn(() => {
@@ -37,10 +42,18 @@ export function createFakeWebviewPanel(): {
   }
   const panel = {
     webview,
+    visible: true,
+    active: true,
     onDidDispose: vi.fn((callback: () => void) => {
       disposeListener = callback
       return { dispose: vi.fn() }
     }),
+    onDidChangeViewState: vi.fn(
+      (callback: (event: vscode.WebviewPanelOnDidChangeViewStateEvent) => void) => {
+        viewStateListener = callback
+        return { dispose: vi.fn() }
+      },
+    ),
     reveal: vi.fn(),
     dispose,
   }
@@ -50,10 +63,21 @@ export function createFakeWebviewPanel(): {
     }
     return listener
   }
+  const setVisible = (isVisible: boolean): void => {
+    panel.visible = isVisible
+    panel.active = isVisible
+    viewStateListener?.({ webviewPanel: panel as unknown as vscode.WebviewPanel })
+  }
+  const sendReady = (): Promise<void> => getMessageListener()({ type: "ready" })
   return {
     panel: panel as unknown as vscode.WebviewPanel,
     dispose,
     getMessageListener,
-    sendReady: () => getMessageListener()({ type: "ready" }),
+    sendReady,
+    hide: () => setVisible(false),
+    reveal: () => {
+      setVisible(true)
+      return sendReady()
+    },
   }
 }

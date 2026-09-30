@@ -732,17 +732,111 @@ suite("TmcPanel ready handshake", () => {
 
     expect(panel.webview.postMessage).not.toHaveBeenCalled()
   })
+})
 
-  test("keeps hidden webviews alive, so a reveal does not reload them", async () => {
-    const actionContext = createMockActionContext()
-    await mountSidePanel(actionContext)
+/** A `submissionView` for `panel` whose headline is `headline`. */
+function submissionViewFor(panel: { id: number }, headline: string): ExtensionToWebview {
+  return {
+    type: "submissionView",
+    target: { id: panel.id, type: "ExerciseSubmission" },
+    view: {
+      phase: "grading",
+      headline,
+      progressSteps: [],
+      testCases: [],
+      canKeepWaiting: false,
+      canPaste: false,
+    },
+  }
+}
 
-    expect(vi.mocked(vscode.window.createWebviewPanel)).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-      expect.objectContaining({ retainContextWhenHidden: true }),
+suite("TmcPanel hidden webviews", () => {
+  beforeEach(resetPanels)
+  afterEach(resetPanels)
+
+  function mountHideable(route: PanelRoute): ReturnType<typeof createFakeWebviewPanel> {
+    const fake = createFakeWebviewPanel()
+    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
+    createWebviewPanel.mockClear()
+    createWebviewPanel.mockReturnValue(fake.panel)
+    renderSidePanel(route)
+    return fake
+  }
+
+  test("does not keep a hidden webview's document alive", () => {
+    mountHideable(exerciseSubmissionPanel())
+
+    expect(vi.mocked(vscode.window.createWebviewPanel).mock.calls[0]?.[3]).not.toHaveProperty(
+      "retainContextWhenHidden",
     )
+  })
+
+  test("posts nothing while hidden, then re-renders the latest submission view on reveal", async () => {
+    const shown = exerciseSubmissionPanel()
+    const { panel, sendReady, hide, reveal } = mountHideable(shown)
+    await sendReady()
+    TmcPanel.postMessage(submissionViewFor(shown, "Sending submission…"))
+    hide()
+    vi.mocked(panel.webview.postMessage).mockClear()
+
+    TmcPanel.postMessage(submissionViewFor(shown, "Processing submission…"))
+    TmcPanel.postMessage(submissionViewFor(shown, "Exercise graded"))
+    expect(panel.webview.postMessage).not.toHaveBeenCalled()
+
+    await reveal()
+
+    expect(postedMessages(panel)).toEqual([
+      expect.objectContaining({
+        type: "setPanel",
+        panel: expect.objectContaining({ id: shown.id }),
+      }),
+      submissionViewFor(shown, "Exercise graded"),
+    ])
+  })
+
+  test("drops the reply to a request its hidden document made", async () => {
+    const copied = Promise.withResolvers<void>()
+    const writeText = vi.fn(() => copied.promise)
+    ;(vscode as unknown as { env: unknown }).env = { clipboard: { writeText } }
+    const shown = exerciseSubmissionPanel()
+    const { panel, sendReady, getMessageListener, hide, reveal } = mountHideable(shown)
+    await sendReady()
+    const copy = getMessageListener()({
+      type: "copyToClipboard",
+      requestId: 7,
+      sourcePanel: panelTarget(shown),
+      text: "stack trace",
+    })
+    hide()
+    vi.mocked(panel.webview.postMessage).mockClear()
+
+    copied.resolve()
+    await copy
+    expect(panel.webview.postMessage).not.toHaveBeenCalled()
+    await reveal()
+
+    expect(replyTo(panel, 7)).toBeUndefined()
+    expect(postedMessages(panel).map(({ type }) => type)).toEqual(["setPanel"])
+  })
+
+  test("re-renders Course Details with the course it last had", async () => {
+    const shown = {
+      id: nextPanelId(),
+      type: "CourseDetails" as const,
+      courseId: CourseIdentifier.from(42),
+    }
+    const { panel, sendReady, hide, reveal } = mountHideable(shown)
+    await sendReady()
+    hide()
+    TmcPanel.postMessage(courseDataFor(shown))
+    vi.mocked(panel.webview.postMessage).mockClear()
+
+    await reveal()
+
+    expect(postedMessages(panel)).toEqual([
+      expect.objectContaining({ type: "setPanel", panel: shown }),
+      courseDataFor(shown),
+    ])
   })
 })
 
