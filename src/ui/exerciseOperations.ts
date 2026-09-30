@@ -51,7 +51,7 @@ export interface ExerciseClaim {
  *
  * Every such operation runs through here, which refuses one that conflicts with an
  * operation already running on the same exercise; the Courses view and the exercise status
- * bar item show what is running. Operations on no single exercise use `runSingleFlight`.
+ * bar item show what is running.
  */
 export class ExerciseOperations {
   private readonly _running = new Map<string, Claim[]>()
