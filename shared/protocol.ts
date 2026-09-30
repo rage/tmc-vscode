@@ -5,13 +5,6 @@ import { CourseIdentifierSchema } from "./enum"
 import { BaseError } from "./errors"
 import { TestCase, TmcStyleValidationResult } from "./langsSchema"
 
-export const AppPanelSchema = z.object({
-  id: z.number(),
-  type: z.literal("App"),
-})
-
-export type AppPanel = z.infer<typeof AppPanelSchema>
-
 export const CourseDetailsPanelSchema = z.object({
   id: z.number(),
   type: z.literal("CourseDetails"),
@@ -80,7 +73,6 @@ export type InitializationErrorHelpPanel = z.infer<typeof InitializationErrorHel
  * `id`: used to make sure messages are delivered to the correct panels
  */
 export const PanelSchema = z.discriminatedUnion("type", [
-  AppPanelSchema,
   CourseDetailsPanelSchema,
   ExerciseSubmissionPanelSchema,
   InitializationErrorHelpPanelSchema,
@@ -214,7 +206,6 @@ export type InitializationErrors = z.infer<typeof InitializationErrorsSchema>
 export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("setPanel"),
-    target: targetPanelSchema("App"),
     panel: PanelSchema,
   }),
   // The course a CourseDetails panel shows, whenever the stored copy changes.

@@ -7,7 +7,7 @@ import { tmcLocalCourse } from "./test/fixtures"
 import { dispatchToWebview, postedMessages } from "./test/setup"
 
 suite("App global error handling", () => {
-  test("renders the loading placeholder for the initial App panel", () => {
+  test("renders the loading placeholder until the host sets a panel", () => {
     render(App)
     expect(document.body.textContent).toContain("Loading TestMyCode…")
   })
@@ -124,7 +124,6 @@ suite("App reload handshake", () => {
 
     dispatchToWebview({
       type: "setPanel",
-      target: { id: 0, type: "App" },
       panel: { id: 7, type: "CourseDetails", courseId: makeTmcKind({ courseId: 42 }) },
     })
     await tick()
@@ -150,7 +149,6 @@ suite("App navigation after a crash", () => {
     postedMessages.mockClear()
     dispatchToWebview({
       type: "setPanel",
-      target: { id: 0, type: "App" },
       panel: { id: 2, type: "CourseDetails", courseId: makeTmcKind({ courseId: 42 }) },
     })
 

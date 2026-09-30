@@ -9,6 +9,7 @@ import type { UserData } from "../../config/userdata"
 import { BottleneckError, InitializationError, presentationFor } from "../../errors"
 import type { PanelActions } from "../../panels/panelActions"
 import { registerPanelActions } from "../../panels/panelActions"
+import type { PanelMessage } from "../../panels/router"
 import { MAIN_PANEL_VIEW_TYPE, nextPanelId, TmcPanel } from "../../panels/TmcPanel"
 import type {
   ExtensionToWebview,
@@ -741,7 +742,7 @@ suite("TmcPanel ready handshake", () => {
 })
 
 /** A `submissionView` for `panel` whose headline is `headline`. */
-function submissionViewFor(panel: { id: number }, headline: string): ExtensionToWebview {
+function submissionViewFor(panel: { id: number }, headline: string): PanelMessage {
   return {
     type: "submissionView",
     target: { id: panel.id, type: "ExerciseSubmission" },
@@ -847,7 +848,7 @@ suite("TmcPanel hidden webviews", () => {
 })
 
 /** A `setCourseData` addressed to `panel`. */
-function courseDataFor(panel: { id: number }): ExtensionToWebview {
+function courseDataFor(panel: { id: number }): PanelMessage {
   return {
     type: "setCourseData",
     target: { id: panel.id, type: "CourseDetails" },

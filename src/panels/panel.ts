@@ -9,7 +9,6 @@ import { Logger, LogLevel } from "../utilities/logger"
 export function renderPanel(panel: Panel, webview: Webview): void {
   postMessageToWebview(webview, {
     type: "setPanel",
-    target: { id: 0, type: "App" },
     panel,
   })
 }

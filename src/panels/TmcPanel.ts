@@ -4,14 +4,14 @@ import type * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
-import type { ExtensionToWebview, Panel } from "../shared/shared"
+import type { Panel } from "../shared/shared"
 import { panelTarget, WebviewStateSchema } from "../shared/shared"
 import { Logger } from "../utilities"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { messageHandlers } from "./handlers"
 import { postMessageToWebview, renderPanel } from "./panel"
-import type { HandlerContext, PanelHost } from "./router"
+import type { HandlerContext, PanelHost, PanelMessage } from "./router"
 import { dispatch } from "./router"
 import { nextPanelId, panelTitle } from "./routes"
 
@@ -56,7 +56,7 @@ export class TmcPanel {
 
   // latest message per type targeted at _route's id, resent after it on "ready"
   // so a reload doesn't lose one-shot results that already fired
-  private _messageBuffer = new Map<string, ExtensionToWebview>()
+  private _messageBuffer = new Map<string, PanelMessage>()
 
   private _disposables: Disposable[] = []
 
@@ -64,7 +64,7 @@ export class TmcPanel {
   private _isDisposed = false
 
   // sends a message to the main and side panels
-  public static postMessage(...messages: ExtensionToWebview[]): void {
+  public static postMessage(...messages: PanelMessage[]): void {
     for (const message of messages) {
       TmcPanel.mainPanel?._postMessage(message)
       TmcPanel.sidePanel?._postMessage(message)
@@ -82,7 +82,7 @@ export class TmcPanel {
    * Every reply to a request this webview made goes through here; {@link postMessage}
    * is for messages every open panel should see.
    */
-  private _postMessage(message: ExtensionToWebview): void {
+  private _postMessage(message: PanelMessage): void {
     // A `reply` is left out: the reloaded webview asks again, and a replayed answer to the
     // request of a page that no longer exists settles nothing.
     if (message.type !== "reply" && message.target.id === this._route?.id) {
@@ -91,7 +91,7 @@ export class TmcPanel {
     this._postTransient(message)
   }
 
-  private _postTransient(message: ExtensionToWebview): void {
+  private _postTransient(message: PanelMessage): void {
     if (!this._isWebviewReady || this._isDisposed) {
       return
     }

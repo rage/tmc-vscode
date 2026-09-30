@@ -166,7 +166,7 @@ suite("App and UI state", () => {
   test("enters the screen of each panel the host sets", () => {
     render(App)
 
-    dispatchToWebview({ type: "setPanel", target: { id: 0, type: "App" }, panel: courseDetails })
+    dispatchToWebview({ type: "setPanel", panel: courseDetails })
 
     expect(savedWebviewState()?.screen).toBe("CourseDetails:tmc:42")
   })

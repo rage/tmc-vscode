@@ -7,9 +7,9 @@
   import CourseDetails from "./panels/CourseDetails.svelte"
   import ExerciseSubmission from "./panels/ExerciseSubmission.svelte"
   import InitializationErrorHelp from "./panels/InitializationErrorHelp.svelte"
-  import type { AppPanel, Panel } from "./shared/shared"
+  import type { Panel } from "./shared/shared"
   import { assertUnreachable } from "./shared/shared"
-  import { addMessageListener } from "./utilities/script"
+  import { onSetPanel } from "./utilities/script"
   import { enterScreen } from "./utilities/uiState.svelte"
   import { vscode } from "./utilities/vscode"
 
@@ -62,22 +62,11 @@
     reportCrash(toCrash("Uncaught error", error))
   }
 
-  const appPanel: AppPanel = {
-    id: 0,
-    type: "App",
-  }
-  let appState = $state.raw<{ panel: Panel }>({ panel: appPanel })
-  addMessageListener(appPanel, (message) => {
-    switch (message.type) {
-      case "setPanel": {
-        crash = null
-        enterScreen(message.panel)
-        appState = { panel: message.panel }
-        break
-      }
-      default:
-        return assertUnreachable(message.type)
-    }
+  let panel = $state.raw<Panel | undefined>(undefined)
+  onSetPanel((next) => {
+    crash = null
+    enterScreen(next)
+    panel = next
   })
 
   // A reload loses whatever the extension already posted, so ask it to resend. Posted
@@ -115,19 +104,19 @@
         // comes back rather than sitting empty until the user navigates somewhere.
         vscode.postMessage({ type: "ready" })
       })}
+    {:else if panel === undefined}
+      <Spinner label="Loading TestMyCode…" />
     {:else}
-      {#key appState.panel.id}
+      {#key panel.id}
         <svelte:boundary onerror={handleRenderError}>
-          {#if appState.panel.type === "CourseDetails"}
-            <CourseDetails panel={appState.panel} />
-          {:else if appState.panel.type === "ExerciseSubmission"}
-            <ExerciseSubmission panel={appState.panel} />
-          {:else if appState.panel.type === "InitializationErrorHelp"}
-            <InitializationErrorHelp panel={appState.panel} />
-          {:else if appState.panel.type === "App"}
-            <Spinner label="Loading TestMyCode…" />
+          {#if panel.type === "CourseDetails"}
+            <CourseDetails {panel} />
+          {:else if panel.type === "ExerciseSubmission"}
+            <ExerciseSubmission {panel} />
+          {:else if panel.type === "InitializationErrorHelp"}
+            <InitializationErrorHelp {panel} />
           {:else}
-            {assertUnreachable(appState.panel)}
+            {assertUnreachable(panel)}
           {/if}
 
           {#snippet failed(error: unknown, reset: () => void)}

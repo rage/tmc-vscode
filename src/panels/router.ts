@@ -17,6 +17,9 @@ import type {
 import { toWebviewError, WebviewToExtensionSchema } from "../shared/shared"
 import { Logger } from "../utilities"
 
+/** A message addressed to one panel; `setPanel` is the transport's own. */
+export type PanelMessage = Exclude<ExtensionToWebview, { type: "setPanel" }>
+
 /** One webview's side of the panel manager, as the message handlers see it. */
 export interface PanelHost {
   /** Tells the main webview from the side one, in log lines. */
@@ -24,9 +27,9 @@ export interface PanelHost {
   /** The screen this webview shows, if any. */
   readonly route: Panel | undefined
   /** Sends `message` to this webview alone, kept for a reload if it targets `route`. */
-  post: (message: ExtensionToWebview) => void
+  post: (message: PanelMessage) => void
   /** {@link post} without keeping it: for messages a reloaded webview must not see again. */
-  postTransient: (message: ExtensionToWebview) => void
+  postTransient: (message: PanelMessage) => void
   /** Shows `route` in this webview. */
   render: (route: Panel) => void
   /** Shows `route` in the main panel, creating it if needed. */

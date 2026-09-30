@@ -6,8 +6,6 @@ import { assertUnreachable, LocalCourseData, LocalCourseExercise } from "../shar
 /** The editor tab label for `route`, so tabs can be told apart in Open Editors and Ctrl+Tab. */
 export function panelTitle(route: Panel, actionContext: ActionContext): string {
   switch (route.type) {
-    case "App":
-      return "TestMyCode"
     case "CourseDetails": {
       const course = isReady(actionContext)
         ? actionContext.startup.userData.getCourse(route.courseId)

@@ -28,7 +28,6 @@ function screenOf(panel: Panel): string {
     // A new submission of the same exercise starts with an empty feedback form.
     case "ExerciseSubmission":
       return `ExerciseSubmission:${panel.id}`
-    case "App":
     case "InitializationErrorHelp":
       return panel.type
   }
@@ -41,7 +40,6 @@ function restorableRouteOf(panel: Panel): RestorableRoute | undefined {
       return { type: panel.type, courseId: panel.courseId }
     case "InitializationErrorHelp":
       return { type: panel.type }
-    case "App":
     case "ExerciseSubmission":
       return undefined
   }
