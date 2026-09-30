@@ -12,9 +12,8 @@ import { createDialogMock } from "../mocks/dialog"
 function contextWith(
   userData: Partial<UserData>,
   unsetSetting: ReturnType<typeof vi.fn> = vi.fn(async () => Ok.EMPTY),
-): [ReadyActionContext, Dialog, ReturnType<typeof vi.fn>] {
+): [ReadyActionContext, Dialog] {
   const [dialog] = createDialogMock()
-  const refresh = vi.fn()
   return [
     {
       ...createMockActionContext({
@@ -29,10 +28,8 @@ function contextWith(
         },
       }),
       dialog,
-      ui: { treeDP: { refresh } } as unknown as ReadyActionContext["ui"],
     },
     dialog,
-    refresh,
   ]
 }
 
@@ -70,7 +67,7 @@ suite("removeCourse action", function () {
 
   test("returns a removal that could not be persisted, without reporting it", async function () {
     const error = new Error("globalState is full")
-    const [actionContext, dialog, refresh] = contextWith({
+    const [actionContext, dialog] = contextWith({
       getCourse: () => Ok(course),
       deleteCourse: vi.fn(async () => Err(error)),
     } as unknown as Partial<UserData>)
@@ -82,7 +79,6 @@ suite("removeCourse action", function () {
     )
     expect(result.err && result.val.cause).toBe(error)
     expect(dialog.reportError).not.toHaveBeenCalled()
-    expect(refresh).not.toHaveBeenCalled()
   })
 
   test("warns about a cleanup it could not do and removes the course anyway", async function () {
@@ -100,17 +96,18 @@ suite("removeCourse action", function () {
     expect(deleteCourse).toHaveBeenCalled()
   })
 
-  test("drops the course from the tree once the removal is persisted", async function () {
-    const [actionContext, dialog, refresh] = contextWith({
+  test("removes the stored course", async function () {
+    const deleteCourse = vi.fn(async () => Ok.EMPTY)
+    const [actionContext, dialog] = contextWith({
       getCourse: () => Ok(course),
-      deleteCourse: vi.fn(async () => Ok.EMPTY),
+      deleteCourse,
     } as unknown as Partial<UserData>)
 
     const result = await removeCourse(actionContext, CourseIdentifier.from(1))
 
     expect(result.ok).toBe(true)
     expect(dialog.reportError).not.toHaveBeenCalled()
-    expect(refresh).toHaveBeenCalled()
+    expect(deleteCourse).toHaveBeenCalledWith(CourseIdentifier.from(1))
   })
 
   // Left behind, it is reused verbatim when the course is added back.

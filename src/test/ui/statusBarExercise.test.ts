@@ -53,9 +53,9 @@ function harness(): Harness {
     userData: {
       getExerciseByName: () => stored.exercise,
       getCourseBySlug: () => Ok(course),
+      onDidChangeCourses: coursesChanged.event,
     },
     activity: createExerciseActivity(),
-    onDidChangeCourses: coursesChanged.event,
   }
   return { sources, active, stored, editorChanged, coursesChanged }
 }

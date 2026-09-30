@@ -11,10 +11,8 @@ export interface ExerciseStatusSources {
     WorkspaceManager,
     "activeExercise" | "getExerciseContaining" | "onDidChangeExercises"
   >
-  userData: Pick<UserData, "getExerciseByName" | "getCourseBySlug">
+  userData: Pick<UserData, "getExerciseByName" | "getCourseBySlug" | "onDidChangeCourses">
   activity: ExerciseActivity
-  /** Fires after the stored courses change, which is when points change. */
-  onDidChangeCourses: vscode.Event<unknown>
 }
 
 const activityLabels: Record<ExerciseActivityKind, string> = {
@@ -62,7 +60,7 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
       vscode.window.onDidChangeActiveTextEditor(render),
       _sources.workspaceManager.onDidChangeExercises(render),
       _sources.activity.onDidChange(render),
-      _sources.onDidChangeCourses(render),
+      _sources.userData.onDidChangeCourses(render),
     ]
     this.render()
   }

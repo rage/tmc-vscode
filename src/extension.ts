@@ -448,8 +448,6 @@ async function activateInner(
   if (readyContext) {
     init.registerSettingsCallbacks(readyContext)
     init.registerTesting(context, readyContext)
-    // Every change to the stored courses re-renders the Courses view.
-    const onDidChangeCourses = ui.treeDP.onDidChangeTreeData
     const account = new AccountStatusBarItem(authState.loggedIn)
     authState.subscribe((loggedIn) => account.setLoggedIn(loggedIn))
     accountStatus = account
@@ -471,9 +469,8 @@ async function activateInner(
         workspaceManager: readyContext.startup.workspaceManager,
         userData: readyContext.startup.userData,
         activity: exerciseActivity,
-        onDidChangeCourses,
       }),
-      trackHasCourses(readyContext.startup.userData, onDidChangeCourses),
+      trackHasCourses(readyContext.startup.userData),
     )
   }
 

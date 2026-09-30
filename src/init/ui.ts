@@ -8,6 +8,10 @@ export function fillCoursesView(actionContext: ActionContext): void {
   const { ui, startup } = actionContext
   if (startup.kind === "ready") {
     const { userData, workspaceManager } = startup
-    ui.treeDP.setSource({ getCourses: () => userData.getCourses(), workspaceManager })
+    ui.treeDP.setSource({
+      getCourses: () => userData.getCourses(),
+      onDidChangeCourses: userData.onDidChangeCourses,
+      workspaceManager,
+    })
   }
 }

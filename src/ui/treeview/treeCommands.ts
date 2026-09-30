@@ -151,14 +151,11 @@ export async function dismissNewExercises(
   actionContext: ReadyActionContext,
   courseId: CourseIdentifier,
 ): Promise<void> {
-  const dismissed = await withOperation(
+  await withOperation(
     actionContext.dialog,
     { failure: "Failed to dismiss the new exercises.", backend: courseId.kind },
     () => actionContext.startup.userData.clearFromNewExercises(courseId),
   )
-  if (dismissed.ok) {
-    actionContext.ui.treeDP.refresh()
-  }
 }
 
 /** The exercises under `rows` that `isWanted`, grouped by course, each exercise once. */

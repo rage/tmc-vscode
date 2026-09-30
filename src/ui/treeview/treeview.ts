@@ -15,6 +15,7 @@ export const COURSES_VIEW_ID = "tmcView"
 /** What the Courses view is drawn from; read afresh on every render. */
 export interface CoursesTreeSource {
   getCourses: () => LocalCourseData[]
+  onDidChangeCourses: vscode.Event<unknown>
   workspaceManager: Pick<
     WorkspaceManager,
     | "activeCourse"
@@ -281,7 +282,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
   private readonly _view: vscode.TreeView<CoursesTreeItem>
   private readonly _disposables: vscode.Disposable[]
   private _source: CoursesTreeSource | undefined
-  private _sourceSubscription: vscode.Disposable | undefined
+  private _sourceSubscriptions: vscode.Disposable[] = []
   private _isLoggedIn = false
   private readonly _unreachableBackends = new Set<BackendKind>()
   private _roots: CourseTreeItem[] | undefined
@@ -303,7 +304,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
   }
 
   public dispose(): void {
-    this._sourceSubscription?.dispose()
+    this._sourceSubscriptions.forEach((subscription) => subscription.dispose())
     for (const disposable of this._disposables) {
       disposable.dispose()
     }
@@ -311,9 +312,12 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
 
   /** Sets what the view is drawn from. Call once activation has it. */
   public setSource(source: CoursesTreeSource): void {
-    this._sourceSubscription?.dispose()
+    this._sourceSubscriptions.forEach((subscription) => subscription.dispose())
     this._source = source
-    this._sourceSubscription = source.workspaceManager.onDidChangeExercises(() => this.refresh())
+    this._sourceSubscriptions = [
+      source.onDidChangeCourses(() => this.refresh()),
+      source.workspaceManager.onDidChangeExercises(() => this.refresh()),
+    ]
     this.refresh()
     void this.revealActiveExercise()
   }
@@ -339,7 +343,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
     this.refresh()
   }
 
-  /** Re-renders the view; call after the user's courses change. */
+  /** Re-renders the view. */
   public refresh(): void {
     this._roots = undefined
     const roots = this._currentRoots()

@@ -1,4 +1,4 @@
-import { Err, Ok } from "ts-results"
+import { Ok } from "ts-results"
 import { vi } from "vitest"
 
 import { closeExercises as closeExercisesAction } from "../../actions/closeExercises"
@@ -239,11 +239,8 @@ suite("Courses view commands", function () {
     expect(downloadExercisesForUi).toHaveBeenCalledWith(actionContext, "update", tmcCourse, updates)
   })
 
-  test("dismissing the new exercises re-renders the view only once they are cleared", async function () {
-    const clearFromNewExercises = vi
-      .fn()
-      .mockResolvedValueOnce(Ok.EMPTY)
-      .mockResolvedValueOnce(Err(new Error("storage is read-only")))
+  test("dismissing the new exercises clears them from the stored course", async function () {
+    const clearFromNewExercises = vi.fn().mockResolvedValue(Ok.EMPTY)
     const actionContext = {
       ...createMockActionContext({
         startup: { userData: { clearFromNewExercises } as unknown as UserData },
@@ -252,9 +249,7 @@ suite("Courses view commands", function () {
     }
 
     await dismissNewExercises(actionContext, tmcCourse)
-    await dismissNewExercises(actionContext, tmcCourse)
 
-    expect(clearFromNewExercises).toHaveBeenCalledWith(tmcCourse)
-    expect(actionContext.ui.treeDP.refresh).toHaveBeenCalledOnce()
+    expect(clearFromNewExercises).toHaveBeenCalledExactlyOnceWith(tmcCourse)
   })
 })

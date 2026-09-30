@@ -19,7 +19,6 @@ export async function addNewCourse(
   organizationSlug: string,
   course: CourseIdentifier,
 ): Promise<Result<void, Error>> {
-  const { ui } = actionContext
   const { langs, userData, workspaceManager } = actionContext.startup
   Logger.info("Adding new course")
 
@@ -58,7 +57,6 @@ export async function addNewCourse(
   if (addResult.err) {
     return addResult
   }
-  ui.treeDP.refresh()
   await workspaceManager.createWorkspaceFile(
     LocalCourseData.getCourseName(fetched.val),
     fetched.val.kind,

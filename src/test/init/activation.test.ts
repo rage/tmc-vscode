@@ -116,7 +116,6 @@ vi.mock("../../ui/ui", () => ({
         recorded.treeLoggedIn.push(loggedIn)
       },
       refresh: (): void => {},
-      onDidChangeTreeData: (): { dispose: () => void } => ({ dispose: () => {} }),
     }
     public dispose = (): void => {
       recorded.uiDisposals += 1

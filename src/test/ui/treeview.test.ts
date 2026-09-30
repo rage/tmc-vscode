@@ -107,11 +107,13 @@ suite("CoursesTree", function () {
   let courses: LocalCourseData[]
   let workspaceExercises: WorkspaceExercise[]
   let exercisesChanged: vscode.EventEmitter<void>
+  let coursesChanged: vscode.EventEmitter<void>
   let activeEditorChanged: vscode.EventEmitter<vscode.TextEditor | undefined>
 
   function source(): CoursesTreeSource {
     return {
       getCourses: () => courses,
+      onDidChangeCourses: coursesChanged.event,
       workspaceManager: {
         activeCourse: undefined,
         activeCourseBackend: undefined,
@@ -135,6 +137,7 @@ suite("CoursesTree", function () {
     courses = []
     workspaceExercises = []
     exercisesChanged = new vscode.EventEmitter<void>()
+    coursesChanged = new vscode.EventEmitter<void>()
     activeEditorChanged = new vscode.EventEmitter<vscode.TextEditor | undefined>()
     view = {
       badge: undefined,
@@ -413,6 +416,15 @@ suite("CoursesTree", function () {
     expect(view.badge).toBeUndefined()
   })
 
+  test("updates the badge when the stored courses change", function () {
+    show(tmcCourse({ newExercises: [7] }))
+
+    courses = [tmcCourse()]
+    coursesChanged.fire()
+
+    expect(view.badge).toBeUndefined()
+  })
+
   test("says which backend could not be reached, until it answers again", function () {
     show(tmcCourse())
 
@@ -433,8 +445,9 @@ suite("CoursesTree", function () {
     ])
     updateablesRegistry.set(CourseIdentifier.from(1), [])
     exercisesChanged.fire()
+    coursesChanged.fire()
 
-    expect(refreshed).toEqual([undefined, undefined, undefined])
+    expect(refreshed).toEqual([undefined, undefined, undefined, undefined])
   })
 
   suite("revealing the active exercise", function () {

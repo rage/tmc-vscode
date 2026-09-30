@@ -1,6 +1,7 @@
 import * as _ from "lodash"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
+import * as vscode from "vscode"
 
 import type { BackendKind, CourseIdentifier, LocalCourseExercise } from "../shared/shared"
 import {
@@ -29,6 +30,14 @@ export class UserData {
   /** Tail of the serialized write chain; see {@link _updatePersistentData}. */
   private _pendingWrite: Promise<Result<void, Error>> = Promise.resolve(Ok.EMPTY)
   private _storage: Storage
+  private readonly _coursesChanged = new vscode.EventEmitter<void>()
+
+  /**
+   * Fires after any change to the stored courses, as soon as memory holds it: before it is
+   * persisted, and even when persisting then fails.
+   */
+  public readonly onDidChangeCourses = this._coursesChanged.event
+
   public constructor(storage: Storage) {
     const persistentData = storage.getUserData()
     if (persistentData) {
@@ -477,7 +486,8 @@ export class UserData {
   }
 
   /**
-   * Writes the whole catalogue back to storage.
+   * Announces the change the in-memory maps hold, and writes the whole catalogue back to
+   * storage.
    *
    * The in-memory maps are already mutated by the time this runs, so an `Err`
    * means the two copies have diverged and the caller must tell the user —
@@ -489,6 +499,7 @@ export class UserData {
    * silently drops the earlier one's changes.
    */
   private async _updatePersistentData(): Promise<Result<void, Error>> {
+    this._coursesChanged.fire()
     const snapshot = {
       courses: Array.from(this._tmcCourses.values()),
       mooc_courses: Array.from(this._moocCourses.values()),

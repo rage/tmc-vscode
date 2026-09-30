@@ -78,7 +78,6 @@ async function refresh(
     },
     async () => {
       const refreshed = await checkForCourseUpdates(actionContext, { courseId, onProgress })
-      actionContext.ui.treeDP.refresh()
       if (refreshed.ok) {
         offerNewExercises(actionContext, refreshed.val.courses)
       }
