@@ -3,7 +3,6 @@ import * as vscode from "vscode"
 import type WorkspaceManager from "../api/workspaceManager"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import type { UserData } from "../config/userdata"
-import { LocalCourseData } from "../shared/shared"
 import type { ExerciseActivity, ExerciseActivityKind } from "./statusBarActivity"
 
 /** What the exercise status bar item and its action pick read. */
@@ -161,9 +160,9 @@ export async function showExerciseActions(
             ? [
                 separator("Course"),
                 {
-                  label: "$(book) Open in Course Details",
-                  command: "tmc.courseDetails",
-                  arguments: [LocalCourseData.getCourseId(course.val)],
+                  label: "$(list-tree) Reveal in Courses View",
+                  command: "tmc.revealInCoursesView",
+                  arguments: target,
                 },
               ]
             : []),

@@ -99,7 +99,7 @@ interface AccountAction extends vscode.QuickPickItem {
 /** Offers what a logged-in user can do with their account, and runs the one they pick. */
 export async function showAccountMenu(): Promise<void> {
   const actions: AccountAction[] = [
-    { label: "$(book) Show My Courses", command: "tmc.myCourses" },
+    { label: "$(book) Show Courses", command: "tmc.myCourses" },
     { label: "$(gear) Open Settings", command: "tmc.settings" },
     { label: "$(sign-out) Log Out", command: "tmc.logout" },
   ]

@@ -202,23 +202,20 @@ suite("showExerciseActions", function () {
       "Share via Paste",
       "Download Old Submission…",
       "Reset Exercise",
-      "Open in Course Details",
+      "Reveal in Courses View",
     ])
     expect(executeCommand).toHaveBeenCalledWith("tmc.submitExercise", exerciseHelloWorld.uri)
   })
 
-  test("opens the exercise's course in Course Details", async function () {
+  test("reveals the exercise in the Courses view", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     vi.spyOn(vscode.window, "showQuickPick").mockImplementation((async (
       items: readonly { label: string }[],
-    ) => items.find((x) => x.label.includes("Course Details"))) as never)
+    ) => items.find((x) => x.label.includes("Courses View"))) as never)
 
     await showExerciseActions(harness().sources, true)
 
-    expect(executeCommand).toHaveBeenCalledWith(
-      "tmc.courseDetails",
-      makeMoocKind({ instanceId: "course-uuid" }),
-    )
+    expect(executeCommand).toHaveBeenCalledWith("tmc.revealInCoursesView", exerciseHelloWorld.uri)
   })
 
   test("logged out, offers only what runs locally", async function () {
@@ -229,14 +226,14 @@ suite("showExerciseActions", function () {
     expect(offered()).toEqual(["Run Tests"])
   })
 
-  test("leaves Course Details out for a course that is not stored", async function () {
+  test("leaves the reveal out for a course that is not stored", async function () {
     vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)
     const { sources } = harness()
     sources.userData.getCourseBySlug = () => Err(new Error("no such course"))
 
     await showExerciseActions(sources, true)
 
-    expect(offered()).not.toContain("Open in Course Details")
+    expect(offered()).not.toContain("Reveal in Courses View")
   })
 
   test("shows nothing outside an exercise", async function () {

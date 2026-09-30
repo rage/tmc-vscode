@@ -63,13 +63,6 @@ if (
   ElementInternals.prototype.setValidity = () => {}
 }
 
-// jsdom has no layout, so `vscode-table`'s ResizeObserver never needs to fire.
-globalThis.ResizeObserver ??= class {
-  public observe(): void {}
-  public unobserve(): void {}
-  public disconnect(): void {}
-}
-
 // `svelte/motion` queries `prefers-reduced-motion` as soon as it is imported.
 window.matchMedia ??= (query: string): MediaQueryList =>
   ({

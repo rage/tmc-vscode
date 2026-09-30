@@ -459,6 +459,16 @@ suite("CoursesTree", function () {
       expect(options).toEqual({ select: true, focus: false })
     })
 
+    test("selects the exercise already open when the view first fills", function () {
+      vi.spyOn(vscode.window, "activeTextEditor", "get").mockReturnValue({
+        document: { uri: vscode.Uri.file("/exercises/tmc-slug/part01-01_hello/src/hello.py") },
+      } as vscode.TextEditor)
+
+      tree.setSource(source())
+
+      expect(view.reveal).toHaveBeenCalledOnce()
+    })
+
     test("leaves a hidden view alone", function () {
       view.visible = false
       openEditorOn("/exercises/tmc-slug/part01-01_hello/src/hello.py")
@@ -469,6 +479,24 @@ suite("CoursesTree", function () {
     test("ignores a file outside every exercise", function () {
       openEditorOn("/home/student/notes.txt")
 
+      expect(view.reveal).not.toHaveBeenCalled()
+    })
+
+    test("on request, opens even a hidden view and focuses the exercise's row", async function () {
+      view.visible = false
+
+      const isRevealed = await tree.revealExercise(
+        vscode.Uri.file("/exercises/tmc-slug/part01-01_hello/src/hello.py"),
+      )
+
+      expect(isRevealed).toBe(true)
+      const [item, options] = view.reveal.mock.calls[0] as [ExerciseTreeItem, object]
+      expect(item.label).toBe("01_hello")
+      expect(options).toEqual({ select: true, focus: true })
+    })
+
+    test("on request, reports a file no row holds", async function () {
+      expect(await tree.revealExercise(vscode.Uri.file("/home/student/notes.txt"))).toBe(false)
       expect(view.reveal).not.toHaveBeenCalled()
     })
   })

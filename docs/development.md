@@ -155,6 +155,24 @@ checkout to re-vendor from. The consequence is the rule: never `cp` an artifact
 into place. A hand-copy leaves the stamp naming the previous revision and fails
 the gate; run the vendoring script, which rewrites both.
 
+## Native views
+
+Most of the UI is VS Code's own, and webviews are left for what native UI cannot show:
+
+- **Courses view** (`src/ui/treeview/`): a tree of course → part → exercise.
+  `courseViewModel.ts` builds it from `UserData`, the exercises on disk and the in-flight
+  state in `src/ui/exerciseStatusRegistry.ts` and `src/ui/updateablesRegistry.ts`;
+  `treeCommands.ts` runs the row actions on the selection.
+- **Local test runs** go through the Testing API (`src/testing/`): results land in the
+  Test Results view and checkstyle findings in the Problems view.
+- **Status bar** (`src/ui/statusBar*.ts`): the account, which logs in or lists the account's
+  actions, and the open exercise with its points, a spinner while it is tested or submitted,
+  and a quick pick of its actions.
+- **Login** is a modal and a progress notification (see [One login](#one-login)).
+
+The webview panels are Course Details (a read-only course overview), the submission
+result and the initialization error help.
+
 ## Webview panels
 
 The extension host is authoritative for panel state. `TmcPanel` keeps the last

@@ -1,13 +1,18 @@
 import { Ok } from "ts-results"
 import { vi } from "vitest"
 
-import { downloadNewExercisesForCourse } from "../../actions/downloadNewExercisesForCourse"
+import {
+  courseDownloadFlight,
+  downloadNewExercisesForCourse,
+} from "../../actions/downloadNewExercisesForCourse"
 import { downloadOrUpdateExercises } from "../../actions/downloadOrUpdateExercises"
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
 import type { ReadyActionContext } from "../../actions/types"
 import type { UserData } from "../../config/userdata"
+import { BottleneckError } from "../../errors"
 import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
+import { acquireSingleFlight, releaseSingleFlight } from "../../utilities"
 import { createMockActionContext } from "../mocks/actionContext"
 
 vi.mock("../../actions/downloadOrUpdateExercises", () => ({
@@ -97,6 +102,18 @@ suite("downloadNewExercisesForCourse action", function () {
 
     await expect(downloadNewExercisesForCourse(actionContext(), COURSE_ID)).rejects.toThrow("boom")
 
+    expect(stillNew()).toEqual([1, 2])
+  })
+
+  test("refuses while another download of the course runs", async function () {
+    const { key } = courseDownloadFlight(COURSE_ID)
+    acquireSingleFlight(key, 60_000)
+    onTestFinished(() => releaseSingleFlight(key))
+
+    const result = await downloadNewExercisesForCourse(actionContext(), COURSE_ID)
+
+    expect(result.err && result.val).toBeInstanceOf(BottleneckError)
+    expect(downloadOrUpdateExercises).not.toHaveBeenCalled()
     expect(stillNew()).toEqual([1, 2])
   })
 })

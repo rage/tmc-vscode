@@ -23,9 +23,7 @@
   let crash = $state.raw<Crash | null>(null)
 
   // "ResizeObserver loop completed/limit exceeded" is a benign browser notice (deferred resize
-  // callbacks), not a real error, but surfaces as a global `error` event. Responsive
-  // `@vscode-elements` (e.g. `vscode-table`) trigger it during layout, so ignore it rather than
-  // crashing the whole panel.
+  // callbacks), not a real error, but surfaces as a global `error` event.
   function isBenignError(message: string): boolean {
     return message.includes("ResizeObserver loop")
   }

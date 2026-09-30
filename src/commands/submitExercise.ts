@@ -44,7 +44,12 @@ export async function keepWaitingForGrading(
   actionContext: ReadyActionContext,
   panelId: number,
 ): Promise<Result<void, Error>> {
-  const waited = await actions.keepWaitingForGrading(context, actionContext, panelId)
+  const wait = (): ReturnType<typeof actions.keepWaitingForGrading> =>
+    actions.keepWaitingForGrading(context, actionContext, panelId)
+  const exercise = actions.exerciseAwaitingGrading(panelId)
+  const waited = exercise
+    ? await exerciseActivity.run(exercise.uri, "submitting", wait)
+    : await wait()
   if (waited.err) {
     return waited
   }

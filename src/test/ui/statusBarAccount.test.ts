@@ -102,6 +102,17 @@ suite("showAccountMenu", function () {
     expect(executeCommand).toHaveBeenCalledWith("tmc.logout")
   })
 
+  test("names the Courses view entry after the view", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    vi.spyOn(vscode.window, "showQuickPick").mockImplementation((async (
+      items: readonly { label: string }[],
+    ) => items.find((x) => x.label === "$(book) Show Courses")) as never)
+
+    await showAccountMenu()
+
+    expect(executeCommand).toHaveBeenCalledWith("tmc.myCourses")
+  })
+
   test("does nothing when dismissed", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)

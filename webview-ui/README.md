@@ -10,7 +10,7 @@ same schemas from one file.
 
 ## Panels
 
-A panel is one screen: `CourseDetails`, `ExerciseSubmission`, `MoocLogin`, … Each has
+A panel is one screen: `CourseDetails`, `ExerciseSubmission` or `InitializationErrorHelp`. Each has
 a schema in `shared/protocol.ts` and a component of the same name in `src/panels/`.
 The schemas form the `Panel` discriminated union, so adding a screen means
 adding a variant there and a branch in `App.svelte`; `assertUnreachable` turns a
@@ -102,8 +102,9 @@ panel rather than mutating it — `panel = { ...panel, course }`, with
 `let { panel }: Props = $props()`.
 
 `ExerciseSubmission` is the exception. Its content is not panel data but a
-running operation's output — progress lines, test results, grading updates —
-which the extension host pushes as it goes. It keeps that in component-local
+running submission's state, which the extension host sends whole, as one
+`submissionView` message, every time it changes (`src/panels/submissionView.ts`
+builds it for both backends). It keeps the latest view in component-local
 `$state` and never reassigns `panel`, so the panel prop stays the identity the
 submission was started with.
 

@@ -290,6 +290,11 @@ export async function submitExercise(
   return Ok(LocalCourseData.getCourseId(course))
 }
 
+/** The exercise whose grading submission panel `panelId` can still wait for, if any. */
+export function exerciseAwaitingGrading(panelId: number): WorkspaceExercise | undefined {
+  return unfinishedGradings.get(panelId)?.exercise
+}
+
 /**
  * Waits again for the grading of the submission panel `panelId` shows, after the wait that
  * followed its submit ended before the grading did.
