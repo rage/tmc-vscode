@@ -99,8 +99,6 @@ interface Harness {
   shownPanel: () => { id: number; type: string }
 }
 
-const failureTypes = new Set(["submissionStatusError"])
-
 async function harness(
   services: {
     langs?: Record<string, unknown>
@@ -240,8 +238,8 @@ async function harness(
               ? []
               : [`${requestTypes.get(message.requestId)}: ${message.outcome.error.message}`]
           }
-          return failureTypes.has(message.type) && "error" in message
-            ? [`${message.type}: ${(message.error as { message: string }).message}`]
+          return message.type === "submissionView" && message.view.error
+            ? [`${message.type}: ${message.view.error.message}`]
             : []
         }),
     shownPanel: () => {
@@ -331,20 +329,19 @@ suite("reported once: exercise commands", function () {
 
   test("a failed submission shows in its panel only", async function () {
     const { run, shown, panelFailures } = await harness({
-      langs: { submitMoocExerciseAndWaitForResults: async () => Err(new ConnectionError("reset")) },
+      langs: { submitMoocExercise: async () => Err(new ConnectionError("reset")) },
     })
 
     await run("tmc.submitExercise")
 
     expect(shown).toEqual([])
-    expect(panelFailures()).toEqual(["submissionStatusError: reset"])
+    expect(panelFailures()).toEqual(["submissionView: reset"])
   })
 
   test("a failed submission with a remedy is also notified, once", async function () {
     const { run, shown, panelFailures } = await harness({
       langs: {
-        submitMoocExerciseAndWaitForResults: async () =>
-          Err(new InsufficientScopeError("exercise-services")),
+        submitMoocExercise: async () => Err(new InsufficientScopeError("exercise-services")),
       },
     })
 
@@ -393,7 +390,7 @@ suite("reported once: exercise commands", function () {
   test("a panel paste that finds a submission in flight shows in the panel only", async function () {
     const submission = pending<Err<Error>>()
     const { actionContext, run, post, shown, panelFailures, shownPanel } = await harness({
-      langs: { submitMoocExerciseAndWaitForResults: () => submission.promise },
+      langs: { submitMoocExercise: () => submission.promise },
     })
     showSubmission(actionContext)
 
@@ -405,7 +402,7 @@ suite("reported once: exercise commands", function () {
     expect(shown).toEqual([])
     expect(panelFailures()).toEqual([
       "pasteExercise: A submission for this exercise is already in progress.",
-      "submissionStatusError: reset",
+      "submissionView: reset",
     ])
   })
 

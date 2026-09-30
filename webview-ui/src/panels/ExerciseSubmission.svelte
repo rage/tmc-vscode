@@ -12,9 +12,8 @@
   import SubmissionFeedbackForm from "../components/SubmissionFeedbackForm.svelte"
   import TestResults from "../components/TestResults.svelte"
   import ToolbarButton from "../components/ToolbarButton.svelte"
-  import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../shared/langsSchema"
-  import type { ExerciseSubmissionPanel, FeedbackQuestion, WebviewError } from "../shared/shared"
-  import { assertUnreachable, unwrap } from "../shared/shared"
+  import type { ExerciseSubmissionPanel, SubmissionView } from "../shared/shared"
+  import { unwrap } from "../shared/shared"
   import { announce } from "../utilities/a11y.svelte"
   import { addMessageListener, createRequester } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
@@ -25,110 +24,34 @@
 
   let { panel }: Props = $props()
 
-  const progressMessageLimit = 20
+  const exerciseName = $derived(unwrap(panel.exercise).name)
+  const sourcePanel = $derived({ id: panel.id, type: panel.type })
+  const request = createRequester()
 
-  // common exercise fields, independent of the backend
-  const exercise = $derived(unwrap(panel.exercise))
-  const isMooc = $derived(panel.exercise.kind === "mooc")
-
-  let submissionStatusUrl = $state<string | undefined>(undefined)
-  let progressFraction = $state<number>(0)
-  // `id` keys the list: the same text can recur once another step came between.
-  let progressSteps = $state.raw<{ id: number; text: string }[]>([])
-  let nextProgressStepId = 0
-  let submissionError = $state.raw<WebviewError | undefined>(undefined)
-  let submissionResult = $state.raw<SubmissionFinished | undefined>(undefined)
-  let feedbackQuestions = $state.raw<FeedbackQuestion[]>([])
+  // Undefined only until the host's first view arrives.
+  let view = $state.raw<SubmissionView | undefined>(undefined)
   let feedbackStatus = $state<"editing" | "sending" | "sent">("editing")
   let feedbackError = $state<string | undefined>(undefined)
-  const request = createRequester()
-  // The last message of a mooc submission: the CLI has stopped waiting once it arrives,
-  // whether or not grading finished, so nothing updates the panel after it.
-  let moocResult = $state.raw<ExerciseTaskSubmissionStatus | undefined>(undefined)
-  const moocGrading = $derived(moocResult?.status === "grading" ? moocResult.grading : undefined)
+  let isKeepWaitingRequested = $state(false)
+  let keepWaitingError = $state<string | undefined>(undefined)
 
-  function moocHeadline(result: ExerciseTaskSubmissionStatus): string {
-    if (result.status === "no-grading-yet") {
-      return "Grading has not started yet"
-    }
-    switch (result.grading.grading_progress) {
-      case "FullyGraded":
-        return "Exercise graded"
-      case "Failed":
-        return "Grading failed"
-      case "PendingManual":
-        return "Awaiting manual grading"
-      case "Pending":
-      case "NotReady":
-        return "Grading still in progress"
-      default:
-        return assertUnreachable(result.grading.grading_progress)
-    }
-  }
-
-  function tmcHeadline(result: SubmissionFinished): string {
-    switch (result.status) {
-      case "ok":
-        return result.all_tests_passed
-          ? "All tests passed on the server"
-          : "Some tests failed on the server"
-      case "fail":
-        return "Some tests failed on the server"
-      case "hidden":
-        return "Processing the submission finished"
-      case "error":
-        return "Something went wrong…"
-      case "processing":
-        return "Processing submission…"
-      default:
-        return assertUnreachable(result.status)
-    }
-  }
-
-  function roundScore(score: number): number {
-    return Math.round(score * 100) / 100
-  }
+  const isInProgress = $derived(
+    view === undefined || view.phase === "uploading" || view.phase === "grading",
+  )
+  const primaryAction = $derived<"runInBackground" | "keepWaiting" | "close">(
+    isInProgress ? "runInBackground" : view?.canKeepWaiting ? "keepWaiting" : "close",
+  )
 
   // svelte-ignore state_referenced_locally -- the panel identity (id/type)
   // is fixed for the lifetime of the component, capturing the initial value is intended
   addMessageListener(panel, (message) => {
-    switch (message.type) {
-      case "submissionStatusUrl": {
-        submissionStatusUrl = message.url
-        break
-      }
-      case "submissionStatusUpdate": {
-        progressFraction = message.fraction
-        // Mooc grading polls every 2 s for up to 3 minutes reporting the same text, so
-        // only a changed message starts a new line; the cap bounds an alternating one.
-        if (message.message !== undefined && message.message !== progressSteps.at(-1)?.text) {
-          progressSteps = [
-            ...progressSteps,
-            { id: nextProgressStepId++, text: message.message },
-          ].slice(-progressMessageLimit)
-          announce(message.message)
-        }
-        break
-      }
-      case "submissionStatusError": {
-        submissionError = message.error
-        announce("Submission failed")
-        break
-      }
-      case "submissionResult": {
-        submissionResult = message.result
-        feedbackQuestions = message.questions
-        announce(tmcHeadline(message.result))
-        break
-      }
-      case "moocSubmissionResult": {
-        moocResult = message.result
-        announce(moocHeadline(message.result))
-        break
-      }
-      default: {
-        assertUnreachable(message)
-      }
+    const previous = view
+    view = message.view
+    const latestStep = view.progressSteps.at(-1)
+    if (previous?.phase !== view.phase || previous.headline !== view.headline) {
+      announce(view.headline)
+    } else if (latestStep !== undefined && latestStep !== previous.progressSteps.at(-1)) {
+      announce(latestStep)
     }
   })
 
@@ -138,21 +61,23 @@
   function showInBrowser(url: string) {
     vscode.postMessage({ type: "openLinkInBrowser", url })
   }
+  async function keepWaiting() {
+    isKeepWaitingRequested = true
+    keepWaitingError = undefined
+    const outcome = await request("keepWaitingForGrading", { sourcePanel })
+    isKeepWaitingRequested = false
+    if (!outcome.ok) {
+      keepWaitingError = outcome.error.message
+    }
+  }
   async function copyToClipboard(text: string) {
-    const outcome = await request("copyToClipboard", {
-      sourcePanel: { id: panel.id, type: panel.type },
-      text,
-    })
+    const outcome = await request("copyToClipboard", { sourcePanel, text })
     announce(outcome.ok ? "Copied to the clipboard" : "Could not copy to the clipboard")
   }
   async function sendFeedback(feedbackAnswerUrl: string, answers: FeedbackAnswer[]) {
     feedbackStatus = "sending"
     feedbackError = undefined
-    const outcome = await request("sendFeedback", {
-      sourcePanel: { id: panel.id, type: panel.type },
-      feedbackAnswerUrl,
-      answers,
-    })
+    const outcome = await request("sendFeedback", { sourcePanel, feedbackAnswerUrl, answers })
     if (outcome.ok) {
       feedbackStatus = "sent"
       announce("Feedback sent")
@@ -163,145 +88,118 @@
   }
 </script>
 
-{#snippet progressList()}
-  <ul class="progress-steps">
-    {#each progressSteps as step, index (step.id)}
-      <li>
-        {#if index < progressSteps.length - 1}
-          <StatusIcon status="passed" label="Done:" isLabelHidden />
-          {step.text}
-        {:else}
-          <Spinner label={step.text} />
-        {/if}
-      </li>
-    {/each}
-  </ul>
-{/snippet}
-
-<PanelHeader title={exercise.name} shouldFocusOnMount={false}>
+<PanelHeader title={exerciseName} shouldFocusOnMount={false}>
   {#snippet actions()}
     <ToolbarButton icon="close" label="Close" onclick={closePanel} />
   {/snippet}
 </PanelHeader>
 
-{#if submissionError !== undefined}
-  <!-- The error is the last message either backend posts, so it replaces the screen. -->
-  <h2>Submission failed</h2>
-  <Notice kind="error">
-    <p>{submissionError.message}</p>
-    {#if submissionError.details}
-      <CodeBlock code={submissionError.details} label="Error details" oncopy={copyToClipboard} />
-    {/if}
-  </Notice>
-{:else if isMooc}
-  <!-- Mooc grading has no per-test breakdown or feedback questions. -->
-  {#if moocResult === undefined}
-    <h2>Processing submission…</h2>
-    <div class="progress-bar">
-      <vscode-progress-bar indeterminate aria-label="Waiting for grading"></vscode-progress-bar>
-    </div>
-    {@render progressList()}
-    <div class="actions">
-      <Button secondary onclick={closePanel}>Run in background</Button>
-    </div>
-  {:else}
-    <h2>{moocHeadline(moocResult)}</h2>
-    {#if moocGrading && moocGrading.score_given !== null}
-      <div class="score">
-        <Meter
-          label="Score"
-          value={roundScore(moocGrading.score_given)}
-          max={exercise.availablePoints}
-        />
-      </div>
-    {/if}
-    {#if moocGrading?.feedback_text}
-      <p class="feedback-text">{moocGrading.feedback_text}</p>
-    {/if}
-    {#if moocGrading?.grading_progress === "PendingManual"}
-      <p>
-        A teacher will grade this submission. The score will appear in the course progress once it
-        has been graded.
-      </p>
-    {:else if moocGrading?.grading_progress !== "FullyGraded" && moocGrading?.grading_progress !== "Failed"}
-      <p>
-        Grading did not finish while VS Code was waiting. Your submission was received, and its
-        score will appear in the course progress once it has been graded.
-      </p>
-    {/if}
-    <div class="actions">
-      <Button secondary onclick={closePanel}>Close</Button>
-    </div>
-  {/if}
-{:else if submissionResult === undefined}
-  <h2>Processing submission…</h2>
+{#if view !== undefined}
+  <h2>{view.headline}</h2>
+{/if}
+
+{#if isInProgress}
   <div class="progress-bar">
-    <vscode-progress-bar aria-label="Running tests on the server" value={progressFraction * 100}
+    <vscode-progress-bar
+      aria-label="Processing submission"
+      indeterminate={view?.progressFraction === undefined}
+      value={(view?.progressFraction ?? 0) * 100}
     ></vscode-progress-bar>
   </div>
-  {@render progressList()}
-  <div class="actions">
-    <Button secondary onclick={closePanel}>Run in background</Button>
-    <Button
-      secondary
-      onclick={() => submissionStatusUrl && showInBrowser(submissionStatusUrl)}
-      disabled={submissionStatusUrl === undefined}
-    >
-      Show submission in browser
-    </Button>
-  </div>
-{:else}
-  <h2>{tmcHeadline(submissionResult)}</h2>
-  {#if submissionResult.status === "error"}
-    <Notice kind="error" title="The submission could not be processed">
-      {#if submissionResult.error}
-        <CodeBlock code={submissionResult.error} label="Server error" oncopy={copyToClipboard} />
+  <ul class="progress-steps">
+    {#each view?.progressSteps ?? [] as step, index (index)}
+      <li>
+        {#if index < (view?.progressSteps.length ?? 0) - 1}
+          <StatusIcon status="passed" label="Done:" isLabelHidden />
+          {step}
+        {:else}
+          <Spinner label={step} />
+        {/if}
+      </li>
+    {/each}
+  </ul>
+{/if}
+
+{#if view !== undefined}
+  {#if view.explanation}
+    <p>{view.explanation}</p>
+  {/if}
+
+  {#if view.error}
+    <Notice kind="error">
+      <p>{view.error.message}</p>
+      {#if view.error.details}
+        <CodeBlock code={view.error.details} label="Error details" oncopy={copyToClipboard} />
       {/if}
-      <p>Please try submitting again.</p>
     </Notice>
   {/if}
 
-  <div class="actions">
-    <Button
-      secondary
-      onclick={() => submissionResult && showInBrowser(submissionResult.submission_url)}
-    >
-      Show submission in browser
-    </Button>
-  </div>
-
-  {#if !submissionResult.all_tests_passed}
-    <PasteHelpBox course={panel.course} sourcePanel={{ id: panel.id, type: panel.type }} />
+  {#if view.points}
+    <div class="points">
+      <Meter label="Points" value={view.points.given} max={view.points.max} />
+    </div>
   {/if}
 
-  {#if feedbackQuestions.length > 0 && submissionResult.feedback_answer_url}
-    {@const feedbackAnswerUrl = submissionResult.feedback_answer_url}
+  {#if view.feedbackText}
+    <p class="feedback-text">{view.feedbackText}</p>
+  {/if}
+
+  <div class="actions">
+    {#if primaryAction === "runInBackground"}
+      <Button onclick={closePanel}>Run in background</Button>
+    {:else if primaryAction === "keepWaiting"}
+      <Button disabled={isKeepWaitingRequested} onclick={keepWaiting}>Keep waiting</Button>
+      <Button secondary onclick={closePanel}>Close</Button>
+    {:else}
+      <Button onclick={closePanel}>Close</Button>
+    {/if}
+    {#if view.submissionUrl}
+      {@const submissionUrl = view.submissionUrl}
+      <Button secondary onclick={() => showInBrowser(submissionUrl)}>
+        Show submission in browser
+      </Button>
+    {/if}
+    {#if view.solutionUrl}
+      {@const solutionUrl = view.solutionUrl}
+      <Button secondary onclick={() => showInBrowser(solutionUrl)}>
+        Show model solution in browser
+      </Button>
+    {/if}
+  </div>
+  {#if keepWaitingError}
+    <Notice kind="error" title="Could not keep waiting">{keepWaitingError}</Notice>
+  {/if}
+
+  {#if view.canPaste}
+    <PasteHelpBox course={panel.course} {sourcePanel} />
+  {/if}
+
+  {#if view.feedback}
+    {@const feedbackAnswerUrl = view.feedback.answerUrl}
     <SubmissionFeedbackForm
-      questions={feedbackQuestions}
+      questions={view.feedback.questions}
       status={feedbackStatus}
       error={feedbackError}
       onsend={(answers) => sendFeedback(feedbackAnswerUrl, answers)}
     />
   {/if}
 
-  <TestResults
-    testResults={submissionResult.test_cases ?? []}
-    points={{ awarded: submissionResult.points.length, available: exercise.availablePoints }}
-    validationResult={submissionResult.validations && {
-      strategy: submissionResult.validations.strategy,
-      validation_errors: submissionResult.validations.validationErrors,
-    }}
-    solutionUrl={submissionResult.solution_url}
-    oncopy={copyToClipboard}
-  />
+  {#if view.testCases.length > 0 || view.validations}
+    <TestResults
+      testResults={view.testCases}
+      validationResult={view.validations
+        ? {
+            strategy: view.validations.strategy,
+            validation_errors: view.validations.validationErrors,
+          }
+        : null}
+      oncopy={copyToClipboard}
+    />
+  {/if}
 
-  {#if submissionResult.valgrind}
+  {#if view.valgrind}
     <Disclosure title="Valgrind output">
-      <CodeBlock
-        code={submissionResult.valgrind}
-        label="Valgrind output"
-        oncopy={copyToClipboard}
-      />
+      <CodeBlock code={view.valgrind} label="Valgrind output" oncopy={copyToClipboard} />
     </Disclosure>
   {/if}
 {/if}
@@ -321,13 +219,16 @@
     gap: var(--tmc-space-1);
     margin-bottom: var(--tmc-space-1);
   }
-  .score {
+  .points {
     margin: var(--tmc-space-3) 0;
   }
   .feedback-text {
     white-space: pre-wrap;
   }
   .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tmc-space-2);
     margin: var(--tmc-space-3) 0;
   }
 </style>

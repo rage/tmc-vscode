@@ -112,6 +112,7 @@ export function registerCommands(
     downloadAndOpenExercises: actions.downloadAndOpenExercises,
     downloadExercisesForUi: actions.downloadExercisesForUi,
     openWorkspace: commands.openWorkspace,
+    keepWaitingForGrading: commands.keepWaitingForGrading,
     pasteExercise: actions.pasteExercise,
     refreshLocalExercises: actions.refreshLocalExercises,
     removeCourse: actions.removeCourse,

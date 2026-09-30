@@ -1,4 +1,5 @@
 import type { Result } from "ts-results"
+import type * as vscode from "vscode"
 
 import type { OpenedExercises } from "../actions/openExercises"
 import type { ReadyActionContext } from "../actions/types"
@@ -41,6 +42,12 @@ export interface PanelActions {
     courseSlug: string,
     exerciseName: string,
   ) => Promise<Result<string, Error>>
+  /** Waits again for a mooc grading the host stopped waiting for; see `keepWaitingForGrading`. */
+  keepWaitingForGrading: (
+    context: vscode.ExtensionContext,
+    actionContext: ReadyActionContext,
+    panelId: number,
+  ) => Promise<Result<void, Error>>
   /** Rescans the exercises on disk, so exercises the backend dropped stop showing as open. */
   refreshLocalExercises: (actionContext: ReadyActionContext) => Promise<Result<void, Error>>
   removeCourse: (

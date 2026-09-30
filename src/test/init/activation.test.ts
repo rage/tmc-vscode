@@ -226,6 +226,7 @@ vi.mock("../../commands", () => ({
   closeExercise: async (): Promise<void> => {},
   downloadNewExercises: async (): Promise<void> => {},
   downloadOldSubmission: async (): Promise<void> => {},
+  keepWaitingForGrading: async (): Promise<unknown> => Ok.EMPTY,
   logout: async (): Promise<void> => {},
   openCourseWorkspace: async (): Promise<void> => {},
   openExercisesFolder: async (): Promise<void> => {},

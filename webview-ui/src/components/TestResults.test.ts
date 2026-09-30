@@ -13,7 +13,6 @@ suite("TestResults component", () => {
           testResult({ name: "failing_test", successful: false, message: "boom" }),
         ],
         validationResult: null,
-        solutionUrl: null,
       },
     })
 
@@ -37,7 +36,6 @@ suite("TestResults component", () => {
           }),
         ],
         validationResult: null,
-        solutionUrl: null,
       },
     })
 
@@ -62,7 +60,6 @@ suite("TestResults component", () => {
           },
         ],
         validationResult: null,
-        solutionUrl: null,
       },
     })
 
@@ -75,7 +72,6 @@ suite("TestResults component", () => {
       props: {
         testResults: [testResult({ successful: false, exception: ["line one", "line two"] })],
         validationResult: null,
-        solutionUrl: null,
         oncopy,
       },
     })
@@ -96,7 +92,6 @@ suite("TestResults component", () => {
             "Main.java": [{ column: 1, line: 2, message: "bad style" }],
           },
         },
-        solutionUrl: null,
       },
     })
 
@@ -105,28 +100,11 @@ suite("TestResults component", () => {
     expect(screen.getByText("Line 2, column 1: bad style")).toBeInTheDocument()
   })
 
-  test("shows points against the exercise's available points when given", () => {
+  test("shows no summary for a run without test results", () => {
     render(TestResults, {
-      props: {
-        testResults: [testResult({ successful: true })],
-        points: { awarded: 1, available: 3 },
-        validationResult: null,
-        solutionUrl: null,
-      },
+      props: { testResults: [], validationResult: null },
     })
 
-    expect(screen.getByRole("meter", { name: "Points" })).toHaveAttribute(
-      "aria-valuetext",
-      "1 / 3 points",
-    )
-  })
-
-  test("shows no meter and no summary for a run without test results", () => {
-    render(TestResults, {
-      props: { testResults: [], validationResult: null, solutionUrl: null },
-    })
-
-    expect(screen.queryByRole("meter")).not.toBeInTheDocument()
     expect(screen.queryByText(/tests passed/)).not.toBeInTheDocument()
   })
 
@@ -138,7 +116,6 @@ suite("TestResults component", () => {
           testResult({ name: "same", successful: false, message: "second" }),
         ],
         validationResult: null,
-        solutionUrl: null,
       },
     })
 

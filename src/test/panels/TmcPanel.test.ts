@@ -325,6 +325,7 @@ function stubHandlers(): { [K in keyof PanelActions]: ReturnType<typeof vi.fn> }
       .fn()
       .mockResolvedValue(Ok({ ids: [], exceededOpenLimit: undefined })),
     downloadExercisesForUi: vi.fn().mockResolvedValue(undefined),
+    keepWaitingForGrading: vi.fn().mockResolvedValue(Ok.EMPTY),
     openWorkspace: vi.fn().mockResolvedValue(undefined),
     pasteExercise: vi.fn().mockResolvedValue(Ok("link")),
     refreshLocalExercises: vi.fn().mockResolvedValue(Ok.EMPTY),
@@ -1431,6 +1432,42 @@ suite("TmcPanel host services for the webview", () => {
       requestId: 1,
       outcome: { ok: false, error: { message: "server said no" } },
     })
+  })
+
+  test("keeps waiting for the grading of the submission the host shows", async () => {
+    const handlers = stubHandlers()
+    registerPanelActions(handlers as unknown as PanelActions)
+    const actionContext = createMockActionContext()
+    const shown = exerciseSubmissionPanel()
+    const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
+
+    await listener({ type: "keepWaitingForGrading", requestId: 1, sourcePanel: panelTarget(shown) })
+
+    expect(handlers.keepWaitingForGrading).toHaveBeenCalledWith(
+      expect.anything(),
+      actionContext,
+      shown.id,
+    )
+    expect(replyTo(panel, 1)).toMatchObject({ outcome: { ok: true } })
+  })
+
+  test("does not wait for a submission a stale panel names", async () => {
+    const handlers = stubHandlers()
+    registerPanelActions(handlers as unknown as PanelActions)
+    const { panel, listener } = await mountSidePanel(
+      createMockActionContext(),
+      createMockContext(),
+      exerciseSubmissionPanel(),
+    )
+
+    await listener({
+      type: "keepWaitingForGrading",
+      requestId: 1,
+      sourcePanel: { id: 9999, type: "ExerciseSubmission" },
+    })
+
+    expect(handlers.keepWaitingForGrading).not.toHaveBeenCalled()
+    expect(replyTo(panel, 1)).toMatchObject({ outcome: { ok: false } })
   })
 
   test("logs a webview crash at error level", async () => {

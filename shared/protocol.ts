@@ -9,7 +9,7 @@ import {
 } from "./course"
 import { CourseIdentifierSchema, ExerciseIdentifierSchema } from "./enum"
 import { BaseError } from "./errors"
-import { ExerciseTaskSubmissionStatus, SubmissionFinished } from "./langsSchema"
+import { TestCase, TmcStyleValidationResult } from "./langsSchema"
 
 export const AppPanelSchema = z.object({
   id: z.number(),
@@ -170,6 +170,56 @@ export function toWebviewError(error: unknown): WebviewError {
   }
 }
 
+/** Where a submission is, from sending it to its final grade. */
+const SubmissionPhaseSchema = z.enum([
+  "uploading",
+  "grading",
+  "finished",
+  // The host stopped waiting before the backend finished grading.
+  "timedOut",
+  "failed",
+  "manualReview",
+])
+
+/**
+ * Everything the ExerciseSubmission panel shows about one submission, from either backend.
+ *
+ * Built on the host by `src/panels/submissionView.ts`; the panel renders it without knowing
+ * which backend answered.
+ */
+export const SubmissionViewSchema = z.object({
+  phase: SubmissionPhaseSchema,
+  headline: z.string(),
+  /** What the phase means for the student, where the headline does not say it. */
+  explanation: z.string().optional(),
+  /** The backend's completion estimate, 0..1; absent while it has none, as for mooc grading. */
+  progressFraction: z.number().optional(),
+  /** The backend's progress messages, oldest first; only while uploading or grading. */
+  progressSteps: z.array(z.string()),
+  /** In the exercise's own unit; `given` may be fractional. */
+  points: z.object({ given: z.number(), max: z.number() }).optional(),
+  /** The grader's feedback, shown as-is. */
+  feedbackText: z.string().optional(),
+  /** Why the submission failed, when the backend or the extension said. */
+  error: WebviewErrorSchema.optional(),
+  testCases: z.array(TestCase),
+  validations: TmcStyleValidationResult.optional(),
+  valgrind: z.string().optional(),
+  solutionUrl: z.string().optional(),
+  /** The submission's page on the backend's site. */
+  submissionUrl: z.string().optional(),
+  /** Whether `keepWaitingForGrading` can pick the wait up again for this submission. */
+  canKeepWaiting: z.boolean(),
+  /** The teachers' feedback questions, answered at `answerUrl` through `sendFeedback`. */
+  feedback: z
+    .object({ answerUrl: z.string(), questions: z.array(FeedbackQuestionSchema) })
+    .optional(),
+  /** Whether to offer sending the exercise to the backend's paste service for help. */
+  canPaste: z.boolean(),
+})
+
+export type SubmissionView = z.infer<typeof SubmissionViewSchema>
+
 const initializationErrorSchema = z
   .object({
     error: z.string(),
@@ -256,36 +306,11 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     courseId: CourseIdentifierSchema,
     exerciseIds: z.array(ExerciseIdentifierSchema),
   }),
+  // The whole view each time: the latest one is what a reloaded panel is sent again.
   z.object({
-    type: z.literal("submissionStatusUrl"),
+    type: z.literal("submissionView"),
     target: targetPanelSchema("ExerciseSubmission"),
-    url: z.string(),
-  }),
-  z.object({
-    type: z.literal("submissionStatusUpdate"),
-    target: targetPanelSchema("ExerciseSubmission"),
-    // completion as a 0..1 fraction, the unit every progress value in the extension uses
-    fraction: z.number(),
-    message: z.string().optional(),
-  }),
-  z.object({
-    type: z.literal("submissionResult"),
-    target: targetPanelSchema("ExerciseSubmission"),
-    result: SubmissionFinished,
-    questions: z.array(FeedbackQuestionSchema),
-  }),
-  // Mooc grading has no per-test breakdown or feedback questions, so its result
-  // is a reduced shape (overall grading progress, score, feedback text) posted
-  // through a separate message rather than reusing the TMC `submissionResult`.
-  z.object({
-    type: z.literal("moocSubmissionResult"),
-    target: targetPanelSchema("ExerciseSubmission"),
-    result: ExerciseTaskSubmissionStatus,
-  }),
-  z.object({
-    type: z.literal("submissionStatusError"),
-    target: targetPanelSchema("ExerciseSubmission"),
-    error: WebviewErrorSchema,
+    view: SubmissionViewSchema,
   }),
   z.object({
     type: z.literal("setNewExercises"),
@@ -316,9 +341,6 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
  * Handled by the Svelte app.
  */
 export type ExtensionToWebview = z.infer<typeof ExtensionToWebviewSchema>
-
-// helper type for messages from the extension to a specific panel
-export type TargetedExtensionToWebview<T extends PanelType> = Targeted<ExtensionToWebview, T>
 
 /**
  * For use with `vscode.postMessage` in the Svelte app.
@@ -400,6 +422,13 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     requestId: z.number(),
     sourcePanel: strictTargetPanelSchema("ExerciseSubmission"),
   }),
+  // Waits again for the grading of the submission the named panel shows, after the host
+  // stopped waiting; progress and the outcome arrive as `submissionView`.
+  z.object({
+    type: z.literal("keepWaitingForGrading"),
+    requestId: z.number(),
+    sourcePanel: strictTargetPanelSchema("ExerciseSubmission"),
+  }),
   z.object({
     type: z.literal("sendFeedback"),
     requestId: z.number(),
@@ -468,6 +497,7 @@ export const ReplyValueSchemas = {
   refreshCourseDetails: z.undefined(),
   // the paste link
   pasteExercise: z.string(),
+  keepWaitingForGrading: z.undefined(),
   sendFeedback: z.undefined(),
   copyToClipboard: z.undefined(),
   requestInitializationErrors: InitializationErrorsSchema,
