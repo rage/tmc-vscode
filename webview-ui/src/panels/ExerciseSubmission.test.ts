@@ -86,6 +86,14 @@ function showView(panelId: number, view: SubmissionView): void {
   })
 }
 
+/** `view` as the host re-posts it once the student's feedback went through. */
+function feedbackSent(view: SubmissionView): SubmissionView {
+  if (!view.feedback) {
+    throw new Error("the view asks for no feedback")
+  }
+  return { ...view, feedback: { ...view.feedback, isSent: true } }
+}
+
 function showTmcResult(result: SubmissionFinished, questions: FeedbackQuestion[] = []): void {
   showView(panel.id, tmcResultView(result, questions, 2))
 }
@@ -353,7 +361,6 @@ suite("ExerciseSubmission panel (tmc feedback)", () => {
       type: "sendFeedback",
       requestId: expect.any(Number),
       sourcePanel: { id: panel.id, type: "ExerciseSubmission" },
-      feedbackAnswerUrl: FEEDBACK_URL,
       answers: [{ questionId: 2, answer: "Fun exercise" }],
     })
   })
@@ -371,10 +378,16 @@ suite("ExerciseSubmission panel (tmc feedback)", () => {
     )
   })
 
-  test("thanks the student once the host has sent it", async () => {
+  test("thanks the student once the host marks the feedback sent", async () => {
     await renderWithFeedback()
     await sendFeedback()
     replyToRequest("sendFeedback", { ok: true })
+    showView(
+      panel.id,
+      feedbackSent(
+        tmcResultView(submissionFinished({ feedback_answer_url: FEEDBACK_URL }), questions, 2),
+      ),
+    )
 
     expect(await screen.findByText("Thank you for your feedback.")).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Send feedback" })).not.toBeInTheDocument()
@@ -536,20 +549,6 @@ suite("ExerciseSubmission panel shown again after being hidden", () => {
 
     await screen.findByRole("heading", { name: "Give feedback" })
     expect(document.querySelector("vscode-textarea")?.value).toBe("Half-written thought")
-  })
-
-  test("does not offer to send feedback the host already accepted", async () => {
-    showPanel()
-    await screen.findByRole("heading", { name: "Give feedback" })
-    await sendFeedback()
-    replyToRequest("sendFeedback", { ok: true })
-    await screen.findByText("Thank you for your feedback.")
-
-    reloadDocument()
-    showPanel()
-
-    expect(await screen.findByText("Thank you for your feedback.")).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: "Send feedback" })).not.toBeInTheDocument()
   })
 
   test("still shows the paste link the host answered with", async () => {

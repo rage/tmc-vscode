@@ -149,15 +149,20 @@ export const SubmissionViewSchema = z.object({
   submissionUrl: z.string().optional(),
   /** Whether `keepWaitingForGrading` can pick the wait up again for this submission. */
   canKeepWaiting: z.boolean(),
-  /** The teachers' feedback questions, answered at `answerUrl` through `sendFeedback`. */
+  /** The teachers' feedback questions, answered once through `sendFeedback`. */
   feedback: z
-    .object({ answerUrl: z.string(), questions: z.array(FeedbackQuestionSchema) })
+    .object({ questions: z.array(FeedbackQuestionSchema), isSent: z.boolean() })
     .optional(),
   /** Whether to offer sending the exercise to the backend's paste service for help. */
   canPaste: z.boolean(),
 })
 
 export type SubmissionView = z.infer<typeof SubmissionViewSchema>
+
+/** One answer to a TMC submission's feedback question. */
+const FeedbackAnswerSchema = z.object({ questionId: z.number(), answer: z.string() })
+
+export type FeedbackAnswer = z.infer<typeof FeedbackAnswerSchema>
 
 const initializationErrorSchema = z
   .object({
@@ -268,8 +273,7 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     type: z.literal("sendFeedback"),
     requestId: z.number(),
     sourcePanel: targetPanelSchema("ExerciseSubmission"),
-    feedbackAnswerUrl: z.url(),
-    answers: z.array(z.object({ questionId: z.number(), answer: z.string() })),
+    answers: z.array(FeedbackAnswerSchema),
   }),
   z.object({
     type: z.literal("copyToClipboard"),

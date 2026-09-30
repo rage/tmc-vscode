@@ -991,31 +991,20 @@ suite("TmcPanel host services for the webview", () => {
     })
   })
 
-  const feedbackPanel = { id: 31, type: "ExerciseSubmission" as const }
-
-  test("hands feedback answers to the feedback action and says it went", async () => {
+  test("hands feedback answers for the panel the host shows to the feedback action", async () => {
     const handlers = stubHandlers()
     registerPanelActions(handlers as unknown as PanelActions)
     const actionContext = createMockActionContext()
-    const { panel, listener } = await mountSidePanel(actionContext)
+    const shown = exerciseSubmissionPanel()
+    const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
     const answers = [{ questionId: 3, answer: "4" }]
 
-    await listener({
-      type: "sendFeedback",
-      requestId: 1,
-      sourcePanel: feedbackPanel,
-      feedbackAnswerUrl: "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback",
-      answers,
-    })
+    await listener({ type: "sendFeedback", requestId: 1, sourcePanel: targetOf(shown), answers })
 
-    expect(handlers.sendSubmissionFeedback).toHaveBeenCalledWith(
-      actionContext,
-      "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback",
-      answers,
-    )
+    expect(handlers.sendSubmissionFeedback).toHaveBeenCalledWith(actionContext, shown.id, answers)
     expect(replyTo(panel, 1)).toEqual({
       type: "reply",
-      target: feedbackPanel,
+      target: targetOf(shown),
       requestId: 1,
       outcome: { ok: true },
     })
@@ -1025,22 +1014,46 @@ suite("TmcPanel host services for the webview", () => {
     const handlers = stubHandlers()
     handlers.sendSubmissionFeedback.mockResolvedValue(Err(new Error("server said no")))
     registerPanelActions(handlers as unknown as PanelActions)
-    const { panel, listener } = await mountSidePanel(createMockActionContext())
+    const shown = exerciseSubmissionPanel()
+    const { panel, listener } = await mountSidePanel(
+      createMockActionContext(),
+      createMockContext(),
+      shown,
+    )
 
     await listener({
       type: "sendFeedback",
       requestId: 1,
-      sourcePanel: feedbackPanel,
-      feedbackAnswerUrl: "https://tmc.mooc.fi/feedback",
+      sourcePanel: targetOf(shown),
       answers: [],
     })
 
     expect(replyTo(panel, 1)).toEqual({
       type: "reply",
-      target: feedbackPanel,
+      target: targetOf(shown),
       requestId: 1,
       outcome: { ok: false, error: { message: "server said no" } },
     })
+  })
+
+  test("does not send feedback for a submission a stale panel names", async () => {
+    const handlers = stubHandlers()
+    registerPanelActions(handlers as unknown as PanelActions)
+    const { panel, listener } = await mountSidePanel(
+      createMockActionContext(),
+      createMockContext(),
+      exerciseSubmissionPanel(),
+    )
+
+    await listener({
+      type: "sendFeedback",
+      requestId: 1,
+      sourcePanel: { id: 9999, type: "ExerciseSubmission" },
+      answers: [],
+    })
+
+    expect(handlers.sendSubmissionFeedback).not.toHaveBeenCalled()
+    expect(replyTo(panel, 1)).toMatchObject({ outcome: { ok: false } })
   })
 
   test("keeps waiting for the grading of the submission the host shows", async () => {

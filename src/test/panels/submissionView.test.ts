@@ -153,8 +153,8 @@ suite("tmcResultView", () => {
     const questions = [{ id: 1, kind: "text", question: "How was it?" }]
     const url = "https://tmc.mooc.fi/feedback"
     expect(tmcResultView(tmcResult({ feedback_answer_url: url }), questions, 3).feedback).toEqual({
-      answerUrl: url,
       questions,
+      isSent: false,
     })
     expect(tmcResultView(tmcResult({ feedback_answer_url: url }), [], 3).feedback).toBeUndefined()
     expect(tmcResultView(tmcResult(), questions, 3).feedback).toBeUndefined()

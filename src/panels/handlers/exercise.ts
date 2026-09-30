@@ -51,10 +51,13 @@ export const exerciseHandlers = {
   },
   sendFeedback: {
     requiresReady: true,
-    async handle(message, { actionContext }): Promise<Result<undefined, Error>> {
+    async handle(message, { host, actionContext }): Promise<Result<undefined, Error>> {
+      if (!shownExercisePanel(host, message.sourcePanel.id)) {
+        return Err(new Error("This submission is no longer shown."))
+      }
       const sent = await panelActions().sendSubmissionFeedback(
         actionContext,
-        message.feedbackAnswerUrl,
+        message.sourcePanel.id,
         message.answers,
       )
       if (sent.err) {

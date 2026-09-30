@@ -8,14 +8,12 @@
   import PasteHelpBox from "../components/PasteHelpBox.svelte"
   import Spinner from "../components/Spinner.svelte"
   import StatusIcon from "../components/StatusIcon.svelte"
-  import type { FeedbackAnswer } from "../components/SubmissionFeedbackForm.svelte"
   import SubmissionFeedbackForm from "../components/SubmissionFeedbackForm.svelte"
   import TestResults from "../components/TestResults.svelte"
   import ToolbarButton from "../components/ToolbarButton.svelte"
-  import type { ExerciseSubmissionPanel, SubmissionView } from "../shared/shared"
+  import type { ExerciseSubmissionPanel, FeedbackAnswer, SubmissionView } from "../shared/shared"
   import { announce } from "../utilities/a11y.svelte"
   import { addMessageListener, createRequester } from "../utilities/script"
-  import { uiState } from "../utilities/uiState.svelte"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -29,11 +27,9 @@
 
   // Undefined only until the host's first view arrives.
   let view = $state.raw<SubmissionView | undefined>(undefined)
-  // Kept so a panel shown again does not offer to send answers the host accepts only once.
-  const isFeedbackSent = uiState("isFeedbackSent", false)
   let isFeedbackSending = $state(false)
   const feedbackStatus = $derived(
-    isFeedbackSent.current ? "sent" : isFeedbackSending ? "sending" : "editing",
+    view?.feedback?.isSent ? "sent" : isFeedbackSending ? "sending" : "editing",
   )
   let feedbackError = $state<string | undefined>(undefined)
   let isKeepWaitingRequested = $state(false)
@@ -78,13 +74,12 @@
     const outcome = await request("copyToClipboard", { sourcePanel, text })
     announce(outcome.ok ? "Copied to the clipboard" : "Could not copy to the clipboard")
   }
-  async function sendFeedback(feedbackAnswerUrl: string, answers: FeedbackAnswer[]) {
+  async function sendFeedback(answers: FeedbackAnswer[]) {
     isFeedbackSending = true
     feedbackError = undefined
-    const outcome = await request("sendFeedback", { sourcePanel, feedbackAnswerUrl, answers })
+    const outcome = await request("sendFeedback", { sourcePanel, answers })
     isFeedbackSending = false
     if (outcome.ok) {
-      isFeedbackSent.current = true
       announce("Feedback sent")
     } else {
       feedbackError = outcome.error.message
@@ -179,12 +174,11 @@
   {/if}
 
   {#if view.feedback}
-    {@const feedbackAnswerUrl = view.feedback.answerUrl}
     <SubmissionFeedbackForm
       questions={view.feedback.questions}
       status={feedbackStatus}
       error={feedbackError}
-      onsend={(answers) => sendFeedback(feedbackAnswerUrl, answers)}
+      onsend={sendFeedback}
     />
   {/if}
 

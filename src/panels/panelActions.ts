@@ -3,7 +3,7 @@ import type * as vscode from "vscode"
 
 import type { ReadyActionContext } from "../actions/types"
 import { InitializationError } from "../errors"
-import type { BackendKind, CourseIdentifier } from "../shared/shared"
+import type { BackendKind, CourseIdentifier, FeedbackAnswer } from "../shared/shared"
 
 /**
  * The action- and command-layer entry points the webview message handlers invoke.
@@ -33,11 +33,11 @@ export interface PanelActions {
   ) => Promise<Result<void, Error>>
   /** Rescans the exercises on disk, so exercises the backend dropped stop showing as open. */
   refreshLocalExercises: (actionContext: ReadyActionContext) => Promise<Result<void, Error>>
-  /** Answers a TMC submission's feedback questions; the URL must be one a result named. */
+  /** Answers the feedback questions of the TMC submission panel `panelId` shows. */
   sendSubmissionFeedback: (
     actionContext: ReadyActionContext,
-    feedbackAnswerUrl: string,
-    answers: readonly { questionId: number; answer: string }[],
+    panelId: number,
+    answers: readonly FeedbackAnswer[],
   ) => Promise<Result<void, Error>>
   updateCourse: (
     actionContext: ReadyActionContext,

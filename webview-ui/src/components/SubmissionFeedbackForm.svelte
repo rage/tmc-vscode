@@ -1,12 +1,5 @@
-<script lang="ts" module>
-  export interface FeedbackAnswer {
-    questionId: number
-    answer: string
-  }
-</script>
-
 <script lang="ts">
-  import type { FeedbackQuestion } from "../shared/shared"
+  import type { FeedbackAnswer, FeedbackQuestion } from "../shared/shared"
   import { uiState } from "../utilities/uiState.svelte"
   import Button from "./Button.svelte"
   import Notice from "./Notice.svelte"

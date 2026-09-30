@@ -600,6 +600,7 @@ suite("sendSubmissionFeedback action", () => {
   const FEEDBACK_URL = "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback"
 
   async function submitAskingFeedback(feedbackUrl: string): Promise<ReadyActionContext> {
+    vi.mocked(TmcPanel.postToSidePanel).mockClear()
     const submitFeedback = vi.fn().mockResolvedValue(Ok({ api_version: 8, status: "ok" }))
     const { actionContext } = contextFor(makeTmcKind(tmcCourse), {
       submitTmcExerciseAndWaitForResults: vi.fn().mockResolvedValue(
@@ -621,7 +622,7 @@ suite("sendSubmissionFeedback action", () => {
   test("sends the answers to the URL the submission result asked them at", async () => {
     const actionContext = await submitAskingFeedback(FEEDBACK_URL)
 
-    const sent = await sendSubmissionFeedback(actionContext, FEEDBACK_URL, [
+    const sent = await sendSubmissionFeedback(actionContext, shownPanelId(), [
       { questionId: 3, answer: "Fun" },
     ])
 
@@ -632,23 +633,29 @@ suite("sendSubmissionFeedback action", () => {
     )
   })
 
-  test("refuses a URL no submission result named", async () => {
-    const actionContext = await submitAskingFeedback(`${FEEDBACK_URL}?asked`)
+  test("shows the panel its feedback as sent", async () => {
+    const actionContext = await submitAskingFeedback(FEEDBACK_URL)
 
-    const sent = await sendSubmissionFeedback(actionContext, "https://attacker.example/", [
-      { questionId: 3, answer: "Fun" },
-    ])
+    await sendSubmissionFeedback(actionContext, shownPanelId(), [{ questionId: 3, answer: "Fun" }])
+
+    expect(lastView()).toMatchObject({ phase: "finished", feedback: { isSent: true } })
+  })
+
+  test("refuses a panel whose submission asked nothing", async () => {
+    const actionContext = await submitAskingFeedback(FEEDBACK_URL)
+
+    const sent = await sendSubmissionFeedback(actionContext, -1, [{ questionId: 3, answer: "Fun" }])
 
     expect(sent.err).toBe(true)
     expect(actionContext.startup.langs.submitSubmissionFeedback).not.toHaveBeenCalled()
   })
 
   test("answers each submission's questions once", async () => {
-    const url = `${FEEDBACK_URL}?once`
-    const actionContext = await submitAskingFeedback(url)
+    const actionContext = await submitAskingFeedback(FEEDBACK_URL)
+    const panelId = shownPanelId()
 
-    await sendSubmissionFeedback(actionContext, url, [{ questionId: 3, answer: "Fun" }])
-    const second = await sendSubmissionFeedback(actionContext, url, [
+    await sendSubmissionFeedback(actionContext, panelId, [{ questionId: 3, answer: "Fun" }])
+    const second = await sendSubmissionFeedback(actionContext, panelId, [
       { questionId: 3, answer: "Again" },
     ])
 
@@ -657,14 +664,16 @@ suite("sendSubmissionFeedback action", () => {
   })
 
   test("a failed send can be retried", async () => {
-    const url = `${FEEDBACK_URL}?retry`
-    const actionContext = await submitAskingFeedback(url)
+    const actionContext = await submitAskingFeedback(FEEDBACK_URL)
+    const panelId = shownPanelId()
     vi.mocked(actionContext.startup.langs.submitSubmissionFeedback).mockResolvedValueOnce(
       Err(new Error("connection reset")),
     )
 
-    const first = await sendSubmissionFeedback(actionContext, url, [{ questionId: 3, answer: "a" }])
-    const second = await sendSubmissionFeedback(actionContext, url, [
+    const first = await sendSubmissionFeedback(actionContext, panelId, [
+      { questionId: 3, answer: "a" },
+    ])
+    const second = await sendSubmissionFeedback(actionContext, panelId, [
       { questionId: 3, answer: "a" },
     ])
 

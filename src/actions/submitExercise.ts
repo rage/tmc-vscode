@@ -22,6 +22,7 @@ import type {
   CourseIdentifier,
   ExerciseIdentifier,
   ExerciseSubmissionPanel,
+  FeedbackAnswer,
   SubmissionView,
 } from "../shared/shared"
 import {
@@ -94,8 +95,16 @@ function showSubmissionView(panel: ExerciseSubmissionPanel, view: SubmissionView
 /** Sends one exercise to its backend and waits for the grading, reporting progress to its panel. */
 type ExerciseSubmitter = (submission: Submission) => Promise<Result<SubmissionOutcome, Error>>
 
-// Answering only URLs a submission result named keeps the webview from choosing where to post.
-const answerableFeedbackUrls = new Set<string>()
+/** A TMC submission's feedback questions, not yet answered. */
+interface PendingFeedback {
+  panel: ExerciseSubmissionPanel
+  answerUrl: string
+  view: SubmissionView
+}
+
+// Keyed by panel id like `unfinishedGradings`; the answer URL never leaves the host, so the
+// webview cannot choose where answers are posted.
+const pendingFeedback = new Map<number, PendingFeedback>()
 
 /** A mooc submission whose grading the host stopped waiting for. */
 interface UnfinishedGrading extends Submission {
@@ -121,13 +130,15 @@ function tmcSubmitter(langs: Langs, exerciseId: number): ExerciseSubmitter {
     const questions = result.feedback_questions
       ? parseFeedbackQuestion(result.feedback_questions)
       : []
-    if (result.feedback_answer_url && questions.length > 0) {
-      answerableFeedbackUrls.add(result.feedback_answer_url)
+    const view = tmcResultView(result, questions, submission.availablePoints)
+    if (view.feedback && result.feedback_answer_url) {
+      pendingFeedback.set(submission.panel.id, {
+        panel: submission.panel,
+        answerUrl: result.feedback_answer_url,
+        view,
+      })
     }
-    return Ok({
-      passed: result.status === "ok" && result.all_tests_passed === true,
-      view: tmcResultView(result, questions, submission.availablePoints),
-    })
+    return Ok({ passed: result.status === "ok" && result.all_tests_passed === true, view })
   }
 }
 
@@ -286,6 +297,7 @@ export async function submitExercise(
       // The side panel shows one submission at a time, so what the earlier ones kept is
       // unreachable from here on.
       unfinishedGradings.clear()
+      pendingFeedback.clear()
       TmcPanel.renderSide(context, actionContext, submission.panel)
 
       const outcome = await submit(submission)
@@ -334,32 +346,31 @@ export async function keepWaitingForGrading(
   )
 }
 
-/** One answer to a TMC submission's feedback question. */
-export interface FeedbackAnswer {
-  questionId: number
-  answer: string
-}
-
 /**
- * Sends a student's answers to the feedback questions a TMC submission result asked.
+ * Sends a student's answers to the feedback questions of the TMC submission panel `panelId`
+ * shows, then shows that panel its feedback as sent.
  *
- * `feedbackAnswerUrl` must be one a submission result named this session; each is answered
- * once. A failed send can be retried.
+ * Each submission's questions are answered once; a failed send can be retried.
  */
 export async function sendSubmissionFeedback(
   actionContext: ReadyActionContext,
-  feedbackAnswerUrl: string,
+  panelId: number,
   answers: readonly FeedbackAnswer[],
 ): Promise<Result<void, Error>> {
-  if (!answerableFeedbackUrls.has(feedbackAnswerUrl)) {
+  const pending = pendingFeedback.get(panelId)
+  if (pending === undefined) {
     return Err(new Error("This submission's feedback was already sent or was never asked for."))
   }
-  const sent = await actionContext.startup.langs.submitSubmissionFeedback(feedbackAnswerUrl, {
+  const sent = await actionContext.startup.langs.submitSubmissionFeedback(pending.answerUrl, {
     status: answers.map(({ questionId, answer }) => ({ question_id: questionId, answer })),
   })
   if (sent.err) {
     return sent
   }
-  answerableFeedbackUrls.delete(feedbackAnswerUrl)
+  pendingFeedback.delete(panelId)
+  const { view } = pending
+  if (view.feedback) {
+    showSubmissionView(pending.panel, { ...view, feedback: { ...view.feedback, isSent: true } })
+  }
   return Ok.EMPTY
 }
