@@ -70,11 +70,6 @@ export const SharedMoocCourseDataSchema = z.object({
 
 export type SharedMoocCourseData = z.infer<typeof SharedMoocCourseDataSchema>
 
-export const LocalCourseExerciseSchema = EnumSchema(
-  SharedTmcCourseExerciseSchema,
-  SharedMoocCourseExerciseSchema,
-)
-
 export type LocalCourseExercise = Enum<SharedTmcCourseExercise, SharedMoocCourseExercise>
 
 export namespace LocalCourseExercise {

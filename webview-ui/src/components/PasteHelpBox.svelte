@@ -3,9 +3,9 @@
 
   import { slide } from "svelte/transition"
 
-  import type { ExerciseSubmissionPanel, LocalCourseData, TargetPanel } from "../shared/shared"
+  import type { BackendKind, ExerciseSubmissionPanel, TargetPanel } from "../shared/shared"
   import { pasteServiceName } from "../shared/shared"
-  import { announce, reducedMotion } from "../utilities/a11y.svelte"
+  import { reducedMotion } from "../utilities/a11y.svelte"
   import { createRequester } from "../utilities/script"
   import { uiState } from "../utilities/uiState.svelte"
   import Button from "./Button.svelte"
@@ -14,13 +14,15 @@
 
   interface Props {
     // names the paste service; the host pastes the exercise `sourcePanel` shows
-    course: LocalCourseData
+    backend: BackendKind
     sourcePanel: TargetPanel<ExerciseSubmissionPanel>
+    /** Copies the paste link through the host. */
+    oncopy: (text: string) => void
   }
 
-  let { course, sourcePanel }: Props = $props()
+  let { backend, sourcePanel, oncopy }: Props = $props()
 
-  const pasteService = $derived(pasteServiceName(course.kind))
+  const pasteService = $derived(pasteServiceName(backend))
   const regionId = $props.id()
   const request = createRequester()
 
@@ -45,10 +47,6 @@
       pasteError = outcome.error.message
     }
   }
-  async function copyLink(url: string) {
-    const outcome = await request("copyToClipboard", { sourcePanel, text: url })
-    announce(outcome.ok ? "Copied to the clipboard" : "Could not copy to the clipboard")
-  }
 </script>
 
 <div class="actions">
@@ -68,7 +66,7 @@
       You can submit your code to {pasteService} and share the link to the course discussion channel and
       ask for help.
     </p>
-    {#if course.kind === "mooc"}
+    {#if backend === "mooc"}
       <p>This also submits your answer for grading, like Submit to server does.</p>
     {/if}
     <div class="actions">
@@ -78,7 +76,7 @@
       {@const url = pasteUrl.current}
       <p>Paste available at <a href={url}>{url}</a></p>
       <div class="actions">
-        <Button secondary icon="copy" onclick={() => copyLink(url)}>Copy link</Button>
+        <Button secondary icon="copy" onclick={() => oncopy(url)}>Copy link</Button>
       </div>
     {/if}
     {#if pasteError !== undefined}

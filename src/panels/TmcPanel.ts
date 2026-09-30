@@ -5,7 +5,7 @@ import type * as vscode from "vscode"
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type { Panel } from "../shared/shared"
-import { panelTarget, WebviewStateSchema } from "../shared/shared"
+import { WebviewStateSchema } from "../shared/shared"
 import { Logger } from "../utilities"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
@@ -61,12 +61,9 @@ export class TmcPanel {
   // `_panel.dispose()` fires `onDidDispose`, which calls back into `dispose()`
   private _isDisposed = false
 
-  // sends a message to the main and side panels
-  public static postMessage(...messages: PanelMessage[]): void {
-    for (const message of messages) {
-      TmcPanel.mainPanel?._postMessage(message)
-      TmcPanel.sidePanel?._postMessage(message)
-    }
+  /** Sends `message` to the side panel, where submissions are shown. */
+  public static postToSidePanel(message: PanelMessage): void {
+    TmcPanel.sidePanel?._postMessage(message)
   }
 
   /** Tells the two panels' log lines apart. */
@@ -74,12 +71,7 @@ export class TmcPanel {
     return this._isMain ? "Main webview" : "Side webview"
   }
 
-  /**
-   * Sends `message` to this panel's webview alone, buffering it for a reload.
-   *
-   * Every reply to a request this webview made goes through here; {@link postMessage}
-   * is for messages every open panel should see.
-   */
+  /** Sends `message` to this panel's webview alone, buffering it for a reload. */
   private _postMessage(message: PanelMessage): void {
     // A `reply` is left out: the reloaded webview asks again, and a replayed answer to the
     // request of a page that no longer exists settles nothing.
@@ -290,7 +282,7 @@ export class TmcPanel {
     this._panel.title = panelTitle(route, this._actionContext)
     this._postTransient({
       type: "setCourseData",
-      target: panelTarget(route),
+      target: { id: route.id, type: route.type },
       courseData: course.val,
     })
   }

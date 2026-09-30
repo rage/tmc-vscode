@@ -10,12 +10,6 @@ import {
 import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../shared/langsSchema"
 import type { ExerciseSubmissionPanel, FeedbackQuestion, SubmissionView } from "../shared/shared"
 import { BaseError, toWebviewError } from "../shared/shared"
-import {
-  moocLocalCourse,
-  moocLocalExercise,
-  tmcLocalCourse,
-  tmcLocalExercise,
-} from "../test/fixtures"
 import { dispatchToWebview, postedMessages, reloadDocument, replyToRequest } from "../test/setup"
 import { withinShadowRoot } from "../test/shadow"
 import { enterScreen } from "../utilities/uiState.svelte"
@@ -24,15 +18,17 @@ import ExerciseSubmission from "./ExerciseSubmission.svelte"
 const panel: ExerciseSubmissionPanel = {
   id: 12,
   type: "ExerciseSubmission",
-  course: tmcLocalCourse(),
-  exercise: tmcLocalExercise({ name: "part01-01_hello", availablePoints: 2 }),
+  backend: "tmc",
+  courseSlug: "python-course",
+  exerciseSlug: "part01-01_hello",
 }
 
 const moocPanel: ExerciseSubmissionPanel = {
   id: 13,
   type: "ExerciseSubmission",
-  course: moocLocalCourse(),
-  exercise: moocLocalExercise(),
+  backend: "mooc",
+  courseSlug: "mooc-course",
+  exerciseSlug: "mooc-exercise",
 }
 
 const FEEDBACK_URL = "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback"

@@ -1,12 +1,13 @@
 import { render, screen } from "@testing-library/svelte"
 import { vi } from "vitest"
 
-import { moocLocalCourse, tmcLocalCourse } from "../test/fixtures"
 import { postedMessages, replyToRequest } from "../test/setup"
 import PasteHelpBox from "./PasteHelpBox.svelte"
 
 const sourcePanel = { id: 1, type: "ExerciseSubmission" } as const
-const course = tmcLocalCourse()
+const oncopy = vi.fn()
+const tmcProps = { backend: "tmc", sourcePanel, oncopy } as const
+const moocProps = { ...tmcProps, backend: "mooc" } as const
 
 /** Opens the help and starts a paste. */
 async function paste(): Promise<HTMLElement> {
@@ -18,7 +19,7 @@ async function paste(): Promise<HTMLElement> {
 
 suite("PasteHelpBox component", () => {
   test("asks the host to paste the exercise the panel shows", async () => {
-    render(PasteHelpBox, { props: { course, sourcePanel } })
+    render(PasteHelpBox, { props: tmcProps })
 
     await paste()
 
@@ -30,7 +31,7 @@ suite("PasteHelpBox component", () => {
   })
 
   test("shows the paste link the host answers with", async () => {
-    render(PasteHelpBox, { props: { course, sourcePanel } })
+    render(PasteHelpBox, { props: tmcProps })
     await paste()
 
     replyToRequest("pasteExercise", { ok: true, value: "https://paste.example/abc" })
@@ -40,7 +41,7 @@ suite("PasteHelpBox component", () => {
   })
 
   test("says why a paste failed", async () => {
-    render(PasteHelpBox, { props: { course, sourcePanel } })
+    render(PasteHelpBox, { props: tmcProps })
     await paste()
 
     replyToRequest("pasteExercise", { ok: false, error: { message: "paste service is down" } })
@@ -49,9 +50,7 @@ suite("PasteHelpBox component", () => {
   })
 
   test("names the backend the code is sent to", async () => {
-    render(PasteHelpBox, {
-      props: { course: moocLocalCourse(), sourcePanel },
-    })
+    render(PasteHelpBox, { props: moocProps })
 
     ;(await screen.findByRole("button", { name: "Need help?" })).click()
     expect(
@@ -60,7 +59,7 @@ suite("PasteHelpBox component", () => {
   })
 
   test("the toggle says whether the help is open", async () => {
-    render(PasteHelpBox, { props: { course, sourcePanel } })
+    render(PasteHelpBox, { props: tmcProps })
 
     const toggle = await screen.findByRole("button", { name: "Need help?" })
     expect(toggle).toHaveAttribute("aria-expanded", "false")
@@ -69,7 +68,7 @@ suite("PasteHelpBox component", () => {
   })
 
   test("a paste in flight cannot be started again", async () => {
-    render(PasteHelpBox, { props: { course, sourcePanel } })
+    render(PasteHelpBox, { props: tmcProps })
 
     const submit = await paste()
     await vi.waitFor(() => expect(submit).toHaveAttribute("disabled"))
@@ -79,23 +78,17 @@ suite("PasteHelpBox component", () => {
     await vi.waitFor(() => expect(submit).not.toHaveAttribute("disabled"))
   })
 
-  test("copies the paste link through the host", async () => {
-    render(PasteHelpBox, { props: { course, sourcePanel } })
+  test("hands the paste link to the panel's copy action", async () => {
+    render(PasteHelpBox, { props: tmcProps })
     await paste()
     replyToRequest("pasteExercise", { ok: true, value: "https://paste.example/abc" })
 
-    postedMessages.mockClear()
     ;(await screen.findByRole("button", { name: "Copy link" })).click()
-    expect(postedMessages).toHaveBeenCalledWith({
-      type: "copyToClipboard",
-      requestId: expect.any(Number),
-      sourcePanel,
-      text: "https://paste.example/abc",
-    })
+    expect(oncopy).toHaveBeenCalledWith("https://paste.example/abc")
   })
 
   test("warns that a courses.mooc.fi paste is also a graded submission", async () => {
-    render(PasteHelpBox, { props: { course: moocLocalCourse(), sourcePanel } })
+    render(PasteHelpBox, { props: moocProps })
     ;(await screen.findByRole("button", { name: "Need help?" })).click()
 
     expect(await screen.findByText(/also submits your answer for grading/)).toBeInTheDocument()

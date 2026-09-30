@@ -13,7 +13,6 @@
   import TestResults from "../components/TestResults.svelte"
   import ToolbarButton from "../components/ToolbarButton.svelte"
   import type { ExerciseSubmissionPanel, SubmissionView } from "../shared/shared"
-  import { unwrap } from "../shared/shared"
   import { announce } from "../utilities/a11y.svelte"
   import { addMessageListener, createRequester } from "../utilities/script"
   import { uiState } from "../utilities/uiState.svelte"
@@ -25,7 +24,6 @@
 
   let { panel }: Props = $props()
 
-  const exerciseName = $derived(unwrap(panel.exercise).name)
   const sourcePanel = $derived({ id: panel.id, type: panel.type })
   const request = createRequester()
 
@@ -94,7 +92,7 @@
   }
 </script>
 
-<PanelHeader title={exerciseName} shouldFocusOnMount={false}>
+<PanelHeader title={panel.exerciseSlug} shouldFocusOnMount={false}>
   {#snippet actions()}
     <ToolbarButton icon="close" label="Close" onclick={closePanel} />
   {/snippet}
@@ -177,7 +175,7 @@
   {/if}
 
   {#if view.canPaste}
-    <PasteHelpBox course={panel.course} {sourcePanel} />
+    <PasteHelpBox backend={panel.backend} {sourcePanel} oncopy={copyToClipboard} />
   {/if}
 
   {#if view.feedback}

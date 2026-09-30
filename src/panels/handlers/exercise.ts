@@ -4,7 +4,6 @@ import * as vscode from "vscode"
 
 import { withOperation } from "../../api/withOperation"
 import type { ExerciseSubmissionPanel } from "../../shared/shared"
-import { LocalCourseData, LocalCourseExercise } from "../../shared/shared"
 import { Logger } from "../../utilities"
 import { panelActions } from "../panelActions"
 import type { HandlerMap, PanelHost } from "../router"
@@ -22,13 +21,13 @@ export const exerciseHandlers = {
       // Silent: the panel that asked is on screen and renders the failure itself.
       return withOperation(
         actionContext.dialog,
-        { failure: "Failed to paste the exercise.", backend: shown.course.kind, silent: true },
+        { failure: "Failed to paste the exercise.", backend: shown.backend, silent: true },
         () =>
           panelActions().pasteExercise(
             actionContext,
-            shown.course.kind,
-            LocalCourseData.getCourseName(shown.course),
-            LocalCourseExercise.getSlug(shown.exercise),
+            shown.backend,
+            shown.courseSlug,
+            shown.exerciseSlug,
           ),
       )
     },
@@ -82,8 +81,8 @@ export const exerciseHandlers = {
 /**
  * The submission panel `host` shows, if it is still panel `id`.
  *
- * The host acts on its own copy of the exercise rather than one the webview sends: the
- * exercise names files it reads and a backend it talks to.
+ * The host acts on its own copy of the panel rather than one the webview sends: the panel
+ * names files it reads and a backend it talks to.
  */
 function shownExercisePanel(host: PanelHost, id: number): ExerciseSubmissionPanel | undefined {
   const route = host.route

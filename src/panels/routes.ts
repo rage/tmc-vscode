@@ -1,7 +1,7 @@
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type { Panel } from "../shared/shared"
-import { assertUnreachable, LocalCourseData, LocalCourseExercise } from "../shared/shared"
+import { assertUnreachable, LocalCourseData } from "../shared/shared"
 
 /** The editor tab label for `route`, so tabs can be told apart in Open Editors and Ctrl+Tab. */
 export function panelTitle(route: Panel, actionContext: ActionContext): string {
@@ -13,7 +13,7 @@ export function panelTitle(route: Panel, actionContext: ActionContext): string {
       return course?.ok ? LocalCourseData.getCourseTitle(course.val) : "Course Details"
     }
     case "ExerciseSubmission":
-      return `Submission: ${LocalCourseExercise.getSlug(route.exercise)}`
+      return `Submission: ${route.exerciseSlug}`
     case "InitializationErrorHelp":
       return "TestMyCode Help"
     default:

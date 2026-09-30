@@ -20,7 +20,7 @@ import { registerTesting } from "../init/testing"
 import { nextPanelId } from "../panels/routes"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseStatus as RowStatus, ExtensionToWebview } from "../shared/shared"
-import { backendName, CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../shared/shared"
+import { backendName, CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import Storage from "../storage"
 import type { MoocLocalCourseData } from "../storage/data"
 import { CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
@@ -283,8 +283,9 @@ function showSubmission(actionContext: ReadyActionContext): void {
   TmcPanel.renderSide(createMockContext(), actionContext, {
     id: nextPanelId(),
     type: "ExerciseSubmission",
-    course: makeMoocKind(storedCourse()),
-    exercise: makeMoocKind(storedExercise),
+    backend: "mooc",
+    courseSlug: storedCourse().name,
+    exerciseSlug: storedExercise.name,
   })
 }
 

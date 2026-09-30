@@ -19,12 +19,12 @@ import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data
 import { createMockActionContext } from "../mocks/actionContext"
 
 // TmcPanel talks to the vscode webview API, so the whole module is mocked; the
-// action only needs renderSide (a no-op), postMessage (asserted), and a defined
+// action only needs renderSide (a no-op), postToSidePanel (asserted), and a defined
 // sidePanel so the re-render branch is skipped.
 vi.mock("../../panels/TmcPanel", () => ({
   TmcPanel: {
     renderSide: vi.fn(),
-    postMessage: vi.fn(),
+    postToSidePanel: vi.fn(),
     sidePanel: {},
   },
 }))
@@ -167,7 +167,7 @@ function moocContextWithErr(error: Error): {
 /** Every view the action showed, oldest first. */
 function shownViews(): SubmissionView[] {
   return vi
-    .mocked(TmcPanel.postMessage)
+    .mocked(TmcPanel.postToSidePanel)
     .mock.calls.flat()
     .flatMap((message: ExtensionToWebview) =>
       message.type === "submissionView" ? [message.view] : [],
@@ -382,6 +382,19 @@ suite("submitExercise action, mooc", () => {
 
     const again = await keepWaitingForGrading(extensionContext, actionContext, panelId)
     expect(again.err).toBe(true)
+  })
+
+  test("a newer submission's panel leaves nothing to wait for in the one it replaced", async () => {
+    const { actionContext } = moocContextWith(grading({ grading_progress: "Pending" }))
+    await submitExercise(extensionContext, actionContext, moocExercise)
+    const replacedPanelId = shownPanelId()
+
+    await submitExercise(extensionContext, actionContext, moocExercise)
+
+    const waited = await keepWaitingForGrading(extensionContext, actionContext, replacedPanelId)
+    expect(waited.err).toBe(true)
+    const current = await keepWaitingForGrading(extensionContext, actionContext, shownPanelId())
+    expect(current.ok).toBe(true)
   })
 
   test("a failed status check after the submit still offers to keep waiting", async () => {

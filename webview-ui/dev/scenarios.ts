@@ -13,13 +13,7 @@ import type {
   WebviewToExtension,
 } from "../src/shared/shared"
 import { makeMoocKind, makeTmcKind } from "../src/shared/shared"
-import {
-  MOOC_INSTANCE_ID,
-  moocLocalCourse,
-  moocLocalExercise,
-  tmcLocalCourse,
-  tmcLocalExercise,
-} from "../src/test/fixtures"
+import { MOOC_INSTANCE_ID, moocLocalCourse, tmcLocalCourse } from "../src/test/fixtures"
 
 /** One screen in one state, reproduced by answering the panel the way the extension host would. */
 export interface Scenario {
@@ -68,8 +62,9 @@ function answerCourseDetails(panel: { id: number }, course: typeof tmcCourse) {
 const submissionPanel = {
   id: 30,
   type: "ExerciseSubmission" as const,
-  course: tmcCourse,
-  exercise: tmcLocalExercise({ id: 103, name: "part01-03_exercise", availablePoints: 2 }),
+  backend: "tmc" as const,
+  courseSlug: "python-course",
+  exerciseSlug: "part01-03_exercise",
 }
 
 function submissionFinished(overrides: Partial<SubmissionFinished>): SubmissionFinished {
@@ -110,8 +105,9 @@ function showView(panelId: number, view: SubmissionView): ExtensionToWebview {
 const moocSubmissionPanel = {
   id: 31,
   type: "ExerciseSubmission" as const,
-  course: moocCourse,
-  exercise: moocLocalExercise(),
+  backend: "mooc" as const,
+  courseSlug: "mooc-course",
+  exerciseSlug: "mooc-exercise",
 }
 
 function moocGrading(

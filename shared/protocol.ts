@@ -1,6 +1,7 @@
 import { z } from "zod"
 
-import { FeedbackQuestionSchema, LocalCourseDataSchema, LocalCourseExerciseSchema } from "./course"
+import { FeedbackQuestionSchema, LocalCourseDataSchema } from "./course"
+import type { BackendKind } from "./enum"
 import { CourseIdentifierSchema } from "./enum"
 import { BaseError } from "./errors"
 import { TestCase, TmcStyleValidationResult } from "./langsSchema"
@@ -18,19 +19,6 @@ export type CourseDetailsPanel = z.infer<typeof CourseDetailsPanelSchema>
 // panel that made it, not to another one that happens to be open
 export type TargetPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"] }>, "id" | "type">
 
-/**
- * Addresses `panel` without carrying its state along.
- *
- * A panel object holds the whole course and its exercises; a message's `target` is read
- * for its `id` and `type` alone, and the rest is serialized through `postMessage` on
- * every send for nothing.
- */
-export function panelTarget<T extends { id: number; type: PanelType }>(
-  panel: T,
-): { id: number; type: T["type"] } {
-  return { id: panel.id, type: panel.type }
-}
-
 // schema equivalent of `TargetPanel<T>` for the given panel type(s)
 export function targetPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
   return z.object({
@@ -39,23 +27,15 @@ export function targetPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
   })
 }
 
-// stricter variant of `targetPanelSchema`, rejecting unknown keys.
-//
-// Used only for the *webview → extension host* direction, where the webview never needs
-// to send more than `{id, type}`: a whole panel posted by mistake, with every course and
-// exercise it holds, is rejected instead of being serialized and validated for nothing.
-function strictTargetPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
-  return z.strictObject({
-    id: z.number(),
-    type: z.literal(types),
-  })
-}
+const BackendKindSchema = z.enum(["tmc", "mooc"]) satisfies z.ZodType<BackendKind>
 
+/** A submission's panel; the host keeps the rest of the submission's state by `id`. */
 export const ExerciseSubmissionPanelSchema = z.object({
   id: z.number(),
   type: z.literal("ExerciseSubmission"),
-  course: LocalCourseDataSchema,
-  exercise: LocalCourseExerciseSchema,
+  backend: BackendKindSchema,
+  courseSlug: z.string(),
+  exerciseSlug: z.string(),
 })
 
 export type ExerciseSubmissionPanel = z.infer<typeof ExerciseSubmissionPanelSchema>
@@ -265,7 +245,7 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("refreshCourseDetails"),
     requestId: z.number(),
-    sourcePanel: strictTargetPanelSchema("CourseDetails"),
+    sourcePanel: targetPanelSchema("CourseDetails"),
   }),
   z.object({
     type: z.literal("closeSidePanel"),
@@ -275,26 +255,26 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("pasteExercise"),
     requestId: z.number(),
-    sourcePanel: strictTargetPanelSchema("ExerciseSubmission"),
+    sourcePanel: targetPanelSchema("ExerciseSubmission"),
   }),
   // Waits again for the grading of the submission the named panel shows, after the host
   // stopped waiting; progress and the outcome arrive as `submissionView`.
   z.object({
     type: z.literal("keepWaitingForGrading"),
     requestId: z.number(),
-    sourcePanel: strictTargetPanelSchema("ExerciseSubmission"),
+    sourcePanel: targetPanelSchema("ExerciseSubmission"),
   }),
   z.object({
     type: z.literal("sendFeedback"),
     requestId: z.number(),
-    sourcePanel: strictTargetPanelSchema("ExerciseSubmission"),
+    sourcePanel: targetPanelSchema("ExerciseSubmission"),
     feedbackAnswerUrl: z.url(),
     answers: z.array(z.object({ questionId: z.number(), answer: z.string() })),
   }),
   z.object({
     type: z.literal("copyToClipboard"),
     requestId: z.number(),
-    sourcePanel: strictTargetPanelSchema("ExerciseSubmission"),
+    sourcePanel: targetPanelSchema("ExerciseSubmission"),
     text: z.string(),
   }),
   z.object({
@@ -306,7 +286,7 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("requestInitializationErrors"),
     requestId: z.number(),
-    sourcePanel: strictTargetPanelSchema("InitializationErrorHelp"),
+    sourcePanel: targetPanelSchema("InitializationErrorHelp"),
   }),
   // an uncaught webview error, for the extension log
   z.object({

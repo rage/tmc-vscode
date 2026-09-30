@@ -23,14 +23,12 @@ import type {
   ExerciseIdentifier,
   ExerciseSubmissionPanel,
   SubmissionView,
-  TargetPanel,
 } from "../shared/shared"
 import {
   backendName,
   LocalCourseData,
   LocalCourseExercise,
   match,
-  panelTarget,
   toWebviewError,
   unwrap,
 } from "../shared/shared"
@@ -45,17 +43,26 @@ interface SubmissionOutcome {
   view: SubmissionView
 }
 
+/** One submission of an exercise, and the side panel showing it. */
+interface Submission {
+  panel: ExerciseSubmissionPanel
+  exercise: WorkspaceExercise
+  exerciseId: ExerciseIdentifier
+  courseId: CourseIdentifier
+  availablePoints: number
+}
+
 /** Collects what a backend reports while it works on a submission, and shows it in the panel. */
 class SubmissionProgressReporter {
   private _phase: InProgressPhase
   private _progress: SubmissionProgress = { steps: [] }
 
   public constructor(
-    private readonly _target: TargetPanel<ExerciseSubmissionPanel>,
+    private readonly _panel: ExerciseSubmissionPanel,
     phase: InProgressPhase,
   ) {
     this._phase = phase
-    showSubmissionView(this._target, inProgressView(this._phase, this._progress))
+    showSubmissionView(this._panel, inProgressView(this._phase, this._progress))
   }
 
   /** @param fraction 0..1, or undefined where the backend's own is meaningless. */
@@ -65,56 +72,52 @@ class SubmissionProgressReporter {
       fraction,
       steps: withProgressStep(this._progress.steps, message),
     }
-    showSubmissionView(this._target, inProgressView(this._phase, this._progress))
+    showSubmissionView(this._panel, inProgressView(this._phase, this._progress))
   }
 
   /** The backend has the submission; `submissionUrl` is its page there, if it has one. */
   public received(submissionUrl?: string): void {
     this._phase = "grading"
     this._progress = { ...this._progress, submissionUrl }
-    showSubmissionView(this._target, inProgressView(this._phase, this._progress))
+    showSubmissionView(this._panel, inProgressView(this._phase, this._progress))
   }
 }
 
-function showSubmissionView(
-  target: TargetPanel<ExerciseSubmissionPanel>,
-  view: SubmissionView,
-): void {
-  TmcPanel.postMessage({ type: "submissionView", target, view })
+function showSubmissionView(panel: ExerciseSubmissionPanel, view: SubmissionView): void {
+  TmcPanel.postToSidePanel({
+    type: "submissionView",
+    target: { id: panel.id, type: panel.type },
+    view,
+  })
 }
 
-/** Sends one exercise to its backend and waits for the grading, reporting progress to `panel`. */
-type ExerciseSubmitter = (
-  panel: ExerciseSubmissionPanel,
-  exercise: WorkspaceExercise,
-) => Promise<Result<SubmissionOutcome, Error>>
+/** Sends one exercise to its backend and waits for the grading, reporting progress to its panel. */
+type ExerciseSubmitter = (submission: Submission) => Promise<Result<SubmissionOutcome, Error>>
 
 // Answering only URLs a submission result named keeps the webview from choosing where to post.
 const answerableFeedbackUrls = new Set<string>()
 
 /** A mooc submission whose grading the host stopped waiting for. */
-interface UnfinishedGrading {
+interface UnfinishedGrading extends Submission {
   taskSubmissionId: string
-  panel: ExerciseSubmissionPanel
-  exercise: WorkspaceExercise
 }
 
 // Keyed by the panel showing the submission, so a webview names only which panel it is.
 const unfinishedGradings = new Map<number, UnfinishedGrading>()
 
 function tmcSubmitter(langs: Langs, exerciseId: number): ExerciseSubmitter {
-  return async (panel, exercise) => {
-    const reporter = new SubmissionProgressReporter(panelTarget(panel), "uploading")
-    const submission = await langs.submitTmcExerciseAndWaitForResults(
+  return async (submission) => {
+    const reporter = new SubmissionProgressReporter(submission.panel, "uploading")
+    const submitted = await langs.submitTmcExerciseAndWaitForResults(
       exerciseId,
-      exercise.uri.fsPath,
+      submission.exercise.uri.fsPath,
       (fraction, message) => reporter.report(fraction, message),
       (url) => reporter.received(url),
     )
-    if (submission.err) {
-      return submission
+    if (submitted.err) {
+      return submitted
     }
-    const result = submission.val
+    const result = submitted.val
     const questions = result.feedback_questions
       ? parseFeedbackQuestion(result.feedback_questions)
       : []
@@ -123,7 +126,7 @@ function tmcSubmitter(langs: Langs, exerciseId: number): ExerciseSubmitter {
     }
     return Ok({
       passed: result.status === "ok" && result.all_tests_passed === true,
-      view: tmcResultView(result, questions, unwrap(panel.exercise).availablePoints),
+      view: tmcResultView(result, questions, submission.availablePoints),
     })
   }
 }
@@ -133,14 +136,14 @@ function tmcSubmitter(langs: Langs, exerciseId: number): ExerciseSubmitter {
  * between is what lets the student keep waiting after the CLI's poll gives up.
  */
 function moocSubmitter(langs: Langs, exerciseId: string): ExerciseSubmitter {
-  return async (panel, exercise) => {
-    const reporter = new SubmissionProgressReporter(panelTarget(panel), "uploading")
-    const submitted = await langs.submitMoocExercise(exerciseId, exercise.uri.fsPath)
+  return async (submission) => {
+    const reporter = new SubmissionProgressReporter(submission.panel, "uploading")
+    const submitted = await langs.submitMoocExercise(exerciseId, submission.exercise.uri.fsPath)
     if (submitted.err) {
       return submitted
     }
     reporter.received()
-    const grading = { taskSubmissionId: submitted.val.task_submission_id, panel, exercise }
+    const grading = { ...submission, taskSubmissionId: submitted.val.task_submission_id }
     return Ok(await waitForMoocGrading(langs, grading, reporter))
   }
 }
@@ -160,7 +163,7 @@ async function waitForMoocGrading(
     return { passed: false, view: gradingUnavailableView(toWebviewError(waited.val)) }
   }
   const status = waited.val
-  const view = moocGradingView(status, unwrap(panel.exercise).availablePoints)
+  const view = moocGradingView(status, grading.availablePoints)
   if (view.canKeepWaiting) {
     unfinishedGradings.set(panel.id, grading)
   }
@@ -194,12 +197,12 @@ function submitterFor(
 async function showOutcome(
   context: vscode.ExtensionContext,
   actionContext: ReadyActionContext,
-  exercise: WorkspaceExercise,
-  panel: ExerciseSubmissionPanel,
+  submission: Submission,
   outcome: SubmissionOutcome,
 ): Promise<void> {
   const { dialog } = actionContext
   const { exerciseDecorationProvider, userData } = actionContext.startup
+  const { exercise } = submission
   if (outcome.passed) {
     const passedResult = await userData.setExerciseAsPassed(
       exercise.backend,
@@ -218,9 +221,9 @@ async function showOutcome(
   }
 
   if (TmcPanel.sidePanel === undefined) {
-    TmcPanel.renderSide(context, actionContext, panel)
+    TmcPanel.renderSide(context, actionContext, submission.panel)
   }
-  showSubmissionView(panelTarget(panel), outcome.view)
+  showSubmissionView(submission.panel, outcome.view)
 }
 
 /**
@@ -251,34 +254,46 @@ export async function submitExercise(
       new Error(`ID for exercise ${exercise.courseSlug}/${exercise.exerciseSlug} was not found.`),
     )
   }
-  const submit = submitterFor(langs, exercise.backend, LocalCourseExercise.getId(courseExercise))
+  const exerciseId = LocalCourseExercise.getId(courseExercise)
+  const submit = submitterFor(langs, exercise.backend, exerciseId)
   if (!submit) {
     return Err(
       new Error(`${exercise.exerciseSlug} is not a ${backendName(exercise.backend)} exercise.`),
     )
   }
+  const courseId = LocalCourseData.getCourseId(course)
 
   // Held only until the result is posted: the panel offers Paste from that point on, and
   // the command layer's post-submit refresh doesn't need the same protection.
   const submitted = await exerciseOperations.run(
-    LocalCourseExercise.getId(courseExercise),
+    exerciseId,
     "submitting",
     SUBMIT_PROCESS_TIMEOUT + 30_000,
     async () => {
-      const panel: ExerciseSubmissionPanel = {
-        id: nextPanelId(),
-        type: "ExerciseSubmission",
-        course,
-        exercise: courseExercise,
+      const submission: Submission = {
+        panel: {
+          id: nextPanelId(),
+          type: "ExerciseSubmission",
+          backend: exercise.backend,
+          courseSlug: exercise.courseSlug,
+          exerciseSlug: exercise.exerciseSlug,
+        },
+        exercise,
+        exerciseId,
+        courseId,
+        availablePoints: unwrap(courseExercise).availablePoints,
       }
-      TmcPanel.renderSide(context, actionContext, panel)
+      // The side panel shows one submission at a time, so what the earlier ones kept is
+      // unreachable from here on.
+      unfinishedGradings.clear()
+      TmcPanel.renderSide(context, actionContext, submission.panel)
 
-      const outcome = await submit(panel, exercise)
+      const outcome = await submit(submission)
       if (outcome.err) {
-        showSubmissionView(panelTarget(panel), submitFailedView(toWebviewError(outcome.val)))
+        showSubmissionView(submission.panel, submitFailedView(toWebviewError(outcome.val)))
         return shownInPanel(outcome.val)
       }
-      await showOutcome(context, actionContext, exercise, panel, outcome.val)
+      await showOutcome(context, actionContext, submission, outcome.val)
       return Ok.EMPTY
     },
   )
@@ -286,7 +301,7 @@ export async function submitExercise(
     return submitted
   }
 
-  return Ok(LocalCourseData.getCourseId(course))
+  return Ok(courseId)
 }
 
 /**
@@ -306,15 +321,15 @@ export async function keepWaitingForGrading(
     return Err(new Error("This submission has no grading left to wait for."))
   }
   return exerciseOperations.run(
-    LocalCourseExercise.getId(grading.panel.exercise),
+    grading.exerciseId,
     "submitting",
     SUBMIT_PROCESS_TIMEOUT + 30_000,
     async () => {
       unfinishedGradings.delete(panelId)
-      const reporter = new SubmissionProgressReporter(panelTarget(grading.panel), "grading")
+      const reporter = new SubmissionProgressReporter(grading.panel, "grading")
       const outcome = await waitForMoocGrading(actionContext.startup.langs, grading, reporter)
-      await showOutcome(context, actionContext, grading.exercise, grading.panel, outcome)
-      return Ok(LocalCourseData.getCourseId(grading.panel.course))
+      await showOutcome(context, actionContext, grading, outcome)
+      return Ok(grading.courseId)
     },
   )
 }

@@ -12,13 +12,8 @@ import { registerPanelActions } from "../../panels/panelActions"
 import type { PanelMessage } from "../../panels/router"
 import { nextPanelId } from "../../panels/routes"
 import { MAIN_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
-import type {
-  ExtensionToWebview,
-  LocalCourseData,
-  LocalCourseExercise,
-  Panel,
-} from "../../shared/shared"
-import { CourseIdentifier, makeMoocKind, makeTmcKind, panelTarget } from "../../shared/shared"
+import type { BackendKind, ExtensionToWebview, LocalCourseData, Panel } from "../../shared/shared"
+import { CourseIdentifier, makeTmcKind } from "../../shared/shared"
 import { Logger } from "../../utilities"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 import { createMockContext } from "../mocks/vscode"
@@ -329,40 +324,19 @@ suite("TmcPanel handler dispatch", () => {
     expect(handlers.refreshLocalExercises).toHaveBeenCalledWith(actionContext)
   })
 
-  const pasteCourse = makeTmcKind({
-    id: 42,
-    name: "python-course",
-    title: "Python Course",
-    description: "",
-    organization: "mooc",
-    exercises: [],
-    availablePoints: 0,
-    awardedPoints: 0,
-    perhapsExamMode: false,
-    newExercises: [],
-    notifyAfter: 0,
-    disabled: false,
-    materialUrl: null,
-  })
-  const pasteExercise = makeTmcKind({
-    id: 101,
-    name: "loops",
-    availablePoints: 1,
-    awardedPoints: 0,
-    deadline: null,
-    passed: false,
-    softDeadline: null,
-  })
-
-  /** Mounts test results for `course`'s `exercise` and asks them to paste it. */
+  /** Mounts the submission of `python-course`'s `loops` and asks it to paste the exercise. */
   async function paste(
     actionContext: ActionContext,
-    course: LocalCourseData = pasteCourse,
-    exercise: LocalCourseExercise = pasteExercise,
+    backend: BackendKind = "tmc",
   ): Promise<{ panel: vscode.WebviewPanel; shown: Panel }> {
-    const shown = { ...exerciseSubmissionPanel(), course, exercise } as Panel
+    const shown: Panel = {
+      ...exerciseSubmissionPanel(),
+      backend,
+      courseSlug: "python-course",
+      exerciseSlug: "loops",
+    }
     const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
-    await listener({ type: "pasteExercise", requestId: 1, sourcePanel: panelTarget(shown) })
+    await listener({ type: "pasteExercise", requestId: 1, sourcePanel: targetOf(shown) })
     return { panel, shown }
   }
 
@@ -380,7 +354,7 @@ suite("TmcPanel handler dispatch", () => {
     )
     expect(replyTo(panel, 1)).toEqual({
       type: "reply",
-      target: panelTarget(shown),
+      target: targetOf(shown),
       requestId: 1,
       outcome: { ok: true, value: "link" },
     })
@@ -410,11 +384,7 @@ suite("TmcPanel handler dispatch", () => {
     const handlers = stubHandlers()
     registerPanelActions(handlers as unknown as PanelActions)
 
-    await paste(
-      createMockActionContext(),
-      makeMoocKind({ ...pasteCourse.data, id: "course-uuid" }),
-      makeMoocKind({ ...pasteExercise.data, id: "exercise-uuid" }),
-    )
+    await paste(createMockActionContext(), "mooc")
 
     expect(handlers.pasteExercise).toHaveBeenCalledWith(
       expect.anything(),
@@ -527,13 +497,13 @@ suite("TmcPanel handler dispatch, degraded startup", () => {
     const shown = exerciseSubmissionPanel()
     const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
 
-    await listener({ type: "pasteExercise", requestId: 1, sourcePanel: panelTarget(shown) })
+    await listener({ type: "pasteExercise", requestId: 1, sourcePanel: targetOf(shown) })
 
     expect(handlers.pasteExercise).not.toHaveBeenCalled()
     expectNoNotification(actionContext)
     expect(replyTo(panel, 1)).toEqual({
       type: "reply",
-      target: panelTarget(shown),
+      target: targetOf(shown),
       requestId: 1,
       outcome: { ok: false, error: { message: "The extension did not initialize properly" } },
     })
@@ -659,7 +629,7 @@ suite("TmcPanel ready handshake", () => {
   test("replays a buffered message for the current panel, after the panel itself", async () => {
     const { panel, listener, shown } = await mountCourseDetails(createMockActionContext())
 
-    TmcPanel.postMessage(courseDataFor(shown))
+    TmcPanel.postToSidePanel(courseDataFor(shown))
     vi.mocked(panel.webview.postMessage).mockClear()
 
     await listener({ type: "ready" })
@@ -675,7 +645,7 @@ suite("TmcPanel ready handshake", () => {
 
     // an id that was never rendered here; buffering it would resend it to a panel
     // that cannot interpret it
-    TmcPanel.postMessage(courseDataFor({ id: 9999 }))
+    TmcPanel.postToSidePanel(courseDataFor({ id: 9999 }))
     vi.mocked(panel.webview.postMessage).mockClear()
 
     await listener({ type: "ready" })
@@ -690,7 +660,7 @@ suite("TmcPanel ready handshake", () => {
     const actionContext = createMockActionContext()
     const { panel, listener, shown } = await mountCourseDetails(actionContext)
 
-    TmcPanel.postMessage(courseDataFor(shown))
+    TmcPanel.postToSidePanel(courseDataFor(shown))
     TmcPanel.renderSide(createMockContext(), actionContext, {
       id: nextPanelId(),
       type: "CourseDetails",
@@ -715,8 +685,8 @@ suite("TmcPanel ready handshake", () => {
       type: "CourseDetails" as const,
       courseId: CourseIdentifier.from(42),
     }
-    renderMainPanel(courseDetails)
-    TmcPanel.postMessage(courseDataFor(courseDetails))
+    renderSidePanel(courseDetails)
+    TmcPanel.postToSidePanel(courseDataFor(courseDetails))
 
     expect(panel.webview.postMessage).not.toHaveBeenCalled()
 
@@ -780,12 +750,12 @@ suite("TmcPanel hidden webviews", () => {
     const shown = exerciseSubmissionPanel()
     const { panel, sendReady, hide, reveal } = mountHideable(shown)
     await sendReady()
-    TmcPanel.postMessage(submissionViewFor(shown, "Sending submission…"))
+    TmcPanel.postToSidePanel(submissionViewFor(shown, "Sending submission…"))
     hide()
     vi.mocked(panel.webview.postMessage).mockClear()
 
-    TmcPanel.postMessage(submissionViewFor(shown, "Processing submission…"))
-    TmcPanel.postMessage(submissionViewFor(shown, "Exercise graded"))
+    TmcPanel.postToSidePanel(submissionViewFor(shown, "Processing submission…"))
+    TmcPanel.postToSidePanel(submissionViewFor(shown, "Exercise graded"))
     expect(panel.webview.postMessage).not.toHaveBeenCalled()
 
     await reveal()
@@ -809,7 +779,7 @@ suite("TmcPanel hidden webviews", () => {
     const copy = getMessageListener()({
       type: "copyToClipboard",
       requestId: 7,
-      sourcePanel: panelTarget(shown),
+      sourcePanel: targetOf(shown),
       text: "stack trace",
     })
     hide()
@@ -833,7 +803,7 @@ suite("TmcPanel hidden webviews", () => {
     const { panel, sendReady, hide, reveal } = mountHideable(shown)
     await sendReady()
     hide()
-    TmcPanel.postMessage(courseDataFor(shown))
+    TmcPanel.postToSidePanel(courseDataFor(shown))
     vi.mocked(panel.webview.postMessage).mockClear()
 
     await reveal()
@@ -907,7 +877,7 @@ suite("TmcPanel refreshCourseDetails", () => {
     expect(postedMessages(panel)).toEqual([
       {
         type: "reply",
-        target: panelTarget(shown),
+        target: targetOf(shown),
         requestId: 1,
         outcome: { ok: true, value: courseWith(2) },
       },
@@ -986,14 +956,14 @@ suite("TmcPanel host services for the webview", () => {
     await listener({
       type: "copyToClipboard",
       requestId: 1,
-      sourcePanel: panelTarget(shown),
+      sourcePanel: targetOf(shown),
       text: "Traceback (most recent call last)",
     })
 
     expect(writeText).toHaveBeenCalledWith("Traceback (most recent call last)")
     expect(replyTo(panel, 1)).toEqual({
       type: "reply",
-      target: panelTarget(shown),
+      target: targetOf(shown),
       requestId: 1,
       outcome: { ok: true },
     })
@@ -1012,7 +982,7 @@ suite("TmcPanel host services for the webview", () => {
     await listener({
       type: "copyToClipboard",
       requestId: 1,
-      sourcePanel: panelTarget(shown),
+      sourcePanel: targetOf(shown),
       text: "x",
     })
 
@@ -1080,7 +1050,7 @@ suite("TmcPanel host services for the webview", () => {
     const shown = exerciseSubmissionPanel()
     const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
 
-    await listener({ type: "keepWaitingForGrading", requestId: 1, sourcePanel: panelTarget(shown) })
+    await listener({ type: "keepWaitingForGrading", requestId: 1, sourcePanel: targetOf(shown) })
 
     expect(handlers.keepWaitingForGrading).toHaveBeenCalledWith(
       expect.anything(),
@@ -1297,6 +1267,27 @@ suite("TmcPanel side panel placement", () => {
 
     expect(panel.reveal).toHaveBeenCalledExactlyOnceWith(undefined, true)
   })
+
+  test("sends submission views to the side panel and not the main one", async () => {
+    const main = createFakeWebviewPanel()
+    const side = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel)
+      .mockReturnValueOnce(main.panel)
+      .mockReturnValueOnce(side.panel)
+    renderMainPanel({ id: nextPanelId(), type: "InitializationErrorHelp" })
+    const shown = exerciseSubmissionPanel()
+    renderSidePanel(shown)
+    await main.sendReady()
+    await side.sendReady()
+    vi.mocked(main.panel.webview.postMessage).mockClear()
+
+    TmcPanel.postToSidePanel(submissionViewFor(shown, "Exercise graded"))
+
+    expect(side.panel.webview.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: "submissionView" }),
+    )
+    expect(main.panel.webview.postMessage).not.toHaveBeenCalled()
+  })
 })
 
 suite("TmcPanel tab identity", () => {
@@ -1337,22 +1328,7 @@ suite("TmcPanel tab identity", () => {
   })
 
   test("names the exercise a results tab belongs to", () => {
-    const exercise = makeTmcKind({
-      id: 1,
-      name: "part01-01_hello",
-      availablePoints: 1,
-      awardedPoints: 0,
-      deadline: null,
-      passed: false,
-      softDeadline: null,
-    })
-
-    const title = mainPanelTitleFor({
-      id: nextPanelId(),
-      type: "ExerciseSubmission",
-      course: courseWith(1),
-      exercise,
-    })
+    const title = mainPanelTitleFor(exerciseSubmissionPanel())
 
     expect(title).toBe("Submission: part01-01_hello")
   })
@@ -1470,20 +1446,17 @@ suite("TmcPanel webview document", () => {
   })
 })
 
+function targetOf(panel: Panel): { id: number; type: Panel["type"] } {
+  return { id: panel.id, type: panel.type }
+}
+
 function exerciseSubmissionPanel(): Extract<Panel, { type: "ExerciseSubmission" }> {
   return {
     id: nextPanelId(),
     type: "ExerciseSubmission",
-    course: courseWith(1),
-    exercise: makeTmcKind({
-      id: 1,
-      name: "part01-01_hello",
-      availablePoints: 1,
-      awardedPoints: 0,
-      deadline: null,
-      passed: false,
-      softDeadline: null,
-    }),
+    backend: "tmc",
+    courseSlug: "python-course",
+    exerciseSlug: "part01-01_hello",
   }
 }
 
@@ -1522,7 +1495,7 @@ suite("TmcPanel requestCourseDetailsData", () => {
     expect(postedMessages(panel)).toEqual([
       {
         type: "reply",
-        target: panelTarget(shown),
+        target: targetOf(shown),
         requestId: 1,
         outcome: { ok: true, value: courseWith(2) },
       },
@@ -1568,7 +1541,7 @@ suite("TmcPanel keeps Course Details on the stored course", () => {
     changed.fire()
 
     expect(postedMessages(panel)).toEqual([
-      { type: "setCourseData", target: panelTarget(shown), courseData: courseWith(3) },
+      { type: "setCourseData", target: targetOf(shown), courseData: courseWith(3) },
     ])
   })
 

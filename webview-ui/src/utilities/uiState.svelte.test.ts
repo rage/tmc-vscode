@@ -3,7 +3,6 @@ import { render } from "@testing-library/svelte"
 import App from "../App.svelte"
 import type { Panel } from "../shared/shared"
 import { makeMoocKind, makeTmcKind } from "../shared/shared"
-import { tmcLocalCourse, tmcLocalExercise } from "../test/fixtures"
 import { dispatchToWebview, reloadDocument, savedWebviewState } from "../test/setup"
 import { enterScreen, uiState } from "./uiState.svelte"
 
@@ -154,8 +153,9 @@ suite("the screen a window reload reopens", () => {
     enterScreen({
       id: 7,
       type: "ExerciseSubmission",
-      course: tmcLocalCourse(),
-      exercise: tmcLocalExercise(),
+      backend: "tmc",
+      courseSlug: "python-course",
+      exerciseSlug: "part01-01_hello",
     })
 
     expect(savedWebviewState()).not.toHaveProperty("route")

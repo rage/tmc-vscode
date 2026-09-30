@@ -6,9 +6,7 @@
 import type { TestResult } from "../shared/langsSchema"
 import type {
   LocalCourseData,
-  LocalCourseExercise,
   SharedMoocCourseData,
-  SharedMoocCourseExercise,
   SharedTmcCourseData,
   SharedTmcCourseExercise,
 } from "../shared/shared"
@@ -86,21 +84,6 @@ export function moocLocalCourse(overrides: Partial<SharedMoocCourseData> = {}): 
   return makeMoocKind(moocCourseData(overrides))
 }
 
-export function moocLocalExercise(
-  overrides: Partial<SharedMoocCourseExercise> = {},
-): LocalCourseExercise {
-  return makeMoocKind({
-    id: MOOC_EXERCISE_ID,
-    availablePoints: 3,
-    awardedPoints: 0,
-    name: "loops",
-    deadline: null,
-    passed: false,
-    softDeadline: null,
-    ...overrides,
-  })
-}
-
 export function tmcExercise(
   overrides: Partial<SharedTmcCourseExercise> = {},
 ): SharedTmcCourseExercise {
@@ -114,12 +97,6 @@ export function tmcExercise(
     softDeadline: null,
     ...overrides,
   }
-}
-
-export function tmcLocalExercise(
-  overrides: Partial<SharedTmcCourseExercise> = {},
-): LocalCourseExercise {
-  return makeTmcKind(tmcExercise(overrides))
 }
 
 export function testResult(overrides: Partial<TestResult> = {}): TestResult {
