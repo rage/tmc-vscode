@@ -14,7 +14,6 @@ suite("postMessageToWebview", () => {
     const { webview, postMessage } = fakeWebview()
     const message: ExtensionToWebview = {
       type: "setPanel",
-      target: { id: 0, type: "App" },
       panel: { id: 1, type: "CourseDetails", courseId: CourseIdentifier.from(42) },
     }
 
@@ -28,7 +27,6 @@ suite("postMessageToWebview", () => {
     const { webview, postMessage } = fakeWebview()
     const message = {
       type: "setPanel",
-      target: { id: 0, type: "App" },
       panel: { id: 1, type: "CourseDetails" },
     } as unknown as ExtensionToWebview
 

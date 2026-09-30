@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/svelte"
 import { createRawSnippet } from "svelte"
-import { vi } from "vitest"
 
+import { initializationErrorHelpPanel } from "../test/fixtures"
 import { reloadDocument } from "../test/setup"
 import { enterScreen } from "../utilities/uiState.svelte"
 import Disclosure from "./Disclosure.svelte"
@@ -20,44 +20,25 @@ suite("Disclosure component", () => {
     expect(screen.getByText("Exercise table")).not.toBeVisible()
   })
 
-  test("toggles the region and reports the new state", async () => {
-    const ontoggle = vi.fn()
-    render(Disclosure, { props: { title: "part01", children: body, ontoggle } })
+  test("toggles the region", async () => {
+    render(Disclosure, { props: { title: "part01", children: body } })
     const toggle = screen.getByRole("button", { name: "part01" })
 
     await fireEvent.click(toggle)
 
     expect(toggle).toHaveAttribute("aria-expanded", "true")
     expect(document.querySelector(`[id="${toggle.getAttribute("aria-controls")}"]`)).toBeVisible()
-    expect(ontoggle).toHaveBeenCalledExactlyOnceWith(true)
   })
 
-  test("starts open and at the requested heading level when asked", () => {
-    render(Disclosure, {
-      props: { title: "part02", open: true, headingLevel: 3, description: "3 / 5", children: body },
-    })
-    expect(screen.getByRole("heading", { level: 3 })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "part02 3 / 5" })).toHaveAttribute(
-      "aria-expanded",
-      "true",
+  test("sits at the requested heading level", () => {
+    render(Disclosure, { props: { title: "part02", headingLevel: 3, children: body } })
+    expect(screen.getByRole("heading", { level: 3 })).toContainElement(
+      screen.getByRole("button", { name: "part02" }),
     )
-    expect(screen.getByText("Exercise table")).toBeVisible()
-  })
-
-  test("keeps section actions outside the toggle", () => {
-    render(Disclosure, {
-      props: {
-        title: "part01",
-        children: body,
-        actions: createRawSnippet(() => ({ render: () => "<button>Download all</button>" })),
-      },
-    })
-    const toggle = screen.getByRole("button", { name: "part01" })
-    expect(toggle).not.toContainElement(screen.getByRole("button", { name: "Download all" }))
   })
 
   test("a persisted one comes back open after its document reloads", async () => {
-    const helpPanel = { id: 1, type: "InitializationErrorHelp" } as const
+    const helpPanel = initializationErrorHelpPanel()
     enterScreen(helpPanel)
     render(Disclosure, { props: { title: "Stack trace", persistAs: "stack", children: body } })
     await fireEvent.click(screen.getByRole("button", { name: "Stack trace" }))

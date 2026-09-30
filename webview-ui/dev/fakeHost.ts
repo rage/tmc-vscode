@@ -18,10 +18,7 @@ export function createFakeHost(
   return async (message) => {
     const replies: ExtensionToWebview[] =
       message.type === "ready"
-        ? [
-            { type: "setPanel", target: { type: "App", id: 0 }, panel: scenario.panel },
-            ...(scenario.pushes ?? []),
-          ]
+        ? [{ type: "setPanel", panel: scenario.panel }, ...(scenario.pushes ?? [])]
         : (scenario.reply?.(message) ?? [])
     for (const reply of replies) {
       const validation = ExtensionToWebviewSchema.safeParse(reply)

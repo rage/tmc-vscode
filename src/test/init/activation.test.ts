@@ -123,18 +123,11 @@ vi.mock("../../ui/treeview/treeview", async (importOriginal) => ({
 }))
 
 vi.mock("../../panels/TmcPanel", () => ({
-  nextPanelId: () => 1,
   TmcPanel: {
-    renderMain: (
-      _uri: unknown,
-      _context: unknown,
-      _actionContext: unknown,
-      panel: { type: string },
-    ) => {
+    renderMain: (_context: unknown, _actionContext: unknown, panel: { type: string }) => {
       recorded.panelTypes.push(panel.type)
     },
-    renderSide: () => {},
-    postMessage: () => {},
+    showSubmissionViews: () => ({ dispose: () => {} }),
     registerSerializer: () => {
       recorded.serializerRegistrations += 1
       return { dispose: () => {} }
@@ -205,22 +198,12 @@ vi.mock("../../init/verifyCliSchema", () => ({
   verifyCliSchema: async (): Promise<void> => {},
 }))
 
-// `registerCommands` reads the handlers it hands the panel layer eagerly, so every one
-// of them has to exist here even though no test drives a webview message.
 vi.mock("../../actions", () => ({
+  onDidFinishSubmission: () => ({ dispose: () => {} }),
   refreshLocalExercises: async (): Promise<unknown> => Ok.EMPTY,
-  closeExercises: async (): Promise<unknown> => Ok.EMPTY,
-  downloadAndOpenExercises: async (): Promise<unknown> => Ok.EMPTY,
-  downloadExercisesForUi: async (): Promise<void> => {},
-  pasteExercise: async (): Promise<unknown> => Ok.EMPTY,
-  removeCourse: async (): Promise<void> => {},
-  sendSubmissionFeedback: async (): Promise<unknown> => Ok.EMPTY,
-  updateCourse: async (): Promise<unknown> => Ok.EMPTY,
 }))
 
-// `registerCommands` reads every one of these eagerly, building the webview handler
-// table and its own command closures, so each has to be defined here even though only
-// `refreshEverything` (the activation background refresh) actually runs.
+// Only `refreshEverything` (the activation background refresh) actually runs.
 vi.mock("../../commands", () => ({
   refreshEverything: async (): Promise<unknown> => Ok.EMPTY,
   refreshCourses: async (): Promise<void> => {},
@@ -230,11 +213,9 @@ vi.mock("../../commands", () => ({
   closeExercise: async (): Promise<void> => {},
   downloadNewExercises: async (): Promise<void> => {},
   downloadOldSubmission: async (): Promise<void> => {},
-  keepWaitingForGrading: async (): Promise<unknown> => Ok.EMPTY,
   logout: async (): Promise<void> => {},
   openCourseWorkspace: async (): Promise<void> => {},
   openExercisesFolder: async (): Promise<void> => {},
-  openWorkspace: async (): Promise<void> => {},
   pasteExercise: async (): Promise<void> => {},
   pickCourse: async (): Promise<unknown> => undefined,
   removeCourse: async (): Promise<void> => {},

@@ -2,8 +2,8 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
 import type Dialog from "../../api/dialog"
-import { failure, shownInPanel, withOperation } from "../../api/withOperation"
-import { BottleneckError, ConnectionError, InsufficientScopeError } from "../../errors"
+import { failure, withOperation } from "../../api/withOperation"
+import { BottleneckError, InsufficientScopeError } from "../../errors"
 import { Logger } from "../../utilities"
 import { createMockActionContext } from "../mocks/actionContext"
 
@@ -150,35 +150,6 @@ suite("withOperation", function () {
     })
 
     expect(dialog.reportError).toHaveBeenCalledOnce()
-  })
-
-  test("only logs a failure a panel shows", async function () {
-    await withOperation(dialog, { failure: "Submission failed." }, async () =>
-      shownInPanel(new ConnectionError("offline")),
-    )
-
-    expect(notificationCount()).toBe(0)
-  })
-
-  test("still notifies a failure a panel shows when it offers a remedy", async function () {
-    const error = new InsufficientScopeError("scope")
-
-    await withOperation(dialog, { failure: "Submission failed.", backend: "mooc" }, async () =>
-      shownInPanel(error),
-    )
-
-    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith("Submission failed.", error, "mooc")
-    expect(notificationCount()).toBe(1)
-  })
-
-  test("recognises a panel-shown failure a failure wraps", async function () {
-    const shown = shownInPanel(new ConnectionError("offline")).val
-
-    await withOperation(dialog, { failure: "Failed." }, async () =>
-      failure("Exercise submission failed.", shown),
-    )
-
-    expect(notificationCount()).toBe(0)
   })
 
   test("resolves without waiting for the notification to be dismissed", async function () {

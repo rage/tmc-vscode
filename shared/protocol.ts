@@ -1,16 +1,9 @@
 import { z } from "zod"
 
-import { FeedbackQuestionSchema, LocalCourseDataSchema, LocalCourseExerciseSchema } from "./course"
+import { FeedbackQuestionSchema, LocalCourseDataSchema } from "./course"
+import type { BackendKind } from "./enum"
 import { CourseIdentifierSchema } from "./enum"
-import { BaseError } from "./errors"
 import { TestCase, TmcStyleValidationResult } from "./langsSchema"
-
-export const AppPanelSchema = z.object({
-  id: z.number(),
-  type: z.literal("App"),
-})
-
-export type AppPanel = z.infer<typeof AppPanelSchema>
 
 export const CourseDetailsPanelSchema = z.object({
   id: z.number(),
@@ -20,29 +13,10 @@ export const CourseDetailsPanelSchema = z.object({
 
 export type CourseDetailsPanel = z.infer<typeof CourseDetailsPanelSchema>
 
-// defined by hand (rather than as `Panel["type"]`) so that
-// `targetPanelSchema` can be used inside the panel schemas
-// themselves without creating a circular type dependency;
-// the `_panelTypesMatch` assertion below `Panel` keeps this in sync with `PanelSchema`
-export type PanelType = "App" | "CourseDetails" | "ExerciseSubmission" | "InitializationErrorHelp"
-
 // used to define messages that should only be sent to a specific instance of a panel
 // for example, a submission's result should only be sent to the ExerciseSubmission
 // panel that made it, not to another one that happens to be open
 export type TargetPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"] }>, "id" | "type">
-
-/**
- * Addresses `panel` without carrying its state along.
- *
- * A panel object holds the whole course and its exercises; a message's `target` is read
- * for its `id` and `type` alone, and the rest is serialized through `postMessage` on
- * every send for nothing.
- */
-export function panelTarget<T extends { id: number; type: PanelType }>(
-  panel: T,
-): { id: number; type: T["type"] } {
-  return { id: panel.id, type: panel.type }
-}
 
 // schema equivalent of `TargetPanel<T>` for the given panel type(s)
 export function targetPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
@@ -52,30 +26,34 @@ export function targetPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
   })
 }
 
-// stricter variant of `targetPanelSchema`, rejecting unknown keys.
-//
-// Used only for the *webview → extension host* direction, where the webview never needs
-// to send more than `{id, type}`: a whole panel posted by mistake, with every course and
-// exercise it holds, is rejected instead of being serialized and validated for nothing.
-function strictTargetPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
-  return z.strictObject({
-    id: z.number(),
-    type: z.literal(types),
-  })
-}
+const BackendKindSchema = z.enum(["tmc", "mooc"]) satisfies z.ZodType<BackendKind>
 
+/** A submission's panel; the host keeps the rest of the submission's state by `id`. */
 export const ExerciseSubmissionPanelSchema = z.object({
   id: z.number(),
   type: z.literal("ExerciseSubmission"),
-  course: LocalCourseDataSchema,
-  exercise: LocalCourseExerciseSchema,
+  backend: BackendKindSchema,
+  courseSlug: z.string(),
+  exerciseSlug: z.string(),
 })
 
 export type ExerciseSubmissionPanel = z.infer<typeof ExerciseSubmissionPanelSchema>
 
+const InitializationFailureSchema = z.object({ error: z.string(), stack: z.string() }).nullable()
+
 export const InitializationErrorHelpPanelSchema = z.object({
   id: z.number(),
   type: z.literal("InitializationErrorHelp"),
+  /** Where the tmc-langs CLI is kept, for a firewall or antivirus exception. */
+  cliFolder: z.string(),
+  /** Each service's activation failure; `null` for one that did not fail. */
+  initializationErrors: z.object({
+    tmc: InitializationFailureSchema,
+    userData: InitializationFailureSchema,
+    workspaceManager: InitializationFailureSchema,
+    exerciseDecorationProvider: InitializationFailureSchema,
+    resources: InitializationFailureSchema,
+  }),
 })
 
 export type InitializationErrorHelpPanel = z.infer<typeof InitializationErrorHelpPanelSchema>
@@ -86,7 +64,6 @@ export type InitializationErrorHelpPanel = z.infer<typeof InitializationErrorHel
  * `id`: used to make sure messages are delivered to the correct panels
  */
 export const PanelSchema = z.discriminatedUnion("type", [
-  AppPanelSchema,
   CourseDetailsPanelSchema,
   ExerciseSubmissionPanelSchema,
   InitializationErrorHelpPanelSchema,
@@ -94,13 +71,7 @@ export const PanelSchema = z.discriminatedUnion("type", [
 
 export type Panel = z.infer<typeof PanelSchema>
 
-// compile-time assertion that the hand-written `PanelType` stays in sync with `PanelSchema`
-type Equal<X, Y> =
-  (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false
-
-type _panelTypesMatch = Equal<Panel["type"], PanelType> extends true ? true : never
-
-const _panelTypesMatch: _panelTypesMatch = true
+export type PanelType = Panel["type"]
 
 /** A screen the main panel can be reopened on after a window reload. */
 export const RestorableRouteSchema = z.discriminatedUnion("type", [
@@ -126,28 +97,38 @@ export const WebviewStateSchema = z.object({
 export type WebviewState = z.infer<typeof WebviewStateSchema>
 
 /**
- * A failure flattened for display in a webview.
+ * A command a webview may ask the host to run. The webview cannot pass arguments: the host
+ * supplies them, `testMyCode.logLevel` for openSettings and this extension's id for
+ * openIssueReporter.
+ */
+export const RunnableCommandSchema = z.enum([
+  "tmc.logs",
+  "tmc.myCourses",
+  "tmc.showMoocLogin",
+  "tmc.viewInitializationErrorHelp",
+  "workbench.action.restartExtensionHost",
+  "workbench.action.openSettings",
+  "workbench.action.openIssueReporter",
+  "workbench.extensions.action.checkForUpdates",
+])
+
+export type RunnableCommand = z.infer<typeof RunnableCommandSchema>
+
+/**
+ * A failure flattened for display in a webview, as the host's `toWebviewError` builds it.
  *
  * The host-to-webview bridge serializes a message as JSON and `Error.message` is
- * non-enumerable, so a live `Error` arrives as `{}`. Build one with
- * {@link toWebviewError} at the send site.
+ * non-enumerable, so a live `Error` arrives as `{}`.
  */
 export const WebviewErrorSchema = z.object({
+  /** The sentence a notification of the same failure would show. */
   message: z.string(),
   details: z.string().optional(),
+  /** The remedies for the failure, shown as buttons that run `command`. */
+  actions: z.array(z.object({ label: z.string(), command: RunnableCommandSchema })).optional(),
 })
 
 export type WebviewError = z.infer<typeof WebviewErrorSchema>
-
-/** Flattens anything thrown into a {@link WebviewError}. */
-export function toWebviewError(error: unknown): WebviewError {
-  const base = error instanceof BaseError ? error : undefined
-  const message = error instanceof Error ? error.message : String(error)
-  return {
-    message: message || "Unknown error",
-    ...(base?.details ? { details: base.details } : {}),
-  }
-}
 
 /** Where a submission is, from sending it to its final grade. */
 const SubmissionPhaseSchema = z.enum([
@@ -189,9 +170,9 @@ export const SubmissionViewSchema = z.object({
   submissionUrl: z.string().optional(),
   /** Whether `keepWaitingForGrading` can pick the wait up again for this submission. */
   canKeepWaiting: z.boolean(),
-  /** The teachers' feedback questions, answered at `answerUrl` through `sendFeedback`. */
+  /** The teachers' feedback questions, answered once through `sendFeedback`. */
   feedback: z
-    .object({ answerUrl: z.string(), questions: z.array(FeedbackQuestionSchema) })
+    .object({ questions: z.array(FeedbackQuestionSchema), isSent: z.boolean() })
     .optional(),
   /** Whether to offer sending the exercise to the backend's paste service for help. */
   canPaste: z.boolean(),
@@ -199,25 +180,10 @@ export const SubmissionViewSchema = z.object({
 
 export type SubmissionView = z.infer<typeof SubmissionViewSchema>
 
-const initializationErrorSchema = z
-  .object({
-    error: z.string(),
-    stack: z.string(),
-  })
-  .nullable()
+/** One answer to a TMC submission's feedback question. */
+const FeedbackAnswerSchema = z.object({ questionId: z.number(), answer: z.string() })
 
-export const InitializationErrorsSchema = z.object({
-  cliFolder: z.string(),
-  initializationErrors: z.object({
-    tmc: initializationErrorSchema,
-    userData: initializationErrorSchema,
-    workspaceManager: initializationErrorSchema,
-    exerciseDecorationProvider: initializationErrorSchema,
-    resources: initializationErrorSchema,
-  }),
-})
-
-export type InitializationErrors = z.infer<typeof InitializationErrorsSchema>
+export type FeedbackAnswer = z.infer<typeof FeedbackAnswerSchema>
 
 /**
  * For use with `webview.postMessage` in `TmcPanel`.
@@ -226,7 +192,6 @@ export type InitializationErrors = z.infer<typeof InitializationErrorsSchema>
 export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("setPanel"),
-    target: targetPanelSchema("App"),
     panel: PanelSchema,
   }),
   // The course a CourseDetails panel shows, whenever the stored copy changes.
@@ -286,7 +251,7 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("refreshCourseDetails"),
     requestId: z.number(),
-    sourcePanel: strictTargetPanelSchema("CourseDetails"),
+    sourcePanel: targetPanelSchema("CourseDetails"),
   }),
   z.object({
     type: z.literal("closeSidePanel"),
@@ -296,26 +261,25 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("pasteExercise"),
     requestId: z.number(),
-    sourcePanel: strictTargetPanelSchema("ExerciseSubmission"),
+    sourcePanel: targetPanelSchema("ExerciseSubmission"),
   }),
   // Waits again for the grading of the submission the named panel shows, after the host
   // stopped waiting; progress and the outcome arrive as `submissionView`.
   z.object({
     type: z.literal("keepWaitingForGrading"),
     requestId: z.number(),
-    sourcePanel: strictTargetPanelSchema("ExerciseSubmission"),
+    sourcePanel: targetPanelSchema("ExerciseSubmission"),
   }),
   z.object({
     type: z.literal("sendFeedback"),
     requestId: z.number(),
-    sourcePanel: strictTargetPanelSchema("ExerciseSubmission"),
-    feedbackAnswerUrl: z.url(),
-    answers: z.array(z.object({ questionId: z.number(), answer: z.string() })),
+    sourcePanel: targetPanelSchema("ExerciseSubmission"),
+    answers: z.array(FeedbackAnswerSchema),
   }),
   z.object({
     type: z.literal("copyToClipboard"),
     requestId: z.number(),
-    sourcePanel: strictTargetPanelSchema("ExerciseSubmission"),
+    sourcePanel: targetPanelSchema("ExerciseSubmission"),
     text: z.string(),
   }),
   z.object({
@@ -323,11 +287,6 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     // Most senders carry a backend-supplied string; the handler additionally restricts
     // the scheme, which this does not.
     url: z.url(),
-  }),
-  z.object({
-    type: z.literal("requestInitializationErrors"),
-    requestId: z.number(),
-    sourcePanel: strictTargetPanelSchema("InitializationErrorHelp"),
   }),
   // an uncaught webview error, for the extension log
   z.object({
@@ -337,16 +296,7 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("runCommand"),
-    // The webview cannot pass arguments: the host supplies them, `testMyCode.logLevel` for
-    // openSettings and this extension's id for openIssueReporter.
-    command: z.enum([
-      "tmc.logs",
-      "tmc.myCourses",
-      "tmc.showMoocLogin",
-      "workbench.action.restartExtensionHost",
-      "workbench.action.openSettings",
-      "workbench.action.openIssueReporter",
-    ]),
+    command: RunnableCommandSchema,
   }),
 ])
 
@@ -375,7 +325,6 @@ export const ReplyValueSchemas = {
   keepWaitingForGrading: z.undefined(),
   sendFeedback: z.undefined(),
   copyToClipboard: z.undefined(),
-  requestInitializationErrors: InitializationErrorsSchema,
 } satisfies Record<RequestType, z.ZodType>
 
 export type ReplyValue<K extends RequestType> = z.infer<(typeof ReplyValueSchemas)[K]>

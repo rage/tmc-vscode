@@ -9,7 +9,6 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { testExercise } from "../../commands/testExercise"
 import type { ExerciseTestController } from "../../testing/exerciseTestController"
-import { setActiveTestController } from "../../testing/localTesting"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -38,21 +37,16 @@ function contextWith(
 
 suite("Test exercise command", function () {
   const runExercise = vi.fn(async (): Promise<Result<void, Error>> => Ok.EMPTY)
-  let registration: vscode.Disposable
+  const controller = { runExercise } as unknown as ExerciseTestController
 
   beforeEach(function () {
     runExercise.mockResolvedValue(Ok.EMPTY)
-    registration = setActiveTestController({ runExercise } as unknown as ExerciseTestController)
-  })
-
-  afterEach(function () {
-    registration.dispose()
   })
 
   test("runs the tests of the active exercise through the controller", async function () {
     const context = contextWith({ active: activeExercise, containing: pointedAtExercise })
 
-    await testExercise(context, undefined)
+    await testExercise(context, controller, undefined)
 
     expect(runExercise).toHaveBeenCalledExactlyOnceWith(activeExercise)
   })
@@ -60,7 +54,7 @@ suite("Test exercise command", function () {
   test("runs the tests of the exercise the resource points at", async function () {
     const context = contextWith({ active: activeExercise, containing: pointedAtExercise })
 
-    await testExercise(context, uri)
+    await testExercise(context, controller, uri)
 
     expect(runExercise).toHaveBeenCalledExactlyOnceWith(pointedAtExercise)
   })
@@ -70,7 +64,7 @@ suite("Test exercise command", function () {
     runExercise.mockResolvedValue(Err(cause))
     const context = contextWith({ active: activeExercise })
 
-    await testExercise(context, undefined)
+    await testExercise(context, controller, undefined)
 
     expect(context.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Testing the exercise failed.",
@@ -79,10 +73,22 @@ suite("Test exercise command", function () {
     )
   })
 
+  test("reports that local testing is unavailable without a controller", async function () {
+    const context = contextWith({ active: activeExercise })
+
+    await testExercise(context, undefined, undefined)
+
+    expect(context.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Testing the exercise failed.",
+      expect.objectContaining({ message: "Local testing is not available." }),
+      "tmc",
+    )
+  })
+
   test("runs nothing when the resource is not part of an exercise", async function () {
     const context = contextWith()
 
-    await testExercise(context, uri)
+    await testExercise(context, controller, uri)
 
     expect(runExercise).not.toHaveBeenCalled()
     expect(context.dialog.errorNotification).toHaveBeenCalledOnce()

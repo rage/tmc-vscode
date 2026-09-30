@@ -9,7 +9,6 @@ import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { UserData } from "../../config/userdata"
 import { ConnectionError, ForbiddenError, InsufficientScopeError } from "../../errors"
-import { TmcPanel } from "../../panels/TmcPanel"
 import type {
   CombinedCourseData,
   CourseData,
@@ -86,7 +85,6 @@ suite("updateCourse action (mooc)", function () {
     ;[workspaceManagerMock] = createWorkspaceMangerMock()
     authState = createMockAuthState()
     await storeCourse(storedMoocCourse)
-    vi.spyOn(TmcPanel, "postMessage").mockImplementation(async () => {})
   })
 
   afterEach(function () {
@@ -347,7 +345,6 @@ suite("updateCourse action (tmc)", function () {
     const storage = new Storage(createMockContext())
     await storage.updateUserData({ courses: [{ ...tmcCourse }], mooc_courses: [] })
     userData = new UserData(storage)
-    vi.spyOn(TmcPanel, "postMessage").mockImplementation(async () => {})
   })
 
   afterEach(function () {
@@ -488,7 +485,6 @@ suite("updateCourse after addNewCourse", function () {
     const storage = new Storage(createMockContext())
     await storage.updateUserData({ courses: [], mooc_courses: [] })
     userData = new UserData(storage)
-    vi.spyOn(TmcPanel, "postMessage").mockImplementation(async () => {})
   })
 
   afterEach(function () {

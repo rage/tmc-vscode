@@ -3,6 +3,7 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import type { ExerciseStatus } from "../../shared/shared"
 import {
   ExerciseIdentifier,
+  isSoftDeadlineBinding,
   LocalCourseData,
   LocalCourseExercise,
   match,
@@ -95,7 +96,7 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       availablePoints: ex.data.availablePoints,
       softDeadline,
       hardDeadline,
-      isHard: softDeadline && hardDeadline ? hardDeadline <= softDeadline : true,
+      isHard: !isSoftDeadlineBinding(ex.data),
       isUpdateable: updateableKeys.has(key),
       onDisk,
     }

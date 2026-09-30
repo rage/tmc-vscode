@@ -11,18 +11,16 @@
 <script lang="ts">
   interface Props {
     status: Status
-    /** Says the status in words, e.g. "Passed" or "Error"; never rely on the icon alone. */
+    /** Says the status to screen readers, e.g. "Passed" or "Error"; the icon alone is not enough. */
     label: string
-    /** Hides the label visually, e.g. in a table column whose header already names it. */
-    isLabelHidden?: boolean
   }
 
-  let { status, label, isLabelHidden = false }: Props = $props()
+  let { status, label }: Props = $props()
 </script>
 
 <span class="status">
   <vscode-icon class="icon tone-{status}" name={icons[status]}></vscode-icon>
-  <span class:visually-hidden={isLabelHidden}>{label}</span>
+  <span class="visually-hidden">{label}</span>
 </span>
 
 <style>

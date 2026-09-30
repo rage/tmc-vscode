@@ -22,11 +22,6 @@ suite("Notice component", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   })
 
-  test("can opt out of being a live region", () => {
-    render(Notice, { props: { kind: "info", role: "none", children: text("Tip") } })
-    expect(screen.queryByRole("status")).not.toBeInTheDocument()
-  })
-
   test("renders actions and a named dismiss button", async () => {
     const ondismiss = vi.fn()
     const { container } = render(Notice, {

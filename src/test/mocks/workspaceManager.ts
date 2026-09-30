@@ -3,7 +3,7 @@ import * as path from "path"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
-import type * as vscode from "vscode"
+import * as vscode from "vscode"
 
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import type WorkspaceManager from "../../api/workspaceManager"
@@ -17,6 +17,9 @@ export interface WorkspaceManagerMockValues {
   activeCourseBackend?: BackendKind | undefined
   activeExercise?: Readonly<WorkspaceExercise> | undefined
   closeExercises: Result<WorkspaceExercise[], Error>
+  /** Fires the mock's `onDidChangeExercises`. */
+  exercisesChanged: vscode.EventEmitter<void>
+  getExercises: readonly WorkspaceExercise[]
   getExerciseByPath: Readonly<WorkspaceExercise> | undefined
   getExercisesByCoursePythonCourse: readonly WorkspaceExercise[]
   setExercises: Result<void, Error>
@@ -28,6 +31,8 @@ export function createWorkspaceMangerMock(): [WorkspaceManager, WorkspaceManager
     activeCourseBackend: undefined,
     activeExercise: undefined,
     closeExercises: Ok(workspaceExercises),
+    exercisesChanged: new vscode.EventEmitter<void>(),
+    getExercises: workspaceExercises,
     getExerciseByPath: undefined,
     getExercisesByCoursePythonCourse: workspaceExercises,
     setExercises: Ok.EMPTY,
@@ -68,6 +73,8 @@ export function createWorkspaceMangerMock(): [WorkspaceManager, WorkspaceManager
         ? values.getExercisesByCoursePythonCourse
         : [],
     ),
+    getExercises: vi.fn(() => values.getExercises),
+    onDidChangeExercises: values.exercisesChanged.event,
     setExercises: vi.fn(async () => values.setExercises),
   }
 

@@ -5,48 +5,26 @@
 
   interface Props {
     title: string
-    /** Starts open when true; bind to follow or drive it. */
-    open?: boolean
     /** Level of the heading that wraps the toggle, so the section sits in the page outline. */
     headingLevel?: 2 | 3 | 4
-    /** Short text after the title inside the toggle, e.g. "3 / 5 completed". */
-    description?: string | undefined
-    ontoggle?: ((open: boolean) => void) | undefined
     /** Keeps the open state across the panel being hidden, under this name unique on the screen. */
     persistAs?: string | undefined
-    /**
-     * Controls for the whole section, e.g. `ToolbarButton`s. Rendered beside the toggle, never
-     * inside it: a button nested in a button is unreachable for assistive technology.
-     */
-    actions?: Snippet | undefined
     children: Snippet
   }
 
-  let {
-    title,
-    open = $bindable(false),
-    headingLevel = 2,
-    description,
-    ontoggle,
-    persistAs,
-    actions,
-    children,
-  }: Props = $props()
+  let { title, headingLevel = 2, persistAs, children }: Props = $props()
 
   const regionId = $props.id()
 
-  // svelte-ignore state_referenced_locally -- read once: the name and initial state seed it
-  const persisted = persistAs === undefined ? undefined : uiState(`disclosure:${persistAs}`, open)
-  if (persisted) {
-    open = persisted.current
-  }
+  // svelte-ignore state_referenced_locally -- read once: the name seeds it
+  const persisted = persistAs === undefined ? undefined : uiState(`disclosure:${persistAs}`, false)
+  let open = $state(persisted?.current ?? false)
 
   function toggle() {
     open = !open
     if (persisted) {
       persisted.current = open
     }
-    ontoggle?.(open)
   }
 </script>
 
@@ -62,10 +40,8 @@
       >
         <vscode-icon name={open ? "chevron-down" : "chevron-right"}></vscode-icon>
         <span class="title">{title}</span>
-        {#if description}<span class="description">{description}</span>{/if}
       </button>
     </svelte:element>
-    {#if actions}<div class="actions">{@render actions()}</div>{/if}
   </div>
   <div id={regionId} class="content" hidden={!open}>
     {@render children()}
@@ -103,15 +79,6 @@
   }
   .toggle:hover {
     outline: 1px dashed var(--tmc-hc-active-outline);
-  }
-  .description {
-    margin-left: var(--tmc-space-2);
-    font-weight: normal;
-    color: var(--tmc-fg-muted);
-  }
-  .actions {
-    flex-wrap: nowrap;
-    gap: 0;
   }
   .content {
     padding: var(--tmc-space-2) 0;

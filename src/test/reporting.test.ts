@@ -17,9 +17,10 @@ import { UserData } from "../config/userdata"
 import { BottleneckError, ConnectionError, InsufficientScopeError } from "../errors"
 import { registerCommands } from "../init/commands"
 import { registerTesting } from "../init/testing"
-import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
+import { nextPanelId } from "../panels/routes"
+import { TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseStatus as RowStatus, ExtensionToWebview } from "../shared/shared"
-import { backendName, CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../shared/shared"
+import { backendName, CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import Storage from "../storage"
 import type { MoocLocalCourseData } from "../storage/data"
 import { CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
@@ -205,9 +206,18 @@ async function harness(
   const extensionContext = new Proxy(createMockContext(), {
     get: (target, prop) => (prop === "subscriptions" ? subscriptions : Reflect.get(target, prop)),
   })
-  registerCommands(extensionContext, actionContext)
-  registerTesting(extensionContext, actionContext)
+  registerCommands(
+    extensionContext,
+    actionContext,
+    registerTesting(extensionContext, actionContext),
+  )
   registerCommand.mockRestore()
+  // The panel runs a command through VS Code, which dispatches to the registered handler.
+  vi.mocked(vscode.commands.executeCommand).mockImplementation(async (id, ...args) =>
+    commandHandlers.get(id)?.(...args),
+  )
+  const submissionViewing = TmcPanel.showSubmissionViews(extensionContext, actionContext)
+  onTestFinished(() => submissionViewing.dispose())
 
   const webviews: ReturnType<typeof createFakeWebviewPanel>[] = []
   const requestTypes = new Map<number, string>()
@@ -218,7 +228,7 @@ async function harness(
   })
   TmcPanel.mainPanel?.dispose()
   TmcPanel.sidePanel?.dispose()
-  TmcPanel.renderSide(vscode.Uri.file("/ext"), extensionContext, actionContext, {
+  TmcPanel.renderSide(extensionContext, actionContext, {
     id: nextPanelId(),
     type: "CourseDetails",
     courseId: COURSE_ID,
@@ -276,11 +286,12 @@ function showSubmission(actionContext: ReadyActionContext): void {
   if (!storedExercise) {
     throw new Error("the stored course has no exercise")
   }
-  TmcPanel.renderSide(vscode.Uri.file("/ext"), createMockContext(), actionContext, {
+  TmcPanel.renderSide(createMockContext(), actionContext, {
     id: nextPanelId(),
     type: "ExerciseSubmission",
-    course: makeMoocKind(storedCourse()),
-    exercise: makeMoocKind(storedExercise),
+    backend: "mooc",
+    courseSlug: storedCourse().name,
+    exerciseSlug: storedExercise.name,
   })
 }
 
@@ -355,10 +366,10 @@ suite("reported once: exercise commands", function () {
     await run("tmc.submitExercise")
 
     expect(shown).toEqual([])
-    expect(panelFailures()).toEqual(["submissionView: reset"])
+    expect(panelFailures()).toEqual(["submissionView: Reset."])
   })
 
-  test("a failed submission with a remedy is also notified, once", async function () {
+  test("a failed submission with a remedy shows in its panel only, remedy included", async function () {
     const { run, shown, panelFailures } = await harness({
       langs: {
         submitMoocExercise: async () => Err(new InsufficientScopeError("exercise-services")),
@@ -367,8 +378,10 @@ suite("reported once: exercise commands", function () {
 
     await run("tmc.submitExercise")
 
-    expect(shown).toEqual(["error: Exercise submission failed."])
-    expect(panelFailures()).toHaveLength(1)
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual([
+      expect.stringMatching(/^submissionView: .*Log in again to continue\.$/),
+    ])
   })
 
   test("a failed paste from the palette is one notification", async function () {
@@ -404,7 +417,7 @@ suite("reported once: exercise commands", function () {
     await post({ type: "pasteExercise", requestId: 1, sourcePanel: shownPanel() })
 
     expect(shown).toEqual([])
-    expect(panelFailures()).toEqual(["pasteExercise: offline"])
+    expect(panelFailures()).toEqual(["pasteExercise: Offline."])
   })
 
   test("a panel paste that finds a submission in flight shows in the panel only", async function () {
@@ -422,7 +435,7 @@ suite("reported once: exercise commands", function () {
     expect(shown).toEqual([])
     expect(panelFailures()).toEqual([
       "pasteExercise: A submission for this exercise is already in progress.",
-      "submissionView: reset",
+      "submissionView: Reset.",
     ])
   })
 
@@ -719,7 +732,7 @@ suite("reported once: the Courses view and course details", function () {
     })
 
     expect(shown).toEqual([])
-    expect(panelFailures()).toEqual(["refreshCourseDetails: offline"])
+    expect(panelFailures()).toEqual(["refreshCourseDetails: Offline."])
   })
 
   test("a lost session scope is warned once, however often it is hit", async function () {

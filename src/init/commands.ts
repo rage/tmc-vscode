@@ -1,14 +1,14 @@
 import * as vscode from "vscode"
 
-import * as actions from "../actions"
 import type { ActionContext, ReadyActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type Dialog from "../api/dialog"
 import * as commands from "../commands"
 import { EXTENSION_ID } from "../config/constants"
-import { registerPanelActions } from "../panels/panelActions"
-import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
+import { initializationErrorHelpPanel, nextPanelId } from "../panels/routes"
+import { TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
+import type { ExerciseTestController } from "../testing/exerciseTestController"
 import { showAccountMenu } from "../ui/statusBarAccount"
 import { showExerciseActions } from "../ui/statusBarExercise"
 import * as treeCommands from "../ui/treeview/treeCommands"
@@ -108,30 +108,26 @@ export function registerServiceFreeCommands(
  * exception that needs an `ActionContext` but no service; every id after it requires
  * `startup.kind === "ready"`. `package.json` hides the ready-only ones from the palette
  * through `test-my-code:Initialized`.
+ *
+ * @param testController What `tmc.testExercise` runs tests through; `undefined` when the
+ * activation is degraded.
  */
 export function registerCommands(
   context: vscode.ExtensionContext,
   actionContext: ActionContext,
+  testController: ExerciseTestController | undefined,
 ): void {
   const { dialog } = actionContext
   Logger.info("Registering TMC VSCode commands")
 
-  registerPanelActions({
-    openWorkspace: commands.openWorkspace,
-    keepWaitingForGrading: commands.keepWaitingForGrading,
-    pasteExercise: actions.pasteExercise,
-    refreshLocalExercises: actions.refreshLocalExercises,
-    sendSubmissionFeedback: actions.sendSubmissionFeedback,
-    updateCourse: actions.updateCourse,
-  })
-
   const register = commandRegistrar(context, dialog)
 
   register("tmc.viewInitializationErrorHelp", () => {
-    TmcPanel.renderMain(context.extensionUri, context, actionContext, {
-      id: nextPanelId(),
-      type: "InitializationErrorHelp",
-    })
+    TmcPanel.renderMain(
+      context,
+      actionContext,
+      initializationErrorHelpPanel(actionContext, context),
+    )
   })
 
   if (!isReady(actionContext)) {
@@ -162,7 +158,7 @@ export function registerCommands(
         placeHolder: "Which course page do you want to open?",
       }))
     if (courseId) {
-      TmcPanel.renderMain(context.extensionUri, context, readyContext, {
+      TmcPanel.renderMain(context, readyContext, {
         id: nextPanelId(),
         type: "CourseDetails",
         courseId,
@@ -263,13 +259,13 @@ export function registerCommands(
   register("tmc.showMoocLogin", async () => commands.login(readyContext))
 
   register("tmc.submitExercise", async (target: ExerciseTarget | undefined) =>
-    commands.submitExercise(context, readyContext, resourceOf(target)),
+    commands.submitExercise(readyContext, resourceOf(target)),
   )
 
   register("tmc.switchWorkspace", async () => commands.switchWorkspace(readyContext))
 
   register("tmc.testExercise", async (target: ExerciseTarget | undefined) =>
-    commands.testExercise(readyContext, resourceOf(target)),
+    commands.testExercise(readyContext, testController, resourceOf(target)),
   )
 
   register("tmc.updateExercises", async (mode?: "silent" | "loud") =>

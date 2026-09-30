@@ -1,9 +1,10 @@
 import type { Result } from "ts-results"
+import { Ok } from "ts-results"
 
-import { withOptimisticList } from "../panels/exerciseLists"
 import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { updateablesRegistry } from "../ui/updateablesRegistry"
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises"
+import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
 
 interface ExerciseUpdate {
@@ -12,11 +13,14 @@ interface ExerciseUpdate {
 }
 
 /**
- * Downloads pending updates that may span several courses, emptying each course's
- * "update available" list while the download runs and leaving only the exercises
- * that failed. Errs, with nothing downloaded, only while some of them are already downloading.
+ * Downloads pending updates that may span several courses, then rescans the disk.
  *
- * For one course's list, see `downloadExercisesForUi`.
+ * Each course's "update available" list is emptied while the download runs, so the student
+ * sees the work begin, and afterwards holds only the exercises that failed. It is refilled
+ * even when the download throws, lest the student conclude there is nothing left to update.
+ * Errs, with nothing downloaded, only while some of the exercises are already downloading.
+ *
+ * For exercises not on disk yet, see `downloadCourseExercises`.
  */
 export async function downloadExerciseUpdates(
   actionContext: ReadyActionContext,
@@ -41,15 +45,30 @@ export async function downloadExerciseUpdates(
     )
   }
 
-  const downloaded = await withOptimisticList(
-    () => setUpdateablesByCourse([]),
-    () =>
-      downloadOrUpdateExercises(
-        actionContext,
-        updates.map((x) => x.exerciseId),
-      ),
-    (outcome) =>
-      setUpdateablesByCourse(outcome?.ok ? outcome.val.failed : updates.map((x) => x.exerciseId)),
-  )
-  return downloaded.map(() => undefined)
+  setUpdateablesByCourse([])
+  let stillUpdateable = updates.map((x) => x.exerciseId)
+  try {
+    const downloaded = await downloadOrUpdateExercises(
+      actionContext,
+      updates.map((x) => x.exerciseId),
+    )
+    if (downloaded.err) {
+      return downloaded
+    }
+    stillUpdateable = downloaded.val.failed
+  } finally {
+    setUpdateablesByCourse(stillUpdateable)
+  }
+
+  const refreshed = await refreshLocalExercises(actionContext)
+  if (refreshed.err) {
+    const backends = new Set(updates.map((x) => x.courseId.kind))
+    const [backend] = backends
+    actionContext.dialog.reportError(
+      "Failed to refresh local exercises.",
+      refreshed.val,
+      backends.size === 1 ? backend : undefined,
+    )
+  }
+  return Ok.EMPTY
 }

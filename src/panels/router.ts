@@ -14,8 +14,13 @@ import type {
   RequestType,
   WebviewToExtension,
 } from "../shared/shared"
-import { toWebviewError, WebviewToExtensionSchema } from "../shared/shared"
+import { WebviewToExtensionSchema } from "../shared/shared"
 import { Logger } from "../utilities"
+import { backendOf } from "./routes"
+import { toWebviewError } from "./webviewError"
+
+/** A message addressed to one panel; `setPanel` is the transport's own. */
+export type PanelMessage = Exclude<ExtensionToWebview, { type: "setPanel" }>
 
 /** One webview's side of the panel manager, as the message handlers see it. */
 export interface PanelHost {
@@ -24,9 +29,7 @@ export interface PanelHost {
   /** The screen this webview shows, if any. */
   readonly route: Panel | undefined
   /** Sends `message` to this webview alone, kept for a reload if it targets `route`. */
-  post: (message: ExtensionToWebview) => void
-  /** {@link post} without keeping it: for messages a reloaded webview must not see again. */
-  postTransient: (message: ExtensionToWebview) => void
+  post: (message: PanelMessage) => void
   /** Shows `route` in this webview. */
   render: (route: Panel) => void
   /** Shows `route` in the main panel, creating it if needed. */
@@ -111,7 +114,7 @@ export async function dispatch(
         request,
         result.ok
           ? { ok: true, value: result.val }
-          : { ok: false, error: toWebviewError(result.val) },
+          : { ok: false, error: toWebviewError(result.val, backendOf(context.host.route)) },
       )
     }
   } catch (error) {
@@ -121,7 +124,10 @@ export async function dispatch(
       error instanceof Error ? error : new Error(String(error)),
     )
     if (request) {
-      reply(context.host, request, { ok: false, error: toWebviewError(error) })
+      reply(context.host, request, {
+        ok: false,
+        error: toWebviewError(error, backendOf(context.host.route)),
+      })
     }
   }
 }

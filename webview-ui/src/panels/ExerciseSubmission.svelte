@@ -1,22 +1,27 @@
 <script lang="ts">
+  import { tick } from "svelte"
+
   import Button from "../components/Button.svelte"
   import CodeBlock from "../components/CodeBlock.svelte"
   import Disclosure from "../components/Disclosure.svelte"
+  import ErrorNotice from "../components/ErrorNotice.svelte"
   import Meter from "../components/Meter.svelte"
-  import Notice from "../components/Notice.svelte"
   import PanelHeader from "../components/PanelHeader.svelte"
   import PasteHelpBox from "../components/PasteHelpBox.svelte"
   import Spinner from "../components/Spinner.svelte"
   import StatusIcon from "../components/StatusIcon.svelte"
-  import type { FeedbackAnswer } from "../components/SubmissionFeedbackForm.svelte"
   import SubmissionFeedbackForm from "../components/SubmissionFeedbackForm.svelte"
   import TestResults from "../components/TestResults.svelte"
   import ToolbarButton from "../components/ToolbarButton.svelte"
-  import type { ExerciseSubmissionPanel, SubmissionView } from "../shared/shared"
-  import { unwrap } from "../shared/shared"
+  import type {
+    ExerciseSubmissionPanel,
+    FeedbackAnswer,
+    SubmissionView,
+    WebviewError,
+  } from "../shared/shared"
   import { announce } from "../utilities/a11y.svelte"
   import { addMessageListener, createRequester } from "../utilities/script"
-  import { uiState } from "../utilities/uiState.svelte"
+  import { restoreScroll } from "../utilities/uiState.svelte"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -25,21 +30,18 @@
 
   let { panel }: Props = $props()
 
-  const exerciseName = $derived(unwrap(panel.exercise).name)
   const sourcePanel = $derived({ id: panel.id, type: panel.type })
   const request = createRequester()
 
   // Undefined only until the host's first view arrives.
   let view = $state.raw<SubmissionView | undefined>(undefined)
-  // Kept so a panel shown again does not offer to send answers the host accepts only once.
-  const isFeedbackSent = uiState("isFeedbackSent", false)
   let isFeedbackSending = $state(false)
   const feedbackStatus = $derived(
-    isFeedbackSent.current ? "sent" : isFeedbackSending ? "sending" : "editing",
+    view?.feedback?.isSent ? "sent" : isFeedbackSending ? "sending" : "editing",
   )
-  let feedbackError = $state<string | undefined>(undefined)
+  let feedbackError = $state<WebviewError | undefined>(undefined)
   let isKeepWaitingRequested = $state(false)
-  let keepWaitingError = $state<string | undefined>(undefined)
+  let keepWaitingError = $state<WebviewError | undefined>(undefined)
 
   const isInProgress = $derived(
     view === undefined || view.phase === "uploading" || view.phase === "grading",
@@ -53,6 +55,9 @@
   addMessageListener(panel, (message) => {
     const previous = view
     view = message.view
+    if (previous === undefined) {
+      void tick().then(restoreScroll)
+    }
     const latestStep = view.progressSteps.at(-1)
     if (previous?.phase !== view.phase || previous.headline !== view.headline) {
       announce(view.headline)
@@ -73,28 +78,27 @@
     const outcome = await request("keepWaitingForGrading", { sourcePanel })
     isKeepWaitingRequested = false
     if (!outcome.ok) {
-      keepWaitingError = outcome.error.message
+      keepWaitingError = outcome.error
     }
   }
   async function copyToClipboard(text: string) {
     const outcome = await request("copyToClipboard", { sourcePanel, text })
     announce(outcome.ok ? "Copied to the clipboard" : "Could not copy to the clipboard")
   }
-  async function sendFeedback(feedbackAnswerUrl: string, answers: FeedbackAnswer[]) {
+  async function sendFeedback(answers: FeedbackAnswer[]) {
     isFeedbackSending = true
     feedbackError = undefined
-    const outcome = await request("sendFeedback", { sourcePanel, feedbackAnswerUrl, answers })
+    const outcome = await request("sendFeedback", { sourcePanel, answers })
     isFeedbackSending = false
     if (outcome.ok) {
-      isFeedbackSent.current = true
       announce("Feedback sent")
     } else {
-      feedbackError = outcome.error.message
+      feedbackError = outcome.error
     }
   }
 </script>
 
-<PanelHeader title={exerciseName} shouldFocusOnMount={false}>
+<PanelHeader title={panel.exerciseSlug} shouldFocusOnMount={false}>
   {#snippet actions()}
     <ToolbarButton icon="close" label="Close" onclick={closePanel} />
   {/snippet}
@@ -116,7 +120,7 @@
     {#each view?.progressSteps ?? [] as step, index (index)}
       <li>
         {#if index < (view?.progressSteps.length ?? 0) - 1}
-          <StatusIcon status="passed" label="Done:" isLabelHidden />
+          <StatusIcon status="passed" label="Done:" />
           {step}
         {:else}
           <Spinner label={step} />
@@ -132,12 +136,7 @@
   {/if}
 
   {#if view.error}
-    <Notice kind="error">
-      <p>{view.error.message}</p>
-      {#if view.error.details}
-        <CodeBlock code={view.error.details} label="Error details" oncopy={copyToClipboard} />
-      {/if}
-    </Notice>
+    <ErrorNotice error={view.error} oncopy={copyToClipboard} />
   {/if}
 
   {#if view.points}
@@ -173,32 +172,26 @@
     {/if}
   </div>
   {#if keepWaitingError}
-    <Notice kind="error" title="Could not keep waiting">{keepWaitingError}</Notice>
+    <ErrorNotice error={keepWaitingError} title="Could not keep waiting" />
   {/if}
 
   {#if view.canPaste}
-    <PasteHelpBox course={panel.course} {sourcePanel} />
+    <PasteHelpBox backend={panel.backend} {sourcePanel} oncopy={copyToClipboard} />
   {/if}
 
   {#if view.feedback}
-    {@const feedbackAnswerUrl = view.feedback.answerUrl}
     <SubmissionFeedbackForm
       questions={view.feedback.questions}
       status={feedbackStatus}
       error={feedbackError}
-      onsend={(answers) => sendFeedback(feedbackAnswerUrl, answers)}
+      onsend={sendFeedback}
     />
   {/if}
 
   {#if view.testCases.length > 0 || view.validations}
     <TestResults
-      testResults={view.testCases}
-      validationResult={view.validations
-        ? {
-            strategy: view.validations.strategy,
-            validation_errors: view.validations.validationErrors,
-          }
-        : null}
+      testCases={view.testCases}
+      validations={view.validations}
       oncopy={copyToClipboard}
     />
   {/if}

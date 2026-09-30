@@ -3,14 +3,19 @@
 // `MessageToWebviewSchema.safeParse` gate in `addMessageListener` and a click
 // handler's posted payload survives `WebviewToExtensionSchema.safeParse`.
 
-import type { TestResult } from "../shared/langsSchema"
 import type {
+  ExerciseTaskSubmissionStatus,
+  SubmissionFinished,
+  TestCase,
+} from "../shared/langsSchema"
+import type {
+  ExtensionToWebview,
+  InitializationErrorHelpPanel,
   LocalCourseData,
-  LocalCourseExercise,
   SharedMoocCourseData,
-  SharedMoocCourseExercise,
   SharedTmcCourseData,
   SharedTmcCourseExercise,
+  SubmissionView,
 } from "../shared/shared"
 import { makeMoocKind, makeTmcKind } from "../shared/shared"
 
@@ -86,21 +91,6 @@ export function moocLocalCourse(overrides: Partial<SharedMoocCourseData> = {}): 
   return makeMoocKind(moocCourseData(overrides))
 }
 
-export function moocLocalExercise(
-  overrides: Partial<SharedMoocCourseExercise> = {},
-): LocalCourseExercise {
-  return makeMoocKind({
-    id: MOOC_EXERCISE_ID,
-    availablePoints: 3,
-    awardedPoints: 0,
-    name: "loops",
-    deadline: null,
-    passed: false,
-    softDeadline: null,
-    ...overrides,
-  })
-}
-
 export function tmcExercise(
   overrides: Partial<SharedTmcCourseExercise> = {},
 ): SharedTmcCourseExercise {
@@ -116,19 +106,84 @@ export function tmcExercise(
   }
 }
 
-export function tmcLocalExercise(
-  overrides: Partial<SharedTmcCourseExercise> = {},
-): LocalCourseExercise {
-  return makeTmcKind(tmcExercise(overrides))
-}
-
-export function testResult(overrides: Partial<TestResult> = {}): TestResult {
+export function testCase(overrides: Partial<TestCase> = {}): TestCase {
   return {
     name: "test_case",
     successful: true,
     message: "",
-    points: ["1"],
+    detailed_message: null,
     exception: [],
     ...overrides,
   }
+}
+
+export function initializationErrorHelpPanel(
+  initializationErrors: Partial<InitializationErrorHelpPanel["initializationErrors"]> = {},
+): InitializationErrorHelpPanel {
+  return {
+    id: 4,
+    type: "InitializationErrorHelp",
+    cliFolder: "/tmp/cli",
+    initializationErrors: {
+      tmc: null,
+      userData: null,
+      workspaceManager: null,
+      exerciseDecorationProvider: null,
+      resources: null,
+      ...initializationErrors,
+    },
+  }
+}
+
+/** A TMC server's graded submission of `part01-01_hello`, all tests passed. */
+export function submissionFinished(
+  overrides: Partial<SubmissionFinished> = {},
+): SubmissionFinished {
+  return {
+    api_version: 7,
+    all_tests_passed: true,
+    user_id: 1,
+    login: "student",
+    course: "python-course",
+    exercise_name: "part01-01_hello",
+    status: "ok",
+    points: ["1.1"],
+    valgrind: null,
+    submission_url: "https://tmc.mooc.fi/submissions/1",
+    solution_url: null,
+    submitted_at: "2026-09-29T00:00:00Z",
+    processing_time: 1,
+    reviewed: false,
+    requests_review: false,
+    paste_url: null,
+    message_for_paste: null,
+    missing_review_points: [],
+    test_cases: [],
+    feedback_questions: null,
+    feedback_answer_url: null,
+    error: null,
+    validations: null,
+    ...overrides,
+  }
+}
+
+type MoocGrading = Extract<ExerciseTaskSubmissionStatus, { status: "grading" }>["grading"]
+
+/** A courses.mooc.fi grading, fully graded with no score unless `overrides` say otherwise. */
+export function moocGrading(overrides: Partial<MoocGrading> = {}): ExerciseTaskSubmissionStatus {
+  return {
+    status: "grading",
+    grading: {
+      grading_progress: "FullyGraded",
+      score_given: null,
+      grading_started_at: null,
+      grading_completed_at: null,
+      feedback_text: null,
+      ...overrides,
+    },
+  }
+}
+
+export function submissionViewMessage(panelId: number, view: SubmissionView): ExtensionToWebview {
+  return { type: "submissionView", target: { type: "ExerciseSubmission", id: panelId }, view }
 }

@@ -3,7 +3,8 @@ import { Ok } from "ts-results"
 import {
   closeExercises as closeExercisesAction,
   downloadAndOpenExercises,
-  downloadExercisesForUi,
+  downloadCourseExercises,
+  downloadExerciseUpdates,
 } from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import { withOperation } from "../../api/withOperation"
@@ -45,7 +46,7 @@ export async function downloadExercises(
     await withOperation(
       actionContext.dialog,
       { failure: "Failed to download the exercises.", backend: courseId.kind },
-      () => downloadExercisesForUi(actionContext, "download", courseId, ids),
+      () => downloadCourseExercises(actionContext, courseId, ids),
     )
   }
 }
@@ -141,7 +142,10 @@ export async function updateCourseExercises(
     actionContext.dialog,
     { failure: "Failed to update the exercises.", backend: courseId.kind },
     () =>
-      downloadExercisesForUi(actionContext, "update", courseId, updateablesRegistry.get(courseId)),
+      downloadExerciseUpdates(
+        actionContext,
+        updateablesRegistry.get(courseId).map((exerciseId) => ({ courseId, exerciseId })),
+      ),
   )
 }
 

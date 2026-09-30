@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/svelte"
 
-import { testResult } from "../test/fixtures"
+import { testCase } from "../test/fixtures"
 import { withinShadowRoot } from "../test/shadow"
 import TestResults from "./TestResults.svelte"
 
@@ -8,11 +8,11 @@ suite("TestResults component", () => {
   test("summarises the run and lists each test under a status heading", () => {
     render(TestResults, {
       props: {
-        testResults: [
-          testResult({ name: "passing_test", successful: true }),
-          testResult({ name: "failing_test", successful: false, message: "boom" }),
+        testCases: [
+          testCase({ name: "passing_test", successful: true }),
+          testCase({ name: "failing_test", successful: false, message: "boom" }),
         ],
-        validationResult: null,
+        validations: undefined,
       },
     })
 
@@ -28,14 +28,14 @@ suite("TestResults component", () => {
   test("shows a failed test's stack trace behind a disclosure", async () => {
     render(TestResults, {
       props: {
-        testResults: [
-          testResult({
+        testCases: [
+          testCase({
             successful: false,
             message: "expected 1 but was 2",
             exception: ["AssertionError", "  at Main.test(Main.java:12)"],
           }),
         ],
-        validationResult: null,
+        validations: undefined,
       },
     })
 
@@ -50,7 +50,7 @@ suite("TestResults component", () => {
   test("shows a server test case's detailed message", () => {
     render(TestResults, {
       props: {
-        testResults: [
+        testCases: [
           {
             name: "server_test",
             successful: false,
@@ -59,7 +59,7 @@ suite("TestResults component", () => {
             exception: null,
           },
         ],
-        validationResult: null,
+        validations: undefined,
       },
     })
 
@@ -70,8 +70,8 @@ suite("TestResults component", () => {
     const oncopy = vi.fn()
     render(TestResults, {
       props: {
-        testResults: [testResult({ successful: false, exception: ["line one", "line two"] })],
-        validationResult: null,
+        testCases: [testCase({ successful: false, exception: ["line one", "line two"] })],
+        validations: undefined,
         oncopy,
       },
     })
@@ -85,11 +85,11 @@ suite("TestResults component", () => {
   test("renders code-quality errors when the validation strategy is FAIL", () => {
     render(TestResults, {
       props: {
-        testResults: [testResult({ successful: false })],
-        validationResult: {
+        testCases: [testCase({ successful: false })],
+        validations: {
           strategy: "FAIL",
-          validation_errors: {
-            "Main.java": [{ column: 1, line: 2, message: "bad style" }],
+          validationErrors: {
+            "Main.java": [{ column: 1, line: 2, message: "bad style", sourceName: "Main.java" }],
           },
         },
       },
@@ -102,7 +102,7 @@ suite("TestResults component", () => {
 
   test("shows no summary for a run without test results", () => {
     render(TestResults, {
-      props: { testResults: [], validationResult: null },
+      props: { testCases: [], validations: undefined },
     })
 
     expect(screen.queryByText(/tests passed/)).not.toBeInTheDocument()
@@ -111,11 +111,11 @@ suite("TestResults component", () => {
   test("duplicate test names still render every result", () => {
     render(TestResults, {
       props: {
-        testResults: [
-          testResult({ name: "same", successful: false, message: "first" }),
-          testResult({ name: "same", successful: false, message: "second" }),
+        testCases: [
+          testCase({ name: "same", successful: false, message: "first" }),
+          testCase({ name: "same", successful: false, message: "second" }),
         ],
-        validationResult: null,
+        validations: undefined,
       },
     })
 

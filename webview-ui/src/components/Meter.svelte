@@ -5,16 +5,14 @@
     value: number
     /** May be 0, e.g. an exercise worth no points; the scale then runs to 1 and shows empty. */
     max: number
-    /** What `value` and `max` count; read out as "3 / 5 points". */
-    unit?: string
   }
 
-  let { label, value, max, unit = "points" }: Props = $props()
+  let { label, value, max }: Props = $props()
 
   const labelId = $props.id()
   const scaleMax = $derived(Math.max(1, max))
   const scaleValue = $derived(Math.min(scaleMax, Math.max(0, value)))
-  const valueText = $derived(`${value} / ${max} ${unit}`)
+  const valueText = $derived(`${value} / ${max} points`)
 </script>
 
 <!--

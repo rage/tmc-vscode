@@ -2,7 +2,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
-import { downloadExercisesForUi } from "../../actions/downloadExercisesForUi"
+import { downloadCourseExercises } from "../../actions/downloadCourseExercises"
 import { downloadAndOpenExercises } from "../../actions/openExercises"
 import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
@@ -15,8 +15,8 @@ import { CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../../shared
 import type { MoocLocalCourseData } from "../../storage/data"
 import { createMockActionContext } from "../mocks/actionContext"
 
-vi.mock("../../actions/downloadExercisesForUi", () => ({
-  downloadExercisesForUi: vi.fn(async () => Ok([])),
+vi.mock("../../actions/downloadCourseExercises", () => ({
+  downloadCourseExercises: vi.fn(async () => Ok([])),
 }))
 
 const moocCourse: MoocLocalCourseData = {
@@ -154,7 +154,7 @@ suite("downloadAndOpenExercises action", function () {
       [ExerciseIdentifier.from("mooc-ex-uuid-1")],
       CourseIdentifier.from("instance-uuid-1"),
     )
-    expect(downloadExercisesForUi).not.toHaveBeenCalled()
+    expect(downloadCourseExercises).not.toHaveBeenCalled()
   })
 
   test("downloads an exercise the local listing does not report", async function () {
@@ -163,9 +163,8 @@ suite("downloadAndOpenExercises action", function () {
       [ExerciseIdentifier.from("mooc-ex-uuid-1")],
       CourseIdentifier.from("instance-uuid-1"),
     )
-    expect(downloadExercisesForUi).toHaveBeenCalledWith(
+    expect(downloadCourseExercises).toHaveBeenCalledWith(
       expect.anything(),
-      "download",
       CourseIdentifier.from("instance-uuid-1"),
       [ExerciseIdentifier.from("mooc-ex-uuid-1")],
     )
@@ -201,7 +200,7 @@ suite("downloadAndOpenExercises action", function () {
 
   test("opens nothing while an exercise it would download is already downloading", async function () {
     const busy = new BottleneckError("Some of these exercises are already downloading.")
-    vi.mocked(downloadExercisesForUi).mockResolvedValueOnce(Err(busy))
+    vi.mocked(downloadCourseExercises).mockResolvedValueOnce(Err(busy))
     const actionContext = contextFor(Ok([]))
 
     const result = await downloadAndOpenExercises(
@@ -226,6 +225,6 @@ suite("downloadAndOpenExercises action", function () {
 
     expect(result.err && result.val).toBe(error)
     expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
-    expect(downloadExercisesForUi).not.toHaveBeenCalled()
+    expect(downloadCourseExercises).not.toHaveBeenCalled()
   })
 })

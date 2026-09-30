@@ -91,7 +91,7 @@ export function tmcResultView(
     submissionUrl: result.submission_url,
     feedback:
       result.feedback_answer_url && questions.length > 0
-        ? { answerUrl: result.feedback_answer_url, questions: [...questions] }
+        ? { questions: [...questions], isSent: false }
         : undefined,
     canPaste: result.all_tests_passed !== true,
   }

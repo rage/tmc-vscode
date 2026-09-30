@@ -15,6 +15,7 @@ import { registerCommands, registerServiceFreeCommands } from "../../init/comman
 import { registerTesting } from "../../init/testing"
 import { TmcPanel } from "../../panels/TmcPanel"
 import { CourseIdentifier } from "../../shared/shared"
+import { ExerciseTestController } from "../../testing/exerciseTestController"
 import * as treeCommands from "../../ui/treeview/treeCommands"
 import { CourseTreeItem, ExerciseTreeItem } from "../../ui/treeview/treeview"
 import { Logger } from "../../utilities"
@@ -97,23 +98,24 @@ function registerAndCollect(actionContext: ActionContext = createMockActionConte
   const context = {
     subscriptions: [],
     extensionUri: vscode.Uri.file("/tmp/extension"),
+    globalStorageUri: vscode.Uri.file("/tmp/global-storage"),
   } as unknown as vscode.ExtensionContext
 
   registerServiceFreeCommands(context, actionContext.dialog)
   const serviceFreeIds = [...ids]
-  registerCommands(context, actionContext)
-  if (isReady(actionContext)) {
-    registerTesting(context, {
-      ...actionContext,
-      startup: {
-        ...actionContext.startup,
-        workspaceManager: {
-          activeCourse: undefined,
-          onDidChangeExercises: () => ({ dispose: vi.fn() }),
-        } as unknown as WorkspaceManager,
-      },
-    })
-  }
+  const testController = isReady(actionContext)
+    ? registerTesting(context, {
+        ...actionContext,
+        startup: {
+          ...actionContext.startup,
+          workspaceManager: {
+            activeCourse: undefined,
+            onDidChangeExercises: () => ({ dispose: vi.fn() }),
+          } as unknown as WorkspaceManager,
+        },
+      })
+    : undefined
+  registerCommands(context, actionContext, testController)
   registerCommand.mockRestore()
   return { ids, serviceFreeIds, handlers, context, actionContext }
 }
@@ -486,7 +488,6 @@ suite("registered command handlers", function () {
     await handlers.get("tmc.viewInitializationErrorHelp")?.()
 
     expect(renderMain).toHaveBeenCalledWith(
-      context.extensionUri,
       context,
       actionContext,
       expect.objectContaining({ type: "InitializationErrorHelp" }),
@@ -566,7 +567,6 @@ suite("registered command handlers", function () {
     ["tmc.downloadOldSubmission", "downloadOldSubmission"],
     ["tmc.pasteExercise", "pasteExercise"],
     ["tmc.resetExercise", "resetExercise"],
-    ["tmc.testExercise", "testExercise"],
   ] as const)(
     "%s run on a Courses view exercise passes commands.%s the exercise's folder",
     async function (commandId, delegateName) {
@@ -627,24 +627,32 @@ suite("registered command handlers", function () {
     ])
   })
 
-  test("tmc.submitExercise delegates to commands.submitExercise with the extension context", async function () {
+  test("tmc.submitExercise delegates to commands.submitExercise", async function () {
     const submitExercise = vi.spyOn(commands, "submitExercise").mockResolvedValue(Ok.EMPTY)
-    const { handlers, context, actionContext } = registerAndCollect()
+    const { handlers, actionContext } = registerAndCollect()
     const resource = vscode.Uri.file("/course/exercise")
 
     await handlers.get("tmc.submitExercise")?.(resource)
 
-    expect(submitExercise).toHaveBeenCalledWith(context, actionContext, resource)
+    expect(submitExercise).toHaveBeenCalledWith(actionContext, resource)
   })
 
-  test("tmc.testExercise delegates to commands.testExercise", async function () {
+  test("tmc.testExercise runs through the activation's test controller", async function () {
     const testExercise = vi.spyOn(commands, "testExercise").mockResolvedValue(undefined)
     const { handlers, actionContext } = registerAndCollect()
     const resource = vscode.Uri.file("/course/exercise")
+    const item = Object.assign(Object.create(ExerciseTreeItem.prototype) as ExerciseTreeItem, {
+      exerciseUri: resource,
+    })
 
     await handlers.get("tmc.testExercise")?.(resource)
+    await handlers.get("tmc.testExercise")?.(item)
 
-    expect(testExercise).toHaveBeenCalledWith(actionContext, resource)
+    const controller = expect.any(ExerciseTestController)
+    expect(testExercise.mock.calls).toEqual([
+      [actionContext, controller, resource],
+      [actionContext, controller, resource],
+    ])
   })
 
   test.each([[undefined], ["silent" as const]])(
@@ -725,7 +733,6 @@ suite("registered command handlers", function () {
 
     expect(pickCourse).not.toHaveBeenCalled()
     expect(renderMain).toHaveBeenCalledWith(
-      context.extensionUri,
       context,
       actionContext,
       expect.objectContaining({ type: "CourseDetails", courseId }),
@@ -741,7 +748,6 @@ suite("registered command handlers", function () {
     await handlers.get("tmc.courseDetails")?.(undefined)
 
     expect(renderMain).toHaveBeenCalledWith(
-      context.extensionUri,
       context,
       actionContext,
       expect.objectContaining({ type: "CourseDetails", courseId }),

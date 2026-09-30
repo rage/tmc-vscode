@@ -15,14 +15,21 @@ import { vscode } from "./vscode"
 
 type ReplyMessage = Extract<ExtensionToWebview, { type: "reply" }>
 
-/** A message a panel listens for; replies go to the request that is awaiting them instead. */
-type PanelMessage = Exclude<ExtensionToWebview, ReplyMessage>
+type SetPanelMessage = Extract<ExtensionToWebview, { type: "setPanel" }>
+
+/**
+ * A message a panel listens for; replies go to the request that is awaiting them instead, and
+ * `setPanel` to the app.
+ */
+type PanelMessage = Exclude<ExtensionToWebview, ReplyMessage | SetPanelMessage>
 
 type TargetedMessage<T extends Panel> = Targeted<PanelMessage, T["type"]>
 
 type MessageListener = (message: PanelMessage) => void
 
 const messageListeners = new Set<MessageListener>()
+
+let panelListener: ((panel: Panel) => void) | undefined
 
 /** Settles one outstanding request, keyed by its `requestId`. */
 const pendingRequests = new Map<number, (reply: ReplyMessage) => void>()
@@ -47,6 +54,10 @@ function dispatchMessage(event: MessageEvent): void {
   const message = event.data as ExtensionToWebview
   if (message.type === "reply") {
     pendingRequests.get(message.requestId)?.(message)
+    return
+  }
+  if (message.type === "setPanel") {
+    panelListener?.(message.panel)
     return
   }
   // A listener added while this message is dispatched (a panel it mounted) waits for the next
@@ -86,6 +97,20 @@ export function addMessageListener<T extends Panel>(
   }
   onDestroy(dispose)
   return dispose
+}
+
+/**
+ * Receives each panel the host sets, for the one component that renders it.
+ *
+ * Must be called during component initialization; replaces any earlier listener.
+ */
+export function onSetPanel(callback: (panel: Panel) => void): void {
+  panelListener = callback
+  onDestroy(() => {
+    if (panelListener === callback) {
+      panelListener = undefined
+    }
+  })
 }
 
 /**

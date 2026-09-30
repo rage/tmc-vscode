@@ -1,16 +1,17 @@
 <script lang="ts">
-  import { onMount, untrack } from "svelte"
+  import { onMount, tick, untrack } from "svelte"
 
   import Button from "../components/Button.svelte"
-  import CodeBlock from "../components/CodeBlock.svelte"
+  import ErrorNotice from "../components/ErrorNotice.svelte"
   import Meter from "../components/Meter.svelte"
   import Notice from "../components/Notice.svelte"
   import PanelHeader from "../components/PanelHeader.svelte"
   import Spinner from "../components/Spinner.svelte"
   import type { CourseDetailsPanel, LocalCourseData, WebviewError } from "../shared/shared"
-  import { unwrap } from "../shared/shared"
+  import { isSoftDeadlineBinding, SOFT_DEADLINE_PENALTY, unwrap } from "../shared/shared"
   import { announce, reducedMotion } from "../utilities/a11y.svelte"
   import { addMessageListener, createRequester, HOST_STATE_TIMEOUT_MS } from "../utilities/script"
+  import { restoreScroll } from "../utilities/uiState.svelte"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -24,7 +25,7 @@
   let refreshError = $state<WebviewError | undefined>(undefined)
   // common course fields, independent of the course's backend
   const course = $derived(courseData === undefined ? undefined : unwrap(courseData))
-  const hasSoftDeadlines = $derived(courseData ? hasSoftDeadline(courseData) : false)
+  const hasSoftDeadlines = $derived(course?.exercises.some(isSoftDeadlineBinding) ?? false)
 
   const request = createRequester()
 
@@ -35,16 +36,6 @@
   const title = $derived(
     course?.title ?? (dataError ? "Could not load this course" : "Loading course…"),
   )
-
-  /** Whether an exercise has a soft deadline before its hard one, which is when it binds. */
-  function hasSoftDeadline(shown: LocalCourseData): boolean {
-    return unwrap(shown).exercises.some(
-      ({ softDeadline, deadline }) =>
-        softDeadline !== null &&
-        deadline !== null &&
-        Date.parse(softDeadline) < Date.parse(deadline),
-    )
-  }
 
   async function requestData() {
     dataError = undefined
@@ -59,6 +50,8 @@
     } else {
       dataError = outcome.error
     }
+    await tick()
+    restoreScroll()
   }
 
   onMount(() => {
@@ -126,10 +119,7 @@
       <p><a href={course.materialUrl}>Course material</a></p>
     {/if}
     {#if hasSoftDeadlines}
-      <p class="muted">
-        A soft deadline can be exceeded: exercises submitted after it still count, but award only
-        75% of the exercise points. A hard deadline cannot be exceeded.
-      </p>
+      <p class="muted">{SOFT_DEADLINE_PENALTY} A hard deadline cannot be exceeded.</p>
     {/if}
     <div class="actions">
       <Button onclick={showExercises}>Show exercises</Button>
@@ -138,14 +128,12 @@
   </div>
 
   {#if refreshError}
-    <Notice
-      kind="error"
+    <ErrorNotice
+      error={refreshError}
       title="Could not refresh this course"
       ondismiss={() => (refreshError = undefined)}
       dismissLabel="Dismiss refresh error"
-    >
-      <p>{refreshError.message}</p>
-    </Notice>
+    />
   {/if}
   {#if course.perhapsExamMode}
     <Notice kind="info">
@@ -158,15 +146,11 @@
     </Notice>
   {/if}
 {:else if dataError}
-  <Notice kind="error">
-    <p>{dataError.message}</p>
-    {#if dataError.details}
-      <CodeBlock code={dataError.details} label="Error details" />
-    {/if}
+  <ErrorNotice error={dataError}>
     {#snippet actions()}
       <Button onclick={() => void requestData()}>Retry</Button>
     {/snippet}
-  </Notice>
+  </ErrorNotice>
 {:else}
   <Spinner label="Loading course" />
 {/if}

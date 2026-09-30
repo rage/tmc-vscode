@@ -7,15 +7,11 @@ import {
   submitFailedView,
   tmcResultView,
 } from "../../../src/panels/submissionView"
+import { toWebviewError } from "../../../src/panels/webviewError"
 import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../shared/langsSchema"
 import type { ExerciseSubmissionPanel, FeedbackQuestion, SubmissionView } from "../shared/shared"
-import { BaseError, toWebviewError } from "../shared/shared"
-import {
-  moocLocalCourse,
-  moocLocalExercise,
-  tmcLocalCourse,
-  tmcLocalExercise,
-} from "../test/fixtures"
+import { BaseError } from "../shared/shared"
+import { moocGrading, submissionFinished, submissionViewMessage } from "../test/fixtures"
 import { dispatchToWebview, postedMessages, reloadDocument, replyToRequest } from "../test/setup"
 import { withinShadowRoot } from "../test/shadow"
 import { enterScreen } from "../utilities/uiState.svelte"
@@ -24,70 +20,31 @@ import ExerciseSubmission from "./ExerciseSubmission.svelte"
 const panel: ExerciseSubmissionPanel = {
   id: 12,
   type: "ExerciseSubmission",
-  course: tmcLocalCourse(),
-  exercise: tmcLocalExercise({ name: "part01-01_hello", availablePoints: 2 }),
+  backend: "tmc",
+  courseSlug: "python-course",
+  exerciseSlug: "part01-01_hello",
 }
 
 const moocPanel: ExerciseSubmissionPanel = {
   id: 13,
   type: "ExerciseSubmission",
-  course: moocLocalCourse(),
-  exercise: moocLocalExercise(),
+  backend: "mooc",
+  courseSlug: "mooc-course",
+  exerciseSlug: "mooc-exercise",
 }
 
 const FEEDBACK_URL = "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback"
 
-function submissionFinished(overrides: Partial<SubmissionFinished> = {}): SubmissionFinished {
-  return {
-    api_version: 7,
-    all_tests_passed: true,
-    user_id: 1,
-    login: "student",
-    course: "python-course",
-    exercise_name: "part01-01_hello",
-    status: "ok",
-    points: ["1.1"],
-    valgrind: null,
-    submission_url: "https://tmc.mooc.fi/submissions/1",
-    solution_url: null,
-    submitted_at: "2026-09-29T00:00:00Z",
-    processing_time: 1,
-    reviewed: false,
-    requests_review: false,
-    paste_url: null,
-    message_for_paste: null,
-    missing_review_points: [],
-    test_cases: [],
-    feedback_questions: null,
-    feedback_answer_url: null,
-    error: null,
-    validations: null,
-    ...overrides,
-  }
-}
-
-function moocGrading(
-  overrides: Partial<Extract<ExerciseTaskSubmissionStatus, { status: "grading" }>["grading"]>,
-): ExerciseTaskSubmissionStatus {
-  return {
-    status: "grading",
-    grading: {
-      grading_progress: "FullyGraded",
-      score_given: null,
-      grading_started_at: null,
-      grading_completed_at: null,
-      feedback_text: null,
-      ...overrides,
-    },
-  }
-}
-
 function showView(panelId: number, view: SubmissionView): void {
-  dispatchToWebview({
-    type: "submissionView",
-    target: { type: "ExerciseSubmission", id: panelId },
-    view,
-  })
+  dispatchToWebview(submissionViewMessage(panelId, view))
+}
+
+/** `view` as the host re-posts it once the student's feedback went through. */
+function feedbackSent(view: SubmissionView): SubmissionView {
+  if (!view.feedback) {
+    throw new Error("the view asks for no feedback")
+  }
+  return { ...view, feedback: { ...view.feedback, isSent: true } }
 }
 
 function showTmcResult(result: SubmissionFinished, questions: FeedbackQuestion[] = []): void {
@@ -209,6 +166,24 @@ suite("ExerciseSubmission panel (failures)", () => {
     expect(document.querySelector("vscode-progress-bar")).toBeNull()
     expect(screen.queryByText("Run in background")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument()
+  })
+
+  test("offers the failure's remedy", async () => {
+    render(ExerciseSubmission, { props: { panel: moocPanel } })
+    showView(
+      moocPanel.id,
+      submitFailedView({
+        message: "Log in again to continue.",
+        actions: [{ label: "Log in", command: "tmc.showMoocLogin" }],
+      }),
+    )
+
+    ;(await screen.findByRole("button", { name: "Log in" })).click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "runCommand",
+      command: "tmc.showMoocLogin",
+    })
   })
 
   test("announces whether the host managed to copy the error details", async () => {
@@ -357,7 +332,6 @@ suite("ExerciseSubmission panel (tmc feedback)", () => {
       type: "sendFeedback",
       requestId: expect.any(Number),
       sourcePanel: { id: panel.id, type: "ExerciseSubmission" },
-      feedbackAnswerUrl: FEEDBACK_URL,
       answers: [{ questionId: 2, answer: "Fun exercise" }],
     })
   })
@@ -375,10 +349,16 @@ suite("ExerciseSubmission panel (tmc feedback)", () => {
     )
   })
 
-  test("thanks the student once the host has sent it", async () => {
+  test("thanks the student once the host marks the feedback sent", async () => {
     await renderWithFeedback()
     await sendFeedback()
     replyToRequest("sendFeedback", { ok: true })
+    showView(
+      panel.id,
+      feedbackSent(
+        tmcResultView(submissionFinished({ feedback_answer_url: FEEDBACK_URL }), questions, 2),
+      ),
+    )
 
     expect(await screen.findByText("Thank you for your feedback.")).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Send feedback" })).not.toBeInTheDocument()
@@ -540,20 +520,6 @@ suite("ExerciseSubmission panel shown again after being hidden", () => {
 
     await screen.findByRole("heading", { name: "Give feedback" })
     expect(document.querySelector("vscode-textarea")?.value).toBe("Half-written thought")
-  })
-
-  test("does not offer to send feedback the host already accepted", async () => {
-    showPanel()
-    await screen.findByRole("heading", { name: "Give feedback" })
-    await sendFeedback()
-    replyToRequest("sendFeedback", { ok: true })
-    await screen.findByText("Thank you for your feedback.")
-
-    reloadDocument()
-    showPanel()
-
-    expect(await screen.findByText("Thank you for your feedback.")).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: "Send feedback" })).not.toBeInTheDocument()
   })
 
   test("still shows the paste link the host answered with", async () => {

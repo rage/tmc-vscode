@@ -18,6 +18,13 @@ function create(isLoggedIn: boolean): {
   return { account, item }
 }
 
+/** The item's text for each state it can show. */
+const shown = {
+  loggedIn: "$(account) courses.mooc.fi",
+  loggedOut: "$(sign-in) TestMyCode: Log In",
+  sessionExpired: "$(warning) TestMyCode: Session Expired",
+}
+
 suite("AccountStatusBarItem", function () {
   afterEach(function () {
     vi.restoreAllMocks()
@@ -33,9 +40,9 @@ suite("AccountStatusBarItem", function () {
   })
 
   test("logged out, it logs in", function () {
-    const { account, item } = create(false)
+    const { item } = create(false)
 
-    expect(account.status).toBe("loggedOut")
+    expect(item.text).toBe(shown.loggedOut)
     expect(item.text).toBe("$(sign-in) TestMyCode: Log In")
     expect(item.command).toBe("tmc.showMoocLogin")
     expect(item.accessibilityInformation?.label).toContain("not logged in")
@@ -43,9 +50,9 @@ suite("AccountStatusBarItem", function () {
   })
 
   test("logged in, it offers the account actions", function () {
-    const { account, item } = create(true)
+    const { item } = create(true)
 
-    expect(account.status).toBe("loggedIn")
+    expect(item.text).toBe(shown.loggedIn)
     expect(item.text).toBe("$(account) courses.mooc.fi")
     expect(item.command).toBe("tmc.showAccountMenu")
     expect(item.accessibilityInformation?.label).toContain("logged in with courses.mooc.fi")
@@ -55,9 +62,9 @@ suite("AccountStatusBarItem", function () {
     const { account, item } = create(false)
 
     account.setLoggedIn(true)
-    expect(account.status).toBe("loggedIn")
+    expect(item.text).toBe(shown.loggedIn)
     account.setLoggedIn(false)
-    expect(account.status).toBe("loggedOut")
+    expect(item.text).toBe(shown.loggedOut)
     expect(item.command).toBe("tmc.showMoocLogin")
   })
 
@@ -66,16 +73,16 @@ suite("AccountStatusBarItem", function () {
 
     account.setLoggedIn(false)
     account.markSessionExpired()
-    expect(account.status).toBe("sessionExpired")
+    expect(item.text).toBe(shown.sessionExpired)
     expect(item.text).toBe("$(warning) TestMyCode: Session Expired")
     expect(item.command).toBe("tmc.showMoocLogin")
     expect(tooltipText(item)).toContain("expired")
 
     account.setLoggedIn(false)
-    expect(account.status).toBe("sessionExpired")
+    expect(item.text).toBe(shown.sessionExpired)
 
     account.setLoggedIn(true)
-    expect(account.status).toBe("loggedIn")
+    expect(item.text).toBe(shown.loggedIn)
   })
 
   test("disposes its item", function () {

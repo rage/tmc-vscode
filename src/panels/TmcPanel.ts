@@ -1,21 +1,20 @@
-import type { Disposable, Webview, WebviewOptions, WebviewPanel } from "vscode"
-import { Uri, ViewColumn, window } from "vscode"
+import type { Webview, WebviewOptions, WebviewPanel } from "vscode"
+import { Disposable, Uri, ViewColumn, window } from "vscode"
 import type * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
-import type { ExtensionToWebview, Panel } from "../shared/shared"
-import { panelTarget, WebviewStateSchema } from "../shared/shared"
+import type { Panel } from "../shared/shared"
+import { assertUnreachable, WebviewStateSchema } from "../shared/shared"
+import { submissionViews } from "../ui/submissionViews"
 import { Logger } from "../utilities"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { messageHandlers } from "./handlers"
 import { postMessageToWebview, renderPanel } from "./panel"
-import type { HandlerContext, PanelHost } from "./router"
+import type { HandlerContext, PanelHost, PanelMessage } from "./router"
 import { dispatch } from "./router"
-import { nextPanelId, panelTitle } from "./routes"
-
-export { nextPanelId } from "./routes"
+import { initializationErrorHelpPanel, nextPanelId, panelTitle } from "./routes"
 
 /**
  * The main panel's webview type, which its serializer is registered for.
@@ -56,19 +55,33 @@ export class TmcPanel {
 
   // latest message per type targeted at _route's id, resent after it on "ready"
   // so a reload doesn't lose one-shot results that already fired
-  private _messageBuffer = new Map<string, ExtensionToWebview>()
+  private _messageBuffer = new Map<string, PanelMessage>()
 
   private _disposables: Disposable[] = []
 
   // `_panel.dispose()` fires `onDidDispose`, which calls back into `dispose()`
   private _isDisposed = false
 
-  // sends a message to the main and side panels
-  public static postMessage(...messages: ExtensionToWebview[]): void {
-    for (const message of messages) {
-      TmcPanel.mainPanel?._postMessage(message)
-      TmcPanel.sidePanel?._postMessage(message)
-    }
+  /** Shows the submissions the submit actions report in the side panel. Call once, at activation. */
+  public static showSubmissionViews(
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+  ): Disposable {
+    return Disposable.from(
+      submissionViews.onDidOpen((panel) =>
+        TmcPanel.renderSide(extensionContext, actionContext, panel),
+      ),
+      submissionViews.onDidUpdate(({ panel, view, shouldReopen }) => {
+        if (shouldReopen && TmcPanel.sidePanel === undefined) {
+          TmcPanel.renderSide(extensionContext, actionContext, panel)
+        }
+        TmcPanel.sidePanel?._postMessage({
+          type: "submissionView",
+          target: { id: panel.id, type: panel.type },
+          view,
+        })
+      }),
+    )
   }
 
   /** Tells the two panels' log lines apart. */
@@ -76,13 +89,8 @@ export class TmcPanel {
     return this._isMain ? "Main webview" : "Side webview"
   }
 
-  /**
-   * Sends `message` to this panel's webview alone, buffering it for a reload.
-   *
-   * Every reply to a request this webview made goes through here; {@link postMessage}
-   * is for messages every open panel should see.
-   */
-  private _postMessage(message: ExtensionToWebview): void {
+  /** Sends `message` to this panel's webview alone, buffering it for a reload. */
+  private _postMessage(message: PanelMessage): void {
     // A `reply` is left out: the reloaded webview asks again, and a replayed answer to the
     // request of a page that no longer exists settles nothing.
     if (message.type !== "reply" && message.target.id === this._route?.id) {
@@ -91,83 +99,61 @@ export class TmcPanel {
     this._postTransient(message)
   }
 
-  private _postTransient(message: ExtensionToWebview): void {
+  private _postTransient(message: PanelMessage): void {
     if (!this._isWebviewReady || this._isDisposed) {
       return
     }
     postMessageToWebview(this._panel.webview, message, this._webviewName)
   }
 
-  // renders the `route` in the main panel
+  /** Shows `route` in the main panel, creating the panel if needed. */
   public static renderMain(
-    extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
     route: Panel,
   ): void {
-    if (TmcPanel.mainPanel !== undefined) {
-      Logger.info(`Revealing existing main panel for "${route.type}"`)
-      TmcPanel.mainPanel._render(route)
-      TmcPanel.mainPanel._panel.reveal(undefined, false)
-    } else {
-      TmcPanel.mainPanel = TmcPanel.renderNew(
-        extensionUri,
-        extensionContext,
-        actionContext,
-        route,
-        true,
-      )
-    }
+    TmcPanel._renderIn(true, extensionContext, actionContext, route)
   }
 
-  // renders the `route` in the side panel, without taking focus: submission results appear
-  // while the student is typing, and must not pull their keystrokes away
+  /**
+   * Shows `route` in the side panel without taking focus: submission results appear while the
+   * student is typing, and must not pull their keystrokes away.
+   */
   public static renderSide(
-    extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
     route: Panel,
   ): void {
-    if (TmcPanel.sidePanel !== undefined) {
-      Logger.info(`Revealing existing side panel for "${route.type}"`)
-      TmcPanel.sidePanel._render(route)
-      TmcPanel.sidePanel._panel.reveal(undefined, true)
-    } else {
-      TmcPanel.sidePanel = TmcPanel.renderNew(
-        extensionUri,
-        extensionContext,
-        actionContext,
-        route,
-        false,
-      )
-    }
+    TmcPanel._renderIn(false, extensionContext, actionContext, route)
   }
 
-  // convenience function for rendering a main/side panel when no main/side panel exists yet
-  // otherwise the panel can simply be "revealed" with `panel.reveal`
-  public static renderNew(
-    extensionUri: Uri,
+  private static _renderIn(
+    isMain: boolean,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
     route: Panel,
-    isMain: boolean,
-  ): TmcPanel {
+  ): void {
+    const existing = isMain ? TmcPanel.mainPanel : TmcPanel.sidePanel
+    if (existing !== undefined) {
+      Logger.info(`Revealing the ${existing._webviewName} for "${route.type}"`)
+      existing._render(route)
+      existing._panel.reveal(undefined, !isMain)
+      return
+    }
     const showOptions = isMain
       ? { viewColumn: ViewColumn.One, preserveFocus: false }
       : { viewColumn: ViewColumn.Beside, preserveFocus: true }
     const panelViewType = isMain ? MAIN_PANEL_VIEW_TYPE : SIDE_PANEL_VIEW_TYPE
     const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", showOptions, {
-      ...webviewOptions(extensionUri),
+      ...webviewOptions(extensionContext.extensionUri),
       enableFindWidget: true,
     })
-    return TmcPanel._adopt(
-      webviewPanel,
-      extensionUri,
-      extensionContext,
-      actionContext,
-      route,
-      isMain,
-    )
+    const created = TmcPanel._adopt(webviewPanel, extensionContext, actionContext, route, isMain)
+    if (isMain) {
+      TmcPanel.mainPanel = created
+    } else {
+      TmcPanel.sidePanel = created
+    }
   }
 
   /**
@@ -180,19 +166,17 @@ export class TmcPanel {
   ): Disposable {
     return window.registerWebviewPanelSerializer(MAIN_PANEL_VIEW_TYPE, {
       deserializeWebviewPanel: async (webviewPanel, state) => {
-        const route = restoredRoute(state, actionContext)
+        const route = restoredRoute(state, actionContext, extensionContext)
         if (!route || TmcPanel.mainPanel !== undefined) {
           Logger.info("Closing a restored main panel, which has no screen to show")
           webviewPanel.dispose()
           return
         }
         Logger.info(`Restoring the main panel on "${route.type}"`)
-        const { extensionUri } = extensionContext
         // The saved options may name an older install's directory.
-        webviewPanel.webview.options = webviewOptions(extensionUri)
+        webviewPanel.webview.options = webviewOptions(extensionContext.extensionUri)
         TmcPanel.mainPanel = TmcPanel._adopt(
           webviewPanel,
-          extensionUri,
           extensionContext,
           actionContext,
           route,
@@ -204,23 +188,17 @@ export class TmcPanel {
 
   private static _adopt(
     webviewPanel: WebviewPanel,
-    extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
     route: Panel,
     isMain: boolean,
   ): TmcPanel {
+    const { extensionUri } = extensionContext
     webviewPanel.iconPath = {
       light: Uri.joinPath(extensionUri, "media", "TMC-light.svg"),
       dark: Uri.joinPath(extensionUri, "media", "TMC.svg"),
     }
-    const currentPanel = new TmcPanel(
-      webviewPanel,
-      extensionContext,
-      extensionUri,
-      actionContext,
-      isMain,
-    )
+    const currentPanel = new TmcPanel(webviewPanel, extensionContext, actionContext, isMain)
     currentPanel._render(route)
     return currentPanel
   }
@@ -228,7 +206,6 @@ export class TmcPanel {
   private constructor(
     panel: WebviewPanel,
     extensionContext: vscode.ExtensionContext,
-    extensionUri: Uri,
     actionContext: ActionContext,
     isMain: boolean,
   ) {
@@ -248,7 +225,7 @@ export class TmcPanel {
       this._disposables,
     )
 
-    this._panel.webview.html = webviewContent(this._panel.webview, extensionUri)
+    this._panel.webview.html = webviewContent(this._panel.webview, extensionContext.extensionUri)
 
     if (isReady(actionContext)) {
       this._disposables.push(
@@ -301,15 +278,8 @@ export class TmcPanel {
         return currentRoute()
       },
       post: (message) => this._postMessage(message),
-      postTransient: (message) => this._postTransient(message),
       render: (route) => this._render(route),
-      renderMain: (route) =>
-        TmcPanel.renderMain(
-          extensionContext.extensionUri,
-          extensionContext,
-          this._actionContext,
-          route,
-        ),
+      renderMain: (route) => TmcPanel.renderMain(extensionContext, this._actionContext, route),
       closeSidePanel: () => TmcPanel.sidePanel?.dispose(),
     }
   }
@@ -330,7 +300,7 @@ export class TmcPanel {
     this._panel.title = panelTitle(route, this._actionContext)
     this._postTransient({
       type: "setCourseData",
-      target: panelTarget(route),
+      target: { id: route.id, type: route.type },
       courseData: course.val,
     })
   }
@@ -349,7 +319,7 @@ export class TmcPanel {
     this._isWebviewReady = true
     const route = this._route
     Logger.info(
-      `Received "ready" from ${this._isMain ? "main" : "side"} webview` +
+      `Received "ready" from the ${this._webviewName}` +
         (route ? `, resending panel "${route.type}"` : ", no panel to resend"),
     )
     if (!route) {
@@ -371,15 +341,26 @@ function webviewOptions(extensionUri: Uri): WebviewOptions {
 }
 
 /** The screen a restored main panel's saved `state` names, if it can still be shown. */
-function restoredRoute(state: unknown, actionContext: ActionContext): Panel | undefined {
+function restoredRoute(
+  state: unknown,
+  actionContext: ActionContext,
+  extensionContext: vscode.ExtensionContext,
+): Panel | undefined {
   const saved = WebviewStateSchema.safeParse(state)
   const route = saved.success ? saved.data.route : undefined
-  if (route?.type === "CourseDetails") {
-    const isCourseStored =
-      isReady(actionContext) && actionContext.startup.userData.getCourse(route.courseId).ok
-    return isCourseStored ? { id: nextPanelId(), ...route } : undefined
+  switch (route?.type) {
+    case "CourseDetails": {
+      const isCourseStored =
+        isReady(actionContext) && actionContext.startup.userData.getCourse(route.courseId).ok
+      return isCourseStored ? { id: nextPanelId(), ...route } : undefined
+    }
+    case "InitializationErrorHelp":
+      return initializationErrorHelpPanel(actionContext, extensionContext)
+    case undefined:
+      return undefined
+    default:
+      return assertUnreachable(route)
   }
-  return route && { id: nextPanelId(), ...route }
 }
 
 function webviewContent(webview: Webview, extensionUri: Uri): string {

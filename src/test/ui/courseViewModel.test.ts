@@ -8,46 +8,26 @@ import type {
   SharedTmcCourseData,
   SharedTmcCourseExercise,
 } from "../../shared/shared"
-import { ExerciseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
+import { ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
 import type { CourseViewState, PartView } from "../../ui/treeview/courseViewModel"
 import { buildCourseView, onDiskByCourse } from "../../ui/treeview/courseViewModel"
+import {
+  moocCourseExercise,
+  moocLocalCourse,
+  tmcCourseExercise,
+  tmcLocalCourse,
+} from "../fixtures/courses"
 
 const COURSE_NAME = "python-course"
 const NOW = new Date("2026-06-01T12:00:00Z")
 
-function exercise(overrides: Partial<SharedTmcCourseExercise> = {}): SharedTmcCourseExercise {
-  return {
-    id: 1,
-    availablePoints: 1,
-    awardedPoints: 0,
-    name: "part01-01_hello",
-    deadline: null,
-    passed: false,
-    softDeadline: null,
-    ...overrides,
-  }
-}
+const exercise = tmcCourseExercise
 
 function course(
   exercises: SharedTmcCourseExercise[],
   overrides: Partial<SharedTmcCourseData> = {},
 ): LocalCourseData {
-  return makeTmcKind({
-    id: 42,
-    name: COURSE_NAME,
-    title: "Python Course",
-    description: "",
-    organization: "mooc",
-    exercises,
-    availablePoints: 0,
-    awardedPoints: 0,
-    perhapsExamMode: false,
-    newExercises: [],
-    notifyAfter: 0,
-    disabled: false,
-    materialUrl: null,
-    ...overrides,
-  })
+  return tmcLocalCourse({ name: COURSE_NAME, exercises, ...overrides })
 }
 
 function moocExercise(
@@ -55,34 +35,11 @@ function moocExercise(
   name: string,
   overrides: Partial<SharedMoocCourseExercise> = {},
 ): SharedMoocCourseExercise {
-  return {
-    id,
-    availablePoints: 1,
-    awardedPoints: 0,
-    name,
-    deadline: null,
-    passed: false,
-    softDeadline: null,
-    ...overrides,
-  }
+  return moocCourseExercise({ id, name, ...overrides })
 }
 
 function moocCourse(exercises: SharedMoocCourseExercise[]): LocalCourseData {
-  return makeMoocKind({
-    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-    name: "mooc-python",
-    title: "MOOC Python",
-    description: null,
-    organization: "mooc",
-    exercises,
-    availablePoints: 0,
-    awardedPoints: 0,
-    perhapsExamMode: false,
-    newExercises: [],
-    notifyAfter: 0,
-    disabled: false,
-    materialUrl: null,
-  })
+  return moocLocalCourse({ exercises })
 }
 
 function onDisk(

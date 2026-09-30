@@ -2,7 +2,8 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
 import { closeExercises as closeExercisesAction } from "../../actions/closeExercises"
-import { downloadExercisesForUi } from "../../actions/downloadExercisesForUi"
+import { downloadCourseExercises } from "../../actions/downloadCourseExercises"
+import { downloadExerciseUpdates } from "../../actions/downloadExerciseUpdates"
 import { downloadAndOpenExercises } from "../../actions/openExercises"
 import type { ReadyActionContext } from "../../actions/types"
 import type WorkspaceManager from "../../api/workspaceManager"
@@ -25,8 +26,11 @@ import { updateablesRegistry } from "../../ui/updateablesRegistry"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
-vi.mock("../../actions/downloadExercisesForUi", () => ({
-  downloadExercisesForUi: vi.fn(async () => Ok.EMPTY),
+vi.mock("../../actions/downloadCourseExercises", () => ({
+  downloadCourseExercises: vi.fn(async () => Ok.EMPTY),
+}))
+vi.mock("../../actions/downloadExerciseUpdates", () => ({
+  downloadExerciseUpdates: vi.fn(async () => Ok.EMPTY),
 }))
 vi.mock("../../actions/openExercises", () => ({
   downloadAndOpenExercises: vi.fn(async () => Ok({ ids: [], exceededOpenLimit: undefined })),
@@ -116,14 +120,13 @@ suite("Courses view commands", function () {
       row(moocCourse, "m-2", "downloading"),
     ])
 
-    expect(vi.mocked(downloadExercisesForUi).mock.calls).toEqual([
+    expect(vi.mocked(downloadCourseExercises).mock.calls).toEqual([
       [
         actionContext,
-        "download",
         tmcCourse,
         [makeTmcKind({ tmcExerciseId: 1 }), makeTmcKind({ tmcExerciseId: 3 })],
       ],
-      [actionContext, "download", moocCourse, [makeMoocKind({ moocExerciseId: "m-1" })]],
+      [actionContext, moocCourse, [makeMoocKind({ moocExerciseId: "m-1" })]],
     ])
   })
 
@@ -132,13 +135,13 @@ suite("Courses view commands", function () {
 
     await downloadExercises(context(), [part(exercise), exercise])
 
-    expect(vi.mocked(downloadExercisesForUi).mock.calls[0]?.[3]).toEqual([
+    expect(vi.mocked(downloadCourseExercises).mock.calls[0]?.[2]).toEqual([
       makeTmcKind({ tmcExerciseId: 1 }),
     ])
   })
 
   test("a download refused as already running says so", async function () {
-    vi.mocked(downloadExercisesForUi).mockResolvedValueOnce(Err(new BottleneckError(BUSY)))
+    vi.mocked(downloadCourseExercises).mockResolvedValueOnce(Err(new BottleneckError(BUSY)))
     const actionContext = context()
 
     await downloadExercises(actionContext, [row(tmcCourse, 2, "missing")])
@@ -227,11 +230,13 @@ suite("Courses view commands", function () {
 
     await updateCourseExercises(actionContext, tmcCourse)
 
-    expect(downloadExercisesForUi).toHaveBeenCalledWith(actionContext, "update", tmcCourse, updates)
+    expect(downloadExerciseUpdates).toHaveBeenCalledWith(actionContext, [
+      { courseId: tmcCourse, exerciseId: updates[0] },
+    ])
   })
 
   test("an update refused as already running says so", async function () {
-    vi.mocked(downloadExercisesForUi).mockResolvedValueOnce(Err(new BottleneckError(BUSY)))
+    vi.mocked(downloadExerciseUpdates).mockResolvedValueOnce(Err(new BottleneckError(BUSY)))
     const actionContext = context()
 
     await updateCourseExercises(actionContext, tmcCourse)
