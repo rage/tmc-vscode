@@ -12,7 +12,6 @@
   --tmc-space-6: var(--vscode-spacing-size240, 24px);
 
   --tmc-radius: var(--vscode-cornerRadius-small, 4px);
-  --tmc-radius-large: var(--vscode-cornerRadius-medium, 6px);
 
   --tmc-font-size-small: var(--vscode-bodyFontSize-small, 12px);
   --tmc-font-size-body: var(--vscode-font-size, 13px);
@@ -26,8 +25,6 @@
   --tmc-fg-disabled: var(--vscode-disabledForeground);
   --tmc-fg-error: var(--vscode-errorForeground);
   --tmc-fg-info: var(--vscode-editorInfo-foreground, var(--vscode-foreground));
-  --tmc-fg-link: var(--vscode-textLink-foreground);
-  --tmc-fg-link-active: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));
 
   /* Icon colours only: these fail text contrast on light themes. charts.green comes first
      because testing.iconPassed stays #73c991, 2:1 on white, in light themes. */
@@ -36,11 +33,6 @@
   --tmc-status-unset: var(--vscode-testing-iconUnset, var(--vscode-disabledForeground));
   --tmc-status-warning: var(--vscode-editorWarning-foreground);
 
-  /* Not welcomePage.tileBackground first: muted text on it is 4.2:1 in Dark 2026. */
-  --tmc-surface: var(
-    --vscode-textBlockQuote-background,
-    var(--vscode-welcomePage-tileBackground, var(--vscode-editorWidget-background))
-  );
   --tmc-surface-border: var(
     --vscode-welcomePage-tileBorder,
     var(--vscode-contrastBorder, transparent)

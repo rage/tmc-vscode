@@ -24,15 +24,6 @@ const PAIRINGS: Pairing[] = [
   { name: "body text", foreground: BODY_TEXT, minimum: TEXT },
   { name: "--tmc-fg text", foreground: "var(--tmc-fg)", minimum: TEXT },
   { name: "muted text", foreground: "var(--tmc-fg-muted)", minimum: TEXT },
-  { name: "link", foreground: "var(--tmc-fg-link)", minimum: TEXT },
-  { name: "hovered link", foreground: "var(--tmc-fg-link-active)", minimum: TEXT },
-  { name: "card text", foreground: BODY_TEXT, background: "var(--tmc-surface)", minimum: TEXT },
-  {
-    name: "muted card text",
-    foreground: "var(--tmc-fg-muted)",
-    background: "var(--tmc-surface)",
-    minimum: TEXT,
-  },
   {
     name: "code block text",
     foreground: BODY_TEXT,
@@ -93,7 +84,7 @@ const PAIRINGS: Pairing[] = [
 /** Colour tokens no pairing covers, and why none has to. */
 const UNPAIRED_COLOUR_TOKENS: Record<string, string> = {
   "--tmc-fg-disabled": "inactive controls are exempt from SC 1.4.3",
-  "--tmc-surface-border": "decorative; the surface is not the only cue for a card",
+  "--tmc-surface-border": "decorative",
   "--tmc-overlay-border": "decorative",
   "--tmc-overlay-shadow": "decorative",
   "--tmc-hc-outline": "transparent outside High Contrast, where the theme picks it",
