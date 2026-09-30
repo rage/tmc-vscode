@@ -1,6 +1,7 @@
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import Dialog from "../../api/dialog"
 import { AccountStatusBarItem, showAccountMenu } from "../../ui/statusBarAccount"
 import { fakeStatusBarItems, tooltipText } from "../mocks/statusBar"
 
@@ -97,7 +98,7 @@ suite("showAccountMenu", function () {
       items: readonly { label: string }[],
     ) => items.find((x) => x.label.includes("Log Out"))) as never)
 
-    await showAccountMenu()
+    await showAccountMenu(new Dialog())
 
     expect(executeCommand).toHaveBeenCalledWith("tmc.logout")
   })
@@ -108,7 +109,7 @@ suite("showAccountMenu", function () {
       items: readonly { label: string }[],
     ) => items.find((x) => x.label === "$(book) Show Courses")) as never)
 
-    await showAccountMenu()
+    await showAccountMenu(new Dialog())
 
     expect(executeCommand).toHaveBeenCalledWith("tmc.myCourses")
   })
@@ -117,7 +118,7 @@ suite("showAccountMenu", function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)
 
-    await showAccountMenu()
+    await showAccountMenu(new Dialog())
 
     expect(executeCommand).not.toHaveBeenCalled()
   })

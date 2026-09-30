@@ -684,7 +684,7 @@ suite("registered command handlers", function () {
     if (!isReady(actionContext)) {
       throw new Error("expected a ready context")
     }
-    const revealExercise = vi.mocked(actionContext.ui.treeDP.revealExercise)
+    const revealExercise = vi.mocked(actionContext.coursesTree.revealExercise)
     const uri = vscode.Uri.file("/exercises/part01-01_hello/src/hello.py")
 
     revealExercise.mockResolvedValue(true)

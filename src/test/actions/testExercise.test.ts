@@ -48,16 +48,13 @@ function course(perhapsExamMode = false) {
 const passingRun = { logs: {}, status: "PASSED", testResults: [] }
 const noToken = new vscode.CancellationTokenSource().token
 
-// A distinct path per test, so the single-flight key one test holds can't reject the next.
-let exerciseCounter = 0
 function workspaceExercise(): WorkspaceExercise {
-  exerciseCounter += 1
   return {
     backend: "tmc",
     courseSlug: COURSE_SLUG,
     exerciseSlug: EXERCISE_SLUG,
     status: ExerciseStatus.Open,
-    uri: vscode.Uri.file(`/exercises/${exerciseCounter}`),
+    uri: vscode.Uri.file("/exercises/hello"),
   }
 }
 

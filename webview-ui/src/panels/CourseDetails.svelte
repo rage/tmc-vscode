@@ -8,14 +8,7 @@
   import PanelHeader from "../components/PanelHeader.svelte"
   import Spinner from "../components/Spinner.svelte"
   import type { CourseDetailsPanel, LocalCourseData, WebviewError } from "../shared/shared"
-  import {
-    assertUnreachable,
-    makeMoocKind,
-    makeTmcKind,
-    match,
-    unwrap,
-    CourseIdentifier,
-  } from "../shared/shared"
+  import { unwrap } from "../shared/shared"
   import { announce, reducedMotion } from "../utilities/a11y.svelte"
   import { addMessageListener, createRequester, HOST_STATE_TIMEOUT_MS } from "../utilities/script"
   import { vscode } from "../utilities/vscode"
@@ -26,11 +19,12 @@
 
   let { panel }: Props = $props()
 
+  let courseData = $state<LocalCourseData | undefined>(undefined)
   let refreshing = $state<boolean>(false)
   let refreshError = $state<WebviewError | undefined>(undefined)
   // common course fields, independent of the course's backend
-  const course = $derived(panel.course === undefined ? undefined : unwrap(panel.course))
-  const hasSoftDeadlines = $derived(panel.course ? hasSoftDeadline(panel.course) : false)
+  const course = $derived(courseData === undefined ? undefined : unwrap(courseData))
+  const hasSoftDeadlines = $derived(courseData ? hasSoftDeadline(courseData) : false)
 
   const request = createRequester()
 
@@ -43,8 +37,8 @@
   )
 
   /** Whether an exercise has a soft deadline before its hard one, which is when it binds. */
-  function hasSoftDeadline(courseData: LocalCourseData): boolean {
-    return unwrap(courseData).exercises.some(
+  function hasSoftDeadline(shown: LocalCourseData): boolean {
+    return unwrap(shown).exercises.some(
       ({ softDeadline, deadline }) =>
         softDeadline !== null &&
         deadline !== null &&
@@ -60,7 +54,11 @@
       { sourcePanel: { id, type, courseId } },
       { timeoutMs: HOST_STATE_TIMEOUT_MS },
     )
-    dataError = outcome.ok ? undefined : outcome.error
+    if (outcome.ok) {
+      courseData = outcome.value
+    } else {
+      dataError = outcome.error
+    }
   }
 
   onMount(() => {
@@ -69,26 +67,7 @@
   // Its id and type are all the listener filters on, and they never change: a new panel remounts.
   const listeningPanel = untrack(() => panel)
   addMessageListener(listeningPanel, (message) => {
-    switch (message.type) {
-      case "setCourseData": {
-        panel = { ...panel, course: message.courseData }
-        break
-      }
-      case "setCourseDisabledStatus": {
-        const isThisCourse = CourseIdentifier.equals(message.courseId, panel.courseId)
-        if (isThisCourse && panel.course) {
-          const updatedCourse = match(
-            panel.course,
-            (tmc) => makeTmcKind({ ...tmc, disabled: message.disabled }),
-            (mooc) => makeMoocKind({ ...mooc, disabled: message.disabled }),
-          )
-          panel = { ...panel, course: updatedCourse }
-        }
-        break
-      }
-      default:
-        assertUnreachable(message)
-    }
+    courseData = message.courseData
   })
 
   async function refresh() {
@@ -100,10 +79,10 @@
     refreshError = undefined
     const outcome = await request("refreshCourseDetails", {
       sourcePanel: { id: panel.id, type: panel.type },
-      id: panel.courseId,
     })
     refreshing = false
     if (outcome.ok) {
+      courseData = outcome.value
       announce("Course refreshed")
     } else {
       refreshError = outcome.error

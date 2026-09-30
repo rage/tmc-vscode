@@ -1,7 +1,10 @@
-import { afterEach, expect, suite, test, vi } from "vitest"
+import { Ok } from "ts-results"
+import { afterEach, expect, onTestFinished, suite, test, vi } from "vitest"
 
+import { BottleneckError } from "../../errors"
 import { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
-import { exerciseStatusRegistry } from "../../ui/exerciseStatusRegistry"
+import { downloadFailures } from "../../ui/downloadFailures"
+import { exerciseOperations } from "../../ui/exerciseOperations"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
 
 const tmcCourse = CourseIdentifier.from(1)
@@ -10,7 +13,7 @@ const moocCourse = CourseIdentifier.from("11111111-2222-3333-4444-555555555555")
 
 afterEach(() => {
   updateablesRegistry.clear()
-  exerciseStatusRegistry.clear()
+  downloadFailures.clear()
 })
 
 suite("updateables registry", () => {
@@ -79,43 +82,117 @@ suite("updateables registry", () => {
   })
 })
 
-suite("exercise status registry", () => {
+suite("download failures", () => {
   const first = ExerciseIdentifier.from(101)
   const second = ExerciseIdentifier.from(102)
 
-  test("keeps the statuses the workspace cannot derive, per course", () => {
-    exerciseStatusRegistry.record(tmcCourse, [
-      [first, "downloading"],
-      [second, "downloadFailed"],
-    ])
-    exerciseStatusRegistry.record(otherTmcCourse, [[first, "downloading"]])
+  test("remembers a failure until the exercise is downloaded", () => {
+    downloadFailures.record([first, second], [])
+    downloadFailures.record([], [first])
 
-    expect(exerciseStatusRegistry.get(CourseIdentifier.from(1))).toEqual([
-      [first, "downloading"],
-      [second, "downloadFailed"],
-    ])
-    expect(exerciseStatusRegistry.get(otherTmcCourse)).toEqual([[first, "downloading"]])
+    expect(downloadFailures.has(first)).toBe(false)
+    expect(downloadFailures.has(second)).toBe(true)
   })
 
-  test("forgets an exercise once it settles", () => {
-    exerciseStatusRegistry.record(tmcCourse, [
-      [first, "downloading"],
-      [second, "downloading"],
-    ])
+  test("keeps a tmc and a mooc exercise with the same id apart", () => {
+    downloadFailures.record([ExerciseIdentifier.from(1)], [])
 
-    exerciseStatusRegistry.record(tmcCourse, [[first, "closed"]])
-
-    expect(exerciseStatusRegistry.get(tmcCourse)).toEqual([[second, "downloading"]])
+    expect(downloadFailures.has(ExerciseIdentifier.from("1"))).toBe(false)
   })
 
   test("announces every change", () => {
     const changed = vi.fn()
-    const subscription = exerciseStatusRegistry.onDidChange(changed)
+    const subscription = downloadFailures.onDidChange(changed)
 
-    exerciseStatusRegistry.record(moocCourse, [[first, "downloading"]])
-    exerciseStatusRegistry.clear()
+    downloadFailures.record([first], [])
+    downloadFailures.clear()
     subscription.dispose()
 
     expect(changed).toHaveBeenCalledTimes(2)
+  })
+})
+
+suite("exercise operations", () => {
+  const exercise = ExerciseIdentifier.from(101)
+  const other = ExerciseIdentifier.from(102)
+
+  test("reports an operation while it runs, and nothing after", async () => {
+    let during: unknown
+    await exerciseOperations.run(exercise, "testing", 60_000, async () => {
+      during = exerciseOperations.current(exercise)
+      return Ok.EMPTY
+    })
+
+    expect(during).toBe("testing")
+    expect(exerciseOperations.current(exercise)).toBeUndefined()
+  })
+
+  test("refuses a conflicting operation on the same exercise, without running it", async () => {
+    const work = vi.fn(async () => Ok.EMPTY)
+    let refused: unknown
+    await exerciseOperations.run(exercise, "submitting", 60_000, async () => {
+      refused = await exerciseOperations.run(exercise, "pasting", 60_000, work)
+      return Ok.EMPTY
+    })
+
+    expect(work).not.toHaveBeenCalled()
+    expect(refused).toMatchObject({
+      err: true,
+      val: new BottleneckError("A submission for this exercise is already in progress."),
+    })
+  })
+
+  test("lets unrelated operations, and other exercises, run alongside", async () => {
+    let outcomes: boolean[] = []
+    await exerciseOperations.run(exercise, "submitting", 60_000, async () => {
+      const tested = await exerciseOperations.run(exercise, "testing", 60_000, async () => Ok.EMPTY)
+      const otherSubmitted = await exerciseOperations.run(
+        other,
+        "submitting",
+        60_000,
+        async () => Ok.EMPTY,
+      )
+      outcomes = [tested.ok, otherSubmitted.ok]
+      return Ok.EMPTY
+    })
+
+    expect(outcomes).toEqual([true, true])
+  })
+
+  test("claims several exercises all or none, and releases them one at a time", () => {
+    const held = exerciseOperations.claim([exercise], "downloading", 60_000).unwrap()
+
+    expect(exerciseOperations.claim([other, exercise], "downloading", 60_000).err).toBe(true)
+    expect(exerciseOperations.isRunning(other, "downloading")).toBe(false)
+    held.releaseAll()
+
+    const both = exerciseOperations.claim([exercise, other], "downloading", 60_000).unwrap()
+    both.release(exercise)
+    expect(exerciseOperations.isRunning(exercise, "downloading")).toBe(false)
+    expect(exerciseOperations.isRunning(other, "downloading")).toBe(true)
+    both.releaseAll()
+  })
+
+  test("a failing operation still ends, and its error reaches the caller", async () => {
+    await expect(
+      exerciseOperations.run(exercise, "testing", 60_000, async () => {
+        throw new Error("boom")
+      }),
+    ).rejects.toThrow("boom")
+
+    expect(exerciseOperations.current(exercise)).toBeUndefined()
+  })
+
+  test("gives up a claim held past its limit", () => {
+    vi.useFakeTimers()
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
+    const held = exerciseOperations.claim([exercise], "testing", 1000).unwrap()
+
+    vi.advanceTimersByTime(1000)
+
+    expect(exerciseOperations.current(exercise)).toBeUndefined()
+    held.releaseAll()
   })
 })

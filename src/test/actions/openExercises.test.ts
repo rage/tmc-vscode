@@ -9,6 +9,7 @@ import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
+import { BottleneckError } from "../../errors"
 import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
 import type { MoocLocalCourseData } from "../../storage/data"
@@ -196,6 +197,21 @@ suite("downloadAndOpenExercises action", function () {
     )
 
     expect(result.unwrap().ids).toEqual([ExerciseIdentifier.from("mooc-ex-uuid-1")])
+  })
+
+  test("opens nothing while an exercise it would download is already downloading", async function () {
+    const busy = new BottleneckError("Some of these exercises are already downloading.")
+    vi.mocked(downloadExercisesForUi).mockResolvedValueOnce(Err(busy))
+    const actionContext = contextFor(Ok([]))
+
+    const result = await downloadAndOpenExercises(
+      actionContext,
+      [ExerciseIdentifier.from("mooc-ex-uuid-1")],
+      CourseIdentifier.from("instance-uuid-1"),
+    )
+
+    expect(result.err && result.val).toBe(busy)
+    expect(actionContext.startup.workspaceManager.openCourseExercises).not.toHaveBeenCalled()
   })
 
   test("returns a failed local listing without reporting it", async function () {

@@ -3,10 +3,11 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import type { BackendKind, CourseIdentifier, LocalCourseExercise } from "../shared/shared"
+import type { BackendKind, CourseIdentifier } from "../shared/shared"
 import {
   assertUnreachable,
   ExerciseIdentifier,
+  LocalCourseExercise,
   makeMoocKind,
   makeTmcKind,
   match,
@@ -515,4 +516,28 @@ export class UserData {
     this._pendingWrite = write
     return write
   }
+}
+
+/**
+ * The stored course and exercise a downloaded exercise belongs to.
+ *
+ * @returns `Err` when the course or the exercise is not stored, e.g. a folder left behind
+ * by a removed course.
+ */
+export function findStoredExercise(
+  userData: Pick<UserData, "getCourseBySlug">,
+  exercise: { backend: BackendKind; courseSlug: string; exerciseSlug: string },
+): Result<{ course: LocalCourseData; exercise: LocalCourseExercise }, Error> {
+  const course = userData.getCourseBySlug(exercise.backend, exercise.courseSlug)
+  if (course.err) {
+    return course
+  }
+  const stored = LocalCourseData.getExercises(course.val).find(
+    (x) => LocalCourseExercise.getSlug(x) === exercise.exerciseSlug,
+  )
+  return stored
+    ? Ok({ course: course.val, exercise: stored })
+    : Err(
+        new Error(`ID for exercise ${exercise.courseSlug}/${exercise.exerciseSlug} was not found.`),
+      )
 }

@@ -2,10 +2,11 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import Dialog from "../../api/dialog"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import type { LocalCourseData, LocalCourseExercise } from "../../shared/shared"
-import { makeMoocKind } from "../../shared/shared"
-import { createExerciseActivity } from "../../ui/statusBarActivity"
+import { ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
+import { exerciseOperations } from "../../ui/exerciseOperations"
 import type { ExerciseStatusSources } from "../../ui/statusBarExercise"
 import { ExerciseStatusBarItem, showExerciseActions } from "../../ui/statusBarExercise"
 import { exerciseHelloWorld } from "../fixtures/workspaceManager"
@@ -23,6 +24,8 @@ function storedExercise(awardedPoints: number, availablePoints: number): LocalCo
     passed: awardedPoints === availablePoints,
   }) as LocalCourseExercise
 }
+
+const STORED_ID = ExerciseIdentifier.from("exercise-uuid")
 
 const course = makeMoocKind({ id: "course-uuid" }) as unknown as LocalCourseData
 
@@ -55,7 +58,7 @@ function harness(): Harness {
       getCourseBySlug: () => Ok(course),
       onDidChangeCourses: coursesChanged.event,
     },
-    activity: createExerciseActivity(),
+    operations: exerciseOperations,
   }
   return { sources, active, stored, editorChanged, coursesChanged }
 }
@@ -129,8 +132,9 @@ suite("ExerciseStatusBarItem", function () {
     track(new ExerciseStatusBarItem(h.sources))
     let duringRun = ""
 
-    await h.sources.activity.run(exerciseHelloWorld.uri, "testing", async () => {
+    await exerciseOperations.run(STORED_ID, "testing", 60_000, async () => {
       duringRun = itemOf().text
+      return Ok.EMPTY
     })
 
     expect(duringRun).toBe(`$(sync~spin) Testing ${exerciseHelloWorld.exerciseSlug}…`)
@@ -142,8 +146,9 @@ suite("ExerciseStatusBarItem", function () {
     track(new ExerciseStatusBarItem(h.sources))
     let label: string | undefined
 
-    await h.sources.activity.run(exerciseHelloWorld.uri, "submitting", async () => {
+    await exerciseOperations.run(STORED_ID, "submitting", 60_000, async () => {
       label = itemOf().accessibilityInformation?.label
+      return Ok.EMPTY
     })
 
     expect(label).toContain("submitting")
@@ -194,7 +199,7 @@ suite("showExerciseActions", function () {
       items: readonly { label: string }[],
     ) => items.find((x) => x.label.includes("Submit"))) as never)
 
-    await showExerciseActions(harness().sources, true)
+    await showExerciseActions(new Dialog(), harness().sources, true)
 
     expect(offered()).toEqual([
       "Run Tests",
@@ -213,7 +218,7 @@ suite("showExerciseActions", function () {
       items: readonly { label: string }[],
     ) => items.find((x) => x.label.includes("Courses View"))) as never)
 
-    await showExerciseActions(harness().sources, true)
+    await showExerciseActions(new Dialog(), harness().sources, true)
 
     expect(executeCommand).toHaveBeenCalledWith("tmc.revealInCoursesView", exerciseHelloWorld.uri)
   })
@@ -221,7 +226,7 @@ suite("showExerciseActions", function () {
   test("logged out, offers only what runs locally", async function () {
     vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)
 
-    await showExerciseActions(harness().sources, false)
+    await showExerciseActions(new Dialog(), harness().sources, false)
 
     expect(offered()).toEqual(["Run Tests"])
   })
@@ -231,7 +236,7 @@ suite("showExerciseActions", function () {
     const { sources } = harness()
     sources.userData.getCourseBySlug = () => Err(new Error("no such course"))
 
-    await showExerciseActions(sources, true)
+    await showExerciseActions(new Dialog(), sources, true)
 
     expect(offered()).not.toContain("Reveal in Courses View")
   })
@@ -241,7 +246,7 @@ suite("showExerciseActions", function () {
     const h = harness()
     h.active.exercise = undefined
 
-    await showExerciseActions(h.sources, true)
+    await showExerciseActions(new Dialog(), h.sources, true)
 
     expect(showQuickPick).not.toHaveBeenCalled()
   })

@@ -410,6 +410,15 @@ suite("WorkspaceManager class", function () {
       ])
     })
 
+    test("closing an exercise announces the change once, not again for its folder move", async function () {
+      const changed = vi.fn()
+      manager.onDidChangeExercises(changed)
+
+      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+
+      expect(changed).toHaveBeenCalledOnce()
+    })
+
     test("the closed set a refresh was built from is not written back", async function () {
       stubWorkspace("workspaceFolders", [
         rootFolder,

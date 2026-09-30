@@ -2,7 +2,7 @@ import { vi } from "vitest"
 import type { OutputChannel } from "vscode"
 import * as vscode from "vscode"
 
-import Dialog, { courseSelectionItems } from "../../api/dialog"
+import Dialog, { courseSelectionItems, separator } from "../../api/dialog"
 import { InsufficientScopeError, RuntimeError } from "../../errors"
 import type {
   LocalCourseData,
@@ -55,6 +55,22 @@ suite("Dialog.selectItem", function () {
       { label: "shared-slug", value: "mooc-course", description: "courses.mooc.fi" },
     )
     expect(picked).toBe("mooc-course")
+  })
+
+  test("shows separators between the rows, as headings", async function () {
+    stubPick((items) => items[2])
+    const heading = separator("More")
+
+    const picked = await new Dialog().selectItem("Which?", { label: "a", value: 1 }, heading, {
+      label: "b",
+      value: 2,
+    })
+
+    expect(showQuickPick.mock.calls[0]?.[0]?.[1]).toEqual({
+      label: "More",
+      kind: vscode.QuickPickItemKind.Separator,
+    })
+    expect(picked).toBe(2)
   })
 
   test("returns undefined when the pick is dismissed", async function () {

@@ -19,7 +19,7 @@ import type {
 import { CourseIdentifier } from "../../shared/shared"
 import Storage from "../../storage"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
-import type UI from "../../ui/ui"
+import type CoursesTree from "../../ui/treeview/treeview"
 import { Logger } from "../../utilities"
 import { combineTmcApiExerciseData } from "../../utilities/apiData"
 import {
@@ -206,7 +206,7 @@ suite("updateCourse action (mooc)", function () {
     tmcMockValues.getMoocCourseData = Ok([moocCourse, moocExerciseSlides])
     await updateCourse(context, courseId)
 
-    expect(vi.mocked(context.ui.treeDP.setBackendReachable).mock.calls).toEqual([
+    expect(vi.mocked(context.coursesTree.setBackendReachable).mock.calls).toEqual([
       ["mooc", false],
       ["mooc", true],
     ])
@@ -476,7 +476,7 @@ suite("updateCourse after addNewCourse", function () {
     workspaceManager.createWorkspaceFile = vi.fn() as never
     return {
       ...createMockActionContext({ startup: { langs: langsMock, userData, workspaceManager } }),
-      ui: { treeDP: { refresh: vi.fn(), setBackendReachable: vi.fn() } } as unknown as UI,
+      coursesTree: { setBackendReachable: vi.fn() } as unknown as CoursesTree,
     }
   }
 

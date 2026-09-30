@@ -1,10 +1,7 @@
-import { Ok } from "ts-results"
+import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
-import {
-  courseDownloadFlight,
-  downloadNewExercisesForCourse,
-} from "../../actions/downloadNewExercisesForCourse"
+import { downloadNewExercisesForCourse } from "../../actions/downloadNewExercisesForCourse"
 import { downloadOrUpdateExercises } from "../../actions/downloadOrUpdateExercises"
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
 import type { ReadyActionContext } from "../../actions/types"
@@ -12,7 +9,6 @@ import type { UserData } from "../../config/userdata"
 import { BottleneckError } from "../../errors"
 import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
-import { acquireSingleFlight, releaseSingleFlight } from "../../utilities"
 import { createMockActionContext } from "../mocks/actionContext"
 
 vi.mock("../../actions/downloadOrUpdateExercises", () => ({
@@ -75,10 +71,12 @@ suite("downloadNewExercisesForCourse action", function () {
   })
 
   test("leaves nothing new once every exercise has been downloaded", async function () {
-    vi.mocked(downloadOrUpdateExercises).mockResolvedValue({
-      successful: [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
-      failed: [],
-    })
+    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(
+      Ok({
+        successful: [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
+        failed: [],
+      }),
+    )
 
     const result = await downloadNewExercisesForCourse(actionContext(), COURSE_ID)
 
@@ -87,10 +85,12 @@ suite("downloadNewExercisesForCourse action", function () {
   })
 
   test("keeps only the exercises that failed to download new", async function () {
-    vi.mocked(downloadOrUpdateExercises).mockResolvedValue({
-      successful: [ExerciseIdentifier.from(1)],
-      failed: [ExerciseIdentifier.from(2)],
-    })
+    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(
+      Ok({
+        successful: [ExerciseIdentifier.from(1)],
+        failed: [ExerciseIdentifier.from(2)],
+      }),
+    )
 
     await downloadNewExercisesForCourse(actionContext(), COURSE_ID)
 
@@ -105,15 +105,14 @@ suite("downloadNewExercisesForCourse action", function () {
     expect(stillNew()).toEqual([1, 2])
   })
 
-  test("refuses while another download of the course runs", async function () {
-    const { key } = courseDownloadFlight(COURSE_ID)
-    acquireSingleFlight(key, 60_000)
-    onTestFinished(() => releaseSingleFlight(key))
+  test("keeps every exercise new when the download is refused as already running", async function () {
+    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(
+      Err(new BottleneckError("Some of these exercises are already downloading.")),
+    )
 
     const result = await downloadNewExercisesForCourse(actionContext(), COURSE_ID)
 
     expect(result.err && result.val).toBeInstanceOf(BottleneckError)
-    expect(downloadOrUpdateExercises).not.toHaveBeenCalled()
     expect(stillNew()).toEqual([1, 2])
   })
 })

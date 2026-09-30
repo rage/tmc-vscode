@@ -4,8 +4,8 @@ import type * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
-import type { ExtensionToWebview } from "../shared/shared"
-import { WebviewStateSchema } from "../shared/shared"
+import type { ExtensionToWebview, Panel } from "../shared/shared"
+import { panelTarget, WebviewStateSchema } from "../shared/shared"
 import { Logger } from "../utilities"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
@@ -13,7 +13,6 @@ import { messageHandlers } from "./handlers"
 import { postMessageToWebview, renderPanel } from "./panel"
 import type { HandlerContext, PanelHost } from "./router"
 import { dispatch } from "./router"
-import type { PanelRoute } from "./routes"
 import { nextPanelId, panelTitle } from "./routes"
 
 export { nextPanelId } from "./routes"
@@ -49,7 +48,7 @@ export class TmcPanel {
 
   // resent on "ready" so a reloaded webview can recover. Per-instance: the main and
   // side panels show different panels.
-  private _route: PanelRoute | undefined
+  private _route: Panel | undefined
 
   // Until "ready", messages are only buffered: that handshake is the single path that
   // renders a panel, for a new document and one reloaded after being hidden alike.
@@ -84,17 +83,9 @@ export class TmcPanel {
    * is for messages every open panel should see.
    */
   private _postMessage(message: ExtensionToWebview): void {
-    // Only id-carrying targets are buffered. A broadcast target has no id, and the
-    // messages that use one (setCourseDisabledStatus) are posted once per course, so they
-    // would all collapse onto one key and only the last would survive; the course data a
-    // reloaded panel asks for carries the same state.
-    // A `reply` is left out on top of that: the reloaded webview asks again, and a
-    // replayed answer to the request of a page that no longer exists settles nothing.
-    if (
-      message.type !== "reply" &&
-      "id" in message.target &&
-      message.target.id === this._route?.id
-    ) {
+    // A `reply` is left out: the reloaded webview asks again, and a replayed answer to the
+    // request of a page that no longer exists settles nothing.
+    if (message.type !== "reply" && message.target.id === this._route?.id) {
       this._messageBuffer.set(`${message.target.id}:${message.type}`, message)
     }
     this._postTransient(message)
@@ -112,7 +103,7 @@ export class TmcPanel {
     extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
-    route: PanelRoute,
+    route: Panel,
   ): void {
     if (TmcPanel.mainPanel !== undefined) {
       Logger.info(`Revealing existing main panel for "${route.type}"`)
@@ -135,7 +126,7 @@ export class TmcPanel {
     extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
-    route: PanelRoute,
+    route: Panel,
   ): void {
     if (TmcPanel.sidePanel !== undefined) {
       Logger.info(`Revealing existing side panel for "${route.type}"`)
@@ -158,7 +149,7 @@ export class TmcPanel {
     extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
-    route: PanelRoute,
+    route: Panel,
     isMain: boolean,
   ): TmcPanel {
     const showOptions = isMain
@@ -216,7 +207,7 @@ export class TmcPanel {
     extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
-    route: PanelRoute,
+    route: Panel,
     isMain: boolean,
   ): TmcPanel {
     webviewPanel.iconPath = {
@@ -259,6 +250,12 @@ export class TmcPanel {
 
     this._panel.webview.html = webviewContent(this._panel.webview, extensionUri)
 
+    if (isReady(actionContext)) {
+      this._disposables.push(
+        actionContext.startup.userData.onDidChangeCourses(() => this._onDidChangeCourses()),
+      )
+    }
+
     const handlerContext: HandlerContext = {
       host: this._createHost(extensionContext),
       actionContext,
@@ -297,7 +294,7 @@ export class TmcPanel {
   }
 
   private _createHost(extensionContext: vscode.ExtensionContext): PanelHost {
-    const currentRoute = (): PanelRoute | undefined => this._route
+    const currentRoute = (): Panel | undefined => this._route
     return {
       name: this._webviewName,
       get route() {
@@ -317,8 +314,29 @@ export class TmcPanel {
     }
   }
 
+  /**
+   * Keeps a CourseDetails screen and its tab title on the stored course. Not buffered: the
+   * screen asks for its course whenever its document loads.
+   */
+  private _onDidChangeCourses(): void {
+    const route = this._route
+    if (route?.type !== "CourseDetails" || !isReady(this._actionContext)) {
+      return
+    }
+    const course = this._actionContext.startup.userData.getCourse(route.courseId)
+    if (course.err) {
+      return
+    }
+    this._panel.title = panelTitle(route, this._actionContext)
+    this._postTransient({
+      type: "setCourseData",
+      target: panelTarget(route),
+      courseData: course.val,
+    })
+  }
+
   // remembers `route` so "ready" can (re)send it
-  private _render(route: PanelRoute): void {
+  private _render(route: Panel): void {
     this._route = route
     this._messageBuffer.clear()
     this._panel.title = panelTitle(route, this._actionContext)
@@ -353,7 +371,7 @@ function webviewOptions(extensionUri: Uri): WebviewOptions {
 }
 
 /** The screen a restored main panel's saved `state` names, if it can still be shown. */
-function restoredRoute(state: unknown, actionContext: ActionContext): PanelRoute | undefined {
+function restoredRoute(state: unknown, actionContext: ActionContext): Panel | undefined {
   const saved = WebviewStateSchema.safeParse(state)
   const route = saved.success ? saved.data.route : undefined
   if (route?.type === "CourseDetails") {

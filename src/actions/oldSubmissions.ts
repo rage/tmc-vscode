@@ -5,9 +5,15 @@ import type {
   ExerciseSlideSubmissionListItem,
   MoocOldSubmissionRestore,
 } from "../shared/langsSchema"
-import type { Enum, ExerciseIdentifier } from "../shared/shared"
-import { assertUnreachable, makeMoocKind, makeTmcKind, match } from "../shared/shared"
-import { runSingleFlight } from "../utilities"
+import {
+  assertUnreachable,
+  Enum,
+  ExerciseIdentifier,
+  makeMoocKind,
+  makeTmcKind,
+  match,
+} from "../shared/shared"
+import { exerciseOperations } from "../ui/exerciseOperations"
 import type { ReadyActionContext } from "./types"
 
 /**
@@ -91,8 +97,7 @@ export async function listOldSubmissions(
  * that state first.
  *
  * Rejects as a `BottleneckError` while a submit, paste, reset or restore of the same
- * exercise is already in flight — all of them share one key because each overwrites or
- * reads the directory the others act on. The tmc CLI reports no outcome and only ever
+ * exercise is already in flight. The tmc CLI reports no outcome and only ever
  * restores, so its result is read as the mooc outcome the caller branches on.
  */
 export async function restoreOldSubmission(
@@ -102,12 +107,10 @@ export async function restoreOldSubmission(
   submitFirst: boolean,
 ): Promise<Result<MoocOldSubmissionRestore, Error>> {
   const { langs } = actionContext.startup
-  return runSingleFlight(
-    {
-      key: `submit:${exercisePath}`,
-      maxHoldMs: CLI_PROCESS_TIMEOUT + 30_000,
-      busyMessage: "A submission for this exercise is already in progress.",
-    },
+  return exerciseOperations.run(
+    ExerciseIdentifier.from(Enum.unwrap(target).exerciseId),
+    "restoring",
+    CLI_PROCESS_TIMEOUT + 30_000,
     () =>
       match(
         target,

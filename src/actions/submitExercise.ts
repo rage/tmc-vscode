@@ -33,7 +33,8 @@ import {
   toWebviewError,
   unwrap,
 } from "../shared/shared"
-import { Logger, parseFeedbackQuestion, runSingleFlight } from "../utilities"
+import { exerciseOperations } from "../ui/exerciseOperations"
+import { Logger, parseFeedbackQuestion } from "../utilities"
 import type { ReadyActionContext } from "./types"
 
 /** What a backend answered a submission with, reduced to what the shared flow acts on. */
@@ -256,15 +257,12 @@ export async function submitExercise(
     )
   }
 
-  // Key shared with the paste actions, which must not overlap a submit of the same exercise.
   // Held only until the result is posted: the panel offers Paste from that point on, and
   // the command layer's post-submit refresh doesn't need the same protection.
-  const submitted = await runSingleFlight(
-    {
-      key: `submit:${exercise.uri.fsPath}`,
-      maxHoldMs: SUBMIT_PROCESS_TIMEOUT + 30_000,
-      busyMessage: "A submission for this exercise is already in progress.",
-    },
+  const submitted = await exerciseOperations.run(
+    LocalCourseExercise.getId(courseExercise),
+    "submitting",
+    SUBMIT_PROCESS_TIMEOUT + 30_000,
     async () => {
       const panel: ExerciseSubmissionPanel = {
         id: nextPanelId(),
@@ -290,17 +288,12 @@ export async function submitExercise(
   return Ok(LocalCourseData.getCourseId(course))
 }
 
-/** The exercise whose grading submission panel `panelId` can still wait for, if any. */
-export function exerciseAwaitingGrading(panelId: number): WorkspaceExercise | undefined {
-  return unfinishedGradings.get(panelId)?.exercise
-}
-
 /**
  * Waits again for the grading of the submission panel `panelId` shows, after the wait that
  * followed its submit ended before the grading did.
  *
  * Returns the exercise's course id, like {@link submitExercise}. Errs when that panel shows
- * no such submission, or when a wait for it is already running.
+ * no such submission, or when a submission of the exercise is already in progress.
  */
 export async function keepWaitingForGrading(
   context: vscode.ExtensionContext,
@@ -311,12 +304,10 @@ export async function keepWaitingForGrading(
   if (grading === undefined) {
     return Err(new Error("This submission has no grading left to wait for."))
   }
-  return runSingleFlight(
-    {
-      key: `grading:${grading.taskSubmissionId}`,
-      maxHoldMs: SUBMIT_PROCESS_TIMEOUT + 30_000,
-      busyMessage: "Already waiting for this submission's grading.",
-    },
+  return exerciseOperations.run(
+    LocalCourseExercise.getId(grading.panel.exercise),
+    "submitting",
+    SUBMIT_PROCESS_TIMEOUT + 30_000,
     async () => {
       unfinishedGradings.delete(panelId)
       const reporter = new SubmissionProgressReporter(panelTarget(grading.panel), "grading")

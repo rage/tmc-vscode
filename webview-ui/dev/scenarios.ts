@@ -60,8 +60,7 @@ function answerCourseDetails(panel: { id: number }, course: typeof tmcCourse) {
     }
     const target = { type: "CourseDetails" as const, id: panel.id }
     return [
-      { type: "setCourseData", target, courseData: course },
-      { type: "reply", target, requestId: message.requestId, outcome: { ok: true } },
+      { type: "reply", target, requestId: message.requestId, outcome: { ok: true, value: course } },
     ]
   }
 }

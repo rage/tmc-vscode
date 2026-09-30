@@ -19,6 +19,16 @@ export interface Item<T> {
   iconPath?: vscode.ThemeIcon
 }
 
+/** A heading between groups of {@link Item}s, which the user cannot pick. */
+export interface Separator {
+  label: string
+  kind: vscode.QuickPickItemKind.Separator
+}
+
+export function separator(label: string): Separator {
+  return { label, kind: vscode.QuickPickItemKind.Separator }
+}
+
 /**
  * A notification button: its label, and what pressing it does. Buttons are
  * resolved by identity rather than by label, so two may share a label.
@@ -235,14 +245,14 @@ export default class Dialog {
    */
   public async selectItem<T>(
     prompt: string | { title: string; placeHolder: string },
-    ...items: Item<T>[]
+    ...items: (Item<T> | Separator)[]
   ): Promise<T | undefined> {
     const options =
       typeof prompt === "string"
         ? { placeHolder: prompt }
         : { title: prompt.title, placeHolder: prompt.placeHolder }
     const picked = await vscode.window.showQuickPick(items, options)
-    return picked?.value
+    return picked && "value" in picked ? picked.value : undefined
   }
 
   /**

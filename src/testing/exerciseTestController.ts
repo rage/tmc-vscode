@@ -9,9 +9,10 @@ import type { WorkspaceExercise } from "../api/workspaceManager"
 import { BottleneckError } from "../errors"
 import type { RunResult, TestResult } from "../shared/langsSchema"
 import { BaseError } from "../shared/shared"
-import { exerciseActivity } from "../ui/statusBarActivity"
+import { countOf } from "../utilities"
 import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
 import { openCourseExercises } from "./openExercises"
+import { createSourceFileFinder } from "./sourceFiles"
 import { failureMessage } from "./testMessages"
 
 /** The `controllerId` that package.json's `testing/*` menus match on. */
@@ -78,11 +79,7 @@ export class ExerciseTestController implements vscode.Disposable {
 
   /** The exercise folder of a test item, or of the exercise a test belongs to. */
   public exerciseUriOf(item: vscode.TestItem | undefined): vscode.Uri | undefined {
-    let root = item
-    while (root?.parent) {
-      root = root.parent
-    }
-    return root && this._exercisesByItemId.get(root.id)?.uri
+    return item && this._exercisesByItemId.get(rootOf(item).id)?.uri
   }
 
   public dispose(): void {
@@ -110,10 +107,7 @@ export class ExerciseTestController implements vscode.Disposable {
     const excluded = new Set(request.exclude?.map((item) => item.id))
     const requested = new Map<string, [vscode.TestItem, WorkspaceExercise]>()
     for (const item of included) {
-      let root = item
-      while (root.parent) {
-        root = root.parent
-      }
+      const root = rootOf(item)
       const exercise = this._exercisesByItemId.get(root.id)
       if (exercise && !excluded.has(root.id)) {
         requested.set(root.id, [root, exercise])
@@ -174,9 +168,7 @@ export class ExerciseTestController implements vscode.Disposable {
     exercise: WorkspaceExercise,
     token: vscode.CancellationToken,
   ): Promise<Result<ExerciseTestOutcome, Error>> {
-    return exerciseActivity.run(exercise.uri, "testing", () =>
-      testExercise(this._actionContext, exercise, token),
-    )
+    return testExercise(this._actionContext, exercise, token)
   }
 
   private _reportError(run: vscode.TestRun, item: vscode.TestItem, error: Error): void {
@@ -253,7 +245,7 @@ export class ExerciseTestController implements vscode.Disposable {
     if (styleProblemCount > 0) {
       messages.push(
         new vscode.TestMessage(
-          `Code quality checks found ${styleProblemCount} ${styleProblemCount === 1 ? "problem" : "problems"}. They are listed in the Problems panel.`,
+          `Code quality checks found ${countOf(styleProblemCount, "problem")}. They are listed in the Problems panel.`,
         ),
       )
     }
@@ -282,11 +274,20 @@ export class ExerciseTestController implements vscode.Disposable {
       children.set(id, [child, result])
     }
     item.children.replace([...children.values()].map(([child]) => child))
-    for (const [child, result] of children.values()) {
-      if (result.successful) {
-        run.passed(child)
+    const findFile = createSourceFileFinder(exercise.uri.fsPath)
+    const outcomes = await Promise.all(
+      [...children.values()].map(async ([child, result]) => ({
+        child,
+        failure: result.successful
+          ? undefined
+          : await failureMessage(result, exercise.uri.fsPath, findFile),
+      })),
+    )
+    for (const { child, failure } of outcomes) {
+      if (failure) {
+        run.failed(child, failure)
       } else {
-        run.failed(child, await failureMessage(result, exercise.uri.fsPath))
+        run.passed(child)
       }
     }
   }
@@ -337,4 +338,13 @@ function runFailure(runResult: RunResult): string | undefined {
 // The Test Results terminal needs CRLF line endings.
 function toTerminalText(text: string): string {
   return text.replaceAll(/\r?\n/g, "\r\n")
+}
+
+/** The exercise item a test item sits under, or the item itself when it is one. */
+function rootOf(item: vscode.TestItem): vscode.TestItem {
+  let root = item
+  while (root.parent) {
+    root = root.parent
+  }
+  return root
 }

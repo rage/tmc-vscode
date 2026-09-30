@@ -129,12 +129,15 @@ export async function downloadAndOpenExercises(
     (eto) => !localExerciseIds.has(ExerciseIdentifier.unwrap(LocalCourseExercise.getId(eto))),
   )
   if (exercisesToDownload.length > 0) {
-    await downloadExercisesForUi(
+    const downloaded = await downloadExercisesForUi(
       actionContext,
       "download",
       courseId,
       exercisesToDownload.map((etd) => LocalCourseExercise.getId(etd)),
     )
+    if (downloaded.err) {
+      return downloaded
+    }
   }
 
   return openExercises(actionContext, exerciseIdsToOpen, courseId)

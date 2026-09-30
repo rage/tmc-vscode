@@ -5,15 +5,16 @@ import type Langs from "../api/langs"
 import { CLI_PROCESS_TIMEOUT } from "../config/constants"
 import type { UserData } from "../config/userdata"
 import type { BackendKind } from "../shared/shared"
-import { runSingleFlight } from "../utilities"
+import { ExerciseIdentifier } from "../shared/shared"
+import { exerciseOperations } from "../ui/exerciseOperations"
 import type { ReadyActionContext } from "./types"
 
 /** Sends the exercise directory `exercisePath` to one backend's paste service. */
 type ExercisePaster = (exercisePath: string) => Promise<Result<string, Error>>
 
 /**
- * Builds the paste call for `backend`, or `undefined` when that backend has no exercise
- * by this name.
+ * Builds the paste call for `backend`, with the exercise it pastes, or `undefined` when that
+ * backend has no exercise by this name.
  */
 function pasterFor(
   langs: Langs,
@@ -21,18 +22,22 @@ function pasterFor(
   backend: BackendKind,
   courseSlug: string,
   exerciseName: string,
-): ExercisePaster | undefined {
+): { exerciseId: ExerciseIdentifier; paste: ExercisePaster } | undefined {
   if (backend === "tmc") {
     const exerciseId = userData.getTmcExerciseByName(courseSlug, exerciseName)?.id
     return exerciseId
-      ? (exercisePath): Promise<Result<string, Error>> =>
-          langs.submitTmcExerciseToPaste(exerciseId, exercisePath)
+      ? {
+          exerciseId: ExerciseIdentifier.from(exerciseId),
+          paste: (exercisePath) => langs.submitTmcExerciseToPaste(exerciseId, exercisePath),
+        }
       : undefined
   }
   const exerciseId = userData.getMoocExerciseByName(courseSlug, exerciseName)?.id
   return exerciseId
-    ? (exercisePath): Promise<Result<string, Error>> =>
-        langs.submitMoocExerciseToPaste(exerciseId, exercisePath)
+    ? {
+        exerciseId: ExerciseIdentifier.from(exerciseId),
+        paste: (exercisePath) => langs.submitMoocExerciseToPaste(exerciseId, exercisePath),
+      }
     : undefined
 }
 
@@ -51,22 +56,19 @@ export async function pasteExercise(
 ): Promise<Result<string, Error>> {
   const { langs, userData, workspaceManager } = actionContext.startup
 
-  const paste = pasterFor(langs, userData, backend, courseSlug, exerciseName)
+  const paster = pasterFor(langs, userData, backend, courseSlug, exerciseName)
   const exercisePath = workspaceManager.getExerciseBySlug(backend, courseSlug, exerciseName)?.uri
     .fsPath
-  if (!paste || !exercisePath) {
+  if (!paster || !exercisePath) {
     return Err(new Error("Failed to resolve exercise id"))
   }
 
-  // key shared with the submit actions, which must not overlap a paste of the same exercise
-  return runSingleFlight(
-    {
-      key: `submit:${exercisePath}`,
-      maxHoldMs: CLI_PROCESS_TIMEOUT + 30_000,
-      busyMessage: "A submission for this exercise is already in progress.",
-    },
+  return exerciseOperations.run(
+    paster.exerciseId,
+    "pasting",
+    CLI_PROCESS_TIMEOUT + 30_000,
     async () => {
-      const pasteResult = await paste(exercisePath)
+      const pasteResult = await paster.paste(exercisePath)
       if (pasteResult.err) {
         return pasteResult
       }

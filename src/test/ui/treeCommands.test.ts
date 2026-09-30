@@ -1,4 +1,4 @@
-import { Ok } from "ts-results"
+import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
 import { closeExercises as closeExercisesAction } from "../../actions/closeExercises"
@@ -8,6 +8,7 @@ import type { ReadyActionContext } from "../../actions/types"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
+import { BottleneckError } from "../../errors"
 import type { CourseIdentifier, ExerciseStatus as RowStatus } from "../../shared/shared"
 import { makeMoocKind, makeTmcKind } from "../../shared/shared"
 import {
@@ -25,7 +26,7 @@ import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions/downloadExercisesForUi", () => ({
-  downloadExercisesForUi: vi.fn(async () => undefined),
+  downloadExercisesForUi: vi.fn(async () => Ok.EMPTY),
 }))
 vi.mock("../../actions/openExercises", () => ({
   downloadAndOpenExercises: vi.fn(async () => Ok({ ids: [], exceededOpenLimit: undefined })),
@@ -34,6 +35,8 @@ vi.mock("../../actions/openExercises", () => ({
 vi.mock("../../actions/closeExercises", () => ({
   closeExercises: vi.fn(async (_context: unknown, ids: unknown[]) => Ok(ids)),
 }))
+
+const BUSY = "Some of these exercises are already downloading."
 
 const tmcCourse = makeTmcKind({ courseId: 1 })
 const moocCourse = makeMoocKind({ instanceId: "course-uuid" })
@@ -134,25 +137,13 @@ suite("Courses view commands", function () {
     ])
   })
 
-  test("a second download of the same course is turned away while one runs", async function () {
-    let finish: (() => void) | undefined
-    vi.mocked(downloadExercisesForUi).mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          finish = resolve
-        }),
-    )
+  test("a download refused as already running says so", async function () {
+    vi.mocked(downloadExercisesForUi).mockResolvedValueOnce(Err(new BottleneckError(BUSY)))
     const actionContext = context()
-    const first = downloadExercises(actionContext, [row(tmcCourse, 1, "missing")])
 
     await downloadExercises(actionContext, [row(tmcCourse, 2, "missing")])
-    finish?.()
-    await first
 
-    expect(downloadExercisesForUi).toHaveBeenCalledOnce()
-    expect(actionContext.dialog.notification).toHaveBeenCalledWith(
-      "This course's exercises are already downloading.",
-    )
+    expect(actionContext.dialog.notification).toHaveBeenCalledWith(BUSY)
   })
 
   test("open skips what is already open or on its way", async function () {
@@ -237,6 +228,15 @@ suite("Courses view commands", function () {
     await updateCourseExercises(actionContext, tmcCourse)
 
     expect(downloadExercisesForUi).toHaveBeenCalledWith(actionContext, "update", tmcCourse, updates)
+  })
+
+  test("an update refused as already running says so", async function () {
+    vi.mocked(downloadExercisesForUi).mockResolvedValueOnce(Err(new BottleneckError(BUSY)))
+    const actionContext = context()
+
+    await updateCourseExercises(actionContext, tmcCourse)
+
+    expect(actionContext.dialog.notification).toHaveBeenCalledWith(BUSY)
   })
 
   test("dismissing the new exercises clears them from the stored course", async function () {

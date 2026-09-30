@@ -33,6 +33,17 @@ suite("CourseDetails panel", () => {
     })
   })
 
+  test("renders the course the host answers its request with", async () => {
+    const panel = tmcPanel()
+    render(CourseDetails, { props: { panel } })
+
+    replyToRequest("requestCourseDetailsData", { ok: true, value: tmcLocalCourse() })
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Python Course" }),
+    ).toBeInTheDocument()
+  })
+
   test("renders the course overview, with no exercise list of its own", async () => {
     const panel = tmcPanel()
     render(CourseDetails, { props: { panel } })
@@ -121,12 +132,7 @@ suite("CourseDetails panel", () => {
     sendCourse(panel)
     await screen.findByRole("heading", { level: 1, name: "Python Course" })
 
-    dispatch({
-      type: "setCourseDisabledStatus",
-      target: { type: "CourseDetails" },
-      courseId: makeTmcKind({ courseId: 42 }),
-      disabled: true,
-    })
+    sendCourse(panel, tmcLocalCourse({ disabled: true }))
 
     expect(await screen.findByText(/This course has been disabled/)).toBeInTheDocument()
   })
@@ -158,7 +164,7 @@ suite("CourseDetails panel", () => {
     })
   })
 
-  test("posts refreshCourseDetails after a message has replaced the panel", async () => {
+  test("posts refreshCourseDetails for the course it shows", async () => {
     const panel = tmcPanel()
     render(CourseDetails, { props: { panel } })
     sendCourse(panel)
@@ -171,8 +177,23 @@ suite("CourseDetails panel", () => {
       type: "refreshCourseDetails",
       requestId: expect.any(Number),
       sourcePanel: { id: panel.id, type: "CourseDetails" },
-      id: makeTmcKind({ courseId: 42 }),
     })
+  })
+
+  test("shows the course the refresh answers with", async () => {
+    const panel = tmcPanel()
+    render(CourseDetails, { props: { panel } })
+    sendCourse(panel)
+    ;(await screen.findByRole("button", { name: "Refresh" })).click()
+
+    replyToRequest("refreshCourseDetails", {
+      ok: true,
+      value: tmcLocalCourse({ title: "Renamed Course" }),
+    })
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Renamed Course" }),
+    ).toBeInTheDocument()
   })
 
   test("stops refreshing when the host reports the refresh finished", async () => {

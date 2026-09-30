@@ -24,10 +24,11 @@ function harness(answers: { tmc?: boolean[]; mooc?: boolean[] } = {}): {
     }),
   } as unknown as Langs
   const setLoggedIn = vi.fn()
-  const ui = { treeDP: { setLoggedIn } }
+  const authState = createAuthState(new Ok(langs))
+  authState.subscribe(setLoggedIn)
 
   return {
-    authState: createAuthState(new Ok(langs), ui),
+    authState,
     setLoggedIn,
     loggedInContext: () =>
       vi
@@ -120,9 +121,7 @@ suite("AuthState", function () {
         return Ok(false)
       }),
     } as unknown as Langs
-    const ui = { treeDP: { setLoggedIn: vi.fn() } }
-
-    await createAuthState(new Ok(langs), ui).refresh()
+    await createAuthState(new Ok(langs)).refresh()
 
     expect(events).toEqual(["tmc started", "mooc started", "tmc answered", "mooc answered"])
   })

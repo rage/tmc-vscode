@@ -155,6 +155,11 @@ export function sleep(millis: number): Promise<void> {
   })
 }
 
+/** `count` and `noun`, with an "s" unless `count` is 1, e.g. "3 new exercises". */
+export function countOf(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`
+}
+
 export function formatSizeInBytes(size: number, precision = 3): string {
   let suffix = "B"
   let cSize = size

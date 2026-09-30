@@ -2,7 +2,6 @@ import { Ok } from "ts-results"
 
 import {
   closeExercises as closeExercisesAction,
-  courseDownloadFlight,
   downloadAndOpenExercises,
   downloadExercisesForUi,
 } from "../../actions"
@@ -15,7 +14,7 @@ import {
   LocalCourseData,
   LocalCourseExercise,
 } from "../../shared/shared"
-import { runSingleFlight } from "../../utilities"
+import { countOf } from "../../utilities"
 import { updateablesRegistry } from "../updateablesRegistry"
 import type { CoursesTreeItem, ExerciseTreeItem } from "./treeview"
 import { exerciseItems, isDownloadable } from "./treeview"
@@ -46,11 +45,7 @@ export async function downloadExercises(
     await withOperation(
       actionContext.dialog,
       { failure: "Failed to download the exercises.", backend: courseId.kind },
-      () =>
-        runSingleFlight(courseDownloadFlight(courseId), async () => {
-          await downloadExercisesForUi(actionContext, "download", courseId, ids)
-          return Ok.EMPTY
-        }),
+      () => downloadExercisesForUi(actionContext, "download", courseId, ids),
     )
   }
 }
@@ -131,8 +126,7 @@ export async function closeCompletedExercises(
       if (closed.err) {
         return closed
       }
-      const count = closed.val.length
-      dialog.statusMessage(`Closed ${count} completed ${count === 1 ? "exercise" : "exercises"}.`)
+      dialog.statusMessage(`Closed ${countOf(closed.val.length, "completed exercise")}.`)
       return Ok.EMPTY
     },
   )
@@ -143,7 +137,12 @@ export async function updateCourseExercises(
   actionContext: ReadyActionContext,
   courseId: CourseIdentifier,
 ): Promise<void> {
-  await downloadExercisesForUi(actionContext, "update", courseId, updateablesRegistry.get(courseId))
+  await withOperation(
+    actionContext.dialog,
+    { failure: "Failed to update the exercises.", backend: courseId.kind },
+    () =>
+      downloadExercisesForUi(actionContext, "update", courseId, updateablesRegistry.get(courseId)),
+  )
 }
 
 /** Stops announcing the course's new exercises, without downloading them. */

@@ -77,7 +77,7 @@ function contextWith(
 suite("updateExercises command", function () {
   beforeEach(function () {
     checkForExerciseUpdates.mockReset()
-    downloadExerciseUpdates.mockReset()
+    downloadExerciseUpdates.mockReset().mockResolvedValue(Ok.EMPTY)
     updateablesRegistry.clear()
   })
 

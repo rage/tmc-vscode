@@ -87,10 +87,12 @@ suite("downloadExercisesForUi, updating exercises", function () {
   })
 
   test("reports only the exercises that failed when the download succeeds", async function () {
-    vi.mocked(downloadOrUpdateExercises).mockResolvedValue({
-      successful: [ExerciseIdentifier.from(101)],
-      failed: [ExerciseIdentifier.from(102)],
-    })
+    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(
+      Ok({
+        successful: [ExerciseIdentifier.from(101)],
+        failed: [ExerciseIdentifier.from(102)],
+      }),
+    )
     const [actionContext] = contextWith([])
 
     await downloadExercisesForUi(actionContext, "update", COURSE_ID, requested)
@@ -99,7 +101,7 @@ suite("downloadExercisesForUi, updating exercises", function () {
   })
 
   test("refreshes the local exercises it just replaced", async function () {
-    vi.mocked(downloadOrUpdateExercises).mockResolvedValue({ successful: [], failed: [] })
+    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(Ok({ successful: [], failed: [] }))
     vi.mocked(refreshLocalExercises).mockResolvedValue(Err(new Error("refresh failed")))
     const [actionContext, dialog] = contextWith([])
 
@@ -118,10 +120,12 @@ suite("downloadExercisesForUi, downloading new exercises", function () {
   const requested = [ExerciseIdentifier.from(201), ExerciseIdentifier.from(202)]
 
   test("takes what it downloaded off the course's new exercises, then rescans", async function () {
-    vi.mocked(downloadOrUpdateExercises).mockResolvedValue({
-      successful: [ExerciseIdentifier.from(201)],
-      failed: [ExerciseIdentifier.from(202)],
-    })
+    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(
+      Ok({
+        successful: [ExerciseIdentifier.from(201)],
+        failed: [ExerciseIdentifier.from(202)],
+      }),
+    )
     const [actionContext] = contextWith([201, 202])
 
     await downloadExercisesForUi(actionContext, "download", COURSE_ID, requested)
@@ -131,7 +135,9 @@ suite("downloadExercisesForUi, downloading new exercises", function () {
   })
 
   test("reports a rescan that fails", async function () {
-    vi.mocked(downloadOrUpdateExercises).mockResolvedValue({ successful: requested, failed: [] })
+    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(
+      Ok({ successful: requested, failed: [] }),
+    )
     vi.mocked(refreshLocalExercises).mockResolvedValue(Err(new Error("refresh failed")))
     const [actionContext, dialog] = contextWith([201, 202])
 

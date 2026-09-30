@@ -10,7 +10,7 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import type Resources from "../../config/resources"
 import type Settings from "../../config/settings"
 import type { UserData } from "../../config/userdata"
-import type UI from "../../ui/ui"
+import type CoursesTree from "../../ui/treeview/treeview"
 import { autoMock } from "../support/mock"
 import { createDialogMock } from "./dialog"
 
@@ -64,7 +64,7 @@ export function createMockActionContext(
     authState: createMockAuthState(options.authenticated),
     dialog: dialogRunningProgressTasks(),
     settings: autoMock<Settings>(),
-    ui: { treeDP: autoMock<UI["treeDP"]>() } as unknown as UI,
+    coursesTree: autoMock<CoursesTree>(),
     startup: {
       kind: "ready",
       exerciseDecorationProvider: autoMock<ExerciseDecorationProvider>(),

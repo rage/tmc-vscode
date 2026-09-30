@@ -1,9 +1,14 @@
 import * as vscode from "vscode"
 
+import type Dialog from "../api/dialog"
+import type { Item } from "../api/dialog"
+import { separator } from "../api/dialog"
 import type WorkspaceManager from "../api/workspaceManager"
-import type { WorkspaceExercise } from "../api/workspaceManager"
+import { exerciseFor } from "../api/workspaceManager"
 import type { UserData } from "../config/userdata"
-import type { ExerciseActivity, ExerciseActivityKind } from "./statusBarActivity"
+import { LocalCourseExercise } from "../shared/shared"
+import type { ExerciseOperationKind, ExerciseOperations } from "./exerciseOperations"
+import { pointsText } from "./points"
 
 /** What the exercise status bar item and its action pick read. */
 export interface ExerciseStatusSources {
@@ -12,30 +17,12 @@ export interface ExerciseStatusSources {
     "activeExercise" | "getExerciseContaining" | "onDidChangeExercises"
   >
   userData: Pick<UserData, "getExerciseByName" | "getCourseBySlug" | "onDidChangeCourses">
-  activity: ExerciseActivity
+  operations: Pick<ExerciseOperations, "current" | "onDidChange">
 }
 
-const activityLabels: Record<ExerciseActivityKind, string> = {
+const activityLabels: Partial<Record<ExerciseOperationKind, string>> = {
   testing: "Testing",
   submitting: "Submitting",
-}
-
-function pointsOf(
-  sources: ExerciseStatusSources,
-  exercise: WorkspaceExercise,
-): { awarded: number; available: number; isPassed: boolean } | undefined {
-  const stored = sources.userData.getExerciseByName(
-    exercise.backend,
-    exercise.courseSlug,
-    exercise.exerciseSlug,
-  )
-  return stored
-    ? {
-        awarded: stored.data.awardedPoints,
-        available: stored.data.availablePoints,
-        isPassed: stored.data.passed,
-      }
-    : undefined
 }
 
 /**
@@ -59,7 +46,7 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
     this._subscriptions = [
       vscode.window.onDidChangeActiveTextEditor(render),
       _sources.workspaceManager.onDidChangeExercises(render),
-      _sources.activity.onDidChange(render),
+      _sources.operations.onDidChange(render),
       _sources.userData.onDidChangeCourses(render),
     ]
     this.render()
@@ -73,22 +60,26 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
       return
     }
     const slug = exercise.exerciseSlug
-    const activity = this._sources.activity.current(exercise.uri)
-    const points = pointsOf(this._sources, exercise)
-    const pointsText =
-      points && points.available > 0 ? `${points.awarded}/${points.available}` : undefined
+    const stored = this._sources.userData.getExerciseByName(
+      exercise.backend,
+      exercise.courseSlug,
+      exercise.exerciseSlug,
+    )
+    const running = stored && this._sources.operations.current(LocalCourseExercise.getId(stored))
+    const activity = running && activityLabels[running]
+    const points = stored && pointsText(stored.data.awardedPoints, stored.data.availablePoints)
 
     if (activity) {
-      this._item.text = `$(sync~spin) ${activityLabels[activity]} ${slug}…`
+      this._item.text = `$(sync~spin) ${activity} ${slug}…`
       this._item.accessibilityInformation = {
-        label: `TestMyCode: ${activityLabels[activity].toLowerCase()} ${slug}`,
+        label: `TestMyCode: ${activity.toLowerCase()} ${slug}`,
       }
     } else {
-      this._item.text = pointsText ? `$(beaker) ${slug} · ${pointsText}` : `$(beaker) ${slug}`
+      this._item.text = points ? `$(beaker) ${slug} · ${points.short}` : `$(beaker) ${slug}`
       this._item.accessibilityInformation = {
         label:
           `TestMyCode exercise ${slug}` +
-          (points && pointsText ? `, ${points.awarded} of ${points.available} points` : "") +
+          (points ? `, ${points.spoken}` : "") +
           ". Show exercise actions",
       }
     }
@@ -96,7 +87,7 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
       [
         `**${slug}**`,
         exercise.courseSlug,
-        ...(pointsText ? [`${pointsText} points${points?.isPassed ? " · passed" : ""}`] : []),
+        ...(points ? [`${points.short} points${stored?.data.passed ? " · passed" : ""}`] : []),
         "Click for exercise actions.",
       ].join("\n\n"),
     )
@@ -109,13 +100,9 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
   }
 }
 
-interface ExerciseAction extends vscode.QuickPickItem {
-  command?: string
-  arguments?: unknown[]
-}
-
-function separator(label: string): ExerciseAction {
-  return { label, kind: vscode.QuickPickItemKind.Separator }
+interface ExerciseAction {
+  command: string
+  arguments: unknown[]
 }
 
 /**
@@ -125,53 +112,41 @@ function separator(label: string): ExerciseAction {
  * @param isLoggedIn Whether to offer the actions that reach a backend.
  */
 export async function showExerciseActions(
+  dialog: Dialog,
   sources: Pick<ExerciseStatusSources, "workspaceManager" | "userData">,
   isLoggedIn: boolean,
   resource?: vscode.Uri,
 ): Promise<void> {
-  const exercise = resource
-    ? sources.workspaceManager.getExerciseContaining(resource)
-    : sources.workspaceManager.activeExercise
+  const exercise = exerciseFor(sources.workspaceManager, resource)
   if (!exercise) {
     return
   }
   const target = [exercise.uri]
+  const action = (label: string, command: string): Item<ExerciseAction> => ({
+    label,
+    value: { command, arguments: target },
+  })
   const course = sources.userData.getCourseBySlug(exercise.backend, exercise.courseSlug)
-  const actions: ExerciseAction[] = [
-    { label: "$(beaker) Run Tests", command: "tmc.testExercise", arguments: target },
+  const picked = await dialog.selectItem(
+    { title: exercise.exerciseSlug, placeHolder: "What do you want to do with this exercise?" },
+    action("$(beaker) Run Tests", "tmc.testExercise"),
     ...(isLoggedIn
       ? [
-          {
-            label: "$(cloud-upload) Submit Solution",
-            command: "tmc.submitExercise",
-            arguments: target,
-          },
-          { label: "$(link) Share via Paste", command: "tmc.pasteExercise", arguments: target },
+          action("$(cloud-upload) Submit Solution", "tmc.submitExercise"),
+          action("$(link) Share via Paste", "tmc.pasteExercise"),
           separator("Restore"),
-          {
-            label: "$(history) Download Old Submission…",
-            command: "tmc.downloadOldSubmission",
-            arguments: target,
-          },
-          { label: "$(discard) Reset Exercise", command: "tmc.resetExercise", arguments: target },
+          action("$(history) Download Old Submission…", "tmc.downloadOldSubmission"),
+          action("$(discard) Reset Exercise", "tmc.resetExercise"),
           ...(course.ok
             ? [
                 separator("Course"),
-                {
-                  label: "$(list-tree) Reveal in Courses View",
-                  command: "tmc.revealInCoursesView",
-                  arguments: target,
-                },
+                action("$(list-tree) Reveal in Courses View", "tmc.revealInCoursesView"),
               ]
             : []),
         ]
       : []),
-  ]
-  const picked = await vscode.window.showQuickPick(actions, {
-    title: exercise.exerciseSlug,
-    placeHolder: "What do you want to do with this exercise?",
-  })
-  if (picked?.command) {
-    await vscode.commands.executeCommand(picked.command, ...(picked.arguments ?? []))
+  )
+  if (picked) {
+    await vscode.commands.executeCommand(picked.command, ...picked.arguments)
   }
 }

@@ -3,6 +3,7 @@ import * as path from "path"
 import * as vscode from "vscode"
 
 import type { TestResult } from "../shared/langsSchema"
+import type { SourceFileFinder } from "./sourceFiles"
 import type { StackFrame } from "./stackTrace"
 import { parseStackTrace } from "./stackTrace"
 
@@ -16,8 +17,9 @@ const JUNIT_COMPARISON = /expected: ?<(?<expected>[\s\S]*)> but was: ?<(?<actual
 export async function failureMessage(
   result: TestResult,
   exercisePath: string,
+  findFile?: SourceFileFinder,
 ): Promise<vscode.TestMessage> {
-  const { frames, details } = await parseStackTrace(result.exception, exercisePath)
+  const { frames, details } = await parseStackTrace(result.exception, exercisePath, findFile)
   const text = result.message || details.join("\n") || "The test failed."
   const comparison = JUNIT_COMPARISON.exec(text)?.groups
   const message =

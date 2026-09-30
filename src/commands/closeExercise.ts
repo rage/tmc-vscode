@@ -32,7 +32,7 @@ export async function closeExercise(
       (await dialog.confirm(`Close ${exercise.exerciseSlug}?`, {
         confirmLabel: "Close Exercise",
         detail:
-          "You have not passed this exercise yet. Its files are kept, and you can open it again from the course's details.",
+          "You have not passed this exercise yet. Its files are kept, and you can open it again from the Courses view.",
       }))
     if (!confirmed) {
       return Ok.EMPTY

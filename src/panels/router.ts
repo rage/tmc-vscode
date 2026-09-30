@@ -9,28 +9,28 @@ import type {
   ExtensionToWebview,
   ReplyOutcome,
   ReplyValue,
+  Panel,
   RequestMessage,
   RequestType,
   WebviewToExtension,
 } from "../shared/shared"
 import { toWebviewError, WebviewToExtensionSchema } from "../shared/shared"
 import { Logger } from "../utilities"
-import type { PanelRoute } from "./routes"
 
 /** One webview's side of the panel manager, as the message handlers see it. */
 export interface PanelHost {
   /** Tells the main webview from the side one, in log lines. */
   readonly name: string
   /** The screen this webview shows, if any. */
-  readonly route: PanelRoute | undefined
+  readonly route: Panel | undefined
   /** Sends `message` to this webview alone, kept for a reload if it targets `route`. */
   post: (message: ExtensionToWebview) => void
   /** {@link post} without keeping it: for messages a reloaded webview must not see again. */
   postTransient: (message: ExtensionToWebview) => void
   /** Shows `route` in this webview. */
-  render: (route: PanelRoute) => void
+  render: (route: Panel) => void
   /** Shows `route` in the main panel, creating it if needed. */
-  renderMain: (route: PanelRoute) => void
+  renderMain: (route: Panel) => void
   closeSidePanel: () => void
 }
 

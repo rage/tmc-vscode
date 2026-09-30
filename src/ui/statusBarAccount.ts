@@ -1,5 +1,10 @@
 import * as vscode from "vscode"
 
+import type Dialog from "../api/dialog"
+import { backendName } from "../shared/shared"
+
+const SITE = backendName("mooc")
+
 /** The courses.mooc.fi session as the account status bar item shows it. */
 export type AccountStatus = "loggedIn" | "loggedOut" | "sessionExpired"
 
@@ -12,21 +17,20 @@ interface AccountPresentation {
 
 const presentations: Record<AccountStatus, AccountPresentation> = {
   loggedIn: {
-    text: "$(account) courses.mooc.fi",
-    tooltip: "**TestMyCode**\n\nLogged in with your courses.mooc.fi account.",
-    accessibilityLabel: "TestMyCode: logged in with courses.mooc.fi. Show account actions",
+    text: `$(account) ${SITE}`,
+    tooltip: `**TestMyCode**\n\nLogged in with your ${SITE} account.`,
+    accessibilityLabel: `TestMyCode: logged in with ${SITE}. Show account actions`,
     command: "tmc.showAccountMenu",
   },
   loggedOut: {
     text: "$(sign-in) TestMyCode: Log In",
-    tooltip: "**TestMyCode**\n\nNot logged in. Log in with your courses.mooc.fi account.",
+    tooltip: `**TestMyCode**\n\nNot logged in. Log in with your ${SITE} account.`,
     accessibilityLabel: "TestMyCode: not logged in. Log in",
     command: "tmc.showMoocLogin",
   },
   sessionExpired: {
     text: "$(warning) TestMyCode: Session Expired",
-    tooltip:
-      "**TestMyCode**\n\nYour courses.mooc.fi session has expired. Log in again to download and submit exercises.",
+    tooltip: `**TestMyCode**\n\nYour ${SITE} session has expired. Log in again to download and submit exercises.`,
     accessibilityLabel: "TestMyCode: session expired. Log in again",
     command: "tmc.showMoocLogin",
   },
@@ -92,22 +96,15 @@ export class AccountStatusBarItem implements vscode.Disposable {
   }
 }
 
-interface AccountAction extends vscode.QuickPickItem {
-  command: string
-}
-
 /** Offers what a logged-in user can do with their account, and runs the one they pick. */
-export async function showAccountMenu(): Promise<void> {
-  const actions: AccountAction[] = [
-    { label: "$(book) Show Courses", command: "tmc.myCourses" },
-    { label: "$(gear) Open Settings", command: "tmc.settings" },
-    { label: "$(sign-out) Log Out", command: "tmc.logout" },
-  ]
-  const picked = await vscode.window.showQuickPick(actions, {
-    title: "TestMyCode Account",
-    placeHolder: "Logged in with your courses.mooc.fi account",
-  })
-  if (picked) {
-    await vscode.commands.executeCommand(picked.command)
+export async function showAccountMenu(dialog: Dialog): Promise<void> {
+  const command = await dialog.selectItem(
+    { title: "TestMyCode Account", placeHolder: `Logged in with your ${SITE} account` },
+    { label: "$(book) Show Courses", value: "tmc.myCourses" },
+    { label: "$(gear) Open Settings", value: "tmc.settings" },
+    { label: "$(sign-out) Log Out", value: "tmc.logout" },
+  )
+  if (command) {
+    await vscode.commands.executeCommand(command)
   }
 }

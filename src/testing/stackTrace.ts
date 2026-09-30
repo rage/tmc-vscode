@@ -1,6 +1,7 @@
 import * as path from "path"
 
-import { findSourceFile } from "./sourceFiles"
+import type { SourceFileFinder } from "./sourceFiles"
+import { createSourceFileFinder } from "./sourceFiles"
 
 /** One frame of a failed test's stack trace. */
 export interface StackFrame {
@@ -26,6 +27,8 @@ const PYTHON_FRAME = /^\s*File "(?<file>[^"]+)", line (?<line>\d+)(?:, in (?<lab
 const TMC_JAVA_FRAME = /^(?:(?<file>[\w$]+\.java):)?(?<line>-?\d+): (?<method>[\w$.<>]+)$/
 // `at fi.helsinki.Hello.greet(Hello.java:42)`, Java's own format.
 const JAVA_FRAME = /^\s*at (?<method>[\w$.<>/]+)\((?<file>[\w$]+\.java):(?<line>\d+)\)$/
+// The JDK's and the test frameworks' classes, which an exercise's sources never hold.
+const LIBRARY_CLASS = /^(?:java|javax|jdk|sun|com\.sun|org\.junit|junit|org\.hamcrest)\./
 
 /**
  * Parses a failed test's `exception` lines as tmc-langs reports them for Python and Java,
@@ -37,6 +40,7 @@ const JAVA_FRAME = /^\s*at (?<method>[\w$.<>/]+)\((?<file>[\w$]+\.java):(?<line>
 export async function parseStackTrace(
   exception: readonly string[],
   exercisePath: string,
+  findFile: SourceFileFinder = createSourceFileFinder(exercisePath),
 ): Promise<StackTrace> {
   const pythonFrames: StackFrame[] = []
   const javaFrames: Promise<StackFrame>[] = []
@@ -47,7 +51,7 @@ export async function parseStackTrace(
     if (python?.file !== undefined && python.line !== undefined) {
       pythonFrames.push(pythonFrame(python.file, python.line, python.label, exercisePath))
     } else if (java?.method !== undefined && java.line !== undefined) {
-      javaFrames.push(javaFrame(java.method, java.file, Number(java.line), exercisePath))
+      javaFrames.push(javaFrame(java.method, java.file, Number(java.line), findFile))
     } else if (line.trim() !== "" && !isPythonSourceLine(line, pythonFrames.length)) {
       details.push(line)
     }
@@ -76,16 +80,16 @@ async function javaFrame(
   method: string,
   fileName: string | undefined,
   line: number,
-  exercisePath: string,
+  findFile: SourceFileFinder,
 ): Promise<StackFrame> {
   const className = method.slice(0, method.lastIndexOf("."))
+  if (line <= 0 || LIBRARY_CLASS.test(className)) {
+    return { label: method }
+  }
   const packagePath = className.includes(".")
     ? className.slice(0, className.lastIndexOf(".")).split(".")
     : []
   const outerClass = (className.split(".").at(-1) ?? className).split("$")[0]
-  const file = await findSourceFile(
-    exercisePath,
-    path.join(...packagePath, fileName ?? `${outerClass}.java`),
-  )
-  return line > 0 && file ? { label: method, file, line } : { label: method }
+  const file = await findFile(path.join(...packagePath, fileName ?? `${outerClass}.java`))
+  return file ? { label: method, file, line } : { label: method }
 }

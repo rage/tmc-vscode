@@ -42,10 +42,10 @@ export interface PartView {
 
 /** What the host knows about a course's exercises beyond its stored data and the disk. */
 export interface CourseViewState {
-  /** Every exercise the workspace tracks, across all courses. */
-  workspaceExercises: WorkspaceExercise[]
-  /** Download statuses posted while a download runs, see `exerciseStatusRegistry`. */
-  inFlight: [ExerciseIdentifier, ExerciseStatus][]
+  /** The workspace's exercises of this course, as {@link onDiskByCourse} groups them. */
+  onDisk: readonly WorkspaceExercise[]
+  /** Whether the exercise is downloading or failed to, which the disk cannot tell. */
+  downloadStatusOf: (id: ExerciseIdentifier) => "downloading" | "downloadFailed" | undefined
   updateable: ExerciseIdentifier[]
   /** The instant deadlines are judged expired against. */
   now: Date
@@ -60,21 +60,12 @@ const MAX_PARTS_ALL_OPEN = 3
  * material presents them in, under one part named after the course.
  */
 export function buildCourseView(course: LocalCourseData, state: CourseViewState): PartView[] {
-  const courseName = LocalCourseData.getCourseName(course)
   const courseTitle = LocalCourseData.getCourseTitle(course)
   const newKeys = new Set(
     LocalCourseData.getNewExercises(course).map((id) => ExerciseIdentifier.key(id)),
   )
   const updateableKeys = new Set(state.updateable.map((id) => ExerciseIdentifier.key(id)))
-  const inFlightByKey = new Map(
-    state.inFlight.map(([id, status]) => [ExerciseIdentifier.key(id), status]),
-  )
-  const onDiskBySlug = new Map<string, WorkspaceExercise>()
-  for (const exercise of state.workspaceExercises) {
-    if (exercise.backend === course.kind && exercise.courseSlug === courseName) {
-      onDiskBySlug.set(exercise.exerciseSlug, exercise)
-    }
-  }
+  const onDiskBySlug = new Map(state.onDisk.map((exercise) => [exercise.exerciseSlug, exercise]))
 
   const exercisesByPart = new Map<string, ExerciseView[]>()
   let ungroupedPartName: string | undefined
@@ -95,7 +86,7 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       slug,
       status: resolveStatus(
         onDisk?.status,
-        inFlightByKey.get(key),
+        state.downloadStatusOf(id),
         hardDeadline !== null && state.now >= hardDeadline,
         newKeys.has(key),
       ),
@@ -108,7 +99,12 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       isUpdateable: updateableKeys.has(key),
       onDisk,
     }
-    exercisesByPart.set(partName, [...(exercisesByPart.get(partName) ?? []), view])
+    const partExercises = exercisesByPart.get(partName)
+    if (partExercises) {
+      partExercises.push(view)
+    } else {
+      exercisesByPart.set(partName, [view])
+    }
   }
 
   const isSortedByName = course.kind === "tmc"
@@ -129,6 +125,28 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
     isDefaultOpen: parts.length <= MAX_PARTS_ALL_OPEN || part.name === openPartName,
     isUngrouped: part.name === ungroupedPartName,
   }))
+}
+
+/**
+ * Groups every exercise the workspace tracks by the course it belongs to.
+ *
+ * @returns a lookup giving a course's exercises; two courses sharing a slug across backends
+ * stay apart.
+ */
+export function onDiskByCourse(
+  workspaceExercises: readonly WorkspaceExercise[],
+): (course: LocalCourseData) => readonly WorkspaceExercise[] {
+  const byCourse = new Map<string, WorkspaceExercise[]>()
+  for (const exercise of workspaceExercises) {
+    const key = `${exercise.backend}:${exercise.courseSlug}`
+    const courseExercises = byCourse.get(key)
+    if (courseExercises) {
+      courseExercises.push(exercise)
+    } else {
+      byCourse.set(key, [exercise])
+    }
+  }
+  return (course) => byCourse.get(`${course.kind}:${LocalCourseData.getCourseName(course)}`) ?? []
 }
 
 /** The deadline an exercise is judged by: the soft one when it comes first. */

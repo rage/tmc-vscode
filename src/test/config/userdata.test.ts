@@ -1,6 +1,6 @@
 import { vi } from "vitest"
 
-import { UserData } from "../../config/userdata"
+import { findStoredExercise, UserData } from "../../config/userdata"
 import { CorruptStoredDataError } from "../../errors"
 import type { LocalCourseExercise } from "../../shared/shared"
 import {
@@ -309,6 +309,31 @@ suite("UserData course add/get/update/delete", function () {
     expect(result.err).toBe(true)
   })
 
+  test("finds a downloaded exercise's stored course and exercise within its backend", async function () {
+    const [userData] = await makeUserData({
+      courses: [tmcCourse({ name: "shared", exercises: [tmcExercise({ id: 1, name: "ex" })] })],
+      mooc_courses: [
+        moocCourse({ name: "shared", exercises: [moocExercise({ id: "m", name: "ex" })] }),
+      ],
+    })
+
+    const stored = findStoredExercise(userData, {
+      backend: "mooc",
+      courseSlug: "shared",
+      exerciseSlug: "ex",
+    })
+
+    expect(stored.unwrap().course.kind).toBe("mooc")
+    expect(stored.unwrap().exercise.data.id).toBe("m")
+    expect(
+      findStoredExercise(userData, { backend: "tmc", courseSlug: "shared", exerciseSlug: "gone" })
+        .err,
+    ).toBe(true)
+    expect(
+      findStoredExercise(userData, { backend: "tmc", courseSlug: "gone", exerciseSlug: "ex" }).err,
+    ).toBe(true)
+  })
+
   test("getCourse errs for a nonexistent course", async function () {
     const [userData] = await makeUserData({ courses: [], mooc_courses: [] })
     expect(userData.getCourse(CourseIdentifier.from(123)).err).toBe(true)
@@ -353,8 +378,6 @@ suite("UserData course add/get/update/delete", function () {
 })
 
 suite("UserData change announcements", function () {
-  // The new-exercise toast's Remind Me Later and Don't Remind Again write only these two,
-  // and the Courses view's badge is stale unless they announce it.
   test("every write to the stored courses announces a change", async function () {
     const [userData] = await makeUserData({
       courses: [tmcCourse({ id: 0, newExercises: [2] })],
