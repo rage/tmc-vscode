@@ -39,6 +39,7 @@ import type {
   DataKind,
   DownloadOrUpdateMoocCourseExercisesResult,
   DownloadOrUpdateTmcCourseExercisesResult,
+  ExerciseTaskSubmissionResult,
   ExerciseTaskSubmissionStatus,
   LocalExercise,
   LocalMoocExercise,
@@ -1375,6 +1376,77 @@ export default class Langs {
           "--submission-path",
           exercisePath,
         ),
+        onStdout,
+        onNotification: (notification) => this._showNotification(notification),
+        processTimeout: SUBMIT_PROCESS_TIMEOUT,
+        interruptOnDeactivate: true,
+      },
+      "mooc-submission-status",
+    )
+    return res.map((x) => x.data["output-data"])
+  }
+
+  /**
+   * Submits a mooc exercise without waiting for its grading; follow with
+   * {@link waitForMoocGrading}. The CLI resolves the slide and task ids from the exercise id.
+   *
+   * Shares its `MINIMUM_SUBMISSION_INTERVAL` throttle with every other mooc call that
+   * submits; per-backend, so the tmc path is unaffected.
+   *
+   * @param exerciseId Mooc exercise id (a UUID string).
+   * @param exercisePath Path to the local exercise directory.
+   */
+  public async submitMoocExercise(
+    exerciseId: string,
+    exercisePath: string,
+  ): Promise<Result<ExerciseTaskSubmissionResult, Error>> {
+    const submissionSlot = this._claimSubmissionSlot("mooc")
+    if (submissionSlot.err) {
+      return submissionSlot
+    }
+
+    const res = await this._executeLangsCommand(
+      {
+        backend: "mooc",
+        args: this._moocCmd(
+          "submit",
+          "--dont-block",
+          "--exercise-id",
+          exerciseId,
+          "--submission-path",
+          exercisePath,
+        ),
+        onNotification: (notification) => this._showNotification(notification),
+        processTimeout: CLI_PROCESS_TIMEOUT,
+        interruptOnDeactivate: true,
+      },
+      "mooc-submission-finished",
+    )
+    return res.map((x) => x.data["output-data"])
+  }
+
+  /**
+   * Polls a mooc submission's grading until it is terminal or the CLI stops waiting.
+   *
+   * Terminal includes `PendingManual`. On the CLI's poll timeout this resolves to the latest
+   * non-terminal status, not an error, so it can be called again for the same submission.
+   *
+   * @param taskSubmissionId The `task_submission_id` {@link submitMoocExercise} returned.
+   * @param progressCallback Reports completion as a 0..1 fraction; the CLI's is not
+   * meaningful for grading, only its messages are.
+   */
+  public async waitForMoocGrading(
+    taskSubmissionId: string,
+    progressCallback?: (fraction: number, message?: string) => void,
+  ): Promise<Result<ExerciseTaskSubmissionStatus, Error>> {
+    const onStdout = (res: StatusUpdateData): void => {
+      progressCallback?.(res["percent-done"], res.message ?? undefined)
+    }
+
+    const res = await this._executeLangsCommand(
+      {
+        backend: "mooc",
+        args: this._moocCmd("wait-for-grading", "--submission-id", taskSubmissionId),
         onStdout,
         onNotification: (notification) => this._showNotification(notification),
         processTimeout: SUBMIT_PROCESS_TIMEOUT,

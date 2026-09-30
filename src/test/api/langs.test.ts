@@ -74,6 +74,10 @@ function errorOutput(kind: unknown, message = "boom", trace = ["trace line"]): O
   })
 }
 
+const TASK_SUBMISSION_ID = "6f1f5a52-4c1b-4a4e-9b8e-0d6c3f3c2a11"
+const SLIDE_ID = "0b7e3d2c-9a51-4f7e-8f55-2c7a1e6d9b40"
+const moocSubmitted = { task_submission_id: TASK_SUBMISSION_ID, slide_submission_id: SLIDE_ID }
+
 function dataOutput(kind: string, data: unknown): OutputData {
   return cliOutput({
     "output-kind": "output-data",
@@ -412,6 +416,98 @@ suite("Langs class arg building", function () {
       progress.push({ fraction, message }),
     )
     // Forwarded unscaled: the CLI's percent-done and the extension are both 0..1.
+    expect(progress).toEqual([{ fraction: 0.5, message: "Grading in progress" }])
+  })
+
+  test("submitMoocExercise submits without waiting for the grading", async function () {
+    const langs = newLangs()
+    const calls = spyOnSpawn(langs)
+    await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
+    expect(calls[0]?.args).toEqual([
+      "mooc",
+      "--client-name",
+      "test-client",
+      "submit",
+      "--dont-block",
+      "--exercise-id",
+      "ex-uuid",
+      "--submission-path",
+      "/path/to/ex",
+    ])
+  })
+
+  test("submitMoocExercise returns the submission's ids", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, () => Ok(dataOutput("mooc-submission-finished", moocSubmitted)))
+    const result = await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
+    expect(result.unwrap()).toEqual(moocSubmitted)
+  })
+
+  test("waitForMoocGrading polls the task submission's grading", async function () {
+    const langs = newLangs()
+    const calls = spyOnSpawn(langs)
+    await langs.waitForMoocGrading(TASK_SUBMISSION_ID)
+    expect(calls[0]?.args).toEqual([
+      "mooc",
+      "--client-name",
+      "test-client",
+      "wait-for-grading",
+      "--submission-id",
+      TASK_SUBMISSION_ID,
+    ])
+  })
+
+  test("waitForMoocGrading returns the grading status", async function () {
+    const langs = newLangs()
+    const grading = {
+      status: "grading",
+      grading: {
+        grading_progress: "FullyGraded",
+        score_given: 1,
+        grading_started_at: "2026-07-21T00:00:00Z",
+        grading_completed_at: "2026-07-21T00:00:01Z",
+        feedback_text: "All tests passed",
+      },
+    }
+    stubSpawn(langs, () => Ok(dataOutput("mooc-submission-status", grading)))
+    const result = await langs.waitForMoocGrading(TASK_SUBMISSION_ID)
+    expect(result.unwrap()).toEqual(grading)
+  })
+
+  test("waitForMoocGrading is not throttled like a submit", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, () => Ok(dataOutput("mooc-submission-status", { status: "no-grading-yet" })))
+    expect((await langs.waitForMoocGrading(TASK_SUBMISSION_ID)).ok).toBe(true)
+    expect((await langs.waitForMoocGrading(TASK_SUBMISSION_ID)).ok).toBe(true)
+  })
+
+  test("waitForMoocGrading forwards progress updates", async function () {
+    const langs = newLangs()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
+      const { onStdout } = commandArgs as {
+        onStdout?: (data: unknown) => void
+      }
+      onStdout?.({
+        "update-data-kind": "none",
+        "percent-done": 0.5,
+        message: "Grading in progress",
+      })
+      return Ok({
+        interrupt: (): void => {},
+        getStderr: (): string => "",
+        result: Promise.resolve(
+          Ok(dataOutput("mooc-submission-status", { status: "no-grading-yet" })) as Result<
+            OutputData,
+            BaseError
+          >,
+        ),
+      })
+    })
+    const progress: { fraction: number; message: string | undefined }[] = []
+    await langs.waitForMoocGrading(TASK_SUBMISSION_ID, (fraction, message) =>
+      progress.push({ fraction, message }),
+    )
     expect(progress).toEqual([{ fraction: 0.5, message: "Grading in progress" }])
   })
 
@@ -810,18 +906,18 @@ suite("Langs cross-backend independence", function () {
     expect(secondTmc.val).toBeInstanceOf(BottleneckError)
 
     // Throttle state is per-backend, so a mooc submission right after is unaffected.
-    stubSpawn(langs, () => Ok(dataOutput("mooc-submission-status", { status: "no-grading-yet" })))
-    const mooc = await langs.submitMoocExerciseAndWaitForResults("ex-uuid", "/path/to/ex")
+    stubSpawn(langs, () => Ok(dataOutput("mooc-submission-finished", moocSubmitted)))
+    const mooc = await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
     expect(mooc.ok).toBe(true)
   })
 
   test("a mooc submission throttle does not block a tmc submission", async function () {
     const langs = newLangs()
-    stubSpawn(langs, () => Ok(dataOutput("mooc-submission-status", { status: "no-grading-yet" })))
-    const firstMooc = await langs.submitMoocExerciseAndWaitForResults("ex-uuid", "/path/to/ex")
+    stubSpawn(langs, () => Ok(dataOutput("mooc-submission-finished", moocSubmitted)))
+    const firstMooc = await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
     expect(firstMooc.ok).toBe(true)
 
-    const secondMooc = await langs.submitMoocExerciseAndWaitForResults("ex-uuid", "/path/to/ex")
+    const secondMooc = await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
     expect(secondMooc.val).toBeInstanceOf(BottleneckError)
 
     stubSpawn(langs, () => Ok(dataOutput("submission-finished", submissionFinished)))
