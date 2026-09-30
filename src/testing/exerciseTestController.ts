@@ -79,11 +79,7 @@ export class ExerciseTestController implements vscode.Disposable {
 
   /** The exercise folder of a test item, or of the exercise a test belongs to. */
   public exerciseUriOf(item: vscode.TestItem | undefined): vscode.Uri | undefined {
-    let root = item
-    while (root?.parent) {
-      root = root.parent
-    }
-    return root && this._exercisesByItemId.get(root.id)?.uri
+    return item && this._exercisesByItemId.get(rootOf(item).id)?.uri
   }
 
   public dispose(): void {
@@ -111,10 +107,7 @@ export class ExerciseTestController implements vscode.Disposable {
     const excluded = new Set(request.exclude?.map((item) => item.id))
     const requested = new Map<string, [vscode.TestItem, WorkspaceExercise]>()
     for (const item of included) {
-      let root = item
-      while (root.parent) {
-        root = root.parent
-      }
+      const root = rootOf(item)
       const exercise = this._exercisesByItemId.get(root.id)
       if (exercise && !excluded.has(root.id)) {
         requested.set(root.id, [root, exercise])
@@ -345,4 +338,13 @@ function runFailure(runResult: RunResult): string | undefined {
 // The Test Results terminal needs CRLF line endings.
 function toTerminalText(text: string): string {
   return text.replaceAll(/\r?\n/g, "\r\n")
+}
+
+/** The exercise item a test item sits under, or the item itself when it is one. */
+function rootOf(item: vscode.TestItem): vscode.TestItem {
+  let root = item
+  while (root.parent) {
+    root = root.parent
+  }
+  return root
 }
