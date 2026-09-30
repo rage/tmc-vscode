@@ -3,7 +3,8 @@ import * as vscode from "vscode"
 import type WorkspaceManager from "../api/workspaceManager"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import type { UserData } from "../config/userdata"
-import type { ExerciseActivity, ExerciseActivityKind } from "./statusBarActivity"
+import { LocalCourseExercise } from "../shared/shared"
+import type { ExerciseOperationKind, ExerciseOperations } from "./exerciseOperations"
 
 /** What the exercise status bar item and its action pick read. */
 export interface ExerciseStatusSources {
@@ -12,10 +13,10 @@ export interface ExerciseStatusSources {
     "activeExercise" | "getExerciseContaining" | "onDidChangeExercises"
   >
   userData: Pick<UserData, "getExerciseByName" | "getCourseBySlug" | "onDidChangeCourses">
-  activity: ExerciseActivity
+  operations: Pick<ExerciseOperations, "current" | "onDidChange">
 }
 
-const activityLabels: Record<ExerciseActivityKind, string> = {
+const activityLabels: Partial<Record<ExerciseOperationKind, string>> = {
   testing: "Testing",
   submitting: "Submitting",
 }
@@ -59,7 +60,7 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
     this._subscriptions = [
       vscode.window.onDidChangeActiveTextEditor(render),
       _sources.workspaceManager.onDidChangeExercises(render),
-      _sources.activity.onDidChange(render),
+      _sources.operations.onDidChange(render),
       _sources.userData.onDidChangeCourses(render),
     ]
     this.render()
@@ -73,15 +74,21 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
       return
     }
     const slug = exercise.exerciseSlug
-    const activity = this._sources.activity.current(exercise.uri)
+    const stored = this._sources.userData.getExerciseByName(
+      exercise.backend,
+      exercise.courseSlug,
+      exercise.exerciseSlug,
+    )
+    const running = stored && this._sources.operations.current(LocalCourseExercise.getId(stored))
+    const activity = running && activityLabels[running]
     const points = pointsOf(this._sources, exercise)
     const pointsText =
       points && points.available > 0 ? `${points.awarded}/${points.available}` : undefined
 
     if (activity) {
-      this._item.text = `$(sync~spin) ${activityLabels[activity]} ${slug}…`
+      this._item.text = `$(sync~spin) ${activity} ${slug}…`
       this._item.accessibilityInformation = {
-        label: `TestMyCode: ${activityLabels[activity].toLowerCase()} ${slug}`,
+        label: `TestMyCode: ${activity.toLowerCase()} ${slug}`,
       }
     } else {
       this._item.text = pointsText ? `$(beaker) ${slug} · ${pointsText}` : `$(beaker) ${slug}`

@@ -1,3 +1,4 @@
+import { Ok } from "ts-results"
 import { vi } from "vitest"
 
 import { downloadExerciseUpdates } from "../../actions/downloadExerciseUpdates"
@@ -53,10 +54,9 @@ suite("downloadExerciseUpdates action", function () {
   })
 
   test("leaves each course only its own failed exercises", async function () {
-    downloadOrUpdateExercises.mockResolvedValue({
-      successful: [ExerciseIdentifier.from(10)],
-      failed: [ExerciseIdentifier.from(20)],
-    })
+    downloadOrUpdateExercises.mockResolvedValue(
+      Ok({ successful: [ExerciseIdentifier.from(10)], failed: [ExerciseIdentifier.from(20)] }),
+    )
 
     await downloadExerciseUpdates(createMockActionContext(), [update(1, 10), update(2, 20)])
 

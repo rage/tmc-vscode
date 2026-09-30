@@ -8,7 +8,7 @@ import type {
   SharedTmcCourseData,
   SharedTmcCourseExercise,
 } from "../../shared/shared"
-import { makeMoocKind, makeTmcKind } from "../../shared/shared"
+import { ExerciseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
 import type { CourseViewState, PartView } from "../../ui/treeview/courseViewModel"
 import { buildCourseView } from "../../ui/treeview/courseViewModel"
 
@@ -107,7 +107,7 @@ function build(
 ): PartView[] {
   return buildCourseView(courseData, {
     workspaceExercises,
-    inFlight: [],
+    downloadStatusOf: () => undefined,
     updateable: [],
     now: NOW,
     ...state,
@@ -181,11 +181,8 @@ suite("buildCourseView", () => {
       ]),
       [onDisk("part01-03_c", ExerciseStatus.Closed)],
       {
-        inFlight: [
-          [makeTmcKind({ tmcExerciseId: 1 }), "downloading"],
-          [makeTmcKind({ tmcExerciseId: 2 }), "downloadFailed"],
-          [makeTmcKind({ tmcExerciseId: 3 }), "downloadFailed"],
-        ],
+        downloadStatusOf: (id) =>
+          ExerciseIdentifier.unwrap(id) === 1 ? "downloading" : "downloadFailed",
       },
     )
 

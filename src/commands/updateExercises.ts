@@ -85,10 +85,9 @@ export async function updateExercises(
   )
 
   const download = async (): Promise<void> => {
-    await withOperation(dialog, { failure: "Failed to update exercises." }, async () => {
-      await downloadExerciseUpdates(actionContext, exercisesToUpdate)
-      return Ok.EMPTY
-    })
+    await withOperation(dialog, { failure: "Failed to update exercises." }, () =>
+      downloadExerciseUpdates(actionContext, exercisesToUpdate),
+    )
   }
 
   if (settings.getAutomaticallyUpdateExercises()) {

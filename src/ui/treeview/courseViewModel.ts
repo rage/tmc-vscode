@@ -44,8 +44,8 @@ export interface PartView {
 export interface CourseViewState {
   /** Every exercise the workspace tracks, across all courses. */
   workspaceExercises: WorkspaceExercise[]
-  /** Download statuses posted while a download runs, see `exerciseStatusRegistry`. */
-  inFlight: [ExerciseIdentifier, ExerciseStatus][]
+  /** Whether the exercise is downloading or failed to, which the disk cannot tell. */
+  downloadStatusOf: (id: ExerciseIdentifier) => "downloading" | "downloadFailed" | undefined
   updateable: ExerciseIdentifier[]
   /** The instant deadlines are judged expired against. */
   now: Date
@@ -66,9 +66,6 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
     LocalCourseData.getNewExercises(course).map((id) => ExerciseIdentifier.key(id)),
   )
   const updateableKeys = new Set(state.updateable.map((id) => ExerciseIdentifier.key(id)))
-  const inFlightByKey = new Map(
-    state.inFlight.map(([id, status]) => [ExerciseIdentifier.key(id), status]),
-  )
   const onDiskBySlug = new Map<string, WorkspaceExercise>()
   for (const exercise of state.workspaceExercises) {
     if (exercise.backend === course.kind && exercise.courseSlug === courseName) {
@@ -95,7 +92,7 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       slug,
       status: resolveStatus(
         onDisk?.status,
-        inFlightByKey.get(key),
+        state.downloadStatusOf(id),
         hardDeadline !== null && state.now >= hardDeadline,
         newKeys.has(key),
       ),

@@ -10,14 +10,12 @@ import { ExerciseStatus } from "../../api/workspaceManager"
 import { refreshEverything } from "../../commands/refreshEverything"
 import { keepWaitingForGrading, submitExercise } from "../../commands/submitExercise"
 import { CourseIdentifier } from "../../shared/shared"
-import { exerciseActivity } from "../../ui/statusBarActivity"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions", () => ({
   submitExercise: vi.fn(async () => Ok(CourseIdentifier.from("mooc-course-uuid"))),
   keepWaitingForGrading: vi.fn(async () => Ok(CourseIdentifier.from("mooc-course-uuid"))),
-  exerciseAwaitingGrading: vi.fn(() => undefined),
 }))
 
 vi.mock("../../commands/refreshEverything", () => ({
@@ -52,19 +50,6 @@ suite("Submit exercise command", function () {
   beforeEach(function () {
     vi.mocked(actions.submitExercise).mockResolvedValue(Ok(courseId))
     vi.mocked(refreshEverything).mockResolvedValue(Ok.EMPTY)
-  })
-
-  test("marks the exercise as being submitted until grading ends", async function () {
-    let during: unknown
-    vi.mocked(actions.submitExercise).mockImplementation(async () => {
-      during = exerciseActivity.current(uri)
-      return Ok(courseId)
-    })
-
-    await submitExercise(extensionContext, contextWith(exercise), uri)
-
-    expect(during).toBe("submitting")
-    expect(exerciseActivity.current(uri)).toBeUndefined()
   })
 
   test("submits the exercise the resource resolves to, and says it succeeded", async function () {
@@ -119,14 +104,7 @@ suite("Keep waiting for grading command", function () {
     vi.mocked(refreshEverything).mockResolvedValue(Ok.EMPTY)
   })
 
-  test("marks the exercise as being submitted while it waits", async function () {
-    let during: unknown
-    vi.mocked(actions.exerciseAwaitingGrading).mockReturnValue(exercise)
-    vi.mocked(actions.keepWaitingForGrading).mockImplementation(async () => {
-      during = exerciseActivity.current(uri)
-      return Ok(courseId)
-    })
-
+  test("waits for the panel's grading, then refreshes its course", async function () {
     await keepWaitingForGrading(extensionContext, contextWith(exercise), 7)
 
     expect(actions.keepWaitingForGrading).toHaveBeenCalledWith(
@@ -134,12 +112,13 @@ suite("Keep waiting for grading command", function () {
       expect.anything(),
       7,
     )
-    expect(during).toBe("submitting")
-    expect(exerciseActivity.current(uri)).toBeUndefined()
+    expect(refreshEverything).toHaveBeenCalledWith(expect.anything(), {
+      silent: true,
+      courseId,
+    })
   })
 
-  test("still waits when the panel names no exercise, and lets the action refuse", async function () {
-    vi.mocked(actions.exerciseAwaitingGrading).mockReturnValue(undefined)
+  test("refreshes nothing when the action refuses to wait", async function () {
     vi.mocked(actions.keepWaitingForGrading).mockResolvedValue(
       Err(new Error("nothing to wait for")),
     )

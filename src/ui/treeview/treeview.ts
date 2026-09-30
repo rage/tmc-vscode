@@ -4,7 +4,8 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import type { BackendKind, ExerciseIdentifier } from "../../shared/shared"
 import { backendName, CourseIdentifier, LocalCourseData } from "../../shared/shared"
 import { formatDeadline } from "../../utilities"
-import { exerciseStatusRegistry } from "../exerciseStatusRegistry"
+import { downloadFailures } from "../downloadFailures"
+import { exerciseOperations } from "../exerciseOperations"
 import { updateablesRegistry } from "../updateablesRegistry"
 import type { ExerciseView, PartView } from "./courseViewModel"
 import { buildCourseView, shownDeadline } from "./courseViewModel"
@@ -336,7 +337,8 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
     this._disposables = [
       this._view,
       this._changed,
-      exerciseStatusRegistry.onDidChange(() => this.refresh()),
+      downloadFailures.onDidChange(() => this.refresh()),
+      exerciseOperations.onDidChange(() => this.refresh()),
       updateablesRegistry.onDidChange(() => this.refresh()),
       vscode.window.onDidChangeActiveTextEditor(() => void this.revealActiveExercise()),
       this._view.onDidChangeVisibility(() => this._onDidChangeVisibility()),
@@ -504,7 +506,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
         const courseId = LocalCourseData.getCourseId(course)
         const parts = buildCourseView(course, {
           workspaceExercises,
-          inFlight: exerciseStatusRegistry.get(courseId),
+          downloadStatusOf,
           updateable: updateablesRegistry.get(courseId),
           now,
         })
@@ -537,6 +539,13 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
   private _visibleCourses(): LocalCourseData[] {
     return this._isLoggedIn && this._source ? this._source.getCourses() : []
   }
+}
+
+function downloadStatusOf(id: ExerciseIdentifier): "downloading" | "downloadFailed" | undefined {
+  if (exerciseOperations.isRunning(id, "downloading")) {
+    return "downloading"
+  }
+  return downloadFailures.has(id) ? "downloadFailed" : undefined
 }
 
 /** Every exercise under `item`, in view order. */

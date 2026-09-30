@@ -6,7 +6,8 @@ import type { WorkspaceExercise } from "../api/workspaceManager"
 import { CLI_PROCESS_TIMEOUT } from "../config/constants"
 import type { RunResult, StyleValidationResult } from "../shared/langsSchema"
 import { LocalCourseData, LocalCourseExercise } from "../shared/shared"
-import { Logger, runSingleFlight } from "../utilities"
+import { exerciseOperations } from "../ui/exerciseOperations"
+import { Logger } from "../utilities"
 import { resolvePythonInterpreter } from "../window"
 import type { ReadyActionContext } from "./types"
 
@@ -57,12 +58,10 @@ export async function testExercise(
 
   // guards the run-tests + checkstyle pair as one unit against a second click
   const exercisePath = exercise.uri.fsPath
-  return runSingleFlight(
-    {
-      key: `test:${exercisePath}`,
-      maxHoldMs: 2 * CLI_PROCESS_TIMEOUT + 30_000,
-      busyMessage: "Tests are already running for this exercise.",
-    },
+  return exerciseOperations.run(
+    LocalCourseExercise.getId(courseExercise),
+    "testing",
+    2 * CLI_PROCESS_TIMEOUT + 30_000,
     async (): Promise<Result<ExerciseTestOutcome, Error>> => {
       const { process: testRunner, interrupt: testInterrupt } = langs.runTests(
         exercisePath,

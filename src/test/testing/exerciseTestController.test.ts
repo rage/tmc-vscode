@@ -12,10 +12,10 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { BottleneckError } from "../../errors"
 import type { RunResult, StyleValidationResult } from "../../shared/langsSchema"
-import { BaseError, makeTmcKind } from "../../shared/shared"
+import { BaseError, ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
 import { CheckstyleDiagnostics } from "../../testing/checkstyleDiagnostics"
 import { ExerciseTestController } from "../../testing/exerciseTestController"
-import { exerciseActivity } from "../../ui/statusBarActivity"
+import { exerciseOperations } from "../../ui/exerciseOperations"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -311,14 +311,14 @@ suite("ExerciseTestController", function () {
     const exercise = exerciseAt(s)
     let during: unknown
     s.runTests.mockImplementation(() => {
-      during = exerciseActivity.current(exercise.uri)
+      during = exerciseOperations.current(ExerciseIdentifier.from(1))
       return { process: Promise.resolve(Ok(passingRun)), interrupt: vi.fn() }
     })
 
     await s.controller.runExercise(exercise)
 
     expect(during).toBe("testing")
-    expect(exerciseActivity.current(exercise.uri)).toBeUndefined()
+    expect(exerciseOperations.current(ExerciseIdentifier.from(1))).toBeUndefined()
   })
 
   test("running one test runs its whole exercise once", async function () {

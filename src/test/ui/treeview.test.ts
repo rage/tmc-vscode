@@ -5,7 +5,8 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
-import { exerciseStatusRegistry } from "../../ui/exerciseStatusRegistry"
+import { downloadFailures } from "../../ui/downloadFailures"
+import { exerciseOperations } from "../../ui/exerciseOperations"
 import type { CoursesTreeItem, CoursesTreeSource } from "../../ui/treeview/treeview"
 import CoursesTree, {
   CourseTreeItem,
@@ -94,7 +95,7 @@ function icon(item: ExerciseTreeItem): [string, string | undefined] {
 
 /** Lets the view's delayed render, with its badge and change event, happen. */
 function settle(): void {
-  vi.runOnlyPendingTimers()
+  vi.advanceTimersByTime(1000)
 }
 
 interface FakeView {
@@ -162,7 +163,7 @@ suite("CoursesTree", function () {
     vi.spyOn(vscode.window, "onDidChangeActiveTextEditor").mockImplementation(
       activeEditorChanged.event,
     )
-    exerciseStatusRegistry.clear()
+    downloadFailures.clear()
     updateablesRegistry.clear()
     tree = new CoursesTree()
   })
@@ -366,12 +367,12 @@ suite("CoursesTree", function () {
     })
 
     test("downloading spins, and a failed download says so", function () {
-      const courseId = CourseIdentifier.from(1)
       const exerciseId = makeTmcKind({ tmcExerciseId: 1 })
-      exerciseStatusRegistry.record(courseId, [[exerciseId, "downloading"]])
+      const claim = exerciseOperations.claim([exerciseId], "downloading", 60_000).unwrap()
       expect(icon(onlyExercise())).toEqual(["sync~spin", undefined])
 
-      exerciseStatusRegistry.record(courseId, [[exerciseId, "downloadFailed"]])
+      claim.releaseAll()
+      downloadFailures.record([exerciseId], [])
       const failed = onlyExercise()
       expect(icon(failed)).toEqual(["error", "testing.iconErrored"])
       expect(failed.contextValue).toBe("exercise.downloadFailed")
@@ -456,10 +457,7 @@ suite("CoursesTree", function () {
     const refreshed: unknown[] = []
     tree.onDidChangeTreeData((node) => refreshed.push(node))
     const changes = [
-      () =>
-        exerciseStatusRegistry.record(CourseIdentifier.from(1), [
-          [makeTmcKind({ tmcExerciseId: 1 }), "downloading"],
-        ]),
+      () => downloadFailures.record([makeTmcKind({ tmcExerciseId: 1 })], []),
       () => updateablesRegistry.set(CourseIdentifier.from(1), []),
       () => exercisesChanged.fire(),
       () => coursesChanged.fire(),
@@ -478,11 +476,13 @@ suite("CoursesTree", function () {
     const refreshed: unknown[] = []
     tree.onDidChangeTreeData((node) => refreshed.push(node))
 
+    const claim = exerciseOperations
+      .claim([makeTmcKind({ tmcExerciseId: 1 })], "downloading", 60_000)
+      .unwrap()
     for (let id = 1; id <= 20; id++) {
-      exerciseStatusRegistry.record(CourseIdentifier.from(1), [
-        [makeTmcKind({ tmcExerciseId: id }), "downloading"],
-      ])
+      downloadFailures.record([makeTmcKind({ tmcExerciseId: id })], [])
     }
+    claim.releaseAll()
     expect(refreshed).toEqual([])
     settle()
 
@@ -588,7 +588,7 @@ suite("CoursesTree", function () {
     tree.onDidChangeTreeData((node) => refreshed.push(node))
     tree.dispose()
     tree.refresh()
-    exerciseStatusRegistry.clear()
+    downloadFailures.clear()
     settle()
 
     expect(view.dispose).toHaveBeenCalledOnce()

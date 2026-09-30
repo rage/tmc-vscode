@@ -39,9 +39,9 @@ import { TmcPanel } from "./panels/TmcPanel"
 import { createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
 import { trackActiveEditorExercise } from "./ui/activeExerciseContext"
+import { exerciseOperations } from "./ui/exerciseOperations"
 import { trackHasCourses } from "./ui/hasCoursesContext"
 import { AccountStatusBarItem } from "./ui/statusBarAccount"
-import { exerciseActivity } from "./ui/statusBarActivity"
 import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
 import { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import UI from "./ui/ui"
@@ -468,7 +468,7 @@ async function activateInner(
       new ExerciseStatusBarItem({
         workspaceManager: readyContext.startup.workspaceManager,
         userData: readyContext.startup.userData,
-        activity: exerciseActivity,
+        operations: exerciseOperations,
       }),
       trackHasCourses(readyContext.startup.userData),
     )

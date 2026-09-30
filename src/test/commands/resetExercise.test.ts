@@ -9,7 +9,8 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { resetExercise } from "../../commands/resetExercise"
 import type { UserData } from "../../config/userdata"
-import { acquireSingleFlight, releaseSingleFlight } from "../../utilities"
+import { ExerciseIdentifier } from "../../shared/shared"
+import { exerciseOperations } from "../../ui/exerciseOperations"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -98,13 +99,13 @@ suite("Reset exercise command", function () {
   })
 
   test("refuses to reset while a submission of the same exercise is in flight", async function () {
-    // The key the submit and paste actions hold; claiming it here stands in for one of them.
-    const submitKey = `submit:${uri.fsPath}`
-    expect(acquireSingleFlight(submitKey, 60_000)).toBe(true)
+    const submission = exerciseOperations
+      .claim([ExerciseIdentifier.from("mooc-ex-uuid")], "submitting", 60_000)
+      .unwrap()
     try {
       await resetExercise(actionContext("Submit and Reset"), uri)
     } finally {
-      releaseSingleFlight(submitKey)
+      submission.releaseAll()
     }
 
     expect(reset).not.toHaveBeenCalled()

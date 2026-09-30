@@ -5,7 +5,6 @@ import type * as vscode from "vscode"
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure } from "../api/withOperation"
-import { exerciseActivity } from "../ui/statusBarActivity"
 import { refreshEverything } from "./refreshEverything"
 import { runForExercise } from "./runForExercise"
 
@@ -19,9 +18,7 @@ export async function submitExercise(
     resource,
     "Submitting the exercise",
     async (exercise) => {
-      const result = await exerciseActivity.run(exercise.uri, "submitting", () =>
-        actions.submitExercise(context, actionContext, exercise),
-      )
+      const result = await actions.submitExercise(context, actionContext, exercise)
       return result.err ? failure("Exercise submission failed.", result.val) : result
     },
   )
@@ -44,12 +41,7 @@ export async function keepWaitingForGrading(
   actionContext: ReadyActionContext,
   panelId: number,
 ): Promise<Result<void, Error>> {
-  const wait = (): ReturnType<typeof actions.keepWaitingForGrading> =>
-    actions.keepWaitingForGrading(context, actionContext, panelId)
-  const exercise = actions.exerciseAwaitingGrading(panelId)
-  const waited = exercise
-    ? await exerciseActivity.run(exercise.uri, "submitting", wait)
-    : await wait()
+  const waited = await actions.keepWaitingForGrading(context, actionContext, panelId)
   if (waited.err) {
     return waited
   }
