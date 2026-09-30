@@ -1,3 +1,6 @@
+import * as fs from "fs"
+import { join } from "node:path"
+
 import { expect } from "@playwright/test"
 import type { Locator, Page } from "@playwright/test"
 
@@ -39,7 +42,7 @@ const exercises: Exercise[] = [
 for (const exercise of exercises) {
   // The title is also the trace filename (fixtures.ts), so a constant one would
   // have every case overwrite the last one's trace.
-  vsCodeTest(`can complete ${exercise.name}`, async ({ page, webview }) => {
+  vsCodeTest(`can complete ${exercise.name}`, async ({ page, userDataDir, webview }) => {
     const coursesView = new CoursesViewPage(page, webview)
     const testResultsPage = new TestResultsPage(page, webview)
     const testSubmissionPage = new TestSubmissionPage(page, webview)
@@ -65,6 +68,17 @@ for (const exercise of exercises) {
 
     await vsCodeTest.step("open workspace", async () => {
       await coursesView.runInlineAction(coursesView.row(exercise.course), "Open Course Workspace")
+    })
+
+    await vsCodeTest.step("the course workspace turns AI assistance off", async () => {
+      // VS Code 1.100, which this tier runs, predates `chat.disableAIFeatures`.
+      await expect
+        .poll(() => courseWorkspaceSettings(userDataDir))
+        .toMatchObject({ "chat.agent.enabled": false, "editor.inlineSuggest.enabled": false })
+      const userSettings = JSON.parse(
+        fs.readFileSync(join(userDataDir, "User", "settings.json"), "utf-8"),
+      )
+      expect(userSettings).toStrictEqual({ "window.dialogStyle": "custom" })
     })
 
     await vsCodeTest.step("open exercise file", async () => {
@@ -143,4 +157,18 @@ function expectedResultInSubmissionView(expectedResult: "pass" | "fail"): string
     return "All tests passed on the server"
   }
   return "Some tests failed on the server"
+}
+
+/** The `settings` of the one course workspace file, or `undefined` while there is none to read. */
+function courseWorkspaceSettings(userDataDir: string): Record<string, unknown> | undefined {
+  const folder = join(userDataDir, "User", "globalStorage", "moocfi.test-my-code", "workspaces")
+  try {
+    const [workspaceFile] = fs.readdirSync(folder).filter((f) => f.endsWith(".code-workspace"))
+    if (!workspaceFile) {
+      return undefined
+    }
+    return JSON.parse(fs.readFileSync(join(folder, workspaceFile), "utf-8")).settings
+  } catch {
+    return undefined
+  }
 }

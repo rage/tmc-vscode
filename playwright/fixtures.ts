@@ -125,6 +125,8 @@ async function resetMockBackend(mock: string): Promise<void> {
 }
 
 interface CustomTestFixtures {
+  /** VS Code's `--user-data-dir`, where the extension's global storage and course workspace files live. */
+  userDataDir: string
   vsCode: ElectronApplication
   /** The URLs VS Code has been asked to open in a browser, which no test really opens. */
   openedExternalUrls: () => Promise<string[]>
@@ -146,10 +148,19 @@ interface CustomTestOptions {
 export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions> = {
   moocClientId: [undefined, { option: true }],
   seedTmcCredentials: [true, { option: true }],
-  vsCode: async ({ moocClientId, seedTmcCredentials: shouldSeedTmcCredentials }, run, testInfo) => {
+  // oxlint-disable-next-line no-empty-pattern -- Playwright requires the fixtures argument to be destructured
+  userDataDir: async ({}, run) => {
+    const userDataDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-user"))
+    await run(userDataDir)
+    fs.rmSync(userDataDir, { recursive: true, force: true })
+  },
+  vsCode: async (
+    { moocClientId, seedTmcCredentials: shouldSeedTmcCredentials, userDataDir },
+    run,
+    testInfo,
+  ) => {
     const configDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-config"))
     const projectsDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-projects"))
-    const userDataDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-user"))
     // A native dialog is outside the page, where Playwright cannot press its buttons; the
     // extension's confirmations are modal dialogs.
     fs.mkdirSync(join(userDataDir, "User"))
@@ -205,8 +216,9 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
 
     // A per-test user data dir is ~50MB of re-extracted VS Code state, on top of
     // the workspace and config dirs; /tmp here is a 16G tmpfs, so leaking these
-    // fills it within a few suite runs. Only after the process is gone.
-    for (const dir of [userDataDir, configDir, projectsDir]) {
+    // fills it within a few suite runs. Only after the process is gone; `userDataDir` goes in
+    // its own fixture's teardown, which runs after this one.
+    for (const dir of [configDir, projectsDir]) {
       fs.rmSync(dir, { recursive: true, force: true })
     }
   },
