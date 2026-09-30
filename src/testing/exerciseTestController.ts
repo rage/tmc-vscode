@@ -9,6 +9,7 @@ import type { WorkspaceExercise } from "../api/workspaceManager"
 import { BottleneckError } from "../errors"
 import type { RunResult, TestResult } from "../shared/langsSchema"
 import { BaseError } from "../shared/shared"
+import { countOf } from "../utilities"
 import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
 import { openCourseExercises } from "./openExercises"
 import { createSourceFileFinder } from "./sourceFiles"
@@ -251,7 +252,7 @@ export class ExerciseTestController implements vscode.Disposable {
     if (styleProblemCount > 0) {
       messages.push(
         new vscode.TestMessage(
-          `Code quality checks found ${styleProblemCount} ${styleProblemCount === 1 ? "problem" : "problems"}. They are listed in the Problems panel.`,
+          `Code quality checks found ${countOf(styleProblemCount, "problem")}. They are listed in the Problems panel.`,
         ),
       )
     }

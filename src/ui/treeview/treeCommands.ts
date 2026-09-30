@@ -14,6 +14,7 @@ import {
   LocalCourseData,
   LocalCourseExercise,
 } from "../../shared/shared"
+import { countOf } from "../../utilities"
 import { updateablesRegistry } from "../updateablesRegistry"
 import type { CoursesTreeItem, ExerciseTreeItem } from "./treeview"
 import { exerciseItems, isDownloadable } from "./treeview"
@@ -125,8 +126,7 @@ export async function closeCompletedExercises(
       if (closed.err) {
         return closed
       }
-      const count = closed.val.length
-      dialog.statusMessage(`Closed ${count} completed ${count === 1 ? "exercise" : "exercises"}.`)
+      dialog.statusMessage(`Closed ${countOf(closed.val.length, "completed exercise")}.`)
       return Ok.EMPTY
     },
   )

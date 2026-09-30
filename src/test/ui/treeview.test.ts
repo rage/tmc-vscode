@@ -403,7 +403,7 @@ suite("CoursesTree", function () {
       const item = onlyExercise({ deadline: "2026-07-01T00:00:00Z" })
 
       expect(item.accessibilityInformation?.label).toMatch(
-        /^01_hello, not passed, not downloaded, 0\/1 points, due /,
+        /^01_hello, not passed, not downloaded, 0 of 1 points, due /,
       )
     })
 

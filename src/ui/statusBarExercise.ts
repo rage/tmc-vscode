@@ -4,11 +4,11 @@ import type Dialog from "../api/dialog"
 import type { Item } from "../api/dialog"
 import { separator } from "../api/dialog"
 import type WorkspaceManager from "../api/workspaceManager"
-import type { WorkspaceExercise } from "../api/workspaceManager"
 import { exerciseFor } from "../api/workspaceManager"
 import type { UserData } from "../config/userdata"
 import { LocalCourseExercise } from "../shared/shared"
 import type { ExerciseOperationKind, ExerciseOperations } from "./exerciseOperations"
+import { pointsText } from "./points"
 
 /** What the exercise status bar item and its action pick read. */
 export interface ExerciseStatusSources {
@@ -23,24 +23,6 @@ export interface ExerciseStatusSources {
 const activityLabels: Partial<Record<ExerciseOperationKind, string>> = {
   testing: "Testing",
   submitting: "Submitting",
-}
-
-function pointsOf(
-  sources: ExerciseStatusSources,
-  exercise: WorkspaceExercise,
-): { awarded: number; available: number; isPassed: boolean } | undefined {
-  const stored = sources.userData.getExerciseByName(
-    exercise.backend,
-    exercise.courseSlug,
-    exercise.exerciseSlug,
-  )
-  return stored
-    ? {
-        awarded: stored.data.awardedPoints,
-        available: stored.data.availablePoints,
-        isPassed: stored.data.passed,
-      }
-    : undefined
 }
 
 /**
@@ -85,9 +67,7 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
     )
     const running = stored && this._sources.operations.current(LocalCourseExercise.getId(stored))
     const activity = running && activityLabels[running]
-    const points = pointsOf(this._sources, exercise)
-    const pointsText =
-      points && points.available > 0 ? `${points.awarded}/${points.available}` : undefined
+    const points = stored && pointsText(stored.data.awardedPoints, stored.data.availablePoints)
 
     if (activity) {
       this._item.text = `$(sync~spin) ${activity} ${slug}…`
@@ -95,11 +75,11 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
         label: `TestMyCode: ${activity.toLowerCase()} ${slug}`,
       }
     } else {
-      this._item.text = pointsText ? `$(beaker) ${slug} · ${pointsText}` : `$(beaker) ${slug}`
+      this._item.text = points ? `$(beaker) ${slug} · ${points.short}` : `$(beaker) ${slug}`
       this._item.accessibilityInformation = {
         label:
           `TestMyCode exercise ${slug}` +
-          (points && pointsText ? `, ${points.awarded} of ${points.available} points` : "") +
+          (points ? `, ${points.spoken}` : "") +
           ". Show exercise actions",
       }
     }
@@ -107,7 +87,7 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
       [
         `**${slug}**`,
         exercise.courseSlug,
-        ...(pointsText ? [`${pointsText} points${points?.isPassed ? " · passed" : ""}`] : []),
+        ...(points ? [`${points.short} points${stored?.data.passed ? " · passed" : ""}`] : []),
         "Click for exercise actions.",
       ].join("\n\n"),
     )

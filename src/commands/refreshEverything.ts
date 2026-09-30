@@ -9,7 +9,7 @@ import { EXERCISE_CHECK_INTERVAL, NOTIFICATION_DELAY } from "../config/constants
 import { BottleneckError } from "../errors"
 import { CourseIdentifier, LocalCourseData } from "../shared/shared"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
-import { Logger } from "../utilities"
+import { countOf, Logger } from "../utilities"
 import { updateExercises } from "./updateExercises"
 
 const REFRESH_FAILED = "Failed to check for course updates."
@@ -197,8 +197,7 @@ function newExercisesMessage(courses: LocalCourseData[]): string {
   }))
   const [only] = counted
   if (only && counted.length === 1) {
-    const exercises = only.count === 1 ? "1 new exercise" : `${only.count} new exercises`
-    return `${only.title} has ${exercises}. Download ${only.count === 1 ? "it" : "them"} now?`
+    return `${only.title} has ${countOf(only.count, "new exercise")}. Download ${only.count === 1 ? "it" : "them"} now?`
   }
   const list = counted.map(({ title, count }) => `${title} (${count})`).join(", ")
   return `New exercises in ${counted.length} courses: ${list}. Download them now?`

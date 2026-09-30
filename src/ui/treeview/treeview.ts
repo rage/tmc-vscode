@@ -3,9 +3,10 @@ import * as vscode from "vscode"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { BackendKind, ExerciseIdentifier } from "../../shared/shared"
 import { backendName, CourseIdentifier, LocalCourseData } from "../../shared/shared"
-import { formatDeadline } from "../../utilities"
+import { countOf, formatDeadline } from "../../utilities"
 import { downloadFailures } from "../downloadFailures"
 import { exerciseOperations } from "../exerciseOperations"
+import { pointsText } from "../points"
 import { updateablesRegistry } from "../updateablesRegistry"
 import type { ExerciseView, PartView } from "./courseViewModel"
 import { buildCourseView, onDiskByCourse, shownDeadline } from "./courseViewModel"
@@ -71,12 +72,12 @@ export class CourseTreeItem extends vscode.TreeItem {
     const newCount = LocalCourseData.getNewExercises(course).length
     const updateCount = exercises.filter((ex) => ex.isUpdateable).length
     const hasCompleted = exercises.some((ex) => ex.passed && ex.status === "opened")
-    const { awardedPoints, availablePoints, disabled } = course.data
-    const points = availablePoints > 0 ? `${awardedPoints}/${availablePoints}` : undefined
+    const { disabled } = course.data
+    const points = pointsText(course.data.awardedPoints, course.data.availablePoints)
     const backend = backendName(course.kind)
 
     // Titles are only unique within one backend, so the backend is always shown.
-    this.description = [points, backend, disabled ? "disabled" : undefined]
+    this.description = [points?.short, backend, disabled ? "disabled" : undefined]
       .filter((part) => part !== undefined)
       .join(" · ")
     this.iconPath = disabled
@@ -92,7 +93,7 @@ export class CourseTreeItem extends vscode.TreeItem {
       title,
       backend,
       ...[
-        points && `${points} points`,
+        points && `${points.short} points`,
         newCount > 0 && countOf(newCount, "new exercise"),
         updateCount > 0 && countOf(updateCount, "exercise update"),
         disabled && "This course is disabled: its exercises cannot be downloaded or submitted.",
@@ -101,7 +102,7 @@ export class CourseTreeItem extends vscode.TreeItem {
     this.accessibilityInformation = {
       label: [
         title,
-        ...(points ? [`${awardedPoints} of ${availablePoints} points`] : []),
+        ...(points ? [points.spoken] : []),
         backend,
         ...(disabled ? ["disabled"] : []),
         ...(newCount > 0 ? [countOf(newCount, "new exercise")] : []),
@@ -234,15 +235,12 @@ export class ExerciseTreeItem extends vscode.TreeItem {
     const deadline = shownDeadline(exercise)
     const isDue = !exercise.passed && deadline !== null && deadline > context.now
     const deadlineText = deadline ? formatDeadline(deadline, context.now, context.locale) : ""
-    const points =
-      exercise.availablePoints > 0
-        ? `${exercise.awardedPoints}/${exercise.availablePoints} points`
-        : undefined
+    const points = pointsText(exercise.awardedPoints, exercise.availablePoints)
     const status = STATUS_LABELS[exercise.status]
     this.description = [
       exercise.status === "opened" ? undefined : status,
       exercise.isUpdateable ? "update available" : undefined,
-      points,
+      points && `${points.short} points`,
       isDue ? `due ${deadlineText}` : undefined,
     ]
       .filter((text) => text !== undefined)
@@ -259,7 +257,7 @@ export class ExerciseTreeItem extends vscode.TreeItem {
         exercise.passed ? "passed" : "not passed",
         status,
         ...(exercise.isUpdateable ? ["update available"] : []),
-        ...(points ? [points] : []),
+        ...(points ? [points.spoken] : []),
         ...(isDue ? [`due ${deadlineText}`] : []),
       ].join(", "),
     }
@@ -268,13 +266,13 @@ export class ExerciseTreeItem extends vscode.TreeItem {
   public buildTooltip(): vscode.MarkdownString {
     const exercise = this._exercise
     const { now, locale } = this._context
+    const points = pointsText(exercise.awardedPoints, exercise.availablePoints)
     const status = STATUS_LABELS[exercise.status]
     return tooltipOf([
       exercise.name,
       `${exercise.passed ? "Passed" : "Not passed"} · ${status}`,
       ...[
-        exercise.availablePoints > 0 &&
-          `${exercise.awardedPoints}/${exercise.availablePoints} points`,
+        points && `${points.short} points`,
         exercise.isUpdateable && "An update is available.",
         exercise.softDeadline &&
           !exercise.isHard &&
@@ -598,8 +596,4 @@ function exerciseIcon(exercise: ExerciseView): vscode.ThemeIcon {
 function partLabel(name: string): string {
   const number = name.match(/^part0*(\d+)$/i)?.[1]
   return number ? `Part ${number}` : name
-}
-
-function countOf(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`
 }
