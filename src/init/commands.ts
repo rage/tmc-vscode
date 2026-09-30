@@ -241,10 +241,15 @@ export function registerCommands(
     commands.resetExercise(readyContext, resourceOf(target)),
   )
 
-  register("tmc.showAccountMenu", async () => showAccountMenu())
+  register("tmc.showAccountMenu", async () => showAccountMenu(readyContext.dialog))
 
   register("tmc.showExerciseActions", async (resource: vscode.Uri | undefined) =>
-    showExerciseActions(readyContext.startup, readyContext.authState.loggedIn, resource),
+    showExerciseActions(
+      readyContext.dialog,
+      readyContext.startup,
+      readyContext.authState.loggedIn,
+      resource,
+    ),
   )
 
   register("tmc.showWelcome", async () => {

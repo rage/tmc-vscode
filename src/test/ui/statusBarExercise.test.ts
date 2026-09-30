@@ -2,6 +2,7 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import Dialog from "../../api/dialog"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import type { LocalCourseData, LocalCourseExercise } from "../../shared/shared"
 import { ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
@@ -198,7 +199,7 @@ suite("showExerciseActions", function () {
       items: readonly { label: string }[],
     ) => items.find((x) => x.label.includes("Submit"))) as never)
 
-    await showExerciseActions(harness().sources, true)
+    await showExerciseActions(new Dialog(), harness().sources, true)
 
     expect(offered()).toEqual([
       "Run Tests",
@@ -217,7 +218,7 @@ suite("showExerciseActions", function () {
       items: readonly { label: string }[],
     ) => items.find((x) => x.label.includes("Courses View"))) as never)
 
-    await showExerciseActions(harness().sources, true)
+    await showExerciseActions(new Dialog(), harness().sources, true)
 
     expect(executeCommand).toHaveBeenCalledWith("tmc.revealInCoursesView", exerciseHelloWorld.uri)
   })
@@ -225,7 +226,7 @@ suite("showExerciseActions", function () {
   test("logged out, offers only what runs locally", async function () {
     vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)
 
-    await showExerciseActions(harness().sources, false)
+    await showExerciseActions(new Dialog(), harness().sources, false)
 
     expect(offered()).toEqual(["Run Tests"])
   })
@@ -235,7 +236,7 @@ suite("showExerciseActions", function () {
     const { sources } = harness()
     sources.userData.getCourseBySlug = () => Err(new Error("no such course"))
 
-    await showExerciseActions(sources, true)
+    await showExerciseActions(new Dialog(), sources, true)
 
     expect(offered()).not.toContain("Reveal in Courses View")
   })
@@ -245,7 +246,7 @@ suite("showExerciseActions", function () {
     const h = harness()
     h.active.exercise = undefined
 
-    await showExerciseActions(h.sources, true)
+    await showExerciseActions(new Dialog(), h.sources, true)
 
     expect(showQuickPick).not.toHaveBeenCalled()
   })

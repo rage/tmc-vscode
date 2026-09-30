@@ -37,6 +37,7 @@ import { FileSystemError, InitializationError, presentationFor } from "./errors"
 import * as init from "./init"
 import { TmcPanel } from "./panels/TmcPanel"
 import { createSessionExpiryTracker } from "./sessionExpiryTracker"
+import { backendName } from "./shared/shared"
 import Storage from "./storage"
 import { trackActiveEditorExercise } from "./ui/activeExerciseContext"
 import { exerciseOperations } from "./ui/exerciseOperations"
@@ -461,7 +462,7 @@ async function activateInner(
       moocAccount,
       vscode.authentication.registerAuthenticationProvider(
         MOOC_AUTHENTICATION_PROVIDER_ID,
-        "courses.mooc.fi",
+        backendName("mooc"),
         moocAccount,
       ),
       account,

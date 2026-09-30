@@ -3,6 +3,7 @@ import * as vscode from "vscode"
 
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
+import { separator } from "../api/dialog"
 import { withOperation } from "../api/withOperation"
 import type { Course, MoocCourse, Organization } from "../shared/langsSchema"
 import {
@@ -25,10 +26,6 @@ type Choice =
 
 interface ChoiceItem extends vscode.QuickPickItem {
   choice?: Choice
-}
-
-function separator(label: string): ChoiceItem {
-  return { label, kind: vscode.QuickPickItemKind.Separator }
 }
 
 /**

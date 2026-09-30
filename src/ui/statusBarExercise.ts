@@ -1,5 +1,8 @@
 import * as vscode from "vscode"
 
+import type Dialog from "../api/dialog"
+import type { Item } from "../api/dialog"
+import { separator } from "../api/dialog"
 import type WorkspaceManager from "../api/workspaceManager"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import type { UserData } from "../config/userdata"
@@ -116,13 +119,9 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
   }
 }
 
-interface ExerciseAction extends vscode.QuickPickItem {
-  command?: string
-  arguments?: unknown[]
-}
-
-function separator(label: string): ExerciseAction {
-  return { label, kind: vscode.QuickPickItemKind.Separator }
+interface ExerciseAction {
+  command: string
+  arguments: unknown[]
 }
 
 /**
@@ -132,6 +131,7 @@ function separator(label: string): ExerciseAction {
  * @param isLoggedIn Whether to offer the actions that reach a backend.
  */
 export async function showExerciseActions(
+  dialog: Dialog,
   sources: Pick<ExerciseStatusSources, "workspaceManager" | "userData">,
   isLoggedIn: boolean,
   resource?: vscode.Uri,
@@ -143,42 +143,31 @@ export async function showExerciseActions(
     return
   }
   const target = [exercise.uri]
+  const action = (label: string, command: string): Item<ExerciseAction> => ({
+    label,
+    value: { command, arguments: target },
+  })
   const course = sources.userData.getCourseBySlug(exercise.backend, exercise.courseSlug)
-  const actions: ExerciseAction[] = [
-    { label: "$(beaker) Run Tests", command: "tmc.testExercise", arguments: target },
+  const picked = await dialog.selectItem(
+    { title: exercise.exerciseSlug, placeHolder: "What do you want to do with this exercise?" },
+    action("$(beaker) Run Tests", "tmc.testExercise"),
     ...(isLoggedIn
       ? [
-          {
-            label: "$(cloud-upload) Submit Solution",
-            command: "tmc.submitExercise",
-            arguments: target,
-          },
-          { label: "$(link) Share via Paste", command: "tmc.pasteExercise", arguments: target },
+          action("$(cloud-upload) Submit Solution", "tmc.submitExercise"),
+          action("$(link) Share via Paste", "tmc.pasteExercise"),
           separator("Restore"),
-          {
-            label: "$(history) Download Old Submission…",
-            command: "tmc.downloadOldSubmission",
-            arguments: target,
-          },
-          { label: "$(discard) Reset Exercise", command: "tmc.resetExercise", arguments: target },
+          action("$(history) Download Old Submission…", "tmc.downloadOldSubmission"),
+          action("$(discard) Reset Exercise", "tmc.resetExercise"),
           ...(course.ok
             ? [
                 separator("Course"),
-                {
-                  label: "$(list-tree) Reveal in Courses View",
-                  command: "tmc.revealInCoursesView",
-                  arguments: target,
-                },
+                action("$(list-tree) Reveal in Courses View", "tmc.revealInCoursesView"),
               ]
             : []),
         ]
       : []),
-  ]
-  const picked = await vscode.window.showQuickPick(actions, {
-    title: exercise.exerciseSlug,
-    placeHolder: "What do you want to do with this exercise?",
-  })
-  if (picked?.command) {
-    await vscode.commands.executeCommand(picked.command, ...(picked.arguments ?? []))
+  )
+  if (picked) {
+    await vscode.commands.executeCommand(picked.command, ...picked.arguments)
   }
 }

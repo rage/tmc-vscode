@@ -58,7 +58,7 @@ suite("pickCourse", function () {
 
   test("prompts among the user's courses, labelled by title and backend", async function () {
     const [context, dialog] = contextWith(courses)
-    const selectItem = vi.fn(async (_prompt: SelectPrompt, ..._items: Item<unknown>[]) => undefined)
+    const selectItem = vi.fn(async (_prompt: SelectPrompt, ..._items: unknown[]) => undefined)
     dialog.selectItem = selectItem
 
     await pickCourse(context, { title: "Course Details", placeHolder: "Which course?" })
