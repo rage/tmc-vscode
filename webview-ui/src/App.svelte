@@ -7,7 +7,6 @@
   import CourseDetails from "./panels/CourseDetails.svelte"
   import ExerciseSubmission from "./panels/ExerciseSubmission.svelte"
   import InitializationErrorHelp from "./panels/InitializationErrorHelp.svelte"
-  import MoocLogin from "./panels/MoocLogin.svelte"
   import MyCourses from "./panels/MyCourses.svelte"
   import type { AppPanel, Panel } from "./shared/shared"
   import { assertUnreachable } from "./shared/shared"
@@ -126,8 +125,6 @@
             <CourseDetails panel={appState.panel} />
           {:else if appState.panel.type === "ExerciseSubmission"}
             <ExerciseSubmission panel={appState.panel} />
-          {:else if appState.panel.type === "MoocLogin"}
-            <MoocLogin panel={appState.panel} />
           {:else if appState.panel.type === "InitializationErrorHelp"}
             <InitializationErrorHelp panel={appState.panel} />
           {:else if appState.panel.type === "App"}

@@ -104,8 +104,8 @@ interface LangsProcessArgs {
   onInterruptHandle?: ((interrupt: () => void) => void) | undefined
   /**
    * Registers the process with {@link Langs.killAllProcesses}. Only set for commands with no
-   * partial-write failure mode (network-only submit/paste, local test runs) -- a killed
-   * download or settings write can corrupt state.
+   * partial-write failure mode (login, which saves nothing until approved, network-only
+   * submit/paste, local test runs) -- a killed download or settings write can corrupt state.
    */
   interruptOnDeactivate?: boolean | undefined
 }
@@ -293,8 +293,8 @@ export default class Langs {
   }
 
   /**
-   * Kills every CLI process opted in via `interruptOnDeactivate` (submit, paste and local
-   * test runs); downloads, extraction, and settings/credentials writes are left running so a
+   * Kills every CLI process opted in via `interruptOnDeactivate` (login, submit, paste and
+   * local test runs); downloads, extraction, and settings/credentials writes are left running so a
    * window reload can't leave them half-written.
    *
    * Safe to call from a synchronous `deactivate`: each kill is a single syscall that has
@@ -412,6 +412,7 @@ export default class Langs {
       backend: "mooc",
       args: this._moocCmd("login"),
       onStdout,
+      interruptOnDeactivate: true,
     })
     if (process.err) {
       return { result: Promise.resolve(process), interrupt: (): void => {} }

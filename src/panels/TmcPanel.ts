@@ -8,12 +8,11 @@ import { Logger } from "../utilities"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { messageHandlers } from "./handlers"
-import { moocLoginRegistry } from "./moocLoginRegistry"
 import { postMessageToWebview, renderPanel } from "./panel"
 import type { HandlerContext, PanelHost } from "./router"
 import { dispatch } from "./router"
 import type { PanelRoute } from "./routes"
-import { completePanel, panelTitle, takesFocus } from "./routes"
+import { completePanel, panelTitle } from "./routes"
 
 export { nextPanelId } from "./routes"
 
@@ -117,23 +116,18 @@ export class TmcPanel {
     }
   }
 
-  // renders the `route` in the side panel
+  // renders the `route` in the side panel, without taking focus: submission results appear
+  // while the student is typing, and must not pull their keystrokes away
   public static renderSide(
     extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
     route: PanelRoute,
   ): void {
-    // Navigating away from an in-flight mooc login abandons it, so kill its CLI
-    // process. Exempt for re-entering MoocLogin: the new `moocLogin` handler
-    // interrupt-and-replaces the old attempt itself.
-    if (route.type !== "MoocLogin") {
-      moocLoginRegistry.cancelAll()
-    }
     if (TmcPanel.sidePanel !== undefined) {
       Logger.info(`Revealing existing side panel for "${route.type}"`)
       TmcPanel.sidePanel._render(route)
-      TmcPanel.sidePanel._panel.reveal(undefined, !takesFocus(route))
+      TmcPanel.sidePanel._panel.reveal(undefined, true)
     } else {
       TmcPanel.sidePanel = TmcPanel.renderNew(
         extensionUri,
@@ -156,13 +150,13 @@ export class TmcPanel {
   ): TmcPanel {
     const showOptions = isMain
       ? { viewColumn: ViewColumn.One, preserveFocus: false }
-      : { viewColumn: ViewColumn.Beside, preserveFocus: !takesFocus(route) }
+      : { viewColumn: ViewColumn.Beside, preserveFocus: true }
     const panelViewType = isMain ? "mainPanel" : "sidePanel"
     const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", showOptions, {
       enableScripts: true,
       enableFindWidget: true,
-      // A reload would restart MoocLogin's device flow and lose UI-only state (selection,
-      // scroll, open parts) that no host registry holds.
+      // A reload would lose UI-only state (selection, scroll, open parts) that no host
+      // registry holds.
       retainContextWhenHidden: true,
       localResourceRoots: [Uri.joinPath(extensionUri, "webview-ui/public/build")],
     })
@@ -223,9 +217,6 @@ export class TmcPanel {
       TmcPanel.mainPanel = undefined
     } else {
       TmcPanel.sidePanel = undefined
-      // Interrupt any in-flight mooc login on side-panel dispose (close/reload)
-      // so no orphaned CLI process keeps polling.
-      moocLoginRegistry.cancelAll()
     }
 
     while (this._disposables.length > 0) {
@@ -277,9 +268,6 @@ export class TmcPanel {
     if (!route) {
       return
     }
-    // Resending MoocLogin deliberately restarts the device flow: the reloaded webview has
-    // lost the code it was showing, and MoocLogin's mount posts `moocLogin` again, which
-    // interrupts the now-unreachable CLI process.
     // Not `_render`, which would clear the buffer about to be resent.
     renderPanel(completePanel(route), this._panel.webview)
     for (const buffered of this._messageBuffer.values()) {

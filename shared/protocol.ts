@@ -55,7 +55,6 @@ export type PanelType =
   | "MyCourses"
   | "CourseDetails"
   | "ExerciseSubmission"
-  | "MoocLogin"
   | "InitializationErrorHelp"
 
 // used to define messages that should only be sent to a specific instance of a panel
@@ -124,13 +123,6 @@ export const InitializationErrorHelpPanelSchema = z.object({
 
 export type InitializationErrorHelpPanel = z.infer<typeof InitializationErrorHelpPanelSchema>
 
-export const MoocLoginPanelSchema = z.object({
-  id: z.number(),
-  type: z.literal("MoocLogin"),
-})
-
-export type MoocLoginPanel = z.infer<typeof MoocLoginPanelSchema>
-
 /**
  * Represents a panel that is rendered by the webview.
  *
@@ -141,7 +133,6 @@ export const PanelSchema = z.discriminatedUnion("type", [
   MyCoursesPanelSchema,
   CourseDetailsPanelSchema,
   ExerciseSubmissionPanelSchema,
-  MoocLoginPanelSchema,
   InitializationErrorHelpPanelSchema,
 ])
 
@@ -302,16 +293,6 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     courseId: CourseIdentifierSchema,
     exerciseIds: z.array(ExerciseIdentifierSchema),
   }),
-  // Device-authorization info the CLI emits before blocking on polling; snake_case CLI fields mapped to camelCase.
-  z.object({
-    type: z.literal("moocDeviceCode"),
-    target: targetPanelSchema("MoocLogin"),
-    userCode: z.string(),
-    verificationUri: z.string(),
-    verificationUriComplete: z.string().nullable(),
-    expiresIn: z.number(),
-    interval: z.number(),
-  }),
   // The one answer to a request, see `RequestMessage`.
   z.object({
     type: z.literal("reply"),
@@ -319,7 +300,6 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
       "MyCourses",
       "CourseDetails",
       "ExerciseSubmission",
-      "MoocLogin",
       "InitializationErrorHelp",
     ),
     requestId: z.number(),
@@ -463,18 +443,6 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
       "workbench.action.openIssueReporter",
     ]),
   }),
-  // Posted on MoocLogin mount; starts the CLI device-flow login. The code is streamed back as
-  // `moocDeviceCode`, and the reply comes once the login is over.
-  z.object({
-    type: z.literal("moocLogin"),
-    requestId: z.number(),
-    sourcePanel: strictTargetPanelSchema("MoocLogin"),
-  }),
-  z.object({
-    // Kills the in-progress device-flow login CLI process, keyed by panel id.
-    type: z.literal("cancelMoocLogin"),
-    sourcePanel: strictTargetPanelSchema("MoocLogin"),
-  }),
 ])
 
 /**
@@ -502,7 +470,6 @@ export const ReplyValueSchemas = {
   pasteExercise: z.string(),
   sendFeedback: z.undefined(),
   copyToClipboard: z.undefined(),
-  moocLogin: z.undefined(),
   requestInitializationErrors: InitializationErrorsSchema,
 } satisfies Record<RequestType, z.ZodType>
 

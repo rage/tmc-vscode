@@ -36,23 +36,11 @@ export function panelTitle(route: PanelRoute, actionContext: ActionContext): str
     }
     case "ExerciseSubmission":
       return `Submission: ${LocalCourseExercise.getSlug(route.exercise)}`
-    case "MoocLogin":
-      return "Log In"
     case "InitializationErrorHelp":
       return "TestMyCode Help"
     default:
       return assertUnreachable(route)
   }
-}
-
-/**
- * Whether showing `route` in the side panel should move keyboard focus into it.
- *
- * Only a side panel the user asked for takes focus; submission results appear while the
- * student is typing, and must not pull their keystrokes away.
- */
-export function takesFocus(route: PanelRoute): boolean {
-  return route.type === "MoocLogin"
 }
 
 let panelIdCounter = 0

@@ -238,14 +238,13 @@ suite("registerCommands", function () {
     expect(ids).toContain("tmc.showMoocLogin")
   })
 
-  test("the login command opens the courses.mooc.fi device flow", async function () {
-    const renderSide = vi.spyOn(TmcPanel, "renderSide").mockReturnValue(undefined)
+  test("the login command runs the courses.mooc.fi device flow", async function () {
+    const login = vi.spyOn(commands, "login").mockResolvedValue("loggedIn")
     const { handlers } = registerAndCollect()
 
     await handlers.get("tmc.showMoocLogin")?.()
 
-    expect(renderSide).toHaveBeenCalledOnce()
-    expect(renderSide.mock.calls[0]?.[3]).toMatchObject({ type: "MoocLogin" })
+    expect(login).toHaveBeenCalledOnce()
   })
 
   // VS Code discards a rejected handler promise, so a command that throws would
@@ -257,16 +256,14 @@ suite("registerCommands", function () {
       value: { getExtension: () => ({ packageJSON: packageJson() }) },
       configurable: true,
     })
-    vi.spyOn(TmcPanel, "renderSide").mockImplementation(() => {
-      throw new Error("the panel could not open")
-    })
+    vi.spyOn(commands, "login").mockRejectedValue(new Error("the CLI could not start"))
     const { handlers, actionContext } = registerAndCollect()
 
     await expect(handlers.get("tmc.showMoocLogin")?.()).resolves.toBeUndefined()
 
     expect(vi.mocked(actionContext.dialog.reportError)).toHaveBeenCalledWith(
       "Failed to run Log In.",
-      expect.objectContaining({ message: "the panel could not open" }),
+      expect.objectContaining({ message: "the CLI could not start" }),
     )
   })
 

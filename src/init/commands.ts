@@ -213,13 +213,7 @@ export function registerCommands(
     )
   })
 
-  // The extension's only login: the courses.mooc.fi device flow.
-  register("tmc.showMoocLogin", () => {
-    TmcPanel.renderSide(context.extensionUri, context, readyContext, {
-      id: nextPanelId(),
-      type: "MoocLogin",
-    })
-  })
+  register("tmc.showMoocLogin", async () => commands.login(readyContext))
 
   register("tmc.submitExercise", async (resource: vscode.Uri | undefined) =>
     commands.submitExercise(context, readyContext, resource),

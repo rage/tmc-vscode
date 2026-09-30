@@ -288,39 +288,6 @@ export const SCENARIOS: Scenario[] = [
     ],
   },
   {
-    id: "mooc-login/awaiting",
-    panel: { id: 40, type: "MoocLogin" },
-    reply: (message) =>
-      message.type === "moocLogin"
-        ? [
-            {
-              type: "moocDeviceCode",
-              target: { type: "MoocLogin", id: 40 },
-              userCode: "WDJB-MJHT",
-              verificationUri: "https://courses.mooc.fi/device",
-              verificationUriComplete: "https://courses.mooc.fi/device?user_code=WDJB-MJHT",
-              expiresIn: 900,
-              interval: 5,
-            },
-          ]
-        : [],
-  },
-  {
-    id: "mooc-login/error",
-    panel: { id: 41, type: "MoocLogin" },
-    reply: (message) =>
-      message.type === "moocLogin"
-        ? [
-            {
-              type: "reply",
-              target: { type: "MoocLogin", id: 41 },
-              requestId: message.requestId,
-              outcome: { ok: false, error: { message: "the sign-in code expired." } },
-            },
-          ]
-        : [],
-  },
-  {
     id: "initialization-error-help/errors",
     panel: { id: 50, type: "InitializationErrorHelp" },
     reply: (message) =>

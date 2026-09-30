@@ -14,7 +14,6 @@ import {
 } from "../../errors"
 import { postExerciseStatuses, postUpdateables } from "../../panels/exerciseLists"
 import { exerciseStatusRegistry } from "../../panels/exerciseStatusRegistry"
-import { moocLoginRegistry } from "../../panels/moocLoginRegistry"
 import type { PanelActions } from "../../panels/panelActions"
 import { registerPanelActions } from "../../panels/panelActions"
 import type { PanelRoute } from "../../panels/routes"
@@ -38,97 +37,6 @@ import { createFakeWebviewPanel } from "../support/webviewPanel"
 beforeEach(() => {
   const vscodeModule: object = vscode
   Object.defineProperty(vscodeModule, "env", { value: {}, writable: true, configurable: true })
-})
-
-suite("TmcPanel moocLogin handling", () => {
-  test("a successful login closes the side panel and offers add-new-course", async () => {
-    // Isolate from any panel state a previous test in this file may have left behind.
-    TmcPanel.sidePanel?.dispose()
-    TmcPanel.sidePanel = undefined
-
-    const { panel, dispose, getMessageListener } = createFakeWebviewPanel()
-    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
-    createWebviewPanel.mockReturnValue(panel)
-
-    const extensionContext = createMockContext()
-    const extensionUri = vscode.Uri.file("/ext")
-    const actionContext = createMockActionContext()
-    const authenticateMooc = vi.fn().mockReturnValue({
-      result: Promise.resolve(Ok(undefined)),
-      interrupt: vi.fn(),
-    })
-    actionContext.startup.langs = { authenticateMooc } as unknown as Langs
-
-    // Render the MoocLogin panel standalone, the way `tmc.showMoocLogin` does.
-    const loginPanelId = nextPanelId()
-    TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
-      id: loginPanelId,
-      type: "MoocLogin",
-    })
-    expect(createWebviewPanel).toHaveBeenCalledTimes(1)
-
-    // Simulate the webview posting `moocLogin` on mount.
-    const listener = getMessageListener()
-    await listener({
-      type: "moocLogin",
-      requestId: 1,
-      sourcePanel: { id: loginPanelId, type: "MoocLogin" },
-    })
-
-    expect(authenticateMooc).toHaveBeenCalledTimes(1)
-    // The side panel is closed...
-    expect(dispose).toHaveBeenCalled()
-    expect(TmcPanel.sidePanel).toBeUndefined()
-    // ...and a confirmation toast is shown, offering the step the user most
-    // likely came for without forcing it on a session-renewal login.
-    expect(actionContext.dialog.notification).toHaveBeenCalledWith(
-      "Logged in to courses.mooc.fi.",
-      ["Add new course", expect.any(Function)],
-    )
-    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
-    const [, button] = vi.mocked(actionContext.dialog.notification).mock.calls[0] as [
-      string,
-      [string, () => void],
-    ]
-    button[1]()
-    expect(executeCommand).toHaveBeenCalledWith("tmc.addNewCourse")
-    executeCommand.mockRestore()
-  })
-
-  const loginPanel = { id: 9, type: "MoocLogin" }
-
-  test("answers the waiting panel when the extension is not initialized", async () => {
-    const actionContext = createDegradedContext()
-    const { panel, listener } = await mountSidePanel(actionContext)
-
-    await listener({ type: "moocLogin", requestId: 1, sourcePanel: loginPanel })
-
-    expect(replyTo(panel, 1)).toEqual({
-      type: "reply",
-      target: loginPanel,
-      requestId: 1,
-      outcome: { ok: false, error: { message: "The extension did not initialize properly" } },
-    })
-  })
-
-  test("answers the waiting panel when the login rejects", async () => {
-    const actionContext = createMockActionContext()
-    actionContext.startup.langs = {
-      authenticateMooc: () => ({
-        result: Promise.reject(new Error("the CLI crashed")),
-        interrupt: vi.fn(),
-      }),
-    } as unknown as Langs
-    const { panel, listener } = await mountSidePanel(actionContext)
-
-    await listener({ type: "moocLogin", requestId: 2, sourcePanel: loginPanel })
-
-    expect(replyTo(panel, 2)).toMatchObject({
-      target: loginPanel,
-      outcome: { ok: false, error: { message: "the CLI crashed" } },
-    })
-    expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
-  })
 })
 
 // Mounts a fresh side panel (resetting any panel state a previous test left
@@ -1018,23 +926,6 @@ suite("TmcPanel addNewCourse handling", () => {
   })
 })
 
-suite("TmcPanel cancelMoocLogin handling", () => {
-  test("cancels the in-flight login registered under the source panel's id", async () => {
-    const actionContext = createMockActionContext()
-    const { listener } = await mountSidePanel(actionContext)
-
-    const cancelSpy = vi.spyOn(moocLoginRegistry, "cancel")
-    try {
-      const sourcePanel = { id: 13, type: "MoocLogin" as const }
-      await listener({ type: "cancelMoocLogin", sourcePanel })
-
-      expect(cancelSpy).toHaveBeenCalledWith(13)
-    } finally {
-      cancelSpy.mockRestore()
-    }
-  })
-})
-
 suite("TmcPanel ready handshake", () => {
   test("resends the last rendered panel", async () => {
     const actionContext = createMockActionContext()
@@ -1730,21 +1621,6 @@ suite("TmcPanel side panel placement", () => {
 
     expect(panel.reveal).toHaveBeenCalledExactlyOnceWith(undefined, true)
   })
-
-  test("focuses the login panel the user opened", () => {
-    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
-    createWebviewPanel.mockClear()
-    createWebviewPanel.mockReturnValue(createFakeWebviewPanel().panel)
-
-    renderSidePanel({ id: nextPanelId(), type: "MoocLogin" })
-
-    expect(createWebviewPanel).toHaveBeenCalledWith(
-      "sidePanel",
-      expect.any(String),
-      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
-      expect.anything(),
-    )
-  })
 })
 
 suite("TmcPanel tab identity", () => {
@@ -1767,7 +1643,6 @@ suite("TmcPanel tab identity", () => {
     expect(mainPanelTitleFor({ id: nextPanelId(), type: "InitializationErrorHelp" })).toBe(
       "TestMyCode Help",
     )
-    expect(mainPanelTitleFor({ id: nextPanelId(), type: "MoocLogin" })).toBe("Log In")
   })
 
   test("titles a course's tab with the course title, not its slug", () => {

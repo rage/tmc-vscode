@@ -30,10 +30,7 @@ const LIVE_ROLES = new Set(["alert", "status", "log", "marquee", "timer"])
  * Checks that fail today, keyed `"<scenario> › <check>"`. Each is a product bug: fix it and
  * delete the entry, and the check starts guarding it.
  */
-const KNOWN_FAILURES: Record<string, string> = {
-  "mooc-login/awaiting › spinners and live regions do not interrupt or nest":
-    "MoocLogin's own vscode-progress-ring keeps its default role=alert inside a role=status",
-}
+const KNOWN_FAILURES: Record<string, string> = {}
 
 interface AxNode {
   nodeId: string

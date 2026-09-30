@@ -126,6 +126,8 @@ async function resetMockBackend(mock: string): Promise<void> {
 
 interface CustomTestFixtures {
   vsCode: ElectronApplication
+  /** The URLs VS Code has been asked to open in a browser, which no test really opens. */
+  openedExternalUrls: () => Promise<string[]>
   page: Page
   context: BrowserContext
   webview: FrameLocator
@@ -183,6 +185,11 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
       },
     })
     await electronApp.context().tracing.start({ screenshots: true, snapshots: true })
+    await electronApp.evaluate(({ shell }) => {
+      const opened: string[] = []
+      Object.assign(globalThis, { tmcOpenedExternalUrls: opened })
+      shell.openExternal = async (url: string): Promise<void> => void opened.push(url)
+    })
 
     await run(electronApp)
 
@@ -199,6 +206,13 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
     for (const dir of [userDataDir, configDir, projectsDir]) {
       fs.rmSync(dir, { recursive: true, force: true })
     }
+  },
+  openedExternalUrls: async ({ vsCode }, run) => {
+    await run(() =>
+      vsCode.evaluate(() => [
+        ...((globalThis as { tmcOpenedExternalUrls?: string[] }).tmcOpenedExternalUrls ?? []),
+      ]),
+    )
   },
   page: async ({ vsCode }, run) => {
     const page = await vsCode.firstWindow()

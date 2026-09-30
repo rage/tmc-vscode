@@ -6,7 +6,7 @@ import { MyCoursesPage } from "../pages/my-courses"
 
 // E2E of the courses.mooc.fi device-flow login, the extension's only login. The
 // mock's OAuth endpoints (backend/mooc/oauth.ts) are not part of the vendored
-// exercise-services spec.
+// exercise-services spec; its default client approves five seconds after the code is issued.
 //
 // The fixture seeds tmc credentials, so the extension starts logged in and the
 // Courses view offers no Log In; these specs reach the device flow through
@@ -14,8 +14,8 @@ import { MyCoursesPage } from "../pages/my-courses"
 // credentials are missing.
 
 vsCodeTest(
-  "shows the device code and makes the enrolled courses addable",
-  async ({ page, webview }) => {
+  "opens the approval page in the browser and makes the enrolled courses addable",
+  async ({ page, webview, openedExternalUrls }) => {
     const myCoursesPage = new MyCoursesPage(page, webview)
     const moocLoginPage = new MoocLoginPage(page, webview)
 
@@ -24,13 +24,19 @@ vsCodeTest(
       await myCoursesPage.startMoocLogin()
     })
 
-    await vsCodeTest.step("the device code is shown", async () => {
-      await expect(moocLoginPage.heading()).toBeVisible()
-      await expect(moocLoginPage.userCode()).toBeVisible()
+    await vsCodeTest.step("Copy & Open opens the page that shows the code", async () => {
+      await expect(moocLoginPage.codeDialog()).toBeVisible()
+      await moocLoginPage.copyAndOpen()
+      await expect(moocLoginPage.codeDialog()).toBeHidden()
+      await expect
+        .poll(openedExternalUrls)
+        .toStrictEqual(["http://localhost:4001/oauth_device?user_code=WXYZ-1234"])
+      await expect(moocLoginPage.waitingNotification()).toBeVisible()
     })
 
     await vsCodeTest.step("the mock approves and the login is confirmed", async () => {
       await expect(myCoursesPage.notificationToast("Logged in to courses.mooc.fi.")).toBeVisible()
+      await expect(moocLoginPage.waitingNotification()).toBeHidden()
     })
 
     await vsCodeTest.step("the enrolled courses are now offered", async () => {
@@ -40,65 +46,68 @@ vsCodeTest(
   },
 )
 
-// This mock client id never approves, so the login stays on the waiting screen
-// until it is cancelled.
 vsCodeTest.describe(() => {
-  vsCodeTest.use({ moocClientId: "mooc-mock-never" })
+  vsCodeTest.use({ moocClientId: "mooc-mock-deny" })
 
-  vsCodeTest("can cancel a pending device login", async ({ page, webview }) => {
+  vsCodeTest("a denied login says so and offers Try again", async ({ page, webview }) => {
     const myCoursesPage = new MyCoursesPage(page, webview)
     const moocLoginPage = new MoocLoginPage(page, webview)
 
-    await vsCodeTest.step("start the login from the add-course pick", async () => {
-      await myCoursesPage.goto()
-      await myCoursesPage.startMoocLogin()
-    })
+    await myCoursesPage.goto()
+    await myCoursesPage.startMoocLogin()
+    await moocLoginPage.copyAndOpen()
 
-    await vsCodeTest.step("cancel the pending login", async () => {
-      await expect(moocLoginPage.heading()).toBeVisible()
-      await expect(moocLoginPage.userCode()).toBeVisible()
-      await moocLoginPage.cancel()
-      await expect(moocLoginPage.getSidePanel().getByText("Login cancelled.")).toBeVisible()
-      await expect(
-        moocLoginPage.getSidePanel().getByRole("button", { name: "Try again" }),
-      ).toBeVisible()
-    })
+    const error = page
+      .locator(".notification-toast")
+      .filter({ hasText: "The login was denied in the browser." })
+    await expect(error).toBeVisible()
+    await error.getByRole("button", { name: "Try again" }).click()
+    await expect(moocLoginPage.codeDialog()).toBeVisible()
   })
+})
 
-  // Regression for orphaned/concurrent logins: cancel-then-retry must start a
-  // clean attempt, unaffected by the old (killed) invocation resolving late.
+// This mock client id never approves, so the login waits until it is cancelled.
+vsCodeTest.describe(() => {
+  vsCodeTest.use({ moocClientId: "mooc-mock-never" })
+
   vsCodeTest(
-    "cancel then retry starts a clean login with no error flash",
-    async ({ page, webview }) => {
+    "dismissing the code cancels the login and opens nothing",
+    async ({ page, webview, openedExternalUrls }) => {
       const myCoursesPage = new MyCoursesPage(page, webview)
       const moocLoginPage = new MoocLoginPage(page, webview)
 
-      await vsCodeTest.step("start the login from the add-course pick", async () => {
-        await myCoursesPage.goto()
-        await myCoursesPage.startMoocLogin()
-      })
+      await myCoursesPage.goto()
+      await myCoursesPage.startMoocLogin()
+      await moocLoginPage.dismissCode()
 
-      await vsCodeTest.step("cancel the pending login", async () => {
-        await expect(moocLoginPage.userCode()).toBeVisible()
-        await moocLoginPage.cancel()
-        await expect(moocLoginPage.getSidePanel().getByText("Login cancelled.")).toBeVisible()
-      })
-
-      await vsCodeTest.step("retry lands on a fresh device code with no error", async () => {
-        await moocLoginPage.tryAgain()
-        // Proves a new process is live, not the killed one.
-        await expect(moocLoginPage.userCode()).toBeVisible()
-        // The late-resolving cancelled attempt must not surface an error banner.
-        await expect(moocLoginPage.errorBanner()).toHaveCount(0)
-      })
-
-      await vsCodeTest.step("the retried login cancels cleanly", async () => {
-        // Also leaves no orphaned `mooc login` process running into teardown.
-        await moocLoginPage.cancel()
-        await expect(moocLoginPage.getSidePanel().getByText("Login cancelled.")).toBeVisible()
-      })
+      await expect(moocLoginPage.codeDialog()).toBeHidden()
+      await expect(
+        page.locator(".notification-toast").filter({ hasText: "courses.mooc.fi" }),
+      ).toHaveCount(0)
+      expect(await openedExternalUrls()).toStrictEqual([])
     },
   )
+
+  // Cancel-then-retry must start a clean attempt, unaffected by the killed one ending late.
+  vsCodeTest("cancel then retry starts a clean login", async ({ page, webview }) => {
+    const myCoursesPage = new MyCoursesPage(page, webview)
+    const moocLoginPage = new MoocLoginPage(page, webview)
+
+    await vsCodeTest.step("cancel the pending login", async () => {
+      await myCoursesPage.goto()
+      await myCoursesPage.startMoocLogin()
+      await moocLoginPage.copyAndOpen()
+      await moocLoginPage.cancelWaiting()
+      await expect(moocLoginPage.waitingNotification()).toBeHidden()
+    })
+
+    await vsCodeTest.step("retry lands on a fresh code with no error", async () => {
+      await myCoursesPage.startMoocLogin()
+      await expect(moocLoginPage.codeDialog()).toBeVisible()
+      await moocLoginPage.dismissCode()
+      await expect(page.locator(".notification-toast").filter({ hasText: "login" })).toHaveCount(0)
+    })
+  })
 })
 
 // The route a brand-new user takes: no credentials at all, so the Courses view's
@@ -113,8 +122,7 @@ vsCodeTest.describe(() => {
       const moocLoginPage = new MoocLoginPage(page, webview)
 
       await moocLoginPage.gotoFromCoursesView()
-      await expect(moocLoginPage.heading()).toBeVisible()
-      await expect(moocLoginPage.userCode()).toBeVisible()
+      await expect(moocLoginPage.codeDialog()).toBeVisible()
     },
   )
 })

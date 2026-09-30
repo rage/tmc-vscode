@@ -1,7 +1,11 @@
+import type { Locator } from "@playwright/test"
+
 import { clickUntilVisible, TmcPage } from "./tmc"
 
-// The courses.mooc.fi device-flow login screen, shown when no mooc credentials
-// are stored.
+// The user code the mock issues (backend/mooc/oauth.ts MOCK_USER_CODE).
+const MOCK_USER_CODE = "WXYZ-1234"
+
+/** The courses.mooc.fi device-flow login: a modal with the code, then a progress notification. */
 export class MoocLoginPage extends TmcPage {
   // Only reachable with no credentials at all: the Courses view shows this welcome
   // content only while the extension considers the user logged out.
@@ -9,31 +13,34 @@ export class MoocLoginPage extends TmcPage {
     await this.openMenu()
     await clickUntilVisible(
       this.coursesViewWelcomeButton("Log In"),
-      this.heading(),
-      "the login screen did not open",
+      this.codeDialog(),
+      "the login code dialog did not open",
     )
   }
 
-  public heading() {
-    return this.getSidePanel().getByRole("heading", { name: "Log in to courses.mooc.fi" })
+  /** The modal showing the code; `window.dialogStyle: custom` renders it inside the page. */
+  public codeDialog(): Locator {
+    return this.page
+      .getByRole("dialog")
+      .filter({ hasText: `Your courses.mooc.fi login code is ${MOCK_USER_CODE}` })
   }
 
-  // The user code the mock issues (backend/mooc/oauth.ts MOCK_USER_CODE).
-  public userCode() {
-    return this.getSidePanel().getByText("WXYZ-1234")
+  public async copyAndOpen(): Promise<void> {
+    await this.codeDialog().getByRole("button", { name: "Copy & Open courses.mooc.fi" }).click()
   }
 
-  public async cancel(): Promise<void> {
-    await this.getSidePanel().getByRole("button", { name: "Cancel" }).click()
+  public async dismissCode(): Promise<void> {
+    await this.codeDialog().getByRole("button", { name: "Cancel" }).click()
   }
 
-  public async tryAgain(): Promise<void> {
-    await this.getSidePanel().getByRole("button", { name: "Try again" }).click()
+  public waitingNotification(): Locator {
+    return this.page
+      .locator(".notification-toast")
+      .filter({ hasText: "Waiting for you to approve in the browser" })
   }
 
-  // Matched by "Login failed" text; the bare "alert" role also matches the
-  // waiting progress ring, so it isn't specific enough.
-  public errorBanner() {
-    return this.getSidePanel().getByText("Login failed")
+  public async cancelWaiting(): Promise<void> {
+    await this.waitingNotification().hover()
+    await this.waitingNotification().getByRole("button", { name: "Cancel" }).click()
   }
 }

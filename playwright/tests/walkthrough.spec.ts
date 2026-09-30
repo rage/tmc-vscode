@@ -1,11 +1,11 @@
 import { expect } from "@playwright/test"
 
 import { vsCodeTest } from "../fixtures"
-import { MoocLoginPage } from "../pages/mooc-login"
+import { TmcPage } from "../pages/tmc"
 
 // Every test starts from an empty profile, which activation treats as a fresh install.
 vsCodeTest("a fresh install opens the walkthrough", async ({ page, webview }) => {
-  const tmcPage = new MoocLoginPage(page, webview)
+  const tmcPage = new TmcPage(page, webview)
 
   await tmcPage.openMenu()
 
