@@ -10,7 +10,7 @@ import type {
 } from "../../shared/shared"
 import { ExerciseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
 import type { CourseViewState, PartView } from "../../ui/treeview/courseViewModel"
-import { buildCourseView } from "../../ui/treeview/courseViewModel"
+import { buildCourseView, onDiskByCourse } from "../../ui/treeview/courseViewModel"
 
 const COURSE_NAME = "python-course"
 const NOW = new Date("2026-06-01T12:00:00Z")
@@ -106,7 +106,7 @@ function build(
   state: Partial<CourseViewState> = {},
 ): PartView[] {
   return buildCourseView(courseData, {
-    workspaceExercises,
+    onDisk: onDiskByCourse(workspaceExercises)(courseData),
     downloadStatusOf: () => undefined,
     updateable: [],
     now: NOW,

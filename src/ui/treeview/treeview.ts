@@ -8,7 +8,7 @@ import { downloadFailures } from "../downloadFailures"
 import { exerciseOperations } from "../exerciseOperations"
 import { updateablesRegistry } from "../updateablesRegistry"
 import type { ExerciseView, PartView } from "./courseViewModel"
-import { buildCourseView, shownDeadline } from "./courseViewModel"
+import { buildCourseView, onDiskByCourse, shownDeadline } from "./courseViewModel"
 
 /** The id of the TestMyCode view, for `withProgress({ location: { viewId } })` too. */
 export const COURSES_VIEW_ID = "tmcView"
@@ -500,12 +500,12 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
 
   private _currentViews(): CourseView[] {
     if (!this._views) {
-      const workspaceExercises = this._source?.workspaceManager.getExercises() ?? []
+      const onDiskOf = onDiskByCourse(this._source?.workspaceManager.getExercises() ?? [])
       const now = new Date()
       this._views = this._visibleCourses().map((course) => {
         const courseId = LocalCourseData.getCourseId(course)
         const parts = buildCourseView(course, {
-          workspaceExercises,
+          onDisk: onDiskOf(course),
           downloadStatusOf,
           updateable: updateablesRegistry.get(courseId),
           now,
