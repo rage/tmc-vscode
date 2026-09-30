@@ -14,9 +14,6 @@ h2,
 h3 {
   font-size: var(--tmc-font-size-body);
 }
-.page-title {
-  font-size: var(--tmc-font-size-page-title);
-}
 
 pre,
 .code-block {

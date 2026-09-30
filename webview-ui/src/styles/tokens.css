@@ -13,14 +13,11 @@
 
   --tmc-radius: var(--vscode-cornerRadius-small, 4px);
 
-  --tmc-font-size-small: var(--vscode-bodyFontSize-small, 12px);
   --tmc-font-size-body: var(--vscode-font-size, 13px);
   --tmc-font-size-heading: var(--vscode-fontSize-heading2, 18px);
-  --tmc-font-size-page-title: var(--vscode-fontSize-heading1, 26px);
   --tmc-font-mono: var(--vscode-editor-font-family, monospace);
   --tmc-font-size-mono: var(--vscode-editor-font-size, 13px);
 
-  --tmc-fg: var(--vscode-foreground);
   --tmc-fg-muted: var(--vscode-descriptionForeground);
 
   /* Icon colours only: these fail text contrast on light themes. charts.green comes first
@@ -33,8 +30,6 @@
     --vscode-welcomePage-tileBorder,
     var(--vscode-contrastBorder, transparent)
   );
-  --tmc-overlay-border: var(--vscode-widget-border, var(--vscode-contrastBorder, transparent));
-  --tmc-overlay-shadow: var(--vscode-widget-shadow, transparent);
   --tmc-hc-outline: var(--vscode-contrastBorder, transparent);
   --tmc-hc-active-outline: var(--vscode-contrastActiveBorder, transparent);
   --tmc-focus-border: var(--vscode-focusBorder);

@@ -22,7 +22,6 @@ const BODY_TEXT = "var(--vscode-editor-foreground)"
 // Buttons use vscode-button's own declarations, fallbacks included.
 const PAIRINGS: Pairing[] = [
   { name: "body text", foreground: BODY_TEXT, minimum: TEXT },
-  { name: "--tmc-fg text", foreground: "var(--tmc-fg)", minimum: TEXT },
   { name: "muted text", foreground: "var(--tmc-fg-muted)", minimum: TEXT },
   {
     name: "code block text",
@@ -81,8 +80,6 @@ const PAIRINGS: Pairing[] = [
 /** Colour tokens no pairing covers, and why none has to. */
 const UNPAIRED_COLOUR_TOKENS: Record<string, string> = {
   "--tmc-surface-border": "decorative",
-  "--tmc-overlay-border": "decorative",
-  "--tmc-overlay-shadow": "decorative",
   "--tmc-hc-outline": "transparent outside High Contrast, where the theme picks it",
   "--tmc-hc-active-outline": "transparent outside High Contrast, where the theme picks it",
   "--tmc-section-header-border": "decorative",
