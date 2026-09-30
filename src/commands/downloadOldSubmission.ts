@@ -10,7 +10,7 @@ import { failure } from "../api/withOperation"
 import { BottleneckError } from "../errors"
 import type { MoocOldSubmissionRestore } from "../shared/langsSchema"
 import { backendName, ExerciseIdentifier } from "../shared/shared"
-import { parseDate } from "../utilities"
+import { formatDateTime, parseDate } from "../utilities"
 import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
 import { runForExercise } from "./runForExercise"
 
@@ -18,17 +18,13 @@ const TITLE = "Download Old Submission"
 
 /** Picker rows for `submissions`, newest first, which is the one a student almost always wants. */
 function submissionItems(submissions: PickableSubmission[]): Item<PickableSubmission>[] {
-  const format = new Intl.DateTimeFormat(vscode.env.language, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  })
   return submissions
     .map((submission) => ({ submission, createdAt: parseDate(submission.createdAt) }))
     .toSorted((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
     .map(({ submission, createdAt }, index) => {
       const passed = submission.status.startsWith("Passed")
       const item: Item<PickableSubmission> = {
-        label: createdAt ? format.format(createdAt) : "Unknown date",
+        label: createdAt ? formatDateTime(createdAt, vscode.env.language) : "Unknown date",
         value: submission,
         description: submission.status,
         iconPath: passed
