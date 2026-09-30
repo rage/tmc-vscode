@@ -20,12 +20,6 @@ export const CourseDetailsPanelSchema = z.object({
 
 export type CourseDetailsPanel = z.infer<typeof CourseDetailsPanelSchema>
 
-// defined by hand (rather than as `Panel["type"]`) so that
-// `targetPanelSchema` can be used inside the panel schemas
-// themselves without creating a circular type dependency;
-// the `_panelTypesMatch` assertion below `Panel` keeps this in sync with `PanelSchema`
-export type PanelType = "App" | "CourseDetails" | "ExerciseSubmission" | "InitializationErrorHelp"
-
 // used to define messages that should only be sent to a specific instance of a panel
 // for example, a submission's result should only be sent to the ExerciseSubmission
 // panel that made it, not to another one that happens to be open
@@ -94,13 +88,7 @@ export const PanelSchema = z.discriminatedUnion("type", [
 
 export type Panel = z.infer<typeof PanelSchema>
 
-// compile-time assertion that the hand-written `PanelType` stays in sync with `PanelSchema`
-type Equal<X, Y> =
-  (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false
-
-type _panelTypesMatch = Equal<Panel["type"], PanelType> extends true ? true : never
-
-const _panelTypesMatch: _panelTypesMatch = true
+export type PanelType = Panel["type"]
 
 /** A screen the main panel can be reopened on after a window reload. */
 export const RestorableRouteSchema = z.discriminatedUnion("type", [
