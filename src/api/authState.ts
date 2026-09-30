@@ -50,18 +50,12 @@ export interface AuthState {
   insufficientScopeReported: boolean
 }
 
-/** The part of the Courses view {@link createAuthState} keeps in step with the session. */
-interface LoggedInView {
-  treeDP: { setLoggedIn: (loggedIn: boolean) => void }
-}
-
 /**
  * Builds the {@link AuthState} for one activation.
  *
- * It applies `test-my-code:LoggedIn` and the Courses view's logged-in state itself,
- * so nothing else may set either.
+ * It applies `test-my-code:LoggedIn` itself, so nothing else may set it.
  */
-export function createAuthState(langs: Result<Langs, Error>, ui: LoggedInView): AuthState {
+export function createAuthState(langs: Result<Langs, Error>): AuthState {
   const authenticated: Record<BackendKind, boolean> = { tmc: false, mooc: false }
   const listeners: ((loggedIn: boolean) => void)[] = []
   const moocListeners: ((authenticated: boolean) => void)[] = []
@@ -73,7 +67,6 @@ export function createAuthState(langs: Result<Langs, Error>, ui: LoggedInView): 
     if (loggedIn !== applied) {
       applied = loggedIn
       await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", loggedIn)
-      ui.treeDP.setLoggedIn(loggedIn)
       for (const listener of listeners) {
         listener(loggedIn)
       }

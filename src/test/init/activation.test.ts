@@ -106,17 +106,16 @@ vi.mock("vscode", async (importOriginal) => {
   }
 })
 
-vi.mock("../../ui/ui", () => ({
+vi.mock("../../ui/treeview/treeview", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   default: class {
-    public treeDP = {
-      setSource: (): void => {
-        recorded.isCourseViewFilled = true
-      },
-      setLoggedIn: (loggedIn: boolean): void => {
-        recorded.treeLoggedIn.push(loggedIn)
-      },
-      refresh: (): void => {},
+    public setSource = (): void => {
+      recorded.isCourseViewFilled = true
     }
+    public setLoggedIn = (loggedIn: boolean): void => {
+      recorded.treeLoggedIn.push(loggedIn)
+    }
+    public refresh = (): void => {}
     public dispose = (): void => {
       recorded.uiDisposals += 1
     }
@@ -689,7 +688,7 @@ suite("activation in a workspace the migration cannot use in place", function ()
     )
   })
 
-  // The Courses view is never filled here (`fillCoursesView` runs after this return).
+  // The Courses view is never filled here (its source is set after this return).
   // The service-free commands do register, since `registerServiceFreeCommands` runs
   // ahead of the migration check -- but `vscode.openFolder` reloads the window into a
   // fresh extension host process, discarding this one's `context.subscriptions` before

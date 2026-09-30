@@ -23,7 +23,7 @@ import { backendName, CourseIdentifier, ExerciseIdentifier, makeMoocKind } from 
 import Storage from "../storage"
 import type { MoocLocalCourseData } from "../storage/data"
 import { CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
-import type UI from "../ui/ui"
+import type CoursesTree from "../ui/treeview/treeview"
 import { updateablesRegistry } from "../ui/updateablesRegistry"
 import { createMockActionContext } from "./mocks/actionContext"
 import { createMockContext } from "./mocks/vscode"
@@ -191,7 +191,7 @@ async function harness(
       } as Partial<ReadyStartup>,
     }),
     dialog,
-    ui: { treeDP: { refresh: vi.fn(), setBackendReachable: vi.fn() } } as unknown as UI,
+    coursesTree: { setBackendReachable: vi.fn() } as unknown as CoursesTree,
   }
 
   const commandHandlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()

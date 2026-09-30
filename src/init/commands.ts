@@ -228,7 +228,7 @@ export function registerCommands(
 
   register("tmc.revealInCoursesView", async (target: ExerciseTarget | undefined) => {
     const uri = resourceOf(target) ?? vscode.window.activeTextEditor?.document.uri
-    if (uri && !(await readyContext.ui.treeDP.revealExercise(uri))) {
+    if (uri && !(await readyContext.coursesTree.revealExercise(uri))) {
       readyContext.dialog.statusMessage("This exercise is not in the Courses view.")
     }
   })

@@ -43,8 +43,7 @@ import { trackActiveEditorExercise, trackHasCourses } from "./ui/contextKeys"
 import { exerciseOperations } from "./ui/exerciseOperations"
 import { AccountStatusBarItem } from "./ui/statusBarAccount"
 import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
-import { COURSES_VIEW_ID } from "./ui/treeview/treeview"
-import UI from "./ui/ui"
+import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
 
 interface InitializationErrorReporter {
@@ -167,8 +166,8 @@ async function activateInner(
   await vscode.commands.executeCommand("setContext", "test-my-code:DebugMode", DEBUG_MODE)
 
   const dialog = new Dialog()
-  const ui = new UI()
-  context.subscriptions.push(ui)
+  const coursesTree = new CoursesTree()
+  context.subscriptions.push(coursesTree)
   init.registerServiceFreeCommands(context, dialog)
   const initializationErrors = makeInitializationErrorReporter(dialog)
   const reportInitializationError = initializationErrors.record
@@ -196,7 +195,8 @@ async function activateInner(
     langs = new Ok(langsInstance)
   }
 
-  const authState = createAuthState(langs, ui)
+  const authState = createAuthState(langs)
+  authState.subscribe((loggedIn) => coursesTree.setLoggedIn(loggedIn))
   const initialAuthCheck = await authState.refresh({ timeout: 15000 })
   if (initialAuthCheck.tmc.err) {
     reportInitializationError("Checking your login", initialAuthCheck.tmc.val)
@@ -432,7 +432,7 @@ async function activateInner(
     // is named nowhere else.
     Logger.warn(`Activation degraded, missing: ${Object.keys(startup.failures).join(", ")}`)
   }
-  const actionContext: ActionContext = { authState, dialog, settings, startup, ui }
+  const actionContext: ActionContext = { authState, coursesTree, dialog, settings, startup }
   const readyContext = isReady(actionContext) ? actionContext : undefined
 
   if (readyContext) {
@@ -440,9 +440,15 @@ async function activateInner(
     if (refreshResult.err) {
       Logger.warn("Failed to set initial exercises.", refreshResult.val)
     }
+    // A failed activation leaves the view empty, and its `viewsWelcome` offers the way out.
+    const { startup: ready } = readyContext
+    coursesTree.setSource({
+      getCourses: () => ready.userData.getCourses(),
+      onDidChangeCourses: ready.userData.onDidChangeCourses,
+      workspaceManager: ready.workspaceManager,
+    })
   }
 
-  init.fillCoursesView(actionContext)
   init.registerCommands(context, actionContext)
   context.subscriptions.push(TmcPanel.registerSerializer(context, actionContext))
   if (readyContext) {

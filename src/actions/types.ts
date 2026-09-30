@@ -6,7 +6,7 @@ import type WorkspaceManager from "../api/workspaceManager"
 import type Resources from "../config/resources"
 import type Settings from "../config/settings"
 import type { UserData } from "../config/userdata"
-import type UI from "../ui/ui"
+import type CoursesTree from "../ui/treeview/treeview"
 
 /** The services an activation builds, once all of them have succeeded. */
 export interface ReadyStartup {
@@ -38,7 +38,7 @@ export interface ActionContext {
   dialog: Dialog
   settings: Settings
   startup: Startup
-  ui: UI
+  coursesTree: CoursesTree
 }
 
 /** A context whose services are all available, and the argument most actions want. */

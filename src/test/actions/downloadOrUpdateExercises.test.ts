@@ -14,14 +14,12 @@ import type { ExerciseStatus } from "../../shared/shared"
 import { CourseIdentifier, ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
 import { downloadFailures } from "../../ui/downloadFailures"
 import { exerciseOperations } from "../../ui/exerciseOperations"
-import type UI from "../../ui/ui"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 import type { SettingsMockValues } from "../mocks/settings"
 import { createSettingsMock } from "../mocks/settings"
 import type { DownloadExercisesMockResult, TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
-import { createUIMock } from "../mocks/ui"
 
 const helloWorld: TmcExerciseDownload = {
   "course-slug": "python-course",
@@ -79,7 +77,6 @@ suite("downloadOrUpdateExercises action", function () {
   let settingsMockValues: SettingsMockValues
   let tmcMock: Langs
   let tmcMockValues: TMCMockValues
-  let uiMock: UI
   let recorded: [ExerciseIdentifier, ExerciseStatus][][]
   let subscriptions: vscode.Disposable[]
 
@@ -89,14 +86,12 @@ suite("downloadOrUpdateExercises action", function () {
     }),
     dialog: dialogMock,
     settings: settingsMock,
-    ui: uiMock,
   })
 
   beforeEach(function () {
     ;[dialogMock] = createDialogMock()
     ;[settingsMock, settingsMockValues] = createSettingsMock()
     ;[tmcMock, tmcMockValues] = createTMCMock()
-    ;[uiMock] = createUIMock()
     recorded = []
     const snapshot = (): void => {
       recorded.push(WATCHED_IDS.map((id) => [id, shownStatus(id)]))
