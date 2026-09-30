@@ -11,6 +11,7 @@ import { toWebviewError } from "../../../src/panels/webviewError"
 import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../shared/langsSchema"
 import type { ExerciseSubmissionPanel, FeedbackQuestion, SubmissionView } from "../shared/shared"
 import { BaseError } from "../shared/shared"
+import { moocGrading, submissionFinished, submissionViewMessage } from "../test/fixtures"
 import { dispatchToWebview, postedMessages, reloadDocument, replyToRequest } from "../test/setup"
 import { withinShadowRoot } from "../test/shadow"
 import { enterScreen } from "../utilities/uiState.svelte"
@@ -34,57 +35,8 @@ const moocPanel: ExerciseSubmissionPanel = {
 
 const FEEDBACK_URL = "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback"
 
-function submissionFinished(overrides: Partial<SubmissionFinished> = {}): SubmissionFinished {
-  return {
-    api_version: 7,
-    all_tests_passed: true,
-    user_id: 1,
-    login: "student",
-    course: "python-course",
-    exercise_name: "part01-01_hello",
-    status: "ok",
-    points: ["1.1"],
-    valgrind: null,
-    submission_url: "https://tmc.mooc.fi/submissions/1",
-    solution_url: null,
-    submitted_at: "2026-09-29T00:00:00Z",
-    processing_time: 1,
-    reviewed: false,
-    requests_review: false,
-    paste_url: null,
-    message_for_paste: null,
-    missing_review_points: [],
-    test_cases: [],
-    feedback_questions: null,
-    feedback_answer_url: null,
-    error: null,
-    validations: null,
-    ...overrides,
-  }
-}
-
-function moocGrading(
-  overrides: Partial<Extract<ExerciseTaskSubmissionStatus, { status: "grading" }>["grading"]>,
-): ExerciseTaskSubmissionStatus {
-  return {
-    status: "grading",
-    grading: {
-      grading_progress: "FullyGraded",
-      score_given: null,
-      grading_started_at: null,
-      grading_completed_at: null,
-      feedback_text: null,
-      ...overrides,
-    },
-  }
-}
-
 function showView(panelId: number, view: SubmissionView): void {
-  dispatchToWebview({
-    type: "submissionView",
-    target: { type: "ExerciseSubmission", id: panelId },
-    view,
-  })
+  dispatchToWebview(submissionViewMessage(panelId, view))
 }
 
 /** `view` as the host re-posts it once the student's feedback went through. */

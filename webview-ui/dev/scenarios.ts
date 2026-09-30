@@ -9,11 +9,17 @@ import type {
   CourseDetailsPanel,
   ExtensionToWebview,
   Panel,
-  SubmissionView,
   WebviewToExtension,
 } from "../src/shared/shared"
 import { makeMoocKind, makeTmcKind } from "../src/shared/shared"
-import { MOOC_INSTANCE_ID, moocLocalCourse, tmcLocalCourse } from "../src/test/fixtures"
+import {
+  MOOC_INSTANCE_ID,
+  moocGrading as baseMoocGrading,
+  moocLocalCourse,
+  submissionFinished as baseSubmissionFinished,
+  submissionViewMessage,
+  tmcLocalCourse,
+} from "../src/test/fixtures"
 
 /** One screen in one state, reproduced by answering the panel the way the extension host would. */
 export interface Scenario {
@@ -68,38 +74,15 @@ const submissionPanel = {
 }
 
 function submissionFinished(overrides: Partial<SubmissionFinished>): SubmissionFinished {
-  return {
-    api_version: 7,
-    all_tests_passed: true,
-    user_id: 1,
-    login: "student",
-    course: "python-course",
+  return baseSubmissionFinished({
     exercise_name: "part01-03_exercise",
-    status: "ok",
     points: ["1.3"],
-    valgrind: null,
-    submission_url: "https://tmc.mooc.fi/submissions/1",
     solution_url: "https://tmc.mooc.fi/solutions/1",
-    submitted_at: "2026-09-29T12:00:00Z",
-    processing_time: 3,
-    reviewed: false,
-    requests_review: false,
-    paste_url: null,
-    message_for_paste: null,
-    missing_review_points: [],
     test_cases: [
       { name: "test_sum", successful: true, message: null, detailed_message: null, exception: [] },
     ],
-    feedback_questions: null,
-    feedback_answer_url: null,
-    error: null,
-    validations: null,
     ...overrides,
-  }
-}
-
-function showView(panelId: number, view: SubmissionView): ExtensionToWebview {
-  return { type: "submissionView", target: { type: "ExerciseSubmission", id: panelId }, view }
+  })
 }
 
 const moocSubmissionPanel = {
@@ -111,19 +94,15 @@ const moocSubmissionPanel = {
 }
 
 function moocGrading(
-  overrides: Partial<Extract<ExerciseTaskSubmissionStatus, { status: "grading" }>["grading"]>,
+  overrides: Parameters<typeof baseMoocGrading>[0],
 ): ExerciseTaskSubmissionStatus {
-  return {
-    status: "grading",
-    grading: {
-      grading_progress: "FullyGraded",
-      score_given: 2.5,
-      grading_started_at: "2026-09-29T12:00:00Z",
-      grading_completed_at: "2026-09-29T12:00:05Z",
-      feedback_text: "Well done!",
-      ...overrides,
-    },
-  }
+  return baseMoocGrading({
+    score_given: 2.5,
+    grading_started_at: "2026-09-29T12:00:00Z",
+    grading_completed_at: "2026-09-29T12:00:05Z",
+    feedback_text: "Well done!",
+    ...overrides,
+  })
 }
 
 /** Every scenario the dev harness offers and the accessibility tests walk through. */
@@ -144,7 +123,7 @@ export const SCENARIOS: Scenario[] = [
     id: "exercise-submission/processing",
     panel: submissionPanel,
     pushes: [
-      showView(
+      submissionViewMessage(
         submissionPanel.id,
         inProgressView("grading", {
           fraction: 0.4,
@@ -158,7 +137,7 @@ export const SCENARIOS: Scenario[] = [
     id: "exercise-submission/tmc-passed",
     panel: submissionPanel,
     pushes: [
-      showView(
+      submissionViewMessage(
         submissionPanel.id,
         tmcResultView(
           submissionFinished({
@@ -177,7 +156,7 @@ export const SCENARIOS: Scenario[] = [
     id: "exercise-submission/tmc-failed",
     panel: submissionPanel,
     pushes: [
-      showView(
+      submissionViewMessage(
         submissionPanel.id,
         tmcResultView(
           submissionFinished({
@@ -204,7 +183,7 @@ export const SCENARIOS: Scenario[] = [
     id: "exercise-submission/mooc-grading",
     panel: moocSubmissionPanel,
     pushes: [
-      showView(
+      submissionViewMessage(
         moocSubmissionPanel.id,
         inProgressView("grading", {
           steps: ["Grading has not started yet", "Grading in progress"],
@@ -215,7 +194,7 @@ export const SCENARIOS: Scenario[] = [
   {
     id: "exercise-submission/mooc-graded",
     panel: moocSubmissionPanel,
-    pushes: [showView(moocSubmissionPanel.id, moocGradingView(moocGrading({}), 3))],
+    pushes: [submissionViewMessage(moocSubmissionPanel.id, moocGradingView(moocGrading({}), 3))],
   },
   {
     id: "exercise-submission/mooc-timed-out",
@@ -223,11 +202,11 @@ export const SCENARIOS: Scenario[] = [
     reply: (message) =>
       message.type === "keepWaitingForGrading"
         ? [
-            showView(
+            submissionViewMessage(
               moocSubmissionPanel.id,
               inProgressView("grading", { steps: ["Grading in progress"] }),
             ),
-            showView(moocSubmissionPanel.id, moocGradingView(moocGrading({}), 3)),
+            submissionViewMessage(moocSubmissionPanel.id, moocGradingView(moocGrading({}), 3)),
             {
               type: "reply",
               target: { type: "ExerciseSubmission", id: moocSubmissionPanel.id },
@@ -237,7 +216,7 @@ export const SCENARIOS: Scenario[] = [
           ]
         : [],
     pushes: [
-      showView(
+      submissionViewMessage(
         moocSubmissionPanel.id,
         moocGradingView(moocGrading({ grading_progress: "Pending", score_given: null }), 3),
       ),
@@ -247,7 +226,7 @@ export const SCENARIOS: Scenario[] = [
     id: "exercise-submission/mooc-manual-review",
     panel: moocSubmissionPanel,
     pushes: [
-      showView(
+      submissionViewMessage(
         moocSubmissionPanel.id,
         moocGradingView(
           moocGrading({
@@ -264,7 +243,7 @@ export const SCENARIOS: Scenario[] = [
     id: "exercise-submission/error",
     panel: submissionPanel,
     pushes: [
-      showView(
+      submissionViewMessage(
         submissionPanel.id,
         submitFailedView({ message: "Submitting failed", details: "The server returned 500" }),
       ),
