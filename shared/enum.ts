@@ -82,6 +82,18 @@ export namespace CourseIdentifier {
       (mooc) => mooc.instanceId,
     )
   }
+
+  /**
+   * A string naming the course and its backend, for `Map`/`Set` keys and comparisons:
+   * {@link toString} alone makes tmc course `1` and mooc course `"1"` collide.
+   */
+  export function key(id: CourseIdentifier): string {
+    return `${id.kind}:${toString(id)}`
+  }
+
+  export function equals(a: CourseIdentifier, b: CourseIdentifier): boolean {
+    return key(a) === key(b)
+  }
 }
 
 export const ExerciseIdentifierSchema = EnumSchema(
@@ -118,6 +130,15 @@ export namespace ExerciseIdentifier {
       (tmc) => tmc.tmcExerciseId.toString(),
       (mooc) => mooc.moocExerciseId,
     )
+  }
+
+  /** Like `CourseIdentifier.key`: keeps tmc exercise `1` and mooc exercise `"1"` apart. */
+  export function key(id: ExerciseIdentifier): string {
+    return `${id.kind}:${toString(id)}`
+  }
+
+  export function equals(a: ExerciseIdentifier, b: ExerciseIdentifier): boolean {
+    return key(a) === key(b)
   }
 }
 

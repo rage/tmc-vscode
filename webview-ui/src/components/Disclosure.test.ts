@@ -2,6 +2,8 @@ import { fireEvent, render, screen } from "@testing-library/svelte"
 import { createRawSnippet } from "svelte"
 import { vi } from "vitest"
 
+import { reloadDocument } from "../test/setup"
+import { enterScreen } from "../utilities/uiState.svelte"
 import Disclosure from "./Disclosure.svelte"
 
 const body = createRawSnippet(() => ({ render: () => "<p>Exercise table</p>" }))
@@ -52,5 +54,21 @@ suite("Disclosure component", () => {
     })
     const toggle = screen.getByRole("button", { name: "part01" })
     expect(toggle).not.toContainElement(screen.getByRole("button", { name: "Download all" }))
+  })
+
+  test("a persisted one comes back open after its document reloads", async () => {
+    const helpPanel = { id: 1, type: "InitializationErrorHelp" } as const
+    enterScreen(helpPanel)
+    render(Disclosure, { props: { title: "Stack trace", persistAs: "stack", children: body } })
+    await fireEvent.click(screen.getByRole("button", { name: "Stack trace" }))
+
+    reloadDocument()
+    enterScreen(helpPanel)
+    render(Disclosure, { props: { title: "Stack trace", persistAs: "stack", children: body } })
+
+    expect(screen.getByRole("button", { name: "Stack trace" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    )
   })
 })

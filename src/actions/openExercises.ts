@@ -99,17 +99,14 @@ export async function downloadAndOpenExercises(
     return courseResult
   }
   const course = courseResult.val
-  // Key by a primitive: ExerciseIdentifier is a tagged-union object, so a
-  // Map keyed by it would only match on reference identity and always miss
-  // the deserialized ids coming from the webview.
   const courseExercises = new Map(
     LocalCourseData.getExercises(course).map((x) => [
-      ExerciseIdentifier.toString(LocalCourseExercise.getId(x)),
+      ExerciseIdentifier.key(LocalCourseExercise.getId(x)),
       x,
     ]),
   )
   const exercisesToOpen = compact(
-    exerciseIdsToOpen.map((x) => courseExercises.get(ExerciseIdentifier.toString(x))),
+    exerciseIdsToOpen.map((x) => courseExercises.get(ExerciseIdentifier.key(x))),
   )
   // The mooc local listing is keyed by course id (UUID); TMC by course
   // slug. `getCourseName` returns the slug for both, so pick per backend.

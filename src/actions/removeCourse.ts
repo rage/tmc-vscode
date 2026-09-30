@@ -23,7 +23,7 @@ export async function removeCourse(
   actionContext: ReadyActionContext,
   id: CourseIdentifier,
 ): Promise<Result<void, Error>> {
-  const { dialog, ui } = actionContext
+  const { dialog } = actionContext
   const { langs, userData, workspaceManager } = actionContext.startup
 
   const courseResult = userData.getCourse(id)
@@ -62,7 +62,6 @@ export async function removeCourse(
       course.kind,
     )
   }
-  ui.treeDP.refresh()
 
   if (
     workspaceManager.activeCourse === courseName &&

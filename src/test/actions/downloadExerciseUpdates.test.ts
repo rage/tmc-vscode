@@ -10,7 +10,7 @@ const downloadOrUpdateExercises = vi.hoisted(() => vi.fn())
 vi.mock("../../actions/downloadOrUpdateExercises", () => ({ downloadOrUpdateExercises }))
 
 // Only the write is stubbed; `withOptimisticList` is part of the behaviour under test.
-vi.mock("../../ui/updateablesRegistry", () => ({ updateablesRegistry: { set: vi.fn() } }))
+vi.mock("../../ui/updateablesRegistry", () => ({ updateablesRegistry: { setMany: vi.fn() } }))
 
 /** A fresh id object per exercise, as `checkForExerciseUpdates` reports them. */
 function update(
@@ -25,11 +25,13 @@ function update(
 
 function postedLists(): [string, number[]][] {
   return vi
-    .mocked(updateablesRegistry.set)
-    .mock.calls.map(([courseId, exerciseIds]) => [
-      CourseIdentifier.toString(courseId),
-      exerciseIds.map((x) => ExerciseIdentifier.unwrap(x) as number),
-    ])
+    .mocked(updateablesRegistry.setMany)
+    .mock.calls.flatMap(([lists]) =>
+      Array.from(lists, ([courseId, exerciseIds]): [string, number[]] => [
+        CourseIdentifier.toString(courseId),
+        exerciseIds.map((x) => ExerciseIdentifier.unwrap(x) as number),
+      ]),
+    )
 }
 
 suite("downloadExerciseUpdates action", function () {

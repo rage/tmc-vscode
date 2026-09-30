@@ -75,8 +75,7 @@
         break
       }
       case "setCourseDisabledStatus": {
-        const isThisCourse =
-          CourseIdentifier.toString(message.courseId) === CourseIdentifier.toString(panel.courseId)
+        const isThisCourse = CourseIdentifier.equals(message.courseId, panel.courseId)
         if (isThisCourse && panel.course) {
           const updatedCourse = match(
             panel.course,

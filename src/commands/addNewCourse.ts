@@ -5,8 +5,13 @@ import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
 import type { Course, MoocCourse, Organization } from "../shared/langsSchema"
-import type { CourseIdentifier } from "../shared/shared"
-import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
+import {
+  backendName,
+  CourseIdentifier,
+  LocalCourseData,
+  makeMoocKind,
+  makeTmcKind,
+} from "../shared/shared"
 import { Logger } from "../utilities"
 
 const TITLE = "Add New Course"
@@ -20,15 +25,6 @@ type Choice =
 
 interface ChoiceItem extends vscode.QuickPickItem {
   choice?: Choice
-}
-
-/** Keys a course across both backends, whose id spaces would otherwise collide. */
-function courseKey(id: CourseIdentifier): string {
-  return match(
-    id,
-    (tmc) => `tmc:${tmc.courseId}`,
-    (mooc) => `mooc:${mooc.instanceId}`,
-  )
 }
 
 function separator(label: string): ChoiceItem {
@@ -71,9 +67,11 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
   Logger.info("Adding new course")
 
   const addedCourses = new Set(
-    userData.getCourses().map((course) => courseKey(LocalCourseData.getCourseId(course))),
+    userData
+      .getCourses()
+      .map((course) => CourseIdentifier.key(LocalCourseData.getCourseId(course))),
   )
-  const isAdded = (id: CourseIdentifier): boolean => addedCourses.has(courseKey(id))
+  const isAdded = (id: CourseIdentifier): boolean => addedCourses.has(CourseIdentifier.key(id))
 
   const chosen = await pickCourse(actionContext, isAdded)
   if (!chosen) {

@@ -40,6 +40,7 @@
 - A submission's result looks the same for both sites. When courses.mooc.fi has not finished grading by the time the wait ends, the result offers Keep waiting, and the status bar shows the exercise as submitting while it waits.
 - Download New Exercises refuses to run while the same course's exercises are already downloading, instead of downloading them twice.
 - Download Old Submission lists the newest submission first, marked Latest, with a readable local date and the result beside it.
+- Course Details and the initialization help reopen after a window reload. A hidden TestMyCode panel no longer holds on to memory; showing it again keeps its scroll position, open sections, feedback draft and paste link.
 
 ## [3.5.4] - 2026-09-15
 

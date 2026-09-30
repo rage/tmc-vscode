@@ -42,16 +42,19 @@ export default class Settings implements vscode.Disposable {
           Logger.configure(value)
         }
 
+        // `_changedValue` runs even with no callback yet: it tracks the User value, and
+        // activation writes settings before the callbacks are registered.
         if (event.affectsConfiguration("testMyCode.hideMetaFiles")) {
-          this._onChangeHideMetaFiles?.(this._changedValue("hideMetaFiles"))
+          const value = this._changedValue("hideMetaFiles")
+          this._onChangeHideMetaFiles?.(value)
         }
         if (event.affectsConfiguration("testMyCode.downloadOldSubmission")) {
-          this._onChangeDownloadOldSubmission?.(this._changedValue("downloadOldSubmission"))
+          const value = this._changedValue("downloadOldSubmission")
+          this._onChangeDownloadOldSubmission?.(value)
         }
         if (event.affectsConfiguration("testMyCode.updateExercisesAutomatically")) {
-          this._onChangeUpdateExercisesAutomatically?.(
-            this._changedValue("updateExercisesAutomatically"),
-          )
+          const value = this._changedValue("updateExercisesAutomatically")
+          this._onChangeUpdateExercisesAutomatically?.(value)
         }
       }),
     ]

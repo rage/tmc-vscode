@@ -1,5 +1,6 @@
 <script lang="ts">
   import { StyleValidationStrategy, TestCase, TestResult } from "../shared/langsSchema"
+  import { uiState } from "../utilities/uiState.svelte"
   import Checkbox from "./Checkbox.svelte"
   import CodeBlock from "./CodeBlock.svelte"
   import Disclosure from "./Disclosure.svelte"
@@ -43,8 +44,8 @@
   // if all tests failed or passed, no need to show the checkbox
   const alwaysShowPassedTests = $derived(allTestsFailed || exercisePassed)
 
-  let showPassedTestsChecked = $state(false)
-  const showPassedTests = $derived(alwaysShowPassedTests || showPassedTestsChecked)
+  const showPassedTestsChecked = uiState("showPassedTests", false)
+  const showPassedTests = $derived(alwaysShowPassedTests || showPassedTestsChecked.current)
 
   // Test names are not guaranteed unique, and a duplicate `{#each}` key throws.
   const rows = $derived.by(() => {
@@ -93,8 +94,8 @@
   <h2>Tests</h2>
   <Checkbox
     hidden={alwaysShowPassedTests}
-    checked={showPassedTestsChecked}
-    oncheckedchange={(checked) => (showPassedTestsChecked = checked)}
+    checked={showPassedTestsChecked.current}
+    oncheckedchange={(checked) => (showPassedTestsChecked.current = checked)}
   >
     Show passed tests
   </Checkbox>
@@ -118,7 +119,7 @@
             <CodeBlock code={details} label="Details" {oncopy} />
           {/if}
           {#if result.exception && result.exception.length > 0}
-            <Disclosure title="Stack trace" headingLevel={4}>
+            <Disclosure title="Stack trace" headingLevel={4} persistAs="stackTrace:{key}">
               <CodeBlock code={result.exception.join("\n")} label="Stack trace" {oncopy} />
             </Disclosure>
           {/if}

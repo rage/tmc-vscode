@@ -1,19 +1,16 @@
 import type { WebviewApi } from "vscode-webview"
 import { z } from "zod"
 
-import type { WebviewToExtension } from "../shared/shared"
-import { WebviewToExtensionSchema } from "../shared/shared"
+import type { WebviewState, WebviewToExtension } from "../shared/shared"
+import { WebviewStateSchema, WebviewToExtensionSchema } from "../shared/shared"
 import { snapshot } from "./snapshot.svelte"
 
 /**
  * The webview's only channel to the extension host; wraps `acquireVsCodeApi()`, which may be
  * called once per page.
- *
- * Deliberately exposes no `getState`/`setState`: the extension host owns all panel state, so
- * the webview's own state bag stays empty (hence `WebviewApi<never>`).
  */
 class VSCodeAPIWrapper {
-  private readonly vsCodeApi: WebviewApi<never> | undefined
+  private readonly vsCodeApi: WebviewApi<WebviewState> | undefined
 
   public constructor() {
     if (typeof acquireVsCodeApi === "function") {
@@ -47,6 +44,20 @@ class VSCodeAPIWrapper {
     // Not zod's parse result, which drops fields the schema does not declare.
     this.vsCodeApi.postMessage(plainMessage)
     return true
+  }
+
+  /** What {@link setState} saved before this document loaded, if it still parses. */
+  public getState(): WebviewState | undefined {
+    const parsed = WebviewStateSchema.safeParse(this.vsCodeApi?.getState())
+    return parsed.success ? parsed.data : undefined
+  }
+
+  /**
+   * Saves UI-only state for the document VS Code reloads this panel with. The extension host
+   * owns every other piece of panel state; see `uiState.svelte.ts`.
+   */
+  public setState(state: WebviewState): void {
+    this.vsCodeApi?.setState(snapshot(state))
   }
 }
 

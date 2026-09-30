@@ -176,17 +176,23 @@ result and the initialization error help.
 ## Webview panels
 
 The extension host is authoritative for panel state. `TmcPanel` keeps the last
-panel it posted and replays it when a webview process reloads, so the webview
-never persists anything itself — `VSCodeAPIWrapper` exposes only `postMessage`,
-and its `WebviewApi<never>` says the webview's own state bag stays empty.
+panel it posted and the latest message of each type aimed at it, and replays them
+when the webview says `ready`. Panels do not use `retainContextWhenHidden`: VS Code
+destroys a hidden panel's document and loads a fresh one on reveal, which sends
+`ready` and is rendered from the host again. A reply to a request the destroyed
+document made is dropped; the new document asks again.
 
-**Panels are deliberately not restored across a window reload.** No
-`WebviewPanelSerializer` is registered: after a reload the TestMyCode panel is
-gone and the user reopens it from the Courses view or the command palette. Making it
-survive would mean persisting panel state where the extension host cannot see it
-and reconstructing it from data that may since have changed; reopening is one
-click. If that changes, register the serializer in `activateInner` and validate
-the restored state before rendering it.
+What only the webview knows — scroll position, open disclosures, a feedback draft,
+a paste link — goes in the webview state bag through `uiState`
+(`webview-ui/src/utilities/uiState.svelte.ts`). It is keyed by screen, so a
+different course or a new submission starts clean.
+
+The main panel survives a window reload: `TmcPanel.registerSerializer` registers a
+`WebviewPanelSerializer` for `tmc.mainPanel` (activated by `onWebviewPanel:tmc.mainPanel`),
+which reads the screen the webview saved in its state bag, validates it, and reopens
+Course Details only if the course is still stored. A panel it cannot reopen is closed. The
+side panel (`tmc.sidePanel`) has no serializer: a submission's view lives only in the
+extension host's memory.
 
 ## Operations and entry points
 

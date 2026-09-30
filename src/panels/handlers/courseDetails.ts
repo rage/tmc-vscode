@@ -79,9 +79,7 @@ function courseDetailsShowing(
   courseId: CourseIdentifier,
 ): TargetPanel<CourseDetailsPanel> | undefined {
   const route = host.route
-  return route?.type === "CourseDetails" &&
-    route.courseId.kind === courseId.kind &&
-    CourseIdentifier.toString(route.courseId) === CourseIdentifier.toString(courseId)
+  return route?.type === "CourseDetails" && CourseIdentifier.equals(route.courseId, courseId)
     ? panelTarget(route)
     : undefined
 }

@@ -38,17 +38,20 @@ export async function updateExercises(
 
   const { outdated, failures } = updateablesResult.val
   // What a failed backend's courses last showed is still the best answer for them.
-  for (const course of userData.getCourses()) {
-    if (failures.every(({ backend }) => backend !== course.kind)) {
-      const courseKey = CourseIdentifier.toString(LocalCourseData.getCourseId(course))
-      updateablesRegistry.set(
-        LocalCourseData.getCourseId(course),
-        outdated
-          .filter((x) => CourseIdentifier.toString(x.courseId) === courseKey)
-          .map((x) => x.exerciseId),
-      )
-    }
-  }
+  updateablesRegistry.setMany(
+    userData
+      .getCourses()
+      .filter((course) => failures.every(({ backend }) => backend !== course.kind))
+      .map((course) => {
+        const courseId = LocalCourseData.getCourseId(course)
+        return [
+          courseId,
+          outdated
+            .filter((x) => CourseIdentifier.equals(x.courseId, courseId))
+            .map((x) => x.exerciseId),
+        ]
+      }),
+  )
   const [firstFailure] = failures
   if (!silent && firstFailure) {
     // One notification however many sites failed; the log has each one's error.
@@ -76,10 +79,9 @@ export async function updateExercises(
     return
   }
 
-  // Keyed by canonical string because each `courseId` is a fresh object, so
-  // anything comparing them by reference sees every exercise as its own course.
+  // Each `courseId` is a fresh object, so only a key tells two of them are one course.
   const coursesToUpdate = new Map(
-    exercisesToUpdate.map((x) => [CourseIdentifier.toString(x.courseId), x.courseId]),
+    exercisesToUpdate.map((x) => [CourseIdentifier.key(x.courseId), x.courseId]),
   )
 
   const download = async (): Promise<void> => {

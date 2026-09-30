@@ -101,6 +101,23 @@ suite("updateExercises command", function () {
     expect(updateablesRegistry.get(CourseIdentifierNs.from("mooc-course"))).toEqual(staleMooc)
   })
 
+  test("does not credit a tmc course's updates to a mooc course with the same id", async function () {
+    checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10)]))
+    const [actionContext] = contextWith(true)
+    const userData = actionContext.startup.userData
+    vi.spyOn(userData, "getCourses").mockReturnValue([
+      tmcCourse(1),
+      { kind: "mooc", data: { id: "1" } } as LocalCourseData,
+    ])
+
+    await updateExercises(actionContext, "silent")
+
+    expect(updateablesRegistry.get(CourseIdentifierNs.from(1))).toEqual([
+      ExerciseIdentifierNs.from(10),
+    ])
+    expect(updateablesRegistry.get(CourseIdentifierNs.from("1"))).toEqual([])
+  })
+
   test("postpones the reminder once per course, not once per exercise", async function () {
     checkForExerciseUpdates.mockResolvedValue(
       checked([outdated(1, 10), outdated(1, 11), outdated(2, 20)]),

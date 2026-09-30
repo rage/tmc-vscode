@@ -15,7 +15,7 @@ import type { ReadyActionContext } from "./types"
  */
 export function courseDownloadFlight(courseId: CourseIdentifier): SingleFlightOptions {
   return {
-    key: `download:${courseId.kind}:${CourseIdentifierNs.toString(courseId)}`,
+    key: `download:${CourseIdentifierNs.key(courseId)}`,
     // one CLI download per backend, then a rescan
     maxHoldMs: 3 * CLI_PROCESS_TIMEOUT,
     busyMessage: "This course's exercises are already downloading.",

@@ -1,9 +1,11 @@
-import type { Disposable, Webview, WebviewPanel } from "vscode"
+import type { Disposable, Webview, WebviewOptions, WebviewPanel } from "vscode"
 import { Uri, ViewColumn, window } from "vscode"
 import type * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
+import { isReady } from "../actions/types"
 import type { ExtensionToWebview } from "../shared/shared"
+import { WebviewStateSchema } from "../shared/shared"
 import { Logger } from "../utilities"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
@@ -12,9 +14,20 @@ import { postMessageToWebview, renderPanel } from "./panel"
 import type { HandlerContext, PanelHost } from "./router"
 import { dispatch } from "./router"
 import type { PanelRoute } from "./routes"
-import { panelTitle } from "./routes"
+import { nextPanelId, panelTitle } from "./routes"
 
 export { nextPanelId } from "./routes"
+
+/**
+ * The main panel's webview type, which its serializer is registered for.
+ *
+ * Namespaced, as webview types are one registry shared by every extension. package.json's
+ * `onWebviewPanel:` activation event must name it.
+ */
+export const MAIN_PANEL_VIEW_TYPE = "tmc.mainPanel"
+
+// No serializer: a submission's view lives only in this extension host's memory.
+const SIDE_PANEL_VIEW_TYPE = "tmc.sidePanel"
 
 /**
  * Manages the extension's two webview panels: their lifecycle, and the transport to and
@@ -38,8 +51,8 @@ export class TmcPanel {
   // side panels show different panels.
   private _route: PanelRoute | undefined
 
-  // Until the first "ready", messages are only buffered: that handshake is the single
-  // path that renders a panel, for a new document and a reloaded one alike.
+  // Until "ready", messages are only buffered: that handshake is the single path that
+  // renders a panel, for a new document and one reloaded after being hidden alike.
   private _isWebviewReady = false
 
   // latest message per type targeted at _route's id, resent after it on "ready"
@@ -151,15 +164,61 @@ export class TmcPanel {
     const showOptions = isMain
       ? { viewColumn: ViewColumn.One, preserveFocus: false }
       : { viewColumn: ViewColumn.Beside, preserveFocus: true }
-    const panelViewType = isMain ? "mainPanel" : "sidePanel"
+    const panelViewType = isMain ? MAIN_PANEL_VIEW_TYPE : SIDE_PANEL_VIEW_TYPE
     const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", showOptions, {
-      enableScripts: true,
+      ...webviewOptions(extensionUri),
       enableFindWidget: true,
-      // A reload would lose UI-only state (selection, scroll, open parts) that no host
-      // registry holds.
-      retainContextWhenHidden: true,
-      localResourceRoots: [Uri.joinPath(extensionUri, "webview-ui/public/build")],
     })
+    return TmcPanel._adopt(
+      webviewPanel,
+      extensionUri,
+      extensionContext,
+      actionContext,
+      route,
+      isMain,
+    )
+  }
+
+  /**
+   * Reopens the main panel VS Code restores after a window reload, on the screen its webview
+   * saved. One whose screen cannot be shown any more is closed instead.
+   */
+  public static registerSerializer(
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+  ): Disposable {
+    return window.registerWebviewPanelSerializer(MAIN_PANEL_VIEW_TYPE, {
+      deserializeWebviewPanel: async (webviewPanel, state) => {
+        const route = restoredRoute(state, actionContext)
+        if (!route || TmcPanel.mainPanel !== undefined) {
+          Logger.info("Closing a restored main panel, which has no screen to show")
+          webviewPanel.dispose()
+          return
+        }
+        Logger.info(`Restoring the main panel on "${route.type}"`)
+        const { extensionUri } = extensionContext
+        // The saved options may name an older install's directory.
+        webviewPanel.webview.options = webviewOptions(extensionUri)
+        TmcPanel.mainPanel = TmcPanel._adopt(
+          webviewPanel,
+          extensionUri,
+          extensionContext,
+          actionContext,
+          route,
+          true,
+        )
+      },
+    })
+  }
+
+  private static _adopt(
+    webviewPanel: WebviewPanel,
+    extensionUri: Uri,
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+    route: PanelRoute,
+    isMain: boolean,
+  ): TmcPanel {
     webviewPanel.iconPath = {
       light: Uri.joinPath(extensionUri, "media", "TMC-light.svg"),
       dark: Uri.joinPath(extensionUri, "media", "TMC.svg"),
@@ -187,6 +246,16 @@ export class TmcPanel {
     this._isMain = isMain
 
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables)
+    // A hidden webview's document is destroyed; the one VS Code loads on reveal sends "ready".
+    this._panel.onDidChangeViewState(
+      ({ webviewPanel }) => {
+        if (!webviewPanel.visible) {
+          this._isWebviewReady = false
+        }
+      },
+      null,
+      this._disposables,
+    )
 
     this._panel.webview.html = webviewContent(this._panel.webview, extensionUri)
 
@@ -274,6 +343,25 @@ export class TmcPanel {
       postMessageToWebview(this._panel.webview, buffered, this._webviewName)
     }
   }
+}
+
+function webviewOptions(extensionUri: Uri): WebviewOptions {
+  return {
+    enableScripts: true,
+    localResourceRoots: [Uri.joinPath(extensionUri, "webview-ui/public/build")],
+  }
+}
+
+/** The screen a restored main panel's saved `state` names, if it can still be shown. */
+function restoredRoute(state: unknown, actionContext: ActionContext): PanelRoute | undefined {
+  const saved = WebviewStateSchema.safeParse(state)
+  const route = saved.success ? saved.data.route : undefined
+  if (route?.type === "CourseDetails") {
+    const isCourseStored =
+      isReady(actionContext) && actionContext.startup.userData.getCourse(route.courseId).ok
+    return isCourseStored ? { id: nextPanelId(), ...route } : undefined
+  }
+  return route && { id: nextPanelId(), ...route }
 }
 
 function webviewContent(webview: Webview, extensionUri: Uri): string {

@@ -16,6 +16,7 @@
   import { unwrap } from "../shared/shared"
   import { announce } from "../utilities/a11y.svelte"
   import { addMessageListener, createRequester } from "../utilities/script"
+  import { uiState } from "../utilities/uiState.svelte"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -30,7 +31,12 @@
 
   // Undefined only until the host's first view arrives.
   let view = $state.raw<SubmissionView | undefined>(undefined)
-  let feedbackStatus = $state<"editing" | "sending" | "sent">("editing")
+  // Kept so a panel shown again does not offer to send answers the host accepts only once.
+  const isFeedbackSent = uiState("isFeedbackSent", false)
+  let isFeedbackSending = $state(false)
+  const feedbackStatus = $derived(
+    isFeedbackSent.current ? "sent" : isFeedbackSending ? "sending" : "editing",
+  )
   let feedbackError = $state<string | undefined>(undefined)
   let isKeepWaitingRequested = $state(false)
   let keepWaitingError = $state<string | undefined>(undefined)
@@ -75,14 +81,14 @@
     announce(outcome.ok ? "Copied to the clipboard" : "Could not copy to the clipboard")
   }
   async function sendFeedback(feedbackAnswerUrl: string, answers: FeedbackAnswer[]) {
-    feedbackStatus = "sending"
+    isFeedbackSending = true
     feedbackError = undefined
     const outcome = await request("sendFeedback", { sourcePanel, feedbackAnswerUrl, answers })
+    isFeedbackSending = false
     if (outcome.ok) {
-      feedbackStatus = "sent"
+      isFeedbackSent.current = true
       announce("Feedback sent")
     } else {
-      feedbackStatus = "editing"
       feedbackError = outcome.error.message
     }
   }
@@ -198,7 +204,7 @@
   {/if}
 
   {#if view.valgrind}
-    <Disclosure title="Valgrind output">
+    <Disclosure title="Valgrind output" persistAs="valgrind">
       <CodeBlock code={view.valgrind} label="Valgrind output" oncopy={copyToClipboard} />
     </Disclosure>
   {/if}

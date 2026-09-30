@@ -14,7 +14,7 @@ suite("trackHasCourses", function () {
     let courses: LocalCourseData[] = []
     const changed = new vscode.EventEmitter<void>()
 
-    trackHasCourses({ getCourses: () => courses }, changed.event)
+    trackHasCourses({ getCourses: () => courses, onDidChangeCourses: changed.event })
     changed.fire()
     courses = [{} as LocalCourseData]
     changed.fire()

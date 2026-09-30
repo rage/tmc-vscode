@@ -7,6 +7,7 @@
   import { pasteServiceName } from "../shared/shared"
   import { announce, reducedMotion } from "../utilities/a11y.svelte"
   import { createRequester } from "../utilities/script"
+  import { uiState } from "../utilities/uiState.svelte"
   import Button from "./Button.svelte"
   import Notice from "./Notice.svelte"
   import Spinner from "./Spinner.svelte"
@@ -24,21 +25,22 @@
   const request = createRequester()
 
   let isPasting = $state<boolean>(false)
-  let pasteUrl = $state<string | undefined>(undefined)
+  // The host answers a paste once, so its link is kept here for the panel to show again.
+  const pasteUrl = uiState<string | null>("pasteUrl", null)
   let pasteError = $state<string | undefined>(undefined)
-  let showHelp = $state<boolean>(false)
+  const showHelp = uiState("showPasteHelp", false)
 
   function toggleShowHelp() {
-    showHelp = !showHelp
+    showHelp.current = !showHelp.current
   }
   async function paste() {
     isPasting = true
-    pasteUrl = undefined
+    pasteUrl.current = null
     pasteError = undefined
     const outcome = await request("pasteExercise", { sourcePanel })
     isPasting = false
     if (outcome.ok) {
-      pasteUrl = outcome.value
+      pasteUrl.current = outcome.value
     } else {
       pasteError = outcome.error.message
     }
@@ -52,14 +54,14 @@
 <div class="actions">
   <Button
     secondary
-    aria-expanded={showHelp}
-    aria-controls={showHelp ? regionId : undefined}
+    aria-expanded={showHelp.current}
+    aria-controls={showHelp.current ? regionId : undefined}
     onclick={toggleShowHelp}
   >
     Need help?
   </Button>
 </div>
-{#if showHelp}
+{#if showHelp.current}
   <div id={regionId} class="help" transition:slide={{ duration: reducedMotion.current ? 0 : 200 }}>
     <h2 class="header">Submit to {pasteService}</h2>
     <p>
@@ -72,12 +74,11 @@
     <div class="actions">
       <Button secondary disabled={isPasting} onclick={paste}>Submit to {pasteService}</Button>
     </div>
-    {#if pasteUrl !== undefined}
-      <p>Paste available at <a href={pasteUrl}>{pasteUrl}</a></p>
+    {#if pasteUrl.current !== null}
+      {@const url = pasteUrl.current}
+      <p>Paste available at <a href={url}>{url}</a></p>
       <div class="actions">
-        <Button secondary icon="copy" onclick={() => pasteUrl && copyLink(pasteUrl)}>
-          Copy link
-        </Button>
+        <Button secondary icon="copy" onclick={() => copyLink(url)}>Copy link</Button>
       </div>
     {/if}
     {#if pasteError !== undefined}

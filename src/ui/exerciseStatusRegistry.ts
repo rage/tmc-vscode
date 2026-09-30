@@ -25,18 +25,18 @@ class ExerciseStatusRegistry {
 
   /** The in-flight statuses last recorded for `courseId`'s exercises. */
   public get(courseId: CourseIdentifier): [ExerciseIdentifier, ExerciseStatus][] {
-    return Array.from(this._byCourse.get(courseKey(courseId))?.values() ?? [])
+    return Array.from(this._byCourse.get(CourseIdentifierNs.key(courseId))?.values() ?? [])
   }
 
   public record(
     courseId: CourseIdentifier,
     statuses: [ExerciseIdentifier, ExerciseStatus][],
   ): void {
-    const key = courseKey(courseId)
+    const key = CourseIdentifierNs.key(courseId)
     const course =
       this._byCourse.get(key) ?? new Map<string, [ExerciseIdentifier, ExerciseStatus]>()
     for (const [exerciseId, status] of statuses) {
-      const exerciseKey = `${exerciseId.kind}:${ExerciseIdentifierNs.toString(exerciseId)}`
+      const exerciseKey = ExerciseIdentifierNs.key(exerciseId)
       if (IN_FLIGHT_STATUSES.has(status)) {
         course.set(exerciseKey, [exerciseId, status])
       } else {
@@ -55,10 +55,6 @@ class ExerciseStatusRegistry {
     this._byCourse.clear()
     this._changed.fire()
   }
-}
-
-function courseKey(courseId: CourseIdentifier): string {
-  return `${courseId.kind}:${CourseIdentifierNs.toString(courseId)}`
 }
 
 export const exerciseStatusRegistry = new ExerciseStatusRegistry()

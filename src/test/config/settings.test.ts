@@ -108,6 +108,21 @@ suite("Settings", function () {
     expect(notified).toEqual([false])
   })
 
+  test("a User edit made before anyone subscribed is not mistaken for a later one", async function () {
+    stubConfiguration({
+      downloadOldSubmission: { defaultValue: false, globalValue: true, workspaceValue: true },
+    })
+    await changeSection("testMyCode.downloadOldSubmission")
+    const notified: boolean[] = []
+    settings.onChangeDownloadOldSubmission = (value): void => void notified.push(value)
+    stubConfiguration({
+      downloadOldSubmission: { defaultValue: false, globalValue: true, workspaceValue: false },
+    })
+    await changeSection("testMyCode.downloadOldSubmission")
+
+    expect(notified).toEqual([false])
+  })
+
   test("a setting the workspace has no copy of reads the User value", function () {
     stubConfiguration({ updateExercisesAutomatically: { defaultValue: true, globalValue: false } })
 

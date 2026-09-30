@@ -35,6 +35,7 @@ import Settings from "./config/settings"
 import { UserData } from "./config/userdata"
 import { FileSystemError, InitializationError, presentationFor } from "./errors"
 import * as init from "./init"
+import { TmcPanel } from "./panels/TmcPanel"
 import { createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
 import { trackActiveEditorExercise } from "./ui/activeExerciseContext"
@@ -117,16 +118,25 @@ async function reopenInMigratedWorkspace(
   return Ok.EMPTY
 }
 
+/** Whether activation has set the context keys that replace the "Starting TestMyCode…" view. */
+interface StartupContext {
+  isApplied: boolean
+}
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  const startupContext: StartupContext = { isApplied: false }
   try {
     // The Courses view shows "Starting TestMyCode…" until activation settles; this gives it
     // a progress bar too.
     await vscode.window.withProgress({ location: { viewId: COURSES_VIEW_ID } }, () =>
-      activateInner(context),
+      activateInner(context, startupContext),
     )
   } catch (e) {
     // this should never occur, we always want to activate the extension even if only partially
     Logger.error("Fatal error during initialization:", e)
+    if (!startupContext.isApplied) {
+      void vscode.commands.executeCommand("setContext", "test-my-code:Degraded", true)
+    }
     const message = e instanceof Error ? e.message : String(e)
     vscode.window.showErrorMessage(
       `Fatal error during TestMyCode extension initialization: ${message}`,
@@ -135,7 +145,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
 }
 
-async function activateInner(context: vscode.ExtensionContext): Promise<void> {
+async function activateInner(
+  context: vscode.ExtensionContext,
+  startupContext: StartupContext,
+): Promise<void> {
   const storage = new Storage(context)
   const settings = new Settings()
   context.subscriptions.push(settings)
@@ -431,11 +444,10 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
 
   init.fillCoursesView(actionContext)
   init.registerCommands(context, actionContext)
+  context.subscriptions.push(TmcPanel.registerSerializer(context, actionContext))
   if (readyContext) {
     init.registerSettingsCallbacks(readyContext)
     init.registerTesting(context, readyContext)
-    // Every change to the stored courses re-renders the Courses view.
-    const onDidChangeCourses = ui.treeDP.onDidChangeTreeData
     const account = new AccountStatusBarItem(authState.loggedIn)
     authState.subscribe((loggedIn) => account.setLoggedIn(loggedIn))
     accountStatus = account
@@ -457,9 +469,8 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
         workspaceManager: readyContext.startup.workspaceManager,
         userData: readyContext.startup.userData,
         activity: exerciseActivity,
-        onDidChangeCourses,
       }),
-      trackHasCourses(readyContext.startup.userData, onDidChangeCourses),
+      trackHasCourses(readyContext.startup.userData),
     )
   }
 
@@ -475,6 +486,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
     "test-my-code:Degraded",
     startup.kind === "degraded",
   )
+  startupContext.isApplied = true
 
   if (exerciseDecorationProvider.ok) {
     context.subscriptions.push(

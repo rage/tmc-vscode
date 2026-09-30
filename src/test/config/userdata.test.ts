@@ -352,6 +352,37 @@ suite("UserData course add/get/update/delete", function () {
   })
 })
 
+suite("UserData change announcements", function () {
+  // The new-exercise toast's Remind Me Later and Don't Remind Again write only these two,
+  // and the Courses view's badge is stale unless they announce it.
+  test("every write to the stored courses announces a change", async function () {
+    const [userData] = await makeUserData({
+      courses: [tmcCourse({ id: 0, newExercises: [2] })],
+      mooc_courses: [],
+    })
+    const changed = vi.fn()
+    userData.onDidChangeCourses(changed)
+
+    await userData.setNewExerciseNotifyAfter(CourseIdentifier.from(0), 111)
+    await userData.clearFromNewExercises(CourseIdentifier.from(0))
+    await userData.setExerciseAsPassed("tmc", "test-python-course", "hello_world")
+    await userData.addCourse(makeMoocKind(moocCourse()))
+    await userData.deleteCourse(CourseIdentifier.from(0))
+
+    expect(changed).toHaveBeenCalledTimes(5)
+  })
+
+  test("a write refused before it changes anything announces nothing", async function () {
+    const [userData] = await makeUserData({ courses: [], mooc_courses: [] })
+    const changed = vi.fn()
+    userData.onDidChangeCourses(changed)
+
+    await userData.clearFromNewExercises(CourseIdentifier.from(0))
+
+    expect(changed).not.toHaveBeenCalled()
+  })
+})
+
 suite("UserData updateExercises", function () {
   test("records genuinely new tmc exercises and replaces the exercise list", async function () {
     const [userData] = await makeUserData({

@@ -85,7 +85,11 @@
       <li>
         <p>Failed to initialize {failure.label}: {failure.error}</p>
         {#if failure.hint}<p>{failure.hint}</p>{/if}
-        <Disclosure title="Stack trace of {failure.label}" headingLevel={3}>
+        <Disclosure
+          title="Stack trace of {failure.label}"
+          headingLevel={3}
+          persistAs="stackTrace:{failure.key}"
+        >
           <CodeBlock label="Stack trace of {failure.label}" code={failure.stack} />
         </Disclosure>
       </li>

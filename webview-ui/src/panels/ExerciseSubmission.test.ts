@@ -16,8 +16,9 @@ import {
   tmcLocalCourse,
   tmcLocalExercise,
 } from "../test/fixtures"
-import { dispatchToWebview, postedMessages, replyToRequest } from "../test/setup"
+import { dispatchToWebview, postedMessages, reloadDocument, replyToRequest } from "../test/setup"
 import { withinShadowRoot } from "../test/shadow"
+import { enterScreen } from "../utilities/uiState.svelte"
 import ExerciseSubmission from "./ExerciseSubmission.svelte"
 
 const panel: ExerciseSubmissionPanel = {
@@ -488,5 +489,98 @@ suite("ExerciseSubmission panel (mooc results)", () => {
       await screen.findByText("Already waiting for this submission's grading."),
     ).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Keep waiting" })).not.toHaveAttribute("disabled")
+  })
+})
+
+// VS Code reloads the document of a panel that was hidden; the host sends the panel and its
+// latest view again, and the webview state keeps what only the webview knew.
+suite("ExerciseSubmission panel shown again after being hidden", () => {
+  const questions: FeedbackQuestion[] = [{ id: 2, kind: "text", question: "Free feedback" }]
+
+  function showPanel(shown: ExerciseSubmissionPanel = panel): void {
+    enterScreen(shown)
+    render(ExerciseSubmission, { props: { panel: shown } })
+    showView(
+      shown.id,
+      tmcResultView(
+        submissionFinished({
+          all_tests_passed: false,
+          status: "fail",
+          valgrind: "==1== definitely lost: 8 bytes",
+          feedback_answer_url: FEEDBACK_URL,
+        }),
+        questions,
+        2,
+      ),
+    )
+  }
+
+  test("keeps an opened disclosure open", async () => {
+    showPanel()
+    await fireEvent.click(await screen.findByRole("button", { name: "Valgrind output" }))
+
+    reloadDocument()
+    showPanel()
+
+    expect(await screen.findByRole("button", { name: "Valgrind output" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    )
+  })
+
+  test("keeps a feedback draft", async () => {
+    showPanel()
+    await screen.findByRole("heading", { name: "Give feedback" })
+    const textarea = document.querySelector("vscode-textarea")!
+    textarea.value = "Half-written thought"
+    await fireEvent.input(textarea)
+
+    reloadDocument()
+    showPanel()
+
+    await screen.findByRole("heading", { name: "Give feedback" })
+    expect(document.querySelector("vscode-textarea")?.value).toBe("Half-written thought")
+  })
+
+  test("does not offer to send feedback the host already accepted", async () => {
+    showPanel()
+    await screen.findByRole("heading", { name: "Give feedback" })
+    await sendFeedback()
+    replyToRequest("sendFeedback", { ok: true })
+    await screen.findByText("Thank you for your feedback.")
+
+    reloadDocument()
+    showPanel()
+
+    expect(await screen.findByText("Thank you for your feedback.")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Send feedback" })).not.toBeInTheDocument()
+  })
+
+  test("still shows the paste link the host answered with", async () => {
+    showPanel()
+    await fireEvent.click(await screen.findByRole("button", { name: "Need help?" }))
+    ;(await screen.findByRole("button", { name: /^Submit to .* paste$/ })).click()
+    replyToRequest("pasteExercise", { ok: true, value: "https://tmc.mooc.fi/paste/abc" })
+    await screen.findByRole("link", { name: "https://tmc.mooc.fi/paste/abc" })
+
+    reloadDocument()
+    showPanel()
+
+    expect(
+      await screen.findByRole("link", { name: "https://tmc.mooc.fi/paste/abc" }),
+    ).toBeInTheDocument()
+  })
+
+  test("a new submission of the same exercise starts with nothing kept", async () => {
+    showPanel()
+    await fireEvent.click(await screen.findByRole("button", { name: "Valgrind output" }))
+
+    reloadDocument()
+    showPanel({ ...panel, id: panel.id + 100 })
+
+    expect(await screen.findByRole("button", { name: "Valgrind output" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    )
   })
 })

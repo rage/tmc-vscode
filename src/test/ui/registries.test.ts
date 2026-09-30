@@ -32,6 +32,14 @@ suite("updateables registry", () => {
     expect(updateablesRegistry.get(moocCourse)).toEqual(mooc)
   })
 
+  test("keeps a tmc and a mooc course with the same id apart", () => {
+    const tmc = [ExerciseIdentifier.from(101)]
+    updateablesRegistry.set(CourseIdentifier.from(1), tmc)
+    updateablesRegistry.set(CourseIdentifier.from("1"), [])
+
+    expect(updateablesRegistry.get(CourseIdentifier.from(1))).toEqual(tmc)
+  })
+
   test("a later set replaces the course's list rather than adding to it", () => {
     updateablesRegistry.set(tmcCourse, [ExerciseIdentifier.from(101)])
     updateablesRegistry.set(tmcCourse, [])
@@ -54,6 +62,20 @@ suite("updateables registry", () => {
     subscription.dispose()
 
     expect(changed).toHaveBeenCalledTimes(2)
+  })
+
+  test("sets several courses as one change", () => {
+    const changed = vi.fn()
+    const subscription = updateablesRegistry.onDidChange(changed)
+
+    updateablesRegistry.setMany([
+      [tmcCourse, [ExerciseIdentifier.from(101)]],
+      [moocCourse, []],
+    ])
+    subscription.dispose()
+
+    expect(changed).toHaveBeenCalledOnce()
+    expect(updateablesRegistry.get(tmcCourse)).toEqual([ExerciseIdentifier.from(101)])
   })
 })
 

@@ -7,7 +7,6 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import { UserData } from "../../config/userdata"
 import { CourseIdentifier } from "../../shared/shared"
 import Storage from "../../storage"
-import type UI from "../../ui/ui"
 import { MOOC_COURSE_UUID, MOOC_EXERCISE_UUID, moocCourse } from "../fixtures/tmc"
 import { createMockActionContext } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
@@ -20,15 +19,12 @@ suite("addNewCourse action (mooc)", function () {
   let tmcMockValues: TMCMockValues
   let userData: UserData
   let workspaceManagerMock: WorkspaceManager
-  let uiMock: UI
-  let refresh: ReturnType<typeof vi.fn>
   let createWorkspaceFile: ReturnType<typeof vi.fn>
 
   const actionContext = (): ReadyActionContext => ({
     ...createMockActionContext({
       startup: { langs: tmcMock, userData, workspaceManager: workspaceManagerMock },
     }),
-    ui: uiMock,
   })
 
   beforeEach(async function () {
@@ -36,8 +32,6 @@ suite("addNewCourse action (mooc)", function () {
     ;[workspaceManagerMock] = createWorkspaceMangerMock()
     createWorkspaceFile = vi.fn()
     workspaceManagerMock.createWorkspaceFile = createWorkspaceFile as never
-    refresh = vi.fn()
-    uiMock = { treeDP: { refresh } } as unknown as UI
     const storage = new Storage(createMockContext())
     await storage.updateUserData({ courses: [], mooc_courses: [] })
     userData = new UserData(storage)
@@ -62,7 +56,6 @@ suite("addNewCourse action (mooc)", function () {
     // Organization comes from organization_name, not the passed slug.
     expect(stored?.organization).toBe(moocCourse.organization_name)
     expect(createWorkspaceFile).toHaveBeenCalledWith(moocCourse.slug, "mooc")
-    expect(refresh).toHaveBeenCalledTimes(1)
     // The fetched exercise slides are recorded, keyed by their exercise id (the
     // identity the bulk download subcommand resolves `--exercise-id` against),
     // so the Courses view can offer them for download.

@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Snippet } from "svelte"
 
+  import { uiState } from "../utilities/uiState.svelte"
+
   interface Props {
     title: string
     /** Starts open when true; bind to follow or drive it. */
@@ -10,6 +12,8 @@
     /** Short text after the title inside the toggle, e.g. "3 / 5 completed". */
     description?: string | undefined
     ontoggle?: ((open: boolean) => void) | undefined
+    /** Keeps the open state across the panel being hidden, under this name unique on the screen. */
+    persistAs?: string | undefined
     /**
      * Controls for the whole section, e.g. `ToolbarButton`s. Rendered beside the toggle, never
      * inside it: a button nested in a button is unreachable for assistive technology.
@@ -24,14 +28,24 @@
     headingLevel = 2,
     description,
     ontoggle,
+    persistAs,
     actions,
     children,
   }: Props = $props()
 
   const regionId = $props.id()
 
+  // svelte-ignore state_referenced_locally -- read once: the name and initial state seed it
+  const persisted = persistAs === undefined ? undefined : uiState(`disclosure:${persistAs}`, open)
+  if (persisted) {
+    open = persisted.current
+  }
+
   function toggle() {
     open = !open
+    if (persisted) {
+      persisted.current = open
+    }
     ontoggle?.(open)
   }
 </script>

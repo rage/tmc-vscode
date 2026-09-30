@@ -185,6 +185,9 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
       },
     })
     await electronApp.context().tracing.start({ screenshots: true, snapshots: true })
+    // Evaluated before the main process opens its first window, the stub can lose its
+    // execution context mid-call ("Execution context was destroyed").
+    await electronApp.firstWindow()
     await electronApp.evaluate(({ shell }) => {
       const opened: string[] = []
       Object.assign(globalThis, { tmcOpenedExternalUrls: opened })

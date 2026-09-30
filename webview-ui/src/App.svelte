@@ -10,6 +10,7 @@
   import type { AppPanel, Panel } from "./shared/shared"
   import { assertUnreachable } from "./shared/shared"
   import { addMessageListener } from "./utilities/script"
+  import { enterScreen } from "./utilities/uiState.svelte"
   import { vscode } from "./utilities/vscode"
 
   interface Crash {
@@ -70,6 +71,7 @@
     switch (message.type) {
       case "setPanel": {
         crash = null
+        enterScreen(message.panel)
         appState = { panel: message.panel }
         break
       }
