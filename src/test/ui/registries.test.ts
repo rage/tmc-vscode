@@ -32,6 +32,14 @@ suite("updateables registry", () => {
     expect(updateablesRegistry.get(moocCourse)).toEqual(mooc)
   })
 
+  test("keeps a tmc and a mooc course with the same id apart", () => {
+    const tmc = [ExerciseIdentifier.from(101)]
+    updateablesRegistry.set(CourseIdentifier.from(1), tmc)
+    updateablesRegistry.set(CourseIdentifier.from("1"), [])
+
+    expect(updateablesRegistry.get(CourseIdentifier.from(1))).toEqual(tmc)
+  })
+
   test("a later set replaces the course's list rather than adding to it", () => {
     updateablesRegistry.set(tmcCourse, [ExerciseIdentifier.from(101)])
     updateablesRegistry.set(tmcCourse, [])

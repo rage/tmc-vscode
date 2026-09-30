@@ -24,7 +24,7 @@ let isScrollTracked = false
 function screenOf(panel: Panel): string {
   switch (panel.type) {
     case "CourseDetails":
-      return `CourseDetails:${panel.courseId.kind}:${CourseIdentifier.toString(panel.courseId)}`
+      return `CourseDetails:${CourseIdentifier.key(panel.courseId)}`
     // A new submission of the same exercise starts with an empty feedback form.
     case "ExerciseSubmission":
       return `ExerciseSubmission:${panel.id}`

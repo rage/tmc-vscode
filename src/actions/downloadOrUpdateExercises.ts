@@ -243,7 +243,7 @@ function postStatuses(
     if (!courseId) {
       continue
     }
-    const key = `${courseId.kind}:${CourseIdentifierNs.toString(courseId)}`
+    const key = CourseIdentifierNs.key(courseId)
     const entry = byCourse.get(key) ?? [courseId, []]
     entry[1].push([exerciseId, status])
     byCourse.set(key, entry)

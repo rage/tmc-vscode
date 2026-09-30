@@ -19,11 +19,11 @@ class UpdateablesRegistry {
 
   /** The exercises last reported as updateable for `courseId`; empty if none were. */
   public get(courseId: CourseIdentifier): ExerciseIdentifier[] {
-    return this._byCourse.get(CourseIdentifierNs.toString(courseId)) ?? []
+    return this._byCourse.get(CourseIdentifierNs.key(courseId)) ?? []
   }
 
   public set(courseId: CourseIdentifier, exerciseIds: ExerciseIdentifier[]): void {
-    this._byCourse.set(CourseIdentifierNs.toString(courseId), exerciseIds)
+    this._byCourse.set(CourseIdentifierNs.key(courseId), exerciseIds)
     this._changed.fire()
   }
 

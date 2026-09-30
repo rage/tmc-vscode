@@ -43,6 +43,15 @@ suite("CourseIdentifier", function () {
     expect(CourseIdentifier.toString(CourseIdentifier.from(42))).toBe("42")
     expect(CourseIdentifier.toString(CourseIdentifier.from("course-uuid"))).toBe("course-uuid")
   })
+
+  test("key and equals tell a tmc and a mooc course with the same id apart", function () {
+    const tmc = CourseIdentifier.from(1)
+    const mooc = CourseIdentifier.from("1")
+
+    expect(CourseIdentifier.key(tmc)).not.toBe(CourseIdentifier.key(mooc))
+    expect(CourseIdentifier.equals(tmc, mooc)).toBe(false)
+    expect(CourseIdentifier.equals(tmc, CourseIdentifier.from(1))).toBe(true)
+  })
 })
 
 suite("ExerciseIdentifier", function () {
@@ -59,6 +68,15 @@ suite("ExerciseIdentifier", function () {
     expect(ExerciseIdentifier.toString(ExerciseIdentifier.from("ex-uuid"))).toBe("ex-uuid")
     expect(ExerciseIdentifier.unwrap(ExerciseIdentifier.from(7))).toBe(7)
     expect(ExerciseIdentifier.unwrap(ExerciseIdentifier.from("ex-uuid"))).toBe("ex-uuid")
+  })
+
+  test("key and equals tell a tmc and a mooc exercise with the same id apart", function () {
+    const tmc = ExerciseIdentifier.from(1)
+    const mooc = ExerciseIdentifier.from("1")
+
+    expect(ExerciseIdentifier.key(tmc)).not.toBe(ExerciseIdentifier.key(mooc))
+    expect(ExerciseIdentifier.equals(tmc, mooc)).toBe(false)
+    expect(ExerciseIdentifier.equals(mooc, ExerciseIdentifier.from("1"))).toBe(true)
   })
 
   test("template-stringing the identifier object is the wrong way to key it", function () {

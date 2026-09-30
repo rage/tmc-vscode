@@ -20,23 +20,11 @@ import type {
 } from "../storage/data"
 import { Logger } from "../utilities/logger"
 
-/**
- * Builds the primitive key under which an exercise's passed-state is tracked.
- *
- * The key is backend-qualified so that a tmc exercise and a mooc exercise whose
- * ids stringify identically (e.g. tmc `1` and mooc `"1"`) don't collide.
- */
-function passedExerciseKey(id: ExerciseIdentifier): string {
-  return `${id.kind}:${ExerciseIdentifier.toString(id)}`
-}
-
 export class UserData {
   private _tmcCourses: Map<number, TmcLocalCourseData>
   // keyed by course id, not slug
   private _moocCourses: Map<string, MoocLocalCourseData>
-  // keyed by a backend-qualified string (see `passedExerciseKey`), never by the
-  // ExerciseIdentifier object itself — a `Set` of objects only ever matches on
-  // reference identity, so membership would silently never hit.
+  // keyed by `ExerciseIdentifier.key`: a `Set` of id objects matches on reference only
   private _passedExercises = new Set<string>()
   /** Tail of the serialized write chain; see {@link _updatePersistentData}. */
   private _pendingWrite: Promise<Result<void, Error>> = Promise.resolve(Ok.EMPTY)
@@ -376,12 +364,12 @@ export class UserData {
   }
 
   public getPassed(exerciseId: ExerciseIdentifier): boolean {
-    return this._passedExercises.has(passedExerciseKey(exerciseId))
+    return this._passedExercises.has(ExerciseIdentifier.key(exerciseId))
   }
 
   /** The only writer of `_passedExercises`, so the set cannot drift from the stored flags. */
   private _setPassed(exerciseId: ExerciseIdentifier, passed: boolean): void {
-    const key = passedExerciseKey(exerciseId)
+    const key = ExerciseIdentifier.key(exerciseId)
     if (passed) {
       this._passedExercises.add(key)
     } else {
@@ -409,13 +397,11 @@ export class UserData {
     const newExercises = courseData.data.newExercises.map(ExerciseIdentifier.from)
     Logger.info(`Clearing new exercises`)
     if (exercisesToClear !== undefined) {
-      // `ExerciseIdentifier`s are tagged-union objects, so a plain `difference`
-      // compares them by reference and never subtracts anything — diff by their
-      // string form instead.
+      // A plain `difference` compares the id objects by reference and subtracts nothing.
       const unSuccessfullyDownloaded = _.differenceBy(
         newExercises,
         exercisesToClear,
-        ExerciseIdentifier.toString,
+        ExerciseIdentifier.key,
       )
       // Write the remainder back to the course's own backend-typed array,
       // always — including down to an empty list when everything was cleared.

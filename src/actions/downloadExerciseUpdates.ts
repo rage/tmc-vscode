@@ -20,20 +20,19 @@ export async function downloadExerciseUpdates(
   actionContext: ReadyActionContext,
   updates: readonly ExerciseUpdate[],
 ): Promise<void> {
-  // Keyed by canonical string because each `courseId` is a fresh object, so
-  // anything comparing them by reference sees every exercise as its own course.
-  const courseIds = new Map(updates.map((x) => [CourseIdentifier.toString(x.courseId), x.courseId]))
+  // Each `courseId` is a fresh object, so only a key tells two of them are one course.
+  const courseIds = new Map(updates.map((x) => [CourseIdentifier.key(x.courseId), x.courseId]))
 
   const setUpdateablesByCourse = (exerciseIds: ExerciseIdentifier[]): void => {
-    const wanted = new Set(exerciseIds.map((x) => ExerciseIdentifier.unwrap(x)))
+    const wanted = new Set(exerciseIds.map((x) => ExerciseIdentifier.key(x)))
     for (const [key, courseId] of courseIds) {
       updateablesRegistry.set(
         courseId,
         updates
           .filter(
             (x) =>
-              CourseIdentifier.toString(x.courseId) === key &&
-              wanted.has(ExerciseIdentifier.unwrap(x.exerciseId)),
+              CourseIdentifier.key(x.courseId) === key &&
+              wanted.has(ExerciseIdentifier.key(x.exerciseId)),
           )
           .map((x) => x.exerciseId),
       )

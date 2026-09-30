@@ -1,8 +1,8 @@
 import * as vscode from "vscode"
 
 import type WorkspaceManager from "../../api/workspaceManager"
-import type { BackendKind, CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
-import { backendName, LocalCourseData } from "../../shared/shared"
+import type { BackendKind, ExerciseIdentifier } from "../../shared/shared"
+import { backendName, CourseIdentifier, LocalCourseData } from "../../shared/shared"
 import { formatDeadline } from "../../utilities"
 import { exerciseStatusRegistry } from "../exerciseStatusRegistry"
 import { updateablesRegistry } from "../updateablesRegistry"
@@ -63,7 +63,7 @@ export class CourseTreeItem extends vscode.TreeItem {
         : vscode.TreeItemCollapsibleState.Collapsed,
     )
     this.courseId = LocalCourseData.getCourseId(course)
-    this.id = `${course.kind}:${course.data.id}`
+    this.id = CourseIdentifier.key(this.courseId)
     const exercises = parts.flatMap((part) => part.exercises)
     const newCount = LocalCourseData.getNewExercises(course).length
     const updateCount = exercises.filter((ex) => ex.isUpdateable).length

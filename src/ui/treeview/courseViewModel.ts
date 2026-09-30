@@ -62,9 +62,13 @@ const MAX_PARTS_ALL_OPEN = 3
 export function buildCourseView(course: LocalCourseData, state: CourseViewState): PartView[] {
   const courseName = LocalCourseData.getCourseName(course)
   const courseTitle = LocalCourseData.getCourseTitle(course)
-  const newKeys = new Set(LocalCourseData.getNewExercises(course).map((id) => exerciseKey(id)))
-  const updateableKeys = new Set(state.updateable.map((id) => exerciseKey(id)))
-  const inFlightByKey = new Map(state.inFlight.map(([id, status]) => [exerciseKey(id), status]))
+  const newKeys = new Set(
+    LocalCourseData.getNewExercises(course).map((id) => ExerciseIdentifier.key(id)),
+  )
+  const updateableKeys = new Set(state.updateable.map((id) => ExerciseIdentifier.key(id)))
+  const inFlightByKey = new Map(
+    state.inFlight.map(([id, status]) => [ExerciseIdentifier.key(id), status]),
+  )
   const onDiskBySlug = new Map<string, WorkspaceExercise>()
   for (const exercise of state.workspaceExercises) {
     if (exercise.backend === course.kind && exercise.courseSlug === courseName) {
@@ -81,7 +85,7 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       ungroupedPartName = partName
     }
     const id = LocalCourseExercise.getId(ex)
-    const key = exerciseKey(id)
+    const key = ExerciseIdentifier.key(id)
     const onDisk = onDiskBySlug.get(slug)
     const softDeadline = ex.data.softDeadline ? parseDate(ex.data.softDeadline) : null
     const hardDeadline = ex.data.deadline ? parseDate(ex.data.deadline) : null
@@ -195,9 +199,4 @@ function placeExercise(
 
 function compareNames(a: string, b: string): number {
   return a.localeCompare(b, undefined, { numeric: true })
-}
-
-/** A key that keeps a tmc and a mooc exercise with the same raw id apart. */
-export function exerciseKey(id: ExerciseIdentifier): string {
-  return `${id.kind}:${ExerciseIdentifier.toString(id)}`
 }

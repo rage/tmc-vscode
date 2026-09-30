@@ -40,11 +40,11 @@ export async function updateExercises(
   // What a failed backend's courses last showed is still the best answer for them.
   for (const course of userData.getCourses()) {
     if (failures.every(({ backend }) => backend !== course.kind)) {
-      const courseKey = CourseIdentifier.toString(LocalCourseData.getCourseId(course))
+      const courseId = LocalCourseData.getCourseId(course)
       updateablesRegistry.set(
-        LocalCourseData.getCourseId(course),
+        courseId,
         outdated
-          .filter((x) => CourseIdentifier.toString(x.courseId) === courseKey)
+          .filter((x) => CourseIdentifier.equals(x.courseId, courseId))
           .map((x) => x.exerciseId),
       )
     }
@@ -76,10 +76,9 @@ export async function updateExercises(
     return
   }
 
-  // Keyed by canonical string because each `courseId` is a fresh object, so
-  // anything comparing them by reference sees every exercise as its own course.
+  // Each `courseId` is a fresh object, so only a key tells two of them are one course.
   const coursesToUpdate = new Map(
-    exercisesToUpdate.map((x) => [CourseIdentifier.toString(x.courseId), x.courseId]),
+    exercisesToUpdate.map((x) => [CourseIdentifier.key(x.courseId), x.courseId]),
   )
 
   const download = async (): Promise<void> => {

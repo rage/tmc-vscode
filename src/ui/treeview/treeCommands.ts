@@ -174,7 +174,7 @@ function byCourse(
     if (!isWanted(item)) {
       continue
     }
-    const courseKey = `${item.courseId.kind}:${CourseIdentifierNs.toString(item.courseId)}`
+    const courseKey = CourseIdentifierNs.key(item.courseId)
     const course = courses.get(courseKey) ?? { courseId: item.courseId, ids: new Map() }
     course.ids.set(item.id ?? "", item.exerciseId)
     courses.set(courseKey, course)
