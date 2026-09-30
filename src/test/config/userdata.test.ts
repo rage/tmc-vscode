@@ -353,8 +353,6 @@ suite("UserData course add/get/update/delete", function () {
 })
 
 suite("UserData change announcements", function () {
-  // The new-exercise toast's Remind Me Later and Don't Remind Again write only these two,
-  // and the Courses view's badge is stale unless they announce it.
   test("every write to the stored courses announces a change", async function () {
     const [userData] = await makeUserData({
       courses: [tmcCourse({ id: 0, newExercises: [2] })],

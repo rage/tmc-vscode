@@ -121,7 +121,6 @@ suite("refreshEverything command", function () {
     expect(updateCourse).toHaveBeenCalledTimes(1)
   })
 
-  // The refresh after a submit is what fetches its points; dropping it leaves them stale.
   test("runs refreshes queued while one is running once, after it", async function () {
     let release!: () => void
     const blocked = new Promise<void>((resolve) => {
