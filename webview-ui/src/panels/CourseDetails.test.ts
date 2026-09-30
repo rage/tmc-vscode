@@ -108,7 +108,7 @@ suite("CourseDetails panel", () => {
     render(CourseDetails, { props: { panel } })
     sendCourse(panel)
     await screen.findByRole("heading", { level: 1, name: "Python Course" })
-    expect(screen.queryByText(/award only 75%/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/awards only 75%/)).not.toBeInTheDocument()
 
     sendCourse(
       panel,
@@ -119,7 +119,7 @@ suite("CourseDetails panel", () => {
       }),
     )
 
-    expect(await screen.findByText(/award only 75% of the exercise points/)).toBeInTheDocument()
+    expect(await screen.findByText(/awards only 75% of its points/)).toBeInTheDocument()
   })
 
   test("sends the student to the Courses view for the exercises", async () => {

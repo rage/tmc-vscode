@@ -2,7 +2,12 @@ import * as vscode from "vscode"
 
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { BackendKind, ExerciseIdentifier } from "../../shared/shared"
-import { backendName, CourseIdentifier, LocalCourseData } from "../../shared/shared"
+import {
+  backendName,
+  CourseIdentifier,
+  LocalCourseData,
+  SOFT_DEADLINE_PENALTY,
+} from "../../shared/shared"
 import { countOf, formatDeadline } from "../../utilities"
 import { downloadFailures } from "../downloadFailures"
 import { exerciseOperations } from "../exerciseOperations"
@@ -276,7 +281,7 @@ export class ExerciseTreeItem extends vscode.TreeItem {
         exercise.isUpdateable && "An update is available.",
         exercise.softDeadline &&
           !exercise.isHard &&
-          `Soft deadline: ${formatDeadline(exercise.softDeadline, now, locale)}. Submitted after it, the exercise awards 75% of its points.`,
+          `Soft deadline: ${formatDeadline(exercise.softDeadline, now, locale)}. ${SOFT_DEADLINE_PENALTY}`,
         exercise.hardDeadline && `Deadline: ${formatDeadline(exercise.hardDeadline, now, locale)}`,
       ].filter((line) => typeof line === "string"),
     ])

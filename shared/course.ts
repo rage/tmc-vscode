@@ -72,6 +72,23 @@ export type SharedMoocCourseData = z.infer<typeof SharedMoocCourseDataSchema>
 
 export type LocalCourseExercise = Enum<SharedTmcCourseExercise, SharedMoocCourseExercise>
 
+/**
+ * Whether an exercise's soft deadline is the one it is judged by: the exercise has both
+ * deadlines and the soft one comes first. Takes the ISO timestamps a stored exercise holds.
+ */
+export function isSoftDeadlineBinding({
+  softDeadline,
+  deadline,
+}: Pick<SharedTmcCourseExercise, "softDeadline" | "deadline">): boolean {
+  return (
+    softDeadline !== null && deadline !== null && Date.parse(softDeadline) < Date.parse(deadline)
+  )
+}
+
+/** What missing a binding soft deadline costs, as one sentence for the student. */
+export const SOFT_DEADLINE_PENALTY =
+  "An exercise submitted after its soft deadline still counts, but awards only 75% of its points."
+
 export namespace LocalCourseExercise {
   export function getSlug(lce: LocalCourseExercise): string {
     return match(
