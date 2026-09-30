@@ -84,6 +84,19 @@ export class TmcPage {
     return this.page.locator(".notifications-toasts").getByText(text)
   }
 
+  /** Runs the command titled `title` ("Category: Name") from the command palette. */
+  public async runPaletteCommand(title: string): Promise<void> {
+    await this.page.keyboard.press("F1")
+    const palette = this.page.locator(".quick-input-widget")
+    await palette.locator("input").fill(`>${title}`)
+    await palette
+      .locator(".quick-input-list .monaco-list-row")
+      .filter({ hasText: title })
+      .first()
+      .click()
+    await expect(palette).toBeHidden()
+  }
+
   public getSidePanel(): FrameLocator {
     return this.page.frameLocator(`.webview.ready`).last().frameLocator("iframe#active-frame")
   }
