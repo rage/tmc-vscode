@@ -3,8 +3,13 @@ import * as vscode from "vscode"
 
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
-import type { LocalCourseData } from "../../shared/shared"
-import { CourseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
+import type {
+  LocalCourseData,
+  SharedMoocCourseData,
+  SharedTmcCourseData,
+  SharedTmcCourseExercise,
+} from "../../shared/shared"
+import { CourseIdentifier, makeTmcKind } from "../../shared/shared"
 import { downloadFailures } from "../../ui/downloadFailures"
 import { exerciseOperations } from "../../ui/exerciseOperations"
 import type { CoursesTreeItem, CoursesTreeSource } from "../../ui/treeview/treeview"
@@ -15,6 +20,7 @@ import CoursesTree, {
   PartTreeItem,
 } from "../../ui/treeview/treeview"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
+import { moocLocalCourse, tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
 
 const NOW = new Date("2026-06-01T12:00:00Z")
 
@@ -24,45 +30,32 @@ beforeAll(function () {
   Object.defineProperty(vscodeModule, "env", { value: { language: "en" }, configurable: true })
 })
 
-function tmcExercise(id: number, name: string, overrides: Record<string, unknown> = {}) {
-  return {
-    id,
-    name,
-    availablePoints: 1,
-    awardedPoints: 0,
-    deadline: null,
-    softDeadline: null,
-    passed: false,
-    ...overrides,
-  }
+function tmcExercise(
+  id: number,
+  name: string,
+  overrides: Partial<SharedTmcCourseExercise> = {},
+): SharedTmcCourseExercise {
+  return tmcCourseExercise({ id, name, ...overrides })
 }
 
-function tmcCourse(overrides: Record<string, unknown> = {}): LocalCourseData {
-  return makeTmcKind({
+function tmcCourse(overrides: Partial<SharedTmcCourseData> = {}): LocalCourseData {
+  return tmcLocalCourse({
     id: 1,
     name: "tmc-slug",
     title: "The Python Course",
     awardedPoints: 12,
     availablePoints: 40,
-    newExercises: [],
-    disabled: false,
-    exercises: [],
     ...overrides,
-  }) as unknown as LocalCourseData
+  })
 }
 
-function moocCourse(overrides: Record<string, unknown> = {}): LocalCourseData {
-  return makeMoocKind({
+function moocCourse(overrides: Partial<SharedMoocCourseData> = {}): LocalCourseData {
+  return moocLocalCourse({
     id: "course-uuid",
     name: "mooc-slug",
     title: "Introduction to CS",
-    awardedPoints: 0,
-    availablePoints: 0,
-    newExercises: [],
-    disabled: false,
-    exercises: [],
     ...overrides,
-  }) as unknown as LocalCourseData
+  })
 }
 
 function onDisk(exerciseSlug: string, status: ExerciseStatus): WorkspaceExercise {

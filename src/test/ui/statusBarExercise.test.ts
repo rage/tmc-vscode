@@ -3,42 +3,46 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import Dialog from "../../api/dialog"
-import type { WorkspaceExercise } from "../../api/workspaceManager"
-import type { LocalCourseData, LocalCourseExercise } from "../../shared/shared"
+import type { LocalCourseExercise } from "../../shared/shared"
 import { ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
 import { exerciseOperations } from "../../ui/exerciseOperations"
 import type { ExerciseStatusSources } from "../../ui/statusBarExercise"
 import { ExerciseStatusBarItem, showExerciseActions } from "../../ui/statusBarExercise"
+import { moocCourseExercise, moocLocalCourse } from "../fixtures/courses"
 import { exerciseHelloWorld } from "../fixtures/workspaceManager"
 import type { FakeStatusBarItem } from "../mocks/statusBar"
 import { fakeStatusBarItems, tooltipText } from "../mocks/statusBar"
+import type { WorkspaceManagerMockValues } from "../mocks/workspaceManager"
+import { createWorkspaceMangerMock } from "../mocks/workspaceManager"
 
 function storedExercise(awardedPoints: number, availablePoints: number): LocalCourseExercise {
-  return makeMoocKind({
-    id: "exercise-uuid",
-    name: exerciseHelloWorld.exerciseSlug,
-    awardedPoints,
-    availablePoints,
-    deadline: null,
-    softDeadline: null,
-    passed: awardedPoints === availablePoints,
-  }) as LocalCourseExercise
+  return makeMoocKind(
+    moocCourseExercise({
+      id: "exercise-uuid",
+      name: exerciseHelloWorld.exerciseSlug,
+      awardedPoints,
+      availablePoints,
+      passed: awardedPoints === availablePoints,
+    }),
+  )
 }
 
 const STORED_ID = ExerciseIdentifier.from("exercise-uuid")
 
-const course = makeMoocKind({ id: "course-uuid" }) as unknown as LocalCourseData
+const course = moocLocalCourse({ id: "course-uuid" })
 
 interface Harness {
   sources: ExerciseStatusSources
-  active: { exercise: WorkspaceExercise | undefined }
+  workspace: WorkspaceManagerMockValues
   stored: { exercise: LocalCourseExercise | undefined }
   editorChanged: vscode.EventEmitter<void>
   coursesChanged: vscode.EventEmitter<void>
 }
 
 function harness(): Harness {
-  const active = { exercise: exerciseHelloWorld as WorkspaceExercise | undefined }
+  const [workspaceManager, workspace] = createWorkspaceMangerMock()
+  workspace.activeExercise = exerciseHelloWorld
+  workspace.getExerciseByPath = exerciseHelloWorld
   const stored = { exercise: storedExercise(1, 2) as LocalCourseExercise | undefined }
   const editorChanged = new vscode.EventEmitter<void>()
   const coursesChanged = new vscode.EventEmitter<void>()
@@ -46,13 +50,7 @@ function harness(): Harness {
     editorChanged.event as never,
   )
   const sources: ExerciseStatusSources = {
-    workspaceManager: {
-      get activeExercise() {
-        return active.exercise
-      },
-      getExerciseContaining: () => active.exercise,
-      onDidChangeExercises: new vscode.EventEmitter<void>().event,
-    },
+    workspaceManager,
     userData: {
       getExerciseByName: () => stored.exercise,
       getCourseBySlug: () => Ok(course),
@@ -60,7 +58,7 @@ function harness(): Harness {
     },
     operations: exerciseOperations,
   }
-  return { sources, active, stored, editorChanged, coursesChanged }
+  return { sources, workspace, stored, editorChanged, coursesChanged }
 }
 
 suite("ExerciseStatusBarItem", function () {
@@ -118,11 +116,11 @@ suite("ExerciseStatusBarItem", function () {
     const h = harness()
     track(new ExerciseStatusBarItem(h.sources))
 
-    h.active.exercise = undefined
+    h.workspace.activeExercise = undefined
     h.editorChanged.fire()
     expect(itemOf().isShown).toBe(false)
 
-    h.active.exercise = exerciseHelloWorld
+    h.workspace.activeExercise = exerciseHelloWorld
     h.editorChanged.fire()
     expect(itemOf().isShown).toBe(true)
   })
@@ -244,7 +242,7 @@ suite("showExerciseActions", function () {
   test("shows nothing outside an exercise", async function () {
     const showQuickPick = vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)
     const h = harness()
-    h.active.exercise = undefined
+    h.workspace.activeExercise = undefined
 
     await showExerciseActions(new Dialog(), h.sources, true)
 

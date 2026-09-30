@@ -12,10 +12,11 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { BottleneckError } from "../../errors"
 import type { RunResult, StyleValidationResult } from "../../shared/langsSchema"
-import { BaseError, ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
+import { BaseError, ExerciseIdentifier } from "../../shared/shared"
 import { CheckstyleDiagnostics } from "../../testing/checkstyleDiagnostics"
 import { ExerciseTestController } from "../../testing/exerciseTestController"
 import { exerciseOperations } from "../../ui/exerciseOperations"
+import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -48,28 +49,12 @@ function course(options: {
   disabled?: boolean | undefined
   slugs: string[]
 }) {
-  return makeTmcKind({
-    id: 42,
+  return tmcLocalCourse({
     name: COURSE_SLUG,
-    title: "Python Course",
-    description: "",
-    organization: "mooc",
-    exercises: options.slugs.map((name, index) => ({
-      id: index + 1,
-      name,
-      availablePoints: 1,
-      awardedPoints: 0,
-      deadline: null,
-      passed: false,
-      softDeadline: null,
-    })),
+    exercises: options.slugs.map((name, index) => tmcCourseExercise({ id: index + 1, name })),
     availablePoints: 1,
-    awardedPoints: 0,
     perhapsExamMode: options.examMode ?? false,
-    newExercises: [],
-    notifyAfter: 0,
     disabled: options.disabled ?? false,
-    materialUrl: null,
   })
 }
 

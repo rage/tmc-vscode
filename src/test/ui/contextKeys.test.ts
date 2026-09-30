@@ -1,15 +1,19 @@
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import type { LocalCourseData } from "../../shared/shared"
 import { trackActiveEditorExercise, trackHasCourses } from "../../ui/contextKeys"
+import type { WorkspaceManagerMockValues } from "../mocks/workspaceManager"
+import { createWorkspaceMangerMock } from "../mocks/workspaceManager"
 
 suite("trackActiveEditorExercise", function () {
   let executeCommand: ReturnType<typeof vi.fn<(...args: unknown[]) => Promise<unknown>>>
   let editorChanged: () => void
-  let exercisesChanged: () => void
-  let activeExercise: WorkspaceExercise | undefined
+  let workspaceManager: WorkspaceManager
+  let workspace: WorkspaceManagerMockValues
+  const exercisesChanged = (): void => workspace.exercisesChanged.fire()
 
   function track(): vscode.Disposable {
     vi.spyOn(vscode.window, "onDidChangeActiveTextEditor").mockImplementation(((
@@ -18,15 +22,7 @@ suite("trackActiveEditorExercise", function () {
       editorChanged = listener
       return new vscode.Disposable(() => {})
     }) as never)
-    return trackActiveEditorExercise({
-      get activeExercise() {
-        return activeExercise
-      },
-      onDidChangeExercises: ((listener: () => void) => {
-        exercisesChanged = listener
-        return new vscode.Disposable(() => {})
-      }) as never,
-    })
+    return trackActiveEditorExercise(workspaceManager)
   }
 
   function keyUpdates(): unknown[] {
@@ -41,7 +37,7 @@ suite("trackActiveEditorExercise", function () {
   beforeEach(function () {
     executeCommand = vi.fn(async () => undefined)
     vi.spyOn(vscode.commands, "executeCommand").mockImplementation(executeCommand)
-    activeExercise = undefined
+    ;[workspaceManager, workspace] = createWorkspaceMangerMock()
   })
 
   afterEach(function () {
@@ -49,7 +45,7 @@ suite("trackActiveEditorExercise", function () {
   })
 
   test("sets the key from the editor open at start", function () {
-    activeExercise = { exerciseSlug: "part01-01" } as WorkspaceExercise
+    workspace.activeExercise = { exerciseSlug: "part01-01" } as WorkspaceExercise
     track()
 
     expect(keyUpdates()).toEqual([true])
@@ -57,11 +53,11 @@ suite("trackActiveEditorExercise", function () {
 
   test("follows the active editor, and exercises appearing under it", function () {
     track()
-    activeExercise = { exerciseSlug: "part01-01" } as WorkspaceExercise
+    workspace.activeExercise = { exerciseSlug: "part01-01" } as WorkspaceExercise
     editorChanged()
-    activeExercise = undefined
+    workspace.activeExercise = undefined
     editorChanged()
-    activeExercise = { exerciseSlug: "part01-02" } as WorkspaceExercise
+    workspace.activeExercise = { exerciseSlug: "part01-02" } as WorkspaceExercise
     exercisesChanged()
 
     expect(keyUpdates()).toEqual([false, true, false, true])
