@@ -15,7 +15,7 @@ import { TMC_ARCHIVE_MIME } from "../../backend/mooc/fixtures"
 import Langs from "../api/langs"
 import { CLIENT_NAME, MINIMUM_SUBMISSION_INTERVAL, TMC_LANGS_VERSION } from "../config/constants"
 import { AuthorizationError, BottleneckError, InvalidTokenError, RuntimeError } from "../errors"
-import type { SubmissionFeedback } from "../shared/langsSchema"
+import type { ExerciseTaskSubmissionStatus, SubmissionFeedback } from "../shared/langsSchema"
 import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { getLangsCLIForPlatform, getPlatform } from "../utilities"
 
@@ -579,13 +579,11 @@ suite("tmc langs cli spec", function () {
       return dir
     }
 
-    test("should submit a mooc exercise and block for a fully-graded result", async function () {
+    test("should submit a mooc exercise and wait for a fully-graded result", async function () {
       const dir = writeSubmittableProject("mooc-submit-passing")
-      const status = (
-        await tmc.submitMoocExerciseAndWaitForResults(PASSING_EXERCISE_ID, dir)
-      ).unwrap()
-      // the blocking submit resolves slide/task from the exercise id, polls the
-      // grading through the real CLI, and returns a terminal FullyGraded status
+      const status = (await submitMoocAndWaitForGrading(tmc, PASSING_EXERCISE_ID, dir)).unwrap()
+      // the submit resolves slide/task from the exercise id, and the wait polls the
+      // grading through the real CLI until it is a terminal FullyGraded status
       if (status.status !== "grading") {
         throw new Error(`expected a grading record, got ${status.status}`)
       }
@@ -600,7 +598,7 @@ suite("tmc langs cli spec", function () {
       // without checking it -- so a wrong one is invisible until a teacher opens the
       // exported answer-file zip, whose entry extensions come from this.
       const dir = writeSubmittableProject("mooc-submit-mime")
-      ;(await tmc.submitMoocExerciseAndWaitForResults(PASSING_EXERCISE_ID, dir)).unwrap()
+      ;(await submitMoocAndWaitForGrading(tmc, PASSING_EXERCISE_ID, dir)).unwrap()
 
       // Read it back off the host's own record rather than through the extension:
       // `mime` is part of the wire contract but nothing in the extension consumes it.
@@ -619,9 +617,7 @@ suite("tmc langs cli spec", function () {
 
     test("should submit a failing mooc exercise and report Failed", async function () {
       const dir = writeSubmittableProject("mooc-submit-failing")
-      const status = (
-        await tmc.submitMoocExerciseAndWaitForResults(FAILING_EXERCISE_ID, dir)
-      ).unwrap()
+      const status = (await submitMoocAndWaitForGrading(tmc, FAILING_EXERCISE_ID, dir)).unwrap()
       if (status.status !== "grading") {
         throw new Error(`expected a grading record, got ${status.status}`)
       }
@@ -641,9 +637,7 @@ suite("tmc langs cli spec", function () {
       expect(armed.status).to.be.equal(204)
 
       const dir = writeSubmittableProject("mooc-submit-reaped")
-      const status = (
-        await tmc.submitMoocExerciseAndWaitForResults(PASSING_EXERCISE_ID, dir)
-      ).unwrap()
+      const status = (await submitMoocAndWaitForGrading(tmc, PASSING_EXERCISE_ID, dir)).unwrap()
       if (status.status !== "grading") {
         throw new Error(`expected a grading record, got ${status.status}`)
       }
@@ -752,12 +746,12 @@ suite("tmc langs cli spec", function () {
       // MINIMUM_SUBMISSION_INTERVAL are throttled by design (the TMC suite
       // asserts the BottleneckError), so wait the interval out in between.
       fs.writeFileSync(studentFile, olderContent)
-      ;(await tmc.submitMoocExerciseAndWaitForResults(PASSING_EXERCISE_ID, exercisePath)).unwrap()
+      ;(await submitMoocAndWaitForGrading(tmc, PASSING_EXERCISE_ID, exercisePath)).unwrap()
       await new Promise((resolve) => {
         setTimeout(resolve, MINIMUM_SUBMISSION_INTERVAL + 100)
       })
       fs.writeFileSync(studentFile, newerContent)
-      ;(await tmc.submitMoocExerciseAndWaitForResults(PASSING_EXERCISE_ID, exercisePath)).unwrap()
+      ;(await submitMoocAndWaitForGrading(tmc, PASSING_EXERCISE_ID, exercisePath)).unwrap()
 
       const after = (await tmc.getMoocOldSubmissions(PASSING_EXERCISE_ID)).unwrap()
       expect(after.length).to.be.equal(before.length + 2)
@@ -1098,6 +1092,16 @@ function setupProjectsDir(configDir: string, projectsDir: string): string {
   }
   fs.writeFileSync(path.join(configDir, "config.toml"), `projects-dir = '${projectsDir}'\n`)
   return projectsDir
+}
+
+/** Submits like the extension does: without blocking, then waiting for the grading. */
+async function submitMoocAndWaitForGrading(
+  langs: Langs,
+  exerciseId: string,
+  exercisePath: string,
+): Promise<Result<ExerciseTaskSubmissionStatus, Error>> {
+  const submitted = await langs.submitMoocExercise(exerciseId, exercisePath)
+  return submitted.err ? submitted : langs.waitForMoocGrading(submitted.val.task_submission_id)
 }
 
 async function unwrapResult<T>(result: Promise<Result<T, Error>>): Promise<T> {

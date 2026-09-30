@@ -1339,54 +1339,6 @@ export default class Langs {
   }
 
   /**
-   * Submits a mooc exercise and waits for its grading, the mooc twin of
-   * {@link submitTmcExerciseAndWaitForResults}. The CLI resolves the slide and
-   * task ids from the exercise id and owns the poll loop, so this only needs the
-   * exercise id and path; it returns the terminal grading status.
-   *
-   * Shares its `MINIMUM_SUBMISSION_INTERVAL` throttle with every other mooc call that
-   * submits; per-backend, so the tmc path is unaffected.
-   *
-   * @param exerciseId Mooc exercise id (a UUID string).
-   * @param exercisePath Path to the local exercise directory.
-   * @param progressCallback Reports completion as a 0..1 fraction, like
-   * {@link submitTmcExerciseAndWaitForResults}.
-   */
-  public async submitMoocExerciseAndWaitForResults(
-    exerciseId: string,
-    exercisePath: string,
-    progressCallback?: (fraction: number, message?: string) => void,
-  ): Promise<Result<ExerciseTaskSubmissionStatus, Error>> {
-    const submissionSlot = this._claimSubmissionSlot("mooc")
-    if (submissionSlot.err) {
-      return submissionSlot
-    }
-
-    const onStdout = (res: StatusUpdateData): void => {
-      progressCallback?.(res["percent-done"], res.message ?? undefined)
-    }
-
-    const res = await this._executeLangsCommand(
-      {
-        backend: "mooc",
-        args: this._moocCmd(
-          "submit",
-          "--exercise-id",
-          exerciseId,
-          "--submission-path",
-          exercisePath,
-        ),
-        onStdout,
-        onNotification: (notification) => this._showNotification(notification),
-        processTimeout: SUBMIT_PROCESS_TIMEOUT,
-        interruptOnDeactivate: true,
-      },
-      "mooc-submission-status",
-    )
-    return res.map((x) => x.data["output-data"])
-  }
-
-  /**
    * Submits a mooc exercise without waiting for its grading; follow with
    * {@link waitForMoocGrading}. The CLI resolves the slide and task ids from the exercise id.
    *
