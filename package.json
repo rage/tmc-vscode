@@ -166,7 +166,7 @@
       },
       {
         "command": "tmc.myCourses",
-        "title": "Show My Courses",
+        "title": "Show Courses",
         "category": "TestMyCode"
       },
       {
