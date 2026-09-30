@@ -1,8 +1,8 @@
 import { expect } from "@playwright/test"
 
 import { vsCodeTest } from "../fixtures"
+import { CoursesViewPage } from "../pages/courses-view"
 import { MoocLoginPage } from "../pages/mooc-login"
-import { MyCoursesPage } from "../pages/my-courses"
 
 // E2E of the courses.mooc.fi device-flow login, the extension's only login. The
 // mock's OAuth endpoints (backend/mooc/oauth.ts) are not part of the vendored
@@ -16,12 +16,12 @@ import { MyCoursesPage } from "../pages/my-courses"
 vsCodeTest(
   "opens the approval page in the browser and makes the enrolled courses addable",
   async ({ page, webview, openedExternalUrls }) => {
-    const myCoursesPage = new MyCoursesPage(page, webview)
+    const coursesView = new CoursesViewPage(page, webview)
     const moocLoginPage = new MoocLoginPage(page, webview)
 
     await vsCodeTest.step("start the login from the add-course pick", async () => {
-      await myCoursesPage.goto()
-      await myCoursesPage.startMoocLogin()
+      await coursesView.goto()
+      await coursesView.startMoocLogin()
     })
 
     await vsCodeTest.step("Copy & Open opens the page that shows the code", async () => {
@@ -35,12 +35,12 @@ vsCodeTest(
     })
 
     await vsCodeTest.step("the mock approves and the login is confirmed", async () => {
-      await expect(myCoursesPage.notificationToast("Logged in to courses.mooc.fi.")).toBeVisible()
+      await expect(coursesView.notificationToast("Logged in to courses.mooc.fi.")).toBeVisible()
       await expect(moocLoginPage.waitingNotification()).toBeHidden()
     })
 
     await vsCodeTest.step("the enrolled courses are now offered", async () => {
-      const quickPick = await myCoursesPage.openAddCourseQuickPick()
+      const quickPick = await coursesView.openAddCourseQuickPick()
       await quickPick.expectItem("MOOC Python Course")
     })
   },
@@ -50,11 +50,11 @@ vsCodeTest.describe(() => {
   vsCodeTest.use({ moocClientId: "mooc-mock-deny" })
 
   vsCodeTest("a denied login says so and offers Try again", async ({ page, webview }) => {
-    const myCoursesPage = new MyCoursesPage(page, webview)
+    const coursesView = new CoursesViewPage(page, webview)
     const moocLoginPage = new MoocLoginPage(page, webview)
 
-    await myCoursesPage.goto()
-    await myCoursesPage.startMoocLogin()
+    await coursesView.goto()
+    await coursesView.startMoocLogin()
     await moocLoginPage.copyAndOpen()
 
     const error = page
@@ -73,11 +73,11 @@ vsCodeTest.describe(() => {
   vsCodeTest(
     "dismissing the code cancels the login and opens nothing",
     async ({ page, webview, openedExternalUrls }) => {
-      const myCoursesPage = new MyCoursesPage(page, webview)
+      const coursesView = new CoursesViewPage(page, webview)
       const moocLoginPage = new MoocLoginPage(page, webview)
 
-      await myCoursesPage.goto()
-      await myCoursesPage.startMoocLogin()
+      await coursesView.goto()
+      await coursesView.startMoocLogin()
       await moocLoginPage.dismissCode()
 
       await expect(moocLoginPage.codeDialog()).toBeHidden()
@@ -90,19 +90,19 @@ vsCodeTest.describe(() => {
 
   // Cancel-then-retry must start a clean attempt, unaffected by the killed one ending late.
   vsCodeTest("cancel then retry starts a clean login", async ({ page, webview }) => {
-    const myCoursesPage = new MyCoursesPage(page, webview)
+    const coursesView = new CoursesViewPage(page, webview)
     const moocLoginPage = new MoocLoginPage(page, webview)
 
     await vsCodeTest.step("cancel the pending login", async () => {
-      await myCoursesPage.goto()
-      await myCoursesPage.startMoocLogin()
+      await coursesView.goto()
+      await coursesView.startMoocLogin()
       await moocLoginPage.copyAndOpen()
       await moocLoginPage.cancelWaiting()
       await expect(moocLoginPage.waitingNotification()).toBeHidden()
     })
 
     await vsCodeTest.step("retry lands on a fresh code with no error", async () => {
-      await myCoursesPage.startMoocLogin()
+      await coursesView.startMoocLogin()
       await expect(moocLoginPage.codeDialog()).toBeVisible()
       await moocLoginPage.dismissCode()
       await expect(page.locator(".notification-toast").filter({ hasText: "login" })).toHaveCount(0)

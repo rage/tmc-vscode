@@ -1,9 +1,8 @@
 import { expect } from "@playwright/test"
 
 import { vsCodeTest } from "../fixtures"
-import { CoursePage } from "../pages/course"
+import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
-import { MyCoursesPage } from "../pages/my-courses"
 import { TestResultsPage } from "../pages/test-results"
 import { TestSubmissionPage } from "../pages/test-submission"
 
@@ -11,10 +10,10 @@ import { TestSubmissionPage } from "../pages/test-submission"
 // mock backend (backend/mooc, mounted in the same process as the legacy TMC
 // mock and routed via TMC_LANGS_MOOC_ROOT_URL in fixtures.ts). It covers the
 // full path the mooc migration adds: device-flow login -> picking an enrolled
-// course from the add-course quick pick -> course details -> selecting and
-// opening (downloading) an exercise -> opening the workspace -> opening the
-// exercise file -> running the local tests -> submitting -> the reduced mooc
-// result panel.
+// course from the add-course quick pick -> the course's exercises in the Courses
+// view -> opening (downloading) an exercise from its context menu -> opening the
+// workspace -> opening the exercise file -> running the local tests -> submitting
+// -> the reduced mooc result panel.
 //
 // Reaching the file explorer / run-tests / submit depends on mooc workspace
 // tracking (the CLI's `mooc list-local-course-exercises` + slug-carrying
@@ -24,8 +23,7 @@ import { TestSubmissionPage } from "../pages/test-submission"
 // grading progress + score, no per-test breakdown), distinct from the TMC
 // submission view.
 vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ page, webview }) => {
-  const myCoursesPage = new MyCoursesPage(page, webview)
-  const coursePage = new CoursePage(page, webview)
+  const coursesView = new CoursesViewPage(page, webview)
   const testResultsPage = new TestResultsPage(page, webview)
   const testSubmissionPage = new TestSubmissionPage(page, webview)
   const explorerPage = new ExplorerPage(page)
@@ -37,34 +35,31 @@ vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ pag
   const filePath = ["src", "passing_exercise.py"]
   const fileContents = "def hello()"
 
-  await vsCodeTest.step("open My Courses", async () => {
-    await myCoursesPage.goto()
+  await vsCodeTest.step("open the Courses view", async () => {
+    await coursesView.goto()
   })
 
   await vsCodeTest.step("add the mooc course", async () => {
-    const courseHeader = webview.getByRole("heading", {
-      name: "MOOC Python Course (mooc-python-course)",
-    })
-    await expect(courseHeader).toBeHidden()
-    await myCoursesPage.addNewMoocCourse(courseTitle)
-    await expect(courseHeader).toBeVisible()
+    const course = coursesView.row(courseTitle)
+    await expect(course).toBeHidden()
+    await coursesView.addNewMoocCourse(courseTitle)
+    await expect(course).toHaveAccessibleName(/, courses\.mooc\.fi(,|$)/)
   })
 
-  await vsCodeTest.step("open the course details and see its exercises", async () => {
-    await myCoursesPage.selectCourse(courseTitle)
-    await expect(coursePage.exerciseGroupHeading(courseTitle)).toBeVisible()
+  await vsCodeTest.step("expand the course and see its exercises", async () => {
+    await coursesView.expand(coursesView.row(courseTitle))
+    // A mooc course names no parts, so its exercises sit right under it.
+    await expect(coursesView.row(exerciseName)).toHaveAccessibleName(/, not downloaded,/)
   })
 
-  await vsCodeTest.step("select and open an exercise", async () => {
-    const openedStatus = webview.getByRole("cell", { name: "opened" })
-    await expect(openedStatus).toBeHidden()
-    await coursePage.showExercises()
-    await coursePage.openExercises([exerciseName])
-    await expect(openedStatus).toBeVisible()
+  await vsCodeTest.step("open an exercise, downloading it on the way", async () => {
+    const row = coursesView.row(exerciseName)
+    await coursesView.runContextMenuCommand(row, "Open")
+    await expect(row).toHaveAccessibleName(/, open,/)
   })
 
   await vsCodeTest.step("open workspace", async () => {
-    await coursePage.openWorkspace()
+    await coursesView.runInlineAction(coursesView.row(courseTitle), "Open Course Workspace")
   })
 
   await vsCodeTest.step("open exercise file", async () => {

@@ -2,9 +2,8 @@ import { expect } from "@playwright/test"
 import type { Locator, Page } from "@playwright/test"
 
 import { vsCodeTest } from "../fixtures"
-import { CoursePage } from "../pages/course"
+import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
-import { MyCoursesPage } from "../pages/my-courses"
 import { TestResultsPage } from "../pages/test-results"
 import { TestSubmissionPage } from "../pages/test-submission"
 
@@ -41,32 +40,31 @@ for (const exercise of exercises) {
   // The title is also the trace filename (fixtures.ts), so a constant one would
   // have every case overwrite the last one's trace.
   vsCodeTest(`can complete ${exercise.name}`, async ({ page, webview }) => {
-    const myCoursesPage = new MyCoursesPage(page, webview)
-    const coursePage = new CoursePage(page, webview)
+    const coursesView = new CoursesViewPage(page, webview)
     const testResultsPage = new TestResultsPage(page, webview)
     const testSubmissionPage = new TestSubmissionPage(page, webview)
     const explorerPage = new ExplorerPage(page)
 
     // The session comes from the tmc credentials the fixture seeds (fixtures.ts).
-    await vsCodeTest.step("open My Courses", async () => {
-      await myCoursesPage.goto()
+    await vsCodeTest.step("open the Courses view", async () => {
+      await coursesView.goto()
     })
 
-    await vsCodeTest.step("open course", async () => {
-      await myCoursesPage.addNewCourse(exercise.course)
-      await myCoursesPage.selectCourse(exercise.course)
+    await vsCodeTest.step("add and expand the course", async () => {
+      await coursesView.addNewCourse(exercise.course)
+      await coursesView.expand(coursesView.row(exercise.course))
+      await expect(coursesView.row("Part 1")).toHaveAttribute("aria-expanded", "true")
     })
 
-    await vsCodeTest.step("open exercise", async () => {
-      const openedStatus = webview.getByRole("cell", { name: "opened" })
-      await expect(openedStatus).toBeHidden()
-      await coursePage.showExercises()
-      await coursePage.openExercises([exercise.name])
-      await expect(openedStatus).toBeVisible()
+    await vsCodeTest.step("download the exercise, which opens it", async () => {
+      const row = coursesView.row(exercise.name)
+      await expect(row).toHaveAccessibleName(/, not downloaded,/)
+      await coursesView.runInlineAction(row, "Download")
+      await expect(row).toHaveAccessibleName(/, open,/)
     })
 
     await vsCodeTest.step("open workspace", async () => {
-      await coursePage.openWorkspace()
+      await coursesView.runInlineAction(coursesView.row(exercise.course), "Open Course Workspace")
     })
 
     await vsCodeTest.step("open exercise file", async () => {
