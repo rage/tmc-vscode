@@ -7,6 +7,7 @@ import type { UserData } from "../config/userdata"
 import type { BackendKind } from "../shared/shared"
 import { ExerciseIdentifier } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
+import { checkAiUse } from "./checkAiUse"
 import type { ReadyActionContext } from "./types"
 
 /** Sends the exercise directory `exercisePath` to one backend's paste service. */
@@ -46,7 +47,8 @@ function pasterFor(
  *
  * Nothing is reported here: the caller shows the failure, once, in the place the user
  * asked from. A paste that comes back without a link is an error rather than an empty
- * `Ok`, so no caller has to check for one.
+ * `Ok`, so no caller has to check for one. Errs with `AiUseRefusedError` while AI assistance
+ * may be on.
  */
 export async function pasteExercise(
   actionContext: ReadyActionContext,
@@ -57,11 +59,16 @@ export async function pasteExercise(
   const { langs, userData, workspaceManager } = actionContext.startup
 
   const paster = pasterFor(langs, userData, backend, courseSlug, exerciseName)
-  const exercisePath = workspaceManager.getExerciseBySlug(backend, courseSlug, exerciseName)?.uri
-    .fsPath
-  if (!paster || !exercisePath) {
+  const exercise = workspaceManager.getExerciseBySlug(backend, courseSlug, exerciseName)
+  if (!paster || !exercise) {
     return Err(new Error("Failed to resolve exercise id"))
   }
+  // Refused like a submit, which a mooc paste also is.
+  const allowed = await checkAiUse(actionContext, { backend, courseSlug, uri: exercise.uri })
+  if (allowed.err) {
+    return allowed
+  }
+  const exercisePath = exercise.uri.fsPath
 
   return exerciseOperations.run(
     paster.exerciseId,

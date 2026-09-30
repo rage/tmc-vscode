@@ -2,6 +2,7 @@ import { Ok } from "ts-results"
 import { vi } from "vitest"
 
 import type { ActionContext, ReadyActionContext, ReadyStartup } from "../../actions/types"
+import type { AiUseGate } from "../../api/aiUseGate"
 import type { AuthState } from "../../api/authState"
 import type Dialog from "../../api/dialog"
 import type ExerciseDecorationProvider from "../../api/exerciseDecorationProvider"
@@ -67,6 +68,8 @@ export function createMockActionContext(
     coursesTree: autoMock<CoursesTree>(),
     startup: {
       kind: "ready",
+      // Refuses nothing: `refusal` resolves to `undefined`.
+      aiUseGate: autoMock<AiUseGate>(),
       exerciseDecorationProvider: autoMock<ExerciseDecorationProvider>(),
       langs: autoMock<Langs>(),
       resources: autoMock<Resources>(),

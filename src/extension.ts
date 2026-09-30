@@ -8,6 +8,7 @@ import { onDidFinishSubmission, refreshLocalExercises } from "./actions"
 import type { ActionContext, Startup } from "./actions/types"
 import { isReady } from "./actions/types"
 import AiRestriction, { isActiveCourseAiAllowed } from "./api/aiRestriction"
+import { AiUseGate } from "./api/aiUseGate"
 import { createAuthState } from "./api/authState"
 import Dialog from "./api/dialog"
 import ExerciseDecorationProvider from "./api/exerciseDecorationProvider"
@@ -347,6 +348,7 @@ async function activateInner(
 
   let userData: Result<UserData, Error>
   let workspaceManager: Result<WorkspaceManager, Error>
+  let aiRestriction: AiRestriction | undefined
   let exerciseDecorationProvider: Result<ExerciseDecorationProvider, Error>
   if (resources.ok) {
     workspaceManager = new Ok(
@@ -379,7 +381,7 @@ async function activateInner(
       await workspaceManager.val.verifyWorkspaceSettingsIntegrity()
       const courseWorkspace = workspaceManager.val
       const courses = userData.ok ? userData.val : undefined
-      const aiRestriction = new AiRestriction(
+      aiRestriction = new AiRestriction(
         courseWorkspace,
         context.workspaceState,
         () => isActiveCourseAiAllowed(courseWorkspace, courses),
@@ -422,6 +424,7 @@ async function activateInner(
     langs.ok && resources.ok && workspaceManager.ok && userData.ok && exerciseDecorationProvider.ok
       ? {
           kind: "ready",
+          aiUseGate: new AiUseGate(aiRestriction),
           langs: langs.val,
           resources: resources.val,
           workspaceManager: workspaceManager.val,

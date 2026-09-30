@@ -1,3 +1,4 @@
+import type { AiUseGate } from "../api/aiUseGate"
 import type { AuthState } from "../api/authState"
 import type Dialog from "../api/dialog"
 import type ExerciseDecorationProvider from "../api/exerciseDecorationProvider"
@@ -11,6 +12,7 @@ import type CoursesTree from "../ui/treeview/treeview"
 /** The services an activation builds, once all of them have succeeded. */
 export interface ReadyStartup {
   kind: "ready"
+  aiUseGate: AiUseGate
   exerciseDecorationProvider: ExerciseDecorationProvider
   langs: Langs
   resources: Resources

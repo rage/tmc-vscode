@@ -27,7 +27,10 @@ function contextFor(
   return createMockActionContext({
     startup: {
       langs: langsMethods as unknown as ReadyStartup["langs"],
-      userData: userDataMethods as unknown as ReadyStartup["userData"],
+      userData: {
+        getCourseBySlug: () => Ok({}),
+        ...userDataMethods,
+      } as unknown as ReadyStartup["userData"],
       workspaceManager: {
         getExerciseBySlug: () => ({ uri: { fsPath: EXERCISE_PATH } as unknown as vscode.Uri }),
       } as unknown as ReadyStartup["workspaceManager"],
@@ -161,6 +164,7 @@ suite("paste action, through the real runForExercise boundary", () => {
       startup: {
         langs: {} as unknown as ReadyStartup["langs"],
         userData: {
+          getCourseBySlug: () => Ok({}),
           getMoocExerciseByName: () => ({ id: MOOC_EXERCISE_ID }),
         } as unknown as ReadyStartup["userData"],
         workspaceManager: {

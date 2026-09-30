@@ -3,12 +3,14 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { ActionContext, ReadyActionContext } from "../../actions/types"
+import type { AiUseGate } from "../../api/aiUseGate"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { resetExercise } from "../../commands/resetExercise"
 import type { UserData } from "../../config/userdata"
+import { AiUseRefusedError } from "../../errors"
 import { ExerciseIdentifier } from "../../shared/shared"
 import { exerciseOperations } from "../../ui/exerciseOperations"
 import { createMockActionContext } from "../mocks/actionContext"
@@ -28,8 +30,11 @@ suite("Reset exercise command", function () {
   let notification: ReturnType<typeof vi.fn>
   let prompts: { message: string; labels: string[] }[]
 
-  /** @param answer The button to press in the confirmation; `undefined` cancels it. */
-  function actionContext(answer: string | undefined): ReadyActionContext {
+  /**
+   * @param answer The button to press in the confirmation; `undefined` cancels it.
+   * @param refusal What the AI use gate answers with.
+   */
+  function actionContext(answer: string | undefined, refusal?: Error): ReadyActionContext {
     const base = createMockActionContext()
     reset = vi.fn(async () => Ok.EMPTY)
     notification = vi.fn()
@@ -47,9 +52,11 @@ suite("Reset exercise command", function () {
       dialog,
       startup: {
         ...base.startup,
+        aiUseGate: { refusal: async () => refusal } as unknown as AiUseGate,
         langs: { resetExercise: reset } as unknown as Langs,
         userData: {
           getMoocExerciseByName: () => ({ id: "mooc-ex-uuid" }),
+          getCourseBySlug: () => Ok({}),
         } as unknown as UserData,
         workspaceManager: {
           get activeExercise() {
@@ -78,6 +85,24 @@ suite("Reset exercise command", function () {
     await resetExercise(actionContext("Submit and Reset"), uri)
 
     expect(reset).toHaveBeenCalledExactlyOnceWith(expect.anything(), uri.fsPath, true)
+  })
+
+  test("resets nothing when submitting first is refused while AI may be on", async function () {
+    const context = actionContext("Submit and Reset", new AiUseRefusedError("AI must be off."))
+
+    await resetExercise(context, uri)
+
+    expect(reset).not.toHaveBeenCalled()
+    expect(context.dialog.warningNotification).toHaveBeenCalledExactlyOnceWith("AI must be off.")
+  })
+
+  test("resets without submitting while AI may be on", async function () {
+    await resetExercise(
+      actionContext("Reset Without Submitting", new AiUseRefusedError("AI must be off.")),
+      uri,
+    )
+
+    expect(reset).toHaveBeenCalledExactlyOnceWith(expect.anything(), uri.fsPath, false)
   })
 
   test("shows progress while resetting and says in the status bar when done", async function () {

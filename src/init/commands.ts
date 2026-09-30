@@ -5,6 +5,7 @@ import { isReady } from "../actions/types"
 import type Dialog from "../api/dialog"
 import * as commands from "../commands"
 import { EXTENSION_ID } from "../config/constants"
+import { SHOW_AI_USE_PROBLEM_COMMAND } from "../errors"
 import { initializationErrorHelpPanel, nextPanelId } from "../panels/routes"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
@@ -257,6 +258,8 @@ export function registerCommands(
   })
 
   register("tmc.showMoocLogin", async () => commands.login(readyContext))
+
+  register(SHOW_AI_USE_PROBLEM_COMMAND, async () => readyContext.startup.aiUseGate.showProblem())
 
   register("tmc.submitExercise", async (target: ExerciseTarget | undefined) =>
     commands.submitExercise(readyContext, resourceOf(target)),

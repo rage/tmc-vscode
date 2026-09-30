@@ -156,6 +156,43 @@ export const AI_OFF_SETTINGS: Readonly<Record<string, unknown>> = {
   "chat.disableAIFeatures": true,
 }
 
+/**
+ * AI assistants that {@link AI_OFF_SETTINGS} cannot fully turn off, by extension id, each with
+ * the name the Extensions view shows it under. Submitting, testing and pasting are refused
+ * while one of them is enabled in the window.
+ */
+export const AI_EXTENSIONS: Readonly<Record<string, string>> = {
+  "Alibaba-Cloud.tongyi-lingma": "Qoder CN (Lingma)",
+  "AmazonWebServices.amazon-q-vscode": "Amazon Q",
+  "anthropic.claude-code": "Claude Code",
+  "augment.vscode-augment": "Augment",
+  "Bito.Bito": "Bito",
+  "Blackboxapp.blackbox": "BLACKBOXAI",
+  "Blackboxapp.blackboxagent": "Blackbox Agent",
+  "Codeium.codeium": "Windsurf Plugin (Codeium)",
+  "Codeium.codeium-enterprise-updater": "Codeium Enterprise Updater",
+  "Codium.codium": "Qodo",
+  "Continue.continue": "Continue",
+  "DanielSanMedium.dscodegpt": "CodeGPT",
+  "FittenTech.Fitten-Code": "Fitten Code",
+  "genieai.chatgpt-vscode": "Genie AI",
+  "Google.gemini-cli-vscode-ide-companion": "Gemini CLI Companion",
+  "Google.geminicodeassist": "Gemini Code Assist",
+  "kilocode.Kilo-Code": "Kilo Code",
+  "Kingleo.qwen": "Qwen",
+  "openai.chatgpt": "Codex",
+  "RooVeterinaryInc.roo-cline": "Roo Code",
+  "saoudrizwan.claude-dev": "Cline",
+  "Sixth.sixth-ai": "Sixth",
+  "smallcloud.codify": "Refact",
+  "sourcegraph.cody-ai": "Cody",
+  "sourcery.sourcery": "Sourcery",
+  "supermaven.supermaven": "Supermaven",
+  "TabNine.tabnine-vscode": "Tabnine",
+  "TabNine.tabnine-vscode-self-hosted-updater": "Tabnine for Enterprise",
+  "ZencoderAI.zencoder": "Zencoder",
+}
+
 export const WORKSPACE_SETTINGS = {
   folders: [{ path: ".tmc" }],
   settings: {

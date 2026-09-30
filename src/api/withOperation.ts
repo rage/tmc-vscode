@@ -1,11 +1,12 @@
 import type { Result } from "ts-results"
 import { Err } from "ts-results"
+import * as vscode from "vscode"
 
-import { BottleneckError } from "../errors"
+import { AiUseRefusedError, BottleneckError, presentationFor } from "../errors"
 import type { BackendKind } from "../shared/shared"
 import { Logger } from "../utilities"
 import type Dialog from "./dialog"
-import type { FractionProgress, ProgressLocation } from "./dialog"
+import type { FractionProgress, NotificationButton, ProgressLocation } from "./dialog"
 
 /** Options for {@link withOperation}. */
 export interface OperationOptions {
@@ -89,6 +90,23 @@ function reportFailure(dialog: Dialog, options: OperationOptions, error: Error):
           error.backend ?? options.backend,
         ]
       : [options.failure, error, options.backend]
+
+  // Not a fault: no failure headline and no Show logs, only the refusal and its one remedy.
+  const refused = [detail, error].find((e) => e instanceof AiUseRefusedError)
+  if (refused) {
+    Logger.info(headline, refused)
+    if (!options.silent) {
+      const presentation = presentationFor(refused)
+      void dialog.warningNotification(
+        presentation.message,
+        ...presentation.actions.map<NotificationButton>(({ label, command }) => [
+          label,
+          (): void => void vscode.commands.executeCommand(command),
+        ]),
+      )
+    }
+    return
+  }
 
   const busy = [detail, error].find((e) => e instanceof BottleneckError)
   if (busy) {

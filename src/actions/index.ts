@@ -1,4 +1,5 @@
 export * from "./addNewCourse"
+export * from "./checkAiUse"
 export * from "./checkForCourseUpdates"
 export * from "./checkForExerciseUpdates"
 export * from "./cleanExercise"

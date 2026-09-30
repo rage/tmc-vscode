@@ -80,6 +80,7 @@ suite("Download old submission command (mooc branch)", function () {
     const userData = {
       // a mooc exercise yields a string uuid id
       getMoocExerciseByName: () => ({ id: "mooc-ex-uuid" }),
+      getCourseBySlug: () => Ok({}),
     } as unknown as UserData
 
     const workspaceManager = {

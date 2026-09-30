@@ -29,6 +29,7 @@ import { backendName, LocalCourseData, LocalCourseExercise, match, unwrap } from
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { submissionViews } from "../ui/submissionViews"
 import { Logger, parseFeedbackQuestion } from "../utilities"
+import { checkAiUse } from "./checkAiUse"
 import type { ReadyActionContext } from "./types"
 
 /** What a backend answered a submission with, reduced to what the shared flow acts on. */
@@ -238,7 +239,8 @@ async function showOutcome(
  * Records the exercise as passed locally when the backend graded it so, and fires
  * {@link onDidFinishSubmission} once the outcome is shown. A failed submission is `Ok`, as the
  * panel shows why. Errs for a failure before the panel opens: a submit or paste already in
- * flight for the same exercise is a `BottleneckError`.
+ * flight for the same exercise is a `BottleneckError`, and AI assistance that may be on is an
+ * `AiUseRefusedError`.
  */
 export async function submitExercise(
   actionContext: ReadyActionContext,
@@ -258,6 +260,10 @@ export async function submitExercise(
     return Err(
       new Error(`${exercise.exerciseSlug} is not a ${backendName(exercise.backend)} exercise.`),
     )
+  }
+  const refused = await actionContext.startup.aiUseGate.refusal(course, exercise.uri)
+  if (refused) {
+    return Err(refused)
   }
   const courseId = LocalCourseData.getCourseId(course)
 
@@ -305,7 +311,8 @@ export async function submitExercise(
  * followed its submit ended before the grading did.
  *
  * Fires {@link onDidFinishSubmission} like {@link submitExercise}. Errs when that panel shows
- * no such submission, or when a submission of the exercise is already in progress.
+ * no such submission, when a submission of the exercise is already in progress, or as
+ * {@link submitExercise} does while AI assistance may be on.
  */
 export async function keepWaitingForGrading(
   actionContext: ReadyActionContext,
@@ -314,6 +321,10 @@ export async function keepWaitingForGrading(
   const grading = unfinishedGradings.get(panelId)
   if (grading === undefined) {
     return Err(new Error("This submission has no grading left to wait for."))
+  }
+  const allowed = await checkAiUse(actionContext, grading.exercise)
+  if (allowed.err) {
+    return allowed
   }
   return exerciseOperations.run(
     grading.exerciseId,

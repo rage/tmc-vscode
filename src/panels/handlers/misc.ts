@@ -67,6 +67,7 @@ function runCommandArguments(command: RunnableCommand): unknown[] {
       return [{ extensionId: EXTENSION_ID }]
     case "tmc.logs":
     case "tmc.myCourses":
+    case "tmc.showAiUseProblem":
     case "tmc.showMoocLogin":
     case "tmc.viewInitializationErrorHelp":
     case "workbench.action.restartExtensionHost":

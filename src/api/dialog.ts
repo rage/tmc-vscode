@@ -33,7 +33,7 @@ export function separator(label: string): Separator {
  * A notification button: its label, and what pressing it does. Buttons are
  * resolved by identity rather than by label, so two may share a label.
  */
-type NotificationButton = [label: string, callback: () => void]
+export type NotificationButton = [label: string, callback: () => void]
 
 type NotificationAction = vscode.MessageItem & { callback: () => void }
 

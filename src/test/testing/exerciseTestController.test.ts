@@ -7,10 +7,11 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
+import type { AiUseGate } from "../../api/aiUseGate"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
-import { BottleneckError } from "../../errors"
+import { AiUseRefusedError, BottleneckError, SHOW_AI_USE_PROBLEM_COMMAND } from "../../errors"
 import type { RunResult, StyleValidationResult } from "../../shared/langsSchema"
 import { BaseError, ExerciseIdentifier } from "../../shared/shared"
 import { CheckstyleDiagnostics } from "../../testing/checkstyleDiagnostics"
@@ -108,6 +109,7 @@ function setup(
     loggedIn?: boolean
     slugs?: string[]
     closedSlugs?: string[]
+    refusal?: AiUseRefusedError
   } = {},
 ): Setup {
   const slugs = options.slugs ?? ["part01-01_hello"]
@@ -130,6 +132,7 @@ function setup(
     ...createMockActionContext({
       authenticated: { tmc: options.loggedIn ?? true, mooc: options.loggedIn ?? true },
       startup: {
+        aiUseGate: { refusal: async () => options.refusal } as unknown as AiUseGate,
         langs: {
           runTests,
           runCheckstyle: () => {
@@ -475,5 +478,53 @@ suite("ExerciseTestController", function () {
 
     expect(s.controller.exerciseUriOf(child)).toBe(exerciseAt(s).uri)
     expect(s.controller.exerciseUriOf(undefined)).toBeUndefined()
+  })
+})
+
+suite("ExerciseTestController while AI may be on", function () {
+  const refusal = new AiUseRefusedError(
+    "AI assistance must be off in this course. Disable Cline for this workspace.",
+    "Show Cline",
+  )
+
+  test("a Test Explorer run errors the item with the reason and its one remedy link", async function () {
+    const s = setup({ refusal })
+    const item = itemOf(s, exerciseAt(s))
+
+    await s.fake.profiles[0]?.runHandler(
+      new vscode.TestRunRequest([item]),
+      new vscode.CancellationTokenSource().token,
+    )
+
+    expect(s.runTests).not.toHaveBeenCalled()
+    const reported = finalStates(lastRun(s)).get(item.id)
+    expect(reported?.[0]).toBe("errored")
+    const message = messagesOf(reported)[0]?.message as vscode.MarkdownString
+    expect(message.value).toContain("Disable Cline for this workspace.")
+    expect(message.value).toContain(`[Show Cline](command:${SHOW_AI_USE_PROBLEM_COMMAND})`)
+    expect(message.isTrusted).toEqual({ enabledCommands: [SHOW_AI_USE_PROBLEM_COMMAND] })
+  })
+
+  test("a run the Run Tests command asks for is refused before any test run starts", async function () {
+    const s = setup({ refusal })
+
+    const result = await s.controller.runExercise(exerciseAt(s))
+
+    expect(result.err && result.val).toBe(refusal)
+    expect(s.fake.runs).toEqual([])
+    expect(s.runTests).not.toHaveBeenCalled()
+  })
+
+  test("exam mode still skips the run without asking", async function () {
+    const s = setup({ examMode: true })
+    const refusalAsked = vi.spyOn(s.actionContext.startup.aiUseGate, "refusal")
+
+    await s.fake.profiles[0]?.runHandler(
+      new vscode.TestRunRequest([itemOf(s, exerciseAt(s))]),
+      new vscode.CancellationTokenSource().token,
+    )
+
+    expect(finalStates(lastRun(s)).get(itemOf(s, exerciseAt(s)).id)?.[0]).toBe("skipped")
+    expect(refusalAsked).not.toHaveBeenCalled()
   })
 })
