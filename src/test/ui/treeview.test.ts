@@ -183,16 +183,17 @@ suite("CoursesTree", function () {
     ])
   })
 
-  test("a course item carries its points, backend, id and course details command", function () {
+  // A click expands the course, so Course Details is left to the context menu.
+  test("a course item carries its points, backend and id, and no click command", function () {
     const item = first(show(tmcCourse())) as CourseTreeItem
 
     expect(item.description).toBe("12/40 · TMC Server")
+    expect(item.accessibilityInformation?.label).toBe(
+      "The Python Course, 12 of 40 points, TMC Server",
+    )
     expect(item.contextValue).toBe("course.tmc")
     expect(item.courseId).toEqual(CourseIdentifier.from(1))
-    expect(item.command).toMatchObject({
-      command: "tmc.courseDetails",
-      arguments: [CourseIdentifier.from(1)],
-    })
+    expect(item.command).toBeUndefined()
     expect((item.iconPath as vscode.ThemeIcon).id).toBe("book")
   })
 
@@ -246,7 +247,13 @@ suite("CoursesTree", function () {
     expect(tree.getParent(parts[0] as CoursesTreeItem)).toBe(course)
   })
 
-  test("a course with a single part lists its exercises directly", function () {
+  test("a tmc course with one part so far still shows the part", function () {
+    const [course] = show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))
+
+    expect(tree.getChildren(course).map((child) => child.label)).toEqual(["Part 1"])
+  })
+
+  test("a course whose exercises name no part lists them directly", function () {
     const [course] = show(
       moocCourse({
         exercises: [

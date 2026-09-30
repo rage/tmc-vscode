@@ -36,6 +36,8 @@ export interface PartView {
   nextDeadline: Date | null
   /** Every part of a short course starts expanded; in a longer one only the next due. */
   isDefaultOpen: boolean
+  /** Holds the exercises whose slug names no part, under the course's title. */
+  isUngrouped: boolean
 }
 
 /** What the host knows about a course's exercises beyond its stored data and the disk. */
@@ -71,9 +73,13 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
   }
 
   const exercisesByPart = new Map<string, ExerciseView[]>()
+  let ungroupedPartName: string | undefined
   for (const ex of LocalCourseData.getExercises(course)) {
     const slug = LocalCourseExercise.getSlug(ex)
-    const { partName, name } = placeExercise(course, slug, courseTitle)
+    const { partName, name, isUngrouped } = placeExercise(course, slug, courseTitle)
+    if (isUngrouped) {
+      ungroupedPartName = partName
+    }
     const id = LocalCourseExercise.getId(ex)
     const key = exerciseKey(id)
     const onDisk = onDiskBySlug.get(slug)
@@ -117,6 +123,7 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
   return parts.map((part) => ({
     ...part,
     isDefaultOpen: parts.length <= MAX_PARTS_ALL_OPEN || part.name === openPartName,
+    isUngrouped: part.name === ungroupedPartName,
   }))
 }
 
@@ -174,13 +181,13 @@ function placeExercise(
   course: LocalCourseData,
   slug: string,
   courseTitle: string,
-): { partName: string; name: string } {
-  const ungrouped = { partName: courseTitle, name: slug }
+): { partName: string; name: string; isUngrouped: boolean } {
+  const ungrouped = { partName: courseTitle, name: slug, isUngrouped: true }
   return match(
     course,
     () => {
       const [, partName, name] = slug.match(/^(\w+)-(.+)$/) ?? []
-      return partName && name ? { partName, name } : ungrouped
+      return partName && name ? { partName, name, isUngrouped: false } : ungrouped
     },
     () => ungrouped,
   )

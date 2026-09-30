@@ -128,7 +128,10 @@ suite("buildCourseView", () => {
       ]),
     )
 
-    expect(parts.map((part) => part.name)).toEqual(["part01", "part02"])
+    expect(parts.map((part) => [part.name, part.isUngrouped])).toEqual([
+      ["part01", false],
+      ["part02", false],
+    ])
     expect(parts[0]?.exercises.map((ex) => ex.name)).toEqual(["01_hello", "02_world"])
     expect(parts[0]?.exercises.map((ex) => ex.slug)).toEqual(["part01-01_hello", "part01-02_world"])
   })
@@ -215,7 +218,7 @@ suite("buildCourseView", () => {
   test("names a tmc exercise without a part prefix by its whole slug", () => {
     const parts = build(course([exercise({ name: "Tehtävä-1" })]))
 
-    expect(parts.map((part) => part.name)).toEqual(["Python Course"])
+    expect(parts.map((part) => [part.name, part.isUngrouped])).toEqual([["Python Course", true]])
     expect(parts[0]?.exercises[0]?.name).toBe("Tehtävä-1")
   })
 
@@ -228,7 +231,7 @@ suite("buildCourseView", () => {
       ]),
     )
 
-    expect(parts.map((part) => part.name)).toEqual(["MOOC Python"])
+    expect(parts.map((part) => [part.name, part.isUngrouped])).toEqual([["MOOC Python", true]])
     expect(parts[0]?.exercises.map((ex) => ex.name)).toEqual([
       "python3_simple",
       "Hello world",

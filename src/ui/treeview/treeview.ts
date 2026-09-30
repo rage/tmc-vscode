@@ -48,7 +48,7 @@ export type CoursesTreeItem = CourseTreeItem | PartTreeItem | ExerciseTreeItem
 export class CourseTreeItem extends vscode.TreeItem {
   public readonly courseId: CourseIdentifier
   public readonly parent: undefined = undefined
-  /** The course's parts, or its exercises directly when it has only one part. */
+  /** The course's parts, or its exercises directly when none of them names a part. */
   public readonly children: (PartTreeItem | ExerciseTreeItem)[]
 
   public constructor(course: LocalCourseData, parts: PartView[], context: RenderContext) {
@@ -98,13 +98,18 @@ export class CourseTreeItem extends vscode.TreeItem {
       }
     }
     this.tooltip = tooltip
-    this.command = {
-      command: "tmc.courseDetails",
-      title: "Go To Course Details",
-      arguments: [this.courseId],
+    this.accessibilityInformation = {
+      label: [
+        title,
+        ...(points ? [`${awardedPoints} of ${availablePoints} points`] : []),
+        backend,
+        ...(disabled ? ["disabled"] : []),
+        ...(newCount > 0 ? [countOf(newCount, "new exercise")] : []),
+        ...(updateCount > 0 ? [countOf(updateCount, "exercise update")] : []),
+      ].join(", "),
     }
     this.children =
-      parts.length === 1
+      parts.length === 1 && parts[0]?.isUngrouped
         ? exercises.map((ex) => new ExerciseTreeItem(this, this.courseId, ex, context))
         : parts.map((part) => new PartTreeItem(this, part, context))
   }
@@ -143,6 +148,13 @@ export class PartTreeItem extends vscode.TreeItem {
     ]
       .filter((text) => text !== undefined)
       .join(" · ")
+    this.accessibilityInformation = {
+      label: [
+        label,
+        `${passed} of ${part.exercises.length} passed`,
+        ...(nextDeadline ? [`next deadline ${nextDeadline}`] : []),
+      ].join(", "),
+    }
     this.iconPath = new vscode.ThemeIcon(
       passed === part.exercises.length ? "pass-filled" : "list-tree",
       passed === part.exercises.length ? new vscode.ThemeColor("testing.iconPassed") : undefined,
