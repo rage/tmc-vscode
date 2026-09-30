@@ -42,6 +42,7 @@ const expectedCommands = [
   "tmc.myCourses",
   "tmc.openCourseWorkspace",
   "tmc.removeCourse",
+  "tmc.revealInCoursesView",
   "tmc.settings",
   "tmc.openTMCExercisesFolder",
   "tmc.pasteExercise",
@@ -676,6 +677,26 @@ suite("registered command handlers", function () {
 
     expect(executeCommand).toHaveBeenCalledWith("tmcView.focus")
     expect(renderMain).not.toHaveBeenCalled()
+  })
+
+  test("tmc.revealInCoursesView reveals the exercise it ran on, else says it is not listed", async function () {
+    const { handlers, actionContext } = registerAndCollect()
+    if (!isReady(actionContext)) {
+      throw new Error("expected a ready context")
+    }
+    const revealExercise = vi.mocked(actionContext.ui.treeDP.revealExercise)
+    const uri = vscode.Uri.file("/exercises/part01-01_hello/src/hello.py")
+
+    revealExercise.mockResolvedValue(true)
+    await handlers.get("tmc.revealInCoursesView")?.(uri)
+    expect(revealExercise).toHaveBeenCalledWith(uri)
+    expect(actionContext.dialog.statusMessage).not.toHaveBeenCalled()
+
+    revealExercise.mockResolvedValue(false)
+    await handlers.get("tmc.revealInCoursesView")?.(uri)
+    expect(actionContext.dialog.statusMessage).toHaveBeenCalledWith(
+      "This exercise is not in the Courses view.",
+    )
   })
 
   test("tmc.showWelcome opens the walkthrough package.json contributes", async function () {

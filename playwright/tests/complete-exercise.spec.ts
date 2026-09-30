@@ -74,12 +74,28 @@ for (const exercise of exercises) {
       await expect(contents).toBeVisible()
     })
 
+    await vsCodeTest.step("reveal the exercise in the Courses view", async () => {
+      await page.keyboard.press("F1")
+      const palette = page.locator(".quick-input-widget")
+      await palette.locator("input").fill(">TestMyCode: Reveal in Courses View")
+      await palette
+        .locator(".quick-input-list .monaco-list-row")
+        .filter({ hasText: "Reveal in Courses View" })
+        .first()
+        .click()
+      // A monaco list keeps DOM focus on itself and marks the focused row with a class.
+      await expect(coursesView.tree()).toBeFocused()
+      const row = coursesView.row(exercise.name)
+      await expect(row).toHaveClass(/\bfocused\b/)
+      await expect(row).toHaveAttribute("aria-selected", "true")
+    })
+
     await vsCodeTest.step("run tests", async () => {
       await page.getByText(exercise.file_contents).click()
       // The editor-title action is contributed under `test-my-code:ActiveEditorIsExercise`
       // (package.json), so it renders only once the extension has recognised the
       // open exercise.
-      const runTests = page.getByLabel("Run Tests", { exact: true })
+      const runTests = editorActions(page).getByLabel("Run Tests", { exact: true })
       await expect(runTests).toBeVisible()
       await runTests.click()
       if (exercise.expected_result === "pass") {
@@ -101,13 +117,18 @@ for (const exercise of exercises) {
       if (exercise.expected_result === "pass") {
         await allPassedToast(page).getByRole("button", { name: "Submit" }).click()
       } else {
-        await page.getByLabel("Submit Solution", { exact: true }).click()
+        await editorActions(page).getByLabel("Submit Solution", { exact: true }).click()
       }
       await expect(
         testSubmissionPage.getWebview().getByRole("heading", { name: expectedString }),
       ).toBeVisible()
     })
   })
+}
+
+/** The editor title bar's actions; the Courses view's exercise rows carry the same labels. */
+function editorActions(page: Page): Locator {
+  return page.getByRole("toolbar", { name: "Editor actions" })
 }
 
 /** The notification that offers Submit after an all-passing local run. */

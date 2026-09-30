@@ -481,6 +481,24 @@ suite("CoursesTree", function () {
 
       expect(view.reveal).not.toHaveBeenCalled()
     })
+
+    test("on request, opens even a hidden view and focuses the exercise's row", async function () {
+      view.visible = false
+
+      const isRevealed = await tree.revealExercise(
+        vscode.Uri.file("/exercises/tmc-slug/part01-01_hello/src/hello.py"),
+      )
+
+      expect(isRevealed).toBe(true)
+      const [item, options] = view.reveal.mock.calls[0] as [ExerciseTreeItem, object]
+      expect(item.label).toBe("01_hello")
+      expect(options).toEqual({ select: true, focus: true })
+    })
+
+    test("on request, reports a file no row holds", async function () {
+      expect(await tree.revealExercise(vscode.Uri.file("/home/student/notes.txt"))).toBe(false)
+      expect(view.reveal).not.toHaveBeenCalled()
+    })
   })
 
   test("a refresh re-renders the whole view", function () {

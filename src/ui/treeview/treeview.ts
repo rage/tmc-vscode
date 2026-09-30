@@ -386,16 +386,34 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
    */
   public async revealActiveExercise(): Promise<void> {
     const uri = vscode.window.activeTextEditor?.document.uri
-    const exercise = uri && this._source?.workspaceManager.getExerciseContaining(uri)
-    if (!exercise || !this._view.visible) {
-      return
-    }
-    const item = this._currentRoots()
-      .flatMap((child) => exerciseItems(child))
-      .find((candidate) => candidate.exerciseUri?.fsPath === exercise.uri.fsPath)
-    if (item) {
+    const item = uri && this._exerciseItemContaining(uri)
+    if (item && this._view.visible) {
       await this._view.reveal(item, { select: true, focus: false })
     }
+  }
+
+  /**
+   * Opens the view with the row of the exercise `uri` belongs to selected and focused.
+   *
+   * @returns false when no row shows that exercise.
+   */
+  public async revealExercise(uri: vscode.Uri): Promise<boolean> {
+    const item = this._exerciseItemContaining(uri)
+    if (!item) {
+      return false
+    }
+    await this._view.reveal(item, { select: true, focus: true })
+    return true
+  }
+
+  private _exerciseItemContaining(uri: vscode.Uri): ExerciseTreeItem | undefined {
+    const exercise = this._source?.workspaceManager.getExerciseContaining(uri)
+    if (!exercise) {
+      return undefined
+    }
+    return this._currentRoots()
+      .flatMap((child) => exerciseItems(child))
+      .find((candidate) => candidate.exerciseUri?.fsPath === exercise.uri.fsPath)
   }
 
   private _currentRoots(): CourseTreeItem[] {
