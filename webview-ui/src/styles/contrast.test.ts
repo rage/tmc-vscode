@@ -68,14 +68,11 @@ const PAIRINGS: Pairing[] = [
     background: "var(--vscode-button-secondaryBackground, #313131)",
     minimum: TEXT,
   },
-  ...(["passed", "failed", "unset", "warning"] as const).map((status) => ({
+  ...(["passed", "failed", "warning"] as const).map((status) => ({
     name: `${status} status icon`,
     foreground: `var(--tmc-status-${status})`,
     minimum: NON_TEXT,
   })),
-  { name: "info status icon", foreground: "var(--tmc-fg-info)", minimum: NON_TEXT },
-  { name: "error status icon", foreground: "var(--tmc-fg-error)", minimum: NON_TEXT },
-  { name: "muted status icon", foreground: "var(--tmc-fg-muted)", minimum: NON_TEXT },
   { name: "meter fill", foreground: "var(--tmc-meter-fill)", minimum: NON_TEXT },
   { name: "meter track outline", foreground: "var(--tmc-meter-track-border)", minimum: NON_TEXT },
   { name: "focus ring", foreground: "var(--tmc-focus-border)", minimum: NON_TEXT },
@@ -83,7 +80,6 @@ const PAIRINGS: Pairing[] = [
 
 /** Colour tokens no pairing covers, and why none has to. */
 const UNPAIRED_COLOUR_TOKENS: Record<string, string> = {
-  "--tmc-fg-disabled": "inactive controls are exempt from SC 1.4.3",
   "--tmc-surface-border": "decorative",
   "--tmc-overlay-border": "decorative",
   "--tmc-overlay-shadow": "decorative",

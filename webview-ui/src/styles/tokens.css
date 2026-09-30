@@ -22,15 +22,11 @@
 
   --tmc-fg: var(--vscode-foreground);
   --tmc-fg-muted: var(--vscode-descriptionForeground);
-  --tmc-fg-disabled: var(--vscode-disabledForeground);
-  --tmc-fg-error: var(--vscode-errorForeground);
-  --tmc-fg-info: var(--vscode-editorInfo-foreground, var(--vscode-foreground));
 
   /* Icon colours only: these fail text contrast on light themes. charts.green comes first
      because testing.iconPassed stays #73c991, 2:1 on white, in light themes. */
   --tmc-status-passed: var(--vscode-charts-green, var(--vscode-testing-iconPassed));
   --tmc-status-failed: var(--vscode-testing-iconFailed, var(--vscode-errorForeground));
-  --tmc-status-unset: var(--vscode-testing-iconUnset, var(--vscode-disabledForeground));
   --tmc-status-warning: var(--vscode-editorWarning-foreground);
 
   --tmc-surface-border: var(
@@ -62,7 +58,7 @@
     --vscode-list-warningForeground,
     var(--vscode-editorWarning-foreground)
   );
-  --tmc-notice-info-accent: var(--tmc-fg-info);
+  --tmc-notice-info-accent: var(--vscode-editorInfo-foreground, var(--vscode-foreground));
 
   --tmc-section-header-background: var(--vscode-sideBarSectionHeader-background, transparent);
   --tmc-section-header-foreground: var(--vscode-sideBarSectionHeader-foreground, inherit);
