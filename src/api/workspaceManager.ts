@@ -753,3 +753,16 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
   }
 }
+
+/**
+ * The exercise an exercise command targets: the one `resource` is in, else the active
+ * editor's when `resource` is omitted.
+ */
+export function exerciseFor(
+  workspaceManager: Pick<WorkspaceManager, "activeExercise" | "getExerciseContaining">,
+  resource: vscode.Uri | undefined,
+): WorkspaceExercise | undefined {
+  return resource
+    ? workspaceManager.getExerciseContaining(resource)
+    : workspaceManager.activeExercise
+}

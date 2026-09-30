@@ -5,6 +5,7 @@ import type * as vscode from "vscode"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
 import type { WorkspaceExercise } from "../api/workspaceManager"
+import { exerciseFor } from "../api/workspaceManager"
 import { Logger } from "../utilities"
 
 /**
@@ -30,9 +31,7 @@ export async function runForExercise<T>(
   const { workspaceManager } = actionContext.startup
   Logger.info(label)
 
-  const exercise = resource
-    ? workspaceManager.getExerciseContaining(resource)
-    : workspaceManager.activeExercise
+  const exercise = exerciseFor(workspaceManager, resource)
   if (!exercise) {
     const error = new Error("The active editor is not part of a course exercise.")
     dialog.errorNotification(error.message)

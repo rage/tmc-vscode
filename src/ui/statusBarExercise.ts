@@ -5,6 +5,7 @@ import type { Item } from "../api/dialog"
 import { separator } from "../api/dialog"
 import type WorkspaceManager from "../api/workspaceManager"
 import type { WorkspaceExercise } from "../api/workspaceManager"
+import { exerciseFor } from "../api/workspaceManager"
 import type { UserData } from "../config/userdata"
 import { LocalCourseExercise } from "../shared/shared"
 import type { ExerciseOperationKind, ExerciseOperations } from "./exerciseOperations"
@@ -136,9 +137,7 @@ export async function showExerciseActions(
   isLoggedIn: boolean,
   resource?: vscode.Uri,
 ): Promise<void> {
-  const exercise = resource
-    ? sources.workspaceManager.getExerciseContaining(resource)
-    : sources.workspaceManager.activeExercise
+  const exercise = exerciseFor(sources.workspaceManager, resource)
   if (!exercise) {
     return
   }
