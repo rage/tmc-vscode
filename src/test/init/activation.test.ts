@@ -394,6 +394,26 @@ suite("activation with unusable storage", function () {
   })
 })
 
+suite("activation that throws", function () {
+  beforeEach(resetActivationRecording)
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    vi.restoreAllMocks()
+  })
+
+  test("leaves the Courses view on the recovery content, not on starting up", async function () {
+    vi.spyOn(Logger, "banner").mockImplementation(() => {
+      throw new Error("boom")
+    })
+    vi.spyOn(Logger, "show").mockImplementation(() => {})
+
+    await activate(createContext())
+
+    expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(true)
+  })
+})
+
 suite("initialization error deduplication", function () {
   beforeEach(resetActivationRecording)
 
