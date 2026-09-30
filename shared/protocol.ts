@@ -116,6 +116,19 @@ type _panelTypesMatch = Equal<Panel["type"], PanelType> extends true ? true : ne
 const _panelTypesMatch: _panelTypesMatch = true
 
 /**
+ * What a webview saves with `setState`: UI state the host does not hold, such as scroll
+ * position, open sections and drafts. VS Code hands it back to the document it reloads a
+ * hidden panel with.
+ */
+export const WebviewStateSchema = z.object({
+  /** The screen `ui` belongs to, so another screen does not inherit it. */
+  screen: z.string(),
+  ui: z.record(z.string(), z.unknown()),
+})
+
+export type WebviewState = z.infer<typeof WebviewStateSchema>
+
+/**
  * A failure flattened for display in a webview.
  *
  * The host-to-webview bridge serializes a message as JSON and `Error.message` is

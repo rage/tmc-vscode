@@ -4,7 +4,7 @@ import { afterEach, vi } from "vitest"
 import { z } from "zod"
 
 import "../elements"
-import type { RequestMessage, RequestType, WebviewError } from "../shared/shared"
+import type { RequestMessage, RequestType, WebviewError, WebviewState } from "../shared/shared"
 import { ExtensionToWebviewSchema } from "../shared/shared"
 
 // The webview wrapper (src/utilities/vscode.ts) calls the global
@@ -12,7 +12,12 @@ import { ExtensionToWebviewSchema } from "../shared/shared"
 // minimal in-memory implementation whose postMessage is a spy the tests read.
 interface MockVsCodeApi {
   postMessage: ReturnType<typeof vi.fn>
+  getState: () => unknown
+  setState: (state: unknown) => void
 }
+
+// What the webview last saved with `setState`, which VS Code keeps across a document reload.
+let savedState: unknown
 
 // VS Code structured-clones every value passed to `postMessage`, so a non-cloneable one (an
 // unsnapshotted `$state` proxy, a function) fails there with an opaque `DataCloneError`. Cloning
@@ -21,10 +26,17 @@ const vsCodeApi: MockVsCodeApi = {
   postMessage: vi.fn((message: unknown) => {
     structuredClone(message)
   }),
+  getState: () => savedState,
+  setState: (state: unknown) => {
+    savedState = structuredClone(state)
+  },
 }
 
 ;(globalThis as unknown as { acquireVsCodeApi: () => MockVsCodeApi }).acquireVsCodeApi = () =>
   vsCodeApi
+
+// Not a static import, which would be hoisted above the stub and call `acquireVsCodeApi()` first.
+const { leaveScreen } = await import("../utilities/uiState.svelte")
 
 // Svelte 5 transitions drive their timing through `element.animate`, which jsdom does not
 // implement; stub it so components using `transition:*` render instead of throwing.
@@ -136,7 +148,23 @@ export function replyToRequest(
   })
 }
 
+/** What the webview has saved with `setState`, as VS Code would hand it to a reloaded document. */
+export function savedWebviewState(): WebviewState | undefined {
+  return savedState as WebviewState | undefined
+}
+
+/**
+ * Unmounts everything and starts the next render as a document VS Code reloaded a hidden panel
+ * with: the saved state stays, everything else is gone.
+ */
+export function reloadDocument(): void {
+  cleanup()
+  leaveScreen()
+}
+
 afterEach(() => {
   cleanup()
+  leaveScreen()
+  savedState = undefined
   vsCodeApi.postMessage.mockClear()
 })

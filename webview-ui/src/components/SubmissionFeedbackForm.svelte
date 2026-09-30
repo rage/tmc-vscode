@@ -7,6 +7,7 @@
 
 <script lang="ts">
   import type { FeedbackQuestion } from "../shared/shared"
+  import { uiState } from "../utilities/uiState.svelte"
   import Button from "./Button.svelte"
   import Notice from "./Notice.svelte"
 
@@ -24,11 +25,19 @@
   let { questions, status, error, onsend }: Props = $props()
 
   const formId = $props.id()
-  let answers = $state<Record<number, string>>({})
+  // Keyed by question id; a draft the student would lose to a hidden panel otherwise.
+  const answers = uiState<Record<string, string>>("feedbackAnswers", {})
+
+  function setAnswer(questionId: number, answer: string): void {
+    answers.current = { ...answers.current, [questionId]: answer }
+  }
 
   const answered = $derived(
     questions
-      .map((question) => ({ questionId: question.id, answer: (answers[question.id] ?? "").trim() }))
+      .map((question) => ({
+        questionId: question.id,
+        answer: (answers.current[question.id] ?? "").trim(),
+      }))
       .filter(({ answer }) => answer !== ""),
   )
 
@@ -52,7 +61,7 @@
           <vscode-radio-group
             aria-labelledby={questionId}
             onchange={(event: Event) => {
-              answers[question.id] = (event.target as HTMLInputElement).value
+              setAnswer(question.id, (event.target as HTMLInputElement).value)
             }}
           >
             {#each scale(question) as value (value)}
@@ -60,7 +69,7 @@
                 name={questionId}
                 value={String(value)}
                 label={String(value)}
-                checked={answers[question.id] === String(value)}
+                checked={answers.current[question.id] === String(value)}
                 disabled={status === "sending"}
               ></vscode-radio>
             {/each}
@@ -69,10 +78,10 @@
           <vscode-textarea
             label={question.question}
             rows={3}
-            value={answers[question.id] ?? ""}
+            value={answers.current[question.id] ?? ""}
             disabled={status === "sending"}
             oninput={(event: Event) => {
-              answers[question.id] = (event.target as HTMLTextAreaElement).value
+              setAnswer(question.id, (event.target as HTMLTextAreaElement).value)
             }}
           ></vscode-textarea>
         {/if}

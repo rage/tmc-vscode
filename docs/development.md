@@ -176,9 +176,16 @@ result and the initialization error help.
 ## Webview panels
 
 The extension host is authoritative for panel state. `TmcPanel` keeps the last
-panel it posted and replays it when a webview process reloads, so the webview
-never persists anything itself — `VSCodeAPIWrapper` exposes only `postMessage`,
-and its `WebviewApi<never>` says the webview's own state bag stays empty.
+panel it posted and the latest message of each type aimed at it, and replays them
+when the webview says `ready`. Panels do not use `retainContextWhenHidden`: VS Code
+destroys a hidden panel's document and loads a fresh one on reveal, which sends
+`ready` and is rendered from the host again. A reply to a request the destroyed
+document made is dropped; the new document asks again.
+
+What only the webview knows — scroll position, open disclosures, a feedback draft,
+a paste link — goes in the webview state bag through `uiState`
+(`webview-ui/src/utilities/uiState.svelte.ts`). It is keyed by screen, so a
+different course or a new submission starts clean.
 
 **Panels are deliberately not restored across a window reload.** No
 `WebviewPanelSerializer` is registered: after a reload the TestMyCode panel is
