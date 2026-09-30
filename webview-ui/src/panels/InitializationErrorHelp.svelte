@@ -1,9 +1,12 @@
 <script lang="ts">
+  import { onMount } from "svelte"
+
   import Button from "../components/Button.svelte"
   import CodeBlock from "../components/CodeBlock.svelte"
   import Disclosure from "../components/Disclosure.svelte"
   import PanelHeader from "../components/PanelHeader.svelte"
   import type { InitializationErrorHelpPanel, WebviewToExtension } from "../shared/shared"
+  import { restoreScroll } from "../utilities/uiState.svelte"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -32,6 +35,8 @@
       return failure ? [{ key, label, ...failure, hint: key === "tmc" ? cliHint : undefined }] : []
     })
   })
+
+  onMount(restoreScroll)
 
   function runCommand(command: RunnableCommand) {
     vscode.postMessage({ type: "runCommand", command })

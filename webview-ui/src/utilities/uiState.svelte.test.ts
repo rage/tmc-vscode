@@ -5,18 +5,12 @@ import type { Panel } from "../shared/shared"
 import { makeMoocKind, makeTmcKind } from "../shared/shared"
 import { initializationErrorHelpPanel } from "../test/fixtures"
 import { dispatchToWebview, reloadDocument, savedWebviewState } from "../test/setup"
-import { enterScreen, uiState } from "./uiState.svelte"
+import { enterScreen, restoreScroll, uiState } from "./uiState.svelte"
 
 const courseDetails: Panel = {
   id: 4,
   type: "CourseDetails",
   courseId: makeTmcKind({ courseId: 42 }),
-}
-
-function nextFrame(): Promise<void> {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => resolve())
-  })
 }
 
 // The state bag `acquireVsCodeApi()` hands out, written here as another build could have left it.
@@ -87,52 +81,71 @@ suite("UI state across a document reload", () => {
   })
 })
 
+/** Scrolls the page as the student would, firing the event the page sees. */
+function scrollWindowTo(scrollY: number): void {
+  vi.spyOn(window, "scrollY", "get").mockReturnValue(scrollY)
+  window.dispatchEvent(new Event("scroll"))
+}
+
 suite("scroll position across a document reload", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
-  test("saves where the student scrolled to", async () => {
+  test("saves where the student scrolled to once the scrolling settles", () => {
     enterScreen(courseDetails)
-    vi.spyOn(window, "scrollY", "get").mockReturnValue(240)
 
-    window.dispatchEvent(new Event("scroll"))
-    await nextFrame()
+    scrollWindowTo(120)
+    scrollWindowTo(240)
+    expect(savedWebviewState()?.ui.scrollY).toBeUndefined()
+    vi.advanceTimersByTime(1000)
 
     expect(savedWebviewState()?.ui.scrollY).toBe(240)
   })
 
-  test("scrolls back there on the same screen", async () => {
-    seedRawState({ screen: "CourseDetails:tmc:42", ui: { scrollY: 240 } })
-    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => {})
-
+  test("saves a scroll still settling when the document is hidden", () => {
     enterScreen(courseDetails)
-    await nextFrame()
 
-    expect(scrollTo).toHaveBeenCalledWith(0, 240)
-  })
-
-  test("does not let the scrolls of a restore still under way overwrite its target", async () => {
-    seedRawState({ screen: "CourseDetails:tmc:42", ui: { scrollY: 240 } })
-    vi.spyOn(window, "scrollTo").mockImplementation(() => {})
-    vi.spyOn(window, "scrollY", "get").mockReturnValue(80)
-
-    enterScreen(courseDetails)
-    window.dispatchEvent(new Event("scroll"))
-    await nextFrame()
+    scrollWindowTo(240)
+    window.dispatchEvent(new Event("pagehide"))
 
     expect(savedWebviewState()?.ui.scrollY).toBe(240)
   })
 
-  test("gives the restore up once the student scrolls themselves", async () => {
+  test("scrolls back there on the same screen once its content is in", () => {
     seedRawState({ screen: "CourseDetails:tmc:42", ui: { scrollY: 240 } })
-    vi.spyOn(window, "scrollTo").mockImplementation(() => {})
-    vi.spyOn(window, "scrollY", "get").mockReturnValue(80)
+    const scroll = vi.spyOn(window, "scrollTo").mockImplementation(() => {})
 
     enterScreen(courseDetails)
-    window.dispatchEvent(new WheelEvent("wheel"))
-    window.dispatchEvent(new Event("scroll"))
-    await nextFrame()
+    expect(scroll).not.toHaveBeenCalled()
+    restoreScroll()
+
+    expect(scroll).toHaveBeenCalledWith(0, 240)
+  })
+
+  test("does not let scrolls before the restore overwrite its target", () => {
+    seedRawState({ screen: "CourseDetails:tmc:42", ui: { scrollY: 240 } })
+    vi.spyOn(window, "scrollTo").mockImplementation(() => {})
+
+    enterScreen(courseDetails)
+    scrollWindowTo(80)
+    vi.advanceTimersByTime(1000)
+
+    expect(savedWebviewState()?.ui.scrollY).toBe(240)
+  })
+
+  test("saves the student's scrolls after the restore", () => {
+    seedRawState({ screen: "CourseDetails:tmc:42", ui: { scrollY: 240 } })
+    vi.spyOn(window, "scrollTo").mockImplementation(() => {})
+
+    enterScreen(courseDetails)
+    restoreScroll()
+    scrollWindowTo(80)
+    vi.advanceTimersByTime(1000)
 
     expect(savedWebviewState()?.ui.scrollY).toBe(80)
   })

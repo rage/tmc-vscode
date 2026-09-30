@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tick } from "svelte"
+
   import Button from "../components/Button.svelte"
   import CodeBlock from "../components/CodeBlock.svelte"
   import Disclosure from "../components/Disclosure.svelte"
@@ -14,6 +16,7 @@
   import type { ExerciseSubmissionPanel, FeedbackAnswer, SubmissionView } from "../shared/shared"
   import { announce } from "../utilities/a11y.svelte"
   import { addMessageListener, createRequester } from "../utilities/script"
+  import { restoreScroll } from "../utilities/uiState.svelte"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -47,6 +50,9 @@
   addMessageListener(panel, (message) => {
     const previous = view
     view = message.view
+    if (previous === undefined) {
+      void tick().then(restoreScroll)
+    }
     const latestStep = view.progressSteps.at(-1)
     if (previous?.phase !== view.phase || previous.headline !== view.headline) {
       announce(view.headline)

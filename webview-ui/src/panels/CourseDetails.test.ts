@@ -3,7 +3,13 @@ import { render, screen } from "@testing-library/svelte"
 import type { CourseDetailsPanel } from "../shared/shared"
 import { makeMoocKind, makeTmcKind } from "../shared/shared"
 import { MOOC_INSTANCE_ID, moocLocalCourse, tmcExercise, tmcLocalCourse } from "../test/fixtures"
-import { dispatchToWebview as dispatch, postedMessages, replyToRequest } from "../test/setup"
+import {
+  dispatchToWebview as dispatch,
+  postedMessages,
+  reloadDocument,
+  replyToRequest,
+} from "../test/setup"
+import { enterScreen } from "../utilities/uiState.svelte"
 import CourseDetails from "./CourseDetails.svelte"
 
 function tmcPanel(): CourseDetailsPanel {
@@ -31,6 +37,25 @@ suite("CourseDetails panel", () => {
       requestId: expect.any(Number),
       sourcePanel: { id: panel.id, type: panel.type, courseId: panel.courseId },
     })
+  })
+
+  test("scrolls back to where the student left it once the course is in", async () => {
+    const panel = tmcPanel()
+    enterScreen(panel)
+    render(CourseDetails, { props: { panel } })
+    vi.spyOn(window, "scrollY", "get").mockReturnValue(300)
+    window.dispatchEvent(new Event("scroll"))
+    window.dispatchEvent(new Event("pagehide"))
+    reloadDocument()
+    const scroll = vi.spyOn(window, "scrollTo").mockImplementation(() => {})
+
+    enterScreen(panel)
+    render(CourseDetails, { props: { panel } })
+    expect(scroll).not.toHaveBeenCalled()
+    replyToRequest("requestCourseDetailsData", { ok: true, value: tmcLocalCourse() })
+
+    await vi.waitFor(() => expect(scroll).toHaveBeenCalledWith(0, 300))
+    vi.restoreAllMocks()
   })
 
   test("renders the course the host answers its request with", async () => {

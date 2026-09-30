@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from "svelte"
+  import { onMount, tick, untrack } from "svelte"
 
   import Button from "../components/Button.svelte"
   import CodeBlock from "../components/CodeBlock.svelte"
@@ -11,6 +11,7 @@
   import { unwrap } from "../shared/shared"
   import { announce, reducedMotion } from "../utilities/a11y.svelte"
   import { addMessageListener, createRequester, HOST_STATE_TIMEOUT_MS } from "../utilities/script"
+  import { restoreScroll } from "../utilities/uiState.svelte"
   import { vscode } from "../utilities/vscode"
 
   interface Props {
@@ -59,6 +60,8 @@
     } else {
       dataError = outcome.error
     }
+    await tick()
+    restoreScroll()
   }
 
   onMount(() => {

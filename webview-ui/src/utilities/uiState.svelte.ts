@@ -9,15 +9,15 @@ import { vscode } from "./vscode"
 
 const SCROLL_KEY = "scrollY"
 
-// Content arrives from the host after the screen mounts; past this, a restore that has not
-// landed is given up rather than jumping the page while the student reads it.
-const SCROLL_RESTORE_TIMEOUT_MS = 3_000
+// Saves a scroll once it settles: each save copies the screen's whole state to the host.
+const SCROLL_SAVE_DELAY_MS = 200
 
 let screen: string | undefined
 let route: RestorableRoute | undefined
 let values: Record<string, unknown> = {}
+// Where the current screen is to scroll back to once its content has rendered.
 let pendingScrollY: number | undefined
-let pendingScrollTimeout: ReturnType<typeof setTimeout> | undefined
+let scrollSaveTimeout: ReturnType<typeof setTimeout> | undefined
 let isScrollTracked = false
 
 /** The key of `panel`'s saved UI state; panels sharing a key take up each other's state. */
@@ -55,8 +55,8 @@ function save(): void {
  * Makes `panel` the screen {@link uiState} reads and writes.
  *
  * Call before the panel's components are created. What was saved for the same screen is kept,
- * including the scroll position, which is restored once the content is tall enough; any other
- * screen's state is dropped.
+ * including the scroll position, which {@link restoreScroll} returns to; any other screen's
+ * state is dropped.
  */
 export function enterScreen(panel: Panel): void {
   const next = screenOf(panel)
@@ -66,9 +66,23 @@ export function enterScreen(panel: Panel): void {
   route = restorableRouteOf(panel)
   save()
   trackScroll()
+  clearTimeout(scrollSaveTimeout)
+  scrollSaveTimeout = undefined
   const savedScrollY = values[SCROLL_KEY]
-  setPendingScroll(typeof savedScrollY === "number" && savedScrollY > 0 ? savedScrollY : undefined)
-  requestAnimationFrame(tryRestoreScroll)
+  pendingScrollY = typeof savedScrollY === "number" && savedScrollY > 0 ? savedScrollY : undefined
+}
+
+/**
+ * Scrolls back to where the student left the current screen.
+ *
+ * A screen calls it once, when its content has rendered: before that the saved position can
+ * lie past the end of the page, so scrolls are not saved until then.
+ */
+export function restoreScroll(): void {
+  if (pendingScrollY !== undefined) {
+    window.scrollTo(0, pendingScrollY)
+    pendingScrollY = undefined
+  }
 }
 
 /** Forgets the current screen and its UI state, as a newly loaded document starts out. */
@@ -76,7 +90,7 @@ export function leaveScreen(): void {
   screen = undefined
   route = undefined
   values = {}
-  setPendingScroll(undefined)
+  pendingScrollY = undefined
 }
 
 /**
@@ -116,22 +130,12 @@ function isSameKind(saved: unknown, initial: unknown): boolean {
   return typeof saved === typeof initial && Array.isArray(saved) === Array.isArray(initial)
 }
 
-function setPendingScroll(scrollY: number | undefined): void {
-  clearTimeout(pendingScrollTimeout)
-  pendingScrollY = scrollY
-  pendingScrollTimeout =
-    scrollY === undefined
-      ? undefined
-      : setTimeout(() => setPendingScroll(undefined), SCROLL_RESTORE_TIMEOUT_MS)
-}
-
-function tryRestoreScroll(): void {
-  if (pendingScrollY === undefined) {
-    return
-  }
-  window.scrollTo(0, pendingScrollY)
-  if (Math.abs(window.scrollY - pendingScrollY) < 1) {
-    setPendingScroll(undefined)
+function saveScroll(): void {
+  clearTimeout(scrollSaveTimeout)
+  scrollSaveTimeout = undefined
+  if (pendingScrollY === undefined && screen !== undefined) {
+    values[SCROLL_KEY] = window.scrollY
+    save()
   }
 }
 
@@ -140,26 +144,24 @@ function trackScroll(): void {
     return
   }
   isScrollTracked = true
-  let isScrollSaveQueued = false
-  window.addEventListener("scroll", () => {
-    if (isScrollSaveQueued) {
-      return
+  window.addEventListener(
+    "scroll",
+    () => {
+      clearTimeout(scrollSaveTimeout)
+      scrollSaveTimeout = setTimeout(saveScroll, SCROLL_SAVE_DELAY_MS)
+    },
+    { passive: true },
+  )
+  // VS Code destroys a hidden panel's document without waiting for a delayed save.
+  const flushScroll = (): void => {
+    if (scrollSaveTimeout !== undefined) {
+      saveScroll()
     }
-    isScrollSaveQueued = true
-    requestAnimationFrame(() => {
-      isScrollSaveQueued = false
-      // Scrolls clamped short of the target while the content is still arriving are not the
-      // student's.
-      if (pendingScrollY === undefined && screen !== undefined) {
-        values[SCROLL_KEY] = window.scrollY
-        save()
-      }
-    })
+  }
+  window.addEventListener("pagehide", flushScroll)
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      flushScroll()
+    }
   })
-  for (const type of ["wheel", "keydown", "pointerdown", "touchstart"]) {
-    window.addEventListener(type, () => setPendingScroll(undefined), { passive: true })
-  }
-  if (typeof ResizeObserver === "function") {
-    new ResizeObserver(tryRestoreScroll).observe(document.body)
-  }
 }
