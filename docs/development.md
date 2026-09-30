@@ -187,13 +187,12 @@ a paste link — goes in the webview state bag through `uiState`
 (`webview-ui/src/utilities/uiState.svelte.ts`). It is keyed by screen, so a
 different course or a new submission starts clean.
 
-**Panels are deliberately not restored across a window reload.** No
-`WebviewPanelSerializer` is registered: after a reload the TestMyCode panel is
-gone and the user reopens it from the Courses view or the command palette. Making it
-survive would mean persisting panel state where the extension host cannot see it
-and reconstructing it from data that may since have changed; reopening is one
-click. If that changes, register the serializer in `activateInner` and validate
-the restored state before rendering it.
+The main panel survives a window reload: `TmcPanel.registerSerializer` registers a
+`WebviewPanelSerializer` for `tmc.mainPanel` (activated by `onWebviewPanel:tmc.mainPanel`),
+which reads the screen the webview saved in its state bag, validates it, and reopens
+Course Details only if the course is still stored. A panel it cannot reopen is closed. The
+side panel (`tmc.sidePanel`) has no serializer: a submission's view lives only in the
+extension host's memory.
 
 ## Operations and entry points
 

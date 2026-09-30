@@ -3,6 +3,7 @@ import { render } from "@testing-library/svelte"
 import App from "../App.svelte"
 import type { Panel } from "../shared/shared"
 import { makeMoocKind, makeTmcKind } from "../shared/shared"
+import { tmcLocalCourse, tmcLocalExercise } from "../test/fixtures"
 import { dispatchToWebview, reloadDocument, savedWebviewState } from "../test/setup"
 import { enterScreen, uiState } from "./uiState.svelte"
 
@@ -82,7 +83,7 @@ suite("UI state across a document reload", () => {
     enterScreen(courseDetails)
 
     expect(uiState("showPassedTests", false).current).toBe(false)
-    expect(savedWebviewState()).toEqual({ screen: "CourseDetails:tmc:42", ui: {} })
+    expect(savedWebviewState()).toMatchObject({ screen: "CourseDetails:tmc:42", ui: {} })
   })
 })
 
@@ -134,6 +135,30 @@ suite("scroll position across a document reload", () => {
     await nextFrame()
 
     expect(savedWebviewState()?.ui.scrollY).toBe(80)
+  })
+})
+
+suite("the screen a window reload reopens", () => {
+  test("is saved for Course Details", () => {
+    enterScreen(courseDetails)
+
+    expect(savedWebviewState()?.route).toEqual({
+      type: "CourseDetails",
+      courseId: makeTmcKind({ courseId: 42 }),
+    })
+  })
+
+  test("is not saved for a submission, whose view the reload clears", () => {
+    enterScreen(courseDetails)
+
+    enterScreen({
+      id: 7,
+      type: "ExerciseSubmission",
+      course: tmcLocalCourse(),
+      exercise: tmcLocalExercise(),
+    })
+
+    expect(savedWebviewState()).not.toHaveProperty("route")
   })
 })
 

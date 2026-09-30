@@ -1,10 +1,11 @@
-import type { Panel } from "../shared/shared"
+import type { Panel, RestorableRoute } from "../shared/shared"
 import { CourseIdentifier } from "../shared/shared"
 import { snapshot } from "./snapshot.svelte"
 import { vscode } from "./vscode"
 
 // VS Code destroys a hidden panel's document and loads a new one on reveal, so UI state the
-// host does not hold lives in the webview state bag, keyed by screen.
+// host does not hold lives in the webview state bag, keyed by screen. The bag also names the
+// screen, for the host's panel serializer to reopen after a window reload.
 
 const SCROLL_KEY = "scrollY"
 
@@ -13,6 +14,7 @@ const SCROLL_KEY = "scrollY"
 const SCROLL_RESTORE_TIMEOUT_MS = 3_000
 
 let screen: string | undefined
+let route: RestorableRoute | undefined
 let values: Record<string, unknown> = {}
 let pendingScrollY: number | undefined
 let pendingScrollTimeout: ReturnType<typeof setTimeout> | undefined
@@ -32,9 +34,22 @@ function screenOf(panel: Panel): string {
   }
 }
 
+// A submission's view lives only in the host's memory, which a window reload clears.
+function restorableRouteOf(panel: Panel): RestorableRoute | undefined {
+  switch (panel.type) {
+    case "CourseDetails":
+      return { type: panel.type, courseId: panel.courseId }
+    case "InitializationErrorHelp":
+      return { type: panel.type }
+    case "App":
+    case "ExerciseSubmission":
+      return undefined
+  }
+}
+
 function save(): void {
   if (screen !== undefined) {
-    vscode.setState({ screen, ui: values })
+    vscode.setState({ screen, ...(route ? { route } : {}), ui: values })
   }
 }
 
@@ -50,6 +65,7 @@ export function enterScreen(panel: Panel): void {
   const saved = vscode.getState()
   values = saved?.screen === next ? { ...saved.ui } : {}
   screen = next
+  route = restorableRouteOf(panel)
   save()
   trackScroll()
   const savedScrollY = values[SCROLL_KEY]
@@ -60,6 +76,7 @@ export function enterScreen(panel: Panel): void {
 /** Forgets the current screen and its UI state, as a newly loaded document starts out. */
 export function leaveScreen(): void {
   screen = undefined
+  route = undefined
   values = {}
   setPendingScroll(undefined)
 }

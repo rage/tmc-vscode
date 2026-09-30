@@ -35,6 +35,7 @@ import Settings from "./config/settings"
 import { UserData } from "./config/userdata"
 import { FileSystemError, InitializationError, presentationFor } from "./errors"
 import * as init from "./init"
+import { TmcPanel } from "./panels/TmcPanel"
 import { createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
 import { trackActiveEditorExercise } from "./ui/activeExerciseContext"
@@ -431,6 +432,7 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
 
   init.fillCoursesView(actionContext)
   init.registerCommands(context, actionContext)
+  context.subscriptions.push(TmcPanel.registerSerializer(context, actionContext))
   if (readyContext) {
     init.registerSettingsCallbacks(readyContext)
     init.registerTesting(context, readyContext)

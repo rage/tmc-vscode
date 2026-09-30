@@ -115,14 +115,24 @@ type _panelTypesMatch = Equal<Panel["type"], PanelType> extends true ? true : ne
 
 const _panelTypesMatch: _panelTypesMatch = true
 
+/** A screen the main panel can be reopened on after a window reload. */
+export const RestorableRouteSchema = z.discriminatedUnion("type", [
+  CourseDetailsPanelSchema.pick({ type: true, courseId: true }),
+  InitializationErrorHelpPanelSchema.pick({ type: true }),
+])
+
+export type RestorableRoute = z.infer<typeof RestorableRouteSchema>
+
 /**
  * What a webview saves with `setState`: UI state the host does not hold, such as scroll
  * position, open sections and drafts. VS Code hands it back to the document it reloads a
- * hidden panel with.
+ * hidden panel with, and to the panel serializer after a window reload.
  */
 export const WebviewStateSchema = z.object({
   /** The screen `ui` belongs to, so another screen does not inherit it. */
   screen: z.string(),
+  /** The screen to reopen after a window reload; absent for one that is not reopened. */
+  route: RestorableRouteSchema.optional(),
   ui: z.record(z.string(), z.unknown()),
 })
 

@@ -1,3 +1,6 @@
+import * as fs from "fs"
+import * as path from "path"
+
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
@@ -6,7 +9,7 @@ import { BottleneckError, InitializationError, presentationFor } from "../../err
 import type { PanelActions } from "../../panels/panelActions"
 import { registerPanelActions } from "../../panels/panelActions"
 import type { PanelRoute } from "../../panels/routes"
-import { nextPanelId, TmcPanel } from "../../panels/TmcPanel"
+import { MAIN_PANEL_VIEW_TYPE, nextPanelId, TmcPanel } from "../../panels/TmcPanel"
 import type {
   ExtensionToWebview,
   LocalCourseData,
@@ -1534,5 +1537,136 @@ suite("TmcPanel requestCourseDetailsData", () => {
 
     const types = postedMessages(panel).map((m) => m.type)
     expect(types).toEqual(["setPanel", "setCourseData"])
+  })
+})
+
+/** Registers the serializer and hands `fake` to it with `state`, as VS Code does on reload. */
+async function restore(
+  fake: ReturnType<typeof createFakeWebviewPanel>,
+  state: unknown,
+  actionContext: ActionContext = courseDetailsContext(),
+): Promise<void> {
+  const register = vi.mocked(vscode.window.registerWebviewPanelSerializer)
+  register.mockClear()
+  const extensionUri = vscode.Uri.file("/ext")
+  const extensionContext = new Proxy(createMockContext(), {
+    get: (target, prop) => (prop === "extensionUri" ? extensionUri : Reflect.get(target, prop)),
+  })
+  TmcPanel.registerSerializer(extensionContext, actionContext)
+  const serializer = register.mock.calls[0]?.[1]
+  await serializer?.deserializeWebviewPanel(fake.panel, state)
+}
+
+suite("TmcPanel main panel restore after a window reload", () => {
+  beforeEach(resetPanels)
+  afterEach(resetPanels)
+
+  const savedCourseDetails = {
+    screen: "CourseDetails:tmc:42",
+    route: { type: "CourseDetails", courseId: CourseIdentifier.from(42) },
+    ui: { scrollY: 120 },
+  }
+
+  test("registers a serializer for the main panel alone", () => {
+    const register = vi.mocked(vscode.window.registerWebviewPanelSerializer)
+    register.mockClear()
+
+    TmcPanel.registerSerializer(createMockContext(), createMockActionContext())
+
+    expect(register.mock.calls.map(([viewType]) => viewType)).toEqual(["tmc.mainPanel"])
+  })
+
+  test("is activated for by package.json", () => {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),
+    ) as { activationEvents: string[] }
+
+    expect(manifest.activationEvents).toContain(`onWebviewPanel:${MAIN_PANEL_VIEW_TYPE}`)
+  })
+
+  test("reopens the saved Course Details as the main panel, with a fresh id", async () => {
+    const fake = createFakeWebviewPanel()
+
+    await restore(fake, savedCourseDetails)
+    await fake.sendReady()
+
+    expect(TmcPanel.mainPanel).toBeDefined()
+    expect(fake.panel.webview.options).toMatchObject({ enableScripts: true })
+    expect(fake.panel.webview.html).toContain("bundle.js")
+    expect(fake.panel.title).toBe("Python Course")
+    const [setPanel] = postedMessages(fake.panel) as Extract<
+      ExtensionToWebview,
+      { type: "setPanel" }
+    >[]
+    expect(setPanel?.panel).toEqual({
+      id: expect.any(Number),
+      type: "CourseDetails",
+      courseId: CourseIdentifier.from(42),
+    })
+  })
+
+  test("renders later navigation in the restored panel", async () => {
+    const fake = createFakeWebviewPanel()
+    await restore(fake, savedCourseDetails)
+    await fake.sendReady()
+    vi.mocked(fake.panel.webview.postMessage).mockClear()
+
+    renderMainPanel({ id: nextPanelId(), type: "InitializationErrorHelp" })
+
+    expect(postedMessages(fake.panel)).toEqual([
+      expect.objectContaining({
+        type: "setPanel",
+        panel: expect.objectContaining({ type: "InitializationErrorHelp" }),
+      }),
+    ])
+  })
+
+  test("reopens the initialization help even when activation degraded", async () => {
+    const fake = createFakeWebviewPanel()
+
+    await restore(
+      fake,
+      { screen: "InitializationErrorHelp", route: { type: "InitializationErrorHelp" }, ui: {} },
+      createDegradedContext(),
+    )
+
+    expect(fake.dispose).not.toHaveBeenCalled()
+    expect(TmcPanel.mainPanel).toBeDefined()
+  })
+
+  const unrestorable: [description: string, state: unknown, actionContext?: ActionContext][] = [
+    ["a screen that is not reopened", { screen: "App", ui: {} }],
+    ["a state bag it cannot read", { panel: "from an older build" }],
+    ["no state at all", undefined],
+    [
+      "a course no longer stored",
+      savedCourseDetails,
+      createMockActionContext({
+        startup: { userData: { getCourse: () => Err(new Error("no such course")) } as never },
+      }),
+    ],
+    ["a course while activation degraded", savedCourseDetails, createDegradedContext()],
+  ]
+  for (const [description, state, actionContext] of unrestorable) {
+    test(`closes a restored panel naming ${description}`, async () => {
+      const fake = createFakeWebviewPanel()
+
+      await restore(fake, state, actionContext)
+
+      expect(fake.dispose).toHaveBeenCalled()
+      expect(TmcPanel.mainPanel).toBeUndefined()
+    })
+  }
+
+  test("closes a restored panel when a main panel is already open", async () => {
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(createFakeWebviewPanel().panel)
+    renderMainPanel({ id: nextPanelId(), type: "InitializationErrorHelp" })
+    const existing = TmcPanel.mainPanel
+    const fake = createFakeWebviewPanel()
+
+    await restore(fake, savedCourseDetails)
+
+    expect(fake.dispose).toHaveBeenCalled()
+    expect(TmcPanel.mainPanel).toBe(existing)
   })
 })

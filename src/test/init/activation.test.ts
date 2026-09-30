@@ -23,6 +23,8 @@ const recorded = vi.hoisted(() => ({
   commandsRegisteredBeforeCliDownload: undefined as string[] | undefined,
   treeLoggedIn: [] as boolean[],
   panelTypes: [] as string[],
+  /** How many times activation registered the panel serializer. */
+  serializerRegistrations: 0,
   uiDisposals: 0,
 }))
 
@@ -135,6 +137,10 @@ vi.mock("../../panels/TmcPanel", () => ({
     },
     renderSide: () => {},
     postMessage: () => {},
+    registerSerializer: () => {
+      recorded.serializerRegistrations += 1
+      return { dispose: () => {} }
+    },
   },
 }))
 
@@ -287,6 +293,7 @@ function resetActivationRecording(): void {
   recorded.treeLoggedIn.length = 0
   recorded.panelTypes.length = 0
   recorded.uiDisposals = 0
+  recorded.serializerRegistrations = 0
   storedUserData.read = (): unknown => undefined
   storedMigration.outcome = { kind: "done" }
   sessionState.previousVersion = undefined
@@ -364,6 +371,13 @@ suite("activation with unusable storage", function () {
     await activate(createContextWithBlockedStorage())
 
     expect(recorded.panelTypes).toEqual([])
+  })
+
+  // A help panel open before the reload is reopened, rather than left as a blank tab.
+  test("still restores panels after a window reload", async function () {
+    await activate(createContextWithBlockedStorage())
+
+    expect(recorded.serializerRegistrations).toBe(1)
   })
 
   test("reports the failure once, naming the step, with Show Details", async function () {
@@ -455,6 +469,7 @@ suite("activation with usable storage", function () {
     expect(recorded.contextKeys.get("test-my-code:Initialized")).toBe(true)
     expect(recorded.isCourseViewFilled).toBe(true)
     expect(recorded.panelTypes).toEqual([])
+    expect(recorded.serializerRegistrations).toBe(1)
   })
 
   // VS Code rejects a command it cannot find, so an entry this key uncovers before its

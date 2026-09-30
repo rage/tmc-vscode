@@ -868,6 +868,7 @@
     }
   },
   "activationEvents": [
+    "onWebviewPanel:tmc.mainPanel",
     "workspaceContains:**/TMC-Readme.md"
   ],
   "icon": "media/TMC.png",
