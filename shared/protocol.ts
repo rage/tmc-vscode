@@ -16,13 +16,12 @@ export const CourseDetailsPanelSchema = z.object({
   id: z.number(),
   type: z.literal("CourseDetails"),
   courseId: CourseIdentifierSchema,
-  course: LocalCourseDataSchema.optional(),
 })
 
 export type CourseDetailsPanel = z.infer<typeof CourseDetailsPanelSchema>
 
 // defined by hand (rather than as `Panel["type"]`) so that
-// `targetPanelSchema`/`broadcastPanelSchema` can be used inside the panel schemas
+// `targetPanelSchema` can be used inside the panel schemas
 // themselves without creating a circular type dependency;
 // the `_panelTypesMatch` assertion below `Panel` keeps this in sync with `PanelSchema`
 export type PanelType = "App" | "CourseDetails" | "ExerciseSubmission" | "InitializationErrorHelp"
@@ -53,23 +52,11 @@ export function targetPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
   })
 }
 
-// schema equivalent of a broadcast target (no id) for the given panel type(s)
-export function broadcastPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
-  return z.object({
-    type: z.literal(types),
-  })
-}
-
 // stricter variant of `targetPanelSchema`, rejecting unknown keys.
 //
 // Used only for the *webview → extension host* direction, where the webview never needs
 // to send more than `{id, type}`: a whole panel posted by mistake, with every course and
 // exercise it holds, is rejected instead of being serialized and validated for nothing.
-//
-// Deliberately NOT used for `ExtensionToWebviewSchema`'s `target` fields: a
-// broadcast target there may carry an `id` on top of the `type` it declares,
-// which narrows the broadcast to the one panel that asked, and the listener
-// honours it.
 function strictTargetPanelSchema<T extends PanelType>(...types: [T, ...T[]]) {
   return z.strictObject({
     id: z.number(),
@@ -242,16 +229,11 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     target: targetPanelSchema("App"),
     panel: PanelSchema,
   }),
+  // The course a CourseDetails panel shows, whenever the stored copy changes.
   z.object({
     type: z.literal("setCourseData"),
     target: targetPanelSchema("CourseDetails"),
     courseData: LocalCourseDataSchema,
-  }),
-  z.object({
-    type: z.literal("setCourseDisabledStatus"),
-    target: broadcastPanelSchema("CourseDetails"),
-    courseId: CourseIdentifierSchema,
-    disabled: z.boolean(),
   }),
   // The whole view each time: the latest one is what a reloaded panel is sent again.
   z.object({
@@ -300,11 +282,11 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     // the webview must not be the one choosing it.
     courseId: CourseIdentifierSchema,
   }),
+  // Refreshes the course the named panel shows.
   z.object({
     type: z.literal("refreshCourseDetails"),
     requestId: z.number(),
     sourcePanel: strictTargetPanelSchema("CourseDetails"),
-    id: CourseIdentifierSchema,
   }),
   z.object({
     type: z.literal("closeSidePanel"),
@@ -386,8 +368,8 @@ export type RequestType = RequestMessage["type"]
 
 /** What a successful `reply` carries, per request type. */
 export const ReplyValueSchemas = {
-  requestCourseDetailsData: z.undefined(),
-  refreshCourseDetails: z.undefined(),
+  requestCourseDetailsData: LocalCourseDataSchema,
+  refreshCourseDetails: LocalCourseDataSchema,
   // the paste link
   pasteExercise: z.string(),
   keepWaitingForGrading: z.undefined(),

@@ -716,7 +716,6 @@ suite("reported once: the Courses view and course details", function () {
       type: "refreshCourseDetails",
       requestId: 1,
       sourcePanel: shownPanel(),
-      id: COURSE_ID,
     })
 
     expect(shown).toEqual([])
@@ -724,15 +723,15 @@ suite("reported once: the Courses view and course details", function () {
   })
 
   test("a lost session scope is warned once, however often it is hit", async function () {
-    const { post, shown } = await harness({
+    const { post, shown, shownPanel } = await harness({
       langs: {
         getMoocCourseData: async () => Err(new InsufficientScopeError("exercise-services")),
       },
     })
-    const sourcePanel = { id: 1, type: "CourseDetails" }
+    const sourcePanel = shownPanel()
 
-    await post({ type: "refreshCourseDetails", requestId: 1, sourcePanel, id: COURSE_ID })
-    await post({ type: "refreshCourseDetails", requestId: 2, sourcePanel, id: COURSE_ID })
+    await post({ type: "refreshCourseDetails", requestId: 1, sourcePanel })
+    await post({ type: "refreshCourseDetails", requestId: 2, sourcePanel })
 
     expect(shown).toEqual(["error: Failed to update course data."])
   })

@@ -2,7 +2,6 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 
 import { ConnectionError, ForbiddenError, InsufficientScopeError } from "../errors"
-import { TmcPanel } from "../panels/TmcPanel"
 import type { CombinedCourseData, MoocCourse, TmcExerciseSlide } from "../shared/langsSchema"
 import type { BackendKind, Enum, LocalCourseExercise } from "../shared/shared"
 import {
@@ -16,15 +15,6 @@ import {
 import { Logger } from "../utilities"
 import { toStoredMoocCourse, toStoredTmcCourse } from "../utilities/apiData"
 import type { ReadyActionContext } from "./types"
-
-const postCourseDisabledStatus = (id: CourseIdentifier, disabled: boolean): void => {
-  TmcPanel.postMessage({
-    type: "setCourseDisabledStatus",
-    target: { type: "CourseDetails" },
-    courseId: id,
-    disabled,
-  })
-}
 
 interface RefreshedCourse {
   course: LocalCourseData
@@ -102,7 +92,6 @@ export async function updateCourse(
       return Ok(false)
     }
     if (updateResult.val instanceof ForbiddenError) {
-      const courseIdent = LocalCourseData.getCourseId(courseData)
       if (!courseData.data.disabled) {
         Logger.warn(`Failed to access information for course. Marking as disabled.`)
         courseData.data.disabled = true
@@ -113,7 +102,6 @@ export async function updateCourse(
       } else {
         Logger.warn(`ForbiddenError above probably caused by course still being disabled`)
       }
-      postCourseDisabledStatus(courseIdent, true)
       return Ok(false)
     } else if (updateResult.val instanceof ConnectionError) {
       Logger.warn(`Failed to fetch data from ${backendName(courseId.kind)}, data not updated.`)
@@ -189,8 +177,6 @@ export async function updateCourse(
       ...workspaceManager.getExercisesByCourseSlug(course.kind, courseName),
     )
   }
-
-  postCourseDisabledStatus(LocalCourseData.getCourseId(course), course.data.disabled)
 
   return Ok(true)
 }

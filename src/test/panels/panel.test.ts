@@ -13,10 +13,9 @@ suite("postMessageToWebview", () => {
   test("posts a message that matches the contract, unchanged", async () => {
     const { webview, postMessage } = fakeWebview()
     const message: ExtensionToWebview = {
-      type: "setCourseDisabledStatus",
-      target: { type: "CourseDetails" },
-      courseId: CourseIdentifier.from(42),
-      disabled: false,
+      type: "setPanel",
+      target: { id: 0, type: "App" },
+      panel: { id: 1, type: "CourseDetails", courseId: CourseIdentifier.from(42) },
     }
 
     expect(await postMessageToWebview(webview, message)).toBe(true)
@@ -28,9 +27,9 @@ suite("postMessageToWebview", () => {
     // one anyway is a silently missing update rather than a visible error.
     const { webview, postMessage } = fakeWebview()
     const message = {
-      type: "setCourseDisabledStatus",
-      target: { type: "CourseDetails" },
-      courseId: CourseIdentifier.from(42),
+      type: "setPanel",
+      target: { id: 0, type: "App" },
+      panel: { id: 1, type: "CourseDetails" },
     } as unknown as ExtensionToWebview
 
     expect(await postMessageToWebview(webview, message)).toBe(false)

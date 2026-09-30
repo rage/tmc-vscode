@@ -1,20 +1,10 @@
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
-import type { CourseDetailsPanel, Panel } from "../shared/shared"
+import type { Panel } from "../shared/shared"
 import { assertUnreachable, LocalCourseData, LocalCourseExercise } from "../shared/shared"
 
-/**
- * Which screen a webview shows: the panel minus the view state the host fills in.
- *
- * What a caller navigates with and what `TmcPanel` remembers. The data a screen renders
- * reaches it separately, as messages, so remembering a route never goes stale.
- */
-export type PanelRoute =
-  | Exclude<Panel, CourseDetailsPanel>
-  | Pick<CourseDetailsPanel, "id" | "type" | "courseId">
-
 /** The editor tab label for `route`, so tabs can be told apart in Open Editors and Ctrl+Tab. */
-export function panelTitle(route: PanelRoute, actionContext: ActionContext): string {
+export function panelTitle(route: Panel, actionContext: ActionContext): string {
   switch (route.type) {
     case "App":
       return "TestMyCode"
