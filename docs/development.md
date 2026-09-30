@@ -160,9 +160,12 @@ the gate; run the vendoring script, which rewrites both.
 Most of the UI is VS Code's own, and webviews are left for what native UI cannot show:
 
 - **Courses view** (`src/ui/treeview/`): a tree of course → part → exercise.
-  `courseViewModel.ts` builds it from `UserData`, the exercises on disk and the in-flight
-  state in `src/ui/exerciseStatusRegistry.ts` and `src/ui/updateablesRegistry.ts`;
-  `treeCommands.ts` runs the row actions on the selection.
+  `courseViewModel.ts` builds it from `UserData`, the exercises on disk, the downloads in
+  flight (`src/ui/exerciseOperations.ts`), and `src/ui/downloadFailures.ts` and
+  `src/ui/updateablesRegistry.ts`; it re-renders on `UserData.onDidChangeCourses` and each
+  registry's change. `treeCommands.ts` runs the row actions on the selection.
+- **Exercise operations** (`src/ui/exerciseOperations.ts`): every download, test run, submit,
+  paste, reset and restore claims its exercises here, which refuses a conflicting one.
 - **Local test runs** go through the Testing API (`src/testing/`): results land in the
   Test Results view and checkstyle findings in the Problems view.
 - **Status bar** (`src/ui/statusBar*.ts`): the account, which logs in or lists the account's
