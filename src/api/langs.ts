@@ -243,9 +243,6 @@ class BoundedStderr {
 }
 
 /**
- * A Class that provides an interface to all langs functionality.
- */
-/**
  * The environment that points the CLI at `javaHome`, or none for an empty one.
  *
  * The Java plugin finds its JVM through `JAVA_HOME` but runs Ant exercises with the `java`
@@ -265,6 +262,9 @@ function javaHomeEnv(javaHome: string): Record<string, string> {
   }
 }
 
+/**
+ * A Class that provides an interface to all langs functionality.
+ */
 export default class Langs {
   // Per-backend: tmc.mooc.fi and courses.mooc.fi are unrelated servers, so one must not throttle the other.
   private readonly _nextSubmissionAllowedTimestamp: Record<BackendKind, number>
@@ -1959,7 +1959,7 @@ ${error.message}`
       } catch (error) {
         if (spawnFailure) {
           // ENOENT/EACCES/EPERM arrive here rather than as a `cp.spawn` throw, and
-          // `activate` gates its antivirus-exception advice on this class.
+          // `presentationFor` gives antivirus-exception advice for this class.
           return Err(new SpawnError(spawnFailure, stderr.text()))
         }
         if (error instanceof TimeoutError) {
