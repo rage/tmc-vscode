@@ -7,7 +7,6 @@
   import CourseDetails from "./panels/CourseDetails.svelte"
   import ExerciseSubmission from "./panels/ExerciseSubmission.svelte"
   import InitializationErrorHelp from "./panels/InitializationErrorHelp.svelte"
-  import MyCourses from "./panels/MyCourses.svelte"
   import type { AppPanel, Panel } from "./shared/shared"
   import { assertUnreachable } from "./shared/shared"
   import { addMessageListener } from "./utilities/script"
@@ -119,9 +118,7 @@
     {:else}
       {#key appState.panel.id}
         <svelte:boundary onerror={handleRenderError}>
-          {#if appState.panel.type === "MyCourses"}
-            <MyCourses panel={appState.panel} />
-          {:else if appState.panel.type === "CourseDetails"}
+          {#if appState.panel.type === "CourseDetails"}
             <CourseDetails panel={appState.panel} />
           {:else if appState.panel.type === "ExerciseSubmission"}
             <ExerciseSubmission panel={appState.panel} />

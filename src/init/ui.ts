@@ -7,7 +7,7 @@ import type { ActionContext } from "../actions/types"
 export function fillCoursesView(actionContext: ActionContext): void {
   const { ui, startup } = actionContext
   if (startup.kind === "ready") {
-    const { userData } = startup
-    ui.treeDP.setCourseSource(() => userData.getCourses())
+    const { userData, workspaceManager } = startup
+    ui.treeDP.setSource({ getCourses: () => userData.getCourses(), workspaceManager })
   }
 }

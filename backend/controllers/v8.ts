@@ -267,8 +267,9 @@ export const registerV8Routes = (
 
   // downloadExercises()
   app.get("/api/v8/core/exercises/details", (req, res: Response<DetailsForLangs>) => {
+    // tmc-langs sends several ids as one comma-separated value.
     const rawIds = req.query.ids
-    const ids = Array.isArray(rawIds) ? rawIds : [rawIds]
+    const ids = (Array.isArray(rawIds) ? rawIds : [rawIds]).flatMap((id) => String(id).split(","))
     const downloadTargets: DetailsForLangs["exercises"] = []
     courseExercises.forEach((ce) => {
       ce.exercises

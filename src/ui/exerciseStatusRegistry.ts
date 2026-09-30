@@ -1,3 +1,5 @@
+import * as vscode from "vscode"
+
 import type { CourseIdentifier, ExerciseIdentifier, ExerciseStatus } from "../shared/shared"
 import {
   CourseIdentifier as CourseIdentifierNs,
@@ -10,21 +12,22 @@ const IN_FLIGHT_STATUSES: ReadonlySet<ExerciseStatus> = new Set(["downloading", 
 /**
  * Remembers which exercises are downloading, or failed to, per course.
  *
- * Those statuses exist only as they are posted, so a CourseDetails panel opened (or
- * reloaded) mid-download would otherwise show the exercise as not downloaded and offer
- * to download it again. Any other status posted for an exercise drops its entry.
- *
- * Deliberately free of any panel import, like `updateablesRegistry`.
+ * The disk cannot tell these apart from not downloaded, so without this the Courses view
+ * would offer to download an exercise already on its way. Any other status recorded for an
+ * exercise drops its entry.
  */
 class ExerciseStatusRegistry {
   private readonly _byCourse = new Map<string, Map<string, [ExerciseIdentifier, ExerciseStatus]>>()
+  private readonly _changed = new vscode.EventEmitter<void>()
 
-  /** The in-flight statuses last posted for `courseId`'s exercises. */
+  /** Fires after {@link record} or {@link clear}. */
+  public readonly onDidChange = this._changed.event
+
+  /** The in-flight statuses last recorded for `courseId`'s exercises. */
   public get(courseId: CourseIdentifier): [ExerciseIdentifier, ExerciseStatus][] {
     return Array.from(this._byCourse.get(courseKey(courseId))?.values() ?? [])
   }
 
-  /** Write through `postExerciseStatuses` in `./exerciseLists`, or this and the live UI drift. */
   public record(
     courseId: CourseIdentifier,
     statuses: [ExerciseIdentifier, ExerciseStatus][],
@@ -45,10 +48,12 @@ class ExerciseStatusRegistry {
     } else {
       this._byCourse.delete(key)
     }
+    this._changed.fire()
   }
 
   public clear(): void {
     this._byCourse.clear()
+    this._changed.fire()
   }
 }
 

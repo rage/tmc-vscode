@@ -1,11 +1,8 @@
 <script lang="ts">
   import { StyleValidationStrategy, TestCase, TestResult } from "../shared/langsSchema"
-  import { vscode } from "../utilities/vscode"
-  import Button from "./Button.svelte"
   import Checkbox from "./Checkbox.svelte"
   import CodeBlock from "./CodeBlock.svelte"
   import Disclosure from "./Disclosure.svelte"
-  import Meter from "./Meter.svelte"
   import StatusIcon from "./StatusIcon.svelte"
 
   // structural subset of both StyleValidationResult (local test runs) and
@@ -21,15 +18,12 @@
 
   interface Props {
     testResults: Array<TestResult | TestCase>
-    /** Omitted where the awarded points are not known in the exercise's own unit. */
-    points?: { awarded: number; available: number } | undefined
     validationResult: ValidationResult | null
-    solutionUrl: string | null
     /** Copies a code block's text through the host. */
     oncopy?: ((text: string) => void) | undefined
   }
 
-  let { testResults, points, validationResult, solutionUrl, oncopy }: Props = $props()
+  let { testResults, validationResult, oncopy }: Props = $props()
 
   const validationStrategy: StyleValidationStrategy = $derived(
     validationResult?.strategy ?? "DISABLED",
@@ -62,10 +56,6 @@
     })
   })
 
-  function showInBrowser(url: string) {
-    vscode.postMessage({ type: "openLinkInBrowser", url })
-  }
-
   function detailedMessage(result: TestResult | TestCase): string | null {
     return "detailed_message" in result ? result.detailed_message : null
   }
@@ -74,20 +64,6 @@
 {#if testResults.length > 0}
   <p>{passedCount} of {testResults.length} tests passed</p>
 {/if}
-{#if points}
-  <div class="points">
-    <Meter label="Points" value={points.awarded} max={points.available} />
-  </div>
-{/if}
-
-{#if solutionUrl !== null}
-  <div class="actions">
-    <Button secondary onclick={() => solutionUrl && showInBrowser(solutionUrl)}>
-      Show model solution in browser
-    </Button>
-  </div>
-{/if}
-
 {#if validationErrorsEntries.length > 0}
   <h2>
     {validationStrategy === "FAIL" ? "Code quality errors found" : "Code quality warnings found"}
@@ -153,10 +129,6 @@
 {/if}
 
 <style>
-  .points,
-  .actions {
-    margin: var(--tmc-space-4) 0;
-  }
   .results,
   .validation-errors {
     list-style: none;

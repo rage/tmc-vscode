@@ -1,15 +1,20 @@
-import type { SubmissionFinished } from "../src/shared/langsSchema"
+import {
+  inProgressView,
+  moocGradingView,
+  submitFailedView,
+  tmcResultView,
+} from "../../src/panels/submissionView"
+import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../src/shared/langsSchema"
 import type {
   CourseDetailsPanel,
-  ExerciseGroup,
   ExtensionToWebview,
   Panel,
+  SubmissionView,
   WebviewToExtension,
 } from "../src/shared/shared"
 import { makeMoocKind, makeTmcKind } from "../src/shared/shared"
 import {
   MOOC_INSTANCE_ID,
-  moocExerciseGroup,
   moocLocalCourse,
   moocLocalExercise,
   tmcLocalCourse,
@@ -34,54 +39,21 @@ const tmcCourse = tmcLocalCourse({
     availablePoints: 2,
     awardedPoints: index < 2 ? 2 : 0,
     name: `part01-0${index + 1}_exercise`,
-    deadline: null,
+    deadline: index === 3 ? "2026-12-31T21:59:00Z" : null,
     passed: index < 2,
-    softDeadline: null,
+    softDeadline: index === 3 ? "2026-12-24T21:59:00Z" : null,
   })),
   availablePoints: 12,
   awardedPoints: 4,
+  materialUrl: "https://example.com/python-programming-2026",
 })
 const moocCourse = moocLocalCourse({ newExercises: [] })
 
-function groupExercise(index: number, passed: boolean): ExerciseGroup["exercises"][number] {
-  return {
-    id: makeTmcKind({ tmcExerciseId: 101 + index }),
-    name: `part0${Math.floor(index / 3) + 1}-0${(index % 3) + 1}_exercise`,
-    isHard: index % 2 === 0,
-    hardDeadlineString: "Deadline: 31.12.2026 23:59",
-    softDeadlineString: "Soft deadline: 24.12.2026 23:59",
-    deadlineIso: "2026-12-31T23:59:00Z",
-    passed,
-  }
-}
-
-function tmcGroups(): ExerciseGroup[] {
-  return [
-    {
-      name: "part01",
-      nextDeadlineString: "Next deadline: 31.12.2026 23:59",
-      defaultOpen: true,
-      exercises: [groupExercise(0, true), groupExercise(1, true), groupExercise(2, false)],
-    },
-    {
-      name: "part02",
-      nextDeadlineString: "Next deadline: 31.12.2026 23:59",
-      defaultOpen: false,
-      exercises: [groupExercise(3, false), groupExercise(4, false), groupExercise(5, false)],
-    },
-  ]
-}
-
 function courseDetailsPanel(id: number, courseId: CourseDetailsPanel["courseId"]): Panel {
-  return { id, type: "CourseDetails", courseId, exerciseStatuses: { tmc: {}, mooc: {} } }
+  return { id, type: "CourseDetails", courseId }
 }
 
-function answerCourseDetails(
-  panel: { id: number },
-  course: typeof tmcCourse,
-  groups: ExerciseGroup[],
-  statuses: Extract<ExtensionToWebview, { type: "setExerciseStatuses" }>["statuses"],
-) {
+function answerCourseDetails(panel: { id: number }, course: typeof tmcCourse) {
   return (message: WebviewToExtension): ExtensionToWebview[] => {
     if (message.type !== "requestCourseDetailsData") {
       return []
@@ -89,28 +61,6 @@ function answerCourseDetails(
     const target = { type: "CourseDetails" as const, id: panel.id }
     return [
       { type: "setCourseData", target, courseData: course },
-      { type: "setCourseGroups", target, offlineMode: false, exerciseGroups: groups },
-      {
-        type: "setExerciseStatuses",
-        target: { type: "CourseDetails" },
-        courseId: message.sourcePanel.courseId,
-        statuses,
-      },
-      { type: "reply", target, requestId: message.requestId, outcome: { ok: true } },
-    ]
-  }
-}
-
-function answerMyCourses(courses: (typeof tmcCourse)[]) {
-  return (message: WebviewToExtension): ExtensionToWebview[] => {
-    if (message.type !== "requestMyCoursesData") {
-      return []
-    }
-    const target = { type: "MyCourses" as const, id: message.sourcePanel.id }
-    return [
-      { type: "setMyCourses", target, courses },
-      { type: "setTmcDataPath", target, tmcDataPath: "/home/student/tmcdata" },
-      { type: "setTmcDataSize", target, tmcDataSize: "12.3 MB" },
       { type: "reply", target, requestId: message.requestId, outcome: { ok: true } },
     ]
   }
@@ -122,7 +72,6 @@ const submissionPanel = {
   course: tmcCourse,
   exercise: tmcLocalExercise({ id: 103, name: "part01-03_exercise", availablePoints: 2 }),
 }
-const submissionTarget = { type: "ExerciseSubmission" as const, id: submissionPanel.id }
 
 function submissionFinished(overrides: Partial<SubmissionFinished>): SubmissionFinished {
   return {
@@ -155,38 +104,44 @@ function submissionFinished(overrides: Partial<SubmissionFinished>): SubmissionF
   }
 }
 
-const statusUpdates = (fractions: [number, string][]): ExtensionToWebview[] =>
-  fractions.map(([fraction, message]) => ({
-    type: "submissionStatusUpdate",
-    target: submissionTarget,
-    fraction,
-    message,
-  }))
+function showView(panelId: number, view: SubmissionView): ExtensionToWebview {
+  return { type: "submissionView", target: { type: "ExerciseSubmission", id: panelId }, view }
+}
+
+const moocSubmissionPanel = {
+  id: 31,
+  type: "ExerciseSubmission" as const,
+  course: moocCourse,
+  exercise: moocLocalExercise(),
+}
+
+function moocGrading(
+  overrides: Partial<Extract<ExerciseTaskSubmissionStatus, { status: "grading" }>["grading"]>,
+): ExerciseTaskSubmissionStatus {
+  return {
+    status: "grading",
+    grading: {
+      grading_progress: "FullyGraded",
+      score_given: 2.5,
+      grading_started_at: "2026-09-29T12:00:00Z",
+      grading_completed_at: "2026-09-29T12:00:05Z",
+      feedback_text: "Well done!",
+      ...overrides,
+    },
+  }
+}
 
 /** Every scenario the dev harness offers and the accessibility tests walk through. */
 export const SCENARIOS: Scenario[] = [
   {
-    id: "my-courses/two-courses",
-    panel: { id: 2, type: "MyCourses" },
-    reply: answerMyCourses([tmcCourse, moocCourse]),
-  },
-  { id: "my-courses/empty", panel: { id: 2, type: "MyCourses" }, reply: answerMyCourses([]) },
-  {
     id: "course-details/tmc",
     panel: courseDetailsPanel(3, makeTmcKind({ courseId: 42 })),
-    reply: answerCourseDetails({ id: 3 }, tmcCourse, tmcGroups(), [
-      [makeTmcKind({ tmcExerciseId: 101 }), "opened"],
-      [makeTmcKind({ tmcExerciseId: 102 }), "closed"],
-      [makeTmcKind({ tmcExerciseId: 103 }), "missing"],
-      [makeTmcKind({ tmcExerciseId: 104 }), "downloading"],
-      [makeTmcKind({ tmcExerciseId: 105 }), "downloadFailed"],
-      [makeTmcKind({ tmcExerciseId: 106 }), "expired"],
-    ]),
+    reply: answerCourseDetails({ id: 3 }, tmcCourse),
   },
   {
     id: "course-details/mooc",
     panel: courseDetailsPanel(4, makeMoocKind({ instanceId: MOOC_INSTANCE_ID })),
-    reply: answerCourseDetails({ id: 4 }, moocCourse, [moocExerciseGroup()], []),
+    reply: answerCourseDetails({ id: 4 }, moocCourse),
   },
   // Never answered, so the panel shows its loading state until the request times out.
   { id: "course-details/loading", panel: courseDetailsPanel(5, makeTmcKind({ courseId: 42 })) },
@@ -194,97 +149,130 @@ export const SCENARIOS: Scenario[] = [
     id: "exercise-submission/processing",
     panel: submissionPanel,
     pushes: [
-      {
-        type: "submissionStatusUrl",
-        target: submissionTarget,
-        url: "https://tmc.mooc.fi/submissions/1",
-      },
-      ...statusUpdates([
-        [0.1, "Submission received"],
-        [0.4, "Waiting in queue"],
-      ]),
+      showView(
+        submissionPanel.id,
+        inProgressView("grading", {
+          fraction: 0.4,
+          steps: ["Submission received", "Waiting in queue"],
+          submissionUrl: "https://tmc.mooc.fi/submissions/1",
+        }),
+      ),
     ],
   },
   {
     id: "exercise-submission/tmc-passed",
     panel: submissionPanel,
     pushes: [
-      ...statusUpdates([
-        [0.5, "Submission received"],
-        [1, "Testing finished"],
-      ]),
-      {
-        type: "submissionResult",
-        target: submissionTarget,
-        result: submissionFinished({
-          feedback_answer_url: "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback",
-        }),
-        questions: [
-          { id: 1, kind: "intrange", lower: 1, upper: 5, question: "How difficult was this?" },
-          { id: 2, kind: "text", question: "Anything else?" },
-        ],
-      },
+      showView(
+        submissionPanel.id,
+        tmcResultView(
+          submissionFinished({
+            feedback_answer_url: "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback",
+          }),
+          [
+            { id: 1, kind: "intrange", lower: 1, upper: 5, question: "How difficult was this?" },
+            { id: 2, kind: "text", question: "Anything else?" },
+          ],
+          2,
+        ),
+      ),
     ],
   },
   {
     id: "exercise-submission/tmc-failed",
     panel: submissionPanel,
     pushes: [
-      {
-        type: "submissionResult",
-        target: submissionTarget,
-        result: submissionFinished({
-          all_tests_passed: false,
-          status: "fail",
-          points: [],
-          test_cases: [
-            {
-              name: "test_sum",
-              successful: false,
-              message: "Expected 3 but got 2",
-              detailed_message: null,
-              exception: ["AssertionError"],
-            },
-          ],
+      showView(
+        submissionPanel.id,
+        tmcResultView(
+          submissionFinished({
+            all_tests_passed: false,
+            status: "fail",
+            points: [],
+            test_cases: [
+              {
+                name: "test_sum",
+                successful: false,
+                message: "Expected 3 but got 2",
+                detailed_message: null,
+                exception: ["AssertionError"],
+              },
+            ],
+          }),
+          [],
+          2,
+        ),
+      ),
+    ],
+  },
+  {
+    id: "exercise-submission/mooc-grading",
+    panel: moocSubmissionPanel,
+    pushes: [
+      showView(
+        moocSubmissionPanel.id,
+        inProgressView("grading", {
+          steps: ["Grading has not started yet", "Grading in progress"],
         }),
-        questions: [],
-      },
+      ),
     ],
   },
   {
     id: "exercise-submission/mooc-graded",
-    panel: {
-      id: 31,
-      type: "ExerciseSubmission",
-      course: moocCourse,
-      exercise: moocLocalExercise(),
-    },
+    panel: moocSubmissionPanel,
+    pushes: [showView(moocSubmissionPanel.id, moocGradingView(moocGrading({}), 3))],
+  },
+  {
+    id: "exercise-submission/mooc-timed-out",
+    panel: moocSubmissionPanel,
+    reply: (message) =>
+      message.type === "keepWaitingForGrading"
+        ? [
+            showView(
+              moocSubmissionPanel.id,
+              inProgressView("grading", { steps: ["Grading in progress"] }),
+            ),
+            showView(moocSubmissionPanel.id, moocGradingView(moocGrading({}), 3)),
+            {
+              type: "reply",
+              target: { type: "ExerciseSubmission", id: moocSubmissionPanel.id },
+              requestId: message.requestId,
+              outcome: { ok: true },
+            },
+          ]
+        : [],
     pushes: [
-      {
-        type: "moocSubmissionResult",
-        target: { type: "ExerciseSubmission", id: 31 },
-        result: {
-          status: "grading",
-          grading: {
-            grading_progress: "FullyGraded",
-            score_given: 2.5,
-            grading_started_at: "2026-09-29T12:00:00Z",
-            grading_completed_at: "2026-09-29T12:00:05Z",
-            feedback_text: "Well done!",
-          },
-        },
-      },
+      showView(
+        moocSubmissionPanel.id,
+        moocGradingView(moocGrading({ grading_progress: "Pending", score_given: null }), 3),
+      ),
+    ],
+  },
+  {
+    id: "exercise-submission/mooc-manual-review",
+    panel: moocSubmissionPanel,
+    pushes: [
+      showView(
+        moocSubmissionPanel.id,
+        moocGradingView(
+          moocGrading({
+            grading_progress: "PendingManual",
+            score_given: null,
+            feedback_text: null,
+          }),
+          3,
+        ),
+      ),
     ],
   },
   {
     id: "exercise-submission/error",
     panel: submissionPanel,
     pushes: [
-      {
-        type: "submissionStatusError",
-        target: submissionTarget,
-        error: { message: "Submitting failed", details: "The server returned 500" },
-      },
+      showView(
+        submissionPanel.id,
+        submitFailedView({ message: "Submitting failed", details: "The server returned 500" }),
+      ),
     ],
   },
   {

@@ -1,7 +1,6 @@
 import type { FractionProgress } from "../api/dialog"
 import type Langs from "../api/langs"
 import { ExerciseUpdateError, presentationFor } from "../errors"
-import { postExerciseStatus, postExerciseStatuses } from "../panels/exerciseLists"
 import type { BackendKind, CourseIdentifier, ExerciseStatus } from "../shared/shared"
 import {
   CourseIdentifier as CourseIdentifierNs,
@@ -10,6 +9,7 @@ import {
   LocalCourseExercise,
   match,
 } from "../shared/shared"
+import { exerciseStatusRegistry } from "../ui/exerciseStatusRegistry"
 import { Logger } from "../utilities"
 import type { ReadyActionContext } from "./types"
 
@@ -114,7 +114,7 @@ export async function downloadOrUpdateExercises(
         progress.report({ fraction: completed / exerciseIds.length, message: download.message })
         const exerciseCourseId = resolveCourseId(download.id)
         if (exerciseCourseId) {
-          postExerciseStatus(exerciseCourseId, download.id, "closed")
+          exerciseStatusRegistry.record(exerciseCourseId, [[download.id, "closed"]])
         }
       }
 
@@ -230,10 +230,7 @@ function failureCause(
   ]
 }
 
-/**
- * Posts `statuses` as one message per course: an exercise list can span courses, and each
- * CourseDetails panel keeps only its own course's.
- */
+/** Records `statuses` per course: an exercise list can span courses. */
 function postStatuses(
   statuses: Map<number | string, ExerciseStatus>,
   resolveCourseId: (exerciseId: ExerciseIdentifier) => CourseIdentifier | undefined,
@@ -242,7 +239,7 @@ function postStatuses(
   for (const [id, status] of statuses) {
     const exerciseId = ExerciseIdentifier.from(id)
     const courseId = resolveCourseId(exerciseId)
-    // Dropped rather than broadcast unscoped when no course resolves.
+    // Dropped rather than recorded unscoped when no course resolves.
     if (!courseId) {
       continue
     }
@@ -252,7 +249,7 @@ function postStatuses(
     byCourse.set(key, entry)
   }
   for (const [courseId, courseStatuses] of byCourse.values()) {
-    postExerciseStatuses(courseId, courseStatuses)
+    exerciseStatusRegistry.record(courseId, courseStatuses)
   }
 }
 

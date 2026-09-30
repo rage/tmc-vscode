@@ -22,9 +22,9 @@ suite("the webview's postMessage", () => {
     // which zod's parse result would drop.
     const exerciseUri = { scheme: "file", path: "/exercise", fsPath: "/exercise" }
     const message = {
-      type: "requestMyCoursesData",
+      type: "requestInitializationErrors",
       requestId: 1,
-      sourcePanel: { id: 3, type: "MyCourses" },
+      sourcePanel: { id: 3, type: "InitializationErrorHelp" },
       exerciseUri,
     } as WebviewToExtension
     vscode.postMessage(message)
@@ -32,16 +32,20 @@ suite("the webview's postMessage", () => {
   })
 
   test("posts a message holding `$state` proxies as plain data", () => {
-    const sourcePanel = deepState({ id: 3, type: "MyCourses" as const })
-    const message: WebviewToExtension = { type: "requestMyCoursesData", requestId: 1, sourcePanel }
+    const sourcePanel = deepState({ id: 3, type: "InitializationErrorHelp" as const })
+    const message: WebviewToExtension = {
+      type: "requestInitializationErrors",
+      requestId: 1,
+      sourcePanel,
+    }
     expect(() => structuredClone(message)).toThrow()
 
     vscode.postMessage(message)
 
     expect(postedMessages).toHaveBeenCalledWith({
-      type: "requestMyCoursesData",
+      type: "requestInitializationErrors",
       requestId: 1,
-      sourcePanel: { id: 3, type: "MyCourses" },
+      sourcePanel: { id: 3, type: "InitializationErrorHelp" },
     })
   })
 

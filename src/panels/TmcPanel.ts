@@ -12,7 +12,7 @@ import { postMessageToWebview, renderPanel } from "./panel"
 import type { HandlerContext, PanelHost } from "./router"
 import { dispatch } from "./router"
 import type { PanelRoute } from "./routes"
-import { completePanel, panelTitle } from "./routes"
+import { panelTitle } from "./routes"
 
 export { nextPanelId } from "./routes"
 
@@ -72,9 +72,9 @@ export class TmcPanel {
    */
   private _postMessage(message: ExtensionToWebview): void {
     // Only id-carrying targets are buffered. A broadcast target has no id, and the
-    // delta messages that use one (setUpdateables, setNewExercises) are posted once
-    // per course, so they would all collapse onto one key and only the last would
-    // survive; those are restored from the extension's own state instead.
+    // messages that use one (setCourseDisabledStatus) are posted once per course, so they
+    // would all collapse onto one key and only the last would survive; the course data a
+    // reloaded panel asks for carries the same state.
     // A `reply` is left out on top of that: the reloaded webview asks again, and a
     // replayed answer to the request of a page that no longer exists settles nothing.
     if (
@@ -254,7 +254,7 @@ export class TmcPanel {
     this._messageBuffer.clear()
     this._panel.title = panelTitle(route, this._actionContext)
     if (this._isWebviewReady && !this._isDisposed) {
-      renderPanel(completePanel(route), this._panel.webview)
+      renderPanel(route, this._panel.webview)
     }
   }
 
@@ -269,7 +269,7 @@ export class TmcPanel {
       return
     }
     // Not `_render`, which would clear the buffer about to be resent.
-    renderPanel(completePanel(route), this._panel.webview)
+    renderPanel(route, this._panel.webview)
     for (const buffered of this._messageBuffer.values()) {
       postMessageToWebview(this._panel.webview, buffered, this._webviewName)
     }

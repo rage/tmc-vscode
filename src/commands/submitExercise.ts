@@ -29,8 +29,25 @@ export async function submitExercise(
     return submitted
   }
 
-  // Point totals come from the backend, so without this refresh the CourseDetails and
-  // MyCourses totals stay stale until the user refreshes by hand.
+  // Point totals come from the backend, so without this refresh the Courses view and
+  // Course Details totals stay stale until the user refreshes by hand.
   await refreshEverything(actionContext, { silent: true, courseId: submitted.val })
+  return Ok.EMPTY
+}
+
+/**
+ * Waits again for the grading shown in submission panel `panelId`, then refreshes that
+ * course's totals like {@link submitExercise}. Failures are the panel's to show.
+ */
+export async function keepWaitingForGrading(
+  context: vscode.ExtensionContext,
+  actionContext: ReadyActionContext,
+  panelId: number,
+): Promise<Result<void, Error>> {
+  const waited = await actions.keepWaitingForGrading(context, actionContext, panelId)
+  if (waited.err) {
+    return waited
+  }
+  await refreshEverything(actionContext, { silent: true, courseId: waited.val })
   return Ok.EMPTY
 }

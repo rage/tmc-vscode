@@ -25,7 +25,6 @@ function firstArguments(source: string, callee: string): string[] {
 // operation returns is never reported by the operation: `withOperation` does that.
 const carriedOnPastWarnings = [
   "downloadExercisesForUi.ts: Failed to refresh local exercises.",
-  "downloadExercisesForUi.ts: Failed to read the course.",
   "downloadExercisesForUi.ts: Failed to refresh local exercises.",
   // one notification for the whole download, naming every exercise that failed
   "downloadOrUpdateExercises.ts: Failed to download ${describeExercises(names)}.",

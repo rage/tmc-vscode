@@ -4,7 +4,6 @@ import * as vscode from "vscode"
 
 import { failure } from "../api/withOperation"
 import { closedExercisesSettingKey } from "../config/constants"
-import { TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
 import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
@@ -12,8 +11,7 @@ import type { ReadyActionContext } from "./types"
 
 /**
  * Removes a course from the user's courses, along with the extension's own state
- * for it: its closed-exercise setting and its `.code-workspace` file, and tells an open
- * My Courses panel.
+ * for it: its closed-exercise setting and its `.code-workspace` file.
  *
  * The exercises already downloaded are deliberately left on disk. Failing to clean up the
  * setting or the workspace file is reported and does not stop the removal; an `Err` means
@@ -65,11 +63,6 @@ export async function removeCourse(
     )
   }
   ui.treeDP.refresh()
-  TmcPanel.postMessage({
-    type: "setMyCourses",
-    target: { type: "MyCourses" },
-    courses: userData.getCourses(),
-  })
 
   if (
     workspaceManager.activeCourse === courseName &&

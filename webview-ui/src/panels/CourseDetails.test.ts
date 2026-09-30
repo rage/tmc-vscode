@@ -1,36 +1,13 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/svelte"
+import { render, screen } from "@testing-library/svelte"
 
-import type { CourseDetailsPanel, ExerciseGroup } from "../shared/shared"
+import type { CourseDetailsPanel } from "../shared/shared"
 import { makeMoocKind, makeTmcKind } from "../shared/shared"
-import {
-  MOOC_EXERCISE_ID,
-  MOOC_INSTANCE_ID,
-  moocExerciseGroup,
-  moocLocalCourse,
-  tmcExerciseGroup,
-  tmcLocalCourse,
-} from "../test/fixtures"
+import { MOOC_INSTANCE_ID, moocLocalCourse, tmcExercise, tmcLocalCourse } from "../test/fixtures"
 import { dispatchToWebview as dispatch, postedMessages, replyToRequest } from "../test/setup"
 import CourseDetails from "./CourseDetails.svelte"
 
-// The first checkbox in the group is the select-all.
-async function checkSelectAll(container: HTMLElement): Promise<void> {
-  const selectAll = container.querySelector("vscode-checkbox")
-  expect(selectAll).not.toBeNull()
-  await fireEvent.keyDown(selectAll!, { key: " " })
-}
-
-function findExerciseGroup(name = "part01"): Promise<HTMLElement> {
-  return screen.findByRole("heading", { level: 2, name: new RegExp(`^${name}`) })
-}
-
 function tmcPanel(): CourseDetailsPanel {
-  return {
-    id: 9,
-    type: "CourseDetails",
-    courseId: makeTmcKind({ courseId: 42 }),
-    exerciseStatuses: { tmc: {}, mooc: {} },
-  }
+  return { id: 9, type: "CourseDetails", courseId: makeTmcKind({ courseId: 42 }) }
 }
 
 function moocPanel(): CourseDetailsPanel {
@@ -38,17 +15,11 @@ function moocPanel(): CourseDetailsPanel {
     id: 10,
     type: "CourseDetails",
     courseId: makeMoocKind({ instanceId: MOOC_INSTANCE_ID }),
-    exerciseStatuses: { tmc: {}, mooc: {} },
   }
 }
 
-function sendGroups(panel: CourseDetailsPanel, exerciseGroups: ExerciseGroup[]): void {
-  dispatch({
-    type: "setCourseGroups",
-    target: { type: "CourseDetails", id: panel.id },
-    offlineMode: false,
-    exerciseGroups,
-  })
+function sendCourse(panel: CourseDetailsPanel, courseData = tmcLocalCourse()): void {
+  dispatch({ type: "setCourseData", target: { type: "CourseDetails", id: panel.id }, courseData })
 }
 
 suite("CourseDetails panel", () => {
@@ -62,44 +33,26 @@ suite("CourseDetails panel", () => {
     })
   })
 
-  test("renders a tmc course header and its exercise group", async () => {
+  test("renders the course overview, with no exercise list of its own", async () => {
     const panel = tmcPanel()
     render(CourseDetails, { props: { panel } })
 
-    dispatch({
-      type: "setCourseData",
-      target: { type: "CourseDetails", id: panel.id },
-      courseData: tmcLocalCourse(),
-    })
-    sendGroups(panel, [tmcExerciseGroup()])
+    sendCourse(panel, tmcLocalCourse({ materialUrl: "https://example.com/material" }))
 
     expect(
       await screen.findByRole("heading", { level: 1, name: "Python Course" }),
     ).toBeInTheDocument()
-    await findExerciseGroup()
-    expect(screen.getByText("1 / 1 completed")).toBeInTheDocument()
+    expect(screen.getByText("A course about Python.")).toBeInTheDocument()
     expect(screen.getByRole("meter", { name: "Points" })).toHaveAttribute(
       "aria-valuetext",
       "1 / 2 points",
     )
-  })
-
-  test("renders a mooc course header and its exercise group", async () => {
-    const panel = moocPanel()
-    render(CourseDetails, { props: { panel } })
-
-    dispatch({
-      type: "setCourseData",
-      target: { type: "CourseDetails", id: panel.id },
-      courseData: moocLocalCourse(),
-    })
-    sendGroups(panel, [moocExerciseGroup()])
-
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "MOOC Python" }),
-    ).toBeInTheDocument()
-    await findExerciseGroup("MOOC Python")
-    expect(screen.getByText("0 / 1 completed")).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Course material" })).toHaveAttribute(
+      "href",
+      "https://example.com/material",
+    )
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument()
+    expect(screen.queryByRole("heading", { level: 2 })).not.toBeInTheDocument()
   })
 
   // courses.mooc.fi courses may have no description at all.
@@ -107,222 +60,41 @@ suite("CourseDetails panel", () => {
     const panel = moocPanel()
     render(CourseDetails, { props: { panel } })
 
-    dispatch({
-      type: "setCourseData",
-      target: { type: "CourseDetails", id: panel.id },
-      courseData: moocLocalCourse({ description: null }),
-    })
+    sendCourse(panel, moocLocalCourse({ description: null }))
 
     await screen.findByRole("heading", { level: 1, name: "MOOC Python" })
-    expect(screen.queryByText(/Loading (description|course)/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Loading/)).not.toBeInTheDocument()
     expect(screen.queryByText("A mooc.fi course about Python.")).not.toBeInTheDocument()
   })
 
-  test("names the breadcrumb and marks the current course in it", async () => {
+  test("states the soft-deadline policy only when a soft deadline binds", async () => {
     const panel = tmcPanel()
     render(CourseDetails, { props: { panel } })
-    dispatch({
-      type: "setCourseData",
-      target: { type: "CourseDetails", id: panel.id },
-      courseData: tmcLocalCourse(),
-    })
-
-    const breadcrumb = await screen.findByRole("navigation", { name: "Breadcrumb" })
-    await waitFor(() => expect(breadcrumb).toHaveTextContent("Python Course"))
-    expect(breadcrumb.querySelector("[aria-current=page]")).toHaveTextContent("Python Course")
-  })
-
-  test("reflects an exerciseStatusChange broadcast in the status cell", async () => {
-    const panel = tmcPanel()
-    render(CourseDetails, { props: { panel } })
-    sendGroups(panel, [tmcExerciseGroup()])
-    await findExerciseGroup()
-    expect(screen.getByText("Loading…")).toBeInTheDocument()
-
-    dispatch({
-      type: "exerciseStatusChange",
-      target: { type: "CourseDetails" },
-      courseId: makeTmcKind({ courseId: 42 }),
-      exerciseId: makeTmcKind({ tmcExerciseId: 101 }),
-      status: "opened",
-    })
-
-    expect(await screen.findByText("Opened")).toBeInTheDocument()
-  })
-
-  test("applies the whole course's statuses from one setExerciseStatuses", async () => {
-    const panel = tmcPanel()
-    render(CourseDetails, { props: { panel } })
-    sendGroups(panel, [tmcExerciseGroup()])
-    await findExerciseGroup()
-
-    dispatch({
-      type: "setExerciseStatuses",
-      target: { type: "CourseDetails" },
-      courseId: makeTmcKind({ courseId: 42 }),
-      statuses: [[makeTmcKind({ tmcExerciseId: 101 }), "missing"]],
-    })
-
-    expect(await screen.findByText("Not downloaded")).toBeInTheDocument()
-  })
-
-  test("ignores a setExerciseStatuses meant for another course", async () => {
-    const panel = tmcPanel()
-    render(CourseDetails, { props: { panel } })
-    sendGroups(panel, [tmcExerciseGroup()])
-    await findExerciseGroup()
-
-    dispatch({
-      type: "setExerciseStatuses",
-      target: { type: "CourseDetails" },
-      courseId: makeTmcKind({ courseId: 999 }),
-      statuses: [[makeTmcKind({ tmcExerciseId: 101 }), "closed"]],
-    })
-
-    await new Promise((resolve) => {
-      setTimeout(resolve, 20)
-    })
-    expect(screen.getByText("Loading…")).toBeInTheDocument()
-  })
-
-  test("shows the offline-mode notice from setCourseGroups", async () => {
-    const panel = tmcPanel()
-    render(CourseDetails, { props: { panel } })
-    dispatch({
-      type: "setCourseGroups",
-      target: { type: "CourseDetails", id: panel.id },
-      offlineMode: true,
-      exerciseGroups: [tmcExerciseGroup()],
-    })
-    const notice = await screen.findByText(/Unable to fetch exercise data from server/)
-    expect(notice.closest("[role=status]")).not.toBeNull()
-  })
-
-  test("states the soft-deadline policy once for the whole course", async () => {
-    const panel = tmcPanel()
-    render(CourseDetails, { props: { panel } })
-    dispatch({
-      type: "setCourseData",
-      target: { type: "CourseDetails", id: panel.id },
-      courseData: tmcLocalCourse(),
-    })
-    const softExercise = tmcExerciseGroup().exercises[0]!
-    sendGroups(panel, [
-      tmcExerciseGroup({ exercises: [softExercise] }),
-      tmcExerciseGroup({ name: "part02", exercises: [softExercise] }),
-    ])
-    await findExerciseGroup("part02")
-
-    expect(screen.getAllByText(/award only 75% of the exercise points/)).toHaveLength(1)
-  })
-
-  test("posts downloadExercises with the selected tmc identifier", async () => {
-    const panel = tmcPanel()
-    const { container } = render(CourseDetails, { props: { panel } })
-    sendGroups(panel, [tmcExerciseGroup()])
-    await findExerciseGroup()
-
-    await checkSelectAll(container)
-
-    const download = await screen.findByRole("button", { name: "Download" })
-    postedMessages.mockClear()
-    download.click()
-
-    // the tmc id stays a number and survives the postMessage clone
-    expect(postedMessages).toHaveBeenCalledWith({
-      type: "downloadExercises",
-      ids: [makeTmcKind({ tmcExerciseId: 101 })],
-      courseId: makeTmcKind({ courseId: 42 }),
-      mode: "download",
-    })
-  })
-
-  test("posts downloadExercises with the selected mooc identifier", async () => {
-    const panel = moocPanel()
-    const { container } = render(CourseDetails, { props: { panel } })
-    sendGroups(panel, [moocExerciseGroup()])
-    await findExerciseGroup("MOOC Python")
-
-    await checkSelectAll(container)
-
-    const download = await screen.findByRole("button", { name: "Download" })
-    postedMessages.mockClear()
-    download.click()
-
-    expect(postedMessages).toHaveBeenCalledWith({
-      type: "downloadExercises",
-      ids: [makeMoocKind({ moocExerciseId: MOOC_EXERCISE_ID })],
-      courseId: makeMoocKind({ instanceId: MOOC_INSTANCE_ID }),
-      mode: "download",
-    })
-  })
-
-  test("opens, closes and clears the selection from the toolbar above the parts", async () => {
-    const panel = tmcPanel()
-    const { container } = render(CourseDetails, { props: { panel } })
-    sendGroups(panel, [tmcExerciseGroup()])
-    const part = await findExerciseGroup()
-    await checkSelectAll(container)
-    const ids = [makeTmcKind({ tmcExerciseId: 101 })]
-    const courseId = makeTmcKind({ courseId: 42 })
-
-    const toolbar = await screen.findByRole("region", { name: "Selected exercises" })
-    expect(toolbar).toHaveTextContent("1 selected")
-    // DOM order is tab order: the selection's actions come before the rows they act on.
-    expect(toolbar.compareDocumentPosition(part) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-
-    postedMessages.mockClear()
-    ;(await screen.findByRole("button", { name: "Open" })).click()
-    ;(await screen.findByRole("button", { name: "Close" })).click()
-    expect(postedMessages).toHaveBeenCalledWith({ type: "openExercises", ids, courseId })
-    expect(postedMessages).toHaveBeenCalledWith({ type: "closeExercises", ids, courseId })
-
-    ;(await screen.findByRole("button", { name: "Clear selection" })).click()
-    await waitFor(() =>
-      expect(screen.queryByRole("region", { name: "Selected exercises" })).not.toBeInTheDocument(),
-    )
-  })
-
-  test("shows the 'Updates found' notice only when there are updateable exercises", async () => {
-    const panel = tmcPanel()
-    render(CourseDetails, { props: { panel } })
-    dispatch({
-      type: "setCourseData",
-      target: { type: "CourseDetails", id: panel.id },
-      courseData: tmcLocalCourse(),
-    })
+    sendCourse(panel)
     await screen.findByRole("heading", { level: 1, name: "Python Course" })
-    expect(screen.queryByText(/Updates found for exercises/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/award only 75%/)).not.toBeInTheDocument()
 
-    dispatch({
-      type: "setUpdateables",
-      target: { type: "CourseDetails" },
-      courseId: makeTmcKind({ courseId: 42 }),
-      exerciseIds: [makeTmcKind({ tmcExerciseId: 101 })],
-    })
-    expect(await screen.findByText(/Updates found for exercises/)).toBeInTheDocument()
-
-    // A broadcast for a DIFFERENT course must not touch this panel's list.
-    dispatch({
-      type: "setUpdateables",
-      target: { type: "CourseDetails" },
-      courseId: makeTmcKind({ courseId: 999 }),
-      exerciseIds: [],
-    })
-    await new Promise((resolve) => {
-      setTimeout(resolve, 20)
-    })
-    expect(screen.getByText(/Updates found for exercises/)).toBeInTheDocument()
-
-    dispatch({
-      type: "setUpdateables",
-      target: { type: "CourseDetails" },
-      courseId: makeTmcKind({ courseId: 42 }),
-      exerciseIds: [],
-    })
-    await waitFor(() =>
-      expect(screen.queryByText(/Updates found for exercises/)).not.toBeInTheDocument(),
+    sendCourse(
+      panel,
+      tmcLocalCourse({
+        exercises: [
+          tmcExercise({ softDeadline: "2026-10-01T00:00:00Z", deadline: "2026-10-08T00:00:00Z" }),
+        ],
+      }),
     )
+
+    expect(await screen.findByText(/award only 75% of the exercise points/)).toBeInTheDocument()
+  })
+
+  test("sends the student to the Courses view for the exercises", async () => {
+    const panel = tmcPanel()
+    render(CourseDetails, { props: { panel } })
+    sendCourse(panel)
+    postedMessages.mockClear()
+
+    ;(await screen.findByRole("button", { name: "Show exercises" })).click()
+
+    expect(postedMessages).toHaveBeenCalledWith({ type: "runCommand", command: "tmc.myCourses" })
   })
 
   test("asks for its own course by id, leaving the slug to the extension", async () => {
@@ -330,11 +102,7 @@ suite("CourseDetails panel", () => {
     // stored data rather than chosen here.
     const panel = moocPanel()
     render(CourseDetails, { props: { panel } })
-    dispatch({
-      type: "setCourseData",
-      target: { type: "CourseDetails", id: panel.id },
-      courseData: moocLocalCourse(),
-    })
+    sendCourse(panel, moocLocalCourse())
     await screen.findByRole("heading", { level: 1, name: "MOOC Python" })
 
     const open = await screen.findByRole("button", { name: "Open workspace" })
@@ -347,49 +115,26 @@ suite("CourseDetails panel", () => {
     })
   })
 
-  test("posts the panel's own course id when updating exercises", async () => {
-    const panel = moocPanel()
+  test("shows when the course is disabled, as the host reports it", async () => {
+    const panel = tmcPanel()
     render(CourseDetails, { props: { panel } })
+    sendCourse(panel)
+    await screen.findByRole("heading", { level: 1, name: "Python Course" })
+
     dispatch({
-      type: "setCourseData",
-      target: { type: "CourseDetails", id: panel.id },
-      courseData: moocLocalCourse(),
-    })
-    dispatch({
-      type: "setUpdateables",
+      type: "setCourseDisabledStatus",
       target: { type: "CourseDetails" },
-      courseId: makeMoocKind({ instanceId: MOOC_INSTANCE_ID }),
-      exerciseIds: [makeMoocKind({ moocExerciseId: MOOC_EXERCISE_ID })],
+      courseId: makeTmcKind({ courseId: 42 }),
+      disabled: true,
     })
 
-    const update = await screen.findByRole("button", { name: "Update exercises" })
-    postedMessages.mockClear()
-    update.click()
-
-    expect(postedMessages).toHaveBeenCalledWith({
-      type: "downloadExercises",
-      ids: [makeMoocKind({ moocExerciseId: MOOC_EXERCISE_ID })],
-      courseId: panel.courseId,
-      mode: "update",
-    })
-  })
-
-  test("navigates back with a real button rather than a keypress handler", async () => {
-    render(CourseDetails, { props: { panel: tmcPanel() } })
-    postedMessages.mockClear()
-
-    const back = screen.getByRole("button", { name: "My Courses" })
-    expect(back.tagName).toBe("BUTTON")
-    expect(back).not.toHaveAttribute("tabindex")
-    back.click()
-
-    expect(postedMessages).toHaveBeenCalledWith({ type: "openMyCourses" })
+    expect(await screen.findByText(/This course has been disabled/)).toBeInTheDocument()
   })
 
   test("shows only why the course could not be loaded, and offers to ask again", async () => {
     const panel = tmcPanel()
     render(CourseDetails, { props: { panel } })
-    expect(screen.getByText("Loading exercises")).toBeInTheDocument()
+    expect(screen.getByText("Loading course")).toBeInTheDocument()
 
     replyToRequest("requestCourseDetailsData", {
       ok: false,
@@ -416,11 +161,7 @@ suite("CourseDetails panel", () => {
   test("posts refreshCourseDetails after a message has replaced the panel", async () => {
     const panel = tmcPanel()
     render(CourseDetails, { props: { panel } })
-    dispatch({
-      type: "setCourseData",
-      target: { type: "CourseDetails", id: panel.id },
-      courseData: tmcLocalCourse(),
-    })
+    sendCourse(panel)
     postedMessages.mockClear()
 
     const refresh = await screen.findByRole("button", { name: "Refresh" })
@@ -437,11 +178,7 @@ suite("CourseDetails panel", () => {
   test("stops refreshing when the host reports the refresh finished", async () => {
     const panel = tmcPanel()
     render(CourseDetails, { props: { panel } })
-    dispatch({
-      type: "setCourseData",
-      target: { type: "CourseDetails", id: panel.id },
-      courseData: tmcLocalCourse(),
-    })
+    sendCourse(panel)
     ;(await screen.findByRole("button", { name: "Refresh" })).click()
     const busy = await screen.findByRole("button", { name: "Refreshing…" })
     expect(busy).toHaveAttribute("aria-disabled", "true")

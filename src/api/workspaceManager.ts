@@ -110,7 +110,7 @@ export default class WorkspaceManager implements vscode.Disposable {
   private _recordedClosedExercises: Map<string, string>
   private readonly _exercisesChanged = new vscode.EventEmitter<void>()
 
-  /** Fires after {@link setExercises} replaces the known exercises. */
+  /** Fires after the known exercises, or whether one is open or closed, change. */
   public readonly onDidChangeExercises = this._exercisesChanged.event
 
   /**
@@ -585,6 +585,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     for (const exercise of matched) {
       exercise.status = open ? ExerciseStatus.Open : ExerciseStatus.Closed
     }
+    this._exercisesChanged.fire()
 
     const refreshed = await this._refreshActiveCourseWorkspace()
     return refreshed.err ? refreshed : Ok(matched)
@@ -679,6 +680,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     if (activeCourseWorkspace) {
       void this._recordClosedExercises(activeCourseWorkspace.backend, activeCourseWorkspace.slug)
     }
+    this._exercisesChanged.fire()
 
     if (incorrectFolderAdded) {
       Logger.warn(

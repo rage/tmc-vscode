@@ -2,14 +2,18 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import type * as vscode from "vscode"
 
-import { sendSubmissionFeedback, submitExercise } from "../../actions/submitExercise"
+import {
+  keepWaitingForGrading,
+  sendSubmissionFeedback,
+  submitExercise,
+} from "../../actions/submitExercise"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { failure } from "../../api/withOperation"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
 import { BottleneckError, InsufficientScopeError } from "../../errors"
-import type { LocalCourseData } from "../../shared/shared"
+import type { ExtensionToWebview, LocalCourseData, SubmissionView } from "../../shared/shared"
 import { CourseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
 import { createMockActionContext } from "../mocks/actionContext"
@@ -129,27 +133,64 @@ function contextFor(
   return { actionContext, setPassed }
 }
 
-function moocContextWith(submitResult: unknown): {
+const TASK_SUBMISSION_ID = "task-submission-1"
+
+function moocContextWith(gradingResult: unknown): {
   actionContext: ReadyActionContext
   setPassed: ReturnType<typeof vi.fn>
   submit: ReturnType<typeof vi.fn>
+  wait: ReturnType<typeof vi.fn>
 } {
-  const submit = vi.fn().mockResolvedValue(Ok(submitResult))
+  const submit = vi
+    .fn()
+    .mockResolvedValue(
+      Ok({ task_submission_id: TASK_SUBMISSION_ID, slide_submission_id: "slide-submission-1" }),
+    )
+  const wait = vi.fn().mockResolvedValue(Ok(gradingResult))
   const { actionContext, setPassed } = contextFor(makeMoocKind(moocCourse), {
-    submitMoocExerciseAndWaitForResults: submit,
+    submitMoocExercise: submit,
+    waitForMoocGrading: wait,
   })
-  return { actionContext, setPassed, submit }
+  return { actionContext, setPassed, submit, wait }
 }
 
-// Like `moocContextWith`, but the blocking submit resolves to an `Err` (e.g. the
+// Like `moocContextWith`, but the submit itself resolves to an `Err` (e.g. the
 // submission-throttle BottleneckError or a submit failure).
 function moocContextWithErr(error: Error): {
   actionContext: ReadyActionContext
   setPassed: ReturnType<typeof vi.fn>
 } {
   return contextFor(makeMoocKind(moocCourse), {
-    submitMoocExerciseAndWaitForResults: vi.fn().mockResolvedValue(Err(error)),
+    submitMoocExercise: vi.fn().mockResolvedValue(Err(error)),
   })
+}
+
+/** Every view the action showed, oldest first. */
+function shownViews(): SubmissionView[] {
+  return vi
+    .mocked(TmcPanel.postMessage)
+    .mock.calls.flat()
+    .flatMap((message: ExtensionToWebview) =>
+      message.type === "submissionView" ? [message.view] : [],
+    )
+}
+
+function lastView(): SubmissionView | undefined {
+  return shownViews().at(-1)
+}
+
+function grading(overrides: Record<string, unknown>): unknown {
+  return {
+    status: "grading",
+    grading: {
+      grading_progress: "FullyGraded",
+      score_given: null,
+      grading_started_at: null,
+      grading_completed_at: null,
+      feedback_text: null,
+      ...overrides,
+    },
+  }
 }
 
 function tmcContextWith(submitResult: unknown): {
@@ -185,13 +226,11 @@ suite("submitExercise action, tmc", () => {
       expect.any(Function),
       expect.any(Function),
     )
-    expect(TmcPanel.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "submissionResult",
-        result: passingSubmission,
-        questions: [{ id: 3, kind: "text", question: "How was it?" }],
-      }),
-    )
+    expect(lastView()).toMatchObject({
+      phase: "finished",
+      headline: "All tests passed on the server",
+      points: { given: 1, max: 2 },
+    })
     expect(setPassed).toHaveBeenCalledWith("tmc", TMC_COURSE_SLUG, EXERCISE_SLUG)
     // The command layer refreshes this course's totals after a successful submit.
     expect(result.val).toEqual(CourseIdentifier.from(tmcCourse.id))
@@ -206,12 +245,24 @@ suite("submitExercise action, tmc", () => {
 
     const onSubmissionUrl = submit.mock.calls[0]?.[3] as (url: string) => void
     onSubmissionUrl("https://tmc.mooc.fi/submissions/1")
-    expect(TmcPanel.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "submissionStatusUrl",
-        url: "https://tmc.mooc.fi/submissions/1",
-      }),
-    )
+    expect(lastView()).toMatchObject({
+      phase: "grading",
+      submissionUrl: "https://tmc.mooc.fi/submissions/1",
+    })
+  })
+
+  test("progress arrives as the uploading view until the server has the submission", async () => {
+    const { actionContext, submit } = tmcContextWith(passingSubmission)
+
+    await submitExercise(extensionContext, actionContext, tmcExercise)
+
+    const onProgress = submit.mock.calls[0]?.[2] as (fraction: number, message?: string) => void
+    onProgress(0.25, "Compressing")
+    expect(lastView()).toMatchObject({
+      phase: "uploading",
+      progressFraction: 0.25,
+      progressSteps: ["Compressing"],
+    })
   })
 
   test("a failing submission posts the result but does not mark passed", async () => {
@@ -225,9 +276,7 @@ suite("submitExercise action, tmc", () => {
     await submitExercise(extensionContext, actionContext, tmcExercise)
 
     expect(setPassed).not.toHaveBeenCalled()
-    expect(TmcPanel.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "submissionResult", questions: [] }),
-    )
+    expect(lastView()).toMatchObject({ phase: "finished", canPaste: true, feedback: undefined })
   })
 
   test("a stored exercise id from the other backend is refused", async () => {
@@ -251,100 +300,103 @@ suite("submitExercise action, tmc", () => {
 })
 
 suite("submitExercise action, mooc", () => {
-  test("submits with the resolved exercise id and posts the reduced result", async () => {
-    const grading = {
-      status: "grading",
-      grading: {
-        grading_progress: "FullyGraded",
-        score_given: 3,
-        grading_started_at: "2026-07-21T00:00:00Z",
-        grading_completed_at: "2026-07-21T00:00:01Z",
-        feedback_text: "All tests passed",
-      },
-    }
-    const { actionContext, setPassed, submit } = moocContextWith(grading)
+  test("submits without blocking, then waits for that submission's grading", async () => {
+    const graded = grading({ score_given: 3, feedback_text: "All tests passed" })
+    const { actionContext, setPassed, submit, wait } = moocContextWith(graded)
 
     const result = await submitExercise(extensionContext, actionContext, moocExercise)
     expect(result.ok).toBe(true)
 
-    // submit is called with the exercise id + path (the CLI resolves slide/task)
-    expect(submit).toHaveBeenCalledWith(MOOC_EXERCISE_ID, "/path/to/exercise", expect.any(Function))
-    // the reduced mooc result is posted to the panel
-    expect(TmcPanel.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "moocSubmissionResult", result: grading }),
-    )
-    // a fully-graded, non-zero score marks the exercise passed
+    expect(submit).toHaveBeenCalledWith(MOOC_EXERCISE_ID, "/path/to/exercise")
+    expect(wait).toHaveBeenCalledWith(TASK_SUBMISSION_ID, expect.any(Function))
+    expect(shownViews().map((view) => view.phase)).toEqual(["uploading", "grading", "finished"])
+    expect(lastView()).toMatchObject({
+      headline: "Exercise graded",
+      points: { given: 3, max: 3 },
+      feedbackText: "All tests passed",
+      canKeepWaiting: false,
+    })
     expect(setPassed).toHaveBeenCalledWith("mooc", COURSE_SLUG, EXERCISE_SLUG)
     // The command layer refreshes this course's totals after a successful submit.
     expect(result.val).toEqual(CourseIdentifier.from(moocCourse.id))
   })
 
+  test("grading progress keeps changed messages only, on an indeterminate bar", async () => {
+    const { actionContext, wait } = moocContextWith(grading({ score_given: 3 }))
+
+    await submitExercise(extensionContext, actionContext, moocExercise)
+
+    const onProgress = wait.mock.calls[0]?.[1] as (fraction: number, message?: string) => void
+    onProgress(1, "Grading in progress")
+    onProgress(1, "Grading in progress")
+    expect(lastView()).toMatchObject({ phase: "grading", progressSteps: ["Grading in progress"] })
+    expect(lastView()?.progressFraction).toBeUndefined()
+  })
+
   test("a failed grading does not mark the exercise passed", async () => {
-    const grading = {
-      status: "grading",
-      grading: {
-        grading_progress: "Failed",
-        score_given: 0,
-        grading_started_at: null,
-        grading_completed_at: null,
-        feedback_text: "Some tests failed",
-      },
-    }
-    const { actionContext, setPassed } = moocContextWith(grading)
+    const { actionContext, setPassed } = moocContextWith(
+      grading({ grading_progress: "Failed", score_given: 0 }),
+    )
 
     await submitExercise(extensionContext, actionContext, moocExercise)
     expect(setPassed).not.toHaveBeenCalled()
-    expect(TmcPanel.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "moocSubmissionResult", result: grading }),
-    )
+    expect(lastView()).toMatchObject({ phase: "failed", headline: "Grading failed" })
   })
 
-  test("a pending-manual grading posts the result but does not mark passed", async () => {
-    // PendingManual is terminal-for-student (awaiting a human): the reduced panel
-    // renders it, but it is not a pass, so the exercise must NOT be marked passed
-    // even though it carries a partial score.
-    const grading = {
-      status: "grading",
-      grading: {
-        grading_progress: "PendingManual",
-        score_given: 0.5,
-        grading_started_at: "2026-07-21T00:00:00Z",
-        grading_completed_at: null,
-        feedback_text: "Awaiting manual grading",
-      },
-    }
-    const { actionContext, setPassed } = moocContextWith(grading)
+  test("a pending-manual grading is shown but does not mark passed", async () => {
+    const { actionContext, setPassed } = moocContextWith(
+      grading({ grading_progress: "PendingManual", score_given: 0.5 }),
+    )
 
     const result = await submitExercise(extensionContext, actionContext, moocExercise)
     expect(result.ok).toBe(true)
     expect(setPassed).not.toHaveBeenCalled()
-    expect(TmcPanel.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "moocSubmissionResult", result: grading }),
-    )
+    expect(lastView()).toMatchObject({ phase: "manualReview", canKeepWaiting: false })
   })
 
-  test("a timed-out (non-terminal) status posts the result without marking passed", async () => {
-    // On timeout the blocking submit returns the latest non-terminal status as
-    // data (not an error); the action must still post it to the panel (which
-    // renders "grading still in progress") and must NOT mark the exercise passed.
-    const grading = {
-      status: "grading",
-      grading: {
-        grading_progress: "Pending",
-        score_given: null,
-        grading_started_at: null,
-        grading_completed_at: null,
-        feedback_text: null,
-      },
-    }
-    const { actionContext, setPassed } = moocContextWith(grading)
+  test("a grading still pending when the CLI stops waiting can be waited for again", async () => {
+    const { actionContext, setPassed, wait } = moocContextWith(
+      grading({ grading_progress: "Pending" }),
+    )
 
     const result = await submitExercise(extensionContext, actionContext, moocExercise)
     expect(result.ok).toBe(true)
     expect(setPassed).not.toHaveBeenCalled()
-    expect(TmcPanel.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "moocSubmissionResult", result: grading }),
-    )
+    expect(lastView()).toMatchObject({ phase: "timedOut", canKeepWaiting: true })
+
+    wait.mockResolvedValueOnce(Ok(grading({ score_given: 2 })))
+    const waited = await keepWaitingForGrading(extensionContext, actionContext, 1)
+
+    expect(waited.val).toEqual(CourseIdentifier.from(moocCourse.id))
+    expect(wait).toHaveBeenLastCalledWith(TASK_SUBMISSION_ID, expect.any(Function))
+    expect(lastView()).toMatchObject({ phase: "finished", points: { given: 2, max: 3 } })
+    expect(setPassed).toHaveBeenCalledWith("mooc", COURSE_SLUG, EXERCISE_SLUG)
+
+    const again = await keepWaitingForGrading(extensionContext, actionContext, 1)
+    expect(again.err).toBe(true)
+  })
+
+  test("a failed status check after the submit still offers to keep waiting", async () => {
+    const { actionContext, wait } = moocContextWith(undefined)
+    wait.mockResolvedValue(Err(new Error("Connection reset by peer")))
+
+    const result = await submitExercise(extensionContext, actionContext, moocExercise)
+
+    expect(result.ok).toBe(true)
+    expect(lastView()).toMatchObject({
+      phase: "failed",
+      canKeepWaiting: true,
+      error: { message: "Connection reset by peer" },
+    })
+  })
+
+  test("keeping waiting for a panel with no unfinished grading errs", async () => {
+    const { actionContext, wait } = moocContextWith(grading({}))
+
+    const waited = await keepWaitingForGrading(extensionContext, actionContext, 2)
+
+    expect(waited.err).toBe(true)
+    expect(wait).not.toHaveBeenCalled()
   })
 
   test("a second submit of the same exercise is rejected while one is in flight", async () => {
@@ -355,11 +407,11 @@ suite("submitExercise action, mooc", () => {
     let finishFirst!: () => void
     const submit = vi.fn().mockReturnValue(
       new Promise((resolve) => {
-        finishFirst = () => resolve(Ok({ status: "no-grading-yet" }))
+        finishFirst = () => resolve(Err(new Error("offline")))
       }),
     )
     const { actionContext } = contextFor(makeMoocKind(moocCourse), {
-      submitMoocExerciseAndWaitForResults: submit,
+      submitMoocExercise: submit,
     })
     const notification = vi.mocked(actionContext.dialog.notification)
 
@@ -373,11 +425,11 @@ suite("submitExercise action, mooc", () => {
     expect(submit).toHaveBeenCalledTimes(1)
 
     finishFirst()
-    expect((await first).ok).toBe(true)
+    await first
 
     // and the key is free again once the first submit finishes
-    const third = await submitExercise(extensionContext, actionContext, moocExercise)
-    expect(third.ok).toBe(true)
+    await submitExercise(extensionContext, actionContext, moocExercise)
+    expect(submit).toHaveBeenCalledTimes(2)
   })
 
   test("a BottleneckError from the submission throttle reaches the panel", async () => {
@@ -391,15 +443,11 @@ suite("submitExercise action, mooc", () => {
     expect(result.err).toBe(true)
     expect(result.val).toBe(error)
     expect(setPassed).not.toHaveBeenCalled()
-    expect(TmcPanel.postMessage).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: "moocSubmissionResult" }),
-    )
-    expect(TmcPanel.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "submissionStatusError",
-        error: { message: "You are submitting too fast, try again later." },
-      }),
-    )
+    expect(lastView()).toMatchObject({
+      phase: "failed",
+      canKeepWaiting: false,
+      error: { message: "You are submitting too fast, try again later." },
+    })
   })
 
   test("the failure survives the webview boundary with its message intact", async () => {
@@ -409,13 +457,8 @@ suite("submitExercise action, mooc", () => {
 
     await submitExercise(extensionContext, actionContext, moocExercise)
 
-    const posted = vi
-      .mocked(TmcPanel.postMessage)
-      .mock.calls.flat()
-      .find((message) => message.type === "submissionStatusError")
-    expect(posted).toBeDefined()
-    const delivered = JSON.parse(JSON.stringify(posted)) as { error: { message: string } }
-    expect(delivered.error.message).toBe("Connection reset by peer")
+    const delivered = JSON.parse(JSON.stringify(lastView())) as SubmissionView
+    expect(delivered.error?.message).toBe("Connection reset by peer")
   })
 })
 
@@ -450,12 +493,12 @@ suite("submitExercise action, through the real runForExercise boundary", () => {
     let finishFirst!: () => void
     const submit = vi.fn().mockReturnValue(
       new Promise((resolve) => {
-        finishFirst = () => resolve(Ok({ status: "no-grading-yet" }))
+        finishFirst = () => resolve(Err(new Error("offline")))
       }),
     )
     const actionContext = contextWithWorkspace(
       makeMoocKind(moocCourse),
-      { submitMoocExerciseAndWaitForResults: submit },
+      { submitMoocExercise: submit },
       moocExercise,
     )
     const notification = vi.mocked(actionContext.dialog.notification)
@@ -488,7 +531,7 @@ suite("submitExercise action, through the real runForExercise boundary", () => {
     const cause = new Error("Connection reset by peer")
     const actionContext = contextWithWorkspace(
       makeMoocKind(moocCourse),
-      { submitMoocExerciseAndWaitForResults: vi.fn().mockResolvedValue(Err(cause)) },
+      { submitMoocExercise: vi.fn().mockResolvedValue(Err(cause)) },
       moocExercise,
     )
     const notification = vi.mocked(actionContext.dialog.notification)
@@ -512,7 +555,7 @@ suite("submitExercise action, through the real runForExercise boundary", () => {
     const cause = new InsufficientScopeError("exercise-services")
     const actionContext = contextWithWorkspace(
       makeMoocKind(moocCourse),
-      { submitMoocExerciseAndWaitForResults: vi.fn().mockResolvedValue(Err(cause)) },
+      { submitMoocExercise: vi.fn().mockResolvedValue(Err(cause)) },
       moocExercise,
     )
     const reportError = vi.mocked(actionContext.dialog.reportError)

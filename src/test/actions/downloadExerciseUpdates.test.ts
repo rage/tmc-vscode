@@ -1,19 +1,16 @@
 import { vi } from "vitest"
 
 import { downloadExerciseUpdates } from "../../actions/downloadExerciseUpdates"
-import { postUpdateables } from "../../panels/exerciseLists"
 import { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
+import { updateablesRegistry } from "../../ui/updateablesRegistry"
 import { createMockActionContext } from "../mocks/actionContext"
 
 const downloadOrUpdateExercises = vi.hoisted(() => vi.fn())
 
 vi.mock("../../actions/downloadOrUpdateExercises", () => ({ downloadOrUpdateExercises }))
 
-// Only the post is stubbed; `withOptimisticList` is part of the behaviour under test.
-vi.mock("../../panels/exerciseLists", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../panels/exerciseLists")>()),
-  postUpdateables: vi.fn(),
-}))
+// Only the write is stubbed; `withOptimisticList` is part of the behaviour under test.
+vi.mock("../../ui/updateablesRegistry", () => ({ updateablesRegistry: { set: vi.fn() } }))
 
 /** A fresh id object per exercise, as `checkForExerciseUpdates` reports them. */
 function update(
@@ -28,7 +25,7 @@ function update(
 
 function postedLists(): [string, number[]][] {
   return vi
-    .mocked(postUpdateables)
+    .mocked(updateablesRegistry.set)
     .mock.calls.map(([courseId, exerciseIds]) => [
       CourseIdentifier.toString(courseId),
       exerciseIds.map((x) => ExerciseIdentifier.unwrap(x) as number),

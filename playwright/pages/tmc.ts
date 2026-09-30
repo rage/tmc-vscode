@@ -73,18 +73,6 @@ export class TmcPage {
   }
 
   /**
-   * Opens My Courses from the Courses view's welcome content, which shows only while the
-   * user has no courses; call {@link openMenu} first.
-   */
-  public async openMyCourses(): Promise<void> {
-    await clickUntilVisible(
-      this.coursesViewWelcomeButton("Open My Courses"),
-      this.webview.getByRole("button", { name: "Add new course" }).first(),
-      "My Courses did not open",
-    )
-  }
-
-  /**
    * The toast VS Code pops for a `Dialog` notification, matched on `text`.
    *
    * Scoped to the toast list because VS Code also mirrors every notification into

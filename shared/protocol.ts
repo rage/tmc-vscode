@@ -1,15 +1,9 @@
 import { z } from "zod"
 
-import {
-  ExerciseGroupSchema,
-  ExerciseStatusSchema,
-  FeedbackQuestionSchema,
-  LocalCourseDataSchema,
-  LocalCourseExerciseSchema,
-} from "./course"
-import { CourseIdentifierSchema, ExerciseIdentifierSchema } from "./enum"
+import { FeedbackQuestionSchema, LocalCourseDataSchema, LocalCourseExerciseSchema } from "./course"
+import { CourseIdentifierSchema } from "./enum"
 import { BaseError } from "./errors"
-import { ExerciseTaskSubmissionStatus, SubmissionFinished } from "./langsSchema"
+import { TestCase, TmcStyleValidationResult } from "./langsSchema"
 
 export const AppPanelSchema = z.object({
   id: z.number(),
@@ -18,30 +12,11 @@ export const AppPanelSchema = z.object({
 
 export type AppPanel = z.infer<typeof AppPanelSchema>
 
-export const MyCoursesPanelSchema = z.object({
-  id: z.number(),
-  type: z.literal("MyCourses"),
-  // matches the `setMyCourses` message, which carries the user's local course data
-  courses: z.array(LocalCourseDataSchema).optional(),
-  tmcDataPath: z.string().optional(),
-  tmcDataSize: z.string().optional(),
-})
-
-export type MyCoursesPanel = z.infer<typeof MyCoursesPanelSchema>
-
 export const CourseDetailsPanelSchema = z.object({
   id: z.number(),
   type: z.literal("CourseDetails"),
   courseId: CourseIdentifierSchema,
   course: LocalCourseDataSchema.optional(),
-  offlineMode: z.boolean().optional(),
-  updateableExercises: z.array(ExerciseIdentifierSchema).optional(),
-  // undefined until the exercise groups have been received from the extension host
-  exerciseGroups: z.array(ExerciseGroupSchema).optional(),
-  exerciseStatuses: z.object({
-    tmc: z.record(z.coerce.number(), ExerciseStatusSchema),
-    mooc: z.record(z.string(), ExerciseStatusSchema),
-  }),
 })
 
 export type CourseDetailsPanel = z.infer<typeof CourseDetailsPanelSchema>
@@ -50,12 +25,7 @@ export type CourseDetailsPanel = z.infer<typeof CourseDetailsPanelSchema>
 // `targetPanelSchema`/`broadcastPanelSchema` can be used inside the panel schemas
 // themselves without creating a circular type dependency;
 // the `_panelTypesMatch` assertion below `Panel` keeps this in sync with `PanelSchema`
-export type PanelType =
-  | "App"
-  | "MyCourses"
-  | "CourseDetails"
-  | "ExerciseSubmission"
-  | "InitializationErrorHelp"
+export type PanelType = "App" | "CourseDetails" | "ExerciseSubmission" | "InitializationErrorHelp"
 
 // used to define messages that should only be sent to a specific instance of a panel
 // for example, a submission's result should only be sent to the ExerciseSubmission
@@ -130,7 +100,6 @@ export type InitializationErrorHelpPanel = z.infer<typeof InitializationErrorHel
  */
 export const PanelSchema = z.discriminatedUnion("type", [
   AppPanelSchema,
-  MyCoursesPanelSchema,
   CourseDetailsPanelSchema,
   ExerciseSubmissionPanelSchema,
   InitializationErrorHelpPanelSchema,
@@ -170,6 +139,56 @@ export function toWebviewError(error: unknown): WebviewError {
   }
 }
 
+/** Where a submission is, from sending it to its final grade. */
+const SubmissionPhaseSchema = z.enum([
+  "uploading",
+  "grading",
+  "finished",
+  // The host stopped waiting before the backend finished grading.
+  "timedOut",
+  "failed",
+  "manualReview",
+])
+
+/**
+ * Everything the ExerciseSubmission panel shows about one submission, from either backend.
+ *
+ * Built on the host by `src/panels/submissionView.ts`; the panel renders it without knowing
+ * which backend answered.
+ */
+export const SubmissionViewSchema = z.object({
+  phase: SubmissionPhaseSchema,
+  headline: z.string(),
+  /** What the phase means for the student, where the headline does not say it. */
+  explanation: z.string().optional(),
+  /** The backend's completion estimate, 0..1; absent while it has none, as for mooc grading. */
+  progressFraction: z.number().optional(),
+  /** The backend's progress messages, oldest first; only while uploading or grading. */
+  progressSteps: z.array(z.string()),
+  /** In the exercise's own unit; `given` may be fractional. */
+  points: z.object({ given: z.number(), max: z.number() }).optional(),
+  /** The grader's feedback, shown as-is. */
+  feedbackText: z.string().optional(),
+  /** Why the submission failed, when the backend or the extension said. */
+  error: WebviewErrorSchema.optional(),
+  testCases: z.array(TestCase),
+  validations: TmcStyleValidationResult.optional(),
+  valgrind: z.string().optional(),
+  solutionUrl: z.string().optional(),
+  /** The submission's page on the backend's site. */
+  submissionUrl: z.string().optional(),
+  /** Whether `keepWaitingForGrading` can pick the wait up again for this submission. */
+  canKeepWaiting: z.boolean(),
+  /** The teachers' feedback questions, answered at `answerUrl` through `sendFeedback`. */
+  feedback: z
+    .object({ answerUrl: z.string(), questions: z.array(FeedbackQuestionSchema) })
+    .optional(),
+  /** Whether to offer sending the exercise to the backend's paste service for help. */
+  canPaste: z.boolean(),
+})
+
+export type SubmissionView = z.infer<typeof SubmissionViewSchema>
+
 const initializationErrorSchema = z
   .object({
     error: z.string(),
@@ -201,107 +220,26 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     panel: PanelSchema,
   }),
   z.object({
-    type: z.literal("setMyCourses"),
-    target: broadcastPanelSchema("MyCourses"),
-    courses: z.array(LocalCourseDataSchema),
-  }),
-  z.object({
-    type: z.literal("setTmcDataPath"),
-    target: broadcastPanelSchema("MyCourses"),
-    tmcDataPath: z.string(),
-  }),
-  z.object({
-    type: z.literal("setTmcDataSize"),
-    target: targetPanelSchema("MyCourses"),
-    tmcDataSize: z.string(),
-  }),
-  z.object({
     type: z.literal("setCourseData"),
     target: targetPanelSchema("CourseDetails"),
     courseData: LocalCourseDataSchema,
   }),
   z.object({
-    type: z.literal("setCourseGroups"),
-    target: targetPanelSchema("CourseDetails"),
-    offlineMode: z.boolean(),
-    exerciseGroups: z.array(ExerciseGroupSchema),
-  }),
-  z.object({
     type: z.literal("setCourseDisabledStatus"),
-    target: broadcastPanelSchema("MyCourses", "CourseDetails"),
+    target: broadcastPanelSchema("CourseDetails"),
     courseId: CourseIdentifierSchema,
     disabled: z.boolean(),
   }),
+  // The whole view each time: the latest one is what a reloaded panel is sent again.
   z.object({
-    type: z.literal("exerciseStatusChange"),
-    target: broadcastPanelSchema("CourseDetails"),
-    // Scopes the broadcast to the CourseDetails panel showing this course (main/side can differ).
-    courseId: CourseIdentifierSchema,
-    exerciseId: ExerciseIdentifierSchema,
-    status: ExerciseStatusSchema,
-  }),
-  // The whole course's statuses in one message. `exerciseStatusChange` stays for genuine
-  // per-exercise deltas; a course opening would otherwise post one message per exercise.
-  z.object({
-    type: z.literal("setExerciseStatuses"),
-    target: broadcastPanelSchema("CourseDetails"),
-    // Scopes the broadcast to the CourseDetails panel showing this course (main/side can differ).
-    courseId: CourseIdentifierSchema,
-    statuses: z.array(z.tuple([ExerciseIdentifierSchema, ExerciseStatusSchema])),
-  }),
-  z.object({
-    type: z.literal("setUpdateables"),
-    target: broadcastPanelSchema("CourseDetails"),
-    // Scopes the broadcast to the CourseDetails panel showing this course (main/side can differ).
-    courseId: CourseIdentifierSchema,
-    exerciseIds: z.array(ExerciseIdentifierSchema),
-  }),
-  z.object({
-    type: z.literal("submissionStatusUrl"),
+    type: z.literal("submissionView"),
     target: targetPanelSchema("ExerciseSubmission"),
-    url: z.string(),
-  }),
-  z.object({
-    type: z.literal("submissionStatusUpdate"),
-    target: targetPanelSchema("ExerciseSubmission"),
-    // completion as a 0..1 fraction, the unit every progress value in the extension uses
-    fraction: z.number(),
-    message: z.string().optional(),
-  }),
-  z.object({
-    type: z.literal("submissionResult"),
-    target: targetPanelSchema("ExerciseSubmission"),
-    result: SubmissionFinished,
-    questions: z.array(FeedbackQuestionSchema),
-  }),
-  // Mooc grading has no per-test breakdown or feedback questions, so its result
-  // is a reduced shape (overall grading progress, score, feedback text) posted
-  // through a separate message rather than reusing the TMC `submissionResult`.
-  z.object({
-    type: z.literal("moocSubmissionResult"),
-    target: targetPanelSchema("ExerciseSubmission"),
-    result: ExerciseTaskSubmissionStatus,
-  }),
-  z.object({
-    type: z.literal("submissionStatusError"),
-    target: targetPanelSchema("ExerciseSubmission"),
-    error: WebviewErrorSchema,
-  }),
-  z.object({
-    type: z.literal("setNewExercises"),
-    target: broadcastPanelSchema("MyCourses"),
-    courseId: CourseIdentifierSchema,
-    exerciseIds: z.array(ExerciseIdentifierSchema),
+    view: SubmissionViewSchema,
   }),
   // The one answer to a request, see `RequestMessage`.
   z.object({
     type: z.literal("reply"),
-    target: targetPanelSchema(
-      "MyCourses",
-      "CourseDetails",
-      "ExerciseSubmission",
-      "InitializationErrorHelp",
-    ),
+    target: targetPanelSchema("CourseDetails", "ExerciseSubmission", "InitializationErrorHelp"),
     requestId: z.number(),
     outcome: z.discriminatedUnion("ok", [
       // `value` is checked against `ReplyValueSchemas` by the side that knows the request.
@@ -316,9 +254,6 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
  * Handled by the Svelte app.
  */
 export type ExtensionToWebview = z.infer<typeof ExtensionToWebviewSchema>
-
-// helper type for messages from the extension to a specific panel
-export type TargetedExtensionToWebview<T extends PanelType> = Targeted<ExtensionToWebview, T>
 
 /**
  * For use with `vscode.postMessage` in the Svelte app.
@@ -337,42 +272,10 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     sourcePanel: targetPanelSchema("CourseDetails").extend({ courseId: CourseIdentifierSchema }),
   }),
   z.object({
-    type: z.literal("requestMyCoursesData"),
-    requestId: z.number(),
-    sourcePanel: targetPanelSchema("MyCourses"),
-  }),
-  z.object({
-    type: z.literal("removeCourse"),
-    id: CourseIdentifierSchema,
-  }),
-  z.object({
     type: z.literal("openCourseWorkspace"),
     // The id, not the slug: the slug names a file the extension writes and opens, so
     // the webview must not be the one choosing it.
     courseId: CourseIdentifierSchema,
-  }),
-  z.object({
-    type: z.literal("downloadExercises"),
-    ids: z.array(ExerciseIdentifierSchema),
-    courseId: CourseIdentifierSchema,
-    mode: z.enum(["download", "update"]),
-  }),
-  z.object({
-    type: z.literal("clearNewExercises"),
-    courseId: CourseIdentifierSchema,
-  }),
-  z.object({
-    type: z.literal("addNewCourse"),
-  }),
-  z.object({
-    type: z.literal("changeTmcDataPath"),
-  }),
-  z.object({
-    type: z.literal("openCourseDetails"),
-    courseId: CourseIdentifierSchema,
-  }),
-  z.object({
-    type: z.literal("openMyCourses"),
   }),
   z.object({
     type: z.literal("refreshCourseDetails"),
@@ -381,22 +284,19 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     id: CourseIdentifierSchema,
   }),
   z.object({
-    type: z.literal("openExercises"),
-    ids: z.array(ExerciseIdentifierSchema),
-    courseId: CourseIdentifierSchema,
-  }),
-  z.object({
-    type: z.literal("closeExercises"),
-    ids: z.array(ExerciseIdentifierSchema),
-    courseId: CourseIdentifierSchema,
-  }),
-  z.object({
     type: z.literal("closeSidePanel"),
   }),
   // Pastes the exercise the named panel shows; a path from the webview would be one the
   // webview chose.
   z.object({
     type: z.literal("pasteExercise"),
+    requestId: z.number(),
+    sourcePanel: strictTargetPanelSchema("ExerciseSubmission"),
+  }),
+  // Waits again for the grading of the submission the named panel shows, after the host
+  // stopped waiting; progress and the outcome arrive as `submissionView`.
+  z.object({
+    type: z.literal("keepWaitingForGrading"),
     requestId: z.number(),
     sourcePanel: strictTargetPanelSchema("ExerciseSubmission"),
   }),
@@ -464,10 +364,10 @@ export type RequestType = RequestMessage["type"]
 /** What a successful `reply` carries, per request type. */
 export const ReplyValueSchemas = {
   requestCourseDetailsData: z.undefined(),
-  requestMyCoursesData: z.undefined(),
   refreshCourseDetails: z.undefined(),
   // the paste link
   pasteExercise: z.string(),
+  keepWaitingForGrading: z.undefined(),
   sendFeedback: z.undefined(),
   copyToClipboard: z.undefined(),
   requestInitializationErrors: InitializationErrorsSchema,

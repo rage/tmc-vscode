@@ -1,7 +1,6 @@
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
-import { TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
 import { LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
 import { Logger } from "../utilities"
@@ -10,7 +9,7 @@ import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
 
 /**
- * Adds a new course to user's courses, and tells an open My Courses panel.
+ * Adds a new course to user's courses and shows it in the Courses view.
  *
  * @param organizationSlug The tmc organization the course was picked from;
  *   ignored for a mooc course, which carries its own.
@@ -60,11 +59,6 @@ export async function addNewCourse(
     return addResult
   }
   ui.treeDP.refresh()
-  TmcPanel.postMessage({
-    type: "setMyCourses",
-    target: { type: "MyCourses" },
-    courses: userData.getCourses(),
-  })
   await workspaceManager.createWorkspaceFile(
     LocalCourseData.getCourseName(fetched.val),
     fetched.val.kind,

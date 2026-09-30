@@ -5,7 +5,8 @@ import { checkForExerciseUpdates, downloadExerciseUpdates } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
 import { NOTIFICATION_DELAY } from "../config/constants"
-import { backendName, CourseIdentifier } from "../shared/shared"
+import { backendName, CourseIdentifier, LocalCourseData } from "../shared/shared"
+import { updateablesRegistry } from "../ui/updateablesRegistry"
 import { Logger } from "../utilities"
 
 /**
@@ -36,6 +37,18 @@ export async function updateExercises(
   }
 
   const { outdated, failures } = updateablesResult.val
+  // What a failed backend's courses last showed is still the best answer for them.
+  for (const course of userData.getCourses()) {
+    if (failures.every(({ backend }) => backend !== course.kind)) {
+      const courseKey = CourseIdentifier.toString(LocalCourseData.getCourseId(course))
+      updateablesRegistry.set(
+        LocalCourseData.getCourseId(course),
+        outdated
+          .filter((x) => CourseIdentifier.toString(x.courseId) === courseKey)
+          .map((x) => x.exerciseId),
+      )
+    }
+  }
   const [firstFailure] = failures
   if (!silent && firstFailure) {
     // One notification however many sites failed; the log has each one's error.

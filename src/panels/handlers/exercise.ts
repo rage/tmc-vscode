@@ -33,6 +33,23 @@ export const exerciseHandlers = {
       )
     },
   },
+  keepWaitingForGrading: {
+    requiresReady: true,
+    async handle(
+      message,
+      { host, actionContext, extensionContext },
+    ): Promise<Result<undefined, Error>> {
+      if (!shownExercisePanel(host, message.sourcePanel.id)) {
+        return Err(new Error("This submission is no longer shown."))
+      }
+      const waited = await panelActions().keepWaitingForGrading(
+        extensionContext,
+        actionContext,
+        message.sourcePanel.id,
+      )
+      return waited.err ? waited : Ok(undefined)
+    },
+  },
   sendFeedback: {
     requiresReady: true,
     async handle(message, { actionContext }): Promise<Result<undefined, Error>> {

@@ -5,8 +5,7 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
 import { ExerciseStatus } from "../api/workspaceManager"
-import { TmcPanel } from "../panels/TmcPanel"
-import type { CourseIdentifier, ExtensionToWebview } from "../shared/shared"
+import type { CourseIdentifier } from "../shared/shared"
 import { ExerciseIdentifier, LocalCourseData, LocalCourseExercise, match } from "../shared/shared"
 import { Logger } from "../utilities"
 import { downloadExercisesForUi } from "./downloadExercisesForUi"
@@ -76,18 +75,6 @@ export async function openExercises(
     .getExercisesByCourseSlug(course.kind, courseName)
     .filter((x) => x.status === ExerciseStatus.Open).length
 
-  TmcPanel.postMessage(
-    ...openedIds.map<ExtensionToWebview>((id) => ({
-      type: "exerciseStatusChange",
-      courseId,
-      exerciseId: id,
-      status: "opened",
-      target: {
-        type: "CourseDetails",
-      },
-    })),
-  )
-
   return new Ok({
     ids: openedIds,
     exceededOpenLimit: openCount > openLimit ? openLimit : undefined,
@@ -97,8 +84,8 @@ export async function openExercises(
 /**
  * Opens given exercises, first downloading any of them that are not present locally.
  *
- * This is what the webview's "open exercises" action maps to: the user can check an
- * exercise that has never been downloaded, so opening it has to fetch it first.
+ * The Courses view offers Open on an exercise that has never been downloaded, so opening
+ * it has to fetch it first.
  */
 export async function downloadAndOpenExercises(
   actionContext: ReadyActionContext,
@@ -153,7 +140,5 @@ export async function downloadAndOpenExercises(
     )
   }
 
-  // `openExercises` is responsible for posting the resulting "opened" status
-  // changes back to the webview, so don't duplicate that here.
   return openExercises(actionContext, exerciseIdsToOpen, courseId)
 }
