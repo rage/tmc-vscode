@@ -6,6 +6,7 @@ import type Langs from "../api/langs"
 import { shownInPanel } from "../api/withOperation"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { SUBMIT_PROCESS_TIMEOUT } from "../config/constants"
+import { nextPanelId } from "../panels/routes"
 import type { InProgressPhase, SubmissionProgress } from "../panels/submissionView"
 import {
   gradingUnavailableView,
@@ -15,7 +16,7 @@ import {
   tmcResultView,
   withProgressStep,
 } from "../panels/submissionView"
-import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
+import { TmcPanel } from "../panels/TmcPanel"
 import type {
   BackendKind,
   CourseIdentifier,
@@ -217,7 +218,7 @@ async function showOutcome(
   }
 
   if (TmcPanel.sidePanel === undefined) {
-    TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+    TmcPanel.renderSide(context, actionContext, panel)
   }
   showSubmissionView(panelTarget(panel), outcome.view)
 }
@@ -270,7 +271,7 @@ export async function submitExercise(
         course,
         exercise: courseExercise,
       }
-      TmcPanel.renderSide(context.extensionUri, context, actionContext, panel)
+      TmcPanel.renderSide(context, actionContext, panel)
 
       const outcome = await submit(panel, exercise)
       if (outcome.err) {

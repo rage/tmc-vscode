@@ -487,7 +487,6 @@ suite("registered command handlers", function () {
     await handlers.get("tmc.viewInitializationErrorHelp")?.()
 
     expect(renderMain).toHaveBeenCalledWith(
-      context.extensionUri,
       context,
       actionContext,
       expect.objectContaining({ type: "InitializationErrorHelp" }),
@@ -733,7 +732,6 @@ suite("registered command handlers", function () {
 
     expect(pickCourse).not.toHaveBeenCalled()
     expect(renderMain).toHaveBeenCalledWith(
-      context.extensionUri,
       context,
       actionContext,
       expect.objectContaining({ type: "CourseDetails", courseId }),
@@ -749,7 +747,6 @@ suite("registered command handlers", function () {
     await handlers.get("tmc.courseDetails")?.(undefined)
 
     expect(renderMain).toHaveBeenCalledWith(
-      context.extensionUri,
       context,
       actionContext,
       expect.objectContaining({ type: "CourseDetails", courseId }),

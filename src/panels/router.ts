@@ -28,8 +28,6 @@ export interface PanelHost {
   readonly route: Panel | undefined
   /** Sends `message` to this webview alone, kept for a reload if it targets `route`. */
   post: (message: PanelMessage) => void
-  /** {@link post} without keeping it: for messages a reloaded webview must not see again. */
-  postTransient: (message: PanelMessage) => void
   /** Shows `route` in this webview. */
   render: (route: Panel) => void
   /** Shows `route` in the main panel, creating it if needed. */

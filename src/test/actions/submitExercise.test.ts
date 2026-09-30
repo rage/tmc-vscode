@@ -22,7 +22,6 @@ import { createMockActionContext } from "../mocks/actionContext"
 // action only needs renderSide (a no-op), postMessage (asserted), and a defined
 // sidePanel so the re-render branch is skipped.
 vi.mock("../../panels/TmcPanel", () => ({
-  nextPanelId: () => 1,
   TmcPanel: {
     renderSide: vi.fn(),
     postMessage: vi.fn(),
@@ -177,6 +176,14 @@ function shownViews(): SubmissionView[] {
 
 function lastView(): SubmissionView | undefined {
   return shownViews().at(-1)
+}
+
+function shownPanelId(): number {
+  const route = vi.mocked(TmcPanel.renderSide).mock.calls.at(-1)?.[2]
+  if (route === undefined) {
+    throw new Error("no submission panel was rendered")
+  }
+  return route.id
 }
 
 function grading(overrides: Record<string, unknown>): unknown {
@@ -365,14 +372,15 @@ suite("submitExercise action, mooc", () => {
     expect(lastView()).toMatchObject({ phase: "timedOut", canKeepWaiting: true })
 
     wait.mockResolvedValueOnce(Ok(grading({ score_given: 2 })))
-    const waited = await keepWaitingForGrading(extensionContext, actionContext, 1)
+    const panelId = shownPanelId()
+    const waited = await keepWaitingForGrading(extensionContext, actionContext, panelId)
 
     expect(waited.val).toEqual(CourseIdentifier.from(moocCourse.id))
     expect(wait).toHaveBeenLastCalledWith(TASK_SUBMISSION_ID, expect.any(Function))
     expect(lastView()).toMatchObject({ phase: "finished", points: { given: 2, max: 3 } })
     expect(setPassed).toHaveBeenCalledWith("mooc", COURSE_SLUG, EXERCISE_SLUG)
 
-    const again = await keepWaitingForGrading(extensionContext, actionContext, 1)
+    const again = await keepWaitingForGrading(extensionContext, actionContext, panelId)
     expect(again.err).toBe(true)
   })
 
@@ -393,7 +401,7 @@ suite("submitExercise action, mooc", () => {
   test("keeping waiting for a panel with no unfinished grading errs", async () => {
     const { actionContext, wait } = moocContextWith(grading({}))
 
-    const waited = await keepWaitingForGrading(extensionContext, actionContext, 2)
+    const waited = await keepWaitingForGrading(extensionContext, actionContext, -1)
 
     expect(waited.err).toBe(true)
     expect(wait).not.toHaveBeenCalled()

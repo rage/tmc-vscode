@@ -17,7 +17,8 @@ import { UserData } from "../config/userdata"
 import { BottleneckError, ConnectionError, InsufficientScopeError } from "../errors"
 import { registerCommands } from "../init/commands"
 import { registerTesting } from "../init/testing"
-import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
+import { nextPanelId } from "../panels/routes"
+import { TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseStatus as RowStatus, ExtensionToWebview } from "../shared/shared"
 import { backendName, CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../shared/shared"
 import Storage from "../storage"
@@ -221,7 +222,7 @@ async function harness(
   })
   TmcPanel.mainPanel?.dispose()
   TmcPanel.sidePanel?.dispose()
-  TmcPanel.renderSide(vscode.Uri.file("/ext"), extensionContext, actionContext, {
+  TmcPanel.renderSide(extensionContext, actionContext, {
     id: nextPanelId(),
     type: "CourseDetails",
     courseId: COURSE_ID,
@@ -279,7 +280,7 @@ function showSubmission(actionContext: ReadyActionContext): void {
   if (!storedExercise) {
     throw new Error("the stored course has no exercise")
   }
-  TmcPanel.renderSide(vscode.Uri.file("/ext"), createMockContext(), actionContext, {
+  TmcPanel.renderSide(createMockContext(), actionContext, {
     id: nextPanelId(),
     type: "ExerciseSubmission",
     course: makeMoocKind(storedCourse()),

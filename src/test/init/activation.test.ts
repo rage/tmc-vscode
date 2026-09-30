@@ -123,14 +123,8 @@ vi.mock("../../ui/treeview/treeview", async (importOriginal) => ({
 }))
 
 vi.mock("../../panels/TmcPanel", () => ({
-  nextPanelId: () => 1,
   TmcPanel: {
-    renderMain: (
-      _uri: unknown,
-      _context: unknown,
-      _actionContext: unknown,
-      panel: { type: string },
-    ) => {
+    renderMain: (_context: unknown, _actionContext: unknown, panel: { type: string }) => {
       recorded.panelTypes.push(panel.type)
     },
     renderSide: () => {},

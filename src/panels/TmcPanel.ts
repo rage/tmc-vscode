@@ -15,8 +15,6 @@ import type { HandlerContext, PanelHost, PanelMessage } from "./router"
 import { dispatch } from "./router"
 import { nextPanelId, panelTitle } from "./routes"
 
-export { nextPanelId } from "./routes"
-
 /**
  * The main panel's webview type, which its serializer is registered for.
  *
@@ -98,76 +96,54 @@ export class TmcPanel {
     postMessageToWebview(this._panel.webview, message, this._webviewName)
   }
 
-  // renders the `route` in the main panel
+  /** Shows `route` in the main panel, creating the panel if needed. */
   public static renderMain(
-    extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
     route: Panel,
   ): void {
-    if (TmcPanel.mainPanel !== undefined) {
-      Logger.info(`Revealing existing main panel for "${route.type}"`)
-      TmcPanel.mainPanel._render(route)
-      TmcPanel.mainPanel._panel.reveal(undefined, false)
-    } else {
-      TmcPanel.mainPanel = TmcPanel.renderNew(
-        extensionUri,
-        extensionContext,
-        actionContext,
-        route,
-        true,
-      )
-    }
+    TmcPanel._renderIn(true, extensionContext, actionContext, route)
   }
 
-  // renders the `route` in the side panel, without taking focus: submission results appear
-  // while the student is typing, and must not pull their keystrokes away
+  /**
+   * Shows `route` in the side panel without taking focus: submission results appear while the
+   * student is typing, and must not pull their keystrokes away.
+   */
   public static renderSide(
-    extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
     route: Panel,
   ): void {
-    if (TmcPanel.sidePanel !== undefined) {
-      Logger.info(`Revealing existing side panel for "${route.type}"`)
-      TmcPanel.sidePanel._render(route)
-      TmcPanel.sidePanel._panel.reveal(undefined, true)
-    } else {
-      TmcPanel.sidePanel = TmcPanel.renderNew(
-        extensionUri,
-        extensionContext,
-        actionContext,
-        route,
-        false,
-      )
-    }
+    TmcPanel._renderIn(false, extensionContext, actionContext, route)
   }
 
-  // convenience function for rendering a main/side panel when no main/side panel exists yet
-  // otherwise the panel can simply be "revealed" with `panel.reveal`
-  public static renderNew(
-    extensionUri: Uri,
+  private static _renderIn(
+    isMain: boolean,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
     route: Panel,
-    isMain: boolean,
-  ): TmcPanel {
+  ): void {
+    const existing = isMain ? TmcPanel.mainPanel : TmcPanel.sidePanel
+    if (existing !== undefined) {
+      Logger.info(`Revealing the ${existing._webviewName} for "${route.type}"`)
+      existing._render(route)
+      existing._panel.reveal(undefined, !isMain)
+      return
+    }
     const showOptions = isMain
       ? { viewColumn: ViewColumn.One, preserveFocus: false }
       : { viewColumn: ViewColumn.Beside, preserveFocus: true }
     const panelViewType = isMain ? MAIN_PANEL_VIEW_TYPE : SIDE_PANEL_VIEW_TYPE
     const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", showOptions, {
-      ...webviewOptions(extensionUri),
+      ...webviewOptions(extensionContext.extensionUri),
       enableFindWidget: true,
     })
-    return TmcPanel._adopt(
-      webviewPanel,
-      extensionUri,
-      extensionContext,
-      actionContext,
-      route,
-      isMain,
-    )
+    const created = TmcPanel._adopt(webviewPanel, extensionContext, actionContext, route, isMain)
+    if (isMain) {
+      TmcPanel.mainPanel = created
+    } else {
+      TmcPanel.sidePanel = created
+    }
   }
 
   /**
@@ -187,12 +163,10 @@ export class TmcPanel {
           return
         }
         Logger.info(`Restoring the main panel on "${route.type}"`)
-        const { extensionUri } = extensionContext
         // The saved options may name an older install's directory.
-        webviewPanel.webview.options = webviewOptions(extensionUri)
+        webviewPanel.webview.options = webviewOptions(extensionContext.extensionUri)
         TmcPanel.mainPanel = TmcPanel._adopt(
           webviewPanel,
-          extensionUri,
           extensionContext,
           actionContext,
           route,
@@ -204,23 +178,17 @@ export class TmcPanel {
 
   private static _adopt(
     webviewPanel: WebviewPanel,
-    extensionUri: Uri,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
     route: Panel,
     isMain: boolean,
   ): TmcPanel {
+    const { extensionUri } = extensionContext
     webviewPanel.iconPath = {
       light: Uri.joinPath(extensionUri, "media", "TMC-light.svg"),
       dark: Uri.joinPath(extensionUri, "media", "TMC.svg"),
     }
-    const currentPanel = new TmcPanel(
-      webviewPanel,
-      extensionContext,
-      extensionUri,
-      actionContext,
-      isMain,
-    )
+    const currentPanel = new TmcPanel(webviewPanel, extensionContext, actionContext, isMain)
     currentPanel._render(route)
     return currentPanel
   }
@@ -228,7 +196,6 @@ export class TmcPanel {
   private constructor(
     panel: WebviewPanel,
     extensionContext: vscode.ExtensionContext,
-    extensionUri: Uri,
     actionContext: ActionContext,
     isMain: boolean,
   ) {
@@ -248,7 +215,7 @@ export class TmcPanel {
       this._disposables,
     )
 
-    this._panel.webview.html = webviewContent(this._panel.webview, extensionUri)
+    this._panel.webview.html = webviewContent(this._panel.webview, extensionContext.extensionUri)
 
     if (isReady(actionContext)) {
       this._disposables.push(
@@ -301,15 +268,8 @@ export class TmcPanel {
         return currentRoute()
       },
       post: (message) => this._postMessage(message),
-      postTransient: (message) => this._postTransient(message),
       render: (route) => this._render(route),
-      renderMain: (route) =>
-        TmcPanel.renderMain(
-          extensionContext.extensionUri,
-          extensionContext,
-          this._actionContext,
-          route,
-        ),
+      renderMain: (route) => TmcPanel.renderMain(extensionContext, this._actionContext, route),
       closeSidePanel: () => TmcPanel.sidePanel?.dispose(),
     }
   }
@@ -349,7 +309,7 @@ export class TmcPanel {
     this._isWebviewReady = true
     const route = this._route
     Logger.info(
-      `Received "ready" from ${this._isMain ? "main" : "side"} webview` +
+      `Received "ready" from the ${this._webviewName}` +
         (route ? `, resending panel "${route.type}"` : ", no panel to resend"),
     )
     if (!route) {

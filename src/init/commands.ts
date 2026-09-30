@@ -7,7 +7,8 @@ import type Dialog from "../api/dialog"
 import * as commands from "../commands"
 import { EXTENSION_ID } from "../config/constants"
 import { registerPanelActions } from "../panels/panelActions"
-import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
+import { nextPanelId } from "../panels/routes"
+import { TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
 import type { ExerciseTestController } from "../testing/exerciseTestController"
 import { showAccountMenu } from "../ui/statusBarAccount"
@@ -133,7 +134,7 @@ export function registerCommands(
   const register = commandRegistrar(context, dialog)
 
   register("tmc.viewInitializationErrorHelp", () => {
-    TmcPanel.renderMain(context.extensionUri, context, actionContext, {
+    TmcPanel.renderMain(context, actionContext, {
       id: nextPanelId(),
       type: "InitializationErrorHelp",
     })
@@ -167,7 +168,7 @@ export function registerCommands(
         placeHolder: "Which course page do you want to open?",
       }))
     if (courseId) {
-      TmcPanel.renderMain(context.extensionUri, context, readyContext, {
+      TmcPanel.renderMain(context, readyContext, {
         id: nextPanelId(),
         type: "CourseDetails",
         courseId,

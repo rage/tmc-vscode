@@ -10,7 +10,8 @@ import { BottleneckError, InitializationError, presentationFor } from "../../err
 import type { PanelActions } from "../../panels/panelActions"
 import { registerPanelActions } from "../../panels/panelActions"
 import type { PanelMessage } from "../../panels/router"
-import { MAIN_PANEL_VIEW_TYPE, nextPanelId, TmcPanel } from "../../panels/TmcPanel"
+import { nextPanelId } from "../../panels/routes"
+import { MAIN_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
 import type {
   ExtensionToWebview,
   LocalCourseData,
@@ -40,10 +41,7 @@ async function mountSidePanel(
   const { panel, getMessageListener, sendReady } = createFakeWebviewPanel()
   vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
 
-  const extensionUri = vscode.Uri.file("/ext")
-
   TmcPanel.renderSide(
-    extensionUri,
     extensionContext,
     actionContext,
     shownPanel ?? { id: nextPanelId(), type: "InitializationErrorHelp" },
@@ -642,7 +640,7 @@ suite("TmcPanel ready handshake", () => {
     const actionContext = createMockActionContext()
     const { panel, listener } = await mountSidePanel(actionContext)
 
-    TmcPanel.renderSide(vscode.Uri.file("/ext"), createMockContext(), actionContext, {
+    TmcPanel.renderSide(createMockContext(), actionContext, {
       id: nextPanelId(),
       type: "CourseDetails",
       courseId: makeTmcKind({ courseId: 1 }),
@@ -693,7 +691,7 @@ suite("TmcPanel ready handshake", () => {
     const { panel, listener, shown } = await mountCourseDetails(actionContext)
 
     TmcPanel.postMessage(courseDataFor(shown))
-    TmcPanel.renderSide(vscode.Uri.file("/ext"), createMockContext(), actionContext, {
+    TmcPanel.renderSide(createMockContext(), actionContext, {
       id: nextPanelId(),
       type: "CourseDetails",
       courseId: makeTmcKind({ courseId: 1 }),
@@ -937,7 +935,7 @@ suite("TmcPanel refreshCourseDetails", () => {
     const { panel, listener, shown } = await mountCourseDetails(actionContext)
 
     const refreshing = listener(refreshRequest(shown))
-    TmcPanel.renderSide(vscode.Uri.file("/ext"), createMockContext(), actionContext, {
+    TmcPanel.renderSide(createMockContext(), actionContext, {
       id: nextPanelId(),
       type: "InitializationErrorHelp",
     })
@@ -1168,17 +1166,16 @@ suite("TmcPanel main panel lifecycle", () => {
     createWebviewPanel.mockReturnValue(panel)
 
     const extensionContext = createMockContext()
-    const extensionUri = vscode.Uri.file("/ext")
     const actionContext = createMockActionContext()
 
-    TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
+    TmcPanel.renderMain(extensionContext, actionContext, {
       id: nextPanelId(),
       type: "CourseDetails",
       courseId: CourseIdentifier.from(42),
     })
     await sendReady()
     vi.mocked(panel.webview.postMessage).mockClear()
-    TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
+    TmcPanel.renderMain(extensionContext, actionContext, {
       id: nextPanelId(),
       type: "InitializationErrorHelp",
     })
@@ -1197,25 +1194,24 @@ suite("TmcPanel main panel lifecycle", () => {
 
   test("navigating the main panel leaves the side panel standing", async () => {
     const extensionContext = createMockContext()
-    const extensionUri = vscode.Uri.file("/ext")
     const actionContext = createMockActionContext()
     const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
 
     createWebviewPanel.mockReturnValue(createFakeWebviewPanel().panel)
-    TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
+    TmcPanel.renderMain(extensionContext, actionContext, {
       id: nextPanelId(),
       type: "CourseDetails",
       courseId: CourseIdentifier.from(42),
     })
     const side = createFakeWebviewPanel()
     createWebviewPanel.mockReturnValue(side.panel)
-    TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
+    TmcPanel.renderSide(extensionContext, actionContext, {
       id: nextPanelId(),
       type: "CourseDetails",
       courseId: CourseIdentifier.from(42),
     })
 
-    TmcPanel.renderMain(extensionUri, extensionContext, actionContext, {
+    TmcPanel.renderMain(extensionContext, actionContext, {
       id: nextPanelId(),
       type: "InitializationErrorHelp",
     })
@@ -1250,7 +1246,7 @@ suite("TmcPanel main panel lifecycle", () => {
     const { panel, dispose } = createFakeWebviewPanel()
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
 
-    TmcPanel.renderMain(vscode.Uri.file("/ext"), createMockContext(), createMockActionContext(), {
+    TmcPanel.renderMain(createMockContext(), createMockActionContext(), {
       id: nextPanelId(),
       type: "CourseDetails",
       courseId: CourseIdentifier.from(42),
@@ -1266,21 +1262,11 @@ suite("TmcPanel main panel lifecycle", () => {
 })
 
 function renderMainPanel(panel: Panel): void {
-  TmcPanel.renderMain(
-    vscode.Uri.file("/ext"),
-    createMockContext(),
-    createMockActionContext(),
-    panel,
-  )
+  TmcPanel.renderMain(createMockContext(), createMockActionContext(), panel)
 }
 
 function renderSidePanel(panel: Panel): void {
-  TmcPanel.renderSide(
-    vscode.Uri.file("/ext"),
-    createMockContext(),
-    createMockActionContext(),
-    panel,
-  )
+  TmcPanel.renderSide(createMockContext(), createMockActionContext(), panel)
 }
 
 suite("TmcPanel side panel placement", () => {
@@ -1324,7 +1310,7 @@ suite("TmcPanel tab identity", () => {
     resetPanels()
     const { panel: webviewPanel } = createFakeWebviewPanel()
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(webviewPanel)
-    TmcPanel.renderMain(vscode.Uri.file("/ext"), createMockContext(), actionContext, panel)
+    TmcPanel.renderMain(createMockContext(), actionContext, panel)
     return webviewPanel.title
   }
 
@@ -1407,7 +1393,7 @@ async function mountedWebviewHtml(): Promise<string> {
   const { panel } = createFakeWebviewPanel()
   vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
 
-  TmcPanel.renderMain(vscode.Uri.file("/ext"), createMockContext(), createMockActionContext(), {
+  TmcPanel.renderMain(createMockContext(), createMockActionContext(), {
     id: nextPanelId(),
     type: "CourseDetails",
     courseId: CourseIdentifier.from(42),
