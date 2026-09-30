@@ -41,6 +41,9 @@ export class CoursesViewPage extends TmcPage {
   public async runInlineAction(row: Locator, action: string): Promise<void> {
     await row.hover()
     await row.getByRole("button", { name: action, exact: true }).click()
+    // The row's hover tooltip outlives the click and swallows clicks on the rows below it.
+    await this.page.mouse.move(0, 0)
+    await expect(this.page.locator(".context-view:visible")).toHaveCount(0)
   }
 
   /** Runs `command` from `row`'s context menu, on the rows selected with it. */
