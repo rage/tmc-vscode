@@ -5,6 +5,7 @@ import type * as vscode from "vscode"
 import type Langs from "../api/langs"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { SUBMIT_PROCESS_TIMEOUT } from "../config/constants"
+import { findStoredExercise } from "../config/userdata"
 import { nextPanelId } from "../panels/routes"
 import type { InProgressPhase, SubmissionProgress } from "../panels/submissionView"
 import {
@@ -247,19 +248,11 @@ export async function submitExercise(
   const { langs, userData } = actionContext.startup
   Logger.info(`Submitting exercise ${exercise.exerciseSlug} to ${backendName(exercise.backend)}`)
 
-  const courseResult = userData.getCourseBySlug(exercise.backend, exercise.courseSlug)
-  if (courseResult.err) {
-    return courseResult
+  const stored = findStoredExercise(userData, exercise)
+  if (stored.err) {
+    return stored
   }
-  const course = courseResult.val
-  const courseExercise = LocalCourseData.getExercises(course).find(
-    (x) => LocalCourseExercise.getSlug(x) === exercise.exerciseSlug,
-  )
-  if (!courseExercise) {
-    return Err(
-      new Error(`ID for exercise ${exercise.courseSlug}/${exercise.exerciseSlug} was not found.`),
-    )
-  }
+  const { course, exercise: courseExercise } = stored.val
   const exerciseId = LocalCourseExercise.getId(courseExercise)
   const submit = submitterFor(langs, exercise.backend, exerciseId)
   if (!submit) {
