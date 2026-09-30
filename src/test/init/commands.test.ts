@@ -15,7 +15,8 @@ import { registerCommands, registerServiceFreeCommands } from "../../init/comman
 import { registerTesting } from "../../init/testing"
 import { TmcPanel } from "../../panels/TmcPanel"
 import { CourseIdentifier } from "../../shared/shared"
-import { CourseTreeItem } from "../../ui/treeview/treeview"
+import * as treeCommands from "../../ui/treeview/treeCommands"
+import { CourseTreeItem, ExerciseTreeItem } from "../../ui/treeview/treeview"
 import { Logger } from "../../utilities"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 
@@ -29,6 +30,12 @@ const expectedCommands = [
   "tmc.cleanExercise",
   "tmc.closeExercise",
   "tmc.courseDetails",
+  "tmc.dismissNewExercises",
+  "tmc.closeCompletedExercises",
+  "tmc.downloadExercises",
+  "tmc.openExercises",
+  "tmc.closeExercises",
+  "tmc.updateCourseExercises",
   "tmc.downloadNewExercises",
   "tmc.downloadOldSubmission",
   "tmc.logout",
@@ -552,6 +559,72 @@ suite("registered command handlers", function () {
       expect(delegate).toHaveBeenCalledWith(actionContext, resource)
     },
   )
+
+  test.each([
+    ["tmc.cleanExercise", "cleanExercise"],
+    ["tmc.downloadOldSubmission", "downloadOldSubmission"],
+    ["tmc.pasteExercise", "pasteExercise"],
+    ["tmc.resetExercise", "resetExercise"],
+    ["tmc.testExercise", "testExercise"],
+  ] as const)(
+    "%s run on a Courses view exercise passes commands.%s the exercise's folder",
+    async function (commandId, delegateName) {
+      const delegate = vi.spyOn(commands, delegateName).mockResolvedValue(undefined)
+      const { handlers, actionContext } = registerAndCollect()
+      const exerciseUri = vscode.Uri.file("/course/exercise")
+      const item = Object.assign(Object.create(ExerciseTreeItem.prototype) as ExerciseTreeItem, {
+        exerciseUri,
+      })
+
+      await handlers.get(commandId)?.(item)
+
+      expect(delegate).toHaveBeenCalledWith(actionContext, exerciseUri)
+    },
+  )
+
+  // VS Code passes a `canSelectMany` view's commands the clicked row and the selection.
+  test.each([
+    ["tmc.downloadExercises", "downloadExercises"],
+    ["tmc.openExercises", "openExercises"],
+    ["tmc.closeExercises", "closeExercises"],
+  ] as const)(
+    "%s acts on the selection the clicked row is part of",
+    async function (commandId, delegateName) {
+      const delegate = vi.spyOn(treeCommands, delegateName).mockResolvedValue(undefined)
+      const { handlers, actionContext } = registerAndCollect()
+      const clicked = Object.create(ExerciseTreeItem.prototype) as ExerciseTreeItem
+      const other = Object.create(ExerciseTreeItem.prototype) as ExerciseTreeItem
+
+      await handlers.get(commandId)?.(clicked, [clicked, other])
+      await handlers.get(commandId)?.(clicked, [other])
+
+      expect(delegate.mock.calls).toEqual([
+        [actionContext, [clicked, other]],
+        [actionContext, [clicked]],
+      ])
+    },
+  )
+
+  test("tmc.closeCompletedExercises closes the course it ran on, or the one picked", async function () {
+    const closeCompleted = vi
+      .spyOn(treeCommands, "closeCompletedExercises")
+      .mockResolvedValue(undefined)
+    const picked = CourseIdentifier.from(3)
+    vi.spyOn(commands, "pickCourse").mockResolvedValue(picked)
+    const { handlers, actionContext } = registerAndCollect()
+    const courseId = CourseIdentifier.from(7)
+    const item = Object.assign(Object.create(CourseTreeItem.prototype) as CourseTreeItem, {
+      courseId,
+    })
+
+    await handlers.get("tmc.closeCompletedExercises")?.(item)
+    await handlers.get("tmc.closeCompletedExercises")?.()
+
+    expect(closeCompleted.mock.calls).toEqual([
+      [actionContext, courseId],
+      [actionContext, picked],
+    ])
+  })
 
   test("tmc.submitExercise delegates to commands.submitExercise with the extension context", async function () {
     const submitExercise = vi.spyOn(commands, "submitExercise").mockResolvedValue(Ok.EMPTY)

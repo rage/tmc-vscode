@@ -197,6 +197,20 @@ suite("updateCourse action (mooc)", function () {
     expect(userData.getMoocCourses()[0]?.disabled).toBe(false)
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("courses.mooc.fi"))
   })
+
+  test("tells the Courses view whether the backend answered", async function () {
+    vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    const context = actionContext()
+    tmcMockValues.getMoocCourseData = Err(new ConnectionError("down"))
+    await updateCourse(context, courseId)
+    tmcMockValues.getMoocCourseData = Ok([moocCourse, moocExerciseSlides])
+    await updateCourse(context, courseId)
+
+    expect(vi.mocked(context.ui.treeDP.setBackendReachable).mock.calls).toEqual([
+      ["mooc", false],
+      ["mooc", true],
+    ])
+  })
 })
 
 const tmcCourse: TmcLocalCourseData = {
@@ -462,7 +476,7 @@ suite("updateCourse after addNewCourse", function () {
     workspaceManager.createWorkspaceFile = vi.fn() as never
     return {
       ...createMockActionContext({ startup: { langs: langsMock, userData, workspaceManager } }),
-      ui: { treeDP: { refresh: vi.fn() } } as unknown as UI,
+      ui: { treeDP: { refresh: vi.fn(), setBackendReachable: vi.fn() } } as unknown as UI,
     }
   }
 

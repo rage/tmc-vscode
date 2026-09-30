@@ -11,7 +11,9 @@ import { nextPanelId, TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
 import { showAccountMenu } from "../ui/statusBarAccount"
 import { showExerciseActions } from "../ui/statusBarExercise"
-import { CourseTreeItem } from "../ui/treeview/treeview"
+import * as treeCommands from "../ui/treeview/treeCommands"
+import type { CoursesTreeItem } from "../ui/treeview/treeview"
+import { CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
 import { Logger } from "../utilities"
 
 /** Must match the `walkthroughs` entry's `id` in package.json. */
@@ -22,6 +24,13 @@ type CourseTarget = CourseIdentifier | CourseTreeItem
 
 function courseIdOf(target: CourseTarget | undefined): CourseIdentifier | undefined {
   return target instanceof CourseTreeItem ? target.courseId : target
+}
+
+/** An exercise command's argument: a file in the exercise, or its Courses view row. */
+type ExerciseTarget = vscode.Uri | ExerciseTreeItem
+
+function resourceOf(target: ExerciseTarget | undefined): vscode.Uri | undefined {
+  return target instanceof ExerciseTreeItem ? target.exerciseUri : target
 }
 
 /** A command's title as the manifest declares it, without a trailing ellipsis; else its id. */
@@ -141,8 +150,8 @@ export function registerCommands(
 
   register("tmc.changeTmcDataPath", async () => commands.changeTmcDataPath(readyContext))
 
-  register("tmc.cleanExercise", async (resource: vscode.Uri | undefined) =>
-    commands.cleanExercise(readyContext, resource),
+  register("tmc.cleanExercise", async (target: ExerciseTarget | undefined) =>
+    commands.cleanExercise(readyContext, resourceOf(target)),
   )
 
   register("tmc.closeExercise", async (resource: vscode.Uri | undefined) =>
@@ -165,12 +174,44 @@ export function registerCommands(
     }
   })
 
+  register("tmc.dismissNewExercises", async (target: CourseTreeItem) =>
+    treeCommands.dismissNewExercises(readyContext, target.courseId),
+  )
+
+  register("tmc.closeCompletedExercises", async (target?: CourseTarget) => {
+    const courseId =
+      courseIdOf(target) ??
+      (await commands.pickCourse(readyContext, {
+        title: "Close Completed Exercises",
+        placeHolder: "Which course's completed exercises do you want to close?",
+      }))
+    if (courseId) {
+      await treeCommands.closeCompletedExercises(readyContext, courseId)
+    }
+  })
+
+  register("tmc.downloadExercises", async (row?: CoursesTreeItem, rows?: CoursesTreeItem[]) =>
+    treeCommands.downloadExercises(readyContext, treeCommands.targetRows(row, rows)),
+  )
+
+  register("tmc.openExercises", async (row?: CoursesTreeItem, rows?: CoursesTreeItem[]) =>
+    treeCommands.openExercises(readyContext, treeCommands.targetRows(row, rows)),
+  )
+
+  register("tmc.closeExercises", async (row?: CoursesTreeItem, rows?: CoursesTreeItem[]) =>
+    treeCommands.closeExercises(readyContext, treeCommands.targetRows(row, rows)),
+  )
+
+  register("tmc.updateCourseExercises", async (target: CourseTreeItem) =>
+    treeCommands.updateCourseExercises(readyContext, target.courseId),
+  )
+
   register("tmc.downloadNewExercises", async (target?: CourseTarget) =>
     commands.downloadNewExercises(readyContext, courseIdOf(target)),
   )
 
-  register("tmc.downloadOldSubmission", async (resource: vscode.Uri | undefined) =>
-    commands.downloadOldSubmission(readyContext, resource),
+  register("tmc.downloadOldSubmission", async (target: ExerciseTarget | undefined) =>
+    commands.downloadOldSubmission(readyContext, resourceOf(target)),
   )
 
   register("tmc.logout", async () => commands.logout(readyContext))
@@ -188,16 +229,16 @@ export function registerCommands(
 
   register("tmc.openTMCExercisesFolder", async () => commands.openExercisesFolder(readyContext))
 
-  register("tmc.pasteExercise", async (resource: vscode.Uri | undefined) =>
-    commands.pasteExercise(readyContext, resource),
+  register("tmc.pasteExercise", async (target: ExerciseTarget | undefined) =>
+    commands.pasteExercise(readyContext, resourceOf(target)),
   )
 
   register("tmc.removeCourse", async (target?: CourseTarget) =>
     commands.removeCourse(readyContext, courseIdOf(target)),
   )
 
-  register("tmc.resetExercise", async (resource: vscode.Uri | undefined) =>
-    commands.resetExercise(readyContext, resource),
+  register("tmc.resetExercise", async (target: ExerciseTarget | undefined) =>
+    commands.resetExercise(readyContext, resourceOf(target)),
   )
 
   register("tmc.showAccountMenu", async () => showAccountMenu())
@@ -216,14 +257,14 @@ export function registerCommands(
 
   register("tmc.showMoocLogin", async () => commands.login(readyContext))
 
-  register("tmc.submitExercise", async (resource: vscode.Uri | undefined) =>
-    commands.submitExercise(context, readyContext, resource),
+  register("tmc.submitExercise", async (target: ExerciseTarget | undefined) =>
+    commands.submitExercise(context, readyContext, resourceOf(target)),
   )
 
   register("tmc.switchWorkspace", async () => commands.switchWorkspace(readyContext))
 
-  register("tmc.testExercise", async (resource: vscode.Uri | undefined) =>
-    commands.testExercise(readyContext, resource),
+  register("tmc.testExercise", async (target: ExerciseTarget | undefined) =>
+    commands.testExercise(readyContext, resourceOf(target)),
   )
 
   register("tmc.updateExercises", async (mode?: "silent" | "loud") =>

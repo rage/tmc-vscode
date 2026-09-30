@@ -173,7 +173,7 @@ async function harness(
       } as Partial<ReadyStartup>,
     }),
     dialog,
-    ui: { treeDP: { refresh: vi.fn() } } as unknown as UI,
+    ui: { treeDP: { refresh: vi.fn(), setBackendReachable: vi.fn() } } as unknown as UI,
   }
 
   const commandHandlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()

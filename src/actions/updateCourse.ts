@@ -133,10 +133,13 @@ export async function updateCourse(
       return Ok(false)
     } else if (updateResult.val instanceof ConnectionError) {
       Logger.warn(`Failed to fetch data from ${backendName(courseId.kind)}, data not updated.`)
+      actionContext.ui.treeDP.setBackendReachable(courseId.kind, false)
       return Ok(false)
     }
     return updateResult
   }
+
+  actionContext.ui.treeDP.setBackendReachable(courseId.kind, true)
 
   // `updateExercises` finds the new exercises by diffing against the stored list,
   // so the course is stored with its old list and the fresh one goes in after.

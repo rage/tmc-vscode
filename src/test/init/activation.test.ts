@@ -107,7 +107,7 @@ vi.mock("vscode", async (importOriginal) => {
 vi.mock("../../ui/ui", () => ({
   default: class {
     public treeDP = {
-      setCourseSource: (): void => {
+      setSource: (): void => {
         recorded.isCourseViewFilled = true
       },
       setLoggedIn: (loggedIn: boolean): void => {

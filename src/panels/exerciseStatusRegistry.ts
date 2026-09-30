@@ -1,3 +1,5 @@
+import * as vscode from "vscode"
+
 import type { CourseIdentifier, ExerciseIdentifier, ExerciseStatus } from "../shared/shared"
 import {
   CourseIdentifier as CourseIdentifierNs,
@@ -18,6 +20,10 @@ const IN_FLIGHT_STATUSES: ReadonlySet<ExerciseStatus> = new Set(["downloading", 
  */
 class ExerciseStatusRegistry {
   private readonly _byCourse = new Map<string, Map<string, [ExerciseIdentifier, ExerciseStatus]>>()
+  private readonly _changed = new vscode.EventEmitter<void>()
+
+  /** Fires after {@link record} or {@link clear}. */
+  public readonly onDidChange = this._changed.event
 
   /** The in-flight statuses last posted for `courseId`'s exercises. */
   public get(courseId: CourseIdentifier): [ExerciseIdentifier, ExerciseStatus][] {
@@ -45,10 +51,12 @@ class ExerciseStatusRegistry {
     } else {
       this._byCourse.delete(key)
     }
+    this._changed.fire()
   }
 
   public clear(): void {
     this._byCourse.clear()
+    this._changed.fire()
   }
 }
 
