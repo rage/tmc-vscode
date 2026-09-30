@@ -4,7 +4,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { refreshLocalExercises } from "./actions"
+import { onDidFinishSubmission, refreshLocalExercises } from "./actions"
 import type { ActionContext, Startup } from "./actions/types"
 import { isReady } from "./actions/types"
 import { createAuthState } from "./api/authState"
@@ -451,7 +451,10 @@ async function activateInner(
 
   const testController = readyContext && init.registerTesting(context, readyContext)
   init.registerCommands(context, actionContext, testController)
-  context.subscriptions.push(TmcPanel.registerSerializer(context, actionContext))
+  context.subscriptions.push(
+    TmcPanel.registerSerializer(context, actionContext),
+    TmcPanel.showSubmissionViews(context, actionContext),
+  )
   if (readyContext) {
     init.registerSettingsCallbacks(readyContext)
     const account = new AccountStatusBarItem(authState.loggedIn)
@@ -477,6 +480,11 @@ async function activateInner(
         operations: exerciseOperations,
       }),
       trackHasCourses(readyContext.startup.userData),
+      // Point totals come from the backend, so without this the Courses view and Course
+      // Details totals stay stale until the user refreshes by hand.
+      onDidFinishSubmission((courseId) => {
+        void refreshEverything(readyContext, { silent: true, isQueuedWhenBusy: true, courseId })
+      }),
     )
   }
 

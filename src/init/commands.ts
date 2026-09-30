@@ -1,12 +1,10 @@
 import * as vscode from "vscode"
 
-import * as actions from "../actions"
 import type { ActionContext, ReadyActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type Dialog from "../api/dialog"
 import * as commands from "../commands"
 import { EXTENSION_ID } from "../config/constants"
-import { registerPanelActions } from "../panels/panelActions"
 import { initializationErrorHelpPanel, nextPanelId } from "../panels/routes"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
@@ -121,15 +119,6 @@ export function registerCommands(
 ): void {
   const { dialog } = actionContext
   Logger.info("Registering TMC VSCode commands")
-
-  registerPanelActions({
-    openWorkspace: commands.openWorkspace,
-    keepWaitingForGrading: commands.keepWaitingForGrading,
-    pasteExercise: actions.pasteExercise,
-    refreshLocalExercises: actions.refreshLocalExercises,
-    sendSubmissionFeedback: actions.sendSubmissionFeedback,
-    updateCourse: actions.updateCourse,
-  })
 
   const register = commandRegistrar(context, dialog)
 
@@ -270,7 +259,7 @@ export function registerCommands(
   register("tmc.showMoocLogin", async () => commands.login(readyContext))
 
   register("tmc.submitExercise", async (target: ExerciseTarget | undefined) =>
-    commands.submitExercise(context, readyContext, resourceOf(target)),
+    commands.submitExercise(readyContext, resourceOf(target)),
   )
 
   register("tmc.switchWorkspace", async () => commands.switchWorkspace(readyContext))

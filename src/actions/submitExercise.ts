@@ -1,6 +1,6 @@
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
-import type * as vscode from "vscode"
+import * as vscode from "vscode"
 
 import type Langs from "../api/langs"
 import type { WorkspaceExercise } from "../api/workspaceManager"
@@ -16,7 +16,6 @@ import {
   tmcResultView,
   withProgressStep,
 } from "../panels/submissionView"
-import { TmcPanel } from "../panels/TmcPanel"
 import { toWebviewError } from "../panels/webviewError"
 import type {
   BackendKind,
@@ -28,6 +27,7 @@ import type {
 } from "../shared/shared"
 import { backendName, LocalCourseData, LocalCourseExercise, match, unwrap } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
+import { submissionViews } from "../ui/submissionViews"
 import { Logger, parseFeedbackQuestion } from "../utilities"
 import type { ReadyActionContext } from "./types"
 
@@ -79,12 +79,16 @@ class SubmissionProgressReporter {
 }
 
 function showSubmissionView(panel: ExerciseSubmissionPanel, view: SubmissionView): void {
-  TmcPanel.postToSidePanel({
-    type: "submissionView",
-    target: { id: panel.id, type: panel.type },
-    view,
-  })
+  submissionViews.update({ panel, view, shouldReopen: false })
 }
+
+const submissionFinished = new vscode.EventEmitter<CourseIdentifier>()
+
+/**
+ * Fires with the course of each submission whose outcome is shown, graded or not, as the
+ * backend's point totals for it may have changed.
+ */
+export const onDidFinishSubmission = submissionFinished.event
 
 /** Sends one exercise to its backend and waits for the grading, reporting progress to its panel. */
 type ExerciseSubmitter = (submission: Submission) => Promise<Result<SubmissionOutcome, Error>>
@@ -200,7 +204,6 @@ function submitterFor(
 
 /** Records a passed grading locally and shows the outcome, reopening the panel if it was closed. */
 async function showOutcome(
-  context: vscode.ExtensionContext,
   actionContext: ReadyActionContext,
   submission: Submission,
   outcome: SubmissionOutcome,
@@ -225,26 +228,22 @@ async function showOutcome(
     }
   }
 
-  if (TmcPanel.sidePanel === undefined) {
-    TmcPanel.renderSide(context, actionContext, submission.panel)
-  }
-  showSubmissionView(submission.panel, outcome.view)
+  submissionViews.update({ panel: submission.panel, view: outcome.view, shouldReopen: true })
+  submissionFinished.fire(submission.courseId)
 }
 
 /**
  * Submits an exercise to the backend it belongs to and shows the grading in a side panel.
  *
- * Records the exercise as passed locally when the backend graded it so. Returns the
- * exercise's course id once graded, so the caller can refresh that course's totals, and
- * `undefined` when the submission failed and the panel shows why. Errs for a failure before
- * the panel opens: a submit or paste already in flight for the same exercise is a
- * `BottleneckError`.
+ * Records the exercise as passed locally when the backend graded it so, and fires
+ * {@link onDidFinishSubmission} once the outcome is shown. A failed submission is `Ok`, as the
+ * panel shows why. Errs for a failure before the panel opens: a submit or paste already in
+ * flight for the same exercise is a `BottleneckError`.
  */
 export async function submitExercise(
-  context: vscode.ExtensionContext,
   actionContext: ReadyActionContext,
   exercise: WorkspaceExercise,
-): Promise<Result<CourseIdentifier | undefined, Error>> {
+): Promise<Result<void, Error>> {
   const { langs, userData } = actionContext.startup
   Logger.info(`Submitting exercise ${exercise.exerciseSlug} to ${backendName(exercise.backend)}`)
 
@@ -263,7 +262,7 @@ export async function submitExercise(
   const courseId = LocalCourseData.getCourseId(course)
 
   // Held only until the result is posted: the panel offers Paste from that point on, and
-  // the command layer's post-submit refresh doesn't need the same protection.
+  // the refresh that follows doesn't need the same protection.
   return exerciseOperations.run(
     exerciseId,
     "submitting",
@@ -286,17 +285,17 @@ export async function submitExercise(
       // unreachable from here on.
       unfinishedGradings.clear()
       pendingFeedback.clear()
-      TmcPanel.renderSide(context, actionContext, submission.panel)
+      submissionViews.open(submission.panel)
 
       const outcome = await submit(submission)
       if (outcome.err) {
         Logger.error("Exercise submission failed", outcome.val)
         const error = toWebviewError(outcome.val, exercise.backend)
         showSubmissionView(submission.panel, submitFailedView(error))
-        return Ok(undefined)
+        return Ok.EMPTY
       }
-      await showOutcome(context, actionContext, submission, outcome.val)
-      return Ok(courseId)
+      await showOutcome(actionContext, submission, outcome.val)
+      return Ok.EMPTY
     },
   )
 }
@@ -305,14 +304,13 @@ export async function submitExercise(
  * Waits again for the grading of the submission panel `panelId` shows, after the wait that
  * followed its submit ended before the grading did.
  *
- * Returns the exercise's course id, like {@link submitExercise}. Errs when that panel shows
+ * Fires {@link onDidFinishSubmission} like {@link submitExercise}. Errs when that panel shows
  * no such submission, or when a submission of the exercise is already in progress.
  */
 export async function keepWaitingForGrading(
-  context: vscode.ExtensionContext,
   actionContext: ReadyActionContext,
   panelId: number,
-): Promise<Result<CourseIdentifier, Error>> {
+): Promise<Result<void, Error>> {
   const grading = unfinishedGradings.get(panelId)
   if (grading === undefined) {
     return Err(new Error("This submission has no grading left to wait for."))
@@ -325,8 +323,8 @@ export async function keepWaitingForGrading(
       unfinishedGradings.delete(panelId)
       const reporter = new SubmissionProgressReporter(grading.panel, "grading")
       const outcome = await waitForMoocGrading(actionContext.startup.langs, grading, reporter)
-      await showOutcome(context, actionContext, grading, outcome)
-      return Ok(grading.courseId)
+      await showOutcome(actionContext, grading, outcome)
+      return Ok.EMPTY
     },
   )
 }

@@ -7,19 +7,12 @@ import type { ReadyActionContext } from "../../actions/types"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
-import { refreshEverything } from "../../commands/refreshEverything"
-import { keepWaitingForGrading, submitExercise } from "../../commands/submitExercise"
-import { CourseIdentifier } from "../../shared/shared"
+import { submitExercise } from "../../commands/submitExercise"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions", () => ({
-  submitExercise: vi.fn(async () => Ok(CourseIdentifier.from("mooc-course-uuid"))),
-  keepWaitingForGrading: vi.fn(async () => Ok(CourseIdentifier.from("mooc-course-uuid"))),
-}))
-
-vi.mock("../../commands/refreshEverything", () => ({
-  refreshEverything: vi.fn(async () => Ok.EMPTY),
+  submitExercise: vi.fn(async () => Ok.EMPTY),
 }))
 
 const uri = vscode.Uri.file("/workspace/mooc/mooc-course/ex-1")
@@ -30,10 +23,6 @@ const exercise: WorkspaceExercise = {
   status: ExerciseStatus.Open,
   uri,
 }
-const courseId = CourseIdentifier.from("mooc-course-uuid")
-
-// `submitExercise` reads nothing off the extension context; it only hands it on.
-const extensionContext = {} as vscode.ExtensionContext
 
 function contextWith(resolved: WorkspaceExercise | undefined): ReadyActionContext {
   const [dialog] = createDialogMock()
@@ -48,38 +37,16 @@ function contextWith(resolved: WorkspaceExercise | undefined): ReadyActionContex
 
 suite("Submit exercise command", function () {
   beforeEach(function () {
-    vi.mocked(actions.submitExercise).mockResolvedValue(Ok(courseId))
-    vi.mocked(refreshEverything).mockResolvedValue(Ok.EMPTY)
+    vi.mocked(actions.submitExercise).mockResolvedValue(Ok.EMPTY)
   })
 
   test("submits the exercise the resource resolves to, and says it succeeded", async function () {
     const context = contextWith(exercise)
 
-    const result = await submitExercise(extensionContext, context, uri)
+    const result = await submitExercise(context, uri)
 
-    expect(actions.submitExercise).toHaveBeenCalledExactlyOnceWith(
-      extensionContext,
-      context,
-      exercise,
-    )
+    expect(actions.submitExercise).toHaveBeenCalledExactlyOnceWith(context, exercise)
     expect(result.ok).toBe(true)
-    // Point totals come from the backend, so the exercise's course is refreshed
-    // once the submission the action resolved to has been recorded.
-    expect(refreshEverything).toHaveBeenCalledExactlyOnceWith(context, {
-      silent: true,
-      isQueuedWhenBusy: true,
-      courseId,
-    })
-  })
-
-  test("refreshes nothing after a failure its panel shows", async function () {
-    vi.mocked(actions.submitExercise).mockResolvedValue(Ok(undefined))
-    const context = contextWith(exercise)
-
-    const result = await submitExercise(extensionContext, context, uri)
-
-    expect(result.ok).toBe(true)
-    expect(refreshEverything).not.toHaveBeenCalled()
   })
 
   test("reports a failed submission under its own headline", async function () {
@@ -87,7 +54,7 @@ suite("Submit exercise command", function () {
     vi.mocked(actions.submitExercise).mockResolvedValue(Err(cause))
     const context = contextWith(exercise)
 
-    const result = await submitExercise(extensionContext, context, uri)
+    const result = await submitExercise(context, uri)
 
     expect(result.err).toBe(true)
     expect(context.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
@@ -95,49 +62,15 @@ suite("Submit exercise command", function () {
       cause,
       "mooc",
     )
-    expect(refreshEverything).not.toHaveBeenCalled()
   })
 
   test("submits nothing when the resource is not part of an exercise", async function () {
     const context = contextWith(undefined)
 
-    const result = await submitExercise(extensionContext, context, uri)
+    const result = await submitExercise(context, uri)
 
     expect(actions.submitExercise).not.toHaveBeenCalled()
     expect(result.err).toBe(true)
     expect(context.dialog.errorNotification).toHaveBeenCalledOnce()
-  })
-})
-
-suite("Keep waiting for grading command", function () {
-  beforeEach(function () {
-    vi.mocked(actions.keepWaitingForGrading).mockResolvedValue(Ok(courseId))
-    vi.mocked(refreshEverything).mockResolvedValue(Ok.EMPTY)
-  })
-
-  test("waits for the panel's grading, then refreshes its course", async function () {
-    await keepWaitingForGrading(extensionContext, contextWith(exercise), 7)
-
-    expect(actions.keepWaitingForGrading).toHaveBeenCalledWith(
-      extensionContext,
-      expect.anything(),
-      7,
-    )
-    expect(refreshEverything).toHaveBeenCalledWith(expect.anything(), {
-      silent: true,
-      isQueuedWhenBusy: true,
-      courseId,
-    })
-  })
-
-  test("refreshes nothing when the action refuses to wait", async function () {
-    vi.mocked(actions.keepWaitingForGrading).mockResolvedValue(
-      Err(new Error("nothing to wait for")),
-    )
-
-    const result = await keepWaitingForGrading(extensionContext, contextWith(exercise), 7)
-
-    expect(result.err).toBe(true)
-    expect(refreshEverything).not.toHaveBeenCalled()
   })
 })

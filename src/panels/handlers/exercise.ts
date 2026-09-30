@@ -2,10 +2,10 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import * as actions from "../../actions"
 import { withOperation } from "../../api/withOperation"
 import type { ExerciseSubmissionPanel } from "../../shared/shared"
 import { Logger } from "../../utilities"
-import { panelActions } from "../panelActions"
 import type { HandlerMap, PanelHost } from "../router"
 
 /** The submission screen's messages. */
@@ -23,29 +23,17 @@ export const exerciseHandlers = {
         actionContext.dialog,
         { failure: "Failed to paste the exercise.", backend: shown.backend, silent: true },
         () =>
-          panelActions().pasteExercise(
-            actionContext,
-            shown.backend,
-            shown.courseSlug,
-            shown.exerciseSlug,
-          ),
+          actions.pasteExercise(actionContext, shown.backend, shown.courseSlug, shown.exerciseSlug),
       )
     },
   },
   keepWaitingForGrading: {
     requiresReady: true,
-    async handle(
-      message,
-      { host, actionContext, extensionContext },
-    ): Promise<Result<undefined, Error>> {
+    async handle(message, { host, actionContext }): Promise<Result<undefined, Error>> {
       if (!shownExercisePanel(host, message.sourcePanel.id)) {
         return Err(new Error("This submission is no longer shown."))
       }
-      const waited = await panelActions().keepWaitingForGrading(
-        extensionContext,
-        actionContext,
-        message.sourcePanel.id,
-      )
+      const waited = await actions.keepWaitingForGrading(actionContext, message.sourcePanel.id)
       return waited.err ? waited : Ok(undefined)
     },
   },
@@ -55,7 +43,7 @@ export const exerciseHandlers = {
       if (!shownExercisePanel(host, message.sourcePanel.id)) {
         return Err(new Error("This submission is no longer shown."))
       }
-      const sent = await panelActions().sendSubmissionFeedback(
+      const sent = await actions.sendSubmissionFeedback(
         actionContext,
         message.sourcePanel.id,
         message.answers,

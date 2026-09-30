@@ -212,6 +212,12 @@ async function harness(
     registerTesting(extensionContext, actionContext),
   )
   registerCommand.mockRestore()
+  // The panel runs a command through VS Code, which dispatches to the registered handler.
+  vi.mocked(vscode.commands.executeCommand).mockImplementation(async (id, ...args) =>
+    commandHandlers.get(id)?.(...args),
+  )
+  const submissionViewing = TmcPanel.showSubmissionViews(extensionContext, actionContext)
+  onTestFinished(() => submissionViewing.dispose())
 
   const webviews: ReturnType<typeof createFakeWebviewPanel>[] = []
   const requestTypes = new Map<number, string>()

@@ -1,11 +1,12 @@
-import type { Disposable, Webview, WebviewOptions, WebviewPanel } from "vscode"
-import { Uri, ViewColumn, window } from "vscode"
+import type { Webview, WebviewOptions, WebviewPanel } from "vscode"
+import { Disposable, Uri, ViewColumn, window } from "vscode"
 import type * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type { Panel } from "../shared/shared"
 import { assertUnreachable, WebviewStateSchema } from "../shared/shared"
+import { submissionViews } from "../ui/submissionViews"
 import { Logger } from "../utilities"
 import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
@@ -61,9 +62,26 @@ export class TmcPanel {
   // `_panel.dispose()` fires `onDidDispose`, which calls back into `dispose()`
   private _isDisposed = false
 
-  /** Sends `message` to the side panel, where submissions are shown. */
-  public static postToSidePanel(message: PanelMessage): void {
-    TmcPanel.sidePanel?._postMessage(message)
+  /** Shows the submissions the submit actions report in the side panel. Call once, at activation. */
+  public static showSubmissionViews(
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+  ): Disposable {
+    return Disposable.from(
+      submissionViews.onDidOpen((panel) =>
+        TmcPanel.renderSide(extensionContext, actionContext, panel),
+      ),
+      submissionViews.onDidUpdate(({ panel, view, shouldReopen }) => {
+        if (shouldReopen && TmcPanel.sidePanel === undefined) {
+          TmcPanel.renderSide(extensionContext, actionContext, panel)
+        }
+        TmcPanel.sidePanel?._postMessage({
+          type: "submissionView",
+          target: { id: panel.id, type: panel.type },
+          view,
+        })
+      }),
+    )
   }
 
   /** Tells the two panels' log lines apart. */

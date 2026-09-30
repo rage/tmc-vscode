@@ -4,16 +4,22 @@ import * as path from "path"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import * as actions from "../../actions"
 import type { ActionContext } from "../../actions/types"
 import type { UserData } from "../../config/userdata"
 import { BottleneckError, InitializationError, presentationFor } from "../../errors"
-import type { PanelActions } from "../../panels/panelActions"
-import { registerPanelActions } from "../../panels/panelActions"
 import type { PanelMessage } from "../../panels/router"
 import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
 import { MAIN_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
-import type { BackendKind, ExtensionToWebview, LocalCourseData, Panel } from "../../shared/shared"
+import type {
+  BackendKind,
+  ExerciseSubmissionPanel,
+  ExtensionToWebview,
+  LocalCourseData,
+  Panel,
+} from "../../shared/shared"
 import { CourseIdentifier, makeTmcKind } from "../../shared/shared"
+import { submissionViews } from "../../ui/submissionViews"
 import { Logger } from "../../utilities"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 import { createMockContext } from "../mocks/vscode"
@@ -225,16 +231,41 @@ suite("initializationErrorHelpPanel", () => {
   })
 })
 
-// The panel layer cannot import `src/actions` or `src/commands` without recreating the
-// runtime import cycle, so every one of those calls goes through this record instead.
-function stubHandlers(): { [K in keyof PanelActions]: ReturnType<typeof vi.fn> } {
+vi.mock("../../actions", () => ({
+  keepWaitingForGrading: vi.fn(),
+  pasteExercise: vi.fn(),
+  refreshLocalExercises: vi.fn(),
+  sendSubmissionFeedback: vi.fn(),
+  updateCourse: vi.fn(),
+}))
+
+/** The actions the handlers call, each succeeding, plus the command-running `openWorkspace`. */
+function stubHandlers(): {
+  keepWaitingForGrading: ReturnType<typeof vi.fn>
+  openWorkspace: ReturnType<typeof vi.fn>
+  pasteExercise: ReturnType<typeof vi.fn>
+  refreshLocalExercises: ReturnType<typeof vi.fn>
+  sendSubmissionFeedback: ReturnType<typeof vi.fn>
+  updateCourse: ReturnType<typeof vi.fn>
+} {
+  const openWorkspace = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+  onTestFinished(() => openWorkspace.mockRestore())
   return {
-    keepWaitingForGrading: vi.fn().mockResolvedValue(Ok.EMPTY),
-    openWorkspace: vi.fn().mockResolvedValue(undefined),
-    pasteExercise: vi.fn().mockResolvedValue(Ok("link")),
-    refreshLocalExercises: vi.fn().mockResolvedValue(Ok.EMPTY),
-    sendSubmissionFeedback: vi.fn().mockResolvedValue(Ok.EMPTY),
-    updateCourse: vi.fn().mockResolvedValue(Ok(true)),
+    keepWaitingForGrading: vi
+      .mocked(actions.keepWaitingForGrading)
+      .mockReset()
+      .mockResolvedValue(Ok.EMPTY),
+    openWorkspace,
+    pasteExercise: vi.mocked(actions.pasteExercise).mockReset().mockResolvedValue(Ok("link")),
+    refreshLocalExercises: vi
+      .mocked(actions.refreshLocalExercises)
+      .mockReset()
+      .mockResolvedValue(Ok.EMPTY),
+    sendSubmissionFeedback: vi
+      .mocked(actions.sendSubmissionFeedback)
+      .mockReset()
+      .mockResolvedValue(Ok.EMPTY),
+    updateCourse: vi.mocked(actions.updateCourse).mockReset().mockResolvedValue(Ok(true)),
   }
 }
 
@@ -244,7 +275,6 @@ suite("TmcPanel handler dispatch", () => {
     // would tell the user their click failed.
     const handlers = stubHandlers()
     handlers.openWorkspace.mockRejectedValue(new Error("handler exploded"))
-    registerPanelActions(handlers as unknown as PanelActions)
     const actionContext = createMockActionContext({
       startup: { userData: storedCourses(() => Ok(courseWith(0))) },
     })
@@ -260,7 +290,6 @@ suite("TmcPanel handler dispatch", () => {
 
   test("a course refresh rescans the exercises on disk", async () => {
     const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
     const actionContext = courseDetailsContext()
     const { listener, shown } = await mountCourseDetails(actionContext)
 
@@ -287,7 +316,6 @@ suite("TmcPanel handler dispatch", () => {
 
   test("a paste link goes back to the panel that asked for it", async () => {
     const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
 
     const { panel, shown } = await paste(createMockActionContext())
 
@@ -307,7 +335,6 @@ suite("TmcPanel handler dispatch", () => {
 
   test("pastes the exercise the host shows, and nothing a stale panel names", async () => {
     const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
     const shown = exerciseSubmissionPanel()
     const { panel, listener } = await mountSidePanel(
       createMockActionContext(),
@@ -327,7 +354,6 @@ suite("TmcPanel handler dispatch", () => {
 
   test("a mooc course's exercise is pasted through the mooc backend", async () => {
     const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
 
     await paste(createMockActionContext(), "mooc")
 
@@ -344,7 +370,6 @@ suite("TmcPanel handler dispatch", () => {
     handlers.pasteExercise.mockResolvedValue(
       Err(new BottleneckError("A paste is already running.")),
     )
-    registerPanelActions(handlers as unknown as PanelActions)
     const actionContext = createMockActionContext()
 
     const { panel } = await paste(actionContext)
@@ -358,7 +383,6 @@ suite("TmcPanel handler dispatch", () => {
   test("a paste that throws still answers the waiting panel, and nothing else", async () => {
     const handlers = stubHandlers()
     handlers.pasteExercise.mockRejectedValue(new Error("paste exploded"))
-    registerPanelActions(handlers as unknown as PanelActions)
     const actionContext = createMockActionContext()
 
     const { panel } = await paste(actionContext)
@@ -374,7 +398,6 @@ suite("TmcPanel handler dispatch", () => {
     // would be the second report of one failure.
     const handlers = stubHandlers()
     handlers.pasteExercise.mockResolvedValue(Err(new Error("paste service is down")))
-    registerPanelActions(handlers as unknown as PanelActions)
     const actionContext = createMockActionContext()
 
     const { panel } = await paste(actionContext)
@@ -397,7 +420,6 @@ suite("TmcPanel reports a handler's failure once", () => {
   test("for refreshCourseDetails, in the panel that asked", async () => {
     const handlers = stubHandlers()
     handlers.updateCourse.mockResolvedValue(Err(new Error("tmc-langs crashed")))
-    registerPanelActions(handlers as unknown as PanelActions)
     const actionContext = courseDetailsContext()
     const { panel, listener, shown } = await mountCourseDetails(actionContext)
 
@@ -418,7 +440,6 @@ suite("TmcPanel reports a handler's failure once", () => {
 suite("TmcPanel handler dispatch, degraded startup", () => {
   test("refreshCourseDetails tells the waiting panel why, and re-renders nothing", async () => {
     const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
     const actionContext = createDegradedContext()
     const { panel, listener, shown } = await mountCourseDetails(actionContext)
 
@@ -437,7 +458,6 @@ suite("TmcPanel handler dispatch, degraded startup", () => {
 
   test("pasteExercise answers the waiting panel, and nothing else", async () => {
     const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
     const actionContext = createDegradedContext()
     const shown = exerciseSubmissionPanel()
     const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
@@ -463,7 +483,6 @@ suite("TmcPanel inbound message guard", () => {
     posted: ReturnType<typeof vi.fn>
   }> {
     const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
     const actionContext = createMockActionContext({
       startup: { userData: storedCourses(() => Ok(courseWith(0))) },
     })
@@ -491,16 +510,15 @@ suite("TmcPanel inbound message guard", () => {
   test("acts on the same message once it carries the field", async () => {
     const { handlers } = await drive({ type: "openCourseWorkspace", courseId })
 
-    expect(handlers.openWorkspace).toHaveBeenCalledWith(expect.anything(), "python-course", "tmc")
+    expect(handlers.openWorkspace).toHaveBeenCalledWith("tmc.openCourseWorkspace", courseId)
   })
 })
 
 suite("TmcPanel webview-supplied paths and links", () => {
-  test("resolves the workspace slug from storage rather than from the message", async () => {
+  test("hands the command only the course id, which it resolves from storage", async () => {
     // The slug becomes a `.code-workspace` path the extension writes and opens, so a
     // name the webview chose must never reach it.
     const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
     const actionContext = createMockActionContext({
       startup: { userData: storedCourses(() => Ok(courseWith(0))) },
     })
@@ -508,7 +526,10 @@ suite("TmcPanel webview-supplied paths and links", () => {
 
     await listener({ type: "openCourseWorkspace", courseId: CourseIdentifier.from(42) })
 
-    expect(handlers.openWorkspace).toHaveBeenCalledWith(actionContext, "python-course", "tmc")
+    expect(handlers.openWorkspace).toHaveBeenCalledExactlyOnceWith(
+      "tmc.openCourseWorkspace",
+      CourseIdentifier.from(42),
+    )
   })
 
   test("opens an https link the webview asks for", async () => {
@@ -574,7 +595,7 @@ suite("TmcPanel ready handshake", () => {
   test("replays a buffered message for the current panel, after the panel itself", async () => {
     const { panel, listener, shown } = await mountCourseDetails(createMockActionContext())
 
-    TmcPanel.postToSidePanel(courseDataFor(shown))
+    postToSidePanel(courseDataFor(shown))
     vi.mocked(panel.webview.postMessage).mockClear()
 
     await listener({ type: "ready" })
@@ -590,7 +611,7 @@ suite("TmcPanel ready handshake", () => {
 
     // an id that was never rendered here; buffering it would resend it to a panel
     // that cannot interpret it
-    TmcPanel.postToSidePanel(courseDataFor({ id: 9999 }))
+    postToSidePanel(courseDataFor({ id: 9999 }))
     vi.mocked(panel.webview.postMessage).mockClear()
 
     await listener({ type: "ready" })
@@ -605,7 +626,7 @@ suite("TmcPanel ready handshake", () => {
     const actionContext = createMockActionContext()
     const { panel, listener, shown } = await mountCourseDetails(actionContext)
 
-    TmcPanel.postToSidePanel(courseDataFor(shown))
+    postToSidePanel(courseDataFor(shown))
     TmcPanel.renderSide(createMockContext(), actionContext, {
       id: nextPanelId(),
       type: "CourseDetails",
@@ -631,7 +652,7 @@ suite("TmcPanel ready handshake", () => {
       courseId: CourseIdentifier.from(42),
     }
     renderSidePanel(courseDetails)
-    TmcPanel.postToSidePanel(courseDataFor(courseDetails))
+    postToSidePanel(courseDataFor(courseDetails))
 
     expect(panel.webview.postMessage).not.toHaveBeenCalled()
 
@@ -654,8 +675,28 @@ suite("TmcPanel ready handshake", () => {
   })
 })
 
+/** Posts `message` to the side panel the way the host's handlers do. */
+function postToSidePanel(message: PanelMessage): void {
+  const sidePanel = TmcPanel.sidePanel as unknown as { _postMessage: (m: PanelMessage) => void }
+  sidePanel._postMessage(message)
+}
+
+/** Shows `panel` a submission view headed `headline`, as a submit action does. */
+function showSubmissionView(panel: ExerciseSubmissionPanel, headline: string): void {
+  const subscription = TmcPanel.showSubmissionViews(createMockContext(), createMockActionContext())
+  submissionViews.update({
+    panel,
+    view: submissionViewFor(panel, headline).view,
+    shouldReopen: false,
+  })
+  subscription.dispose()
+}
+
 /** A `submissionView` for `panel` whose headline is `headline`. */
-function submissionViewFor(panel: { id: number }, headline: string): PanelMessage {
+function submissionViewFor(
+  panel: { id: number },
+  headline: string,
+): Extract<PanelMessage, { type: "submissionView" }> {
   return {
     type: "submissionView",
     target: { id: panel.id, type: "ExerciseSubmission" },
@@ -695,12 +736,12 @@ suite("TmcPanel hidden webviews", () => {
     const shown = exerciseSubmissionPanel()
     const { panel, sendReady, hide, reveal } = mountHideable(shown)
     await sendReady()
-    TmcPanel.postToSidePanel(submissionViewFor(shown, "Sending submission…"))
+    showSubmissionView(shown, "Sending submission…")
     hide()
     vi.mocked(panel.webview.postMessage).mockClear()
 
-    TmcPanel.postToSidePanel(submissionViewFor(shown, "Processing submission…"))
-    TmcPanel.postToSidePanel(submissionViewFor(shown, "Exercise graded"))
+    showSubmissionView(shown, "Processing submission…")
+    showSubmissionView(shown, "Exercise graded")
     expect(panel.webview.postMessage).not.toHaveBeenCalled()
 
     await reveal()
@@ -748,7 +789,7 @@ suite("TmcPanel hidden webviews", () => {
     const { panel, sendReady, hide, reveal } = mountHideable(shown)
     await sendReady()
     hide()
-    TmcPanel.postToSidePanel(courseDataFor(shown))
+    postToSidePanel(courseDataFor(shown))
     vi.mocked(panel.webview.postMessage).mockClear()
 
     await reveal()
@@ -811,8 +852,7 @@ function postedMessages(panel: vscode.WebviewPanel): { type: string }[] {
 
 suite("TmcPanel refreshCourseDetails", () => {
   test("refreshes the panel in place, answering with the refreshed course", async () => {
-    const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
+    stubHandlers()
     const actionContext = courseDetailsContext()
     const { panel, listener, shown } = await mountCourseDetails(actionContext)
 
@@ -831,7 +871,6 @@ suite("TmcPanel refreshCourseDetails", () => {
 
   test("refuses a refresh from a panel no longer showing the course", async () => {
     const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
     const actionContext = courseDetailsContext()
     const { panel, listener } = await mountCourseDetails(actionContext)
 
@@ -845,7 +884,6 @@ suite("TmcPanel refreshCourseDetails", () => {
     const handlers = stubHandlers()
     const update = Promise.withResolvers<unknown>()
     handlers.updateCourse.mockReturnValue(update.promise)
-    registerPanelActions(handlers as unknown as PanelActions)
     const actionContext = courseDetailsContext()
     const { panel, listener, shown } = await mountCourseDetails(actionContext)
 
@@ -862,7 +900,6 @@ suite("TmcPanel refreshCourseDetails", () => {
   test("answers the panel even when the refresh throws", async () => {
     const handlers = stubHandlers()
     handlers.refreshLocalExercises.mockRejectedValue(new Error("rescan exploded"))
-    registerPanelActions(handlers as unknown as PanelActions)
     const actionContext = courseDetailsContext()
     const { panel, listener, shown } = await mountCourseDetails(actionContext)
 
@@ -935,7 +972,6 @@ suite("TmcPanel host services for the webview", () => {
 
   test("hands feedback answers for the panel the host shows to the feedback action", async () => {
     const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
     const actionContext = createMockActionContext()
     const shown = exerciseSubmissionPanel()
     const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
@@ -955,7 +991,6 @@ suite("TmcPanel host services for the webview", () => {
   test("reports a feedback failure to the form that sent it", async () => {
     const handlers = stubHandlers()
     handlers.sendSubmissionFeedback.mockResolvedValue(Err(new Error("server said no")))
-    registerPanelActions(handlers as unknown as PanelActions)
     const shown = exerciseSubmissionPanel()
     const { panel, listener } = await mountSidePanel(
       createMockActionContext(),
@@ -980,7 +1015,6 @@ suite("TmcPanel host services for the webview", () => {
 
   test("does not send feedback for a submission a stale panel names", async () => {
     const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
     const { panel, listener } = await mountSidePanel(
       createMockActionContext(),
       createMockContext(),
@@ -1000,24 +1034,18 @@ suite("TmcPanel host services for the webview", () => {
 
   test("keeps waiting for the grading of the submission the host shows", async () => {
     const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
     const actionContext = createMockActionContext()
     const shown = exerciseSubmissionPanel()
     const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
 
     await listener({ type: "keepWaitingForGrading", requestId: 1, sourcePanel: targetOf(shown) })
 
-    expect(handlers.keepWaitingForGrading).toHaveBeenCalledWith(
-      expect.anything(),
-      actionContext,
-      shown.id,
-    )
+    expect(handlers.keepWaitingForGrading).toHaveBeenCalledWith(actionContext, shown.id)
     expect(replyTo(panel, 1)).toMatchObject({ outcome: { ok: true } })
   })
 
   test("does not wait for a submission a stale panel names", async () => {
     const handlers = stubHandlers()
-    registerPanelActions(handlers as unknown as PanelActions)
     const { panel, listener } = await mountSidePanel(
       createMockActionContext(),
       createMockContext(),
@@ -1230,12 +1258,54 @@ suite("TmcPanel side panel placement", () => {
     await side.sendReady()
     vi.mocked(main.panel.webview.postMessage).mockClear()
 
-    TmcPanel.postToSidePanel(submissionViewFor(shown, "Exercise graded"))
+    showSubmissionView(shown, "Exercise graded")
 
     expect(side.panel.webview.postMessage).toHaveBeenLastCalledWith(
       expect.objectContaining({ type: "submissionView" }),
     )
     expect(main.panel.webview.postMessage).not.toHaveBeenCalled()
+  })
+
+  test("opens a new submission in the side panel", () => {
+    const { panel } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    const subscription = TmcPanel.showSubmissionViews(
+      createMockContext(),
+      createMockActionContext(),
+    )
+    onTestFinished(() => subscription.dispose())
+    const shown = exerciseSubmissionPanel()
+
+    submissionViews.open(shown)
+
+    expect(TmcPanel.sidePanel).toBeDefined()
+    expect(panel.title).toBe(`Submission: ${shown.exerciseSlug}`)
+  })
+
+  test("reopens a closed side panel for a submission's outcome, not for its progress", async () => {
+    const { panel, sendReady } = createFakeWebviewPanel()
+    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
+    createWebviewPanel.mockClear()
+    createWebviewPanel.mockReturnValue(panel)
+    const subscription = TmcPanel.showSubmissionViews(
+      createMockContext(),
+      createMockActionContext(),
+    )
+    onTestFinished(() => subscription.dispose())
+    const shown = exerciseSubmissionPanel()
+    const graded = submissionViewFor(shown, "Exercise graded")
+
+    submissionViews.update({ panel: shown, view: graded.view, shouldReopen: false })
+    expect(createWebviewPanel).not.toHaveBeenCalled()
+
+    submissionViews.update({ panel: shown, view: graded.view, shouldReopen: true })
+    await sendReady()
+
+    expect(createWebviewPanel).toHaveBeenCalledOnce()
+    expect(postedMessages(panel)).toEqual([
+      expect.objectContaining({ type: "setPanel", panel: shown }),
+      graded,
+    ])
   })
 })
 

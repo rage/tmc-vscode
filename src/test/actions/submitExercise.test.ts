@@ -4,6 +4,7 @@ import type * as vscode from "vscode"
 
 import {
   keepWaitingForGrading,
+  onDidFinishSubmission,
   sendSubmissionFeedback,
   submitExercise,
 } from "../../actions/submitExercise"
@@ -13,23 +14,25 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
 import { BottleneckError, InsufficientScopeError } from "../../errors"
-import type { ExtensionToWebview, LocalCourseData, SubmissionView } from "../../shared/shared"
+import type { ExerciseSubmissionPanel, LocalCourseData, SubmissionView } from "../../shared/shared"
 import { CourseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
+import type { SubmissionViewUpdate } from "../../ui/submissionViews"
+import { submissionViews } from "../../ui/submissionViews"
 import { createMockActionContext } from "../mocks/actionContext"
 
-// TmcPanel talks to the vscode webview API, so the whole module is mocked; the
-// action only needs renderSide (a no-op), postToSidePanel (asserted), and a defined
-// sidePanel so the re-render branch is skipped.
-vi.mock("../../panels/TmcPanel", () => ({
-  TmcPanel: {
-    renderSide: vi.fn(),
-    postToSidePanel: vi.fn(),
-    sidePanel: {},
-  },
-}))
+const openedPanels: ExerciseSubmissionPanel[] = []
+const viewUpdates: SubmissionViewUpdate[] = []
+const finishedCourses: CourseIdentifier[] = []
+submissionViews.onDidOpen((panel) => openedPanels.push(panel))
+submissionViews.onDidUpdate((update) => viewUpdates.push(update))
+onDidFinishSubmission((courseId) => finishedCourses.push(courseId))
 
-import { TmcPanel } from "../../panels/TmcPanel"
+beforeEach(() => {
+  openedPanels.length = 0
+  viewUpdates.length = 0
+  finishedCourses.length = 0
+})
 
 const COURSE_SLUG = "mooc-python-course"
 const EXERCISE_SLUG = "loops"
@@ -104,8 +107,6 @@ const tmcExercise: WorkspaceExercise = {
   courseSlug: TMC_COURSE_SLUG,
 }
 
-const extensionContext = { extensionUri: {} } as unknown as vscode.ExtensionContext
-
 // `langsMethods` holds only the backend's own submit call, so a submission routed
 // through the other backend's method fails instead of quietly passing.
 function contextFor(
@@ -166,12 +167,7 @@ function moocContextWithErr(error: Error): {
 
 /** Every view the action showed, oldest first. */
 function shownViews(): SubmissionView[] {
-  return vi
-    .mocked(TmcPanel.postToSidePanel)
-    .mock.calls.flat()
-    .flatMap((message: ExtensionToWebview) =>
-      message.type === "submissionView" ? [message.view] : [],
-    )
+  return viewUpdates.map(({ view }) => view)
 }
 
 function lastView(): SubmissionView | undefined {
@@ -179,7 +175,7 @@ function lastView(): SubmissionView | undefined {
 }
 
 function shownPanelId(): number {
-  const route = vi.mocked(TmcPanel.renderSide).mock.calls.at(-1)?.[2]
+  const route = openedPanels.at(-1)
   if (route === undefined) {
     throw new Error("no submission panel was rendered")
   }
@@ -224,7 +220,7 @@ suite("submitExercise action, tmc", () => {
   test("submits through the tmc call and posts the full result", async () => {
     const { actionContext, setPassed, submit } = tmcContextWith(passingSubmission)
 
-    const result = await submitExercise(extensionContext, actionContext, tmcExercise)
+    const result = await submitExercise(actionContext, tmcExercise)
     expect(result.ok).toBe(true)
 
     expect(submit).toHaveBeenCalledWith(
@@ -239,8 +235,10 @@ suite("submitExercise action, tmc", () => {
       points: { given: 1, max: 2 },
     })
     expect(setPassed).toHaveBeenCalledWith("tmc", TMC_COURSE_SLUG, EXERCISE_SLUG)
-    // The command layer refreshes this course's totals after a successful submit.
-    expect(result.val).toEqual(CourseIdentifier.from(tmcCourse.id))
+    expect(finishedCourses).toEqual([CourseIdentifier.from(tmcCourse.id)])
+    // Only the outcome brings back a side panel the student closed while it was graded.
+    expect(viewUpdates.map(({ shouldReopen }) => shouldReopen).at(-1)).toBe(true)
+    expect(viewUpdates.slice(0, -1).every(({ shouldReopen }) => !shouldReopen)).toBe(true)
   })
 
   test("the submission's page on the server reaches the panel", async () => {
@@ -248,7 +246,7 @@ suite("submitExercise action, tmc", () => {
     // before the grading does, so the panel can offer it while it waits.
     const { actionContext, submit } = tmcContextWith(passingSubmission)
 
-    await submitExercise(extensionContext, actionContext, tmcExercise)
+    await submitExercise(actionContext, tmcExercise)
 
     const onSubmissionUrl = submit.mock.calls[0]?.[3] as (url: string) => void
     onSubmissionUrl("https://tmc.mooc.fi/submissions/1")
@@ -261,7 +259,7 @@ suite("submitExercise action, tmc", () => {
   test("progress arrives as the uploading view until the server has the submission", async () => {
     const { actionContext, submit } = tmcContextWith(passingSubmission)
 
-    await submitExercise(extensionContext, actionContext, tmcExercise)
+    await submitExercise(actionContext, tmcExercise)
 
     const onProgress = submit.mock.calls[0]?.[2] as (fraction: number, message?: string) => void
     onProgress(0.25, "Compressing")
@@ -280,7 +278,7 @@ suite("submitExercise action, tmc", () => {
       test_cases: [],
     })
 
-    await submitExercise(extensionContext, actionContext, tmcExercise)
+    await submitExercise(actionContext, tmcExercise)
 
     expect(setPassed).not.toHaveBeenCalled()
     expect(lastView()).toMatchObject({ phase: "finished", canPaste: true, feedback: undefined })
@@ -298,7 +296,7 @@ suite("submitExercise action, tmc", () => {
       submitTmcExerciseAndWaitForResults: submit,
     })
 
-    const result = await submitExercise(extensionContext, actionContext, tmcExercise)
+    const result = await submitExercise(actionContext, tmcExercise)
 
     expect(result.err).toBe(true)
     expect((result.val as Error).message).toContain("is not a TMC Server exercise")
@@ -311,7 +309,7 @@ suite("submitExercise action, mooc", () => {
     const graded = grading({ score_given: 3, feedback_text: "All tests passed" })
     const { actionContext, setPassed, submit, wait } = moocContextWith(graded)
 
-    const result = await submitExercise(extensionContext, actionContext, moocExercise)
+    const result = await submitExercise(actionContext, moocExercise)
     expect(result.ok).toBe(true)
 
     expect(submit).toHaveBeenCalledWith(MOOC_EXERCISE_ID, "/path/to/exercise")
@@ -324,14 +322,13 @@ suite("submitExercise action, mooc", () => {
       canKeepWaiting: false,
     })
     expect(setPassed).toHaveBeenCalledWith("mooc", COURSE_SLUG, EXERCISE_SLUG)
-    // The command layer refreshes this course's totals after a successful submit.
-    expect(result.val).toEqual(CourseIdentifier.from(moocCourse.id))
+    expect(finishedCourses).toEqual([CourseIdentifier.from(moocCourse.id)])
   })
 
   test("grading progress keeps changed messages only, on an indeterminate bar", async () => {
     const { actionContext, wait } = moocContextWith(grading({ score_given: 3 }))
 
-    await submitExercise(extensionContext, actionContext, moocExercise)
+    await submitExercise(actionContext, moocExercise)
 
     const onProgress = wait.mock.calls[0]?.[1] as (fraction: number, message?: string) => void
     onProgress(1, "Grading in progress")
@@ -345,7 +342,7 @@ suite("submitExercise action, mooc", () => {
       grading({ grading_progress: "Failed", score_given: 0 }),
     )
 
-    await submitExercise(extensionContext, actionContext, moocExercise)
+    await submitExercise(actionContext, moocExercise)
     expect(setPassed).not.toHaveBeenCalled()
     expect(lastView()).toMatchObject({ phase: "failed", headline: "Grading failed" })
   })
@@ -355,7 +352,7 @@ suite("submitExercise action, mooc", () => {
       grading({ grading_progress: "PendingManual", score_given: 0.5 }),
     )
 
-    const result = await submitExercise(extensionContext, actionContext, moocExercise)
+    const result = await submitExercise(actionContext, moocExercise)
     expect(result.ok).toBe(true)
     expect(setPassed).not.toHaveBeenCalled()
     expect(lastView()).toMatchObject({ phase: "manualReview", canKeepWaiting: false })
@@ -366,34 +363,38 @@ suite("submitExercise action, mooc", () => {
       grading({ grading_progress: "Pending" }),
     )
 
-    const result = await submitExercise(extensionContext, actionContext, moocExercise)
+    const result = await submitExercise(actionContext, moocExercise)
     expect(result.ok).toBe(true)
     expect(setPassed).not.toHaveBeenCalled()
     expect(lastView()).toMatchObject({ phase: "timedOut", canKeepWaiting: true })
 
     wait.mockResolvedValueOnce(Ok(grading({ score_given: 2 })))
     const panelId = shownPanelId()
-    const waited = await keepWaitingForGrading(extensionContext, actionContext, panelId)
+    const waited = await keepWaitingForGrading(actionContext, panelId)
 
-    expect(waited.val).toEqual(CourseIdentifier.from(moocCourse.id))
+    expect(waited.ok).toBe(true)
+    expect(finishedCourses).toEqual([
+      CourseIdentifier.from(moocCourse.id),
+      CourseIdentifier.from(moocCourse.id),
+    ])
     expect(wait).toHaveBeenLastCalledWith(TASK_SUBMISSION_ID, expect.any(Function))
     expect(lastView()).toMatchObject({ phase: "finished", points: { given: 2, max: 3 } })
     expect(setPassed).toHaveBeenCalledWith("mooc", COURSE_SLUG, EXERCISE_SLUG)
 
-    const again = await keepWaitingForGrading(extensionContext, actionContext, panelId)
+    const again = await keepWaitingForGrading(actionContext, panelId)
     expect(again.err).toBe(true)
   })
 
   test("a newer submission's panel leaves nothing to wait for in the one it replaced", async () => {
     const { actionContext } = moocContextWith(grading({ grading_progress: "Pending" }))
-    await submitExercise(extensionContext, actionContext, moocExercise)
+    await submitExercise(actionContext, moocExercise)
     const replacedPanelId = shownPanelId()
 
-    await submitExercise(extensionContext, actionContext, moocExercise)
+    await submitExercise(actionContext, moocExercise)
 
-    const waited = await keepWaitingForGrading(extensionContext, actionContext, replacedPanelId)
+    const waited = await keepWaitingForGrading(actionContext, replacedPanelId)
     expect(waited.err).toBe(true)
-    const current = await keepWaitingForGrading(extensionContext, actionContext, shownPanelId())
+    const current = await keepWaitingForGrading(actionContext, shownPanelId())
     expect(current.ok).toBe(true)
   })
 
@@ -401,7 +402,7 @@ suite("submitExercise action, mooc", () => {
     const { actionContext, wait } = moocContextWith(undefined)
     wait.mockResolvedValue(Err(new Error("Connection reset by peer")))
 
-    const result = await submitExercise(extensionContext, actionContext, moocExercise)
+    const result = await submitExercise(actionContext, moocExercise)
 
     expect(result.ok).toBe(true)
     expect(lastView()).toMatchObject({
@@ -414,7 +415,7 @@ suite("submitExercise action, mooc", () => {
   test("keeping waiting for a panel with no unfinished grading errs", async () => {
     const { actionContext, wait } = moocContextWith(grading({}))
 
-    const waited = await keepWaitingForGrading(extensionContext, actionContext, -1)
+    const waited = await keepWaitingForGrading(actionContext, -1)
 
     expect(waited.err).toBe(true)
     expect(wait).not.toHaveBeenCalled()
@@ -436,8 +437,8 @@ suite("submitExercise action, mooc", () => {
     })
     const notification = vi.mocked(actionContext.dialog.notification)
 
-    const first = submitExercise(extensionContext, actionContext, moocExercise)
-    const second = await submitExercise(extensionContext, actionContext, moocExercise)
+    const first = submitExercise(actionContext, moocExercise)
+    const second = await submitExercise(actionContext, moocExercise)
 
     expect(second.err).toBe(true)
     expect(second.val).toBeInstanceOf(BottleneckError)
@@ -449,7 +450,7 @@ suite("submitExercise action, mooc", () => {
     await first
 
     // and the key is free again once the first submit finishes
-    await submitExercise(extensionContext, actionContext, moocExercise)
+    await submitExercise(actionContext, moocExercise)
     expect(submit).toHaveBeenCalledTimes(2)
   })
 
@@ -457,9 +458,10 @@ suite("submitExercise action, mooc", () => {
     const error = new BottleneckError("You are submitting too fast, try again later.")
     const { actionContext, setPassed } = moocContextWithErr(error)
 
-    const result = await submitExercise(extensionContext, actionContext, moocExercise)
+    const result = await submitExercise(actionContext, moocExercise)
     expect(result).toEqual(Ok(undefined))
     expect(setPassed).not.toHaveBeenCalled()
+    expect(finishedCourses).toEqual([])
     expect(lastView()).toMatchObject({
       phase: "failed",
       canKeepWaiting: false,
@@ -472,15 +474,22 @@ suite("submitExercise action, mooc", () => {
     // message as JSON -- which drops a live Error's non-enumerable `message`.
     const { actionContext } = moocContextWithErr(new Error("Connection reset by peer"))
 
-    await submitExercise(extensionContext, actionContext, moocExercise)
+    await submitExercise(actionContext, moocExercise)
 
     const delivered = JSON.parse(JSON.stringify(lastView())) as SubmissionView
     expect(delivered.error?.message).toBe("Connection reset by peer.")
   })
 })
 
+function submitBody(actionContext: ReadyActionContext) {
+  return (exercise: WorkspaceExercise) =>
+    submitExercise(actionContext, exercise).then((result) =>
+      result.err ? failure("Exercise submission failed.", result.val) : result,
+    )
+}
+
 // These drive the action through the real `runForExercise`/`withOperation` boundary
-// (bypassing only `commands/submitExercise`'s post-submit refresh) to prove the
+// (bypassing only `commands/submitExercise`) to prove the
 // cross-layer contract: the busy notice is shown exactly once, and a failure the panel
 // shows, remedies included, is not also notified.
 suite("submitExercise action, through the real runForExercise boundary", () => {
@@ -497,13 +506,6 @@ suite("submitExercise action, through the real runForExercise boundary", () => {
       getExerciseContaining: () => exercise,
     } as unknown as ReadyStartup["workspaceManager"]
     return { ...actionContext, startup: { ...actionContext.startup, workspaceManager } }
-  }
-
-  function submitBody(actionContext: ReadyActionContext) {
-    return (exercise: WorkspaceExercise) =>
-      submitExercise(extensionContext, actionContext, exercise).then((result) =>
-        result.err ? failure("Exercise submission failed.", result.val) : result,
-      )
   }
 
   test("a busy rejection notifies exactly once and reports no error", async () => {
@@ -593,7 +595,7 @@ suite("sendSubmissionFeedback action", () => {
   const FEEDBACK_URL = "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback"
 
   async function submitAskingFeedback(feedbackUrl: string): Promise<ReadyActionContext> {
-    vi.mocked(TmcPanel.postToSidePanel).mockClear()
+    viewUpdates.length = 0
     const submitFeedback = vi.fn().mockResolvedValue(Ok({ api_version: 8, status: "ok" }))
     const { actionContext } = contextFor(makeTmcKind(tmcCourse), {
       submitTmcExerciseAndWaitForResults: vi.fn().mockResolvedValue(
@@ -608,7 +610,7 @@ suite("sendSubmissionFeedback action", () => {
       ),
       submitSubmissionFeedback: submitFeedback,
     })
-    await submitExercise(extensionContext, actionContext, tmcExercise)
+    await submitExercise(actionContext, tmcExercise)
     return actionContext
   }
 
