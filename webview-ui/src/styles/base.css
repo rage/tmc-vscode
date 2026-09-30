@@ -70,16 +70,13 @@ a:focus-visible,
 
 /* Avoids a flash of unstyled light DOM before the elements upgrade. */
 :where(
-  vscode-badge,
   vscode-button,
   vscode-checkbox,
-  vscode-collapsible,
   vscode-icon,
   vscode-progress-bar,
   vscode-progress-ring,
   vscode-radio,
   vscode-radio-group,
-  vscode-table,
   vscode-textarea,
   vscode-toolbar-button
 ):not(:defined) {

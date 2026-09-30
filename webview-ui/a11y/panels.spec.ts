@@ -157,7 +157,7 @@ for (const scenarioId of SCENARIO_IDS) {
       }
       const { nodeIds } = (await cdp.send("DOM.querySelectorAll", {
         nodeId: root.nodeId,
-        selector: "[aria-controls], vscode-collapsible",
+        selector: "[aria-controls]",
       })) as { nodeIds: number[] }
       const byBackendId = new Map(nodes.map((node) => [node.backendDOMNodeId, node]))
       const problems: string[] = []
@@ -173,7 +173,7 @@ for (const scenarioId of SCENARIO_IDS) {
           problems.push(`${domNode.localName} exposes no expanded state`)
           continue
         }
-        if (domNode.localName === "vscode-collapsible" || !controls) {
+        if (!controls) {
           continue
         }
         const isShown = await page.evaluate((id) => {
