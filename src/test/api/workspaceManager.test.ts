@@ -522,6 +522,51 @@ suite("WorkspaceManager class", function () {
         vscode.ConfigurationTarget.Workspace,
       )
     })
+
+    test("a section VS Code rejects neither stops the others nor fails the pass", async function () {
+      const warn = vi.spyOn(Logger, "warn").mockImplementation(() => undefined)
+      stubExtensions(() => undefined)
+      update.mockImplementation(async (section) => {
+        if (section === "files.exclude") {
+          throw new Error("does not support workspace scope")
+        }
+      })
+      stubWorkspace("getConfiguration", () => configurationStub(update))
+
+      await new WorkspaceManager(resources, persistForCourse).verifyWorkspaceSettingsIntegrity()
+
+      expect(sectionsWritten()).toContain("problems.decorations.enabled")
+      warn.mockRestore()
+    })
+
+    test("replaces a stored object instead of merging into it", async function () {
+      stubWorkspace("getConfiguration", () =>
+        configurationStub(update, () => ({ python: true, rust: true })),
+      )
+
+      await new WorkspaceManager(resources, persistForCourse).replaceWorkspaceSetting(
+        "github.copilot.enable",
+        { rust: true },
+      )
+
+      expect(update).toHaveBeenCalledExactlyOnceWith(
+        "github.copilot.enable",
+        { rust: true },
+        vscode.ConfigurationTarget.Workspace,
+      )
+    })
+
+    test("replaces nothing outside a course workspace", async function () {
+      stubWorkspace("workspaceFile", undefined)
+      stubWorkspace("getConfiguration", () => configurationStub(update))
+
+      await new WorkspaceManager(resources, persistForCourse).replaceWorkspaceSetting(
+        "chat.disableAIFeatures",
+        true,
+      )
+
+      expect(update).not.toHaveBeenCalled()
+    })
   })
 
   suite("addWorkspaceRecommendation", function () {

@@ -7,6 +7,7 @@ import * as vscode from "vscode"
 import { onDidFinishSubmission, refreshLocalExercises } from "./actions"
 import type { ActionContext, Startup } from "./actions/types"
 import { isReady } from "./actions/types"
+import AiRestriction, { isActiveCourseAiAllowed } from "./api/aiRestriction"
 import { createAuthState } from "./api/authState"
 import Dialog from "./api/dialog"
 import ExerciseDecorationProvider from "./api/exerciseDecorationProvider"
@@ -364,10 +365,6 @@ async function activateInner(
       workspaceManager.val,
       trackActiveEditorExercise(workspaceManager.val),
     )
-    if (workspaceManager.val.activeCourse) {
-      await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true)
-      await workspaceManager.val.verifyWorkspaceSettingsIntegrity()
-    }
     // Stored data this version cannot parse must degrade the extension, not abort it.
     try {
       userData = new Ok(new UserData(storage))
@@ -376,6 +373,20 @@ async function activateInner(
         e instanceof Error ? e : new InitializationError(e, "Could not read stored user data")
       reportInitializationError("Reading your stored courses", error)
       userData = new Err(error)
+    }
+    if (workspaceManager.val.activeCourse) {
+      await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true)
+      await workspaceManager.val.verifyWorkspaceSettingsIntegrity()
+      const courseWorkspace = workspaceManager.val
+      const courses = userData.ok ? userData.val : undefined
+      const aiRestriction = new AiRestriction(
+        courseWorkspace,
+        context.workspaceState,
+        () => isActiveCourseAiAllowed(courseWorkspace, courses),
+        courses?.onDidChangeCourses,
+      )
+      context.subscriptions.push(aiRestriction)
+      await aiRestriction.apply()
     }
     exerciseDecorationProvider = userData.ok
       ? new Ok(new ExerciseDecorationProvider(userData.val, workspaceManager.val))

@@ -9,6 +9,7 @@
 3. [How can I download unlocked/new exercises for my course?](#how-can-i-download-unlockednew-exercises-for-my-course)
 4. [How do I download updates for exercises?](#how-do-i-download-updates-for-exercises)
 5. [How do I wipe all data related to the TMC Extension?](#how-do-i-wipe-all-data-related-to-the-tmc-extension)
+6. [Why are Copilot and other AI features off?](#why-are-copilot-and-other-ai-features-off)
 
 ## Where can I find all actions related to TMC?
 
@@ -34,3 +35,7 @@ You can also run `TestMyCode: Update Exercises` from the Command Palette (`CTRL 
 
 If open, close course workspace, press `CTRL + SHIFT + P` and run `TestMyCode: Wipe All Extension Data...`.  
 This will delete all files and folders under the tmcdata folder and vscode storage, i.e. your course workspaces, exercises, settings, user data...
+
+## Why are Copilot and other AI features off?
+
+Course workspaces turn off Copilot, inline suggestions and, wherever a setting can, the AI features of other extensions. AI assistance is not allowed in course exercises unless your course allows it.

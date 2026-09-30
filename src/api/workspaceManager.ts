@@ -429,6 +429,30 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   /**
+   * The value the open course's `.code-workspace` itself stores for `section`, or `undefined`
+   * when it stores none — never a user-scope value or a default.
+   */
+  public getStoredWorkspaceSetting(section: string): unknown {
+    // `inspect`, not `get`: the effective configuration would materialize
+    // every VS Code default into the workspace file as an explicit entry.
+    return this.getWorkspaceSettings().inspect<unknown>(section)?.workspaceValue
+  }
+
+  /**
+   * Writes `value` into the open course's `.code-workspace` as is, replacing a stored object
+   * rather than merging into it (compare {@link updateWorkspaceSetting}); `undefined` removes
+   * the section. Rejects when VS Code refuses the write, e.g. for a setting no installed
+   * extension declares. A no-op outside a course workspace.
+   */
+  public async replaceWorkspaceSetting(section: string, value: unknown): Promise<void> {
+    await this._courseWorkspaceConfiguration()?.update(
+      section,
+      value,
+      vscode.ConfigurationTarget.Workspace,
+    )
+  }
+
+  /**
    * Writes each section into the open course workspace's `.code-workspace`,
    * skipping the ones already holding the value that would be written.
    *
@@ -441,11 +465,31 @@ export default class WorkspaceManager implements vscode.Disposable {
    * setting the student added by hand to the same section survives.
    */
   private async _updateWorkspaceSettings(sections: Record<string, unknown>): Promise<void> {
-    const activeCourseWorkspace = this._activeCourseWorkspace
-    if (!activeCourseWorkspace) {
+    const workspaceConfiguration = this._courseWorkspaceConfiguration()
+    if (!workspaceConfiguration) {
       return
     }
-    const workspaceConfiguration = vscode.workspace.getConfiguration(
+    for (const [section, value] of Object.entries(sections)) {
+      const stored = this.getStoredWorkspaceSetting(section)
+      const desired = value instanceof Object ? { ...(stored as object), ...value } : value
+      if (_.isEqual(stored, desired)) {
+        continue
+      }
+      // A section VS Code rejects must not cost the others, nor fail the activation that runs this.
+      try {
+        await workspaceConfiguration.update(section, desired, vscode.ConfigurationTarget.Workspace)
+      } catch (e) {
+        Logger.warn(`Could not write ${section} into the course workspace file.`, e)
+      }
+    }
+  }
+
+  private _courseWorkspaceConfiguration(): vscode.WorkspaceConfiguration | undefined {
+    const activeCourseWorkspace = this._activeCourseWorkspace
+    if (!activeCourseWorkspace) {
+      return undefined
+    }
+    return vscode.workspace.getConfiguration(
       undefined,
       vscode.Uri.file(
         this._resources.getWorkspaceFilePath(
@@ -454,16 +498,6 @@ export default class WorkspaceManager implements vscode.Disposable {
         ),
       ),
     )
-    for (const [section, value] of Object.entries(sections)) {
-      // `inspect`, not `get`: the effective configuration would materialize
-      // every VS Code default into the workspace file as an explicit entry.
-      const stored = this.getWorkspaceSettings().inspect<unknown>(section)?.workspaceValue
-      const desired = value instanceof Object ? { ...(stored as object), ...value } : value
-      if (_.isEqual(stored, desired)) {
-        continue
-      }
-      await workspaceConfiguration.update(section, desired, vscode.ConfigurationTarget.Workspace)
-    }
   }
 
   /**
