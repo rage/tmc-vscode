@@ -221,6 +221,11 @@
         "category": "TestMyCode"
       },
       {
+        "command": "tmc.showAiUseProblem",
+        "title": "Show What Keeps AI Assistance On",
+        "category": "TestMyCode"
+      },
+      {
         "command": "tmc.showWelcome",
         "title": "Get Started",
         "category": "TestMyCode"
@@ -400,6 +405,10 @@
         {
           "command": "tmc.updateExercises",
           "when": "test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.showAiUseProblem",
+          "when": "false"
         },
         {
           "command": "tmc.viewInitializationErrorHelp",

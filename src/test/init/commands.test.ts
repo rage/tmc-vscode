@@ -49,6 +49,7 @@ const expectedCommands = [
   "tmc.pasteExercise",
   "tmc.resetExercise",
   "tmc.showAccountMenu",
+  "tmc.showAiUseProblem",
   "tmc.showExerciseActions",
   "tmc.showWelcome",
   "tmc.showMoocLogin",

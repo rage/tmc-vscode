@@ -96,6 +96,28 @@ export class LangsResponseSchemaError extends BaseError {
   public override readonly name = "Langs Response Schema Error"
 }
 
+/** The command that opens where the last {@link AiUseRefusedError}'s cause can be fixed. */
+export const SHOW_AI_USE_PROBLEM_COMMAND = "tmc.showAiUseProblem"
+
+/**
+ * Submitting, testing or pasting an exercise was refused because AI assistance may be on in
+ * the window. The message says what to change.
+ */
+export class AiUseRefusedError extends BaseError {
+  public override readonly name = "AI Use Refused Error"
+
+  /**
+   * @param remedyLabel Names the button that runs {@link SHOW_AI_USE_PROBLEM_COMMAND}; there is
+   * none without it.
+   */
+  public constructor(
+    message: string,
+    public readonly remedyLabel?: string,
+  ) {
+    super(message)
+  }
+}
+
 /** A button offered beside an error notification: its label, and the command pressing it runs. */
 export interface ErrorAction {
   label: string
@@ -141,6 +163,14 @@ function userSentence(error: Error): string {
  */
 export function presentationFor(error: Error, backend?: BackendKind): ErrorPresentation {
   const reported = userSentence(error)
+  if (error instanceof AiUseRefusedError) {
+    return {
+      message: reported,
+      actions: error.remedyLabel
+        ? [{ label: error.remedyLabel, command: SHOW_AI_USE_PROBLEM_COMMAND }]
+        : [],
+    }
+  }
   if (error instanceof InsufficientScopeError) {
     return {
       message:

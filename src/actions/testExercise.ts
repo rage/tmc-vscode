@@ -1,5 +1,5 @@
 import type { Result } from "ts-results"
-import { Ok } from "ts-results"
+import { Err, Ok } from "ts-results"
 import type * as vscode from "vscode"
 
 import type { WorkspaceExercise } from "../api/workspaceManager"
@@ -30,8 +30,9 @@ export type ExerciseTestOutcome =
  *
  * @param token Stops both CLI processes. A cancelled run resolves with whatever the CLI
  * made of being interrupted, so check the token before reporting the outcome.
- * @returns `Err(BottleneckError)` while another run of the same exercise is in flight, and
- * `Err` when the tests could not be run at all.
+ * @returns `Err(BottleneckError)` while another run of the same exercise is in flight,
+ * `Err(AiUseRefusedError)` while AI assistance may be on, and `Err` when the tests could not
+ * be run at all.
  */
 export async function testExercise(
   actionContext: ReadyActionContext,
@@ -47,6 +48,10 @@ export async function testExercise(
   const { course, exercise: courseExercise } = stored.val
   if (course.data.perhapsExamMode) {
     return Ok({ kind: "examMode" })
+  }
+  const refused = await actionContext.startup.aiUseGate.refusal(course, exercise.uri)
+  if (refused) {
+    return Err(refused)
   }
 
   // guards the run-tests + checkstyle pair as one unit against a second click

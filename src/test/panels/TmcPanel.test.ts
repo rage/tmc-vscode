@@ -1075,6 +1075,7 @@ suite("TmcPanel host services for the webview", () => {
   test.each([
     ["tmc.logs", []],
     ["tmc.myCourses", []],
+    ["tmc.showAiUseProblem", []],
     ["tmc.showMoocLogin", []],
     ["workbench.action.restartExtensionHost", []],
     ["workbench.action.openSettings", ["testMyCode.logLevel"]],

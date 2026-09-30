@@ -6,6 +6,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { ReadyActionContext, ReadyStartup } from "../actions/types"
+import { AiUseGate } from "../api/aiUseGate"
 import type Dialog from "../api/dialog"
 import type Langs from "../api/langs"
 import type { WorkspaceExercise } from "../api/workspaceManager"
@@ -124,6 +125,7 @@ async function harness(
     workspaceManager?: Record<string, unknown>
     resources?: Partial<Resources>
     course?: MoocLocalCourseData
+    aiUseGate?: AiUseGate
   } = {},
 ): Promise<Harness> {
   const shown: string[] = []
@@ -181,6 +183,7 @@ async function harness(
   const actionContext: ReadyActionContext = {
     ...createMockActionContext({
       startup: {
+        ...(services.aiUseGate && { aiUseGate: services.aiUseGate }),
         langs,
         userData: new UserData(storage),
         workspaceManager,
@@ -802,5 +805,124 @@ suite("reported once: the refresh", function () {
         "error: Failed to postpone the reminder for Mooc Course.",
       ]),
     )
+  })
+})
+
+/** The langs calls a refused submit, test run or paste must not reach. */
+const neverCalled = (): Record<string, ReturnType<typeof vi.fn>> => ({
+  submitMoocExercise: vi.fn(),
+  submitMoocExerciseToPaste: vi.fn(),
+  runTests: vi.fn(),
+  runCheckstyle: vi.fn(),
+})
+
+suite("refused while an AI extension runs: every entry point", function () {
+  const reason =
+    "AI assistance must be off in this course. Disable Cline for this workspace" +
+    " (Extensions → Disable (Workspace)) and try again."
+  const vscodeModule = vscode as unknown as { extensions: typeof vscode.extensions }
+
+  function withEnabledExtensions(ids: string[]): void {
+    Object.defineProperty(vscodeModule, "extensions", {
+      value: { all: ids.map((id) => ({ id })) },
+      configurable: true,
+    })
+  }
+
+  // The restriction itself holds: only the extension check refuses.
+  const refusingHarness = (langs: Record<string, unknown> = {}): Promise<Harness> =>
+    harness({ langs, aiUseGate: new AiUseGate({ enforce: async () => undefined }) })
+
+  beforeEach(function () {
+    withEnabledExtensions(["saoudrizwan.claude-dev"])
+    onTestFinished(() => withEnabledExtensions([]))
+  })
+
+  const row = (): ExerciseTreeItem =>
+    Object.assign(exerciseRow("opened"), { exerciseUri: exercise.uri })
+
+  test.each<[string, string, () => unknown[]]>([
+    ["the palette", "tmc.submitExercise", () => []],
+    ["the palette", "tmc.testExercise", () => []],
+    ["the palette", "tmc.pasteExercise", () => []],
+    ["an editor title button", "tmc.submitExercise", () => [exercise.uri]],
+    ["an editor title button", "tmc.testExercise", () => [exercise.uri]],
+    ["a Courses view inline action", "tmc.submitExercise", () => [row()]],
+    ["a Courses view inline action", "tmc.testExercise", () => [row()]],
+    ["a test item's context menu", "tmc.testing.submitExercise", () => [undefined]],
+    ["a test item's context menu", "tmc.testing.pasteExercise", () => [undefined]],
+    ["the status bar's action pick", "tmc.showExerciseActions", () => []],
+  ])(
+    "%s's %s says why, once, with one remedy, and does nothing",
+    async function (_entry, id, args) {
+      const langs = neverCalled()
+      const { actionContext, run, shown } = await refusingHarness(langs)
+
+      await run(id, ...args())
+
+      expect(shown).toEqual([`warning: ${reason}`])
+      const buttons = vi.mocked(actionContext.dialog.warningNotification).mock.calls[0]?.slice(1)
+      expect(buttons?.map((button) => (button as unknown as [string])[0])).toEqual(["Show Cline"])
+      for (const method of Object.values(langs)) {
+        expect(method).not.toHaveBeenCalled()
+      }
+    },
+  )
+
+  test.each([
+    ["tmc.resetExercise", "resetExercise"],
+    ["tmc.downloadOldSubmission", "downloadMoocOldSubmission"],
+  ])("%s's Submit first says why, once, and changes nothing", async function (id, method) {
+    const destructive = vi.fn()
+    const { run, shown } = await refusingHarness({
+      getMoocOldSubmissions: oldSubmissions,
+      [method]: destructive,
+    })
+
+    await run(id)
+
+    expect(shown).toEqual([`warning: ${reason}`])
+    expect(destructive).not.toHaveBeenCalled()
+  })
+
+  test("the remedy shows the extension in the Extensions view", async function () {
+    const { run } = await refusingHarness()
+    await run("tmc.submitExercise")
+
+    await run("tmc.showAiUseProblem")
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      "workbench.extensions.search",
+      "@id:saoudrizwan.claude-dev",
+    )
+  })
+
+  test("a paste from the submission panel says why in the panel, remedy included", async function () {
+    const langs = neverCalled()
+    const { actionContext, post, shown, panelFailures, shownPanel } = await refusingHarness(langs)
+    showSubmission(actionContext)
+
+    await post({ type: "pasteExercise", requestId: 1, sourcePanel: shownPanel() })
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual([`pasteExercise: ${reason}`])
+    expect(langs.submitMoocExerciseToPaste).not.toHaveBeenCalled()
+  })
+
+  test("keep waiting from the submission panel says why in the panel", async function () {
+    withEnabledExtensions([])
+    const waitForMoocGrading = vi.fn(async () => Err(offline()))
+    const { run, post, shown, panelFailures, shownPanel } = await refusingHarness({
+      submitMoocExercise: async () => Ok({ task_submission_id: "task-1" }),
+      waitForMoocGrading,
+    })
+    await run("tmc.submitExercise")
+    withEnabledExtensions(["saoudrizwan.claude-dev"])
+
+    await post({ type: "keepWaitingForGrading", requestId: 1, sourcePanel: shownPanel() })
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toContain(`keepWaitingForGrading: ${reason}`)
+    expect(waitForMoocGrading).toHaveBeenCalledOnce()
   })
 })

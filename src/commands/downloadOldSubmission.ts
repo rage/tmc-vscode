@@ -3,7 +3,7 @@ import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { PickableSubmission } from "../actions"
-import { listOldSubmissions, restoreOldSubmission } from "../actions"
+import { checkAiUse, listOldSubmissions, restoreOldSubmission } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import type { Item } from "../api/dialog"
 import { failure } from "../api/withOperation"
@@ -95,6 +95,12 @@ export async function downloadOldSubmission(
       })
       if (submitFirst === undefined) {
         return Ok.EMPTY
+      }
+      if (submitFirst) {
+        const allowed = await checkAiUse(actionContext, exercise)
+        if (allowed.err) {
+          return allowed
+        }
       }
 
       const editor = vscode.window.activeTextEditor

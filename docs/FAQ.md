@@ -9,6 +9,7 @@
 3. [How can I download unlocked/new exercises for my course?](#how-can-i-download-unlockednew-exercises-for-my-course)
 4. [How do I download updates for exercises?](#how-do-i-download-updates-for-exercises)
 5. [How do I wipe all data related to the TMC Extension?](#how-do-i-wipe-all-data-related-to-the-tmc-extension)
+6. [Why are Copilot and other AI features off?](#why-are-copilot-and-other-ai-features-off)
 
 ## Where can I find all actions related to TMC?
 
@@ -34,3 +35,9 @@ You can also run `TestMyCode: Update Exercises` from the Command Palette (`CTRL 
 
 If open, close course workspace, press `CTRL + SHIFT + P` and run `TestMyCode: Wipe All Extension Data...`.  
 This will delete all files and folders under the tmcdata folder and vscode storage, i.e. your course workspaces, exercises, settings, user data...
+
+## Why are Copilot and other AI features off?
+
+Course workspaces turn off Copilot, inline suggestions and, wherever a setting can, the AI features of other extensions. AI assistance is not allowed in course exercises unless your course allows it.
+
+Submitting (also before a reset or restore), running tests and sharing via paste are refused while AI assistance may be on: when the course workspace's AI settings can't be applied (its `.code-workspace` file has unsaved changes or can't be written, or one of your User settings or an exercise folder's `.vscode/settings.json` turns one back on), or while an AI extension that no setting turns off is enabled, such as Cline, Roo Code, Claude Code, Codex or Continue. The message says what to change. To keep such an extension for other projects, disable it only for the course workspace with Extensions → Disable (Workspace). Nothing about this is sent anywhere.

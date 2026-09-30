@@ -2,11 +2,12 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import { checkAiUse } from "../actions/checkAiUse"
 import type { ExerciseTestOutcome } from "../actions/testExercise"
 import { testExercise } from "../actions/testExercise"
 import type { ReadyActionContext } from "../actions/types"
 import type { WorkspaceExercise } from "../api/workspaceManager"
-import { BottleneckError } from "../errors"
+import { AiUseRefusedError, BottleneckError, SHOW_AI_USE_PROBLEM_COMMAND } from "../errors"
 import type { RunResult, TestResult } from "../shared/langsSchema"
 import { BaseError } from "../shared/shared"
 import { countOf } from "../utilities"
@@ -57,10 +58,15 @@ export class ExerciseTestController implements vscode.Disposable {
    * Runs an exercise's tests as a run of its test item, so the results land in the Test
    * Results view.
    *
-   * @returns `Err(BottleneckError)` when the exercise was already being tested; every other
-   * outcome, failures included, is reported in the run itself.
+   * @returns `Err(BottleneckError)` when the exercise was already being tested, and
+   * `Err(AiUseRefusedError)`, with no run, while AI assistance may be on; every other outcome,
+   * failures included, is reported in the run itself.
    */
   public async runExercise(exercise: WorkspaceExercise): Promise<Result<void, Error>> {
+    const allowed = await checkAiUse(this._actionContext, exercise)
+    if (allowed.err && allowed.val instanceof AiUseRefusedError) {
+      return allowed
+    }
     const item = this._itemFor(exercise)
     if (!this._controller.items.get(item.id)) {
       this._controller.items.add(item)
@@ -172,6 +178,10 @@ export class ExerciseTestController implements vscode.Disposable {
   }
 
   private _reportError(run: vscode.TestRun, item: vscode.TestItem, error: Error): void {
+    if (error instanceof AiUseRefusedError) {
+      run.errored(item, new vscode.TestMessage(refusalMessage(error)))
+      return
+    }
     if (error instanceof BottleneckError) {
       run.appendOutput(toTerminalText(`${error.message}\n`), undefined, item)
       run.skipped(item)
@@ -313,6 +323,17 @@ export class ExerciseTestController implements vscode.Disposable {
       (): void => void vscode.commands.executeCommand("tmc.submitExercise", exercise.uri),
     ])
   }
+}
+
+/** The refusal's sentence, and its remedy as the one command the message may run. */
+function refusalMessage(error: AiUseRefusedError): vscode.MarkdownString {
+  const message = new vscode.MarkdownString()
+  message.appendText(error.message)
+  if (error.remedyLabel) {
+    message.appendMarkdown(` [${error.remedyLabel}](command:${SHOW_AI_USE_PROBLEM_COMMAND})`)
+    message.isTrusted = { enabledCommands: [SHOW_AI_USE_PROBLEM_COMMAND] }
+  }
+  return message
 }
 
 /** Why a run produced no per-test results, or `undefined` when it did. */

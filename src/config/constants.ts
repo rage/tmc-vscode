@@ -71,6 +71,128 @@ export const WATCHER_EXCLUDE = {
   "**/.tmc.json": true,
 }
 
+/** VS Code language ids of the exercises the language plugins handle, plus the prose files around them. */
+export const COURSE_LANGUAGE_IDS = [
+  "c",
+  "cpp",
+  "csharp",
+  "java",
+  "javascript",
+  "markdown",
+  "plaintext",
+  "python",
+  "r",
+  "typescript",
+]
+
+// Per-language maps merge across scopes, so a user-scope `{"python": true}` would beat a bare
+// `{"*": false}`: every course language is named.
+const OFF_FOR_COURSE_LANGUAGES = {
+  "*": false,
+  ...Object.fromEntries(COURSE_LANGUAGE_IDS.map((languageId) => [languageId, false])),
+}
+
+/**
+ * The settings that turn AI assistance off in a course workspace, written into its
+ * `.code-workspace` unless the course allows AI. Every key must be window-, resource- or
+ * language-scoped: a workspace file cannot hold application or machine settings.
+ */
+export const AI_OFF_SETTINGS: Readonly<Record<string, unknown>> = {
+  // The only core switch that also reaches third-party ghost text.
+  "editor.inlineSuggest.enabled": false,
+  "chat.agent.enabled": false,
+  "chat.extensionTools.enabled": false,
+  "chat.mcp.access": "none",
+  "chat.plugins.enabled": false,
+  "github.copilot.enable": OFF_FOR_COURSE_LANGUAGES,
+  "github.copilot.nextEditSuggestions.enabled": false,
+  "github.copilot.editor.enableCodeActions": false,
+  "github.copilot.renameSuggestions.triggerAutomatically": false,
+  "github.copilot.chat.reviewSelection.enabled": false,
+  "github.copilot.chat.reviewAgent.enabled": false,
+  "codeium.enableConfig": OFF_FOR_COURSE_LANGUAGES,
+  "codeium.enableCodeLens": false,
+  "codeium.enableSearch": false,
+  "codeium.enableExplainProblem": false,
+  "codeium.disableSupercomplete": true,
+  "codeium.disableTabJump": true,
+  // Tabnine has no enable switch, and answers `editor.inlineSuggest.enabled` by moving to the suggest list.
+  "tabnine.disableFileRegex": [".*"],
+  "tabnine.codeLensEnabled": false,
+  "continue.enableTabAutocomplete": false,
+  "continue.enableNextEdit": false,
+  "continue.enableQuickActions": false,
+  "continue.disableQuickFix": true,
+  "continue.showInlineTip": false,
+  "cody.suggestions.mode": "off",
+  "cody.autocomplete.languages": OFF_FOR_COURSE_LANGUAGES,
+  "cody.codeActions.enabled": false,
+  "cody.commandHints.enabled": false,
+  "geminicodeassist.enable": false,
+  "geminicodeassist.inlineSuggestions.enableAuto": false,
+  "geminicodeassist.inlineSuggestions.nextEditPredictions": false,
+  // An allow-list: empty enables no language.
+  "geminicodeassist.languages": [],
+  "supermaven.enable": OFF_FOR_COURSE_LANGUAGES,
+  "supermaven.enableFixWithSupermaven": false,
+  "supermaven.enableJumpSuggestions": false,
+  "supermaven.enableDeleteSuggestions": false,
+  "roo-cline.enableCodeActions": false,
+  "kilo-code.new.autocomplete.enableAutoTrigger": false,
+  "kilo-code.new.autocomplete.enableSmartInlineTaskKeybinding": false,
+  "kilo-code.new.autocomplete.enableChatAutocomplete": false,
+  "augment.completions.enableAutomaticCompletions": false,
+  "augment.completions.disableCompletionsByLanguage": COURSE_LANGUAGE_IDS,
+  "intellicodeCompletions.language.javascript": false,
+  "intellicodeCompletions.language.python": false,
+  "intellicodeCompletions.language.typescript": false,
+  "vsintellicode.java.completionsEnabled": false,
+  "vsintellicode.python.completionsEnabled": false,
+  "vsintellicode.typescript.completionsEnabled": false,
+  "genieai.quickFix.enable": false,
+  "genieai.enableGenerateCommitMessage": false,
+  // Last: turning it on disables Copilot Chat and restarts the extension host, which would cut
+  // off any write still to come.
+  "chat.disableAIFeatures": true,
+}
+
+/**
+ * AI assistants that {@link AI_OFF_SETTINGS} cannot fully turn off, by extension id, each with
+ * the name the Extensions view shows it under. Submitting, testing and pasting are refused
+ * while one of them is enabled in the window.
+ */
+export const AI_EXTENSIONS: Readonly<Record<string, string>> = {
+  "Alibaba-Cloud.tongyi-lingma": "Qoder CN (Lingma)",
+  "AmazonWebServices.amazon-q-vscode": "Amazon Q",
+  "anthropic.claude-code": "Claude Code",
+  "augment.vscode-augment": "Augment",
+  "Bito.Bito": "Bito",
+  "Blackboxapp.blackbox": "BLACKBOXAI",
+  "Blackboxapp.blackboxagent": "Blackbox Agent",
+  "Codeium.codeium": "Windsurf Plugin (Codeium)",
+  "Codeium.codeium-enterprise-updater": "Codeium Enterprise Updater",
+  "Codium.codium": "Qodo",
+  "Continue.continue": "Continue",
+  "DanielSanMedium.dscodegpt": "CodeGPT",
+  "FittenTech.Fitten-Code": "Fitten Code",
+  "genieai.chatgpt-vscode": "Genie AI",
+  "Google.gemini-cli-vscode-ide-companion": "Gemini CLI Companion",
+  "Google.geminicodeassist": "Gemini Code Assist",
+  "kilocode.Kilo-Code": "Kilo Code",
+  "Kingleo.qwen": "Qwen",
+  "openai.chatgpt": "Codex",
+  "RooVeterinaryInc.roo-cline": "Roo Code",
+  "saoudrizwan.claude-dev": "Cline",
+  "Sixth.sixth-ai": "Sixth",
+  "smallcloud.codify": "Refact",
+  "sourcegraph.cody-ai": "Cody",
+  "sourcery.sourcery": "Sourcery",
+  "supermaven.supermaven": "Supermaven",
+  "TabNine.tabnine-vscode": "Tabnine",
+  "TabNine.tabnine-vscode-self-hosted-updater": "Tabnine for Enterprise",
+  "ZencoderAI.zencoder": "Zencoder",
+}
+
 export const WORKSPACE_SETTINGS = {
   folders: [{ path: ".tmc" }],
   settings: {

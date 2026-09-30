@@ -104,6 +104,7 @@ export type WebviewState = z.infer<typeof WebviewStateSchema>
 export const RunnableCommandSchema = z.enum([
   "tmc.logs",
   "tmc.myCourses",
+  "tmc.showAiUseProblem",
   "tmc.showMoocLogin",
   "tmc.viewInitializationErrorHelp",
   "workbench.action.restartExtensionHost",

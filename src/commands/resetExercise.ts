@@ -1,7 +1,7 @@
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { resetExercise as resetExerciseAction } from "../actions"
+import { checkAiUse, resetExercise as resetExerciseAction } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure } from "../api/withOperation"
 import { backendName, ExerciseIdentifier } from "../shared/shared"
@@ -40,6 +40,12 @@ export async function resetExercise(
     })
     if (submitFirst === undefined) {
       return Ok.EMPTY
+    }
+    if (submitFirst) {
+      const allowed = await checkAiUse(actionContext, exercise)
+      if (allowed.err) {
+        return allowed
+      }
     }
 
     const editor = vscode.window.activeTextEditor
