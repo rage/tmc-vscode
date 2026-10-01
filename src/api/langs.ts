@@ -174,6 +174,20 @@ function loggableArg(arg: string): string {
   return arg.length > MAX_LOGGED_ARG_LENGTH ? `<${arg.length} characters>` : arg
 }
 
+/**
+ * The status of the HTTP error response a CLI failure names, if any. Matches the
+ * `HttpError` Display of both tmc-langs backend clients, the CLI's only report of it.
+ */
+function httpStatusIn(errorLines: readonly string[]): number | undefined {
+  for (const line of errorLines) {
+    const status = /\bHTTP error (\d{3})\b/.exec(line)?.[1]
+    if (status !== undefined) {
+      return Number(status)
+    }
+  }
+  return undefined
+}
+
 /** Ample for the failure diagnostics stderr feeds; a test run can write orders of magnitude more. */
 const MAX_RETAINED_STDERR_BYTES = 64 * 1024
 
@@ -1719,9 +1733,10 @@ export default class Langs {
     // `trace` is the CLI's own reported backtrace; `stderr` is what the process wrote.
     // Neither alone has been enough to diagnose a failure, so every error carries both.
     const details = [data["output-data"].trace.join("\n"), stderr].filter(Boolean).join("\n\n")
+    const httpStatus = httpStatusIn([message, ...data["output-data"].trace])
     switch (errorKind) {
       case "connection-error":
-        return Err(new ConnectionError(message, details))
+        return Err(Object.assign(new ConnectionError(message, details), { httpStatus }))
       case "forbidden":
         // courses.mooc.fi 403s a token whose scopes don't cover programming exercises;
         // tmc.mooc.fi 403s a course the user may not see. Only the latter is about the
@@ -1754,7 +1769,7 @@ export default class Langs {
         return Err(new ObsoleteClientError(message, details))
     }
 
-    return Err(new RuntimeError(message, details))
+    return Err(Object.assign(new RuntimeError(message, details), { httpStatus }))
   }
 
   /**

@@ -272,6 +272,20 @@ suite("login command", function () {
     ])
   })
 
+  test("reports a server error status as the server failing, not the connection", async function () {
+    const h = harness()
+    const outcome = login(h.context)
+    await settle()
+    const error = Object.assign(new ConnectionError("HTTP error 503 …"), { httpStatus: 503 })
+
+    h.logins[0]?.finish(Err(error))
+
+    expect(await outcome).toBe("failed")
+    expect(errorNotificationCall(h.context)?.[0]).toBe(
+      "courses.mooc.fi returned an error (503). Try again later.",
+    )
+  })
+
   test("gives up on a CLI still running past the code's lifetime", async function () {
     vi.useFakeTimers()
     const h = harness()

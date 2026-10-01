@@ -947,6 +947,28 @@ suite("Langs error-kind mapping", function () {
     expect(moocResult.val).toBeInstanceOf(InsufficientScopeError)
   })
 
+  test.each([
+    ["connection-error", ConnectionError, 503],
+    ["generic", RuntimeError, 404],
+  ] as const)(
+    "%s carries the status of the HTTP error it names",
+    async function (kind, errorClass, status) {
+      const langs = newLangs()
+      const line = `HTTP error ${status} for https://courses.mooc.fi/x: body. Obsolete client: false.`
+      stubSpawn(langs, () => Ok(errorOutput(kind, "Failed to get courses", [`Caused by: ${line}`])))
+      const result = await langs.getEnrolledMoocCourses()
+      expect(result.val).toBeInstanceOf(errorClass)
+      expect((result.val as ConnectionError | RuntimeError).httpStatus).toBe(status)
+    },
+  )
+
+  test("a connection error naming no HTTP status has none", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, () => Ok(errorOutput("connection-error", "Connection error trying to GET x")))
+    const result = await langs.getEnrolledMoocCourses()
+    expect((result.val as ConnectionError).httpStatus).toBeUndefined()
+  })
+
   test("an error kind carries the CLI's message and no remediation of its own", async function () {
     // `presentationFor` owns every user-facing sentence, so a second copy composed here
     // would drift from it.

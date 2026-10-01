@@ -1,4 +1,5 @@
 import {
+  ConnectionError,
   InitializationError,
   InsufficientScopeError,
   NotEnrolledError,
@@ -21,6 +22,28 @@ suite("presentationFor", function () {
 
     expect(presentation.message).toBe("The CLI exited with 1.")
     expect(presentation.actions).toEqual([])
+  })
+
+  test("a server error status reads as the server failing, not as the network", function () {
+    const raw = "HTTP error 503 Service Unavailable for https://courses.mooc.fi/x: <html>…</html>"
+    const unavailable = Object.assign(new ConnectionError(raw), { httpStatus: 503 })
+    const notFound = Object.assign(new RuntimeError(raw), { httpStatus: 404 })
+
+    expect(presentationFor(unavailable, "mooc").message).toBe(
+      "courses.mooc.fi returned an error (503). Try again later.",
+    )
+    expect(presentationFor(unavailable).message).toBe(
+      "The server returned an error (503). Try again later.",
+    )
+    expect(presentationFor(notFound, "mooc").message).toBe(
+      "courses.mooc.fi returned an error (404).",
+    )
+  })
+
+  test("an unreachable server keeps its own message", function () {
+    const presentation = presentationFor(new ConnectionError("dns error"), "mooc")
+
+    expect(presentation.message).toBe("Dns error.")
   })
 
   test("a lost courses.mooc.fi scope offers the login command", function () {

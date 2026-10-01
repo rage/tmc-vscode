@@ -63,6 +63,25 @@ vsCodeTest.describe(() => {
   })
 })
 
+vsCodeTest.describe(() => {
+  vsCodeTest.use({ moocClientId: "mooc-mock-unavailable" })
+
+  vsCodeTest(
+    "a server error says the server failed, not the connection",
+    async ({ page, webview }) => {
+      const coursesView = new CoursesViewPage(page, webview)
+
+      await coursesView.goto()
+      await coursesView.startMoocLogin()
+
+      await expect(
+        coursesView.notificationToast("courses.mooc.fi returned an error (503). Try again later."),
+      ).toBeVisible()
+      await expect(coursesView.notificationToast("Check your internet connection")).toHaveCount(0)
+    },
+  )
+})
+
 // This mock client id never approves, so the login waits until it is cancelled.
 vsCodeTest.describe(() => {
   vsCodeTest.use({ moocClientId: "mooc-mock-never" })

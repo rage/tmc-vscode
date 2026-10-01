@@ -170,7 +170,9 @@ function failureMessage(error: Error): [message: string, error?: Error] {
       : ["The login code expired before it was approved."]
   }
   if (error instanceof ConnectionError) {
-    return [`Could not reach ${SITE}. Check your internet connection.`, error]
+    return error.httpStatus === undefined
+      ? [`Could not reach ${SITE}. Check your internet connection.`, error]
+      : [presentationFor(error, "mooc").message, error]
   }
   return [`Logging in to ${SITE} failed. ${presentationFor(error, "mooc").message}`, error]
 }
