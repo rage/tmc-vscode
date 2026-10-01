@@ -2,8 +2,7 @@
 
 One courses.mooc.fi account works for every TestMyCode course, on courses.mooc.fi and on tmc.mooc.fi.
 
-1. Select **Log In**. A dialog shows a short code.
-2. Select **Copy & Open courses.mooc.fi**. The code is copied and courses.mooc.fi opens in your browser, where you log in if you are not already.
-3. Check or paste the code there and approve the login. TestMyCode waits in a notification until you do.
+1. Select **Log In**. courses.mooc.fi opens in your browser, where you log in if you are not already. VS Code may first ask whether to open the site.
+2. Check that the page shows the code in TestMyCode's notification, then approve the login. The notification waits until you do.
 
 VS Code never sees your password. To log out, select the account item in the status bar, or run **TestMyCode: Log Out**.

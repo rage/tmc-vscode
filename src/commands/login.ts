@@ -28,10 +28,11 @@ let cancelCurrentLogin: (() => void) | undefined
  * Logs in to courses.mooc.fi with the device flow, in the user's own browser so their
  * existing browser session is reused.
  *
- * A modal shows the code with one action that copies it and opens the verification page; a
- * cancellable progress notification then waits for the approval. Starting a login cancels any
- * login already in flight, so two `mooc login` processes never race on the credentials file.
- * Every failure is reported here, with a Try again action.
+ * A cancellable progress notification shows the code while it waits for the approval. The
+ * verification page opens at once when its URL carries the code; otherwise a modal first offers
+ * to copy the code for pasting there. Starting a login cancels any login already in flight, so
+ * two `mooc login` processes never race on the credentials file. Every failure is reported
+ * here, with a Try again action.
  */
 export async function login(actionContext: ReadyActionContext): Promise<LoginOutcome> {
   const { dialog } = actionContext
@@ -71,7 +72,11 @@ export async function login(actionContext: ReadyActionContext): Promise<LoginOut
         message: `Waiting for you to approve in the browser… Code ${info.user_code} at ${info.verification_uri}`,
       })
       const ended = Promise.race([finished, cancelled])
-      if (!(await offerCode(info, ended))) {
+      if (info.verification_uri_complete) {
+        // No modal of our own: VS Code already asks before opening a domain the user has not
+        // trusted, and the code is in the URL it shows.
+        void openInBrowser(info.verification_uri_complete)
+      } else if (!(await offerCode(info, ended))) {
         cancel()
         return { kind: "cancelled" }
       }
@@ -117,7 +122,8 @@ export async function login(actionContext: ReadyActionContext): Promise<LoginOut
 }
 
 /**
- * Shows the code in a modal, and on "Copy & Open" copies it and opens the verification page.
+ * Shows a code the user must type in a modal, and on "Copy & Open" copies it and opens the
+ * verification page.
  *
  * @param ended Settles when the login ends without the user. VS Code cannot close a modal,
  * so one still open then is left to the user, and its button opens nothing.
@@ -131,12 +137,7 @@ async function offerCode(info: MoocDeviceLogin, ended: Promise<unknown>): Promis
   const copyAndOpen = `Copy & Open ${SITE}`
   const picked = await vscode.window.showInformationMessage(
     `Your ${SITE} login code is ${info.user_code}`,
-    {
-      modal: true,
-      detail: info.verification_uri_complete
-        ? "Check that the page that opens shows this code, then approve the login."
-        : "Paste the code on the page that opens, then approve the login.",
-    },
+    { modal: true, detail: "Paste the code on the page that opens, then approve the login." },
     copyAndOpen,
   )
   if (hasEnded) {
@@ -146,11 +147,18 @@ async function offerCode(info: MoocDeviceLogin, ended: Promise<unknown>): Promis
     return false
   }
   await vscode.env.clipboard.writeText(info.user_code)
-  const target = info.verification_uri_complete ?? info.verification_uri
-  if (!(await vscode.env.openExternal(vscode.Uri.parse(target)))) {
-    Logger.warn(`Could not open ${target} in a browser`)
-  }
+  await openInBrowser(info.verification_uri)
   return true
+}
+
+/**
+ * Opens `url` in the user's browser. A refusal leaves the login waiting, as the progress names
+ * the page to open by hand.
+ */
+async function openInBrowser(url: string): Promise<void> {
+  if (!(await vscode.env.openExternal(vscode.Uri.parse(url)))) {
+    Logger.warn(`Could not open ${url} in a browser`)
+  }
 }
 
 /** The sentence for a failed login, plus the error when its details belong in the logs. */

@@ -25,7 +25,12 @@ const DEVICE: MoocDeviceLogin = {
   interval: 5,
 }
 
+/** A server that sends no code-carrying URL, which only a modal can bridge. */
+const DEVICE_WITHOUT_COMPLETE_URI: MoocDeviceLogin = { ...DEVICE, verification_uri_complete: null }
+
 const COPY_AND_OPEN = "Copy & Open courses.mooc.fi"
+
+const WAITING = `Waiting for you to approve in the browser… Code WXYZ-1234 at ${DEVICE.verification_uri}`
 
 /** One `mooc login` process the test drives: it emits the code and ends when told to. */
 interface FakeLogin {
@@ -110,11 +115,14 @@ async function settle(): Promise<void> {
   }
 }
 
-/** Starts a login and lets the CLI emit its code; the login's outcome stays pending. */
-async function runToModal(h: Harness): Promise<{ outcome: Promise<unknown> }> {
+/** Starts a login and lets the CLI emit `info`; the login's outcome stays pending. */
+async function runToCode(
+  h: Harness,
+  info: MoocDeviceLogin = DEVICE,
+): Promise<{ outcome: Promise<unknown> }> {
   const outcome = login(h.context)
   await settle()
-  h.logins[0]?.emitCode()
+  h.logins[0]?.emitCode(info)
   await settle()
   return { outcome }
 }
@@ -133,27 +141,15 @@ suite("login command", function () {
     vi.useRealTimers()
   })
 
-  test("shows the code, then copies it and opens the page on Copy & Open", async function () {
+  test("opens the page carrying the code at once, and shows the code in the progress", async function () {
     const h = harness()
-    const { outcome } = await runToModal(h)
+    const { outcome } = await runToCode(h)
 
-    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      "Your courses.mooc.fi login code is WXYZ-1234",
-      {
-        modal: true,
-        detail: "Check that the page that opens shows this code, then approve the login.",
-      },
-      COPY_AND_OPEN,
-    )
-    h.answerModal(COPY_AND_OPEN)
-    await settle()
-
-    expect(h.clipboard).toHaveBeenCalledExactlyOnceWith("WXYZ-1234")
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
+    expect(h.clipboard).not.toHaveBeenCalled()
     expect(h.openExternal).toHaveBeenCalledOnce()
     expect(openedUrl(h)).toBe(DEVICE.verification_uri_complete)
-    expect(h.progressMessages.at(-1)).toBe(
-      "Waiting for you to approve in the browser… Code WXYZ-1234 at https://courses.mooc.fi/oauth_device",
-    )
+    expect(h.progressMessages.at(-1)).toBe(WAITING)
 
     h.logins[0]?.finish(Ok(undefined))
     expect(await outcome).toBe("loggedIn")
@@ -164,36 +160,39 @@ suite("login command", function () {
     expect(refreshEverything).toHaveBeenCalledWith(h.context, { silent: true })
   })
 
-  test("the progress shows the code, not the request for it, while the code modal is open", async function () {
+  test("without a page carrying the code, offers to copy it before opening the page", async function () {
     const h = harness()
-    await runToModal(h)
+    const { outcome } = await runToCode(h, DEVICE_WITHOUT_COMPLETE_URI)
 
-    expect(h.progressMessages.at(-1)).toBe(
-      "Waiting for you to approve in the browser… Code WXYZ-1234 at https://courses.mooc.fi/oauth_device",
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      "Your courses.mooc.fi login code is WXYZ-1234",
+      { modal: true, detail: "Paste the code on the page that opens, then approve the login." },
+      COPY_AND_OPEN,
     )
-  })
-
-  test("opens the plain verification page when the CLI has no complete one", async function () {
-    const h = harness()
-    const outcome = login(h.context)
-    await settle()
-    h.logins[0]?.emitCode({ ...DEVICE, verification_uri_complete: null })
-    await settle()
-
-    expect(vi.mocked(vscode.window.showInformationMessage).mock.calls[0]?.[1]).toMatchObject({
-      detail: "Paste the code on the page that opens, then approve the login.",
-    })
+    expect(h.progressMessages.at(-1)).toBe(WAITING)
+    expect(h.openExternal).not.toHaveBeenCalled()
     h.answerModal(COPY_AND_OPEN)
     await settle()
+    expect(h.clipboard).toHaveBeenCalledExactlyOnceWith("WXYZ-1234")
     expect(openedUrl(h)).toBe(DEVICE.verification_uri)
 
     h.logins[0]?.finish(Ok(undefined))
     expect(await outcome).toBe("loggedIn")
   })
 
-  test("dismissing the code cancels the login silently", async function () {
+  test("a browser that does not open leaves the login waiting", async function () {
     const h = harness()
-    const { outcome } = await runToModal(h)
+    h.openExternal.mockResolvedValue(false)
+    const { outcome } = await runToCode(h)
+
+    expect(h.logins[0]?.interrupt).not.toHaveBeenCalled()
+    h.logins[0]?.finish(Ok(undefined))
+    expect(await outcome).toBe("loggedIn")
+  })
+
+  test("dismissing the code modal cancels the login silently", async function () {
+    const h = harness()
+    const { outcome } = await runToCode(h, DEVICE_WITHOUT_COMPLETE_URI)
 
     h.answerModal(undefined)
 
@@ -206,9 +205,7 @@ suite("login command", function () {
 
   test("cancelling the progress notification kills the CLI process", async function () {
     const h = harness()
-    const { outcome } = await runToModal(h)
-    h.answerModal(COPY_AND_OPEN)
-    await settle()
+    const { outcome } = await runToCode(h)
 
     h.cancelProgress()
 
@@ -217,9 +214,9 @@ suite("login command", function () {
     expect(h.context.dialog.errorNotification).not.toHaveBeenCalled()
   })
 
-  test("a login that ends while the code is still shown opens no browser", async function () {
+  test("a login that ends while the code modal is still open opens no browser", async function () {
     const h = harness()
-    const { outcome } = await runToModal(h)
+    const { outcome } = await runToCode(h, DEVICE_WITHOUT_COMPLETE_URI)
 
     h.logins[0]?.finish(Ok(undefined))
     await settle()
@@ -238,9 +235,7 @@ suite("login command", function () {
     ],
   ])("says what went wrong when %s, and offers Try again", async function (cliMessage, shown) {
     const h = harness()
-    const { outcome } = await runToModal(h)
-    h.answerModal(COPY_AND_OPEN)
-    await settle()
+    const { outcome } = await runToCode(h)
 
     h.logins[0]?.finish(Err(new AuthorizationError(cliMessage)))
 
@@ -280,9 +275,7 @@ suite("login command", function () {
   test("gives up on a CLI still running past the code's lifetime", async function () {
     vi.useFakeTimers()
     const h = harness()
-    const { outcome } = await runToModal(h)
-    h.answerModal(COPY_AND_OPEN)
-    await settle()
+    const { outcome } = await runToCode(h)
 
     await vi.advanceTimersByTimeAsync(DEVICE.expires_in * 1000 + 30_000)
 
@@ -295,9 +288,7 @@ suite("login command", function () {
 
   test("a new login cancels the one in flight", async function () {
     const h = harness()
-    const { outcome: first } = await runToModal(h)
-    h.answerModal(COPY_AND_OPEN)
-    await settle()
+    const { outcome: first } = await runToCode(h)
 
     const second = login(h.context)
     await settle()

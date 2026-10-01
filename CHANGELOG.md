@@ -9,7 +9,7 @@
 - The extension now declares itself unsupported in untrusted (restricted-mode) workspaces, since it downloads and runs the TMC-langs CLI against workspace files.
 - The extension now declares itself unsupported in virtual workspaces, such as a repository opened straight from GitHub, since it runs the TMC-langs CLI as a local process and stores exercises on disk.
 - The backend name beside a course in the Courses view is now shown dimmed, next to the title, instead of appended to it.
-- Logging in no longer opens a panel: a dialog shows your courses.mooc.fi login code with Copy & Open courses.mooc.fi, and a notification you can cancel waits while you approve in the browser. A denied or expired login says so and offers Try again.
+- Logging in no longer opens a panel: courses.mooc.fi opens in your browser with your login code, and a notification you can cancel shows the code and waits while you approve there. A denied or expired login says so and offers Try again.
 - Your courses.mooc.fi account now shows in VS Code's Accounts menu, where you can also sign out.
 - Every initialization error notification now offers Show help.
 - Open Exercises Folder, Wipe and Change data path now say why they cannot run when TMC-langs reported no exercise directory.

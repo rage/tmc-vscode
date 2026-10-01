@@ -23,6 +23,6 @@ vsCodeTest.describe(() => {
 
     await statusBarItem(page, /not logged in/).click()
 
-    await expect(moocLoginPage.codeDialog()).toBeVisible()
+    await expect(moocLoginPage.waitingNotification()).toBeVisible()
   })
 })
