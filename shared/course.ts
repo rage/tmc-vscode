@@ -44,6 +44,8 @@ export const SharedMoocCourseExerciseSchema = z.object({
   deadline: z.string().nullable(),
   passed: z.boolean(),
   softDeadline: z.string().nullable(),
+  /** The chapter the course material puts the exercise in; absent outside any chapter. */
+  chapter: z.object({ name: z.string(), number: z.number() }).optional(),
 })
 
 export type SharedMoocCourseExercise = z.infer<typeof SharedMoocCourseExerciseSchema>

@@ -6,6 +6,7 @@ import {
 import type { CourseExercise, Exercise } from "../../shared/langsSchema"
 import type { MoocLocalCourseData } from "../../storage/data"
 import {
+  combineMoocApiExerciseData,
   combineTmcApiExerciseData,
   sumCoursePoints,
   sumTmcApiCoursePoints,
@@ -169,5 +170,23 @@ suite("toStoredMoocCourse", function () {
       newExercises: ["new-exercise"],
       notifyAfter: 1234,
     })
+  })
+})
+
+suite("combineMoocApiExerciseData", function () {
+  test("keeps each exercise's chapter, and none for an exercise outside one", function () {
+    const [slide] = moocExerciseSlides
+    if (slide === undefined) {
+      throw new Error("the fixture has a slide")
+    }
+    const chaptered = {
+      ...slide,
+      chapter: { id: "chapter-1", name: "Basics", chapter_number: 1 },
+    }
+
+    const [stored, unchaptered] = combineMoocApiExerciseData([chaptered, slide], undefined)
+
+    expect(stored?.chapter).toEqual({ name: "Basics", number: 1 })
+    expect(unchaptered).not.toHaveProperty("chapter")
   })
 })

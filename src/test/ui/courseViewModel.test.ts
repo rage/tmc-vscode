@@ -193,6 +193,26 @@ suite("buildCourseView", () => {
     ])
   })
 
+  test("groups mooc exercises by chapter in chapter order, the unchaptered ones last", () => {
+    const basics = { name: "Basics", number: 1 }
+    const loops = { name: "Loops", number: 2 }
+    const parts = build(
+      moocCourse([
+        moocExercise("cccccccc-cccc-4ccc-accc-000000000001", "Extra", {}),
+        moocExercise("cccccccc-cccc-4ccc-accc-000000000002", "While", { chapter: loops }),
+        moocExercise("cccccccc-cccc-4ccc-accc-000000000003", "Print", { chapter: basics }),
+        moocExercise("cccccccc-cccc-4ccc-accc-000000000004", "For", { chapter: loops }),
+      ]),
+    )
+
+    expect(parts.map((part) => [part.name, part.isUngrouped])).toEqual([
+      ["Basics", false],
+      ["Loops", false],
+      ["MOOC Python", true],
+    ])
+    expect(parts[1]?.exercises.map((ex) => ex.name)).toEqual(["While", "For"])
+  })
+
   test("marks an undownloaded exercise past its hard deadline as expired", () => {
     const parts = build(
       course([

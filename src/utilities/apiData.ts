@@ -76,6 +76,9 @@ export function combineMoocApiExerciseData(
       passed: exerciseProgress?.completed ?? previous?.passed ?? false,
       availablePoints: exerciseProgress?.score_maximum ?? previous?.availablePoints ?? 0,
       awardedPoints: exerciseProgress?.score_given ?? previous?.awardedPoints ?? 0,
+      ...(slide.chapter
+        ? { chapter: { name: slide.chapter.name, number: slide.chapter.chapter_number } }
+        : {}),
     }
   })
 }
