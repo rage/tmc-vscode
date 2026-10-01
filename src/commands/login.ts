@@ -2,7 +2,12 @@ import * as vscode from "vscode"
 
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import { AuthorizationError, ConnectionError, presentationFor } from "../errors"
+import {
+  ConnectionError,
+  DeviceLoginDeniedError,
+  DeviceLoginExpiredError,
+  presentationFor,
+} from "../errors"
 import type { MoocDeviceLogin } from "../shared/langsSchema"
 import { backendName } from "../shared/shared"
 import { Logger } from "../utilities"
@@ -155,11 +160,11 @@ async function offerCode(info: MoocDeviceLogin, ended: Promise<unknown>): Promis
 
 /** The sentence for a failed login, plus the error when its details belong in the logs. */
 function failureMessage(error: Error): [message: string, error?: Error] {
-  if (error instanceof AuthorizationError) {
-    // The CLI reports a denial and an expired code as the same error kind.
-    return /denied/i.test(error.message)
-      ? ["The login was denied in the browser."]
-      : ["The login code expired before it was approved."]
+  if (error instanceof DeviceLoginDeniedError) {
+    return ["The login was denied in the browser."]
+  }
+  if (error instanceof DeviceLoginExpiredError) {
+    return ["The login code expired before it was approved."]
   }
   if (error instanceof ConnectionError) {
     return [`Could not reach ${SITE}. Check your internet connection.`, error]

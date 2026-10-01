@@ -91,10 +91,11 @@ vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ pag
   })
 
   await vsCodeTest.step("submit exercise and see the reduced mooc result", async () => {
-    // The mooc submit renders the reduced result panel: a "Exercise graded"
-    // heading (FullyGraded) plus the score, not the TMC per-test submission view.
+    // The mooc submit renders the reduced result panel: an "Exercise passed" heading
+    // (full points, as the backend's standing says) plus the score, not the TMC per-test
+    // submission view.
     const gradedHeading = testSubmissionPage.getWebview().getByRole("heading", {
-      name: "Exercise graded",
+      name: "Exercise passed",
     })
     await expect(gradedHeading).toBeHidden()
     await allPassed.getByRole("button", { name: "Submit" }).click()

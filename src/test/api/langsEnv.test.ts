@@ -85,7 +85,7 @@ suite("Langs CLI environment", function () {
     expect(captured?.env && "TMC_LANGS_MOOC_TRUST_LOCALHOST" in captured.env).toBe(false)
   })
 
-  test("a configured Java home becomes JAVA_HOME and leads PATH", async function () {
+  test("a configured Java home becomes JAVA_HOME and leaves PATH alone", async function () {
     const javaHome = path.join("/opt", "jdk-21")
     const langs = new Langs("dummy-cli-path", "test-client", "1.0.0", { javaHome: () => javaHome })
 
@@ -93,10 +93,8 @@ suite("Langs CLI environment", function () {
     await Promise.resolve()
 
     const env = spawnCalls[0]?.env ?? {}
-    const pathKey = Object.keys(env).find((key) => key.toUpperCase() === "PATH") ?? "PATH"
     expect(env.JAVA_HOME).toBe(javaHome)
-    expect(env[pathKey]?.split(path.delimiter)[0]).toBe(path.join(javaHome, "bin"))
-    expect(Object.keys(env).filter((key) => key.toUpperCase() === "PATH")).toHaveLength(1)
+    expect(env.PATH).toBe(process.env.PATH)
   })
 
   test("an empty Java home leaves the inherited JAVA_HOME and PATH alone", async function () {

@@ -6,6 +6,7 @@ import type Langs from "../api/langs"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { SUBMIT_PROCESS_TIMEOUT } from "../config/constants"
 import { findStoredExercise } from "../config/userdata"
+import { OutOfTriesError } from "../errors"
 import { nextPanelId } from "../panels/routes"
 import type { InProgressPhase, SubmissionProgress } from "../panels/submissionView"
 import {
@@ -27,17 +28,28 @@ import type {
 } from "../shared/shared"
 import { backendName, LocalCourseData, LocalCourseExercise, match, unwrap } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
+import { pointsText } from "../ui/points"
 import { submissionViews } from "../ui/submissionViews"
 import { Logger, parseFeedbackQuestion } from "../utilities"
+import type { MoocStoredStanding } from "../utilities/apiData"
+import { moocStoredStanding } from "../utilities/apiData"
 import { checkAiUse } from "./checkAiUse"
 import type { ReadyActionContext } from "./types"
 
 /** What a backend answered a submission with, reduced to what the shared flow acts on. */
 interface SubmissionOutcome {
-  /** Whether the backend graded the submission as passed, which is then recorded locally. */
-  passed: boolean
+  /** What the backend says about the exercise after this submission; recorded locally. */
+  recorded: RecordedGrading | undefined
   view: SubmissionView
 }
+
+/**
+ * A tmc submission records only a pass. A mooc one records the backend's standing and points,
+ * when the CLI and host are new enough to report them; otherwise the course refresh decides.
+ */
+type RecordedGrading =
+  | { backend: "tmc" }
+  | { backend: "mooc"; standing: MoocStoredStanding; awardedPoints: number }
 
 /** One submission of an exercise, and the side panel showing it. */
 interface Submission {
@@ -108,6 +120,8 @@ const pendingFeedback = new Map<number, PendingFeedback>()
 /** A mooc submission whose grading the host stopped waiting for. */
 interface UnfinishedGrading extends Submission {
   taskSubmissionId: string
+  /** The exercise's course material page, which shows the submission's grading. */
+  exercisePageUrl: string | undefined
 }
 
 // Keyed by the panel showing the submission, so a webview names only which panel it is.
@@ -137,7 +151,8 @@ function tmcSubmitter(langs: Langs, exerciseId: number): ExerciseSubmitter {
         view,
       })
     }
-    return Ok({ passed: result.status === "ok" && result.all_tests_passed === true, view })
+    const passed = result.status === "ok" && result.all_tests_passed === true
+    return Ok({ recorded: passed ? { backend: "tmc" } : undefined, view })
   }
 }
 
@@ -152,8 +167,13 @@ function moocSubmitter(langs: Langs, exerciseId: string): ExerciseSubmitter {
     if (submitted.err) {
       return submitted
     }
-    reporter.received()
-    const grading = { ...submission, taskSubmissionId: submitted.val.task_submission_id }
+    const exercisePageUrl = submitted.val.exercise_page_url ?? undefined
+    reporter.received(exercisePageUrl)
+    const grading = {
+      ...submission,
+      taskSubmissionId: submitted.val.task_submission_id,
+      exercisePageUrl,
+    }
     return Ok(await waitForMoocGrading(langs, grading, reporter))
   }
 }
@@ -170,19 +190,31 @@ async function waitForMoocGrading(
   if (waited.err) {
     Logger.error("Failed to wait for the grading of a submission", waited.val)
     unfinishedGradings.set(panel.id, grading)
-    return { passed: false, view: gradingUnavailableView(toWebviewError(waited.val, "mooc")) }
+    return {
+      recorded: undefined,
+      view: {
+        ...gradingUnavailableView(toWebviewError(waited.val, "mooc")),
+        submissionUrl: grading.exercisePageUrl,
+      },
+    }
   }
   const status = waited.val
-  const view = moocGradingView(status, grading.availablePoints)
+  const view = {
+    ...moocGradingView(status, grading.availablePoints),
+    submissionUrl: grading.exercisePageUrl,
+  }
   if (view.canKeepWaiting) {
     unfinishedGradings.set(panel.id, grading)
   }
+  const progress = status.status === "grading" ? status.grading.exercise_progress : null
   return {
-    passed:
-      status.status === "grading" &&
-      status.grading.grading_progress === "FullyGraded" &&
-      status.grading.score_given !== null &&
-      status.grading.score_given > 0,
+    recorded: progress?.standing
+      ? {
+          backend: "mooc",
+          standing: moocStoredStanding(progress),
+          awardedPoints: progress.score_given,
+        }
+      : undefined,
     view,
   }
 }
@@ -203,7 +235,7 @@ function submitterFor(
   )
 }
 
-/** Records a passed grading locally and shows the outcome, reopening the panel if it was closed. */
+/** Records the grading locally and shows the outcome, reopening the panel if it was closed. */
 async function showOutcome(
   actionContext: ReadyActionContext,
   submission: Submission,
@@ -212,18 +244,19 @@ async function showOutcome(
   const { dialog } = actionContext
   const { exerciseDecorationProvider, userData } = actionContext.startup
   const { exercise } = submission
-  if (outcome.passed) {
-    const passedResult = await userData.setExerciseAsPassed(
-      exercise.backend,
-      exercise.courseSlug,
-      exercise.exerciseSlug,
-    )
-    if (passedResult.err) {
-      dialog.reportError(
-        "Failed to record the exercise as passed.",
-        passedResult.val,
-        exercise.backend,
-      )
+  const { recorded } = outcome
+  if (recorded) {
+    const written =
+      recorded.backend === "tmc"
+        ? await userData.setExerciseAsPassed("tmc", exercise.courseSlug, exercise.exerciseSlug)
+        : await userData.setMoocExerciseStanding(
+            exercise.courseSlug,
+            exercise.exerciseSlug,
+            recorded.standing,
+            recorded.awardedPoints,
+          )
+    if (written.err) {
+      dialog.reportError("Failed to record the grading.", written.val, exercise.backend)
     } else {
       exerciseDecorationProvider.updateDecorationsForExercises(exercise)
     }
@@ -236,11 +269,12 @@ async function showOutcome(
 /**
  * Submits an exercise to the backend it belongs to and shows the grading in a side panel.
  *
- * Records the exercise as passed locally when the backend graded it so, and fires
+ * Records what the backend says about the exercise after the grading, and fires
  * {@link onDidFinishSubmission} once the outcome is shown. A failed submission is `Ok`, as the
  * panel shows why. Errs for a failure before the panel opens: a submit or paste already in
- * flight for the same exercise is a `BottleneckError`, and AI assistance that may be on is an
- * `AiUseRefusedError`.
+ * flight for the same exercise is a `BottleneckError`, AI assistance that may be on is an
+ * `AiUseRefusedError`, and an exercise the backend last reported out of tries is an
+ * `OutOfTriesError`.
  */
 export async function submitExercise(
   actionContext: ReadyActionContext,
@@ -259,6 +293,18 @@ export async function submitExercise(
   if (!submit) {
     return Err(
       new Error(`${exercise.exerciseSlug} is not a ${backendName(exercise.backend)} exercise.`),
+    )
+  }
+  if (courseExercise.kind === "mooc" && courseExercise.data.outOfTries) {
+    const points = pointsText(
+      courseExercise.data.awardedPoints,
+      courseExercise.data.availablePoints,
+    )
+    return Err(
+      new OutOfTriesError(
+        `You have no tries left on ${exercise.exerciseSlug}` +
+          (points ? `, so its ${points.short} points are final.` : "."),
+      ),
     )
   }
   const refused = await actionContext.startup.aiUseGate.refusal(course, exercise.uri)

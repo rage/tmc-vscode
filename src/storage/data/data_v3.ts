@@ -21,7 +21,18 @@ export interface MoocLocalCourseExercise {
   name: string
   deadline: string | null
   passed: boolean
+  /** Below full points with the try limit used up, so the score is final; absent means no. */
+  outOfTries?: boolean | undefined
   softDeadline: string | null
+  /** The chapter the course material puts the exercise in; absent outside any chapter. */
+  chapter?: MoocExerciseChapter | undefined
+}
+
+/** A chapter of a mooc course, as its exercises are grouped by. */
+export interface MoocExerciseChapter {
+  name: string
+  /** The chapter's position in the course, from 1. */
+  number: number
 }
 
 export interface MoocLocalCourseData {
@@ -65,7 +76,9 @@ export const moocLocalCourseExerciseSchema: z.ZodType<MoocLocalCourseExercise> =
   name: z.string(),
   deadline: z.string().nullable(),
   passed: z.boolean(),
+  outOfTries: z.boolean().optional(),
   softDeadline: z.string().nullable(),
+  chapter: z.object({ name: z.string(), number: z.number() }).optional(),
 })
 
 export const moocLocalCourseDataSchema: z.ZodType<MoocLocalCourseData> = z.object({

@@ -8,7 +8,7 @@ import type Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { UserData } from "../../config/userdata"
-import { ConnectionError, ForbiddenError, InsufficientScopeError } from "../../errors"
+import { ConnectionError, ForbiddenError, InsufficientScopeError, ServerError } from "../../errors"
 import type {
   CombinedCourseData,
   CourseData,
@@ -187,14 +187,17 @@ suite("updateCourse action (mooc)", function () {
     expect(userData.getMoocCourses()[0]?.disabled).toBe(false)
   })
 
-  test("returns offline (not disabled) on a ConnectionError", async function () {
-    const warn = vi.spyOn(Logger, "warn").mockImplementation(() => {})
-    tmcMockValues.getMoocCourseData = Err(new ConnectionError("down"))
-    const result = await updateCourse(actionContext(), courseId)
-    expect(result.val).toBe(false)
-    expect(userData.getMoocCourses()[0]?.disabled).toBe(false)
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("courses.mooc.fi"))
-  })
+  test.each([new ConnectionError("down"), new ServerError("503")])(
+    "returns offline (not disabled) on %s",
+    async function (error) {
+      const warn = vi.spyOn(Logger, "warn").mockImplementation(() => {})
+      tmcMockValues.getMoocCourseData = Err(error)
+      const result = await updateCourse(actionContext(), courseId)
+      expect(result.val).toBe(false)
+      expect(userData.getMoocCourses()[0]?.disabled).toBe(false)
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("courses.mooc.fi"))
+    },
+  )
 
   test("tells the Courses view whether the backend answered", async function () {
     vi.spyOn(Logger, "warn").mockImplementation(() => {})
