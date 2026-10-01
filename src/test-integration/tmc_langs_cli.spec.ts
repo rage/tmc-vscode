@@ -14,7 +14,13 @@ import { MOCK_TMC_ACCESS_TOKEN } from "../../backend/controllers/accessToken"
 import { TMC_ARCHIVE_MIME } from "../../backend/mooc/fixtures"
 import Langs from "../api/langs"
 import { CLIENT_NAME, MINIMUM_SUBMISSION_INTERVAL, TMC_LANGS_VERSION } from "../config/constants"
-import { AuthorizationError, BottleneckError, InvalidTokenError, RuntimeError } from "../errors"
+import {
+  AuthorizationError,
+  BottleneckError,
+  InvalidTokenError,
+  NotFoundError,
+  RuntimeError,
+} from "../errors"
 import type { ExerciseTaskSubmissionStatus, SubmissionFeedback } from "../shared/langsSchema"
 import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { getLangsCLIForPlatform, getPlatform } from "../utilities"
@@ -193,13 +199,13 @@ suite("tmc langs cli spec", function () {
       expect(dataResult.val).to.be.instanceOf(RuntimeError)
 
       const detailsResult = await tmc.getCourseDetails(CourseIdentifier.from(404))
-      expect(detailsResult.val).to.be.instanceOf(RuntimeError)
+      expect(detailsResult.val).to.be.instanceOf(NotFoundError)
 
       const coursesResult = await tmc.getCourses("404")
-      expect(coursesResult.val).to.be.instanceOf(RuntimeError)
+      expect(coursesResult.val).to.be.instanceOf(NotFoundError)
 
       const submissionsResult = await tmc.getTmcOldSubmissions(404)
-      expect(submissionsResult.val).to.be.instanceOf(RuntimeError)
+      expect(submissionsResult.val).to.be.instanceOf(NotFoundError)
     })
 
     test("should be able to give feedback", async function () {
