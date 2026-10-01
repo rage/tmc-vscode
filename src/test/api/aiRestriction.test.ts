@@ -3,6 +3,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import AiRestriction, { isActiveCourseAiAllowed, isAiAllowed } from "../../api/aiRestriction"
+import type { AiRestrictionEvents } from "../../api/aiRestriction"
 import type { SettingInspection, WorkspaceFileProblem } from "../../api/workspaceManager"
 import { AI_OFF_SETTINGS } from "../../config/constants"
 import { makeMoocKind, makeTmcKind } from "../../shared/shared"
@@ -115,12 +116,24 @@ function declare(sections: string[]): void {
   } as unknown as vscode.WorkspaceConfiguration)
 }
 
+/** The events an `AiRestriction` listens to, fired by hand. */
+class FakeEvents implements AiRestrictionEvents {
+  public readonly configurationChanged = new vscode.EventEmitter<vscode.ConfigurationChangeEvent>()
+  public readonly documentOpened = new vscode.EventEmitter<vscode.TextDocument>()
+  public readonly workspaceFileChanged = new vscode.EventEmitter<void>()
+  public readonly onDidChangeConfiguration = this.configurationChanged.event
+  public readonly onDidOpenTextDocument = this.documentOpened.event
+  public readonly onDidChangeWorkspaceFile = this.workspaceFileChanged.event
+}
+
+let events: FakeEvents
+
 function changeListener(): (event: vscode.ConfigurationChangeEvent) => void {
-  return vi.mocked(vscode.workspace.onDidChangeConfiguration).mock.calls.at(-1)?.[0] as never
+  return (event) => events.configurationChanged.fire(event)
 }
 
 function openListener(): (document: vscode.TextDocument) => void {
-  return vi.mocked(vscode.workspace.onDidOpenTextDocument).mock.calls.at(-1)?.[0] as never
+  return (document) => events.documentOpened.fire(document)
 }
 
 function changeOf(section: string): vscode.ConfigurationChangeEvent {
@@ -147,10 +160,11 @@ suite("AI restriction", function () {
   let restriction: AiRestriction
 
   function createRestriction(onDidChangeCourses?: vscode.Event<unknown>): AiRestriction {
-    return new AiRestriction(workspace, ownership, () => isAllowed, onDidChangeCourses)
+    return new AiRestriction(workspace, ownership, () => isAllowed, onDidChangeCourses, events)
   }
 
   beforeEach(function () {
+    events = new FakeEvents()
     workspace = new FakeCourseWorkspace()
     ownership = createMockMemento()
     isAllowed = false
@@ -407,12 +421,18 @@ suite("AI restriction", function () {
       })
       let reentries = 0
       restriction.dispose()
-      restriction = new AiRestriction(workspace, ownership, () => {
-        if (reentries++ === 0) {
-          void restriction.apply()
-        }
-        return isAllowed
-      })
+      restriction = new AiRestriction(
+        workspace,
+        ownership,
+        () => {
+          if (reentries++ === 0) {
+            void restriction.apply()
+          }
+          return isAllowed
+        },
+        undefined,
+        events,
+      )
 
       await restriction.apply()
 
@@ -435,6 +455,47 @@ suite("AI restriction", function () {
       await restriction.apply()
 
       expect(workspace.replaceWorkspaceSetting).toHaveBeenCalledOnce()
+    })
+  })
+
+  suite("refused writes", function () {
+    const REFUSED = "chat.mcp.access"
+
+    function attempts(): number {
+      return workspace.writtenKeys().filter((key) => key === REFUSED).length
+    }
+
+    beforeEach(function () {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] })
+      workspace.rejected.add(REFUSED)
+    })
+
+    test("are retried on a timer, each wait twice as long as the last", async function () {
+      await restriction.apply()
+      expect(attempts()).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(attempts()).toBe(2)
+      await vi.advanceTimersByTimeAsync(9_999)
+      expect(attempts()).toBe(2)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(attempts()).toBe(3)
+
+      workspace.rejected.clear()
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(workspace.stored.get(REFUSED)).toBe("none")
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    test("are retried as soon as the workspace file is saved or changed on disk", async function () {
+      await restriction.apply()
+      workspace.rejected.clear()
+
+      events.workspaceFileChanged.fire()
+      // Well before the timer's retry.
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(workspace.stored.get(REFUSED)).toBe("none")
     })
   })
 
