@@ -695,18 +695,18 @@ suite("WorkspaceManager class", function () {
       fs.rmSync(workspaceFileFolder, { recursive: true, force: true })
     })
 
-    test("warns instead of throwing when the workspace file is unreadable", function () {
+    test("warns instead of rejecting when the workspace file is unreadable", async function () {
       const warn = vi.spyOn(Logger, "warn").mockImplementation(() => undefined)
 
-      expect(() =>
+      await expect(
         manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"]),
-      ).not.toThrow()
+      ).resolves.toBeUndefined()
       expect(warn).toHaveBeenCalledOnce()
 
       warn.mockRestore()
     })
 
-    test("leaves the file untouched when every extension is already recommended", function () {
+    test("leaves the file untouched when every extension is already recommended", async function () {
       const contents = JSON.stringify(
         { folders: [], extensions: { recommendations: ["ms-python.python"] } },
         null,
@@ -714,18 +714,18 @@ suite("WorkspaceManager class", function () {
       )
       fs.writeFileSync(workspaceFile, contents)
 
-      manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"])
+      await manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"])
 
       expect(fs.readFileSync(workspaceFile, "utf-8")).toBe(contents)
     })
 
-    test("merges a new extension into the recommendations already there", function () {
+    test("merges a new extension into the recommendations already there", async function () {
       fs.writeFileSync(
         workspaceFile,
         JSON.stringify({ folders: [], extensions: { recommendations: ["ikuyadeu.r"] } }),
       )
 
-      manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"])
+      await manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"])
 
       const written = fs.readFileSync(workspaceFile, "utf-8")
       expect(JSON.parse(written)).toEqual({
@@ -735,13 +735,42 @@ suite("WorkspaceManager class", function () {
       expect(written).toContain("\n")
     })
 
-    test("recommends into a workspace file that lists none yet", function () {
+    test("recommends into a workspace file that lists none yet", async function () {
       fs.writeFileSync(workspaceFile, JSON.stringify({ folders: [] }))
 
-      manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"])
+      await manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"])
 
       const written = JSON.parse(fs.readFileSync(workspaceFile, "utf-8"))
       expect(written.extensions.recommendations).toEqual(["ms-python.python"])
+    })
+
+    test("waits for a settings write to the same file before rewriting it", async function () {
+      fs.writeFileSync(workspaceFile, JSON.stringify({ folders: [] }))
+      stubWorkspace("workspaceFile", vscode.Uri.file(workspaceFile))
+      let finishSettingsWrite: (() => void) | undefined
+      const update = vi.fn<UpdateSetting>(
+        () =>
+          new Promise<void>((resolve) => {
+            finishSettingsWrite = resolve
+          }),
+      )
+      stubWorkspace("getConfiguration", () => configurationStub(update))
+
+      const settingsWrite = manager.replaceWorkspaceSetting("chat.agent.enabled", false)
+      const recommendation = manager.addWorkspaceRecommendation(courseSlug, "tmc", [
+        "ms-python.python",
+      ])
+      await vi.waitFor(() => expect(update).toHaveBeenCalledOnce())
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0)
+      })
+
+      expect(JSON.parse(fs.readFileSync(workspaceFile, "utf-8"))).toEqual({ folders: [] })
+      finishSettingsWrite?.()
+      await Promise.all([settingsWrite, recommendation])
+      expect(JSON.parse(fs.readFileSync(workspaceFile, "utf-8")).extensions).toEqual({
+        recommendations: ["ms-python.python"],
+      })
     })
 
     test("creates a course's workspace file where its resources put it", async function () {
