@@ -388,7 +388,8 @@ async function activateInner(
         courses?.onDidChangeCourses,
       )
       context.subscriptions.push(aiRestriction)
-      await aiRestriction.apply()
+      // The AI-use gate enforces its own pass before a submit, test run or paste.
+      void aiRestriction.apply()
     }
     exerciseDecorationProvider = userData.ok
       ? new Ok(new ExerciseDecorationProvider(userData.val, workspaceManager.val))

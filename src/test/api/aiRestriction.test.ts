@@ -801,6 +801,30 @@ suite("AI restriction", function () {
       },
     )
 
+    test("waits for a pass already under way, then makes one of its own", async function () {
+      let finishBlockedWrite: (() => void) | undefined
+      const blockedWrite = new Promise<void>((resolve) => {
+        finishBlockedWrite = resolve
+      })
+      const write = workspace.replaceWorkspaceSetting.getMockImplementation()
+      workspace.replaceWorkspaceSetting.mockImplementation(async (section, ...rest) => {
+        if (section === "chat.mcp.access") {
+          await blockedWrite
+        }
+        await write?.(section, ...rest)
+      })
+      void restriction.apply()
+      await vi.waitFor(() => expect(workspace.writtenKeys()).toContain("chat.mcp.access"))
+
+      const lapse = restriction.enforce()
+      // Turned back on behind the pass, with no event to say so.
+      workspace.stored.set(INLINE_SUGGEST, true)
+      finishBlockedWrite?.()
+
+      await expect(lapse).resolves.toBeUndefined()
+      expect(workspace.stored.get(INLINE_SUGGEST)).toBe(false)
+    })
+
     test("a write refused in the background still counts once nothing has changed", async function () {
       workspace.rejected.add("chat.mcp.access")
       await restriction.apply()
