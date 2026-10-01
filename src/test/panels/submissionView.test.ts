@@ -140,7 +140,7 @@ suite("moocGradingView", () => {
   test("a full grade is finished, rounded, and asks for no help", () => {
     expect(moocGradingView(moocGrading("FullyGraded", 2.999), 3)).toMatchObject({
       phase: "finished",
-      headline: "Exercise graded",
+      headline: "All tests passed on the server",
       points: { given: 3, max: 3 },
       feedbackText: "Feedback",
       canPaste: false,
@@ -148,8 +148,19 @@ suite("moocGradingView", () => {
     })
   })
 
-  test("a partial grade offers paste help", () => {
-    expect(moocGradingView(moocGrading("FullyGraded", 1), 3).canPaste).toBe(true)
+  test("a partial grade says tests failed and offers paste help", () => {
+    expect(moocGradingView(moocGrading("FullyGraded", 1), 3)).toMatchObject({
+      headline: "Some tests failed on the server",
+      canPaste: true,
+    })
+    expect(moocGradingView(moocGrading("FullyGraded", 0), 1).headline).toBe(
+      "Some tests failed on the server",
+    )
+  })
+
+  test("a grade with no score or no known maximum names no outcome", () => {
+    expect(moocGradingView(moocGrading("FullyGraded", null), 3).headline).toBe("Exercise graded")
+    expect(moocGradingView(moocGrading("FullyGraded", 1), 0).headline).toBe("Exercise graded")
   })
 
   test("a failed grading is a failure the student can get help with", () => {

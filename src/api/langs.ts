@@ -20,6 +20,7 @@ import {
   BottleneckError,
   ConnectionError,
   EmptyLangsResponseError,
+  ExerciseNotFoundError,
   ForbiddenError,
   InsufficientScopeError,
   InvalidTokenError,
@@ -65,6 +66,7 @@ import { CliNotification, CliOutputData, CliStatusUpdate } from "../shared/langs
 import type { BackendKind, ExerciseIdentifier } from "../shared/shared"
 import {
   assertUnreachable,
+  backendName,
   BaseError,
   CourseIdentifier,
   makeMoocKind,
@@ -172,6 +174,30 @@ const MAX_LOGGED_ARG_LENGTH = 120
  */
 function loggableArg(arg: string): string {
   return arg.length > MAX_LOGGED_ARG_LENGTH ? `<${arg.length} characters>` : arg
+}
+
+/**
+ * The status of the HTTP error response a CLI failure names, if any. Matches the
+ * `HttpError` Display of both tmc-langs backend clients, the CLI's only report of it.
+ */
+function httpStatusIn(errorLines: readonly string[]): number | undefined {
+  for (const line of errorLines) {
+    const status = /\bHTTP error (\d{3})\b/.exec(line)?.[1]
+    if (status !== undefined) {
+      return Number(status)
+    }
+  }
+  return undefined
+}
+
+/** Every request a mooc submit or paste makes names the exercise, so a 404 means it is gone. */
+function exerciseGoneOn404(error: Error): Error {
+  return error instanceof RuntimeError && error.httpStatus === 404
+    ? new ExerciseNotFoundError(
+        `This exercise no longer exists on ${backendName("mooc")}.`,
+        error.details,
+      )
+    : error
 }
 
 /** Ample for the failure diagnostics stderr feeds; a test run can write orders of magnitude more. */
@@ -1343,7 +1369,8 @@ export default class Langs {
    * {@link waitForMoocGrading}. The CLI resolves the slide and task ids from the exercise id.
    *
    * Shares its `MINIMUM_SUBMISSION_INTERVAL` throttle with every other mooc call that
-   * submits; per-backend, so the tmc path is unaffected.
+   * submits; per-backend, so the tmc path is unaffected. Errs with an `ExerciseNotFoundError`
+   * when the exercise is gone from courses.mooc.fi.
    *
    * @param exerciseId Mooc exercise id (a UUID string).
    * @param exercisePath Path to the local exercise directory.
@@ -1374,7 +1401,7 @@ export default class Langs {
       },
       "mooc-submission-finished",
     )
-    return res.map((x) => x.data["output-data"])
+    return res.map((x) => x.data["output-data"]).mapErr(exerciseGoneOn404)
   }
 
   /**
@@ -1482,7 +1509,7 @@ export default class Langs {
       },
       "mooc-paste",
     )
-    return res.map((x) => x.data["output-data"].paste_url)
+    return res.map((x) => x.data["output-data"].paste_url).mapErr(exerciseGoneOn404)
   }
 
   /**
@@ -1718,10 +1745,13 @@ export default class Langs {
     const errorKind = data["output-data"].kind
     // `trace` is the CLI's own reported backtrace; `stderr` is what the process wrote.
     // Neither alone has been enough to diagnose a failure, so every error carries both.
-    const details = [data["output-data"].trace.join("\n"), stderr].filter(Boolean).join("\n\n")
+    // The CLI lists a boxed error twice in a row, once as the box and once as itself.
+    const trace = data["output-data"].trace.filter((line, i, lines) => line !== lines[i - 1])
+    const details = [trace.join("\n"), stderr].filter(Boolean).join("\n\n")
+    const httpStatus = httpStatusIn([message, ...trace])
     switch (errorKind) {
       case "connection-error":
-        return Err(new ConnectionError(message, details))
+        return Err(Object.assign(new ConnectionError(message, details), { httpStatus }))
       case "forbidden":
         // courses.mooc.fi 403s a token whose scopes don't cover programming exercises;
         // tmc.mooc.fi 403s a course the user may not see. Only the latter is about the
@@ -1754,7 +1784,7 @@ export default class Langs {
         return Err(new ObsoleteClientError(message, details))
     }
 
-    return Err(new RuntimeError(message, details))
+    return Err(Object.assign(new RuntimeError(message, details), { httpStatus }))
   }
 
   /**

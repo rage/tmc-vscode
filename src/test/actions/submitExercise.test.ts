@@ -13,7 +13,7 @@ import { failure } from "../../api/withOperation"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
-import { BottleneckError, InsufficientScopeError } from "../../errors"
+import { BottleneckError, ExerciseNotFoundError, InsufficientScopeError } from "../../errors"
 import type { ExerciseSubmissionPanel, LocalCourseData, SubmissionView } from "../../shared/shared"
 import { CourseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
@@ -316,7 +316,7 @@ suite("submitExercise action, mooc", () => {
     expect(wait).toHaveBeenCalledWith(TASK_SUBMISSION_ID, expect.any(Function))
     expect(shownViews().map((view) => view.phase)).toEqual(["uploading", "grading", "finished"])
     expect(lastView()).toMatchObject({
-      headline: "Exercise graded",
+      headline: "All tests passed on the server",
       points: { given: 3, max: 3 },
       feedbackText: "All tests passed",
       canKeepWaiting: false,
@@ -335,6 +335,14 @@ suite("submitExercise action, mooc", () => {
     onProgress(1, "Grading in progress")
     expect(lastView()).toMatchObject({ phase: "grading", progressSteps: ["Grading in progress"] })
     expect(lastView()?.progressFraction).toBeUndefined()
+  })
+
+  test("a graded submission short of full points does not mark passed", async () => {
+    const { actionContext, setPassed } = moocContextWith(grading({ score_given: 2 }))
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect(setPassed).not.toHaveBeenCalled()
   })
 
   test("a failed grading does not mark the exercise passed", async () => {
@@ -368,7 +376,7 @@ suite("submitExercise action, mooc", () => {
     expect(setPassed).not.toHaveBeenCalled()
     expect(lastView()).toMatchObject({ phase: "timedOut", canKeepWaiting: true })
 
-    wait.mockResolvedValueOnce(Ok(grading({ score_given: 2 })))
+    wait.mockResolvedValueOnce(Ok(grading({ score_given: 3 })))
     const panelId = shownPanelId()
     const waited = await keepWaitingForGrading(actionContext, panelId)
 
@@ -378,7 +386,7 @@ suite("submitExercise action, mooc", () => {
       CourseIdentifier.from(moocCourse.id),
     ])
     expect(wait).toHaveBeenLastCalledWith(TASK_SUBMISSION_ID, expect.any(Function))
-    expect(lastView()).toMatchObject({ phase: "finished", points: { given: 2, max: 3 } })
+    expect(lastView()).toMatchObject({ phase: "finished", points: { given: 3, max: 3 } })
     expect(setPassed).toHaveBeenCalledWith("mooc", COURSE_SLUG, EXERCISE_SLUG)
 
     const again = await keepWaitingForGrading(actionContext, panelId)
@@ -588,6 +596,36 @@ suite("submitExercise action, through the real runForExercise boundary", () => {
 
     expect(reportError).not.toHaveBeenCalled()
     expect(lastView()?.error?.actions).toEqual([{ label: "Log in", command: "tmc.showMoocLogin" }])
+  })
+
+  test("an exercise gone from the server says so and offers a refresh", async () => {
+    const cause = new ExerciseNotFoundError(
+      "This exercise no longer exists on courses.mooc.fi.",
+      "Caused by: HTTP error 404 Not Found for …",
+    )
+    const actionContext = contextWithWorkspace(
+      makeMoocKind(moocCourse),
+      { submitMoocExercise: vi.fn().mockResolvedValue(Err(cause)) },
+      moocExercise,
+    )
+
+    await runForExercise(
+      actionContext,
+      undefined,
+      "Submitting the exercise",
+      submitBody(actionContext),
+    )
+
+    expect(lastView()).toMatchObject({
+      headline: "Submission failed",
+      error: {
+        message:
+          "This exercise no longer exists on courses.mooc.fi. Refresh the courses to see the" +
+          " course's current exercises.",
+        details: "Caused by: HTTP error 404 Not Found for …",
+        actions: [{ label: "Refresh Courses", command: "tmcTreeView.refreshCourses" }],
+      },
+    })
   })
 })
 

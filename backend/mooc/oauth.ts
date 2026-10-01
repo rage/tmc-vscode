@@ -51,6 +51,8 @@ export const MOCK_OAUTH_CLIENT_IDS = {
   expired: "mooc-mock-expired",
   never: "mooc-mock-never",
   slowDown: "mooc-mock-slowdown",
+  // Answers `device_authorization` like the proxy in front of a backend being redeployed.
+  unavailable: "mooc-mock-unavailable",
 } as const
 
 /**
@@ -308,6 +310,13 @@ const handleDeviceAuthorization = (
   const requestedScopes = formField(req, "scope").split(" ").filter(Boolean)
   if (requestedScopes.some((scope) => !allowedScopes.includes(scope))) {
     res.status(400).json(oauthError("invalid_scope"))
+    return
+  }
+  if (clientId === MOCK_OAUTH_CLIENT_IDS.unavailable) {
+    res
+      .status(503)
+      .type("html")
+      .send("<html><body><h1>503 Service Temporarily Unavailable</h1></body></html>")
     return
   }
   const scenario = scenarioForClient(clientId)

@@ -9,11 +9,15 @@
 - The extension now declares itself unsupported in untrusted (restricted-mode) workspaces, since it downloads and runs the TMC-langs CLI against workspace files.
 - The extension now declares itself unsupported in virtual workspaces, such as a repository opened straight from GitHub, since it runs the TMC-langs CLI as a local process and stores exercises on disk.
 - The backend name beside a course in the Courses view is now shown dimmed, next to the title, instead of appended to it.
-- Logging in no longer opens a panel: a dialog shows your courses.mooc.fi login code with Copy & Open courses.mooc.fi, and a notification you can cancel waits while you approve in the browser. A denied or expired login says so and offers Try again.
+- Logging in no longer opens a panel: courses.mooc.fi opens in your browser with your login code, and a notification you can cancel shows the code and waits while you approve there. A denied or expired login says so and offers Try again.
 - Your courses.mooc.fi account now shows in VS Code's Accounts menu, where you can also sign out.
+- An error answer from courses.mooc.fi or TMC Server now says the server returned an error, with its status, instead of asking you to check your internet connection or showing the raw response.
+- Submitting or pasting a courses.mooc.fi exercise that has been removed from the course now says the exercise no longer exists and offers Refresh Courses, and an error's details no longer repeat the same cause twice.
 - Every initialization error notification now offers Show help.
 - Open Exercises Folder, Wipe and Change data path now say why they cannot run when TMC-langs reported no exercise directory.
 - Fixed a newly added course's passed exercises not showing as passed right away.
+- Fixed a courses.mooc.fi exercise showing as completed after any graded submission; it now takes full points.
+- A graded courses.mooc.fi submission now says whether all tests passed or some failed, as a TMC Server one does, instead of only Exercise graded.
 - Fixed removing a course saying it was removed even when the removal failed.
 - A failed submission is now reported once, in the submission panel; a notification is added only when it offers a fix, such as Log in.
 - Pasting, resetting an exercise or downloading an old submission while submissions are throttled now says so instead of doing nothing.

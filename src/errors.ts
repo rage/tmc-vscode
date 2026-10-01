@@ -11,6 +11,8 @@ export class BottleneckError extends BaseError {
 
 export class ConnectionError extends BaseError {
   public override readonly name = "Connection Error"
+  /** The error status the server answered with; unset when it could not be reached at all. */
+  public httpStatus?: number | undefined
 }
 
 /**
@@ -66,6 +68,8 @@ export class ObsoleteClientError extends BaseError {
 
 export class RuntimeError extends BaseError {
   public override readonly name = "Runtime Error"
+  /** The error status a backend answered with, when that is what failed. */
+  public httpStatus?: number | undefined
 }
 
 export class TimeoutError extends BaseError {
@@ -74,6 +78,11 @@ export class TimeoutError extends BaseError {
 
 export class InitializationError extends BaseError {
   public override readonly name = "Initialization Error"
+}
+
+/** The exercise is gone from its backend, such as one removed from the course since download. */
+export class ExerciseNotFoundError extends BaseError {
+  public override readonly name = "Exercise Not Found Error"
 }
 
 export class ExerciseUpdateError extends BaseError {
@@ -198,6 +207,12 @@ export function presentationFor(error: Error, backend?: BackendKind): ErrorPrese
       actions: [],
     }
   }
+  if (error instanceof ExerciseNotFoundError) {
+    return {
+      message: `${reported} Refresh the courses to see the course's current exercises.`,
+      actions: [{ label: "Refresh Courses", command: "tmcTreeView.refreshCourses" }],
+    }
+  }
   if (error instanceof SpawnError || error instanceof EmptyLangsResponseError) {
     return {
       message:
@@ -219,6 +234,15 @@ export function presentationFor(error: Error, backend?: BackendKind): ErrorPrese
         { label: "Update Extension", command: "workbench.extensions.action.checkForUpdates" },
       ],
     }
+  }
+  if (
+    (error instanceof ConnectionError || error instanceof RuntimeError) &&
+    error.httpStatus !== undefined
+  ) {
+    // The reported message quotes the raw response body.
+    const server = backend === undefined ? "The server" : backendName(backend)
+    const retry = error.httpStatus >= 500 ? " Try again later." : ""
+    return { message: `${server} returned an error (${error.httpStatus}).${retry}`, actions: [] }
   }
   return { message: reported, actions: [] }
 }

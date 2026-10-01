@@ -91,10 +91,10 @@ vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ pag
   })
 
   await vsCodeTest.step("submit exercise and see the reduced mooc result", async () => {
-    // The mooc submit renders the reduced result panel: a "Exercise graded"
-    // heading (FullyGraded) plus the score, not the TMC per-test submission view.
+    // The mooc submit renders the reduced result panel: the outcome its score tells plus
+    // the score, not the TMC per-test submission view.
     const gradedHeading = testSubmissionPage.getWebview().getByRole("heading", {
-      name: "Exercise graded",
+      name: "All tests passed on the server",
     })
     await expect(gradedHeading).toBeHidden()
     await allPassed.getByRole("button", { name: "Submit" }).click()
@@ -102,5 +102,49 @@ vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ pag
     await expect(
       testSubmissionPage.getWebview().getByRole("meter", { name: "Points" }),
     ).toHaveAttribute("aria-valuetext", /^1 \/ \d+ points$/)
+  })
+})
+
+vsCodeTest("submitting an exercise gone from the server says so", async ({ page, webview }) => {
+  const coursesView = new CoursesViewPage(page, webview)
+  const testSubmissionPage = new TestSubmissionPage(page, webview)
+  const explorerPage = new ExplorerPage(page)
+
+  await vsCodeTest.step("open the exercise in its workspace", async () => {
+    await coursesView.goto()
+    await coursesView.addNewMoocCourse("MOOC Python Course")
+    await coursesView.expand(coursesView.row("MOOC Python Course"))
+    const row = coursesView.row("passing_exercise")
+    await coursesView.runContextMenuCommand(row, "Open")
+    await expect(row).toHaveAccessibleName(/, open,/)
+    await coursesView.runInlineAction(
+      coursesView.row("MOOC Python Course"),
+      "Open Course Workspace",
+    )
+    await explorerPage.openPath(["src", "passing_exercise.py"])
+    await expect(page.getByText("def hello()")).toBeVisible()
+  })
+
+  await vsCodeTest.step("submit after the exercise is removed", async () => {
+    const armed = await fetch("http://localhost:4001/mooc-mock/fail-next", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operationId: "getClientExercise", status: 404 }),
+    })
+    expect(armed.status).toBe(204)
+    await page.getByText("def hello()").click()
+    await page
+      .getByRole("toolbar", { name: "Editor actions" })
+      .getByLabel("Submit Solution", { exact: true })
+      .click()
+
+    const panel = testSubmissionPage.getWebview()
+    await expect(panel.getByRole("heading", { name: "Submission failed" })).toBeVisible()
+    await expect(
+      panel.getByText("This exercise no longer exists on courses.mooc.fi.", { exact: false }),
+    ).toBeVisible()
+    await expect(panel.getByRole("button", { name: "Refresh Courses" })).toBeVisible()
+    const details = await panel.getByRole("group", { name: "Error details" }).textContent()
+    expect(details?.split("Caused by: HTTP error 404")).toHaveLength(2)
   })
 })

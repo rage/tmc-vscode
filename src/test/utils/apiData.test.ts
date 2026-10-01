@@ -3,9 +3,10 @@ import {
   LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
   LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
 } from "../../config/constants"
-import type { CourseExercise, Exercise } from "../../shared/langsSchema"
+import type { CourseExercise, Exercise, MoocCourseProgress } from "../../shared/langsSchema"
 import type { MoocLocalCourseData } from "../../storage/data"
 import {
+  combineMoocApiExerciseData,
   combineTmcApiExerciseData,
   sumCoursePoints,
   sumTmcApiCoursePoints,
@@ -169,5 +170,42 @@ suite("toStoredMoocCourse", function () {
       newExercises: ["new-exercise"],
       notifyAfter: 1234,
     })
+  })
+})
+
+const progressOf = (
+  progress: Partial<MoocCourseProgress["exercises"][number]>,
+): MoocCourseProgress => ({
+  ...moocCourseProgress,
+  exercises: [{ ...moocCourseProgress.exercises[0]!, ...progress }],
+})
+
+suite("combineMoocApiExerciseData", function () {
+  test.each([
+    ["full points", { score_given: 2, score_maximum: 2, completed: true }, true],
+    [
+      "a graded submission short of full points",
+      { score_given: 1, score_maximum: 2, completed: true },
+      false,
+    ],
+    [
+      "a graded submission with no points",
+      { score_given: 0, score_maximum: 1, completed: true },
+      false,
+    ],
+    [
+      "a completed exercise worth no points",
+      { score_given: 0, score_maximum: 0, completed: true },
+      true,
+    ],
+    [
+      "an untouched exercise worth no points",
+      { score_given: 0, score_maximum: 0, completed: false },
+      false,
+    ],
+  ] as const)("%s is passed: %s", function (_case, progress, isPassed) {
+    const [exercise] = combineMoocApiExerciseData(moocExerciseSlides, progressOf(progress))
+
+    expect(exercise?.passed).toBe(isPassed)
   })
 })

@@ -25,7 +25,14 @@ import type {
   FeedbackAnswer,
   SubmissionView,
 } from "../shared/shared"
-import { backendName, LocalCourseData, LocalCourseExercise, match, unwrap } from "../shared/shared"
+import {
+  backendName,
+  isMoocScorePassing,
+  LocalCourseData,
+  LocalCourseExercise,
+  match,
+  unwrap,
+} from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { submissionViews } from "../ui/submissionViews"
 import { Logger, parseFeedbackQuestion } from "../utilities"
@@ -182,7 +189,7 @@ async function waitForMoocGrading(
       status.status === "grading" &&
       status.grading.grading_progress === "FullyGraded" &&
       status.grading.score_given !== null &&
-      status.grading.score_given > 0,
+      isMoocScorePassing(status.grading.score_given, grading.availablePoints),
     view,
   }
 }

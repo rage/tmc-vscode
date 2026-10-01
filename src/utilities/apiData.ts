@@ -11,6 +11,7 @@ import type {
   MoocCourseProgress,
   TmcExerciseSlide,
 } from "../shared/langsSchema"
+import { isMoocScorePassing } from "../shared/shared"
 import type {
   MoocLocalCourseData,
   MoocLocalCourseExercise,
@@ -73,7 +74,11 @@ export function combineMoocApiExerciseData(
       name: slide.exercise_name,
       deadline: slide.deadline,
       softDeadline: slide.deadline,
-      passed: exerciseProgress?.completed ?? previous?.passed ?? false,
+      passed: exerciseProgress
+        ? exerciseProgress.score_maximum > 0
+          ? isMoocScorePassing(exerciseProgress.score_given, exerciseProgress.score_maximum)
+          : exerciseProgress.completed
+        : (previous?.passed ?? false),
       availablePoints: exerciseProgress?.score_maximum ?? previous?.availablePoints ?? 0,
       awardedPoints: exerciseProgress?.score_given ?? previous?.awardedPoints ?? 0,
     }
