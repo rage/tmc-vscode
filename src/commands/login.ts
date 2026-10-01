@@ -67,14 +67,14 @@ export async function login(actionContext: ReadyActionContext): Promise<LoginOut
         return first
       }
       const { info } = first
+      progress.report({
+        message: `Waiting for you to approve in the browser… Code ${info.user_code} at ${info.verification_uri}`,
+      })
       const ended = Promise.race([finished, cancelled])
       if (!(await offerCode(info, ended))) {
         cancel()
         return { kind: "cancelled" }
       }
-      progress.report({
-        message: `Waiting for you to approve in the browser… Code ${info.user_code} at ${info.verification_uri}`,
-      })
       let timer: NodeJS.Timeout | undefined
       const timedOut = new Promise<Settled>((resolve) => {
         timer = setTimeout(

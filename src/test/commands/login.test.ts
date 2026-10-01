@@ -164,6 +164,15 @@ suite("login command", function () {
     expect(refreshEverything).toHaveBeenCalledWith(h.context, { silent: true })
   })
 
+  test("the progress shows the code, not the request for it, while the code modal is open", async function () {
+    const h = harness()
+    await runToModal(h)
+
+    expect(h.progressMessages.at(-1)).toBe(
+      "Waiting for you to approve in the browser… Code WXYZ-1234 at https://courses.mooc.fi/oauth_device",
+    )
+  })
+
   test("opens the plain verification page when the CLI has no complete one", async function () {
     const h = harness()
     const outcome = login(h.context)
