@@ -17,6 +17,7 @@
 - Open Exercises Folder, Wipe and Change data path now say why they cannot run when TMC-langs reported no exercise directory.
 - Fixed a newly added course's passed exercises not showing as passed right away.
 - Fixed a courses.mooc.fi exercise showing as completed after any graded submission; it now takes full points.
+- A graded courses.mooc.fi submission now says whether all tests passed or some failed, as a TMC Server one does, instead of only Exercise graded.
 - Fixed removing a course saying it was removed even when the removal failed.
 - A failed submission is now reported once, in the submission panel; a notification is added only when it offers a fix, such as Log in.
 - Pasting, resetting an exercise or downloading an old submission while submissions are throttled now says so instead of doing nothing.

@@ -25,10 +25,17 @@ import type {
   FeedbackAnswer,
   SubmissionView,
 } from "../shared/shared"
-import { backendName, LocalCourseData, LocalCourseExercise, match, unwrap } from "../shared/shared"
+import {
+  backendName,
+  isMoocScorePassing,
+  LocalCourseData,
+  LocalCourseExercise,
+  match,
+  unwrap,
+} from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { submissionViews } from "../ui/submissionViews"
-import { isMoocScorePassing, Logger, parseFeedbackQuestion } from "../utilities"
+import { Logger, parseFeedbackQuestion } from "../utilities"
 import { checkAiUse } from "./checkAiUse"
 import type { ReadyActionContext } from "./types"
 

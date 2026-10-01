@@ -387,13 +387,17 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     render(ExerciseSubmission, { props: { panel: moocPanel } })
     showMoocGrading(moocGrading({ score_given: 2.666666, feedback_text: "Great work" }))
 
-    expect(await screen.findByRole("heading", { name: "Exercise graded" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { name: "Some tests failed on the server" }),
+    ).toBeInTheDocument()
     expect(screen.getByRole("meter", { name: "Points" })).toHaveAttribute(
       "aria-valuetext",
       "2.67 / 3 points",
     )
     expect(screen.getByText("Great work")).toBeInTheDocument()
-    expect(screen.queryByText(/tests? (passed|failed)/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/tests? (passed|failed)/i, { ignore: "h1, h2, h3, script, style" }),
+    ).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument()
     expect(screen.queryByText("Run in background")).not.toBeInTheDocument()
   })
@@ -406,7 +410,7 @@ suite("ExerciseSubmission panel (mooc results)", () => {
 
     render(ExerciseSubmission, { props: { panel: moocPanel } })
     showMoocGrading(moocGrading({ score_given: 3 }))
-    await screen.findByRole("heading", { name: "Exercise graded" })
+    await screen.findByRole("heading", { name: "All tests passed on the server" })
     expect(screen.queryByRole("button", { name: "Need help?" })).not.toBeInTheDocument()
   })
 

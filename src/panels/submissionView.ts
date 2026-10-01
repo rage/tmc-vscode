@@ -1,6 +1,6 @@
 import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../shared/langsSchema"
 import type { FeedbackQuestion, SubmissionView, WebviewError } from "../shared/shared"
-import { assertUnreachable } from "../shared/shared"
+import { assertUnreachable, isMoocScorePassing } from "../shared/shared"
 
 /** The phases in which the backend is still working on the submission. */
 export type InProgressPhase = "uploading" | "grading"
@@ -169,7 +169,7 @@ export function moocGradingView(
       return {
         ...graded,
         phase: "finished",
-        headline: "Exercise graded",
+        headline: fullyGradedHeadline(given, maxPoints),
         canPaste: given === undefined || given < maxPoints,
       }
     case "Failed":
@@ -189,4 +189,14 @@ export function moocGradingView(
     default:
       return assertUnreachable(grading.grading_progress)
   }
+}
+
+/** The outcome a score tells, in the words `tmcResultView` uses for its tests. */
+function fullyGradedHeadline(given: number | undefined, maxPoints: number): string {
+  if (given === undefined || maxPoints <= 0) {
+    return "Exercise graded"
+  }
+  return isMoocScorePassing(given, maxPoints)
+    ? "All tests passed on the server"
+    : "Some tests failed on the server"
 }

@@ -11,6 +11,7 @@ import type {
   MoocCourseProgress,
   TmcExerciseSlide,
 } from "../shared/langsSchema"
+import { isMoocScorePassing } from "../shared/shared"
 import type {
   MoocLocalCourseData,
   MoocLocalCourseExercise,
@@ -82,17 +83,6 @@ export function combineMoocApiExerciseData(
       awardedPoints: exerciseProgress?.score_given ?? previous?.awardedPoints ?? 0,
     }
   })
-}
-
-/**
- * Whether a courses.mooc.fi score passes its exercise, which takes full points. The progress
- * endpoint's `completed` is no substitute: any graded submission sets it, whatever its score.
- *
- * @param scoreMaximum 0 when the exercise is worth nothing or its points are unknown, which
- * never passes.
- */
-export function isMoocScorePassing(scoreGiven: number, scoreMaximum: number): boolean {
-  return scoreMaximum > 0 && scoreGiven >= scoreMaximum
 }
 
 export interface CoursePoints {

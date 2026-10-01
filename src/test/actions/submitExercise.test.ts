@@ -316,7 +316,7 @@ suite("submitExercise action, mooc", () => {
     expect(wait).toHaveBeenCalledWith(TASK_SUBMISSION_ID, expect.any(Function))
     expect(shownViews().map((view) => view.phase)).toEqual(["uploading", "grading", "finished"])
     expect(lastView()).toMatchObject({
-      headline: "Exercise graded",
+      headline: "All tests passed on the server",
       points: { given: 3, max: 3 },
       feedbackText: "All tests passed",
       canKeepWaiting: false,

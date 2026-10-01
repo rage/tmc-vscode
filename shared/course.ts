@@ -85,6 +85,17 @@ export function isSoftDeadlineBinding({
   )
 }
 
+/**
+ * Whether a courses.mooc.fi score passes its exercise, which takes full points. The progress
+ * endpoint's `completed` is no substitute: any graded submission sets it, whatever its score.
+ *
+ * @param scoreMaximum 0 when the exercise is worth nothing or its points are unknown, which
+ * never passes.
+ */
+export function isMoocScorePassing(scoreGiven: number, scoreMaximum: number): boolean {
+  return scoreMaximum > 0 && scoreGiven >= scoreMaximum
+}
+
 /** What missing a binding soft deadline costs, as one sentence for the student. */
 export const SOFT_DEADLINE_PENALTY =
   "An exercise submitted after its soft deadline still counts, but awards only 75% of its points."
