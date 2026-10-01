@@ -289,6 +289,13 @@ export default class WorkspaceManager implements vscode.Disposable {
     )
   }
 
+  /** The open workspace folders that are exercises themselves; never `.tmc` or one added by hand. */
+  public exerciseFolders(): vscode.Uri[] {
+    return (vscode.workspace.workspaceFolders ?? [])
+      .map((folder) => folder.uri)
+      .filter((uri) => this._exercisesByPath.has(uri.fsPath))
+  }
+
   public getExercises(): WorkspaceExercise[] {
     return this._exercises
   }
@@ -512,6 +519,23 @@ export default class WorkspaceManager implements vscode.Disposable {
         true,
       )
     })
+  }
+
+  /**
+   * Writes `value` into a workspace folder's own `.vscode/settings.json` as is, like
+   * {@link replaceWorkspaceSetting} does into the workspace file; VS Code creates the file if
+   * it is missing.
+   */
+  public async replaceFolderSetting(
+    folder: vscode.Uri,
+    section: string,
+    value: unknown,
+    languageId?: string,
+  ): Promise<void> {
+    const scope = languageId === undefined ? folder : { uri: folder, languageId }
+    await vscode.workspace
+      .getConfiguration(undefined, scope)
+      .update(section, value, vscode.ConfigurationTarget.WorkspaceFolder, languageId !== undefined)
   }
 
   /**

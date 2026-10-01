@@ -36,6 +36,9 @@ class FakeCourseWorkspace {
   /** Keys whose writes VS Code refuses. */
   public readonly rejected = new Set<string>()
   public problem: WorkspaceFileProblem | undefined
+  /** What `exerciseFolders` answers; the folder these name is {@link folder}. */
+  public exerciseFolderUris: vscode.Uri[] = []
+  public readonly onDidChangeExercises = new vscode.EventEmitter<void>().event
   public onWrite: (section: string, languageId: string | undefined) => void = () => {}
   public readonly replaceWorkspaceSetting = vi.fn(
     async (section: string, value: unknown, languageId?: string) => {
@@ -52,7 +55,22 @@ class FakeCourseWorkspace {
     },
   )
 
+  public readonly replaceFolderSetting = vi.fn(
+    async (_folder: vscode.Uri, section: string, value: unknown, languageId?: string) => {
+      const key = keyOf(section, languageId)
+      if (value === undefined) {
+        this.folder.delete(key)
+      } else {
+        this.folder.set(key, value)
+      }
+    },
+  )
+
   public readonly workspaceFileProblem = vi.fn(async () => this.problem)
+
+  public exerciseFolders(): vscode.Uri[] {
+    return this.exerciseFolderUris
+  }
 
   public getStoredWorkspaceSetting(section: string, languageId?: string): unknown {
     return this.stored.get(keyOf(section, languageId))
@@ -121,9 +139,11 @@ class FakeEvents implements AiRestrictionEvents {
   public readonly configurationChanged = new vscode.EventEmitter<vscode.ConfigurationChangeEvent>()
   public readonly documentOpened = new vscode.EventEmitter<vscode.TextDocument>()
   public readonly workspaceFileChanged = new vscode.EventEmitter<void>()
+  public readonly exerciseFoldersChanged = new vscode.EventEmitter<void>()
   public readonly onDidChangeConfiguration = this.configurationChanged.event
   public readonly onDidOpenTextDocument = this.documentOpened.event
   public readonly onDidChangeWorkspaceFile = this.workspaceFileChanged.event
+  public readonly onDidChangeExerciseFolders = this.exerciseFoldersChanged.event
 }
 
 let events: FakeEvents
@@ -306,6 +326,67 @@ suite("AI restriction", function () {
       await restriction.apply()
 
       expect(workspace.stored.size).toBe(0)
+    })
+  })
+
+  suite("exercise folders", function () {
+    beforeEach(function () {
+      holdEverySetting(workspace)
+      workspace.exerciseFolderUris = [EXERCISE_FOLDER]
+    })
+
+    test("a value or language value of an exercise folder's own that turns AI on is overridden", async function () {
+      workspace.folder.set(INLINE_SUGGEST, true)
+      workspace.folder.set(keyOf(INLINE_SUGGEST, "python"), true)
+      workspace.folder.set("github.copilot.enable", { python: true, rust: true })
+
+      await restriction.apply()
+
+      expect(Object.fromEntries(workspace.folder)).toEqual({
+        [INLINE_SUGGEST]: false,
+        [keyOf(INLINE_SUGGEST, "python")]: false,
+        "github.copilot.enable": {
+          ...(AI_OFF_SETTINGS["github.copilot.enable"] as object),
+          rust: true,
+        },
+      })
+      expect(workspace.replaceWorkspaceSetting).not.toHaveBeenCalled()
+      await expect(restriction.enforce(EXERCISE_FOLDER)).resolves.toBeUndefined()
+    })
+
+    test("a folder that sets nothing, or only values that hold, is left untouched", async function () {
+      workspace.folder.set(INLINE_SUGGEST, false)
+
+      await restriction.apply()
+
+      expect(workspace.replaceFolderSetting).not.toHaveBeenCalled()
+    })
+
+    test("a folder that is not an exercise is left untouched", async function () {
+      workspace.exerciseFolderUris = []
+      workspace.folder.set(INLINE_SUGGEST, true)
+
+      await restriction.apply()
+
+      expect(workspace.replaceFolderSetting).not.toHaveBeenCalled()
+    })
+
+    test("a change to the exercise folders starts a pass", async function () {
+      await restriction.apply()
+      workspace.folder.set(INLINE_SUGGEST, true)
+
+      events.exerciseFoldersChanged.fire()
+      await vi.waitFor(() => expect(workspace.folder.get(INLINE_SUGGEST)).toBe(false))
+    })
+
+    test("what it wrote into a folder is removed once the course allows AI", async function () {
+      workspace.folder.set(INLINE_SUGGEST, true)
+      await restriction.apply()
+      isAllowed = true
+
+      await restriction.apply()
+
+      expect(workspace.folder.has(INLINE_SUGGEST)).toBe(false)
     })
   })
 

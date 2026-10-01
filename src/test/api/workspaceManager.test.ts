@@ -253,6 +253,22 @@ suite("WorkspaceManager class", function () {
     })
   })
 
+  test("only the workspace folders that are exercises are exercise folders", function () {
+    const known = exercise("tmc", "test-python-course", "loops", ExerciseStatus.Open)
+    const inside = vscode.Uri.file(path.join(known.uri.fsPath, "src"))
+    const addedByHand = vscode.Uri.file("/home/student/notes")
+    stubWorkspace("workspaceFolders", [
+      rootFolder,
+      folderOf(known.uri, "loops"),
+      folderOf(inside, "src"),
+      folderOf(addedByHand, "notes"),
+    ])
+
+    const manager = new WorkspaceManager(resources, persistForCourse, [known])
+
+    expect(manager.exerciseFolders()).toEqual([known.uri])
+  })
+
   suite("opening and closing exercises", function () {
     const courseSlug = "test-python-course"
     let open: WorkspaceExercise
