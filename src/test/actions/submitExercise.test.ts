@@ -134,6 +134,7 @@ function contextFor(
 }
 
 const TASK_SUBMISSION_ID = "task-submission-1"
+const EXERCISE_PAGE_URL = "https://courses.mooc.fi/org/uh-cs/courses/python/chapter-1/page-1"
 
 function moocContextWith(gradingResult: unknown): {
   actionContext: ReadyActionContext
@@ -141,11 +142,13 @@ function moocContextWith(gradingResult: unknown): {
   submit: ReturnType<typeof vi.fn>
   wait: ReturnType<typeof vi.fn>
 } {
-  const submit = vi
-    .fn()
-    .mockResolvedValue(
-      Ok({ task_submission_id: TASK_SUBMISSION_ID, slide_submission_id: "slide-submission-1" }),
-    )
+  const submit = vi.fn().mockResolvedValue(
+    Ok({
+      task_submission_id: TASK_SUBMISSION_ID,
+      slide_submission_id: "slide-submission-1",
+      exercise_page_url: EXERCISE_PAGE_URL,
+    }),
+  )
   const wait = vi.fn().mockResolvedValue(Ok(gradingResult))
   const { actionContext, setPassed } = contextFor(makeMoocKind(moocCourse), {
     submitMoocExercise: submit,
@@ -180,6 +183,17 @@ function shownPanelId(): number {
     throw new Error("no submission panel was rendered")
   }
   return route.id
+}
+
+/** The backend's progress on the exercise, as a grading reports it. */
+function progress(completed: boolean): Record<string, unknown> {
+  return {
+    exercise_id: MOOC_EXERCISE_ID,
+    score_given: completed ? 3 : 0,
+    score_maximum: 3,
+    completed,
+    attempted: true,
+  }
 }
 
 function grading(overrides: Record<string, unknown>): unknown {
@@ -306,7 +320,11 @@ suite("submitExercise action, tmc", () => {
 
 suite("submitExercise action, mooc", () => {
   test("submits without blocking, then waits for that submission's grading", async () => {
-    const graded = grading({ score_given: 3, feedback_text: "All tests passed" })
+    const graded = grading({
+      score_given: 3,
+      feedback_text: "All tests passed",
+      exercise_progress: progress(true),
+    })
     const { actionContext, setPassed, submit, wait } = moocContextWith(graded)
 
     const result = await submitExercise(actionContext, moocExercise)
@@ -323,6 +341,34 @@ suite("submitExercise action, mooc", () => {
     })
     expect(setPassed).toHaveBeenCalledWith("mooc", COURSE_SLUG, EXERCISE_SLUG)
     expect(finishedCourses).toEqual([CourseIdentifier.from(moocCourse.id)])
+  })
+
+  test("offers the exercise's page from the moment the backend has the submission", async () => {
+    const { actionContext } = moocContextWith(grading({ score_given: 3 }))
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect(shownViews().map((view) => view.submissionUrl)).toEqual([
+      undefined,
+      EXERCISE_PAGE_URL,
+      EXERCISE_PAGE_URL,
+    ])
+  })
+
+  test("records passed only when the backend counts the exercise completed", async () => {
+    const { actionContext, setPassed } = moocContextWith(
+      grading({ score_given: 3, exercise_progress: progress(false) }),
+    )
+
+    await submitExercise(actionContext, moocExercise)
+    expect(setPassed).not.toHaveBeenCalled()
+  })
+
+  test("leaves passed to the course refresh when the grading reports no progress", async () => {
+    const { actionContext, setPassed } = moocContextWith(grading({ score_given: 3 }))
+
+    await submitExercise(actionContext, moocExercise)
+    expect(setPassed).not.toHaveBeenCalled()
   })
 
   test("grading progress keeps changed messages only, on an indeterminate bar", async () => {
@@ -368,7 +414,7 @@ suite("submitExercise action, mooc", () => {
     expect(setPassed).not.toHaveBeenCalled()
     expect(lastView()).toMatchObject({ phase: "timedOut", canKeepWaiting: true })
 
-    wait.mockResolvedValueOnce(Ok(grading({ score_given: 2 })))
+    wait.mockResolvedValueOnce(Ok(grading({ score_given: 2, exercise_progress: progress(true) })))
     const panelId = shownPanelId()
     const waited = await keepWaitingForGrading(actionContext, panelId)
 
@@ -378,7 +424,11 @@ suite("submitExercise action, mooc", () => {
       CourseIdentifier.from(moocCourse.id),
     ])
     expect(wait).toHaveBeenLastCalledWith(TASK_SUBMISSION_ID, expect.any(Function))
-    expect(lastView()).toMatchObject({ phase: "finished", points: { given: 2, max: 3 } })
+    expect(lastView()).toMatchObject({
+      phase: "finished",
+      points: { given: 2, max: 3 },
+      submissionUrl: EXERCISE_PAGE_URL,
+    })
     expect(setPassed).toHaveBeenCalledWith("mooc", COURSE_SLUG, EXERCISE_SLUG)
 
     const again = await keepWaitingForGrading(actionContext, panelId)

@@ -34,7 +34,7 @@ import type { ReadyActionContext } from "./types"
 
 /** What a backend answered a submission with, reduced to what the shared flow acts on. */
 interface SubmissionOutcome {
-  /** Whether the backend graded the submission as passed, which is then recorded locally. */
+  /** Whether the backend counts the exercise passed after this submission; recorded locally. */
   passed: boolean
   view: SubmissionView
 }
@@ -108,6 +108,8 @@ const pendingFeedback = new Map<number, PendingFeedback>()
 /** A mooc submission whose grading the host stopped waiting for. */
 interface UnfinishedGrading extends Submission {
   taskSubmissionId: string
+  /** The exercise's course material page, which shows the submission's grading. */
+  exercisePageUrl: string | undefined
 }
 
 // Keyed by the panel showing the submission, so a webview names only which panel it is.
@@ -152,8 +154,13 @@ function moocSubmitter(langs: Langs, exerciseId: string): ExerciseSubmitter {
     if (submitted.err) {
       return submitted
     }
-    reporter.received()
-    const grading = { ...submission, taskSubmissionId: submitted.val.task_submission_id }
+    const exercisePageUrl = submitted.val.exercise_page_url ?? undefined
+    reporter.received(exercisePageUrl)
+    const grading = {
+      ...submission,
+      taskSubmissionId: submitted.val.task_submission_id,
+      exercisePageUrl,
+    }
     return Ok(await waitForMoocGrading(langs, grading, reporter))
   }
 }
@@ -170,19 +177,25 @@ async function waitForMoocGrading(
   if (waited.err) {
     Logger.error("Failed to wait for the grading of a submission", waited.val)
     unfinishedGradings.set(panel.id, grading)
-    return { passed: false, view: gradingUnavailableView(toWebviewError(waited.val, "mooc")) }
+    return {
+      passed: false,
+      view: {
+        ...gradingUnavailableView(toWebviewError(waited.val, "mooc")),
+        submissionUrl: grading.exercisePageUrl,
+      },
+    }
   }
   const status = waited.val
-  const view = moocGradingView(status, grading.availablePoints)
+  const view = {
+    ...moocGradingView(status, grading.availablePoints),
+    submissionUrl: grading.exercisePageUrl,
+  }
   if (view.canKeepWaiting) {
     unfinishedGradings.set(panel.id, grading)
   }
   return {
-    passed:
-      status.status === "grading" &&
-      status.grading.grading_progress === "FullyGraded" &&
-      status.grading.score_given !== null &&
-      status.grading.score_given > 0,
+    // A CLI or host too old to report the exercise's progress leaves it to the course refresh.
+    passed: status.status === "grading" && status.grading.exercise_progress?.completed === true,
     view,
   }
 }
