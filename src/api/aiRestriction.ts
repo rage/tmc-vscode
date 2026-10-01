@@ -94,6 +94,7 @@ export interface AiRestrictionEvents {
   /** The course workspace file was saved or changed on disk. */
   onDidChangeWorkspaceFile: vscode.Event<unknown>
   onDidChangeExerciseFolders: vscode.Event<unknown>
+  onDidChangeExtensions: vscode.Event<unknown>
 }
 
 /**
@@ -139,6 +140,8 @@ export default class AiRestriction implements vscode.Disposable {
   private _refusalRetryDelayMs = MIN_BACKOFF_MS
   private readonly _writeFailures = new Map<string, string>()
   private readonly _knownLanguageIds = new Set<string>()
+  /** The sections extensions declare language-overridable; `undefined` until first needed. */
+  private _overridableSections: Set<string> | undefined
   private _hasLoggedWrite = false
 
   /**
@@ -162,22 +165,23 @@ export default class AiRestriction implements vscode.Disposable {
     const triggers = events ?? this._vscodeEvents()
     this._disposables.push(
       triggers.onDidChangeConfiguration((event) => {
-        if (
-          this._workspace.activeCourse &&
-          Object.keys(AI_OFF_SETTINGS).some((section) => event.affectsConfiguration(section))
-        ) {
+        if (Object.keys(AI_OFF_SETTINGS).some((section) => event.affectsConfiguration(section))) {
           void this.apply()
         }
       }),
       // Also fires when the student switches a document's language mode.
       triggers.onDidOpenTextDocument((document) => {
-        if (this._workspace.activeCourse && !this._knownLanguageIds.has(document.languageId)) {
+        if (!this._knownLanguageIds.has(document.languageId)) {
           void this.apply()
         }
       }),
       // A write VS Code refused, e.g. for unsaved changes, may go through now.
       triggers.onDidChangeWorkspaceFile(() => void this.apply()),
       triggers.onDidChangeExerciseFolders(() => void this.apply()),
+      triggers.onDidChangeExtensions(() => {
+        this._overridableSections = undefined
+        void this.apply()
+      }),
     )
     if (onDidChangeCourses) {
       this._disposables.push(onDidChangeCourses(() => void this.apply()))
@@ -275,7 +279,7 @@ export default class AiRestriction implements vscode.Disposable {
     for (const section of others) {
       await write({ section, languageId: undefined })
     }
-    const overridable = others.filter((section) => isLanguageOverridable(section))
+    const overridable = others.filter((section) => this._isLanguageOverridable(section))
     const languageIds = this._languageIds(overridable, folders)
     // A language block is needed only where a language override beats a top level that holds;
     // one written for a refused or backed-off top level adds a block for every course language.
@@ -418,11 +422,11 @@ export default class AiRestriction implements vscode.Disposable {
 
     const declared = Object.keys(AI_OFF_SETTINGS).filter((section) => isDeclared(section))
     const languageIds = this._languageIds(
-      declared.filter((section) => isLanguageOverridable(section)),
+      declared.filter((section) => this._isLanguageOverridable(section)),
     )
     const targets = declared.flatMap((section) => [
       { section, languageId: undefined },
-      ...(isLanguageOverridable(section)
+      ...(this._isLanguageOverridable(section)
         ? languageIds.map((languageId) => ({ section, languageId }))
         : []),
     ])
@@ -552,6 +556,31 @@ export default class AiRestriction implements vscode.Disposable {
     return this._state.get<string[]>(OWNED_SECTIONS_KEY) ?? []
   }
 
+  /**
+   * Whether `section` may appear in a `[languageId]` block: every core editor option, and what an
+   * extension declares so.
+   */
+  private _isLanguageOverridable(section: string): boolean {
+    if (section.startsWith("editor.")) {
+      return true
+    }
+    this._overridableSections ??= new Set(
+      vscode.extensions.all.flatMap((extension) => {
+        const configuration: unknown = extension.packageJSON?.contributes?.configuration
+        const declarations = Array.isArray(configuration) ? configuration : [configuration]
+        return declarations.flatMap((declaration) =>
+          Object.entries(
+            (declaration as { properties?: Record<string, { scope?: string }> } | undefined)
+              ?.properties ?? {},
+          )
+            .filter(([, property]) => property?.scope === "language-overridable")
+            .map(([name]) => name),
+        )
+      }),
+    )
+    return this._overridableSections.has(section)
+  }
+
   private _vscodeEvents(): AiRestrictionEvents {
     const file = this._workspace.workspaceFileUri
     const watcher =
@@ -582,6 +611,7 @@ export default class AiRestriction implements vscode.Disposable {
         vscode.workspace.onDidChangeWorkspaceFolders,
         this._workspace.onDidChangeExercises,
       ),
+      onDidChangeExtensions: vscode.extensions.onDidChange,
     }
   }
 }
@@ -609,25 +639,6 @@ function merged(stored: unknown, off: unknown): unknown {
 
 function isDeclared(section: string): boolean {
   return vscode.workspace.getConfiguration().inspect(section)?.defaultValue !== undefined
-}
-
-/**
- * Whether `section` may appear in a `[languageId]` block: every core editor option, and what an
- * extension declares so.
- */
-function isLanguageOverridable(section: string): boolean {
-  if (section.startsWith("editor.")) {
-    return true
-  }
-  return vscode.extensions.all.some((extension) => {
-    const configuration: unknown = extension.packageJSON?.contributes?.configuration
-    const declarations = Array.isArray(configuration) ? configuration : [configuration]
-    return declarations.some(
-      (declaration) =>
-        (declaration as { properties?: Record<string, { scope?: string }> } | undefined)
-          ?.properties?.[section]?.scope === "language-overridable",
-    )
-  })
 }
 
 /** Whether `effective` turns off what `off` does; a per-language map merges, so only its own entries count. */

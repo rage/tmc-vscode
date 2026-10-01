@@ -140,10 +140,12 @@ class FakeEvents implements AiRestrictionEvents {
   public readonly documentOpened = new vscode.EventEmitter<vscode.TextDocument>()
   public readonly workspaceFileChanged = new vscode.EventEmitter<void>()
   public readonly exerciseFoldersChanged = new vscode.EventEmitter<void>()
+  public readonly extensionsChanged = new vscode.EventEmitter<void>()
   public readonly onDidChangeConfiguration = this.configurationChanged.event
   public readonly onDidOpenTextDocument = this.documentOpened.event
   public readonly onDidChangeWorkspaceFile = this.workspaceFileChanged.event
   public readonly onDidChangeExerciseFolders = this.exerciseFoldersChanged.event
+  public readonly onDidChangeExtensions = this.extensionsChanged.event
 }
 
 let events: FakeEvents
@@ -310,6 +312,45 @@ suite("AI restriction", function () {
       await restriction.apply()
 
       expect(workspace.stored.get(keyOf(INLINE_SUGGEST, "ruby"))).toBe(false)
+    })
+
+    test("an extension's language-overridable setting is looked up once, and again after extensions change", async function () {
+      const COPILOT_ENABLE = "github.copilot.enable"
+      const installed = [
+        {
+          packageJSON: {
+            contributes: {
+              configuration: {
+                properties: { [COPILOT_ENABLE]: { scope: "language-overridable" } },
+              },
+            },
+          },
+        },
+      ]
+      const extensionsListed = vi.fn(() => installed)
+      Object.defineProperty(vscode.extensions, "all", { get: extensionsListed, configurable: true })
+      holdEverySetting(workspace)
+      workspace.user.set(keyOf(COPILOT_ENABLE, "python"), { python: true })
+      try {
+        await restriction.apply()
+        await restriction.apply()
+        expect(extensionsListed).toHaveBeenCalledOnce()
+        expect(workspace.stored.get(keyOf(COPILOT_ENABLE, "python"))).toEqual(
+          AI_OFF_SETTINGS[COPILOT_ENABLE],
+        )
+
+        installed.length = 0
+        events.extensionsChanged.fire()
+        await restriction.apply()
+
+        expect(extensionsListed).toHaveBeenCalledTimes(2)
+      } finally {
+        Object.defineProperty(vscode.extensions, "all", {
+          value: [],
+          configurable: true,
+          writable: true,
+        })
+      }
     })
 
     test("writes no language block where the workspace file's own value already wins", async function () {
