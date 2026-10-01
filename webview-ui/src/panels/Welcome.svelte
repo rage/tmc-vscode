@@ -72,6 +72,8 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
+            <h3>3.5.4 - 2026-10-01</h3>
+            <h4>Course workspaces now turn off VS Code's AI features</h4>
             <h3>3.5.3 - 2026-06-12</h3>
             <h4>Fixed the extension failing to start when downloading the CLI</h4>
             <p>
