@@ -25,6 +25,7 @@ import {
     zExercisePoint,
     zExerciseProgress,
     zExerciseSlideSubmissionListItem,
+    zExerciseStanding,
     zExerciseSubmission,
     zExerciseTaskSubmissionResult,
     zExerciseTaskSubmissionStatus,
@@ -188,9 +189,8 @@ export const ExercisePoint = zExercisePoint;
 export type ExercisePoint = z.infer<typeof ExercisePoint>;
 
 /**
- * The current user's progress on a single exercise. The authoritative "passed"
- * signal is `completed`; `attempted` distinguishes "not started" from "started
- * but not passed".
+ * The current user's progress on a single exercise. `standing` is the "passed" signal;
+ * `completed` is only the activity stage, which any graded submission can reach.
  */
 export const ExerciseProgress = zExerciseProgress;
 export type ExerciseProgress = z.infer<typeof ExerciseProgress>;
@@ -201,6 +201,12 @@ export type ExerciseProgress = z.infer<typeof ExerciseProgress>;
  */
 export const ExerciseSlideSubmissionListItem = zExerciseSlideSubmissionListItem;
 export type ExerciseSlideSubmissionListItem = z.infer<typeof ExerciseSlideSubmissionListItem>;
+
+/**
+ * Where the user stands on an exercise, as the host decides it.
+ */
+export const ExerciseStanding = zExerciseStanding;
+export type ExerciseStanding = z.infer<typeof ExerciseStanding>;
 
 export const ExerciseSubmission = zExerciseSubmission;
 export type ExerciseSubmission = z.infer<typeof ExerciseSubmission>;

@@ -601,7 +601,7 @@ const revealModelSolutions = (
  * Terminal grading outcome per exercise fixture. Shared by the grading-poll
  * response and the submissions list so a submission's listed score/progress
  * matches the grading the exercise actually produces (passing exercises show
- * FullyGraded/1, failing show Failed/0, etc.) instead of a hardcoded value.
+ * FullyGraded/1, failing FullyGraded/0, etc.) instead of a hardcoded value.
  */
 const GRADING_OUTCOMES = {
   passing: {
@@ -610,7 +610,7 @@ const GRADING_OUTCOMES = {
     feedback_text: "All tests passed",
   },
   failing: {
-    grading_progress: "Failed",
+    grading_progress: "FullyGraded",
     score_given: 0,
     feedback_text: "Some tests failed",
   },
@@ -630,18 +630,30 @@ const outcomeOf = (
 /**
  * The caller's progress on an exercise, derived from this run's submissions: attempted once
  * submitted, completed/scored once a submission has been polled to its terminal (FullyGraded)
- * outcome.
+ * outcome. `standing` follows the host's `derive_exercise_progress`: passed at full points,
+ * else out of tries once the limit is used up, whatever the tries scored.
  */
 const exerciseProgress = (state: MoocMockState, exerciseId: string): unknown => {
   const records = callerSubmissionsFor(state, exerciseId)
   const graded = records.filter((r) => isGraded(r))
   const scores = graded.map((r) => outcomeOf(state, r).score_given)
+  const scoreMaximum = scoreMaximumFor(state, exerciseId)
+  const limit = state.fixtures.exerciseById.get(exerciseId)?.maxTriesPerSlide
+  const isPassed = scores.some((score) => score >= scoreMaximum)
+  const standing = isPassed
+    ? "Passed"
+    : limit !== undefined && records.length >= limit
+      ? "OutOfTries"
+      : records.length > 0
+        ? "Attempted"
+        : "NotAttempted"
   return {
     exercise_id: exerciseId,
     score_given: scores.length > 0 ? Math.max(...scores) : 0,
-    score_maximum: scoreMaximumFor(state, exerciseId),
+    score_maximum: scoreMaximum,
     completed: graded.some((r) => outcomeOf(state, r).grading_progress === "FullyGraded"),
     attempted: records.length > 0,
+    standing,
   }
 }
 

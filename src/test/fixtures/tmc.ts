@@ -85,6 +85,7 @@ const moocCourseProgress: MoocCourseProgress = {
       score_maximum: 1,
       completed: true,
       attempted: true,
+      standing: "Passed",
     },
   ],
 }

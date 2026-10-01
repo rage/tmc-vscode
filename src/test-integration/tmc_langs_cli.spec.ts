@@ -615,14 +615,15 @@ suite("tmc langs cli spec", function () {
       expect(body.data_files[0]?.mime).to.equal(TMC_ARCHIVE_MIME)
     })
 
-    test("should submit a failing mooc exercise and report Failed", async function () {
+    test("should grade a failing mooc exercise fully, to zero points and not passed", async function () {
       const dir = writeSubmittableProject("mooc-submit-failing")
       const status = (await submitMoocAndWaitForGrading(tmc, FAILING_EXERCISE_ID, dir)).unwrap()
       if (status.status !== "grading") {
         throw new Error(`expected a grading record, got ${status.status}`)
       }
-      expect(status.grading.grading_progress).to.equal("Failed")
+      expect(status.grading.grading_progress).to.equal("FullyGraded")
       expect(status.grading.score_given).to.equal(0)
+      expect(status.grading.exercise_progress?.standing).to.equal("Attempted")
     })
 
     test("should transparently re-upload when the first upload is reaped before submit", async function () {

@@ -157,16 +157,26 @@ export const zCombinedCourseData = z.object({
 });
 
 /**
- * The current user's progress on a single exercise. The authoritative "passed"
- * signal is `completed`; `attempted` distinguishes "not started" from "started
- * but not passed".
+ * Where the user stands on an exercise, as the host decides it.
+ */
+export const zExerciseStanding = z.union([
+    z.literal('NotAttempted'),
+    z.literal('Attempted'),
+    z.literal('Passed'),
+    z.literal('OutOfTries')
+]);
+
+/**
+ * The current user's progress on a single exercise. `standing` is the "passed" signal;
+ * `completed` is only the activity stage, which any graded submission can reach.
  */
 export const zExerciseProgress = z.object({
     attempted: z.boolean(),
     completed: z.boolean(),
     exercise_id: z.uuid(),
     score_given: z.number(),
-    score_maximum: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
+    score_maximum: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    standing: zExerciseStanding.nullable()
 });
 
 /**

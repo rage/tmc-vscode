@@ -1722,7 +1722,7 @@
       ]
     },
     "ExerciseProgress": {
-      "description": "The current user's progress on a single exercise. The authoritative \"passed\"\nsignal is `completed`; `attempted` distinguishes \"not started\" from \"started\nbut not passed\".",
+      "description": "The current user's progress on a single exercise. `standing` is the \"passed\" signal;\n`completed` is only the activity stage, which any graded submission can reach.",
       "type": "object",
       "properties": {
         "attempted": {
@@ -1746,6 +1746,17 @@
           "description": "The maximum points obtainable from the exercise; can be `0`.",
           "type": "integer",
           "format": "int32"
+        },
+        "standing": {
+          "description": "`None` from a host that predates the field.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExerciseStanding"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1753,7 +1764,8 @@
         "score_given",
         "score_maximum",
         "completed",
-        "attempted"
+        "attempted",
+        "standing"
       ]
     },
     "ExerciseSlideSubmissionListItem": {
@@ -1796,6 +1808,31 @@
         "created_at",
         "score_given",
         "grading_progress"
+      ]
+    },
+    "ExerciseStanding": {
+      "description": "Where the user stands on an exercise, as the host decides it.",
+      "oneOf": [
+        {
+          "description": "No graded submission and no try used.",
+          "type": "string",
+          "const": "NotAttempted"
+        },
+        {
+          "description": "Below full points with tries left, or still being graded.",
+          "type": "string",
+          "const": "Attempted"
+        },
+        {
+          "description": "A grading awarded full points.",
+          "type": "string",
+          "const": "Passed"
+        },
+        {
+          "description": "Below full points (0 included) with the try limit used up, so the score is final.",
+          "type": "string",
+          "const": "OutOfTries"
+        }
       ]
     },
     "ExerciseSubmission": {

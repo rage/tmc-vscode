@@ -314,6 +314,7 @@ suite("Langs class arg building", function () {
           score_maximum: 3,
           completed: true,
           attempted: true,
+          standing: "Passed",
         },
       ],
     }
