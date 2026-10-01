@@ -12,7 +12,10 @@ import type { SettingInspection, WorkspaceFileProblem } from "./workspaceManager
 /** `workspaceState` key: the {@link AI_OFF_SETTINGS} sections this extension wrote into the workspace file. */
 const OWNED_SECTIONS_KEY = "aiOffSettingsOwned"
 
-/** Writes of one setting a minute before it is left alone: {@link MIN_BACKOFF_MS} at first, doubling up to {@link MAX_BACKOFF_MS}. */
+/** `workspaceState` key: the {@link Backoff}s, by target key. */
+const BACKOFFS_KEY = "aiOffSettingsBackoffs"
+
+/** Writes of one target a minute before it is left alone: {@link MIN_BACKOFF_MS} at first, doubling up to {@link MAX_BACKOFF_MS}. */
 const MAX_WRITES_PER_MINUTE = 5
 const MIN_BACKOFF_MS = 5_000
 const MAX_BACKOFF_MS = 10 * 60_000
@@ -89,7 +92,7 @@ function targetKey({ section, languageId }: SettingTarget): string {
   return languageId === undefined ? section : `[${languageId}]${section}`
 }
 
-/** How often one target has been written, and how long it is left alone for. */
+/** Successful writes of one target, and how long it is left alone for; times are `Date.now()`. */
 interface Backoff {
   writeTimes: number[]
   delayMs: number
@@ -108,23 +111,27 @@ export default class AiRestriction implements vscode.Disposable {
   private _pass: Promise<void> | undefined
   private _isPassRequested = false
   private _isForcedPassRequested = false
-  private readonly _backoffs = new Map<string, Backoff>()
+  private readonly _backoffs: Map<string, Backoff>
   private _retryTimer: ReturnType<typeof setTimeout> | undefined
   private readonly _writeFailures = new Map<string, string>()
   private readonly _knownLanguageIds = new Set<string>()
   private _hasLoggedWrite = false
 
   /**
-   * @param ownership The workspace's own `ExtensionContext.workspaceState`.
+   * @param _state The workspace's own `ExtensionContext.workspaceState`. The backoff is kept
+   * there too, because a write of `chat.disableAIFeatures` can restart the extension host.
    * @param isAllowed Decides for the open course at the time of each pass.
    * @param onDidChangeCourses Course data changes, which may change the decision.
    */
   public constructor(
     private readonly _workspace: CourseWorkspaceSettings,
-    private readonly _ownership: vscode.Memento,
+    private readonly _state: vscode.Memento,
     private readonly _isAllowed: () => boolean,
     onDidChangeCourses?: vscode.Event<unknown>,
   ) {
+    this._backoffs = new Map(
+      Object.entries(_state.get<Record<string, Backoff>>(BACKOFFS_KEY) ?? {}),
+    )
     this._disposables = [
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (
@@ -258,18 +265,20 @@ export default class AiRestriction implements vscode.Disposable {
       this._writeFailures.delete(key)
       return
     }
-    if ((!isForced && !this._mayWrite(key)) || this._isDisposed) {
+    if ((!isForced && !(await this._mayWrite(key))) || this._isDisposed) {
       return
     }
-    // Claimed before writing: the last section can restart the extension host mid-pass.
-    await this._ownership.update(OWNED_SECTIONS_KEY, _.union(this._ownedTargets(), [key]))
+    // Claimed and counted before writing: the last section can restart the extension host mid-pass.
+    await this._state.update(OWNED_SECTIONS_KEY, _.union(this._ownedTargets(), [key]))
+    const writeTime = await this._recordWrite(key)
     try {
       await this._workspace.replaceWorkspaceSetting(target.section, desired, target.languageId)
       this._writeFailures.delete(key)
       written.push(target)
     } catch (e) {
-      Logger.warn(`Could not turn off AI assistance through ${key}.`, e)
+      Logger.warn(`Could not write ${key} to turn off AI assistance.`, e)
       this._writeFailures.set(key, e instanceof Error ? e.message : String(e))
+      await this._forgetWrite(key, writeTime)
     }
   }
 
@@ -362,32 +371,26 @@ export default class AiRestriction implements vscode.Disposable {
         kept.push(key)
       }
     }
-    await this._ownership.update(OWNED_SECTIONS_KEY, kept.length > 0 ? kept : undefined)
+    await this._state.update(OWNED_SECTIONS_KEY, kept.length > 0 ? kept : undefined)
     Logger.info("The course allows AI, so its workspace no longer turns AI assistance off.")
   }
 
   /**
-   * Counts a write of `key`; `false` while a target something keeps flipping back is left
-   * alone. Kept per target, so one fought-over setting costs the others nothing.
+   * `false` while a target something keeps flipping back is left alone. Only successful writes
+   * count, so each one past the first in a minute means the one before it was undone. Kept per
+   * target, so one fought-over setting costs the others nothing.
    */
-  private _mayWrite(key: string): boolean {
-    const now = Date.now()
-    const backoff = this._backoffs.get(key) ?? {
-      writeTimes: [],
-      delayMs: MIN_BACKOFF_MS,
-      retryAt: 0,
+  private async _mayWrite(key: string): Promise<boolean> {
+    const backoff = this._backoffs.get(key)
+    if (!backoff) {
+      return true
     }
-    this._backoffs.set(key, backoff)
+    const now = Date.now()
     if (now < backoff.retryAt) {
       return false
     }
-    // A minute of calm since the last backoff forgives it.
-    if (now - backoff.retryAt > 60_000) {
-      backoff.delayMs = MIN_BACKOFF_MS
-    }
     backoff.writeTimes = backoff.writeTimes.filter((t) => now - t < 60_000)
     if (backoff.writeTimes.length < MAX_WRITES_PER_MINUTE) {
-      backoff.writeTimes.push(now)
       return true
     }
     backoff.retryAt = now + backoff.delayMs
@@ -397,7 +400,40 @@ export default class AiRestriction implements vscode.Disposable {
     )
     backoff.delayMs = Math.min(backoff.delayMs * 2, MAX_BACKOFF_MS)
     backoff.writeTimes = []
+    await this._saveBackoffs()
     return false
+  }
+
+  /** @returns The time recorded, for {@link _forgetWrite}. */
+  private async _recordWrite(key: string): Promise<number> {
+    const now = Date.now()
+    const backoff = this._backoffs.get(key) ?? {
+      writeTimes: [],
+      delayMs: MIN_BACKOFF_MS,
+      retryAt: 0,
+    }
+    // A minute of calm since the last backoff forgives it.
+    if (now - backoff.retryAt > 60_000) {
+      backoff.delayMs = MIN_BACKOFF_MS
+    }
+    backoff.writeTimes.push(now)
+    this._backoffs.set(key, backoff)
+    await this._saveBackoffs()
+    return now
+  }
+
+  /** Takes back a write {@link _recordWrite} counted that VS Code then refused. */
+  private async _forgetWrite(key: string, writeTime: number): Promise<void> {
+    const backoff = this._backoffs.get(key)
+    const index = backoff?.writeTimes.lastIndexOf(writeTime) ?? -1
+    if (backoff && index >= 0) {
+      backoff.writeTimes.splice(index, 1)
+      await this._saveBackoffs()
+    }
+  }
+
+  private async _saveBackoffs(): Promise<void> {
+    await this._state.update(BACKOFFS_KEY, Object.fromEntries(this._backoffs))
   }
 
   /** Runs a pass when the earliest backoff ends, which nothing else may trigger. */
@@ -414,7 +450,7 @@ export default class AiRestriction implements vscode.Disposable {
   }
 
   private _ownedTargets(): string[] {
-    return this._ownership.get<string[]>(OWNED_SECTIONS_KEY) ?? []
+    return this._state.get<string[]>(OWNED_SECTIONS_KEY) ?? []
   }
 }
 

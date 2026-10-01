@@ -518,6 +518,54 @@ suite("AI restriction", function () {
       expect(vi.getTimerCount()).toBe(0)
     })
 
+    test("refused writes do not count toward it", async function () {
+      workspace.stored.set(FLAPPED, true)
+      workspace.rejected.add(FLAPPED)
+      for (let i = 0; i < 2 * 5; i++) {
+        await restriction.apply()
+      }
+      workspace.rejected.clear()
+
+      await restriction.apply()
+
+      expect(workspace.stored.get(FLAPPED)).toBe(false)
+      expect(Logger.warn).toHaveBeenCalledWith(
+        `Could not write ${FLAPPED} to turn off AI assistance.`,
+        expect.any(Error),
+      )
+      expect(Logger.warn).not.toHaveBeenCalledWith(expect.stringContaining("keeps turning"))
+    })
+
+    test("a write is on record before it is made, and taken back when refused", async function () {
+      const recorded = (): number[] | undefined =>
+        ownership.get<Record<string, { writeTimes: number[] }>>("aiOffSettingsBackoffs")?.[FLAPPED]
+          ?.writeTimes
+      const recordedDuringWrites: (number[] | undefined)[] = []
+      workspace.onWrite = (): void => void recordedDuringWrites.push(recorded())
+      workspace.stored.set(FLAPPED, true)
+      workspace.rejected.add(FLAPPED)
+      await restriction.apply()
+      expect(recorded()).toEqual([])
+      workspace.rejected.clear()
+
+      await restriction.apply()
+
+      expect(recordedDuringWrites).toEqual([[Date.now()]])
+    })
+
+    test("outlives the extension host", async function () {
+      flapUntilStopped()
+      workspace.stored.set(FLAPPED, true)
+      await restriction.apply()
+      restriction.dispose()
+      workspace.replaceWorkspaceSetting.mockClear()
+
+      restriction = createRestriction()
+      await restriction.apply()
+
+      expect(workspace.writtenKeys()).toEqual([])
+    })
+
     test("enforce writes a backed-off setting anyway", async function () {
       const stop = flapUntilStopped()
       workspace.stored.set(FLAPPED, true)
