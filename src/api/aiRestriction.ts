@@ -104,6 +104,7 @@ interface Backoff {
  */
 export default class AiRestriction implements vscode.Disposable {
   private readonly _disposables: vscode.Disposable[]
+  private _isDisposed = false
   private _pass: Promise<void> | undefined
   private _isPassRequested = false
   private _isForcedPassRequested = false
@@ -151,24 +152,15 @@ export default class AiRestriction implements vscode.Disposable {
    * A call during a pass runs one more pass after it. Never rejects.
    */
   public apply(): Promise<void> {
+    if (this._isDisposed) {
+      return Promise.resolve()
+    }
     if (this._pass) {
       this._isPassRequested = true
       return this._pass
     }
-    this._pass = (async (): Promise<void> => {
-      try {
-        do {
-          const isForced = this._isForcedPassRequested
-          this._isPassRequested = false
-          this._isForcedPassRequested = false
-          await this._applyOnce(isForced)
-        } while (this._isPassRequested)
-      } catch (e) {
-        Logger.error("Failed to apply the course's AI settings.", e)
-      } finally {
-        this._pass = undefined
-      }
-    })()
+    // Deferred, so `_pass` is set before the pass's first read can call back in here.
+    this._pass = Promise.resolve().then(() => this._runPasses())
     return this._pass
   }
 
@@ -185,8 +177,24 @@ export default class AiRestriction implements vscode.Disposable {
   }
 
   public dispose(): void {
+    this._isDisposed = true
     clearTimeout(this._retryTimer)
     this._disposables.forEach((x) => x.dispose())
+  }
+
+  private async _runPasses(): Promise<void> {
+    try {
+      do {
+        const isForced = this._isForcedPassRequested
+        this._isPassRequested = false
+        this._isForcedPassRequested = false
+        await this._applyOnce(isForced)
+      } while (this._isPassRequested && !this._isDisposed)
+    } catch (e) {
+      Logger.error("Failed to apply the course's AI settings.", e)
+    } finally {
+      this._pass = undefined
+    }
   }
 
   private async _applyOnce(isForced: boolean): Promise<void> {
@@ -250,7 +258,7 @@ export default class AiRestriction implements vscode.Disposable {
       this._writeFailures.delete(key)
       return
     }
-    if (!isForced && !this._mayWrite(key)) {
+    if ((!isForced && !this._mayWrite(key)) || this._isDisposed) {
       return
     }
     // Claimed before writing: the last section can restart the extension host mid-pass.
@@ -337,6 +345,10 @@ export default class AiRestriction implements vscode.Disposable {
     }
     const kept: string[] = []
     for (const key of owned) {
+      if (this._isDisposed) {
+        kept.push(key)
+        continue
+      }
       const target = parseTargetKey(key)
       const stored = this._workspace.getStoredWorkspaceSetting(target.section, target.languageId)
       const remaining = withoutOwnValue(stored, AI_OFF_SETTINGS[target.section])
@@ -391,6 +403,9 @@ export default class AiRestriction implements vscode.Disposable {
   /** Runs a pass when the earliest backoff ends, which nothing else may trigger. */
   private _scheduleRetry(): void {
     clearTimeout(this._retryTimer)
+    if (this._isDisposed) {
+      return
+    }
     const now = Date.now()
     const retryAts = [...this._backoffs.values()].map((b) => b.retryAt).filter((t) => t > now)
     if (retryAts.length > 0) {

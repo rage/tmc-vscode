@@ -392,6 +392,52 @@ suite("AI restriction", function () {
     })
   })
 
+  suite("passes", function () {
+    test("a pass re-entered from its first read runs once more after it, not alongside", async function () {
+      let writesInFlight = 0
+      let mostWritesInFlight = 0
+      workspace.replaceWorkspaceSetting.mockImplementation(async (section, value) => {
+        writesInFlight++
+        mostWritesInFlight = Math.max(mostWritesInFlight, writesInFlight)
+        await new Promise((resolve) => {
+          setTimeout(resolve, 0)
+        })
+        workspace.stored.set(section, value)
+        writesInFlight--
+      })
+      let reentries = 0
+      restriction.dispose()
+      restriction = new AiRestriction(workspace, ownership, () => {
+        if (reentries++ === 0) {
+          void restriction.apply()
+        }
+        return isAllowed
+      })
+
+      await restriction.apply()
+
+      expect(mostWritesInFlight).toBe(1)
+      expect(reentries).toBe(2)
+      expect(Object.fromEntries(workspace.stored)).toEqual(AI_OFF_SETTINGS)
+    })
+
+    test("writes nothing once disposed", async function () {
+      restriction.dispose()
+
+      await restriction.apply()
+
+      expect(workspace.replaceWorkspaceSetting).not.toHaveBeenCalled()
+    })
+
+    test("a pass in progress stops before its next write once disposed", async function () {
+      workspace.onWrite = (): void => restriction.dispose()
+
+      await restriction.apply()
+
+      expect(workspace.replaceWorkspaceSetting).toHaveBeenCalledOnce()
+    })
+  })
+
   suite("backoff", function () {
     const FLAPPED = "chat.agent.enabled"
 
@@ -459,6 +505,17 @@ suite("AI restriction", function () {
       expect(workspace.writtenKeys()).toHaveLength(writesAfterFirstBackoff)
       await vi.advanceTimersByTimeAsync(5_000)
       expect(workspace.writtenKeys().length).toBeGreaterThan(writesAfterFirstBackoff)
+    })
+
+    test("schedules no retry once disposed", async function () {
+      flapUntilStopped()
+      workspace.stored.set(FLAPPED, true)
+      // Disposed in the pass that backs the setting off.
+      vi.mocked(Logger.warn).mockImplementation(() => restriction.dispose())
+
+      await restriction.apply()
+
+      expect(vi.getTimerCount()).toBe(0)
     })
 
     test("enforce writes a backed-off setting anyway", async function () {
