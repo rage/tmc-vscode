@@ -73,11 +73,26 @@ export function combineMoocApiExerciseData(
       name: slide.exercise_name,
       deadline: slide.deadline,
       softDeadline: slide.deadline,
-      passed: exerciseProgress?.completed ?? previous?.passed ?? false,
+      passed: exerciseProgress
+        ? exerciseProgress.score_maximum > 0
+          ? isMoocScorePassing(exerciseProgress.score_given, exerciseProgress.score_maximum)
+          : exerciseProgress.completed
+        : (previous?.passed ?? false),
       availablePoints: exerciseProgress?.score_maximum ?? previous?.availablePoints ?? 0,
       awardedPoints: exerciseProgress?.score_given ?? previous?.awardedPoints ?? 0,
     }
   })
+}
+
+/**
+ * Whether a courses.mooc.fi score passes its exercise, which takes full points. The progress
+ * endpoint's `completed` is no substitute: any graded submission sets it, whatever its score.
+ *
+ * @param scoreMaximum 0 when the exercise is worth nothing or its points are unknown, which
+ * never passes.
+ */
+export function isMoocScorePassing(scoreGiven: number, scoreMaximum: number): boolean {
+  return scoreMaximum > 0 && scoreGiven >= scoreMaximum
 }
 
 export interface CoursePoints {

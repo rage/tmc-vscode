@@ -337,6 +337,14 @@ suite("submitExercise action, mooc", () => {
     expect(lastView()?.progressFraction).toBeUndefined()
   })
 
+  test("a graded submission short of full points does not mark passed", async () => {
+    const { actionContext, setPassed } = moocContextWith(grading({ score_given: 2 }))
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect(setPassed).not.toHaveBeenCalled()
+  })
+
   test("a failed grading does not mark the exercise passed", async () => {
     const { actionContext, setPassed } = moocContextWith(
       grading({ grading_progress: "Failed", score_given: 0 }),
@@ -368,7 +376,7 @@ suite("submitExercise action, mooc", () => {
     expect(setPassed).not.toHaveBeenCalled()
     expect(lastView()).toMatchObject({ phase: "timedOut", canKeepWaiting: true })
 
-    wait.mockResolvedValueOnce(Ok(grading({ score_given: 2 })))
+    wait.mockResolvedValueOnce(Ok(grading({ score_given: 3 })))
     const panelId = shownPanelId()
     const waited = await keepWaitingForGrading(actionContext, panelId)
 
@@ -378,7 +386,7 @@ suite("submitExercise action, mooc", () => {
       CourseIdentifier.from(moocCourse.id),
     ])
     expect(wait).toHaveBeenLastCalledWith(TASK_SUBMISSION_ID, expect.any(Function))
-    expect(lastView()).toMatchObject({ phase: "finished", points: { given: 2, max: 3 } })
+    expect(lastView()).toMatchObject({ phase: "finished", points: { given: 3, max: 3 } })
     expect(setPassed).toHaveBeenCalledWith("mooc", COURSE_SLUG, EXERCISE_SLUG)
 
     const again = await keepWaitingForGrading(actionContext, panelId)
