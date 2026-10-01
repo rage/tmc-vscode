@@ -252,6 +252,17 @@ suite("AI restriction", function () {
       expect(workspace.stored.get("chat.disableAIFeatures")).toBe(true)
     })
 
+    test("writes the rest on a VS Code that declares none of the 1.104 chat settings", async function () {
+      const since1104 = ["chat.disableAIFeatures", "chat.mcp.access", "chat.plugins.enabled"]
+      declare(AI_SECTIONS.filter((section) => !since1104.includes(section)))
+
+      await restriction.apply()
+
+      expect(workspace.writtenKeys().filter((key) => since1104.includes(key))).toEqual([])
+      expect(workspace.stored.get("chat.agent.enabled")).toBe(false)
+      expect(Logger.warn).not.toHaveBeenCalled()
+    })
+
     test("a rejected write neither stops the others nor rejects", async function () {
       workspace.rejected.add("chat.mcp.access")
 
@@ -309,9 +320,10 @@ suite("AI restriction", function () {
       withOpenDocuments(["ruby"])
 
       openListener()({ languageId: "ruby" } as vscode.TextDocument)
-      await restriction.apply()
 
-      expect(workspace.stored.get(keyOf(INLINE_SUGGEST, "ruby"))).toBe(false)
+      await vi.waitFor(() =>
+        expect(workspace.stored.get(keyOf(INLINE_SUGGEST, "ruby"))).toBe(false),
+      )
     })
 
     test("an extension's language-overridable setting is looked up once, and again after extensions change", async function () {
@@ -392,6 +404,9 @@ suite("AI restriction", function () {
         },
       })
       expect(workspace.replaceWorkspaceSetting).not.toHaveBeenCalled()
+      expect(new Set(workspace.replaceFolderSetting.mock.calls.map(([folder]) => folder))).toEqual(
+        new Set([EXERCISE_FOLDER]),
+      )
       await expect(restriction.enforce(EXERCISE_FOLDER)).resolves.toBeUndefined()
     })
 
@@ -511,6 +526,16 @@ suite("AI restriction", function () {
       expect(workspace.replaceWorkspaceSetting).toHaveBeenCalledTimes(AI_SECTIONS.length)
     })
 
+    test("an installed or removed extension starts a pass", async function () {
+      holdEverySetting(workspace)
+      await restriction.apply()
+      workspace.stored.set("chat.agent.enabled", true)
+
+      events.extensionsChanged.fire()
+
+      await vi.waitFor(() => expect(workspace.stored.get("chat.agent.enabled")).toBe(false))
+    })
+
     test("a course data change re-decides", async function () {
       let notifyCoursesChanged: (() => void) | undefined
       restriction.dispose()
@@ -619,6 +644,17 @@ suite("AI restriction", function () {
 
       expect(workspace.stored.get(REFUSED)).toBe("none")
     })
+
+    test("are not retried once disposed", async function () {
+      await restriction.apply()
+      expect(vi.getTimerCount()).toBe(1)
+
+      restriction.dispose()
+
+      expect(vi.getTimerCount()).toBe(0)
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(attempts()).toBe(1)
+    })
   })
 
   suite("backoff", function () {
@@ -651,6 +687,7 @@ suite("AI restriction", function () {
       await restriction.apply()
 
       expect(workspace.writtenKeys().filter((key) => key === FLAPPED)).toHaveLength(5)
+      expect(Logger.warn).toHaveBeenCalledExactlyOnceWith(expect.stringContaining("keeps turning"))
     })
 
     test("flapping one setting does not stop the others being put back", async function () {
