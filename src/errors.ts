@@ -23,6 +23,11 @@ export class CorruptStoredDataError extends BaseError {
   public override readonly name = "Corrupt Stored Data Error"
 }
 
+/** A mooc exercise's try limit is used up, so the backend accepts no further submission. */
+export class OutOfTriesError extends BaseError {
+  public override readonly name = "Out Of Tries Error"
+}
+
 /** The user denied a courses.mooc.fi device login in the browser. */
 export class DeviceLoginDeniedError extends BaseError {
   public override readonly name = "Device Login Denied Error"

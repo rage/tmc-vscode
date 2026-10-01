@@ -8,6 +8,7 @@ import {
   withProgressStep,
 } from "../../panels/submissionView"
 import type {
+  ExerciseStanding,
   ExerciseTaskSubmissionStatus,
   GradingProgress,
   SubmissionFinished,
@@ -25,11 +26,22 @@ function tmcResult(overrides: Partial<SubmissionFinished> = {}): SubmissionFinis
 function moocGrading(
   progress: GradingProgress,
   scoreGiven: number | null = null,
+  standing?: ExerciseStanding,
 ): ExerciseTaskSubmissionStatus {
   return gradingOf({
     grading_progress: progress,
     score_given: scoreGiven,
     feedback_text: "Feedback",
+    exercise_progress: standing
+      ? {
+          exercise_id: "exercise",
+          score_given: scoreGiven ?? 0,
+          score_maximum: 3,
+          completed: true,
+          attempted: true,
+          standing,
+        }
+      : null,
   })
 }
 
@@ -137,10 +149,10 @@ suite("tmcResultView", () => {
 })
 
 suite("moocGradingView", () => {
-  test("a full grade is finished, rounded, and asks for no help", () => {
-    expect(moocGradingView(moocGrading("FullyGraded", 2.999), 3)).toMatchObject({
+  test("a grading the backend counts passed is finished, rounded, and asks for no help", () => {
+    expect(moocGradingView(moocGrading("FullyGraded", 2.999, "Passed"), 3)).toMatchObject({
       phase: "finished",
-      headline: "Exercise graded",
+      headline: "Exercise passed",
       points: { given: 3, max: 3 },
       feedbackText: "Feedback",
       canPaste: false,
@@ -148,8 +160,32 @@ suite("moocGradingView", () => {
     })
   })
 
+  test("full points the backend does not count passed are not called passed", () => {
+    expect(moocGradingView(moocGrading("FullyGraded", 3, "Attempted"), 3)).toMatchObject({
+      headline: "Exercise graded",
+      canPaste: true,
+    })
+  })
+
   test("a partial grade offers paste help", () => {
-    expect(moocGradingView(moocGrading("FullyGraded", 1), 3).canPaste).toBe(true)
+    expect(moocGradingView(moocGrading("FullyGraded", 1, "Attempted"), 3).canPaste).toBe(true)
+  })
+
+  test("the last try below full points says the score is final", () => {
+    const view = moocGradingView(moocGrading("FullyGraded", 2, "OutOfTries"), 3)
+    expect(view).toMatchObject({
+      phase: "finished",
+      headline: "Exercise graded",
+      explanation: "You have no tries left on this exercise, so this score is final.",
+      points: { given: 2, max: 3 },
+    })
+  })
+
+  test("without a standing from the backend, no score is called passed", () => {
+    expect(moocGradingView(moocGrading("FullyGraded", 3), 3)).toMatchObject({
+      headline: "Exercise graded",
+      canPaste: true,
+    })
   })
 
   test("a failed grading is a failure the student can get help with", () => {

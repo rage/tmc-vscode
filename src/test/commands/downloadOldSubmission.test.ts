@@ -128,7 +128,7 @@ suite("Download old submission command (mooc branch)", function () {
     ).toEqual([
       {
         label: format.format(new Date("2026-07-21T12:00:00Z")),
-        description: "Passed (score 1)",
+        description: "Graded (score 1)",
         detail: "Latest",
       },
       {
@@ -138,7 +138,7 @@ suite("Download old submission command (mooc branch)", function () {
       },
     ])
     expect(offered.map(({ iconPath }) => (iconPath as vscode.ThemeIcon).id)).toEqual([
-      "pass",
+      "circle-large-outline",
       "circle-large-outline",
     ])
 

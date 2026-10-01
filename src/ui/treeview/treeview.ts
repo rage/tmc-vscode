@@ -238,7 +238,8 @@ export class ExerciseTreeItem extends vscode.TreeItem {
     this._context = context
 
     const deadline = shownDeadline(exercise)
-    const isDue = !exercise.passed && deadline !== null && deadline > context.now
+    const isDue =
+      !exercise.passed && !exercise.isOutOfTries && deadline !== null && deadline > context.now
     const deadlineText = deadline ? formatDeadline(deadline, context.now, context.locale) : ""
     const points = pointsText(exercise.awardedPoints, exercise.availablePoints)
     const status = STATUS_LABELS[exercise.status]
@@ -246,6 +247,7 @@ export class ExerciseTreeItem extends vscode.TreeItem {
       exercise.status === "opened" ? undefined : status,
       exercise.isUpdateable ? "update available" : undefined,
       points && `${points.short} points`,
+      exercise.isOutOfTries ? "no tries left" : undefined,
       isDue ? `due ${deadlineText}` : undefined,
     ]
       .filter((text) => text !== undefined)
@@ -260,6 +262,7 @@ export class ExerciseTreeItem extends vscode.TreeItem {
       label: [
         exercise.name,
         exercise.passed ? "passed" : "not passed",
+        ...(exercise.isOutOfTries ? ["no tries left"] : []),
         status,
         ...(exercise.isUpdateable ? ["update available"] : []),
         ...(points ? [points.spoken] : []),
@@ -277,7 +280,8 @@ export class ExerciseTreeItem extends vscode.TreeItem {
       exercise.name,
       `${exercise.passed ? "Passed" : "Not passed"} · ${status}`,
       ...[
-        points && `${points.short} points`,
+        points && `${points.short} points${exercise.isOutOfTries ? " · no tries left" : ""}`,
+        exercise.isOutOfTries && "The try limit is used up, so this score is final.",
         exercise.isUpdateable && "An update is available.",
         exercise.softDeadline &&
           !exercise.isHard &&
@@ -581,6 +585,9 @@ function exerciseIcon(exercise: ExerciseView): vscode.ThemeIcon {
   }
   if (exercise.passed) {
     return new vscode.ThemeIcon("pass-filled", new vscode.ThemeColor("testing.iconPassed"))
+  }
+  if (exercise.isOutOfTries) {
+    return new vscode.ThemeIcon("circle-slash", new vscode.ThemeColor("testing.iconSkipped"))
   }
   switch (exercise.status) {
     case "expired":

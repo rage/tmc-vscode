@@ -32,7 +32,7 @@ const carriedOnPastWarnings = [
   'logout.ts: Failed to log out of ${backendName("mooc")}.',
   'removeCourse.ts: Failed to clear the record of closed exercises for "${courseName}".',
   'removeCourse.ts: Failed to remove the workspace file for "${courseName}".',
-  "submitExercise.ts: Failed to record the exercise as passed.",
+  "submitExercise.ts: Failed to record the grading.",
   // once per session; the only way a background poll tells the user their scope is gone
   "updateCourse.ts: Failed to update course data.",
 ]

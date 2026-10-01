@@ -18,6 +18,8 @@ export interface ExerciseView {
   slug: string
   status: ExerciseStatus
   passed: boolean
+  /** Below full points with the try limit used up, so the score is final. Only mooc has a limit. */
+  isOutOfTries: boolean
   awardedPoints: number
   availablePoints: number
   softDeadline: Date | null
@@ -33,7 +35,7 @@ export interface ExerciseView {
 export interface PartView {
   name: string
   exercises: ExerciseView[]
-  /** The soonest deadline after `now` among the exercises not yet passed. */
+  /** The soonest deadline after `now` among the exercises still open: not passed, tries left. */
   nextDeadline: Date | null
   /** Every part of a short course starts expanded; in a longer one only the next due. */
   isDefaultOpen: boolean
@@ -97,6 +99,7 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
         newKeys.has(key),
       ),
       passed: ex.data.passed,
+      isOutOfTries: ex.kind === "mooc" && ex.data.outOfTries === true,
       awardedPoints: ex.data.awardedPoints,
       availablePoints: ex.data.availablePoints,
       softDeadline,
@@ -121,7 +124,7 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       : exercises,
     nextDeadline: findNextDateAfter(
       state.now,
-      exercises.filter((ex) => !ex.passed).map((ex) => shownDeadline(ex)),
+      exercises.filter((ex) => !ex.passed && !ex.isOutOfTries).map((ex) => shownDeadline(ex)),
     ),
   })).toSorted((a, b) => compareParts(a.name, b.name, partNumbers, ungroupedPartName))
 

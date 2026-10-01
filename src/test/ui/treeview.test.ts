@@ -20,7 +20,12 @@ import CoursesTree, {
   PartTreeItem,
 } from "../../ui/treeview/treeview"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
-import { moocLocalCourse, tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
+import {
+  moocCourseExercise,
+  moocLocalCourse,
+  tmcCourseExercise,
+  tmcLocalCourse,
+} from "../fixtures/courses"
 
 const NOW = new Date("2026-06-01T12:00:00Z")
 
@@ -357,6 +362,32 @@ suite("CoursesTree", function () {
       expect(icon(item)).toEqual(["pass-filled", "testing.iconPassed"])
       expect(item.contextValue).toBe("exercise.closed.passed")
       expect(item.description).toBe("closed · 1/1 points")
+    })
+
+    test("out of tries below full points is final, not due", function () {
+      const [course] = show(
+        moocCourse({
+          exercises: [
+            moocCourseExercise({
+              name: "loops",
+              availablePoints: 3,
+              awardedPoints: 2,
+              outOfTries: true,
+              deadline: "2026-07-01T00:00:00Z",
+            }),
+          ],
+        }),
+      )
+      const [item] = exercisesOf(course)
+      if (!item) {
+        throw new Error("no exercise")
+      }
+
+      expect(icon(item)).toEqual(["circle-slash", "testing.iconSkipped"])
+      expect(item.contextValue).toBe("exercise.missing")
+      expect(item.description).toBe("not downloaded · 2/3 points · no tries left")
+      expect(item.accessibilityInformation?.label).toMatch(/^loops, not passed, no tries left, /)
+      expect(tooltipOf(item)).toContain("2/3 points · no tries left")
     })
 
     test("downloading spins, and a failed download says so", function () {

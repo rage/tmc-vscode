@@ -43,6 +43,8 @@ export const SharedMoocCourseExerciseSchema = z.object({
   name: z.string(),
   deadline: z.string().nullable(),
   passed: z.boolean(),
+  /** Below full points with the try limit used up, so the score is final; absent means no. */
+  outOfTries: z.boolean().optional(),
   softDeadline: z.string().nullable(),
   /** The chapter the course material puts the exercise in; absent outside any chapter. */
   chapter: z.object({ name: z.string(), number: z.number() }).optional(),

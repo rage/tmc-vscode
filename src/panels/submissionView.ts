@@ -164,13 +164,17 @@ export function moocGradingView(
     points: given === undefined ? undefined : { given, max: maxPoints },
     feedbackText: grading.feedback_text ?? undefined,
   }
+  const standing = grading.exercise_progress?.standing
   switch (grading.grading_progress) {
     case "FullyGraded":
       return {
         ...graded,
         phase: "finished",
-        headline: "Exercise graded",
-        canPaste: given === undefined || given < maxPoints,
+        headline: standing === "Passed" ? "Exercise passed" : "Exercise graded",
+        ...(standing === "OutOfTries"
+          ? { explanation: "You have no tries left on this exercise, so this score is final." }
+          : {}),
+        canPaste: standing !== "Passed",
       }
     case "Failed":
       return { ...graded, phase: "failed", headline: "Grading failed", canPaste: true }
