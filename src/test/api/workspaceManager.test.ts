@@ -552,7 +552,18 @@ suite("WorkspaceManager class", function () {
 
       await new WorkspaceManager(resources, persistForCourse).verifyWorkspaceSettingsIntegrity()
 
-      expect(sectionsWritten()).toContain("problems.decorations.enabled")
+      expect(sectionsWritten()).toEqual(
+        expect.arrayContaining([
+          "files.watcherExclude",
+          "explorer.decorations.colors",
+          "explorer.decorations.badges",
+          "problems.decorations.enabled",
+        ]),
+      )
+      expect(warn).toHaveBeenCalledWith(
+        "Could not write files.exclude into the course workspace file.",
+        expect.any(Error),
+      )
       warn.mockRestore()
     })
 
@@ -571,6 +582,19 @@ suite("WorkspaceManager class", function () {
         { rust: true },
         vscode.ConfigurationTarget.Workspace,
       )
+    })
+
+    test("a refused replacement rejects its caller and does not hold up the next write", async function () {
+      update.mockRejectedValueOnce(new Error("the file has unsaved changes"))
+      stubWorkspace("getConfiguration", () => configurationStub(update))
+      const manager = new WorkspaceManager(resources, persistForCourse)
+
+      const refused = manager.replaceWorkspaceSetting("chat.agent.enabled", false)
+      const next = manager.replaceWorkspaceSetting("chat.mcp.access", "none")
+
+      await expect(refused).rejects.toThrow("the file has unsaved changes")
+      await expect(next).resolves.toBeUndefined()
+      expect(sectionsWritten()).toEqual(["chat.agent.enabled", "chat.mcp.access"])
     })
 
     test("replaces nothing outside a course workspace", async function () {
