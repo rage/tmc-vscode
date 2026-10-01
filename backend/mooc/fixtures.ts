@@ -83,6 +83,8 @@ export interface ExerciseSlide {
   exercise_order_number: number
   deadline: string | null
   tasks: ExerciseTask[]
+  page_url: string | null
+  chapter: { id: string; name: string; chapter_number: number } | null
 }
 
 export interface Course {
@@ -216,6 +218,8 @@ const makeExercise = (params: {
       exercise_name: params.name,
       exercise_order_number: params.order,
       deadline: params.deadline ?? null,
+      page_url: `${params.baseUrl}/mooc-pages/${params.archiveSlug}`,
+      chapter: null,
       tasks: params.tasks.map((task, orderNumber) => ({
         task_id: task.taskId,
         order_number: orderNumber,

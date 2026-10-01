@@ -627,6 +627,24 @@ const outcomeOf = (
 ): (typeof GRADING_OUTCOMES)[keyof typeof GRADING_OUTCOMES] =>
   GRADING_OUTCOMES[state.fixtures.exerciseById.get(record.exerciseId)?.gradingOutcome ?? "passing"]
 
+/**
+ * The caller's progress on an exercise, derived from this run's submissions: attempted once
+ * submitted, completed/scored once a submission has been polled to its terminal (FullyGraded)
+ * outcome.
+ */
+const exerciseProgress = (state: MoocMockState, exerciseId: string): unknown => {
+  const records = callerSubmissionsFor(state, exerciseId)
+  const graded = records.filter((r) => isGraded(r))
+  const scores = graded.map((r) => outcomeOf(state, r).score_given)
+  return {
+    exercise_id: exerciseId,
+    score_given: scores.length > 0 ? Math.max(...scores) : 0,
+    score_maximum: scoreMaximumFor(state, exerciseId),
+    completed: graded.some((r) => outcomeOf(state, r).grading_progress === "FullyGraded"),
+    attempted: records.length > 0,
+  }
+}
+
 const gradingStatus = (state: MoocMockState, record: SubmissionRecord): unknown => {
   // First poll: not graded yet. Subsequent polls: the exercise's terminal
   // grading outcome. Deterministic (poll-count based) rather than wall-clock
@@ -648,6 +666,7 @@ const gradingStatus = (state: MoocMockState, record: SubmissionRecord): unknown 
       // never reaches the CLI-stdout schema.
       feedback_json: { mock_feedback: "reconciliation sentinel" },
       feedback_text: grading.feedback_text,
+      exercise_progress: exerciseProgress(state, record.exerciseId),
     },
   }
 }
@@ -760,27 +779,10 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       if (!found) {
         return apiError("not_found", `no such course: ${id}`)
       }
-      // One zeroed entry per exercise, like the real backend, derived from this
-      // run's submissions: attempted once submitted, completed/scored once a
-      // submission has been polled to its terminal (FullyGraded) outcome.
+      // One entry per exercise, zeroed when untouched, like the real backend.
       return ok({
         course_id: found.course.id,
-        exercises: found.exercises.map((e) => {
-          const records = callerSubmissionsFor(state, e.slide.exercise_id)
-          const graded = records.filter((r) => isGraded(r))
-          const scores = graded.map((r) => outcomeOf(state, r).score_given)
-          const scoreGiven = scores.length > 0 ? Math.max(...scores) : 0
-          const completed = graded.some(
-            (r) => outcomeOf(state, r).grading_progress === "FullyGraded",
-          )
-          return {
-            exercise_id: e.slide.exercise_id,
-            score_given: scoreGiven,
-            score_maximum: scoreMaximumFor(state, e.slide.exercise_id),
-            completed,
-            attempted: records.length > 0,
-          }
-        }),
+        exercises: found.exercises.map((e) => exerciseProgress(state, e.slide.exercise_id)),
       })
     },
 

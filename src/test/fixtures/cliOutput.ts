@@ -268,6 +268,8 @@ const moocExerciseSlide = {
   exercise_name: "Best exercise",
   exercise_order_number: 1,
   deadline: "2026-08-19T23:59:59.999999Z",
+  page_url: "https://courses.mooc.fi/org/uh-cs/courses/python/chapter-1/best-exercise",
+  chapter: { id: UUID_C, name: "Getting started", chapter_number: 1 },
   tasks: [
     {
       task_id: UUID_C,
@@ -555,6 +557,13 @@ const validCliOutputFixtures: CliOutputFixture[] = [
         grading_started_at: "2026-07-21T00:00:00Z",
         grading_completed_at: "2026-07-21T00:00:01Z",
         feedback_text: "All tests passed",
+        exercise_progress: {
+          exercise_id: UUID_B,
+          score_given: 1,
+          score_maximum: 1,
+          completed: true,
+          attempted: true,
+        },
       },
     }),
   },
@@ -589,6 +598,7 @@ const validCliOutputFixtures: CliOutputFixture[] = [
     value: outputData("mooc-submission-finished", {
       task_submission_id: UUID_A,
       slide_submission_id: UUID_B,
+      exercise_page_url: null,
     }),
   },
   {

@@ -110,6 +110,16 @@ export const zCourseDetails = z.object({
 });
 
 /**
+ * The chapter an exercise belongs to, for grouping a course's exercises the way its material
+ * does.
+ */
+export const zExerciseChapter = z.object({
+    chapter_number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    id: z.uuid(),
+    name: z.string()
+});
+
+/**
  * Represents configuration based on which submission may be packaged.
  */
 export const zExercisePackagingConfiguration = z.object({
@@ -201,6 +211,7 @@ export const zExerciseDetails = z.object({
 });
 
 export const zExerciseTaskSubmissionResult = z.object({
+    exercise_page_url: z.string().nullable(),
     slide_submission_id: z.uuid(),
     task_submission_id: z.uuid()
 });
@@ -231,6 +242,7 @@ export const zExerciseSlideSubmissionListItem = z.object({
  * A task submission's grading record.
  */
 export const zGrading = z.object({
+    exercise_progress: zExerciseProgress.nullable(),
     feedback_text: z.string().nullable(),
     grading_completed_at: z.string().nullable(),
     grading_progress: zGradingProgress,
@@ -260,7 +272,11 @@ export const zKind = z.union([
     z.literal('invalid-token'),
     z.literal('not-enrolled'),
     z.literal('upload-expired'),
-    z.literal('unknown-upload')
+    z.literal('unknown-upload'),
+    z.literal('device-login-denied'),
+    z.literal('device-login-expired'),
+    z.literal('not-found'),
+    z.literal('server-error')
 ]);
 
 /**
@@ -705,11 +721,13 @@ export const zTmcExerciseTask = z.object({
 });
 
 export const zTmcExerciseSlide = z.object({
+    chapter: zExerciseChapter.nullable(),
     course_id: z.uuid(),
     deadline: z.string().nullable(),
     exercise_id: z.uuid(),
     exercise_name: z.string(),
     exercise_order_number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    page_url: z.string().nullable(),
     slide_id: z.uuid(),
     tasks: z.array(zTmcExerciseTask)
 });
@@ -829,6 +847,7 @@ export const zUpdatedExercise = z.object({
 export const zDataKind = z.union([
     z.object({
         'output-data': z.object({
+            http_status: z.int().gte(0).lte(65535).nullish(),
             kind: zKind,
             trace: z.array(z.string())
         }),

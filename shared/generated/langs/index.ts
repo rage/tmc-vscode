@@ -18,6 +18,7 @@ import {
     zDownloadOrUpdateMoocCourseExercisesResult,
     zDownloadOrUpdateTmcCourseExercisesResult,
     zExercise,
+    zExerciseChapter,
     zExerciseDesc,
     zExerciseDetails,
     zExercisePackagingConfiguration,
@@ -157,6 +158,13 @@ export type DownloadOrUpdateTmcCourseExercisesResult = z.infer<typeof DownloadOr
 
 export const Exercise = zExercise;
 export type Exercise = z.infer<typeof Exercise>;
+
+/**
+ * The chapter an exercise belongs to, for grouping a course's exercises the way its material
+ * does.
+ */
+export const ExerciseChapter = zExerciseChapter;
+export type ExerciseChapter = z.infer<typeof ExerciseChapter>;
 
 /**
  * A description of an exercise.

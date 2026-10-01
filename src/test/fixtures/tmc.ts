@@ -58,6 +58,8 @@ const moocExerciseSlides: TmcExerciseSlide[] = [
     exercise_name: "mooc_hello",
     exercise_order_number: 0,
     deadline: null,
+    page_url: null,
+    chapter: null,
     tasks: [
       {
         task_id: MOOC_TASK_UUID,
