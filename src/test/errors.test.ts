@@ -1,5 +1,6 @@
 import {
   ConnectionError,
+  ExerciseNotFoundError,
   InitializationError,
   InsufficientScopeError,
   NotEnrolledError,
@@ -38,6 +39,17 @@ suite("presentationFor", function () {
     expect(presentationFor(notFound, "mooc").message).toBe(
       "courses.mooc.fi returned an error (404).",
     )
+  })
+
+  test("an exercise gone from the server offers to refresh the courses", function () {
+    const presentation = presentationFor(new ExerciseNotFoundError("This exercise is gone."))
+
+    expect(presentation.message).toBe(
+      "This exercise is gone. Refresh the courses to see the course's current exercises.",
+    )
+    expect(presentation.actions).toEqual([
+      { label: "Refresh Courses", command: "tmcTreeView.refreshCourses" },
+    ])
   })
 
   test("an unreachable server keeps its own message", function () {

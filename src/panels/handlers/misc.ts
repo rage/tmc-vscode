@@ -70,6 +70,7 @@ function runCommandArguments(command: RunnableCommand): unknown[] {
     case "tmc.showAiUseProblem":
     case "tmc.showMoocLogin":
     case "tmc.viewInitializationErrorHelp":
+    case "tmcTreeView.refreshCourses":
     case "workbench.action.restartExtensionHost":
     case "workbench.extensions.action.checkForUpdates":
       return []

@@ -80,6 +80,11 @@ export class InitializationError extends BaseError {
   public override readonly name = "Initialization Error"
 }
 
+/** The exercise is gone from its backend, such as one removed from the course since download. */
+export class ExerciseNotFoundError extends BaseError {
+  public override readonly name = "Exercise Not Found Error"
+}
+
 export class ExerciseUpdateError extends BaseError {
   public override readonly name = "Exercise Update Error"
 }
@@ -200,6 +205,12 @@ export function presentationFor(error: Error, backend?: BackendKind): ErrorPrese
         `${reported} The submission's files expired on the server before the submission` +
         " was accepted. Please try again.",
       actions: [],
+    }
+  }
+  if (error instanceof ExerciseNotFoundError) {
+    return {
+      message: `${reported} Refresh the courses to see the course's current exercises.`,
+      actions: [{ label: "Refresh Courses", command: "tmcTreeView.refreshCourses" }],
     }
   }
   if (error instanceof SpawnError || error instanceof EmptyLangsResponseError) {

@@ -13,7 +13,7 @@ import { failure } from "../../api/withOperation"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
-import { BottleneckError, InsufficientScopeError } from "../../errors"
+import { BottleneckError, ExerciseNotFoundError, InsufficientScopeError } from "../../errors"
 import type { ExerciseSubmissionPanel, LocalCourseData, SubmissionView } from "../../shared/shared"
 import { CourseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
@@ -588,6 +588,36 @@ suite("submitExercise action, through the real runForExercise boundary", () => {
 
     expect(reportError).not.toHaveBeenCalled()
     expect(lastView()?.error?.actions).toEqual([{ label: "Log in", command: "tmc.showMoocLogin" }])
+  })
+
+  test("an exercise gone from the server says so and offers a refresh", async () => {
+    const cause = new ExerciseNotFoundError(
+      "This exercise no longer exists on courses.mooc.fi.",
+      "Caused by: HTTP error 404 Not Found for …",
+    )
+    const actionContext = contextWithWorkspace(
+      makeMoocKind(moocCourse),
+      { submitMoocExercise: vi.fn().mockResolvedValue(Err(cause)) },
+      moocExercise,
+    )
+
+    await runForExercise(
+      actionContext,
+      undefined,
+      "Submitting the exercise",
+      submitBody(actionContext),
+    )
+
+    expect(lastView()).toMatchObject({
+      headline: "Submission failed",
+      error: {
+        message:
+          "This exercise no longer exists on courses.mooc.fi. Refresh the courses to see the" +
+          " course's current exercises.",
+        details: "Caused by: HTTP error 404 Not Found for …",
+        actions: [{ label: "Refresh Courses", command: "tmcTreeView.refreshCourses" }],
+      },
+    })
   })
 })
 

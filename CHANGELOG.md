@@ -12,6 +12,7 @@
 - Logging in no longer opens a panel: courses.mooc.fi opens in your browser with your login code, and a notification you can cancel shows the code and waits while you approve there. A denied or expired login says so and offers Try again.
 - Your courses.mooc.fi account now shows in VS Code's Accounts menu, where you can also sign out.
 - An error answer from courses.mooc.fi or TMC Server now says the server returned an error, with its status, instead of asking you to check your internet connection or showing the raw response.
+- Submitting or pasting a courses.mooc.fi exercise that has been removed from the course now says the exercise no longer exists and offers Refresh Courses, and an error's details no longer repeat the same cause twice.
 - Every initialization error notification now offers Show help.
 - Open Exercises Folder, Wipe and Change data path now say why they cannot run when TMC-langs reported no exercise directory.
 - Fixed a newly added course's passed exercises not showing as passed right away.

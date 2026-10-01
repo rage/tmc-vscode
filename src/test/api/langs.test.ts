@@ -7,6 +7,7 @@ import {
   AuthorizationError,
   BottleneckError,
   ConnectionError,
+  ExerciseNotFoundError,
   ForbiddenError,
   InsufficientScopeError,
   InvalidTokenError,
@@ -374,6 +375,24 @@ suite("Langs class arg building", function () {
     stubSpawn(langs, () => Ok(dataOutput("mooc-submission-finished", moocSubmitted)))
     const result = await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
     expect(result.unwrap()).toEqual(moocSubmitted)
+  })
+
+  test.each([
+    ["submitMoocExercise", (langs: Langs) => langs.submitMoocExercise("ex-uuid", "/path/to/ex")],
+    [
+      "submitMoocExerciseToPaste",
+      (langs: Langs) => langs.submitMoocExerciseToPaste("ex-uuid", "/path/to/ex"),
+    ],
+  ] as const)("%s reports a 404 as the exercise being gone", async function (_name, call) {
+    const langs = newLangs()
+    const line =
+      "HTTP error 404 Not Found for https://courses.mooc.fi/api/v0/exercise-services/client/" +
+      'exercises/ex-uuid: {"title":"Not Found"}. Obsolete client: false.'
+    stubSpawn(langs, () => Ok(errorOutput("generic", line, [`Caused by: ${line}`])))
+    const result = await call(langs)
+    expect(result.val).toBeInstanceOf(ExerciseNotFoundError)
+    expect((result.val as Error).message).toBe("This exercise no longer exists on courses.mooc.fi.")
+    expect((result.val as ExerciseNotFoundError).details).toContain(line)
   })
 
   test("waitForMoocGrading polls the task submission's grading", async function () {
@@ -961,6 +980,14 @@ suite("Langs error-kind mapping", function () {
       expect((result.val as ConnectionError | RuntimeError).httpStatus).toBe(status)
     },
   )
+
+  test("a cause the CLI lists twice in a row appears once in the details", async function () {
+    const langs = newLangs()
+    const trace = ["Caused by: outer", "Caused by: inner", "Caused by: inner"]
+    stubSpawn(langs, () => Ok(errorOutput("generic", "outer", trace)))
+    const result = await langs.getEnrolledMoocCourses()
+    expect((result.val as RuntimeError).details).toBe("Caused by: outer\nCaused by: inner")
+  })
 
   test("a connection error naming no HTTP status has none", async function () {
     const langs = newLangs()
