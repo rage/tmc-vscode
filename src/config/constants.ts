@@ -70,6 +70,89 @@ export const WATCHER_EXCLUDE = {
     "**/.tmc.json": true,
 };
 
+/** VS Code language ids of the exercises the language plugins handle, plus the prose files around them. */
+export const COURSE_LANGUAGE_IDS = [
+    "c",
+    "cpp",
+    "csharp",
+    "java",
+    "javascript",
+    "markdown",
+    "plaintext",
+    "python",
+    "r",
+    "typescript",
+];
+
+// Per-language maps merge across scopes, so a user-scope `{"python": true}` would beat a bare
+// `{"*": false}`: every course language is named.
+const OFF_FOR_COURSE_LANGUAGES = {
+    "*": false,
+    ...Object.fromEntries(COURSE_LANGUAGE_IDS.map((languageId) => [languageId, false])),
+};
+
+/**
+ * The settings that turn AI assistance off in a course workspace, written into its
+ * `.code-workspace`. Every key must be window-, resource- or language-scoped: a workspace file
+ * cannot hold application or machine settings.
+ */
+export const AI_OFF_SETTINGS: Readonly<Record<string, unknown>> = {
+    // The only core switch that also reaches third-party ghost text.
+    "editor.inlineSuggest.enabled": false,
+    "chat.agent.enabled": false,
+    "chat.extensionTools.enabled": false,
+    "chat.mcp.access": "none",
+    "chat.plugins.enabled": false,
+    "github.copilot.enable": OFF_FOR_COURSE_LANGUAGES,
+    "github.copilot.nextEditSuggestions.enabled": false,
+    "github.copilot.editor.enableCodeActions": false,
+    "github.copilot.renameSuggestions.triggerAutomatically": false,
+    "github.copilot.chat.reviewSelection.enabled": false,
+    "github.copilot.chat.reviewAgent.enabled": false,
+    "codeium.enableConfig": OFF_FOR_COURSE_LANGUAGES,
+    "codeium.enableCodeLens": false,
+    "codeium.enableSearch": false,
+    "codeium.enableExplainProblem": false,
+    "codeium.disableSupercomplete": true,
+    "codeium.disableTabJump": true,
+    // Tabnine has no enable switch, and answers `editor.inlineSuggest.enabled` by moving to the suggest list.
+    "tabnine.disableFileRegex": [".*"],
+    "tabnine.codeLensEnabled": false,
+    "continue.enableTabAutocomplete": false,
+    "continue.enableNextEdit": false,
+    "continue.enableQuickActions": false,
+    "continue.disableQuickFix": true,
+    "continue.showInlineTip": false,
+    "cody.suggestions.mode": "off",
+    "cody.autocomplete.languages": OFF_FOR_COURSE_LANGUAGES,
+    "cody.codeActions.enabled": false,
+    "cody.commandHints.enabled": false,
+    "geminicodeassist.enable": false,
+    "geminicodeassist.inlineSuggestions.enableAuto": false,
+    "geminicodeassist.inlineSuggestions.nextEditPredictions": false,
+    // An allow-list: empty enables no language.
+    "geminicodeassist.languages": [],
+    "supermaven.enable": OFF_FOR_COURSE_LANGUAGES,
+    "supermaven.enableFixWithSupermaven": false,
+    "supermaven.enableJumpSuggestions": false,
+    "supermaven.enableDeleteSuggestions": false,
+    "roo-cline.enableCodeActions": false,
+    "kilo-code.new.autocomplete.enableAutoTrigger": false,
+    "kilo-code.new.autocomplete.enableSmartInlineTaskKeybinding": false,
+    "kilo-code.new.autocomplete.enableChatAutocomplete": false,
+    "augment.completions.enableAutomaticCompletions": false,
+    "augment.completions.disableCompletionsByLanguage": COURSE_LANGUAGE_IDS,
+    "intellicodeCompletions.language.javascript": false,
+    "intellicodeCompletions.language.python": false,
+    "intellicodeCompletions.language.typescript": false,
+    "vsintellicode.java.completionsEnabled": false,
+    "vsintellicode.python.completionsEnabled": false,
+    "vsintellicode.typescript.completionsEnabled": false,
+    "genieai.quickFix.enable": false,
+    "genieai.enableGenerateCommitMessage": false,
+    "chat.disableAIFeatures": true,
+};
+
 export const WORKSPACE_SETTINGS = {
     folders: [{ path: ".tmc" }],
     settings: {

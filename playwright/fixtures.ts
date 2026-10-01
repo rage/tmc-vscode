@@ -15,7 +15,8 @@ const rootPath = resolve(__dirname, "..");
 
 console.log("Loading extension from", rootPath);
 
-const userDataDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-user"));
+/** VS Code's `--user-data-dir`, where the extension's global storage and course workspace files live. */
+export const userDataDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-user"));
 
 const args = [
     "--disable-gpu-sandbox",

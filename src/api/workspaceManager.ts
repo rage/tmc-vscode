@@ -8,7 +8,7 @@ import {
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import Resources, { EditorKind } from "../config/resources";
-import { Logger } from "../utilities";
+import { Logger, SerialQueue } from "../utilities";
 import * as fs from "fs-extra";
 import * as _ from "lodash";
 import * as path from "path";
@@ -28,6 +28,11 @@ export interface WorkspaceExercise {
     uri: vscode.Uri;
 }
 
+/** `WorkspaceConfiguration.inspect`'s answer, with the value that wins among them. */
+export type SettingInspection = NonNullable<
+    ReturnType<vscode.WorkspaceConfiguration["inspect"]>
+> & { effectiveValue: unknown };
+
 interface ConfigurationProperties {
     default?: unknown;
     type?: string;
@@ -35,6 +40,13 @@ interface ConfigurationProperties {
     scope?: string;
     enum?: Array<string>;
     enumDescriptions?: Array<string>;
+}
+
+function configurationScope(
+    uri: vscode.Uri | undefined,
+    languageId: string | undefined,
+): vscode.ConfigurationScope | undefined {
+    return languageId === undefined ? uri : { ...(uri && { uri }), languageId };
 }
 
 /**
@@ -45,6 +57,12 @@ export default class WorkspaceManager implements vscode.Disposable {
     private readonly _resources: Resources;
     private readonly _watcher: vscode.FileSystemWatcher | undefined;
     private readonly _disposables: vscode.Disposable[];
+    private readonly _onDidChangeExercises = new vscode.EventEmitter<void>();
+    // The recommendation write replaces the whole file, so it must not interleave with a settings edit.
+    private readonly _workspaceFileWrites = new SerialQueue();
+
+    /** Fires when the set of known exercises changes. */
+    public readonly onDidChangeExercises = this._onDidChangeExercises.event;
 
     /**
      * Creates a new instance of the WorkspaceManager class.
@@ -68,6 +86,7 @@ export default class WorkspaceManager implements vscode.Disposable {
                 this._onDidChangeWorkspaceFolders(e),
             ),
             vscode.workspace.onDidOpenTextDocument((e) => this._onDidOpenTextDocument(e)),
+            this._onDidChangeExercises,
         ];
     }
 
@@ -111,6 +130,7 @@ export default class WorkspaceManager implements vscode.Disposable {
 
     public async setExercises(exercises: WorkspaceExercise[]): Promise<Result<void, Error>> {
         this._exercises = exercises;
+        this._onDidChangeExercises.fire();
         return this._refreshActiveCourseWorkspace();
     }
 
@@ -154,6 +174,7 @@ export default class WorkspaceManager implements vscode.Disposable {
 
     public addExercise(exercise: WorkspaceExercise): void {
         this._exercises = this._exercises.concat(exercise);
+        this._onDidChangeExercises.fire();
     }
 
     public openCourseExercises(
@@ -194,20 +215,30 @@ export default class WorkspaceManager implements vscode.Disposable {
      * @param workspace
      * @param extensions
      */
-    public addWorkspaceRecommendation(workspace: string, extensions: string[]): void {
+    public async addWorkspaceRecommendation(
+        workspace: string,
+        extensions: string[],
+    ): Promise<void> {
         const pathToWorkspace = path.join(this._resources.getWorkspaceFilePath(workspace));
-        const workspaceData = JSON.parse(fs.readFileSync(pathToWorkspace, "utf-8"));
-        let recommendations: string[] | undefined = workspaceData.extensions?.recommendations;
-        if (recommendations) {
-            Logger.debug("Current workspace recommendations", recommendations);
-            recommendations = _.union(recommendations, extensions);
+        try {
+            await this._workspaceFileWrites.run(() => {
+                const workspaceData = JSON.parse(fs.readFileSync(pathToWorkspace, "utf-8"));
+                let recommendations: string[] | undefined =
+                    workspaceData.extensions?.recommendations;
+                if (recommendations) {
+                    Logger.debug("Current workspace recommendations", recommendations);
+                    recommendations = _.union(recommendations, extensions);
+                }
+                const workspaceDataRecommend = {
+                    ...workspaceData,
+                    extensions: { recommendations: recommendations ?? extensions },
+                };
+                Logger.debug("New workspace data", workspaceDataRecommend);
+                fs.writeFileSync(pathToWorkspace, JSON.stringify(workspaceDataRecommend));
+            });
+        } catch (e) {
+            Logger.warn("Could not add extension recommendations to the course workspace.", e);
         }
-        const workspaceDataRecommend = {
-            ...workspaceData,
-            extensions: { recommendations: recommendations ?? extensions },
-        };
-        Logger.debug("New workspace data", workspaceDataRecommend);
-        fs.writeFileSync(pathToWorkspace, JSON.stringify(workspaceDataRecommend));
     }
 
     public createWorkspaceFile(courseName: string): void {
@@ -249,7 +280,10 @@ export default class WorkspaceManager implements vscode.Disposable {
                 "hideMetaFiles",
                 true,
             );
-            await this.excludeMetaFilesInWorkspace(hideMetaFiles);
+            await this._updateWorkspaceSettingOrWarn(
+                "files.exclude",
+                hideMetaFiles ? HIDE_META_FILES : SHOW_META_FILES,
+            );
             await this._ensureSettingsAreStoredInMultiRootWorkspace();
             await this._verifyWatcherPatternExclusion();
             await this._forceTMCWorkspaceSettings();
@@ -269,13 +303,103 @@ export default class WorkspaceManager implements vscode.Disposable {
                 const oldValue = this.getWorkspaceSettings(section);
                 newValue = { ...oldValue, ...value };
             }
-            await vscode.workspace
-                .getConfiguration(
-                    undefined,
-                    vscode.Uri.file(this._resources.getWorkspaceFilePath(activeCourse)),
-                )
-                .update(section, newValue, vscode.ConfigurationTarget.Workspace);
+            await this._workspaceFileWrites.run(() =>
+                vscode.workspace
+                    .getConfiguration(
+                        undefined,
+                        vscode.Uri.file(this._resources.getWorkspaceFilePath(activeCourse)),
+                    )
+                    .update(section, newValue, vscode.ConfigurationTarget.Workspace),
+            );
         }
+    }
+
+    /**
+     * The value the open course's `.code-workspace` itself stores for `section`, or `undefined`
+     * when it stores none — never a user-scope value or a default.
+     */
+    public getStoredWorkspaceSetting(section: string): unknown {
+        return this.inspectSetting(section)?.workspaceValue;
+    }
+
+    /**
+     * Every scope's value of `section` as an editor of `languageId` would resolve it, and the
+     * language ids anything overrides it for.
+     *
+     * @param folder A workspace folder, whose own `.vscode/settings.json` then counts; the
+     * workspace file when omitted.
+     */
+    public inspectSetting(
+        section: string,
+        languageId?: string,
+        folder?: vscode.Uri,
+    ): SettingInspection | undefined {
+        const configuration = vscode.workspace.getConfiguration(
+            undefined,
+            configurationScope(folder ?? this.workspaceFileUri, languageId),
+        );
+        const inspection = configuration.inspect<unknown>(section);
+        return inspection && { ...inspection, effectiveValue: configuration.get<unknown>(section) };
+    }
+
+    /**
+     * Writes `value` into the open course's `.code-workspace` as is, replacing a stored object
+     * rather than merging into it (compare {@link updateWorkspaceSetting}). Rejects when VS Code
+     * refuses the write, e.g. for a setting no installed extension declares, or while the file
+     * has unsaved changes. A no-op outside a course workspace.
+     *
+     * @param languageId Writes into the file's `[languageId]` block, which only a
+     * language-overridable setting may appear in.
+     */
+    public async replaceWorkspaceSetting(
+        section: string,
+        value: unknown,
+        languageId?: string,
+    ): Promise<void> {
+        const uri = this.workspaceFileUri;
+        if (!uri) {
+            return;
+        }
+        await this._workspaceFileWrites.run(() =>
+            vscode.workspace
+                .getConfiguration(undefined, configurationScope(uri, languageId))
+                .update(
+                    section,
+                    value,
+                    vscode.ConfigurationTarget.Workspace,
+                    languageId !== undefined,
+                ),
+        );
+    }
+
+    /**
+     * Writes `value` into an exercise folder's own `.vscode/settings.json`, like
+     * {@link replaceWorkspaceSetting} does into the workspace file.
+     */
+    public async replaceFolderSetting(
+        folder: vscode.Uri,
+        section: string,
+        value: unknown,
+        languageId?: string,
+    ): Promise<void> {
+        await vscode.workspace
+            .getConfiguration(undefined, configurationScope(folder, languageId))
+            .update(
+                section,
+                value,
+                vscode.ConfigurationTarget.WorkspaceFolder,
+                languageId !== undefined,
+            );
+    }
+
+    /** The open workspace folders that are exercises; never `.tmc` or a folder added by hand. */
+    public exerciseFolders(
+        workspaceFolders: readonly Pick<vscode.WorkspaceFolder, "uri">[] = vscode.workspace
+            .workspaceFolders ?? [],
+    ): vscode.Uri[] {
+        return workspaceFolders
+            .map((folder) => folder.uri)
+            .filter((uri) => this._exercises.some((x) => x.uri.fsPath === uri.fsPath));
     }
 
     /**
@@ -294,13 +418,22 @@ export default class WorkspaceManager implements vscode.Disposable {
             if (value.scope !== "application" && value.type === "boolean") {
                 const codeSettings = this.getWorkspaceSettings().inspect<boolean>(key);
                 if (codeSettings?.workspaceValue !== undefined) {
-                    await this.updateWorkspaceSetting(key, codeSettings.workspaceValue);
+                    await this._updateWorkspaceSettingOrWarn(key, codeSettings.workspaceValue);
                 } else if (codeSettings?.globalValue !== undefined) {
-                    await this.updateWorkspaceSetting(key, codeSettings.globalValue);
+                    await this._updateWorkspaceSettingOrWarn(key, codeSettings.globalValue);
                 } else {
-                    await this.updateWorkspaceSetting(key, codeSettings?.defaultValue);
+                    await this._updateWorkspaceSettingOrWarn(key, codeSettings?.defaultValue);
                 }
             }
+        }
+    }
+
+    /** {@link updateWorkspaceSetting}, where VS Code refusing the write must not cost the other sections or fail activation. */
+    private async _updateWorkspaceSettingOrWarn(section: string, value: unknown): Promise<void> {
+        try {
+            await this.updateWorkspaceSetting(section, value);
+        } catch (e) {
+            Logger.warn(`Could not write ${section} into the course workspace file.`, e);
         }
     }
 
@@ -327,9 +460,9 @@ export default class WorkspaceManager implements vscode.Disposable {
      * Force some settings for TMC multi-root workspaces that we want.
      */
     private async _forceTMCWorkspaceSettings(): Promise<void> {
-        await this.updateWorkspaceSetting("explorer.decorations.colors", false);
-        await this.updateWorkspaceSetting("explorer.decorations.badges", true);
-        await this.updateWorkspaceSetting("problems.decorations.enabled", false);
+        await this._updateWorkspaceSettingOrWarn("explorer.decorations.colors", false);
+        await this._updateWorkspaceSettingOrWarn("explorer.decorations.badges", true);
+        await this._updateWorkspaceSettingOrWarn("problems.decorations.enabled", false);
     }
 
     /**
@@ -424,12 +557,12 @@ export default class WorkspaceManager implements vscode.Disposable {
             case "objective-c":
             case "objective-cpp":
                 if (isCode && !vscode.extensions.getExtension("ms-vscode.cpptools")) {
-                    this.addWorkspaceRecommendation(activeCourse, ["ms-vscode.cpptools"]);
+                    void this.addWorkspaceRecommendation(activeCourse, ["ms-vscode.cpptools"]);
                 }
                 break;
             case "csharp":
                 if (isCode && !vscode.extensions.getExtension("ms-dotnettools.csharp")) {
-                    this.addWorkspaceRecommendation(activeCourse, ["ms-dotnettools.csharp"]);
+                    void this.addWorkspaceRecommendation(activeCourse, ["ms-dotnettools.csharp"]);
                 }
                 break;
             case "markdown":
@@ -437,25 +570,27 @@ export default class WorkspaceManager implements vscode.Disposable {
                 break;
             case "r":
                 if (!vscode.extensions.getExtension("ikuyadeu.r")) {
-                    this.addWorkspaceRecommendation(activeCourse, ["ikuyadeu.r"]);
+                    void this.addWorkspaceRecommendation(activeCourse, ["ikuyadeu.r"]);
                 }
                 break;
             case "python":
                 if (!vscode.extensions.getExtension("ms-python.python")) {
                     if (isCode && !vscode.extensions.getExtension("ms-python.vscode-pylance")) {
-                        this.addWorkspaceRecommendation(activeCourse, [
+                        void this.addWorkspaceRecommendation(activeCourse, [
                             "ms-python.vscode-pylance",
                             "ms-python.python",
                         ]);
                     } else {
-                        this.addWorkspaceRecommendation(activeCourse, ["ms-python.python"]);
+                        void this.addWorkspaceRecommendation(activeCourse, ["ms-python.python"]);
                     }
                 }
 
                 break;
             case "java":
                 if (isCode && !vscode.extensions.getExtension("vscjava.vscode-java-pack")) {
-                    this.addWorkspaceRecommendation(activeCourse, ["vscjava.vscode-java-pack"]);
+                    void this.addWorkspaceRecommendation(activeCourse, [
+                        "vscjava.vscode-java-pack",
+                    ]);
                 }
                 break;
         }
@@ -467,6 +602,6 @@ export default class WorkspaceManager implements vscode.Disposable {
      * doesn't work. For example defining Python interpreter for the Exercise folder.
      */
     private async _verifyWatcherPatternExclusion(): Promise<void> {
-        await this.updateWorkspaceSetting("files.watcherExclude", { ...WATCHER_EXCLUDE });
+        await this._updateWorkspaceSettingOrWarn("files.watcherExclude", { ...WATCHER_EXCLUDE });
     }
 }

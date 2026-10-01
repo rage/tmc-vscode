@@ -1,5 +1,6 @@
 import { checkForCourseUpdates, refreshLocalExercises } from "./actions";
 import { ActionContext } from "./actions/types";
+import AiRestriction from "./api/aiRestriction";
 import Dialog from "./api/dialog";
 import ExerciseDecorationProvider from "./api/exerciseDecorationProvider";
 import TMC from "./api/tmc";
@@ -227,6 +228,9 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
                 true,
             );
             await workspaceManager.val.verifyWorkspaceSettingsIntegrity();
+            const aiRestriction = new AiRestriction(workspaceManager.val, context.workspaceState);
+            context.subscriptions.push(aiRestriction);
+            void aiRestriction.apply();
         }
         exerciseDecorationProvider = new Ok(
             new ExerciseDecorationProvider(userData.val, workspaceManager.val),
