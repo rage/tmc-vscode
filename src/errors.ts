@@ -23,8 +23,28 @@ export class CorruptStoredDataError extends BaseError {
   public override readonly name = "Corrupt Stored Data Error"
 }
 
+/** The user denied a courses.mooc.fi device login in the browser. */
+export class DeviceLoginDeniedError extends BaseError {
+  public override readonly name = "Device Login Denied Error"
+}
+
+/** A courses.mooc.fi device login code expired before the user approved it. */
+export class DeviceLoginExpiredError extends BaseError {
+  public override readonly name = "Device Login Expired Error"
+}
+
 export class EmptyLangsResponseError extends BaseError {
   public override readonly name = "Empty Langs Response Error"
+}
+
+/** A backend answered 404: what was asked for does not exist, or not for this user. */
+export class NotFoundError extends BaseError {
+  public override readonly name = "Not Found Error"
+}
+
+/** A backend answered with a 5xx status: it was reached, and failed. Worth retrying later. */
+export class ServerError extends BaseError {
+  public override readonly name = "Server Error"
 }
 
 export class ForbiddenError extends BaseError {

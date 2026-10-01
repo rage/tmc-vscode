@@ -7,12 +7,16 @@ import {
   AuthorizationError,
   BottleneckError,
   ConnectionError,
+  DeviceLoginDeniedError,
+  DeviceLoginExpiredError,
   ForbiddenError,
   InsufficientScopeError,
   InvalidTokenError,
   NotEnrolledError,
+  NotFoundError,
   ObsoleteClientError,
   RuntimeError,
+  ServerError,
   UnknownUploadError,
   UploadExpiredError,
 } from "../../errors"
@@ -728,13 +732,19 @@ suite("Langs class arg building", function () {
     expect(seen).toEqual([deviceInfo])
   })
 
-  test("authenticateMooc reports a not-logged-in error on denial/expiry", async function () {
+  test.each([
+    ["device-login-denied", DeviceLoginDeniedError],
+    ["device-login-expired", DeviceLoginExpiredError],
+  ] as const)("authenticateMooc reports %s as its own error", async function (kind, errorClass) {
     const langs = newLangs()
-    stubSpawn(langs, () => Ok(errorOutput("not-logged-in")))
+    const onLogout = vi.fn()
+    langs.on("mooc-logout", onLogout)
+    stubSpawn(langs, () => Ok(errorOutput(kind)))
     const { result } = langs.authenticateMooc(() => {})
     const res = await result
     expect(res.err).toBe(true)
-    expect(res.val).toBeInstanceOf(AuthorizationError)
+    expect(res.val).toBeInstanceOf(errorClass)
+    expect(onLogout).not.toHaveBeenCalled()
   })
 
   test("isMoocAuthenticated builds `mooc logged-in` and maps the result", async function () {
@@ -911,6 +921,10 @@ suite("Langs error-kind mapping", function () {
     ["not-enrolled", NotEnrolledError],
     ["upload-expired", UploadExpiredError],
     ["unknown-upload", UnknownUploadError],
+    ["device-login-denied", DeviceLoginDeniedError],
+    ["device-login-expired", DeviceLoginExpiredError],
+    ["not-found", NotFoundError],
+    ["server-error", ServerError],
     ["generic", RuntimeError],
   ]
   for (const [kind, errorClass] of cases) {

@@ -19,14 +19,18 @@ import {
   AuthorizationError,
   BottleneckError,
   ConnectionError,
+  DeviceLoginDeniedError,
+  DeviceLoginExpiredError,
   EmptyLangsResponseError,
   ForbiddenError,
   InsufficientScopeError,
   InvalidTokenError,
   LangsResponseSchemaError,
   NotEnrolledError,
+  NotFoundError,
   ObsoleteClientError,
   RuntimeError,
+  ServerError,
   SpawnError,
   TimeoutError,
   UnknownUploadError,
@@ -1750,6 +1754,14 @@ export default class Langs {
           this._fireUnexpectedLogout(auth.backend)
         }
         return Err(new AuthorizationError(message, details))
+      case "device-login-denied":
+        return Err(new DeviceLoginDeniedError(message, details))
+      case "device-login-expired":
+        return Err(new DeviceLoginExpiredError(message, details))
+      case "not-found":
+        return Err(new NotFoundError(message, details))
+      case "server-error":
+        return Err(new ServerError(message, details))
       case "obsolete-client":
         return Err(new ObsoleteClientError(message, details))
     }
