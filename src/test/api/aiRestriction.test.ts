@@ -627,6 +627,22 @@ suite("AI restriction", function () {
       expect(workspace.writtenKeys()).toEqual([])
     })
 
+    test("writes no language block for a setting backed off at the top level", async function () {
+      const listener = changeListener()
+      workspace.onWrite = (section, languageId): void => {
+        if (section === INLINE_SUGGEST && languageId === undefined) {
+          workspace.stored.set(section, true)
+          listener(changeOf(section))
+        }
+      }
+      workspace.stored.set(INLINE_SUGGEST, true)
+      workspace.user.set(keyOf(INLINE_SUGGEST, "haskell"), true)
+
+      await restriction.apply()
+
+      expect(workspace.writtenKeys().filter((key) => key.startsWith("["))).toEqual([])
+    })
+
     test("enforce writes a backed-off setting anyway", async function () {
       const stop = flapUntilStopped()
       workspace.stored.set(FLAPPED, true)

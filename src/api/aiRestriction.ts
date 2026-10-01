@@ -262,13 +262,14 @@ export default class AiRestriction implements vscode.Disposable {
     for (const section of others) {
       await write({ section, languageId: undefined })
     }
-    // Only once the top level holds: a per-language block is needed only where a language
-    // override beats it.
-    const overridable = declared.filter(
-      (section) => isLanguageOverridable(section) && !this._writeFailures.has(section),
-    )
+    const overridable = others.filter((section) => isLanguageOverridable(section))
     const languageIds = this._languageIds(overridable)
-    for (const section of overridable) {
+    // A language block is needed only where a language override beats a top level that holds;
+    // one written for a refused or backed-off top level adds a block for every course language.
+    const heldAtTopLevel = overridable.filter(
+      (section) => this._desiredValue({ section, languageId: undefined }) === undefined,
+    )
+    for (const section of heldAtTopLevel) {
       for (const languageId of languageIds) {
         await write({ section, languageId })
       }
