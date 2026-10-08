@@ -5,7 +5,7 @@ const path = require("path")
 
 const { version: EXTENSION_VERSION } = require("./package.json")
 
-const TMC_LANGS_RUST_VERSION = "0.40.0"
+const TMC_LANGS_RUST_VERSION = "0.40.1"
 
 // VS Code build both test tiers download. Defaults to the minimum `engines.vscode`
 // declares, so the version users may actually be on is the one exercised; CI
