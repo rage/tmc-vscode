@@ -601,7 +601,7 @@ const revealModelSolutions = (
  * Terminal grading outcome per exercise fixture. Shared by the grading-poll
  * response and the submissions list so a submission's listed score/progress
  * matches the grading the exercise actually produces (passing exercises show
- * FullyGraded/1, failing show Failed/0, etc.) instead of a hardcoded value.
+ * FullyGraded/1, failing FullyGraded/0, etc.) instead of a hardcoded value.
  */
 const GRADING_OUTCOMES = {
   passing: {
@@ -610,7 +610,7 @@ const GRADING_OUTCOMES = {
     feedback_text: "All tests passed",
   },
   failing: {
-    grading_progress: "Failed",
+    grading_progress: "FullyGraded",
     score_given: 0,
     feedback_text: "Some tests failed",
   },
@@ -626,6 +626,36 @@ const outcomeOf = (
   record: SubmissionRecord,
 ): (typeof GRADING_OUTCOMES)[keyof typeof GRADING_OUTCOMES] =>
   GRADING_OUTCOMES[state.fixtures.exerciseById.get(record.exerciseId)?.gradingOutcome ?? "passing"]
+
+/**
+ * The caller's progress on an exercise, derived from this run's submissions: attempted once
+ * submitted, completed/scored once a submission has been polled to its terminal (FullyGraded)
+ * outcome. `standing` follows the host's `derive_exercise_progress`: passed at full points,
+ * else out of tries once the limit is used up, whatever the tries scored.
+ */
+const exerciseProgress = (state: MoocMockState, exerciseId: string): unknown => {
+  const records = callerSubmissionsFor(state, exerciseId)
+  const graded = records.filter((r) => isGraded(r))
+  const scores = graded.map((r) => outcomeOf(state, r).score_given)
+  const scoreMaximum = scoreMaximumFor(state, exerciseId)
+  const limit = state.fixtures.exerciseById.get(exerciseId)?.maxTriesPerSlide
+  const isPassed = scores.some((score) => score >= scoreMaximum)
+  const standing = isPassed
+    ? "Passed"
+    : limit !== undefined && records.length >= limit
+      ? "OutOfTries"
+      : records.length > 0
+        ? "Attempted"
+        : "NotAttempted"
+  return {
+    exercise_id: exerciseId,
+    score_given: scores.length > 0 ? Math.max(...scores) : 0,
+    score_maximum: scoreMaximum,
+    completed: graded.some((r) => outcomeOf(state, r).grading_progress === "FullyGraded"),
+    attempted: records.length > 0,
+    standing,
+  }
+}
 
 const gradingStatus = (state: MoocMockState, record: SubmissionRecord): unknown => {
   // First poll: not graded yet. Subsequent polls: the exercise's terminal
@@ -648,6 +678,7 @@ const gradingStatus = (state: MoocMockState, record: SubmissionRecord): unknown 
       // never reaches the CLI-stdout schema.
       feedback_json: { mock_feedback: "reconciliation sentinel" },
       feedback_text: grading.feedback_text,
+      exercise_progress: exerciseProgress(state, record.exerciseId),
     },
   }
 }
@@ -760,27 +791,10 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       if (!found) {
         return apiError("not_found", `no such course: ${id}`)
       }
-      // One zeroed entry per exercise, like the real backend, derived from this
-      // run's submissions: attempted once submitted, completed/scored once a
-      // submission has been polled to its terminal (FullyGraded) outcome.
+      // One entry per exercise, zeroed when untouched, like the real backend.
       return ok({
         course_id: found.course.id,
-        exercises: found.exercises.map((e) => {
-          const records = callerSubmissionsFor(state, e.slide.exercise_id)
-          const graded = records.filter((r) => isGraded(r))
-          const scores = graded.map((r) => outcomeOf(state, r).score_given)
-          const scoreGiven = scores.length > 0 ? Math.max(...scores) : 0
-          const completed = graded.some(
-            (r) => outcomeOf(state, r).grading_progress === "FullyGraded",
-          )
-          return {
-            exercise_id: e.slide.exercise_id,
-            score_given: scoreGiven,
-            score_maximum: scoreMaximumFor(state, e.slide.exercise_id),
-            completed,
-            attempted: records.length > 0,
-          }
-        }),
+        exercises: found.exercises.map((e) => exerciseProgress(state, e.slide.exercise_id)),
       })
     },
 

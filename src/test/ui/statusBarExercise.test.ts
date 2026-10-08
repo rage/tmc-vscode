@@ -163,6 +163,22 @@ suite("ExerciseStatusBarItem", function () {
     expect(tooltipText(itemOf())).toContain("passed")
   })
 
+  test("says when the backend reports no tries left", function () {
+    const h = harness()
+    h.stored.exercise = makeMoocKind(
+      moocCourseExercise({
+        id: "exercise-uuid",
+        name: exerciseHelloWorld.exerciseSlug,
+        awardedPoints: 1,
+        availablePoints: 2,
+        outOfTries: true,
+      }),
+    )
+    track(new ExerciseStatusBarItem(h.sources))
+
+    expect(tooltipText(itemOf())).toContain("1/2 points · no tries left")
+  })
+
   test("stops listening when disposed", function () {
     const h = harness()
     const exerciseItem = new ExerciseStatusBarItem(h.sources)

@@ -9,10 +9,9 @@ export class BottleneckError extends BaseError {
   public override readonly name = "Bottleneck Error"
 }
 
+/** A backend could not be reached at all; one that answered with an error status is not this. */
 export class ConnectionError extends BaseError {
   public override readonly name = "Connection Error"
-  /** The error status the server answered with; unset when it could not be reached at all. */
-  public httpStatus?: number | undefined
 }
 
 /**
@@ -25,8 +24,35 @@ export class CorruptStoredDataError extends BaseError {
   public override readonly name = "Corrupt Stored Data Error"
 }
 
+/** A mooc exercise's try limit is used up, so the backend accepts no further submission. */
+export class OutOfTriesError extends BaseError {
+  public override readonly name = "Out Of Tries Error"
+}
+
+/** The user denied a courses.mooc.fi device login in the browser. */
+export class DeviceLoginDeniedError extends BaseError {
+  public override readonly name = "Device Login Denied Error"
+}
+
+/** A courses.mooc.fi device login code expired before the user approved it. */
+export class DeviceLoginExpiredError extends BaseError {
+  public override readonly name = "Device Login Expired Error"
+}
+
 export class EmptyLangsResponseError extends BaseError {
   public override readonly name = "Empty Langs Response Error"
+}
+
+/** A backend answered 404: what was asked for does not exist, or not for this user. */
+export class NotFoundError extends BaseError {
+  public override readonly name = "Not Found Error"
+  public httpStatus?: number | undefined
+}
+
+/** A backend answered with a 5xx status: it was reached, and failed. Worth retrying later. */
+export class ServerError extends BaseError {
+  public override readonly name = "Server Error"
+  public httpStatus?: number | undefined
 }
 
 export class ForbiddenError extends BaseError {
@@ -236,7 +262,9 @@ export function presentationFor(error: Error, backend?: BackendKind): ErrorPrese
     }
   }
   if (
-    (error instanceof ConnectionError || error instanceof RuntimeError) &&
+    (error instanceof NotFoundError ||
+      error instanceof ServerError ||
+      error instanceof RuntimeError) &&
     error.httpStatus !== undefined
   ) {
     // The reported message quotes the raw response body.

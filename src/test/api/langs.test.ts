@@ -7,13 +7,17 @@ import {
   AuthorizationError,
   BottleneckError,
   ConnectionError,
+  DeviceLoginDeniedError,
+  DeviceLoginExpiredError,
   ExerciseNotFoundError,
   ForbiddenError,
   InsufficientScopeError,
   InvalidTokenError,
   NotEnrolledError,
+  NotFoundError,
   ObsoleteClientError,
   RuntimeError,
+  ServerError,
   UnknownUploadError,
   UploadExpiredError,
 } from "../../errors"
@@ -65,19 +69,35 @@ function cliOutput(value: unknown): OutputData {
   return CliOutputData.parse(value)
 }
 
-function errorOutput(kind: unknown, message = "boom", trace = ["trace line"]): OutputData {
+function errorOutput(
+  kind: unknown,
+  message = "boom",
+  trace = ["trace line"],
+  httpStatus?: number,
+): OutputData {
   return cliOutput({
     "output-kind": "output-data",
     status: "finished",
     message,
     result: "error",
-    data: { "output-data-kind": "error", "output-data": { kind, trace } },
+    data: {
+      "output-data-kind": "error",
+      "output-data": {
+        kind,
+        trace,
+        ...(httpStatus === undefined ? {} : { http_status: httpStatus }),
+      },
+    },
   })
 }
 
 const TASK_SUBMISSION_ID = "6f1f5a52-4c1b-4a4e-9b8e-0d6c3f3c2a11"
 const SLIDE_ID = "0b7e3d2c-9a51-4f7e-8f55-2c7a1e6d9b40"
-const moocSubmitted = { task_submission_id: TASK_SUBMISSION_ID, slide_submission_id: SLIDE_ID }
+const moocSubmitted = {
+  task_submission_id: TASK_SUBMISSION_ID,
+  slide_submission_id: SLIDE_ID,
+  exercise_page_url: null,
+}
 
 function dataOutput(kind: string, data: unknown): OutputData {
   return cliOutput({
@@ -307,6 +327,7 @@ suite("Langs class arg building", function () {
           score_maximum: 3,
           completed: true,
           attempted: true,
+          standing: "Passed",
         },
       ],
     }
@@ -388,7 +409,7 @@ suite("Langs class arg building", function () {
     const line =
       "HTTP error 404 Not Found for https://courses.mooc.fi/api/v0/exercise-services/client/" +
       'exercises/ex-uuid: {"title":"Not Found"}. Obsolete client: false.'
-    stubSpawn(langs, () => Ok(errorOutput("generic", line, [`Caused by: ${line}`])))
+    stubSpawn(langs, () => Ok(errorOutput("not-found", line, [`Caused by: ${line}`], 404)))
     const result = await call(langs)
     expect(result.val).toBeInstanceOf(ExerciseNotFoundError)
     expect((result.val as Error).message).toBe("This exercise no longer exists on courses.mooc.fi.")
@@ -419,6 +440,7 @@ suite("Langs class arg building", function () {
         grading_started_at: "2026-07-21T00:00:00Z",
         grading_completed_at: "2026-07-21T00:00:01Z",
         feedback_text: "All tests passed",
+        exercise_progress: null,
       },
     }
     stubSpawn(langs, () => Ok(dataOutput("mooc-submission-status", grading)))
@@ -742,13 +764,19 @@ suite("Langs class arg building", function () {
     expect(seen).toEqual([deviceInfo])
   })
 
-  test("authenticateMooc reports a not-logged-in error on denial/expiry", async function () {
+  test.each([
+    ["device-login-denied", DeviceLoginDeniedError],
+    ["device-login-expired", DeviceLoginExpiredError],
+  ] as const)("authenticateMooc reports %s as its own error", async function (kind, errorClass) {
     const langs = newLangs()
-    stubSpawn(langs, () => Ok(errorOutput("not-logged-in")))
+    const onLogout = vi.fn()
+    langs.on("mooc-logout", onLogout)
+    stubSpawn(langs, () => Ok(errorOutput(kind)))
     const { result } = langs.authenticateMooc(() => {})
     const res = await result
     expect(res.err).toBe(true)
-    expect(res.val).toBeInstanceOf(AuthorizationError)
+    expect(res.val).toBeInstanceOf(errorClass)
+    expect(onLogout).not.toHaveBeenCalled()
   })
 
   test("isMoocAuthenticated builds `mooc logged-in` and maps the result", async function () {
@@ -925,6 +953,10 @@ suite("Langs error-kind mapping", function () {
     ["not-enrolled", NotEnrolledError],
     ["upload-expired", UploadExpiredError],
     ["unknown-upload", UnknownUploadError],
+    ["device-login-denied", DeviceLoginDeniedError],
+    ["device-login-expired", DeviceLoginExpiredError],
+    ["not-found", NotFoundError],
+    ["server-error", ServerError],
     ["generic", RuntimeError],
   ]
   for (const [kind, errorClass] of cases) {
@@ -967,17 +999,17 @@ suite("Langs error-kind mapping", function () {
   })
 
   test.each([
-    ["connection-error", ConnectionError, 503],
-    ["generic", RuntimeError, 404],
+    ["not-found", NotFoundError, 404],
+    ["server-error", ServerError, 503],
+    ["generic", RuntimeError, 409],
   ] as const)(
-    "%s carries the status of the HTTP error it names",
+    "%s carries the HTTP status the CLI reports",
     async function (kind, errorClass, status) {
       const langs = newLangs()
-      const line = `HTTP error ${status} for https://courses.mooc.fi/x: body. Obsolete client: false.`
-      stubSpawn(langs, () => Ok(errorOutput(kind, "Failed to get courses", [`Caused by: ${line}`])))
+      stubSpawn(langs, () => Ok(errorOutput(kind, "Failed to get courses", undefined, status)))
       const result = await langs.getEnrolledMoocCourses()
       expect(result.val).toBeInstanceOf(errorClass)
-      expect((result.val as ConnectionError | RuntimeError).httpStatus).toBe(status)
+      expect((result.val as NotFoundError | ServerError | RuntimeError).httpStatus).toBe(status)
     },
   )
 
@@ -989,11 +1021,11 @@ suite("Langs error-kind mapping", function () {
     expect((result.val as RuntimeError).details).toBe("Caused by: outer\nCaused by: inner")
   })
 
-  test("a connection error naming no HTTP status has none", async function () {
+  test("an error the CLI reports no HTTP status for has none", async function () {
     const langs = newLangs()
-    stubSpawn(langs, () => Ok(errorOutput("connection-error", "Connection error trying to GET x")))
+    stubSpawn(langs, () => Ok(errorOutput("generic", "HTTP error 404 quoted in a message")))
     const result = await langs.getEnrolledMoocCourses()
-    expect((result.val as ConnectionError).httpStatus).toBeUndefined()
+    expect((result.val as RuntimeError).httpStatus).toBeUndefined()
   })
 
   test("an error kind carries the CLI's message and no remediation of its own", async function () {

@@ -7,7 +7,13 @@ import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import { login } from "../../commands/login"
 import { refreshEverything } from "../../commands/refreshEverything"
-import { AuthorizationError, ConnectionError } from "../../errors"
+import {
+  AuthorizationError,
+  ConnectionError,
+  DeviceLoginDeniedError,
+  DeviceLoginExpiredError,
+  ServerError,
+} from "../../errors"
 import type { MoocDeviceLogin } from "../../shared/langsSchema"
 import type { BaseError } from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
@@ -228,16 +234,13 @@ suite("login command", function () {
   })
 
   test.each([
-    ["The device authorization request was denied", "The login was denied in the browser."],
-    [
-      "The device authorization request expired before it was approved",
-      "The login code expired before it was approved.",
-    ],
-  ])("says what went wrong when %s, and offers Try again", async function (cliMessage, shown) {
+    [new DeviceLoginDeniedError("denied"), "The login was denied in the browser."],
+    [new DeviceLoginExpiredError("expired"), "The login code expired before it was approved."],
+  ])("says what went wrong for %s, and offers Try again", async function (error, shown) {
     const h = harness()
     const { outcome } = await runToCode(h)
 
-    h.logins[0]?.finish(Err(new AuthorizationError(cliMessage)))
+    h.logins[0]?.finish(Err(error))
 
     expect(await outcome).toBe("failed")
     expect(errorNotificationCall(h.context)).toEqual([
@@ -276,7 +279,7 @@ suite("login command", function () {
     const h = harness()
     const outcome = login(h.context)
     await settle()
-    const error = Object.assign(new ConnectionError("HTTP error 503 …"), { httpStatus: 503 })
+    const error = Object.assign(new ServerError("HTTP error 503 …"), { httpStatus: 503 })
 
     h.logins[0]?.finish(Err(error))
 

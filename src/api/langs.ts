@@ -1,5 +1,4 @@
 import * as cp from "child_process"
-import * as path from "path"
 
 import kill from "tree-kill"
 import type { Result } from "ts-results"
@@ -19,6 +18,8 @@ import {
   AuthorizationError,
   BottleneckError,
   ConnectionError,
+  DeviceLoginDeniedError,
+  DeviceLoginExpiredError,
   EmptyLangsResponseError,
   ExerciseNotFoundError,
   ForbiddenError,
@@ -26,8 +27,10 @@ import {
   InvalidTokenError,
   LangsResponseSchemaError,
   NotEnrolledError,
+  NotFoundError,
   ObsoleteClientError,
   RuntimeError,
+  ServerError,
   SpawnError,
   TimeoutError,
   UnknownUploadError,
@@ -176,23 +179,9 @@ function loggableArg(arg: string): string {
   return arg.length > MAX_LOGGED_ARG_LENGTH ? `<${arg.length} characters>` : arg
 }
 
-/**
- * The status of the HTTP error response a CLI failure names, if any. Matches the
- * `HttpError` Display of both tmc-langs backend clients, the CLI's only report of it.
- */
-function httpStatusIn(errorLines: readonly string[]): number | undefined {
-  for (const line of errorLines) {
-    const status = /\bHTTP error (\d{3})\b/.exec(line)?.[1]
-    if (status !== undefined) {
-      return Number(status)
-    }
-  }
-  return undefined
-}
-
 /** Every request a mooc submit or paste makes names the exercise, so a 404 means it is gone. */
 function exerciseGoneOn404(error: Error): Error {
-  return error instanceof RuntimeError && error.httpStatus === 404
+  return error instanceof NotFoundError
     ? new ExerciseNotFoundError(
         `This exercise no longer exists on ${backendName("mooc")}.`,
         error.details,
@@ -265,26 +254,6 @@ class BoundedStderr {
           : `[…${this._droppedBytes} bytes of earlier stderr dropped…]\n${tail}`
     }
     return this._text
-  }
-}
-
-/**
- * The environment that points the CLI at `javaHome`, or none for an empty one.
- *
- * The Java plugin finds its JVM through `JAVA_HOME` but runs Ant exercises with the `java`
- * on `PATH`, so both have to name the same JDK.
- */
-function javaHomeEnv(javaHome: string): Record<string, string> {
-  if (javaHome === "") {
-    return {}
-  }
-  // On Windows the key is usually "Path"; adding "PATH" beside it would give the child two.
-  const pathKey = Object.keys(process.env).find((key) => key.toUpperCase() === "PATH") ?? "PATH"
-  const inherited = process.env[pathKey]
-  const javaBin = path.join(javaHome, "bin")
-  return {
-    JAVA_HOME: javaHome,
-    [pathKey]: inherited ? `${javaBin}${path.delimiter}${inherited}` : javaBin,
   }
 }
 
@@ -1748,10 +1717,10 @@ export default class Langs {
     // The CLI lists a boxed error twice in a row, once as the box and once as itself.
     const trace = data["output-data"].trace.filter((line, i, lines) => line !== lines[i - 1])
     const details = [trace.join("\n"), stderr].filter(Boolean).join("\n\n")
-    const httpStatus = httpStatusIn([message, ...trace])
+    const httpStatus = data["output-data"].http_status ?? undefined
     switch (errorKind) {
       case "connection-error":
-        return Err(Object.assign(new ConnectionError(message, details), { httpStatus }))
+        return Err(new ConnectionError(message, details))
       case "forbidden":
         // courses.mooc.fi 403s a token whose scopes don't cover programming exercises;
         // tmc.mooc.fi 403s a course the user may not see. Only the latter is about the
@@ -1780,6 +1749,14 @@ export default class Langs {
           this._fireUnexpectedLogout(auth.backend)
         }
         return Err(new AuthorizationError(message, details))
+      case "device-login-denied":
+        return Err(new DeviceLoginDeniedError(message, details))
+      case "device-login-expired":
+        return Err(new DeviceLoginExpiredError(message, details))
+      case "not-found":
+        return Err(Object.assign(new NotFoundError(message, details), { httpStatus }))
+      case "server-error":
+        return Err(Object.assign(new ServerError(message, details), { httpStatus }))
       case "obsolete-client":
         return Err(new ObsoleteClientError(message, details))
     }
@@ -1847,6 +1824,8 @@ export default class Langs {
       }
     }
 
+    const javaHome = this._options.javaHome?.() ?? ""
+
     Logger.info(`Running ${loggableCommand}`)
     Logger.debug(`TMC backend at ${tmcBackendUrl}`)
     Logger.debug(`MOOC backend at ${moocBackendUrl}`)
@@ -1873,7 +1852,7 @@ export default class Langs {
           TMC_LANGS_MOOC_ROOT_URL: moocBackendUrl,
           TMC_LANGS_CONFIG_DIR: tmcLangsConfigDir,
           ...moocEnv,
-          ...javaHomeEnv(this._options.javaHome?.() ?? ""),
+          ...(javaHome ? { JAVA_HOME: javaHome } : {}),
         },
       })
     } catch (error) {

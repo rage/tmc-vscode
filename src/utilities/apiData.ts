@@ -7,11 +7,11 @@ import type {
   CombinedCourseData,
   CourseExercise,
   Exercise,
+  ExerciseProgress,
   MoocCourse,
   MoocCourseProgress,
   TmcExerciseSlide,
 } from "../shared/langsSchema"
-import { isMoocScorePassing } from "../shared/shared"
 import type {
   MoocLocalCourseData,
   MoocLocalCourseExercise,
@@ -74,15 +74,37 @@ export function combineMoocApiExerciseData(
       name: slide.exercise_name,
       deadline: slide.deadline,
       softDeadline: slide.deadline,
-      passed: exerciseProgress
-        ? exerciseProgress.score_maximum > 0
-          ? isMoocScorePassing(exerciseProgress.score_given, exerciseProgress.score_maximum)
-          : exerciseProgress.completed
-        : (previous?.passed ?? false),
+      ...moocStoredStanding(exerciseProgress, previous),
       availablePoints: exerciseProgress?.score_maximum ?? previous?.availablePoints ?? 0,
       awardedPoints: exerciseProgress?.score_given ?? previous?.awardedPoints ?? 0,
+      ...(slide.chapter
+        ? { chapter: { name: slide.chapter.name, number: slide.chapter.chapter_number } }
+        : {}),
     }
   })
+}
+
+/** A mooc exercise's stored `passed` and `outOfTries`, as the backend decides them. */
+export interface MoocStoredStanding {
+  passed: boolean
+  outOfTries: boolean
+}
+
+/**
+ * The stored flags `progress` sets. Keeps `previous`'s, else neither, when the backend sent no
+ * standing: a host that predates it, or no progress at all.
+ */
+export function moocStoredStanding(
+  progress: ExerciseProgress | undefined,
+  previous?: Pick<MoocLocalCourseExercise, "passed" | "outOfTries">,
+): MoocStoredStanding {
+  if (!progress?.standing) {
+    return { passed: previous?.passed ?? false, outOfTries: previous?.outOfTries ?? false }
+  }
+  return {
+    passed: progress.standing === "Passed",
+    outOfTries: progress.standing === "OutOfTries",
+  }
 }
 
 export interface CoursePoints {

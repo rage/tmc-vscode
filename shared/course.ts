@@ -43,7 +43,11 @@ export const SharedMoocCourseExerciseSchema = z.object({
   name: z.string(),
   deadline: z.string().nullable(),
   passed: z.boolean(),
+  /** Below full points with the try limit used up, so the score is final; absent means no. */
+  outOfTries: z.boolean().optional(),
   softDeadline: z.string().nullable(),
+  /** The chapter the course material puts the exercise in; absent outside any chapter. */
+  chapter: z.object({ name: z.string(), number: z.number() }).optional(),
 })
 
 export type SharedMoocCourseExercise = z.infer<typeof SharedMoocCourseExerciseSchema>
@@ -83,17 +87,6 @@ export function isSoftDeadlineBinding({
   return (
     softDeadline !== null && deadline !== null && Date.parse(softDeadline) < Date.parse(deadline)
   )
-}
-
-/**
- * Whether a courses.mooc.fi score passes its exercise, which takes full points. The progress
- * endpoint's `completed` is no substitute: any graded submission sets it, whatever its score.
- *
- * @param scoreMaximum 0 when the exercise is worth nothing or its points are unknown, which
- * never passes.
- */
-export function isMoocScorePassing(scoreGiven: number, scoreMaximum: number): boolean {
-  return scoreMaximum > 0 && scoreGiven >= scoreMaximum
 }
 
 /** What missing a binding soft deadline costs, as one sentence for the student. */

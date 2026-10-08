@@ -87,7 +87,7 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
       [
         `**${slug}**`,
         exercise.courseSlug,
-        ...(points ? [`${points.short} points${stored?.data.passed ? " · passed" : ""}`] : []),
+        ...(points ? [`${points.short} points${standingSuffix(stored)}`] : []),
         "Click for exercise actions.",
       ].join("\n\n"),
     )
@@ -98,6 +98,14 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
     vscode.Disposable.from(...this._subscriptions).dispose()
     this._item.dispose()
   }
+}
+
+/** What the stored exercise's points line adds: whether it passed, or ran out of tries. */
+function standingSuffix(stored: Readonly<LocalCourseExercise> | undefined): string {
+  if (stored?.data.passed) {
+    return " · passed"
+  }
+  return stored?.kind === "mooc" && stored.data.outOfTries ? " · no tries left" : ""
 }
 
 interface ExerciseAction {

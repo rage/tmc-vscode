@@ -2,7 +2,13 @@ import * as vscode from "vscode"
 
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import { AuthorizationError, ConnectionError, presentationFor } from "../errors"
+import {
+  ConnectionError,
+  DeviceLoginDeniedError,
+  DeviceLoginExpiredError,
+  presentationFor,
+  ServerError,
+} from "../errors"
 import type { MoocDeviceLogin } from "../shared/langsSchema"
 import { backendName } from "../shared/shared"
 import { Logger } from "../utilities"
@@ -163,16 +169,17 @@ async function openInBrowser(url: string): Promise<void> {
 
 /** The sentence for a failed login, plus the error when its details belong in the logs. */
 function failureMessage(error: Error): [message: string, error?: Error] {
-  if (error instanceof AuthorizationError) {
-    // The CLI reports a denial and an expired code as the same error kind.
-    return /denied/i.test(error.message)
-      ? ["The login was denied in the browser."]
-      : ["The login code expired before it was approved."]
+  if (error instanceof DeviceLoginDeniedError) {
+    return ["The login was denied in the browser."]
+  }
+  if (error instanceof DeviceLoginExpiredError) {
+    return ["The login code expired before it was approved."]
   }
   if (error instanceof ConnectionError) {
-    return error.httpStatus === undefined
-      ? [`Could not reach ${SITE}. Check your internet connection.`, error]
-      : [presentationFor(error, "mooc").message, error]
+    return [`Could not reach ${SITE}. Check your internet connection.`, error]
+  }
+  if (error instanceof ServerError) {
+    return [presentationFor(error, "mooc").message, error]
   }
   return [`Logging in to ${SITE} failed. ${presentationFor(error, "mooc").message}`, error]
 }

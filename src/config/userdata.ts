@@ -20,6 +20,7 @@ import type {
   TmcLocalCourseData,
   TmcLocalCourseExercise,
 } from "../storage/data"
+import type { MoocStoredStanding } from "../utilities/apiData"
 import { Logger } from "../utilities/logger"
 
 export class UserData {
@@ -225,6 +226,34 @@ export class UserData {
     // through it is what updates the catalogue.
     exercise.data.passed = true
     this._setPassed(ExerciseIdentifier.from(exercise.data.id), true)
+    return this._updatePersistentData()
+  }
+
+  /**
+   * Records a mooc exercise's standing and points as a grading reported them, in memory and in
+   * storage. Unlike {@link setExerciseAsPassed} it can also clear `passed`, as the backend decides.
+   *
+   * Errs when the named exercise is not in the catalogue.
+   */
+  public async setMoocExerciseStanding(
+    courseSlug: string,
+    exerciseName: string,
+    standing: MoocStoredStanding,
+    awardedPoints: number,
+  ): Promise<Result<void, Error>> {
+    const exercise = this.getMoocExerciseByName(courseSlug, exerciseName) as
+      | MoocLocalCourseExercise
+      | undefined
+    if (!exercise) {
+      return Err(
+        new Error(`No mooc exercise ${courseSlug}/${exerciseName} to record a grading for`),
+      )
+    }
+    // The stored record, not a copy, so writing through it updates the catalogue.
+    exercise.passed = standing.passed
+    exercise.outOfTries = standing.outOfTries
+    exercise.awardedPoints = awardedPoints
+    this._setPassed(ExerciseIdentifier.from(exercise.id), standing.passed)
     return this._updatePersistentData()
   }
 

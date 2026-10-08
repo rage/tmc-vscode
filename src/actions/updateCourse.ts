@@ -1,7 +1,7 @@
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 
-import { ConnectionError, ForbiddenError, InsufficientScopeError } from "../errors"
+import { ConnectionError, ForbiddenError, InsufficientScopeError, ServerError } from "../errors"
 import type { CombinedCourseData, MoocCourse, TmcExerciseSlide } from "../shared/langsSchema"
 import type { BackendKind, Enum, LocalCourseExercise } from "../shared/shared"
 import {
@@ -103,7 +103,10 @@ export async function updateCourse(
         Logger.warn(`ForbiddenError above probably caused by course still being disabled`)
       }
       return Ok(false)
-    } else if (updateResult.val instanceof ConnectionError) {
+    } else if (
+      updateResult.val instanceof ConnectionError ||
+      updateResult.val instanceof ServerError
+    ) {
       Logger.warn(`Failed to fetch data from ${backendName(courseId.kind)}, data not updated.`)
       actionContext.coursesTree.setBackendReachable(courseId.kind, false)
       return Ok(false)

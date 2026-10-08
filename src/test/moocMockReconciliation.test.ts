@@ -274,8 +274,13 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     })
     expect(res.status).toBe(200)
     const body = (await res.json()) as unknown
-    // the submit response is the `submission-finished` payload
-    expectValid(ExerciseTaskSubmissionResult, body, "submit result")
+    // The submit response is the `submission-finished` payload, less the page URL the CLI
+    // takes from the exercise it fetched first.
+    expectValid(
+      ExerciseTaskSubmissionResult,
+      { ...(body as object), exercise_page_url: null },
+      "submit result",
+    )
     const ids = body as { task_submission_id: string; slide_submission_id: string }
     return { taskSubmissionId: ids.task_submission_id, slideSubmissionId: ids.slide_submission_id }
   }

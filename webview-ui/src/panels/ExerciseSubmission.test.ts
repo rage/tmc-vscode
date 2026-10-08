@@ -385,7 +385,20 @@ suite("ExerciseSubmission panel (tmc feedback)", () => {
 suite("ExerciseSubmission panel (mooc results)", () => {
   test("renders the graded status, score out of the maximum and feedback text", async () => {
     render(ExerciseSubmission, { props: { panel: moocPanel } })
-    showMoocGrading(moocGrading({ score_given: 2.666666, feedback_text: "Great work" }))
+    showMoocGrading(
+      moocGrading({
+        score_given: 2.666666,
+        feedback_text: "Great work",
+        exercise_progress: {
+          exercise_id: "exercise",
+          score_given: 2.666666,
+          score_maximum: 3,
+          completed: true,
+          attempted: true,
+          standing: "Attempted",
+        },
+      }),
+    )
 
     expect(
       await screen.findByRole("heading", { name: "Some tests failed on the server" }),
@@ -409,9 +422,42 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     unmount()
 
     render(ExerciseSubmission, { props: { panel: moocPanel } })
-    showMoocGrading(moocGrading({ score_given: 3 }))
-    await screen.findByRole("heading", { name: "All tests passed on the server" })
+    showMoocGrading(
+      moocGrading({
+        score_given: 3,
+        exercise_progress: {
+          exercise_id: "exercise",
+          score_given: 3,
+          score_maximum: 3,
+          completed: true,
+          attempted: true,
+          standing: "Passed",
+        },
+      }),
+    )
+    await screen.findByRole("heading", { name: "Exercise passed" })
     expect(screen.queryByRole("button", { name: "Need help?" })).not.toBeInTheDocument()
+  })
+
+  test("the last try below full points says the score is final", async () => {
+    render(ExerciseSubmission, { props: { panel: moocPanel } })
+    showMoocGrading(
+      moocGrading({
+        score_given: 2,
+        exercise_progress: {
+          exercise_id: "exercise",
+          score_given: 2,
+          score_maximum: 3,
+          completed: true,
+          attempted: true,
+          standing: "OutOfTries",
+        },
+      }),
+    )
+    await screen.findByRole("heading", { name: "Some tests failed on the server" })
+    expect(
+      screen.getByText("You have no tries left on this exercise, so this score is final."),
+    ).toBeInTheDocument()
   })
 
   test("awaiting manual grading explains itself and offers Close", async () => {

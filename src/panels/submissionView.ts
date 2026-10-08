@@ -1,6 +1,10 @@
-import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../shared/langsSchema"
+import type {
+  ExerciseStanding,
+  ExerciseTaskSubmissionStatus,
+  SubmissionFinished,
+} from "../shared/langsSchema"
 import type { FeedbackQuestion, SubmissionView, WebviewError } from "../shared/shared"
-import { assertUnreachable, isMoocScorePassing } from "../shared/shared"
+import { assertUnreachable } from "../shared/shared"
 
 /** The phases in which the backend is still working on the submission. */
 export type InProgressPhase = "uploading" | "grading"
@@ -164,13 +168,17 @@ export function moocGradingView(
     points: given === undefined ? undefined : { given, max: maxPoints },
     feedbackText: grading.feedback_text ?? undefined,
   }
+  const standing = grading.exercise_progress?.standing
   switch (grading.grading_progress) {
     case "FullyGraded":
       return {
         ...graded,
         phase: "finished",
-        headline: fullyGradedHeadline(given, maxPoints),
-        canPaste: given === undefined || given < maxPoints,
+        headline: fullyGradedHeadline(standing),
+        ...(standing === "OutOfTries"
+          ? { explanation: "You have no tries left on this exercise, so this score is final." }
+          : {}),
+        canPaste: standing !== "Passed",
       }
     case "Failed":
       return { ...graded, phase: "failed", headline: "Grading failed", canPaste: true }
@@ -191,12 +199,18 @@ export function moocGradingView(
   }
 }
 
-/** The outcome a score tells, in the words `tmcResultView` uses for its tests. */
-function fullyGradedHeadline(given: number | undefined, maxPoints: number): string {
-  if (given === undefined || maxPoints <= 0) {
-    return "Exercise graded"
+/**
+ * The outcome the backend's standing tells. A pass may come from an earlier submission, so only
+ * a standing short of full points says something about this submission's tests.
+ */
+function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): string {
+  switch (standing) {
+    case "Passed":
+      return "Exercise passed"
+    case "Attempted":
+    case "OutOfTries":
+      return "Some tests failed on the server"
+    default:
+      return "Exercise graded"
   }
-  return isMoocScorePassing(given, maxPoints)
-    ? "All tests passed on the server"
-    : "Some tests failed on the server"
 }

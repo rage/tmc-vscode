@@ -18,6 +18,8 @@ export interface ExerciseView {
   slug: string
   status: ExerciseStatus
   passed: boolean
+  /** Below full points with the try limit used up, so the score is final. Only mooc has a limit. */
+  isOutOfTries: boolean
   awardedPoints: number
   availablePoints: number
   softDeadline: Date | null
@@ -29,11 +31,11 @@ export interface ExerciseView {
   onDisk: WorkspaceExercise | undefined
 }
 
-/** A part of a course: the exercises sharing a `partNN-` slug prefix. */
+/** A part of a course: a tmc course's exercises sharing a `partNN-` slug prefix, or a mooc chapter. */
 export interface PartView {
   name: string
   exercises: ExerciseView[]
-  /** The soonest deadline after `now` among the exercises not yet passed. */
+  /** The soonest deadline after `now` among the exercises still open: not passed, tries left. */
   nextDeadline: Date | null
   /** Every part of a short course starts expanded; in a longer one only the next due. */
   isDefaultOpen: boolean
@@ -57,8 +59,9 @@ const MAX_PARTS_ALL_OPEN = 3
 /**
  * Groups a course's exercises into parts and derives each exercise's status.
  *
- * A tmc course is sorted by part and exercise number; a mooc course keeps the order its
- * material presents them in, under one part named after the course.
+ * A tmc course is sorted by part and exercise number. A mooc course is grouped by chapter in
+ * chapter order and keeps the order its material presents the exercises in; exercises outside
+ * any chapter come last, under a part named after the course.
  */
 export function buildCourseView(course: LocalCourseData, state: CourseViewState): PartView[] {
   const courseTitle = LocalCourseData.getCourseTitle(course)
@@ -69,12 +72,16 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
   const onDiskBySlug = new Map(state.onDisk.map((exercise) => [exercise.exerciseSlug, exercise]))
 
   const exercisesByPart = new Map<string, ExerciseView[]>()
+  const partNumbers = new Map<string, number>()
   let ungroupedPartName: string | undefined
   for (const ex of LocalCourseData.getExercises(course)) {
     const slug = LocalCourseExercise.getSlug(ex)
-    const { partName, name, isUngrouped } = placeExercise(course, slug, courseTitle)
+    const { partName, partNumber, name, isUngrouped } = placeExercise(ex, slug, courseTitle)
     if (isUngrouped) {
       ungroupedPartName = partName
+    }
+    if (partNumber !== undefined) {
+      partNumbers.set(partName, partNumber)
     }
     const id = LocalCourseExercise.getId(ex)
     const key = ExerciseIdentifier.key(id)
@@ -92,6 +99,7 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
         newKeys.has(key),
       ),
       passed: ex.data.passed,
+      isOutOfTries: ex.kind === "mooc" && ex.data.outOfTries === true,
       awardedPoints: ex.data.awardedPoints,
       availablePoints: ex.data.availablePoints,
       softDeadline,
@@ -116,9 +124,9 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       : exercises,
     nextDeadline: findNextDateAfter(
       state.now,
-      exercises.filter((ex) => !ex.passed).map((ex) => shownDeadline(ex)),
+      exercises.filter((ex) => !ex.passed && !ex.isOutOfTries).map((ex) => shownDeadline(ex)),
     ),
-  })).toSorted((a, b) => compareNames(a.name, b.name))
+  })).toSorted((a, b) => compareParts(a.name, b.name, partNumbers, ungroupedPartName))
 
   const openPartName = pickOpenPart(parts)
   return parts.map((part) => ({
@@ -197,23 +205,48 @@ function pickOpenPart(parts: { name: string; nextDeadline: Date | null }[]): str
 
 /**
  * A tmc slug encodes its part as a `part01-` prefix. A mooc slug is the name the course
- * author typed, with no part in it, so every mooc exercise goes in one part named after
- * the course until the backend exposes chapters.
+ * author typed, with no part in it, so a mooc exercise's part is its chapter.
  */
 function placeExercise(
-  course: LocalCourseData,
+  exercise: LocalCourseExercise,
   slug: string,
   courseTitle: string,
-): { partName: string; name: string; isUngrouped: boolean } {
+): { partName: string; partNumber?: number; name: string; isUngrouped: boolean } {
   const ungrouped = { partName: courseTitle, name: slug, isUngrouped: true }
   return match(
-    course,
+    exercise,
     () => {
       const [, partName, name] = slug.match(/^(\w+)-(.+)$/) ?? []
       return partName && name ? { partName, name, isUngrouped: false } : ungrouped
     },
-    () => ungrouped,
+    (mooc) =>
+      mooc.chapter
+        ? {
+            partName: mooc.chapter.name,
+            partNumber: mooc.chapter.number,
+            name: slug,
+            isUngrouped: false,
+          }
+        : ungrouped,
   )
+}
+
+/** Chapters in chapter order with the unchaptered exercises after them; otherwise by name. */
+function compareParts(
+  a: string,
+  b: string,
+  partNumbers: ReadonlyMap<string, number>,
+  ungroupedPartName: string | undefined,
+): number {
+  if (partNumbers.size > 0 && (a === ungroupedPartName || b === ungroupedPartName)) {
+    return Number(a === ungroupedPartName) - Number(b === ungroupedPartName)
+  }
+  const numberA = partNumbers.get(a)
+  const numberB = partNumbers.get(b)
+  if (numberA !== undefined && numberB !== undefined) {
+    return numberA - numberB
+  }
+  return compareNames(a, b)
 }
 
 function compareNames(a: string, b: string): number {

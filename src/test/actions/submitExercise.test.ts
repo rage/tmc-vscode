@@ -13,7 +13,13 @@ import { failure } from "../../api/withOperation"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
-import { BottleneckError, ExerciseNotFoundError, InsufficientScopeError } from "../../errors"
+import {
+  BottleneckError,
+  ExerciseNotFoundError,
+  InsufficientScopeError,
+  OutOfTriesError,
+} from "../../errors"
+import type { ExerciseStanding } from "../../shared/langsSchema"
 import type { ExerciseSubmissionPanel, LocalCourseData, SubmissionView } from "../../shared/shared"
 import { CourseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
@@ -115,8 +121,10 @@ function contextFor(
 ): {
   actionContext: ReadyActionContext
   setPassed: ReturnType<typeof vi.fn>
+  setStanding: ReturnType<typeof vi.fn>
 } {
   const setPassed = vi.fn().mockResolvedValue(Ok.EMPTY)
+  const setStanding = vi.fn().mockResolvedValue(Ok.EMPTY)
   const actionContext = createMockActionContext({
     startup: {
       langs: langsMethods as unknown as ReadyStartup["langs"],
@@ -124,41 +132,45 @@ function contextFor(
         getCourseBySlug: () => Ok(course),
         getCourse: () => Ok(course),
         setExerciseAsPassed: setPassed,
+        setMoocExerciseStanding: setStanding,
       } as unknown as ReadyStartup["userData"],
       exerciseDecorationProvider: {
         updateDecorationsForExercises: vi.fn(),
       } as unknown as ReadyStartup["exerciseDecorationProvider"],
     },
   })
-  return { actionContext, setPassed }
+  return { actionContext, setPassed, setStanding }
 }
 
 const TASK_SUBMISSION_ID = "task-submission-1"
+const EXERCISE_PAGE_URL = "https://courses.mooc.fi/org/uh-cs/courses/python/chapter-1/page-1"
 
 function moocContextWith(gradingResult: unknown): {
   actionContext: ReadyActionContext
-  setPassed: ReturnType<typeof vi.fn>
+  setStanding: ReturnType<typeof vi.fn>
   submit: ReturnType<typeof vi.fn>
   wait: ReturnType<typeof vi.fn>
 } {
-  const submit = vi
-    .fn()
-    .mockResolvedValue(
-      Ok({ task_submission_id: TASK_SUBMISSION_ID, slide_submission_id: "slide-submission-1" }),
-    )
+  const submit = vi.fn().mockResolvedValue(
+    Ok({
+      task_submission_id: TASK_SUBMISSION_ID,
+      slide_submission_id: "slide-submission-1",
+      exercise_page_url: EXERCISE_PAGE_URL,
+    }),
+  )
   const wait = vi.fn().mockResolvedValue(Ok(gradingResult))
-  const { actionContext, setPassed } = contextFor(makeMoocKind(moocCourse), {
+  const { actionContext, setStanding } = contextFor(makeMoocKind(moocCourse), {
     submitMoocExercise: submit,
     waitForMoocGrading: wait,
   })
-  return { actionContext, setPassed, submit, wait }
+  return { actionContext, setStanding, submit, wait }
 }
 
 // Like `moocContextWith`, but the submit itself resolves to an `Err` (e.g. the
 // submission-throttle BottleneckError or a submit failure).
 function moocContextWithErr(error: Error): {
   actionContext: ReadyActionContext
-  setPassed: ReturnType<typeof vi.fn>
+  setStanding: ReturnType<typeof vi.fn>
 } {
   return contextFor(makeMoocKind(moocCourse), {
     submitMoocExercise: vi.fn().mockResolvedValue(Err(error)),
@@ -180,6 +192,18 @@ function shownPanelId(): number {
     throw new Error("no submission panel was rendered")
   }
   return route.id
+}
+
+/** The backend's progress on the exercise, as a grading reports it. */
+function progress(standing: ExerciseStanding, scoreGiven: number): Record<string, unknown> {
+  return {
+    exercise_id: MOOC_EXERCISE_ID,
+    score_given: scoreGiven,
+    score_maximum: 3,
+    completed: true,
+    attempted: true,
+    standing,
+  }
 }
 
 function grading(overrides: Record<string, unknown>): unknown {
@@ -306,8 +330,12 @@ suite("submitExercise action, tmc", () => {
 
 suite("submitExercise action, mooc", () => {
   test("submits without blocking, then waits for that submission's grading", async () => {
-    const graded = grading({ score_given: 3, feedback_text: "All tests passed" })
-    const { actionContext, setPassed, submit, wait } = moocContextWith(graded)
+    const graded = grading({
+      score_given: 3,
+      feedback_text: "All tests passed",
+      exercise_progress: progress("Passed", 3),
+    })
+    const { actionContext, setStanding, submit, wait } = moocContextWith(graded)
 
     const result = await submitExercise(actionContext, moocExercise)
     expect(result.ok).toBe(true)
@@ -316,13 +344,90 @@ suite("submitExercise action, mooc", () => {
     expect(wait).toHaveBeenCalledWith(TASK_SUBMISSION_ID, expect.any(Function))
     expect(shownViews().map((view) => view.phase)).toEqual(["uploading", "grading", "finished"])
     expect(lastView()).toMatchObject({
-      headline: "All tests passed on the server",
+      headline: "Exercise passed",
       points: { given: 3, max: 3 },
       feedbackText: "All tests passed",
       canKeepWaiting: false,
     })
-    expect(setPassed).toHaveBeenCalledWith("mooc", COURSE_SLUG, EXERCISE_SLUG)
+    expect(setStanding).toHaveBeenCalledWith(
+      COURSE_SLUG,
+      EXERCISE_SLUG,
+      { passed: true, outOfTries: false },
+      3,
+    )
     expect(finishedCourses).toEqual([CourseIdentifier.from(moocCourse.id)])
+  })
+
+  test("offers the exercise's page from the moment the backend has the submission", async () => {
+    const { actionContext } = moocContextWith(grading({ score_given: 3 }))
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect(shownViews().map((view) => view.submissionUrl)).toEqual([
+      undefined,
+      EXERCISE_PAGE_URL,
+      EXERCISE_PAGE_URL,
+    ])
+  })
+
+  test("a completed grading below full points is recorded as not passed", async () => {
+    const { actionContext, setStanding } = moocContextWith(
+      grading({ score_given: 2, exercise_progress: progress("Attempted", 2) }),
+    )
+
+    await submitExercise(actionContext, moocExercise)
+    expect(setStanding).toHaveBeenCalledWith(
+      COURSE_SLUG,
+      EXERCISE_SLUG,
+      { passed: false, outOfTries: false },
+      2,
+    )
+    expect(lastView()).toMatchObject({
+      headline: "Some tests failed on the server",
+      canPaste: true,
+    })
+  })
+
+  test("the last try below full points is recorded and shown as final", async () => {
+    const { actionContext, setStanding } = moocContextWith(
+      grading({ score_given: 2, exercise_progress: progress("OutOfTries", 2) }),
+    )
+
+    await submitExercise(actionContext, moocExercise)
+    expect(setStanding).toHaveBeenCalledWith(
+      COURSE_SLUG,
+      EXERCISE_SLUG,
+      { passed: false, outOfTries: true },
+      2,
+    )
+    expect(lastView()).toMatchObject({
+      headline: "Some tests failed on the server",
+      explanation: "You have no tries left on this exercise, so this score is final.",
+    })
+  })
+
+  test("leaves the standing to the course refresh when the grading reports none", async () => {
+    const { actionContext, setStanding } = moocContextWith(grading({ score_given: 3 }))
+
+    await submitExercise(actionContext, moocExercise)
+    expect(setStanding).not.toHaveBeenCalled()
+  })
+
+  test("refuses up front an exercise the backend reported out of tries", async () => {
+    const outOfTries = {
+      ...moocCourse,
+      exercises: [{ ...moocCourse.exercises[0]!, awardedPoints: 2, outOfTries: true }],
+    }
+    const submit = vi.fn()
+    const { actionContext } = contextFor(makeMoocKind(outOfTries), { submitMoocExercise: submit })
+
+    const result = await submitExercise(actionContext, moocExercise)
+    expect(result.err).toBe(true)
+    expect(result.val).toBeInstanceOf(OutOfTriesError)
+    expect((result.val as Error).message).toBe(
+      `You have no tries left on ${EXERCISE_SLUG}, so its 2/3 points are final.`,
+    )
+    expect(submit).not.toHaveBeenCalled()
   })
 
   test("grading progress keeps changed messages only, on an indeterminate bar", async () => {
@@ -337,46 +442,40 @@ suite("submitExercise action, mooc", () => {
     expect(lastView()?.progressFraction).toBeUndefined()
   })
 
-  test("a graded submission short of full points does not mark passed", async () => {
-    const { actionContext, setPassed } = moocContextWith(grading({ score_given: 2 }))
-
-    await submitExercise(actionContext, moocExercise)
-
-    expect(setPassed).not.toHaveBeenCalled()
-  })
-
   test("a failed grading does not mark the exercise passed", async () => {
-    const { actionContext, setPassed } = moocContextWith(
+    const { actionContext, setStanding } = moocContextWith(
       grading({ grading_progress: "Failed", score_given: 0 }),
     )
 
     await submitExercise(actionContext, moocExercise)
-    expect(setPassed).not.toHaveBeenCalled()
+    expect(setStanding).not.toHaveBeenCalled()
     expect(lastView()).toMatchObject({ phase: "failed", headline: "Grading failed" })
   })
 
   test("a pending-manual grading is shown but does not mark passed", async () => {
-    const { actionContext, setPassed } = moocContextWith(
+    const { actionContext, setStanding } = moocContextWith(
       grading({ grading_progress: "PendingManual", score_given: 0.5 }),
     )
 
     const result = await submitExercise(actionContext, moocExercise)
     expect(result.ok).toBe(true)
-    expect(setPassed).not.toHaveBeenCalled()
+    expect(setStanding).not.toHaveBeenCalled()
     expect(lastView()).toMatchObject({ phase: "manualReview", canKeepWaiting: false })
   })
 
   test("a grading still pending when the CLI stops waiting can be waited for again", async () => {
-    const { actionContext, setPassed, wait } = moocContextWith(
+    const { actionContext, setStanding, wait } = moocContextWith(
       grading({ grading_progress: "Pending" }),
     )
 
     const result = await submitExercise(actionContext, moocExercise)
     expect(result.ok).toBe(true)
-    expect(setPassed).not.toHaveBeenCalled()
+    expect(setStanding).not.toHaveBeenCalled()
     expect(lastView()).toMatchObject({ phase: "timedOut", canKeepWaiting: true })
 
-    wait.mockResolvedValueOnce(Ok(grading({ score_given: 3 })))
+    wait.mockResolvedValueOnce(
+      Ok(grading({ score_given: 3, exercise_progress: progress("Passed", 3) })),
+    )
     const panelId = shownPanelId()
     const waited = await keepWaitingForGrading(actionContext, panelId)
 
@@ -386,8 +485,17 @@ suite("submitExercise action, mooc", () => {
       CourseIdentifier.from(moocCourse.id),
     ])
     expect(wait).toHaveBeenLastCalledWith(TASK_SUBMISSION_ID, expect.any(Function))
-    expect(lastView()).toMatchObject({ phase: "finished", points: { given: 3, max: 3 } })
-    expect(setPassed).toHaveBeenCalledWith("mooc", COURSE_SLUG, EXERCISE_SLUG)
+    expect(lastView()).toMatchObject({
+      phase: "finished",
+      points: { given: 3, max: 3 },
+      submissionUrl: EXERCISE_PAGE_URL,
+    })
+    expect(setStanding).toHaveBeenCalledWith(
+      COURSE_SLUG,
+      EXERCISE_SLUG,
+      { passed: true, outOfTries: false },
+      3,
+    )
 
     const again = await keepWaitingForGrading(actionContext, panelId)
     expect(again.err).toBe(true)
@@ -464,11 +572,11 @@ suite("submitExercise action, mooc", () => {
 
   test("a BottleneckError from the submission throttle is shown in the panel", async () => {
     const error = new BottleneckError("You are submitting too fast, try again later.")
-    const { actionContext, setPassed } = moocContextWithErr(error)
+    const { actionContext, setStanding } = moocContextWithErr(error)
 
     const result = await submitExercise(actionContext, moocExercise)
     expect(result).toEqual(Ok(undefined))
-    expect(setPassed).not.toHaveBeenCalled()
+    expect(setStanding).not.toHaveBeenCalled()
     expect(finishedCourses).toEqual([])
     expect(lastView()).toMatchObject({
       phase: "failed",
