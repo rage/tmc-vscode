@@ -286,7 +286,7 @@ suite("ExerciseTestController", function () {
     const failedChild = item.children.get(`${item.id}/test.test_hello.Hello.test_second`)
     const [failure] = messagesOf(states.get(failedChild?.id ?? ""))
     expect(failure?.message).toBe("'Hi' != 'Hello'")
-    expect(failure?.location?.uri.fsPath).toBe(testFile)
+    expect(failure?.location?.uri.toString()).toBe(vscode.Uri.file(testFile).toString())
     expect(failure?.location?.range.start.line).toBe(11)
     expect(states.get(item.id)?.[0]).toBe("failed")
     expect(messagesOf(states.get(item.id)).map((m) => m.message)).toEqual(["1 of 2 tests failed."])

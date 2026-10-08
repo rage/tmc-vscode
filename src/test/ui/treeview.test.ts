@@ -347,7 +347,9 @@ suite("CoursesTree", function () {
       expect(icon(item)).toEqual(["circle-large-outline", "testing.iconUnset"])
       expect(item.contextValue).toBe("exercise.opened")
       expect(item.description).toBe("0/1 points")
-      expect(item.exerciseUri?.fsPath).toBe("/exercises/tmc-slug/part01-01_hello")
+      expect(item.exerciseUri?.toString()).toBe(
+        vscode.Uri.file("/exercises/tmc-slug/part01-01_hello").toString(),
+      )
     })
 
     test("passed shows the passed icon whatever its local state", function () {
