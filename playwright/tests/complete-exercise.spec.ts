@@ -4,11 +4,21 @@ import { join } from "node:path"
 import { expect } from "@playwright/test"
 import type { Locator, Page } from "@playwright/test"
 
+import { VSCODE_TEST_VERSION } from "../../config"
 import { vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
 import { TestResultsPage } from "../pages/test-results"
 import { TestSubmissionPage } from "../pages/test-submission"
+
+// Both arrived in VS Code 1.104; an older one does not declare them, so nothing writes them.
+const SETTINGS_SINCE_1_104 = { "chat.disableAIFeatures": true, "chat.mcp.access": "none" }
+
+/** Whether the VS Code under test is 1.104 or newer; a channel name such as "stable" is. */
+function isAtLeast1104(version: string): boolean {
+  const match = /^(\d+)\.(\d+)\./.exec(version)
+  return !match || Number(match[1]) > 1 || Number(match[2]) >= 104
+}
 
 interface Exercise {
   course: string
@@ -71,10 +81,21 @@ for (const exercise of exercises) {
     })
 
     await vsCodeTest.step("the course workspace turns AI assistance off", async () => {
-      // VS Code 1.100, which this tier runs, predates `chat.disableAIFeatures`.
+      const hasNewerSettings = isAtLeast1104(VSCODE_TEST_VERSION)
       await expect
         .poll(() => courseWorkspaceSettings(userDataDir))
-        .toMatchObject({ "chat.agent.enabled": false, "editor.inlineSuggest.enabled": false })
+        .toMatchObject({
+          "chat.agent.enabled": false,
+          "chat.extensionTools.enabled": false,
+          "editor.inlineSuggest.enabled": false,
+          ...(hasNewerSettings ? SETTINGS_SINCE_1_104 : {}),
+        })
+      if (!hasNewerSettings) {
+        const settings = courseWorkspaceSettings(userDataDir)
+        for (const section of Object.keys(SETTINGS_SINCE_1_104)) {
+          expect(settings).not.toHaveProperty([section])
+        }
+      }
       const userSettings = JSON.parse(
         fs.readFileSync(join(userDataDir, "User", "settings.json"), "utf-8"),
       )

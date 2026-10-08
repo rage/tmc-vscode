@@ -1,3 +1,5 @@
+import * as path from "path"
+
 import * as _ from "lodash"
 import * as vscode from "vscode"
 
@@ -9,10 +11,13 @@ import { Logger } from "../utilities"
 import type WorkspaceManager from "./workspaceManager"
 import type { SettingInspection, WorkspaceFileProblem } from "./workspaceManager"
 
-/** `workspaceState` key: the {@link AI_OFF_SETTINGS} sections this extension wrote into the workspace file. */
+/** `workspaceState` key: the {@link AI_OFF_SETTINGS} targets this extension wrote, by target key. */
 const OWNED_SECTIONS_KEY = "aiOffSettingsOwned"
 
-/** Writes of one setting a minute before it is left alone: {@link MIN_BACKOFF_MS} at first, doubling up to {@link MAX_BACKOFF_MS}. */
+/** `workspaceState` key: the {@link Backoff}s, by target key. */
+const BACKOFFS_KEY = "aiOffSettingsBackoffs"
+
+/** Writes of one target a minute before it is left alone: {@link MIN_BACKOFF_MS} at first, doubling up to {@link MAX_BACKOFF_MS}. */
 const MAX_WRITES_PER_MINUTE = 5
 const MIN_BACKOFF_MS = 5_000
 const MAX_BACKOFF_MS = 10 * 60_000
@@ -72,24 +77,43 @@ export type AiRestrictionLapse =
 type CourseWorkspaceSettings = Pick<
   WorkspaceManager,
   | "activeCourse"
+  | "exerciseFolders"
   | "getStoredWorkspaceSetting"
   | "inspectSetting"
+  | "onDidChangeExercises"
+  | "replaceFolderSetting"
   | "replaceWorkspaceSetting"
   | "workspaceFileProblem"
   | "workspaceFileUri"
 >
 
-/** One place a section is written: the workspace file's top level, or one `[languageId]` block. */
+/** What makes {@link AiRestriction} run a pass, besides its own retries. */
+export interface AiRestrictionEvents {
+  onDidChangeConfiguration: vscode.Event<vscode.ConfigurationChangeEvent>
+  onDidOpenTextDocument: vscode.Event<vscode.TextDocument>
+  /** The course workspace file was saved or changed on disk. */
+  onDidChangeWorkspaceFile: vscode.Event<unknown>
+  onDidChangeExerciseFolders: vscode.Event<unknown>
+  onDidChangeExtensions: vscode.Event<unknown>
+}
+
+/**
+ * One place a section is written: the workspace file's top level or one of its `[languageId]`
+ * blocks, or the same in an exercise folder's `.vscode/settings.json`.
+ */
 interface SettingTarget {
   section: string
   languageId: string | undefined
+  folder?: vscode.Uri | undefined
 }
 
-function targetKey({ section, languageId }: SettingTarget): string {
-  return languageId === undefined ? section : `[${languageId}]${section}`
+function targetKey({ section, languageId, folder }: SettingTarget): string {
+  const key = languageId === undefined ? section : `[${languageId}]${section}`
+  // A uri's string form escapes `#`, so the last one ends the folder.
+  return folder ? `${folder.toString()}#${key}` : key
 }
 
-/** How often one target has been written, and how long it is left alone for. */
+/** Successful writes of one target, and how long it is left alone for; times are `Date.now()`. */
 interface Backoff {
   writeTimes: number[]
   delayMs: number
@@ -99,47 +123,66 @@ interface Backoff {
 /**
  * Keeps {@link AI_OFF_SETTINGS} in force in the open course workspace unless its course allows
  * AI: writes them into its `.code-workspace`, puts back a section the student or another
- * extension changes, overrides per-language user settings with `[languageId]` blocks of its own,
- * and removes what it wrote once the course allows AI.
+ * extension changes, overrides per-language user settings with `[languageId]` blocks of its own
+ * and an exercise folder's own settings that turn AI back on, and removes what it wrote once the
+ * course allows AI.
  */
 export default class AiRestriction implements vscode.Disposable {
   private readonly _disposables: vscode.Disposable[]
+  private _isDisposed = false
   private _pass: Promise<void> | undefined
   private _isPassRequested = false
   private _isForcedPassRequested = false
-  private readonly _backoffs = new Map<string, Backoff>()
+  private readonly _backoffs: Map<string, Backoff>
   private _retryTimer: ReturnType<typeof setTimeout> | undefined
+  /** When to retry after a pass with a refused write, `0` for none; the delay doubles per refusal. */
+  private _refusalRetryAt = 0
+  private _refusalRetryDelayMs = MIN_BACKOFF_MS
   private readonly _writeFailures = new Map<string, string>()
   private readonly _knownLanguageIds = new Set<string>()
+  /** The sections extensions declare language-overridable; `undefined` until first needed. */
+  private _overridableSections: Set<string> | undefined
   private _hasLoggedWrite = false
 
   /**
-   * @param ownership The workspace's own `ExtensionContext.workspaceState`.
+   * @param _state The workspace's own `ExtensionContext.workspaceState`. The backoff is kept
+   * there too, because a write of `chat.disableAIFeatures` can restart the extension host.
    * @param isAllowed Decides for the open course at the time of each pass.
    * @param onDidChangeCourses Course data changes, which may change the decision.
+   * @param events VS Code's own when omitted.
    */
   public constructor(
     private readonly _workspace: CourseWorkspaceSettings,
-    private readonly _ownership: vscode.Memento,
+    private readonly _state: vscode.Memento,
     private readonly _isAllowed: () => boolean,
     onDidChangeCourses?: vscode.Event<unknown>,
+    events?: AiRestrictionEvents,
   ) {
-    this._disposables = [
-      vscode.workspace.onDidChangeConfiguration((event) => {
-        if (
-          this._workspace.activeCourse &&
-          Object.keys(AI_OFF_SETTINGS).some((section) => event.affectsConfiguration(section))
-        ) {
+    this._backoffs = new Map(
+      Object.entries(_state.get<Record<string, Backoff>>(BACKOFFS_KEY) ?? {}),
+    )
+    this._disposables = []
+    const triggers = events ?? this._vscodeEvents()
+    this._disposables.push(
+      triggers.onDidChangeConfiguration((event) => {
+        if (Object.keys(AI_OFF_SETTINGS).some((section) => event.affectsConfiguration(section))) {
           void this.apply()
         }
       }),
       // Also fires when the student switches a document's language mode.
-      vscode.workspace.onDidOpenTextDocument((document) => {
-        if (this._workspace.activeCourse && !this._knownLanguageIds.has(document.languageId)) {
+      triggers.onDidOpenTextDocument((document) => {
+        if (!this._knownLanguageIds.has(document.languageId)) {
           void this.apply()
         }
       }),
-    ]
+      // A write VS Code refused, e.g. for unsaved changes, may go through now.
+      triggers.onDidChangeWorkspaceFile(() => void this.apply()),
+      triggers.onDidChangeExerciseFolders(() => void this.apply()),
+      triggers.onDidChangeExtensions(() => {
+        this._overridableSections = undefined
+        void this.apply()
+      }),
+    )
     if (onDidChangeCourses) {
       this._disposables.push(onDidChangeCourses(() => void this.apply()))
     }
@@ -147,28 +190,19 @@ export default class AiRestriction implements vscode.Disposable {
 
   /**
    * Writes the settings, or removes the ones this extension wrote when the course allows AI.
-   * Writes only what drifted, and leaves a setting that keeps flipping back alone for a while.
-   * A call during a pass runs one more pass after it. Never rejects.
+   * Writes only what drifted, leaves a setting that keeps flipping back alone for a while, and
+   * retries refused writes later. A call during a pass runs one more pass after it. Never rejects.
    */
   public apply(): Promise<void> {
+    if (this._isDisposed) {
+      return Promise.resolve()
+    }
     if (this._pass) {
       this._isPassRequested = true
       return this._pass
     }
-    this._pass = (async (): Promise<void> => {
-      try {
-        do {
-          const isForced = this._isForcedPassRequested
-          this._isPassRequested = false
-          this._isForcedPassRequested = false
-          await this._applyOnce(isForced)
-        } while (this._isPassRequested)
-      } catch (e) {
-        Logger.error("Failed to apply the course's AI settings.", e)
-      } finally {
-        this._pass = undefined
-      }
-    })()
+    // Deferred, so `_pass` is set before the pass's first read can call back in here.
+    this._pass = Promise.resolve().then(() => this._runPasses())
     return this._pass
   }
 
@@ -185,45 +219,94 @@ export default class AiRestriction implements vscode.Disposable {
   }
 
   public dispose(): void {
+    this._isDisposed = true
     clearTimeout(this._retryTimer)
     this._disposables.forEach((x) => x.dispose())
+  }
+
+  private async _runPasses(): Promise<void> {
+    try {
+      do {
+        const isForced = this._isForcedPassRequested
+        this._isPassRequested = false
+        this._isForcedPassRequested = false
+        await this._applyOnce(isForced)
+      } while (this._isPassRequested && !this._isDisposed)
+    } catch (e) {
+      Logger.error("Failed to apply the course's AI settings.", e)
+    } finally {
+      this._pass = undefined
+    }
   }
 
   private async _applyOnce(isForced: boolean): Promise<void> {
     if (!this._workspace.activeCourse) {
       return
     }
+    let wasRefused: boolean
     if (this._isAllowed()) {
       this._writeFailures.clear()
-      await this._removeOwnedSettings()
+      wasRefused = await this._removeOwnedSettings()
     } else {
-      await this._writeSettings(isForced)
+      wasRefused = await this._writeSettings(isForced)
     }
+    if (wasRefused) {
+      this._refusalRetryAt = Date.now() + this._refusalRetryDelayMs
+      this._refusalRetryDelayMs = Math.min(this._refusalRetryDelayMs * 2, MAX_BACKOFF_MS)
+    } else {
+      this._refusalRetryAt = 0
+      this._refusalRetryDelayMs = MIN_BACKOFF_MS
+    }
+    this._scheduleRetry()
   }
 
-  private async _writeSettings(isForced: boolean): Promise<void> {
+  /** @returns Whether VS Code refused a write. */
+  private async _writeSettings(isForced: boolean): Promise<boolean> {
     const declared = Object.keys(AI_OFF_SETTINGS).filter((section) => isDeclared(section))
     // Last: turning it on restarts the extension host, which would cut off any write still to come.
     const [restarting, others] = _.partition(declared, (s) => s === "chat.disableAIFeatures")
+    const folders = this._workspace.exerciseFolders()
     const written: SettingTarget[] = []
-    for (const section of others) {
-      await this._writeIfDrifted({ section, languageId: undefined }, isForced, written)
+    let wasRefused = false
+    const write = async (target: SettingTarget): Promise<void> => {
+      const outcome = await this._writeIfDrifted(target, isForced)
+      if (outcome === "written") {
+        written.push(target)
+      } else if (outcome === "refused") {
+        wasRefused = true
+      }
     }
-    // Only once the top level holds: a per-language block is needed only where a language
-    // override beats it.
-    const overridable = declared.filter(
-      (section) => isLanguageOverridable(section) && !this._writeFailures.has(section),
+    for (const section of others) {
+      await write({ section, languageId: undefined })
+    }
+    const overridable = others.filter((section) => this._isLanguageOverridable(section))
+    const languageIds = this._languageIds(overridable, folders)
+    // A language block is needed only where a language override beats a top level that holds;
+    // one written for a refused or backed-off top level adds a block for every course language.
+    const heldAtTopLevel = overridable.filter(
+      (section) => this._desiredValue({ section, languageId: undefined }) === undefined,
     )
-    const languageIds = this._languageIds(overridable)
-    for (const section of overridable) {
+    for (const section of heldAtTopLevel) {
       for (const languageId of languageIds) {
-        await this._writeIfDrifted({ section, languageId }, isForced, written)
+        await write({ section, languageId })
+      }
+    }
+    for (const folder of folders) {
+      for (const section of others) {
+        await write({ section, languageId: undefined, folder })
+      }
+      for (const section of overridable) {
+        for (const languageId of languageIds) {
+          await write({ section, languageId, folder })
+        }
       }
     }
     for (const section of restarting) {
-      await this._writeIfDrifted({ section, languageId: undefined }, isForced, written)
+      await write({ section, languageId: undefined })
+      for (const folder of folders) {
+        await write({ section, languageId: undefined, folder })
+      }
     }
-    this._scheduleRetry()
 
     if (written.length > 0) {
       const summary = `Turned AI assistance off in the course workspace through ${written.length} settings.`
@@ -237,58 +320,90 @@ export default class AiRestriction implements vscode.Disposable {
         Logger.info(summary)
       }
     }
+    return wasRefused
   }
 
   private async _writeIfDrifted(
     target: SettingTarget,
     isForced: boolean,
-    written: SettingTarget[],
-  ): Promise<void> {
+  ): Promise<"held" | "backedOff" | "written" | "refused"> {
     const key = targetKey(target)
     const desired = this._desiredValue(target)
+    // Only the workspace file's: a refused folder write shows as that folder overriding it.
+    const failures = target.folder ? undefined : this._writeFailures
     if (desired === undefined) {
-      this._writeFailures.delete(key)
-      return
+      failures?.delete(key)
+      return "held"
     }
-    if (!isForced && !this._mayWrite(key)) {
-      return
+    if ((!isForced && !(await this._mayWrite(key))) || this._isDisposed) {
+      return "backedOff"
     }
-    // Claimed before writing: the last section can restart the extension host mid-pass.
-    await this._ownership.update(OWNED_SECTIONS_KEY, _.union(this._ownedTargets(), [key]))
+    // Claimed and counted before writing: the last section can restart the extension host mid-pass.
+    await this._state.update(OWNED_SECTIONS_KEY, _.union(this._ownedTargets(), [key]))
+    const writeTime = await this._recordWrite(key)
     try {
-      await this._workspace.replaceWorkspaceSetting(target.section, desired, target.languageId)
-      this._writeFailures.delete(key)
-      written.push(target)
+      await this._replaceSetting(target, desired)
+      failures?.delete(key)
     } catch (e) {
-      Logger.warn(`Could not turn off AI assistance through ${key}.`, e)
-      this._writeFailures.set(key, e instanceof Error ? e.message : String(e))
+      Logger.warn(`Could not write ${key} to turn off AI assistance.`, e)
+      failures?.set(key, e instanceof Error ? e.message : String(e))
+      await this._forgetWrite(key, writeTime)
+      return "refused"
     }
+    return "written"
   }
 
-  /** What `target` must be written as, or `undefined` when it already holds. */
-  private _desiredValue({ section, languageId }: SettingTarget): unknown {
+  /**
+   * What `target` must be written as, or `undefined` when it already holds. A folder is written
+   * only where its own value turns AI back on, so a folder that sets nothing gets no file.
+   */
+  private _desiredValue(target: SettingTarget): unknown {
+    const { section, languageId, folder } = target
     const value = AI_OFF_SETTINGS[section]
+    if (folder) {
+      const stored = this._storedValue(target)
+      return stored === undefined || holds(stored, value) ? undefined : merged(stored, value)
+    }
     if (languageId !== undefined) {
       const effective = this._workspace.inspectSetting(section, languageId)?.effectiveValue
       return holds(effective, value) ? undefined : value
     }
     const stored = this._workspace.getStoredWorkspaceSetting(section)
-    const desired =
-      _.isPlainObject(value) && _.isPlainObject(stored)
-        ? { ...(stored as object), ...(value as object) }
-        : value
+    const desired = merged(stored, value)
     return _.isEqual(stored, desired) ? undefined : desired
+  }
+
+  /** What the file `target` names stores for it, never another scope's value. */
+  private _storedValue({ section, languageId, folder }: SettingTarget): unknown {
+    if (!folder) {
+      return this._workspace.getStoredWorkspaceSetting(section, languageId)
+    }
+    const inspection = this._workspace.inspectSetting(section, languageId, folder)
+    return languageId === undefined
+      ? inspection?.workspaceFolderValue
+      : inspection?.workspaceFolderLanguageValue
+  }
+
+  private async _replaceSetting(target: SettingTarget, value: unknown): Promise<void> {
+    const { section, languageId, folder } = target
+    await (folder
+      ? this._workspace.replaceFolderSetting(folder, section, value, languageId)
+      : this._workspace.replaceWorkspaceSetting(section, value, languageId))
   }
 
   /**
    * The course languages, the languages of the open documents, and every language something
    * overrides one of `sections` for: a language override at any scope beats the top level.
    */
-  private _languageIds(sections: string[]): string[] {
+  private _languageIds(sections: string[], folders: vscode.Uri[] = []): string[] {
     const languageIds = _.union(
       COURSE_LANGUAGE_IDS,
       vscode.workspace.textDocuments.map((document) => document.languageId),
-      ...sections.map((section) => this._workspace.inspectSetting(section)?.languageIds ?? []),
+      ...sections.flatMap((section) =>
+        [undefined, ...folders].map(
+          (folder) => this._workspace.inspectSetting(section, undefined, folder)?.languageIds ?? [],
+        ),
+      ),
     )
     languageIds.forEach((languageId) => this._knownLanguageIds.add(languageId))
     return languageIds
@@ -307,11 +422,11 @@ export default class AiRestriction implements vscode.Disposable {
 
     const declared = Object.keys(AI_OFF_SETTINGS).filter((section) => isDeclared(section))
     const languageIds = this._languageIds(
-      declared.filter((section) => isLanguageOverridable(section)),
+      declared.filter((section) => this._isLanguageOverridable(section)),
     )
     const targets = declared.flatMap((section) => [
       { section, languageId: undefined },
-      ...(isLanguageOverridable(section)
+      ...(this._isLanguageOverridable(section)
         ? languageIds.map((languageId) => ({ section, languageId }))
         : []),
     ])
@@ -330,52 +445,52 @@ export default class AiRestriction implements vscode.Disposable {
     return undefined
   }
 
-  private async _removeOwnedSettings(): Promise<void> {
+  /** @returns Whether VS Code refused a removal. */
+  private async _removeOwnedSettings(): Promise<boolean> {
     const owned = this._ownedTargets()
     if (owned.length === 0) {
-      return
+      return false
     }
     const kept: string[] = []
     for (const key of owned) {
+      if (this._isDisposed) {
+        kept.push(key)
+        continue
+      }
       const target = parseTargetKey(key)
-      const stored = this._workspace.getStoredWorkspaceSetting(target.section, target.languageId)
+      const stored = this._storedValue(target)
       const remaining = withoutOwnValue(stored, AI_OFF_SETTINGS[target.section])
       if (_.isEqual(remaining, stored)) {
         continue
       }
       try {
-        await this._workspace.replaceWorkspaceSetting(target.section, remaining, target.languageId)
+        await this._replaceSetting(target, remaining)
       } catch (e) {
         Logger.warn(`Could not remove ${key} from the course workspace.`, e)
         kept.push(key)
       }
     }
-    await this._ownership.update(OWNED_SECTIONS_KEY, kept.length > 0 ? kept : undefined)
+    await this._state.update(OWNED_SECTIONS_KEY, kept.length > 0 ? kept : undefined)
     Logger.info("The course allows AI, so its workspace no longer turns AI assistance off.")
+    return kept.length > 0 && !this._isDisposed
   }
 
   /**
-   * Counts a write of `key`; `false` while a target something keeps flipping back is left
-   * alone. Kept per target, so one fought-over setting costs the others nothing.
+   * `false` while a target something keeps flipping back is left alone. Only successful writes
+   * count, so each one past the first in a minute means the one before it was undone. Kept per
+   * target, so one fought-over setting costs the others nothing.
    */
-  private _mayWrite(key: string): boolean {
-    const now = Date.now()
-    const backoff = this._backoffs.get(key) ?? {
-      writeTimes: [],
-      delayMs: MIN_BACKOFF_MS,
-      retryAt: 0,
+  private async _mayWrite(key: string): Promise<boolean> {
+    const backoff = this._backoffs.get(key)
+    if (!backoff) {
+      return true
     }
-    this._backoffs.set(key, backoff)
+    const now = Date.now()
     if (now < backoff.retryAt) {
       return false
     }
-    // A minute of calm since the last backoff forgives it.
-    if (now - backoff.retryAt > 60_000) {
-      backoff.delayMs = MIN_BACKOFF_MS
-    }
     backoff.writeTimes = backoff.writeTimes.filter((t) => now - t < 60_000)
     if (backoff.writeTimes.length < MAX_WRITES_PER_MINUTE) {
-      backoff.writeTimes.push(now)
       return true
     }
     backoff.retryAt = now + backoff.delayMs
@@ -385,52 +500,145 @@ export default class AiRestriction implements vscode.Disposable {
     )
     backoff.delayMs = Math.min(backoff.delayMs * 2, MAX_BACKOFF_MS)
     backoff.writeTimes = []
+    await this._saveBackoffs()
     return false
   }
 
-  /** Runs a pass when the earliest backoff ends, which nothing else may trigger. */
+  /** @returns The time recorded, for {@link _forgetWrite}. */
+  private async _recordWrite(key: string): Promise<number> {
+    const now = Date.now()
+    const backoff = this._backoffs.get(key) ?? {
+      writeTimes: [],
+      delayMs: MIN_BACKOFF_MS,
+      retryAt: 0,
+    }
+    // A minute of calm since the last backoff forgives it.
+    if (now - backoff.retryAt > 60_000) {
+      backoff.delayMs = MIN_BACKOFF_MS
+    }
+    backoff.writeTimes.push(now)
+    this._backoffs.set(key, backoff)
+    await this._saveBackoffs()
+    return now
+  }
+
+  /** Takes back a write {@link _recordWrite} counted that VS Code then refused. */
+  private async _forgetWrite(key: string, writeTime: number): Promise<void> {
+    const backoff = this._backoffs.get(key)
+    const index = backoff?.writeTimes.lastIndexOf(writeTime) ?? -1
+    if (backoff && index >= 0) {
+      backoff.writeTimes.splice(index, 1)
+      await this._saveBackoffs()
+    }
+  }
+
+  private async _saveBackoffs(): Promise<void> {
+    await this._state.update(BACKOFFS_KEY, Object.fromEntries(this._backoffs))
+  }
+
+  /** Runs a pass when the earliest backoff or refusal retry ends, which nothing else may trigger. */
   private _scheduleRetry(): void {
     clearTimeout(this._retryTimer)
+    if (this._isDisposed) {
+      return
+    }
     const now = Date.now()
-    const retryAts = [...this._backoffs.values()].map((b) => b.retryAt).filter((t) => t > now)
+    const retryAts = [...this._backoffs.values()]
+      .map((b) => b.retryAt)
+      .concat(this._refusalRetryAt)
+      .filter((t) => t > now)
     if (retryAts.length > 0) {
       this._retryTimer = setTimeout(() => void this.apply(), Math.min(...retryAts) - now)
     }
   }
 
   private _ownedTargets(): string[] {
-    return this._ownership.get<string[]>(OWNED_SECTIONS_KEY) ?? []
+    return this._state.get<string[]>(OWNED_SECTIONS_KEY) ?? []
+  }
+
+  /**
+   * Whether `section` may appear in a `[languageId]` block: every core editor option, and what an
+   * extension declares so.
+   */
+  private _isLanguageOverridable(section: string): boolean {
+    if (section.startsWith("editor.")) {
+      return true
+    }
+    this._overridableSections ??= new Set(
+      vscode.extensions.all.flatMap((extension) => {
+        const configuration: unknown = extension.packageJSON?.contributes?.configuration
+        const declarations = Array.isArray(configuration) ? configuration : [configuration]
+        return declarations.flatMap((declaration) =>
+          Object.entries(
+            (declaration as { properties?: Record<string, { scope?: string }> } | undefined)
+              ?.properties ?? {},
+          )
+            .filter(([, property]) => property?.scope === "language-overridable")
+            .map(([name]) => name),
+        )
+      }),
+    )
+    return this._overridableSections.has(section)
+  }
+
+  private _vscodeEvents(): AiRestrictionEvents {
+    const file = this._workspace.workspaceFileUri
+    const watcher =
+      file &&
+      vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(
+          vscode.Uri.file(path.dirname(file.fsPath)),
+          path.basename(file.fsPath),
+        ),
+      )
+    if (watcher) {
+      this._disposables.push(watcher)
+    }
+    const onDidSaveWorkspaceFile: vscode.Event<unknown> = (listener) =>
+      vscode.workspace.onDidSaveTextDocument((document) => {
+        if (document.uri.fsPath === file?.fsPath) {
+          listener(document)
+        }
+      })
+    return {
+      onDidChangeConfiguration: vscode.workspace.onDidChangeConfiguration,
+      onDidOpenTextDocument: vscode.workspace.onDidOpenTextDocument,
+      onDidChangeWorkspaceFile: anyEvent(
+        onDidSaveWorkspaceFile,
+        ...(watcher ? [watcher.onDidChange, watcher.onDidCreate] : []),
+      ),
+      onDidChangeExerciseFolders: anyEvent(
+        vscode.workspace.onDidChangeWorkspaceFolders,
+        this._workspace.onDidChangeExercises,
+      ),
+      onDidChangeExtensions: vscode.extensions.onDidChange,
+    }
   }
 }
 
+function anyEvent(...events: vscode.Event<unknown>[]): vscode.Event<unknown> {
+  return (listener) => vscode.Disposable.from(...events.map((event) => event(listener)))
+}
+
 function parseTargetKey(key: string): SettingTarget {
-  const language = /^\[([^\]]+)\](.+)$/.exec(key)
+  const folderEnd = key.lastIndexOf("#")
+  const folder = folderEnd >= 0 ? vscode.Uri.parse(key.slice(0, folderEnd)) : undefined
+  const fileKey = key.slice(folderEnd + 1)
+  const language = /^\[([^\]]+)\](.+)$/.exec(fileKey)
   return language
-    ? { section: language[2] as string, languageId: language[1] }
-    : { section: key, languageId: undefined }
+    ? { section: language[2] as string, languageId: language[1], folder }
+    : { section: fileKey, languageId: undefined, folder }
+}
+
+/** `off` written over `stored`; a per-language map keeps the entries `off` does not name. */
+function merged(stored: unknown, off: unknown): unknown {
+  return _.isPlainObject(off) && _.isPlainObject(stored)
+    ? { ...(stored as object), ...(off as object) }
+    : off
 }
 
 function isDeclared(section: string): boolean {
   return vscode.workspace.getConfiguration().inspect(section)?.defaultValue !== undefined
-}
-
-/**
- * Whether `section` may appear in a `[languageId]` block: every core editor option, and what an
- * extension declares so.
- */
-function isLanguageOverridable(section: string): boolean {
-  if (section.startsWith("editor.")) {
-    return true
-  }
-  return vscode.extensions.all.some((extension) => {
-    const configuration: unknown = extension.packageJSON?.contributes?.configuration
-    const declarations = Array.isArray(configuration) ? configuration : [configuration]
-    return declarations.some(
-      (declaration) =>
-        (declaration as { properties?: Record<string, { scope?: string }> } | undefined)
-          ?.properties?.[section]?.scope === "language-overridable",
-    )
-  })
 }
 
 /** Whether `effective` turns off what `off` does; a per-language map merges, so only its own entries count. */

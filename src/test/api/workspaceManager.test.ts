@@ -253,6 +253,22 @@ suite("WorkspaceManager class", function () {
     })
   })
 
+  test("only the workspace folders that are exercises are exercise folders", function () {
+    const known = exercise("tmc", "test-python-course", "loops", ExerciseStatus.Open)
+    const inside = vscode.Uri.file(path.join(known.uri.fsPath, "src"))
+    const addedByHand = vscode.Uri.file("/home/student/notes")
+    stubWorkspace("workspaceFolders", [
+      rootFolder,
+      folderOf(known.uri, "loops"),
+      folderOf(inside, "src"),
+      folderOf(addedByHand, "notes"),
+    ])
+
+    const manager = new WorkspaceManager(resources, persistForCourse, [known])
+
+    expect(manager.exerciseFolders()).toEqual([known.uri])
+  })
+
   suite("opening and closing exercises", function () {
     const courseSlug = "test-python-course"
     let open: WorkspaceExercise
@@ -536,7 +552,18 @@ suite("WorkspaceManager class", function () {
 
       await new WorkspaceManager(resources, persistForCourse).verifyWorkspaceSettingsIntegrity()
 
-      expect(sectionsWritten()).toContain("problems.decorations.enabled")
+      expect(sectionsWritten()).toEqual(
+        expect.arrayContaining([
+          "files.watcherExclude",
+          "explorer.decorations.colors",
+          "explorer.decorations.badges",
+          "problems.decorations.enabled",
+        ]),
+      )
+      expect(warn).toHaveBeenCalledWith(
+        "Could not write files.exclude into the course workspace file.",
+        expect.any(Error),
+      )
       warn.mockRestore()
     })
 
@@ -555,6 +582,19 @@ suite("WorkspaceManager class", function () {
         { rust: true },
         vscode.ConfigurationTarget.Workspace,
       )
+    })
+
+    test("a refused replacement rejects its caller and does not hold up the next write", async function () {
+      update.mockRejectedValueOnce(new Error("the file has unsaved changes"))
+      stubWorkspace("getConfiguration", () => configurationStub(update))
+      const manager = new WorkspaceManager(resources, persistForCourse)
+
+      const refused = manager.replaceWorkspaceSetting("chat.agent.enabled", false)
+      const next = manager.replaceWorkspaceSetting("chat.mcp.access", "none")
+
+      await expect(refused).rejects.toThrow("the file has unsaved changes")
+      await expect(next).resolves.toBeUndefined()
+      expect(sectionsWritten()).toEqual(["chat.agent.enabled", "chat.mcp.access"])
     })
 
     test("replaces nothing outside a course workspace", async function () {
@@ -695,18 +735,18 @@ suite("WorkspaceManager class", function () {
       fs.rmSync(workspaceFileFolder, { recursive: true, force: true })
     })
 
-    test("warns instead of throwing when the workspace file is unreadable", function () {
+    test("warns instead of rejecting when the workspace file is unreadable", async function () {
       const warn = vi.spyOn(Logger, "warn").mockImplementation(() => undefined)
 
-      expect(() =>
+      await expect(
         manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"]),
-      ).not.toThrow()
+      ).resolves.toBeUndefined()
       expect(warn).toHaveBeenCalledOnce()
 
       warn.mockRestore()
     })
 
-    test("leaves the file untouched when every extension is already recommended", function () {
+    test("leaves the file untouched when every extension is already recommended", async function () {
       const contents = JSON.stringify(
         { folders: [], extensions: { recommendations: ["ms-python.python"] } },
         null,
@@ -714,18 +754,18 @@ suite("WorkspaceManager class", function () {
       )
       fs.writeFileSync(workspaceFile, contents)
 
-      manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"])
+      await manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"])
 
       expect(fs.readFileSync(workspaceFile, "utf-8")).toBe(contents)
     })
 
-    test("merges a new extension into the recommendations already there", function () {
+    test("merges a new extension into the recommendations already there", async function () {
       fs.writeFileSync(
         workspaceFile,
         JSON.stringify({ folders: [], extensions: { recommendations: ["ikuyadeu.r"] } }),
       )
 
-      manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"])
+      await manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"])
 
       const written = fs.readFileSync(workspaceFile, "utf-8")
       expect(JSON.parse(written)).toEqual({
@@ -735,13 +775,42 @@ suite("WorkspaceManager class", function () {
       expect(written).toContain("\n")
     })
 
-    test("recommends into a workspace file that lists none yet", function () {
+    test("recommends into a workspace file that lists none yet", async function () {
       fs.writeFileSync(workspaceFile, JSON.stringify({ folders: [] }))
 
-      manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"])
+      await manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"])
 
       const written = JSON.parse(fs.readFileSync(workspaceFile, "utf-8"))
       expect(written.extensions.recommendations).toEqual(["ms-python.python"])
+    })
+
+    test("waits for a settings write to the same file before rewriting it", async function () {
+      fs.writeFileSync(workspaceFile, JSON.stringify({ folders: [] }))
+      stubWorkspace("workspaceFile", vscode.Uri.file(workspaceFile))
+      let finishSettingsWrite: (() => void) | undefined
+      const update = vi.fn<UpdateSetting>(
+        () =>
+          new Promise<void>((resolve) => {
+            finishSettingsWrite = resolve
+          }),
+      )
+      stubWorkspace("getConfiguration", () => configurationStub(update))
+
+      const settingsWrite = manager.replaceWorkspaceSetting("chat.agent.enabled", false)
+      const recommendation = manager.addWorkspaceRecommendation(courseSlug, "tmc", [
+        "ms-python.python",
+      ])
+      await vi.waitFor(() => expect(update).toHaveBeenCalledOnce())
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0)
+      })
+
+      expect(JSON.parse(fs.readFileSync(workspaceFile, "utf-8"))).toEqual({ folders: [] })
+      finishSettingsWrite?.()
+      await Promise.all([settingsWrite, recommendation])
+      expect(JSON.parse(fs.readFileSync(workspaceFile, "utf-8")).extensions).toEqual({
+        recommendations: ["ms-python.python"],
+      })
     })
 
     test("creates a course's workspace file where its resources put it", async function () {

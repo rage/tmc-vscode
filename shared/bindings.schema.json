@@ -546,6 +546,16 @@
             "output-data": {
               "type": "object",
               "properties": {
+                "http_status": {
+                  "description": "The HTTP status a server answered with, when the error is one.",
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "uint16",
+                  "maximum": 65535,
+                  "minimum": 0
+                },
                 "kind": {
                   "$ref": "#/$defs/Kind"
                 },
@@ -1557,6 +1567,29 @@
         "solution_zip_url"
       ]
     },
+    "ExerciseChapter": {
+      "description": "The chapter an exercise belongs to, for grouping a course's exercises the way its material\ndoes.",
+      "type": "object",
+      "properties": {
+        "chapter_number": {
+          "description": "The chapter's position in the course, from 1.",
+          "type": "integer",
+          "format": "int32"
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "chapter_number"
+      ]
+    },
     "ExerciseDesc": {
       "description": "A description of an exercise.",
       "type": "object",
@@ -1689,7 +1722,7 @@
       ]
     },
     "ExerciseProgress": {
-      "description": "The current user's progress on a single exercise. The authoritative \"passed\"\nsignal is `completed`; `attempted` distinguishes \"not started\" from \"started\nbut not passed\".",
+      "description": "The current user's progress on a single exercise. `standing` is the \"passed\" signal;\n`completed` is only the activity stage, which any graded submission can reach.",
       "type": "object",
       "properties": {
         "attempted": {
@@ -1713,6 +1746,17 @@
           "description": "The maximum points obtainable from the exercise; can be `0`.",
           "type": "integer",
           "format": "int32"
+        },
+        "standing": {
+          "description": "`None` from a host that predates the field.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExerciseStanding"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1720,7 +1764,8 @@
         "score_given",
         "score_maximum",
         "completed",
-        "attempted"
+        "attempted",
+        "standing"
       ]
     },
     "ExerciseSlideSubmissionListItem": {
@@ -1763,6 +1808,31 @@
         "created_at",
         "score_given",
         "grading_progress"
+      ]
+    },
+    "ExerciseStanding": {
+      "description": "Where the user stands on an exercise, as the host decides it.",
+      "oneOf": [
+        {
+          "description": "No graded submission and no try used.",
+          "type": "string",
+          "const": "NotAttempted"
+        },
+        {
+          "description": "Below full points with tries left, or still being graded.",
+          "type": "string",
+          "const": "Attempted"
+        },
+        {
+          "description": "A grading awarded full points.",
+          "type": "string",
+          "const": "Passed"
+        },
+        {
+          "description": "Below full points (0 included) with the try limit used up, so the score is final.",
+          "type": "string",
+          "const": "OutOfTries"
+        }
       ]
     },
     "ExerciseSubmission": {
@@ -1843,6 +1913,13 @@
     "ExerciseTaskSubmissionResult": {
       "type": "object",
       "properties": {
+        "exercise_page_url": {
+          "description": "The exercise's course material page, where the submission's grading also shows. Set by\n[`MoocClient::submit_exercise`], which has the exercise at hand; `None` otherwise, or when\nthe host reports no page.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "slide_submission_id": {
           "description": "Identifies the slide submission; what downloading and sharing take.",
           "type": "string",
@@ -1856,7 +1933,8 @@
       },
       "required": [
         "task_submission_id",
-        "slide_submission_id"
+        "slide_submission_id",
+        "exercise_page_url"
       ]
     },
     "ExerciseTaskSubmissionStatus": {
@@ -1905,6 +1983,17 @@
       "description": "A task submission's grading record.",
       "type": "object",
       "properties": {
+        "exercise_progress": {
+          "description": "The user's progress on the whole exercise as of this poll; its `completed` is the\nauthoritative \"passed\" signal. `None` for an exam exercise or from a host that does not\nreport it.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExerciseProgress"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "feedback_text": {
           "description": "Human-readable feedback, for a client to display as-is.",
           "type": [
@@ -1943,7 +2032,8 @@
         "score_given",
         "grading_started_at",
         "grading_completed_at",
-        "feedback_text"
+        "feedback_text",
+        "exercise_progress"
       ]
     },
     "GradingProgress": {
@@ -2021,6 +2111,26 @@
           "description": "A submission named a file this user never uploaded for the exercise\n(backend `message_key: \"unknown_upload\"`, HTTP 422). A client bug or tampering.",
           "type": "string",
           "const": "unknown-upload"
+        },
+        {
+          "description": "The user denied a device login in the browser.",
+          "type": "string",
+          "const": "device-login-denied"
+        },
+        {
+          "description": "A device login was not approved before its code expired.",
+          "type": "string",
+          "const": "device-login-expired"
+        },
+        {
+          "description": "The server answered 404: what was asked for does not exist, or not for this user.",
+          "type": "string",
+          "const": "not-found"
+        },
+        {
+          "description": "The server answered with a 5xx status. Transient, so stored credentials are kept.",
+          "type": "string",
+          "const": "server-error"
         }
       ]
     },
@@ -3460,6 +3570,17 @@
     "TmcExerciseSlide": {
       "type": "object",
       "properties": {
+        "chapter": {
+          "description": "`None` for an exercise outside any chapter, or from a host that does not report it.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExerciseChapter"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "course_id": {
           "description": "Lets a client locate the exercise's course without a separate lookup.",
           "type": "string",
@@ -3483,6 +3604,13 @@
           "type": "integer",
           "format": "int32"
         },
+        "page_url": {
+          "description": "The course material page the exercise is on, which also shows the student's latest\nsubmission. `None` from a host that does not report it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "slide_id": {
           "type": "string",
           "format": "uuid"
@@ -3501,7 +3629,9 @@
         "exercise_name",
         "exercise_order_number",
         "deadline",
-        "tasks"
+        "tasks",
+        "page_url",
+        "chapter"
       ]
     },
     "TmcExerciseTask": {

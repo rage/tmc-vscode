@@ -3,6 +3,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import AiRestriction, { isActiveCourseAiAllowed, isAiAllowed } from "../../api/aiRestriction"
+import type { AiRestrictionEvents } from "../../api/aiRestriction"
 import type { SettingInspection, WorkspaceFileProblem } from "../../api/workspaceManager"
 import { AI_OFF_SETTINGS } from "../../config/constants"
 import { makeMoocKind, makeTmcKind } from "../../shared/shared"
@@ -35,6 +36,9 @@ class FakeCourseWorkspace {
   /** Keys whose writes VS Code refuses. */
   public readonly rejected = new Set<string>()
   public problem: WorkspaceFileProblem | undefined
+  /** What `exerciseFolders` answers; the folder these name is {@link folder}. */
+  public exerciseFolderUris: vscode.Uri[] = []
+  public readonly onDidChangeExercises = new vscode.EventEmitter<void>().event
   public onWrite: (section: string, languageId: string | undefined) => void = () => {}
   public readonly replaceWorkspaceSetting = vi.fn(
     async (section: string, value: unknown, languageId?: string) => {
@@ -51,7 +55,22 @@ class FakeCourseWorkspace {
     },
   )
 
+  public readonly replaceFolderSetting = vi.fn(
+    async (_folder: vscode.Uri, section: string, value: unknown, languageId?: string) => {
+      const key = keyOf(section, languageId)
+      if (value === undefined) {
+        this.folder.delete(key)
+      } else {
+        this.folder.set(key, value)
+      }
+    },
+  )
+
   public readonly workspaceFileProblem = vi.fn(async () => this.problem)
+
+  public exerciseFolders(): vscode.Uri[] {
+    return this.exerciseFolderUris
+  }
 
   public getStoredWorkspaceSetting(section: string, languageId?: string): unknown {
     return this.stored.get(keyOf(section, languageId))
@@ -115,12 +134,28 @@ function declare(sections: string[]): void {
   } as unknown as vscode.WorkspaceConfiguration)
 }
 
+/** The events an `AiRestriction` listens to, fired by hand. */
+class FakeEvents implements AiRestrictionEvents {
+  public readonly configurationChanged = new vscode.EventEmitter<vscode.ConfigurationChangeEvent>()
+  public readonly documentOpened = new vscode.EventEmitter<vscode.TextDocument>()
+  public readonly workspaceFileChanged = new vscode.EventEmitter<void>()
+  public readonly exerciseFoldersChanged = new vscode.EventEmitter<void>()
+  public readonly extensionsChanged = new vscode.EventEmitter<void>()
+  public readonly onDidChangeConfiguration = this.configurationChanged.event
+  public readonly onDidOpenTextDocument = this.documentOpened.event
+  public readonly onDidChangeWorkspaceFile = this.workspaceFileChanged.event
+  public readonly onDidChangeExerciseFolders = this.exerciseFoldersChanged.event
+  public readonly onDidChangeExtensions = this.extensionsChanged.event
+}
+
+let events: FakeEvents
+
 function changeListener(): (event: vscode.ConfigurationChangeEvent) => void {
-  return vi.mocked(vscode.workspace.onDidChangeConfiguration).mock.calls.at(-1)?.[0] as never
+  return (event) => events.configurationChanged.fire(event)
 }
 
 function openListener(): (document: vscode.TextDocument) => void {
-  return vi.mocked(vscode.workspace.onDidOpenTextDocument).mock.calls.at(-1)?.[0] as never
+  return (document) => events.documentOpened.fire(document)
 }
 
 function changeOf(section: string): vscode.ConfigurationChangeEvent {
@@ -147,10 +182,11 @@ suite("AI restriction", function () {
   let restriction: AiRestriction
 
   function createRestriction(onDidChangeCourses?: vscode.Event<unknown>): AiRestriction {
-    return new AiRestriction(workspace, ownership, () => isAllowed, onDidChangeCourses)
+    return new AiRestriction(workspace, ownership, () => isAllowed, onDidChangeCourses, events)
   }
 
   beforeEach(function () {
+    events = new FakeEvents()
     workspace = new FakeCourseWorkspace()
     ownership = createMockMemento()
     isAllowed = false
@@ -216,6 +252,17 @@ suite("AI restriction", function () {
       expect(workspace.stored.get("chat.disableAIFeatures")).toBe(true)
     })
 
+    test("writes the rest on a VS Code that declares none of the 1.104 chat settings", async function () {
+      const since1104 = ["chat.disableAIFeatures", "chat.mcp.access", "chat.plugins.enabled"]
+      declare(AI_SECTIONS.filter((section) => !since1104.includes(section)))
+
+      await restriction.apply()
+
+      expect(workspace.writtenKeys().filter((key) => since1104.includes(key))).toEqual([])
+      expect(workspace.stored.get("chat.agent.enabled")).toBe(false)
+      expect(Logger.warn).not.toHaveBeenCalled()
+    })
+
     test("a rejected write neither stops the others nor rejects", async function () {
       workspace.rejected.add("chat.mcp.access")
 
@@ -273,9 +320,49 @@ suite("AI restriction", function () {
       withOpenDocuments(["ruby"])
 
       openListener()({ languageId: "ruby" } as vscode.TextDocument)
-      await restriction.apply()
 
-      expect(workspace.stored.get(keyOf(INLINE_SUGGEST, "ruby"))).toBe(false)
+      await vi.waitFor(() =>
+        expect(workspace.stored.get(keyOf(INLINE_SUGGEST, "ruby"))).toBe(false),
+      )
+    })
+
+    test("an extension's language-overridable setting is looked up once, and again after extensions change", async function () {
+      const COPILOT_ENABLE = "github.copilot.enable"
+      const installed = [
+        {
+          packageJSON: {
+            contributes: {
+              configuration: {
+                properties: { [COPILOT_ENABLE]: { scope: "language-overridable" } },
+              },
+            },
+          },
+        },
+      ]
+      const extensionsListed = vi.fn(() => installed)
+      Object.defineProperty(vscode.extensions, "all", { get: extensionsListed, configurable: true })
+      holdEverySetting(workspace)
+      workspace.user.set(keyOf(COPILOT_ENABLE, "python"), { python: true })
+      try {
+        await restriction.apply()
+        await restriction.apply()
+        expect(extensionsListed).toHaveBeenCalledOnce()
+        expect(workspace.stored.get(keyOf(COPILOT_ENABLE, "python"))).toEqual(
+          AI_OFF_SETTINGS[COPILOT_ENABLE],
+        )
+
+        installed.length = 0
+        events.extensionsChanged.fire()
+        await restriction.apply()
+
+        expect(extensionsListed).toHaveBeenCalledTimes(2)
+      } finally {
+        Object.defineProperty(vscode.extensions, "all", {
+          value: [],
+          configurable: true,
+          writable: true,
+        })
+      }
     })
 
     test("writes no language block where the workspace file's own value already wins", async function () {
@@ -292,6 +379,70 @@ suite("AI restriction", function () {
       await restriction.apply()
 
       expect(workspace.stored.size).toBe(0)
+    })
+  })
+
+  suite("exercise folders", function () {
+    beforeEach(function () {
+      holdEverySetting(workspace)
+      workspace.exerciseFolderUris = [EXERCISE_FOLDER]
+    })
+
+    test("a value or language value of an exercise folder's own that turns AI on is overridden", async function () {
+      workspace.folder.set(INLINE_SUGGEST, true)
+      workspace.folder.set(keyOf(INLINE_SUGGEST, "python"), true)
+      workspace.folder.set("github.copilot.enable", { python: true, rust: true })
+
+      await restriction.apply()
+
+      expect(Object.fromEntries(workspace.folder)).toEqual({
+        [INLINE_SUGGEST]: false,
+        [keyOf(INLINE_SUGGEST, "python")]: false,
+        "github.copilot.enable": {
+          ...(AI_OFF_SETTINGS["github.copilot.enable"] as object),
+          rust: true,
+        },
+      })
+      expect(workspace.replaceWorkspaceSetting).not.toHaveBeenCalled()
+      expect(new Set(workspace.replaceFolderSetting.mock.calls.map(([folder]) => folder))).toEqual(
+        new Set([EXERCISE_FOLDER]),
+      )
+      await expect(restriction.enforce(EXERCISE_FOLDER)).resolves.toBeUndefined()
+    })
+
+    test("a folder that sets nothing, or only values that hold, is left untouched", async function () {
+      workspace.folder.set(INLINE_SUGGEST, false)
+
+      await restriction.apply()
+
+      expect(workspace.replaceFolderSetting).not.toHaveBeenCalled()
+    })
+
+    test("a folder that is not an exercise is left untouched", async function () {
+      workspace.exerciseFolderUris = []
+      workspace.folder.set(INLINE_SUGGEST, true)
+
+      await restriction.apply()
+
+      expect(workspace.replaceFolderSetting).not.toHaveBeenCalled()
+    })
+
+    test("a change to the exercise folders starts a pass", async function () {
+      await restriction.apply()
+      workspace.folder.set(INLINE_SUGGEST, true)
+
+      events.exerciseFoldersChanged.fire()
+      await vi.waitFor(() => expect(workspace.folder.get(INLINE_SUGGEST)).toBe(false))
+    })
+
+    test("what it wrote into a folder is removed once the course allows AI", async function () {
+      workspace.folder.set(INLINE_SUGGEST, true)
+      await restriction.apply()
+      isAllowed = true
+
+      await restriction.apply()
+
+      expect(workspace.folder.has(INLINE_SUGGEST)).toBe(false)
     })
   })
 
@@ -375,6 +526,16 @@ suite("AI restriction", function () {
       expect(workspace.replaceWorkspaceSetting).toHaveBeenCalledTimes(AI_SECTIONS.length)
     })
 
+    test("an installed or removed extension starts a pass", async function () {
+      holdEverySetting(workspace)
+      await restriction.apply()
+      workspace.stored.set("chat.agent.enabled", true)
+
+      events.extensionsChanged.fire()
+
+      await vi.waitFor(() => expect(workspace.stored.get("chat.agent.enabled")).toBe(false))
+    })
+
     test("a course data change re-decides", async function () {
       let notifyCoursesChanged: (() => void) | undefined
       restriction.dispose()
@@ -389,6 +550,110 @@ suite("AI restriction", function () {
       await restriction.apply()
 
       expect(workspace.stored.size).toBe(0)
+    })
+  })
+
+  suite("passes", function () {
+    test("a pass re-entered from its first read runs once more after it, not alongside", async function () {
+      let writesInFlight = 0
+      let mostWritesInFlight = 0
+      workspace.replaceWorkspaceSetting.mockImplementation(async (section, value) => {
+        writesInFlight++
+        mostWritesInFlight = Math.max(mostWritesInFlight, writesInFlight)
+        await new Promise((resolve) => {
+          setTimeout(resolve, 0)
+        })
+        workspace.stored.set(section, value)
+        writesInFlight--
+      })
+      let reentries = 0
+      restriction.dispose()
+      restriction = new AiRestriction(
+        workspace,
+        ownership,
+        () => {
+          if (reentries++ === 0) {
+            void restriction.apply()
+          }
+          return isAllowed
+        },
+        undefined,
+        events,
+      )
+
+      await restriction.apply()
+
+      expect(mostWritesInFlight).toBe(1)
+      expect(reentries).toBe(2)
+      expect(Object.fromEntries(workspace.stored)).toEqual(AI_OFF_SETTINGS)
+    })
+
+    test("writes nothing once disposed", async function () {
+      restriction.dispose()
+
+      await restriction.apply()
+
+      expect(workspace.replaceWorkspaceSetting).not.toHaveBeenCalled()
+    })
+
+    test("a pass in progress stops before its next write once disposed", async function () {
+      workspace.onWrite = (): void => restriction.dispose()
+
+      await restriction.apply()
+
+      expect(workspace.replaceWorkspaceSetting).toHaveBeenCalledOnce()
+    })
+  })
+
+  suite("refused writes", function () {
+    const REFUSED = "chat.mcp.access"
+
+    function attempts(): number {
+      return workspace.writtenKeys().filter((key) => key === REFUSED).length
+    }
+
+    beforeEach(function () {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] })
+      workspace.rejected.add(REFUSED)
+    })
+
+    test("are retried on a timer, each wait twice as long as the last", async function () {
+      await restriction.apply()
+      expect(attempts()).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(attempts()).toBe(2)
+      await vi.advanceTimersByTimeAsync(9_999)
+      expect(attempts()).toBe(2)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(attempts()).toBe(3)
+
+      workspace.rejected.clear()
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(workspace.stored.get(REFUSED)).toBe("none")
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    test("are retried as soon as the workspace file is saved or changed on disk", async function () {
+      await restriction.apply()
+      workspace.rejected.clear()
+
+      events.workspaceFileChanged.fire()
+      // Well before the timer's retry.
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(workspace.stored.get(REFUSED)).toBe("none")
+    })
+
+    test("are not retried once disposed", async function () {
+      await restriction.apply()
+      expect(vi.getTimerCount()).toBe(1)
+
+      restriction.dispose()
+
+      expect(vi.getTimerCount()).toBe(0)
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(attempts()).toBe(1)
     })
   })
 
@@ -422,6 +687,7 @@ suite("AI restriction", function () {
       await restriction.apply()
 
       expect(workspace.writtenKeys().filter((key) => key === FLAPPED)).toHaveLength(5)
+      expect(Logger.warn).toHaveBeenCalledExactlyOnceWith(expect.stringContaining("keeps turning"))
     })
 
     test("flapping one setting does not stop the others being put back", async function () {
@@ -461,6 +727,81 @@ suite("AI restriction", function () {
       expect(workspace.writtenKeys().length).toBeGreaterThan(writesAfterFirstBackoff)
     })
 
+    test("schedules no retry once disposed", async function () {
+      flapUntilStopped()
+      workspace.stored.set(FLAPPED, true)
+      // Disposed in the pass that backs the setting off.
+      vi.mocked(Logger.warn).mockImplementation(() => restriction.dispose())
+
+      await restriction.apply()
+
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    test("refused writes do not count toward it", async function () {
+      workspace.stored.set(FLAPPED, true)
+      workspace.rejected.add(FLAPPED)
+      for (let i = 0; i < 2 * 5; i++) {
+        await restriction.apply()
+      }
+      workspace.rejected.clear()
+
+      await restriction.apply()
+
+      expect(workspace.stored.get(FLAPPED)).toBe(false)
+      expect(Logger.warn).toHaveBeenCalledWith(
+        `Could not write ${FLAPPED} to turn off AI assistance.`,
+        expect.any(Error),
+      )
+      expect(Logger.warn).not.toHaveBeenCalledWith(expect.stringContaining("keeps turning"))
+    })
+
+    test("a write is on record before it is made, and taken back when refused", async function () {
+      const recorded = (): number[] | undefined =>
+        ownership.get<Record<string, { writeTimes: number[] }>>("aiOffSettingsBackoffs")?.[FLAPPED]
+          ?.writeTimes
+      const recordedDuringWrites: (number[] | undefined)[] = []
+      workspace.onWrite = (): void => void recordedDuringWrites.push(recorded())
+      workspace.stored.set(FLAPPED, true)
+      workspace.rejected.add(FLAPPED)
+      await restriction.apply()
+      expect(recorded()).toEqual([])
+      workspace.rejected.clear()
+
+      await restriction.apply()
+
+      expect(recordedDuringWrites).toEqual([[Date.now()]])
+    })
+
+    test("outlives the extension host", async function () {
+      flapUntilStopped()
+      workspace.stored.set(FLAPPED, true)
+      await restriction.apply()
+      restriction.dispose()
+      workspace.replaceWorkspaceSetting.mockClear()
+
+      restriction = createRestriction()
+      await restriction.apply()
+
+      expect(workspace.writtenKeys()).toEqual([])
+    })
+
+    test("writes no language block for a setting backed off at the top level", async function () {
+      const listener = changeListener()
+      workspace.onWrite = (section, languageId): void => {
+        if (section === INLINE_SUGGEST && languageId === undefined) {
+          workspace.stored.set(section, true)
+          listener(changeOf(section))
+        }
+      }
+      workspace.stored.set(INLINE_SUGGEST, true)
+      workspace.user.set(keyOf(INLINE_SUGGEST, "haskell"), true)
+
+      await restriction.apply()
+
+      expect(workspace.writtenKeys().filter((key) => key.startsWith("["))).toEqual([])
+    })
+
     test("enforce writes a backed-off setting anyway", async function () {
       const stop = flapUntilStopped()
       workspace.stored.set(FLAPPED, true)
@@ -496,6 +837,30 @@ suite("AI restriction", function () {
         })
       },
     )
+
+    test("waits for a pass already under way, then makes one of its own", async function () {
+      let finishBlockedWrite: (() => void) | undefined
+      const blockedWrite = new Promise<void>((resolve) => {
+        finishBlockedWrite = resolve
+      })
+      const write = workspace.replaceWorkspaceSetting.getMockImplementation()
+      workspace.replaceWorkspaceSetting.mockImplementation(async (section, ...rest) => {
+        if (section === "chat.mcp.access") {
+          await blockedWrite
+        }
+        await write?.(section, ...rest)
+      })
+      void restriction.apply()
+      await vi.waitFor(() => expect(workspace.writtenKeys()).toContain("chat.mcp.access"))
+
+      const lapse = restriction.enforce()
+      // Turned back on behind the pass, with no event to say so.
+      workspace.stored.set(INLINE_SUGGEST, true)
+      finishBlockedWrite?.()
+
+      await expect(lapse).resolves.toBeUndefined()
+      expect(workspace.stored.get(INLINE_SUGGEST)).toBe(false)
+    })
 
     test("a write refused in the background still counts once nothing has changed", async function () {
       workspace.rejected.add("chat.mcp.access")

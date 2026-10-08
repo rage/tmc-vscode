@@ -2,6 +2,8 @@ import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
 
+import * as vscode from "vscode"
+
 import type { TestResult } from "../../shared/langsSchema"
 import { createSourceFileFinder } from "../../testing/sourceFiles"
 import { parseStackTrace } from "../../testing/stackTrace"
@@ -128,7 +130,7 @@ suite("stack traces of failed tests", function () {
     )
 
     expect(message.message).toBe("wrong")
-    expect(message.location?.uri.fsPath).toBe(test)
+    expect(message.location?.uri.toString()).toBe(vscode.Uri.file(test).toString())
     expect(message.location?.range.start.line).toBe(8)
     expect(message.stackTrace?.map((frame) => frame.label)).toEqual(["fail", "check", "test_first"])
   })
