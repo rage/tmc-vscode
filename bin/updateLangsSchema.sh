@@ -19,6 +19,11 @@
 #   * `--check` fetches the pinned release's schema and byte-compares, which also
 #     catches a pin bumped without re-vendoring. It needs network.
 #
+#   * `--from-checkout` vendors the committed schema of a local tmc-langs-rust
+#     checkout instead (TMC_LANGS_RUST_DIR, default ../tmc-langs-rust), for
+#     building against an unreleased CLI. Its stamp names the checkout's rev and
+#     no release, so `--check` fails until the pin is bumped and re-vendored.
+#
 # Run via `pnpm run vendor:langs-schema`. This step alone only re-vendors the
 # JSON Schema; it does not regenerate the zod/TS output. Follow it with
 # `pnpm run generate:langs-schema` (bin/generateLangsSchema.mjs) to regenerate
@@ -41,6 +46,31 @@ MODE="$(vendor_mode "$@")"
 if [ "$MODE" = "--check-stamp" ]; then
   verify_stamp "$TARGET" "$STAMP" "$REVENDOR"
   exit $?
+fi
+
+if [ "$MODE" = "--from-checkout" ]; then
+  LANGS_REPO="${TMC_LANGS_RUST_DIR:-../tmc-langs-rust}"
+  SOURCE="$LANGS_REPO/crates/tmc-langs-cli/bindings.schema.json"
+  if [ ! -f "$SOURCE" ]; then
+    echo "error: $SOURCE not found. Set TMC_LANGS_RUST_DIR to your tmc-langs-rust checkout." >&2
+    exit 1
+  fi
+  node -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))" "$SOURCE"
+  cp "$SOURCE" "$TARGET"
+  REV="$(git -C "$LANGS_REPO" rev-parse HEAD 2>/dev/null || echo "unknown")"
+  SHA="$(sha256_of "$TARGET")"
+  cat > "$STAMP" <<EOF
+{
+  "//": "Provenance stamp for the vendored tmc-langs-cli output contract schema. Written by bin/updateLangsSchema.sh; do not hand-edit. CI asserts the vendored schema's sha256 matches the value below via 'bin/updateLangsSchema.sh --check-stamp', catching a hand-edit that never went through re-vendoring.",
+  "source_repo": "tmc-langs-rust",
+  "source_release": "unreleased",
+  "source_rev": "$REV",
+  "sha256": "$SHA"
+}
+EOF
+  pnpm exec oxfmt "$STAMP" >/dev/null 2>&1 || true
+  echo "Vendored $SOURCE (tmc-langs-rust rev $REV, unreleased) -> $TARGET"
+  exit 0
 fi
 
 VERSION="$(node -p 'JSON.parse(require("./config.js").productionApi.__TMC_LANGS_VERSION__)')"

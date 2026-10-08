@@ -24,6 +24,12 @@ export default class ExerciseDecorationProvider
     new vscode.ThemeColor("gitDecoration.modifiedResourceForeground"),
   )
 
+  private static _outOfTriesExercise = new vscode.FileDecoration(
+    "⊘",
+    "No tries left; the score is final.",
+    new vscode.ThemeColor("disabledForeground"),
+  )
+
   private static _missingExercise = new vscode.FileDecoration(
     "ⓘ",
     "Exercise not found in course. This could be an old exercise that has been renamed or removed from course.",
@@ -70,6 +76,9 @@ export default class ExerciseDecorationProvider
 
     if (apiExercise.passed) {
       return ExerciseDecorationProvider._passedExercise
+    }
+    if ("outOfTries" in apiExercise && apiExercise.outOfTries) {
+      return ExerciseDecorationProvider._outOfTriesExercise
     }
 
     const deadlinePassed = apiExercise.deadline

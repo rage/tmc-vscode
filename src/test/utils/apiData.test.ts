@@ -3,7 +3,12 @@ import {
   LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
   LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
 } from "../../config/constants"
-import type { CourseExercise, Exercise, MoocCourseProgress } from "../../shared/langsSchema"
+import type {
+  CourseExercise,
+  Exercise,
+  ExerciseProgress,
+  MoocCourseProgress,
+} from "../../shared/langsSchema"
 import type { MoocLocalCourseData } from "../../storage/data"
 import {
   combineMoocApiExerciseData,
@@ -12,7 +17,12 @@ import {
   sumTmcApiCoursePoints,
   toStoredMoocCourse,
 } from "../../utilities/apiData"
-import { moocCourse, moocCourseProgress, moocExerciseSlides } from "../fixtures/tmc"
+import {
+  MOOC_COURSE_UUID,
+  moocCourse,
+  moocCourseProgress,
+  moocExerciseSlides,
+} from "../fixtures/tmc"
 
 /** An exercise as `/api/v8/core/courses/{id}` lists it; only the combined fields vary. */
 function apiExercise(exercise: Pick<Exercise, "id" | "name" | "completed">): Exercise {
@@ -173,39 +183,64 @@ suite("toStoredMoocCourse", function () {
   })
 })
 
-const progressOf = (
-  progress: Partial<MoocCourseProgress["exercises"][number]>,
-): MoocCourseProgress => ({
-  ...moocCourseProgress,
-  exercises: [{ ...moocCourseProgress.exercises[0]!, ...progress }],
-})
-
 suite("combineMoocApiExerciseData", function () {
-  test.each([
-    ["full points", { score_given: 2, score_maximum: 2, completed: true }, true],
-    [
-      "a graded submission short of full points",
-      { score_given: 1, score_maximum: 2, completed: true },
-      false,
-    ],
-    [
-      "a graded submission with no points",
-      { score_given: 0, score_maximum: 1, completed: true },
-      false,
-    ],
-    [
-      "a completed exercise worth no points",
-      { score_given: 0, score_maximum: 0, completed: true },
-      true,
-    ],
-    [
-      "an untouched exercise worth no points",
-      { score_given: 0, score_maximum: 0, completed: false },
-      false,
-    ],
-  ] as const)("%s is passed: %s", function (_case, progress, isPassed) {
-    const [exercise] = combineMoocApiExerciseData(moocExerciseSlides, progressOf(progress))
+  test("keeps each exercise's chapter, and none for an exercise outside one", function () {
+    const [slide] = moocExerciseSlides
+    if (slide === undefined) {
+      throw new Error("the fixture has a slide")
+    }
+    const chaptered = {
+      ...slide,
+      chapter: { id: "chapter-1", name: "Basics", chapter_number: 1 },
+    }
 
-    expect(exercise?.passed).toBe(isPassed)
+    const [stored, unchaptered] = combineMoocApiExerciseData([chaptered, slide], undefined)
+
+    expect(stored?.chapter).toEqual({ name: "Basics", number: 1 })
+    expect(unchaptered).not.toHaveProperty("chapter")
+  })
+
+  const [slide] = moocExerciseSlides
+  /** The fixture slide's progress, completed with the given standing and points of 3. */
+  function progressOf(
+    standing: ExerciseProgress["standing"],
+    scoreGiven: number,
+  ): MoocCourseProgress {
+    return {
+      course_id: MOOC_COURSE_UUID,
+      exercises: [
+        {
+          exercise_id: slide!.exercise_id,
+          score_given: scoreGiven,
+          score_maximum: 3,
+          completed: true,
+          attempted: true,
+          standing,
+        },
+      ],
+    }
+  }
+
+  test.each([
+    ["Passed", 3, { passed: true, outOfTries: false }],
+    ["Attempted", 3, { passed: false, outOfTries: false }],
+    ["OutOfTries", 2, { passed: false, outOfTries: true }],
+    ["NotAttempted", 0, { passed: false, outOfTries: false }],
+  ] as const)(
+    "a %s standing at %i points is stored as the backend decides",
+    (standing, score, flags) => {
+      const [stored] = combineMoocApiExerciseData([slide!], progressOf(standing, score))
+      expect(stored).toMatchObject({ ...flags, awardedPoints: score, availablePoints: 3 })
+    },
+  )
+
+  test("without a standing from the backend, the previous flags stay, not the score's", () => {
+    const previous = {
+      ...combineMoocApiExerciseData([slide!], undefined)[0]!,
+      passed: false,
+      outOfTries: true,
+    }
+    const [stored] = combineMoocApiExerciseData([slide!], progressOf(null, 3), [previous])
+    expect(stored).toMatchObject({ passed: false, outOfTries: true, awardedPoints: 3 })
   })
 })

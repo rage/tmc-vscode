@@ -179,6 +179,7 @@ export function moocGrading(overrides: Partial<MoocGrading> = {}): ExerciseTaskS
       grading_started_at: null,
       grading_completed_at: null,
       feedback_text: null,
+      exercise_progress: null,
       ...overrides,
     },
   }

@@ -642,6 +642,47 @@ suite("UserData setExerciseAsPassed", function () {
   })
 })
 
+suite("UserData setMoocExerciseStanding", function () {
+  async function withPassedExercise(): ReturnType<typeof makeUserData> {
+    return makeUserData({
+      courses: [],
+      mooc_courses: [
+        moocCourse({
+          exercises: [moocExercise({ id: "exercise-uuid-1", name: "mooc_hello", passed: true })],
+        }),
+      ],
+    })
+  }
+
+  test("records the backend's standing and points in memory and in storage", async function () {
+    const [userData, store] = await withPassedExercise()
+    const result = await userData.setMoocExerciseStanding(
+      "mooc-python-course",
+      "mooc_hello",
+      { passed: false, outOfTries: true },
+      2,
+    )
+    expect(result.ok).toBe(true)
+    expect(userData.getPassed(ExerciseIdentifier.from("exercise-uuid-1"))).toBe(false)
+    expect(store.getUserData()?.mooc_courses[0]?.exercises[0]).toMatchObject({
+      passed: false,
+      outOfTries: true,
+      awardedPoints: 2,
+    })
+  })
+
+  test("errs when the exercise is not in the catalogue", async function () {
+    const [userData] = await withPassedExercise()
+    const result = await userData.setMoocExerciseStanding(
+      "mooc-python-course",
+      "no_such",
+      { passed: true, outOfTries: false },
+      1,
+    )
+    expect(result.err).toBe(true)
+  })
+})
+
 suite("UserData concurrent writes", function () {
   test("chains overlapping writes instead of letting them interleave", async function () {
     const [userData, store] = await makeUserData({

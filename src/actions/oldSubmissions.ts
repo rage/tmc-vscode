@@ -44,8 +44,9 @@ function moocSubmissionStatus(submission: ExerciseSlideSubmissionListItem): stri
   }
   const score = submission.score_given !== null ? ` (score ${submission.score_given})` : ""
   switch (progress) {
+    // The backend judges passing per exercise, not per submission.
     case "FullyGraded":
-      return `${(submission.score_given ?? 0) > 0 ? "Passed" : "Not passed"}${score}`
+      return `Graded${score}`
     case "Failed":
       return `Failed${score}`
     case "PendingManual":

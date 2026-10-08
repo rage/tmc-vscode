@@ -133,6 +133,7 @@ describe("mooc mock conformance", () => {
         score_maximum: number
         completed: boolean
         attempted: boolean
+        standing: string
       }[]
     }
     assert.equal(beforeBody.course_id, pythonCourse.id)
@@ -142,6 +143,7 @@ describe("mooc mock conformance", () => {
     assert.equal(untouched.score_given, 0)
     assert.equal(untouched.completed, false)
     assert.equal(untouched.attempted, false)
+    assert.equal(untouched.standing, "NotAttempted")
 
     await submitAndGrade(passingExercise)
     const afterRes = await authFetch(api(`/courses/${pythonCourse.id}/progress`))
@@ -152,6 +154,7 @@ describe("mooc mock conformance", () => {
     assert.equal(progressed.completed, true)
     assert.equal(progressed.score_given, 1)
     assert.equal(progressed.score_maximum, 1)
+    assert.equal(progressed.standing, "Passed")
   })
 
   test("GET courses/{id}/progress reports heterogeneous per-exercise score_maximum", async () => {
@@ -419,17 +422,20 @@ describe("mooc mock conformance", () => {
   })
 
   // Drives a submission through the poll loop and returns the terminal Grading.
-  const submitAndGrade = async (
-    exercise: MoocExerciseFixture,
-  ): Promise<{ grading_progress: string; score_given: number | null; feedback_text: string }> => {
+  interface Grading {
+    grading_progress: string
+    score_given: number | null
+    feedback_text: string
+    exercise_progress: { completed: boolean; standing: string }
+  }
+
+  const submitAndGrade = async (exercise: MoocExerciseFixture): Promise<Grading> => {
     const { taskSubmissionId } = await submit(exercise)
     // first poll is NoGradingYet, second is terminal
     await authFetch(api(`/submissions/${taskSubmissionId}/grading`))
     const graded = (await (
       await authFetch(api(`/submissions/${taskSubmissionId}/grading`))
-    ).json()) as {
-      Grading: { grading_progress: string; score_given: number | null; feedback_text: string }
-    }
+    ).json()) as { Grading: Grading }
     return graded.Grading
   }
 
@@ -471,10 +477,14 @@ describe("mooc mock conformance", () => {
     assert.equal(slides[0]!.tasks[0]!.model_solution_spec, null)
   })
 
-  test("submit -> poll grading: a failing exercise grades to Failed/zero score", async () => {
+  test("submit -> poll grading: a failing exercise grades fully, to zero points", async () => {
+    // As on the host: failing tests are a grade, not a failed grading, and complete the
+    // activity without passing the exercise.
     const grading = await submitAndGrade(failingExercise)
-    assert.equal(grading.grading_progress, "Failed")
+    assert.equal(grading.grading_progress, "FullyGraded")
     assert.equal(grading.score_given, 0)
+    assert.equal(grading.exercise_progress.completed, true)
+    assert.equal(grading.exercise_progress.standing, "Attempted")
   })
 
   test("submit -> poll grading: a pending-manual exercise grades to PendingManual", async () => {
@@ -770,13 +780,13 @@ describe("mooc mock conformance", () => {
     assert.equal(items[0]!.grading_progress, null)
 
     // once grading completes, the list reflects the exercise's actual grading
-    // outcome (this fixture fails) rather than a hardcoded pass
+    // outcome (this fixture scores zero) rather than a hardcoded pass
     await authFetch(api(`/submissions/${taskSubmissionId}/grading`))
     await authFetch(api(`/submissions/${taskSubmissionId}/grading`))
     const gradedList = (await (
       await authFetch(api(`/exercises/${exerciseId}/submissions`))
     ).json()) as { score_given: number | null; grading_progress: string | null }[]
-    assert.equal(gradedList[0]!.grading_progress, "Failed")
+    assert.equal(gradedList[0]!.grading_progress, "FullyGraded")
     assert.equal(gradedList[0]!.score_given, 0)
   })
 
@@ -1112,6 +1122,28 @@ describe("mooc mock enrollment, answerability and ownership", () => {
       type: "editor",
       solution_download_url: `${base}/mooc-archives/${limitedTriesExercise.archiveSlug}.tar.zst`,
     })
+  })
+
+  test("the last try below full points leaves the exercise out of tries", async () => {
+    const exerciseId = limitedTriesExercise.slide.exercise_id
+    const standingInCourse = async (): Promise<string | undefined> => {
+      const progress = (await (
+        await authFetch(api(`/courses/${variantsCourse.id}/progress`))
+      ).json()) as { exercises: { exercise_id: string; standing: string }[] }
+      return progress.exercises.find((e) => e.exercise_id === exerciseId)?.standing
+    }
+    assert.equal(await standingInCourse(), "NotAttempted")
+
+    const res = await postSubmit(limitedTriesExercise, [await uploadFor(exerciseId)])
+    assert.equal(res.status, 200)
+    const { task_submission_id } = (await res.json()) as { task_submission_id: string }
+    await authFetch(api(`/submissions/${task_submission_id}/grading`))
+    const graded = (await (
+      await authFetch(api(`/submissions/${task_submission_id}/grading`))
+    ).json()) as { Grading: { score_given: number; exercise_progress: { standing: string } } }
+    assert.equal(graded.Grading.score_given, 0)
+    assert.equal(graded.Grading.exercise_progress.standing, "OutOfTries")
+    assert.equal(await standingInCourse(), "OutOfTries")
   })
 
   test("an upload is refused once no slide of the exercise has a try left", async () => {

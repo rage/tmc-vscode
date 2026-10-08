@@ -4,9 +4,11 @@ import {
   InitializationError,
   InsufficientScopeError,
   NotEnrolledError,
+  NotFoundError,
   ObsoleteClientError,
   presentationFor,
   RuntimeError,
+  ServerError,
   SpawnError,
   UploadExpiredError,
 } from "../errors"
@@ -27,8 +29,8 @@ suite("presentationFor", function () {
 
   test("a server error status reads as the server failing, not as the network", function () {
     const raw = "HTTP error 503 Service Unavailable for https://courses.mooc.fi/x: <html>…</html>"
-    const unavailable = Object.assign(new ConnectionError(raw), { httpStatus: 503 })
-    const notFound = Object.assign(new RuntimeError(raw), { httpStatus: 404 })
+    const unavailable = Object.assign(new ServerError(raw), { httpStatus: 503 })
+    const notFound = Object.assign(new NotFoundError(raw), { httpStatus: 404 })
 
     expect(presentationFor(unavailable, "mooc").message).toBe(
       "courses.mooc.fi returned an error (503). Try again later.",

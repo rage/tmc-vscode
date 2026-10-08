@@ -17,7 +17,8 @@
 - Open Exercises Folder, Wipe and Change data path now say why they cannot run when TMC-langs reported no exercise directory.
 - Fixed a newly added course's passed exercises not showing as passed right away.
 - Fixed a courses.mooc.fi exercise showing as completed after any graded submission; it now takes full points.
-- A graded courses.mooc.fi submission now says whether all tests passed or some failed, as a TMC Server one does, instead of only Exercise graded.
+- A graded courses.mooc.fi submission now says whether the exercise is passed or some tests failed, instead of only Exercise graded, and links to the exercise's page in the course material.
+- The Courses view groups courses.mooc.fi exercises by chapter, and marks an exercise whose tries are used up; submitting it again is refused before anything is uploaded.
 - Fixed removing a course saying it was removed even when the removal failed.
 - A failed submission is now reported once, in the submission panel; a notification is added only when it offers a fix, such as Log in.
 - Pasting, resetting an exercise or downloading an old submission while submissions are throttled now says so instead of doing nothing.
@@ -25,7 +26,7 @@
 - A paste from the exercise panel that fails now shows its error in the panel only, instead of also as a notification.
 - A course workspace that fails to open is now reported.
 - Checking for exercise updates no longer says "All exercises are up to date." when refreshing the courses failed, or when a site holding your courses could not be checked; that site's failure is reported instead.
-- Updated TMC-langs to 0.40.0.
+- Updated TMC-langs to 0.40.1.
 - Removed the Ctrl+Shift+T (Run Tests), Ctrl+Shift+C (Close Exercise) and Ctrl+Shift+A (Action Menu) shortcuts. They replaced VS Code's Reopen Closed Editor, terminal Copy and Toggle Block Comment in every course workspace, and copying from the terminal on Linux could close an exercise. To keep a shortcut for running tests, bind "TestMyCode: Run Tests" in Keyboard Shortcuts (Ctrl+K Ctrl+S).
 - The Java Home setting now takes effect: Java exercises run with the JDK it names. It had been ignored.
 - Removed the Insider Version setting, which did nothing.
