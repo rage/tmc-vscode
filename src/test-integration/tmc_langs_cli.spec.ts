@@ -836,6 +836,7 @@ suite("tmc langs cli spec", function () {
     })
 
     test("reports the login status the stored mooc credentials give", async function () {
+      clearCredentials(configDir)
       clearMoocCredentials(configDir)
       expect((await tmc.isAuthenticated()).unwrap()).to.be.false
       writeMoocCredentials(configDir)
