@@ -12,6 +12,7 @@ import { countOf, formatDeadline } from "../../utilities"
 import { downloadFailures } from "../downloadFailures"
 import { exerciseOperations } from "../exerciseOperations"
 import { pointsText } from "../points"
+import { tooltipOf } from "../tooltip"
 import { updateablesRegistry } from "../updateablesRegistry"
 import type { ExerciseView, PartView } from "./courseViewModel"
 import { buildCourseView, onDiskByCourse, shownDeadline } from "./courseViewModel"
@@ -290,19 +291,6 @@ export class ExerciseTreeItem extends vscode.TreeItem {
       ].filter((line) => typeof line === "string"),
     ])
   }
-}
-
-/** A row's hover: its bold title, then one paragraph per line. */
-function tooltipOf([title, ...lines]: string[]): vscode.MarkdownString {
-  const tooltip = new vscode.MarkdownString()
-  tooltip
-    .appendMarkdown("**")
-    .appendText(title ?? "")
-    .appendMarkdown("**")
-  for (const line of lines) {
-    tooltip.appendMarkdown("\n\n").appendText(line)
-  }
-  return tooltip
 }
 
 /** How long a burst of changes, such as one per downloaded exercise, is gathered into one render. */
