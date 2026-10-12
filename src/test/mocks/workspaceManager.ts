@@ -8,6 +8,7 @@ import * as vscode from "vscode"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { BackendKind } from "../../shared/shared"
+import { ExerciseIdentifier } from "../../shared/shared"
 import { workspaceExercises } from "../fixtures/workspaceManager"
 
 const NOT_MOCKED_ERROR = Err(new Error("Method was not mocked."))
@@ -72,6 +73,9 @@ export function createWorkspaceMangerMock(): [WorkspaceManager, WorkspaceManager
       backend === "tmc" && courseSlug === "test-python-course"
         ? values.getExercisesByCoursePythonCourse
         : [],
+    ),
+    getExercise: vi.fn((id: ExerciseIdentifier) =>
+      values.getExercises.find((x) => ExerciseIdentifier.key(x.id) === ExerciseIdentifier.key(id)),
     ),
     getExercises: vi.fn(() => values.getExercises),
     onDidChangeExercises: values.exercisesChanged.event,

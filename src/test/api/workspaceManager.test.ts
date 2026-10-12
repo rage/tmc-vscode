@@ -341,6 +341,60 @@ suite("WorkspaceManager class", function () {
       expect(closed.status).toBe(ExerciseStatus.Open)
     })
 
+    test("records both of two closes requested at once", async function () {
+      let finishFirst!: () => void
+      record.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishFirst = () => resolve(Ok.EMPTY)
+          }),
+      )
+      const reopened = exercise("tmc", courseSlug, "part03-01_third", ExerciseStatus.Open)
+      await manager.setExercises([open, closed, reopened])
+
+      const first = manager.closeCourseExercises("tmc", courseSlug, [open.id])
+      const second = manager.closeCourseExercises("tmc", courseSlug, [reopened.id])
+      await vi.waitFor(() => expect(record).toHaveBeenCalledOnce())
+      finishFirst()
+      await Promise.all([first, second])
+
+      expect(record.mock.calls.at(-1)?.[2]).toEqual([
+        "hello_world",
+        "part02-01_greeting",
+        "part03-01_third",
+      ])
+    })
+
+    test("applies a close to the exercises a refresh put in place meanwhile", async function () {
+      let finish!: () => void
+      record.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = () => resolve(Ok.EMPTY)
+          }),
+      )
+      const closing = manager.closeCourseExercises("tmc", courseSlug, [open.id])
+      await vi.waitFor(() => expect(record).toHaveBeenCalledOnce())
+      const refreshedOpen = { ...open }
+      await manager.setExercises([refreshedOpen, closed])
+      finish()
+
+      const result = await closing
+
+      expect(result.unwrap()).toEqual([refreshedOpen])
+      expect(refreshedOpen.status).toBe(ExerciseStatus.Closed)
+    })
+
+    test("refuses to open or close while the closed set is unknown", async function () {
+      await manager.setExercises([open, closed], false)
+
+      const result = await manager.openCourseExercises("tmc", courseSlug, [closed.id])
+
+      expect(result.err).toBe(true)
+      expect(record).not.toHaveBeenCalled()
+      expect(closed.status).toBe(ExerciseStatus.Closed)
+    })
+
     test("announces an exercise opening or closing", async function () {
       const changed = vi.fn()
       manager.onDidChangeExercises(changed)
@@ -466,16 +520,26 @@ suite("WorkspaceManager class", function () {
       expect(write).not.toHaveBeenCalled()
     })
 
+    test("records no folder change while the closed set is unknown", async function () {
+      await manager.setExercises([open, closed], false)
+
+      notifyFolderChange?.({ added: [], removed: [folderOf(open.uri, open.exerciseSlug)] })
+      await new Promise((resolve) => {
+        setImmediate(resolve)
+      })
+
+      expect(write).not.toHaveBeenCalled()
+    })
+
     test("a failed write is retried on the next folder change", async function () {
       write.mockResolvedValueOnce(Err(new Error("settings are read-only")))
       const error = vi.spyOn(Logger, "error").mockImplementation(() => undefined)
 
       notifyFolderChange?.({ added: [], removed: [folderOf(open.uri, open.exerciseSlug)] })
-      await Promise.resolve()
+      await vi.waitFor(() => expect(error).toHaveBeenCalledOnce())
       notifyFolderChange?.({ added: [], removed: [folderOf(open.uri, open.exerciseSlug)] })
-      await Promise.resolve()
 
-      expect(write).toHaveBeenCalledTimes(2)
+      await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2))
       expect(error).toHaveBeenCalledOnce()
       error.mockRestore()
     })

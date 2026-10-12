@@ -139,6 +139,9 @@ export default class WorkspaceManager implements vscode.Disposable {
   private readonly _disposables: vscode.Disposable[]
   private readonly _persistClosedExercises: PersistClosedCourseExercises
   private _recordedClosedExercises: Map<string, string>
+  private _isClosedStateKnown = true
+  // Per course key, so that one course's record is read and written by one change at a time.
+  private readonly _closedRecordWrites = new Map<string, SerialQueue>()
   private readonly _exercisesChanged = new vscode.EventEmitter<void>()
   // A settings write and addWorkspaceRecommendation's raw rewrite of the same file would
   // otherwise interleave, and one would lose the other's change.
@@ -246,12 +249,20 @@ export default class WorkspaceManager implements vscode.Disposable {
    * Replaces the known exercises. Their statuses are what the durable record
    * already says, so they become the last-written closed set rather than being
    * written back to it.
+   *
+   * @param isClosedStateKnown `false` when the durable record could not be read, so the
+   * statuses are a guess; nothing is written to the record, and opening or closing errs,
+   * until a call with it `true`.
    */
-  public async setExercises(exercises: WorkspaceExercise[]): Promise<Result<void, Error>> {
+  public async setExercises(
+    exercises: WorkspaceExercise[],
+    isClosedStateKnown = true,
+  ): Promise<Result<void, Error>> {
     this._exercises = exercises
     this._exercisesByPath = WorkspaceManager._indexByPath(exercises)
     this._exercisesById = WorkspaceManager._indexById(exercises)
     this._recordedClosedExercises = WorkspaceManager._closedByCourse(exercises)
+    this._isClosedStateKnown = isClosedStateKnown
     this._exercisesChanged.fire()
     return this._refreshActiveCourseWorkspace()
   }
@@ -717,39 +728,47 @@ export default class WorkspaceManager implements vscode.Disposable {
    * @returns the exercises the request named — matched, not changed: one already
    * in the requested state is included.
    */
-  private async _setOpen(
+  private _setOpen(
     backend: BackendKind,
     courseSlug: string,
     exerciseIds: ExerciseIdentifier[],
     open: boolean,
   ): Promise<Result<WorkspaceExercise[], Error>> {
-    const courseExercises = this._exercises.filter(
-      (x) => x.backend === backend && x.courseSlug === courseSlug,
-    )
     const requested = new Set(exerciseIds.map((id) => ExerciseIdentifier.key(id)))
     const isRequested = (x: WorkspaceExercise): boolean =>
       requested.has(ExerciseIdentifier.key(x.id))
-    const closedAfterwards = courseExercises
-      .filter((x) => (isRequested(x) ? !open : x.status === ExerciseStatus.Closed))
-      .map((x) => x.exerciseSlug)
+    const courseExercises = (): WorkspaceExercise[] =>
+      this._exercises.filter((x) => x.backend === backend && x.courseSlug === courseSlug)
 
-    const persisted = await this._persistClosedExercises(backend, courseSlug, closedAfterwards)
-    if (persisted.err) {
-      return persisted
-    }
-    this._recordedClosedExercises.set(
-      WorkspaceManager._courseKey(backend, courseSlug),
-      WorkspaceManager._closedFingerprint(closedAfterwards),
-    )
+    return this._closedRecordWrite(backend, courseSlug, async () => {
+      if (!this._isClosedStateKnown) {
+        return Err(
+          new Error("Which exercises are closed could not be read. Refresh the courses and retry."),
+        )
+      }
+      const closedAfterwards = courseExercises()
+        .filter((x) => (isRequested(x) ? !open : x.status === ExerciseStatus.Closed))
+        .map((x) => x.exerciseSlug)
 
-    const matched = courseExercises.filter((x) => isRequested(x))
-    for (const exercise of matched) {
-      exercise.status = open ? ExerciseStatus.Open : ExerciseStatus.Closed
-    }
-    this._exercisesChanged.fire()
+      const persisted = await this._persistClosedExercises(backend, courseSlug, closedAfterwards)
+      if (persisted.err) {
+        return persisted
+      }
+      this._recordedClosedExercises.set(
+        WorkspaceManager._courseKey(backend, courseSlug),
+        WorkspaceManager._closedFingerprint(closedAfterwards),
+      )
 
-    const refreshed = await this._refreshActiveCourseWorkspace()
-    return refreshed.err ? refreshed : Ok(matched)
+      // `setExercises` may have replaced the exercises while the write was in flight.
+      const matched = courseExercises().filter((x) => isRequested(x))
+      for (const exercise of matched) {
+        exercise.status = open ? ExerciseStatus.Open : ExerciseStatus.Closed
+      }
+      this._exercisesChanged.fire()
+
+      const refreshed = await this._refreshActiveCourseWorkspace()
+      return refreshed.err ? refreshed : Ok(matched)
+    })
   }
 
   /**
@@ -760,29 +779,46 @@ export default class WorkspaceManager implements vscode.Disposable {
    * re-enters the folder-change handler with the state it has just applied, so
    * writing unconditionally would cost a second CLI call per open or close.
    */
-  private async _recordClosedExercises(backend: BackendKind, courseSlug: string): Promise<void> {
-    const closedExerciseSlugs = this._exercises
-      .filter(
-        (x) =>
-          x.backend === backend &&
-          x.courseSlug === courseSlug &&
-          x.status === ExerciseStatus.Closed,
-      )
-      .map((x) => x.exerciseSlug)
-    const key = WorkspaceManager._courseKey(backend, courseSlug)
-    const fingerprint = WorkspaceManager._closedFingerprint(closedExerciseSlugs)
-    if (this._recordedClosedExercises.get(key) === fingerprint) {
-      return
-    }
+  private _recordClosedExercises(backend: BackendKind, courseSlug: string): Promise<void> {
+    return this._closedRecordWrite(backend, courseSlug, async () => {
+      if (!this._isClosedStateKnown) {
+        return
+      }
+      const closedExerciseSlugs = this._exercises
+        .filter(
+          (x) =>
+            x.backend === backend &&
+            x.courseSlug === courseSlug &&
+            x.status === ExerciseStatus.Closed,
+        )
+        .map((x) => x.exerciseSlug)
+      const key = WorkspaceManager._courseKey(backend, courseSlug)
+      const fingerprint = WorkspaceManager._closedFingerprint(closedExerciseSlugs)
+      if (this._recordedClosedExercises.get(key) === fingerprint) {
+        return
+      }
+      const persisted = await this._persistClosedExercises(backend, courseSlug, closedExerciseSlugs)
+      if (persisted.err) {
+        Logger.error(`Failed to record the closed exercises of ${courseSlug}.`, persisted.val)
+        return
+      }
+      this._recordedClosedExercises.set(key, fingerprint)
+    })
+  }
 
-    // Noted before the write, so two folder changes in flight do not both issue
-    // it; a failed write puts the course back in play for the next change.
-    this._recordedClosedExercises.set(key, fingerprint)
-    const persisted = await this._persistClosedExercises(backend, courseSlug, closedExerciseSlugs)
-    if (persisted.err) {
-      this._recordedClosedExercises.delete(key)
-      Logger.error(`Failed to record the closed exercises of ${courseSlug}.`, persisted.val)
+  /** Runs `task` after every earlier read-and-write of the course's closed record. */
+  private _closedRecordWrite<T>(
+    backend: BackendKind,
+    courseSlug: string,
+    task: () => Promise<T>,
+  ): Promise<T> {
+    const key = WorkspaceManager._courseKey(backend, courseSlug)
+    let queue = this._closedRecordWrites.get(key)
+    if (!queue) {
+      queue = new SerialQueue()
+      this._closedRecordWrites.set(key, queue)
     }
+    return queue.run(task)
   }
 
   private static _courseKey(backend: BackendKind, courseSlug: string): string {

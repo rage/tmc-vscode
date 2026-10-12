@@ -6,6 +6,7 @@ import type { WorkspaceExercise } from "../api/workspaceManager"
 import { ExerciseStatus } from "../api/workspaceManager"
 import { closedExercisesSettingKey } from "../config/constants"
 import type { LocalExercise } from "../shared/langsSchema"
+import type { ExerciseIdentifier } from "../shared/shared"
 import { LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
 import { Logger } from "../utilities"
 import type { ReadyActionContext } from "./types"
@@ -39,17 +40,20 @@ export async function refreshLocalExercises(
   }
   if (settingsResult.err) {
     Logger.warn(
-      "Failed to determine closed status for exercises, defaulting to open.",
+      "Failed to determine closed status for exercises, keeping the statuses already shown.",
       settingsResult.val,
     )
   }
   const settings = settingsResult.ok ? settingsResult.val : {}
 
-  // Keyed the way the user's catalogue identifies a course: TMC by slug, mooc by id,
-  // since a mooc course's on-disk slug is derived locally and need not match its name.
+  // TMC by slug, as its projects config records no course id; mooc by id, since a mooc
+  // course's on-disk slug is derived locally and need not match its name.
   const localExercisesByCourse = new Map<string, LocalExercise[]>()
   for (const exercise of localExercisesResult.val) {
-    const key = exercise.backend === "tmc" ? exercise["course-slug"] : exercise["course-id"]
+    const key =
+      exercise.backend === "tmc"
+        ? `tmc:${exercise["course-slug"]}`
+        : `mooc:${exercise["course-id"]}`
     const exercises = localExercisesByCourse.get(key)
     if (exercises) {
       exercises.push(exercise)
@@ -64,8 +68,8 @@ export async function refreshLocalExercises(
     const localExercises = localExercisesByCourse.get(
       match(
         course,
-        () => courseSlug,
-        (mooc) => mooc.id,
+        () => `tmc:${courseSlug}`,
+        (mooc) => `mooc:${mooc.id}`,
       ),
     )
     if (!localExercises) {
@@ -78,22 +82,26 @@ export async function refreshLocalExercises(
 
     const courseId = LocalCourseData.getCourseId(course)
     workspaceExercises.push(
-      ...localExercises.map<WorkspaceExercise>((x) => ({
-        id:
+      ...localExercises.map<WorkspaceExercise>((x) => {
+        const id: ExerciseIdentifier =
           x.backend === "tmc"
             ? makeTmcKind({ tmcExerciseId: x["exercise-id"] })
-            : makeMoocKind({ moocExerciseId: x["exercise-id"] }),
-        courseId,
-        backend: x.backend,
-        courseSlug,
-        exerciseSlug: x["exercise-slug"],
-        status: closedExercises.has(x["exercise-slug"])
-          ? ExerciseStatus.Closed
-          : ExerciseStatus.Open,
-        uri: vscode.Uri.file(x["exercise-path"]),
-      })),
+            : makeMoocKind({ moocExerciseId: x["exercise-id"] })
+        const isClosed = settingsResult.ok
+          ? closedExercises.has(x["exercise-slug"])
+          : workspaceManager.getExercise(id)?.status === ExerciseStatus.Closed
+        return {
+          id,
+          courseId,
+          backend: x.backend,
+          courseSlug,
+          exerciseSlug: x["exercise-slug"],
+          status: isClosed ? ExerciseStatus.Closed : ExerciseStatus.Open,
+          uri: vscode.Uri.file(x["exercise-path"]),
+        }
+      }),
     )
   }
 
-  return workspaceManager.setExercises(workspaceExercises)
+  return workspaceManager.setExercises(workspaceExercises, settingsResult.ok)
 }
