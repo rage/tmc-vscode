@@ -487,33 +487,14 @@ suite("reported once: exercise commands", function () {
 })
 
 suite("reported once: course administration", function () {
-  test("a logout with both backends failing names each, once", async function () {
+  test("a failed logout is one notification", async function () {
     const { run, shown } = await harness({
-      langs: {
-        deauthenticate: async () => Err(offline()),
-        deauthenticateMooc: async () => Err(offline()),
-      },
+      langs: { deauthenticate: async () => Err(offline()) },
     })
 
     await run("tmc.logout")
 
-    expect(shown).toEqual([
-      `error: Failed to log out of ${backendName("mooc")}.`,
-      `error: Failed to log out of ${backendName("tmc")}.`,
-    ])
-  })
-
-  test("a logout with one backend failing is one notification", async function () {
-    const { run, shown } = await harness({
-      langs: {
-        deauthenticate: async () => Ok.EMPTY,
-        deauthenticateMooc: async () => Err(offline()),
-      },
-    })
-
-    await run("tmc.logout")
-
-    expect(shown).toEqual([`error: Failed to log out of ${backendName("mooc")}.`])
+    expect(shown).toEqual(["error: Failed to log out."])
   })
 
   test("a course that fails to add is one notification", async function () {

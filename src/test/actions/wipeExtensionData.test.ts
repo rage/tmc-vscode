@@ -35,7 +35,6 @@ function context(
       langs: {
         resetSettings: vi.fn(step("resetSettings", () => options.resetSettings ?? Ok.EMPTY)),
         deauthenticate: vi.fn(step("deauthenticate", () => Ok.EMPTY)),
-        deauthenticateMooc: vi.fn(step("deauthenticateMooc", () => Ok.EMPTY)),
       } as unknown as Langs,
       userData: {
         wipeDataFromStorage: vi.fn(step("wipeDataFromStorage", () => {})),
@@ -68,7 +67,6 @@ suite("wipeExtensionData action", function () {
     expect(stepsRun).toEqual([
       "resetSettings",
       "deauthenticate",
-      "deauthenticateMooc",
       "wipeDataFromStorage",
       "deleteAllWorkspaceFiles",
       "removeSync",

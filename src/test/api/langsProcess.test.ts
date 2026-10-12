@@ -417,7 +417,7 @@ suite("Langs CLI process output", function () {
   test("status updates reach the caller", async function () {
     const langs = newLangs()
     const deviceCodes: string[] = []
-    const login = langs.authenticateMooc((info) => deviceCodes.push(info.user_code))
+    const login = langs.authenticate((info) => deviceCodes.push(info.user_code))
     const langsProcess = lastProcess()
     writeStdout(
       langsProcess,
@@ -448,7 +448,7 @@ suite("Langs CLI process output", function () {
 suite("Langs CLI process cancellation", function () {
   test("an interrupted process is reported as killed", async function () {
     const langs = newLangs()
-    const login = langs.authenticateMooc(() => {})
+    const login = langs.authenticate(() => {})
     const langsProcess = lastProcess()
     login.interrupt()
     endProcess(langsProcess)
@@ -460,7 +460,7 @@ suite("Langs CLI process cancellation", function () {
 
   test("interrupting a process that already exited signals nothing", async function () {
     const langs = newLangs()
-    const login = langs.authenticateMooc(() => {})
+    const login = langs.authenticate(() => {})
     const langsProcess = lastProcess()
     endProcess(langsProcess)
     await login.result
@@ -472,7 +472,7 @@ suite("Langs CLI process cancellation", function () {
 
   test("interrupting a process that failed to start signals nothing", async function () {
     const langs = newLangs()
-    const login = langs.authenticateMooc(() => {})
+    const login = langs.authenticate(() => {})
     const langsProcess = lastProcess()
     langsProcess.emit("error", Object.assign(new Error("spawn ENOENT"), { errno: -2 }))
     await login.result

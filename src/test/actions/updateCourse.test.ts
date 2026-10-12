@@ -8,7 +8,13 @@ import type Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { UserData } from "../../config/userdata"
-import { ConnectionError, ForbiddenError, InsufficientScopeError, ServerError } from "../../errors"
+import {
+  ConnectionError,
+  ForbiddenError,
+  InsufficientScopeError,
+  ServerError,
+  TmcLoginNotAcceptedError,
+} from "../../errors"
 import type {
   CombinedCourseData,
   CourseData,
@@ -443,6 +449,19 @@ suite("updateCourse action (tmc)", function () {
     // Unlisted: one placeholder point, awarded only if the exercise is completed.
     expect(second).toMatchObject({ id: 2, availablePoints: 1, awardedPoints: 0, passed: false })
     expect(third).toMatchObject({ id: 3, availablePoints: 1, awardedPoints: 1, passed: true })
+  })
+
+  // tmc.mooc.fi may not accept courses.mooc.fi logins yet: nothing about the course, and a
+  // background poll must not repeat it.
+  test("reports a login tmc.mooc.fi does not accept once, leaving the course alone", async function () {
+    const context = actionContext()
+    getTmcCourseData.mockResolvedValue(Err(new TmcLoginNotAcceptedError("not logged in")))
+
+    expect((await updateCourse(context, courseId)).val).toBe(false)
+    expect((await updateCourse(context, courseId)).val).toBe(false)
+
+    expect(context.dialog.reportError).toHaveBeenCalledOnce()
+    expect(userData.getTmcCourses()[0]?.title).toBe("Stale title")
   })
 
   test("marks the course disabled when the server refuses it", async function () {

@@ -10,6 +10,7 @@ import {
   RuntimeError,
   ServerError,
   SpawnError,
+  TmcLoginNotAcceptedError,
   UploadExpiredError,
 } from "../errors"
 import { Logger, LogLevel } from "../utilities/logger"
@@ -65,6 +66,16 @@ suite("presentationFor", function () {
 
     expect(presentation.message).toContain("Log in again to continue")
     expect(presentation.actions).toEqual([{ label: "Log in", command: "tmc.showMoocLogin" }])
+  })
+
+  // Logging in again cannot make tmc.mooc.fi accept the login.
+  test("a login tmc.mooc.fi does not accept offers no login", function () {
+    const presentation = presentationFor(new TmcLoginNotAcceptedError("not logged in"))
+
+    expect(presentation.message).toBe(
+      "TMC Server did not accept your login. It may not accept courses.mooc.fi logins yet.",
+    )
+    expect(presentation.actions).toEqual([])
   })
 
   test("a failed initialization offers the help panel", function () {

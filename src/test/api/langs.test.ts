@@ -18,6 +18,7 @@ import {
   ObsoleteClientError,
   RuntimeError,
   ServerError,
+  TmcLoginNotAcceptedError,
   UnknownUploadError,
   UploadExpiredError,
 } from "../../errors"
@@ -633,14 +634,14 @@ suite("Langs class arg building", function () {
     expect(updates).toEqual([{ fraction: 0.25, message: "Moving exercises" }])
   })
 
-  test("authenticateMooc builds the `mooc login` command", async function () {
+  test("authenticate builds the `mooc login` command", async function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
-    langs.authenticateMooc(() => {})
+    langs.authenticate(() => {})
     expect(calls[0]?.args).toEqual(["mooc", "--client-name", "test-client", "login"])
   })
 
-  test("authenticateMooc sets no process timeout (device flow can take minutes)", async function () {
+  test("authenticate sets no process timeout (device flow can take minutes)", async function () {
     const langs = newLangs()
     let captured: { processTimeout?: number } | undefined
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -648,11 +649,11 @@ suite("Langs class arg building", function () {
       captured = commandArgs as { processTimeout?: number }
       return Err(new Error("stopped before spawning a real process"))
     })
-    langs.authenticateMooc(() => {})
+    langs.authenticate(() => {})
     expect(captured?.processTimeout).toBeUndefined()
   })
 
-  test("authenticateMooc surfaces the device-login status update and resolves on success", async function () {
+  test("authenticate surfaces the device-login status update and resolves on success", async function () {
     const langs = newLangs()
     const deviceInfo = {
       verification_uri: "https://courses.mooc.fi/oauth_device",
@@ -687,7 +688,7 @@ suite("Langs class arg building", function () {
       })
     })
     const seen: unknown[] = []
-    const { result } = langs.authenticateMooc((info) => seen.push(info))
+    const { result } = langs.authenticate((info) => seen.push(info))
     const res = await result
     expect(res.ok).toBe(true)
     expect(seen).toEqual([deviceInfo])
@@ -696,39 +697,16 @@ suite("Langs class arg building", function () {
   test.each([
     ["device-login-denied", DeviceLoginDeniedError],
     ["device-login-expired", DeviceLoginExpiredError],
-  ] as const)("authenticateMooc reports %s as its own error", async function (kind, errorClass) {
+  ] as const)("authenticate reports %s as its own error", async function (kind, errorClass) {
     const langs = newLangs()
     const onLogout = vi.fn()
-    langs.on("mooc-logout", onLogout)
+    langs.on("logout", onLogout)
     stubSpawn(langs, () => Ok(errorOutput(kind)))
-    const { result } = langs.authenticateMooc(() => {})
+    const { result } = langs.authenticate(() => {})
     const res = await result
     expect(res.err).toBe(true)
     expect(res.val).toBeInstanceOf(errorClass)
     expect(onLogout).not.toHaveBeenCalled()
-  })
-
-  test("isMoocAuthenticated builds `mooc logged-in` and maps the result", async function () {
-    const langs = newLangs()
-    const calls = stubSpawn(langs, () => Ok(nullOutput("currently logged in", "logged-in")))
-    const res = await langs.isMoocAuthenticated()
-    expect(calls[0]?.args).toEqual(["mooc", "--client-name", "test-client", "logged-in"])
-    expect(res.unwrap()).toBe(true)
-  })
-
-  test("isMoocAuthenticated returns false when not logged in", async function () {
-    const langs = newLangs()
-    stubSpawn(langs, () => Ok(nullOutput("currently not logged in", "not-logged-in")))
-    const res = await langs.isMoocAuthenticated()
-    expect(res.unwrap()).toBe(false)
-  })
-
-  test("deauthenticateMooc builds `mooc logout`", async function () {
-    const langs = newLangs()
-    const calls = stubSpawn(langs, () => Ok(nullOutput("logged out", "logged-out")))
-    const res = await langs.deauthenticateMooc()
-    expect(calls[0]?.args).toEqual(["mooc", "--client-name", "test-client", "logout"])
-    expect(res.ok).toBe(true)
   })
 
   test("listLocalExercises asks for every course and both backends in one call", async function () {
@@ -975,12 +953,10 @@ suite("Langs error-kind mapping", function () {
     expect(result.err).toBe(true)
   })
 
-  test("invalid-token fires the failing backend's logout event and keeps the other's cache", async function () {
+  test("invalid-token fires the logout event and keeps the other backend's cache", async function () {
     const langs = newLangs()
     const onLogout = vi.fn()
-    const onMoocLogout = vi.fn()
     langs.on("logout", onLogout)
-    langs.on("mooc-logout", onMoocLogout)
     let organizationsCalls = 0
     stubSpawn(langs, (_i, args) => {
       if (args.includes("get-organizations")) {
@@ -996,11 +972,9 @@ suite("Langs error-kind mapping", function () {
     await langs.getTmcOrganizations() // served from cache
     expect(organizationsCalls).toBe(1)
 
-    // Only the mooc event fires, since the failing command targets mooc.
     const result = await langs.getEnrolledMoocCourses()
     expect(result.val).toBeInstanceOf(InvalidTokenError)
-    expect(onMoocLogout).toHaveBeenCalledExactlyOnceWith(false)
-    expect(onLogout).not.toHaveBeenCalled()
+    expect(onLogout).toHaveBeenCalledExactlyOnceWith(false)
 
     // tmc.mooc.fi did not reject anything, so its data is still good.
     await langs.getTmcOrganizations()
@@ -1034,67 +1008,47 @@ suite("Langs error-kind mapping", function () {
     expect(courseCalls).toBe(2)
   })
 
-  test("a tmc command's invalid-token fires the tmc logout event as unexpected", async function () {
+  test("a tmc command's not-logged-in is tmc.mooc.fi not accepting the login", async function () {
     const langs = newLangs()
     const onLogout = vi.fn()
-    const onMoocLogout = vi.fn()
     langs.on("logout", onLogout)
-    langs.on("mooc-logout", onMoocLogout)
-    stubSpawn(langs, () => Ok(errorOutput("invalid-token")))
+    stubSpawn(langs, () => Ok(errorOutput("not-logged-in")))
 
-    const result = await langs.getTmcOrganizations()
-    expect(result.val).toBeInstanceOf(InvalidTokenError)
+    const tmc = await langs.getTmcOrganizations()
+    expect(tmc.val).toBeInstanceOf(TmcLoginNotAcceptedError)
     expect(onLogout).toHaveBeenCalledExactlyOnceWith(false)
-    expect(onMoocLogout).not.toHaveBeenCalled()
+
+    const mooc = await langs.getEnrolledMoocCourses()
+    expect(mooc.val).toBeInstanceOf(AuthorizationError)
+    expect(mooc.val).not.toBeInstanceOf(TmcLoginNotAcceptedError)
   })
 
-  test("deauthenticate fires the logout event as expected and stays quiet on auth errors", async function () {
+  test("deauthenticate removes both credentials and fires the logout event as expected", async function () {
+    const langs = newLangs()
+    const onLogout = vi.fn()
+    langs.on("logout", onLogout)
+    const calls = stubSpawn(langs, () => Ok(nullOutput("logged out", "logged-out")))
+
+    const result = await langs.deauthenticate()
+
+    expect(result.ok).toBe(true)
+    expect(calls.map((x) => x.args)).toEqual([
+      ["tmc", "--client-name", "test-client", "--client-version", "1.0.0", "logout"],
+      ["mooc", "--client-name", "test-client", "logout"],
+    ])
+    expect(onLogout).toHaveBeenCalledExactlyOnceWith(true)
+  })
+
+  test("a failed deauthenticate fires no logout event, expected or not", async function () {
     const langs = newLangs()
     const onLogout = vi.fn()
     langs.on("logout", onLogout)
     stubSpawn(langs, (i) => Ok(i === 0 ? nullOutput() : errorOutput("not-logged-in")))
 
-    const logoutResult = await langs.deauthenticate()
-    expect(logoutResult.ok).toBe(true)
-    expect(onLogout).toHaveBeenCalledExactlyOnceWith(true)
-
-    // Errors, but must not fire the unexpected-logout event.
-    const secondResult = await langs.deauthenticate()
-    expect(secondResult.err).toBe(true)
-    expect(onLogout).toHaveBeenCalledTimes(1)
-  })
-
-  test("deauthenticateMooc fires the mooc-logout event as expected", async function () {
-    const langs = newLangs()
-    const onMoocLogout = vi.fn()
-    langs.on("mooc-logout", onMoocLogout)
-    stubSpawn(langs, () => Ok(nullOutput()))
-
-    const result = await langs.deauthenticateMooc()
-    expect(result.ok).toBe(true)
-    expect(onMoocLogout).toHaveBeenCalledExactlyOnceWith(true)
-  })
-
-  // `tmc logout` only removes credentials.json; the mooc credentials -- which
-  // authenticate both backends -- are `mooc logout`'s to remove.
-  test("deauthenticate runs only `tmc logout` and leaves the mooc session alone", async function () {
-    const langs = newLangs()
-    const onMoocLogout = vi.fn()
-    langs.on("mooc-logout", onMoocLogout)
-    const calls = stubSpawn(langs, () => Ok(nullOutput()))
-
     const result = await langs.deauthenticate()
-    expect(result.ok).toBe(true)
-    expect(calls).toHaveLength(1)
-    expect(calls[0]?.args).toEqual([
-      "tmc",
-      "--client-name",
-      "test-client",
-      "--client-version",
-      "1.0.0",
-      "logout",
-    ])
-    expect(onMoocLogout).not.toHaveBeenCalled()
+
+    expect(result.err).toBe(true)
+    expect(onLogout).not.toHaveBeenCalled()
   })
 
   test("isAuthenticated builds `tmc logged-in` and maps the result", async function () {

@@ -1,4 +1,4 @@
-import { Ok } from "ts-results"
+import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
 import {
@@ -9,6 +9,7 @@ import {
 } from "../../actions/courseCatalog"
 import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
+import { AuthorizationError } from "../../errors"
 import { createMockActionContext } from "../mocks/actionContext"
 
 const organizations = [
@@ -36,7 +37,7 @@ function context(options: {
     getCourses: options.getCourses ?? vi.fn(async () => Ok([])),
   } as unknown as Langs
   return createMockActionContext({
-    authenticated: { mooc: options.moocAuthenticated ?? true },
+    loggedIn: options.moocAuthenticated ?? true,
     startup: { langs },
   })
 }
@@ -55,6 +56,15 @@ suite("listEnrolledMoocCourses and listTmcOrganizations", function () {
 
     expect(await listEnrolledMoocCourses(ctx)).toBe(MOOC_LOGIN)
     expect(getEnrolledMoocCourses).not.toHaveBeenCalled()
+  })
+
+  // A tmc token stored before courses.mooc.fi logins keeps the session alive on its own.
+  test("stands for a mooc login when courses.mooc.fi refuses the session", async function () {
+    const ctx = context({
+      getEnrolledMoocCourses: vi.fn(async () => Err(new AuthorizationError("not logged in"))),
+    })
+
+    expect(await listEnrolledMoocCourses(ctx)).toBe(MOOC_LOGIN)
   })
 })
 

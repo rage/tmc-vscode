@@ -58,7 +58,7 @@ interface Harness {
 
 function harness(): Harness {
   const logins: FakeLogin[] = []
-  const authenticateMooc = vi.fn((onDeviceCode: (info: MoocDeviceLogin) => void) => {
+  const authenticate = vi.fn((onDeviceCode: (info: MoocDeviceLogin) => void) => {
     const result = Promise.withResolvers<Result<void, BaseError>>()
     const interrupt = vi.fn(() => result.resolve(Err(new AuthorizationError("interrupted"))))
     logins.push({
@@ -70,7 +70,7 @@ function harness(): Harness {
   })
   const [dialog] = createDialogMock()
   const context = {
-    ...createMockActionContext({ startup: { langs: { authenticateMooc } as unknown as Langs } }),
+    ...createMockActionContext({ startup: { langs: { authenticate } as unknown as Langs } }),
     dialog,
   }
 

@@ -2,8 +2,14 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
 import type Langs from "../api/langs"
-import { ConnectionError, ForbiddenError, InsufficientScopeError, ServerError } from "../errors"
-import type { CourseIdentifier, Enum } from "../shared/shared"
+import {
+  ConnectionError,
+  ForbiddenError,
+  InsufficientScopeError,
+  ServerError,
+  TmcLoginNotAcceptedError,
+} from "../errors"
+import type { BackendKind, CourseIdentifier, Enum } from "../shared/shared"
 import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
 import { Logger } from "../utilities"
@@ -50,19 +56,20 @@ function withStoredExercises(fresh: LocalCourseData, stored: LocalCourseData): L
 }
 
 /**
- * Tells the user their session has to be renewed, and stays quiet until one is.
+ * Tells the user `backend` refuses their session, and stays quiet until it serves them again.
  *
  * `updateCourse` runs once per course and from a half-hourly background poll, so an
  * unguarded dialog would repeat for every course on every refresh.
  */
-function reportInsufficientScope(
+function reportSessionRefusal(
   { authState, dialog }: ReadyActionContext,
-  error: InsufficientScopeError,
+  backend: BackendKind,
+  error: Error,
 ): void {
-  if (authState.insufficientScopeReported) {
+  if (authState.sessionRefusalsReported.has(backend)) {
     return
   }
-  authState.insufficientScopeReported = true
+  authState.sessionRefusalsReported.add(backend)
   dialog.reportError("Failed to update course data.", error)
 }
 
@@ -98,10 +105,13 @@ export async function updateCourse(
     { forceRefresh: true },
   )
   if (updateResult.err) {
-    if (updateResult.val instanceof InsufficientScopeError) {
+    if (
+      updateResult.val instanceof InsufficientScopeError ||
+      updateResult.val instanceof TmcLoginNotAcceptedError
+    ) {
       // Says nothing about the course, so nothing stored about it is touched.
-      Logger.warn("The current session does not grant access to programming exercises.")
-      reportInsufficientScope(actionContext, updateResult.val)
+      Logger.warn(`${backendName(courseId.kind)} refused the session.`, updateResult.val)
+      reportSessionRefusal(actionContext, courseId.kind, updateResult.val)
       return Ok(false)
     }
     if (updateResult.val instanceof ForbiddenError) {
@@ -128,11 +138,8 @@ export async function updateCourse(
   }
 
   actionContext.coursesTree.setBackendReachable(courseId.kind, true)
-  if (courseId.kind === "mooc") {
-    // The fetch the session was refused before has now gone through, so the next
-    // lapse is worth telling the user about again.
-    actionContext.authState.insufficientScopeReported = false
-  }
+  // A refusal reported before has ended, so the next one is worth telling the user about.
+  actionContext.authState.sessionRefusalsReported.delete(courseId.kind)
 
   // `updateExercises` finds the new exercises by diffing against the stored list,
   // so the course is stored with its old list and the fresh one goes in after.

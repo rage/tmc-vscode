@@ -33,6 +33,7 @@ import {
   ServerError,
   SpawnError,
   TimeoutError,
+  TmcLoginNotAcceptedError,
   UnknownUploadError,
   UploadExpiredError,
 } from "../errors"
@@ -253,9 +254,8 @@ export default class Langs {
   private readonly _nextSubmissionAllowedTimestamp: Record<BackendKind, number>
   private readonly _options: Options
   private readonly _responseCache: Map<string, ResponseCacheEntry>
+  private _onLogin?: () => void
   private _onLogout?: (expected: boolean) => void
-  private _onMoocLogin?: () => void
-  private _onMoocLogout?: (expected: boolean) => void
   private _onNotification?: (notification: Notification) => void
   /** Messages already surfaced; the CLI repeats a plugin's warning on every run. */
   private readonly _shownNotifications = new Set<string>()
@@ -293,29 +293,26 @@ export default class Langs {
   }
 
   /**
-   * Sets the callback to an event. Will overwrite previous callback for the specified event.
+   * Sets the callback to an event, replacing any earlier one.
    *
-   * `expected` is true for a deliberate logout, false when the backend rejected the credentials mid-session.
-   *
-   * @param event Event to subscribe to.
-   * @param callback Eventhandler to invoke on event.
+   * There is one session: `login` follows a successful {@link authenticate}, and `logout`
+   * carries `expected: true` after {@link deauthenticate} and `false` when a backend rejected
+   * the credentials it was sent. A rejection need not end the session, as the other
+   * credential may still be good, so a subscriber re-checks with {@link isAuthenticated}.
    */
-  public on(event: "mooc-login", callback: () => void): void
-  public on(event: "logout" | "mooc-logout", callback: (expected: boolean) => void): void
+  public on(event: "login", callback: () => void): void
+  public on(event: "logout", callback: (expected: boolean) => void): void
   public on(event: "notification", callback: (notification: Notification) => void): void
   public on(
-    event: "logout" | "mooc-login" | "mooc-logout" | "notification",
+    event: "login" | "logout" | "notification",
     callback: (() => void) | ((expected: boolean) => void) | ((notification: Notification) => void),
   ): void {
     switch (event) {
+      case "login":
+        this._onLogin = callback as () => void
+        break
       case "logout":
         this._onLogout = callback as (expected: boolean) => void
-        break
-      case "mooc-login":
-        this._onMoocLogin = callback as () => void
-        break
-      case "mooc-logout":
-        this._onMoocLogout = callback as (expected: boolean) => void
         break
       case "notification":
         this._onNotification = callback as (notification: Notification) => void
@@ -328,8 +325,8 @@ export default class Langs {
   // ---------------------------------------------------------------------------------------------
 
   /**
-   * Whether the tmc backend can be authenticated, via `tmc logged-in`: either a
-   * stored tmc token or a usable courses.mooc.fi access token counts.
+   * Whether the user has a session, via `tmc logged-in`: a usable courses.mooc.fi access token
+   * counts, and so does a tmc token stored before courses.mooc.fi logins replaced tmc ones.
    */
   public async isAuthenticated(options?: ExecutionOptions): Promise<Result<boolean, Error>> {
     const res = await this._executeLangsCommand(
@@ -353,37 +350,16 @@ export default class Langs {
   }
 
   /**
-   * Removes the stored tmc token (`tmc logout`). The courses.mooc.fi credentials
-   * are untouched, so the user can still be authenticated afterwards.
-   */
-  public async deauthenticate(): Promise<Result<void, Error>> {
-    const res = await this._executeLangsCommand(
-      {
-        backend: "tmc",
-        args: this._tmcCmd("logout"),
-        suppressAuthEvents: true,
-      },
-      null,
-    )
-    return res.andThen(() => {
-      this._clearBackendCache("tmc")
-      this._onLogout?.(true)
-      return Ok.EMPTY
-    })
-  }
-
-  /**
-   * Logs in via OAuth2 device authorization (RFC 8628) using `mooc login`.
-   * The CLI emits a `mooc-device-login` update with the verification
-   * URL/user code before blocking on approval, surfaced via `onDeviceCode`;
-   * it rejects on deny/expiry (`not-logged-in`). No `processTimeout`: the
-   * user may take minutes to approve in the browser. `interrupt` kills the
-   * process; nothing is persisted until login succeeds.
+   * Logs in to courses.mooc.fi with the OAuth2 device authorization flow (RFC 8628), via
+   * `mooc login`, and fires `login` once approved.
    *
-   * @param onDeviceCode Called with the verification URL/user code once the
-   * CLI emits it.
+   * Errs with a `DeviceLoginDeniedError` or `DeviceLoginExpiredError` when the user denies the
+   * login or does not approve it in time. `interrupt` kills the process; nothing is saved
+   * until the approval.
+   *
+   * @param onDeviceCode Called with the verification URL and user code once the CLI has them.
    */
-  public authenticateMooc(onDeviceCode: (info: MoocDeviceLogin) => void): {
+  public authenticate(onDeviceCode: (info: MoocDeviceLogin) => void): {
     result: Promise<Result<void, BaseError | InitializationError>>
     interrupt: () => void
   } {
@@ -408,50 +384,30 @@ export default class Langs {
           this._checkLangsResponse(x, null, { backend: "mooc", expected: true }, getStderr()),
         )
         .map(() => {
-          this._onMoocLogin?.()
+          this._onLogin?.()
           return undefined
         }),
     )
     return { result: loginResult, interrupt }
   }
 
-  /** Mirrors `isAuthenticated` for the mooc backend (`mooc logged-in`). */
-  public async isMoocAuthenticated(options?: ExecutionOptions): Promise<Result<boolean, Error>> {
-    const res = await this._executeLangsCommand(
-      {
-        backend: "mooc",
-        args: this._moocCmd("logged-in"),
-        processTimeout: options?.timeout,
-      },
-      null,
+  /**
+   * Removes every stored credential, the courses.mooc.fi one and any tmc one, and fires
+   * `logout` with `expected: true` once both are gone.
+   */
+  public async deauthenticate(): Promise<Result<void, Error>> {
+    const results = await Promise.all(
+      [this._tmcCmd("logout"), this._moocCmd("logout")].map((args) =>
+        this._executeLangsCommand({ args, suppressAuthEvents: true }, null),
+      ),
     )
-    return res.andThen<boolean, Error>((x) => {
-      switch (x.result) {
-        case "logged-in":
-          return Ok(true)
-        case "not-logged-in":
-          return Ok(false)
-        default:
-          return Err(new Error(`Unexpected langs result: ${x.result}`))
-      }
-    })
-  }
-
-  /** Mirrors `deauthenticate` for the mooc backend (`mooc logout`); fires `mooc-logout` with `expected: true`. */
-  public async deauthenticateMooc(): Promise<Result<void, Error>> {
-    const res = await this._executeLangsCommand(
-      {
-        backend: "mooc",
-        args: this._moocCmd("logout"),
-        suppressAuthEvents: true,
-      },
-      null,
-    )
-    return res.andThen(() => {
-      this._clearBackendCache("mooc")
-      this._onMoocLogout?.(true)
-      return Ok.EMPTY
-    })
+    this._responseCache.clear()
+    const failed = results.find((res) => res.err)
+    if (failed) {
+      return failed
+    }
+    this._onLogout?.(true)
+    return Ok.EMPTY
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -1614,15 +1570,21 @@ export default class Langs {
       case "invalid-token":
         this._clearBackendCache(auth.backend)
         if (!auth.expected) {
-          this._fireUnexpectedLogout(auth.backend)
+          this._onLogout?.(false)
         }
         return Err(new InvalidTokenError(message))
       case "not-logged-in":
         this._clearBackendCache(auth.backend)
         if (!auth.expected) {
-          this._fireUnexpectedLogout(auth.backend)
+          this._onLogout?.(false)
         }
-        return Err(new AuthorizationError(message, details))
+        // tmc.mooc.fi may not accept courses.mooc.fi tokens yet, and logging in again
+        // cannot change that.
+        return Err(
+          auth.backend === "tmc"
+            ? new TmcLoginNotAcceptedError(message, details)
+            : new AuthorizationError(message, details),
+        )
       case "device-login-denied":
         return Err(new DeviceLoginDeniedError(message, details))
       case "device-login-expired":
@@ -1649,15 +1611,6 @@ export default class Langs {
     }
     this._shownNotifications.add(notification.message)
     this._onNotification?.(notification)
-  }
-
-  /** Fires the unexpected-logout (`expected: false`) event for `target`, used when credentials were rejected rather than removed deliberately. */
-  private _fireUnexpectedLogout(target?: BackendKind): void {
-    if (target === "tmc") {
-      this._onLogout?.(false)
-    } else if (target === "mooc") {
-      this._onMoocLogout?.(false)
-    }
   }
 
   /**

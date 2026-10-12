@@ -16,28 +16,20 @@ import { autoMock } from "../support/mock"
 import { createDialogMock } from "./dialog"
 
 export interface MockActionContextOptions {
-  /** Which backends hold a session; both do unless said otherwise. */
-  authenticated?: { tmc?: boolean; mooc?: boolean }
+  /** Whether the user has a session; they do unless said otherwise. */
+  loggedIn?: boolean
   /** Services the test drives itself; the rest stay loose auto-mocks. */
   startup?: Partial<Omit<ReadyStartup, "kind">>
 }
 
 /** An auth state stuck at a fixed login status, with no CLI behind it. */
-export function createMockAuthState(
-  authenticated: { tmc?: boolean; mooc?: boolean } = {},
-): AuthState {
-  const tmc = authenticated.tmc ?? true
-  const mooc = authenticated.mooc ?? true
+export function createMockAuthState(loggedIn = true): AuthState {
   return {
-    tmc,
-    mooc,
-    loggedIn: tmc || mooc,
-    refresh: vi.fn(async () => ({ tmc: Ok(tmc), mooc: Ok(mooc) })),
+    loggedIn,
+    refresh: vi.fn(async () => Ok(loggedIn)),
     set: vi.fn(async () => {}),
-    clear: vi.fn(async () => {}),
     subscribe: vi.fn(),
-    subscribeMooc: vi.fn(),
-    insufficientScopeReported: false,
+    sessionRefusalsReported: new Set(),
   }
 }
 
@@ -62,7 +54,7 @@ export function createMockActionContext(
   options: MockActionContextOptions = {},
 ): ReadyActionContext {
   return {
-    authState: createMockAuthState(options.authenticated),
+    authState: createMockAuthState(options.loggedIn),
     dialog: dialogRunningProgressTasks(),
     settings: autoMock<Settings>(),
     coursesTree: autoMock<CoursesTree>(),

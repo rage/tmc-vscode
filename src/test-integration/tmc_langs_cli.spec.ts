@@ -411,7 +411,6 @@ suite("tmc langs cli spec", function () {
     test("a stored mooc credential authenticates the tmc backend", async function () {
       writeMoocCredentials(configDir)
       expect(await unwrapResult(tmc.isAuthenticated())).to.be.true
-      expect(await unwrapResult(tmc.isMoocAuthenticated())).to.be.true
     })
 
     // What a new user has: the only login left issues a mooc credential, and
@@ -433,15 +432,13 @@ suite("tmc langs cli spec", function () {
       expect(fs.existsSync(path.join(configDir, "credentials.json"))).to.be.false
     }).timeout(20000)
 
-    test("tmc logout leaves the mooc credentials in place", async function () {
+    test("logging out removes both the tmc and the mooc credentials", async function () {
       writeCredentials(configDir)
       writeMoocCredentials(configDir)
       await unwrapResult(tmc.deauthenticate())
       expect(fs.existsSync(path.join(configDir, "credentials.json"))).to.be.false
-      // `tmc logout` owns credentials.json only; the mooc session survives it
-      // and keeps authenticating both backends.
-      expect(await unwrapResult(tmc.isMoocAuthenticated())).to.be.true
-      expect(await unwrapResult(tmc.isAuthenticated())).to.be.true
+      expect(hasMoocCredentials(configDir)).to.be.false
+      expect(await unwrapResult(tmc.isAuthenticated())).to.be.false
     })
 
     test("should not be able to download an exercise", async function () {
@@ -843,19 +840,17 @@ suite("tmc langs cli spec", function () {
       expect(after.length).to.be.equal(before.length)
     })
 
-    test("reports mooc login status from the stored credentials file", async function () {
-      // `mooc logged-in` only reads the credentials file; no backend call.
+    test("reports the login status the stored mooc credentials give", async function () {
       clearMoocCredentials(configDir)
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
+      expect((await tmc.isAuthenticated()).unwrap()).to.be.false
       writeMoocCredentials(configDir)
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+      expect((await tmc.isAuthenticated()).unwrap()).to.be.true
     })
 
-    test("deauthenticateMooc removes the stored mooc credentials", async function () {
+    test("deauthenticate removes the stored mooc credentials", async function () {
       writeMoocCredentials(configDir)
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
-      ;(await tmc.deauthenticateMooc()).unwrap()
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
+      ;(await tmc.deauthenticate()).unwrap()
+      expect(hasMoocCredentials(configDir)).to.be.false
     })
 
     suite("device flow", function () {
@@ -880,9 +875,9 @@ suite("tmc langs cli spec", function () {
         }
       })
 
-      test("authenticateMooc runs the device flow and stores credentials", async function () {
+      test("authenticate runs the device flow and stores credentials", async function () {
         let deviceInfo: { user_code: string; verification_uri: string } | undefined
-        const { result } = tmc.authenticateMooc((info) => {
+        const { result } = tmc.authenticate((info) => {
           deviceInfo = info
         })
         const res = await result
@@ -890,14 +885,14 @@ suite("tmc langs cli spec", function () {
         // the CLI emitted the device code before blocking on the poll loop
         expect(deviceInfo?.user_code).to.equal(mockUserCode(1))
         expect(deviceInfo?.verification_uri).to.contain("/oauth_device")
-        expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+        expect(hasMoocCredentials(configDir)).to.be.true
       })
 
       test("a device code that expires before approval fails the login", async function () {
         process.env.TMC_LANGS_MOOC_CLIENT_ID = "mooc-mock-expired"
-        const res = await tmc.authenticateMooc(() => {}).result
+        const res = await tmc.authenticate(() => {}).result
         expect(res.val).to.be.instanceOf(DeviceLoginExpiredError)
-        expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
+        expect(hasMoocCredentials(configDir)).to.be.false
       })
 
       // The mock answers slow_down until a full interval has passed, whatever the
@@ -905,9 +900,9 @@ suite("tmc langs cli spec", function () {
       test("a login told to slow down still completes", async function () {
         this.timeout(40000)
         process.env.TMC_LANGS_MOOC_CLIENT_ID = "mooc-mock-slowdown"
-        const res = await tmc.authenticateMooc(() => {}).result
+        const res = await tmc.authenticate(() => {}).result
         expect(res.ok, res.err ? `login failed: ${res.val.message}` : "").to.be.true
-        expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+        expect(hasMoocCredentials(configDir)).to.be.true
       })
     })
   })
@@ -996,7 +991,7 @@ suite("tmc langs cli spec", function () {
       const courses = (await tmc.getEnrolledMoocCourses()).unwrap()
       expect(courses.length).to.be.greaterThan(0)
       // The refreshed credentials were retained -> still logged in.
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+      expect(hasMoocCredentials(configDir)).to.be.true
     })
 
     test("deletes credentials and reports logged-out when the refresh is rejected", async function () {
@@ -1007,11 +1002,11 @@ suite("tmc langs cli spec", function () {
         expiresIn: 3600,
         obtainedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
       })
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+      expect(hasMoocCredentials(configDir)).to.be.true
       // Refresh is rejected, so langs deletes the creds and proceeds unauthenticated.
       const res = await tmc.getEnrolledMoocCourses()
       expect(res.err).to.be.true
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
+      expect(hasMoocCredentials(configDir)).to.be.false
     })
 
     // Revokes the token server-side while the stored credentials still look
@@ -1035,7 +1030,7 @@ suite("tmc langs cli spec", function () {
       await expireAccessToken(MOCK_SEEDED_ACCESS_TOKEN)
       const courses = (await tmc.getEnrolledMoocCourses()).unwrap()
       expect(courses.length).to.be.greaterThan(0)
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+      expect(hasMoocCredentials(configDir)).to.be.true
     })
 
     test("deletes credentials when the refresh after a rejection also fails", async function () {
@@ -1047,7 +1042,7 @@ suite("tmc langs cli spec", function () {
       await expireAccessToken(MOCK_SEEDED_ACCESS_TOKEN)
       const res = await tmc.getEnrolledMoocCourses()
       expect(res.err).to.be.true
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
+      expect(hasMoocCredentials(configDir)).to.be.false
     })
   })
 
@@ -1126,6 +1121,10 @@ function moocCredentialsFileName(): string {
 
 // Removes the per-host file and any shared `credentials_mooc.json` an older CLI
 // left behind, which langs would otherwise adopt.
+function hasMoocCredentials(configDir: string): boolean {
+  return fs.existsSync(path.join(configDir, moocCredentialsFileName()))
+}
+
 function clearMoocCredentials(configDir: string): void {
   if (!fs.existsSync(configDir)) {
     return

@@ -2,7 +2,15 @@ import type { BackendKind } from "./shared/shared"
 import { backendName, BaseError } from "./shared/shared"
 
 export class AuthorizationError extends BaseError {
-  public override readonly name = "Authorization Error"
+  public override readonly name: string = "Authorization Error"
+}
+
+/**
+ * tmc.mooc.fi refused the request's credentials: the courses.mooc.fi login, which it may not
+ * accept yet, or none at all. Logging in again does not fix the former.
+ */
+export class TmcLoginNotAcceptedError extends AuthorizationError {
+  public override readonly name = "TMC Login Not Accepted Error"
 }
 
 export class BottleneckError extends BaseError {
@@ -204,6 +212,14 @@ export function presentationFor(error: Error, backend?: BackendKind): ErrorPrese
       actions: error.remedyLabel
         ? [{ label: error.remedyLabel, command: SHOW_AI_USE_PROBLEM_COMMAND }]
         : [],
+    }
+  }
+  if (error instanceof TmcLoginNotAcceptedError) {
+    return {
+      message:
+        `${backendName("tmc")} did not accept your login. It may not accept` +
+        ` ${backendName("mooc")} logins yet.`,
+      actions: [],
     }
   }
   if (error instanceof InsufficientScopeError) {
