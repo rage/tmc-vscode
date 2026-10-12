@@ -49,7 +49,7 @@ suite("refreshLocalExercises action", function () {
   })
 
   test("uses a scan it is given instead of asking the CLI", async function () {
-    const scan = { localExercises: Ok([]), settings: Ok({}) }
+    const scan = { localExercises: Ok([]), settings: Ok({ projects_dir: "/projects" }) }
     const result = await refreshLocalExercises(actionContext(), scan)
     expect(result).toBe(Ok.EMPTY)
     expect(tmcMock.listLocalExercises).not.toHaveBeenCalled()

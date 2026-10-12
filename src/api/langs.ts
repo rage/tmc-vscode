@@ -27,6 +27,7 @@ import type {
   SubmissionFeedback,
   SubmissionFeedbackResponse,
   SubmissionFinished,
+  TmcConfig,
 } from "../../shared/langsSchema"
 import { CliNotification, CliOutputData, CliStatusUpdate } from "../../shared/langsSchema"
 import type { BackendKind, Enum } from "../../shared/lib"
@@ -628,11 +629,12 @@ export default class Langs {
    * Reads the whole settings file in one call. Uses TMC-langs `settings list` command
    * internally.
    *
-   * Values arrive unchecked and keyed by setting name, so a caller validates the shape of
-   * each key it reads, as it would pass a checker to {@link getSetting}. Prefer this
-   * whenever more than one key is wanted: {@link getSetting} costs a CLI process per key.
+   * Values other than `projects_dir` arrive unchecked and keyed by setting name, so a caller
+   * validates the shape of each key it reads, as it would pass a checker to
+   * {@link getSetting}. Prefer this whenever more than one key is wanted: {@link getSetting}
+   * costs a CLI process per key.
    */
-  public async listSettings(): Promise<Result<Record<string, unknown>, Error>> {
+  public async listSettings(): Promise<Result<TmcConfig & Record<string, unknown>, Error>> {
     return this._fetch({ args: this._settingsCmd("list") }, "tmc-config")
   }
 

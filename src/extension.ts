@@ -246,15 +246,11 @@ async function activateInner(
   let tmcDataPath: string | undefined
   if (startupScan) {
     const { settings: cliSettings } = startupScan
-    const projectsDir = cliSettings.ok ? cliSettings.val["projects-dir"] : undefined
     if (cliSettings.err) {
       Logger.error("Failed to define datapath:", cliSettings.val)
       reportInitializationError("Finding the exercises folder", cliSettings.val)
-    } else if (typeof projectsDir !== "string") {
-      Logger.error("Failed to define datapath: no value found.")
-      reportInitializationError("Finding the exercises folder", new Error("No value for datapath."))
     } else {
-      tmcDataPath = projectsDir
+      tmcDataPath = cliSettings.val.projects_dir
     }
   }
 

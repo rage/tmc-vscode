@@ -168,7 +168,7 @@ vi.mock("../../api/langs", () => ({
     public listSettings = async (): Promise<unknown> =>
       langsStub.sharedFailure
         ? Err(langsStub.sharedFailure)
-        : Ok({ "projects-dir": cliSettings.projectsDirectory })
+        : Ok({ projects_dir: cliSettings.projectsDirectory })
     public listLocalExercises = async (): Promise<unknown> => Ok([])
     public setSetting = async (key: string, value: unknown): Promise<unknown> => {
       langsStub.settingsWritten.push([key, value])
@@ -503,6 +503,7 @@ suite("activation with usable storage", function () {
     expect(recorded.isCourseViewFilled).toBe(true)
     expect(recorded.panelTypes).toEqual([])
     expect(recorded.serializerRegistrations).toBe(1)
+    expect(vscode.window.showErrorMessage).not.toHaveBeenCalled()
   })
 
   // VS Code rejects a command it cannot find, so an entry this key uncovers before its

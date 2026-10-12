@@ -26,7 +26,7 @@ function readClosedExercises(settings: Record<string, unknown>, key: string): st
 /** What {@link refreshLocalExercises} reads from the CLI: the exercises on disk and the settings. */
 export interface LocalExerciseScan {
   localExercises: Result<LocalExercise[], Error>
-  settings: Result<Record<string, unknown>, Error>
+  settings: Awaited<ReturnType<Langs["listSettings"]>>
 }
 
 /** Reads a {@link LocalExerciseScan}; both reads run, and fail, independently. */
