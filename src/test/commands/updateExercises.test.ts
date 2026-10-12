@@ -7,11 +7,14 @@ import { updateExercises } from "../../commands/updateExercises"
 import type Settings from "../../config/settings"
 import type { UserData } from "../../config/userdata"
 import type { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../../shared/shared"
-import {
-  CourseIdentifier as CourseIdentifierNs,
-  ExerciseIdentifier as ExerciseIdentifierNs,
-} from "../../shared/shared"
+import { CourseIdentifier as CourseIdentifierNs } from "../../shared/shared"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
+import {
+  idOfMoocCourse,
+  idOfMoocExercise,
+  idOfTmcCourse,
+  idOfTmcExercise,
+} from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -31,8 +34,8 @@ function outdated(
   exerciseName: string
 } {
   return {
-    courseId: CourseIdentifierNs.from(courseId),
-    exerciseId: ExerciseIdentifierNs.from(exerciseId),
+    courseId: idOfTmcCourse(courseId),
+    exerciseId: idOfTmcExercise(exerciseId),
     exerciseName: `exercise-${exerciseId}`,
   }
 }
@@ -82,9 +85,9 @@ suite("updateExercises command", function () {
   })
 
   test("records what it found per course, keeping a failed backend's last answer", async function () {
-    const staleMooc = [ExerciseIdentifierNs.from("mooc-exercise")]
-    updateablesRegistry.setMany([[CourseIdentifierNs.from(2), [ExerciseIdentifierNs.from(99)]]])
-    updateablesRegistry.setMany([[CourseIdentifierNs.from("mooc-course"), staleMooc]])
+    const staleMooc = [idOfMoocExercise("mooc-exercise")]
+    updateablesRegistry.setMany([[idOfTmcCourse(2), [idOfTmcExercise(99)]]])
+    updateablesRegistry.setMany([[idOfMoocCourse("mooc-course"), staleMooc]])
     checkForExerciseUpdates.mockResolvedValue({
       outdated: [outdated(1, 10), outdated(1, 11)],
       failures: [{ backend: "mooc", error: new Error("offline") }],
@@ -93,12 +96,12 @@ suite("updateExercises command", function () {
 
     await updateExercises(actionContext, "silent")
 
-    expect(updateablesRegistry.get(CourseIdentifierNs.from(1))).toEqual([
-      ExerciseIdentifierNs.from(10),
-      ExerciseIdentifierNs.from(11),
+    expect(updateablesRegistry.get(idOfTmcCourse(1))).toEqual([
+      idOfTmcExercise(10),
+      idOfTmcExercise(11),
     ])
-    expect(updateablesRegistry.get(CourseIdentifierNs.from(2))).toEqual([])
-    expect(updateablesRegistry.get(CourseIdentifierNs.from("mooc-course"))).toEqual(staleMooc)
+    expect(updateablesRegistry.get(idOfTmcCourse(2))).toEqual([])
+    expect(updateablesRegistry.get(idOfMoocCourse("mooc-course"))).toEqual(staleMooc)
   })
 
   test("does not credit a tmc course's updates to a mooc course with the same id", async function () {
@@ -112,10 +115,8 @@ suite("updateExercises command", function () {
 
     await updateExercises(actionContext, "silent")
 
-    expect(updateablesRegistry.get(CourseIdentifierNs.from(1))).toEqual([
-      ExerciseIdentifierNs.from(10),
-    ])
-    expect(updateablesRegistry.get(CourseIdentifierNs.from("1"))).toEqual([])
+    expect(updateablesRegistry.get(idOfTmcCourse(1))).toEqual([idOfTmcExercise(10)])
+    expect(updateablesRegistry.get(idOfMoocCourse("1"))).toEqual([])
   })
 
   test("postpones the reminder once per course, not once per exercise", async function () {

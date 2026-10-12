@@ -5,8 +5,8 @@ import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { UserData } from "../../config/userdata"
-import { CourseIdentifier } from "../../shared/shared"
 import Storage from "../../storage"
+import { idOfMoocCourse } from "../fixtures/identifiers"
 import { MOOC_COURSE_UUID, MOOC_EXERCISE_UUID, moocCourse } from "../fixtures/tmc"
 import { createMockActionContext } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
@@ -45,7 +45,7 @@ suite("addNewCourse action (mooc)", function () {
     const result = await addNewCourse(
       actionContext(),
       "unused-org-slug",
-      CourseIdentifier.from(MOOC_COURSE_UUID),
+      idOfMoocCourse(MOOC_COURSE_UUID),
     )
     expect(result.ok).toBe(true)
     const stored = userData.getMoocCourses()[0]
@@ -72,7 +72,7 @@ suite("addNewCourse action (mooc)", function () {
     const result = await addNewCourse(
       actionContext(),
       "unused-org-slug",
-      CourseIdentifier.from(MOOC_COURSE_UUID),
+      idOfMoocCourse(MOOC_COURSE_UUID),
     )
     expect(result.err).toBe(true)
     expect(userData.getMoocCourses()).toEqual([])
@@ -83,7 +83,7 @@ suite("addNewCourse action (mooc)", function () {
     const first = await addNewCourse(
       actionContext(),
       "unused-org-slug",
-      CourseIdentifier.from(MOOC_COURSE_UUID),
+      idOfMoocCourse(MOOC_COURSE_UUID),
     )
     expect(first.ok).toBe(true)
     expect(userData.getMoocCourses()).toHaveLength(1)
@@ -96,7 +96,7 @@ suite("addNewCourse action (mooc)", function () {
         second = await addNewCourse(
           actionContext(),
           "unused-org-slug",
-          CourseIdentifier.from(MOOC_COURSE_UUID),
+          idOfMoocCourse(MOOC_COURSE_UUID),
         )
       })(),
     ).resolves.not.toThrow()

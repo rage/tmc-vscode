@@ -3,9 +3,8 @@ import { Err, Ok } from "ts-results"
 import type * as vscode from "vscode"
 
 import type { WorkspaceExercise } from "../api/workspaceManager"
-import { findStoredExercise } from "../config/userdata"
 import type { RunResult, StyleValidationResult } from "../shared/langsSchema"
-import { LocalCourseData, LocalCourseExercise } from "../shared/shared"
+import { LocalCourseData } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { Logger } from "../utilities"
 import { resolvePythonInterpreter } from "../window"
@@ -43,11 +42,11 @@ export async function testExercise(
 ): Promise<Result<ExerciseTestOutcome, Error>> {
   const { langs, userData } = actionContext.startup
 
-  const stored = findStoredExercise(userData, exercise)
+  const stored = userData.getExercise(exercise.id)
   if (stored.err) {
     return stored
   }
-  const { course, exercise: courseExercise } = stored.val
+  const { course } = stored.val
   if (LocalCourseData.isExamMode(course)) {
     return Ok({ kind: "examMode" })
   }
@@ -60,7 +59,7 @@ export async function testExercise(
   // guards the run-tests + checkstyle pair as one unit against a second click
   const exercisePath = exercise.uri.fsPath
   return exerciseOperations.run(
-    LocalCourseExercise.getId(courseExercise),
+    exercise.id,
     "testing",
     async (): Promise<Result<ExerciseTestOutcome, Error>> => {
       const { process: testRunner, interrupt: testInterrupt } = langs.runTests(

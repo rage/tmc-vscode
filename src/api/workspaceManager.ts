@@ -20,7 +20,8 @@ import {
 import type Resources from "../config/resources"
 import { EditorKind } from "../config/resources"
 import { FileSystemError } from "../errors"
-import type { BackendKind } from "../shared/shared"
+import type { BackendKind, CourseIdentifier } from "../shared/shared"
+import { ExerciseIdentifier } from "../shared/shared"
 import { Logger } from "../utilities"
 
 /** What keeps VS Code from writing a course's `.code-workspace`. */
@@ -37,9 +38,17 @@ export enum ExerciseStatus {
   Open = "opened",
 }
 
+/** An exercise on disk, joined to the stored course it belongs to. */
 export interface WorkspaceExercise {
+  /** The stored exercise's id; join stored data on this, never on {@link exerciseSlug}. */
+  id: ExerciseIdentifier
+  courseId: CourseIdentifier
   backend: BackendKind
   courseSlug: string
+  /**
+   * The exercise's folder name. A mooc exercise's stored name is free text, which langs
+   * kebab-cases for its folder, so this need not equal any stored name.
+   */
   exerciseSlug: string
   status: ExerciseStatus
   uri: vscode.Uri
@@ -122,8 +131,10 @@ export async function ensureWorkspaceRootFile(workspaceFileFolder: string): Prom
  */
 export default class WorkspaceManager implements vscode.Disposable {
   private _exercises: WorkspaceExercise[]
-  // The same objects as `_exercises`, keyed by `uri.fsPath`. Replace both together.
+  // The same objects as `_exercises`, keyed by `uri.fsPath` and by `ExerciseIdentifier.key`.
+  // Replace all three together.
   private _exercisesByPath: Map<string, WorkspaceExercise>
+  private _exercisesById: Map<string, WorkspaceExercise>
   private readonly _resources: Resources
   private readonly _disposables: vscode.Disposable[]
   private readonly _persistClosedExercises: PersistClosedCourseExercises
@@ -149,6 +160,7 @@ export default class WorkspaceManager implements vscode.Disposable {
   ) {
     this._exercises = exercises ?? []
     this._exercisesByPath = WorkspaceManager._indexByPath(this._exercises)
+    this._exercisesById = WorkspaceManager._indexById(this._exercises)
     this._persistClosedExercises = persistClosedExercises
     this._recordedClosedExercises = WorkspaceManager._closedByCourse(this._exercises)
     this._resources = resources
@@ -238,6 +250,7 @@ export default class WorkspaceManager implements vscode.Disposable {
   public async setExercises(exercises: WorkspaceExercise[]): Promise<Result<void, Error>> {
     this._exercises = exercises
     this._exercisesByPath = WorkspaceManager._indexByPath(exercises)
+    this._exercisesById = WorkspaceManager._indexById(exercises)
     this._recordedClosedExercises = WorkspaceManager._closedByCourse(exercises)
     this._exercisesChanged.fire()
     return this._refreshActiveCourseWorkspace()
@@ -277,15 +290,9 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
   }
 
-  public getExerciseBySlug(
-    backend: BackendKind,
-    courseSlug: string,
-    exerciseSlug: string,
-  ): WorkspaceExercise | undefined {
-    return this._exercises.find(
-      (x) =>
-        x.backend === backend && x.courseSlug === courseSlug && x.exerciseSlug === exerciseSlug,
-    )
+  /** The exercise on disk with this id, or `undefined` while it is not downloaded. */
+  public getExercise(id: ExerciseIdentifier): WorkspaceExercise | undefined {
+    return this._exercisesById.get(ExerciseIdentifier.key(id))
   }
 
   /** The open workspace folders that are exercises themselves; never `.tmc` or one added by hand. */
@@ -311,17 +318,17 @@ export default class WorkspaceManager implements vscode.Disposable {
   public openCourseExercises(
     backend: BackendKind,
     courseSlug: string,
-    exerciseSlugs: string[],
+    exerciseIds: ExerciseIdentifier[],
   ): Promise<Result<WorkspaceExercise[], Error>> {
-    return this._setOpen(backend, courseSlug, exerciseSlugs, true)
+    return this._setOpen(backend, courseSlug, exerciseIds, true)
   }
 
   public closeCourseExercises(
     backend: BackendKind,
     courseSlug: string,
-    exerciseSlugs: string[],
+    exerciseIds: ExerciseIdentifier[],
   ): Promise<Result<WorkspaceExercise[], Error>> {
-    return this._setOpen(backend, courseSlug, exerciseSlugs, false)
+    return this._setOpen(backend, courseSlug, exerciseIds, false)
   }
 
   /** Adds extension recommendations to a course's workspace file. Never rejects. */
@@ -713,15 +720,17 @@ export default class WorkspaceManager implements vscode.Disposable {
   private async _setOpen(
     backend: BackendKind,
     courseSlug: string,
-    exerciseSlugs: string[],
+    exerciseIds: ExerciseIdentifier[],
     open: boolean,
   ): Promise<Result<WorkspaceExercise[], Error>> {
     const courseExercises = this._exercises.filter(
       (x) => x.backend === backend && x.courseSlug === courseSlug,
     )
-    const requested = new Set(exerciseSlugs)
+    const requested = new Set(exerciseIds.map((id) => ExerciseIdentifier.key(id)))
+    const isRequested = (x: WorkspaceExercise): boolean =>
+      requested.has(ExerciseIdentifier.key(x.id))
     const closedAfterwards = courseExercises
-      .filter((x) => (requested.has(x.exerciseSlug) ? !open : x.status === ExerciseStatus.Closed))
+      .filter((x) => (isRequested(x) ? !open : x.status === ExerciseStatus.Closed))
       .map((x) => x.exerciseSlug)
 
     const persisted = await this._persistClosedExercises(backend, courseSlug, closedAfterwards)
@@ -733,7 +742,7 @@ export default class WorkspaceManager implements vscode.Disposable {
       WorkspaceManager._closedFingerprint(closedAfterwards),
     )
 
-    const matched = courseExercises.filter((x) => requested.has(x.exerciseSlug))
+    const matched = courseExercises.filter((x) => isRequested(x))
     for (const exercise of matched) {
       exercise.status = open ? ExerciseStatus.Open : ExerciseStatus.Closed
     }
@@ -804,6 +813,10 @@ export default class WorkspaceManager implements vscode.Disposable {
 
   private static _indexByPath(exercises: WorkspaceExercise[]): Map<string, WorkspaceExercise> {
     return new Map(exercises.map((x) => [x.uri.fsPath, x]))
+  }
+
+  private static _indexById(exercises: WorkspaceExercise[]): Map<string, WorkspaceExercise> {
+    return new Map(exercises.map((x) => [ExerciseIdentifier.key(x.id), x]))
   }
 
   private _onDidChangeWorkspaceFolders(e: vscode.WorkspaceFoldersChangeEvent): void {

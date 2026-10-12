@@ -6,7 +6,7 @@ import { separator } from "../api/dialog"
 import type WorkspaceManager from "../api/workspaceManager"
 import { exerciseFor } from "../api/workspaceManager"
 import type { UserData } from "../config/userdata"
-import { LocalCourseExercise } from "../shared/shared"
+import type { LocalCourseExercise } from "../shared/shared"
 import type { ExerciseOperationKind, ExerciseOperations } from "./exerciseOperations"
 import { pointsText } from "./points"
 import { tooltipOf } from "./tooltip"
@@ -17,7 +17,7 @@ export interface ExerciseStatusSources {
     WorkspaceManager,
     "activeExercise" | "getExerciseContaining" | "onDidChangeExercises"
   >
-  userData: Pick<UserData, "getExerciseByName" | "getCourseBySlug" | "onDidChangeCourses">
+  userData: Pick<UserData, "getExercise" | "getCourse" | "onDidChangeCourses">
   operations: Pick<ExerciseOperations, "current" | "onDidChange">
 }
 
@@ -61,12 +61,9 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
       return
     }
     const slug = exercise.exerciseSlug
-    const stored = this._sources.userData.getExerciseByName(
-      exercise.backend,
-      exercise.courseSlug,
-      exercise.exerciseSlug,
-    )
-    const running = stored && this._sources.operations.current(LocalCourseExercise.getId(stored))
+    const storedResult = this._sources.userData.getExercise(exercise.id)
+    const stored = storedResult.ok ? storedResult.val.exercise : undefined
+    const running = this._sources.operations.current(exercise.id)
     const activity = running && activityLabels[running]
     const points = stored && pointsText(stored.data.awardedPoints, stored.data.availablePoints)
 
@@ -133,7 +130,7 @@ export async function showExerciseActions(
     label,
     value: { command, arguments: target },
   })
-  const course = sources.userData.getCourseBySlug(exercise.backend, exercise.courseSlug)
+  const course = sources.userData.getCourse(exercise.courseId)
   const picked = await dialog.selectItem(
     { title: exercise.exerciseSlug, placeHolder: "What do you want to do with this exercise?" },
     action("$(beaker) Run Tests", "tmc.testExercise"),

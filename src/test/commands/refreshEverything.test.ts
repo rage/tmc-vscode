@@ -10,6 +10,7 @@ import { updateExercises } from "../../commands/updateExercises"
 import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, makeTmcKind } from "../../shared/shared"
 import { Logger } from "../../utilities"
+import { idOfTmcCourse } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -134,7 +135,7 @@ suite("refreshEverything command", function () {
     const queuedOptions = {
       silent: true,
       isQueuedWhenBusy: true,
-      courseId: CourseIdentifier.from(1),
+      courseId: idOfTmcCourse(1),
     }
 
     const first = refreshEverything(actionContext, { silent: true })
@@ -290,7 +291,7 @@ suite("refreshEverything's new-exercises prompt", function () {
     await vi.waitFor(() =>
       expect(downloadNewExercisesForCourse).toHaveBeenCalledExactlyOnceWith(
         actionContext,
-        CourseIdentifier.from(1),
+        idOfTmcCourse(1),
       ),
     )
     expect(dialog.reportError).not.toHaveBeenCalled()
@@ -313,9 +314,7 @@ suite("refreshEverything's new-exercises prompt", function () {
 
   test("Download All carries on past a course that fails, and reports it once", async function () {
     vi.mocked(downloadNewExercisesForCourse).mockImplementation(async (_context, courseId) =>
-      CourseIdentifier.equals(courseId, CourseIdentifier.from(1))
-        ? Err(new Error("disk full"))
-        : Ok.EMPTY,
+      CourseIdentifier.equals(courseId, idOfTmcCourse(1)) ? Err(new Error("disk full")) : Ok.EMPTY,
     )
     const [actionContext, dialog] = contextWithCourses([
       tmcCourse(1, 0, [10]),
@@ -344,12 +343,10 @@ suite("refreshEverything's new-exercises prompt", function () {
 
     await vi.waitFor(() => {
       expect(userData.setNewExerciseNotifyAfter).toHaveBeenCalledExactlyOnceWith(
-        CourseIdentifier.from(1),
+        idOfTmcCourse(1),
         expect.any(Number),
       )
-      expect(userData.clearFromNewExercises).toHaveBeenCalledExactlyOnceWith(
-        CourseIdentifier.from(1),
-      )
+      expect(userData.clearFromNewExercises).toHaveBeenCalledExactlyOnceWith(idOfTmcCourse(1))
     })
   })
 

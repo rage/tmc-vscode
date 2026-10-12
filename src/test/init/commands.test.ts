@@ -14,11 +14,11 @@ import type Resources from "../../config/resources"
 import { registerCommands, registerServiceFreeCommands } from "../../init/commands"
 import { registerTesting } from "../../init/testing"
 import { TmcPanel } from "../../panels/TmcPanel"
-import { CourseIdentifier } from "../../shared/shared"
 import { ExerciseTestController } from "../../testing/exerciseTestController"
 import * as treeCommands from "../../ui/treeview/treeCommands"
 import { CourseTreeItem, ExerciseTreeItem } from "../../ui/treeview/treeview"
 import { Logger } from "../../utilities"
+import { idOfMoocCourse, idOfTmcCourse } from "../fixtures/identifiers"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 
 // Every command the extension registers, across `registerServiceFreeCommands`,
@@ -527,7 +527,7 @@ suite("registered command handlers", function () {
     async function (commandId, delegateName) {
       const delegate = vi.spyOn(commands, delegateName).mockResolvedValue(undefined)
       const { handlers, actionContext } = registerAndCollect()
-      const courseId = CourseIdentifier.from("course-uuid")
+      const courseId = idOfMoocCourse("course-uuid")
       const item = Object.assign(Object.create(CourseTreeItem.prototype) as CourseTreeItem, {
         courseId,
       })
@@ -611,10 +611,10 @@ suite("registered command handlers", function () {
     const closeCompleted = vi
       .spyOn(treeCommands, "closeCompletedExercises")
       .mockResolvedValue(undefined)
-    const picked = CourseIdentifier.from(3)
+    const picked = idOfTmcCourse(3)
     vi.spyOn(commands, "pickCourse").mockResolvedValue(picked)
     const { handlers, actionContext } = registerAndCollect()
-    const courseId = CourseIdentifier.from(7)
+    const courseId = idOfTmcCourse(7)
     const item = Object.assign(Object.create(CourseTreeItem.prototype) as CourseTreeItem, {
       courseId,
     })
@@ -728,7 +728,7 @@ suite("registered command handlers", function () {
     const pickCourse = vi.spyOn(commands, "pickCourse").mockResolvedValue(undefined)
     const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
     const { handlers, context, actionContext } = registerAndCollect()
-    const courseId = CourseIdentifier.from(7)
+    const courseId = idOfTmcCourse(7)
 
     await handlers.get("tmc.courseDetails")?.(courseId)
 
@@ -741,7 +741,7 @@ suite("registered command handlers", function () {
   })
 
   test("tmc.courseDetails asks the user to pick a course when none is given", async function () {
-    const courseId = CourseIdentifier.from("course-uuid")
+    const courseId = idOfMoocCourse("course-uuid")
     vi.spyOn(commands, "pickCourse").mockResolvedValue(courseId)
     const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
     const { handlers, context, actionContext } = registerAndCollect()

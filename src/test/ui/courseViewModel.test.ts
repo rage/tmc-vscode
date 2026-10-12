@@ -17,6 +17,12 @@ import {
   tmcCourseExercise,
   tmcLocalCourse,
 } from "../fixtures/courses"
+import {
+  idOfMoocCourse,
+  idOfMoocExercise,
+  idOfTmcCourse,
+  idOfTmcExercise,
+} from "../fixtures/identifiers"
 
 const COURSE_NAME = "python-course"
 const NOW = new Date("2026-06-01T12:00:00Z")
@@ -42,12 +48,16 @@ function moocCourse(exercises: SharedMoocCourseExercise[]): LocalCourseData {
   return moocLocalCourse({ exercises })
 }
 
+/** Exercise `id` of the tmc course {@link course} builds, on disk. */
 function onDisk(
+  id: number,
   exerciseSlug: string,
   status: ExerciseStatus,
   overrides: Partial<WorkspaceExercise> = {},
 ): WorkspaceExercise {
   return {
+    id: idOfTmcExercise(id),
+    courseId: idOfTmcCourse(42),
     backend: "tmc",
     courseSlug: COURSE_NAME,
     exerciseSlug,
@@ -94,10 +104,13 @@ suite("buildCourseView", () => {
   })
 
   test("reports the on-disk status of a downloaded exercise, with the exercise on disk", () => {
-    const open = onDisk("part01-01_hello", ExerciseStatus.Open)
+    const open = onDisk(1, "part01-01_hello", ExerciseStatus.Open)
     const parts = build(
-      course([exercise({ name: "part01-01_hello" }), exercise({ id: 2, name: "part01-02_world" })]),
-      [open, onDisk("part01-02_world", ExerciseStatus.Closed)],
+      course([
+        exercise({ id: 1, name: "part01-01_hello" }),
+        exercise({ id: 2, name: "part01-02_world" }),
+      ]),
+      [open, onDisk(2, "part01-02_world", ExerciseStatus.Closed)],
     )
 
     expect(statuses(parts)).toEqual(["opened", "closed"])
@@ -107,9 +120,13 @@ suite("buildCourseView", () => {
   test("ignores an identically named exercise belonging to another course or backend", () => {
     // The workspace tracks every downloaded exercise, so the course a status belongs to
     // has to be checked or two courses sharing a slug would read each other's state.
-    const parts = build(course([exercise({ name: "part01-01_hello" })]), [
-      onDisk("part01-01_hello", ExerciseStatus.Open, { courseSlug: "java-course" }),
-      onDisk("part01-01_hello", ExerciseStatus.Open, { backend: "mooc" }),
+    const parts = build(course([exercise({ id: 1, name: "part01-01_hello" })]), [
+      onDisk(1, "part01-01_hello", ExerciseStatus.Open, { courseId: idOfTmcCourse(7) }),
+      onDisk(1, "part01-01_hello", ExerciseStatus.Open, {
+        id: idOfMoocExercise("1"),
+        courseId: idOfMoocCourse("42"),
+        backend: "mooc",
+      }),
     ])
 
     expect(statuses(parts)).toEqual(["missing"])
@@ -136,10 +153,10 @@ suite("buildCourseView", () => {
         exercise({ id: 2, name: "part01-02_b" }),
         exercise({ id: 3, name: "part01-03_c" }),
       ]),
-      [onDisk("part01-03_c", ExerciseStatus.Closed)],
+      [onDisk(3, "part01-03_c", ExerciseStatus.Closed)],
       {
         downloadStatusOf: (id) =>
-          ExerciseIdentifier.unwrap(id) === 1 ? "downloading" : "downloadFailed",
+          ExerciseIdentifier.toString(id) === "1" ? "downloading" : "downloadFailed",
       },
     )
 

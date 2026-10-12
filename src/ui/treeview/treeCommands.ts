@@ -104,15 +104,17 @@ export async function closeCompletedExercises(
       return course
     }
     const courseName = LocalCourseData.getCourseName(course.val)
-    const openSlugs = new Set(
-      workspaceManager
-        .getExercisesByCourseSlug(course.val.kind, courseName)
-        .filter((ex) => ex.status === ExerciseStatus.Open)
-        .map((ex) => ex.exerciseSlug),
+    const passed = new Set(
+      LocalCourseData.getExercises(course.val)
+        .filter((ex) => ex.data.passed)
+        .map((ex) => ExerciseIdentifierNs.key(LocalCourseExercise.getId(ex))),
     )
-    const ids: ExerciseIdentifier[] = LocalCourseData.getExercises(course.val)
-      .filter((ex) => ex.data.passed && openSlugs.has(LocalCourseExercise.getSlug(ex)))
-      .map((ex) => LocalCourseExercise.getId(ex))
+    const ids: ExerciseIdentifier[] = workspaceManager
+      .getExercisesByCourseSlug(course.val.kind, courseName)
+      .filter(
+        (ex) => ex.status === ExerciseStatus.Open && passed.has(ExerciseIdentifierNs.key(ex.id)),
+      )
+      .map((ex) => ex.id)
     if (ids.length === 0) {
       dialog.statusMessage("No completed exercises are open.")
       return Ok.EMPTY

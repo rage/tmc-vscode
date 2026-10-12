@@ -167,6 +167,7 @@ suite("the screen a window reload reopens", () => {
     enterScreen({
       id: 7,
       type: "ExerciseSubmission",
+      exerciseId: makeTmcKind({ tmcExerciseId: 1 }),
       backend: "tmc",
       courseSlug: "python-course",
       exerciseSlug: "part01-01_hello",

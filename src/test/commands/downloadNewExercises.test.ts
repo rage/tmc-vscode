@@ -8,7 +8,7 @@ import type { Item } from "../../api/dialog"
 import { downloadNewExercises } from "../../commands/downloadNewExercises"
 import type { UserData } from "../../config/userdata"
 import type { LocalCourseData } from "../../shared/shared"
-import { CourseIdentifier } from "../../shared/shared"
+import { idOfTmcCourse } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -70,10 +70,7 @@ suite("Download new exercises command", function () {
     await downloadNewExercises(context)
 
     expect(offered).toEqual(["Python Programming"])
-    expect(downloadNewExercisesForCourse).toHaveBeenCalledExactlyOnceWith(
-      context,
-      CourseIdentifier.from(1),
-    )
+    expect(downloadNewExercisesForCourse).toHaveBeenCalledExactlyOnceWith(context, idOfTmcCourse(1))
   })
 
   test("downloads nothing when the course pick is dismissed", async function () {

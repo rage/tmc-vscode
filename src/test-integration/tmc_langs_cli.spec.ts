@@ -36,7 +36,8 @@ import type {
   Submission,
   SubmissionFeedback,
 } from "../shared/langsSchema"
-import { ExerciseIdentifier, makeMoocKind, makeTmcKind } from "../shared/shared"
+import { makeMoocKind, makeTmcKind } from "../shared/shared"
+import { idOfMoocExercise, idOfTmcExercise } from "../test/fixtures/identifiers"
 import { getLangsCLIForPlatform, getPlatform } from "../utilities"
 
 // __dirname is the dist folder when built.
@@ -230,7 +231,9 @@ suite("tmc langs cli spec", function () {
       })
 
       test("should be able to list local exercises", async function () {
-        const result = await unwrapResult(tmc.listLocalCourseExercises("tmc", "python-course"))
+        const result = (await unwrapResult(tmc.listLocalExercises())).filter(
+          (x) => x.backend === "tmc" && x["course-slug"] === "python-course",
+        )
         expect(result.length).to.be.equal(1)
         expect(first(result)?.["exercise-path"]).to.be.equal(exercisePath)
       })
@@ -294,7 +297,7 @@ suite("tmc langs cli spec", function () {
       // Langs fails to remove folder on Windows CI
       test.skip("should be able to save the exercise state and reset it to original template", async function () {
         const submissions = await unwrapResult(tmcSubmissions(tmc, 1))
-        await unwrapResult(tmc.resetExercise(ExerciseIdentifier.from(1), exercisePath, true))
+        await unwrapResult(tmc.resetExercise(idOfTmcExercise(1), exercisePath, true))
 
         // State saving check is based on a side effect of making a new submission.
         const newSubmissions = await unwrapResult(tmcSubmissions(tmc, 1))
@@ -304,7 +307,7 @@ suite("tmc langs cli spec", function () {
       // Langs fails to remove folder on Windows CI
       test.skip("should be able to reset exercise without saving the current state", async function () {
         const submissions = await unwrapResult(tmcSubmissions(tmc, 1))
-        await unwrapResult(tmc.resetExercise(ExerciseIdentifier.from(1), exercisePath, false))
+        await unwrapResult(tmc.resetExercise(idOfTmcExercise(1), exercisePath, false))
 
         // State saving check is based on a side effect of making a new submission.
         const newSubmissions = await unwrapResult(tmcSubmissions(tmc, 1))
@@ -328,13 +331,13 @@ suite("tmc langs cli spec", function () {
       })
 
       test("should be able to submit the exercise to TMC-paste", async function () {
-        const pasteUrl = await unwrapResult(tmc.paste(ExerciseIdentifier.from(1), exercisePath))
+        const pasteUrl = await unwrapResult(tmc.paste(idOfTmcExercise(1), exercisePath))
         expect(pasteUrl).to.include("localhost")
       })
 
       test("should encounter an error if trying to submit to paste twice too soon", async function () {
-        const firstSubmission = tmc.paste(ExerciseIdentifier.from(1), exercisePath)
-        const second = tmc.paste(ExerciseIdentifier.from(1), exercisePath)
+        const firstSubmission = tmc.paste(idOfTmcExercise(1), exercisePath)
+        const second = tmc.paste(idOfTmcExercise(1), exercisePath)
         const [, secondResult] = await Promise.all([firstSubmission, second])
         expect(secondResult.val).to.be.instanceOf(BottleneckError)
       })
@@ -370,11 +373,7 @@ suite("tmc langs cli spec", function () {
       // Directory locks live in a central locks dir, not inside the exercise, so a missing
       // directory is re-downloaded rather than failing, like the old-submission case above.
       test("should re-download the exercise when trying to reset it", async function () {
-        const result = await tmc.resetExercise(
-          ExerciseIdentifier.from(1),
-          missingExercisePath,
-          false,
-        )
+        const result = await tmc.resetExercise(idOfTmcExercise(1), missingExercisePath, false)
         expect(result.ok).to.be.true
         expect(fs.existsSync(missingExercisePath)).to.be.true
       })
@@ -385,7 +384,7 @@ suite("tmc langs cli spec", function () {
       })
 
       test("should encounter an error when trying to submit it to TMC-paste", async function () {
-        const result = await tmc.paste(ExerciseIdentifier.from(404), missingExercisePath)
+        const result = await tmc.paste(idOfTmcExercise(404), missingExercisePath)
         expect(result.val).to.be.instanceOf(RuntimeError)
       })
     })
@@ -505,7 +504,9 @@ suite("tmc langs cli spec", function () {
       })
 
       test("should be able to list local exercises", async function () {
-        const result = await unwrapResult(tmc.listLocalCourseExercises("tmc", "python-course"))
+        const result = (await unwrapResult(tmc.listLocalExercises())).filter(
+          (x) => x.backend === "tmc" && x["course-slug"] === "python-course",
+        )
         expect(result.length).to.be.equal(1)
         expect(first(result)?.["exercise-path"]).to.be.equal(exercisePath)
       })
@@ -525,7 +526,7 @@ suite("tmc langs cli spec", function () {
       })
 
       test("should not be able to reset exercise", async function () {
-        const result = await tmc.resetExercise(ExerciseIdentifier.from(1), exercisePath, true)
+        const result = await tmc.resetExercise(idOfTmcExercise(1), exercisePath, true)
         expect(result.val).to.be.instanceOf(AuthorizationError)
       })
 
@@ -536,7 +537,7 @@ suite("tmc langs cli spec", function () {
 
       // This actually works
       test.skip("should not be able to submit exercise to TMC-paste", async function () {
-        const result = await tmc.paste(ExerciseIdentifier.from(1), exercisePath)
+        const result = await tmc.paste(idOfTmcExercise(1), exercisePath)
         expect(result.val).to.be.instanceOf(AuthorizationError)
       })
     })
@@ -669,7 +670,7 @@ suite("tmc langs cli spec", function () {
       const dir = writeSubmittableProject("mooc-paste")
       // `mooc paste` submits (non-blocking) then shares the resulting submission,
       // resolving the slide-submission id from the exercise's submissions list.
-      const pasteUrl = (await tmc.paste(ExerciseIdentifier.from(PASSING_EXERCISE_ID), dir)).unwrap()
+      const pasteUrl = (await tmc.paste(idOfMoocExercise(PASSING_EXERCISE_ID), dir)).unwrap()
       expect(pasteUrl).to.match(/\/shared-submissions\/[0-9a-f-]+$/)
     })
 
@@ -698,22 +699,24 @@ suite("tmc langs cli spec", function () {
         await tmc.downloadMoocExercises([PASSING_EXERCISE_ID], undefined, () => {})
       ).unwrap()
       expect(mooc.downloaded.length).to.be.equal(1)
-      expect(mooc.downloaded[0]?.id).to.deep.equal(ExerciseIdentifier.from(PASSING_EXERCISE_ID))
+      expect(mooc.downloaded[0]?.id).to.deep.equal(idOfMoocExercise(PASSING_EXERCISE_ID))
     })
 
     test("should download with --course-id and then list the local mooc exercise with its slug", async function () {
       // Passing the course id drives the single-course resolution path; the
-      // downloaded exercise must then surface via the mooc list-local command
-      // (looked up by course id) with a slug + path so the workspace manager
-      // can track it.
+      // downloaded exercise must then be listed locally under that course id with
+      // a slug + path so the workspace manager can track it.
       const downloaded = (
         await tmc.downloadMoocExercises([PASSING_EXERCISE_ID], PYTHON_COURSE_ID, () => {})
       ).unwrap()
       expect(downloaded.downloaded.length).to.be.equal(1)
 
-      const local = (await tmc.listLocalCourseExercises("mooc", PYTHON_COURSE_ID)).unwrap()
+      const local = (await tmc.listLocalExercises()).unwrap()
       const entry = local.find(
-        (x) => "exercise-id" in x && x["exercise-id"] === PASSING_EXERCISE_ID,
+        (x) =>
+          x.backend === "mooc" &&
+          x["course-id"] === PYTHON_COURSE_ID &&
+          x["exercise-id"] === PASSING_EXERCISE_ID,
       )
       expect(entry, "the downloaded exercise should be listed locally").to.not.be.undefined
       expect(entry?.["exercise-slug"]).to.be.a("string").and.not.be.empty
@@ -723,9 +726,12 @@ suite("tmc langs cli spec", function () {
     test("should submit twice, list both newest-first, and restore an old submission", async function () {
       // Get a real local exercise path to submit and restore into.
       await tmc.downloadMoocExercises([PASSING_EXERCISE_ID], PYTHON_COURSE_ID, () => {})
-      const local = (await tmc.listLocalCourseExercises("mooc", PYTHON_COURSE_ID)).unwrap()
+      const local = (await tmc.listLocalExercises()).unwrap()
       const entry = local.find(
-        (x) => "exercise-id" in x && x["exercise-id"] === PASSING_EXERCISE_ID,
+        (x) =>
+          x.backend === "mooc" &&
+          x["course-id"] === PYTHON_COURSE_ID &&
+          x["exercise-id"] === PASSING_EXERCISE_ID,
       )
       const exercisePath = (entry as { "exercise-path": string })["exercise-path"]
       const studentFile = path.join(exercisePath, "src", "passing_exercise.py")
@@ -795,9 +801,12 @@ suite("tmc langs cli spec", function () {
       // always uploads before submitting, so this can only be reached by seeding it in
       // the mock.
       await tmc.downloadMoocExercises([PASSING_EXERCISE_ID], PYTHON_COURSE_ID, () => {})
-      const local = (await tmc.listLocalCourseExercises("mooc", PYTHON_COURSE_ID)).unwrap()
+      const local = (await tmc.listLocalExercises()).unwrap()
       const entry = local.find(
-        (x) => "exercise-id" in x && x["exercise-id"] === PASSING_EXERCISE_ID,
+        (x) =>
+          x.backend === "mooc" &&
+          x["course-id"] === PYTHON_COURSE_ID &&
+          x["exercise-id"] === PASSING_EXERCISE_ID,
       )
       const exercisePath = (entry as { "exercise-path": string })["exercise-path"]
       const studentFile = path.join(exercisePath, "src", "passing_exercise.py")

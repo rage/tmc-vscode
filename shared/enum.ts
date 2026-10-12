@@ -42,15 +42,6 @@ export const CourseIdentifierSchema = EnumSchema(
 export type CourseIdentifier = z.infer<typeof CourseIdentifierSchema>
 
 export namespace CourseIdentifier {
-  export function from(id: number | string): CourseIdentifier {
-    if (typeof id === "number") {
-      return makeTmcKind({ courseId: id })
-    } else if (typeof id === "string") {
-      return makeMoocKind({ instanceId: id })
-    }
-    assertUnreachable(id)
-  }
-
   export function toString(id: CourseIdentifier): string {
     return match(
       id,
@@ -80,26 +71,6 @@ export const ExerciseIdentifierSchema = EnumSchema(
 export type ExerciseIdentifier = z.infer<typeof ExerciseIdentifierSchema>
 
 export namespace ExerciseIdentifier {
-  export function from(id: number | string): ExerciseIdentifier {
-    if (typeof id === "number") {
-      return makeTmcKind({ tmcExerciseId: id })
-    } else if (typeof id === "string") {
-      return makeMoocKind({ moocExerciseId: id })
-    }
-    assertUnreachable(id)
-  }
-
-  // oxlint-disable-next-line no-shadow -- deliberate qualified-name reuse (ExerciseIdentifier.unwrap)
-  export function unwrap(id: ExerciseIdentifier): number | string {
-    if (id.kind === "tmc") {
-      return id.data.tmcExerciseId
-    }
-    if (id.kind === "mooc") {
-      return id.data.moocExerciseId
-    }
-    assertUnreachable(id)
-  }
-
   export function toString(id: ExerciseIdentifier): string {
     return match(
       id,
@@ -157,6 +128,20 @@ export function makeTmcKind<T>(t: T): { kind: "tmc" } & { data: T } {
 
 export function makeMoocKind<T>(t: T): { kind: "mooc" } & { data: T } {
   return { kind: "mooc", data: t }
+}
+
+/** Splits `values` by backend, keeping their order within each. */
+export function partition<A, B>(values: readonly Enum<A, B>[]): { tmc: A[]; mooc: B[] } {
+  const tmc: A[] = []
+  const mooc: B[] = []
+  for (const value of values) {
+    match(
+      value,
+      (a) => tmc.push(a),
+      (b) => mooc.push(b),
+    )
+  }
+  return { tmc, mooc }
 }
 
 export function unwrap<A, B>(e: Enum<A, B>): A | B {

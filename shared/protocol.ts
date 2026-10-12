@@ -2,7 +2,7 @@ import { z } from "zod"
 
 import { FeedbackQuestionSchema, LocalCourseDataSchema } from "./course"
 import type { BackendKind } from "./enum"
-import { CourseIdentifierSchema } from "./enum"
+import { CourseIdentifierSchema, ExerciseIdentifierSchema } from "./enum"
 import { TestCase, TmcStyleValidationResult } from "./langsSchema"
 
 export const CourseDetailsPanelSchema = z.object({
@@ -32,6 +32,7 @@ const BackendKindSchema = z.enum(["tmc", "mooc"]) satisfies z.ZodType<BackendKin
 export const ExerciseSubmissionPanelSchema = z.object({
   id: z.number(),
   type: z.literal("ExerciseSubmission"),
+  exerciseId: ExerciseIdentifierSchema,
   backend: BackendKindSchema,
   courseSlug: z.string(),
   exerciseSlug: z.string(),

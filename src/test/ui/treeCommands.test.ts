@@ -72,9 +72,9 @@ function courseContext(): ReadyActionContext {
     ],
   })
   const workspaceExercises = [
-    { exerciseSlug: "part01-01_done", status: ExerciseStatus.Open },
-    { exerciseSlug: "part01-02_todo", status: ExerciseStatus.Open },
-    { exerciseSlug: "part01-03_closed", status: ExerciseStatus.Closed },
+    { id: makeTmcKind({ tmcExerciseId: 1 }), status: ExerciseStatus.Open },
+    { id: makeTmcKind({ tmcExerciseId: 2 }), status: ExerciseStatus.Open },
+    { id: makeTmcKind({ tmcExerciseId: 3 }), status: ExerciseStatus.Closed },
   ]
   const [dialog] = createDialogMock()
   return {

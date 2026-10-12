@@ -5,6 +5,7 @@ import { downloadExerciseUpdates } from "../../actions/downloadExerciseUpdates"
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
 import { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
+import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
 const downloadOrUpdateExercises = vi.hoisted(() => vi.fn())
@@ -20,8 +21,8 @@ function update(
   exerciseId: number,
 ): { courseId: CourseIdentifier; exerciseId: ExerciseIdentifier } {
   return {
-    courseId: CourseIdentifier.from(courseId),
-    exerciseId: ExerciseIdentifier.from(exerciseId),
+    courseId: idOfTmcCourse(courseId),
+    exerciseId: idOfTmcExercise(exerciseId),
   }
 }
 
@@ -31,7 +32,7 @@ function postedLists(): [string, number[]][] {
     .mock.calls.flatMap(([lists]) =>
       Array.from(lists, ([courseId, exerciseIds]): [string, number[]] => [
         CourseIdentifier.toString(courseId),
-        exerciseIds.map((x) => ExerciseIdentifier.unwrap(x) as number),
+        exerciseIds.map((x) => Number(ExerciseIdentifier.toString(x))),
       ]),
     )
 }
@@ -58,7 +59,7 @@ suite("downloadExerciseUpdates action", function () {
 
   test("leaves each course only its own failed exercises", async function () {
     downloadOrUpdateExercises.mockResolvedValue(
-      Ok({ successful: [ExerciseIdentifier.from(10)], failed: [ExerciseIdentifier.from(20)] }),
+      Ok({ successful: [idOfTmcExercise(10)], failed: [idOfTmcExercise(20)] }),
     )
 
     await downloadExerciseUpdates(createMockActionContext(), [update(1, 10), update(2, 20)])

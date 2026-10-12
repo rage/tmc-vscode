@@ -7,8 +7,9 @@ import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
 import type { ReadyActionContext } from "../../actions/types"
 import type { UserData } from "../../config/userdata"
 import { BottleneckError } from "../../errors"
-import type { LocalCourseData } from "../../shared/shared"
-import { CourseIdentifier, ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
+import type { LocalCourseData, CourseIdentifier } from "../../shared/shared"
+import { ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
+import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
 vi.mock("../../actions/downloadOrUpdateExercises", () => ({
@@ -18,7 +19,7 @@ vi.mock("../../actions/refreshLocalExercises", () => ({
   refreshLocalExercises: vi.fn(),
 }))
 
-const COURSE_ID = CourseIdentifier.from(1)
+const COURSE_ID = idOfTmcCourse(1)
 
 function courseWithNewExercises(newExercises: number[]): LocalCourseData {
   return makeTmcKind({
@@ -49,9 +50,11 @@ suite("downloadNewExercisesForCourse action", function () {
         _courseId: CourseIdentifier,
         cleared?: ExerciseIdentifier[],
       ) => {
-        const clearedIds = new Set((cleared ?? []).map((id) => ExerciseIdentifier.unwrap(id)))
+        const clearedIds = new Set((cleared ?? []).map((id) => ExerciseIdentifier.toString(id)))
         if (course.kind === "tmc") {
-          course.data.newExercises = course.data.newExercises.filter((id) => !clearedIds.has(id))
+          course.data.newExercises = course.data.newExercises.filter(
+            (id) => !clearedIds.has(String(id)),
+          )
         }
         return Ok.EMPTY
       },
@@ -73,7 +76,7 @@ suite("downloadNewExercisesForCourse action", function () {
   test("leaves nothing new once every exercise has been downloaded", async function () {
     vi.mocked(downloadOrUpdateExercises).mockResolvedValue(
       Ok({
-        successful: [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
+        successful: [idOfTmcExercise(1), idOfTmcExercise(2)],
         failed: [],
       }),
     )
@@ -87,8 +90,8 @@ suite("downloadNewExercisesForCourse action", function () {
   test("keeps only the exercises that failed to download new", async function () {
     vi.mocked(downloadOrUpdateExercises).mockResolvedValue(
       Ok({
-        successful: [ExerciseIdentifier.from(1)],
-        failed: [ExerciseIdentifier.from(2)],
+        successful: [idOfTmcExercise(1)],
+        failed: [idOfTmcExercise(2)],
       }),
     )
 

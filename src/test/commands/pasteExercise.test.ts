@@ -9,6 +9,12 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { pasteExercise } from "../../commands/pasteExercise"
 import type { BackendKind } from "../../shared/shared"
+import {
+  idOfMoocCourse,
+  idOfMoocExercise,
+  idOfTmcCourse,
+  idOfTmcExercise,
+} from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -29,8 +35,13 @@ interface Harness {
   notifications: NotificationCall[]
 }
 
+const TMC_ID = idOfTmcExercise(1)
+const MOOC_ID = idOfMoocExercise("mooc-ex-uuid")
+
 function harness(backend: BackendKind): Harness {
   const exercise: WorkspaceExercise = {
+    id: backend === "tmc" ? TMC_ID : MOOC_ID,
+    courseId: backend === "tmc" ? idOfTmcCourse(1) : idOfMoocCourse("mooc-course-uuid"),
     backend,
     courseSlug: `${backend}-course`,
     exerciseSlug: "ex-1",
@@ -61,8 +72,8 @@ function harness(backend: BackendKind): Harness {
 
 suite("Paste exercise command", function () {
   beforeEach(function () {
-    vi.mocked(actions.pasteExercise).mockImplementation(async (_context, backend) =>
-      Ok(`https://pastebin.example/${backend}`),
+    vi.mocked(actions.pasteExercise).mockImplementation(async (_context, id) =>
+      Ok(`https://pastebin.example/${id.kind}`),
     )
     vscodeMock.env = { openExternal: vi.fn() }
   })
@@ -83,12 +94,7 @@ suite("Paste exercise command", function () {
 
     await pasteExercise(context, undefined)
 
-    expect(actions.pasteExercise).toHaveBeenCalledExactlyOnceWith(
-      context,
-      "tmc",
-      "tmc-course",
-      "ex-1",
-    )
+    expect(actions.pasteExercise).toHaveBeenCalledExactlyOnceWith(context, TMC_ID)
     expect(notifications[0]?.[0]).toBe("Paste link: https://pastebin.example/tmc")
   })
 
@@ -97,12 +103,7 @@ suite("Paste exercise command", function () {
 
     await pasteExercise(context, undefined)
 
-    expect(actions.pasteExercise).toHaveBeenCalledExactlyOnceWith(
-      context,
-      "mooc",
-      "mooc-course",
-      "ex-1",
-    )
+    expect(actions.pasteExercise).toHaveBeenCalledExactlyOnceWith(context, MOOC_ID)
     expect(notifications[0]?.[0]).toBe("Paste link: https://pastebin.example/mooc")
   })
 

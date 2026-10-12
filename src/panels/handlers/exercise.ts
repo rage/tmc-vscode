@@ -22,8 +22,7 @@ export const exerciseHandlers = {
       return withOperation(
         actionContext.dialog,
         { failure: "Failed to paste the exercise.", silent: true },
-        () =>
-          actions.pasteExercise(actionContext, shown.backend, shown.courseSlug, shown.exerciseSlug),
+        () => actions.pasteExercise(actionContext, shown.exerciseId),
       )
     },
   },

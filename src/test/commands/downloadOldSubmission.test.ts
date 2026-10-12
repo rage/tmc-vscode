@@ -15,8 +15,9 @@ import type {
   ExerciseSlideSubmissionListItem,
   MoocOldSubmissionRestore,
 } from "../../shared/langsSchema"
-import { ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
+import { makeMoocKind } from "../../shared/shared"
 import { exerciseOperations } from "../../ui/exerciseOperations"
+import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -29,6 +30,8 @@ beforeAll(function () {
 suite("Download old submission command (mooc branch)", function () {
   const uri = vscode.Uri.file("/workspace/mooc/course/ex-1")
   const moocExercise: WorkspaceExercise = {
+    id: idOfMoocExercise("mooc-ex-uuid"),
+    courseId: idOfMoocCourse("mooc-course-uuid"),
     backend: "mooc",
     courseSlug: "mooc-course",
     exerciseSlug: "ex-1",
@@ -82,8 +85,8 @@ suite("Download old submission command (mooc branch)", function () {
     const langs = { getOldSubmissions, restoreSubmission } as unknown as Langs
 
     const userData = {
-      getExerciseByName: () => makeMoocKind({ id: "mooc-ex-uuid" }),
-      getCourseBySlug: () => Ok({}),
+      getExercise: () => Ok({}),
+      getCourse: () => Ok({}),
     } as unknown as UserData
 
     const workspaceManager = {
@@ -120,9 +123,7 @@ suite("Download old submission command (mooc branch)", function () {
   test("lists submissions newest first, dated in the UI language, with the status beside", async function () {
     await downloadOldSubmission(actionContext({ submissions: moocSubmissions.toReversed() }), uri)
 
-    expect(getOldSubmissions).toHaveBeenCalledExactlyOnceWith(
-      ExerciseIdentifier.from("mooc-ex-uuid"),
-    )
+    expect(getOldSubmissions).toHaveBeenCalledExactlyOnceWith(idOfMoocExercise("mooc-ex-uuid"))
     expect(pickPrompt).toEqual({
       title: "Download Old Submission — ex-1",
       placeHolder: "Pick a submission to restore",
@@ -217,7 +218,7 @@ suite("Download old submission command (mooc branch)", function () {
 
   test("refuses to restore while a submission of the same exercise is in flight", async function () {
     const submission = exerciseOperations
-      .claim([ExerciseIdentifier.from("mooc-ex-uuid")], "submitting")
+      .claim([idOfMoocExercise("mooc-ex-uuid")], "submitting")
       .unwrap()
     try {
       await downloadOldSubmission(actionContext({ answer: "Submit and Restore" }), uri)

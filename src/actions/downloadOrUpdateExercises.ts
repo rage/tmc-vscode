@@ -7,9 +7,9 @@ import type { BackendKind, CourseIdentifier } from "../shared/shared"
 import {
   backendName,
   ExerciseIdentifier,
-  LocalCourseData,
   LocalCourseExercise,
   match,
+  partition,
 } from "../shared/shared"
 import { downloadFailures } from "../ui/downloadFailures"
 import type { ExerciseClaim } from "../ui/exerciseOperations"
@@ -72,20 +72,9 @@ async function download(
 
   const succeeded = new Set<string>()
   const downloadTemplate = !settings.getDownloadOldSubmission()
-  const tmcIds = exerciseIds.flatMap((id) =>
-    match(
-      id,
-      (tmc) => [tmc.tmcExerciseId],
-      () => [],
-    ),
-  )
-  const moocIds = exerciseIds.flatMap((id) =>
-    match(
-      id,
-      () => [],
-      (mooc) => [mooc.moocExerciseId],
-    ),
-  )
+  const byBackend = partition(exerciseIds)
+  const tmcIds = byBackend.tmc.map((id) => id.tmcExerciseId)
+  const moocIds = byBackend.mooc.map((id) => id.moocExerciseId)
   const moocCourseId =
     courseId &&
     match(
@@ -209,14 +198,10 @@ function failureCause(failedLegs: Error[], exerciseReasons: string[][]): Error {
 
 /** The name the student knows `exerciseId` by, or its id if no stored course has it. */
 function exerciseName(actionContext: ReadyActionContext, exerciseId: ExerciseIdentifier): string {
-  const wanted = ExerciseIdentifier.unwrap(exerciseId)
-  for (const course of actionContext.startup.userData.getCourses()) {
-    const exercise = LocalCourseData.getExercises(course).find((x) => x.data.id === wanted)
-    if (exercise) {
-      return LocalCourseExercise.getSlug(exercise)
-    }
-  }
-  return String(wanted)
+  const stored = actionContext.startup.userData.getExercise(exerciseId)
+  return stored.ok
+    ? LocalCourseExercise.getSlug(stored.val.exercise)
+    : ExerciseIdentifier.toString(exerciseId)
 }
 
 const LISTED_EXERCISE_LIMIT = 5

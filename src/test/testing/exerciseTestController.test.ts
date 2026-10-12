@@ -13,13 +13,15 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { AiUseRefusedError, BottleneckError, SHOW_AI_USE_PROBLEM_COMMAND } from "../../errors"
 import type { RunResult, StyleValidationResult } from "../../shared/langsSchema"
-import { BaseError, ExerciseIdentifier } from "../../shared/shared"
+import { BaseError, LocalCourseData } from "../../shared/shared"
 import { CheckstyleDiagnostics } from "../../testing/checkstyleDiagnostics"
 import { ExerciseTestController } from "../../testing/exerciseTestController"
 import { exerciseOperations } from "../../ui/exerciseOperations"
 import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
+import { idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
+import { exerciseLookupOver } from "../mocks/userdata"
 
 vi.mock("../../window", () => ({ resolvePythonInterpreter: () => undefined }))
 
@@ -113,13 +115,18 @@ function setup(
   } = {},
 ): Setup {
   const slugs = options.slugs ?? ["part01-01_hello"]
-  const exercises: WorkspaceExercise[] = [...slugs, ...(options.closedSlugs ?? [])].map((slug) => ({
-    backend: "tmc",
-    courseSlug: COURSE_SLUG,
-    exerciseSlug: slug,
-    status: slugs.includes(slug) ? ExerciseStatus.Open : ExerciseStatus.Closed,
-    uri: vscode.Uri.file(path.join(tempDir, slug)),
-  }))
+  const storedCourse = course({ examMode: options.examMode, disabled: options.disabled, slugs })
+  const exercises: WorkspaceExercise[] = [...slugs, ...(options.closedSlugs ?? [])].map(
+    (slug, index) => ({
+      id: idOfTmcExercise(index + 1),
+      courseId: LocalCourseData.getCourseId(storedCourse),
+      backend: "tmc",
+      courseSlug: COURSE_SLUG,
+      exerciseSlug: slug,
+      status: slugs.includes(slug) ? ExerciseStatus.Open : ExerciseStatus.Closed,
+      uri: vscode.Uri.file(path.join(tempDir, slug)),
+    }),
+  )
   const interrupts: ReturnType<typeof vi.fn>[] = []
   const runTests = vi.fn(() => {
     const interrupt = vi.fn()
@@ -147,8 +154,8 @@ function setup(
           },
         } as unknown as ReadyStartup["langs"],
         userData: {
-          getCourseBySlug: () =>
-            Ok(course({ examMode: options.examMode, disabled: options.disabled, slugs })),
+          getCourse: () => Ok(storedCourse),
+          getExercise: exerciseLookupOver([storedCourse]),
         } as unknown as ReadyStartup["userData"],
         workspaceManager: {
           activeCourse: COURSE_SLUG,
@@ -317,14 +324,14 @@ suite("ExerciseTestController", function () {
     const exercise = exerciseAt(s)
     let during: unknown
     s.runTests.mockImplementation(() => {
-      during = exerciseOperations.current(ExerciseIdentifier.from(1))
+      during = exerciseOperations.current(idOfTmcExercise(1))
       return { process: Promise.resolve(Ok(passingRun)), interrupt: vi.fn() }
     })
 
     await s.controller.runExercise(exercise)
 
     expect(during).toBe("testing")
-    expect(exerciseOperations.current(ExerciseIdentifier.from(1))).toBeUndefined()
+    expect(exerciseOperations.current(idOfTmcExercise(1))).toBeUndefined()
   })
 
   test("running one test runs its whole exercise once", async function () {

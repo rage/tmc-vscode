@@ -8,6 +8,7 @@ import { updateCourse } from "../../actions/updateCourse"
 import type Dialog from "../../api/dialog"
 import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, makeTmcKind } from "../../shared/shared"
+import { idOfTmcCourse } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -69,7 +70,7 @@ suite("checkForCourseUpdates action", function () {
     await checkForCourseUpdates(actionContext)
 
     expect(updateCourse).toHaveBeenCalledTimes(1)
-    expect(updateCourse).toHaveBeenCalledWith(actionContext, CourseIdentifier.from(1))
+    expect(updateCourse).toHaveBeenCalledWith(actionContext, idOfTmcCourse(1))
   })
 
   test("rescans the exercises on disk once, however many courses were refreshed", async function () {
@@ -128,7 +129,7 @@ suite("checkForCourseUpdates action", function () {
     actionContext.startup.userData.getCourse = (): Err<Error> => Err(new Error("no such course"))
 
     const result = await checkForCourseUpdates(actionContext, {
-      courseId: CourseIdentifier.from(9),
+      courseId: idOfTmcCourse(9),
     })
 
     expect(result.err && result.val.message).toBe("no such course")

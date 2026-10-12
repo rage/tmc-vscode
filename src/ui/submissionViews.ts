@@ -1,6 +1,7 @@
 import * as vscode from "vscode"
 
 import type { ExerciseSubmissionPanel, SubmissionView } from "../shared/shared"
+import { ExerciseIdentifier } from "../shared/shared"
 
 /** A view of a submission, for the side panel showing `panel`. */
 export interface SubmissionViewUpdate {
@@ -49,9 +50,7 @@ class SubmissionViews {
 
 /** Whether two submission panels show submissions of one exercise. */
 export function isSameExercise(a: ExerciseSubmissionPanel, b: ExerciseSubmissionPanel): boolean {
-  return (
-    a.backend === b.backend && a.courseSlug === b.courseSlug && a.exerciseSlug === b.exerciseSlug
-  )
+  return ExerciseIdentifier.key(a.exerciseId) === ExerciseIdentifier.key(b.exerciseId)
 }
 
 export const submissionViews = new SubmissionViews()

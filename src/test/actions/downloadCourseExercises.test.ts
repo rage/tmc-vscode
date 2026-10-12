@@ -6,7 +6,7 @@ import { downloadOrUpdateExercises } from "../../actions/downloadOrUpdateExercis
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import type { LocalCourseData } from "../../shared/shared"
-import { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
+import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -18,7 +18,7 @@ vi.mock("../../actions/refreshLocalExercises", () => ({
   refreshLocalExercises: vi.fn(),
 }))
 
-const COURSE_ID = CourseIdentifier.from(1)
+const COURSE_ID = idOfTmcCourse(1)
 
 /** The course as storage holds it, carrying the exercises not yet downloaded. */
 function storedCourse(newExercises: number[]): LocalCourseData {
@@ -55,20 +55,20 @@ beforeEach(() => {
 })
 
 suite("downloadCourseExercises", function () {
-  const requested = [ExerciseIdentifier.from(201), ExerciseIdentifier.from(202)]
+  const requested = [idOfTmcExercise(201), idOfTmcExercise(202)]
 
   test("takes what it downloaded off the course's new exercises, then rescans", async function () {
     vi.mocked(downloadOrUpdateExercises).mockResolvedValue(
       Ok({
-        successful: [ExerciseIdentifier.from(201)],
-        failed: [ExerciseIdentifier.from(202)],
+        successful: [idOfTmcExercise(201)],
+        failed: [idOfTmcExercise(202)],
       }),
     )
     const [actionContext] = contextWith([201, 202])
 
     await downloadCourseExercises(actionContext, COURSE_ID, requested)
 
-    expect(clearFromNewExercises).toHaveBeenCalledWith(COURSE_ID, [ExerciseIdentifier.from(201)])
+    expect(clearFromNewExercises).toHaveBeenCalledWith(COURSE_ID, [idOfTmcExercise(201)])
     expect(refreshLocalExercises).toHaveBeenCalledOnce()
   })
 

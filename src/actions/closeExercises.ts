@@ -1,14 +1,14 @@
-import { compact } from "lodash"
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
-import type { CourseIdentifier } from "../shared/shared"
-import { ExerciseIdentifier, LocalCourseData, LocalCourseExercise } from "../shared/shared"
+import type { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
+import { LocalCourseData } from "../shared/shared"
 import type { ReadyActionContext } from "./types"
 
 /**
  * Closes given exercises, hiding them from the course workspace.
- * @param ids Array of exercise IDs
+ *
+ * @returns the ids of the given exercises that are on disk.
  */
 export async function closeExercises(
   actionContext: ReadyActionContext,
@@ -22,37 +22,13 @@ export async function closeExercises(
     return courseResult
   }
   const course = courseResult.val
-  const exercises = new Map(LocalCourseData.getExercises(course).map((x) => [x.data.id, x]))
-  const exerciseSlugs = compact(
-    ids.map((x) => {
-      const exercise = exercises.get(ExerciseIdentifier.unwrap(x))
-      if (!exercise) {
-        return undefined
-      }
-      // The workspace manager expects a slug, not the mooc exercise's raw uuid id.
-      return LocalCourseExercise.getSlug(exercise)
-    }),
-  )
-
-  const courseName = LocalCourseData.getCourseName(course)
   const closeResult = await workspaceManager.closeCourseExercises(
     course.kind,
-    courseName,
-    exerciseSlugs,
+    LocalCourseData.getCourseName(course),
+    ids,
   )
   if (closeResult.err) {
     return closeResult
   }
-
-  const slugToId = new Map(
-    Array.from(exercises.entries(), ([key, val]) => [
-      LocalCourseExercise.getSlug(val),
-      ExerciseIdentifier.from(key),
-    ]),
-  )
-  const closedIds = closeResult.val
-    .map((exercise) => slugToId.get(exercise.exerciseSlug))
-    .filter((e) => e !== undefined)
-
-  return new Ok(closedIds)
+  return new Ok(closeResult.val.map((exercise) => exercise.id))
 }

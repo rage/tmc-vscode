@@ -3,12 +3,14 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import Dialog from "../../api/dialog"
+import type { WorkspaceExercise } from "../../api/workspaceManager"
 import type { LocalCourseExercise } from "../../shared/shared"
-import { ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
+import { makeMoocKind } from "../../shared/shared"
 import { exerciseOperations } from "../../ui/exerciseOperations"
 import type { ExerciseStatusSources } from "../../ui/statusBarExercise"
 import { ExerciseStatusBarItem, showExerciseActions } from "../../ui/statusBarExercise"
 import { moocCourseExercise, moocLocalCourse } from "../fixtures/courses"
+import { idOfMoocExercise } from "../fixtures/identifiers"
 import { exerciseHelloWorld } from "../fixtures/workspaceManager"
 import type { FakeStatusBarItem } from "../mocks/statusBar"
 import { fakeStatusBarItems, tooltipText } from "../mocks/statusBar"
@@ -27,7 +29,8 @@ function storedExercise(awardedPoints: number, availablePoints: number): LocalCo
   )
 }
 
-const STORED_ID = ExerciseIdentifier.from("exercise-uuid")
+const STORED_ID = idOfMoocExercise("exercise-uuid")
+const onDiskExercise: WorkspaceExercise = { ...exerciseHelloWorld, id: STORED_ID, backend: "mooc" }
 
 const course = moocLocalCourse({ id: "course-uuid" })
 
@@ -41,8 +44,8 @@ interface Harness {
 
 function harness(): Harness {
   const [workspaceManager, workspace] = createWorkspaceMangerMock()
-  workspace.activeExercise = exerciseHelloWorld
-  workspace.getExerciseByPath = exerciseHelloWorld
+  workspace.activeExercise = onDiskExercise
+  workspace.getExerciseByPath = onDiskExercise
   const stored = { exercise: storedExercise(1, 2) as LocalCourseExercise | undefined }
   const editorChanged = new vscode.EventEmitter<void>()
   const coursesChanged = new vscode.EventEmitter<undefined>()
@@ -52,8 +55,11 @@ function harness(): Harness {
   const sources: ExerciseStatusSources = {
     workspaceManager,
     userData: {
-      getExerciseByName: () => stored.exercise,
-      getCourseBySlug: () => Ok(course),
+      getExercise: () =>
+        stored.exercise
+          ? Ok({ course, exercise: stored.exercise })
+          : Err(new Error("no such exercise")),
+      getCourse: () => Ok(course),
       onDidChangeCourses: coursesChanged.event,
     },
     operations: exerciseOperations,
@@ -107,7 +113,7 @@ suite("ExerciseStatusBarItem", function () {
   test("shows a course name in the tooltip as text, never as markdown", function () {
     const h = harness()
     const courseSlug = "[x](command:tmc.wipe)"
-    h.workspace.activeExercise = { ...exerciseHelloWorld, courseSlug }
+    h.workspace.activeExercise = { ...onDiskExercise, courseSlug }
     const appendText = vi.spyOn(vscode.MarkdownString.prototype, "appendText")
     const appendMarkdown = vi.spyOn(vscode.MarkdownString.prototype, "appendMarkdown")
     track(new ExerciseStatusBarItem(h.sources))
@@ -132,7 +138,7 @@ suite("ExerciseStatusBarItem", function () {
     h.editorChanged.fire()
     expect(itemOf().isShown).toBe(false)
 
-    h.workspace.activeExercise = exerciseHelloWorld
+    h.workspace.activeExercise = onDiskExercise
     h.editorChanged.fire()
     expect(itemOf().isShown).toBe(true)
   })
@@ -260,7 +266,7 @@ suite("showExerciseActions", function () {
   test("leaves the reveal out for a course that is not stored", async function () {
     vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)
     const { sources } = harness()
-    sources.userData.getCourseBySlug = () => Err(new Error("no such course"))
+    sources.userData.getCourse = () => Err(new Error("no such course"))
 
     await showExerciseActions(new Dialog(), sources, true)
 

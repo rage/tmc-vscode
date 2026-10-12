@@ -68,6 +68,7 @@ function answerCourseDetails(panel: { id: number }, course: typeof tmcCourse) {
 const submissionPanel = {
   id: 30,
   type: "ExerciseSubmission" as const,
+  exerciseId: makeTmcKind({ tmcExerciseId: 3 }),
   backend: "tmc" as const,
   courseSlug: "python-course",
   exerciseSlug: "part01-03_exercise",
@@ -88,6 +89,7 @@ function submissionFinished(overrides: Partial<SubmissionFinished>): SubmissionF
 const moocSubmissionPanel = {
   id: 31,
   type: "ExerciseSubmission" as const,
+  exerciseId: makeMoocKind({ moocExerciseId: "mooc-exercise-uuid" }),
   backend: "mooc" as const,
   courseSlug: "mooc-course",
   exerciseSlug: "mooc-exercise",

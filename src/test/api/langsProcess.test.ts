@@ -8,8 +8,8 @@ import {
   SpawnError,
   TimeoutError,
 } from "../../errors"
-import { ExerciseIdentifier } from "../../shared/shared"
 import { Logger } from "../../utilities/logger"
+import { idOfTmcExercise } from "../fixtures/identifiers"
 
 type FakeListener = (...args: unknown[]) => void
 
@@ -544,7 +544,7 @@ suite("Langs CLI process cancellation", function () {
 
   test("killAllProcesses kills an in-flight submit's process tree", async function () {
     const langs = newLangs()
-    const submitting = langs.paste(ExerciseIdentifier.from(101), "/ex")
+    const submitting = langs.paste(idOfTmcExercise(101), "/ex")
     const langsProcess = lastProcess()
 
     langs.killAllProcesses()
@@ -580,7 +580,7 @@ suite("Langs CLI process cancellation", function () {
 
   test("killAllProcesses stops tracking a process once it settles", async function () {
     const langs = newLangs()
-    const pasting = langs.paste(ExerciseIdentifier.from(101), "/ex")
+    const pasting = langs.paste(idOfTmcExercise(101), "/ex")
     const langsProcess = lastProcess()
     endProcess(langsProcess)
     await pasting

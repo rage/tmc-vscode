@@ -20,11 +20,17 @@ import {
   OutOfTriesError,
 } from "../../errors"
 import type { ExerciseStanding } from "../../shared/langsSchema"
-import type { ExerciseSubmissionPanel, LocalCourseData, SubmissionView } from "../../shared/shared"
-import { CourseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
+import type { CourseIdentifier, ExerciseSubmissionPanel, SubmissionView } from "../../shared/shared"
+import { LocalCourseData, makeMoocKind, makeTmcKind } from "../../shared/shared"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
 import type { SubmissionViewUpdate } from "../../ui/submissionViews"
 import { submissionViews } from "../../ui/submissionViews"
+import {
+  idOfMoocCourse,
+  idOfMoocExercise,
+  idOfTmcCourse,
+  idOfTmcExercise,
+} from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
 const openedPanels: ExerciseSubmissionPanel[] = []
@@ -96,6 +102,8 @@ const tmcCourse: TmcLocalCourseData = {
 }
 
 const moocExercise: WorkspaceExercise = {
+  id: idOfMoocExercise(MOOC_EXERCISE_ID),
+  courseId: idOfMoocCourse(moocCourse.id),
   backend: "mooc",
   courseSlug: COURSE_SLUG,
   exerciseSlug: EXERCISE_SLUG,
@@ -105,6 +113,8 @@ const moocExercise: WorkspaceExercise = {
 
 const tmcExercise: WorkspaceExercise = {
   ...moocExercise,
+  id: idOfTmcExercise(TMC_EXERCISE_ID),
+  courseId: idOfTmcCourse(tmcCourse.id),
   backend: "tmc",
   courseSlug: TMC_COURSE_SLUG,
 }
@@ -125,7 +135,7 @@ function contextFor(
     startup: {
       langs: langsMethods as unknown as ReadyStartup["langs"],
       userData: {
-        getCourseBySlug: () => Ok(course),
+        getExercise: () => Ok({ course, exercise: LocalCourseData.getExercises(course)[0] }),
         getCourse: () => Ok(course),
         setExerciseAsPassed: setPassed,
         setMoocExerciseStanding: setStanding,
@@ -254,8 +264,8 @@ suite("submitExercise action, tmc", () => {
       headline: "All tests passed on the server",
       points: { given: 1, max: 2 },
     })
-    expect(setPassed).toHaveBeenCalledWith("tmc", TMC_COURSE_SLUG, EXERCISE_SLUG)
-    expect(finishedCourses).toEqual([CourseIdentifier.from(tmcCourse.id)])
+    expect(setPassed).toHaveBeenCalledWith(idOfTmcExercise(TMC_EXERCISE_ID))
+    expect(finishedCourses).toEqual([idOfTmcCourse(tmcCourse.id)])
     // Only the outcome brings back a side panel the student closed while it was graded.
     expect(viewUpdates.map(({ shouldReopen }) => shouldReopen).at(-1)).toBe(true)
     expect(viewUpdates.slice(0, -1).every(({ shouldReopen }) => !shouldReopen)).toBe(true)
@@ -304,19 +314,17 @@ suite("submitExercise action, tmc", () => {
     expect(lastView()).toMatchObject({ phase: "finished", canPaste: true, feedback: undefined })
   })
 
-  test("a stored exercise id from the other backend is refused", async () => {
-    // The course says tmc but its exercise carries a mooc id, so there is nothing to
-    // submit; submitting it anyway would send the work to the wrong server.
-    const mismatched = makeTmcKind({
-      ...tmcCourse,
-      exercises: moocCourse.exercises,
-    }) as unknown as LocalCourseData
+  test("an exercise whose id is from the other backend is refused", async () => {
+    // Submitting it anyway would send the work to the wrong server.
     const submit = vi.fn()
-    const { actionContext } = contextFor(mismatched, {
+    const { actionContext } = contextFor(makeTmcKind(tmcCourse), {
       submitTmcExerciseAndWaitForResults: submit,
     })
 
-    const result = await submitExercise(actionContext, tmcExercise)
+    const result = await submitExercise(actionContext, {
+      ...tmcExercise,
+      id: idOfMoocExercise(MOOC_EXERCISE_ID),
+    })
 
     expect(result.err).toBe(true)
     expect((result.val as Error).message).toContain("is not a TMC Server exercise")
@@ -346,12 +354,11 @@ suite("submitExercise action, mooc", () => {
       canKeepWaiting: false,
     })
     expect(setStanding).toHaveBeenCalledWith(
-      COURSE_SLUG,
-      EXERCISE_SLUG,
+      idOfMoocExercise(MOOC_EXERCISE_ID),
       { passed: true, outOfTries: false },
       3,
     )
-    expect(finishedCourses).toEqual([CourseIdentifier.from(moocCourse.id)])
+    expect(finishedCourses).toEqual([idOfMoocCourse(moocCourse.id)])
   })
 
   test("offers the exercise's page from the moment the backend has the submission", async () => {
@@ -373,8 +380,7 @@ suite("submitExercise action, mooc", () => {
 
     await submitExercise(actionContext, moocExercise)
     expect(setStanding).toHaveBeenCalledWith(
-      COURSE_SLUG,
-      EXERCISE_SLUG,
+      idOfMoocExercise(MOOC_EXERCISE_ID),
       { passed: false, outOfTries: false },
       2,
     )
@@ -391,8 +397,7 @@ suite("submitExercise action, mooc", () => {
 
     await submitExercise(actionContext, moocExercise)
     expect(setStanding).toHaveBeenCalledWith(
-      COURSE_SLUG,
-      EXERCISE_SLUG,
+      idOfMoocExercise(MOOC_EXERCISE_ID),
       { passed: false, outOfTries: true },
       2,
     )
@@ -476,10 +481,7 @@ suite("submitExercise action, mooc", () => {
     const waited = await keepWaitingForGrading(actionContext, panelId)
 
     expect(waited.ok).toBe(true)
-    expect(finishedCourses).toEqual([
-      CourseIdentifier.from(moocCourse.id),
-      CourseIdentifier.from(moocCourse.id),
-    ])
+    expect(finishedCourses).toEqual([idOfMoocCourse(moocCourse.id), idOfMoocCourse(moocCourse.id)])
     expect(wait).toHaveBeenLastCalledWith(TASK_SUBMISSION_ID, expect.any(Function))
     expect(lastView()).toMatchObject({
       phase: "finished",
@@ -487,8 +489,7 @@ suite("submitExercise action, mooc", () => {
       submissionUrl: EXERCISE_PAGE_URL,
     })
     expect(setStanding).toHaveBeenCalledWith(
-      COURSE_SLUG,
-      EXERCISE_SLUG,
+      idOfMoocExercise(MOOC_EXERCISE_ID),
       { passed: true, outOfTries: false },
       3,
     )

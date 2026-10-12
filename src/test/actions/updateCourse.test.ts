@@ -21,12 +21,12 @@ import type {
   CourseExercise,
   Exercise,
 } from "../../shared/langsSchema"
-import { CourseIdentifier } from "../../shared/shared"
 import Storage from "../../storage"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
 import type CoursesTree from "../../ui/treeview/treeview"
 import { Logger } from "../../utilities"
 import { combineTmcApiExerciseData } from "../../utilities/apiData"
+import { idOfMoocCourse, idOfTmcCourse } from "../fixtures/identifiers"
 import {
   MOOC_COURSE_UUID,
   MOOC_EXERCISE_UUID,
@@ -55,7 +55,7 @@ const storedMoocCourse: MoocLocalCourseData = {
 }
 
 suite("updateCourse action (mooc)", function () {
-  const courseId = CourseIdentifier.from(MOOC_COURSE_UUID)
+  const courseId = idOfMoocCourse(MOOC_COURSE_UUID)
 
   let tmcMock: Langs
   let tmcMockValues: TMCMockValues
@@ -328,7 +328,7 @@ const tmcCourseData: CombinedCourseData = {
 }
 
 suite("updateCourse action (tmc)", function () {
-  const courseId = CourseIdentifier.from(1)
+  const courseId = idOfTmcCourse(1)
 
   let langsMock: Langs
   let getTmcCourseData: ReturnType<typeof vi.fn>
@@ -508,7 +508,7 @@ suite("updateCourse after addNewCourse", function () {
   })
 
   test("a refresh of an unchanged tmc course stores what adding it stored", async function () {
-    const courseId = CourseIdentifier.from(tmcCourseData.details.id)
+    const courseId = idOfTmcCourse(tmcCourseData.details.id)
     expect((await addNewCourse(actionContext(), "test", courseId)).ok).toBe(true)
     const added = structuredClone(userData.getTmcCourses())
 
@@ -518,7 +518,7 @@ suite("updateCourse after addNewCourse", function () {
   })
 
   test("a refresh of an unchanged mooc course stores what adding it stored", async function () {
-    const courseId = CourseIdentifier.from(MOOC_COURSE_UUID)
+    const courseId = idOfMoocCourse(MOOC_COURSE_UUID)
     expect((await addNewCourse(actionContext(), "", courseId)).ok).toBe(true)
     const added = structuredClone(userData.getMoocCourses())
 

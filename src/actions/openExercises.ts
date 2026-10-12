@@ -1,12 +1,11 @@
 import * as os from "os"
 
-import { compact } from "lodash"
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
 import { ExerciseStatus } from "../api/workspaceManager"
 import type { CourseIdentifier } from "../shared/shared"
-import { ExerciseIdentifier, LocalCourseData, LocalCourseExercise, match } from "../shared/shared"
+import { ExerciseIdentifier, LocalCourseData, LocalCourseExercise } from "../shared/shared"
 import { Logger } from "../utilities"
 import { downloadCourseExercises } from "./downloadCourseExercises"
 import type { ReadyActionContext } from "./types"
@@ -46,29 +45,17 @@ export async function openExercises(
     return courseResult
   }
   const course = courseResult.val
-  const courseExercises = new Map(LocalCourseData.getExercises(course).map((x) => [x.data.id, x]))
-  const exercisesToOpen = compact(
-    exerciseIdsToOpen.map((x) => courseExercises.get(ExerciseIdentifier.unwrap(x))),
-  )
-
-  const courseName = match(
-    course,
-    (tmc) => tmc.name,
-    (mooc) => mooc.name,
-  )
+  const courseName = LocalCourseData.getCourseName(course)
   const openResult = await workspaceManager.openCourseExercises(
     course.kind,
     courseName,
-    exercisesToOpen.map((x) => LocalCourseExercise.getSlug(x)),
+    exerciseIdsToOpen,
   )
   if (openResult.err) {
     return openResult
   }
   // An exercise not on disk, say one whose download just failed, is not among them.
-  const openedSlugs = new Set(openResult.val.map((x) => x.exerciseSlug))
-  const openedIds = exercisesToOpen
-    .filter((x) => openedSlugs.has(LocalCourseExercise.getSlug(x)))
-    .map((x) => LocalCourseExercise.getId(x))
+  const openedIds = openResult.val.map((x) => x.id)
 
   const openLimit = UNDER_8GB_RAM ? 50 : 100
   const openCount = workspaceManager
@@ -92,48 +79,22 @@ export async function downloadAndOpenExercises(
   exerciseIdsToOpen: ExerciseIdentifier[],
   courseId: CourseIdentifier,
 ): Promise<Result<OpenedExercises, Error>> {
-  const { langs, userData } = actionContext.startup
+  const { userData, workspaceManager } = actionContext.startup
 
   const courseResult = userData.getCourse(courseId)
   if (courseResult.err) {
     return courseResult
   }
-  const course = courseResult.val
-  const courseExercises = new Map(
-    LocalCourseData.getExercises(course).map((x) => [
+  const courseExerciseKeys = new Set(
+    LocalCourseData.getExercises(courseResult.val).map((x) =>
       ExerciseIdentifier.key(LocalCourseExercise.getId(x)),
-      x,
-    ]),
-  )
-  const exercisesToOpen = compact(
-    exerciseIdsToOpen.map((x) => courseExercises.get(ExerciseIdentifier.key(x))),
-  )
-  // The mooc local listing is keyed by course id (UUID); TMC by course
-  // slug. `getCourseName` returns the slug for both, so pick per backend.
-  const localCourseExercises = await langs.listLocalCourseExercises(
-    courseId.kind,
-    match(
-      course,
-      () => LocalCourseData.getCourseName(course),
-      (mooc) => mooc.id,
     ),
   )
-  if (localCourseExercises.err) {
-    return localCourseExercises
-  }
-
-  const localExerciseIds = new Set<number | string>(
-    localCourseExercises.val.map((lce) => lce["exercise-id"]),
-  )
-  const exercisesToDownload = exercisesToOpen.filter(
-    (eto) => !localExerciseIds.has(ExerciseIdentifier.unwrap(LocalCourseExercise.getId(eto))),
+  const exercisesToDownload = exerciseIdsToOpen.filter(
+    (id) => courseExerciseKeys.has(ExerciseIdentifier.key(id)) && !workspaceManager.getExercise(id),
   )
   if (exercisesToDownload.length > 0) {
-    const downloaded = await downloadCourseExercises(
-      actionContext,
-      courseId,
-      exercisesToDownload.map((etd) => LocalCourseExercise.getId(etd)),
-    )
+    const downloaded = await downloadCourseExercises(actionContext, courseId, exercisesToDownload)
     if (downloaded.err) {
       return downloaded
     }

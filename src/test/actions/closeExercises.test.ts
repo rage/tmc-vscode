@@ -5,8 +5,9 @@ import { closeExercises } from "../../actions/closeExercises"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
 import type { LocalCourseData } from "../../shared/shared"
-import { CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
+import { makeMoocKind } from "../../shared/shared"
 import type { MoocLocalCourseData } from "../../storage/data"
+import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
 const moocCourse: MoocLocalCourseData = {
@@ -32,28 +33,18 @@ const moocCourse: MoocLocalCourseData = {
 }
 
 suite("closeExercises action", function () {
-  test("closes a mooc exercise by its slug, not its raw uuid id", async function () {
-    // The workspace manager keys exercises by slug; a mooc exercise's uuid matches nothing there.
-    const closeCourseExercises = vi.fn(async () => Ok([]))
-    const workspaceManager = {
-      closeCourseExercises,
-      getExercisesByCourseSlug: () => [],
-    } as unknown as WorkspaceManager
-
+  test("closes the course's exercises by id and answers with the ids it closed", async function () {
+    const id = idOfMoocExercise("mooc-ex-uuid-1")
+    const closeCourseExercises = vi.fn(async () => Ok([{ id }]))
+    const workspaceManager = { closeCourseExercises } as unknown as WorkspaceManager
     const userData = {
       getCourse: () => Ok(makeMoocKind(moocCourse) as LocalCourseData),
     } as unknown as UserData
-
     const actionContext = createMockActionContext({ startup: { userData, workspaceManager } })
 
-    await closeExercises(
-      actionContext,
-      [ExerciseIdentifier.from("mooc-ex-uuid-1")],
-      CourseIdentifier.from("instance-uuid-1"),
-    )
+    const result = await closeExercises(actionContext, [id], idOfMoocCourse("instance-uuid-1"))
 
-    expect(closeCourseExercises).toHaveBeenCalledExactlyOnceWith("mooc", "mooc-python-course", [
-      "mooc_hello",
-    ])
+    expect(closeCourseExercises).toHaveBeenCalledExactlyOnceWith("mooc", "mooc-python-course", [id])
+    expect(result.unwrap()).toEqual([id])
   })
 })

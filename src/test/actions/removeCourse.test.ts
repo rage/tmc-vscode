@@ -5,7 +5,8 @@ import { removeCourse } from "../../actions/removeCourse"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import type Dialog from "../../api/dialog"
 import type { UserData } from "../../config/userdata"
-import { CourseIdentifier, makeTmcKind } from "../../shared/shared"
+import { makeTmcKind } from "../../shared/shared"
+import { idOfTmcCourse } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -58,7 +59,7 @@ suite("removeCourse action", function () {
       deleteCourse,
     } as unknown as Partial<UserData>)
 
-    const result = await removeCourse(actionContext, CourseIdentifier.from(1))
+    const result = await removeCourse(actionContext, idOfTmcCourse(1))
 
     expect(result.err).toBe(true)
     expect(dialog.reportError).not.toHaveBeenCalled()
@@ -76,7 +77,7 @@ suite("removeCourse action", function () {
       unsetSetting,
     )
 
-    const result = await removeCourse(actionContext, CourseIdentifier.from(1))
+    const result = await removeCourse(actionContext, idOfTmcCourse(1))
 
     // The course stays, so its closed exercises and workspace file must too.
     expect(unsetSetting).not.toHaveBeenCalled()
@@ -97,7 +98,7 @@ suite("removeCourse action", function () {
       vi.fn(async () => Err(error)),
     )
 
-    const result = await removeCourse(actionContext, CourseIdentifier.from(1))
+    const result = await removeCourse(actionContext, idOfTmcCourse(1))
 
     expect(result.ok).toBe(true)
     expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(expect.any(String), error)
@@ -111,11 +112,11 @@ suite("removeCourse action", function () {
       deleteCourse,
     } as unknown as Partial<UserData>)
 
-    const result = await removeCourse(actionContext, CourseIdentifier.from(1))
+    const result = await removeCourse(actionContext, idOfTmcCourse(1))
 
     expect(result.ok).toBe(true)
     expect(dialog.reportError).not.toHaveBeenCalled()
-    expect(deleteCourse).toHaveBeenCalledWith(CourseIdentifier.from(1))
+    expect(deleteCourse).toHaveBeenCalledWith(idOfTmcCourse(1))
   })
 
   // Left behind, it is reused verbatim when the course is added back.
@@ -125,7 +126,7 @@ suite("removeCourse action", function () {
       deleteCourse: vi.fn(async () => Ok.EMPTY),
     } as unknown as Partial<UserData>)
 
-    await removeCourse(actionContext, CourseIdentifier.from(1))
+    await removeCourse(actionContext, idOfTmcCourse(1))
 
     expect(
       actionContext.startup.workspaceManager.deleteWorkspaceFile,

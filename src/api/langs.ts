@@ -47,8 +47,6 @@ import type {
   ExerciseTaskSubmissionResult,
   ExerciseTaskSubmissionStatus,
   LocalExercise,
-  LocalMoocExercise,
-  LocalTmcExercise,
   MoocCourse,
   MoocDeviceLogin,
   MoocOldSubmissionRestore,
@@ -501,45 +499,6 @@ export default class Langs {
     return this._fetch(
       { args: ["list-local-exercises", "--client-name", this.clientName] },
       "local-exercises",
-    )
-  }
-
-  /**
-   * Lists local exercises for a given course. Dispatches on the backend: a core
-   * `list-local-tmc-course-exercises` keyed by course slug for TMC, or
-   * `mooc list-local-course-exercises` keyed by course id (mooc configs store
-   * no slug). Both return entries
-   * with an `exercise-slug` and an `exercise-path`, the fields the workspace manager
-   * needs.
-   *
-   * @param courseKind Which backend the course belongs to.
-   * @param courseIdentifier Course slug for TMC, course id (UUID) for mooc.
-   */
-  public async listLocalCourseExercises(
-    courseKind: BackendKind,
-    courseIdentifier: string,
-  ): Promise<Result<(LocalTmcExercise | LocalMoocExercise)[], Error>> {
-    if (courseKind === "mooc") {
-      return this._fetch(
-        {
-          backend: "mooc",
-          args: this._moocCmd("list-local-course-exercises", "--course-id", courseIdentifier),
-        },
-        "local-mooc-exercises",
-      )
-    }
-    return this._fetch(
-      {
-        backend: "tmc",
-        args: [
-          "list-local-tmc-course-exercises",
-          "--client-name",
-          this.clientName,
-          "--course-slug",
-          courseIdentifier,
-        ],
-      },
-      "local-tmc-exercises",
     )
   }
 

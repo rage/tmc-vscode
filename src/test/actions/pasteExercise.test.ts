@@ -9,12 +9,9 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
 import { BottleneckError } from "../../errors"
-import {
-  ExerciseIdentifier,
-  makeMoocKind,
-  makeTmcKind,
-  pasteServiceName,
-} from "../../shared/shared"
+import type { ExerciseIdentifier } from "../../shared/shared"
+import { pasteServiceName } from "../../shared/shared"
+import { idOfMoocCourse, idOfMoocExercise, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
 const COURSE_SLUG = "mooc-python-course"
@@ -23,79 +20,69 @@ const MOOC_EXERCISE_ID = "mooc-ex-1"
 const TMC_EXERCISE_ID = 4321
 const EXERCISE_PATH = "/path/to/exercise"
 
-function contextFor(
-  langsMethods: Record<string, unknown>,
-  userDataMethods: Record<string, unknown>,
-): ReadyActionContext {
+const MOOC_ID = idOfMoocExercise(MOOC_EXERCISE_ID)
+const TMC_ID = idOfTmcExercise(TMC_EXERCISE_ID)
+
+const moocExercise: WorkspaceExercise = {
+  id: MOOC_ID,
+  courseId: idOfMoocCourse("mooc-course-1"),
+  backend: "mooc",
+  courseSlug: COURSE_SLUG,
+  exerciseSlug: EXERCISE_SLUG,
+  status: ExerciseStatus.Open,
+  uri: { fsPath: EXERCISE_PATH } as unknown as vscode.Uri,
+}
+
+function contextFor(langsMethods: Record<string, unknown>): ReadyActionContext {
   return createMockActionContext({
     startup: {
       langs: langsMethods as unknown as ReadyStartup["langs"],
-      userData: {
-        getCourseBySlug: () => Ok({}),
-        ...userDataMethods,
-      } as unknown as ReadyStartup["userData"],
+      userData: { getCourse: () => Ok({}) } as unknown as ReadyStartup["userData"],
       workspaceManager: {
-        getExerciseBySlug: () => ({ uri: { fsPath: EXERCISE_PATH } as unknown as vscode.Uri }),
+        getExercise: (id: ExerciseIdentifier) => ({ ...moocExercise, id }),
       } as unknown as ReadyStartup["workspaceManager"],
     },
   })
 }
 
-function moocContextWith(pasteResult: unknown): {
+function contextWith(pasteResult: unknown): {
   actionContext: ReadyActionContext
   submit: ReturnType<typeof vi.fn>
 } {
   const submit = vi.fn().mockResolvedValue(pasteResult)
-  const actionContext = contextFor(
-    { paste: submit },
-    { getExerciseByName: () => makeMoocKind({ id: MOOC_EXERCISE_ID }) },
-  )
-  return { actionContext, submit }
-}
-
-function tmcContextWith(pasteResult: unknown): {
-  actionContext: ReadyActionContext
-  submit: ReturnType<typeof vi.fn>
-} {
-  const submit = vi.fn().mockResolvedValue(pasteResult)
-  const actionContext = contextFor(
-    { paste: submit },
-    { getExerciseByName: () => makeTmcKind({ id: TMC_EXERCISE_ID }) },
-  )
-  return { actionContext, submit }
+  return { actionContext: contextFor({ paste: submit }), submit }
 }
 
 /** Mirrors `commands/pasteExercise.ts`'s headline-wrapping, for driving the action
  * through the real `runForExercise`/`withOperation` boundary. */
 function pasteBody(actionContext: ReadyActionContext) {
   return (exercise: WorkspaceExercise) =>
-    pasteExercise(actionContext, exercise.backend, exercise.courseSlug, exercise.exerciseSlug).then(
-      (result) =>
-        result.ok
-          ? result
-          : failure(
-              `Failed to send the exercise to ${pasteServiceName(exercise.backend)}.`,
-              result.val,
-            ),
+    pasteExercise(actionContext, exercise.id).then((result) =>
+      result.ok
+        ? result
+        : failure(
+            `Failed to send the exercise to ${pasteServiceName(exercise.backend)}.`,
+            result.val,
+          ),
     )
 }
 
 suite("paste action", () => {
   test("a tmc exercise goes to the tmc paste service with its numeric id", async () => {
-    const { actionContext, submit } = tmcContextWith(Ok("https://tmc.mooc.fi/paste/abc123"))
+    const { actionContext, submit } = contextWith(Ok("https://tmc.mooc.fi/paste/abc123"))
 
-    const result = await pasteExercise(actionContext, "tmc", COURSE_SLUG, EXERCISE_SLUG)
+    const result = await pasteExercise(actionContext, TMC_ID)
 
-    expect(submit).toHaveBeenCalledWith(ExerciseIdentifier.from(TMC_EXERCISE_ID), EXERCISE_PATH)
+    expect(submit).toHaveBeenCalledWith(TMC_ID, EXERCISE_PATH)
     expect(result.val).toBe("https://tmc.mooc.fi/paste/abc123")
   })
 
   test("a mooc exercise goes to the mooc paste service with its uuid", async () => {
-    const { actionContext, submit } = moocContextWith(Ok("https://paste.example/abc123"))
+    const { actionContext, submit } = contextWith(Ok("https://paste.example/abc123"))
 
-    const result = await pasteExercise(actionContext, "mooc", COURSE_SLUG, EXERCISE_SLUG)
+    const result = await pasteExercise(actionContext, MOOC_ID)
 
-    expect(submit).toHaveBeenCalledWith(ExerciseIdentifier.from(MOOC_EXERCISE_ID), EXERCISE_PATH)
+    expect(submit).toHaveBeenCalledWith(MOOC_ID, EXERCISE_PATH)
     expect(result.ok).toBe(true)
     expect(result.val).toBe("https://paste.example/abc123")
   })
@@ -105,7 +92,7 @@ suite("paste action", () => {
     // same exercise directory, so they must not overlap. The busy notice is
     // `withOperation`'s job at the command layer; showing it here too would double it.
     let finish!: () => void
-    const { actionContext } = moocContextWith(undefined)
+    const { actionContext } = contextWith(undefined)
     ;(actionContext.startup.langs as unknown as Record<string, unknown>).paste = vi
       .fn()
       .mockReturnValue(
@@ -115,8 +102,8 @@ suite("paste action", () => {
       )
     const notification = vi.mocked(actionContext.dialog.notification)
 
-    const first = pasteExercise(actionContext, "mooc", COURSE_SLUG, EXERCISE_SLUG)
-    const second = await pasteExercise(actionContext, "mooc", COURSE_SLUG, EXERCISE_SLUG)
+    const first = pasteExercise(actionContext, MOOC_ID)
+    const second = await pasteExercise(actionContext, MOOC_ID)
 
     expect(second.err).toBe(true)
     expect(second.val).toBeInstanceOf(BottleneckError)
@@ -130,9 +117,9 @@ suite("paste action", () => {
     // Both callers report it themselves, in the place the user asked from; a
     // notification here would make every failed paste two of them.
     const error = new Error("backend unreachable")
-    const { actionContext } = moocContextWith(Err(error))
+    const { actionContext } = contextWith(Err(error))
 
-    const result = await pasteExercise(actionContext, "mooc", COURSE_SLUG, EXERCISE_SLUG)
+    const result = await pasteExercise(actionContext, MOOC_ID)
 
     expect(result.err).toBe(true)
     expect(result.val).toBe(error)
@@ -140,9 +127,9 @@ suite("paste action", () => {
   })
 
   test("an empty paste link from the server is its own error case", async () => {
-    const { actionContext } = moocContextWith(Ok(""))
+    const { actionContext } = contextWith(Ok(""))
 
-    const result = await pasteExercise(actionContext, "mooc", COURSE_SLUG, EXERCISE_SLUG)
+    const result = await pasteExercise(actionContext, MOOC_ID)
 
     expect(result.err).toBe(true)
     expect((result.val as Error).message).toContain("did not answer with a paste link")
@@ -157,22 +144,13 @@ suite("paste action, through the real runForExercise boundary", () => {
     actionContext: ReadyActionContext
     exercise: WorkspaceExercise
   } {
-    const exercise: WorkspaceExercise = {
-      backend: "mooc",
-      courseSlug: COURSE_SLUG,
-      exerciseSlug: EXERCISE_SLUG,
-      status: ExerciseStatus.Open,
-      uri: { fsPath: EXERCISE_PATH } as unknown as vscode.Uri,
-    }
+    const exercise = moocExercise
     const actionContext = createMockActionContext({
       startup: {
         langs: {} as unknown as ReadyStartup["langs"],
-        userData: {
-          getCourseBySlug: () => Ok({}),
-          getExerciseByName: () => makeMoocKind({ id: MOOC_EXERCISE_ID }),
-        } as unknown as ReadyStartup["userData"],
+        userData: { getCourse: () => Ok({}) } as unknown as ReadyStartup["userData"],
         workspaceManager: {
-          getExerciseBySlug: () => ({ uri: exercise.uri }),
+          getExercise: () => exercise,
           get activeExercise() {
             return exercise
           },

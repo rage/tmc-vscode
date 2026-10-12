@@ -9,11 +9,14 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
 import { BottleneckError } from "../../errors"
+import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
 suite("Exercise command runner", function () {
   const uri = vscode.Uri.file("/workspace/mooc/course/ex-1")
   const exercise: WorkspaceExercise = {
+    id: idOfMoocExercise("mooc-ex-uuid"),
+    courseId: idOfMoocCourse("mooc-course-uuid"),
     backend: "mooc",
     courseSlug: "mooc-course",
     exerciseSlug: "ex-1",

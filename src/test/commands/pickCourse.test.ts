@@ -6,7 +6,8 @@ import type { Item } from "../../api/dialog"
 import { pickCourse } from "../../commands/pickCourse"
 import type { UserData } from "../../config/userdata"
 import type { LocalCourseData } from "../../shared/shared"
-import { CourseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
+import { makeMoocKind, makeTmcKind } from "../../shared/shared"
+import { idOfMoocCourse, idOfTmcCourse } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -67,10 +68,10 @@ suite("pickCourse", function () {
     const [prompt, ...items] = selectItem.mock.calls[0] ?? []
     expect(prompt).toEqual({ title: "Course Details", placeHolder: "Which course?" })
     expect(items).toEqual([
-      { label: "The Python Course", value: CourseIdentifier.from(1), description: "TMC Server" },
+      { label: "The Python Course", value: idOfTmcCourse(1), description: "TMC Server" },
       {
         label: "Introduction to CS",
-        value: CourseIdentifier.from("course-uuid"),
+        value: idOfMoocCourse("course-uuid"),
         description: "courses.mooc.fi",
       },
     ])
@@ -84,7 +85,7 @@ suite("pickCourse", function () {
 
     const picked = await pickCourse(context, { title: "Title", placeHolder: "Pick one" })
 
-    expect(picked).toEqual(CourseIdentifier.from("course-uuid"))
+    expect(picked).toEqual(idOfMoocCourse("course-uuid"))
   })
 
   test("decorate replaces the label", async function () {

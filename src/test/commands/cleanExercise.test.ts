@@ -7,6 +7,7 @@ import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { cleanExercise } from "../../commands"
+import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createTMCMock } from "../mocks/tmc"
 import type { WorkspaceManagerMockValues } from "../mocks/workspaceManager"
@@ -19,6 +20,8 @@ suite("Clean exercise command", function () {
 
   const uri = vscode.Uri.file(PASSING_EXERCISE_PATH)
   const exercise = {
+    id: idOfTmcExercise(1),
+    courseId: idOfTmcCourse(1),
     backend: "tmc" as const,
     courseSlug: "test-python-course",
     exerciseSlug: "part01-01_passing_exercise",

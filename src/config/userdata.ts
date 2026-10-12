@@ -13,6 +13,7 @@ import {
   makeTmcKind,
   match,
   LocalCourseData,
+  partition,
   toError,
 } from "../shared/shared"
 import type Storage from "../storage"
@@ -48,22 +49,21 @@ function replaceIn<Id, Course extends StoredCourse<Id>>(
   return true
 }
 
-/**
- * The exercise named `exerciseName` in a course with slug `courseSlug`. Searches every such
- * course: stored slugs are not guaranteed unique, and the first match need not hold the
- * exercise.
- */
-function findExerciseByName<Exercise extends { name: string }>(
-  courses: Map<unknown, { name: string; exercises: Exercise[] }>,
-  courseSlug: string,
-  exerciseName: string,
-): Exercise | undefined {
+/** A stored exercise and the stored course holding it. */
+export interface StoredExercise {
+  course: LocalCourseData
+  exercise: LocalCourseExercise
+}
+
+/** The course holding the exercise with id `exerciseId`, and that exercise. */
+function findExercise<Course extends { exercises: { id: unknown }[] }>(
+  courses: Map<unknown, Course>,
+  exerciseId: Course["exercises"][number]["id"],
+): { course: Course; exercise: Course["exercises"][number] } | undefined {
   for (const course of courses.values()) {
-    if (course.name === courseSlug) {
-      const exercise = course.exercises.find((x) => x.name === exerciseName)
-      if (exercise) {
-        return exercise
-      }
+    const exercise = course.exercises.find((x) => x.id === exerciseId)
+    if (exercise) {
+      return { course, exercise }
     }
   }
   return undefined
@@ -93,12 +93,11 @@ export class UserData {
       this._tmcCourses = new Map(persistentData.courses.map((x) => [x.id, x]))
       this._moocCourses = new Map(persistentData.mooc_courses.map((x) => [x.id, x]))
 
-      persistentData.courses.forEach((x) =>
-        x.exercises.forEach((y) => this._setPassed(ExerciseIdentifier.from(y.id), y.passed)),
-      )
-      persistentData.mooc_courses.forEach((x) =>
-        x.exercises.forEach((y) => this._setPassed(ExerciseIdentifier.from(y.id), y.passed)),
-      )
+      for (const course of this.getCourses()) {
+        for (const exercise of LocalCourseData.getExercises(course)) {
+          this._setPassed(LocalCourseExercise.getId(exercise), exercise.data.passed)
+        }
+      }
     } else {
       this._tmcCourses = new Map()
       this._moocCourses = new Map()
@@ -182,54 +181,45 @@ export class UserData {
   }
 
   /**
-   * Looks up an exercise by course slug and exercise name **within one backend**,
-   * returning it tagged with that backend.
+   * Looks up a stored exercise, and its course, by id.
    *
-   * As with `getCourseBySlug`, the backend is required rather than inferred: a
-   * mooc course can share its slug with a tmc course. Every caller comes from a
-   * `WorkspaceExercise`, which already records the backend.
+   * The returned records are the stored ones, not copies. Errs when no stored course holds
+   * the exercise, e.g. for a folder left behind by a removed course.
    */
-  public getExerciseByName(
-    backend: BackendKind,
-    courseSlug: string,
-    exerciseName: string,
-  ): LocalCourseExercise | undefined {
-    switch (backend) {
-      case "tmc": {
-        const exercise = findExerciseByName(this._tmcCourses, courseSlug, exerciseName)
-        return exercise && makeTmcKind(exercise)
-      }
-      case "mooc": {
-        const exercise = findExerciseByName(this._moocCourses, courseSlug, exerciseName)
-        return exercise && makeMoocKind(exercise)
-      }
-      default: {
-        assertUnreachable(backend)
-      }
-    }
+  public getExercise(id: ExerciseIdentifier): Result<StoredExercise, Error> {
+    const found = match(
+      id,
+      (tmc) => {
+        const stored = findExercise(this._tmcCourses, tmc.tmcExerciseId)
+        return (
+          stored && { course: makeTmcKind(stored.course), exercise: makeTmcKind(stored.exercise) }
+        )
+      },
+      (mooc) => {
+        const stored = findExercise(this._moocCourses, mooc.moocExerciseId)
+        return (
+          stored && { course: makeMoocKind(stored.course), exercise: makeMoocKind(stored.exercise) }
+        )
+      },
+    )
+    return found
+      ? Ok(found)
+      : Err(new Error(`No stored ${id.kind} exercise ${ExerciseIdentifier.toString(id)}.`))
   }
 
   /**
    * Records a single exercise as passed, in memory and in storage.
    *
-   * Errs when the named exercise is not in the catalogue, which after a passing
+   * Errs when the exercise is not in the catalogue, which after a passing
    * submission means the catalogue is out of step with what was submitted.
    */
-  public async setExerciseAsPassed(
-    backend: BackendKind,
-    courseSlug: string,
-    exerciseName: string,
-  ): Promise<Result<void, Error>> {
-    const exercise = this.getExerciseByName(backend, courseSlug, exerciseName)
-    if (!exercise) {
-      return Err(
-        new Error(`No ${backend} exercise ${courseSlug}/${exerciseName} to record as passed`),
-      )
+  public async setExerciseAsPassed(id: ExerciseIdentifier): Promise<Result<void, Error>> {
+    const stored = this.getExercise(id)
+    if (stored.err) {
+      return stored
     }
-    // `getExerciseByName` hands back the stored record, not a copy, so writing
-    // through it is what updates the catalogue.
-    exercise.data.passed = true
-    this._setPassed(ExerciseIdentifier.from(exercise.data.id), true)
+    stored.val.exercise.data.passed = true
+    this._setPassed(id, true)
     return this._updatePersistentData()
   }
 
@@ -237,25 +227,25 @@ export class UserData {
    * Records a mooc exercise's standing and points as a grading reported them, in memory and in
    * storage. Unlike {@link setExerciseAsPassed} it can also clear `passed`, as the backend decides.
    *
-   * Errs when the named exercise is not in the catalogue.
+   * Errs when the catalogue holds no mooc exercise with this id.
    */
   public async setMoocExerciseStanding(
-    courseSlug: string,
-    exerciseName: string,
+    id: ExerciseIdentifier,
     standing: MoocStoredStanding,
     awardedPoints: number,
   ): Promise<Result<void, Error>> {
-    const exercise = findExerciseByName(this._moocCourses, courseSlug, exerciseName)
-    if (!exercise) {
-      return Err(
-        new Error(`No mooc exercise ${courseSlug}/${exerciseName} to record a grading for`),
-      )
+    const stored = this.getExercise(id)
+    if (stored.err) {
+      return stored
     }
-    // The stored record, not a copy, so writing through it updates the catalogue.
-    exercise.passed = standing.passed
-    exercise.outOfTries = standing.outOfTries
-    exercise.awardedPoints = awardedPoints
-    this._setPassed(ExerciseIdentifier.from(exercise.id), standing.passed)
+    const { exercise } = stored.val
+    if (exercise.kind !== "mooc") {
+      return Err(new Error(`Exercise ${ExerciseIdentifier.toString(id)} is not a mooc exercise.`))
+    }
+    exercise.data.passed = standing.passed
+    exercise.data.outOfTries = standing.outOfTries
+    exercise.data.awardedPoints = awardedPoints
+    this._setPassed(id, standing.passed)
     return this._updatePersistentData()
   }
 
@@ -284,7 +274,7 @@ export class UserData {
       }
     }
     LocalCourseData.getExercises(data).forEach((x) =>
-      this._setPassed(ExerciseIdentifier.from(x.data.id), x.data.passed),
+      this._setPassed(LocalCourseExercise.getId(x), x.data.passed),
     )
     return this._updatePersistentData(LocalCourseData.getCourseId(data))
   }
@@ -359,7 +349,7 @@ export class UserData {
       return courseResult
     }
     const courseData = courseResult.val
-    const newExercises = courseData.data.newExercises.map(ExerciseIdentifier.from)
+    const newExercises = LocalCourseData.getNewExercises(courseData)
     Logger.info(`Clearing new exercises`)
     if (exercisesToClear !== undefined) {
       // A plain `difference` compares the id objects by reference and subtracts nothing.
@@ -368,31 +358,14 @@ export class UserData {
         exercisesToClear,
         ExerciseIdentifier.key,
       )
-      // Write the remainder back to the course's own backend-typed array,
-      // always — including down to an empty list when everything was cleared.
+      const remaining = partition(unSuccessfullyDownloaded)
       match(
         courseData,
         (tmc) => {
-          tmc.newExercises = unSuccessfullyDownloaded
-            .map((id) =>
-              match(
-                id,
-                (t) => t.tmcExerciseId,
-                () => undefined,
-              ),
-            )
-            .filter((id) => id !== undefined)
+          tmc.newExercises = remaining.tmc.map((id) => id.tmcExerciseId)
         },
         (mooc) => {
-          mooc.newExercises = unSuccessfullyDownloaded
-            .map((id) =>
-              match(
-                id,
-                () => undefined,
-                (m) => m.moocExerciseId,
-              ),
-            )
-            .filter((id) => id !== undefined)
+          mooc.newExercises = remaining.mooc.map((id) => id.moocExerciseId)
         },
       )
       if (unSuccessfullyDownloaded.length === 0) {
@@ -478,28 +451,4 @@ export class UserData {
     this._pendingWrite = queued
     return queued
   }
-}
-
-/**
- * The stored course and exercise a downloaded exercise belongs to.
- *
- * @returns `Err` when the course or the exercise is not stored, e.g. a folder left behind
- * by a removed course.
- */
-export function findStoredExercise(
-  userData: Pick<UserData, "getCourseBySlug">,
-  exercise: { backend: BackendKind; courseSlug: string; exerciseSlug: string },
-): Result<{ course: LocalCourseData; exercise: LocalCourseExercise }, Error> {
-  const course = userData.getCourseBySlug(exercise.backend, exercise.courseSlug)
-  if (course.err) {
-    return course
-  }
-  const stored = LocalCourseData.getExercises(course.val).find(
-    (x) => LocalCourseExercise.getSlug(x) === exercise.exerciseSlug,
-  )
-  return stored
-    ? Ok({ course: course.val, exercise: stored })
-    : Err(
-        new Error(`ID for exercise ${exercise.courseSlug}/${exercise.exerciseSlug} was not found.`),
-      )
 }

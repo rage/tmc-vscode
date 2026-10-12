@@ -5,13 +5,14 @@ import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import { removeCourse } from "../../commands/removeCourse"
 import type { UserData } from "../../config/userdata"
-import { CourseIdentifier, makeMoocKind } from "../../shared/shared"
+import { makeMoocKind } from "../../shared/shared"
+import { idOfMoocCourse } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions", () => ({ removeCourse: vi.fn(async () => Ok.EMPTY) }))
 
-const courseId = CourseIdentifier.from("course-uuid")
+const courseId = idOfMoocCourse("course-uuid")
 const course = makeMoocKind({ id: "course-uuid", name: "cs-intro", title: "Introduction to CS" })
 
 function contextWith(confirmed: boolean): ReadyActionContext {

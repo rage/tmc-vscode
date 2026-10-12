@@ -2,14 +2,19 @@ import { Ok } from "ts-results"
 import { afterEach, expect, suite, test, vi } from "vitest"
 
 import { BottleneckError } from "../../errors"
-import { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
 import { downloadFailures } from "../../ui/downloadFailures"
 import { exerciseOperations } from "../../ui/exerciseOperations"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
+import {
+  idOfMoocCourse,
+  idOfMoocExercise,
+  idOfTmcCourse,
+  idOfTmcExercise,
+} from "../fixtures/identifiers"
 
-const tmcCourse = CourseIdentifier.from(1)
-const otherTmcCourse = CourseIdentifier.from(2)
-const moocCourse = CourseIdentifier.from("11111111-2222-3333-4444-555555555555")
+const tmcCourse = idOfTmcCourse(1)
+const otherTmcCourse = idOfTmcCourse(2)
+const moocCourse = idOfMoocCourse("11111111-2222-3333-4444-555555555555")
 
 afterEach(() => {
   updateablesRegistry.clear()
@@ -22,9 +27,9 @@ suite("updateables registry", () => {
   })
 
   test("keeps courses apart, including across backends", () => {
-    const first = [ExerciseIdentifier.from(101)]
-    const second = [ExerciseIdentifier.from(202)]
-    const mooc = [ExerciseIdentifier.from("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")]
+    const first = [idOfTmcExercise(101)]
+    const second = [idOfTmcExercise(202)]
+    const mooc = [idOfMoocExercise("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")]
 
     updateablesRegistry.setMany([[tmcCourse, first]])
     updateablesRegistry.setMany([[otherTmcCourse, second]])
@@ -36,24 +41,24 @@ suite("updateables registry", () => {
   })
 
   test("keeps a tmc and a mooc course with the same id apart", () => {
-    const tmc = [ExerciseIdentifier.from(101)]
-    updateablesRegistry.setMany([[CourseIdentifier.from(1), tmc]])
-    updateablesRegistry.setMany([[CourseIdentifier.from("1"), []]])
+    const tmc = [idOfTmcExercise(101)]
+    updateablesRegistry.setMany([[idOfTmcCourse(1), tmc]])
+    updateablesRegistry.setMany([[idOfMoocCourse("1"), []]])
 
-    expect(updateablesRegistry.get(CourseIdentifier.from(1))).toEqual(tmc)
+    expect(updateablesRegistry.get(idOfTmcCourse(1))).toEqual(tmc)
   })
 
   test("a later list replaces the course's list rather than adding to it", () => {
-    updateablesRegistry.setMany([[tmcCourse, [ExerciseIdentifier.from(101)]]])
+    updateablesRegistry.setMany([[tmcCourse, [idOfTmcExercise(101)]]])
     updateablesRegistry.setMany([[tmcCourse, []]])
 
     expect(updateablesRegistry.get(tmcCourse)).toEqual([])
   })
 
   test("looks up by value, not by object identity", () => {
-    updateablesRegistry.setMany([[CourseIdentifier.from(1), [ExerciseIdentifier.from(101)]]])
+    updateablesRegistry.setMany([[idOfTmcCourse(1), [idOfTmcExercise(101)]]])
 
-    expect(updateablesRegistry.get(CourseIdentifier.from(1))).toHaveLength(1)
+    expect(updateablesRegistry.get(idOfTmcCourse(1))).toHaveLength(1)
   })
 
   test("announces every change", () => {
@@ -72,19 +77,19 @@ suite("updateables registry", () => {
     const subscription = updateablesRegistry.onDidChange(changed)
 
     updateablesRegistry.setMany([
-      [tmcCourse, [ExerciseIdentifier.from(101)]],
+      [tmcCourse, [idOfTmcExercise(101)]],
       [moocCourse, []],
     ])
     subscription.dispose()
 
     expect(changed).toHaveBeenCalledOnce()
-    expect(updateablesRegistry.get(tmcCourse)).toEqual([ExerciseIdentifier.from(101)])
+    expect(updateablesRegistry.get(tmcCourse)).toEqual([idOfTmcExercise(101)])
   })
 })
 
 suite("download failures", () => {
-  const first = ExerciseIdentifier.from(101)
-  const second = ExerciseIdentifier.from(102)
+  const first = idOfTmcExercise(101)
+  const second = idOfTmcExercise(102)
 
   test("remembers a failure until the exercise is downloaded", () => {
     downloadFailures.record([first, second], [])
@@ -95,9 +100,9 @@ suite("download failures", () => {
   })
 
   test("keeps a tmc and a mooc exercise with the same id apart", () => {
-    downloadFailures.record([ExerciseIdentifier.from(1)], [])
+    downloadFailures.record([idOfTmcExercise(1)], [])
 
-    expect(downloadFailures.has(ExerciseIdentifier.from("1"))).toBe(false)
+    expect(downloadFailures.has(idOfMoocExercise("1"))).toBe(false)
   })
 
   test("announces every change", () => {
@@ -113,8 +118,8 @@ suite("download failures", () => {
 })
 
 suite("exercise operations", () => {
-  const exercise = ExerciseIdentifier.from(101)
-  const other = ExerciseIdentifier.from(102)
+  const exercise = idOfTmcExercise(101)
+  const other = idOfTmcExercise(102)
 
   test("reports an operation while it runs, and nothing after", async () => {
     let during: unknown

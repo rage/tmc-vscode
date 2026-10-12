@@ -2,7 +2,7 @@ import type { Webview } from "vscode"
 
 import { postMessageToWebview } from "../../panels/panel"
 import type { ExtensionToWebview } from "../../shared/shared"
-import { CourseIdentifier } from "../../shared/shared"
+import { idOfTmcCourse } from "../fixtures/identifiers"
 
 function fakeWebview(): { webview: Webview; postMessage: ReturnType<typeof vi.fn> } {
   const postMessage = vi.fn(() => Promise.resolve(true))
@@ -14,7 +14,7 @@ suite("postMessageToWebview", () => {
     const { webview, postMessage } = fakeWebview()
     const message: ExtensionToWebview = {
       type: "setPanel",
-      panel: { id: 1, type: "CourseDetails", courseId: CourseIdentifier.from(42) },
+      panel: { id: 1, type: "CourseDetails", courseId: idOfTmcCourse(42) },
     }
 
     expect(await postMessageToWebview(webview, message)).toBe(true)

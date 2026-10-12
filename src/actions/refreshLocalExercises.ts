@@ -6,7 +6,7 @@ import type { WorkspaceExercise } from "../api/workspaceManager"
 import { ExerciseStatus } from "../api/workspaceManager"
 import { closedExercisesSettingKey } from "../config/constants"
 import type { LocalExercise } from "../shared/langsSchema"
-import { LocalCourseData, match } from "../shared/shared"
+import { LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
 import { Logger } from "../utilities"
 import type { ReadyActionContext } from "./types"
 
@@ -76,8 +76,14 @@ export async function refreshLocalExercises(
       readClosedExercises(settings, closedExercisesSettingKey(course.kind, courseSlug)),
     )
 
+    const courseId = LocalCourseData.getCourseId(course)
     workspaceExercises.push(
       ...localExercises.map<WorkspaceExercise>((x) => ({
+        id:
+          x.backend === "tmc"
+            ? makeTmcKind({ tmcExerciseId: x["exercise-id"] })
+            : makeMoocKind({ moocExerciseId: x["exercise-id"] }),
+        courseId,
         backend: x.backend,
         courseSlug,
         exerciseSlug: x["exercise-slug"],

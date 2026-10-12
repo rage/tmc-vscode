@@ -9,7 +9,7 @@ import type { Item } from "../api/dialog"
 import { failure } from "../api/withOperation"
 import { BottleneckError } from "../errors"
 import type { MoocOldSubmissionRestore } from "../shared/langsSchema"
-import { backendName, LocalCourseExercise } from "../shared/shared"
+import { backendName } from "../shared/shared"
 import { formatDateTime, parseDate } from "../utilities"
 import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
 import { runForExercise } from "./runForExercise"
@@ -52,16 +52,12 @@ export async function downloadOldSubmission(
     resource,
     "Downloading the old submission",
     async (exercise) => {
-      const stored = userData.getExerciseByName(
-        exercise.backend,
-        exercise.courseSlug,
-        exercise.exerciseSlug,
-      )
-      if (!stored) {
-        return failure("Failed to resolve exercise id.")
+      const stored = userData.getExercise(exercise.id)
+      if (stored.err) {
+        return failure("Failed to resolve exercise id.", stored.val)
       }
 
-      const id = LocalCourseExercise.getId(stored)
+      const { id } = exercise
       const submissionsResult = await dialog.progressNotification(
         `Fetching the submissions of ${exercise.exerciseSlug}…`,
         () => listOldSubmissions(actionContext, id),

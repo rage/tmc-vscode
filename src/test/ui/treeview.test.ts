@@ -9,7 +9,7 @@ import type {
   SharedTmcCourseData,
   SharedTmcCourseExercise,
 } from "../../shared/shared"
-import { CourseIdentifier, makeTmcKind } from "../../shared/shared"
+import { makeTmcKind } from "../../shared/shared"
 import { downloadFailures } from "../../ui/downloadFailures"
 import { exerciseOperations } from "../../ui/exerciseOperations"
 import type { CoursesTreeItem, CoursesTreeSource } from "../../ui/treeview/treeview"
@@ -26,6 +26,7 @@ import {
   tmcCourseExercise,
   tmcLocalCourse,
 } from "../fixtures/courses"
+import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 
 const NOW = new Date("2026-06-01T12:00:00Z")
 
@@ -65,6 +66,8 @@ function moocCourse(overrides: Partial<SharedMoocCourseData> = {}): LocalCourseD
 
 function onDisk(exerciseSlug: string, status: ExerciseStatus): WorkspaceExercise {
   return {
+    id: idOfTmcExercise(1),
+    courseId: idOfTmcCourse(1),
     backend: "tmc",
     courseSlug: "tmc-slug",
     exerciseSlug,
@@ -204,7 +207,7 @@ suite("CoursesTree", function () {
       "The Python Course, 12 of 40 points, TMC Server",
     )
     expect(item.contextValue).toBe("course.tmc")
-    expect(item.courseId).toEqual(CourseIdentifier.from(1))
+    expect(item.courseId).toEqual(idOfTmcCourse(1))
     expect(item.command).toBeUndefined()
     expect((item.iconPath as vscode.ThemeIcon).id).toBe("book")
   })
@@ -450,7 +453,7 @@ suite("CoursesTree", function () {
 
     test("with an update is marked, and the course and badge count it", function () {
       workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Open)]
-      updateablesRegistry.setMany([[CourseIdentifier.from(1), [makeTmcKind({ tmcExerciseId: 1 })]]])
+      updateablesRegistry.setMany([[idOfTmcCourse(1), [makeTmcKind({ tmcExerciseId: 1 })]]])
       const item = onlyExercise()
 
       expect(item.contextValue).toBe("exercise.opened.updateable")
@@ -499,7 +502,7 @@ suite("CoursesTree", function () {
     tree.onDidChangeTreeData((node) => refreshed.push(node))
     const changes = [
       () => downloadFailures.record([makeTmcKind({ tmcExerciseId: 1 })], []),
-      () => updateablesRegistry.setMany([[CourseIdentifier.from(1), []]]),
+      () => updateablesRegistry.setMany([[idOfTmcCourse(1), []]]),
       () => exercisesChanged.fire(),
       () => coursesChanged.fire(),
     ]

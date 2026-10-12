@@ -10,6 +10,7 @@ import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
 import { BottleneckError } from "../../errors"
 import { makeTmcKind } from "../../shared/shared"
+import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
 vi.mock("../../window", () => ({ resolvePythonInterpreter: () => undefined }))
@@ -50,6 +51,8 @@ const noToken = new vscode.CancellationTokenSource().token
 
 function workspaceExercise(): WorkspaceExercise {
   return {
+    id: idOfTmcExercise(1),
+    courseId: idOfTmcCourse(42),
     backend: "tmc",
     courseSlug: COURSE_SLUG,
     exerciseSlug: EXERCISE_SLUG,
@@ -82,7 +85,10 @@ function contextWithTestRun(
         }),
       } as unknown as ReadyStartup["langs"],
       userData: {
-        getCourseBySlug: () => Ok(course(options.examMode)),
+        getExercise: () => {
+          const stored = course(options.examMode)
+          return Ok({ course: stored, exercise: makeTmcKind(stored.data.exercises[0]) })
+        },
       } as unknown as ReadyStartup["userData"],
     },
   })

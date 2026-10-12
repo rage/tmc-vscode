@@ -2,6 +2,7 @@ import { ExerciseStatus as WorkspaceStatus } from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import type { ExerciseStatus } from "../../shared/shared"
 import {
+  CourseIdentifier,
   ExerciseIdentifier,
   isSoftDeadlineBinding,
   LocalCourseData,
@@ -71,7 +72,9 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
     LocalCourseData.getNewExercises(course).map((id) => ExerciseIdentifier.key(id)),
   )
   const updateableKeys = new Set(state.updateable.map((id) => ExerciseIdentifier.key(id)))
-  const onDiskBySlug = new Map(state.onDisk.map((exercise) => [exercise.exerciseSlug, exercise]))
+  const onDiskById = new Map(
+    state.onDisk.map((exercise) => [ExerciseIdentifier.key(exercise.id), exercise]),
+  )
 
   const parts = new Map<string, PartPlace & { exercises: ExerciseView[] }>()
   for (const ex of LocalCourseData.getExercises(course)) {
@@ -79,7 +82,7 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
     const { part, name } = placeExercise(ex, slug, courseTitle)
     const id = LocalCourseExercise.getId(ex)
     const key = ExerciseIdentifier.key(id)
-    const onDisk = onDiskBySlug.get(slug)
+    const onDisk = onDiskById.get(key)
     const softDeadlineText = LocalCourseExercise.getSoftDeadline(ex)
     const softDeadline = softDeadlineText ? parseDate(softDeadlineText) : null
     const hardDeadline = ex.data.deadline ? parseDate(ex.data.deadline) : null
@@ -151,7 +154,7 @@ export function onDiskByCourse(
 ): (course: LocalCourseData) => readonly WorkspaceExercise[] {
   const byCourse = new Map<string, WorkspaceExercise[]>()
   for (const exercise of workspaceExercises) {
-    const key = `${exercise.backend}:${exercise.courseSlug}`
+    const key = CourseIdentifier.key(exercise.courseId)
     const courseExercises = byCourse.get(key)
     if (courseExercises) {
       courseExercises.push(exercise)
@@ -159,7 +162,7 @@ export function onDiskByCourse(
       byCourse.set(key, [exercise])
     }
   }
-  return (course) => byCourse.get(`${course.kind}:${LocalCourseData.getCourseName(course)}`) ?? []
+  return (course) => byCourse.get(CourseIdentifier.key(LocalCourseData.getCourseId(course))) ?? []
 }
 
 /** The deadline an exercise is judged by: the soft one when it comes first. */

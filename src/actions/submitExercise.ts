@@ -4,7 +4,6 @@ import * as vscode from "vscode"
 
 import type Langs from "../api/langs"
 import type { WorkspaceExercise } from "../api/workspaceManager"
-import { findStoredExercise } from "../config/userdata"
 import { OutOfTriesError } from "../errors"
 import { nextPanelId } from "../panels/routes"
 import type { InProgressPhase, SubmissionProgress } from "../panels/submissionView"
@@ -25,7 +24,7 @@ import type {
   FeedbackAnswer,
   SubmissionView,
 } from "../shared/shared"
-import { backendName, LocalCourseData, LocalCourseExercise, match, unwrap } from "../shared/shared"
+import { backendName, LocalCourseData, match, unwrap } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { pointsText } from "../ui/points"
 import { isSameExercise, submissionViews } from "../ui/submissionViews"
@@ -253,15 +252,14 @@ async function showOutcome(
 ): Promise<void> {
   const { dialog } = actionContext
   const { exerciseDecorationProvider, userData } = actionContext.startup
-  const { exercise } = submission
+  const { exercise, exerciseId } = submission
   const { recorded } = outcome
   if (recorded) {
     const written =
       recorded.backend === "tmc"
-        ? await userData.setExerciseAsPassed("tmc", exercise.courseSlug, exercise.exerciseSlug)
+        ? await userData.setExerciseAsPassed(exerciseId)
         : await userData.setMoocExerciseStanding(
-            exercise.courseSlug,
-            exercise.exerciseSlug,
+            exerciseId,
             recorded.standing,
             recorded.awardedPoints,
           )
@@ -293,12 +291,12 @@ export async function submitExercise(
   const { langs, userData } = actionContext.startup
   Logger.info(`Submitting exercise ${exercise.exerciseSlug} to ${backendName(exercise.backend)}`)
 
-  const stored = findStoredExercise(userData, exercise)
+  const stored = userData.getExercise(exercise.id)
   if (stored.err) {
     return stored
   }
   const { course, exercise: courseExercise } = stored.val
-  const exerciseId = LocalCourseExercise.getId(courseExercise)
+  const exerciseId = exercise.id
   const submit = submitterFor(langs, exercise.backend, exerciseId)
   if (!submit) {
     return Err(
@@ -330,6 +328,7 @@ export async function submitExercise(
       panel: {
         id: nextPanelId(),
         type: "ExerciseSubmission",
+        exerciseId,
         backend: exercise.backend,
         courseSlug: exercise.courseSlug,
         exerciseSlug: exercise.exerciseSlug,

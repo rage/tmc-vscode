@@ -1,16 +1,23 @@
+import type { Result } from "ts-results"
+import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
-import type { UserData } from "../../config/userdata"
-import type { BackendKind, LocalCourseData } from "../../shared/shared"
-import { makeMoocKind, makeTmcKind } from "../../shared/shared"
+import type { StoredExercise, UserData } from "../../config/userdata"
+import {
+  ExerciseIdentifier,
+  LocalCourseData,
+  LocalCourseExercise,
+  makeMoocKind,
+  makeTmcKind,
+} from "../../shared/shared"
 import type { MoocLocalCourseExercise, TmcLocalCourseExercise } from "../../storage/data"
 import { v2_1_0 as userData } from "../fixtures/userData"
 
 export interface UserDataMockValues {
   getCourses: LocalCourseData[]
-  /** What `getExerciseByName` finds for a tmc exercise. */
+  /** What `getExercise` finds for a tmc id, whatever the id. */
   tmcExercise: TmcLocalCourseExercise | undefined
-  /** What `getExerciseByName` finds for a mooc exercise. */
+  /** What `getExercise` finds for a mooc id, whatever the id. */
   moocExercise: MoocLocalCourseExercise | undefined
 }
 
@@ -23,12 +30,31 @@ export function createUserDataMock(): [UserData, UserDataMockValues] {
 
   const mock = {
     getCourses: vi.fn(() => values.getCourses),
-    getExerciseByName: vi.fn((backend: BackendKind) =>
-      backend === "tmc"
-        ? values.tmcExercise && makeTmcKind(values.tmcExercise)
-        : values.moocExercise && makeMoocKind(values.moocExercise),
-    ),
+    getExercise: vi.fn((id: ExerciseIdentifier) => {
+      const exercise =
+        id.kind === "tmc"
+          ? values.tmcExercise && makeTmcKind(values.tmcExercise)
+          : values.moocExercise && makeMoocKind(values.moocExercise)
+      return exercise ? Ok({ course: undefined, exercise }) : Err(new Error("not stored"))
+    }),
   }
 
   return [mock as unknown as UserData, values]
+}
+
+/** `UserData.getExercise` over `courses`, for a hand-rolled `UserData` stub. */
+export function exerciseLookupOver(
+  courses: LocalCourseData[],
+): (id: ExerciseIdentifier) => Result<StoredExercise, Error> {
+  return (id) => {
+    for (const course of courses) {
+      const exercise = LocalCourseData.getExercises(course).find(
+        (x) => ExerciseIdentifier.key(LocalCourseExercise.getId(x)) === ExerciseIdentifier.key(id),
+      )
+      if (exercise) {
+        return Ok({ course, exercise })
+      }
+    }
+    return Err(new Error(`No stored exercise ${ExerciseIdentifier.key(id)}`))
+  }
 }

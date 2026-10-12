@@ -5,14 +5,8 @@ import type {
   ExerciseSlideSubmissionListItem,
   MoocOldSubmissionRestore,
 } from "../shared/langsSchema"
-import {
-  assertUnreachable,
-  ExerciseIdentifier,
-  makeMoocKind,
-  makeTmcKind,
-  match,
-  unwrap,
-} from "../shared/shared"
+import type { ExerciseIdentifier } from "../shared/shared"
+import { assertUnreachable, makeMoocKind, makeTmcKind, match } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import type { ReadyActionContext } from "./types"
 
@@ -90,9 +84,11 @@ export async function restoreOldSubmission(
   target: RestoreTarget,
   submitFirst: boolean,
 ): Promise<Result<MoocOldSubmissionRestore, Error>> {
-  return exerciseOperations.run(
-    ExerciseIdentifier.from(unwrap(target).exerciseId),
-    "restoring",
-    () => actionContext.startup.langs.restoreSubmission(target, exercisePath, submitFirst),
+  const exerciseId: ExerciseIdentifier =
+    target.kind === "tmc"
+      ? makeTmcKind({ tmcExerciseId: target.data.exerciseId })
+      : makeMoocKind({ moocExerciseId: target.data.exerciseId })
+  return exerciseOperations.run(exerciseId, "restoring", () =>
+    actionContext.startup.langs.restoreSubmission(target, exercisePath, submitFirst),
   )
 }

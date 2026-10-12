@@ -6,8 +6,9 @@ import type { AiRestrictionLapse } from "../../api/aiRestriction"
 import { AiUseGate, enabledAiExtensions } from "../../api/aiUseGate"
 import { AiUseRefusedError, presentationFor, SHOW_AI_USE_PROBLEM_COMMAND } from "../../errors"
 import type { LocalCourseData } from "../../shared/shared"
-import { CourseIdentifier, makeMoocKind } from "../../shared/shared"
+import { makeMoocKind } from "../../shared/shared"
 import { Logger } from "../../utilities"
+import { idOfMoocCourse } from "../fixtures/identifiers"
 
 const COURSE = makeMoocKind({
   id: "instance-1",
@@ -110,7 +111,7 @@ suite("AiUseGate", function () {
     expect(refusal?.message).toContain("Open the exercise in the course workspace")
     expect(vscode.commands.executeCommand).toHaveBeenCalledExactlyOnceWith(
       "tmc.openCourseWorkspace",
-      CourseIdentifier.from("instance-1"),
+      idOfMoocCourse("instance-1"),
     )
   })
 

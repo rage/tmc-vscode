@@ -1,7 +1,7 @@
 import { z } from "zod"
 
-import type { CourseIdentifier, Enum } from "./enum"
-import { EnumSchema, ExerciseIdentifier, makeMoocKind, makeTmcKind, match, unwrap } from "./enum"
+import type { CourseIdentifier, Enum, ExerciseIdentifier } from "./enum"
+import { EnumSchema, makeMoocKind, makeTmcKind, match, unwrap } from "./enum"
 
 // The live course schemas. Storage v3 persists exactly these (see `data_v3.ts`), so a change
 // here is a storage format change.
@@ -104,7 +104,11 @@ export namespace LocalCourseExercise {
   }
 
   export function getId(lce: LocalCourseExercise): ExerciseIdentifier {
-    return ExerciseIdentifier.from(unwrap(lce).id)
+    return match(
+      lce,
+      (tmc) => makeTmcKind({ tmcExerciseId: tmc.id }),
+      (mooc) => makeMoocKind({ moocExerciseId: mooc.id }),
+    )
   }
 
   /** The soft deadline as stored; mooc exercises have none. */

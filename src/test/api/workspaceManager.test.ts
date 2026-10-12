@@ -26,6 +26,12 @@ import {
 import Resources from "../../config/resources"
 import type { BackendKind } from "../../shared/shared"
 import { Logger, LogLevel } from "../../utilities"
+import {
+  idOfMoocCourse,
+  idOfMoocExercise,
+  idOfTmcCourse,
+  idOfTmcExercise,
+} from "../fixtures/identifiers"
 
 // `Resources` reads `vscode.env.appName` to tell Code from VSCodium, and the
 // mock ships no `env`.
@@ -83,13 +89,21 @@ function exercise(
   exerciseSlug: string,
   status: ExerciseStatus,
 ): WorkspaceExercise {
+  const key = `${courseSlug}/${exerciseSlug}`
   return {
+    id: backend === "tmc" ? idOfTmcExercise(numberFor(key)) : idOfMoocExercise(key),
+    courseId: backend === "tmc" ? idOfTmcCourse(numberFor(courseSlug)) : idOfMoocCourse(courseSlug),
     backend,
     courseSlug,
     exerciseSlug,
     status,
     uri: vscode.Uri.file(path.join(PROJECTS_DIRECTORY, backend, courseSlug, exerciseSlug)),
   }
+}
+
+/** A tmc id that differs between the names the tests use. */
+function numberFor(name: string): number {
+  return [...name].reduce((hash, char) => (hash * 31 + (char.codePointAt(0) ?? 0)) % 1_000_003, 7)
 }
 
 function folderOf(uri: vscode.Uri, name: string): vscode.WorkspaceFolder {
@@ -289,7 +303,7 @@ suite("WorkspaceManager class", function () {
     })
 
     test("records the whole closed set, not only the exercises the caller named", async function () {
-      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+      await manager.closeCourseExercises("tmc", courseSlug, [open.id])
 
       expect(record).toHaveBeenCalledExactlyOnceWith("tmc", courseSlug, [
         "hello_world",
@@ -304,7 +318,7 @@ suite("WorkspaceManager class", function () {
         return Ok.EMPTY
       })
 
-      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+      await manager.closeCourseExercises("tmc", courseSlug, [open.id])
 
       expect(workspaceWritesBeforeRecording).toBe(0)
       expect(updateWorkspaceFolders).toHaveBeenCalledOnce()
@@ -313,7 +327,7 @@ suite("WorkspaceManager class", function () {
     test("changes nothing the user can see when the closed set cannot be recorded", async function () {
       record.mockResolvedValue(Err(new Error("settings are read-only")))
 
-      const result = await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+      const result = await manager.closeCourseExercises("tmc", courseSlug, [open.id])
 
       expect(result.err).toBe(true)
       expect(open.status).toBe(ExerciseStatus.Open)
@@ -321,7 +335,7 @@ suite("WorkspaceManager class", function () {
     })
 
     test("drops the reopened exercise from the recorded closed set", async function () {
-      await manager.openCourseExercises("tmc", courseSlug, [closed.exerciseSlug])
+      await manager.openCourseExercises("tmc", courseSlug, [closed.id])
 
       expect(record).toHaveBeenCalledExactlyOnceWith("tmc", courseSlug, [])
       expect(closed.status).toBe(ExerciseStatus.Open)
@@ -331,7 +345,7 @@ suite("WorkspaceManager class", function () {
       const changed = vi.fn()
       manager.onDidChangeExercises(changed)
 
-      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+      await manager.closeCourseExercises("tmc", courseSlug, [open.id])
 
       expect(changed).toHaveBeenCalled()
     })
@@ -341,7 +355,7 @@ suite("WorkspaceManager class", function () {
       const changed = vi.fn()
       manager.onDidChangeExercises(changed)
 
-      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+      await manager.closeCourseExercises("tmc", courseSlug, [open.id])
 
       expect(changed).not.toHaveBeenCalled()
     })
@@ -421,8 +435,8 @@ suite("WorkspaceManager class", function () {
     // The workspace move each call makes re-enters the handler, so an
     // unconditional write here would double every CLI call the user's clicks cost.
     test("an open-then-close cycle writes once per change, not once per folder move", async function () {
-      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
-      await manager.openCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+      await manager.closeCourseExercises("tmc", courseSlug, [open.id])
+      await manager.openCourseExercises("tmc", courseSlug, [open.id])
 
       expect(write.mock.calls).toEqual([
         ["tmc", courseSlug, ["hello_world", "part02-01_greeting"]],
@@ -434,7 +448,7 @@ suite("WorkspaceManager class", function () {
       const changed = vi.fn()
       manager.onDidChangeExercises(changed)
 
-      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+      await manager.closeCourseExercises("tmc", courseSlug, [open.id])
 
       expect(changed).toHaveBeenCalledOnce()
     })
@@ -869,7 +883,7 @@ suite("WorkspaceManager class", function () {
     })
 
     test("opens an exercise only in the requested backend", async function () {
-      const result = await manager.openCourseExercises("mooc", courseSlug, ["hello_world"])
+      const result = await manager.openCourseExercises("mooc", courseSlug, [moocExercise.id])
 
       expect(result.ok).toBe(true)
       expect(moocExercise.status).toBe(ExerciseStatus.Open)
@@ -881,7 +895,7 @@ suite("WorkspaceManager class", function () {
       tmcExercise.status = ExerciseStatus.Open
       moocExercise.status = ExerciseStatus.Open
 
-      const result = await manager.closeCourseExercises("mooc", courseSlug, ["hello_world"])
+      const result = await manager.closeCourseExercises("mooc", courseSlug, [moocExercise.id])
 
       expect(result.val).toEqual([moocExercise])
       expect(tmcExercise.status).toBe(ExerciseStatus.Open)

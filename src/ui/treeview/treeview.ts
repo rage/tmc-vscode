@@ -498,14 +498,13 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
       return undefined
     }
     // Builds only that course's rows; the others stay lazy.
-    const courseIndex = this._currentViews().findIndex(
-      ({ course }) =>
-        course.kind === exercise.backend &&
-        LocalCourseData.getCourseName(course) === exercise.courseSlug,
+    const courseIndex = this._currentViews().findIndex(({ course }) =>
+      CourseIdentifier.equals(LocalCourseData.getCourseId(course), exercise.courseId),
     )
     const root = this._currentRoots()[courseIndex]
+    const key = ExerciseIdentifier.key(exercise.id)
     return (
-      root && exerciseItems(root).find((item) => item.exerciseUri?.fsPath === exercise.uri.fsPath)
+      root && exerciseItems(root).find((item) => ExerciseIdentifier.key(item.exerciseId) === key)
     )
   }
 
