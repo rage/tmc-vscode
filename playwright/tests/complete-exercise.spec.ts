@@ -9,7 +9,7 @@ import { vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
 import { TestResultsPage } from "../pages/test-results"
-import { TestSubmissionPage } from "../pages/test-submission"
+import { TmcPage } from "../pages/tmc"
 
 // Both arrived in VS Code 1.104; an older one does not declare them, so nothing writes them.
 const SETTINGS_SINCE_1_104 = { "chat.disableAIFeatures": true, "chat.mcp.access": "none" }
@@ -55,7 +55,7 @@ for (const exercise of exercises) {
   vsCodeTest(`can complete ${exercise.name}`, async ({ page, userDataDir, webview }) => {
     const coursesView = new CoursesViewPage(page, webview)
     const testResultsPage = new TestResultsPage(page, webview)
-    const testSubmissionPage = new TestSubmissionPage(page, webview)
+    const sidePanel = new TmcPage(page, webview).getSidePanel()
     const explorerPage = new ExplorerPage(page)
 
     // The session comes from the tmc credentials the fixture seeds (fixtures.ts).
@@ -146,17 +146,13 @@ for (const exercise of exercises) {
 
     await vsCodeTest.step("submit exercise", async () => {
       const expectedString = expectedResultInSubmissionView(exercise.expected_result)
-      await expect(
-        testSubmissionPage.getWebview().getByRole("heading", { name: expectedString }),
-      ).toBeHidden()
+      await expect(sidePanel.getByRole("heading", { name: expectedString })).toBeHidden()
       if (exercise.expected_result === "pass") {
         await allPassedToast(page).getByRole("button", { name: "Submit" }).click()
       } else {
         await editorActions(page).getByLabel("Submit Solution", { exact: true }).click()
       }
-      await expect(
-        testSubmissionPage.getWebview().getByRole("heading", { name: expectedString }),
-      ).toBeVisible()
+      await expect(sidePanel.getByRole("heading", { name: expectedString })).toBeVisible()
     })
   })
 }
