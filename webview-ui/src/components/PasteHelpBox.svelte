@@ -13,6 +13,7 @@
   import { reducedMotion } from "../utilities/a11y.svelte"
   import { createRequester } from "../utilities/script"
   import { uiState } from "../utilities/uiState.svelte"
+  import { vscode } from "../utilities/vscode"
   import Button from "./Button.svelte"
   import ErrorNotice from "./ErrorNotice.svelte"
   import Spinner from "./Spinner.svelte"
@@ -79,8 +80,15 @@
     </div>
     {#if pasteUrl.current !== null}
       {@const url = pasteUrl.current}
-      <p>Paste available at <a href={url}>{url}</a></p>
+      <p>Paste available at {url}</p>
       <div class="actions">
+        <Button
+          secondary
+          icon="link-external"
+          onclick={() => vscode.postMessage({ type: "openLinkInBrowser", url })}
+        >
+          Open link
+        </Button>
         <Button secondary icon="copy" onclick={() => oncopy(url)}>Copy link</Button>
       </div>
     {/if}
@@ -104,6 +112,9 @@
     margin-top: 0;
   }
   .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tmc-space-2);
     margin: var(--tmc-space-2) 0;
   }
 </style>

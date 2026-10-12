@@ -577,14 +577,12 @@ suite("ExerciseSubmission panel shown again after being hidden", () => {
     await fireEvent.click(await screen.findByRole("button", { name: "Need help?" }))
     ;(await screen.findByRole("button", { name: /^Submit to .* paste$/ })).click()
     replyToRequest("pasteExercise", { ok: true, value: "https://tmc.mooc.fi/paste/abc" })
-    await screen.findByRole("link", { name: "https://tmc.mooc.fi/paste/abc" })
+    await screen.findByText(/https:\/\/tmc\.mooc\.fi\/paste\/abc/)
 
     reloadDocument()
     showPanel()
 
-    expect(
-      await screen.findByRole("link", { name: "https://tmc.mooc.fi/paste/abc" }),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/https:\/\/tmc\.mooc\.fi\/paste\/abc/)).toBeInTheDocument()
   })
 
   test("a new submission of the same exercise starts with nothing kept", async () => {

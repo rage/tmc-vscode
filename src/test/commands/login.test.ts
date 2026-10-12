@@ -196,6 +196,14 @@ suite("login command", function () {
     expect(await outcome).toBe("loggedIn")
   })
 
+  test("never opens a verification page that is not http(s)", async function () {
+    const h = harness()
+    await runToCode(h, { ...DEVICE, verification_uri_complete: "command:workbench.action.quit" })
+
+    expect(h.openExternal).not.toHaveBeenCalled()
+    expect(h.logins[0]?.interrupt).not.toHaveBeenCalled()
+  })
+
   test("dismissing the code modal cancels the login silently", async function () {
     const h = harness()
     const { outcome } = await runToCode(h, DEVICE_WITHOUT_COMPLETE_URI)

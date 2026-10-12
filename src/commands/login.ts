@@ -11,7 +11,7 @@ import {
 } from "../errors"
 import type { MoocDeviceLogin } from "../shared/langsSchema"
 import { backendName } from "../shared/shared"
-import { Logger } from "../utilities"
+import { Logger, openWebLink } from "../utilities"
 import { refreshEverything } from "./refreshEverything"
 
 /** How long past the code's own lifetime the host waits for the CLI before giving up on it. */
@@ -162,7 +162,7 @@ async function offerCode(info: MoocDeviceLogin, ended: Promise<unknown>): Promis
  * the page to open by hand.
  */
 async function openInBrowser(url: string): Promise<void> {
-  if (!(await vscode.env.openExternal(vscode.Uri.parse(url)))) {
+  if (!(await openWebLink(url))) {
     Logger.warn(`Could not open ${url} in a browser`)
   }
 }
