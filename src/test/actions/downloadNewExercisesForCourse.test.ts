@@ -2,13 +2,14 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
 import type { LocalCourseData, CourseIdentifier } from "../../../shared/lib"
-import { ExerciseIdentifier, makeTmcKind } from "../../../shared/lib"
+import { ExerciseIdentifier } from "../../../shared/lib"
 import { downloadNewExercisesForCourse } from "../../actions/downloadNewExercisesForCourse"
 import { downloadOrUpdateExercises } from "../../actions/downloadOrUpdateExercises"
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
 import type { ReadyActionContext } from "../../actions/types"
 import type { UserData } from "../../config/userdata"
 import { BottleneckError } from "../../errors"
+import { tmcLocalCourse } from "../fixtures/courses"
 import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
@@ -22,20 +23,12 @@ vi.mock("../../actions/refreshLocalExercises", () => ({
 const COURSE_ID = idOfTmcCourse(1)
 
 function courseWithNewExercises(newExercises: number[]): LocalCourseData {
-  return makeTmcKind({
+  return tmcLocalCourse({
     id: 1,
     name: "test-python-course",
     title: "The Python Course",
-    description: "",
     organization: "test",
-    exercises: [],
-    availablePoints: 0,
-    awardedPoints: 0,
-    perhapsExamMode: false,
     newExercises,
-    notifyAfter: 0,
-    disabled: false,
-    materialUrl: null,
   })
 }
 

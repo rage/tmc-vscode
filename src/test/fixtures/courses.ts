@@ -40,9 +40,9 @@ export function moocCourseExercise(
   }
 }
 
-/** A stored tmc course, `python-course`, with no exercises unless given. */
-export function tmcLocalCourse(overrides: Partial<SharedTmcCourseData> = {}): LocalCourseData {
-  return makeTmcKind({
+/** The data of a stored tmc course, `python-course`, with no exercises unless given. */
+export function tmcCourseData(overrides: Partial<SharedTmcCourseData> = {}): SharedTmcCourseData {
+  return {
     id: 42,
     name: "python-course",
     title: "Python Course",
@@ -57,12 +57,14 @@ export function tmcLocalCourse(overrides: Partial<SharedTmcCourseData> = {}): Lo
     disabled: false,
     materialUrl: null,
     ...overrides,
-  })
+  }
 }
 
-/** A stored courses.mooc.fi course, `mooc-python`, with no exercises unless given. */
-export function moocLocalCourse(overrides: Partial<SharedMoocCourseData> = {}): LocalCourseData {
-  return makeMoocKind({
+/** The data of a stored courses.mooc.fi course, `mooc-python`, with no exercises unless given. */
+export function moocCourseData(
+  overrides: Partial<SharedMoocCourseData> = {},
+): SharedMoocCourseData {
+  return {
     id: MOOC_COURSE_ID,
     name: "mooc-python",
     title: "MOOC Python",
@@ -71,11 +73,18 @@ export function moocLocalCourse(overrides: Partial<SharedMoocCourseData> = {}): 
     exercises: [],
     availablePoints: 0,
     awardedPoints: 0,
-    perhapsExamMode: false,
     newExercises: [],
     notifyAfter: 0,
-    disabled: false,
-    materialUrl: null,
     ...overrides,
-  })
+  }
+}
+
+/** {@link tmcCourseData} as a stored course. */
+export function tmcLocalCourse(overrides: Partial<SharedTmcCourseData> = {}): LocalCourseData {
+  return makeTmcKind(tmcCourseData(overrides))
+}
+
+/** {@link moocCourseData} as a stored course. */
+export function moocLocalCourse(overrides: Partial<SharedMoocCourseData> = {}): LocalCourseData {
+  return makeMoocKind(moocCourseData(overrides))
 }

@@ -27,6 +27,7 @@ import type { MoocLocalCourseData } from "../storage/data"
 import { CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
 import type CoursesTree from "../ui/treeview/treeview"
 import { updateablesRegistry } from "../ui/updateablesRegistry"
+import { moocCourseData, moocCourseExercise } from "./fixtures/courses"
 import { idOfMoocCourse, idOfMoocExercise } from "./fixtures/identifiers"
 import { createMockActionContext } from "./mocks/actionContext"
 import { createMockContext } from "./mocks/vscode"
@@ -59,28 +60,14 @@ function courseRow(): CourseTreeItem {
 }
 
 function storedCourse(overrides: Partial<MoocLocalCourseData> = {}): MoocLocalCourseData {
-  return {
+  return moocCourseData({
     id: "instance-1",
     name: COURSE,
     title: "Mooc Course",
-    description: null,
-    organization: "mooc",
-    exercises: [
-      {
-        id: EXERCISE_ID,
-        name: EXERCISE,
-        availablePoints: 1,
-        awardedPoints: 0,
-        deadline: null,
-        passed: false,
-      },
-    ],
     availablePoints: 1,
-    awardedPoints: 0,
-    newExercises: [],
-    notifyAfter: 0,
+    exercises: [moocCourseExercise({ id: EXERCISE_ID, name: EXERCISE })],
     ...overrides,
-  }
+  })
 }
 
 const exercise: WorkspaceExercise = {

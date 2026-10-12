@@ -25,6 +25,7 @@ import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data
 import type CoursesTree from "../../ui/treeview/treeview"
 import { Logger } from "../../utilities"
 import { combineTmcApiExerciseData } from "../../utilities/apiData"
+import { tmcCourseData as storedTmcCourseData } from "../fixtures/courses"
 import { idOfMoocCourse, idOfTmcCourse } from "../fixtures/identifiers"
 import {
   MOOC_COURSE_UUID,
@@ -199,21 +200,14 @@ suite("updateCourse action (mooc)", function () {
   })
 })
 
-const tmcCourse: TmcLocalCourseData = {
+const tmcCourse: TmcLocalCourseData = storedTmcCourseData({
   id: 1,
   name: "test-python-course",
   title: "Stale title",
   description: "Stale description",
   organization: "test",
-  exercises: [],
-  availablePoints: 0,
-  awardedPoints: 0,
-  perhapsExamMode: false,
-  newExercises: [],
-  notifyAfter: 0,
   disabled: true,
-  materialUrl: null,
-}
+})
 
 const tmcExerciseDefaults: Omit<Exercise, "id" | "name" | "completed"> = {
   all_review_points_given: false,

@@ -10,6 +10,7 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
 import { BottleneckError } from "../../errors"
+import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
 import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
@@ -19,30 +20,11 @@ const COURSE_SLUG = "python-course"
 const EXERCISE_SLUG = "part01-01_hello"
 
 function course(perhapsExamMode = false) {
-  return makeTmcKind({
-    id: 42,
+  return tmcLocalCourse({
     name: COURSE_SLUG,
-    title: "Python Course",
-    description: "",
-    organization: "mooc",
-    exercises: [
-      {
-        id: 1,
-        name: EXERCISE_SLUG,
-        availablePoints: 1,
-        awardedPoints: 0,
-        deadline: null,
-        passed: false,
-        softDeadline: null,
-      },
-    ],
+    exercises: [tmcCourseExercise({ id: 1, name: EXERCISE_SLUG })],
     availablePoints: 1,
-    awardedPoints: 0,
     perhapsExamMode,
-    newExercises: [],
-    notifyAfter: 0,
-    disabled: false,
-    materialUrl: null,
   })
 }
 

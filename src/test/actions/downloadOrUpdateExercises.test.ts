@@ -5,7 +5,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { ExerciseStatus } from "../../../shared/lib"
-import { ExerciseIdentifier, makeTmcKind } from "../../../shared/lib"
+import { ExerciseIdentifier } from "../../../shared/lib"
 import { downloadOrUpdateExercises } from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import Dialog from "../../api/dialog"
@@ -17,6 +17,7 @@ import * as errors from "../../errors"
 import { BottleneckError, InvalidTokenError } from "../../errors"
 import { downloadFailures } from "../../ui/downloadFailures"
 import { exerciseOperations } from "../../ui/exerciseOperations"
+import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
 import { idOfMoocExercise, idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -39,31 +40,13 @@ const otherWorld: ExerciseDownload = {
 // Fixed id shared by all tests, since they all operate within a single course.
 const TEST_COURSE_ID = idOfTmcCourse(0)
 
-const storedCourse = makeTmcKind({
+const storedCourse = tmcLocalCourse({
   id: 0,
-  name: "python-course",
-  title: "Python Course",
-  description: "",
-  organization: "mooc",
   exercises: [
-    [1, "hello_world"],
-    [2, "other_world"],
-  ].map(([id, name]) => ({
-    id: id as number,
-    name: name as string,
-    availablePoints: 1,
-    awardedPoints: 0,
-    deadline: null,
-    passed: false,
-    softDeadline: null,
-  })),
+    tmcCourseExercise({ id: 1, name: "hello_world" }),
+    tmcCourseExercise({ id: 2, name: "other_world" }),
+  ],
   availablePoints: 2,
-  awardedPoints: 0,
-  perhapsExamMode: false,
-  newExercises: [],
-  notifyAfter: 0,
-  disabled: false,
-  materialUrl: null,
 })
 
 const createDownloadResult = (

@@ -7,6 +7,7 @@ import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type { UserData } from "../../config/userdata"
 import type { MoocLocalCourseData } from "../../storage/data"
+import { moocCourseData, moocCourseExercise } from "../fixtures/courses"
 import {
   idOfMoocCourse,
   idOfMoocExercise,
@@ -27,27 +28,13 @@ const tmcOutdated = {
   exerciseName: "other_world",
 }
 
-const moocCourse: MoocLocalCourseData = {
+const moocCourse: MoocLocalCourseData = moocCourseData({
   id: "instance-uuid-1",
   name: "mooc-python-course",
   title: "Mooc Python",
-  description: null,
-  organization: "mooc",
-  exercises: [
-    {
-      id: "mooc-ex-1",
-      name: "mooc_hello",
-      availablePoints: 1,
-      awardedPoints: 0,
-      deadline: null,
-      passed: false,
-    },
-  ],
   availablePoints: 1,
-  awardedPoints: 0,
-  newExercises: [],
-  notifyAfter: 0,
-}
+  exercises: [moocCourseExercise({ id: "mooc-ex-1", name: "mooc_hello" })],
+})
 
 const moocOutdated = {
   courseId: idOfMoocCourse("instance-uuid-1"),

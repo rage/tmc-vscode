@@ -6,6 +6,7 @@ import { CorruptStoredDataError } from "../../errors"
 import Storage from "../../storage"
 import type * as storage from "../../storage/data"
 import { USER_DATA_KEY } from "../../storage/data"
+import { moocCourseExercise, tmcCourseData, tmcCourseExercise } from "../fixtures/courses"
 import {
   idOfMoocCourse,
   idOfMoocExercise,
@@ -21,54 +22,31 @@ import { createMockContext } from "../mocks/vscode"
 function tmcExercise(
   overrides: Partial<storage.TmcLocalCourseExercise> = {},
 ): storage.TmcLocalCourseExercise {
-  return {
-    id: 1,
-    availablePoints: 1,
-    awardedPoints: 0,
-    deadline: null,
-    name: "hello_world",
-    passed: false,
-    softDeadline: null,
-    ...overrides,
-  }
+  return tmcCourseExercise({ name: "hello_world", ...overrides })
 }
 
 function moocExercise(
   overrides: Partial<storage.MoocLocalCourseExercise> = {},
 ): storage.MoocLocalCourseExercise {
-  return {
-    id: "exercise-uuid-1",
-    availablePoints: 1,
-    awardedPoints: 0,
-    deadline: null,
-    name: "mooc_hello",
-    passed: false,
-    ...overrides,
-  }
+  return moocCourseExercise({ id: "exercise-uuid-1", name: "mooc_hello", ...overrides })
 }
 
 function tmcCourse(
   overrides: Partial<storage.TmcLocalCourseData> = {},
 ): storage.TmcLocalCourseData {
-  return {
+  return tmcCourseData({
     id: 0,
     availablePoints: 2,
-    awardedPoints: 0,
     description: "Python Course",
-    disabled: false,
     exercises: [
       tmcExercise({ id: 1, name: "hello_world" }),
       tmcExercise({ id: 2, name: "other_world" }),
     ],
-    materialUrl: null,
     name: "test-python-course",
-    newExercises: [],
-    notifyAfter: 0,
     organization: "test",
-    perhapsExamMode: false,
     title: "The Python Course",
     ...overrides,
-  }
+  })
 }
 
 function moocCourse(

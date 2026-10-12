@@ -9,6 +9,7 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
 import type { MoocLocalCourseData } from "../../storage/data"
+import { moocCourseData } from "../fixtures/courses"
 import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
@@ -127,18 +128,11 @@ suite("refreshLocalExercises action", function () {
   })
 
   test("should set mooc course exercises with the mooc backend", async function () {
-    const moocCourse: MoocLocalCourseData = {
+    const moocCourse: MoocLocalCourseData = moocCourseData({
       id: "course-uuid-1",
       name: "mooc-python-course",
       title: "Mooc Python",
-      description: null,
-      organization: "mooc",
-      exercises: [],
-      availablePoints: 0,
-      awardedPoints: 0,
-      newExercises: [],
-      notifyAfter: 0,
-    }
+    })
     userDataMockValues.getCourses = [makeMoocKind(moocCourse) as LocalCourseData]
     // A mooc entry is matched to its course by course id, since its on-disk slug
     // is derived locally and need not equal the course name the workspace uses.

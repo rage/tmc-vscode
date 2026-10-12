@@ -2,7 +2,7 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
 import type { LocalCourseData } from "../../../shared/lib"
-import { CourseIdentifier, makeTmcKind } from "../../../shared/lib"
+import { CourseIdentifier } from "../../../shared/lib"
 import { downloadNewExercisesForCourse } from "../../actions/downloadNewExercisesForCourse"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
@@ -10,6 +10,7 @@ import type Dialog from "../../api/dialog"
 import { refreshCourses, refreshEverything } from "../../commands/refreshEverything"
 import { updateExercises } from "../../commands/updateExercises"
 import { Logger } from "../../utilities"
+import { tmcLocalCourse } from "../fixtures/courses"
 import { idOfTmcCourse } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -33,20 +34,13 @@ vi.mock("../../commands/updateExercises", () => ({
 }))
 
 const tmcCourse = (id: number, notifyAfter: number, newExercises: number[]): LocalCourseData =>
-  makeTmcKind({
+  tmcLocalCourse({
     id,
     name: `course-${id}`,
     title: `Course ${id}`,
-    description: "",
     organization: "test",
-    exercises: [],
-    availablePoints: 0,
-    awardedPoints: 0,
-    perhapsExamMode: false,
     newExercises,
     notifyAfter,
-    disabled: false,
-    materialUrl: null,
   })
 
 function contextWithCourses(courses: LocalCourseData[]): [ReadyActionContext, Dialog] {

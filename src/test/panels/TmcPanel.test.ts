@@ -22,6 +22,7 @@ import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
 import { MAIN_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
 import { submissionViews } from "../../ui/submissionViews"
 import { Logger } from "../../utilities"
+import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
 import { idOfMoocExercise, idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 import { createMockContext } from "../mocks/vscode"
@@ -1518,28 +1519,16 @@ function exerciseSubmissionPanel(): Extract<Panel, { type: "ExerciseSubmission" 
 }
 
 function courseWith(exerciseCount: number, deadline: string | null = null) {
-  return makeTmcKind({
-    id: 42,
-    name: "python-course",
-    title: "Python Course",
-    description: "",
-    organization: "mooc",
-    exercises: Array.from({ length: exerciseCount }, (_, index) => ({
-      id: index + 1,
-      availablePoints: 1,
-      awardedPoints: 0,
-      name: `part01-${String(index).padStart(3, "0")}_exercise`,
-      deadline,
-      passed: false,
-      softDeadline: deadline,
-    })),
+  return tmcLocalCourse({
+    exercises: Array.from({ length: exerciseCount }, (_, index) =>
+      tmcCourseExercise({
+        id: index + 1,
+        name: `part01-${String(index).padStart(3, "0")}_exercise`,
+        deadline,
+        softDeadline: deadline,
+      }),
+    ),
     availablePoints: exerciseCount,
-    awardedPoints: 0,
-    perhapsExamMode: false,
-    newExercises: [],
-    notifyAfter: 0,
-    disabled: false,
-    materialUrl: null,
   })
 }
 

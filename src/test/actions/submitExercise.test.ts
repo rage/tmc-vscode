@@ -27,6 +27,12 @@ import type { SubmissionViewUpdate } from "../../ui/submissionViews"
 import { submissionViews } from "../../ui/submissionViews"
 import { saveExerciseDocuments } from "../../window/exerciseDocuments"
 import {
+  moocCourseData,
+  moocCourseExercise,
+  tmcCourseData,
+  tmcCourseExercise,
+} from "../fixtures/courses"
+import {
   idOfMoocCourse,
   idOfMoocExercise,
   idOfTmcCourse,
@@ -58,53 +64,25 @@ const MOOC_EXERCISE_ID = "mooc-ex-1"
 const TMC_COURSE_SLUG = "test-python-course"
 const TMC_EXERCISE_ID = 4321
 
-const moocCourse: MoocLocalCourseData = {
+const moocCourse: MoocLocalCourseData = moocCourseData({
   id: "instance-uuid-1",
   name: COURSE_SLUG,
   title: "Mooc Python",
-  description: null,
-  organization: "mooc",
-  exercises: [
-    {
-      id: MOOC_EXERCISE_ID,
-      name: EXERCISE_SLUG,
-      availablePoints: 3,
-      awardedPoints: 0,
-      deadline: null,
-      passed: false,
-    },
-  ],
   availablePoints: 3,
-  awardedPoints: 0,
-  newExercises: [],
-  notifyAfter: 0,
-}
+  exercises: [
+    moocCourseExercise({ id: MOOC_EXERCISE_ID, name: EXERCISE_SLUG, availablePoints: 3 }),
+  ],
+})
 
-const tmcCourse: TmcLocalCourseData = {
+const tmcCourse: TmcLocalCourseData = tmcCourseData({
   id: 7,
   name: TMC_COURSE_SLUG,
   title: "Test Python",
   description: "A tmc course",
   organization: "test",
-  exercises: [
-    {
-      id: TMC_EXERCISE_ID,
-      name: EXERCISE_SLUG,
-      availablePoints: 2,
-      awardedPoints: 0,
-      deadline: null,
-      passed: false,
-      softDeadline: null,
-    },
-  ],
+  exercises: [tmcCourseExercise({ id: TMC_EXERCISE_ID, name: EXERCISE_SLUG, availablePoints: 2 })],
   availablePoints: 2,
-  awardedPoints: 0,
-  perhapsExamMode: false,
-  newExercises: [],
-  notifyAfter: 0,
-  disabled: false,
-  materialUrl: null,
-}
+})
 
 const moocExercise: WorkspaceExercise = {
   id: idOfMoocExercise(MOOC_EXERCISE_ID),
