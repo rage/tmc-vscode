@@ -74,6 +74,12 @@ export type AiRestrictionLapse =
       source: SettingSource
     }
 
+/** The {@link AiRestrictionLapse} of VS Code refusing to write the workspace file. */
+export type WorkspaceFileUnwritable = Extract<
+  AiRestrictionLapse,
+  { kind: "workspaceFileUnwritable" }
+>
+
 type CourseWorkspaceSettings = Pick<
   WorkspaceManager,
   | "activeCourse"
@@ -143,6 +149,14 @@ export default class AiRestriction implements vscode.Disposable {
   /** The sections extensions declare language-overridable; `undefined` until first needed. */
   private _overridableSections: Set<string> | undefined
   private _hasLoggedWrite = false
+  private _isRefusalAnnounced = false
+  private readonly _workspaceFileRefused = new vscode.EventEmitter<WorkspaceFileUnwritable>()
+
+  /**
+   * Fires when a pass ends with VS Code refusing to write the workspace file, and not again
+   * until a pass gets every write into it.
+   */
+  public readonly onDidRefuseWorkspaceFile = this._workspaceFileRefused.event
 
   /**
    * @param _state The workspace's own `ExtensionContext.workspaceState`. The backoff is kept
@@ -222,6 +236,7 @@ export default class AiRestriction implements vscode.Disposable {
     this._isDisposed = true
     clearTimeout(this._retryTimer)
     this._disposables.forEach((x) => x.dispose())
+    this._workspaceFileRefused.dispose()
   }
 
   private async _runPasses(): Promise<void> {
@@ -250,6 +265,7 @@ export default class AiRestriction implements vscode.Disposable {
     } else {
       wasRefused = await this._writeSettings(isForced)
     }
+    await this._announceRefusal(isForced)
     if (wasRefused) {
       this._refusalRetryAt = Date.now() + this._refusalRetryDelayMs
       this._refusalRetryDelayMs = Math.min(this._refusalRetryDelayMs * 2, MAX_BACKOFF_MS)
@@ -258,6 +274,26 @@ export default class AiRestriction implements vscode.Disposable {
       this._refusalRetryDelayMs = MIN_BACKOFF_MS
     }
     this._scheduleRetry()
+  }
+
+  /** @param isForced A forced pass's caller reports the refusal itself. */
+  private async _announceRefusal(isForced: boolean): Promise<void> {
+    if (this._writeFailures.size === 0) {
+      this._isRefusalAnnounced = false
+      return
+    }
+    if (this._isRefusalAnnounced || this._isDisposed) {
+      return
+    }
+    if (isForced) {
+      this._isRefusalAnnounced = true
+      return
+    }
+    const lapse = await this._lapse(undefined)
+    if (lapse?.kind === "workspaceFileUnwritable") {
+      this._isRefusalAnnounced = true
+      this._workspaceFileRefused.fire(lapse)
+    }
   }
 
   /** @returns Whether VS Code refused a write. */

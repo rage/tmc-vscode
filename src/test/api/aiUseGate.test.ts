@@ -5,7 +5,7 @@ import type { LocalCourseData } from "../../../shared/lib"
 import { makeMoocKind } from "../../../shared/lib"
 import * as aiRestriction from "../../api/aiRestriction"
 import type { AiRestrictionLapse } from "../../api/aiRestriction"
-import { AiUseGate, enabledAiExtensions } from "../../api/aiUseGate"
+import { AiUseGate, enabledAiExtensions, warnOfUnwritableWorkspaceFile } from "../../api/aiUseGate"
 import { AiUseRefusedError, presentationFor, SHOW_AI_USE_PROBLEM_COMMAND } from "../../errors"
 import { Logger } from "../../utilities"
 import { idOfMoocCourse } from "../fixtures/identifiers"
@@ -254,5 +254,31 @@ suite("a refusal's presentation", function () {
 
   test("has no button without a remedy", function () {
     expect(presentationFor(new AiUseRefusedError("AI assistance must be off.")).actions).toEqual([])
+  })
+})
+
+suite("warnOfUnwritableWorkspaceFile", function () {
+  test("warns that the settings were not applied, with a button that opens the file", async function () {
+    const showTextDocument = vi
+      .spyOn(vscode.window, "showTextDocument")
+      .mockResolvedValue(undefined as never)
+    const warningNotification = vi.fn(async () => undefined)
+
+    await warnOfUnwritableWorkspaceFile(
+      { warningNotification },
+      { kind: "workspaceFileUnwritable", file: WORKSPACE_FILE, problem: "unsaved", reason: "" },
+    )
+
+    expect(warningNotification).toHaveBeenCalledExactlyOnceWith(
+      "AI settings in the course workspace couldn't be applied: save or revert the changes to" +
+        " python-course.code-workspace and try again.",
+      ["Open python-course.code-workspace", expect.any(Function)],
+    )
+    const [, [, open]] = warningNotification.mock.calls[0] as unknown as [
+      string,
+      [string, () => void],
+    ]
+    open()
+    expect(showTextDocument).toHaveBeenCalledExactlyOnceWith(WORKSPACE_FILE)
   })
 })

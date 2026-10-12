@@ -7,8 +7,10 @@ import { AI_EXTENSIONS } from "../config/constants"
 import { AiUseRefusedError } from "../errors"
 import { Logger } from "../utilities"
 import type AiRestriction from "./aiRestriction"
-import type { AiRestrictionLapse } from "./aiRestriction"
+import type { AiRestrictionLapse, WorkspaceFileUnwritable } from "./aiRestriction"
 import { isAiAllowed } from "./aiRestriction"
+import type Dialog from "./dialog"
+import type { NotificationButton } from "./dialog"
 
 /** An AI extension from {@link AI_EXTENSIONS} that is enabled in this window. */
 export interface EnabledAiExtension {
@@ -90,8 +92,40 @@ function refusalForExtensions(): Refusal | undefined {
   }
 }
 
-function refusalForLapse(lapse: AiRestrictionLapse, course: LocalCourseData): Refusal {
+/** Tells the user that AI assistance stays on because VS Code refused the AI restriction's writes. */
+export async function warnOfUnwritableWorkspaceFile(
+  dialog: Pick<Dialog, "warningNotification">,
+  lapse: WorkspaceFileUnwritable,
+): Promise<void> {
+  const { error, showProblem } = refusalForUnwritableFile(lapse)
+  const buttons: NotificationButton[] =
+    error.remedyLabel && showProblem ? [[error.remedyLabel, () => void showProblem()]] : []
+  await dialog.warningNotification(error.message, ...buttons)
+}
+
+function refusalForUnwritableFile(lapse: WorkspaceFileUnwritable): Refusal {
   const notApplied = "AI settings in the course workspace couldn't be applied"
+  const fileName = path.basename(lapse.file.fsPath)
+  if (lapse.problem === "readOnly") {
+    return {
+      error: new AiUseRefusedError(
+        `${notApplied}: ${fileName} is read-only. Make it writable and try again.`,
+        "Reveal File",
+      ),
+      showProblem: () => vscode.commands.executeCommand("revealFileInOS", lapse.file),
+    }
+  }
+  const message =
+    lapse.problem === "unsaved"
+      ? `${notApplied}: save or revert the changes to ${fileName} and try again.`
+      : `${notApplied}: ${lapse.reason}`
+  return {
+    error: new AiUseRefusedError(message, `Open ${fileName}`),
+    showProblem: () => vscode.window.showTextDocument(lapse.file),
+  }
+}
+
+function refusalForLapse(lapse: AiRestrictionLapse, course: LocalCourseData): Refusal {
   switch (lapse.kind) {
     case "outsideCourseWorkspace":
       return {
@@ -106,26 +140,8 @@ function refusalForLapse(lapse: AiRestrictionLapse, course: LocalCourseData): Re
             LocalCourseData.getCourseId(course),
           ),
       }
-    case "workspaceFileUnwritable": {
-      const fileName = path.basename(lapse.file.fsPath)
-      if (lapse.problem === "readOnly") {
-        return {
-          error: new AiUseRefusedError(
-            `${notApplied}: ${fileName} is read-only. Make it writable and try again.`,
-            "Reveal File",
-          ),
-          showProblem: () => vscode.commands.executeCommand("revealFileInOS", lapse.file),
-        }
-      }
-      const message =
-        lapse.problem === "unsaved"
-          ? `${notApplied}: save or revert the changes to ${fileName} and try again.`
-          : `${notApplied}: ${lapse.reason}`
-      return {
-        error: new AiUseRefusedError(message, `Open ${fileName}`),
-        showProblem: () => vscode.window.showTextDocument(lapse.file),
-      }
-    }
+    case "workspaceFileUnwritable":
+      return refusalForUnwritableFile(lapse)
     case "settingOverridden": {
       const setting =
         lapse.languageId === undefined ? lapse.section : `${lapse.section} for ${lapse.languageId}`

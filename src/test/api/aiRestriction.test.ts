@@ -645,6 +645,38 @@ suite("AI restriction", function () {
       expect(workspace.stored.get(REFUSED)).toBe("none")
     })
 
+    test("are announced once, and again only after a pass got every write through", async function () {
+      workspace.problem = "unsaved"
+      const announced = vi.fn()
+      restriction.onDidRefuseWorkspaceFile(announced)
+
+      await restriction.apply()
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(announced).toHaveBeenCalledExactlyOnceWith({
+        kind: "workspaceFileUnwritable",
+        file: WORKSPACE_FILE,
+        problem: "unsaved",
+        reason: "Unable to write into the workspace configuration file.",
+      })
+
+      workspace.rejected.clear()
+      await vi.advanceTimersByTimeAsync(10_000)
+      workspace.rejected.add(REFUSED)
+      workspace.stored.delete(REFUSED)
+      await restriction.apply()
+      expect(announced).toHaveBeenCalledTimes(2)
+    })
+
+    test("are left to an enforcing caller to report", async function () {
+      const announced = vi.fn()
+      restriction.onDidRefuseWorkspaceFile(announced)
+
+      await restriction.enforce()
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      expect(announced).not.toHaveBeenCalled()
+    })
+
     test("are not retried once disposed", async function () {
       await restriction.apply()
       expect(vi.getTimerCount()).toBe(1)

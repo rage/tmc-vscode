@@ -15,7 +15,7 @@ import type {
 } from "./actions/types"
 import { isReady } from "./actions/types"
 import AiRestriction, { isActiveCourseAiAllowed } from "./api/aiRestriction"
-import { AiUseGate } from "./api/aiUseGate"
+import { AiUseGate, warnOfUnwritableWorkspaceFile } from "./api/aiUseGate"
 import { createAuthState } from "./api/authState"
 import type { NotificationButton } from "./api/dialog"
 import Dialog from "./api/dialog"
@@ -373,7 +373,12 @@ async function activateInner(
         () => isActiveCourseAiAllowed(courseWorkspace, courses),
         courses?.onDidChangeCourses,
       )
-      context.subscriptions.push(aiRestriction)
+      context.subscriptions.push(
+        aiRestriction,
+        aiRestriction.onDidRefuseWorkspaceFile(
+          (lapse) => void warnOfUnwritableWorkspaceFile(dialog, lapse),
+        ),
+      )
       // The AI-use gate enforces its own pass before a submit, test run or paste.
       void aiRestriction.apply()
     }
