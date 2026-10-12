@@ -715,6 +715,45 @@ suite("UserData concurrent writes", function () {
   })
 })
 
+suite("UserData wipe", function () {
+  test("forgets every course in memory as well as in storage", async function () {
+    const [userData, store] = await makeUserData({
+      courses: [tmcCourse({ exercises: [tmcExercise({ id: 1, passed: true })] })],
+      mooc_courses: [moocCourse()],
+    })
+
+    expect((await userData.wipeDataFromStorage()).ok).toBe(true)
+
+    expect(userData.getCourses()).toEqual([])
+    expect(userData.getPassed(ExerciseIdentifier.from(1))).toBe(false)
+    expect(store.getUserData()).toBeUndefined()
+  })
+
+  test("is not undone by a write queued before it", async function () {
+    const [userData, store] = await makeUserData({
+      courses: [tmcCourse({ id: 0 })],
+      mooc_courses: [],
+    })
+    const updateUserData = store.updateUserData.bind(store)
+    vi.spyOn(store, "updateUserData").mockImplementation(async (data) => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10)
+      })
+      await updateUserData(data)
+    })
+
+    const queued = userData.setNewExerciseNotifyAfter(CourseIdentifier.from(0), 111)
+    await userData.wipeDataFromStorage()
+    await queued
+
+    expect(store.getUserData()).toBeUndefined()
+  })
+
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+})
+
 suite("UserData write failures", function () {
   /** A `UserData` whose every persistence write rejects. */
   async function withFailingWrites(

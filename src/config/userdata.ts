@@ -504,15 +504,16 @@ export class UserData {
   }
 
   /**
-   * Tries to set all storage data to undefined.
+   * Forgets every course, in memory and in storage.
+   *
+   * Runs after any write already queued, so none of them can put the wiped data back.
    */
   public async wipeDataFromStorage(): Promise<Result<void, Error>> {
-    try {
-      await this._storage.wipeStorage()
-      return Ok.EMPTY
-    } catch (e) {
-      return Err(e instanceof Error ? e : new Error(String(e)))
-    }
+    this._tmcCourses.clear()
+    this._moocCourses.clear()
+    this._passedExercises.clear()
+    this._coursesChanged.fire()
+    return this._enqueueWrite(() => this._storage.wipeStorage())
   }
 
   /**
@@ -522,11 +523,6 @@ export class UserData {
    * The in-memory maps are already mutated by the time this runs, so an `Err`
    * means the two copies have diverged and the caller must tell the user —
    * dropping it silently reverts their action at the next restart.
-   *
-   * Every write rewrites the entire catalogue, so concurrent callers are chained
-   * onto one another rather than run in parallel; without that, two overlapping
-   * background refreshes each persist their own snapshot and the later write
-   * silently drops the earlier one's changes.
    */
   private async _updatePersistentData(): Promise<Result<void, Error>> {
     this._coursesChanged.fire()
@@ -534,16 +530,25 @@ export class UserData {
       courses: Array.from(this._tmcCourses.values()),
       mooc_courses: Array.from(this._moocCourses.values()),
     }
-    const write = this._pendingWrite.then(async (): Promise<Result<void, Error>> => {
+    return this._enqueueWrite(() => this._storage.updateUserData(snapshot))
+  }
+
+  /**
+   * Runs `write` after every storage write queued before it. Each write replaces the whole
+   * catalogue, so two overlapping ones would otherwise let the later drop the earlier's
+   * changes.
+   */
+  private _enqueueWrite(write: () => Promise<void>): Promise<Result<void, Error>> {
+    const queued = this._pendingWrite.then(async (): Promise<Result<void, Error>> => {
       try {
-        await this._storage.updateUserData(snapshot)
+        await write()
         return Ok.EMPTY
       } catch (e) {
         return Err(e instanceof Error ? e : new Error(String(e)))
       }
     })
-    this._pendingWrite = write
-    return write
+    this._pendingWrite = queued
+    return queued
   }
 }
 
