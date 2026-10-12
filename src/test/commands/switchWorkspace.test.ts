@@ -1,3 +1,4 @@
+import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
@@ -6,7 +7,7 @@ import type { Item } from "../../api/dialog"
 import { openWorkspace } from "../../commands/openWorkspace"
 import { switchWorkspace } from "../../commands/switchWorkspace"
 import type { UserData } from "../../config/userdata"
-import type { LocalCourseData } from "../../shared/shared"
+import { CourseIdentifier, LocalCourseData } from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -43,7 +44,16 @@ function harness(pick: number | "dismissed" = 0): Harness {
     return pick === "dismissed" ? undefined : items[pick]?.value
   }) as unknown as typeof dialog.selectItem
 
-  const userData = { getCourses: () => courses } as unknown as UserData
+  const userData = {
+    getCourses: () => courses,
+    getCourse: (id: CourseIdentifier) => {
+      const course = courses.find(
+        (candidate) =>
+          CourseIdentifier.key(LocalCourseData.getCourseId(candidate)) === CourseIdentifier.key(id),
+      )
+      return course ? Ok(course) : Err(new Error("no such course"))
+    },
+  } as unknown as UserData
   return {
     context: { ...createMockActionContext({ startup: { userData } }), dialog },
     offered,
