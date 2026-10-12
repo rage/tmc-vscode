@@ -13,24 +13,18 @@ suite("Session state migration", function () {
   })
 
   suite("between versions", function () {
-    test("succeeds without any data", function () {
-      const migrated = migrateSessionState(memento).data
-      expect(migrated).toEqual({
-        extensionVersion: undefined,
-      })
+    test("has nothing to write without any data", function () {
+      expect(migrateSessionState(memento).data).toBeUndefined()
     })
 
-    test("succeeds with version 2.0.0 data", async function () {
+    test("leaves current data to stay as it is", async function () {
       await memento.update(v1.SESSION_STATE_KEY, sessionState.v2_0_0)
-      const migrated = migrateSessionState(memento).data
-      expect(migrated).toEqual(sessionState.v2_0_0)
+      expect(migrateSessionState(memento).data).toBeUndefined()
     })
 
-    test("should succeed with backwards compatible future data", async function () {
-      const data = { ...sessionState.v2_0_0, wonderwoman: "Diana Prince" }
-      await memento.update(v1.SESSION_STATE_KEY, data)
-      const migrated = migrateSessionState(memento).data
-      expect(migrated).toEqual(data)
+    test("accepts backwards compatible future data", async function () {
+      await memento.update(v1.SESSION_STATE_KEY, { ...sessionState.v2_0_0, wonderwoman: "Diana" })
+      expect(migrateSessionState(memento).data).toBeUndefined()
     })
   })
 
