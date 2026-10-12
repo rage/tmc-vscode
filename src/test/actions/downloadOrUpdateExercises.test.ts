@@ -573,6 +573,25 @@ suite("downloadOrUpdateExercises cancellation and progress", function () {
     expect(result.failed).toEqual([...tmcIds, ...moocIds])
   })
 
+  test("keeps what a leg finished before the cancel, skipped exercises included", async function () {
+    fakeDownloads(tmcMock, async (ids) => {
+      downloadedIdsPerCall.push(ids)
+      // The tmc leg finishes, reporting one exercise skipped as already up to date; the
+      // user cancels before the mooc leg starts.
+      cancel()
+      return createDownloadResult(
+        [{ id: tmcIds[0]!, path: "/exercise" }],
+        [{ id: tmcIds[1]!, path: "/exercise" }],
+      )
+    })
+
+    const result = await downloadResults(actionContext(), [...tmcIds, ...moocIds], TEST_COURSE_ID)
+
+    expect(downloadedIdsPerCall).toEqual([tmcIds])
+    expect(result.successful).toEqual(tmcIds)
+    expect(result.failed).toEqual(moocIds)
+  })
+
   test("kills a leg that was still starting up when the user cancelled", async function () {
     const interruptedLegs: ExerciseIdentifier[][] = []
     fakeDownloads(tmcMock, async (ids, _onDownloaded, onHandle) => {

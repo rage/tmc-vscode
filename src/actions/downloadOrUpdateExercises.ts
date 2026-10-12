@@ -137,19 +137,13 @@ async function download(
     },
     { cancellable: true },
   )
-  if (cancelled) {
-    // The user chose to stop; report what completed instead of erroring.
-    const results = sortResults(exerciseIds, succeeded)
-    downloadFailures.record(results.failed, results.successful)
-    Logger.info("Exercise download cancelled by the user")
-    return results
-  }
-
   const failedLegs: Error[] = []
   const exerciseReasons: string[][] = []
   for (const { backend, result } of legs) {
     if (result.err) {
-      Logger.error(`Failed to download exercises from ${backendName(backend)}`, result.val)
+      if (!cancelled) {
+        Logger.error(`Failed to download exercises from ${backendName(backend)}`, result.val)
+      }
       failedLegs.push(result.val)
       continue
     }
@@ -169,6 +163,11 @@ async function download(
 
   const results = sortResults(exerciseIds, succeeded)
   downloadFailures.record(results.failed, results.successful)
+  if (cancelled) {
+    // The user chose to stop; what completed is the answer, not an error.
+    Logger.info("Exercise download cancelled by the user")
+    return results
+  }
   if (results.failed.length > 0) {
     const names = results.failed.map((id) => exerciseName(actionContext, id))
     dialog.reportError(
