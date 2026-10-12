@@ -62,13 +62,25 @@ export async function updateExercises(
     void dialog.reportError(`Failed to check ${sites} for exercise updates.`, firstFailure.error)
   }
 
-  const now = Date.now()
-  const exercisesToUpdate = outdated.filter((x) => {
+  const updateable = outdated.filter((x) => {
     const course = userData.getCourse(x.courseId)
-    return (
-      course.ok && course.val.data.notifyAfter <= now && !LocalCourseData.isDisabled(course.val)
-    )
+    return course.ok && !LocalCourseData.isDisabled(course.val)
   })
+  if (updateable.length > 0 && settings.getAutomaticallyUpdateExercises()) {
+    await withOperation(dialog, { failure: "Failed to update exercises." }, () =>
+      downloadExerciseUpdates(actionContext, updateable),
+    )
+    return
+  }
+
+  // A postponed reminder holds back only the prompt, and only one the user did not ask for.
+  const now = Date.now()
+  const exercisesToUpdate = silent
+    ? updateable.filter((x) => {
+        const course = userData.getCourse(x.courseId)
+        return course.ok && course.val.data.notifyAfter <= now
+      })
+    : updateable
 
   if (exercisesToUpdate.length === 0) {
     if (!silent && failures.length === 0) {
@@ -86,10 +98,6 @@ export async function updateExercises(
     await withOperation(dialog, { failure: "Failed to update exercises." }, () =>
       downloadExerciseUpdates(actionContext, exercisesToUpdate),
     )
-  }
-
-  if (settings.getAutomaticallyUpdateExercises()) {
-    return download()
   }
 
   const postpone = async (): Promise<Result<void, Error>> => {

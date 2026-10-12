@@ -138,6 +138,43 @@ suite("updateExercises command", function () {
     ).toEqual(["1", "2"])
   })
 
+  suite("with the reminder postponed", function () {
+    function postponed(automaticallyUpdate: boolean): ReturnType<typeof contextWith> {
+      const context = contextWith(automaticallyUpdate)
+      context[0].startup.userData.getCourse = () =>
+        Ok({ data: { notifyAfter: Date.now() + 60_000, disabled: false } } as LocalCourseData)
+      return context
+    }
+
+    test("still downloads the updates when automatic updates are on", async function () {
+      const updates = [outdated(1, 10)]
+      checkForExerciseUpdates.mockResolvedValue(checked(updates))
+      const [actionContext] = postponed(true)
+
+      await updateExercises(actionContext, "silent")
+
+      expect(downloadExerciseUpdates).toHaveBeenCalledExactlyOnceWith(actionContext, updates)
+    })
+
+    test("does not prompt on a run the user did not ask for", async function () {
+      checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10)]))
+      const [actionContext, dialog] = postponed(false)
+
+      await updateExercises(actionContext, "silent")
+
+      expect(dialog.notification).not.toHaveBeenCalled()
+    })
+
+    test("prompts when the user asks for the updates", async function () {
+      checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10)]))
+      const [actionContext, dialog] = postponed(false)
+
+      await updateExercises(actionContext, "loud")
+
+      expect(dialog.notification).toHaveBeenCalledOnce()
+    })
+  })
+
   test("downloads the updates without asking when automatic updates are on", async function () {
     const updates = [outdated(1, 10), outdated(2, 20)]
     checkForExerciseUpdates.mockResolvedValue(checked(updates))
