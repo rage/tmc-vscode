@@ -86,6 +86,17 @@ suite("checkForCourseUpdates action", function () {
     expect(refreshLocalExercises).toHaveBeenCalledExactlyOnceWith(actionContext)
   })
 
+  test("names a rescan that fails as the pass's failure", async function () {
+    vi.mocked(updateCourse).mockResolvedValue(Ok(true))
+    const error = new Error("tmc-langs crashed")
+    vi.mocked(refreshLocalExercises).mockResolvedValueOnce(Err(error))
+    const [actionContext] = contextWithCourses([tmcCourse(1, 0, [])])
+
+    const result = await checkForCourseUpdates(actionContext)
+
+    expect(result.unwrap().failure).toBe(error)
+  })
+
   test("refreshes the other courses after one fails, and names the failure", async function () {
     vi.mocked(updateCourse).mockImplementation(async (_actionContext, id) =>
       CourseIdentifier.toString(id) === "1" ? Err(new Error("boom")) : Ok(true),

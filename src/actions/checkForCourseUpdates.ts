@@ -19,7 +19,10 @@ export interface CourseUpdateOptions {
 export interface CourseUpdates {
   /** Every course read back after the pass, whether or not its own refresh succeeded. */
   courses: LocalCourseData[]
-  /** Names every course that could not be refreshed; the others were. */
+  /**
+   * Names every course that could not be refreshed, the others having been; else why the local
+   * exercises could not be rescanned after them.
+   */
   failure: Error | undefined
 }
 
@@ -66,7 +69,7 @@ export async function checkForCourseUpdates(
   )
   // Once for the whole pass, not once per course: a course update can drop exercises the
   // backend no longer has, and only a rescan stops those still showing as open.
-  await refreshLocalExercises(actionContext)
+  const rescanned = await refreshLocalExercises(actionContext)
   const updatedCourses = refreshed
     .map((x) => x.updated)
     .filter((x): x is LocalCourseData => x !== undefined)
@@ -77,11 +80,16 @@ export async function checkForCourseUpdates(
 
   const names = failures.map((x) => x.name).join(", ")
   const firstMessage = failures[0]?.error?.message ?? "unknown error"
+  if (rescanned.err) {
+    Logger.warn("Failed to rescan the local exercises after refreshing the courses", rescanned.val)
+  }
   return Ok({
     courses: updatedCourses,
     failure:
       failures.length > 0
         ? new Error(`Failed to fetch updates for ${names}: ${firstMessage}`)
-        : undefined,
+        : rescanned.err
+          ? rescanned.val
+          : undefined,
   })
 }
