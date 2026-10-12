@@ -31,7 +31,7 @@ export const courseDetailsHandlers = {
       // Silent: the panel that asked shows the failure, remedies included.
       const updateResult = await withOperation(
         actionContext.dialog,
-        { failure: "Failed to update course.", backend: courseId.kind, silent: true },
+        { failure: "Failed to update course.", silent: true },
         () => actions.updateCourse(actionContext, courseId),
       )
       // `updateCourse` does not rescan, and a course update can drop exercises still on disk.

@@ -128,7 +128,6 @@ suite("Paste exercise command", function () {
     expect(context.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Failed to send the exercise to courses.mooc.fi paste.",
       expect.objectContaining({ message: "submission rejected" }),
-      "mooc",
     )
     expect(notifications).toEqual([])
   })

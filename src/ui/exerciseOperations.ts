@@ -36,7 +36,6 @@ const BUSY_MESSAGES: Record<(typeof LANES)[ExerciseOperationKind], string> = {
 
 interface Claim {
   kind: ExerciseOperationKind
-  backstop: ReturnType<typeof setTimeout>
 }
 
 /** A held claim on several exercises, released one at a time as each one's part finishes. */
@@ -74,18 +73,15 @@ export class ExerciseOperations {
 
   /**
    * Runs `work` as a `kind` operation on `exerciseId`, or returns a `BottleneckError` without
-   * running it while a conflicting one runs.
-   *
-   * @param maxHoldMs Releases the claim after this long regardless, so a CLI call whose
-   *   promise never settles cannot refuse the exercise's operations forever.
+   * running it while a conflicting one runs. The claim lasts until `work` settles, which every
+   * CLI call does once its process ends or is killed.
    */
   public async run<T>(
     exerciseId: ExerciseIdentifier,
     kind: ExerciseOperationKind,
-    maxHoldMs: number,
     work: () => Promise<Result<T, Error>>,
   ): Promise<Result<T, Error>> {
-    const claim = this.claim([exerciseId], kind, maxHoldMs)
+    const claim = this.claim([exerciseId], kind)
     if (claim.err) {
       return claim
     }
@@ -103,7 +99,6 @@ export class ExerciseOperations {
   public claim(
     exerciseIds: readonly ExerciseIdentifier[],
     kind: ExerciseOperationKind,
-    maxHoldMs: number,
   ): Result<ExerciseClaim, BottleneckError> {
     const lane = LANES[kind]
     const keys = [...new Set(exerciseIds.map((id) => ExerciseIdentifier.key(id)))]
@@ -121,7 +116,6 @@ export class ExerciseOperations {
         return
       }
       held.delete(key)
-      clearTimeout(claim.backstop)
       const claims = this._running.get(key)?.filter((other) => other !== claim) ?? []
       if (claims.length > 0) {
         this._running.set(key, claims)
@@ -131,7 +125,7 @@ export class ExerciseOperations {
       this._changed.fire()
     }
     for (const key of keys) {
-      const claim: Claim = { kind, backstop: setTimeout(() => release(key), maxHoldMs) }
+      const claim: Claim = { kind }
       held.set(key, claim)
       this._running.set(key, [...(this._running.get(key) ?? []), claim])
     }

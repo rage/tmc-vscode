@@ -10,6 +10,7 @@ import { isReady } from "./actions/types"
 import AiRestriction, { isActiveCourseAiAllowed } from "./api/aiRestriction"
 import { AiUseGate } from "./api/aiUseGate"
 import { createAuthState } from "./api/authState"
+import type { NotificationButton } from "./api/dialog"
 import Dialog from "./api/dialog"
 import ExerciseDecorationProvider from "./api/exerciseDecorationProvider"
 import Langs from "./api/langs"
@@ -153,8 +154,7 @@ async function activateInner(
   const storage = new Storage(context)
   const settings = new Settings()
   context.subscriptions.push(settings)
-  // Must precede the first CLI invocation below: the user's level decides what the output
-  // channel keeps of a `logged-in` response, which carries a live OAuth token.
+  // Must precede the first CLI invocation below, which logs at the user's level.
   Logger.configure(settings.getLogLevel())
   context.subscriptions.push({ dispose: () => Logger.dispose() })
   // Kept at every level: it carries no credential, and it is what makes a pasted log
@@ -173,12 +173,10 @@ async function activateInner(
   init.registerServiceFreeCommands(context, dialog)
   const initializationErrors = makeInitializationErrorReporter(dialog)
   const reportInitializationError = initializationErrors.record
-  const cliPathResult = await init.ensureLangsUpdated(
-    cliFolder(context),
-    dialog,
-    { downloadUrl: TMC_LANGS_DL_URL, version: TMC_LANGS_VERSION },
-    context.globalState,
-  )
+  const cliPathResult = await init.ensureLangsUpdated(cliFolder(context), dialog, {
+    downloadUrl: TMC_LANGS_DL_URL,
+    version: TMC_LANGS_VERSION,
+  })
 
   // download langs if necessary
   let langs: Result<Langs, Error>
@@ -200,11 +198,8 @@ async function activateInner(
   const authState = createAuthState(langs)
   authState.subscribe((loggedIn) => coursesTree.setLoggedIn(loggedIn))
   const initialAuthCheck = await authState.refresh({ timeout: 15000 })
-  if (initialAuthCheck.tmc.err) {
-    reportInitializationError("Checking your login", initialAuthCheck.tmc.val)
-  }
-  if (initialAuthCheck.mooc.err) {
-    Logger.warn("Could not check mooc login status", initialAuthCheck.mooc.val)
+  if (initialAuthCheck.err) {
+    reportInitializationError("Checking your login", initialAuthCheck.val)
   }
 
   const workspaceFileFolder = path.join(context.globalStorageUri.fsPath, "workspaces")
@@ -254,8 +249,7 @@ async function activateInner(
     reportInitializationError("Preparing the extension's files", resources.val)
   }
 
-  // Armed only while logged in: each round is two cold CLI starts, and a session can only
-  // drop silently for someone who has one.
+  // Armed only while logged in: a session can only drop silently for someone who has one.
   let maintenancePoll: NodeJS.Timeout | undefined
   function setMaintenancePollArmed(armed: boolean): void {
     if (armed === (maintenancePoll !== undefined)) {
@@ -273,43 +267,40 @@ async function activateInner(
 
   // Created once the commands it runs are registered, which is after the listeners below.
   let accountStatus: AccountStatusBarItem | undefined
+  // `tmc.showMoocLogin` exists only once a ready activation has registered it.
+  let canOfferLogin = false
 
-  // Both backends are authenticated by the same courses.mooc.fi credential, so
-  // either one expiring is fixed by the same device-flow login.
   const sessionExpiredWarning = (): void => {
     accountStatus?.markSessionExpired()
-    dialog.warningNotification("Your session has expired, please log in.", [
+    const logIn: NotificationButton = [
       "Log in",
-      (): void => {
-        vscode.commands.executeCommand("tmc.showMoocLogin")
-      },
-    ])
+      (): void => void vscode.commands.executeCommand("tmc.showMoocLogin"),
+    ]
+    dialog.warningNotification(
+      "Your session has expired, please log in.",
+      ...(canOfferLogin ? [logIn] : []),
+    )
   }
 
   // Seeded from the startup check above; shared with the background poll further down.
-  const sessionExpiry = createSessionExpiryTracker(
-    { tmc: authState.tmc, mooc: authState.mooc },
-    sessionExpiredWarning,
-  )
+  const sessionExpiry = createSessionExpiryTracker(authState.loggedIn, sessionExpiredWarning)
 
   if (langs.ok) {
+    langs.val.on("login", async () => {
+      await authState.set(true)
+      sessionExpiry.onLogin()
+    })
     langs.val.on("logout", async (expected) => {
-      await authState.set("tmc", false)
-      sessionExpiry.onLogout("tmc", expected)
-    })
-    langs.val.on("mooc-login", async () => {
-      await authState.set("mooc", true)
-      accountStatus?.setLoggedIn(true)
-      sessionExpiry.onLogin("mooc")
-      // A CLI that authenticates the tmc backend with the mooc token resolves an
-      // earlier tmc expiry too. Whether it does is a property of the pinned CLI,
-      // so drop the stale tmc state rather than claiming a session: the next
-      // background check is what re-arms the warning.
-      sessionExpiry.reset("tmc")
-    })
-    langs.val.on("mooc-logout", async (expected) => {
-      await authState.set("mooc", false)
-      sessionExpiry.onLogout("mooc", expected)
+      if (expected) {
+        await authState.set(false)
+        sessionExpiry.onLogout()
+        return
+      }
+      const checked = await authState.refresh()
+      if (checked.err) {
+        Logger.error("Failed to check if authenticated", checked.val)
+      }
+      sessionExpiry.onAuthChecked(authState.loggedIn)
     })
     langs.val.on("notification", (notification) => {
       void dialog.warningNotification(notification.message)
@@ -455,6 +446,7 @@ async function activateInner(
 
   const testController = readyContext && init.registerTesting(context, readyContext)
   init.registerCommands(context, actionContext, testController)
+  canOfferLogin = readyContext !== undefined
   context.subscriptions.push(
     TmcPanel.registerSerializer(context, actionContext),
     TmcPanel.showSubmissionViews(context, actionContext),
@@ -465,11 +457,11 @@ async function activateInner(
     authState.subscribe((loggedIn) => account.setLoggedIn(loggedIn))
     accountStatus = account
     const moocAccount = new MoocAuthenticationProvider({
-      isLoggedIn: () => authState.mooc,
+      isLoggedIn: () => authState.loggedIn,
       login: async () => (await login(readyContext)) === "loggedIn",
       logout: () => logoutConfirmed(readyContext),
     })
-    authState.subscribeMooc((authenticated) => moocAccount.setLoggedIn(authenticated))
+    authState.subscribe((loggedIn) => moocAccount.setLoggedIn(loggedIn))
     context.subscriptions.push(
       moocAccount,
       vscode.authentication.registerAuthenticationProvider(
@@ -522,15 +514,11 @@ async function activateInner(
   async function runMaintenancePoll(): Promise<void> {
     try {
       const checked = await authState.refresh()
-      if (checked.tmc.err) {
-        Logger.error("Failed to check if authenticated", checked.tmc.val)
-      }
-      if (checked.mooc.err) {
-        Logger.error("Failed to check if mooc authenticated", checked.mooc.val)
+      if (checked.err) {
+        Logger.error("Failed to check if authenticated", checked.val)
       }
       // Proactively catches a session dropping between polls, not just on a failed command.
-      sessionExpiry.onAuthChecked("tmc", authState.tmc)
-      sessionExpiry.onAuthChecked("mooc", authState.mooc)
+      sessionExpiry.onAuthChecked(authState.loggedIn)
       if (readyContext && authState.loggedIn) {
         void refreshEverything(readyContext, { silent: true }).catch((e) =>
           Logger.error("Background refresh failed", e),

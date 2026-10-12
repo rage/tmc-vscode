@@ -1,12 +1,11 @@
 import type { Result } from "ts-results"
-import { Ok } from "ts-results"
 
 import type { CourseIdentifier } from "../shared/shared"
 import { LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
 import { Logger } from "../utilities"
-import { toStoredMoocCourse, toStoredTmcCourse } from "../utilities/apiData"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
+import { fetchStoredCourse } from "./updateCourse"
 
 /**
  * Adds a new course to user's courses and shows it in the Courses view.
@@ -22,30 +21,13 @@ export async function addNewCourse(
   const { langs, userData, workspaceManager } = actionContext.startup
   Logger.info("Adding new course")
 
-  const fetched = await match(
-    course,
-    async (tmcCourse): Promise<Result<LocalCourseData, Error>> => {
-      const courseData = await langs.getTmcCourseData(tmcCourse.courseId)
-      return courseData.map((x) => makeTmcKind(toStoredTmcCourse(x, organizationSlug)))
-    },
-    async (mooc): Promise<Result<LocalCourseData, Error>> => {
-      const courseRes = await langs.getMoocCourseData(mooc.instanceId)
-      if (courseRes.err) {
-        return courseRes
-      }
-      const [moocCourse, slides] = courseRes.val
-
-      // Non-fatal: a failed fetch just starts the course with zeroed progress.
-      const progressRes = await langs.getMoocCourseProgress(mooc.instanceId)
-      if (progressRes.err) {
-        Logger.warn("Failed to fetch mooc course progress", progressRes.val)
-      }
-      return Ok(
-        makeMoocKind(
-          toStoredMoocCourse(moocCourse, slides, progressRes.ok ? progressRes.val : undefined),
-        ),
-      )
-    },
+  const fetched = await fetchStoredCourse(
+    langs,
+    match(
+      course,
+      (tmc) => makeTmcKind({ courseId: tmc.courseId, organization: organizationSlug }),
+      (mooc) => makeMoocKind({ courseId: mooc.instanceId }),
+    ),
   )
   if (fetched.err) {
     return fetched

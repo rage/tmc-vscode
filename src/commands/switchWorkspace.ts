@@ -21,11 +21,7 @@ export async function openCourseWorkspace(
   }
   const course = actionContext.startup.userData.getCourse(courseId)
   if (course.err) {
-    void actionContext.dialog.reportError(
-      "Failed to open the course workspace.",
-      course.val,
-      courseId.kind,
-    )
+    void actionContext.dialog.reportError("Failed to open the course workspace.", course.val)
     return
   }
   await openWorkspace(actionContext, LocalCourseData.getCourseName(course.val), course.val.kind)

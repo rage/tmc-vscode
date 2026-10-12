@@ -5,7 +5,7 @@ import type { CourseUpdateOptions } from "../actions"
 import { checkForCourseUpdates, downloadNewExercisesForCourse } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure, withOperation } from "../api/withOperation"
-import { EXERCISE_CHECK_INTERVAL, NOTIFICATION_DELAY } from "../config/constants"
+import { NOTIFICATION_DELAY } from "../config/constants"
 import { BottleneckError } from "../errors"
 import { CourseIdentifier, LocalCourseData } from "../shared/shared"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
@@ -38,10 +38,9 @@ export async function refreshEverything(
   actionContext: ReadyActionContext,
   options: { silent: boolean; isQueuedWhenBusy?: boolean } & CourseUpdateOptions,
 ): Promise<Result<void, Error>> {
-  const { silent, courseId } = options
   return withOperation(
     actionContext.dialog,
-    { failure: REFRESH_FAILED, silent, ...(courseId && { backend: courseId.kind }) },
+    { failure: REFRESH_FAILED, silent: options.silent },
     () => refresh(actionContext, options),
   )
 }
@@ -66,8 +65,7 @@ export async function refreshCourses(actionContext: ReadyActionContext): Promise
   )
 }
 
-/** When the refresh in progress started, in epoch milliseconds, if one is. */
-let runningSince: number | undefined
+let isRunning = false
 
 /** The refresh to run once the one in progress ends; no `courseId` means every course. */
 let queued: { courseId?: CourseIdentifier | undefined } | undefined
@@ -77,8 +75,7 @@ async function refresh(
   options: { silent: boolean; isQueuedWhenBusy?: boolean } & CourseUpdateOptions,
 ): Promise<Result<void, Error>> {
   const { silent, courseId, onProgress, isQueuedWhenBusy } = options
-  // A wedged refresh stops counting as running by the time the next poll wants one.
-  if (runningSince !== undefined && Date.now() - runningSince < EXERCISE_CHECK_INTERVAL) {
+  if (isRunning) {
     if (isQueuedWhenBusy) {
       const isSameCourse =
         queued === undefined ||
@@ -91,8 +88,7 @@ async function refresh(
     Logger.warn("Rejected a refresh, one is already in flight")
     return Err(new BottleneckError("A refresh is already in progress."))
   }
-  const startedAt = Date.now()
-  runningSince = startedAt
+  isRunning = true
   try {
     const refreshed = await checkForCourseUpdates(actionContext, { courseId, onProgress })
     if (refreshed.ok) {
@@ -102,9 +98,7 @@ async function refresh(
     await updateExercises(actionContext, silent || refreshFailure ? "silent" : "loud")
     return refreshFailure ? Err(refreshFailure) : Ok.EMPTY
   } finally {
-    if (runningSince === startedAt) {
-      runningSince = undefined
-    }
+    isRunning = false
     const next = queued
     queued = undefined
     if (next) {
@@ -119,7 +113,7 @@ async function refresh(
 
 /**
  * Offers, in one notification, the new exercises of every course whose reminder is due; each
- * button acts on all of those courses.
+ * button acts on all of those courses, one failing course not stopping the rest.
  */
 function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCourseData[]): void {
   const { dialog } = actionContext
@@ -146,17 +140,21 @@ function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCour
     ) =>
     (): void =>
       void withOperation(dialog, { failure: headline("a course") }, async () => {
+        const failed: [title: string, error: Error][] = []
         for (const course of offered) {
           const result = await step(course)
           if (result.err) {
-            return failure(
-              headline(LocalCourseData.getCourseTitle(course)),
-              result.val,
-              course.kind,
-            )
+            failed.push([LocalCourseData.getCourseTitle(course), result.val])
           }
         }
-        return Ok.EMPTY
+        const [first, ...others] = failed
+        if (!first) {
+          return Ok.EMPTY
+        }
+        for (const [title, error] of others) {
+          Logger.error(headline(title), error)
+        }
+        return failure(headline(failed.map(([title]) => title).join(", ")), first[1])
       })
 
   void dialog.notification(

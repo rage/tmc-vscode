@@ -148,7 +148,7 @@ function harness(
   const [dialog] = createDialogMock()
   const context = {
     ...createMockActionContext({
-      authenticated: { mooc: options.moocAuthenticated ?? true },
+      loggedIn: options.moocAuthenticated ?? true,
       startup: { langs, userData },
     }),
     dialog,

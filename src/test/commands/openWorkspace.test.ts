@@ -85,7 +85,6 @@ suite("openWorkspace command", function () {
     expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
       "Failed to open the course workspace.",
       error,
-      "mooc",
     )
     expect(executeCommand).not.toHaveBeenCalledWith("vscode.openFolder", expect.anything())
   })

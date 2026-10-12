@@ -69,7 +69,6 @@ suite("Test exercise command", function () {
     expect(context.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Testing the exercise failed.",
       cause,
-      "tmc",
     )
   })
 
@@ -81,7 +80,6 @@ suite("Test exercise command", function () {
     expect(context.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Testing the exercise failed.",
       expect.objectContaining({ message: "Local testing is not available." }),
-      "tmc",
     )
   })
 

@@ -55,10 +55,7 @@ export class AccountStatusBarItem implements vscode.Disposable {
     this._item.show()
   }
 
-  /**
-   * Follows `AuthState.loggedIn`. Also call with `true` on a courses.mooc.fi login, which ends
-   * an expiry even when a tmc session kept `loggedIn` true throughout.
-   */
+  /** Follows `AuthState.loggedIn`. */
   public setLoggedIn(isLoggedIn: boolean): void {
     if (isLoggedIn) {
       this._setStatus("loggedIn")

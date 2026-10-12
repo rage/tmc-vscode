@@ -130,7 +130,7 @@ suite("ExerciseStatusBarItem", function () {
     track(new ExerciseStatusBarItem(h.sources))
     let duringRun = ""
 
-    await exerciseOperations.run(STORED_ID, "testing", 60_000, async () => {
+    await exerciseOperations.run(STORED_ID, "testing", async () => {
       duringRun = itemOf().text
       return Ok.EMPTY
     })
@@ -144,7 +144,7 @@ suite("ExerciseStatusBarItem", function () {
     track(new ExerciseStatusBarItem(h.sources))
     let label: string | undefined
 
-    await exerciseOperations.run(STORED_ID, "submitting", 60_000, async () => {
+    await exerciseOperations.run(STORED_ID, "submitting", async () => {
       label = itemOf().accessibilityInformation?.label
       return Ok.EMPTY
     })

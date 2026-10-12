@@ -65,7 +65,7 @@ suite("Langs CLI environment", function () {
   test("a mooc command carries them too", async function () {
     const langs = new Langs("dummy-cli-path", "test-client", "1.0.0")
 
-    await langs.isMoocAuthenticated()
+    await langs.getEnrolledMoocCourses()
 
     const captured = spawnCalls[0]
     expect(captured?.env?.TMC_LANGS_MOOC_ROOT_URL).toBe("http://localhost:4001")

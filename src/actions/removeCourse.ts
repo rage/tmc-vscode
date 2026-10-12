@@ -37,11 +37,7 @@ export async function removeCourse(
   // First, so a failure leaves the course with its closed exercises and workspace intact.
   const deleteResult = await userData.deleteCourse(id)
   if (deleteResult.err) {
-    return failure(
-      `Failed to remove "${courseName}" from your courses.`,
-      deleteResult.val,
-      course.kind,
-    )
+    return failure(`Failed to remove "${courseName}" from your courses.`, deleteResult.val)
   }
 
   const unsetResult = await langs.unsetSetting(closedExercisesSettingKey(course.kind, courseName))
@@ -49,7 +45,6 @@ export async function removeCourse(
     dialog.reportError(
       `Failed to clear the record of closed exercises for "${courseName}".`,
       unsetResult.val,
-      course.kind,
     )
   }
 
@@ -60,7 +55,6 @@ export async function removeCourse(
     dialog.reportError(
       `Failed to remove the workspace file for "${courseName}".`,
       workspaceFileResult.val,
-      course.kind,
     )
   }
 

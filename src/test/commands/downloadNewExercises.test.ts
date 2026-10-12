@@ -101,7 +101,6 @@ suite("Download new exercises command", function () {
     expect(context.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Failed to read the selected course.",
       expect.objectContaining({ message: "course is missing" }),
-      "tmc",
     )
     expect(downloadNewExercisesForCourse).not.toHaveBeenCalled()
   })
@@ -115,7 +114,6 @@ suite("Download new exercises command", function () {
     expect(context.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       'Failed to download new exercises for course "python-course".',
       expect.objectContaining({ message: "connection error" }),
-      "tmc",
     )
   })
 })

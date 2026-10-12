@@ -84,7 +84,6 @@ suite("Exercise command runner", function () {
     expect(stubContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Failed to reset exercise.",
       cause,
-      "mooc",
     )
   })
 
@@ -98,7 +97,6 @@ suite("Exercise command runner", function () {
     expect(stubContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Resetting the exercise failed.",
       speechless,
-      "mooc",
     )
   })
 

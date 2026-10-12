@@ -6,9 +6,6 @@ import type { BackendKind } from "../shared/shared"
 import { Logger } from "../utilities"
 import type Langs from "./langs"
 
-/** What one {@link AuthState.refresh} observed, per backend. */
-export type AuthCheck = Record<BackendKind, Result<boolean, Error>>
-
 /**
  * The extension's single answer to "is the user logged in".
  *
@@ -17,37 +14,24 @@ export type AuthCheck = Record<BackendKind, Result<boolean, Error>>
  * Courses view, the background poll and the actions.
  */
 export interface AuthState {
-  /** Whether the tmc backend can be authenticated. */
-  readonly tmc: boolean
-  /** Whether courses.mooc.fi has a usable access token. */
-  readonly mooc: boolean
-  /**
-   * Whether either backend has a session. The two credentials are independent,
-   * and this is what gates every logged-in affordance.
-   */
+  /** Whether the user has a session; see `Langs.isAuthenticated`. */
   readonly loggedIn: boolean
   /**
-   * Asks the CLI about both backends and records what it said.
-   *
-   * A backend whose check fails keeps its previous answer — a failed check says
-   * nothing about the session — so the returned errors are for reporting, not
-   * for deciding what the state now is. The two calls run at once, so `timeout`
-   * bounds each of them and the call as a whole.
+   * Asks the CLI whether the user has a session and records the answer. A check that
+   * fails keeps the previous answer, as it says nothing about the session. Calls made
+   * while a check runs share it.
    */
-  refresh: (options?: { timeout: number }) => Promise<AuthCheck>
-  /** Records what a login or logout event just reported for one backend. */
-  set: (backend: BackendKind, authenticated: boolean) => Promise<void>
-  /** Forgets both sessions, for a wipe or a sign-out of everything. */
-  clear: () => Promise<void>
+  refresh: (options?: { timeout: number }) => Promise<Result<boolean, Error>>
+  /** Records what a login or logout just did to the session. */
+  set: (loggedIn: boolean) => Promise<void>
   /** Called whenever {@link loggedIn} changes, after the change is applied. */
   subscribe: (listener: (loggedIn: boolean) => void) => void
-  /** Called whenever {@link mooc} changes, after the change is applied. */
-  subscribeMooc: (listener: (authenticated: boolean) => void) => void
   /**
-   * Whether the user has been told the courses.mooc.fi session lacks the programming-exercise
-   * scope. Whoever reports that sets it, and a fetch the session is granted clears it.
+   * The backends whose refusal of the session the user has been told about: courses.mooc.fi
+   * granting no access to programming exercises, or tmc.mooc.fi not accepting the login.
+   * Whoever reports one adds its backend, and a fetch that backend serves removes it.
    */
-  insufficientScopeReported: boolean
+  readonly sessionRefusalsReported: Set<BackendKind>
 }
 
 /**
@@ -56,14 +40,12 @@ export interface AuthState {
  * It applies `test-my-code:LoggedIn` itself, so nothing else may set it.
  */
 export function createAuthState(langs: Result<Langs, Error>): AuthState {
-  const authenticated: Record<BackendKind, boolean> = { tmc: false, mooc: false }
-  const listeners: ((loggedIn: boolean) => void)[] = []
-  const moocListeners: ((authenticated: boolean) => void)[] = []
+  let loggedIn = false
   let applied: boolean | undefined
-  let appliedMooc = false
+  let checking: Promise<Result<boolean, Error>> | undefined
+  const listeners: ((loggedIn: boolean) => void)[] = []
 
   const apply = async (): Promise<void> => {
-    const loggedIn = authenticated.tmc || authenticated.mooc
     if (loggedIn !== applied) {
       applied = loggedIn
       await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", loggedIn)
@@ -71,58 +53,39 @@ export function createAuthState(langs: Result<Langs, Error>): AuthState {
         listener(loggedIn)
       }
     }
-    if (authenticated.mooc !== appliedMooc) {
-      appliedMooc = authenticated.mooc
-      for (const listener of moocListeners) {
-        listener(appliedMooc)
-      }
+  }
+
+  const check = async (options?: { timeout: number }): Promise<Result<boolean, Error>> => {
+    if (langs.err) {
+      Logger.warn("Could not check login status")
+      await apply()
+      return Ok(false)
     }
+    const checked = await langs.val.isAuthenticated(options)
+    if (checked.ok) {
+      loggedIn = checked.val
+    }
+    await apply()
+    return checked
   }
 
   return {
-    get tmc(): boolean {
-      return authenticated.tmc
-    },
-    get mooc(): boolean {
-      return authenticated.mooc
-    },
     get loggedIn(): boolean {
-      return authenticated.tmc || authenticated.mooc
+      return loggedIn
     },
-    async refresh(options): Promise<AuthCheck> {
-      if (langs.err) {
-        Logger.warn("Could not check login status")
-        await apply()
-        return { tmc: Ok(false), mooc: Ok(false) }
-      }
-      const [tmc, mooc] = await Promise.all([
-        langs.val.isAuthenticated(options),
-        langs.val.isMoocAuthenticated(options),
-      ])
-      if (tmc.ok) {
-        authenticated.tmc = tmc.val
-      }
-      if (mooc.ok) {
-        authenticated.mooc = mooc.val
-      }
-      await apply()
-      return { tmc, mooc }
+    refresh(options): Promise<Result<boolean, Error>> {
+      checking ??= check(options).finally(() => {
+        checking = undefined
+      })
+      return checking
     },
-    async set(backend, value): Promise<void> {
-      authenticated[backend] = value
-      await apply()
-    },
-    async clear(): Promise<void> {
-      authenticated.tmc = false
-      authenticated.mooc = false
+    async set(value): Promise<void> {
+      loggedIn = value
       await apply()
     },
     subscribe(listener): void {
       listeners.push(listener)
     },
-    subscribeMooc(listener): void {
-      moocListeners.push(listener)
-    },
-    insufficientScopeReported: false,
+    sessionRefusalsReported: new Set(),
   }
 }

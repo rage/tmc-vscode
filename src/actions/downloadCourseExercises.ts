@@ -28,7 +28,7 @@ export async function downloadCourseExercises(
     await refreshLocalExercises(actionContext),
   )
   if (refreshed.err) {
-    dialog.reportError("Failed to refresh local exercises.", refreshed.val, courseId.kind)
+    dialog.reportError("Failed to refresh local exercises.", refreshed.val)
   }
   return Ok.EMPTY
 }

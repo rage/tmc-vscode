@@ -8,7 +8,13 @@ import type Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { UserData } from "../../config/userdata"
-import { ConnectionError, ForbiddenError, InsufficientScopeError, ServerError } from "../../errors"
+import {
+  ConnectionError,
+  ForbiddenError,
+  InsufficientScopeError,
+  ServerError,
+  TmcLoginNotAcceptedError,
+} from "../../errors"
 import type {
   CombinedCourseData,
   CourseData,
@@ -25,6 +31,7 @@ import {
   MOOC_COURSE_UUID,
   MOOC_EXERCISE_UUID,
   moocCourse,
+  moocCourseProgress,
   moocExerciseSlides,
 } from "../fixtures/tmc"
 import { createMockActionContext, createMockAuthState } from "../mocks/actionContext"
@@ -125,13 +132,13 @@ suite("updateCourse action (mooc)", function () {
     expect(stored?.name).toBe("mooc-python-course")
   })
 
-  test("a failed progress fetch preserves previously known progress", async function () {
+  test("a failed fetch leaves previously known progress alone", async function () {
     await updateCourse(actionContext(), courseId)
     expect(userData.getMoocCourses()[0]?.exercises[0]?.passed).toBe(true)
 
-    tmcMockValues.getMoocCourseProgress = Err(new Error("transient"))
+    tmcMockValues.getMoocCourseData = Err(new Error("transient"))
     const result = await updateCourse(actionContext(), courseId)
-    expect(result.val).toBe(true)
+    expect(result.err).toBe(true)
     const stored = userData.getMoocCourses()[0]
     expect(stored?.exercises[0]?.passed).toBe(true)
     expect(stored?.exercises[0]?.awardedPoints).toBe(1)
@@ -165,7 +172,11 @@ suite("updateCourse action (mooc)", function () {
     await updateCourse(repeat.context, courseId)
     expect(repeat.dialog.reportError).not.toHaveBeenCalled()
 
-    tmcMockValues.getMoocCourseData = Ok([moocCourse, moocExerciseSlides])
+    tmcMockValues.getMoocCourseData = Ok({
+      course: moocCourse,
+      slides: moocExerciseSlides,
+      progress: moocCourseProgress,
+    })
     await updateCourse(actionContext(), courseId)
     tmcMockValues.getMoocCourseData = Err(new InsufficientScopeError("no scope"))
 
@@ -190,7 +201,11 @@ suite("updateCourse action (mooc)", function () {
     const context = actionContext()
     tmcMockValues.getMoocCourseData = Err(new ConnectionError("down"))
     await updateCourse(context, courseId)
-    tmcMockValues.getMoocCourseData = Ok([moocCourse, moocExerciseSlides])
+    tmcMockValues.getMoocCourseData = Ok({
+      course: moocCourse,
+      slides: moocExerciseSlides,
+      progress: moocCourseProgress,
+    })
     await updateCourse(context, courseId)
 
     expect(vi.mocked(context.coursesTree.setBackendReachable).mock.calls).toEqual([
@@ -420,6 +435,19 @@ suite("updateCourse action (tmc)", function () {
     // Unlisted: one placeholder point, awarded only if the exercise is completed.
     expect(second).toMatchObject({ id: 2, availablePoints: 1, awardedPoints: 0, passed: false })
     expect(third).toMatchObject({ id: 3, availablePoints: 1, awardedPoints: 1, passed: true })
+  })
+
+  // tmc.mooc.fi may not accept courses.mooc.fi logins yet: nothing about the course, and a
+  // background poll must not repeat it.
+  test("reports a login tmc.mooc.fi does not accept once, leaving the course alone", async function () {
+    const context = actionContext()
+    getTmcCourseData.mockResolvedValue(Err(new TmcLoginNotAcceptedError("not logged in")))
+
+    expect((await updateCourse(context, courseId)).val).toBe(false)
+    expect((await updateCourse(context, courseId)).val).toBe(false)
+
+    expect(context.dialog.reportError).toHaveBeenCalledOnce()
+    expect(userData.getTmcCourses()[0]?.title).toBe("Stale title")
   })
 
   test("marks the course disabled when the server refuses it", async function () {

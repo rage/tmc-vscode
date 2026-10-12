@@ -1,6 +1,7 @@
 import { vi } from "vitest"
 
 import Langs from "../../api/langs"
+import { CLI_PROCESS_TIMEOUT } from "../../config/constants"
 import {
   EmptyLangsResponseError,
   LangsResponseSchemaError,
@@ -259,6 +260,18 @@ suite("Langs CLI process failures", function () {
     expect((result.val as SpawnError).details).toBe("permission denied")
   })
 
+  // Chunk boundaries fall wherever the pipe's buffer does, not at line ends.
+  test("stderr split across chunks reads as it was written", async function () {
+    const langs = newLangs()
+    const pending = langs.isAuthenticated()
+    const langsProcess = lastProcess()
+    langsProcess.stderr.emit("data", "permission ")
+    langsProcess.stderr.emit("data", "denied\nsecond line")
+    langsProcess.emit("error", new Error("spawn dummy-cli-path ENOENT"))
+
+    expect(((await pending).val as SpawnError).details).toBe("permission denied\nsecond line")
+  })
+
   test("stderr past the retention cap keeps the newest output and counts the rest", async function () {
     const langs = newLangs()
     const pending = langs.isAuthenticated()
@@ -417,7 +430,7 @@ suite("Langs CLI process output", function () {
   test("status updates reach the caller", async function () {
     const langs = newLangs()
     const deviceCodes: string[] = []
-    const login = langs.authenticateMooc((info) => deviceCodes.push(info.user_code))
+    const login = langs.authenticate((info) => deviceCodes.push(info.user_code))
     const langsProcess = lastProcess()
     writeStdout(
       langsProcess,
@@ -448,7 +461,7 @@ suite("Langs CLI process output", function () {
 suite("Langs CLI process cancellation", function () {
   test("an interrupted process is reported as killed", async function () {
     const langs = newLangs()
-    const login = langs.authenticateMooc(() => {})
+    const login = langs.authenticate(() => {})
     const langsProcess = lastProcess()
     login.interrupt()
     endProcess(langsProcess)
@@ -460,7 +473,7 @@ suite("Langs CLI process cancellation", function () {
 
   test("interrupting a process that already exited signals nothing", async function () {
     const langs = newLangs()
-    const login = langs.authenticateMooc(() => {})
+    const login = langs.authenticate(() => {})
     const langsProcess = lastProcess()
     endProcess(langsProcess)
     await login.result
@@ -472,13 +485,44 @@ suite("Langs CLI process cancellation", function () {
 
   test("interrupting a process that failed to start signals nothing", async function () {
     const langs = newLangs()
-    const login = langs.authenticateMooc(() => {})
+    const login = langs.authenticate(() => {})
     const langsProcess = lastProcess()
     langsProcess.emit("error", Object.assign(new Error("spawn ENOENT"), { errno: -2 }))
     await login.result
 
     login.interrupt()
     expect(killedProcessTrees()).toEqual([])
+  })
+
+  test("a command with no limit of its own is killed after the default one", async function () {
+    vi.useFakeTimers()
+    try {
+      const langs = newLangs()
+      const pending = langs.listLocalExercises()
+      const langsProcess = lastProcess()
+      vi.advanceTimersByTime(CLI_PROCESS_TIMEOUT)
+
+      expect((await pending).val).toBeInstanceOf(TimeoutError)
+      expect(killedProcessTrees()).toContain(langsProcess.pid)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("moving the projects directory is never killed for taking long", async function () {
+    vi.useFakeTimers()
+    try {
+      const langs = newLangs()
+      const moving = langs.moveProjectsDirectory("/new")
+      const langsProcess = lastProcess()
+      vi.advanceTimersByTime(24 * 60 * 60 * 1000)
+
+      expect(killedProcessTrees()).toEqual([])
+      endProcess(langsProcess)
+      await moving
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   test("a process that outlives its timeout is killed and reported as a timeout", async function () {
@@ -500,7 +544,7 @@ suite("Langs CLI process cancellation", function () {
 
   test("killAllProcesses kills an in-flight submit's process tree", async function () {
     const langs = newLangs()
-    const submitting = langs.submitTmcExerciseToPaste(101, "/ex")
+    const submitting = langs.paste(ExerciseIdentifier.from(101), "/ex")
     const langsProcess = lastProcess()
 
     langs.killAllProcesses()
@@ -524,7 +568,7 @@ suite("Langs CLI process cancellation", function () {
 
   test("killAllProcesses leaves a download alone, so it can't be cut in half", async function () {
     const langs = newLangs()
-    const downloading = langs.downloadExercises([ExerciseIdentifier.from(1)], false, () => {})
+    const downloading = langs.downloadTmcExercises([1], false, () => {})
     const langsProcess = lastProcess()
 
     langs.killAllProcesses()
@@ -536,7 +580,7 @@ suite("Langs CLI process cancellation", function () {
 
   test("killAllProcesses stops tracking a process once it settles", async function () {
     const langs = newLangs()
-    const pasting = langs.submitTmcExerciseToPaste(101, "/ex")
+    const pasting = langs.paste(ExerciseIdentifier.from(101), "/ex")
     const langsProcess = lastProcess()
     endProcess(langsProcess)
     await pasting

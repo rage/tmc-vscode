@@ -3,7 +3,6 @@ import { Err, Ok } from "ts-results"
 import type * as vscode from "vscode"
 
 import type { WorkspaceExercise } from "../api/workspaceManager"
-import { CLI_PROCESS_TIMEOUT } from "../config/constants"
 import { findStoredExercise } from "../config/userdata"
 import type { RunResult, StyleValidationResult } from "../shared/langsSchema"
 import { LocalCourseData, LocalCourseExercise } from "../shared/shared"
@@ -59,7 +58,6 @@ export async function testExercise(
   return exerciseOperations.run(
     LocalCourseExercise.getId(courseExercise),
     "testing",
-    2 * CLI_PROCESS_TIMEOUT + 30_000,
     async (): Promise<Result<ExerciseTestOutcome, Error>> => {
       const { process: testRunner, interrupt: testInterrupt } = langs.runTests(
         exercisePath,

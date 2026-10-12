@@ -130,7 +130,7 @@ function setup(
   const [dialog] = createDialogMock()
   const actionContext: ReadyActionContext = {
     ...createMockActionContext({
-      authenticated: { tmc: options.loggedIn ?? true, mooc: options.loggedIn ?? true },
+      loggedIn: options.loggedIn ?? true,
       startup: {
         aiUseGate: { refusal: async () => options.refusal } as unknown as AiUseGate,
         langs: {

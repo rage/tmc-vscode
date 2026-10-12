@@ -7,7 +7,7 @@ import type { UserData } from "../../config/userdata"
 import type { LocalCourseData } from "../../shared/shared"
 import { CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
 import type { MoocLocalCourseData } from "../../storage/data"
-import { createMockActionContext, createMockAuthState } from "../mocks/actionContext"
+import { createMockActionContext } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
 import type { UserDataMockValues } from "../mocks/userdata"
@@ -55,13 +55,8 @@ suite("checkForExerciseUpdates action", function () {
   let userDataMock: UserData
   let userDataMockValues: UserDataMockValues
 
-  const actionContext = (authenticated?: {
-    tmc?: boolean
-    mooc?: boolean
-  }): ReadyActionContext => ({
-    ...createMockActionContext({ startup: { langs: tmcMock, userData: userDataMock } }),
-    authState: createMockAuthState(authenticated),
-  })
+  const actionContext = (): ReadyActionContext =>
+    createMockActionContext({ startup: { langs: tmcMock, userData: userDataMock } })
 
   beforeEach(function () {
     ;[tmcMock, tmcMockValues] = createTMCMock()
@@ -74,6 +69,10 @@ suite("checkForExerciseUpdates action", function () {
   })
 
   test("should respect forceRefresh option", async function () {
+    userDataMockValues.getCourses = [
+      ...userDataMockValues.getCourses,
+      makeMoocKind(moocCourse) as LocalCourseData,
+    ]
     for (const forceRefresh of [true, false]) {
       await checkForExerciseUpdates(actionContext(), { forceRefresh })
       expect(tmcMock.checkExerciseUpdates).toHaveBeenCalledWith(
@@ -143,17 +142,25 @@ suite("checkForExerciseUpdates action", function () {
     expect(result).toEqual({ outdated: [tmcOutdated], failures: [] })
   })
 
-  // The shared auth state is the only thing asked; a check here would be a second
-  // cold CLI start for a fact the extension already holds.
-  test("should skip the mooc check entirely when not authenticated", async function () {
+  test("asks only the backends that hold some of the user's courses", async function () {
+    const result = await checkForExerciseUpdates(actionContext())
+    expect(result.outdated).toEqual([tmcOutdated])
+    expect(tmcMock.checkExerciseUpdates).not.toHaveBeenCalledWith("mooc", expect.anything())
+  })
+
+  test("checks the backends at once", async function () {
     userDataMockValues.getCourses = [
       ...userDataMockValues.getCourses,
       makeMoocKind(moocCourse) as LocalCourseData,
     ]
-    tmcMockValues.moocExerciseUpdates = Ok([ExerciseIdentifier.from("mooc-ex-1")])
-    const result = await checkForExerciseUpdates(actionContext({ mooc: false }))
-    expect(result.outdated).toEqual([tmcOutdated])
-    expect(tmcMock.checkExerciseUpdates).not.toHaveBeenCalledWith("mooc", expect.anything())
-    expect(tmcMock.isMoocAuthenticated).not.toHaveBeenCalled()
+    const started: string[] = []
+    vi.mocked(tmcMock.checkExerciseUpdates).mockImplementation(async (backend) => {
+      started.push(backend)
+      await Promise.resolve()
+      started.push(`${backend} done`)
+      return Ok([])
+    })
+    await checkForExerciseUpdates(actionContext())
+    expect(started.slice(0, 2)).toEqual(["tmc", "mooc"])
   })
 })
