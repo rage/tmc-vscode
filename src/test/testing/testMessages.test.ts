@@ -79,6 +79,23 @@ suite("stack traces of failed tests", function () {
     expect(frames).toEqual([{ label: "Hello$Inner.run", file: source, line: 4 }])
   })
 
+  test("a frame's class loader and module prefix is not part of its class", async function () {
+    const source = writeSource("src/fi/helsinki/Hello.java")
+
+    const { frames } = await parseStackTrace(
+      [
+        "\tat app//fi.helsinki.Hello.greet(Hello.java:4)",
+        "\tat java.base/java.lang.Thread.run(Thread.java:1583)",
+      ],
+      exercisePath,
+    )
+
+    expect(frames).toEqual([
+      { label: "fi.helsinki.Hello.greet", file: source, line: 4 },
+      { label: "java.lang.Thread.run" },
+    ])
+  })
+
   test("never looks for the JDK's or a test framework's classes in the exercise", async function () {
     const findFile = vi.fn(createSourceFileFinder(exercisePath))
 

@@ -25,8 +25,10 @@ const PYTHON_FRAME = /^\s*File "(?<file>[^"]+)", line (?<line>\d+)(?:, in (?<lab
 // `Hello.java:42: fi.helsinki.Hello.greet`, from tmc-langs' Java plugin; the file is omitted
 // when unknown.
 const TMC_JAVA_FRAME = /^(?:(?<file>[\w$]+\.java):)?(?<line>-?\d+): (?<method>[\w$.<>]+)$/
-// `at fi.helsinki.Hello.greet(Hello.java:42)`, Java's own format.
-const JAVA_FRAME = /^\s*at (?<method>[\w$.<>/]+)\((?<file>[\w$]+\.java):(?<line>\d+)\)$/
+// `at fi.helsinki.Hello.greet(Hello.java:42)`, Java's own format, whose method may carry a
+// `loader/module@version/` prefix such as `app//` or `java.base/`.
+const JAVA_FRAME =
+  /^\s*at (?:[\w$.@-]*\/){0,2}(?<method>[\w$.<>]+)\((?<file>[\w$]+\.java):(?<line>\d+)\)$/
 // The JDK's and the test frameworks' classes, which an exercise's sources never hold.
 const LIBRARY_CLASS = /^(?:java|javax|jdk|sun|com\.sun|org\.junit|junit|org\.hamcrest)\./
 
