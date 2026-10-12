@@ -174,7 +174,7 @@ suite("TmcPanel initialization guards", () => {
 })
 
 suite("initializationErrorHelpPanel", () => {
-  test("carries each failed service's message, keyed by the service", () => {
+  test("lists each failed service, named for the student, with the CLI hint on tmc-langs", () => {
     const actionContext = createDegradedContext({
       failures: {
         langs: new Error("langs offline"),
@@ -184,38 +184,21 @@ suite("initializationErrorHelpPanel", () => {
 
     const panel = initializationErrorHelpPanel(actionContext, createMockContext())
 
-    expect(path.basename(panel.cliFolder)).toBe("cli")
-    expect(panel.initializationErrors).toMatchObject({
-      tmc: { error: "langs offline" },
-      userData: { error: "corrupt user data" },
-    })
+    expect(panel.failures).toEqual([
+      {
+        service: "tmc-langs",
+        error: "langs offline",
+        stack: expect.any(String),
+        hint: expect.stringContaining(`${path.sep}cli'`),
+      },
+      { service: "user data", error: "corrupt user data", stack: expect.any(String) },
+    ])
   })
 
   test("a ready startup carries no initialization failures", () => {
     const panel = initializationErrorHelpPanel(createMockActionContext(), createMockContext())
 
-    expect(panel.initializationErrors).toEqual({
-      tmc: null,
-      userData: null,
-      workspaceManager: null,
-      resources: null,
-      exerciseDecorationProvider: null,
-    })
-  })
-
-  test("a service absent from the failures map is null, not empty or crashing", () => {
-    // Only `langs` failed; the root cause never touched the other four, which is
-    // distinct from a service that ran and failed itself.
-    const actionContext = createDegradedContext({ failures: { langs: new Error("langs offline") } })
-
-    const panel = initializationErrorHelpPanel(actionContext, createMockContext())
-
-    expect(panel.initializationErrors).toMatchObject({
-      userData: null,
-      workspaceManager: null,
-      resources: null,
-      exerciseDecorationProvider: null,
-    })
+    expect(panel.failures).toEqual([])
   })
 
   test("folds a failure's cause into the message", () => {
@@ -225,9 +208,7 @@ suite("initializationErrorHelpPanel", () => {
 
     const panel = initializationErrorHelpPanel(actionContext, createMockContext())
 
-    expect(panel.initializationErrors.tmc).toMatchObject({
-      error: "langs offline: network unreachable",
-    })
+    expect(panel.failures[0]).toMatchObject({ error: "langs offline: network unreachable" })
   })
 })
 
