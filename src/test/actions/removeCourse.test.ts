@@ -92,7 +92,7 @@ suite("removeCourse action", function () {
     const result = await removeCourse(actionContext, CourseIdentifier.from(1))
 
     expect(result.ok).toBe(true)
-    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(expect.any(String), error, "tmc")
+    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(expect.any(String), error)
     expect(deleteCourse).toHaveBeenCalled()
   })
 

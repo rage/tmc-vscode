@@ -16,7 +16,6 @@ import type {
 } from "../shared/shared"
 import { WebviewToExtensionSchema } from "../shared/shared"
 import { Logger } from "../utilities"
-import { backendOf } from "./routes"
 import { toWebviewError } from "./webviewError"
 
 /** A message addressed to one panel; `setPanel` is the transport's own. */
@@ -114,7 +113,7 @@ export async function dispatch(
         request,
         result.ok
           ? { ok: true, value: result.val }
-          : { ok: false, error: toWebviewError(result.val, backendOf(context.host.route)) },
+          : { ok: false, error: toWebviewError(result.val) },
       )
     }
   } catch (error) {
@@ -126,7 +125,7 @@ export async function dispatch(
     if (request) {
       reply(context.host, request, {
         ok: false,
-        error: toWebviewError(error, backendOf(context.host.route)),
+        error: toWebviewError(error),
       })
     }
   }

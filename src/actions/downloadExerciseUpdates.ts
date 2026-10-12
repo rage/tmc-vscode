@@ -64,13 +64,7 @@ export async function downloadExerciseUpdates(
 
   const refreshed = await refreshLocalExercises(actionContext)
   if (refreshed.err) {
-    const backends = new Set(updates.map((x) => x.courseId.kind))
-    const [backend] = backends
-    actionContext.dialog.reportError(
-      "Failed to refresh local exercises.",
-      refreshed.val,
-      backends.size === 1 ? backend : undefined,
-    )
+    actionContext.dialog.reportError("Failed to refresh local exercises.", refreshed.val)
   }
   return Ok.EMPTY
 }

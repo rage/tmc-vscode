@@ -156,12 +156,12 @@ async function download(
     return results
   }
 
-  const failedLegs: [Error, BackendKind][] = []
+  const failedLegs: Error[] = []
   const exerciseReasons: string[][] = []
   for (const { backend, result } of legs) {
     if (result.err) {
       Logger.error(`Failed to download exercises from ${backendName(backend)}`, result.val)
-      failedLegs.push([result.val, backend])
+      failedLegs.push(result.val)
       continue
     }
     const { downloaded, skipped, failed } = result.val
@@ -182,8 +182,10 @@ async function download(
   downloadFailures.record(results.failed, results.successful)
   if (results.failed.length > 0) {
     const names = results.failed.map((id) => exerciseName(actionContext, id))
-    const [cause, backend] = failureCause(failedLegs, exerciseReasons)
-    dialog.reportError(`Failed to download ${describeExercises(names)}.`, cause, backend)
+    dialog.reportError(
+      `Failed to download ${describeExercises(names)}.`,
+      failureCause(failedLegs, exerciseReasons),
+    )
   }
   return results
 }
@@ -194,23 +196,15 @@ async function download(
  * A backend that failed as a whole is the cause worth naming, preferring one whose
  * presentation carries a remedy (e.g. "Log in"); otherwise the per-exercise reasons.
  */
-function failureCause(
-  failedLegs: [Error, BackendKind][],
-  exerciseReasons: string[][],
-): [Error, BackendKind | undefined] {
-  const leg =
-    failedLegs.find(([error, backend]) => presentationFor(error, backend).actions.length > 0) ??
-    failedLegs[0]
+function failureCause(failedLegs: Error[], exerciseReasons: string[][]): Error {
+  const leg = failedLegs.find((error) => presentationFor(error).actions.length > 0) ?? failedLegs[0]
   if (leg) {
     return leg
   }
   const reasons = [...new Set(exerciseReasons.flat().filter((reason) => reason !== ""))]
-  return [
-    new ExerciseUpdateError(
-      reasons.length > 0 ? reasons.join("; ") : "tmc-langs did not report them as downloaded",
-    ),
-    undefined,
-  ]
+  return new ExerciseUpdateError(
+    reasons.length > 0 ? reasons.join("; ") : "tmc-langs did not report them as downloaded",
+  )
 }
 
 /** The name the student knows `exerciseId` by, or its id if no stored course has it. */

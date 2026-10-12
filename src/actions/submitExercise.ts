@@ -192,7 +192,7 @@ async function waitForMoocGrading(
     return {
       recorded: undefined,
       view: {
-        ...gradingUnavailableView(toWebviewError(waited.val, "mooc")),
+        ...gradingUnavailableView(toWebviewError(waited.val)),
         submissionUrl: grading.exercisePageUrl,
       },
     }
@@ -255,7 +255,7 @@ async function showOutcome(
             recorded.awardedPoints,
           )
     if (written.err) {
-      dialog.reportError("Failed to record the grading.", written.val, exercise.backend)
+      dialog.reportError("Failed to record the grading.", written.val)
     } else {
       exerciseDecorationProvider.updateDecorationsForExercises(exercise)
     }
@@ -337,7 +337,7 @@ export async function submitExercise(
     const outcome = await submit(submission)
     if (outcome.err) {
       Logger.error("Exercise submission failed", outcome.val)
-      const error = toWebviewError(outcome.val, exercise.backend)
+      const error = toWebviewError(outcome.val)
       showSubmissionView(submission.panel, submitFailedView(error))
       return Ok.EMPTY
     }

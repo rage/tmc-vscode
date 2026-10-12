@@ -158,7 +158,6 @@ suite("downloadOrUpdateExercises action", function () {
     expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
       "Failed to download 2 exercises: hello_world, other_world.",
       error,
-      "tmc",
     )
   })
 
@@ -181,7 +180,6 @@ suite("downloadOrUpdateExercises action", function () {
     expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
       "Failed to download 2 exercises: hello_world, other_world.",
       expect.objectContaining({ message: "checksum mismatch" }),
-      undefined,
     )
   })
 
@@ -204,7 +202,6 @@ suite("downloadOrUpdateExercises action", function () {
     expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
       "Failed to download 2 exercises: hello_world, mooc-exercise.",
       moocError,
-      "mooc",
     )
   })
 
@@ -360,7 +357,6 @@ suite("downloadOrUpdateExercises action", function () {
     expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
       "Failed to download 2 exercises: exercise-uuid-3, exercise-uuid-4.",
       moocError,
-      "mooc",
     )
     expect(result.successful).toEqual([])
     expect(result.failed).toEqual([

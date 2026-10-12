@@ -59,11 +59,7 @@ export async function updateExercises(
     for (const { backend, error } of failures.slice(1)) {
       Logger.error(`Failed to check ${backendName(backend)} for exercise updates.`, error)
     }
-    void dialog.reportError(
-      `Failed to check ${sites} for exercise updates.`,
-      firstFailure.error,
-      failures.length === 1 ? firstFailure.backend : undefined,
-    )
+    void dialog.reportError(`Failed to check ${sites} for exercise updates.`, firstFailure.error)
   }
 
   const now = Date.now()

@@ -38,10 +38,9 @@ export async function refreshEverything(
   actionContext: ReadyActionContext,
   options: { silent: boolean; isQueuedWhenBusy?: boolean } & CourseUpdateOptions,
 ): Promise<Result<void, Error>> {
-  const { silent, courseId } = options
   return withOperation(
     actionContext.dialog,
-    { failure: REFRESH_FAILED, silent, ...(courseId && { backend: courseId.kind }) },
+    { failure: REFRESH_FAILED, silent: options.silent },
     () => refresh(actionContext, options),
   )
 }
@@ -144,11 +143,7 @@ function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCour
         for (const course of offered) {
           const result = await step(course)
           if (result.err) {
-            return failure(
-              headline(LocalCourseData.getCourseTitle(course)),
-              result.val,
-              course.kind,
-            )
+            return failure(headline(LocalCourseData.getCourseTitle(course)), result.val)
           }
         }
         return Ok.EMPTY

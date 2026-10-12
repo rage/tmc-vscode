@@ -964,6 +964,19 @@ suite("Langs error-kind mapping", function () {
     }
   })
 
+  test("an error names the backend the command talked to", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, () => Ok(errorOutput("server-error", "boom", ["trace"], 503)))
+
+    const mooc = await langs.getEnrolledMoocCourses()
+    const tmc = await langs.getTmcOrganizations()
+    const local = await langs.listLocalExercises()
+
+    expect((mooc.val as BaseError).backend).toBe("mooc")
+    expect((tmc.val as BaseError).backend).toBe("tmc")
+    expect((local.val as BaseError).backend).toBeUndefined()
+  })
+
   test("a crashed process is reported as an error", async function () {
     const langs = newLangs()
     stubSpawn(langs, () => Ok({ ...dataOutput("mooc-courses", []), status: "crashed" }))

@@ -159,9 +159,9 @@ function failureMessage(error: Error): [message: string, error?: Error] {
     return [`Could not reach ${SITE}. Check your internet connection.`, error]
   }
   if (error instanceof ServerError) {
-    return [presentationFor(error, "mooc").message, error]
+    return [presentationFor(error).message, error]
   }
-  return [`Logging in to ${SITE} failed. ${presentationFor(error, "mooc").message}`, error]
+  return [`Logging in to ${SITE} failed. ${presentationFor(error).message}`, error]
 }
 
 function reportFailure(actionContext: ReadyActionContext, message: string, error?: Error): void {

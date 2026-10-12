@@ -279,7 +279,10 @@ suite("login command", function () {
     const h = harness()
     const outcome = login(h.context)
     await settle()
-    const error = Object.assign(new ServerError("HTTP error 503 …"), { httpStatus: 503 })
+    const error = Object.assign(new ServerError("HTTP error 503 …"), {
+      httpStatus: 503,
+      backend: "mooc" as const,
+    })
 
     h.logins[0]?.finish(Err(error))
 

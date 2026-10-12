@@ -202,7 +202,6 @@ suite("refreshEverything reporting", function () {
     expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Failed to check for course updates.",
       expect.objectContaining({ message: expect.stringContaining("course-1") }),
-      undefined,
     )
     expect(headlineLogs()).toHaveLength(0)
   })
@@ -308,7 +307,6 @@ suite("refreshEverything's new-exercises prompt", function () {
       expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
         "Failed to download the new exercises of Course 1.",
         expect.objectContaining({ message: "disk full" }),
-        "tmc",
       ),
     )
   })
@@ -345,7 +343,6 @@ suite("refreshEverything's new-exercises prompt", function () {
       expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
         "Failed to postpone the reminder for Course 1.",
         expect.objectContaining({ message: "storage full" }),
-        "tmc",
       ),
     )
   })

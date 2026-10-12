@@ -180,9 +180,12 @@ function loggableArg(arg: string): string {
 /** Every request a submit or paste makes names the exercise, so a 404 means it is gone. */
 function exerciseGoneOn404(error: Error, backend: BackendKind): Error {
   return error instanceof NotFoundError
-    ? new ExerciseNotFoundError(
-        `This exercise no longer exists on ${backendName(backend)}.`,
-        error.details,
+    ? Object.assign(
+        new ExerciseNotFoundError(
+          `This exercise no longer exists on ${backendName(backend)}.`,
+          error.details,
+        ),
+        { backend },
       )
     : error
 }
@@ -1305,7 +1308,9 @@ export default class Langs {
     }
     return {
       result: result.then((res) =>
-        res.andThen((x) => this._checkLangsResponse(x, outputDataKind, auth, getStderr())),
+        res
+          .andThen((x) => this._checkLangsResponse(x, outputDataKind, auth, getStderr()))
+          .mapErr((error) => Object.assign(error, { backend: langsArgs.backend })),
       ),
       interrupt,
     }

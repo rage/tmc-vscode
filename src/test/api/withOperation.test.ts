@@ -30,51 +30,30 @@ suite("withOperation", function () {
     expect(notificationCount()).toBe(0)
   })
 
-  test("reports a plain Err under the options' headline and backend", async function () {
+  test("reports a plain Err under the options' headline", async function () {
     const error = new Error("langs exited with 1")
 
-    const result = await withOperation(
-      dialog,
-      { failure: "Failed to add the course.", backend: "tmc" },
-      async () => Err(error),
+    const result = await withOperation(dialog, { failure: "Failed to add the course." }, async () =>
+      Err(error),
     )
 
     expect(result.val).toBe(error)
-    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to add the course.",
-      error,
-      "tmc",
-    )
+    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith("Failed to add the course.", error)
     expect(notificationCount()).toBe(1)
   })
 
   test("leads with a failure's own headline, reporting its cause as the detail", async function () {
     const cause = new Error("langs exited with 1")
 
-    await withOperation(dialog, { failure: "Failed.", backend: "tmc" }, async () =>
-      failure("Failed to log out of courses.mooc.fi.", cause, "mooc"),
+    await withOperation(dialog, { failure: "Failed." }, async () =>
+      failure("Failed to log out of courses.mooc.fi.", cause),
     )
 
     expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Failed to log out of courses.mooc.fi.",
       cause,
-      "mooc",
     )
     expect(notificationCount()).toBe(1)
-  })
-
-  test("falls back to the options' backend when a failure names none", async function () {
-    const cause = new Error("boom")
-
-    await withOperation(dialog, { failure: "Failed.", backend: "tmc" }, async () =>
-      failure("Failed to reset exercise.", cause),
-    )
-
-    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to reset exercise.",
-      cause,
-      "tmc",
-    )
   })
 
   test("shows a failure without a cause as its headline alone", async function () {
@@ -98,7 +77,7 @@ suite("withOperation", function () {
 
     expect(result.err).toBe(true)
     expect(result.val).toBe(thrown)
-    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith("Failed to wipe.", thrown, undefined)
+    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith("Failed to wipe.", thrown)
   })
 
   test("turns a thrown non-Error into an Error", async function () {
@@ -145,7 +124,7 @@ suite("withOperation", function () {
 
   test("leaves the operation's own warnings visible when silent", async function () {
     await withOperation(dialog, { failure: "Failed.", silent: true }, async () => {
-      void dialog.reportError("Log in again.", new InsufficientScopeError("scope"), "mooc")
+      void dialog.reportError("Log in again.", new InsufficientScopeError("scope"))
       return Err(new Error("offline"))
     })
 
@@ -231,7 +210,7 @@ suite("withOperation", function () {
     )
 
     expect(result.val).toBe(thrown)
-    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith("Failed.", thrown, undefined)
+    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith("Failed.", thrown)
   })
 
   test("shows no progress notification unless asked", async function () {

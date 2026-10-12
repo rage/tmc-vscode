@@ -1,4 +1,3 @@
-import type { BackendKind } from "./shared/shared"
 import { backendName, BaseError } from "./shared/shared"
 
 export class AuthorizationError extends BaseError {
@@ -198,13 +197,10 @@ function userSentence(error: Error): string {
  * call site spells one out and the same failure reads the same way wherever it surfaces.
  * A class with no entry shows its own message and no buttons, which is the right answer
  * for a failure the user cannot act on. No message carries diagnostics; see
- * {@link userSentence}.
- *
- * @param backend Names the backend in the sentence, for the errors either backend can
- * raise. Omit it where the caller does not know which one, and the sentence stays
- * backend-neutral.
+ * {@link userSentence}. An error a backend raised names that backend where it matters.
  */
-export function presentationFor(error: Error, backend?: BackendKind): ErrorPresentation {
+export function presentationFor(error: Error): ErrorPresentation {
+  const backend = error instanceof BaseError ? error.backend : undefined
   const reported = userSentence(error)
   if (error instanceof AiUseRefusedError) {
     return {

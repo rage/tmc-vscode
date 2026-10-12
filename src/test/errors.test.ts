@@ -33,13 +33,13 @@ suite("presentationFor", function () {
     const unavailable = Object.assign(new ServerError(raw), { httpStatus: 503 })
     const notFound = Object.assign(new NotFoundError(raw), { httpStatus: 404 })
 
-    expect(presentationFor(unavailable, "mooc").message).toBe(
+    expect(presentationFor(Object.assign(unavailable, { backend: "mooc" })).message).toBe(
       "courses.mooc.fi returned an error (503). Try again later.",
     )
-    expect(presentationFor(unavailable).message).toBe(
+    expect(presentationFor(Object.assign(new ServerError(raw), { httpStatus: 503 })).message).toBe(
       "The server returned an error (503). Try again later.",
     )
-    expect(presentationFor(notFound, "mooc").message).toBe(
+    expect(presentationFor(Object.assign(notFound, { backend: "mooc" })).message).toBe(
       "courses.mooc.fi returned an error (404).",
     )
   })
@@ -56,7 +56,9 @@ suite("presentationFor", function () {
   })
 
   test("an unreachable server keeps its own message", function () {
-    const presentation = presentationFor(new ConnectionError("dns error"), "mooc")
+    const presentation = presentationFor(
+      Object.assign(new ConnectionError("dns error"), { backend: "mooc" }),
+    )
 
     expect(presentation.message).toBe("Dns error.")
   })
@@ -89,8 +91,10 @@ suite("presentationFor", function () {
     ])
   })
 
-  test("a dropped enrollment names the backend to re-enroll on when the caller knows it", function () {
-    const withBackend = presentationFor(new NotEnrolledError("not enrolled"), "tmc")
+  test("a dropped enrollment names the backend to re-enroll on when the error does", function () {
+    const withBackend = presentationFor(
+      Object.assign(new NotEnrolledError("not enrolled"), { backend: "tmc" as const }),
+    )
     const withoutBackend = presentationFor(new NotEnrolledError("not enrolled"))
 
     expect(withBackend.message).toContain("Enroll on the course again on TMC Server")
