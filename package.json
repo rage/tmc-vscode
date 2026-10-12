@@ -57,7 +57,6 @@
     "webview:start": "pnpm --dir webview-ui run dev"
   },
   "dependencies": {
-    "@aws-crypto/sha256-js": "^5.2.0",
     "fs-extra": "^11.2.0",
     "lodash": "^4.17.21",
     "tree-kill": "^1.2.2",

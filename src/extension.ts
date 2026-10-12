@@ -174,12 +174,10 @@ async function activateInner(
   init.registerServiceFreeCommands(context, dialog)
   const initializationErrors = makeInitializationErrorReporter(dialog)
   const reportInitializationError = initializationErrors.record
-  const cliPathResult = await init.ensureLangsUpdated(
-    cliFolder(context),
-    dialog,
-    { downloadUrl: TMC_LANGS_DL_URL, version: TMC_LANGS_VERSION },
-    context.globalState,
-  )
+  const cliPathResult = await init.ensureLangsUpdated(cliFolder(context), dialog, {
+    downloadUrl: TMC_LANGS_DL_URL,
+    version: TMC_LANGS_VERSION,
+  })
 
   // download langs if necessary
   let langs: Result<Langs, Error>

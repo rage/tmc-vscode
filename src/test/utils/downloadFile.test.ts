@@ -1,5 +1,6 @@
 import type * as http from "http"
 import * as path from "path"
+import * as zlib from "zlib"
 
 import * as fs from "fs-extra"
 import * as tmp from "tmp"
@@ -104,6 +105,40 @@ suite("downloadFile", function () {
     await downloadFile(serverUrl(server), out)
     // No open fd should remain; on Windows a leftover handle throws ENOTEMPTY.
     expect(() => fs.rmSync(path.join(tmpDir.name, "sub"), { recursive: true })).not.toThrow()
+  })
+
+  test("returns an Err when the file cannot be written", async function () {
+    const body = Buffer.alloc(1024 * 1024, 7)
+    server = await startServer((_req, res) => {
+      res.writeHead(200, { "content-length": String(body.length) })
+      res.end(body)
+    })
+    // A directory where the file should go fails the write once the body starts arriving.
+    const out = path.join(tmpDir.name, "occupied")
+    fs.mkdirSync(out)
+
+    const result = await downloadFile(serverUrl(server), out)
+
+    expect(result.err).toBe(true)
+  })
+
+  // `Content-Length` counts the compressed bytes, and fetch hands back the decompressed ones.
+  test("accepts a compressed body longer than the length it declares", async function () {
+    const body = Buffer.alloc(64 * 1024, "a")
+    const compressed = zlib.gzipSync(body)
+    server = await startServer((_req, res) => {
+      res.writeHead(200, {
+        "content-encoding": "gzip",
+        "content-length": String(compressed.length),
+      })
+      res.end(compressed)
+    })
+    const out = path.join(tmpDir.name, "compressed.bin")
+
+    const result = await downloadFile(serverUrl(server), out)
+
+    expect(result.ok).toBe(true)
+    expect(fs.readFileSync(out).equals(body)).toBe(true)
   })
 
   test("returns Err with 'Request failed' on a non-2xx response", async function () {
