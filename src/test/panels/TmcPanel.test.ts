@@ -1545,10 +1545,10 @@ suite("TmcPanel requestCourseDetailsData", () => {
 suite("TmcPanel keeps Course Details on the stored course", () => {
   function contextWithChangingCourse(): {
     actionContext: ActionContext
-    changed: vscode.EventEmitter<void>
+    changed: vscode.EventEmitter<CourseIdentifier | undefined>
     course: { current: LocalCourseData }
   } {
-    const changed = new vscode.EventEmitter<void>()
+    const changed = new vscode.EventEmitter<CourseIdentifier | undefined>()
     const course = { current: courseWith(2) }
     const actionContext = createMockActionContext({
       startup: {
@@ -1566,18 +1566,27 @@ suite("TmcPanel keeps Course Details on the stored course", () => {
     const { panel, shown } = await mountCourseDetails(actionContext)
 
     course.current = courseWith(3)
-    changed.fire()
+    changed.fire(undefined)
 
     expect(postedMessages(panel)).toEqual([
       { type: "setCourseData", target: targetOf(shown), courseData: courseWith(3) },
     ])
   })
 
+  test("sends nothing when another course changed", async () => {
+    const { actionContext, changed } = contextWithChangingCourse()
+    const { panel } = await mountCourseDetails(actionContext)
+
+    changed.fire(CourseIdentifier.from(43))
+
+    expect(postedMessages(panel)).toEqual([])
+  })
+
   test("sends nothing to a panel showing another screen", async () => {
     const { actionContext, changed } = contextWithChangingCourse()
     const { panel } = await mountSidePanel(actionContext)
 
-    changed.fire()
+    changed.fire(undefined)
 
     expect(postedMessages(panel)).toEqual([])
   })
@@ -1585,7 +1594,7 @@ suite("TmcPanel keeps Course Details on the stored course", () => {
   test("does not keep the pushed course for a reload, which asks for it anyway", async () => {
     const { actionContext, changed } = contextWithChangingCourse()
     const { panel, listener } = await mountCourseDetails(actionContext)
-    changed.fire()
+    changed.fire(undefined)
     vi.mocked(panel.webview.postMessage).mockClear()
 
     await listener({ type: "ready" })

@@ -3,9 +3,10 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import type { BackendKind, CourseIdentifier } from "../shared/shared"
+import type { BackendKind } from "../shared/shared"
 import {
   assertUnreachable,
+  CourseIdentifier,
   ExerciseIdentifier,
   LocalCourseExercise,
   makeMoocKind,
@@ -23,20 +24,49 @@ import type {
 import type { MoocStoredStanding } from "../utilities/apiData"
 import { Logger } from "../utilities/logger"
 
+interface StoredCourse<Id> {
+  exercises: { id: Id }[]
+  newExercises: Id[]
+}
+
+/**
+ * Puts `refreshed` in `courses` in place of the course stored under `id`, carrying over which
+ * exercises are new. Returns whether a course was stored there.
+ */
+function replaceIn<Id, Course extends StoredCourse<Id>>(
+  courses: Map<Id, Course>,
+  id: Id,
+  refreshed: Course,
+): boolean {
+  const stored = courses.get(id)
+  if (!stored) {
+    return false
+  }
+  const refreshedIds = new Set(refreshed.exercises.map((exercise) => exercise.id))
+  const storedIds = new Set(stored.exercises.map((exercise) => exercise.id))
+  refreshed.newExercises = _.uniq([
+    ...stored.newExercises.filter((exerciseId) => refreshedIds.has(exerciseId)),
+    ...[...refreshedIds].filter((exerciseId) => !storedIds.has(exerciseId)),
+  ])
+  courses.set(id, refreshed)
+  return true
+}
+
 export class UserData {
   private _tmcCourses: Map<number, TmcLocalCourseData>
   // keyed by course id, not slug
   private _moocCourses: Map<string, MoocLocalCourseData>
   // keyed by `ExerciseIdentifier.key`: a `Set` of id objects matches on reference only
   private _passedExercises = new Set<string>()
-  /** Tail of the serialized write chain; see {@link _updatePersistentData}. */
+  /** Tail of the serialized write chain; see {@link _enqueueWrite}. */
   private _pendingWrite: Promise<Result<void, Error>> = Promise.resolve(Ok.EMPTY)
   private _storage: Storage
-  private readonly _coursesChanged = new vscode.EventEmitter<void>()
+  private readonly _coursesChanged = new vscode.EventEmitter<CourseIdentifier | undefined>()
 
   /**
    * Fires after any change to the stored courses, as soon as memory holds it: before it is
-   * persisted, and even when persisting then fails.
+   * persisted, and even when persisting then fails. Carries the changed course, or
+   * `undefined` when any course may have changed.
    */
   public readonly onDidChangeCourses = this._coursesChanged.event
 
@@ -284,7 +314,7 @@ export class UserData {
     LocalCourseData.getExercises(data).forEach((x) =>
       this._setPassed(ExerciseIdentifier.from(x.data.id), x.data.passed),
     )
-    return this._updatePersistentData()
+    return this._updatePersistentData(LocalCourseData.getCourseId(data))
   }
 
   public async deleteCourse(id: CourseIdentifier): Promise<Result<void, Error>> {
@@ -297,109 +327,33 @@ export class UserData {
         this._moocCourses.delete(mooc.instanceId)
       },
     )
-    return this._updatePersistentData()
+    return this._updatePersistentData(id)
   }
 
-  public async updateCourse(data: LocalCourseData): Promise<Result<void, Error>> {
-    switch (data.kind) {
-      case "tmc": {
-        const course = data
-        if (!this._tmcCourses.has(course.data.id)) {
-          return Err(new Error(`No tmc course with id ${course.data.id} to update`))
-        }
-        this._tmcCourses.set(course.data.id, course.data)
-        break
-      }
-      case "mooc": {
-        const course = data
-        if (!this._moocCourses.has(course.data.id)) {
-          return Err(new Error(`No mooc course with id ${course.data.id} to update`))
-        }
-        this._moocCourses.set(course.data.id, course.data)
-        break
-      }
-      default: {
-        assertUnreachable(data)
-      }
-    }
-    return this._updatePersistentData()
-  }
-
-  public async updateExercises(
-    courseId: CourseIdentifier,
-    exercises: LocalCourseExercise[],
-  ): Promise<Result<void, Error>> {
-    const courseResult = this.getCourse(courseId)
-    if (courseResult.err) {
-      return courseResult
-    }
-    const courseData = courseResult.val
-    const courseExercises = LocalCourseData.getExercises(courseData)
-    const exerciseIds = exercises.map((exercise) => exercise.data.id)
-    // Filter out "new" exercises that no longer were in the API, and then append new data
-    courseData.data.newExercises = match(
-      courseData,
-      (tmc) =>
-        _.uniq(
-          tmc.newExercises
-            .filter((exerciseId) => exerciseIds.includes(exerciseId))
-            .concat(
-              exerciseIds
-                .filter((eid) => typeof eid === "number")
-                .filter(
-                  (newExerciseId) => !courseExercises.some((e) => e.data.id === newExerciseId),
-                ),
-            ),
-        ),
-      (mooc) =>
-        _.uniq(
-          mooc.newExercises
-            .filter((exerciseId) => exerciseIds.includes(exerciseId))
-            .concat(
-              exerciseIds
-                .filter((eid) => typeof eid === "string")
-                .filter(
-                  (newExerciseId) => !courseExercises.some((e) => e.data.id === newExerciseId),
-                ),
-            ),
-        ),
+  /**
+   * Replaces a stored course, exercises included, with a refreshed copy in one write.
+   *
+   * Exercises the stored copy lacks are recorded as new, and new exercises the refreshed
+   * copy no longer lists are dropped; the refreshed copy's own `newExercises` is ignored.
+   * Errs when the course is not stored.
+   */
+  public async replaceCourse(course: LocalCourseData): Promise<Result<void, Error>> {
+    const courseId = LocalCourseData.getCourseId(course)
+    const replaced = match(
+      course,
+      (tmc) => replaceIn(this._tmcCourses, tmc.id, tmc),
+      (mooc) => replaceIn(this._moocCourses, mooc.id, mooc),
     )
-    if (courseData.data.newExercises.length > 0) {
-      Logger.info(
-        `Found ${courseData.data.newExercises.length} new exercises for ${LocalCourseData.getNewExercises(courseData)}`,
-      )
+    if (!replaced) {
+      return Err(new Error(`No course ${CourseIdentifier.toString(courseId)} to replace`))
     }
-    exercises.forEach((x) => this._setPassed(ExerciseIdentifier.from(x.data.id), x.data.passed))
-    match(
-      courseData,
-      (tmcCourse) => {
-        tmcCourse.exercises = exercises
-          .map((e) =>
-            match(
-              e,
-              (tmc) => tmc,
-              () => undefined,
-            ),
-          )
-          .filter((e) => e !== undefined)
-      },
-      (moocCourse) => {
-        moocCourse.exercises = exercises
-          .map((e) =>
-            match(
-              e,
-              () => undefined,
-              (mooc) => mooc,
-            ),
-          )
-          .filter((e) => e !== undefined)
-      },
+    if (course.data.newExercises.length > 0) {
+      Logger.info(`${course.data.name} has ${course.data.newExercises.length} new exercises`)
+    }
+    LocalCourseData.getExercises(course).forEach((x) =>
+      this._setPassed(LocalCourseExercise.getId(x), x.data.passed),
     )
-    // `courseData.data` is the same object held by the backing map (getCourse
-    // wraps the stored reference), so the mutations above are already in place;
-    // persisting is all that's left. Calling addCourse here would err, since
-    // the course already exists.
-    return this._updatePersistentData()
+    return this._updatePersistentData(courseId)
   }
 
   public getPassed(exerciseId: ExerciseIdentifier): boolean {
@@ -476,7 +430,7 @@ export class UserData {
       courseData.data.newExercises = []
       courseData.data.notifyAfter = 0
     }
-    return this._updatePersistentData()
+    return this._updatePersistentData(courseId)
   }
 
   /**
@@ -500,7 +454,7 @@ export class UserData {
     }
     Logger.info(`Notifying user for course again at ${new Date(dateInMillis).toString()}`)
     courseData.notifyAfter = dateInMillis
-    return this._updatePersistentData()
+    return this._updatePersistentData(courseId)
   }
 
   /**
@@ -512,7 +466,7 @@ export class UserData {
     this._tmcCourses.clear()
     this._moocCourses.clear()
     this._passedExercises.clear()
-    this._coursesChanged.fire()
+    this._coursesChanged.fire(undefined)
     return this._enqueueWrite(() => this._storage.wipeStorage())
   }
 
@@ -524,8 +478,10 @@ export class UserData {
    * means the two copies have diverged and the caller must tell the user —
    * dropping it silently reverts their action at the next restart.
    */
-  private async _updatePersistentData(): Promise<Result<void, Error>> {
-    this._coursesChanged.fire()
+  private async _updatePersistentData(
+    changedCourse?: CourseIdentifier,
+  ): Promise<Result<void, Error>> {
+    this._coursesChanged.fire(changedCourse)
     const snapshot = {
       courses: Array.from(this._tmcCourses.values()),
       mooc_courses: Array.from(this._moocCourses.values()),
