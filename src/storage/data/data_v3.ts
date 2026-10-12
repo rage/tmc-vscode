@@ -36,7 +36,6 @@ export const userDataSchema = z.object({
   mooc_courses: z.array(moocLocalCourseDataSchema),
 })
 
-// data types
 export type TmcLocalCourseExercise = z.infer<typeof tmcLocalCourseExerciseSchema>
 export type TmcLocalCourseData = z.infer<typeof tmcLocalCourseDataSchema>
 export type MoocLocalCourseExercise = z.infer<typeof moocLocalCourseExerciseSchema>

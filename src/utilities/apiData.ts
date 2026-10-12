@@ -9,7 +9,7 @@ import type {
   Exercise,
   ExerciseProgress,
   MoocCourse,
-  MoocCourseProgress,
+  CourseProgress,
   TmcExerciseSlide,
 } from "../shared/langsSchema"
 import type {
@@ -61,7 +61,7 @@ export function combineTmcApiExerciseData(
  */
 export function combineMoocApiExerciseData(
   slides: TmcExerciseSlide[],
-  progress: MoocCourseProgress | undefined,
+  progress: CourseProgress | undefined,
   previousExercises: MoocLocalCourseExercise[] = [],
 ): MoocLocalCourseExercise[] {
   const progressById = new Map(progress?.exercises.map((x) => [x.exercise_id, x]) ?? [])
@@ -181,7 +181,7 @@ export function toStoredTmcCourse(
 export function toStoredMoocCourse(
   course: MoocCourse,
   slides: TmcExerciseSlide[],
-  progress: MoocCourseProgress | undefined,
+  progress: CourseProgress | undefined,
   previous?: MoocLocalCourseData,
 ): MoocLocalCourseData {
   const exercises = combineMoocApiExerciseData(slides, progress, previous?.exercises)

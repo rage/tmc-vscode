@@ -4,31 +4,24 @@ import type { LocalCourseData, LocalCourseExercise } from "../../shared/shared"
 import {
   CourseIdentifier,
   EnumSchema,
-  enumSchemaKinds,
   ExerciseIdentifier,
   LocalCourseData as LCD,
   LocalCourseExercise as LCE,
   makeMoocKind,
   makeTmcKind,
   match,
-  matchBackend,
-  matchOption,
 } from "../../shared/shared"
 
 suite("EnumSchema", function () {
-  // `EnumSchema`'s annotated return type hides zod's `.options`, so the arm list is a
-  // constant; this is what keeps it honest.
-  test("enumSchemaKinds lists exactly the kinds an enum schema accepts", function () {
+  test("accepts exactly the tmc and mooc kinds", function () {
     const schema = EnumSchema(z.object({ courseId: z.number() }), z.object({ id: z.string() }))
     const samples = {
       tmc: { kind: "tmc", data: { courseId: 1 } },
       mooc: { kind: "mooc", data: { id: "uuid" } },
     }
 
-    expect(enumSchemaKinds()).toEqual(["tmc", "mooc"])
-    for (const kind of enumSchemaKinds()) {
-      expect(schema.safeParse(samples[kind]).success).toBe(true)
-    }
+    expect(schema.safeParse(samples.tmc).success).toBe(true)
+    expect(schema.safeParse(samples.mooc).success).toBe(true)
     expect(schema.safeParse({ kind: "other", data: {} }).success).toBe(false)
   })
 })
@@ -70,13 +63,12 @@ suite("ExerciseIdentifier", function () {
     expect(ExerciseIdentifier.unwrap(ExerciseIdentifier.from("ex-uuid"))).toBe("ex-uuid")
   })
 
-  test("key and equals tell a tmc and a mooc exercise with the same id apart", function () {
+  test("key tells a tmc and a mooc exercise with the same id apart", function () {
     const tmc = ExerciseIdentifier.from(1)
     const mooc = ExerciseIdentifier.from("1")
 
     expect(ExerciseIdentifier.key(tmc)).not.toBe(ExerciseIdentifier.key(mooc))
-    expect(ExerciseIdentifier.equals(tmc, mooc)).toBe(false)
-    expect(ExerciseIdentifier.equals(mooc, ExerciseIdentifier.from("1"))).toBe(true)
+    expect(ExerciseIdentifier.key(mooc)).toBe(ExerciseIdentifier.key(ExerciseIdentifier.from("1")))
   })
 
   test("template-stringing the identifier object is the wrong way to key it", function () {
@@ -108,32 +100,6 @@ suite("match helpers", function () {
         (x) => `mooc:${x.b}`,
       ),
     ).toBe("mooc:x")
-  })
-
-  test("matchOption returns undefined for an undefined value", function () {
-    const result = matchOption(
-      undefined,
-      () => "tmc",
-      () => "mooc",
-    )
-    expect(result).toBeUndefined()
-  })
-
-  test("matchBackend dispatches on a backend-tagged object", function () {
-    expect(
-      matchBackend(
-        { backend: "tmc" as const },
-        () => "t",
-        () => "m",
-      ),
-    ).toBe("t")
-    expect(
-      matchBackend(
-        { backend: "mooc" as const },
-        () => "t",
-        () => "m",
-      ),
-    ).toBe("m")
   })
 })
 

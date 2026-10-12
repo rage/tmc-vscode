@@ -1,13 +1,5 @@
 import { z } from "zod"
 
-interface TmcKind {
-  kind: "tmc"
-}
-
-interface MoocKind {
-  kind: "mooc"
-}
-
 /**
  * Which of the two backends something belongs to.
  *
@@ -35,27 +27,11 @@ export function EnumSchema<Tmc extends z.ZodType, Mooc extends z.ZodType>(
   // return type above
   //
   // the price of the annotation is that zod's own `.options` and `.extend()` are
-  // no longer visible on the result — use `enumSchemaKinds` for the arms
+  // no longer visible on the result
   return z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("tmc"), data: tmc }),
     z.object({ kind: z.literal("mooc"), data: mooc }),
   ]) as unknown as z.ZodType<Enum<z.output<Tmc>, z.output<Mooc>>>
-}
-
-/** The arms every `EnumSchema` carries, in declaration order. */
-export function enumSchemaKinds(): readonly ["tmc", "mooc"] {
-  return ["tmc", "mooc"]
-}
-
-export namespace Enum {
-  // oxlint-disable-next-line no-shadow -- the namespace-scoped helpers deliberately reuse the module-level `unwrap` name (qualified access, e.g. Enum.unwrap)
-  export function unwrap<A, B>(e: Enum<A, B>): A | B {
-    return match(
-      e,
-      (value) => value,
-      (value) => value,
-    )
-  }
 }
 
 export const CourseIdentifierSchema = EnumSchema(
@@ -136,10 +112,6 @@ export namespace ExerciseIdentifier {
   export function key(id: ExerciseIdentifier): string {
     return `${id.kind}:${toString(id)}`
   }
-
-  export function equals(a: ExerciseIdentifier, b: ExerciseIdentifier): boolean {
-    return key(a) === key(b)
-  }
 }
 
 // helper to simulate Rust's `match`
@@ -153,24 +125,6 @@ export function match<A, B, C, D>(data: Enum<A, B>, tmc: (x: A) => C, mooc: (x: 
     }
     default: {
       assertUnreachable(data)
-    }
-  }
-}
-
-export function matchBackend<A extends { backend: BackendKind }, B, C>(
-  data: A,
-  tmc: (x: A) => B,
-  mooc: (x: A) => C,
-): B | C {
-  switch (data.backend) {
-    case "tmc": {
-      return tmc(data)
-    }
-    case "mooc": {
-      return mooc(data)
-    }
-    default: {
-      assertUnreachable(data.backend)
     }
   }
 }
@@ -195,27 +149,6 @@ export function backendName(kind: BackendKind): string {
  */
 export function pasteServiceName(kind: BackendKind): string {
   return `${backendName(kind)} paste`
-}
-
-export function matchOption<A, B, T extends Enum<A, B> | undefined>(
-  data: T,
-  tmc: (x: T & TmcKind) => A,
-  mooc: (x: T & MoocKind) => B,
-): A | B | undefined {
-  switch (data?.kind) {
-    case "tmc": {
-      return tmc(data as T & TmcKind)
-    }
-    case "mooc": {
-      return mooc(data as T & MoocKind)
-    }
-    case undefined: {
-      return undefined
-    }
-    default: {
-      assertUnreachable(data)
-    }
-  }
 }
 
 export function makeTmcKind<T>(t: T): { kind: "tmc" } & { data: T } {

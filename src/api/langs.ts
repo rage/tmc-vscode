@@ -49,7 +49,7 @@ import type {
   LocalMoocExercise,
   LocalTmcExercise,
   MoocCourse,
-  MoocCourseProgress,
+  CourseProgress,
   MoocDeviceLogin,
   MoocOldSubmissionRestore,
   ExerciseSlideSubmissionListItem,
@@ -1116,7 +1116,7 @@ export default class Langs {
   public async getMoocCourseProgress(
     courseId: string,
     options?: CacheOptions,
-  ): Promise<Result<MoocCourseProgress, Error>> {
+  ): Promise<Result<CourseProgress, Error>> {
     const res = await this._executeLangsCommand(
       { backend: "mooc", args: this._moocCmd("course-progress", "--course-id", courseId) },
       "mooc-course-progress",

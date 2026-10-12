@@ -9,7 +9,7 @@ import type {
   LocalExercise,
   LocalTmcExercise,
   MoocCourse,
-  MoocCourseProgress,
+  CourseProgress,
   TmcExerciseSlide,
 } from "../../shared/langsSchema"
 import type { BackendKind, ExerciseIdentifier } from "../../shared/shared"
@@ -49,7 +49,7 @@ export interface TMCMockValues {
   moocExerciseUpdates: Result<ExerciseIdentifier[], Error>
   isMoocAuthenticated: Result<boolean, Error>
   getMoocCourseData: Result<[MoocCourse, TmcExerciseSlide[]], Error>
-  getMoocCourseProgress: Result<MoocCourseProgress, Error>
+  getMoocCourseProgress: Result<CourseProgress, Error>
   getEnrolledMoocCourses: Result<MoocCourse[], Error>
 }
 

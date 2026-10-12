@@ -7,7 +7,7 @@ import type {
   CourseExercise,
   Exercise,
   ExerciseProgress,
-  MoocCourseProgress,
+  CourseProgress,
 } from "../../shared/langsSchema"
 import type { MoocLocalCourseData } from "../../storage/data"
 import {
@@ -201,10 +201,7 @@ suite("combineMoocApiExerciseData", function () {
 
   const [slide] = moocExerciseSlides
   /** The fixture slide's progress, completed with the given standing and points of 3. */
-  function progressOf(
-    standing: ExerciseProgress["standing"],
-    scoreGiven: number,
-  ): MoocCourseProgress {
+  function progressOf(standing: ExerciseProgress["standing"], scoreGiven: number): CourseProgress {
     return {
       course_id: MOOC_COURSE_UUID,
       exercises: [
