@@ -19,10 +19,6 @@ export default class Resources {
   private _projectsDirectory: string | undefined
 
   public constructor(
-    public readonly cssFolder: string,
-    public readonly extensionVersion: string,
-    public readonly htmlFolder: string,
-    public readonly mediaFolder: string,
     public readonly workspaceFileFolder: string,
     projectsDirectory: string | undefined,
   ) {

@@ -5,7 +5,7 @@ import type * as vscode from "vscode"
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type { Panel } from "../shared/shared"
-import { assertUnreachable, WebviewStateSchema } from "../shared/shared"
+import { assertUnreachable, CourseIdentifier, WebviewStateSchema } from "../shared/shared"
 import { submissionViews } from "../ui/submissionViews"
 import { Logger } from "../utilities"
 import { getNonce } from "./getNonce"
@@ -229,7 +229,9 @@ export class TmcPanel {
 
     if (isReady(actionContext)) {
       this._disposables.push(
-        actionContext.startup.userData.onDidChangeCourses(() => this._onDidChangeCourses()),
+        actionContext.startup.userData.onDidChangeCourses((changed) =>
+          this._onDidChangeCourses(changed),
+        ),
       )
     }
 
@@ -288,9 +290,12 @@ export class TmcPanel {
    * Keeps a CourseDetails screen and its tab title on the stored course. Not buffered: the
    * screen asks for its course whenever its document loads.
    */
-  private _onDidChangeCourses(): void {
+  private _onDidChangeCourses(changed: CourseIdentifier | undefined): void {
     const route = this._route
     if (route?.type !== "CourseDetails" || !isReady(this._actionContext)) {
+      return
+    }
+    if (changed && !CourseIdentifier.equals(changed, route.courseId)) {
       return
     }
     const course = this._actionContext.startup.userData.getCourse(route.courseId)

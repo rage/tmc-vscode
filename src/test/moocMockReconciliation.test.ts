@@ -19,7 +19,7 @@ import {
   ExerciseTaskSubmissionResult,
   ExerciseTaskSubmissionStatus,
   MoocCourse,
-  MoocCourseProgress,
+  CourseProgress,
   TmcExerciseSlide,
   TmcExerciseTask,
 } from "../shared/langsSchema"
@@ -336,7 +336,7 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     }
   })
 
-  test("GET /courses/{id}/progress validates as MoocCourseProgress", async function () {
+  test("GET /courses/{id}/progress validates as CourseProgress", async function () {
     const progressOf = async (): Promise<unknown> => {
       const res = await fetch(api(`/courses/${pythonCourse.id}/progress`))
       expect(res.status).toBe(200)
@@ -346,7 +346,7 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     // untouched: every exercise is present, zeroed and unattempted
     const untouched = (await progressOf()) as { exercises: unknown[] }
     expect(untouched.exercises.length).toBeGreaterThan(0)
-    expectValid(MoocCourseProgress, untouched, "course progress (untouched)")
+    expectValid(CourseProgress, untouched, "course progress (untouched)")
 
     // graded: score_given and completed are populated, which is the half a
     // zeroed payload cannot exercise
@@ -354,9 +354,9 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     await fetch(api(`/submissions/${taskSubmissionId}/grading`))
     await fetch(api(`/submissions/${taskSubmissionId}/grading`))
     const graded = await progressOf()
-    expectValid(MoocCourseProgress, graded, "course progress (graded)")
+    expectValid(CourseProgress, graded, "course progress (graded)")
     expect(
-      MoocCourseProgress.parse(graded).exercises.some((e) => e.completed && e.score_given > 0),
+      CourseProgress.parse(graded).exercises.some((e) => e.completed && e.score_given > 0),
     ).toBe(true)
   })
 

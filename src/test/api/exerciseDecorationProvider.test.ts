@@ -20,7 +20,7 @@ suite("ExerciseDecoratorProvider class", function () {
 
   beforeEach(function () {
     ;[userDataMock, userDataMockValues] = createUserDataMock()
-    userDataMockValues.getExerciseByName = userDataExerciseHelloWorld
+    userDataMockValues.tmcExercise = userDataExerciseHelloWorld
     ;[workspaceManagerMock, workspaceManagerMockValues] = createWorkspaceMangerMock()
     workspaceManagerMockValues.getExerciseByPath = exerciseHelloWorld
 
@@ -28,14 +28,14 @@ suite("ExerciseDecoratorProvider class", function () {
   })
 
   test("should decorate passed exercise with a filled circle", function () {
-    userDataMockValues.getExerciseByName = { ...userDataExerciseHelloWorld, passed: true }
+    userDataMockValues.tmcExercise = { ...userDataExerciseHelloWorld, passed: true }
     const decoration = exerciseDecorationProvider.provideFileDecoration(exerciseHelloWorld.uri)
     expect((decoration as vscode.FileDecoration).badge).toBe("⬤")
   })
 
   test("should decorate expired exercise with an X mark", function () {
     const expiredExercise = { ...userDataExerciseHelloWorld, deadline: "1970-01-01" }
-    userDataMockValues.getExerciseByName = expiredExercise
+    userDataMockValues.tmcExercise = expiredExercise
     const decoration = exerciseDecorationProvider.provideFileDecoration(exerciseHelloWorld.uri)
     expect((decoration as vscode.FileDecoration).badge).toBe("✗")
   })
@@ -46,19 +46,19 @@ suite("ExerciseDecoratorProvider class", function () {
       awardedPoints: 1,
       passed: false,
     }
-    userDataMockValues.getExerciseByName = partialCompletion
+    userDataMockValues.tmcExercise = partialCompletion
     const decoration = exerciseDecorationProvider.provideFileDecoration(exerciseHelloWorld.uri)
     expect((decoration as vscode.FileDecoration).badge).toBe("○")
   })
 
   test("should decorate exercise missing from UserData with information symbol", function () {
-    userDataMockValues.getExerciseByName = undefined
+    userDataMockValues.tmcExercise = undefined
     const decoration = exerciseDecorationProvider.provideFileDecoration(exerciseHelloWorld.uri)
     expect((decoration as vscode.FileDecoration).badge).toBe("ⓘ")
   })
 
   test("should not decorate valid exercise that isn't yet passed", function () {
-    userDataMockValues.getExerciseByName = { ...userDataExerciseHelloWorld, passed: false }
+    userDataMockValues.tmcExercise = { ...userDataExerciseHelloWorld, passed: false }
     const decoration = exerciseDecorationProvider.provideFileDecoration(exerciseHelloWorld.uri)
     expect(decoration).toBeUndefined()
   })
@@ -72,29 +72,29 @@ suite("ExerciseDecoratorProvider class", function () {
   })
 
   test("should decorate a mooc exercise from the mooc course data", function () {
-    // Regression: the provider used to look the exercise up with
-    // `getTmcExerciseByName` regardless of backend, so every mooc exercise missed
-    // and got the "not found in course" badge instead of its real decoration.
     workspaceManagerMockValues.getExerciseByPath = { ...exerciseHelloWorld, backend: "mooc" }
-    userDataMockValues.getExerciseByName = undefined
-    userDataMockValues.getMoocExerciseByName = {
+    userDataMockValues.tmcExercise = undefined
+    userDataMockValues.moocExercise = {
       id: "mooc-ex-1",
       name: "hello_world",
       availablePoints: 1,
       awardedPoints: 1,
       deadline: null,
       passed: true,
-      softDeadline: null,
     }
     const decoration = exerciseDecorationProvider.provideFileDecoration(exerciseHelloWorld.uri)
     expect((decoration as vscode.FileDecoration).badge).toBe("⬤")
-    expect(userDataMock.getTmcExerciseByName).not.toHaveBeenCalled()
+    expect(userDataMock.getExerciseByName).toHaveBeenCalledWith(
+      "mooc",
+      exerciseHelloWorld.courseSlug,
+      exerciseHelloWorld.exerciseSlug,
+    )
   })
 
   test("should not attempt to decorate a non-exercise", function () {
     const notExercise = vscode.Uri.file("something.txt")
     const decoration = exerciseDecorationProvider.provideFileDecoration(notExercise)
     expect(decoration).toBeUndefined()
-    expect(userDataMock.getTmcExerciseByName).not.toHaveBeenCalled()
+    expect(userDataMock.getExerciseByName).not.toHaveBeenCalled()
   })
 })

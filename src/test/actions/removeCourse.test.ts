@@ -67,12 +67,20 @@ suite("removeCourse action", function () {
 
   test("returns a removal that could not be persisted, without reporting it", async function () {
     const error = new Error("globalState is full")
-    const [actionContext, dialog] = contextWith({
-      getCourse: () => Ok(course),
-      deleteCourse: vi.fn(async () => Err(error)),
-    } as unknown as Partial<UserData>)
+    const unsetSetting = vi.fn(async () => Ok.EMPTY)
+    const [actionContext, dialog] = contextWith(
+      {
+        getCourse: () => Ok(course),
+        deleteCourse: vi.fn(async () => Err(error)),
+      } as unknown as Partial<UserData>,
+      unsetSetting,
+    )
 
     const result = await removeCourse(actionContext, CourseIdentifier.from(1))
+
+    // The course stays, so its closed exercises and workspace file must too.
+    expect(unsetSetting).not.toHaveBeenCalled()
+    expect(actionContext.startup.workspaceManager.deleteWorkspaceFile).not.toHaveBeenCalled()
 
     expect(result.err && result.val.message).toBe(
       'Failed to remove "test-python-course" from your courses.',

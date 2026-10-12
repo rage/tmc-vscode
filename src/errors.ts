@@ -119,10 +119,6 @@ export class FileSystemError extends BaseError {
   public override readonly name = "File System Error"
 }
 
-export class ExerciseMigrationError extends BaseError {
-  public override readonly name = "Exercise Migration Error"
-}
-
 export class SpawnError extends BaseError {
   public override readonly name = "Langs Spawn Error"
 }

@@ -132,7 +132,7 @@ function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCour
   const offered = courses.filter(
     (course) =>
       LocalCourseData.getNewExercises(course).length > 0 &&
-      !course.data.disabled &&
+      !LocalCourseData.isDisabled(course) &&
       course.data.notifyAfter <= now,
   )
   if (offered.length === 0) {

@@ -2,7 +2,6 @@ import { vi } from "vitest"
 
 import { findStoredExercise, UserData } from "../../config/userdata"
 import { CorruptStoredDataError } from "../../errors"
-import type { LocalCourseExercise } from "../../shared/shared"
 import {
   CourseIdentifier,
   ExerciseIdentifier,
@@ -43,7 +42,6 @@ function moocExercise(
     deadline: null,
     name: "mooc_hello",
     passed: false,
-    softDeadline: null,
     ...overrides,
   }
 }
@@ -87,13 +85,18 @@ function moocCourse(
     ],
     availablePoints: 2,
     awardedPoints: 0,
-    perhapsExamMode: false,
     newExercises: [],
     notifyAfter: 0,
-    disabled: false,
-    materialUrl: null,
     ...overrides,
   }
+}
+
+function storedTmcCourse(userData: UserData, courseId: number): storage.TmcLocalCourseData {
+  const course = userData.getCourse(makeTmcKind({ courseId })).unwrap()
+  if (course.kind !== "tmc") {
+    throw new Error(`Course ${courseId} is not a tmc course`)
+  }
+  return course.data
 }
 
 async function makeUserData(data: storage.UserData): Promise<[UserData, Storage]> {
@@ -146,36 +149,20 @@ suite("UserData passed-state (Bug 1 regression)", function () {
     expect(userData.getPassed(ExerciseIdentifier.from("1"))).toBe(false)
   })
 
-  test("updateExercises flips passed-state on and off", async function () {
+  test("replaceCourse flips passed-state on and off", async function () {
     const [userData] = await makeUserData({
       courses: [tmcCourse({ exercises: [tmcExercise({ id: 1, passed: false })] })],
       mooc_courses: [],
     })
-    const passed: LocalCourseExercise = makeTmcKind(tmcExercise({ id: 1, passed: true }))
-    await userData.updateExercises(CourseIdentifier.from(0), [passed])
+    await userData.replaceCourse(
+      makeTmcKind(tmcCourse({ exercises: [tmcExercise({ id: 1, passed: true })] })),
+    )
     expect(userData.getPassed(ExerciseIdentifier.from(1))).toBe(true)
 
-    const notPassed: LocalCourseExercise = makeTmcKind(tmcExercise({ id: 1, passed: false }))
-    await userData.updateExercises(CourseIdentifier.from(0), [notPassed])
-    expect(userData.getPassed(ExerciseIdentifier.from(1))).toBe(false)
-  })
-
-  test("updateExercises does not throw when the course already exists", async function () {
-    // Regression: updateExercises used to call addCourse on the existing
-    // course, which throws "Trying to add an already existing course" — so the
-    // whole course-update flow crashed. updateExercises is only ever called on
-    // an already-added course.
-    const [userData] = await makeUserData({
-      courses: [tmcCourse({ exercises: [tmcExercise({ id: 1, name: "hello_world" })] })],
-      mooc_courses: [],
-    })
-    const updated: LocalCourseExercise = makeTmcKind(
-      tmcExercise({ id: 1, name: "hello_world", awardedPoints: 1, passed: true }),
+    await userData.replaceCourse(
+      makeTmcKind(tmcCourse({ exercises: [tmcExercise({ id: 1, passed: false })] })),
     )
-    const result = await userData.updateExercises(CourseIdentifier.from(0), [updated])
-    expect(result.ok).toBe(true)
-    const course = userData.getTmcCourse(0)
-    expect(course.exercises.find((x) => x.id === 1)?.awardedPoints).toBe(1)
+    expect(userData.getPassed(ExerciseIdentifier.from(1))).toBe(false)
   })
 
   test("passed-state survives a persistence round-trip", async function () {
@@ -201,7 +188,7 @@ suite("UserData clearFromNewExercises (Bug 2 regression)", function () {
       mooc_courses: [],
     })
     await userData.clearFromNewExercises(CourseIdentifier.from(0), [ExerciseIdentifier.from(2)])
-    expect(userData.getTmcCourse(0).newExercises).toEqual([3, 4])
+    expect(storedTmcCourse(userData, 0).newExercises).toEqual([3, 4])
   })
 
   test("clears all new tmc exercises and resets the notify timer", async function () {
@@ -214,7 +201,7 @@ suite("UserData clearFromNewExercises (Bug 2 regression)", function () {
       ExerciseIdentifier.from(3),
       ExerciseIdentifier.from(4),
     ])
-    const course = userData.getTmcCourse(0)
+    const course = storedTmcCourse(userData, 0)
     expect(course.newExercises).toEqual([])
     expect(course.notifyAfter).toBe(0)
   })
@@ -237,14 +224,14 @@ suite("UserData clearFromNewExercises (Bug 2 regression)", function () {
       mooc_courses: [],
     })
     await userData.clearFromNewExercises(CourseIdentifier.from(0))
-    const course = userData.getTmcCourse(0)
+    const course = storedTmcCourse(userData, 0)
     expect(course.newExercises).toEqual([])
     expect(course.notifyAfter).toBe(0)
   })
 })
 
 // -------------------------------------------------------------------------------------------------
-// General UserData surface: construction, CRUD, updateExercises, persistence, both backends
+// General UserData surface: construction, CRUD, replaceCourse, persistence, both backends
 // -------------------------------------------------------------------------------------------------
 
 suite("UserData construction", function () {
@@ -270,7 +257,7 @@ suite("UserData course add/get/update/delete", function () {
     await userData.addCourse(makeTmcKind(tmcCourse({ id: 7, name: "algorithms" })))
     expect(userData.getCourse(CourseIdentifier.from(7)).unwrap().data.name).toBe("algorithms")
     expect(userData.getCourseBySlug("tmc", "algorithms").unwrap().kind).toBe("tmc")
-    expect(userData.getTmcCourseByName("algorithms")?.id).toBe(7)
+    expect(userData.getCourseBySlug("tmc", "algorithms").unwrap().data.id).toBe(7)
   })
 
   test("adds a mooc course and reads it back by identifier and slug", async function () {
@@ -342,15 +329,15 @@ suite("UserData course add/get/update/delete", function () {
     expect(userData.getCourseBySlug("mooc", "nope").err).toBe(true)
   })
 
-  test("updateCourse overwrites tmc course data", async function () {
+  test("replaceCourse overwrites tmc course data", async function () {
     const [userData] = await makeUserData({ courses: [tmcCourse({ id: 0 })], mooc_courses: [] })
-    await userData.updateCourse(makeTmcKind(tmcCourse({ id: 0, title: "Renamed" })))
-    expect(userData.getTmcCourse(0).title).toBe("Renamed")
+    await userData.replaceCourse(makeTmcKind(tmcCourse({ id: 0, title: "Renamed" })))
+    expect(storedTmcCourse(userData, 0).title).toBe("Renamed")
   })
 
-  test("updateCourse errs for a course that does not exist", async function () {
+  test("replaceCourse errs for a course that does not exist", async function () {
     const [userData] = await makeUserData({ courses: [], mooc_courses: [] })
-    const result = await userData.updateCourse(makeTmcKind(tmcCourse({ id: 5 })))
+    const result = await userData.replaceCourse(makeTmcKind(tmcCourse({ id: 5 })))
     expect(result.err).toBe(true)
   })
 
@@ -365,6 +352,12 @@ suite("UserData course add/get/update/delete", function () {
     expect(userData.getMoocCourses()).toEqual([])
   })
 
+  test("setNewExerciseNotifyAfter names a course it cannot find", async function () {
+    const [userData] = await makeUserData({ courses: [], mooc_courses: [] })
+    const result = await userData.setNewExerciseNotifyAfter(CourseIdentifier.from(5), 111)
+    expect(result.err && result.val.message).toBe("Course data missing for 5")
+  })
+
   test("setNewExerciseNotifyAfter updates the notify timer for both backends", async function () {
     const [userData] = await makeUserData({
       courses: [tmcCourse({ id: 0 })],
@@ -372,7 +365,7 @@ suite("UserData course add/get/update/delete", function () {
     })
     await userData.setNewExerciseNotifyAfter(CourseIdentifier.from(0), 111)
     await userData.setNewExerciseNotifyAfter(CourseIdentifier.from("instance-uuid-1"), 222)
-    expect(userData.getTmcCourse(0).notifyAfter).toBe(111)
+    expect(storedTmcCourse(userData, 0).notifyAfter).toBe(111)
     expect(userData.getMoocCourses()[0]?.notifyAfter).toBe(222)
   })
 })
@@ -406,7 +399,7 @@ suite("UserData change announcements", function () {
   })
 })
 
-suite("UserData updateExercises", function () {
+suite("UserData replaceCourse", function () {
   test("records genuinely new tmc exercises and replaces the exercise list", async function () {
     const [userData] = await makeUserData({
       courses: [
@@ -418,13 +411,13 @@ suite("UserData updateExercises", function () {
       ],
       mooc_courses: [],
     })
-    const exercises: LocalCourseExercise[] = [
-      makeTmcKind(tmcExercise({ id: 1 })),
-      makeTmcKind(tmcExercise({ id: 2 })),
-      makeTmcKind(tmcExercise({ id: 3, name: "new_one" })),
+    const exercises = [
+      tmcExercise({ id: 1 }),
+      tmcExercise({ id: 2 }),
+      tmcExercise({ id: 3, name: "new_one" }),
     ]
-    await userData.updateExercises(CourseIdentifier.from(0), exercises)
-    const course = userData.getTmcCourse(0)
+    await userData.replaceCourse(makeTmcKind(tmcCourse({ id: 0, exercises })))
+    const course = storedTmcCourse(userData, 0)
     expect(course.exercises.map((x) => x.id)).toEqual([1, 2, 3])
     // id 3 is new relative to the previously stored [1, 2]
     expect(course.newExercises).toEqual([3])
@@ -441,16 +434,33 @@ suite("UserData updateExercises", function () {
         }),
       ],
     })
-    const exercises: LocalCourseExercise[] = [
-      makeMoocKind(moocExercise({ id: "a" })),
-      makeMoocKind(moocExercise({ id: "b" })),
-      makeMoocKind(moocExercise({ id: "c", name: "new_mooc" })),
+    const exercises = [
+      moocExercise({ id: "a" }),
+      moocExercise({ id: "b" }),
+      moocExercise({ id: "c", name: "new_mooc" }),
     ]
-    await userData.updateExercises(CourseIdentifier.from("instance-uuid-1"), exercises)
+    await userData.replaceCourse(makeMoocKind(moocCourse({ id: "instance-uuid-1", exercises })))
     const course = userData.getMoocCourses()[0]
     expect(course?.exercises.map((x) => x.id)).toEqual(["a", "b", "c"])
     expect(course?.newExercises).toEqual(["c"])
   })
+
+  test("keeps new exercises still listed and drops ones that are gone", async function () {
+    const [userData] = await makeUserData({
+      courses: [tmcCourse({ id: 0, newExercises: [2, 3], exercises: [tmcExercise({ id: 1 })] })],
+      mooc_courses: [],
+    })
+    await userData.replaceCourse(
+      makeTmcKind(tmcCourse({ id: 0, newExercises: [], exercises: [tmcExercise({ id: 1 })] })),
+    )
+    await userData.replaceCourse(
+      makeTmcKind(
+        tmcCourse({ id: 0, exercises: [tmcExercise({ id: 1 }), tmcExercise({ id: 2 })] }),
+      ),
+    )
+    expect(storedTmcCourse(userData, 0).newExercises).toEqual([2])
+  })
+
   test("lists an exercise once when it was already new but not yet stored", async function () {
     const [userData] = await makeUserData({
       courses: [tmcCourse({ id: 0, newExercises: [3], exercises: [tmcExercise({ id: 1 })] })],
@@ -462,16 +472,39 @@ suite("UserData updateExercises", function () {
         }),
       ],
     })
-    await userData.updateExercises(CourseIdentifier.from(0), [
-      makeTmcKind(tmcExercise({ id: 1 })),
-      makeTmcKind(tmcExercise({ id: 3, name: "new_one" })),
-    ])
-    await userData.updateExercises(CourseIdentifier.from("instance-uuid-1"), [
-      makeMoocKind(moocExercise({ id: "a" })),
-      makeMoocKind(moocExercise({ id: "c", name: "new_mooc" })),
-    ])
-    expect(userData.getTmcCourse(0).newExercises).toEqual([3])
+    await userData.replaceCourse(
+      makeTmcKind(
+        tmcCourse({
+          id: 0,
+          exercises: [tmcExercise({ id: 1 }), tmcExercise({ id: 3, name: "new_one" })],
+        }),
+      ),
+    )
+    await userData.replaceCourse(
+      makeMoocKind(
+        moocCourse({
+          id: "instance-uuid-1",
+          exercises: [moocExercise({ id: "a" }), moocExercise({ id: "c", name: "new_mooc" })],
+        }),
+      ),
+    )
+    expect(storedTmcCourse(userData, 0).newExercises).toEqual([3])
     expect(userData.getMoocCourses()[0]?.newExercises).toEqual(["c"])
+  })
+
+  test("writes once and announces the replaced course", async function () {
+    const [userData, store] = await makeUserData({
+      courses: [tmcCourse({ id: 0 })],
+      mooc_courses: [],
+    })
+    const updateUserData = vi.spyOn(store, "updateUserData")
+    const changed = vi.fn()
+    userData.onDidChangeCourses(changed)
+
+    await userData.replaceCourse(makeTmcKind(tmcCourse({ id: 0, title: "Renamed" })))
+
+    expect(updateUserData).toHaveBeenCalledOnce()
+    expect(changed).toHaveBeenCalledExactlyOnceWith(makeTmcKind({ courseId: 0 }))
   })
 })
 
@@ -583,7 +616,9 @@ suite("UserData slug collision across backends (Bug 3 regression)", function () 
         }),
       ],
     })
-    expect(userData.getMoocExerciseByName("two-instances", "mooc_late")?.id).toBe("late-uuid")
+    expect(userData.getExerciseByName("mooc", "two-instances", "mooc_late")?.data.id).toBe(
+      "late-uuid",
+    )
   })
 })
 
@@ -715,6 +750,45 @@ suite("UserData concurrent writes", function () {
   })
 })
 
+suite("UserData wipe", function () {
+  test("forgets every course in memory as well as in storage", async function () {
+    const [userData, store] = await makeUserData({
+      courses: [tmcCourse({ exercises: [tmcExercise({ id: 1, passed: true })] })],
+      mooc_courses: [moocCourse()],
+    })
+
+    expect((await userData.wipeDataFromStorage()).ok).toBe(true)
+
+    expect(userData.getCourses()).toEqual([])
+    expect(userData.getPassed(ExerciseIdentifier.from(1))).toBe(false)
+    expect(store.getUserData()).toBeUndefined()
+  })
+
+  test("is not undone by a write queued before it", async function () {
+    const [userData, store] = await makeUserData({
+      courses: [tmcCourse({ id: 0 })],
+      mooc_courses: [],
+    })
+    const updateUserData = store.updateUserData.bind(store)
+    vi.spyOn(store, "updateUserData").mockImplementation(async (data) => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10)
+      })
+      await updateUserData(data)
+    })
+
+    const queued = userData.setNewExerciseNotifyAfter(CourseIdentifier.from(0), 111)
+    await userData.wipeDataFromStorage()
+    await queued
+
+    expect(store.getUserData()).toBeUndefined()
+  })
+
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+})
+
 suite("UserData write failures", function () {
   /** A `UserData` whose every persistence write rejects. */
   async function withFailingWrites(
@@ -744,12 +818,12 @@ suite("UserData write failures", function () {
     expect(result.err).toBe(true)
   })
 
-  test("updateCourse reports the failed write", async function () {
+  test("replaceCourse reports the failed write", async function () {
     const [userData] = await withFailingWrites({
       courses: [tmcCourse({ id: 0 })],
       mooc_courses: [],
     })
-    const result = await userData.updateCourse(makeTmcKind(tmcCourse({ id: 0, title: "New" })))
+    const result = await userData.replaceCourse(makeTmcKind(tmcCourse({ id: 0, title: "New" })))
     expect(result.err).toBe(true)
   })
 
@@ -777,17 +851,6 @@ suite("UserData write failures", function () {
       mooc_courses: [],
     })
     const result = await userData.clearFromNewExercises(CourseIdentifier.from(0))
-    expect(result.err).toBe(true)
-  })
-
-  test("updateExercises reports the failed write", async function () {
-    const [userData] = await withFailingWrites({
-      courses: [tmcCourse({ id: 0 })],
-      mooc_courses: [],
-    })
-    const result = await userData.updateExercises(CourseIdentifier.from(0), [
-      makeTmcKind(tmcExercise({ id: 1 })),
-    ])
     expect(result.err).toBe(true)
   })
 })

@@ -61,13 +61,10 @@ suite("Settings", function () {
     expect(configure).toHaveBeenCalledWith(LogLevel.Verbose)
   })
 
-  test("each workspace-scoped setting notifies its own subscriber with the new value", async function () {
+  test("each mirrored setting notifies the subscriber with its name and new value", async function () {
     const notified: [string, boolean][] = []
-    settings.onChangeHideMetaFiles = (value): void => void notified.push(["hideMetaFiles", value])
-    settings.onChangeDownloadOldSubmission = (value): void =>
-      void notified.push(["downloadOldSubmission", value])
-    settings.onChangeUpdateExercisesAutomatically = (value): void =>
-      void notified.push(["updateExercisesAutomatically", value])
+    settings.onChangeMirroredSetting = (section, value): void =>
+      void notified.push([section, value])
 
     await changeSection("testMyCode.hideMetaFiles")
     await changeSection("testMyCode.downloadOldSubmission")
@@ -84,7 +81,7 @@ suite("Settings", function () {
   // long as the course workspace is open.
   test("a User-tab edit reaches the subscriber over a stale workspace copy", async function () {
     const notified: boolean[] = []
-    settings.onChangeDownloadOldSubmission = (value): void => void notified.push(value)
+    settings.onChangeMirroredSetting = (_, value): void => void notified.push(value)
     stubConfiguration({
       downloadOldSubmission: { defaultValue: false, globalValue: true, workspaceValue: true },
     })
@@ -99,7 +96,7 @@ suite("Settings", function () {
 
   test("a workspace edit leaves the User value alone", async function () {
     const notified: boolean[] = []
-    settings.onChangeDownloadOldSubmission = (value): void => void notified.push(value)
+    settings.onChangeMirroredSetting = (_, value): void => void notified.push(value)
     stubConfiguration({
       downloadOldSubmission: { defaultValue: false, globalValue: false, workspaceValue: false },
     })
@@ -114,7 +111,7 @@ suite("Settings", function () {
     })
     await changeSection("testMyCode.downloadOldSubmission")
     const notified: boolean[] = []
-    settings.onChangeDownloadOldSubmission = (value): void => void notified.push(value)
+    settings.onChangeMirroredSetting = (_, value): void => void notified.push(value)
     stubConfiguration({
       downloadOldSubmission: { defaultValue: false, globalValue: true, workspaceValue: false },
     })
@@ -132,8 +129,7 @@ suite("Settings", function () {
   test("a change to an unrelated section notifies nobody", async function () {
     const configure = vi.spyOn(Logger, "configure").mockImplementation(() => {})
     const notified: string[] = []
-    settings.onChangeHideMetaFiles = (): void => void notified.push("hideMetaFiles")
-    settings.onChangeDownloadOldSubmission = (): void => void notified.push("downloadOldSubmission")
+    settings.onChangeMirroredSetting = (section): void => void notified.push(section)
 
     await changeSection("editor.fontSize")
 

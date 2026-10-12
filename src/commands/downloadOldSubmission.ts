@@ -9,7 +9,7 @@ import type { Item } from "../api/dialog"
 import { failure } from "../api/withOperation"
 import { BottleneckError } from "../errors"
 import type { MoocOldSubmissionRestore } from "../shared/langsSchema"
-import { backendName, ExerciseIdentifier } from "../shared/shared"
+import { backendName, LocalCourseExercise } from "../shared/shared"
 import { formatDateTime, parseDate } from "../utilities"
 import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
 import { runForExercise } from "./runForExercise"
@@ -52,17 +52,16 @@ export async function downloadOldSubmission(
     resource,
     "Downloading the old submission",
     async (exercise) => {
-      // Look up by known backend rather than a name-only match, which could
-      // resolve to the wrong backend if a tmc and mooc exercise share a slug.
-      const exerciseId =
-        exercise.backend === "mooc"
-          ? userData.getMoocExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id
-          : userData.getTmcExerciseByName(exercise.courseSlug, exercise.exerciseSlug)?.id
-      if (!exerciseId) {
+      const stored = userData.getExerciseByName(
+        exercise.backend,
+        exercise.courseSlug,
+        exercise.exerciseSlug,
+      )
+      if (!stored) {
         return failure("Failed to resolve exercise id.")
       }
 
-      const id = ExerciseIdentifier.from(exerciseId)
+      const id = LocalCourseExercise.getId(stored)
       const submissionsResult = await dialog.progressNotification(
         `Fetching the submissions of ${exercise.exerciseSlug}…`,
         () => listOldSubmissions(actionContext, id),

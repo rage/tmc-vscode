@@ -34,6 +34,16 @@ export async function removeCourse(
   const courseName = LocalCourseData.getCourseName(course)
   Logger.info(`Closing exercises for ${courseName} and removing course data from userData`)
 
+  // First, so a failure leaves the course with its closed exercises and workspace intact.
+  const deleteResult = await userData.deleteCourse(id)
+  if (deleteResult.err) {
+    return failure(
+      `Failed to remove "${courseName}" from your courses.`,
+      deleteResult.val,
+      course.kind,
+    )
+  }
+
   const unsetResult = await langs.unsetSetting(closedExercisesSettingKey(course.kind, courseName))
   if (unsetResult.err) {
     dialog.reportError(
@@ -50,15 +60,6 @@ export async function removeCourse(
     dialog.reportError(
       `Failed to remove the workspace file for "${courseName}".`,
       workspaceFileResult.val,
-      course.kind,
-    )
-  }
-
-  const deleteResult = await userData.deleteCourse(id)
-  if (deleteResult.err) {
-    return failure(
-      `Failed to remove "${courseName}" from your courses.`,
-      deleteResult.val,
       course.kind,
     )
   }

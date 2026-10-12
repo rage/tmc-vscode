@@ -177,8 +177,9 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     const fileName = path.basename(workspaceFile.fsPath)
-    for (const backend of ["tmc", "mooc"] as const) {
-      // What the name generator adds to an empty slug is what a tagged file ends with.
+    // Mooc first: the tmc tag is a suffix of the mooc one.
+    for (const backend of ["mooc", "tmc"] as const) {
+      // What the name generator adds to an empty slug is what a file of that backend ends with.
       const tag = workspaceFileName("", backend)
       if (fileName.length <= tag.length || !fileName.endsWith(tag)) {
         continue
@@ -191,9 +192,7 @@ export default class WorkspaceManager implements vscode.Disposable {
         return { slug, backend }
       }
     }
-
-    // Workspace files written before backend namespacing carry no tag and are tmc.
-    return { slug: path.basename(fileName, path.extname(fileName)), backend: "tmc" }
+    return undefined
   }
 
   /**

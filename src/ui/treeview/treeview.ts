@@ -77,7 +77,7 @@ export class CourseTreeItem extends vscode.TreeItem {
     const newCount = LocalCourseData.getNewExercises(course).length
     const updateCount = exercises.filter((ex) => ex.isUpdateable).length
     const hasCompleted = exercises.some((ex) => ex.passed && ex.status === "opened")
-    const { disabled } = course.data
+    const disabled = LocalCourseData.isDisabled(course)
     const points = pointsText(course.data.awardedPoints, course.data.availablePoints)
     const backend = backendName(course.kind)
 
