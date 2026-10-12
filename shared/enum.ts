@@ -36,7 +36,7 @@ export function EnumSchema<Tmc extends z.ZodType, Mooc extends z.ZodType>(
 
 export const CourseIdentifierSchema = EnumSchema(
   z.object({ courseId: z.number() }),
-  z.object({ instanceId: z.string() }),
+  z.object({ moocCourseId: z.string() }),
 )
 
 export type CourseIdentifier = z.infer<typeof CourseIdentifierSchema>
@@ -46,7 +46,7 @@ export namespace CourseIdentifier {
     return match(
       id,
       (tmc) => tmc.courseId.toString(),
-      (mooc) => mooc.instanceId,
+      (mooc) => mooc.moocCourseId,
     )
   }
 

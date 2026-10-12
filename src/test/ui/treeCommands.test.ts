@@ -43,7 +43,7 @@ vi.mock("../../actions/closeExercises", () => ({
 const BUSY = "Some of these exercises are already downloading."
 
 const tmcCourse = makeTmcKind({ courseId: 1 })
-const moocCourse = makeMoocKind({ instanceId: "course-uuid" })
+const moocCourse = makeMoocKind({ moocCourseId: "course-uuid" })
 
 function row(courseId: CourseIdentifier, id: number | string, status: RowStatus): ExerciseTreeItem {
   return Object.assign(Object.create(ExerciseTreeItem.prototype) as ExerciseTreeItem, {

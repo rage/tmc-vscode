@@ -129,9 +129,7 @@ export namespace LocalCourseData {
     return match(
       lcd,
       (tmc) => makeTmcKind({ courseId: tmc.id }),
-      // mooc has no instance concept; the course id is the identifier (carried
-      // under the `instanceId` label on the CourseIdentifier mooc arm)
-      (mooc) => makeMoocKind({ instanceId: mooc.id }),
+      (mooc) => makeMoocKind({ moocCourseId: mooc.id }),
     )
   }
 

@@ -214,7 +214,7 @@ suite("Add New Course command", function () {
     quickPick.accept("Shared Slug Course")
     await done
 
-    const courseId = makeMoocKind({ instanceId: moocCourse.id })
+    const courseId = makeMoocKind({ moocCourseId: moocCourse.id })
     expect(actions.addNewCourse).toHaveBeenCalledExactlyOnceWith(context, "", courseId)
     expect(context.dialog.progressNotification).toHaveBeenCalledWith(
       "Adding Shared Slug Course…",

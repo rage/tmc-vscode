@@ -116,7 +116,7 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: "course-details/mooc",
-    panel: courseDetailsPanel(4, makeMoocKind({ instanceId: MOOC_INSTANCE_ID })),
+    panel: courseDetailsPanel(4, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
     reply: answerCourseDetails({ id: 4 }, moocCourse),
   },
   // Never answered, so the panel shows its loading state until the request times out.

@@ -14,5 +14,5 @@ export function idOfTmcCourse(courseId: number): CourseIdentifier {
 }
 
 export function idOfMoocCourse(moocCourseId: string): CourseIdentifier {
-  return makeMoocKind({ instanceId: moocCourseId })
+  return makeMoocKind({ moocCourseId })
 }

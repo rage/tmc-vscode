@@ -20,7 +20,7 @@ function moocPanel(): CourseDetailsPanel {
   return {
     id: 10,
     type: "CourseDetails",
-    courseId: makeMoocKind({ instanceId: MOOC_INSTANCE_ID }),
+    courseId: makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID }),
   }
 }
 
@@ -149,7 +149,7 @@ suite("CourseDetails panel", () => {
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "openCourseWorkspace",
-      courseId: makeMoocKind({ instanceId: MOOC_INSTANCE_ID }),
+      courseId: makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID }),
     })
   })
 

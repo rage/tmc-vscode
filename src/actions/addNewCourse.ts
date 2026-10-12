@@ -26,7 +26,7 @@ export async function addNewCourse(
     match(
       course,
       (tmc) => makeTmcKind({ courseId: tmc.courseId, organization: organizationSlug }),
-      (mooc) => makeMoocKind({ courseId: mooc.instanceId }),
+      (mooc) => makeMoocKind({ courseId: mooc.moocCourseId }),
     ),
   )
   if (fetched.err) {

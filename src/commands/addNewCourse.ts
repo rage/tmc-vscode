@@ -262,7 +262,7 @@ function moocListingRows(
     return []
   }
   return listing.val.map((course) => {
-    const id = makeMoocKind({ instanceId: course.id })
+    const id = makeMoocKind({ moocCourseId: course.id })
     // The mooc arm of the action takes the organization from the course it fetches.
     return courseItem(id, course.name, "", isAdded(id), course.organization_name)
   })

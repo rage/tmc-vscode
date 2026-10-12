@@ -80,7 +80,7 @@ async function download(
     match(
       courseId,
       () => undefined,
-      (mooc) => mooc.instanceId,
+      (mooc) => mooc.moocCourseId,
     )
 
   let cancelled = false

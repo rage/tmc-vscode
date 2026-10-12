@@ -46,7 +46,7 @@ suite("UI state across a document reload", () => {
     enterScreen({
       id: 5,
       type: "CourseDetails",
-      courseId: makeMoocKind({ instanceId: "42" }),
+      courseId: makeMoocKind({ moocCourseId: "42" }),
     })
 
     expect(uiState("showPassedTests", false).current).toBe(false)

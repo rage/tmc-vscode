@@ -266,7 +266,7 @@ suite("courseSelectionItems", function () {
       { label: "Programming 1", value: makeTmcKind({ courseId: 3 }), description: "TMC Server" },
       {
         label: "Programming 1",
-        value: makeMoocKind({ instanceId: "course-uuid" }),
+        value: makeMoocKind({ moocCourseId: "course-uuid" }),
         description: "courses.mooc.fi",
       },
     ])

@@ -135,10 +135,10 @@ export class UserData {
           : Err(new Error(`No tmc course with id ${id.data.courseId}`))
       }
       case "mooc": {
-        const course = this._moocCourses.get(id.data.instanceId)
+        const course = this._moocCourses.get(id.data.moocCourseId)
         return course
           ? Ok(makeMoocKind(course))
-          : Err(new Error(`No mooc course with instance id ${id.data.instanceId}`))
+          : Err(new Error(`No mooc course with id ${id.data.moocCourseId}`))
       }
       default: {
         assertUnreachable(id)
@@ -286,7 +286,7 @@ export class UserData {
         this._tmcCourses.delete(tmc.courseId)
       },
       (mooc) => {
-        this._moocCourses.delete(mooc.instanceId)
+        this._moocCourses.delete(mooc.moocCourseId)
       },
     )
     return this._updatePersistentData(id)
@@ -392,7 +392,7 @@ export class UserData {
     const courseData = match(
       courseId,
       (tmc) => this._tmcCourses.get(tmc.courseId),
-      (mooc) => this._moocCourses.get(mooc.instanceId),
+      (mooc) => this._moocCourses.get(mooc.moocCourseId),
     )
     if (!courseData) {
       return new Err(new Error(`Course data missing for ${CourseIdentifier.toString(courseId)}`))
