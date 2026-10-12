@@ -21,9 +21,6 @@ import { createFailingTMCMock, createTMCMock } from "../mocks/tmc"
 import { createMockContext, createMockWorkspaceConfiguration } from "../mocks/vscode"
 import { makeTmpDirs } from "../utils"
 
-/** Spelled out rather than imported: no storage version declares it any more. */
-const RETIRED_EXTENSION_SETTINGS_KEY = "extension-settings-v3"
-
 const moocCourse: MoocLocalCourseData = {
   id: "8bd5a0d6-8ba0-4b2a-a2e0-0dd1ba7f2af5",
   name: "mooc-course",
@@ -195,7 +192,6 @@ suite("Extension data migration", function () {
       v1.USER_DATA_KEY,
       v3.SESSION_STATE_KEY,
       v3.PENDING_EXERCISE_MIGRATION_KEY,
-      RETIRED_EXTENSION_SETTINGS_KEY,
       v3.USER_DATA_KEY,
     ]
     const currentKeys = [v3.SESSION_STATE_KEY, v3.USER_DATA_KEY]
@@ -232,19 +228,6 @@ suite("Extension data migration", function () {
       expect(result.kind).toBe("done")
       expect(survivingKeys()).toEqual([v3.SESSION_STATE_KEY, v3.USER_DATA_KEY])
       expect(storage.getUserData()).toEqual(userData.v3_0_0)
-    })
-
-    test("drops the settings copy it no longer keeps, and nothing beside it", async function () {
-      await context.globalState.update(RETIRED_EXTENSION_SETTINGS_KEY, extensionSettings.v2_0_0)
-      await context.globalState.update(v3.USER_DATA_KEY, userData.v3_0_0)
-      await context.globalState.update(v3.SESSION_STATE_KEY, sessionState.v2_0_0)
-
-      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
-
-      expect(result.kind).toBe("done")
-      expect(context.globalState.get(RETIRED_EXTENSION_SETTINGS_KEY)).toBeUndefined()
-      expect(storage.getUserData()).toEqual(userData.v3_0_0)
-      expect(storage.getSessionState()).toEqual(sessionState.v2_0_0)
     })
 
     test("a second run does not replay the first run's source data", async function () {

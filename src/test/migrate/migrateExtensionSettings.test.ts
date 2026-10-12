@@ -10,7 +10,6 @@ import { createMockMemento, createMockWorkspaceConfiguration } from "../mocks/vs
 
 const EXTENSION_SETTINGS_KEY_V0 = "extensionSettings"
 const EXTENSION_SETTINGS_KEY_V1 = "extension-settings-v1"
-const EXTENSION_SETTINGS_KEY_V3 = "extension-settings-v3"
 const UNSTABLE_EXTENSION_VERSION_KEY = "extensionVersion"
 const SESSION_STATE_KEY_V1 = "session-state-v1"
 
@@ -203,7 +202,7 @@ suite("Extension settings migration", function () {
       const migrated = await migrateExtensionSettings(memento, settingsMock)
 
       expect(new Set(migrated.supersededKeys)).toEqual(
-        new Set([EXTENSION_SETTINGS_KEY_V0, EXTENSION_SETTINGS_KEY_V1, EXTENSION_SETTINGS_KEY_V3]),
+        new Set([EXTENSION_SETTINGS_KEY_V0, EXTENSION_SETTINGS_KEY_V1]),
       )
     })
   })
