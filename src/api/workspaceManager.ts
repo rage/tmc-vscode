@@ -69,6 +69,30 @@ export type PersistClosedCourseExercises = (
   closedExerciseSlugs: string[],
 ) => Promise<Result<void, Error>>
 
+/** How long a workspace folder change may keep the workspace file to itself. */
+const FOLDER_CHANGE_TIMEOUT_MS = 5_000
+
+/**
+ * Runs `update`, an `updateWorkspaceFolders` call, and waits for the folder change event, which
+ * VS Code fires only once it has saved the new folder list into the workspace file.
+ */
+async function updateWorkspaceFoldersAndWait(
+  update: () => boolean,
+): Promise<"changed" | "refused" | "timedOut"> {
+  let listener: vscode.Disposable | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const changed = new Promise<"changed" | "timedOut">((resolve) => {
+    listener = vscode.workspace.onDidChangeWorkspaceFolders(() => resolve("changed"))
+    timer = setTimeout(() => resolve("timedOut"), FOLDER_CHANGE_TIMEOUT_MS)
+  })
+  try {
+    return update() ? await changed : "refused"
+  } finally {
+    listener?.dispose()
+    clearTimeout(timer)
+  }
+}
+
 /** Runs tasks one at a time, each once every earlier one has settled. */
 class SerialQueue {
   private _tail: Promise<unknown> = Promise.resolve()
@@ -144,8 +168,9 @@ export default class WorkspaceManager implements vscode.Disposable {
   // Per course key, so that one course's record is read and written by one change at a time.
   private readonly _closedRecordWrites = new Map<string, SerialQueue>()
   private readonly _exercisesChanged = new vscode.EventEmitter<void>()
-  // A settings write and addWorkspaceRecommendation's raw rewrite of the same file would
-  // otherwise interleave, and one would lose the other's change.
+  // Every write of the open workspace file. VS Code refuses a settings write while it has the
+  // file's folder list unsaved, and addWorkspaceRecommendation's raw rewrite would lose a change
+  // interleaved with it.
   private readonly _workspaceFileWrites = new SerialQueue()
 
   /** Fires after the known exercises, or whether one is open or closed, change. */
@@ -710,7 +735,11 @@ export default class WorkspaceManager implements vscode.Disposable {
    * Refreshes current active course workspace by first making sure that the `.tmc` folder is at
    * the top and then lists all that course's open exercises in alphanumeric order.
    */
-  private async _refreshActiveCourseWorkspace(): Promise<Result<void, Error>> {
+  private _refreshActiveCourseWorkspace(): Promise<Result<void, Error>> {
+    return this._workspaceFileWrites.run(() => this._replaceWorkspaceFolders())
+  }
+
+  private async _replaceWorkspaceFolders(): Promise<Result<void, Error>> {
     const activeCourseWorkspace = this._activeCourseWorkspace
     const workspaceFolders = vscode.workspace.workspaceFolders
     if (!activeCourseWorkspace || !workspaceFolders) {
@@ -743,13 +772,18 @@ export default class WorkspaceManager implements vscode.Disposable {
 
     const deleteCount = workspaceFolders.length
     Logger.debug(`Replacing ${deleteCount} workspace folders with ${correctStructure.length}`)
-    const success = vscode.workspace.updateWorkspaceFolders(0, deleteCount, ...correctStructure)
-    if (!success) {
+    const outcome = await updateWorkspaceFoldersAndWait(() =>
+      vscode.workspace.updateWorkspaceFolders(0, deleteCount, ...correctStructure),
+    )
+    if (outcome === "refused") {
       Logger.error("Replace operation failed.")
       Logger.debug("Failed with folders:", ...correctStructure)
+      return Err(new Error("Failed to refresh active workspace."))
     }
-
-    return success ? Ok.EMPTY : Err(new Error("Failed to refresh active workspace."))
+    if (outcome === "timedOut") {
+      Logger.warn("VS Code did not confirm the workspace folder change in time.")
+    }
+    return Ok.EMPTY
   }
 
   /**
