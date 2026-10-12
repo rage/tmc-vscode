@@ -6,13 +6,14 @@ import { checkAiUse } from "../actions/checkAiUse"
 import type { ExerciseTestOutcome } from "../actions/testExercise"
 import { testExercise } from "../actions/testExercise"
 import type { ReadyActionContext } from "../actions/types"
+import type WorkspaceManager from "../api/workspaceManager"
 import type { WorkspaceExercise } from "../api/workspaceManager"
+import { ExerciseStatus } from "../api/workspaceManager"
 import { AiUseRefusedError, BottleneckError, SHOW_AI_USE_PROBLEM_COMMAND } from "../errors"
 import type { RunResult, TestResult } from "../shared/langsSchema"
 import { BaseError, withDistinctKeys } from "../shared/shared"
 import { countOf } from "../utilities"
 import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
-import { openCourseExercises } from "./openExercises"
 import { createSourceFileFinder } from "./sourceFiles"
 import { failureMessage } from "./testMessages"
 
@@ -48,7 +49,7 @@ export class ExerciseTestController implements vscode.Disposable {
 
   /** Makes the test items match the exercises open in the course workspace. */
   public syncExercises(): void {
-    const exercises = openCourseExercises(this._actionContext.startup.workspaceManager)
+    const exercises = exercisesOpenInCourseWorkspace(this._actionContext.startup.workspaceManager)
     this._exercisesByItemId.clear()
     this._controller.items.replace(exercises.map((exercise) => this._itemFor(exercise)))
     this._diagnostics.retain(exercises.map((exercise) => exercise.uri))
@@ -325,6 +326,17 @@ export class ExerciseTestController implements vscode.Disposable {
       (): void => void vscode.commands.executeCommand("tmc.submitExercise", exercise.uri),
     ])
   }
+}
+
+/** The open course workspace's exercises that are open in it; none outside a course workspace. */
+function exercisesOpenInCourseWorkspace(workspaceManager: WorkspaceManager): WorkspaceExercise[] {
+  const { activeCourse, activeCourseBackend } = workspaceManager
+  if (activeCourse === undefined || activeCourseBackend === undefined) {
+    return []
+  }
+  return workspaceManager
+    .getExercisesByCourseSlug(activeCourseBackend, activeCourse)
+    .filter((exercise) => exercise.status === ExerciseStatus.Open)
 }
 
 /** Drops the tests and pass count an earlier run reported under `item`, for a run that named none. */
