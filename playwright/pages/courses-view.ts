@@ -62,9 +62,6 @@ export class CoursesViewPage extends TmcPage {
     await this.page.getByRole("button", { name: "Add New Course...", exact: true }).click()
     const quickPick = new QuickPickPage(this.page)
     await quickPick.waitForTitle("Add New Course")
-    // Each backend's rows land as it answers and re-render the list, so a click before both
-    // have can hit a row just reused for another item.
-    await quickPick.waitForText("courses.mooc.fi — your courses", "TMC Server — organizations")
     return quickPick
   }
 

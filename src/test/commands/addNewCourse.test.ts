@@ -192,12 +192,12 @@ suite("Add New Course command", function () {
     expect(quickPick.busy).toBe(false)
   })
 
-  test("shows each backend's rows as soon as it answers", async function () {
+  test("shows no rows until both backends have answered, so none moves under a click", async function () {
     const tmc = deferred<ReturnType<typeof Ok>>()
     const { quickPick } = harness({ organizations: tmc.promise })
     await flush()
 
-    expect(quickPick.rows).toEqual(["--- courses.mooc.fi — your courses", "Shared Slug Course"])
+    expect(quickPick.rows).toEqual([])
     expect(quickPick.busy).toBe(true)
 
     tmc.resolve(Ok(organizations))

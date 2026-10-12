@@ -22,13 +22,6 @@ export class QuickPickPage {
     await expect(this.widget().locator(".quick-input-title")).toHaveText(title)
   }
 
-  /** Waits until some row carries each of `texts`. */
-  public async waitForText(...texts: string[]): Promise<void> {
-    for (const text of texts) {
-      await expect(this.rows().filter({ hasText: text }).first()).toBeVisible()
-    }
-  }
-
   public async selectByLabel(label: string): Promise<void> {
     await this.rows().filter({ hasText: label }).first().click()
   }

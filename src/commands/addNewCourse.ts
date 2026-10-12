@@ -55,8 +55,8 @@ function courseItem(
  *
  * courses.mooc.fi lists only the courses the user is enrolled in, so they come first and add in
  * one step. TMC Server hides thousands of courses behind its organizations, so picking one of
- * those opens a second step, with Back, listing its courses. Each backend's rows appear as soon
- * as it answers.
+ * those opens a second step, with Back, listing its courses. The rows appear once both backends
+ * have answered, so that none moves under the pointer as the other backend's arrive.
  */
 export async function addNewCourse(actionContext: ReadyActionContext): Promise<void> {
   const { dialog } = actionContext
@@ -138,13 +138,20 @@ function pickCourse(
       unavailable.length === 0
         ? "Search your courses or TMC organizations"
         : `Search your courses or TMC organizations (${unavailableNames().join(" and ")} unavailable)`
+    if (moocRows === undefined || tmcRows === undefined) {
+      quickPick.items = []
+      quickPick.busy = true
+      return
+    }
     quickPick.items = [
-      ...(moocRows?.length
+      ...(moocRows.length > 0
         ? [separator(`${backendName("mooc")} — your courses`), ...moocRows]
         : []),
-      ...(tmcRows?.length ? [separator(`${backendName("tmc")} — organizations`), ...tmcRows] : []),
+      ...(tmcRows.length > 0
+        ? [separator(`${backendName("tmc")} — organizations`), ...tmcRows]
+        : []),
     ]
-    quickPick.busy = moocRows === undefined || tmcRows === undefined
+    quickPick.busy = false
   }
 
   const moocListing = actions.listEnrolledMoocCourses(actionContext).then((listing) => {
@@ -219,15 +226,12 @@ function pickCourse(
       quickPick.dispose()
     })
 
-    const refreshFirstStep = (): void => {
-      if (step === 1 && !isSettled) {
-        renderFirstStep()
-      }
-    }
-    void moocListing.then(refreshFirstStep)
-    void tmcListing.then(refreshFirstStep)
     void Promise.all([moocListing, tmcListing]).then(() => {
-      if (step === 1 && !isSettled && quickPick.items.length === 0) {
+      if (step !== 1 || isSettled) {
+        return
+      }
+      renderFirstStep()
+      if (quickPick.items.length === 0) {
         void dialog.errorNotification(
           `Failed to fetch courses from ${unavailableNames().join(" or ")}. ` +
             "Check your network connection and that you are logged in.",
