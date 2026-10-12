@@ -75,8 +75,7 @@ export async function listOldSubmissions(
  * Restores one earlier submission over an exercise's current state, optionally submitting
  * that state first.
  *
- * Rejects as a `BottleneckError` while a submit, paste, reset or restore of the same
- * exercise is already in flight.
+ * Rejects as a `BottleneckError` while another operation on the exercise is in flight.
  */
 export async function restoreOldSubmission(
   actionContext: ReadyActionContext,

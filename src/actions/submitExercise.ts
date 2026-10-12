@@ -279,8 +279,8 @@ async function showOutcome(
  *
  * Records what the backend says about the exercise after the grading, and fires
  * {@link onDidFinishSubmission} once the outcome is shown. A failed submission is `Ok`, as the
- * panel shows why. Errs for a failure before the panel opens: a submit or paste already in
- * flight for the same exercise is a `BottleneckError`, AI assistance that may be on is an
+ * panel shows why. Errs for a failure before the panel opens: another operation in flight on
+ * the exercise is a `BottleneckError`, AI assistance that may be on is an
  * `AiUseRefusedError`, and an exercise the backend last reported out of tries is an
  * `OutOfTriesError`.
  */
@@ -358,7 +358,7 @@ export async function submitExercise(
  * followed its submit ended before the grading did.
  *
  * Fires {@link onDidFinishSubmission} like {@link submitExercise}. Errs when that panel shows
- * no such submission, when a submission of the exercise is already in progress, or as
+ * no such submission, when another operation on the exercise is in flight, or as
  * {@link submitExercise} does while AI assistance may be on.
  */
 export async function keepWaitingForGrading(

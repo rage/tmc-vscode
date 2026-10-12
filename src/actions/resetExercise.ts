@@ -8,8 +8,7 @@ import type { ReadyActionContext } from "./types"
 /**
  * Resets an exercise to its initial state on disk, optionally submitting it first.
  *
- * Rejects as a `BottleneckError` while a submit, paste, reset or restore of the same
- * exercise is already in flight.
+ * Rejects as a `BottleneckError` while another operation on the exercise is in flight.
  */
 export async function resetExercise(
   actionContext: ReadyActionContext,

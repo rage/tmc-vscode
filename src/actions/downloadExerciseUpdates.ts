@@ -18,7 +18,8 @@ interface ExerciseUpdate {
  * Each course's "update available" list is emptied while the download runs, so the student
  * sees the work begin, and afterwards holds only the exercises that failed. It is refilled
  * even when the download throws, lest the student conclude there is nothing left to update.
- * Errs, with nothing downloaded, only while some of the exercises are already downloading.
+ * Errs, with nothing downloaded, only while some of the exercises are busy with another
+ * operation.
  *
  * For exercises not on disk yet, see `downloadCourseExercises`.
  */

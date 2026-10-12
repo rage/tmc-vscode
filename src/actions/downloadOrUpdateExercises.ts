@@ -32,7 +32,7 @@ interface DownloadResults {
  * Downloads given exercises and opens them in the course workspace.
  *
  * Fails as a whole only with a `BottleneckError`, downloading nothing, while any of the
- * exercises is already downloading. Every other failure is reported here, in one
+ * exercises is busy with another operation. Every other failure is reported here, in one
  * notification naming the exercises, and lands in `failed`; a cancelled download returns
  * what had completed.
  *

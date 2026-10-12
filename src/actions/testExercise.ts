@@ -30,7 +30,7 @@ export type ExerciseTestOutcome =
  * made of being interrupted, so check the token before reporting the outcome.
  * @param options.isAiUseChecked The caller has just had `checkAiUse` pass, so it is not asked
  * again.
- * @returns `Err(BottleneckError)` while another run of the same exercise is in flight,
+ * @returns `Err(BottleneckError)` while another operation on the exercise is in flight,
  * `Err(AiUseRefusedError)` while AI assistance may be on, and `Err` when the tests could not
  * be run at all.
  */

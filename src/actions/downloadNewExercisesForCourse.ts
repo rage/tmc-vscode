@@ -12,7 +12,7 @@ import type { ReadyActionContext } from "./types"
  *
  * An exercise that fails to download is warned about and stays on the list; the `Err` is for
  * a course that is not stored or a list or rescan that could not be updated, and a
- * `BottleneckError` while some of the exercises are already downloading.
+ * `BottleneckError` while some of the exercises are busy with another operation.
  */
 export async function downloadNewExercisesForCourse(
   actionContext: ReadyActionContext,

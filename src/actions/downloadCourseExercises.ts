@@ -8,7 +8,7 @@ import type { ReadyActionContext } from "./types"
 /**
  * Downloads exercises of one course, takes them off its new-exercise list and rescans the
  * disk, so the Courses view shows the result. Errs, with nothing downloaded, only while some
- * of the exercises are already downloading.
+ * of the exercises are busy with another operation.
  *
  * For exercises already on disk, see `downloadExerciseUpdates`.
  */

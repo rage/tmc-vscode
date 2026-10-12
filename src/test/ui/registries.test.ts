@@ -147,16 +147,44 @@ suite("exercise operations", () => {
     })
   })
 
-  test("lets unrelated operations, and other exercises, run alongside", async () => {
-    let outcomes: boolean[] = []
-    await exerciseOperations.run(exercise, "submitting", async () => {
-      const tested = await exerciseOperations.run(exercise, "testing", async () => Ok.EMPTY)
-      const otherSubmitted = await exerciseOperations.run(other, "submitting", async () => Ok.EMPTY)
-      outcomes = [tested.ok, otherSubmitted.ok]
+  test.each([
+    ["downloading", "submitting"],
+    ["downloading", "resetting"],
+    ["testing", "submitting"],
+    ["testing", "pasting"],
+    ["testing", "restoring"],
+    ["submitting", "testing"],
+    ["resetting", "downloading"],
+  ] as const)("refuses %s and %s overlapping on one exercise", async (running, requested) => {
+    let refused: unknown
+    await exerciseOperations.run(exercise, running, async () => {
+      refused = await exerciseOperations.run(exercise, requested, async () => Ok.EMPTY)
       return Ok.EMPTY
     })
 
-    expect(outcomes).toEqual([true, true])
+    expect(refused).toMatchObject({ err: true })
+  })
+
+  test("names the running operation when refusing another", async () => {
+    let refused: unknown
+    await exerciseOperations.run(exercise, "testing", async () => {
+      refused = await exerciseOperations.run(exercise, "submitting", async () => Ok.EMPTY)
+      return Ok.EMPTY
+    })
+
+    expect(refused).toMatchObject({
+      val: new BottleneckError("Tests are already running for this exercise."),
+    })
+  })
+
+  test("lets other exercises run alongside", async () => {
+    let otherSubmitted: unknown
+    await exerciseOperations.run(exercise, "submitting", async () => {
+      otherSubmitted = await exerciseOperations.run(other, "submitting", async () => Ok.EMPTY)
+      return Ok.EMPTY
+    })
+
+    expect(otherSubmitted).toMatchObject({ ok: true })
   })
 
   test("claims several exercises all or none, and releases them one at a time", () => {
