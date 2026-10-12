@@ -7,10 +7,10 @@ import { checkAiUse, listOldSubmissions, restoreOldSubmission } from "../actions
 import type { ReadyActionContext } from "../actions/types"
 import type { Item } from "../api/dialog"
 import { failure } from "../api/withOperation"
-import { BottleneckError } from "../errors"
 import type { MoocOldSubmissionRestore } from "../shared/langsSchema"
 import { backendName } from "../shared/shared"
 import { formatDateTime, parseDate } from "../utilities"
+import { revertExerciseDocuments } from "../window/exerciseDocuments"
 import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
 import { runForExercise } from "./runForExercise"
 
@@ -98,30 +98,13 @@ export async function downloadOldSubmission(
         }
       }
 
-      const editor = vscode.window.activeTextEditor
-      const document = editor?.document.uri
       const restoreResult: Result<MoocOldSubmissionRestore, Error> =
         await dialog.progressNotification(
           submitFirst
             ? `Submitting ${exercise.exerciseSlug} and restoring the old submission…`
             : `Restoring the old submission of ${exercise.exerciseSlug}…`,
-          () =>
-            restoreOldSubmission(
-              actionContext,
-              exercise.uri.fsPath,
-              submission.target,
-              submitFirst,
-            ),
+          () => restoreOldSubmission(actionContext, exercise, submission.target, submitFirst),
         )
-      // A busy rejection means the restore never ran, so there is nothing on disk to
-      // revert the editor to.
-      if (
-        editor &&
-        document &&
-        !(restoreResult.err && restoreResult.val instanceof BottleneckError)
-      ) {
-        await vscode.commands.executeCommand("workbench.action.files.revert", document)
-      }
       if (restoreResult.err) {
         return failure("Failed to download old submission.", restoreResult.val)
       }
@@ -130,6 +113,7 @@ export async function downloadOldSubmission(
         // exercise. Nothing was changed, so this is ordinary news rather than a failure.
         dialog.notification("That submission has no files to download.")
       } else {
+        await revertExerciseDocuments(exercise)
         dialog.statusMessage(`Restored the old submission of ${exercise.exerciseSlug}.`)
       }
       return Ok.EMPTY

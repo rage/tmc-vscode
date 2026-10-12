@@ -1,11 +1,11 @@
 import { Ok } from "ts-results"
-import * as vscode from "vscode"
+import type * as vscode from "vscode"
 
 import { checkAiUse, resetExercise as resetExerciseAction } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure } from "../api/withOperation"
 import { backendName } from "../shared/shared"
-import { Logger } from "../utilities"
+import { revertExerciseDocuments } from "../window/exerciseDocuments"
 import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
 import { runForExercise } from "./runForExercise"
 
@@ -43,8 +43,6 @@ export async function resetExercise(
       }
     }
 
-    const editor = vscode.window.activeTextEditor
-    const document = editor?.document.uri
     const resetResult = await dialog.progressNotification(
       submitFirst
         ? `Submitting and resetting ${exercise.exerciseSlug}…`
@@ -55,10 +53,7 @@ export async function resetExercise(
       return failure("Failed to reset exercise.", resetResult.val)
     }
 
-    if (editor && document) {
-      Logger.debug(`Reopening original file "${document.fsPath}"`)
-      await vscode.commands.executeCommand("workbench.action.files.revert", document)
-    }
+    await revertExerciseDocuments(exercise)
     dialog.statusMessage(`Reset ${exercise.exerciseSlug}.`)
     return Ok.EMPTY
   })

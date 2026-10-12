@@ -25,6 +25,7 @@ import { LocalCourseData, makeMoocKind, makeTmcKind } from "../../shared/shared"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
 import type { SubmissionViewUpdate } from "../../ui/submissionViews"
 import { submissionViews } from "../../ui/submissionViews"
+import { saveExerciseDocuments } from "../../window/exerciseDocuments"
 import {
   idOfMoocCourse,
   idOfMoocExercise,
@@ -32,6 +33,10 @@ import {
   idOfTmcExercise,
 } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
+
+vi.mock("../../window/exerciseDocuments", () => ({
+  saveExerciseDocuments: vi.fn(async () => Ok.EMPTY),
+}))
 
 const openedPanels: ExerciseSubmissionPanel[] = []
 const viewUpdates: SubmissionViewUpdate[] = []
@@ -333,6 +338,29 @@ suite("submitExercise action, tmc", () => {
 })
 
 suite("submitExercise action, mooc", () => {
+  test("saves the exercise's editors before submitting", async () => {
+    const { actionContext, submit } = moocContextWith(grading({ score_given: 3 }))
+    vi.mocked(saveExerciseDocuments).mockImplementationOnce(async () => {
+      expect(submit).not.toHaveBeenCalled()
+      return Ok.EMPTY
+    })
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect(saveExerciseDocuments).toHaveBeenCalledExactlyOnceWith(moocExercise)
+    expect(submit).toHaveBeenCalledOnce()
+  })
+
+  test("submits nothing when the exercise's editors cannot be saved", async () => {
+    const { actionContext, submit } = moocContextWith(grading({ score_given: 3 }))
+    vi.mocked(saveExerciseDocuments).mockResolvedValueOnce(Err(new Error("Could not save a.py.")))
+
+    const result = await submitExercise(actionContext, moocExercise)
+
+    expect(result.err).toBe(true)
+    expect(submit).not.toHaveBeenCalled()
+  })
+
   test("submits without blocking, then waits for that submission's grading", async () => {
     const graded = grading({
       score_given: 3,

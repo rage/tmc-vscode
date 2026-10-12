@@ -1,4 +1,4 @@
-import { Ok } from "ts-results"
+import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
@@ -17,9 +17,15 @@ import type {
 } from "../../shared/langsSchema"
 import { makeMoocKind } from "../../shared/shared"
 import { exerciseOperations } from "../../ui/exerciseOperations"
+import { revertExerciseDocuments, saveExerciseDocuments } from "../../window/exerciseDocuments"
 import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
+
+vi.mock("../../window/exerciseDocuments", () => ({
+  revertExerciseDocuments: vi.fn(async () => {}),
+  saveExerciseDocuments: vi.fn(async () => Ok.EMPTY),
+}))
 
 // jest-mock-vscode ships no `env` namespace.
 beforeAll(function () {
@@ -203,11 +209,28 @@ suite("Download old submission command (mooc branch)", function () {
   test("submits the current state first when the user asks for it", async function () {
     await downloadOldSubmission(actionContext({ answer: "Submit and Restore" }), uri)
 
+    expect(saveExerciseDocuments).toHaveBeenCalledExactlyOnceWith(moocExercise)
     expect(restoreSubmission).toHaveBeenCalledExactlyOnceWith(
       makeMoocKind({ exerciseId: "mooc-ex-uuid", submissionId: "sub-newer" }),
       uri.fsPath,
       true,
     )
+  })
+
+  test("reverts the restored exercise's editors after the restore", async function () {
+    await downloadOldSubmission(actionContext(), uri)
+
+    expect(saveExerciseDocuments).not.toHaveBeenCalled()
+    expect(revertExerciseDocuments).toHaveBeenCalledExactlyOnceWith(moocExercise)
+  })
+
+  test("leaves the editors alone when the restore fails", async function () {
+    const context = actionContext()
+    restoreSubmission.mockResolvedValue(Err(new Error("disk full")))
+
+    await downloadOldSubmission(context, uri)
+
+    expect(revertExerciseDocuments).not.toHaveBeenCalled()
   })
 
   test("downloads nothing when the confirmation is cancelled", async function () {

@@ -3,6 +3,7 @@ import { Err } from "ts-results"
 
 import type { ExerciseIdentifier } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
+import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import { checkAiUse } from "./checkAiUse"
 import type { ReadyActionContext } from "./types"
 
@@ -29,10 +30,13 @@ export async function pasteExercise(
   if (allowed.err) {
     return allowed
   }
-  const exercisePath = exercise.uri.fsPath
 
   return exerciseOperations.run(exerciseId, "pasting", async () => {
-    const pasteResult = await langs.paste(exerciseId, exercisePath)
+    const saved = await saveExerciseDocuments(exercise)
+    if (saved.err) {
+      return saved
+    }
+    const pasteResult = await langs.paste(exerciseId, exercise.uri.fsPath)
     if (pasteResult.err) {
       return pasteResult
     }

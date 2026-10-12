@@ -31,6 +31,7 @@ import { isSameExercise, submissionViews } from "../ui/submissionViews"
 import { Logger, parseFeedbackQuestion } from "../utilities"
 import type { MoocStoredStanding } from "../utilities/apiData"
 import { moocStoredStanding } from "../utilities/apiData"
+import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import { checkAiUse } from "./checkAiUse"
 import type { ReadyActionContext } from "./types"
 
@@ -324,6 +325,10 @@ export async function submitExercise(
   // Held only until the result is posted: the panel offers Paste from that point on, and
   // the refresh that follows doesn't need the same protection.
   return exerciseOperations.run(exerciseId, "submitting", async () => {
+    const saved = await saveExerciseDocuments(exercise)
+    if (saved.err) {
+      return saved
+    }
     const submission: Submission = {
       panel: {
         id: nextPanelId(),

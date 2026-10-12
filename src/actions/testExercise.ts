@@ -8,6 +8,7 @@ import { LocalCourseData } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { Logger } from "../utilities"
 import { resolvePythonInterpreter } from "../window"
+import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import type { ReadyActionContext } from "./types"
 
 /** What running an exercise's tests locally produced. */
@@ -62,6 +63,10 @@ export async function testExercise(
     exercise.id,
     "testing",
     async (): Promise<Result<ExerciseTestOutcome, Error>> => {
+      const saved = await saveExerciseDocuments(exercise)
+      if (saved.err) {
+        return saved
+      }
       const { process: testRunner, interrupt: testInterrupt } = langs.runTests(
         exercisePath,
         resolvePythonInterpreter(exercise.uri),

@@ -1,9 +1,10 @@
 import { Ok } from "ts-results"
-import * as vscode from "vscode"
+import type * as vscode from "vscode"
 
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure } from "../api/withOperation"
+import { closeExerciseEditors } from "../window/exerciseDocuments"
 import { runForExercise } from "./runForExercise"
 
 export async function closeExercise(
@@ -30,7 +31,7 @@ export async function closeExercise(
       return failure("Error when closing exercise.", result.val)
     }
 
-    vscode.commands.executeCommand("workbench.action.closeActiveEditor")
+    await closeExerciseEditors(exercise)
     return Ok.EMPTY
   })
 }

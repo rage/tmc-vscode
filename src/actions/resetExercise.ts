@@ -3,6 +3,7 @@ import type { Result } from "ts-results"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import type { ExerciseIdentifier } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
+import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import type { ReadyActionContext } from "./types"
 
 /**
@@ -17,7 +18,13 @@ export async function resetExercise(
   submitFirst: boolean,
 ): Promise<Result<void, Error>> {
   const { langs } = actionContext.startup
-  return exerciseOperations.run(id, "resetting", () =>
-    langs.resetExercise(id, exercise.uri.fsPath, submitFirst),
-  )
+  return exerciseOperations.run(id, "resetting", async () => {
+    if (submitFirst) {
+      const saved = await saveExerciseDocuments(exercise)
+      if (saved.err) {
+        return saved
+      }
+    }
+    return langs.resetExercise(id, exercise.uri.fsPath, submitFirst)
+  })
 }

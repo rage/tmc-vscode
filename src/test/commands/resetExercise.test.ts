@@ -1,4 +1,4 @@
-import { Ok } from "ts-results"
+import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
@@ -12,9 +12,15 @@ import { resetExercise } from "../../commands/resetExercise"
 import type { UserData } from "../../config/userdata"
 import { AiUseRefusedError } from "../../errors"
 import { exerciseOperations } from "../../ui/exerciseOperations"
+import { revertExerciseDocuments, saveExerciseDocuments } from "../../window/exerciseDocuments"
 import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
+
+vi.mock("../../window/exerciseDocuments", () => ({
+  revertExerciseDocuments: vi.fn(async () => {}),
+  saveExerciseDocuments: vi.fn(async () => Ok.EMPTY),
+}))
 
 suite("Reset exercise command", function () {
   const uri = vscode.Uri.file("/workspace/mooc/course/ex-1")
@@ -83,10 +89,27 @@ suite("Reset exercise command", function () {
     )
   })
 
-  test("submits first when asked to", async function () {
+  test("submits first when asked to, saving the exercise's editors before", async function () {
     await resetExercise(actionContext("Submit and Reset"), uri)
 
     expect(reset).toHaveBeenCalledExactlyOnceWith(expect.anything(), uri.fsPath, true)
+    expect(saveExerciseDocuments).toHaveBeenCalledExactlyOnceWith(exercise)
+  })
+
+  test("reverts the reset exercise's editors, not the active one's", async function () {
+    await resetExercise(actionContext("Reset Without Submitting"), uri)
+
+    expect(saveExerciseDocuments).not.toHaveBeenCalled()
+    expect(revertExerciseDocuments).toHaveBeenCalledExactlyOnceWith(exercise)
+  })
+
+  test("reverts no editor when the reset fails", async function () {
+    const context = actionContext("Reset Without Submitting")
+    reset.mockResolvedValue(Err(new Error("disk full")))
+
+    await resetExercise(context, uri)
+
+    expect(revertExerciseDocuments).not.toHaveBeenCalled()
   })
 
   test("resets nothing when submitting first is refused while AI may be on", async function () {

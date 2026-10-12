@@ -9,6 +9,7 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { closeExercise } from "../../commands/closeExercise"
 import type { UserData } from "../../config/userdata"
+import { closeExerciseEditors } from "../../window/exerciseDocuments"
 import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -16,6 +17,7 @@ import { createDialogMock } from "../mocks/dialog"
 vi.mock("../../actions", () => ({
   closeExercises: vi.fn(async () => Ok([])),
 }))
+vi.mock("../../window/exerciseDocuments", () => ({ closeExerciseEditors: vi.fn() }))
 
 const uri = vscode.Uri.file("/workspace/mooc/mooc-course/ex-1")
 const exercise: WorkspaceExercise = {
@@ -59,6 +61,7 @@ function harness(options: { passed?: boolean; confirmed?: boolean } = {}): Harne
 suite("Close exercise command", function () {
   beforeEach(function () {
     vi.mocked(actions.closeExercises).mockClear()
+    vi.mocked(closeExerciseEditors).mockClear()
     vi.mocked(actions.closeExercises).mockResolvedValue(Ok([]))
   })
 
@@ -93,14 +96,12 @@ suite("Close exercise command", function () {
     expect(actions.closeExercises).not.toHaveBeenCalled()
   })
 
-  test("closes the editor once the exercise is closed", async function () {
+  test("closes the exercise's editors once the exercise is closed", async function () {
     const { context } = harness({ passed: true })
 
     await closeExercise(context, uri)
 
-    expect(vscode.commands.executeCommand).toHaveBeenCalledExactlyOnceWith(
-      "workbench.action.closeActiveEditor",
-    )
+    expect(closeExerciseEditors).toHaveBeenCalledExactlyOnceWith(exercise)
   })
 
   test("reports a failed close and leaves the editor alone", async function () {
@@ -113,6 +114,6 @@ suite("Close exercise command", function () {
       "Error when closing exercise.",
       expect.objectContaining({ message: "exercise is running" }),
     )
-    expect(vscode.commands.executeCommand).not.toHaveBeenCalled()
+    expect(closeExerciseEditors).not.toHaveBeenCalled()
   })
 })
