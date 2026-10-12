@@ -437,7 +437,7 @@ suite("CoursesTree", function () {
 
     test("with an update is marked, and the course and badge count it", function () {
       workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Open)]
-      updateablesRegistry.set(CourseIdentifier.from(1), [makeTmcKind({ tmcExerciseId: 1 })])
+      updateablesRegistry.setMany([[CourseIdentifier.from(1), [makeTmcKind({ tmcExerciseId: 1 })]]])
       const item = onlyExercise()
 
       expect(item.contextValue).toBe("exercise.opened.updateable")
@@ -486,7 +486,7 @@ suite("CoursesTree", function () {
     tree.onDidChangeTreeData((node) => refreshed.push(node))
     const changes = [
       () => downloadFailures.record([makeTmcKind({ tmcExerciseId: 1 })], []),
-      () => updateablesRegistry.set(CourseIdentifier.from(1), []),
+      () => updateablesRegistry.setMany([[CourseIdentifier.from(1), []]]),
       () => exercisesChanged.fire(),
       () => coursesChanged.fire(),
     ]
@@ -594,6 +594,17 @@ suite("CoursesTree", function () {
       const [item, options] = view.reveal.mock.calls[0] as [ExerciseTreeItem, object]
       expect(item.label).toBe("01_hello")
       expect(options).toEqual({ select: true, focus: true })
+    })
+
+    test("builds no other course's rows to find the exercise", async function () {
+      show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }), moocCourse())
+      const childrenRead = vi.spyOn(CourseTreeItem.prototype, "children", "get")
+
+      await tree.revealExercise(vscode.Uri.file("/exercises/tmc-slug/part01-01_hello/src/hello.py"))
+
+      expect(childrenRead.mock.contexts.map((course) => (course as CourseTreeItem).label)).toEqual([
+        "The Python Course",
+      ])
     })
 
     test("on request, reports a file no row holds", async function () {
