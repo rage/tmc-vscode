@@ -39,7 +39,6 @@ export interface TMCMockValues {
   setSettingClosedExercises: Result<void, Error>
   tmcExerciseUpdates: Result<ExerciseIdentifier[], Error>
   moocExerciseUpdates: Result<ExerciseIdentifier[], Error>
-  isMoocAuthenticated: Result<boolean, Error>
   getMoocCourseData: Result<CombinedMoocCourseData, Error>
   getEnrolledMoocCourses: Result<MoocCourse[], Error>
 }
@@ -64,7 +63,6 @@ export function createTMCMock(): [Langs, TMCMockValues] {
     setSettingClosedExercises: Ok.EMPTY,
     tmcExerciseUpdates: Ok(tmcExerciseUpdates),
     moocExerciseUpdates: Ok(moocExerciseUpdates),
-    isMoocAuthenticated: Ok(true),
     getMoocCourseData: Ok({
       course: moocCourse,
       slides: moocExerciseSlides,
@@ -92,7 +90,6 @@ export function createFailingTMCMock(): [Langs, TMCMockValues] {
     setSettingClosedExercises: error,
     tmcExerciseUpdates: error,
     moocExerciseUpdates: error,
-    isMoocAuthenticated: error,
     getMoocCourseData: error,
     getEnrolledMoocCourses: error,
   }
@@ -125,7 +122,6 @@ function setupMockValues(values: TMCMockValues): Langs {
     checkExerciseUpdates: vi.fn(async (backend: BackendKind) =>
       backend === "tmc" ? values.tmcExerciseUpdates : values.moocExerciseUpdates,
     ),
-    isMoocAuthenticated: vi.fn(async () => values.isMoocAuthenticated),
     getMoocCourseData: vi.fn(async () => values.getMoocCourseData),
     getEnrolledMoocCourses: vi.fn(async () => values.getEnrolledMoocCourses),
     downloadTmcExercises: vi.fn(async () => values.downloadTmcExercises),

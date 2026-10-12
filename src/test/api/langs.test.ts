@@ -415,7 +415,7 @@ suite("Langs class arg building", function () {
     expect(progress).toEqual([{ fraction: 0.5, message: "Grading in progress" }])
   })
 
-  test("getMoocOldSubmissions parses the mooc-submissions list", async function () {
+  test("getOldSubmissions parses the mooc-submissions list", async function () {
     const langs = newLangs()
     stubSpawn(langs, () =>
       Ok(
