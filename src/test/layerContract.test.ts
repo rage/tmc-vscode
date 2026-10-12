@@ -28,12 +28,10 @@ const carriedOnPastWarnings = [
   "downloadExerciseUpdates.ts: Failed to refresh local exercises.",
   // one notification for the whole download, naming every exercise that failed
   "downloadOrUpdateExercises.ts: Failed to download ${describeExercises(names)}.",
-  // both backends failed: the tmc half is returned, the mooc half is this
-  'logout.ts: Failed to log out of ${backendName("mooc")}.',
   'removeCourse.ts: Failed to clear the record of closed exercises for "${courseName}".',
   'removeCourse.ts: Failed to remove the workspace file for "${courseName}".',
   "submitExercise.ts: Failed to record the grading.",
-  // once per session; the only way a background poll tells the user their scope is gone
+  // once per refusal; the only way a background poll tells the user a backend refuses the session
   "updateCourse.ts: Failed to update course data.",
 ]
 

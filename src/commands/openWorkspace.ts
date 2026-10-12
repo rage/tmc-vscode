@@ -34,15 +34,11 @@ export async function openWorkspace(
   }
 
   const openCourseWorkspace = async (): Promise<void> => {
-    await withOperation(
-      dialog,
-      { failure: "Failed to open the course workspace.", backend },
-      async () => {
-        await workspaceManager.createWorkspaceFile(name, backend)
-        await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri)
-        return Ok.EMPTY
-      },
-    )
+    await withOperation(dialog, { failure: "Failed to open the course workspace." }, async () => {
+      await workspaceManager.createWorkspaceFile(name, backend)
+      await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri)
+      return Ok.EMPTY
+    })
   }
 
   if (

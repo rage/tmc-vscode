@@ -14,9 +14,8 @@ import type {
   RequestType,
   WebviewToExtension,
 } from "../shared/shared"
-import { WebviewToExtensionSchema } from "../shared/shared"
+import { toError, WebviewToExtensionSchema } from "../shared/shared"
 import { Logger } from "../utilities"
-import { backendOf } from "./routes"
 import { toWebviewError } from "./webviewError"
 
 /** A message addressed to one panel; `setPanel` is the transport's own. */
@@ -114,19 +113,19 @@ export async function dispatch(
         request,
         result.ok
           ? { ok: true, value: result.val }
-          : { ok: false, error: toWebviewError(result.val, backendOf(context.host.route)) },
+          : { ok: false, error: toWebviewError(result.val) },
       )
     }
   } catch (error) {
     Logger.error(`Failed to handle "${message.type}" from the webview`, error)
     void actionContext.dialog.reportError(
       "Something went wrong while handling that action.",
-      error instanceof Error ? error : new Error(String(error)),
+      toError(error),
     )
     if (request) {
       reply(context.host, request, {
         ok: false,
-        error: toWebviewError(error, backendOf(context.host.route)),
+        error: toWebviewError(error),
       })
     }
   }

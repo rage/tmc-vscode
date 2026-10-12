@@ -140,7 +140,6 @@ suite("Close exercise command", function () {
     expect(context.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Error when closing exercise.",
       expect.objectContaining({ message: "exercise is running" }),
-      "mooc",
     )
     expect(vscode.commands.executeCommand).not.toHaveBeenCalled()
   })
@@ -154,7 +153,6 @@ suite("Close exercise command", function () {
     expect(context.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Error when closing exercise.",
       expect.objectContaining({ message: "no such course" }),
-      "mooc",
     )
   })
 })

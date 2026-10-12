@@ -4,7 +4,6 @@ import * as vscode from "vscode"
 
 import type Langs from "../api/langs"
 import type { WorkspaceExercise } from "../api/workspaceManager"
-import { SUBMIT_PROCESS_TIMEOUT } from "../config/constants"
 import { findStoredExercise } from "../config/userdata"
 import { OutOfTriesError } from "../errors"
 import { nextPanelId } from "../panels/routes"
@@ -193,7 +192,7 @@ async function waitForMoocGrading(
     return {
       recorded: undefined,
       view: {
-        ...gradingUnavailableView(toWebviewError(waited.val, "mooc")),
+        ...gradingUnavailableView(toWebviewError(waited.val)),
         submissionUrl: grading.exercisePageUrl,
       },
     }
@@ -256,7 +255,7 @@ async function showOutcome(
             recorded.awardedPoints,
           )
     if (written.err) {
-      dialog.reportError("Failed to record the grading.", written.val, exercise.backend)
+      dialog.reportError("Failed to record the grading.", written.val)
     } else {
       exerciseDecorationProvider.updateDecorationsForExercises(exercise)
     }
@@ -315,41 +314,36 @@ export async function submitExercise(
 
   // Held only until the result is posted: the panel offers Paste from that point on, and
   // the refresh that follows doesn't need the same protection.
-  return exerciseOperations.run(
-    exerciseId,
-    "submitting",
-    SUBMIT_PROCESS_TIMEOUT + 30_000,
-    async () => {
-      const submission: Submission = {
-        panel: {
-          id: nextPanelId(),
-          type: "ExerciseSubmission",
-          backend: exercise.backend,
-          courseSlug: exercise.courseSlug,
-          exerciseSlug: exercise.exerciseSlug,
-        },
-        exercise,
-        exerciseId,
-        courseId,
-        availablePoints: unwrap(courseExercise).availablePoints,
-      }
-      // The side panel shows one submission at a time, so what the earlier ones kept is
-      // unreachable from here on.
-      unfinishedGradings.clear()
-      pendingFeedback.clear()
-      submissionViews.open(submission.panel)
+  return exerciseOperations.run(exerciseId, "submitting", async () => {
+    const submission: Submission = {
+      panel: {
+        id: nextPanelId(),
+        type: "ExerciseSubmission",
+        backend: exercise.backend,
+        courseSlug: exercise.courseSlug,
+        exerciseSlug: exercise.exerciseSlug,
+      },
+      exercise,
+      exerciseId,
+      courseId,
+      availablePoints: unwrap(courseExercise).availablePoints,
+    }
+    // The side panel shows one submission at a time, so what the earlier ones kept is
+    // unreachable from here on.
+    unfinishedGradings.clear()
+    pendingFeedback.clear()
+    submissionViews.open(submission.panel)
 
-      const outcome = await submit(submission)
-      if (outcome.err) {
-        Logger.error("Exercise submission failed", outcome.val)
-        const error = toWebviewError(outcome.val, exercise.backend)
-        showSubmissionView(submission.panel, submitFailedView(error))
-        return Ok.EMPTY
-      }
-      await showOutcome(actionContext, submission, outcome.val)
+    const outcome = await submit(submission)
+    if (outcome.err) {
+      Logger.error("Exercise submission failed", outcome.val)
+      const error = toWebviewError(outcome.val)
+      showSubmissionView(submission.panel, submitFailedView(error))
       return Ok.EMPTY
-    },
-  )
+    }
+    await showOutcome(actionContext, submission, outcome.val)
+    return Ok.EMPTY
+  })
 }
 
 /**
@@ -372,18 +366,13 @@ export async function keepWaitingForGrading(
   if (allowed.err) {
     return allowed
   }
-  return exerciseOperations.run(
-    grading.exerciseId,
-    "submitting",
-    SUBMIT_PROCESS_TIMEOUT + 30_000,
-    async () => {
-      unfinishedGradings.delete(panelId)
-      const reporter = new SubmissionProgressReporter(grading.panel, "grading")
-      const outcome = await waitForMoocGrading(actionContext.startup.langs, grading, reporter)
-      await showOutcome(actionContext, grading, outcome)
-      return Ok.EMPTY
-    },
-  )
+  return exerciseOperations.run(grading.exerciseId, "submitting", async () => {
+    unfinishedGradings.delete(panelId)
+    const reporter = new SubmissionProgressReporter(grading.panel, "grading")
+    const outcome = await waitForMoocGrading(actionContext.startup.langs, grading, reporter)
+    await showOutcome(actionContext, grading, outcome)
+    return Ok.EMPTY
+  })
 }
 
 /**

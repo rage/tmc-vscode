@@ -1,7 +1,6 @@
 import type { Result } from "ts-results"
 
 import type { WorkspaceExercise } from "../api/workspaceManager"
-import { CLI_PROCESS_TIMEOUT } from "../config/constants"
 import type { ExerciseIdentifier } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import type { ReadyActionContext } from "./types"
@@ -19,7 +18,7 @@ export async function resetExercise(
   submitFirst: boolean,
 ): Promise<Result<void, Error>> {
   const { langs } = actionContext.startup
-  return exerciseOperations.run(id, "resetting", CLI_PROCESS_TIMEOUT + 30_000, () =>
+  return exerciseOperations.run(id, "resetting", () =>
     langs.resetExercise(id, exercise.uri.fsPath, submitFirst),
   )
 }

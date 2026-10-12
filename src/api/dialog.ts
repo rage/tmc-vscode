@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 
 import { presentationFor } from "../errors"
-import type { BackendKind, CourseIdentifier } from "../shared/shared"
+import type { CourseIdentifier } from "../shared/shared"
 import { backendName, LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
 
@@ -162,12 +162,9 @@ export default class Dialog {
    * The notification carries the sentence and nothing else: the error's diagnostics —
    * details, cause chain and stack — go to the output channel behind the "Show logs"
    * button, which {@link Logger} writes in full.
-   *
-   * @param backend The backend the operation ran against, where the caller knows it; it
-   * lets the sentence name the site for errors either backend can raise.
    */
-  public async reportError(message: string, error: Error, backend?: BackendKind): Promise<void> {
-    const presentation = presentationFor(error, backend)
+  public async reportError(message: string, error: Error): Promise<void> {
+    const presentation = presentationFor(error)
     const buttons = presentation.actions.map<NotificationButton>(({ label, command }) => [
       label,
       (): void => void vscode.commands.executeCommand(command),

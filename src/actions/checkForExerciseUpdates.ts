@@ -1,7 +1,10 @@
-import { flatten } from "lodash"
-
 import type { BackendKind, CourseIdentifier } from "../shared/shared"
-import { ExerciseIdentifier, LocalCourseData, LocalCourseExercise } from "../shared/shared"
+import {
+  backendName,
+  ExerciseIdentifier,
+  LocalCourseData,
+  LocalCourseExercise,
+} from "../shared/shared"
 import { Logger } from "../utilities"
 import type { ReadyActionContext } from "./types"
 
@@ -26,66 +29,50 @@ export interface ExerciseUpdateCheck {
 }
 
 /**
- * Lists the exercises in the user's courses that have updates. A backend whose check fails
- * is skipped rather than failing the whole check, and named in `failures` if the user has
- * courses there.
+ * Lists the exercises in the user's courses that have updates. Only backends holding some of
+ * the user's courses are asked, and one whose check fails is named in `failures` rather than
+ * failing the whole check.
  */
 export async function checkForExerciseUpdates(
   actionContext: ReadyActionContext,
   options?: Options,
 ): Promise<ExerciseUpdateCheck> {
-  const { authState } = actionContext
   const { langs, userData } = actionContext.startup
   const forceRefresh = options?.forceRefresh ?? false
   Logger.info("Checking for exercise updates, forced update:", forceRefresh)
 
-  // This runs on startup and on an interval, so a failure on one backend
-  // (e.g. expired credentials) must not discard the other's results.
-  const updateableExerciseIds = new Set<number | string>()
-  const failed: { backend: BackendKind; error: Error }[] = []
-  const tmcCheckUpdatesResult = await langs.checkExerciseUpdates("tmc", { forceRefresh })
-  if (tmcCheckUpdatesResult.ok) {
-    for (const exerciseId of tmcCheckUpdatesResult.val) {
-      updateableExerciseIds.add(ExerciseIdentifier.unwrap(exerciseId))
-    }
-  } else {
-    Logger.warn("Skipping tmc.mooc.fi exercise update check; it failed:", tmcCheckUpdatesResult.val)
-    failed.push({ backend: "tmc", error: tmcCheckUpdatesResult.val })
-  }
-
-  // Skipped entirely when courses.mooc.fi has no session, so a tmc-only user pays
-  // no network cost on every background run.
-  if (authState.mooc) {
-    const moocCheckUpdatesResult = await langs.checkExerciseUpdates("mooc", { forceRefresh })
-    if (moocCheckUpdatesResult.ok) {
-      for (const exerciseId of moocCheckUpdatesResult.val) {
-        updateableExerciseIds.add(ExerciseIdentifier.unwrap(exerciseId))
-      }
+  const courses = userData.getCourses()
+  const backends = [...new Set(courses.map((course) => course.kind))]
+  const checks = await Promise.all(
+    backends.map(async (backend) => ({
+      backend,
+      result: await langs.checkExerciseUpdates(backend, { forceRefresh }),
+    })),
+  )
+  const updateable = new Set<string>()
+  const failures: ExerciseUpdateCheck["failures"] = []
+  for (const { backend, result } of checks) {
+    if (result.ok) {
+      result.val.forEach((id) => updateable.add(ExerciseIdentifier.key(id)))
     } else {
       Logger.warn(
-        "Skipping courses.mooc.fi exercise update check; it failed:",
-        moocCheckUpdatesResult.val,
+        `Skipping the ${backendName(backend)} exercise update check; it failed:`,
+        result.val,
       )
-      failed.push({ backend: "mooc", error: moocCheckUpdatesResult.val })
+      failures.push({ backend, error: result.val })
     }
-  } else {
-    Logger.debug("Skipping courses.mooc.fi exercise update check; not authenticated.")
   }
 
-  const courses = userData.getCourses()
-  const outdatedExercisesByCourse = courses.map<OutdatedExercise[]>((course) => {
+  const outdated = courses.flatMap((course) => {
     const courseId = LocalCourseData.getCourseId(course)
     return LocalCourseData.getExercises(course)
-      .filter((x) => updateableExerciseIds.has(x.data.id))
+      .filter((x) => updateable.has(ExerciseIdentifier.key(LocalCourseExercise.getId(x))))
       .map((x) => ({
         courseId,
         exerciseId: LocalCourseExercise.getId(x),
         exerciseName: LocalCourseExercise.getSlug(x),
       }))
   })
-  const outdatedExercises = flatten(outdatedExercisesByCourse)
-  Logger.info(`Update check found ${outdatedExercises.length} outdated exercises`)
-  // The tmc check also fails for users tmc.mooc.fi does not accept, who have nothing there.
-  const failures = failed.filter(({ backend }) => courses.some((course) => course.kind === backend))
-  return { outdated: outdatedExercises, failures }
+  Logger.info(`Update check found ${outdated.length} outdated exercises`)
+  return { outdated, failures }
 }

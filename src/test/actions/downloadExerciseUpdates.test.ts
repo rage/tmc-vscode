@@ -95,7 +95,6 @@ suite("downloadExerciseUpdates action", function () {
     expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
       "Failed to refresh local exercises.",
       expect.any(Error),
-      "tmc",
     )
   })
 })

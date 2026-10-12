@@ -65,7 +65,7 @@ Please close the workspace and any related files before running this command aga
     return
   }
 
-  await authState.clear()
+  await authState.set(false)
   await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", undefined)
 
   for (const sub of context.subscriptions) {

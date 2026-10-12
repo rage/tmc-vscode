@@ -12,6 +12,7 @@ import {
   makeTmcKind,
   match,
   LocalCourseData,
+  toError,
 } from "../shared/shared"
 import type Storage from "../storage"
 import type {
@@ -511,7 +512,7 @@ export class UserData {
       await this._storage.wipeStorage()
       return Ok.EMPTY
     } catch (e) {
-      return Err(e instanceof Error ? e : new Error(String(e)))
+      return Err(toError(e))
     }
   }
 
@@ -539,7 +540,7 @@ export class UserData {
         await this._storage.updateUserData(snapshot)
         return Ok.EMPTY
       } catch (e) {
-        return Err(e instanceof Error ? e : new Error(String(e)))
+        return Err(toError(e))
       }
     })
     this._pendingWrite = write

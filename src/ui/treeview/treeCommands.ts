@@ -45,7 +45,7 @@ export async function downloadExercises(
   for (const { courseId, ids } of byCourse(rows, (item) => isDownloadable(item.status))) {
     await withOperation(
       actionContext.dialog,
-      { failure: "Failed to download the exercises.", backend: courseId.kind },
+      { failure: "Failed to download the exercises." },
       () => downloadCourseExercises(actionContext, courseId, ids),
     )
   }
@@ -62,10 +62,8 @@ export async function openExercises(
     (item) => item.status !== "opened" && item.status !== "downloading",
   )
   for (const { courseId, ids } of selected) {
-    const opened = await withOperation(
-      dialog,
-      { failure: "Failed to open the exercises.", backend: courseId.kind },
-      () => downloadAndOpenExercises(actionContext, ids, courseId),
+    const opened = await withOperation(dialog, { failure: "Failed to open the exercises." }, () =>
+      downloadAndOpenExercises(actionContext, ids, courseId),
     )
     const openLimit = opened.ok ? opened.val.exceededOpenLimit : undefined
     if (openLimit !== undefined) {
@@ -86,10 +84,8 @@ export async function closeExercises(
   rows: CoursesTreeItem[],
 ): Promise<void> {
   for (const { courseId, ids } of byCourse(rows, (item) => item.status === "opened")) {
-    await withOperation(
-      actionContext.dialog,
-      { failure: "Failed to close the exercises.", backend: courseId.kind },
-      () => closeExercisesAction(actionContext, ids, courseId),
+    await withOperation(actionContext.dialog, { failure: "Failed to close the exercises." }, () =>
+      closeExercisesAction(actionContext, ids, courseId),
     )
   }
 }
@@ -101,36 +97,32 @@ export async function closeCompletedExercises(
 ): Promise<void> {
   const { dialog } = actionContext
   const { userData, workspaceManager } = actionContext.startup
-  await withOperation(
-    dialog,
-    { failure: "Failed to close the completed exercises.", backend: courseId.kind },
-    async () => {
-      const course = userData.getCourse(courseId)
-      if (course.err) {
-        return course
-      }
-      const courseName = LocalCourseData.getCourseName(course.val)
-      const openSlugs = new Set(
-        workspaceManager
-          .getExercisesByCourseSlug(course.val.kind, courseName)
-          .filter((ex) => ex.status === ExerciseStatus.Open)
-          .map((ex) => ex.exerciseSlug),
-      )
-      const ids: ExerciseIdentifier[] = LocalCourseData.getExercises(course.val)
-        .filter((ex) => ex.data.passed && openSlugs.has(LocalCourseExercise.getSlug(ex)))
-        .map((ex) => LocalCourseExercise.getId(ex))
-      if (ids.length === 0) {
-        dialog.statusMessage("No completed exercises are open.")
-        return Ok.EMPTY
-      }
-      const closed = await closeExercisesAction(actionContext, ids, courseId)
-      if (closed.err) {
-        return closed
-      }
-      dialog.statusMessage(`Closed ${countOf(closed.val.length, "completed exercise")}.`)
+  await withOperation(dialog, { failure: "Failed to close the completed exercises." }, async () => {
+    const course = userData.getCourse(courseId)
+    if (course.err) {
+      return course
+    }
+    const courseName = LocalCourseData.getCourseName(course.val)
+    const openSlugs = new Set(
+      workspaceManager
+        .getExercisesByCourseSlug(course.val.kind, courseName)
+        .filter((ex) => ex.status === ExerciseStatus.Open)
+        .map((ex) => ex.exerciseSlug),
+    )
+    const ids: ExerciseIdentifier[] = LocalCourseData.getExercises(course.val)
+      .filter((ex) => ex.data.passed && openSlugs.has(LocalCourseExercise.getSlug(ex)))
+      .map((ex) => LocalCourseExercise.getId(ex))
+    if (ids.length === 0) {
+      dialog.statusMessage("No completed exercises are open.")
       return Ok.EMPTY
-    },
-  )
+    }
+    const closed = await closeExercisesAction(actionContext, ids, courseId)
+    if (closed.err) {
+      return closed
+    }
+    dialog.statusMessage(`Closed ${countOf(closed.val.length, "completed exercise")}.`)
+    return Ok.EMPTY
+  })
 }
 
 /** Downloads the updates the last check found for the course's exercises. */
@@ -138,14 +130,11 @@ export async function updateCourseExercises(
   actionContext: ReadyActionContext,
   courseId: CourseIdentifier,
 ): Promise<void> {
-  await withOperation(
-    actionContext.dialog,
-    { failure: "Failed to update the exercises.", backend: courseId.kind },
-    () =>
-      downloadExerciseUpdates(
-        actionContext,
-        updateablesRegistry.get(courseId).map((exerciseId) => ({ courseId, exerciseId })),
-      ),
+  await withOperation(actionContext.dialog, { failure: "Failed to update the exercises." }, () =>
+    downloadExerciseUpdates(
+      actionContext,
+      updateablesRegistry.get(courseId).map((exerciseId) => ({ courseId, exerciseId })),
+    ),
   )
 }
 
@@ -156,7 +145,7 @@ export async function dismissNewExercises(
 ): Promise<void> {
   await withOperation(
     actionContext.dialog,
-    { failure: "Failed to dismiss the new exercises.", backend: courseId.kind },
+    { failure: "Failed to dismiss the new exercises." },
     () => actionContext.startup.userData.clearFromNewExercises(courseId),
   )
 }

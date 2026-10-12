@@ -60,7 +60,6 @@ suite("Submit exercise command", function () {
     expect(context.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Exercise submission failed.",
       cause,
-      "mooc",
     )
   })
 

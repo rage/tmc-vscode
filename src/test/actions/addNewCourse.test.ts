@@ -61,24 +61,10 @@ suite("addNewCourse action (mooc)", function () {
     // so the Courses view can offer them for download.
     expect(stored?.exercises.map((e) => e.id)).toEqual([MOOC_EXERCISE_UUID])
     expect(stored?.exercises[0]?.name).toBe("mooc_hello")
-    // Points and passed state come from `mooc course-progress` (fixture: passed, 1/1).
+    // Points and passed state come from the course's progress (fixture: passed, 1/1).
     expect(stored?.exercises[0]?.passed).toBe(true)
     expect(stored?.awardedPoints).toBe(1)
     expect(stored?.availablePoints).toBe(1)
-  })
-
-  test("a failed progress fetch still adds the course, with zeroed progress", async function () {
-    tmcMockValues.getMoocCourseProgress = Err(new Error("transient"))
-    const result = await addNewCourse(
-      actionContext(),
-      "unused-org-slug",
-      CourseIdentifier.from(MOOC_COURSE_UUID),
-    )
-    expect(result.ok).toBe(true)
-    const stored = userData.getMoocCourses()[0]
-    expect(stored?.exercises[0]?.passed).toBe(false)
-    expect(stored?.awardedPoints).toBe(0)
-    expect(stored?.availablePoints).toBe(0)
   })
 
   test("propagates a Langs error and adds no course", async function () {

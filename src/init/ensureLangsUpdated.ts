@@ -1,10 +1,9 @@
+import { createHash, randomUUID } from "crypto"
 import * as path from "path"
 
-import { Sha256 } from "@aws-crypto/sha256-js"
 import * as fs from "fs-extra"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
-import type * as vscode from "vscode"
 
 import type Dialog from "../api/dialog"
 import { FileSystemError, InitializationError } from "../errors"
@@ -13,41 +12,6 @@ import { downloadFile, getLangsCLIForPlatform, getPlatform, Logger, sleep } from
 /** Extra attempts after the first, for the one download too large to redo cheaply. */
 const DOWNLOAD_RETRIES = 2
 const RETRY_BACKOFF_MS = 500
-
-/** Global-state key holding the CLI a previous run checksummed successfully. */
-export const VERIFIED_CLI_KEY = "tmc-langs-verified-cli"
-
-/**
- * Identifies the exact file a checksum verdict was reached about. Hashing 51 MB
- * of CLI costs most of a second, so a run that finds all four fields unchanged
- * skips it; any redownload or hand-edit changes the size or the mtime and the
- * hash runs again.
- */
-interface VerifiedCli {
-  version: string
-  cliPath: string
-  size: number
-  mtimeMs: number
-}
-
-/** Describes the CLI on disk now, or `undefined` if it is not readable. */
-async function describeCli(cliPath: string, version: string): Promise<VerifiedCli | undefined> {
-  const stats = await fs.stat(cliPath).catch(() => undefined)
-  if (!stats) {
-    return undefined
-  }
-  return { version, cliPath, size: stats.size, mtimeMs: stats.mtimeMs }
-}
-
-function isSameCli(remembered: VerifiedCli | undefined, current: VerifiedCli): boolean {
-  return (
-    remembered !== undefined &&
-    remembered.version === current.version &&
-    remembered.cliPath === current.cliPath &&
-    remembered.size === current.size &&
-    remembered.mtimeMs === current.mtimeMs
-  )
-}
 
 /**
  * Parses the hash out of a `.sha256` file's contents and normalizes it to
@@ -105,44 +69,60 @@ export async function verifyCli(
  */
 function hashFile(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const hash = new Sha256()
+    const hash = createHash("sha256")
     const stream = fs.createReadStream(filePath)
     stream.on("error", reject)
     stream.on("data", (chunk) => hash.update(chunk))
-    stream.on("end", () => resolve(Buffer.from(hash.digestSync()).toString("hex")))
+    stream.on("end", () => resolve(hash.digest("hex")))
   })
 }
 
+/** How long a download's temp file goes unchanged before it counts as abandoned. */
+const ABANDONED_DOWNLOAD_AGE_MS = 60 * 60 * 1000
+
+/** Whether `entry` is a file a download writes before renaming it into place. */
+function isDownloadTempFile(entry: string): boolean {
+  return entry.startsWith("temp-") || entry.endsWith(".tmp")
+}
+
 /**
- * Removes the CLI folder, tolerating a missing folder and retrying on transient
- * Windows ENOTEMPTY/EBUSY failures. Returns an Err Result instead of throwing so
- * a failed delete can never crash activation.
+ * Deletes what earlier installs left in the CLI folder: other versions, and downloads abandoned
+ * long enough ago that no install still writes them. Never throws; an entry that cannot be
+ * removed, such as a CLI another window is running, is logged and left.
+ *
+ * @param keep The entries to leave, by file name.
  */
-export async function removeCliFolder(cliFolder: string): Promise<Result<void, Error>> {
-  try {
-    await fs.rm(cliFolder, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
-    return Ok.EMPTY
-  } catch (error) {
-    return Err(new FileSystemError(error, `Failed to remove CLI folder ${cliFolder}`))
+export async function removeStaleCliFiles(cliFolder: string, keep: string[]): Promise<void> {
+  const entries = await fs.readdir(cliFolder).catch(() => [])
+  for (const entry of entries.filter((x) => !keep.includes(x))) {
+    const entryPath = path.join(cliFolder, entry)
+    try {
+      if (isDownloadTempFile(entry)) {
+        const { mtimeMs } = await fs.stat(entryPath)
+        if (Date.now() - mtimeMs < ABANDONED_DOWNLOAD_AGE_MS) {
+          continue
+        }
+      }
+      await fs.rm(entryPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    } catch (error) {
+      Logger.warn(`Failed to remove ${entryPath} from the CLI folder`, error)
+    }
   }
 }
 
 /**
  * Downloads correct langs version for the current extension version, unless already present. Will
- * remove any previous versions in the process.
+ * remove any previous versions once it has.
  *
  * @param cliFolder
  * @param dialog
  * @param config Download URL and version to fetch; owned by the caller (the
  * extension passes the build-inlined constants, tests pass a local server).
- * @param memento Where the checksum verdict is remembered between runs, so an
- * unchanged CLI is not rehashed on every activation.
  */
 async function ensureLangsUpdated(
   cliFolder: string,
   dialog: Dialog,
   config: { downloadUrl: string; version: string },
-  memento: vscode.Memento,
 ): Promise<Result<string, Error>> {
   const { downloadUrl, version } = config
 
@@ -177,18 +157,11 @@ async function ensureLangsUpdated(
     }
   }
 
-  const onDisk = await describeCli(cliPath, version)
-  if (onDisk && isSameCli(memento.get<VerifiedCli>(VERIFIED_CLI_KEY), onDisk)) {
-    return Ok(cliPath)
-  }
-
   // check shasum
   const initial = await verifyCli(cliPath, shaPath)
   if (!initial.match) {
     Logger.error("Mismatch between CLI and checksum, trying redownload")
     Logger.debug(`CLI "${initial.cliDigest}", hash "${initial.hashData}"`)
-    // downloadLangs() clears the CLI folder before redownloading, so no
-    // separate delete is needed here.
     const result = await downloadLangs(
       cliFolder,
       cliPath,
@@ -218,11 +191,6 @@ async function ensureLangsUpdated(
         ),
       )
     }
-  }
-
-  const verified = await describeCli(cliPath, version)
-  if (verified) {
-    await memento.update(VERIFIED_CLI_KEY, verified)
   }
 
   return Ok(cliPath)
@@ -255,14 +223,9 @@ async function downloadLangs(
   version: string,
   dialog: Dialog,
 ): Promise<Result<void, Error>> {
-  const removeResult = await removeCliFolder(cliFolder)
-  if (removeResult.err) {
-    Logger.error("Failed to clear existing CLI folder before download:", removeResult.val)
-    return removeResult
-  }
-
-  // copy to temp file and rename to prevent partial downloads from causing issues
-  const tempPath = path.join(cliFolder, `temp-${executable}`)
+  // A download goes to a temp file renamed into place, so a partial one is never run. The name
+  // is this run's own: another window may be installing the same CLI into the same folder.
+  const tempPath = path.join(cliFolder, `temp-${randomUUID()}-${executable}`)
 
   Logger.info(`Downloading TMC-langs from ${cliUrl} to temporary file ${tempPath}`)
   const message = `Downloading the TestMyCode tools (${version})…`
@@ -311,21 +274,43 @@ async function downloadLangs(
             You can try again or make it executable manually and remove the "temp-" prefix.`,
       e,
     )
-    // Typing change from update
-    return Err(e as Error)
+    return Err(new FileSystemError(e, `Failed to make ${tempPath} executable`))
   }
-  await fs.rename(tempPath, cliPath)
+  const installed = await moveIntoPlace(tempPath, cliPath)
+  if (installed.err) {
+    return installed
+  }
 
   // Same temp-then-rename as the binary: a checksum file that exists is complete.
-  const shaTempPath = shaPath + ".tmp"
+  const shaTempPath = `${shaPath}.${randomUUID()}.tmp`
   const shaResult = await downloadFile(shaUrl, shaTempPath)
   if (shaResult.err) {
     Logger.error("An error occurred while downloading the checksum for TMC-langs:", shaResult.val)
     return Err(shaResult.val)
   }
-  await fs.rename(shaTempPath, shaPath)
+  const checksumInstalled = await moveIntoPlace(shaTempPath, shaPath)
+  if (checksumInstalled.ok) {
+    await removeStaleCliFiles(cliFolder, [path.basename(cliPath), path.basename(shaPath)])
+  }
+  return checksumInstalled
+}
 
-  return Ok.EMPTY
+/**
+ * Renames a finished download to `target`. When that fails because another window got there
+ * first, or on Windows is running the CLI already in place, whatever is at `target` is used and
+ * the checksum check that follows decides whether it will do.
+ */
+async function moveIntoPlace(tempPath: string, target: string): Promise<Result<void, Error>> {
+  try {
+    await fs.rename(tempPath, target)
+    return Ok.EMPTY
+  } catch (error) {
+    if (await fs.pathExists(target)) {
+      Logger.warn(`Using the ${target} another install put in place`, error)
+      return Ok.EMPTY
+    }
+    return Err(new FileSystemError(error, `Failed to move ${tempPath} to ${target}`))
+  }
 }
 
 export { ensureLangsUpdated }

@@ -86,7 +86,6 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
     dialog,
     {
       failure: "Failed to add course.",
-      backend: chosen.courseId.kind,
       progress: `Adding ${chosen.name}…`,
     },
     () => actions.addNewCourse(actionContext, chosen.organizationSlug, chosen.courseId),
@@ -189,7 +188,6 @@ function pickCourse(
         void dialog.reportError(
           `Failed to fetch organization courses for ${organization.name}.`,
           courses.val,
-          "tmc",
         )
         settle(undefined)
         return

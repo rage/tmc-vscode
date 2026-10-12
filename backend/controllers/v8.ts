@@ -267,7 +267,7 @@ export const registerV8Routes = (
     })
   }
 
-  // getCourseDetails(0)
+  // getTmcCourseData()
   for (const { course, exercises } of courseExercises) {
     app.get(
       `/api/v8/core/courses/${course.id}`,
@@ -282,7 +282,7 @@ export const registerV8Routes = (
     )
   }
 
-  // downloadExercises()
+  // downloadTmcExercises()
   app.get("/api/v8/core/exercises/details", (req, res: Response<DetailsForLangs>) => {
     // tmc-langs sends several ids as one comma-separated value.
     const rawIds = req.query.ids

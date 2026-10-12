@@ -803,6 +803,7 @@ export { invalidCliOutputFixtures, validCliOutputFixtures }
 // one of these rather than hand-rolling a partial one.
 export {
   course,
+  courseData,
   courseDetails,
   exerciseDetails,
   localMoocExercise,

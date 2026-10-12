@@ -5,10 +5,10 @@ import {
 } from "../config/constants"
 import type {
   CombinedCourseData,
+  CombinedMoocCourseData,
   CourseExercise,
   Exercise,
   ExerciseProgress,
-  MoocCourse,
   MoocCourseProgress,
   TmcExerciseSlide,
 } from "../shared/langsSchema"
@@ -51,9 +51,8 @@ export function combineTmcApiExerciseData(
 
 /**
  * Builds local mooc exercises from the course's exercise slides and the
- * user's per-exercise progress. When `progress` is unavailable (e.g. a
- * transient fetch failure), falls back to `previousExercises` per exercise id
- * so a refresh never wipes previously known points or passed flags.
+ * user's per-exercise progress. An exercise `progress` does not list keeps its
+ * `previousExercises` points and flags, so a refresh never wipes known ones.
  *
  * One local exercise per slide, keyed by `slide.exercise_id` (a UUID): the bulk
  * download/update CLI subcommand resolves `--exercise-id` against that field, not
@@ -61,10 +60,10 @@ export function combineTmcApiExerciseData(
  */
 export function combineMoocApiExerciseData(
   slides: TmcExerciseSlide[],
-  progress: MoocCourseProgress | undefined,
+  progress: MoocCourseProgress,
   previousExercises: MoocLocalCourseExercise[] = [],
 ): MoocLocalCourseExercise[] {
-  const progressById = new Map(progress?.exercises.map((x) => [x.exercise_id, x]) ?? [])
+  const progressById = new Map(progress.exercises.map((x) => [x.exercise_id, x]))
   const previousById = new Map(previousExercises.map((x) => [x.id, x]))
   return slides.map<MoocLocalCourseExercise>((slide) => {
     const exerciseProgress = progressById.get(slide.exercise_id)
@@ -173,16 +172,12 @@ export function toStoredTmcCourse(
 /**
  * The stored form of a courses.mooc.fi course, for both adding it and refreshing it.
  *
- * @param progress `undefined` when its fetch failed: exercises then keep
- *   `previous`'s points and passed flags, or start at zero on an add.
  * @param previous The stored course being refreshed. Its `name`, `newExercises`
  *   and `notifyAfter` are kept; every other field is rebuilt, so a refresh and an
  *   add of the same payload agree. Unlike tmc, `organization` is the course's own.
  */
 export function toStoredMoocCourse(
-  course: MoocCourse,
-  slides: TmcExerciseSlide[],
-  progress: MoocCourseProgress | undefined,
+  { course, slides, progress }: CombinedMoocCourseData,
   previous?: MoocLocalCourseData,
 ): MoocLocalCourseData {
   const exercises = combineMoocApiExerciseData(slides, progress, previous?.exercises)

@@ -30,8 +30,13 @@ import {
   NotFoundError,
   RuntimeError,
 } from "../errors"
-import type { ExerciseTaskSubmissionStatus, SubmissionFeedback } from "../shared/langsSchema"
-import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
+import type {
+  ExerciseSlideSubmissionListItem,
+  ExerciseTaskSubmissionStatus,
+  Submission,
+  SubmissionFeedback,
+} from "../shared/langsSchema"
+import { ExerciseIdentifier, makeMoocKind, makeTmcKind } from "../shared/shared"
 import { getLangsCLIForPlatform, getPlatform } from "../utilities"
 
 // __dirname is the dist folder when built.
@@ -129,14 +134,12 @@ suite("tmc langs cli spec", function () {
     // of the user asking to log out. The CLI deletes the credential it was
     // holding, so the extension has to be told the session is gone.
     //
-    // getCourseDetails stands in for a settings call, which Langs does not
-    // expose; get-course-data would not work here, since its LangsError
-    // wrapping hides the 401 the CLI otherwise turns into invalid-token (see
-    // the comment in "should not get existing api data in general" below).
+    // Not get-course-data: its LangsError wrapping hides the 401 the CLI otherwise
+    // turns into invalid-token (see "should not get existing api data in general").
     test("reports a logout when the backend rejects the stored token", async function () {
       writeCredentials(configDir, "no-longer-accepted")
 
-      const result = await tmc.getCourseDetails(CourseIdentifier.from(1))
+      const result = await tmc.getCourses("test")
       expect(result.val).to.be.instanceOf(InvalidTokenError)
       expect(onLoggedOutCalls).to.be.equal(1)
       expect(fs.existsSync(path.join(configDir, "credentials.json"))).to.be.false
@@ -163,18 +166,13 @@ suite("tmc langs cli spec", function () {
     })
 
     test("should be able to download an existing exercise", async function () {
-      const result = await tmc.downloadExercises([ExerciseIdentifier.from(1)], true, () => {})
-      result.tmcError && expect.fail(`Expected operation to succeed: ${result.tmcError.message}`)
+      await unwrapResult(tmc.downloadTmcExercises([1], true, () => {}))
     }).timeout(10000)
 
     // Ids missing from the server are missing from the response.
     test.skip("should not be able to download a non-existent exercise", async function () {
-      const { tmc: tmcDownloads } = await tmc.downloadExercises(
-        [ExerciseIdentifier.from(404)],
-        true,
-        () => {},
-      )
-      expect(tmcDownloads.failed?.length).to.be.equal(1)
+      const downloads = await unwrapResult(tmc.downloadTmcExercises([404], true, () => {}))
+      expect(downloads.failed.length).to.be.equal(1)
     })
 
     test("should get existing api data", async function () {
@@ -183,15 +181,11 @@ suite("tmc langs cli spec", function () {
       expect(data.exercises.length).to.be.equal(2)
       expect(data.settings.name).to.be.equal("python-course")
 
-      const details = (await tmc.getCourseDetails(CourseIdentifier.from(1))).unwrap()
-      expect(details.id).to.be.equal(1)
-      expect(details.name).to.be.equal("python-course")
-
       const courses = (await tmc.getCourses("test")).unwrap()
       expect(courses.length).to.be.equal(2)
       expect(courses.some((x) => x.name === "python-course")).to.be.true
 
-      const submissions = (await tmc.getTmcOldSubmissions(1)).unwrap()
+      const submissions = (await tmcSubmissions(tmc, 1)).unwrap()
       expect(submissions.length).to.be.greaterThan(0)
 
       const organizations = (await tmc.getTmcOrganizations()).unwrap()
@@ -202,13 +196,10 @@ suite("tmc langs cli spec", function () {
       const dataResult = await tmc.getTmcCourseData(404)
       expect(dataResult.val).to.be.instanceOf(RuntimeError)
 
-      const detailsResult = await tmc.getCourseDetails(CourseIdentifier.from(404))
-      expect(detailsResult.val).to.be.instanceOf(NotFoundError)
-
       const coursesResult = await tmc.getCourses("404")
       expect(coursesResult.val).to.be.instanceOf(NotFoundError)
 
-      const submissionsResult = await tmc.getTmcOldSubmissions(404)
+      const submissionsResult = await tmcSubmissions(tmc, 404)
       expect(submissionsResult.val).to.be.instanceOf(NotFoundError)
     })
 
@@ -226,11 +217,7 @@ suite("tmc langs cli spec", function () {
 
       setup(async function () {
         deleteSync(projectsDir, { force: true })
-        const { tmc: tmcRes } = await tmc.downloadExercises(
-          [ExerciseIdentifier.from(1)],
-          true,
-          () => {},
-        )
+        const tmcRes = await unwrapResult(tmc.downloadTmcExercises([1], true, () => {}))
         const downloaded = tmcRes.downloaded[0]
         if (!downloaded) {
           throw new Error("expected an exercise to have been downloaded")
@@ -275,40 +262,52 @@ suite("tmc langs cli spec", function () {
       })
 
       test("should be able to save the exercise state and revert it to an old submission", async function () {
-        const submissions = await unwrapResult(tmc.getTmcOldSubmissions(1))
-        await unwrapResult(tmc.downloadTmcOldSubmission(1, exercisePath, 1, true))
+        const submissions = await unwrapResult(tmcSubmissions(tmc, 1))
+        await unwrapResult(
+          tmc.restoreSubmission(
+            makeTmcKind({ exerciseId: 1, submissionId: 1 }),
+            exercisePath,
+            true,
+          ),
+        )
 
         // State saving check is based on a side effect of making a new submission.
-        const newSubmissions = await unwrapResult(tmc.getTmcOldSubmissions(1))
+        const newSubmissions = await unwrapResult(tmcSubmissions(tmc, 1))
         expect(newSubmissions.length).to.be.equal(submissions.length + 1)
       })
 
       test("should be able to download an old submission without saving the current state", async function () {
-        const submissions = await unwrapResult(tmc.getTmcOldSubmissions(1))
-        await unwrapResult(tmc.downloadTmcOldSubmission(1, exercisePath, 1, false))
+        const submissions = await unwrapResult(tmcSubmissions(tmc, 1))
+        await unwrapResult(
+          tmc.restoreSubmission(
+            makeTmcKind({ exerciseId: 1, submissionId: 1 }),
+            exercisePath,
+            false,
+          ),
+        )
 
         // State saving check is based on a side effect of making a new submission.
-        const newSubmissions = await unwrapResult(tmc.getTmcOldSubmissions(1))
+        const newSubmissions = await unwrapResult(tmcSubmissions(tmc, 1))
         expect(newSubmissions.length).to.be.equal(submissions.length)
       })
 
       // Langs fails to remove folder on Windows CI
       test.skip("should be able to save the exercise state and reset it to original template", async function () {
-        const submissions = await unwrapResult(tmc.getTmcOldSubmissions(1))
+        const submissions = await unwrapResult(tmcSubmissions(tmc, 1))
         await unwrapResult(tmc.resetExercise(ExerciseIdentifier.from(1), exercisePath, true))
 
         // State saving check is based on a side effect of making a new submission.
-        const newSubmissions = await unwrapResult(tmc.getTmcOldSubmissions(1))
+        const newSubmissions = await unwrapResult(tmcSubmissions(tmc, 1))
         expect(newSubmissions.length).to.be.equal(submissions.length + 1)
       })
 
       // Langs fails to remove folder on Windows CI
       test.skip("should be able to reset exercise without saving the current state", async function () {
-        const submissions = await unwrapResult(tmc.getTmcOldSubmissions(1))
+        const submissions = await unwrapResult(tmcSubmissions(tmc, 1))
         await unwrapResult(tmc.resetExercise(ExerciseIdentifier.from(1), exercisePath, false))
 
         // State saving check is based on a side effect of making a new submission.
-        const newSubmissions = await unwrapResult(tmc.getTmcOldSubmissions(1))
+        const newSubmissions = await unwrapResult(tmcSubmissions(tmc, 1))
         expect(newSubmissions.length).to.be.equal(submissions.length)
       })
 
@@ -329,13 +328,13 @@ suite("tmc langs cli spec", function () {
       })
 
       test("should be able to submit the exercise to TMC-paste", async function () {
-        const pasteUrl = await unwrapResult(tmc.submitTmcExerciseToPaste(1, exercisePath))
+        const pasteUrl = await unwrapResult(tmc.paste(ExerciseIdentifier.from(1), exercisePath))
         expect(pasteUrl).to.include("localhost")
       })
 
       test("should encounter an error if trying to submit to paste twice too soon", async function () {
-        const firstSubmission = tmc.submitTmcExerciseToPaste(1, exercisePath)
-        const second = tmc.submitTmcExerciseToPaste(1, exercisePath)
+        const firstSubmission = tmc.paste(ExerciseIdentifier.from(1), exercisePath)
+        const second = tmc.paste(ExerciseIdentifier.from(1), exercisePath)
         const [, secondResult] = await Promise.all([firstSubmission, second])
         expect(secondResult.val).to.be.instanceOf(BottleneckError)
       })
@@ -360,7 +359,11 @@ suite("tmc langs cli spec", function () {
 
       // Downloads exercise on Langs 0.18
       test.skip("should encounter an error when attempting to revert to an older submission", async function () {
-        const result = await tmc.downloadTmcOldSubmission(1, missingExercisePath, 1, false)
+        const result = await tmc.restoreSubmission(
+          makeTmcKind({ exerciseId: 1, submissionId: 1 }),
+          missingExercisePath,
+          false,
+        )
         expect(result.val).to.be.instanceOf(RuntimeError)
       })
 
@@ -384,7 +387,7 @@ suite("tmc langs cli spec", function () {
       })
 
       test("should encounter an error when trying to submit it to TMC-paste", async function () {
-        const result = await tmc.submitTmcExerciseToPaste(404, missingExercisePath)
+        const result = await tmc.paste(ExerciseIdentifier.from(404), missingExercisePath)
         expect(result.val).to.be.instanceOf(RuntimeError)
       })
     })
@@ -420,7 +423,6 @@ suite("tmc langs cli spec", function () {
     test("a stored mooc credential authenticates the tmc backend", async function () {
       writeMoocCredentials(configDir)
       expect(await unwrapResult(tmc.isAuthenticated())).to.be.true
-      expect(await unwrapResult(tmc.isMoocAuthenticated())).to.be.true
     })
 
     // What a new user has: the only login left issues a mooc credential, and
@@ -432,30 +434,23 @@ suite("tmc langs cli spec", function () {
       expect(courses.some((x) => x.name === "python-course")).to.be.true
       const data = await unwrapResult(tmc.getTmcCourseData(1))
       expect(data.details.name).to.be.equal("python-course")
-      const { tmc: downloads, tmcError } = await tmc.downloadExercises(
-        [ExerciseIdentifier.from(1)],
-        true,
-        () => {},
-      )
-      tmcError && expect.fail(`Expected the download to succeed: ${tmcError.message}`)
+      const downloads = await unwrapResult(tmc.downloadTmcExercises([1], true, () => {}))
       expect(downloads.downloaded.length).to.be.equal(1)
       expect(fs.existsSync(path.join(configDir, "credentials.json"))).to.be.false
     }).timeout(20000)
 
-    test("tmc logout leaves the mooc credentials in place", async function () {
+    test("logging out removes both the tmc and the mooc credentials", async function () {
       writeCredentials(configDir)
       writeMoocCredentials(configDir)
       await unwrapResult(tmc.deauthenticate())
       expect(fs.existsSync(path.join(configDir, "credentials.json"))).to.be.false
-      // `tmc logout` owns credentials.json only; the mooc session survives it
-      // and keeps authenticating both backends.
-      expect(await unwrapResult(tmc.isMoocAuthenticated())).to.be.true
-      expect(await unwrapResult(tmc.isAuthenticated())).to.be.true
+      expect(hasMoocCredentials(configDir)).to.be.false
+      expect(await unwrapResult(tmc.isAuthenticated())).to.be.false
     })
 
     test("should not be able to download an exercise", async function () {
-      const result = await tmc.downloadExercises([ExerciseIdentifier.from(1)], true, () => {})
-      expect(result.tmcError).to.be.instanceOf(RuntimeError)
+      const result = await tmc.downloadTmcExercises([1], true, () => {})
+      expect(result.val).to.be.instanceOf(RuntimeError)
     })
 
     // None of these reaches the mock: the CLI refuses a tmc command it holds no
@@ -469,13 +464,10 @@ suite("tmc langs cli spec", function () {
       const dataResult = await tmc.getTmcCourseData(0)
       expect(dataResult.val).to.be.instanceOf(RuntimeError)
 
-      const detailsResult = await tmc.getCourseDetails(CourseIdentifier.from(0))
-      expect(detailsResult.val).to.be.instanceOf(AuthorizationError)
-
       const coursesResult = await tmc.getCourses("test")
       expect(coursesResult.val).to.be.instanceOf(AuthorizationError)
 
-      const submissionsResult = await tmc.getTmcOldSubmissions(1)
+      const submissionsResult = await tmcSubmissions(tmc, 1)
       expect(submissionsResult.val).to.be.instanceOf(AuthorizationError)
     })
 
@@ -500,11 +492,7 @@ suite("tmc langs cli spec", function () {
       setup(async function () {
         deleteSync(projectsDir, { force: true })
         writeCredentials(configDir)
-        const { tmc: tmcRes } = await tmc.downloadExercises(
-          [ExerciseIdentifier.from(1)],
-          true,
-          () => {},
-        )
+        const tmcRes = await unwrapResult(tmc.downloadTmcExercises([1], true, () => {}))
         clearCredentials(configDir)
         const downloaded = tmcRes.downloaded[0]
         if (!downloaded) {
@@ -530,7 +518,11 @@ suite("tmc langs cli spec", function () {
       })
 
       test("should not be able to load old submission", async function () {
-        const result = await tmc.downloadTmcOldSubmission(1, exercisePath, 1, true)
+        const result = await tmc.restoreSubmission(
+          makeTmcKind({ exerciseId: 1, submissionId: 1 }),
+          exercisePath,
+          true,
+        )
         expect(result.val).to.be.instanceOf(RuntimeError)
       })
 
@@ -546,7 +538,7 @@ suite("tmc langs cli spec", function () {
 
       // This actually works
       test.skip("should not be able to submit exercise to TMC-paste", async function () {
-        const result = await tmc.submitTmcExerciseToPaste(1, exercisePath)
+        const result = await tmc.paste(ExerciseIdentifier.from(1), exercisePath)
         expect(result.val).to.be.instanceOf(AuthorizationError)
       })
     })
@@ -590,8 +582,9 @@ suite("tmc langs cli spec", function () {
       expect(courses.some((c) => c.name === "MOOC Unenrolled Course")).to.be.false
     })
 
-    test("should get mooc course data with exercise slides", async function () {
-      const [course, slides] = (await tmc.getMoocCourseData(PYTHON_COURSE_ID)).unwrap()
+    test("should get mooc course data with exercise slides and progress", async function () {
+      const { course, slides, progress } = (await tmc.getMoocCourseData(PYTHON_COURSE_ID)).unwrap()
+      expect(progress.course_id).to.be.equal(PYTHON_COURSE_ID)
       expect(course.name).to.be.equal("MOOC Python Course")
       expect(slides.length).to.be.equal(1)
       expect(slides[0]?.exercise_id).to.be.equal(PASSING_EXERCISE_ID)
@@ -631,7 +624,7 @@ suite("tmc langs cli spec", function () {
 
       // Read it back off the host's own record rather than through the extension:
       // `mime` is part of the wire contract but nothing in the extension consumes it.
-      const submissions = (await tmc.getMoocOldSubmissions(PASSING_EXERCISE_ID)).unwrap()
+      const submissions = (await moocSubmissions(tmc, PASSING_EXERCISE_ID)).unwrap()
       const newest = first(submissions)
       expect(newest, "the submit must be listed").to.not.be.undefined
       const download = await fetch(
@@ -678,44 +671,37 @@ suite("tmc langs cli spec", function () {
       const dir = writeSubmittableProject("mooc-paste")
       // `mooc paste` submits (non-blocking) then shares the resulting submission,
       // resolving the slide-submission id from the exercise's submissions list.
-      const pasteUrl = (await tmc.submitMoocExerciseToPaste(PASSING_EXERCISE_ID, dir)).unwrap()
+      const pasteUrl = (await tmc.paste(ExerciseIdentifier.from(PASSING_EXERCISE_ID), dir)).unwrap()
       expect(pasteUrl).to.match(/\/shared-submissions\/[0-9a-f-]+$/)
     })
 
     test("should download mooc exercises then skip them by checksum", async function () {
-      const ids = [
-        ExerciseIdentifier.from(PASSING_EXERCISE_ID),
-        ExerciseIdentifier.from(FAILING_EXERCISE_ID),
-      ]
-      const { mooc: firstMooc } = await tmc.downloadExercises(ids, false, () => {})
+      const ids = [PASSING_EXERCISE_ID, FAILING_EXERCISE_ID]
+      const firstMooc = (await tmc.downloadMoocExercises(ids, undefined, () => {})).unwrap()
       expect(firstMooc.downloaded.length).to.be.equal(2)
       expect(firstMooc.skipped.length).to.be.equal(0)
 
       // second run: identical checksums -> skipped, nothing re-downloaded
-      const { mooc: secondMooc } = await tmc.downloadExercises(ids, false, () => {})
+      const secondMooc = (await tmc.downloadMoocExercises(ids, undefined, () => {})).unwrap()
       expect(secondMooc.downloaded.length).to.be.equal(0)
       expect(secondMooc.skipped.length).to.be.equal(2)
     })
 
     test("should report a failed entry for a nonexistent mooc exercise", async function () {
-      const { mooc } = await tmc.downloadExercises(
-        [ExerciseIdentifier.from(NONEXISTENT_EXERCISE_ID)],
-        false,
-        () => {},
-      )
-      expect(mooc.failed?.length).to.be.equal(1)
+      const mooc = (
+        await tmc.downloadMoocExercises([NONEXISTENT_EXERCISE_ID], undefined, () => {})
+      ).unwrap()
+      expect(mooc.failed.length).to.be.equal(1)
     })
 
     test("should key mooc download results by the requested exercise id", async function () {
       // Regression guard for the task_id/exercise_id confusion: the result must
       // be addressable by the exercise id the caller passed in.
-      const { mooc } = await tmc.downloadExercises(
-        [ExerciseIdentifier.from(PASSING_EXERCISE_ID)],
-        false,
-        () => {},
-      )
+      const mooc = (
+        await tmc.downloadMoocExercises([PASSING_EXERCISE_ID], undefined, () => {})
+      ).unwrap()
       expect(mooc.downloaded.length).to.be.equal(1)
-      expect(mooc.downloaded[0]?.["exercise-id"]).to.be.equal(PASSING_EXERCISE_ID)
+      expect(mooc.downloaded[0]?.id).to.deep.equal(ExerciseIdentifier.from(PASSING_EXERCISE_ID))
     })
 
     test("should download with --course-id and then list the local mooc exercise with its slug", async function () {
@@ -723,13 +709,10 @@ suite("tmc langs cli spec", function () {
       // downloaded exercise must then surface via the mooc list-local command
       // (looked up by course id) with a slug + path so the workspace manager
       // can track it.
-      const downloaded = await tmc.downloadExercises(
-        [ExerciseIdentifier.from(PASSING_EXERCISE_ID)],
-        false,
-        () => {},
-        PYTHON_COURSE_ID,
-      )
-      expect(downloaded.mooc.downloaded.length).to.be.equal(1)
+      const downloaded = (
+        await tmc.downloadMoocExercises([PASSING_EXERCISE_ID], PYTHON_COURSE_ID, () => {})
+      ).unwrap()
+      expect(downloaded.downloaded.length).to.be.equal(1)
 
       const local = (await tmc.listLocalCourseExercises("mooc", PYTHON_COURSE_ID)).unwrap()
       const entry = local.find(
@@ -742,12 +725,7 @@ suite("tmc langs cli spec", function () {
 
     test("should submit twice, list both newest-first, and restore an old submission", async function () {
       // Get a real local exercise path to submit and restore into.
-      await tmc.downloadExercises(
-        [ExerciseIdentifier.from(PASSING_EXERCISE_ID)],
-        false,
-        () => {},
-        PYTHON_COURSE_ID,
-      )
+      await tmc.downloadMoocExercises([PASSING_EXERCISE_ID], PYTHON_COURSE_ID, () => {})
       const local = (await tmc.listLocalCourseExercises("mooc", PYTHON_COURSE_ID)).unwrap()
       const entry = local.find(
         (x) => "exercise-id" in x && x["exercise-id"] === PASSING_EXERCISE_ID,
@@ -758,7 +736,7 @@ suite("tmc langs cli spec", function () {
 
       // The mock accumulates submissions for the suite's lifetime, so measure
       // relative to whatever is already there.
-      const before = (await tmc.getMoocOldSubmissions(PASSING_EXERCISE_ID)).unwrap()
+      const before = (await moocSubmissions(tmc, PASSING_EXERCISE_ID)).unwrap()
 
       // Make the two submissions CONTENT-DISTINCT so restoring the older one is
       // provably serving that submission's own content -- not the exercise stub
@@ -782,7 +760,7 @@ suite("tmc langs cli spec", function () {
         await submitMoocAndWaitForGrading(secondSubmitter, PASSING_EXERCISE_ID, exercisePath)
       ).unwrap()
 
-      const after = (await tmc.getMoocOldSubmissions(PASSING_EXERCISE_ID)).unwrap()
+      const after = (await moocSubmissions(tmc, PASSING_EXERCISE_ID)).unwrap()
       expect(after.length).to.be.equal(before.length + 2)
       // newest first: the two we just submitted lead the list, distinct ids,
       // and created_at is non-increasing down the list
@@ -801,7 +779,11 @@ suite("tmc langs cli spec", function () {
       const olderId = after[1]!.id
       fs.writeFileSync(studentFile, newerContent)
       const restore = (
-        await tmc.downloadMoocOldSubmission(PASSING_EXERCISE_ID, exercisePath, olderId, false)
+        await tmc.restoreSubmission(
+          makeMoocKind({ exerciseId: PASSING_EXERCISE_ID, submissionId: olderId }),
+          exercisePath,
+          false,
+        )
       ).unwrap()
       expect(restore).to.equal("restored")
       expect(fs.existsSync(studentFile)).to.be.true
@@ -815,12 +797,7 @@ suite("tmc langs cli spec", function () {
       // Only an exercise type with no files at all downloads as an empty list. The CLI
       // always uploads before submitting, so this can only be reached by seeding it in
       // the mock.
-      await tmc.downloadExercises(
-        [ExerciseIdentifier.from(PASSING_EXERCISE_ID)],
-        false,
-        () => {},
-        PYTHON_COURSE_ID,
-      )
+      await tmc.downloadMoocExercises([PASSING_EXERCISE_ID], PYTHON_COURSE_ID, () => {})
       const local = (await tmc.listLocalCourseExercises("mooc", PYTHON_COURSE_ID)).unwrap()
       const entry = local.find(
         (x) => "exercise-id" in x && x["exercise-id"] === PASSING_EXERCISE_ID,
@@ -840,33 +817,36 @@ suite("tmc langs cli spec", function () {
 
       const onDisk = `${fs.readFileSync(studentFile, "utf8")}\n# must survive the restore\n`
       fs.writeFileSync(studentFile, onDisk)
-      const before = (await tmc.getMoocOldSubmissions(PASSING_EXERCISE_ID)).unwrap()
+      const before = (await moocSubmissions(tmc, PASSING_EXERCISE_ID)).unwrap()
 
       // `--save-old-state` is on deliberately: the archive url is resolved first,
       // so the zero-file case must return before submitting the current state and
       // before the destructive rebuild of the exercise directory.
       const restore = (
-        await tmc.downloadMoocOldSubmission(PASSING_EXERCISE_ID, exercisePath, filelessId, true)
+        await tmc.restoreSubmission(
+          makeMoocKind({ exerciseId: PASSING_EXERCISE_ID, submissionId: filelessId }),
+          exercisePath,
+          true,
+        )
       ).unwrap()
       expect(restore).to.equal("nothing-to-download")
       expect(fs.readFileSync(studentFile, "utf8")).to.equal(onDisk)
-      const after = (await tmc.getMoocOldSubmissions(PASSING_EXERCISE_ID)).unwrap()
+      const after = (await moocSubmissions(tmc, PASSING_EXERCISE_ID)).unwrap()
       expect(after.length).to.be.equal(before.length)
     })
 
-    test("reports mooc login status from the stored credentials file", async function () {
-      // `mooc logged-in` only reads the credentials file; no backend call.
+    test("reports the login status the stored mooc credentials give", async function () {
+      clearCredentials(configDir)
       clearMoocCredentials(configDir)
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
+      expect((await tmc.isAuthenticated()).unwrap()).to.be.false
       writeMoocCredentials(configDir)
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+      expect((await tmc.isAuthenticated()).unwrap()).to.be.true
     })
 
-    test("deauthenticateMooc removes the stored mooc credentials", async function () {
+    test("deauthenticate removes the stored mooc credentials", async function () {
       writeMoocCredentials(configDir)
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
-      ;(await tmc.deauthenticateMooc()).unwrap()
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
+      ;(await tmc.deauthenticate()).unwrap()
+      expect(hasMoocCredentials(configDir)).to.be.false
     })
 
     suite("device flow", function () {
@@ -891,9 +871,9 @@ suite("tmc langs cli spec", function () {
         }
       })
 
-      test("authenticateMooc runs the device flow and stores credentials", async function () {
+      test("authenticate runs the device flow and stores credentials", async function () {
         let deviceInfo: { user_code: string; verification_uri: string } | undefined
-        const { result } = tmc.authenticateMooc((info) => {
+        const { result } = tmc.authenticate((info) => {
           deviceInfo = info
         })
         const res = await result
@@ -901,14 +881,14 @@ suite("tmc langs cli spec", function () {
         // the CLI emitted the device code before blocking on the poll loop
         expect(deviceInfo?.user_code).to.equal(mockUserCode(1))
         expect(deviceInfo?.verification_uri).to.contain("/oauth_device")
-        expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+        expect(hasMoocCredentials(configDir)).to.be.true
       })
 
       test("a device code that expires before approval fails the login", async function () {
         process.env.TMC_LANGS_MOOC_CLIENT_ID = "mooc-mock-expired"
-        const res = await tmc.authenticateMooc(() => {}).result
+        const res = await tmc.authenticate(() => {}).result
         expect(res.val).to.be.instanceOf(DeviceLoginExpiredError)
-        expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
+        expect(hasMoocCredentials(configDir)).to.be.false
       })
 
       // The mock answers slow_down until a full interval has passed, whatever the
@@ -916,9 +896,9 @@ suite("tmc langs cli spec", function () {
       test("a login told to slow down still completes", async function () {
         this.timeout(40000)
         process.env.TMC_LANGS_MOOC_CLIENT_ID = "mooc-mock-slowdown"
-        const res = await tmc.authenticateMooc(() => {}).result
+        const res = await tmc.authenticate(() => {}).result
         expect(res.ok, res.err ? `login failed: ${res.val.message}` : "").to.be.true
-        expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+        expect(hasMoocCredentials(configDir)).to.be.true
       })
     })
   })
@@ -1007,7 +987,7 @@ suite("tmc langs cli spec", function () {
       const courses = (await tmc.getEnrolledMoocCourses()).unwrap()
       expect(courses.length).to.be.greaterThan(0)
       // The refreshed credentials were retained -> still logged in.
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+      expect(hasMoocCredentials(configDir)).to.be.true
     })
 
     test("deletes credentials and reports logged-out when the refresh is rejected", async function () {
@@ -1018,11 +998,11 @@ suite("tmc langs cli spec", function () {
         expiresIn: 3600,
         obtainedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
       })
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+      expect(hasMoocCredentials(configDir)).to.be.true
       // Refresh is rejected, so langs deletes the creds and proceeds unauthenticated.
       const res = await tmc.getEnrolledMoocCourses()
       expect(res.err).to.be.true
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
+      expect(hasMoocCredentials(configDir)).to.be.false
     })
 
     // Revokes the token server-side while the stored credentials still look
@@ -1046,7 +1026,7 @@ suite("tmc langs cli spec", function () {
       await expireAccessToken(MOCK_SEEDED_ACCESS_TOKEN)
       const courses = (await tmc.getEnrolledMoocCourses()).unwrap()
       expect(courses.length).to.be.greaterThan(0)
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+      expect(hasMoocCredentials(configDir)).to.be.true
     })
 
     test("deletes credentials when the refresh after a rejection also fails", async function () {
@@ -1058,7 +1038,7 @@ suite("tmc langs cli spec", function () {
       await expireAccessToken(MOCK_SEEDED_ACCESS_TOKEN)
       const res = await tmc.getEnrolledMoocCourses()
       expect(res.err).to.be.true
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
+      expect(hasMoocCredentials(configDir)).to.be.false
     })
   })
 
@@ -1137,6 +1117,26 @@ function moocCredentialsFileName(): string {
 
 // Removes the per-host file and any shared `credentials_mooc.json` an older CLI
 // left behind, which langs would otherwise adopt.
+async function tmcSubmissions(
+  langs: Langs,
+  exerciseId: number,
+): Promise<Result<Submission[], Error>> {
+  const listed = await langs.getOldSubmissions(makeTmcKind({ tmcExerciseId: exerciseId }))
+  return listed.map((old) => (old.kind === "tmc" ? old.data.submissions : []))
+}
+
+async function moocSubmissions(
+  langs: Langs,
+  exerciseId: string,
+): Promise<Result<ExerciseSlideSubmissionListItem[], Error>> {
+  const listed = await langs.getOldSubmissions(makeMoocKind({ moocExerciseId: exerciseId }))
+  return listed.map((old) => (old.kind === "mooc" ? old.data.submissions : []))
+}
+
+function hasMoocCredentials(configDir: string): boolean {
+  return fs.existsSync(path.join(configDir, moocCredentialsFileName()))
+}
+
 function clearMoocCredentials(configDir: string): void {
   if (!fs.existsSync(configDir)) {
     return
