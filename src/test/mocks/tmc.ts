@@ -4,13 +4,12 @@ import { vi } from "vitest"
 
 import type Langs from "../../api/langs"
 import type {
+  CombinedMoocCourseData,
   DownloadOrUpdateMoocCourseExercisesResult,
   DownloadOrUpdateTmcCourseExercisesResult,
   LocalExercise,
   LocalTmcExercise,
   MoocCourse,
-  MoocCourseProgress,
-  TmcExerciseSlide,
 } from "../../shared/langsSchema"
 import type { BackendKind, ExerciseIdentifier } from "../../shared/shared"
 import {
@@ -48,8 +47,7 @@ export interface TMCMockValues {
   tmcExerciseUpdates: Result<ExerciseIdentifier[], Error>
   moocExerciseUpdates: Result<ExerciseIdentifier[], Error>
   isMoocAuthenticated: Result<boolean, Error>
-  getMoocCourseData: Result<[MoocCourse, TmcExerciseSlide[]], Error>
-  getMoocCourseProgress: Result<MoocCourseProgress, Error>
+  getMoocCourseData: Result<CombinedMoocCourseData, Error>
   getEnrolledMoocCourses: Result<MoocCourse[], Error>
 }
 
@@ -76,8 +74,11 @@ export function createTMCMock(): [Langs, TMCMockValues] {
     tmcExerciseUpdates: Ok(tmcExerciseUpdates),
     moocExerciseUpdates: Ok(moocExerciseUpdates),
     isMoocAuthenticated: Ok(true),
-    getMoocCourseData: Ok([moocCourse, moocExerciseSlides]),
-    getMoocCourseProgress: Ok(moocCourseProgress),
+    getMoocCourseData: Ok({
+      course: moocCourse,
+      slides: moocExerciseSlides,
+      progress: moocCourseProgress,
+    }),
     getEnrolledMoocCourses: Ok(moocEnrolledCourses),
   }
 
@@ -105,7 +106,6 @@ export function createFailingTMCMock(): [Langs, TMCMockValues] {
     moocExerciseUpdates: error,
     isMoocAuthenticated: error,
     getMoocCourseData: error,
-    getMoocCourseProgress: error,
     getEnrolledMoocCourses: error,
   }
 
@@ -139,7 +139,6 @@ function setupMockValues(values: TMCMockValues): Langs {
     ),
     isMoocAuthenticated: vi.fn(async () => values.isMoocAuthenticated),
     getMoocCourseData: vi.fn(async () => values.getMoocCourseData),
-    getMoocCourseProgress: vi.fn(async () => values.getMoocCourseProgress),
     getEnrolledMoocCourses: vi.fn(async () => values.getEnrolledMoocCourses),
     downloadExercises: vi.fn(
       async (

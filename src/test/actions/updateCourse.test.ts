@@ -25,6 +25,7 @@ import {
   MOOC_COURSE_UUID,
   MOOC_EXERCISE_UUID,
   moocCourse,
+  moocCourseProgress,
   moocExerciseSlides,
 } from "../fixtures/tmc"
 import { createMockActionContext, createMockAuthState } from "../mocks/actionContext"
@@ -128,13 +129,13 @@ suite("updateCourse action (mooc)", function () {
     expect(stored?.name).toBe("mooc-python-course")
   })
 
-  test("a failed progress fetch preserves previously known progress", async function () {
+  test("a failed fetch leaves previously known progress alone", async function () {
     await updateCourse(actionContext(), courseId)
     expect(userData.getMoocCourses()[0]?.exercises[0]?.passed).toBe(true)
 
-    tmcMockValues.getMoocCourseProgress = Err(new Error("transient"))
+    tmcMockValues.getMoocCourseData = Err(new Error("transient"))
     const result = await updateCourse(actionContext(), courseId)
-    expect(result.val).toBe(true)
+    expect(result.err).toBe(true)
     const stored = userData.getMoocCourses()[0]
     expect(stored?.exercises[0]?.passed).toBe(true)
     expect(stored?.exercises[0]?.awardedPoints).toBe(1)
@@ -168,7 +169,11 @@ suite("updateCourse action (mooc)", function () {
     await updateCourse(repeat.context, courseId)
     expect(repeat.dialog.reportError).not.toHaveBeenCalled()
 
-    tmcMockValues.getMoocCourseData = Ok([moocCourse, moocExerciseSlides])
+    tmcMockValues.getMoocCourseData = Ok({
+      course: moocCourse,
+      slides: moocExerciseSlides,
+      progress: moocCourseProgress,
+    })
     await updateCourse(actionContext(), courseId)
     tmcMockValues.getMoocCourseData = Err(new InsufficientScopeError("no scope"))
 
@@ -204,7 +209,11 @@ suite("updateCourse action (mooc)", function () {
     const context = actionContext()
     tmcMockValues.getMoocCourseData = Err(new ConnectionError("down"))
     await updateCourse(context, courseId)
-    tmcMockValues.getMoocCourseData = Ok([moocCourse, moocExerciseSlides])
+    tmcMockValues.getMoocCourseData = Ok({
+      course: moocCourse,
+      slides: moocExerciseSlides,
+      progress: moocCourseProgress,
+    })
     await updateCourse(context, courseId)
 
     expect(vi.mocked(context.coursesTree.setBackendReachable).mock.calls).toEqual([

@@ -1,33 +1,51 @@
 import type { Result } from "ts-results"
-import { Err, Ok } from "ts-results"
+import { Ok } from "ts-results"
 
+import type Langs from "../api/langs"
 import { ConnectionError, ForbiddenError, InsufficientScopeError, ServerError } from "../errors"
-import type { CombinedCourseData, MoocCourse, TmcExerciseSlide } from "../shared/langsSchema"
-import type { BackendKind, Enum, LocalCourseExercise } from "../shared/shared"
-import {
-  backendName,
-  CourseIdentifier,
-  LocalCourseData,
-  makeMoocKind,
-  makeTmcKind,
-  match,
-} from "../shared/shared"
+import type { CourseIdentifier, Enum } from "../shared/shared"
+import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
+import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
 import { Logger } from "../utilities"
 import { toStoredMoocCourse, toStoredTmcCourse } from "../utilities/apiData"
 import type { ReadyActionContext } from "./types"
 
-interface RefreshedCourse {
-  course: LocalCourseData
-  exercises: LocalCourseExercise[]
+/**
+ * A course to fetch. `previous` is the stored course a refresh replaces, whose user-side
+ * fields carry over; an add has none. A tmc course's data does not name the organization
+ * it was picked from, so the caller does.
+ */
+export type CourseSource = Enum<
+  { courseId: number; organization: string; previous?: TmcLocalCourseData | undefined },
+  { courseId: string; previous?: MoocLocalCourseData | undefined }
+>
+
+/** Fetches a course from its backend, in the form it is stored in. */
+export async function fetchStoredCourse(
+  langs: Langs,
+  source: CourseSource,
+  options?: { forceRefresh?: boolean },
+): Promise<Result<LocalCourseData, Error>> {
+  return match(
+    source,
+    async (tmc) =>
+      (await langs.getTmcCourseData(tmc.courseId, options)).map((data) =>
+        makeTmcKind(toStoredTmcCourse(data, tmc.organization, tmc.previous)),
+      ),
+    async (mooc) =>
+      (await langs.getMoocCourseData(mooc.courseId, options)).map((data) =>
+        makeMoocKind(toStoredMoocCourse(data, mooc.previous)),
+      ),
+  )
 }
 
-/**
- * The stored course and the refetched data are looked up by the same id, so this
- * only guards the narrowing the projections need.
- */
-function mismatchedBackend(courseId: CourseIdentifier, expected: BackendKind): Error {
-  return new Error(
-    `Expected stored course ${CourseIdentifier.toString(courseId)} to be a ${expected} course`,
+/** `fresh` with the exercise list of `stored`, the same course before the refresh. */
+function withStoredExercises(fresh: LocalCourseData, stored: LocalCourseData): LocalCourseData {
+  return match(
+    fresh,
+    (tmc) => makeTmcKind({ ...tmc, exercises: stored.kind === "tmc" ? stored.data.exercises : [] }),
+    (mooc) =>
+      makeMoocKind({ ...mooc, exercises: stored.kind === "mooc" ? stored.data.exercises : [] }),
   )
 }
 
@@ -70,19 +88,14 @@ export async function updateCourse(
     return storedCourse
   }
   const courseData = storedCourse.val
-  const updateResult: Result<
-    Enum<CombinedCourseData, [MoocCourse, TmcExerciseSlide[]]>,
-    Error
-  > = await match(
-    courseId,
-    (tmcId) =>
-      langs
-        .getTmcCourseData(tmcId.courseId, { forceRefresh: true })
-        .then((res) => res.map((x) => makeTmcKind(x))),
-    (moocId) =>
-      langs
-        .getMoocCourseData(moocId.instanceId, { forceRefresh: true })
-        .then((res) => res.map((x) => makeMoocKind(x))),
+  const updateResult = await fetchStoredCourse(
+    langs,
+    match(
+      courseData,
+      (tmc) => makeTmcKind({ courseId: tmc.id, organization: tmc.organization, previous: tmc }),
+      (mooc) => makeMoocKind({ courseId: mooc.id, previous: mooc }),
+    ),
+    { forceRefresh: true },
   )
   if (updateResult.err) {
     if (updateResult.val instanceof InsufficientScopeError) {
@@ -115,62 +128,26 @@ export async function updateCourse(
   }
 
   actionContext.coursesTree.setBackendReachable(courseId.kind, true)
+  if (courseId.kind === "mooc") {
+    // The fetch the session was refused before has now gone through, so the next
+    // lapse is worth telling the user about again.
+    actionContext.authState.insufficientScopeReported = false
+  }
 
   // `updateExercises` finds the new exercises by diffing against the stored list,
   // so the course is stored with its old list and the fresh one goes in after.
-  const refreshed = await match(
-    updateResult.val,
-    async (tmc): Promise<Result<RefreshedCourse, Error>> => {
-      if (courseData.kind !== "tmc") {
-        return Err(mismatchedBackend(courseId, "tmc"))
-      }
-      const next = toStoredTmcCourse(tmc, courseData.data.organization, courseData.data)
-      return Ok({
-        course: makeTmcKind({ ...next, exercises: courseData.data.exercises }),
-        exercises: next.exercises.map((x) => makeTmcKind(x)),
-      })
-    },
-    async ([moocCourse, slides]): Promise<Result<RefreshedCourse, Error>> => {
-      // The fetch the session was refused before has now gone through, so the next
-      // lapse is worth telling the user about again.
-      actionContext.authState.insufficientScopeReported = false
-      if (courseData.kind !== "mooc") {
-        return Err(mismatchedBackend(courseId, "mooc"))
-      }
-      // Non-fatal: on a failed fetch, previous local progress is carried over
-      // per exercise id so a refresh never wipes known points or passed flags.
-      const progressRes = await langs.getMoocCourseProgress(courseData.data.id, {
-        forceRefresh: true,
-      })
-      if (progressRes.err) {
-        Logger.warn("Failed to fetch mooc course progress", progressRes.val)
-      }
-      const next = toStoredMoocCourse(
-        moocCourse,
-        slides,
-        progressRes.ok ? progressRes.val : undefined,
-        courseData.data,
-      )
-      return Ok({
-        course: makeMoocKind({ ...next, exercises: courseData.data.exercises }),
-        exercises: next.exercises.map((x) => makeMoocKind(x)),
-      })
-    },
-  )
-  if (refreshed.err) {
-    return refreshed
-  }
-  const stored = await userData.updateCourse(refreshed.val.course)
+  const exercises = LocalCourseData.getExercises(updateResult.val)
+  const course = withStoredExercises(updateResult.val, courseData)
+  const stored = await userData.updateCourse(course)
   if (stored.err) {
     return stored
   }
-  const updateExercisesResult = await userData.updateExercises(courseId, refreshed.val.exercises)
+  const updateExercisesResult = await userData.updateExercises(courseId, exercises)
   if (updateExercisesResult.err) {
     return updateExercisesResult
   }
 
   // `updateExercises` mutated this same stored object, so it is already current.
-  const course = refreshed.val.course
   const courseName = LocalCourseData.getCourseName(course)
   if (
     courseName === workspaceManager.activeCourse &&

@@ -38,8 +38,8 @@ import {
 } from "../errors"
 import type {
   CombinedCourseData,
+  CombinedMoocCourseData,
   Course,
-  CourseDetails,
   DataKind,
   DownloadOrUpdateMoocCourseExercisesResult,
   DownloadOrUpdateTmcCourseExercisesResult,
@@ -49,7 +49,6 @@ import type {
   LocalMoocExercise,
   LocalTmcExercise,
   MoocCourse,
-  MoocCourseProgress,
   MoocDeviceLogin,
   MoocOldSubmissionRestore,
   ExerciseSlideSubmissionListItem,
@@ -63,19 +62,10 @@ import type {
   SubmissionFeedback,
   SubmissionFeedbackResponse,
   SubmissionFinished,
-  TmcExerciseSlide,
 } from "../shared/langsSchema"
 import { CliNotification, CliOutputData, CliStatusUpdate } from "../shared/langsSchema"
 import type { BackendKind, ExerciseIdentifier } from "../shared/shared"
-import {
-  assertUnreachable,
-  backendName,
-  BaseError,
-  CourseIdentifier,
-  makeMoocKind,
-  makeTmcKind,
-  match,
-} from "../shared/shared"
+import { backendName, BaseError, makeMoocKind, makeTmcKind, match } from "../shared/shared"
 import { Logger, LogLevel } from "../utilities/logger"
 import type { FractionProgress } from "./dialog"
 
@@ -146,8 +136,6 @@ interface CacheOptions {
 interface CacheConfig {
   forceRefresh?: boolean | undefined
   key: string
-  /** Optional remapper for assigning parts of the result to different keys. */
-  remapper?: ((response: OutputData) => [string, OutputData][]) | undefined
 }
 
 /**
@@ -157,7 +145,7 @@ interface CacheConfig {
  * space here — both arrive as strings — and because {@link Langs} drops one backend's
  * entries without touching the other's by matching that prefix.
  *
- * @param resource What the entry holds, e.g. `course-details`. One resource name per CLI
+ * @param resource What the entry holds, e.g. `course-data`. One resource name per CLI
  * output-data kind, so two commands returning the same thing share an entry.
  * @param parts The ids the entry is keyed by, in the order the resource names them.
  */
@@ -1043,139 +1031,28 @@ export default class Langs {
     courseId: number,
     options?: CacheOptions,
   ): Promise<Result<CombinedCourseData, Error>> {
-    // The combined response contains the course details `getCourseDetails` fetches on its
-    // own, so serving that entry from here saves the second call.
-    const remapper: CacheConfig["remapper"] = (response) => {
-      if (response.data?.["output-data-kind"] !== "combined-course-data") {
-        return []
-      }
-      return [
-        [
-          cacheKey("tmc", "course-details", courseId),
-          {
-            ...response,
-            data: {
-              "output-data-kind": "course-details",
-              "output-data": response.data["output-data"].details,
-            },
-          },
-        ],
-      ]
-    }
     const res = await this._executeLangsCommand(
       {
         backend: "tmc",
         args: this._tmcCmd("get-course-data", "--course-id", courseId.toString()),
       },
       "combined-course-data",
-      {
-        forceRefresh: options?.forceRefresh,
-        key: cacheKey("tmc", "course-data", courseId),
-        remapper,
-      },
+      { forceRefresh: options?.forceRefresh, key: cacheKey("tmc", "course-data", courseId) },
     )
     return res.map((x) => x.data["output-data"])
   }
 
-  /**
-   * Gets a mooc course with its exercise slides. Two sequential CLI calls
-   * (`mooc course`, `mooc course-exercises`) — mooc has no combined endpoint
-   * like tmc's `combined-course-data`. Each is cached by course id; pass
-   * `{ forceRefresh: true }` to bypass.
-   */
+  /** Gets a courses.mooc.fi course with its exercise slides and the user's progress on them. */
   public async getMoocCourseData(
     courseId: string,
     options?: CacheOptions,
-  ): Promise<Result<[MoocCourse, TmcExerciseSlide[]], Error>> {
-    const courseRes = await this._executeLangsCommand(
-      { backend: "mooc", args: this._moocCmd("course", "--course-id", courseId) },
-      "mooc-course",
-      { forceRefresh: options?.forceRefresh, key: cacheKey("mooc", "course", courseId) },
-    )
-    if (courseRes.err) {
-      return courseRes
-    }
-    const exercisesRes = await this._executeLangsCommand(
-      { backend: "mooc", args: this._moocCmd("course-exercises", "--course-id", courseId) },
-      "mooc-exercise-slides",
-      { forceRefresh: options?.forceRefresh, key: cacheKey("mooc", "course-exercises", courseId) },
-    )
-    if (exercisesRes.err) {
-      return exercisesRes
-    }
-    return Ok([courseRes.val.data["output-data"], exercisesRes.val.data["output-data"]])
-  }
-
-  /**
-   * Per-exercise progress (points, completion) for a mooc course via
-   * `mooc course-progress`. Course totals are derived by summing the
-   * per-exercise entries, not returned separately.
-   *
-   * @param courseId The course UUID.
-   */
-  public async getMoocCourseProgress(
-    courseId: string,
-    options?: CacheOptions,
-  ): Promise<Result<MoocCourseProgress, Error>> {
+  ): Promise<Result<CombinedMoocCourseData, Error>> {
     const res = await this._executeLangsCommand(
-      { backend: "mooc", args: this._moocCmd("course-progress", "--course-id", courseId) },
-      "mooc-course-progress",
-      {
-        forceRefresh: options?.forceRefresh,
-        key: cacheKey("mooc", "course-progress", courseId),
-      },
+      { backend: "mooc", args: this._moocCmd("course-data", "--course-id", courseId) },
+      "mooc-combined-course-data",
+      { forceRefresh: options?.forceRefresh, key: cacheKey("mooc", "course-data", courseId) },
     )
     return res.map((x) => x.data["output-data"])
-  }
-
-  /**
-   * Gets user-specific details of the given course. Uses TMC-langs `get-course-details` core
-   * command internally.
-   *
-   * @param courseId Id to the course.
-   * @returns Details of the course.
-   */
-  public async getCourseDetails(
-    courseId: CourseIdentifier,
-    options?: CacheOptions,
-  ): Promise<Result<CourseDetails | MoocCourse, Error>> {
-    if (courseId.kind === "tmc") {
-      const res = await this._executeLangsCommand(
-        {
-          backend: "tmc",
-          args: this._tmcCmd(
-            "get-course-details",
-            "--course-id",
-            CourseIdentifier.toString(courseId),
-          ),
-        },
-        "course-details",
-        {
-          forceRefresh: options?.forceRefresh,
-          key: cacheKey("tmc", "course-details", CourseIdentifier.toString(courseId)),
-        },
-      )
-      return res.map((x) => x.data["output-data"])
-    } else if (courseId.kind === "mooc") {
-      // The mooc CLI has no `get-course-details` subcommand; `course` returns the
-      // course itself. Callers use this only as a connectivity probe (a failed
-      // result flips the course-details view into offline mode), so the returned
-      // MoocCourse shape is sufficient. It shares getMoocCourseData's entry,
-      // being the same command against the same course.
-      const res = await this._executeLangsCommand(
-        {
-          backend: "mooc",
-          args: this._moocCmd("course", "--course-id", CourseIdentifier.toString(courseId)),
-        },
-        "mooc-course",
-        {
-          forceRefresh: options?.forceRefresh,
-          key: cacheKey("mooc", "course", CourseIdentifier.toString(courseId)),
-        },
-      )
-      return res.map((x) => x.data["output-data"])
-    }
-    assertUnreachable(courseId)
   }
 
   /**
@@ -1626,9 +1503,6 @@ export default class Langs {
       .andThen((x) => {
         if (x && key) {
           this._writeCachedResponse(key, { response: x, timestamp: currentTime })
-          cacheConfig?.remapper?.(x).forEach(([remappedKey, response]) => {
-            this._writeCachedResponse(remappedKey, { response, timestamp: currentTime })
-          })
         }
         return Ok(x)
       })

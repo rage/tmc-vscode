@@ -157,7 +157,11 @@ suite("sumTmcApiCoursePoints", function () {
 })
 
 const addedMoocCourse = (): MoocLocalCourseData =>
-  toStoredMoocCourse(moocCourse, moocExerciseSlides, moocCourseProgress)
+  toStoredMoocCourse({
+    course: moocCourse,
+    slides: moocExerciseSlides,
+    progress: moocCourseProgress,
+  })
 
 suite("toStoredMoocCourse", function () {
   test("keeps only the slug and the new-exercise state of the course it refreshes", function () {
@@ -173,7 +177,10 @@ suite("toStoredMoocCourse", function () {
     }
 
     expect(
-      toStoredMoocCourse(moocCourse, moocExerciseSlides, moocCourseProgress, previous),
+      toStoredMoocCourse(
+        { course: moocCourse, slides: moocExerciseSlides, progress: moocCourseProgress },
+        previous,
+      ),
     ).toEqual({
       ...addedMoocCourse(),
       name: "old-slug",
@@ -182,6 +189,8 @@ suite("toStoredMoocCourse", function () {
     })
   })
 })
+
+const NO_PROGRESS: MoocCourseProgress = { course_id: MOOC_COURSE_UUID, exercises: [] }
 
 suite("combineMoocApiExerciseData", function () {
   test("keeps each exercise's chapter, and none for an exercise outside one", function () {
@@ -194,7 +203,7 @@ suite("combineMoocApiExerciseData", function () {
       chapter: { id: "chapter-1", name: "Basics", chapter_number: 1 },
     }
 
-    const [stored, unchaptered] = combineMoocApiExerciseData([chaptered, slide], undefined)
+    const [stored, unchaptered] = combineMoocApiExerciseData([chaptered, slide], NO_PROGRESS)
 
     expect(stored?.chapter).toEqual({ name: "Basics", number: 1 })
     expect(unchaptered).not.toHaveProperty("chapter")
@@ -236,7 +245,7 @@ suite("combineMoocApiExerciseData", function () {
 
   test("without a standing from the backend, the previous flags stay, not the score's", () => {
     const previous = {
-      ...combineMoocApiExerciseData([slide!], undefined)[0]!,
+      ...combineMoocApiExerciseData([slide!], NO_PROGRESS)[0]!,
       passed: false,
       outOfTries: true,
     }

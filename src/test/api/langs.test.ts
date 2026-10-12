@@ -24,8 +24,8 @@ import {
 import type { OutputData, OutputResult } from "../../shared/langsSchema"
 import { CliOutputData } from "../../shared/langsSchema"
 import type { BaseError } from "../../shared/shared"
-import { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
-import { courseDetails, moocCourse, submissionFinished } from "../fixtures/cliOutput"
+import { ExerciseIdentifier } from "../../shared/shared"
+import { courseData, courseDetails, moocCourse, submissionFinished } from "../fixtures/cliOutput"
 
 // `_spawnLangsProcess` is private; cast to `any` to stub it without spawning a
 // real tmc-langs-cli process.
@@ -148,24 +148,13 @@ afterEach(function () {
 })
 
 suite("Langs class arg building", function () {
-  test("getCourseDetails builds the tmc --course-id from the numeric course id", async function () {
+  test("getTmcCourseData builds the tmc --course-id from the numeric course id", async function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
-    await langs.getCourseDetails(CourseIdentifier.from(42))
+    await langs.getTmcCourseData(42)
     const args = calls[0]?.args ?? []
     expect(args[0]).toBe("tmc")
     expect(args[args.indexOf("--course-id") + 1]).toBe("42")
-    expect(args.some((arg) => arg.includes("[object Object]"))).toBe(false)
-  })
-
-  test("getCourseDetails builds the mooc --course-id from the course id", async function () {
-    const langs = newLangs()
-    const calls = spyOnSpawn(langs)
-    await langs.getCourseDetails(CourseIdentifier.from("course-uuid"))
-    const args = calls[0]?.args ?? []
-    expect(args[0]).toBe("mooc")
-    expect(args[args.indexOf("--course-id") + 1]).toBe("course-uuid")
-    expect(args.some((arg) => arg.includes("[object Object]"))).toBe(false)
   })
 
   test("checkExerciseUpdates (mooc)", async function () {
@@ -283,79 +272,19 @@ suite("Langs class arg building", function () {
     ])
   })
 
-  test("getMoocCourseData first requests the course", async function () {
+  test("getMoocCourseData fetches the course, its slides and progress in one command", async function () {
     const langs = newLangs()
-    const calls = spyOnSpawn(langs)
-    await langs.getMoocCourseData("course-uuid")
-    // The Err stub stops after the first request; assert its argv.
-    expect(calls[0]?.args).toEqual([
-      "mooc",
-      "--client-name",
-      "test-client",
-      "course",
-      "--course-id",
-      "course-uuid",
-    ])
-  })
-
-  test("getMoocCourseData then requests the course exercises", async function () {
-    const langs = newLangs()
-    const calls = stubSpawn(langs, (i) =>
-      i === 0
-        ? Ok(dataOutput("mooc-course", { ...moocCourse, id: uuid(1) }))
-        : Ok(dataOutput("mooc-exercise-slides", [])),
-    )
-    await langs.getMoocCourseData(uuid(1))
-    expect(calls[1]?.args).toEqual([
-      "mooc",
-      "--client-name",
-      "test-client",
-      "course-exercises",
-      "--course-id",
-      uuid(1),
-    ])
-  })
-
-  test("getMoocCourseProgress builds the command and parses the returned data", async function () {
-    const langs = newLangs()
-    const progress = {
-      course_id: uuid(1),
-      exercises: [
-        {
-          exercise_id: uuid(2),
-          score_given: 3,
-          score_maximum: 3,
-          completed: true,
-          attempted: true,
-          standing: "Passed",
-        },
-      ],
+    const combined = {
+      course: { ...moocCourse, id: uuid(1) },
+      slides: [],
+      progress: { course_id: uuid(1), exercises: [] },
     }
-    const calls = stubSpawn(langs, () => Ok(dataOutput("mooc-course-progress", progress)))
-    const result = await langs.getMoocCourseProgress("course-uuid")
-    expect(calls[0]?.args).toEqual([
-      "mooc",
-      "--client-name",
-      "test-client",
-      "course-progress",
-      "--course-id",
-      "course-uuid",
+    const calls = stubSpawn(langs, () => Ok(dataOutput("mooc-combined-course-data", combined)))
+    const result = await langs.getMoocCourseData(uuid(1))
+    expect(calls.map((x) => x.args)).toEqual([
+      ["mooc", "--client-name", "test-client", "course-data", "--course-id", uuid(1)],
     ])
-    expect(result.ok).toBe(true)
-    expect(result.unwrap()).toEqual(progress)
-  })
-
-  test("getMoocCourseProgress caches per course until a refresh is forced", async function () {
-    const langs = newLangs()
-    const progress = { course_id: uuid(1), exercises: [] }
-    const calls = stubSpawn(langs, () => Ok(dataOutput("mooc-course-progress", progress)))
-    await langs.getMoocCourseProgress(uuid(1))
-    await langs.getMoocCourseProgress(uuid(1))
-    expect(calls).toHaveLength(1)
-    await langs.getMoocCourseProgress(uuid(2))
-    expect(calls).toHaveLength(2)
-    await langs.getMoocCourseProgress(uuid(1), { forceRefresh: true })
-    expect(calls).toHaveLength(3)
+    expect(result.unwrap()).toEqual(combined)
   })
 
   test("submitMoocExerciseToPaste", async function () {
@@ -1085,11 +1014,14 @@ suite("Langs error-kind mapping", function () {
       if (args.includes("courses")) {
         return Ok(errorOutput("invalid-token"))
       }
-      if (args.includes("course-exercises")) {
-        return Ok(dataOutput("mooc-exercise-slides", []))
-      }
       courseCalls += 1
-      return Ok(dataOutput("mooc-course", { ...moocCourse, id: uuid(1) }))
+      return Ok(
+        dataOutput("mooc-combined-course-data", {
+          course: { ...moocCourse, id: uuid(1) },
+          slides: [],
+          progress: { course_id: uuid(1), exercises: [] },
+        }),
+      )
     })
 
     await langs.getMoocCourseData(uuid(1))
@@ -1216,93 +1148,71 @@ suite("Langs response cache", function () {
     expect(refreshed.val).toEqual([ExerciseIdentifier.from(uuid(2))])
   })
 
-  test("getMoocCourseData serves a repeat view from cache", async function () {
+  test("getMoocCourseData serves a repeat view from cache until a refresh is forced", async function () {
     const langs = newLangs()
-    let callCount = 0
-    stubSpawn(langs, (_i, args) => {
-      callCount += 1
-      return args.includes("course-exercises")
-        ? Ok(dataOutput("mooc-exercise-slides", []))
-        : Ok(dataOutput("mooc-course", { ...moocCourse, id: uuid(1) }))
-    })
+    const calls = stubSpawn(langs, () =>
+      Ok(
+        dataOutput("mooc-combined-course-data", {
+          course: { ...moocCourse, id: uuid(1) },
+          slides: [],
+          progress: { course_id: uuid(1), exercises: [] },
+        }),
+      ),
+    )
     await langs.getMoocCourseData(uuid(1))
     await langs.getMoocCourseData(uuid(1))
-    // Two subcommands on the first view, both served from cache on the second.
-    expect(callCount).toBe(2)
-  })
-
-  test("getMoocCourseData forceRefresh bypasses the cache", async function () {
-    const langs = newLangs()
-    let callCount = 0
-    stubSpawn(langs, (_i, args) => {
-      callCount += 1
-      return args.includes("course-exercises")
-        ? Ok(dataOutput("mooc-exercise-slides", []))
-        : Ok(dataOutput("mooc-course", { ...moocCourse, id: uuid(1) }))
-    })
-    await langs.getMoocCourseData(uuid(1))
+    expect(calls).toHaveLength(1)
     await langs.getMoocCourseData(uuid(1), { forceRefresh: true })
-    expect(callCount).toBe(4)
-  })
-
-  test("getCourseDetails reuses the mooc course getMoocCourseData already fetched", async function () {
-    const langs = newLangs()
-    let courseCalls = 0
-    stubSpawn(langs, (_i, args) => {
-      if (args.includes("course-exercises")) {
-        return Ok(dataOutput("mooc-exercise-slides", []))
-      }
-      courseCalls += 1
-      return Ok(dataOutput("mooc-course", { ...moocCourse, id: uuid(1) }))
-    })
-
-    await langs.getMoocCourseData(uuid(1))
-    const details = await langs.getCourseDetails(CourseIdentifier.from(uuid(1)))
-
-    // Both legs run `mooc course --course-id`, so the second must not spawn.
-    expect(courseCalls).toBe(1)
-    expect(details.val).toEqual({ ...moocCourse, id: uuid(1) })
+    expect(calls).toHaveLength(2)
   })
 
   test("a tmc course id and a mooc course id of the same text keep separate entries", async function () {
     const langs = newLangs()
-    const kindsRequested: string[] = []
+    const backendsRequested: string[] = []
     stubSpawn(langs, (_i, args) => {
-      if (args[0] === "tmc") {
-        kindsRequested.push("tmc")
-        return Ok(dataOutput("course-details", { ...courseDetails, id: 5 }))
-      }
-      kindsRequested.push("mooc")
-      return Ok(dataOutput("mooc-course", { ...moocCourse, id: uuid(5) }))
+      backendsRequested.push(args[0] ?? "")
+      return args[0] === "tmc"
+        ? Ok(
+            dataOutput("combined-course-data", {
+              details: { ...courseDetails, id: 5 },
+              exercises: [],
+              settings: courseData,
+            }),
+          )
+        : Ok(
+            dataOutput("mooc-combined-course-data", {
+              course: { ...moocCourse, id: uuid(5) },
+              slides: [],
+              progress: { course_id: uuid(5), exercises: [] },
+            }),
+          )
     })
 
-    const tmc = await langs.getCourseDetails(CourseIdentifier.from(5))
-    const mooc = await langs.getCourseDetails(CourseIdentifier.from("5"))
+    await langs.getTmcCourseData(5)
+    await langs.getMoocCourseData("5")
 
-    expect(kindsRequested).toEqual(["tmc", "mooc"])
-    expect(tmc.val).toEqual({ ...courseDetails, id: 5 })
-    expect(mooc.val).toEqual({ ...moocCourse, id: uuid(5) })
+    expect(backendsRequested).toEqual(["tmc", "mooc"])
   })
 
   test("the cache evicts the least recently used entry once it is full", async function () {
     const langs = newLangs()
-    let detailCalls = 0
+    let courseCalls = 0
     stubSpawn(langs, () => {
-      detailCalls += 1
-      return Ok(dataOutput("course-details", { ...courseDetails, id: detailCalls }))
+      courseCalls += 1
+      return Ok(dataOutput("courses", []))
     })
 
-    // One entry per course id; the cap is 128, so 129 ids push the first one out.
-    for (let courseId = 0; courseId <= 128; courseId++) {
-      await langs.getCourseDetails(CourseIdentifier.from(courseId))
+    // One entry per organization; the cap is 128, so 129 of them push the first one out.
+    for (let organization = 0; organization <= 128; organization++) {
+      await langs.getCourses(`org-${organization}`)
     }
-    expect(detailCalls).toBe(129)
+    expect(courseCalls).toBe(129)
 
     // The newest is still cached, the oldest is not.
-    await langs.getCourseDetails(CourseIdentifier.from(128))
-    expect(detailCalls).toBe(129)
-    await langs.getCourseDetails(CourseIdentifier.from(0))
-    expect(detailCalls).toBe(130)
+    await langs.getCourses("org-128")
+    expect(courseCalls).toBe(129)
+    await langs.getCourses("org-0")
+    expect(courseCalls).toBe(130)
   })
 })
 
@@ -1391,7 +1301,7 @@ suite("Langs error diagnostics", function () {
       "thread 'main' panicked",
     )
 
-    const result = await langs.getCourseDetails(CourseIdentifier.from(42))
+    const result = await langs.getTmcCourseData(42)
 
     expect(result.err).toBe(true)
     const details = (result.val as BaseError).details ?? ""

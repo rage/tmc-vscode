@@ -31,7 +31,7 @@ import {
   RuntimeError,
 } from "../errors"
 import type { ExerciseTaskSubmissionStatus, SubmissionFeedback } from "../shared/langsSchema"
-import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
+import { ExerciseIdentifier } from "../shared/shared"
 import { getLangsCLIForPlatform, getPlatform } from "../utilities"
 
 // __dirname is the dist folder when built.
@@ -129,14 +129,12 @@ suite("tmc langs cli spec", function () {
     // of the user asking to log out. The CLI deletes the credential it was
     // holding, so the extension has to be told the session is gone.
     //
-    // getCourseDetails stands in for a settings call, which Langs does not
-    // expose; get-course-data would not work here, since its LangsError
-    // wrapping hides the 401 the CLI otherwise turns into invalid-token (see
-    // the comment in "should not get existing api data in general" below).
+    // Not get-course-data: its LangsError wrapping hides the 401 the CLI otherwise
+    // turns into invalid-token (see "should not get existing api data in general").
     test("reports a logout when the backend rejects the stored token", async function () {
       writeCredentials(configDir, "no-longer-accepted")
 
-      const result = await tmc.getCourseDetails(CourseIdentifier.from(1))
+      const result = await tmc.getCourses("test")
       expect(result.val).to.be.instanceOf(InvalidTokenError)
       expect(onLoggedOutCalls).to.be.equal(1)
       expect(fs.existsSync(path.join(configDir, "credentials.json"))).to.be.false
@@ -183,10 +181,6 @@ suite("tmc langs cli spec", function () {
       expect(data.exercises.length).to.be.equal(2)
       expect(data.settings.name).to.be.equal("python-course")
 
-      const details = (await tmc.getCourseDetails(CourseIdentifier.from(1))).unwrap()
-      expect(details.id).to.be.equal(1)
-      expect(details.name).to.be.equal("python-course")
-
       const courses = (await tmc.getCourses("test")).unwrap()
       expect(courses.length).to.be.equal(2)
       expect(courses.some((x) => x.name === "python-course")).to.be.true
@@ -201,9 +195,6 @@ suite("tmc langs cli spec", function () {
     test("should encounter errors when trying to get non-existing api data", async function () {
       const dataResult = await tmc.getTmcCourseData(404)
       expect(dataResult.val).to.be.instanceOf(RuntimeError)
-
-      const detailsResult = await tmc.getCourseDetails(CourseIdentifier.from(404))
-      expect(detailsResult.val).to.be.instanceOf(NotFoundError)
 
       const coursesResult = await tmc.getCourses("404")
       expect(coursesResult.val).to.be.instanceOf(NotFoundError)
@@ -469,9 +460,6 @@ suite("tmc langs cli spec", function () {
       const dataResult = await tmc.getTmcCourseData(0)
       expect(dataResult.val).to.be.instanceOf(RuntimeError)
 
-      const detailsResult = await tmc.getCourseDetails(CourseIdentifier.from(0))
-      expect(detailsResult.val).to.be.instanceOf(AuthorizationError)
-
       const coursesResult = await tmc.getCourses("test")
       expect(coursesResult.val).to.be.instanceOf(AuthorizationError)
 
@@ -590,8 +578,9 @@ suite("tmc langs cli spec", function () {
       expect(courses.some((c) => c.name === "MOOC Unenrolled Course")).to.be.false
     })
 
-    test("should get mooc course data with exercise slides", async function () {
-      const [course, slides] = (await tmc.getMoocCourseData(PYTHON_COURSE_ID)).unwrap()
+    test("should get mooc course data with exercise slides and progress", async function () {
+      const { course, slides, progress } = (await tmc.getMoocCourseData(PYTHON_COURSE_ID)).unwrap()
+      expect(progress.course_id).to.be.equal(PYTHON_COURSE_ID)
       expect(course.name).to.be.equal("MOOC Python Course")
       expect(slides.length).to.be.equal(1)
       expect(slides[0]?.exercise_id).to.be.equal(PASSING_EXERCISE_ID)
