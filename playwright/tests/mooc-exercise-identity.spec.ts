@@ -55,7 +55,7 @@ vsCodeTest(
 
     await vsCodeTest.step("reset it", async () => {
       await page.getByText("def hello()").click()
-      await coursesView.runPaletteCommand("TestMyCode: Reset Exercise")
+      await coursesView.runExercisePaletteCommand("TestMyCode: Reset Exercise")
       await page
         .locator(".monaco-dialog-box")
         .getByRole("button", { name: "Reset Without Submitting" })
@@ -80,7 +80,7 @@ vsCodeTest(
       // The extension spaces submissions, pastes among them, 5 s apart.
       await expect(async () => {
         await page.getByText("def hello()").click()
-        await coursesView.runPaletteCommand("TestMyCode: Share Exercise via Paste")
+        await coursesView.runExercisePaletteCommand("TestMyCode: Share Exercise via Paste")
         await expect(coursesView.notificationToast("Paste link:")).toBeVisible({ timeout: 2_000 })
       }).toPass()
     })
