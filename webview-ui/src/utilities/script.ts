@@ -85,9 +85,8 @@ export function addMessageListener<T extends Panel>(
   callback: (message: TargetedMessage<T>) => void,
 ): () => void {
   const listener: MessageListener = (message) => {
-    // a target without an id is a broadcast to every panel of its type
-    const correctType = message.target.type === listeningPanel.type
-    if (correctType && (!("id" in message.target) || message.target.id === listeningPanel.id)) {
+    // Panel ids are unique across panel types, so the id alone picks out the panel.
+    if (message.target.id === listeningPanel.id) {
       callback(message as TargetedMessage<T>)
     }
   }
