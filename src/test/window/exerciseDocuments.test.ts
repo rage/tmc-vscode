@@ -52,32 +52,59 @@ suite("saveExerciseDocuments", function () {
   })
 })
 
+function openTabs(...groups: { input: unknown }[][]): ReturnType<typeof vi.fn> {
+  const close = vi.fn(async () => true)
+  Object.defineProperty(vscode.window, "tabGroups", {
+    value: {
+      all: groups.map((tabs, index) => ({
+        viewColumn: index + 1,
+        tabs: tabs.map((tab) => ({ ...tab, group: { viewColumn: index + 1 } })),
+      })),
+      close,
+    },
+    configurable: true,
+  })
+  return close
+}
+
+const insideUri = vscode.Uri.file("/projects/course/exercise/src/main.py")
+const outsideUri = vscode.Uri.file("/projects/course/other/main.py")
+
 suite("revertExerciseDocuments", function () {
-  test("reverts each unsaved document of the exercise in turn, then refocuses the editor", async function () {
-    const inside = document("/projects/course/exercise/src/main.py", true)
-    const outside = document("/projects/other/main.py", true)
-    openDocuments(inside, outside)
-    const previous = { document: outside, viewColumn: 2 }
+  test("reverts each editor of the exercise in its own group, then refocuses the editor", async function () {
+    openTabs(
+      [{ input: { uri: insideUri } }, { input: { viewType: "tmc" } }],
+      [{ input: { uri: outsideUri } }],
+    )
+    const previous = { document: { uri: outsideUri }, viewColumn: 2 }
     Object.defineProperty(vscode.window, "activeTextEditor", {
       value: previous,
       configurable: true,
     })
+    vi.spyOn(vscode.workspace, "openTextDocument").mockImplementation(
+      async (uri) => ({ uri }) as unknown as vscode.TextDocument,
+    )
     const shown: unknown[] = []
-    vi.spyOn(vscode.window, "showTextDocument").mockImplementation(async (shownDocument) => {
-      shown.push(shownDocument)
-      return {} as vscode.TextEditor
-    })
+    vi.spyOn(vscode.window, "showTextDocument").mockImplementation(
+      async (shownDocument, options) => {
+        shown.push([(shownDocument as unknown as vscode.TextDocument).uri.fsPath, options])
+        return {} as vscode.TextEditor
+      },
+    )
 
     await revertExerciseDocuments(exercise)
 
-    expect(shown).toEqual([inside, outside])
+    expect(shown).toEqual([
+      [insideUri.fsPath, { viewColumn: 1, preview: false }],
+      [outsideUri.fsPath, 2],
+    ])
     expect(vscode.commands.executeCommand).toHaveBeenCalledExactlyOnceWith(
       "workbench.action.files.revert",
     )
   })
 
-  test("touches no editor when nothing of the exercise is unsaved", async function () {
-    openDocuments(document("/projects/course/exercise/src/main.py", false))
+  test("touches no editor when none shows the exercise", async function () {
+    openTabs([{ input: { uri: outsideUri } }])
     const showTextDocument = vi.spyOn(vscode.window, "showTextDocument")
 
     await revertExerciseDocuments(exercise)
@@ -89,17 +116,15 @@ suite("revertExerciseDocuments", function () {
 
 suite("closeExerciseEditors", function () {
   test("closes the tabs showing the exercise's files only", async function () {
-    const inside = { input: { uri: vscode.Uri.file("/projects/course/exercise/src/main.py") } }
-    const outside = { input: { uri: vscode.Uri.file("/projects/course/other/main.py") } }
-    const webview = { input: { viewType: "tmc" } }
-    const close = vi.fn(async () => true)
-    Object.defineProperty(vscode.window, "tabGroups", {
-      value: { all: [{ tabs: [inside, webview] }, { tabs: [outside] }], close },
-      configurable: true,
-    })
+    const close = openTabs(
+      [{ input: { uri: insideUri } }, { input: { viewType: "tmc" } }],
+      [{ input: { uri: outsideUri } }],
+    )
 
     await closeExerciseEditors(exercise)
 
-    expect(close).toHaveBeenCalledExactlyOnceWith([inside])
+    expect(close).toHaveBeenCalledExactlyOnceWith([
+      expect.objectContaining({ input: { uri: insideUri } }),
+    ])
   })
 })

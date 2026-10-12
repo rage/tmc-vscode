@@ -42,19 +42,35 @@ export async function saveExerciseDocuments(
       )
 }
 
+/** The editor tabs showing a file inside `exercise`'s folder. */
+function exerciseTabs(exercise: ExerciseFolder): { tab: vscode.Tab; uri: vscode.Uri }[] {
+  return vscode.window.tabGroups.all.flatMap((group) =>
+    group.tabs.flatMap((tab) => {
+      // Every tab input that shows one resource names it `uri`.
+      const uri = (tab.input as { uri?: vscode.Uri } | undefined)?.uri
+      return uri !== undefined && isInside(exercise, uri) ? [{ tab, uri }] : []
+    }),
+  )
+}
+
 /**
- * Discards the unsaved edits of `exercise`'s documents after its folder was rewritten on disk;
- * VS Code reloads the saved ones by itself.
+ * Reloads every editor of `exercise`'s files from disk after its folder was rewritten there,
+ * discarding unsaved edits. A saved editor needs it too: the CLI replaces the folder, and VS
+ * Code stops watching a file whose folder is deleted.
  */
 export async function revertExerciseDocuments(exercise: ExerciseFolder): Promise<void> {
-  const dirty = exerciseDocuments(exercise).filter((document) => document.isDirty)
-  if (dirty.length === 0) {
+  const tabs = exerciseTabs(exercise)
+  if (tabs.length === 0) {
     return
   }
   const previous = vscode.window.activeTextEditor
-  for (const document of dirty) {
+  for (const { tab, uri } of tabs) {
+    const document = await vscode.workspace.openTextDocument(uri)
+    await vscode.window.showTextDocument(document, {
+      viewColumn: tab.group.viewColumn,
+      preview: false,
+    })
     // The revert command ignores any argument and reverts the active editor.
-    await vscode.window.showTextDocument(document, { preview: false })
     await vscode.commands.executeCommand("workbench.action.files.revert")
   }
   if (previous) {
@@ -64,13 +80,7 @@ export async function revertExerciseDocuments(exercise: ExerciseFolder): Promise
 
 /** Closes every editor tab showing a file inside `exercise`'s folder. */
 export async function closeExerciseEditors(exercise: ExerciseFolder): Promise<void> {
-  const tabs = vscode.window.tabGroups.all
-    .flatMap((group) => group.tabs)
-    .filter((tab) => {
-      // Every tab input that shows one resource names it `uri`.
-      const uri = (tab.input as { uri?: vscode.Uri } | undefined)?.uri
-      return uri !== undefined && isInside(exercise, uri)
-    })
+  const tabs = exerciseTabs(exercise).map(({ tab }) => tab)
   if (tabs.length > 0) {
     await vscode.window.tabGroups.close(tabs)
   }
