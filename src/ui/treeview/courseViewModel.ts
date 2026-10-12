@@ -33,6 +33,8 @@ export interface ExerciseView {
 
 /** A part of a course: a tmc course's exercises sharing a `partNN-` slug prefix, or a mooc chapter. */
 export interface PartView {
+  /** Unique among the course's parts, unlike `name`, as two chapters may share a name. */
+  key: string
   name: string
   exercises: ExerciseView[]
   /** The soonest deadline after `now` among the exercises still open: not passed, tries left. */
@@ -71,18 +73,10 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
   const updateableKeys = new Set(state.updateable.map((id) => ExerciseIdentifier.key(id)))
   const onDiskBySlug = new Map(state.onDisk.map((exercise) => [exercise.exerciseSlug, exercise]))
 
-  const exercisesByPart = new Map<string, ExerciseView[]>()
-  const partNumbers = new Map<string, number>()
-  let ungroupedPartName: string | undefined
+  const parts = new Map<string, PartPlace & { exercises: ExerciseView[] }>()
   for (const ex of LocalCourseData.getExercises(course)) {
     const slug = LocalCourseExercise.getSlug(ex)
-    const { partName, partNumber, name, isUngrouped } = placeExercise(ex, slug, courseTitle)
-    if (isUngrouped) {
-      ungroupedPartName = partName
-    }
-    if (partNumber !== undefined) {
-      partNumbers.set(partName, partNumber)
-    }
+    const { part, name } = placeExercise(ex, slug, courseTitle)
     const id = LocalCourseExercise.getId(ex)
     const key = ExerciseIdentifier.key(id)
     const onDisk = onDiskBySlug.get(slug)
@@ -109,17 +103,18 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       isUpdateable: updateableKeys.has(key),
       onDisk,
     }
-    const partExercises = exercisesByPart.get(partName)
-    if (partExercises) {
-      partExercises.push(view)
+    const existing = parts.get(part.key)
+    if (existing) {
+      existing.exercises.push(view)
     } else {
-      exercisesByPart.set(partName, [view])
+      parts.set(part.key, { ...part, exercises: [view] })
     }
   }
 
   const isSortedByName = course.kind === "tmc"
-  const parts = Array.from(exercisesByPart, ([name, exercises]) => ({
-    name,
+  const isAnyNumbered = [...parts.values()].some((part) => part.number !== undefined)
+  const sorted = Array.from(parts.values(), ({ exercises, ...part }) => ({
+    ...part,
     exercises: isSortedByName
       ? exercises.toSorted((a, b) => compareNames(a.name, b.name))
       : exercises,
@@ -127,14 +122,22 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       state.now,
       exercises.filter((ex) => !ex.passed && !ex.isOutOfTries).map((ex) => shownDeadline(ex)),
     ),
-  })).toSorted((a, b) => compareParts(a.name, b.name, partNumbers, ungroupedPartName))
+  })).toSorted((a, b) => compareParts(a, b, isAnyNumbered))
 
-  const openPartName = pickOpenPart(parts)
-  return parts.map((part) => ({
+  const openPartKey = pickOpenPart(sorted)
+  return sorted.map(({ number: _number, ...part }) => ({
     ...part,
-    isDefaultOpen: parts.length <= MAX_PARTS_ALL_OPEN || part.name === openPartName,
-    isUngrouped: part.name === ungroupedPartName,
+    isDefaultOpen: sorted.length <= MAX_PARTS_ALL_OPEN || part.key === openPartKey,
   }))
+}
+
+/** The part an exercise belongs in. */
+interface PartPlace {
+  key: string
+  name: string
+  /** A mooc chapter's number, which orders the chapters. */
+  number?: number
+  isUngrouped: boolean
 }
 
 /**
@@ -193,15 +196,15 @@ function resolveStatus(
   }
 }
 
-/** The part holding the soonest unmet deadline, else the first part. */
-function pickOpenPart(parts: { name: string; nextDeadline: Date | null }[]): string | undefined {
-  let soonest: { name: string; nextDeadline: Date } | undefined
-  for (const { name, nextDeadline } of parts) {
+/** The key of the part holding the soonest unmet deadline, else of the first part. */
+function pickOpenPart(parts: { key: string; nextDeadline: Date | null }[]): string | undefined {
+  let soonest: { key: string; nextDeadline: Date } | undefined
+  for (const { key, nextDeadline } of parts) {
     if (nextDeadline && (!soonest || nextDeadline < soonest.nextDeadline)) {
-      soonest = { name, nextDeadline }
+      soonest = { key, nextDeadline }
     }
   }
-  return soonest?.name ?? parts[0]?.name
+  return soonest?.key ?? parts[0]?.key
 }
 
 /**
@@ -212,42 +215,43 @@ function placeExercise(
   exercise: LocalCourseExercise,
   slug: string,
   courseTitle: string,
-): { partName: string; partNumber?: number; name: string; isUngrouped: boolean } {
-  const ungrouped = { partName: courseTitle, name: slug, isUngrouped: true }
+): { part: PartPlace; name: string } {
+  const ungrouped = {
+    part: { key: ":ungrouped", name: courseTitle, isUngrouped: true },
+    name: slug,
+  }
   return match(
     exercise,
     () => {
       const [, partName, name] = slug.match(/^(\w+)-(.+)$/) ?? []
-      return partName && name ? { partName, name, isUngrouped: false } : ungrouped
+      return partName && name
+        ? { part: { key: partName, name: partName, isUngrouped: false }, name }
+        : ungrouped
     },
-    (mooc) =>
-      mooc.chapter
+    ({ chapter }) =>
+      chapter
         ? {
-            partName: mooc.chapter.name,
-            partNumber: mooc.chapter.number,
+            part: {
+              key: `chapter:${chapter.number}`,
+              name: chapter.name,
+              number: chapter.number,
+              isUngrouped: false,
+            },
             name: slug,
-            isUngrouped: false,
           }
         : ungrouped,
   )
 }
 
 /** Chapters in chapter order with the unchaptered exercises after them; otherwise by name. */
-function compareParts(
-  a: string,
-  b: string,
-  partNumbers: ReadonlyMap<string, number>,
-  ungroupedPartName: string | undefined,
-): number {
-  if (partNumbers.size > 0 && (a === ungroupedPartName || b === ungroupedPartName)) {
-    return Number(a === ungroupedPartName) - Number(b === ungroupedPartName)
+function compareParts(a: PartPlace, b: PartPlace, isAnyNumbered: boolean): number {
+  if (isAnyNumbered && (a.isUngrouped || b.isUngrouped)) {
+    return Number(a.isUngrouped) - Number(b.isUngrouped)
   }
-  const numberA = partNumbers.get(a)
-  const numberB = partNumbers.get(b)
-  if (numberA !== undefined && numberB !== undefined) {
-    return numberA - numberB
+  if (a.number !== undefined && b.number !== undefined) {
+    return a.number - b.number
   }
-  return compareNames(a, b)
+  return compareNames(a.name, b.name)
 }
 
 function compareNames(a: string, b: string): number {

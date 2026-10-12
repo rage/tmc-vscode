@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { TestCase, TmcStyleValidationResult } from "../shared/langsSchema"
+  import { withDistinctKeys } from "../shared/shared"
   import { uiState } from "../utilities/uiState.svelte"
   import Checkbox from "./Checkbox.svelte"
   import CodeBlock from "./CodeBlock.svelte"
@@ -33,14 +34,7 @@
   const showPassedTests = $derived(alwaysShowPassedTests || showPassedTestsChecked.current)
 
   // Test names are not guaranteed unique, and a duplicate `{#each}` key throws.
-  const rows = $derived.by(() => {
-    const seen = new Map<string, number>()
-    return testCases.map((result) => {
-      const occurrence = seen.get(result.name) ?? 0
-      seen.set(result.name, occurrence + 1)
-      return { key: occurrence === 0 ? result.name : `${result.name}#${occurrence}`, result }
-    })
-  })
+  const rows = $derived(withDistinctKeys(testCases, (result) => result.name))
 </script>
 
 {#if testCases.length > 0}
@@ -80,7 +74,7 @@
     Show passed tests
   </Checkbox>
   <ul class="results">
-    {#each rows as { key, result } (key)}
+    {#each rows as { key, item: result } (key)}
       <li hidden={result.successful && !showPassedTests}>
         <h3 class="result-name">
           <StatusIcon

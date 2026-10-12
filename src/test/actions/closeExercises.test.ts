@@ -33,8 +33,7 @@ const moocCourse: MoocLocalCourseData = {
 
 suite("closeExercises action", function () {
   test("closes a mooc exercise by its slug, not its raw uuid id", async function () {
-    // Regression guard: `closeExercises` used to pass the mooc exercise's raw
-    // uuid `id` where the workspace manager expects a slug.
+    // The workspace manager keys exercises by slug; a mooc exercise's uuid matches nothing there.
     const closeCourseExercises = vi.fn(async () => Ok([]))
     const workspaceManager = {
       closeCourseExercises,

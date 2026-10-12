@@ -174,7 +174,7 @@ suite("TmcPanel initialization guards", () => {
 })
 
 suite("initializationErrorHelpPanel", () => {
-  test("carries each failed service's message, keyed by the service", () => {
+  test("lists each failed service, named for the student, with the CLI hint on tmc-langs", () => {
     const actionContext = createDegradedContext({
       failures: {
         langs: new Error("langs offline"),
@@ -184,38 +184,21 @@ suite("initializationErrorHelpPanel", () => {
 
     const panel = initializationErrorHelpPanel(actionContext, createMockContext())
 
-    expect(path.basename(panel.cliFolder)).toBe("cli")
-    expect(panel.initializationErrors).toMatchObject({
-      tmc: { error: "langs offline" },
-      userData: { error: "corrupt user data" },
-    })
+    expect(panel.failures).toEqual([
+      {
+        service: "tmc-langs",
+        error: "langs offline",
+        stack: expect.any(String),
+        hint: expect.stringContaining(`${path.sep}cli'`),
+      },
+      { service: "user data", error: "corrupt user data", stack: expect.any(String) },
+    ])
   })
 
   test("a ready startup carries no initialization failures", () => {
     const panel = initializationErrorHelpPanel(createMockActionContext(), createMockContext())
 
-    expect(panel.initializationErrors).toEqual({
-      tmc: null,
-      userData: null,
-      workspaceManager: null,
-      resources: null,
-      exerciseDecorationProvider: null,
-    })
-  })
-
-  test("a service absent from the failures map is null, not empty or crashing", () => {
-    // Only `langs` failed; the root cause never touched the other four, which is
-    // distinct from a service that ran and failed itself.
-    const actionContext = createDegradedContext({ failures: { langs: new Error("langs offline") } })
-
-    const panel = initializationErrorHelpPanel(actionContext, createMockContext())
-
-    expect(panel.initializationErrors).toMatchObject({
-      userData: null,
-      workspaceManager: null,
-      resources: null,
-      exerciseDecorationProvider: null,
-    })
+    expect(panel.failures).toEqual([])
   })
 
   test("folds a failure's cause into the message", () => {
@@ -225,9 +208,7 @@ suite("initializationErrorHelpPanel", () => {
 
     const panel = initializationErrorHelpPanel(actionContext, createMockContext())
 
-    expect(panel.initializationErrors.tmc).toMatchObject({
-      error: "langs offline: network unreachable",
-    })
+    expect(panel.failures[0]).toMatchObject({ error: "langs offline: network unreachable" })
   })
 })
 
@@ -571,8 +552,7 @@ suite("TmcPanel ready handshake", () => {
   })
 
   test("resends whichever panel was rendered last, not the one mounted with", async () => {
-    // A stale _route is the way this feature makes things worse than the bug it
-    // fixes, so every render path has to keep it current.
+    // A reload resends `_route`, so every render path has to keep it current.
     const actionContext = createMockActionContext()
     const { panel, listener } = await mountSidePanel(actionContext)
 
@@ -1308,6 +1288,53 @@ suite("TmcPanel side panel placement", () => {
       graded,
     ])
   })
+
+  test("offers a background submission's outcome instead of leaving the shown one", async () => {
+    const { panel, sendReady } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    const subscription = TmcPanel.showSubmissionViews(
+      createMockContext(),
+      createMockActionContext(),
+    )
+    onTestFinished(() => subscription.dispose())
+    const shown = exerciseSubmissionPanel()
+    const background = { ...exerciseSubmissionPanel(), exerciseSlug: "part01-02_other" }
+    submissionViews.open(shown)
+    await sendReady()
+    const offered = Promise.withResolvers<string | undefined>()
+    vi.mocked(vscode.window.showInformationMessage).mockReturnValueOnce(offered.promise as never)
+    vi.mocked(panel.webview.postMessage).mockClear()
+    const graded = submissionViewFor(background, "Exercise graded")
+
+    submissionViews.update({ panel: background, view: graded.view, shouldReopen: true })
+
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      "Submission of part01-02_other: Exercise graded",
+      "Show result",
+    )
+    expect(panel.webview.postMessage).not.toHaveBeenCalled()
+
+    offered.resolve("Show result")
+    await vi.waitFor(() =>
+      expect(postedMessages(panel)).toEqual([
+        expect.objectContaining({ type: "setPanel", panel: background }),
+        graded,
+      ]),
+    )
+  })
+
+  test("a later submission of the same exercise forgets the earlier one's view", () => {
+    const earlier = exerciseSubmissionPanel()
+    submissionViews.update({
+      panel: earlier,
+      view: submissionViewFor(earlier, "Exercise graded").view,
+      shouldReopen: false,
+    })
+
+    submissionViews.open(exerciseSubmissionPanel())
+
+    expect(submissionViews.latestView(earlier.id)).toBeUndefined()
+  })
 })
 
 suite("TmcPanel tab identity", () => {
@@ -1705,6 +1732,11 @@ suite("TmcPanel main panel restore after a window reload", () => {
       }),
     ],
     ["a course while activation degraded", savedCourseDetails, createDegradedContext()],
+    [
+      "the initialization help after a healthy activation",
+      { screen: "InitializationErrorHelp", route: { type: "InitializationErrorHelp" }, ui: {} },
+      createMockActionContext(),
+    ],
   ]
   for (const [description, state, actionContext] of unrestorable) {
     test(`closes a restored panel naming ${description}`, async () => {

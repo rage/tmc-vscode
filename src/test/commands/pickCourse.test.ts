@@ -87,20 +87,15 @@ suite("pickCourse", function () {
     expect(picked).toEqual(CourseIdentifier.from("course-uuid"))
   })
 
-  test("value picks what a selection yields, and decorate replaces the label", async function () {
+  test("decorate replaces the label", async function () {
     const [context, dialog] = contextWith(courses)
-    dialog.selectItem = vi.fn(
-      async (_prompt: SelectPrompt, ...items: Item<unknown>[]) => items[0]?.value,
-    ) as unknown as typeof dialog.selectItem
 
-    const picked = await pickCourse(context, {
+    await pickCourse(context, {
       title: "Switch Course Workspace",
       placeHolder: "Pick one",
-      value: (course: LocalCourseData) => course,
       decorate: (_course: LocalCourseData, title: string) => `${title} (Currently open)`,
     })
 
-    expect(picked).toEqual(courses[0])
     const [, ...items] = vi.mocked(dialog.selectItem).mock.calls[0] ?? []
     expect(items.map((item) => item.label)).toEqual([
       "The Python Course (Currently open)",

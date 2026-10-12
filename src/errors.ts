@@ -1,3 +1,4 @@
+import type { RunnableCommand } from "./shared/shared"
 import { backendName, BaseError } from "./shared/shared"
 
 export class AuthorizationError extends BaseError {
@@ -159,7 +160,7 @@ export class AiUseRefusedError extends BaseError {
 /** A button offered beside an error notification: its label, and the command pressing it runs. */
 export interface ErrorAction {
   label: string
-  command: string
+  command: RunnableCommand
 }
 
 /** How an error reaches the user: the sentence they read, and what they can do about it. */

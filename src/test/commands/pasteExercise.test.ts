@@ -119,6 +119,17 @@ suite("Paste exercise command", function () {
     )
   })
 
+  test("never opens a paste link that is not http(s)", async function () {
+    vi.mocked(actions.pasteExercise).mockResolvedValue(Ok("file:///etc/passwd"))
+    const { context, notifications } = harness("mooc")
+
+    await pasteExercise(context, undefined)
+    const [, open] = notifications[0]?.[1] ?? []
+    await open?.()
+
+    expect(vscodeMock.env.openExternal).not.toHaveBeenCalled()
+  })
+
   test("names the paste service on a failure, and offers no link", async function () {
     vi.mocked(actions.pasteExercise).mockResolvedValue(Err(new Error("submission rejected")))
     const { context, notifications } = harness("mooc")

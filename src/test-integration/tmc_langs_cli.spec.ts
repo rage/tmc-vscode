@@ -367,10 +367,8 @@ suite("tmc langs cli spec", function () {
         expect(result.val).to.be.instanceOf(RuntimeError)
       })
 
-      // Since 0.39.6 directory locks live in a central locks dir instead of a
-      // `.tmc.lock` inside the exercise, so this no longer fails just because the
-      // directory is missing -- it re-downloads the exercise, like the old-submission
-      // case above.
+      // Directory locks live in a central locks dir, not inside the exercise, so a missing
+      // directory is re-downloaded rather than failing, like the old-submission case above.
       test("should re-download the exercise when trying to reset it", async function () {
         const result = await tmc.resetExercise(
           ExerciseIdentifier.from(1),
@@ -695,8 +693,7 @@ suite("tmc langs cli spec", function () {
     })
 
     test("should key mooc download results by the requested exercise id", async function () {
-      // Regression guard for the task_id/exercise_id confusion: the result must
-      // be addressable by the exercise id the caller passed in.
+      // Keyed by the exercise id the caller passed in, never by a task id.
       const mooc = (
         await tmc.downloadMoocExercises([PASSING_EXERCISE_ID], undefined, () => {})
       ).unwrap()
@@ -978,8 +975,8 @@ suite("tmc langs cli spec", function () {
         // Unrecognised token; the expired lifetime forces the CLI's proactive
         // refresh before the resource call.
         accessToken: "mock-access-expired",
-        // The seeded refresh token the mock always honours; an arbitrary one
-        // is rejected now that the grant only accepts tokens it issued.
+        // The seeded refresh token the mock always honours; the grant rejects any
+        // token it did not issue.
         refreshToken: MOCK_SEEDED_REFRESH_TOKEN,
         expiresIn: 3600,
         obtainedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),

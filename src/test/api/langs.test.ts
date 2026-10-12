@@ -1202,10 +1202,9 @@ suite("Langs response cache", function () {
 })
 
 suite("Langs exercise-update cache invalidation", function () {
-  // Regression: the mooc download leg deleted the *tmc* cache key
-  // ("exercise-updates") instead of its own ("mooc-exercise-updates"), so a mooc
-  // update left the stale mooc update list cached for the full cache lifetime and
-  // the just-updated exercises kept showing as outdated.
+  // Each backend's download clears its own cached update list ("exercise-updates" vs
+  // "mooc-exercise-updates"); a stale one keeps just-updated exercises showing as outdated
+  // for the whole cache lifetime.
   test("a mooc download invalidates the cached mooc exercise-update list", async function () {
     const langs = newLangs()
     let updateCheckCalls = 0

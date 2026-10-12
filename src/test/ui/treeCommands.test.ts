@@ -225,7 +225,7 @@ suite("Courses view commands", function () {
 
   test("update downloads the updates the last check found for the course", async function () {
     const updates = [makeTmcKind({ tmcExerciseId: 5 })]
-    updateablesRegistry.set(tmcCourse, updates)
+    updateablesRegistry.setMany([[tmcCourse, updates]])
     const actionContext = context()
 
     await updateCourseExercises(actionContext, tmcCourse)

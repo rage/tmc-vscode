@@ -3,10 +3,9 @@ import { expect } from "@playwright/test"
 import { vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 
-// Adding a course is one host-owned quick pick listing both backends. The session
-// comes from the tmc credentials the fixture seeds; the extension has no TMC login
-// screen any more (see fixtures.ts). These cases stay on the tmc path so they run
-// against the pinned CLI, which has no mooc subcommands.
+// Adding a course is one host-owned quick pick listing both backends; these cases pick
+// from the tmc side. The session comes from the tmc credentials the fixture seeds
+// (fixtures.ts).
 
 vsCodeTest("can add new course", async ({ page, webview }) => {
   const coursesView = new CoursesViewPage(page, webview)

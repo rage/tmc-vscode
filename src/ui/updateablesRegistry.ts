@@ -14,7 +14,7 @@ class UpdateablesRegistry {
   private readonly _byCourse = new Map<string, ExerciseIdentifier[]>()
   private readonly _changed = new vscode.EventEmitter<void>()
 
-  /** Fires after {@link set}, {@link setMany} or {@link clear}. */
+  /** Fires after {@link setMany} or {@link clear}. */
   public readonly onDidChange = this._changed.event
 
   /** The exercises last reported as updateable for `courseId`; empty if none were. */
@@ -22,11 +22,7 @@ class UpdateablesRegistry {
     return this._byCourse.get(CourseIdentifierNs.key(courseId)) ?? []
   }
 
-  public set(courseId: CourseIdentifier, exerciseIds: ExerciseIdentifier[]): void {
-    this.setMany([[courseId, exerciseIds]])
-  }
-
-  /** {@link set} for several courses, announced as one change. */
+  /** Replaces the updateable exercises of each course listed, announced as one change. */
   public setMany(listsByCourse: Iterable<[CourseIdentifier, ExerciseIdentifier[]]>): void {
     for (const [courseId, exerciseIds] of listsByCourse) {
       this._byCourse.set(CourseIdentifierNs.key(courseId), exerciseIds)

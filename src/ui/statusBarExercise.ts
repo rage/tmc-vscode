@@ -9,6 +9,7 @@ import type { UserData } from "../config/userdata"
 import { LocalCourseExercise } from "../shared/shared"
 import type { ExerciseOperationKind, ExerciseOperations } from "./exerciseOperations"
 import { pointsText } from "./points"
+import { tooltipOf } from "./tooltip"
 
 /** What the exercise status bar item and its action pick read. */
 export interface ExerciseStatusSources {
@@ -83,14 +84,12 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
           ". Show exercise actions",
       }
     }
-    this._item.tooltip = new vscode.MarkdownString(
-      [
-        `**${slug}**`,
-        exercise.courseSlug,
-        ...(points ? [`${points.short} points${standingSuffix(stored)}`] : []),
-        "Click for exercise actions.",
-      ].join("\n\n"),
-    )
+    this._item.tooltip = tooltipOf([
+      slug,
+      exercise.courseSlug,
+      ...(points ? [`${points.short} points${standingSuffix(stored)}`] : []),
+      "Click for exercise actions.",
+    ])
     this._item.show()
   }
 

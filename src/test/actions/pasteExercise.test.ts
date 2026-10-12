@@ -150,8 +150,8 @@ suite("paste action", () => {
   })
 })
 
-// Drives the action through the real `runForExercise`/`withOperation` boundary to prove
-// the busy notice is shown exactly once now that the action no longer notifies itself.
+// Drives the action through the real `runForExercise`/`withOperation` boundary: the busy
+// notice is the boundary's to show, exactly once.
 suite("paste action, through the real runForExercise boundary", () => {
   function moocWorkspaceContext(): {
     actionContext: ReadyActionContext

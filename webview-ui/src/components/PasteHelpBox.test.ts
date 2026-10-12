@@ -36,8 +36,21 @@ suite("PasteHelpBox component", () => {
 
     replyToRequest("pasteExercise", { ok: true, value: "https://paste.example/abc" })
 
-    const link = await screen.findByRole("link", { name: "https://paste.example/abc" })
-    expect(link).toBeVisible()
+    expect(await screen.findByText(/https:\/\/paste\.example\/abc/)).toBeVisible()
+  })
+
+  test("has the host open the paste link, which it checks first", async () => {
+    render(PasteHelpBox, { props: tmcProps })
+    await paste()
+    replyToRequest("pasteExercise", { ok: true, value: "https://paste.example/abc" })
+
+    ;(await screen.findByRole("button", { name: "Open link" })).click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "openLinkInBrowser",
+      url: "https://paste.example/abc",
+    })
+    expect(screen.queryByRole("link")).not.toBeInTheDocument()
   })
 
   test("says why a paste failed", async () => {

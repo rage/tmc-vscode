@@ -41,26 +41,25 @@ export function initializationErrorHelpPanel(
   extensionContext: vscode.ExtensionContext,
 ): InitializationErrorHelpPanel {
   const failures = actionContext.startup.kind === "degraded" ? actionContext.startup.failures : {}
+  const cliHint =
+    "A proxy, firewall or antivirus program blocking network requests can cause this. " +
+    `Try adding an exception for the directory '${cliFolder(extensionContext)}'.`
   return {
     id: nextPanelId(),
     type: "InitializationErrorHelp",
-    cliFolder: cliFolder(extensionContext),
-    initializationErrors: {
-      tmc: failureOf(failures.langs),
-      userData: failureOf(failures.userData),
-      workspaceManager: failureOf(failures.workspaceManager),
-      resources: failureOf(failures.resources),
-      exerciseDecorationProvider: failureOf(failures.exerciseDecorationProvider),
-    },
+    failures: Object.entries(failures).map(([service, error]) => ({
+      service: SERVICE_NAMES[service] ?? service,
+      error: error.cause ? `${error.message}: ${error.cause}` : error.message,
+      stack: error.stack ?? "no stack trace",
+      ...(service === "langs" ? { hint: cliHint } : {}),
+    })),
   }
 }
 
-function failureOf(error: Error | undefined): { error: string; stack: string } | null {
-  if (!error) {
-    return null
-  }
-  const stack = error.stack ?? "no stack trace"
-  return error.cause
-    ? { error: `${error.message}: ${error.cause}`, stack }
-    : { error: error.message, stack }
+/** `DegradedStartup.failures` keys, named for the student. */
+const SERVICE_NAMES: Partial<Record<string, string>> = {
+  langs: "tmc-langs",
+  userData: "user data",
+  workspaceManager: "workspace manager",
+  exerciseDecorationProvider: "exercise decoration provider",
 }

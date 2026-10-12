@@ -5,7 +5,7 @@ import { vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
 import { TestResultsPage } from "../pages/test-results"
-import { TestSubmissionPage } from "../pages/test-submission"
+import { TmcPage } from "../pages/tmc"
 
 // End-to-end walk of the mooc (courses.mooc.fi) student flow against the mooc
 // mock backend (backend/mooc, mounted in the same process as the legacy TMC
@@ -16,17 +16,15 @@ import { TestSubmissionPage } from "../pages/test-submission"
 // workspace -> opening the exercise file -> running the local tests -> submitting
 // -> the reduced mooc result panel.
 //
-// Reaching the file explorer / run-tests / submit depends on mooc workspace
-// tracking (the CLI's `mooc list-local-course-exercises` + slug-carrying
-// LocalMoocExercise, consumed by refreshLocalExercises). Before that landed the
-// exercise files never surfaced in the opened workspace and this walk had to
-// stop at "opened". The submit result here is the REDUCED mooc panel (overall
-// grading progress + score, no per-test breakdown), distinct from the TMC
+// Reaching the file explorer, test run and submit depends on mooc workspace
+// tracking (the CLI's `mooc list-local-course-exercises`, consumed by
+// refreshLocalExercises). The submit result here is the reduced mooc panel
+// (grading progress and score, no per-test breakdown), distinct from the TMC
 // submission view.
 vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ page, webview }) => {
   const coursesView = new CoursesViewPage(page, webview)
   const testResultsPage = new TestResultsPage(page, webview)
-  const testSubmissionPage = new TestSubmissionPage(page, webview)
+  const sidePanel = new TmcPage(page, webview).getSidePanel()
   const explorerPage = new ExplorerPage(page)
 
   // course + exercise are served by backend/mooc/fixtures.ts; the exercise packs
@@ -95,21 +93,22 @@ vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ pag
     // The mooc submit renders the reduced result panel: an "Exercise passed" heading
     // (full points, as the backend's standing says) plus the score, not the TMC per-test
     // submission view.
-    const gradedHeading = testSubmissionPage.getWebview().getByRole("heading", {
+    const gradedHeading = sidePanel.getByRole("heading", {
       name: "Exercise passed",
     })
     await expect(gradedHeading).toBeHidden()
     await allPassed.getByRole("button", { name: "Submit" }).click()
     await expect(gradedHeading).toBeVisible()
-    await expect(
-      testSubmissionPage.getWebview().getByRole("meter", { name: "Points" }),
-    ).toHaveAttribute("aria-valuetext", /^1 \/ \d+ points$/)
+    await expect(sidePanel.getByRole("meter", { name: "Points" })).toHaveAttribute(
+      "aria-valuetext",
+      /^1 \/ \d+ points$/,
+    )
   })
 })
 
 vsCodeTest("submitting an exercise gone from the server says so", async ({ page, webview }) => {
   const coursesView = new CoursesViewPage(page, webview)
-  const testSubmissionPage = new TestSubmissionPage(page, webview)
+  const sidePanel = new TmcPage(page, webview).getSidePanel()
   const explorerPage = new ExplorerPage(page)
 
   await vsCodeTest.step("open the exercise in its workspace", async () => {
@@ -140,13 +139,12 @@ vsCodeTest("submitting an exercise gone from the server says so", async ({ page,
       .getByLabel("Submit Solution", { exact: true })
       .click()
 
-    const panel = testSubmissionPage.getWebview()
-    await expect(panel.getByRole("heading", { name: "Submission failed" })).toBeVisible()
+    await expect(sidePanel.getByRole("heading", { name: "Submission failed" })).toBeVisible()
     await expect(
-      panel.getByText("This exercise no longer exists on courses.mooc.fi.", { exact: false }),
+      sidePanel.getByText("This exercise no longer exists on courses.mooc.fi.", { exact: false }),
     ).toBeVisible()
-    await expect(panel.getByRole("button", { name: "Refresh Courses" })).toBeVisible()
-    const details = await panel.getByRole("group", { name: "Error details" }).textContent()
+    await expect(sidePanel.getByRole("button", { name: "Refresh Courses" })).toBeVisible()
+    const details = await sidePanel.getByRole("group", { name: "Error details" }).textContent()
     expect(details?.split("Caused by: HTTP error 404")).toHaveLength(2)
   })
 })

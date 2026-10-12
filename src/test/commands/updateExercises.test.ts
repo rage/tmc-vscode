@@ -83,8 +83,8 @@ suite("updateExercises command", function () {
 
   test("records what it found per course, keeping a failed backend's last answer", async function () {
     const staleMooc = [ExerciseIdentifierNs.from("mooc-exercise")]
-    updateablesRegistry.set(CourseIdentifierNs.from(2), [ExerciseIdentifierNs.from(99)])
-    updateablesRegistry.set(CourseIdentifierNs.from("mooc-course"), staleMooc)
+    updateablesRegistry.setMany([[CourseIdentifierNs.from(2), [ExerciseIdentifierNs.from(99)]]])
+    updateablesRegistry.setMany([[CourseIdentifierNs.from("mooc-course"), staleMooc]])
     checkForExerciseUpdates.mockResolvedValue({
       outdated: [outdated(1, 10), outdated(1, 11)],
       failures: [{ backend: "mooc", error: new Error("offline") }],

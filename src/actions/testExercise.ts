@@ -29,6 +29,8 @@ export type ExerciseTestOutcome =
  *
  * @param token Stops both CLI processes. A cancelled run resolves with whatever the CLI
  * made of being interrupted, so check the token before reporting the outcome.
+ * @param options.isAiUseChecked The caller has just had `checkAiUse` pass, so it is not asked
+ * again.
  * @returns `Err(BottleneckError)` while another run of the same exercise is in flight,
  * `Err(AiUseRefusedError)` while AI assistance may be on, and `Err` when the tests could not
  * be run at all.
@@ -37,6 +39,7 @@ export async function testExercise(
   actionContext: ReadyActionContext,
   exercise: WorkspaceExercise,
   token: vscode.CancellationToken,
+  options: { isAiUseChecked?: boolean } = {},
 ): Promise<Result<ExerciseTestOutcome, Error>> {
   const { langs, userData } = actionContext.startup
 
@@ -48,7 +51,8 @@ export async function testExercise(
   if (LocalCourseData.isExamMode(course)) {
     return Ok({ kind: "examMode" })
   }
-  const refused = await actionContext.startup.aiUseGate.refusal(course, exercise.uri)
+  const refused =
+    !options.isAiUseChecked && (await actionContext.startup.aiUseGate.refusal(course, exercise.uri))
   if (refused) {
     return Err(refused)
   }

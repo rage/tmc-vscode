@@ -294,6 +294,24 @@ suite("ExerciseTestController", function () {
     expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
   })
 
+  test("a run that could not run the tests drops the tests an earlier run found", async function () {
+    const s = setup()
+    const exercise = exerciseAt(s)
+    await s.controller.runExercise(exercise)
+    const item = itemOf(s, exercise)
+    expect(item.children.size).toBe(2)
+    s.runTests.mockReturnValueOnce({
+      process: Promise.resolve(Err(new Error("compilation failed"))),
+      interrupt: vi.fn(),
+    })
+
+    await s.controller.runExercise(exercise)
+
+    expect(finalStates(lastRun(s)).get(item.id)?.[0]).toBe("errored")
+    expect(item.children.size).toBe(0)
+    expect(item.description).toBe("")
+  })
+
   test("marks the exercise as being tested while the run lasts", async function () {
     const s = setup()
     const exercise = exerciseAt(s)
@@ -513,6 +531,16 @@ suite("ExerciseTestController while AI may be on", function () {
     expect(result.err && result.val).toBe(refusal)
     expect(s.fake.runs).toEqual([])
     expect(s.runTests).not.toHaveBeenCalled()
+  })
+
+  test("a run the Run Tests command asks for checks AI use once", async function () {
+    const s = setup()
+    const refusalAsked = vi.spyOn(s.actionContext.startup.aiUseGate, "refusal")
+
+    await s.controller.runExercise(exerciseAt(s))
+
+    expect(refusalAsked).toHaveBeenCalledOnce()
+    expect(s.runTests).toHaveBeenCalledOnce()
   })
 
   test("exam mode still skips the run without asking", async function () {
