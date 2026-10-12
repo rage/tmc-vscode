@@ -49,7 +49,7 @@ export const SharedMoocCourseExerciseSchema = z.object({
   id: z.string(),
   availablePoints: z.number(),
   awardedPoints: z.number(),
-  /** The exercise slug. */
+  /** The name the course author gave it; its folder on disk is a kebab-cased form of it. */
   name: z.string(),
   deadline: z.string().nullable(),
   passed: z.boolean(),
