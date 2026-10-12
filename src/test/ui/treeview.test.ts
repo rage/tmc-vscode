@@ -388,8 +388,10 @@ suite("CoursesTree", function () {
       expect(icon(item)).toEqual(["circle-slash", "testing.iconSkipped"])
       expect(item.contextValue).toBe("exercise.missing")
       expect(item.description).toBe("not downloaded · 2/3 points · no tries left")
-      expect(item.accessibilityInformation?.label).toMatch(/^loops, not passed, no tries left, /)
-      expect(tooltipOf(item)).toContain("2/3 points · no tries left")
+      expect(item.accessibilityInformation?.label).toBe(
+        "loops, not passed, not downloaded, 2 of 3 points, no tries left",
+      )
+      expect(tooltipOf(item)).toContain("No tries left, so this score is final.")
     })
 
     test("downloading spins, and a failed download says so", function () {

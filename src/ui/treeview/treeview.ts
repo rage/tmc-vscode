@@ -82,10 +82,6 @@ export class CourseTreeItem extends vscode.TreeItem {
     const points = pointsText(course.data.awardedPoints, course.data.availablePoints)
     const backend = backendName(course.kind)
 
-    // Titles are only unique within one backend, so the backend is always shown.
-    this.description = [points?.short, backend, disabled ? "disabled" : undefined]
-      .filter((part) => part !== undefined)
-      .join(" · ")
     this.iconPath = disabled
       ? new vscode.ThemeIcon("book", new vscode.ThemeColor("disabledForeground"))
       : new vscode.ThemeIcon("book")
@@ -95,26 +91,24 @@ export class CourseTreeItem extends vscode.TreeItem {
       ...(updateCount > 0 ? ["hasUpdates"] : []),
       ...(hasCompleted ? ["hasCompleted"] : []),
     ].join(".")
-    this._tooltipLines = [
-      title,
-      backend,
-      ...[
-        points && `${points.short} points`,
-        newCount > 0 && countOf(newCount, "new exercise"),
-        updateCount > 0 && countOf(updateCount, "exercise update"),
-        disabled && "This course is disabled: its exercises cannot be downloaded or submitted.",
-      ].filter((line) => typeof line === "string"),
-    ]
-    this.accessibilityInformation = {
-      label: [
-        title,
-        ...(points ? [points.spoken] : []),
-        backend,
-        ...(disabled ? ["disabled"] : []),
-        ...(newCount > 0 ? [countOf(newCount, "new exercise")] : []),
-        ...(updateCount > 0 ? [countOf(updateCount, "exercise update")] : []),
-      ].join(", "),
-    }
+    const newExercises = countOf(newCount, "new exercise")
+    const updates = countOf(updateCount, "exercise update")
+    this._tooltipLines = showFacts(this, title, [
+      points && {
+        description: points.short,
+        spoken: points.spoken,
+        tooltip: `${points.short} points`,
+      },
+      // Titles are only unique within one backend, so the backend is always shown.
+      { description: backend, spoken: backend, tooltip: backend },
+      disabled && {
+        description: "disabled",
+        spoken: "disabled",
+        tooltip: "This course is disabled: its exercises cannot be downloaded or submitted.",
+      },
+      newCount > 0 && { spoken: newExercises, tooltip: newExercises },
+      updateCount > 0 && { spoken: updates, tooltip: updates },
+    ])
     this._buildChildren = () =>
       parts.length === 1 && parts[0]?.isUngrouped
         ? exercises.map((ex) => new ExerciseTreeItem(this, this.courseId, ex, context))
@@ -160,19 +154,18 @@ export class PartTreeItem extends vscode.TreeItem {
       part.nextDeadline && !context.isOffline
         ? formatDeadline(part.nextDeadline, context.now, context.locale)
         : undefined
-    this.description = [
-      `${passed}/${part.exercises.length} passed`,
-      nextDeadline && `next deadline ${nextDeadline}`,
-    ]
-      .filter((text) => text !== undefined)
-      .join(" · ")
-    this.accessibilityInformation = {
-      label: [
-        label,
-        `${passed} of ${part.exercises.length} passed`,
-        ...(nextDeadline ? [`next deadline ${nextDeadline}`] : []),
-      ].join(", "),
-    }
+    this._tooltipLines = showFacts(this, label, [
+      {
+        description: `${passed}/${part.exercises.length} passed`,
+        spoken: `${passed} of ${part.exercises.length} passed`,
+        tooltip: `${passed} of ${part.exercises.length} exercises passed`,
+      },
+      nextDeadline !== undefined && {
+        description: `next deadline ${nextDeadline}`,
+        spoken: `next deadline ${nextDeadline}`,
+        tooltip: `Next deadline: ${nextDeadline}`,
+      },
+    ])
     this.iconPath = new vscode.ThemeIcon(
       passed === part.exercises.length ? "pass-filled" : "list-tree",
       passed === part.exercises.length ? new vscode.ThemeColor("testing.iconPassed") : undefined,
@@ -183,11 +176,6 @@ export class PartTreeItem extends vscode.TreeItem {
       ...(part.exercises.some((ex) => ex.status === "closed") ? ["hasClosed"] : []),
       ...(part.exercises.some((ex) => ex.status === "opened") ? ["hasOpened"] : []),
     ].join(".")
-    this._tooltipLines = [
-      label,
-      `${passed} of ${part.exercises.length} exercises passed`,
-      ...(nextDeadline ? [`Next deadline: ${nextDeadline}`] : []),
-    ]
     this.children = part.exercises.map(
       (ex) => new ExerciseTreeItem(this, this.courseId, ex, context),
     )
@@ -217,10 +205,7 @@ export class ExerciseTreeItem extends vscode.TreeItem {
   /** The exercise's folder, while it is on disk. */
   public readonly exerciseUri: vscode.Uri | undefined
   public readonly status: ExerciseView["status"]
-  public readonly isPassed: boolean
-  public readonly isUpdateable: boolean
-  private readonly _exercise: ExerciseView
-  private readonly _context: RenderContext
+  private readonly _tooltipLines: string[]
 
   public constructor(
     public readonly parent: CourseTreeItem | PartTreeItem,
@@ -233,64 +218,86 @@ export class ExerciseTreeItem extends vscode.TreeItem {
     this.exerciseId = exercise.id
     this.exerciseUri = exercise.onDisk?.uri
     this.status = exercise.status
-    this.isPassed = exercise.passed
-    this.isUpdateable = exercise.isUpdateable
-    this._exercise = exercise
-    this._context = context
-
-    const deadline = shownDeadline(exercise)
-    const isDue =
-      !exercise.passed && !exercise.isOutOfTries && deadline !== null && deadline > context.now
-    const deadlineText = deadline ? formatDeadline(deadline, context.now, context.locale) : ""
-    const points = pointsText(exercise.awardedPoints, exercise.availablePoints)
-    const status = STATUS_LABELS[exercise.status]
-    this.description = [
-      exercise.status === "opened" ? undefined : status,
-      exercise.isUpdateable ? "update available" : undefined,
-      points && `${points.short} points`,
-      exercise.isOutOfTries ? "no tries left" : undefined,
-      isDue ? `due ${deadlineText}` : undefined,
-    ]
-      .filter((text) => text !== undefined)
-      .join(" · ")
     this.iconPath = exerciseIcon(exercise)
     this.contextValue = [
       `exercise.${exercise.status}`,
       ...(exercise.passed ? ["passed"] : []),
       ...(exercise.isUpdateable ? ["updateable"] : []),
     ].join(".")
-    this.accessibilityInformation = {
-      label: [
-        exercise.name,
-        exercise.passed ? "passed" : "not passed",
-        ...(exercise.isOutOfTries ? ["no tries left"] : []),
-        status,
-        ...(exercise.isUpdateable ? ["update available"] : []),
-        ...(points ? [points.spoken] : []),
-        ...(isDue ? [`due ${deadlineText}`] : []),
-      ].join(", "),
-    }
+
+    const { now, locale } = context
+    const deadline = shownDeadline(exercise)
+    const isDue = !exercise.passed && !exercise.isOutOfTries && deadline !== null && deadline > now
+    const points = pointsText(exercise.awardedPoints, exercise.availablePoints)
+    const status = STATUS_LABELS[exercise.status]
+    const due = isDue && `due ${formatDeadline(deadline, now, locale)}`
+    this._tooltipLines = showFacts(this, exercise.name, [
+      {
+        spoken: exercise.passed ? "passed" : "not passed",
+        tooltip: exercise.passed ? "Passed" : "Not passed",
+      },
+      {
+        description: exercise.status === "opened" ? undefined : status,
+        spoken: status,
+        tooltip: `Status: ${status}`,
+      },
+      exercise.isUpdateable && {
+        description: "update available",
+        spoken: "update available",
+        tooltip: "An update is available.",
+      },
+      points && {
+        description: `${points.short} points`,
+        spoken: points.spoken,
+        tooltip: `${points.short} points`,
+      },
+      exercise.isOutOfTries && {
+        description: "no tries left",
+        spoken: "no tries left",
+        tooltip: "No tries left, so this score is final.",
+      },
+      due && { description: due, spoken: due },
+      exercise.softDeadline &&
+        !exercise.isHard && {
+          tooltip: `Soft deadline: ${formatDeadline(exercise.softDeadline, now, locale)}. ${SOFT_DEADLINE_PENALTY}`,
+        },
+      exercise.hardDeadline && {
+        tooltip: `Deadline: ${formatDeadline(exercise.hardDeadline, now, locale)}`,
+      },
+    ])
   }
 
   public buildTooltip(): vscode.MarkdownString {
-    const exercise = this._exercise
-    const { now, locale } = this._context
-    const points = pointsText(exercise.awardedPoints, exercise.availablePoints)
-    const status = STATUS_LABELS[exercise.status]
-    return tooltipOf([
-      exercise.name,
-      `${exercise.passed ? "Passed" : "Not passed"} · ${status}`,
-      ...[
-        points && `${points.short} points${exercise.isOutOfTries ? " · no tries left" : ""}`,
-        exercise.isOutOfTries && "The try limit is used up, so this score is final.",
-        exercise.isUpdateable && "An update is available.",
-        exercise.softDeadline &&
-          !exercise.isHard &&
-          `Soft deadline: ${formatDeadline(exercise.softDeadline, now, locale)}. ${SOFT_DEADLINE_PENALTY}`,
-        exercise.hardDeadline && `Deadline: ${formatDeadline(exercise.hardDeadline, now, locale)}`,
-      ].filter((line) => typeof line === "string"),
-    ])
+    return tooltipOf(this._tooltipLines)
   }
+}
+
+/**
+ * One fact about a row, worded for each place the row shows it: its description, its
+ * accessible name and its hover. A fact without a wording for a place is left out there.
+ */
+interface RowFact {
+  description?: string | undefined
+  spoken?: string
+  tooltip?: string
+}
+
+/**
+ * Sets `item`'s description and accessible name from `facts`, in their order.
+ *
+ * @returns The hover's lines, which the item turns into a tooltip only when hovered.
+ */
+function showFacts(
+  item: vscode.TreeItem,
+  label: string,
+  facts: readonly (RowFact | false | undefined | null | "")[],
+): string[] {
+  const shown = facts.filter((fact) => typeof fact === "object" && fact !== null)
+  item.description = shown.flatMap((fact) => fact.description ?? []).join(" · ")
+  item.accessibilityInformation = {
+    label: [label, ...shown.flatMap((fact) => fact.spoken ?? [])].join(", "),
+  }
+  return [label, ...shown.flatMap((fact) => fact.tooltip ?? [])]
 }
 
 /** How long a burst of changes, such as one per downloaded exercise, is gathered into one render. */
