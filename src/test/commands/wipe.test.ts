@@ -13,7 +13,7 @@ import type { UserData } from "../../config/userdata"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
-vi.mock("fs-extra", () => ({ removeSync: vi.fn() }))
+vi.mock("fs-extra", () => ({ remove: vi.fn() }))
 
 const PROJECTS_DIRECTORY = "/tmp/tmcdata/projects"
 
@@ -36,6 +36,7 @@ function wipeContext(
     confirmations?: [boolean, boolean]
     noProjectsDirectory?: boolean
     resetSettings?: Result<void, Error>
+    wipeDataFromStorage?: Result<void, Error>
     deleteAllWorkspaceFiles?: Result<void, Error>
   } = {},
 ): ReadyActionContext {
@@ -52,10 +53,11 @@ function wipeContext(
         langs: {
           resetSettings: vi.fn(step("resetSettings", () => options.resetSettings ?? Ok.EMPTY)),
           deauthenticate: vi.fn(step("deauthenticate", () => Ok.EMPTY)),
-          deauthenticateMooc: vi.fn(step("deauthenticateMooc", () => Ok.EMPTY)),
         } as unknown as Langs,
         userData: {
-          wipeDataFromStorage: vi.fn(step("wipeDataFromStorage", () => {})),
+          wipeDataFromStorage: vi.fn(
+            step("wipeDataFromStorage", () => options.wipeDataFromStorage ?? Ok.EMPTY),
+          ),
         } as unknown as UserData,
         workspaceManager: {
           activeCourse: undefined,
@@ -72,9 +74,9 @@ function wipeContext(
 suite("Wipe command", function () {
   beforeEach(function () {
     stepsRun.length = 0
-    vi.mocked(fs.removeSync).mockReset()
-    vi.mocked(fs.removeSync).mockImplementation(() => {
-      stepsRun.push("removeSync")
+    vi.mocked(fs.remove).mockReset()
+    vi.mocked(fs.remove).mockImplementation(() => {
+      stepsRun.push("remove")
     })
   })
 
@@ -83,7 +85,7 @@ suite("Wipe command", function () {
 
     await wipe(context, extensionContext)
 
-    expect(fs.removeSync).toHaveBeenCalledWith(PROJECTS_DIRECTORY)
+    expect(fs.remove).toHaveBeenCalledWith(PROJECTS_DIRECTORY)
   })
 
   test("deletes the exercises only after every recoverable step has succeeded", async function () {
@@ -94,10 +96,9 @@ suite("Wipe command", function () {
     expect(stepsRun).toEqual([
       "resetSettings",
       "deauthenticate",
-      "deauthenticateMooc",
       "wipeDataFromStorage",
       "deleteAllWorkspaceFiles",
-      "removeSync",
+      "remove",
     ])
   })
 
@@ -106,7 +107,7 @@ suite("Wipe command", function () {
 
     await wipe(context, extensionContext)
 
-    expect(fs.removeSync).not.toHaveBeenCalled()
+    expect(fs.remove).not.toHaveBeenCalled()
     expect(context.dialog.reportError).toHaveBeenCalledOnce()
   })
 
@@ -117,7 +118,7 @@ suite("Wipe command", function () {
 
     await wipe(context, extensionContext)
 
-    expect(fs.removeSync).not.toHaveBeenCalled()
+    expect(fs.remove).not.toHaveBeenCalled()
     expect(context.dialog.reportError).toHaveBeenCalledOnce()
   })
 
@@ -140,7 +141,7 @@ suite("Wipe command", function () {
     await wipe(context, extensionContext)
 
     expect(context.dialog.explicitConfirmation).not.toHaveBeenCalled()
-    expect(fs.removeSync).not.toHaveBeenCalled()
+    expect(fs.remove).not.toHaveBeenCalled()
   })
 
   test("deletes nothing unless the user also types the confirmation", async function () {
@@ -149,6 +150,6 @@ suite("Wipe command", function () {
     await wipe(context, extensionContext)
 
     expect(context.dialog.explicitConfirmation).toHaveBeenCalledWith(expect.any(String), "DELETE")
-    expect(fs.removeSync).not.toHaveBeenCalled()
+    expect(fs.remove).not.toHaveBeenCalled()
   })
 })

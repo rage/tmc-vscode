@@ -202,7 +202,6 @@ suite("refreshEverything reporting", function () {
     expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Failed to check for course updates.",
       expect.objectContaining({ message: expect.stringContaining("course-1") }),
-      undefined,
     )
     expect(headlineLogs()).toHaveLength(0)
   })
@@ -308,9 +307,31 @@ suite("refreshEverything's new-exercises prompt", function () {
       expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
         "Failed to download the new exercises of Course 1.",
         expect.objectContaining({ message: "disk full" }),
-        "tmc",
       ),
     )
+  })
+
+  test("Download All carries on past a course that fails, and reports it once", async function () {
+    vi.mocked(downloadNewExercisesForCourse).mockImplementation(async (_context, courseId) =>
+      CourseIdentifier.equals(courseId, CourseIdentifier.from(1))
+        ? Err(new Error("disk full"))
+        : Ok.EMPTY,
+    )
+    const [actionContext, dialog] = contextWithCourses([
+      tmcCourse(1, 0, [10]),
+      tmcCourse(2, 0, [20]),
+    ])
+    await refreshEverything(actionContext, { silent: true })
+
+    press(dialog, "Download All")
+
+    await vi.waitFor(() =>
+      expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
+        "Failed to download the new exercises of Course 1.",
+        expect.objectContaining({ message: "disk full" }),
+      ),
+    )
+    expect(downloadNewExercisesForCourse).toHaveBeenCalledTimes(2)
   })
 
   test("postpones or dismisses the reminder from the other two buttons", async function () {
@@ -345,7 +366,6 @@ suite("refreshEverything's new-exercises prompt", function () {
       expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
         "Failed to postpone the reminder for Course 1.",
         expect.objectContaining({ message: "storage full" }),
-        "tmc",
       ),
     )
   })

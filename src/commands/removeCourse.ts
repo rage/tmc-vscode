@@ -28,7 +28,7 @@ export async function removeCourse(
   }
   const course = userData.getCourse(target)
   if (course.err) {
-    void dialog.reportError("Failed to remove the course.", course.val, target.kind)
+    void dialog.reportError("Failed to remove the course.", course.val)
     return
   }
 
@@ -41,10 +41,8 @@ export async function removeCourse(
     return
   }
 
-  const removed = await withOperation(
-    dialog,
-    { failure: "Failed to remove the course.", backend: target.kind },
-    () => actions.removeCourse(actionContext, target),
+  const removed = await withOperation(dialog, { failure: "Failed to remove the course." }, () =>
+    actions.removeCourse(actionContext, target),
   )
   if (removed.ok) {
     dialog.statusMessage(`Removed ${title}.`)

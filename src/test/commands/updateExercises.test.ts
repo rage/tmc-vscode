@@ -172,7 +172,6 @@ suite("updateExercises command", function () {
     expect(loudDialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Failed to check for exercise updates.",
       expect.objectContaining({ message: "offline" }),
-      undefined,
     )
     expect(silentDialog.reportError).not.toHaveBeenCalled()
     expect(silentDialog.notification).not.toHaveBeenCalled()
@@ -193,7 +192,6 @@ suite("updateExercises command", function () {
     expect(loudDialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Failed to check courses.mooc.fi for exercise updates.",
       error,
-      "mooc",
     )
     expect(loudDialog.notification).not.toHaveBeenCalled()
     expect(loudDialog.statusMessage).not.toHaveBeenCalled()
@@ -216,7 +214,6 @@ suite("updateExercises command", function () {
     expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Failed to check TMC Server and courses.mooc.fi for exercise updates.",
       tmcError,
-      undefined,
     )
   })
 
@@ -257,7 +254,6 @@ suite("updateExercises command", function () {
       expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
         "Failed to postpone the reminder.",
         expect.objectContaining({ message: "storage full" }),
-        undefined,
       ),
     )
     expect(setNewExerciseNotifyAfter).toHaveBeenCalledTimes(1)

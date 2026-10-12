@@ -10,7 +10,7 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
 import { createMockActionContext } from "../mocks/actionContext"
 
-vi.mock("fs-extra", () => ({ removeSync: vi.fn() }))
+vi.mock("fs-extra", () => ({ remove: vi.fn() }))
 
 const PROJECTS_DIRECTORY = "/tmp/tmcdata/projects"
 
@@ -27,6 +27,7 @@ function step<T>(name: string, outcome: () => T): () => Promise<T> {
 function context(
   options: {
     resetSettings?: Result<void, Error>
+    wipeDataFromStorage?: Result<void, Error>
     deleteAllWorkspaceFiles?: Result<void, Error>
   } = {},
 ): ReadyActionContext {
@@ -35,10 +36,11 @@ function context(
       langs: {
         resetSettings: vi.fn(step("resetSettings", () => options.resetSettings ?? Ok.EMPTY)),
         deauthenticate: vi.fn(step("deauthenticate", () => Ok.EMPTY)),
-        deauthenticateMooc: vi.fn(step("deauthenticateMooc", () => Ok.EMPTY)),
       } as unknown as Langs,
       userData: {
-        wipeDataFromStorage: vi.fn(step("wipeDataFromStorage", () => {})),
+        wipeDataFromStorage: vi.fn(
+          step("wipeDataFromStorage", () => options.wipeDataFromStorage ?? Ok.EMPTY),
+        ),
       } as unknown as UserData,
       workspaceManager: {
         deleteAllWorkspaceFiles: vi.fn(
@@ -52,15 +54,15 @@ function context(
 suite("wipeExtensionData action", function () {
   beforeEach(function () {
     stepsRun.length = 0
-    vi.mocked(fs.removeSync).mockReset()
-    vi.mocked(fs.removeSync).mockImplementation(() => {
-      stepsRun.push("removeSync")
+    vi.mocked(fs.remove).mockReset()
+    vi.mocked(fs.remove).mockImplementation(() => {
+      stepsRun.push("remove")
     })
   })
 
   test("removes the projects directory it was given", async function () {
     await wipeExtensionData(context(), PROJECTS_DIRECTORY)
-    expect(fs.removeSync).toHaveBeenCalledWith(PROJECTS_DIRECTORY)
+    expect(fs.remove).toHaveBeenCalledWith(PROJECTS_DIRECTORY)
   })
 
   test("deletes the exercises only after every recoverable step has succeeded", async function () {
@@ -68,11 +70,23 @@ suite("wipeExtensionData action", function () {
     expect(stepsRun).toEqual([
       "resetSettings",
       "deauthenticate",
-      "deauthenticateMooc",
       "wipeDataFromStorage",
       "deleteAllWorkspaceFiles",
-      "removeSync",
+      "remove",
     ])
+  })
+
+  // Deleting the exercises with their records still stored would show courses whose work is gone.
+  test("leaves the exercises on disk when the stored data cannot be wiped", async function () {
+    const error = new Error("storage is read-only")
+
+    const result = await wipeExtensionData(
+      context({ wipeDataFromStorage: Err(error) }),
+      PROJECTS_DIRECTORY,
+    )
+
+    expect(result.val).toBe(error)
+    expect(fs.remove).not.toHaveBeenCalled()
   })
 
   test("leaves the exercises on disk when an earlier step fails", async function () {
@@ -80,7 +94,7 @@ suite("wipeExtensionData action", function () {
       context({ resetSettings: Err(new Error("settings are read-only")) }),
       PROJECTS_DIRECTORY,
     )
-    expect(fs.removeSync).not.toHaveBeenCalled()
+    expect(fs.remove).not.toHaveBeenCalled()
     expect(result.err).toBe(true)
   })
 
@@ -89,7 +103,7 @@ suite("wipeExtensionData action", function () {
       context({ deleteAllWorkspaceFiles: Err(new Error("workspace folder is read-only")) }),
       PROJECTS_DIRECTORY,
     )
-    expect(fs.removeSync).not.toHaveBeenCalled()
+    expect(fs.remove).not.toHaveBeenCalled()
     expect(result.err).toBe(true)
   })
 

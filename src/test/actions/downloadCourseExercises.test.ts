@@ -84,7 +84,6 @@ suite("downloadCourseExercises", function () {
     expect(dialog.reportError).toHaveBeenCalledWith(
       "Failed to refresh local exercises.",
       expect.any(Error),
-      "tmc",
     )
   })
 })

@@ -58,7 +58,7 @@ interface Harness {
 
 function harness(): Harness {
   const logins: FakeLogin[] = []
-  const authenticateMooc = vi.fn((onDeviceCode: (info: MoocDeviceLogin) => void) => {
+  const authenticate = vi.fn((onDeviceCode: (info: MoocDeviceLogin) => void) => {
     const result = Promise.withResolvers<Result<void, BaseError>>()
     const interrupt = vi.fn(() => result.resolve(Err(new AuthorizationError("interrupted"))))
     logins.push({
@@ -70,7 +70,7 @@ function harness(): Harness {
   })
   const [dialog] = createDialogMock()
   const context = {
-    ...createMockActionContext({ startup: { langs: { authenticateMooc } as unknown as Langs } }),
+    ...createMockActionContext({ startup: { langs: { authenticate } as unknown as Langs } }),
     dialog,
   }
 
@@ -279,27 +279,16 @@ suite("login command", function () {
     const h = harness()
     const outcome = login(h.context)
     await settle()
-    const error = Object.assign(new ServerError("HTTP error 503 …"), { httpStatus: 503 })
+    const error = Object.assign(new ServerError("HTTP error 503 …"), {
+      httpStatus: 503,
+      backend: "mooc" as const,
+    })
 
     h.logins[0]?.finish(Err(error))
 
     expect(await outcome).toBe("failed")
     expect(errorNotificationCall(h.context)?.[0]).toBe(
       "courses.mooc.fi returned an error (503). Try again later.",
-    )
-  })
-
-  test("gives up on a CLI still running past the code's lifetime", async function () {
-    vi.useFakeTimers()
-    const h = harness()
-    const { outcome } = await runToCode(h)
-
-    await vi.advanceTimersByTimeAsync(DEVICE.expires_in * 1000 + 30_000)
-
-    expect(await outcome).toBe("failed")
-    expect(h.logins[0]?.interrupt).toHaveBeenCalled()
-    expect(errorNotificationCall(h.context)?.[0]).toBe(
-      "The login code expired before it was approved.",
     )
   })
 

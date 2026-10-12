@@ -13,6 +13,7 @@ import {
   makeTmcKind,
   match,
   LocalCourseData,
+  toError,
 } from "../shared/shared"
 import type Storage from "../storage"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
@@ -471,7 +472,7 @@ export class UserData {
         await write()
         return Ok.EMPTY
       } catch (e) {
-        return Err(e instanceof Error ? e : new Error(String(e)))
+        return Err(toError(e))
       }
     })
     this._pendingWrite = queued

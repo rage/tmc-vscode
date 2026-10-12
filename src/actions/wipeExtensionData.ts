@@ -7,7 +7,7 @@ import { FileSystemError } from "../errors"
 import type { ReadyActionContext } from "./types"
 
 /**
- * Resets settings, logs out of both backends, clears stored user data and
+ * Resets settings, logs out, clears stored user data and
  * workspace files, and removes the projects directory.
  *
  * The exercises are deleted last: every earlier step is recoverable, so a
@@ -27,19 +27,18 @@ export async function wipeExtensionData(
   }
   report({ fraction: 0.2 })
 
-  // `deauthenticate` fires the logout events with `expected: true`, so the
+  // `deauthenticate` fires the logout event with `expected: true`, so the
   // session-expiry warning stays quiet and the auth context updates itself.
-  const tmcLogout = await langs.deauthenticate()
-  if (tmcLogout.err) {
-    return tmcLogout
-  }
-  const moocLogout = await langs.deauthenticateMooc()
-  if (moocLogout.err) {
-    return moocLogout
+  const loggedOut = await langs.deauthenticate()
+  if (loggedOut.err) {
+    return loggedOut
   }
   report({ fraction: 0.4 })
 
-  await userData.wipeDataFromStorage()
+  const storageWiped = await userData.wipeDataFromStorage()
+  if (storageWiped.err) {
+    return storageWiped
+  }
   report({ fraction: 0.6 })
 
   const workspaceFilesRemoved = await workspaceManager.deleteAllWorkspaceFiles()
@@ -49,7 +48,7 @@ export async function wipeExtensionData(
   report({ fraction: 0.8 })
 
   try {
-    fs.removeSync(projectsDirectory)
+    await fs.remove(projectsDirectory)
   } catch (e) {
     return Err(new FileSystemError(e, "Failed to remove projects directory."))
   }

@@ -30,8 +30,7 @@ const recorded = vi.hoisted(() => ({
 
 /** The stubbed CLI's answers, and what activation asked of it. */
 const langsStub = vi.hoisted(() => ({
-  tmcAuthenticated: false,
-  moocAuthenticated: false,
+  authenticated: false,
   authChecks: 0,
   killAllProcessesCalls: 0,
   settingsWritten: [] as [string, unknown][],
@@ -154,11 +153,7 @@ vi.mock("../../api/langs", () => ({
   default: class {
     public isAuthenticated = async (): Promise<unknown> => {
       langsStub.authChecks += 1
-      return langsStub.sharedFailure ? Err(langsStub.sharedFailure) : Ok(langsStub.tmcAuthenticated)
-    }
-    public isMoocAuthenticated = async (): Promise<unknown> => {
-      langsStub.authChecks += 1
-      return Ok(langsStub.moocAuthenticated)
+      return langsStub.sharedFailure ? Err(langsStub.sharedFailure) : Ok(langsStub.authenticated)
     }
     public getSetting = async (): Promise<unknown> =>
       langsStub.sharedFailure ? Err(langsStub.sharedFailure) : Ok(cliSettings.projectsDirectory)
@@ -276,8 +271,7 @@ function resetActivationRecording(): void {
   storedUserData.read = (): unknown => undefined
   storedMigration.outcome = { kind: "done" }
   sessionState.previousVersion = undefined
-  langsStub.tmcAuthenticated = false
-  langsStub.moocAuthenticated = false
+  langsStub.authenticated = false
   langsStub.authChecks = 0
   langsStub.killAllProcessesCalls = 0
   langsStub.settingsWritten.length = 0
@@ -571,7 +565,7 @@ suite("the maintenance poll", function () {
     vi.restoreAllMocks()
   })
 
-  // Each round is two cold CLI process starts, and it can only observe a session that a
+  // Each round is a cold CLI process start, and it can only observe a session that a
   // logged-out user does not have.
   test("asks the CLI nothing while logged out", async function () {
     await activate(createContext())
@@ -582,18 +576,18 @@ suite("the maintenance poll", function () {
     expect(langsStub.authChecks).toBe(checksDuringActivation)
   })
 
-  test("rechecks both backends while logged in", async function () {
-    langsStub.moocAuthenticated = true
+  test("rechecks the session while logged in", async function () {
+    langsStub.authenticated = true
     await activate(createContext())
     const checksDuringActivation = langsStub.authChecks
 
     await vi.advanceTimersByTimeAsync(EXERCISE_CHECK_INTERVAL)
 
-    expect(langsStub.authChecks).toBe(checksDuringActivation + 2)
+    expect(langsStub.authChecks).toBe(checksDuringActivation + 1)
   })
 
   test("stops once the context is disposed", async function () {
-    langsStub.moocAuthenticated = true
+    langsStub.authenticated = true
     await activate(createContext())
     disposeActivatedContexts()
     const checksBeforeAdvancing = langsStub.authChecks
@@ -779,7 +773,7 @@ suite("status bar", function () {
   })
 
   test("an unexpected logout marks the account item's session expired", async function () {
-    langsStub.moocAuthenticated = true
+    langsStub.authenticated = true
     vi.mocked(vscode.window.createStatusBarItem).mockClear()
     vi.spyOn(vscode.window, "showWarningMessage").mockResolvedValue(undefined)
 
@@ -788,8 +782,40 @@ suite("status bar", function () {
       ?.value as vscode.StatusBarItem
     expect(account.text).toContain("courses.mooc.fi")
 
-    await (langsStub.handlers.get("mooc-logout") as (expected: boolean) => Promise<void>)(false)
+    langsStub.authenticated = false
+    await (langsStub.handlers.get("logout") as (expected: boolean) => Promise<void>)(false)
 
     expect(account.text).toContain("Session Expired")
+  })
+
+  // The other credential may still be good, so a rejected one is checked, not trusted.
+  test("an unexpected logout that leaves a session warns nothing", async function () {
+    langsStub.authenticated = true
+    const showWarningMessage = vi
+      .spyOn(vscode.window, "showWarningMessage")
+      .mockResolvedValue(undefined)
+
+    await activate(createContext())
+    await (langsStub.handlers.get("logout") as (expected: boolean) => Promise<void>)(false)
+
+    expect(showWarningMessage).not.toHaveBeenCalled()
+  })
+
+  test("a degraded activation's expiry warning offers no login it cannot run", async function () {
+    langsStub.authenticated = true
+    const showWarningMessage = vi
+      .spyOn(vscode.window, "showWarningMessage")
+      .mockResolvedValue(undefined)
+    storedUserData.read = (): unknown => {
+      throw new Error("unparseable stored data")
+    }
+
+    await activate(createContext())
+    langsStub.authenticated = false
+    await (langsStub.handlers.get("logout") as (expected: boolean) => Promise<void>)(false)
+
+    expect(showWarningMessage).toHaveBeenCalledExactlyOnceWith(
+      "Your session has expired, please log in.",
+    )
   })
 })

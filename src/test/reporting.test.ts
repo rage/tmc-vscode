@@ -21,7 +21,7 @@ import { registerTesting } from "../init/testing"
 import { nextPanelId } from "../panels/routes"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseStatus as RowStatus, ExtensionToWebview } from "../shared/shared"
-import { backendName, CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
+import { backendName, CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../shared/shared"
 import Storage from "../storage"
 import type { MoocLocalCourseData } from "../storage/data"
 import { CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
@@ -297,7 +297,10 @@ function showSubmission(actionContext: ReadyActionContext): void {
 const offline = (): Error => new Error("offline")
 const throttled = async (): Promise<Err<Error>> =>
   Err(new BottleneckError("This command can't be executed at the moment."))
-const oldSubmission = [{ id: "sub-1", created_at: "2026-01-01T00:00:00Z", grading_progress: null }]
+const oldSubmission = makeMoocKind({
+  exerciseId: EXERCISE_ID,
+  submissions: [{ id: "sub-1", created_at: "2026-01-01T00:00:00Z", grading_progress: null }],
+})
 const oldSubmissions = async (): Promise<Ok<typeof oldSubmission>> => Ok(oldSubmission)
 const pending = <T>(): { promise: Promise<T>; resolve: (value: T) => void } => {
   let resolve!: (value: T) => void
@@ -385,7 +388,7 @@ suite("reported once: exercise commands", function () {
 
   test("a failed paste from the palette is one notification", async function () {
     const { run, shown } = await harness({
-      langs: { submitMoocExerciseToPaste: async () => Err(offline()) },
+      langs: { paste: async () => Err(offline()) },
     })
 
     await run("tmc.pasteExercise")
@@ -394,12 +397,12 @@ suite("reported once: exercise commands", function () {
   })
 
   test.each([
-    ["tmc.pasteExercise", "submitMoocExerciseToPaste"],
+    ["tmc.pasteExercise", "paste"],
     ["tmc.resetExercise", "resetExercise"],
-    ["tmc.downloadOldSubmission", "downloadMoocOldSubmission"],
+    ["tmc.downloadOldSubmission", "restoreSubmission"],
   ])("a throttled %s says so, as information", async function (id, method) {
     const { run, shown } = await harness({
-      langs: { getMoocOldSubmissions: oldSubmissions, [method]: throttled },
+      langs: { getOldSubmissions: oldSubmissions, [method]: throttled },
     })
 
     await run(id)
@@ -409,7 +412,7 @@ suite("reported once: exercise commands", function () {
 
   test("a failed paste from the panel shows in the panel only", async function () {
     const { actionContext, post, shown, panelFailures, shownPanel } = await harness({
-      langs: { submitMoocExerciseToPaste: async () => Err(offline()) },
+      langs: { paste: async () => Err(offline()) },
     })
     showSubmission(actionContext)
 
@@ -443,14 +446,14 @@ suite("reported once: exercise commands", function () {
     ["tmc.resetExercise", { resetExercise: offline }, "Failed to reset exercise."],
     [
       "tmc.downloadOldSubmission",
-      { getMoocOldSubmissions: offline },
+      { getOldSubmissions: offline },
       "Failed to fetch old submissions.",
     ],
     [
       "tmc.downloadOldSubmission",
       {
-        getMoocOldSubmissions: () => Ok(oldSubmission),
-        downloadMoocOldSubmission: offline,
+        getOldSubmissions: () => Ok(oldSubmission),
+        restoreSubmission: offline,
       },
       "Failed to download old submission.",
     ],
@@ -483,33 +486,14 @@ suite("reported once: exercise commands", function () {
 })
 
 suite("reported once: course administration", function () {
-  test("a logout with both backends failing names each, once", async function () {
+  test("a failed logout is one notification", async function () {
     const { run, shown } = await harness({
-      langs: {
-        deauthenticate: async () => Err(offline()),
-        deauthenticateMooc: async () => Err(offline()),
-      },
+      langs: { deauthenticate: async () => Err(offline()) },
     })
 
     await run("tmc.logout")
 
-    expect(shown).toEqual([
-      `error: Failed to log out of ${backendName("mooc")}.`,
-      `error: Failed to log out of ${backendName("tmc")}.`,
-    ])
-  })
-
-  test("a logout with one backend failing is one notification", async function () {
-    const { run, shown } = await harness({
-      langs: {
-        deauthenticate: async () => Ok.EMPTY,
-        deauthenticateMooc: async () => Err(offline()),
-      },
-    })
-
-    await run("tmc.logout")
-
-    expect(shown).toEqual([`error: Failed to log out of ${backendName("mooc")}.`])
+    expect(shown).toEqual(["error: Failed to log out."])
   })
 
   test("a course that fails to add is one notification", async function () {
@@ -624,10 +608,7 @@ suite("reported once: the Courses view and course details", function () {
   })
 
   const moocDownloadFails = {
-    downloadExercises: async () => ({
-      mooc: { downloaded: [], failed: [], skipped: [] },
-      moocError: offline(),
-    }),
+    downloadMoocExercises: async () => Err(offline()),
   }
 
   test("a failed download from the Courses view is one warning", async function () {
@@ -807,7 +788,7 @@ suite("reported once: the refresh", function () {
 /** The langs calls a refused submit, test run or paste must not reach. */
 const neverCalled = (): Record<string, ReturnType<typeof vi.fn>> => ({
   submitMoocExercise: vi.fn(),
-  submitMoocExerciseToPaste: vi.fn(),
+  paste: vi.fn(),
   runTests: vi.fn(),
   runCheckstyle: vi.fn(),
 })
@@ -867,11 +848,11 @@ suite("refused while an AI extension runs: every entry point", function () {
 
   test.each([
     ["tmc.resetExercise", "resetExercise"],
-    ["tmc.downloadOldSubmission", "downloadMoocOldSubmission"],
+    ["tmc.downloadOldSubmission", "restoreSubmission"],
   ])("%s's Submit first says why, once, and changes nothing", async function (id, method) {
     const destructive = vi.fn()
     const { run, shown } = await refusingHarness({
-      getMoocOldSubmissions: oldSubmissions,
+      getOldSubmissions: oldSubmissions,
       [method]: destructive,
     })
 
@@ -902,7 +883,7 @@ suite("refused while an AI extension runs: every entry point", function () {
 
     expect(shown).toEqual([])
     expect(panelFailures()).toEqual([`pasteExercise: ${reason}`])
-    expect(langs.submitMoocExerciseToPaste).not.toHaveBeenCalled()
+    expect(langs.paste).not.toHaveBeenCalled()
   })
 
   test("keep waiting from the submission panel says why in the panel", async function () {

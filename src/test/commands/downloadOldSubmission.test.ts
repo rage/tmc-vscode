@@ -53,8 +53,8 @@ suite("Download old submission command (mooc branch)", function () {
     },
   ] as ExerciseSlideSubmissionListItem[]
 
-  let getMoocOldSubmissions: ReturnType<typeof vi.fn>
-  let downloadMoocOldSubmission: ReturnType<typeof vi.fn>
+  let getOldSubmissions: ReturnType<typeof vi.fn>
+  let restoreSubmission: ReturnType<typeof vi.fn>
   let notification: ReturnType<typeof vi.fn>
   let offered: Item<PickableSubmission>[]
   let pickPrompt: unknown
@@ -70,12 +70,16 @@ suite("Download old submission command (mooc branch)", function () {
     const base = createMockActionContext()
     const answer = "answer" in options ? options.answer : "Restore Without Submitting"
 
-    getMoocOldSubmissions = vi.fn(async () => Ok(options.submissions ?? moocSubmissions))
-    downloadMoocOldSubmission = vi.fn(async () => Ok(options.restore ?? "restored"))
-    const langs = {
-      getMoocOldSubmissions,
-      downloadMoocOldSubmission,
-    } as unknown as Langs
+    getOldSubmissions = vi.fn(async () =>
+      Ok(
+        makeMoocKind({
+          exerciseId: "mooc-ex-uuid",
+          submissions: options.submissions ?? moocSubmissions,
+        }),
+      ),
+    )
+    restoreSubmission = vi.fn(async () => Ok(options.restore ?? "restored"))
+    const langs = { getOldSubmissions, restoreSubmission } as unknown as Langs
 
     const userData = {
       getExerciseByName: () => makeMoocKind({ id: "mooc-ex-uuid" }),
@@ -116,7 +120,9 @@ suite("Download old submission command (mooc branch)", function () {
   test("lists submissions newest first, dated in the UI language, with the status beside", async function () {
     await downloadOldSubmission(actionContext({ submissions: moocSubmissions.toReversed() }), uri)
 
-    expect(getMoocOldSubmissions).toHaveBeenCalledExactlyOnceWith("mooc-ex-uuid")
+    expect(getOldSubmissions).toHaveBeenCalledExactlyOnceWith(
+      ExerciseIdentifier.from("mooc-ex-uuid"),
+    )
     expect(pickPrompt).toEqual({
       title: "Download Old Submission — ex-1",
       placeHolder: "Pick a submission to restore",
@@ -142,10 +148,9 @@ suite("Download old submission command (mooc branch)", function () {
     ])
 
     // Restored with the picked submission's id, not saving the current state.
-    expect(downloadMoocOldSubmission).toHaveBeenCalledExactlyOnceWith(
-      "mooc-ex-uuid",
+    expect(restoreSubmission).toHaveBeenCalledExactlyOnceWith(
+      makeMoocKind({ exerciseId: "mooc-ex-uuid", submissionId: "sub-newer" }),
       uri.fsPath,
-      "sub-newer",
       false,
     )
     expect(notification).not.toHaveBeenCalled()
@@ -157,7 +162,7 @@ suite("Download old submission command (mooc branch)", function () {
     const context = actionContext({ restore: "nothing-to-download" })
     await downloadOldSubmission(context, uri)
 
-    expect(downloadMoocOldSubmission).toHaveBeenCalledOnce()
+    expect(restoreSubmission).toHaveBeenCalledOnce()
     expect(context.dialog.errorNotification).not.toHaveBeenCalled()
     expect(notification).toHaveBeenCalledOnce()
     expect(String(notification.mock.calls[0]?.[0])).toContain("no files to download")
@@ -168,7 +173,7 @@ suite("Download old submission command (mooc branch)", function () {
 
     expect(notification).toHaveBeenCalledOnce()
     expect(String(notification.mock.calls[0]?.[0])).toContain("ex-1")
-    expect(downloadMoocOldSubmission).not.toHaveBeenCalled()
+    expect(restoreSubmission).not.toHaveBeenCalled()
   })
 
   test("reads a submission the server has not started grading as pending", async function () {
@@ -197,10 +202,9 @@ suite("Download old submission command (mooc branch)", function () {
   test("submits the current state first when the user asks for it", async function () {
     await downloadOldSubmission(actionContext({ answer: "Submit and Restore" }), uri)
 
-    expect(downloadMoocOldSubmission).toHaveBeenCalledExactlyOnceWith(
-      "mooc-ex-uuid",
+    expect(restoreSubmission).toHaveBeenCalledExactlyOnceWith(
+      makeMoocKind({ exerciseId: "mooc-ex-uuid", submissionId: "sub-newer" }),
       uri.fsPath,
-      "sub-newer",
       true,
     )
   })
@@ -208,12 +212,12 @@ suite("Download old submission command (mooc branch)", function () {
   test("downloads nothing when the confirmation is cancelled", async function () {
     await downloadOldSubmission(actionContext({ answer: undefined }), uri)
 
-    expect(downloadMoocOldSubmission).not.toHaveBeenCalled()
+    expect(restoreSubmission).not.toHaveBeenCalled()
   })
 
   test("refuses to restore while a submission of the same exercise is in flight", async function () {
     const submission = exerciseOperations
-      .claim([ExerciseIdentifier.from("mooc-ex-uuid")], "submitting", 60_000)
+      .claim([ExerciseIdentifier.from("mooc-ex-uuid")], "submitting")
       .unwrap()
     try {
       await downloadOldSubmission(actionContext({ answer: "Submit and Restore" }), uri)
@@ -221,7 +225,7 @@ suite("Download old submission command (mooc branch)", function () {
       submission.releaseAll()
     }
 
-    expect(downloadMoocOldSubmission).not.toHaveBeenCalled()
+    expect(restoreSubmission).not.toHaveBeenCalled()
     expect(notification).toHaveBeenCalledExactlyOnceWith(
       "A submission for this exercise is already in progress.",
     )

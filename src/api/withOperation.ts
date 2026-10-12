@@ -3,7 +3,7 @@ import { Err } from "ts-results"
 import * as vscode from "vscode"
 
 import { AiUseRefusedError, BottleneckError, presentationFor } from "../errors"
-import type { BackendKind } from "../shared/shared"
+import { toError } from "../shared/shared"
 import { Logger } from "../utilities"
 import type Dialog from "./dialog"
 import type { FractionProgress, NotificationButton, ProgressLocation } from "./dialog"
@@ -12,8 +12,6 @@ import type { FractionProgress, NotificationButton, ProgressLocation } from "./d
 export interface OperationOptions {
   /** Leads the notification when the operation fails, e.g. "Failed to add the course." */
   failure: string
-  /** Names the site in the sentence; see {@link Dialog.reportError}. */
-  backend?: BackendKind
   /**
    * Logs a failure or a busy rejection instead of showing it: for runs the user did not ask
    * for, and for entry points that render the failure themselves. Warnings the operation
@@ -27,11 +25,7 @@ export interface OperationOptions {
 }
 
 class OperationFailure extends Error {
-  public constructor(
-    headline: string,
-    cause: Error | undefined,
-    public readonly backend: BackendKind | undefined,
-  ) {
+  public constructor(headline: string, cause: Error | undefined) {
     super(headline, { cause })
   }
 }
@@ -42,10 +36,9 @@ class OperationFailure extends Error {
  * @param headline The whole sentence, in the user's vocabulary.
  * @param cause The error behind it: the notification's detail and the log's. Omit it when
  * the headline is the whole story.
- * @param backend Overrides `OperationOptions.backend` for this failure.
  */
-export function failure(headline: string, cause?: Error, backend?: BackendKind): Err<Error> {
-  return Err(new OperationFailure(headline, cause, backend))
+export function failure(headline: string, cause?: Error): Err<Error> {
+  return Err(new OperationFailure(headline, cause))
 }
 
 /**
@@ -73,7 +66,7 @@ export async function withOperation<T>(
         )
       : await body(() => {})
   } catch (thrown) {
-    result = Err(thrown instanceof Error ? thrown : new Error(String(thrown)))
+    result = Err(toError(thrown))
   }
   if (result.err) {
     reportFailure(dialog, options, result.val)
@@ -82,14 +75,10 @@ export async function withOperation<T>(
 }
 
 function reportFailure(dialog: Dialog, options: OperationOptions, error: Error): void {
-  const [headline, detail, backend] =
+  const [headline, detail] =
     error instanceof OperationFailure
-      ? [
-          error.message,
-          error.cause instanceof Error ? error.cause : undefined,
-          error.backend ?? options.backend,
-        ]
-      : [options.failure, error, options.backend]
+      ? [error.message, error.cause instanceof Error ? error.cause : undefined]
+      : [options.failure, error]
 
   // Not a fault: no failure headline and no Show logs, only the refusal and its one remedy.
   const refused = [detail, error].find((e) => e instanceof AiUseRefusedError)
@@ -120,7 +109,7 @@ function reportFailure(dialog: Dialog, options: OperationOptions, error: Error):
   if (options.silent) {
     Logger.warn(headline, detail)
   } else if (detail) {
-    void dialog.reportError(headline, detail, backend)
+    void dialog.reportError(headline, detail)
   } else {
     void dialog.errorNotification(headline, error)
   }

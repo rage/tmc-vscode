@@ -1,5 +1,4 @@
-import { once } from "node:events"
-import { finished } from "node:stream/promises"
+import { pipeline } from "node:stream/promises"
 import * as path from "path"
 
 import * as fs from "fs-extra"
@@ -36,7 +35,8 @@ export interface DownloadOptions {
  *
  * Never hangs: the request is bounded by both a total and a per-chunk budget, and by
  * the caller's own signal. A body that stops short of the `Content-Length` it declared
- * is an `Err`, so a truncated file is never handed back as a complete one.
+ * is an `Err`, so a truncated file is never handed back as a complete one. A failed write,
+ * such as a full disk, is an `Err` too.
  *
  * @param url Url to data
  * @param filePath Absolute path to the desired output file
@@ -96,37 +96,34 @@ export async function downloadFile(
       return new Err(new Error("Request failed: " + response.statusText, { cause }))
     }
 
-    // Created outside the try so the catch can always release the fd.
-    const writeStream = fs.createWriteStream(filePath)
+    const body = response.body
+    if (!body) {
+      return new Err(new Error("Unexpected null response body"))
+    }
     let downloaded = 0
+    // `fetch` decodes a compressed body, and `Content-Length` counts the bytes before that.
+    const isEncoded = (response.headers.get("content-encoding") ?? "identity") !== "identity"
     const sizeString = response.headers.get("content-length")
-    const size = sizeString ? Math.trunc(Number(sizeString)) : 0
+    const size = sizeString && !isEncoded ? Math.trunc(Number(sizeString)) : 0
     try {
-      if (!response.body) {
-        throw new Error("Unexpected null response body")
-      }
-
       restartStallTimer()
-      for await (const chunk of response.body) {
-        restartStallTimer()
-        downloaded += chunk.length
-        if (size > 0) {
-          options?.onProgress?.(Math.round((downloaded / size) * 100))
-        }
-        // write() returns false when the internal buffer is full; wait for
-        // "drain" so large downloads don't grow memory unbounded.
-        if (!writeStream.write(chunk)) {
-          await once(writeStream, "drain")
-        }
-      }
-
-      // Wait until everything is flushed and the fd is closed, so callers
-      // always see a complete file with no handle left open.
-      writeStream.end()
-      await finished(writeStream)
+      // `pipeline` rather than a write loop: it fails on a write error, such as a full disk,
+      // where a loop waiting for "drain" would hang.
+      await pipeline(
+        body,
+        async function* (chunks: AsyncIterable<Uint8Array>) {
+          for await (const chunk of chunks) {
+            restartStallTimer()
+            downloaded += chunk.length
+            if (size > 0) {
+              options?.onProgress?.(Math.round((downloaded / size) * 100))
+            }
+            yield chunk
+          }
+        },
+        fs.createWriteStream(filePath),
+      )
     } catch (error) {
-      // Destroy on error so we never leak an open handle.
-      writeStream.destroy()
       if (signal.aborted) {
         return new Err(new ConnectionError(signal.reason, `Download from ${url} was aborted`))
       }

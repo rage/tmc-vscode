@@ -31,26 +31,19 @@ export async function downloadNewExercises(
     return
   }
 
-  await withOperation(
-    dialog,
-    { failure: "Failed to download new exercises.", backend: courseId.kind },
-    async () => {
-      const courseResult = userData.getCourse(courseId)
-      if (courseResult.err) {
-        return failure("Failed to read the selected course.", courseResult.val)
-      }
-      const courseName = LocalCourseData.getCourseName(courseResult.val)
-      if (LocalCourseData.getNewExercises(courseResult.val).length === 0) {
-        void dialog.notification(`There are no new exercises for the course ${courseName}.`)
-        return Ok.EMPTY
-      }
-      const downloadResult = await downloadNewExercisesForCourse(actionContext, courseId)
-      return downloadResult.err
-        ? failure(
-            `Failed to download new exercises for course "${courseName}".`,
-            downloadResult.val,
-          )
-        : downloadResult
-    },
-  )
+  await withOperation(dialog, { failure: "Failed to download new exercises." }, async () => {
+    const courseResult = userData.getCourse(courseId)
+    if (courseResult.err) {
+      return failure("Failed to read the selected course.", courseResult.val)
+    }
+    const courseName = LocalCourseData.getCourseName(courseResult.val)
+    if (LocalCourseData.getNewExercises(courseResult.val).length === 0) {
+      void dialog.notification(`There are no new exercises for the course ${courseName}.`)
+      return Ok.EMPTY
+    }
+    const downloadResult = await downloadNewExercisesForCourse(actionContext, courseId)
+    return downloadResult.err
+      ? failure(`Failed to download new exercises for course "${courseName}".`, downloadResult.val)
+      : downloadResult
+  })
 }

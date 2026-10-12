@@ -1,45 +1,65 @@
 import type { Result } from "ts-results"
-import { Err, Ok } from "ts-results"
+import { Ok } from "ts-results"
 
-import { ConnectionError, ForbiddenError, InsufficientScopeError, ServerError } from "../errors"
-import type { CombinedCourseData, MoocCourse, TmcExerciseSlide } from "../shared/langsSchema"
-import type { BackendKind, Enum } from "../shared/shared"
+import type Langs from "../api/langs"
 import {
-  backendName,
-  CourseIdentifier,
-  LocalCourseData,
-  makeMoocKind,
-  makeTmcKind,
-  match,
-} from "../shared/shared"
+  ConnectionError,
+  ForbiddenError,
+  InsufficientScopeError,
+  ServerError,
+  TmcLoginNotAcceptedError,
+} from "../errors"
+import type { BackendKind, CourseIdentifier, Enum } from "../shared/shared"
+import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
+import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
 import { Logger } from "../utilities"
 import { toStoredMoocCourse, toStoredTmcCourse } from "../utilities/apiData"
 import type { ReadyActionContext } from "./types"
 
 /**
- * The stored course and the refetched data are looked up by the same id, so this
- * only guards the narrowing the projections need.
+ * A course to fetch. `previous` is the stored course a refresh replaces, whose user-side
+ * fields carry over; an add has none. A tmc course's data does not name the organization
+ * it was picked from, so the caller does.
  */
-function mismatchedBackend(courseId: CourseIdentifier, expected: BackendKind): Error {
-  return new Error(
-    `Expected stored course ${CourseIdentifier.toString(courseId)} to be a ${expected} course`,
+export type CourseSource = Enum<
+  { courseId: number; organization: string; previous?: TmcLocalCourseData | undefined },
+  { courseId: string; previous?: MoocLocalCourseData | undefined }
+>
+
+/** Fetches a course from its backend, in the form it is stored in. */
+export async function fetchStoredCourse(
+  langs: Langs,
+  source: CourseSource,
+  options?: { forceRefresh?: boolean },
+): Promise<Result<LocalCourseData, Error>> {
+  return match(
+    source,
+    async (tmc) =>
+      (await langs.getTmcCourseData(tmc.courseId, options)).map((data) =>
+        makeTmcKind(toStoredTmcCourse(data, tmc.organization, tmc.previous)),
+      ),
+    async (mooc) =>
+      (await langs.getMoocCourseData(mooc.courseId, options)).map((data) =>
+        makeMoocKind(toStoredMoocCourse(data, mooc.previous)),
+      ),
   )
 }
 
 /**
- * Tells the user their session has to be renewed, and stays quiet until one is.
+ * Tells the user `backend` refuses their session, and stays quiet until it serves them again.
  *
  * `updateCourse` runs once per course and from a half-hourly background poll, so an
  * unguarded dialog would repeat for every course on every refresh.
  */
-function reportInsufficientScope(
+function reportSessionRefusal(
   { authState, dialog }: ReadyActionContext,
-  error: InsufficientScopeError,
+  backend: BackendKind,
+  error: Error,
 ): void {
-  if (authState.insufficientScopeReported) {
+  if (authState.sessionRefusalsReported.has(backend)) {
     return
   }
-  authState.insufficientScopeReported = true
+  authState.sessionRefusalsReported.add(backend)
   dialog.reportError("Failed to update course data.", error)
 }
 
@@ -65,25 +85,23 @@ export async function updateCourse(
     return storedCourse
   }
   const courseData = storedCourse.val
-  const updateResult: Result<
-    Enum<CombinedCourseData, [MoocCourse, TmcExerciseSlide[]]>,
-    Error
-  > = await match(
-    courseId,
-    (tmcId) =>
-      langs
-        .getTmcCourseData(tmcId.courseId, { forceRefresh: true })
-        .then((res) => res.map((x) => makeTmcKind(x))),
-    (moocId) =>
-      langs
-        .getMoocCourseData(moocId.instanceId, { forceRefresh: true })
-        .then((res) => res.map((x) => makeMoocKind(x))),
+  const updateResult = await fetchStoredCourse(
+    langs,
+    match(
+      courseData,
+      (tmc) => makeTmcKind({ courseId: tmc.id, organization: tmc.organization, previous: tmc }),
+      (mooc) => makeMoocKind({ courseId: mooc.id, previous: mooc }),
+    ),
+    { forceRefresh: true },
   )
   if (updateResult.err) {
-    if (updateResult.val instanceof InsufficientScopeError) {
+    if (
+      updateResult.val instanceof InsufficientScopeError ||
+      updateResult.val instanceof TmcLoginNotAcceptedError
+    ) {
       // Says nothing about the course, so nothing stored about it is touched.
-      Logger.warn("The current session does not grant access to programming exercises.")
-      reportInsufficientScope(actionContext, updateResult.val)
+      Logger.warn(`${backendName(courseId.kind)} refused the session.`, updateResult.val)
+      reportSessionRefusal(actionContext, courseId.kind, updateResult.val)
       return Ok(false)
     }
     if (updateResult.val instanceof ForbiddenError) {
@@ -110,44 +128,10 @@ export async function updateCourse(
   }
 
   actionContext.coursesTree.setBackendReachable(courseId.kind, true)
+  // A refusal reported before has ended, so the next one is worth telling the user about.
+  actionContext.authState.sessionRefusalsReported.delete(courseId.kind)
 
-  const refreshed = await match(
-    updateResult.val,
-    async (tmc): Promise<Result<LocalCourseData, Error>> => {
-      if (courseData.kind !== "tmc") {
-        return Err(mismatchedBackend(courseId, "tmc"))
-      }
-      const next = toStoredTmcCourse(tmc, courseData.data.organization, courseData.data)
-      return Ok(makeTmcKind(next))
-    },
-    async ([moocCourse, slides]): Promise<Result<LocalCourseData, Error>> => {
-      // The fetch the session was refused before has now gone through, so the next
-      // lapse is worth telling the user about again.
-      actionContext.authState.insufficientScopeReported = false
-      if (courseData.kind !== "mooc") {
-        return Err(mismatchedBackend(courseId, "mooc"))
-      }
-      // Non-fatal: on a failed fetch, previous local progress is carried over
-      // per exercise id so a refresh never wipes known points or passed flags.
-      const progressRes = await langs.getMoocCourseProgress(courseData.data.id, {
-        forceRefresh: true,
-      })
-      if (progressRes.err) {
-        Logger.warn("Failed to fetch mooc course progress", progressRes.val)
-      }
-      const next = toStoredMoocCourse(
-        moocCourse,
-        slides,
-        progressRes.ok ? progressRes.val : undefined,
-        courseData.data,
-      )
-      return Ok(makeMoocKind(next))
-    },
-  )
-  if (refreshed.err) {
-    return refreshed
-  }
-  const course = refreshed.val
+  const course = updateResult.val
   const stored = await userData.replaceCourse(course)
   if (stored.err) {
     return stored

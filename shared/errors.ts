@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+import type { BackendKind } from "./enum"
+
 /**
  * An `Error` carrying the fields Node attaches to a failed system call.
  *
@@ -43,6 +45,8 @@ function describeThrown(value: unknown): string {
 export class BaseError extends Error {
   public override readonly name: string = "Base Error"
   public details?: string | undefined
+  /** The backend the CLI command that raised this talked to, if it talked to one. */
+  public backend?: BackendKind | undefined
   public override cause?: ErrnoException | string
   public override stack?: string
 
@@ -130,4 +134,9 @@ export class BaseError extends Error {
     }
     return errorMessage
   }
+}
+
+/** `thrown` as an `Error`: itself if it is one, else an `Error` with it as the message. */
+export function toError(thrown: unknown): Error {
+  return thrown instanceof Error ? thrown : new Error(String(thrown))
 }

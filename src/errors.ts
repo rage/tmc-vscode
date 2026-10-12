@@ -1,8 +1,15 @@
-import type { BackendKind } from "./shared/shared"
 import { backendName, BaseError } from "./shared/shared"
 
 export class AuthorizationError extends BaseError {
-  public override readonly name = "Authorization Error"
+  public override readonly name: string = "Authorization Error"
+}
+
+/**
+ * tmc.mooc.fi refused the request's credentials: the courses.mooc.fi login, which it may not
+ * accept yet, or none at all. Logging in again does not fix the former.
+ */
+export class TmcLoginNotAcceptedError extends AuthorizationError {
+  public override readonly name = "TMC Login Not Accepted Error"
 }
 
 export class BottleneckError extends BaseError {
@@ -186,13 +193,10 @@ function userSentence(error: Error): string {
  * call site spells one out and the same failure reads the same way wherever it surfaces.
  * A class with no entry shows its own message and no buttons, which is the right answer
  * for a failure the user cannot act on. No message carries diagnostics; see
- * {@link userSentence}.
- *
- * @param backend Names the backend in the sentence, for the errors either backend can
- * raise. Omit it where the caller does not know which one, and the sentence stays
- * backend-neutral.
+ * {@link userSentence}. An error a backend raised names that backend where it matters.
  */
-export function presentationFor(error: Error, backend?: BackendKind): ErrorPresentation {
+export function presentationFor(error: Error): ErrorPresentation {
+  const backend = error instanceof BaseError ? error.backend : undefined
   const reported = userSentence(error)
   if (error instanceof AiUseRefusedError) {
     return {
@@ -200,6 +204,14 @@ export function presentationFor(error: Error, backend?: BackendKind): ErrorPrese
       actions: error.remedyLabel
         ? [{ label: error.remedyLabel, command: SHOW_AI_USE_PROBLEM_COMMAND }]
         : [],
+    }
+  }
+  if (error instanceof TmcLoginNotAcceptedError) {
+    return {
+      message:
+        `${backendName("tmc")} did not accept your login. It may not accept` +
+        ` ${backendName("mooc")} logins yet.`,
+      actions: [],
     }
   }
   if (error instanceof InsufficientScopeError) {

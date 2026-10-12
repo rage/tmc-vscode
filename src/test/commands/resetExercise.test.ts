@@ -125,7 +125,7 @@ suite("Reset exercise command", function () {
 
   test("refuses to reset while a submission of the same exercise is in flight", async function () {
     const submission = exerciseOperations
-      .claim([ExerciseIdentifier.from("mooc-ex-uuid")], "submitting", 60_000)
+      .claim([ExerciseIdentifier.from("mooc-ex-uuid")], "submitting")
       .unwrap()
     try {
       await resetExercise(actionContext("Submit and Reset"), uri)

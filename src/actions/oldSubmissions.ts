@@ -1,11 +1,10 @@
 import type { Result } from "ts-results"
 
-import { CLI_PROCESS_TIMEOUT } from "../config/constants"
+import type { RestoreTarget } from "../api/langs"
 import type {
   ExerciseSlideSubmissionListItem,
   MoocOldSubmissionRestore,
 } from "../shared/langsSchema"
-import type { Enum } from "../shared/shared"
 import {
   assertUnreachable,
   ExerciseIdentifier,
@@ -16,16 +15,6 @@ import {
 } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import type { ReadyActionContext } from "./types"
-
-/**
- * Everything the restore call needs, as one value: the exercise id and the
- * submission id are in different id spaces per backend (integers for TMC, uuid
- * strings for mooc) and pairing them here is what keeps a mismatch unbuildable.
- */
-export type RestoreTarget = Enum<
-  { exerciseId: number; submissionId: number },
-  { exerciseId: string; submissionId: string }
->
 
 /**
  * A submission normalized for the picker across both backends: what restoring it
@@ -61,36 +50,30 @@ function moocSubmissionStatus(submission: ExerciseSlideSubmissionListItem): stri
 
 /**
  * Lists an exercise's earlier submissions, normalized for the picker across both backends.
- * The id spaces differ (TMC integer, mooc uuid string) and the status is derived
- * differently (TMC all_tests_passed vs mooc grading progress + score).
+ * The status is derived differently: TMC reports whether all tests passed, courses.mooc.fi
+ * the grading progress and score.
  */
 export async function listOldSubmissions(
   actionContext: ReadyActionContext,
   id: ExerciseIdentifier,
 ): Promise<Result<PickableSubmission[], Error>> {
-  const { langs } = actionContext.startup
-  return match(
-    id,
-    (tmc): Promise<Result<PickableSubmission[], Error>> =>
-      langs.getTmcOldSubmissions(tmc.tmcExerciseId).then((res) =>
-        res.map((submissions) =>
-          submissions.map<PickableSubmission>((submission) => ({
-            target: makeTmcKind({ exerciseId: tmc.tmcExerciseId, submissionId: submission.id }),
-            createdAt: submission.created_at,
-            status: submission.all_tests_passed ? "Passed" : "Not passed",
-          })),
-        ),
-      ),
-    (mooc): Promise<Result<PickableSubmission[], Error>> =>
-      langs.getMoocOldSubmissions(mooc.moocExerciseId).then((res) =>
-        res.map((submissions) =>
-          submissions.map<PickableSubmission>((submission) => ({
-            target: makeMoocKind({ exerciseId: mooc.moocExerciseId, submissionId: submission.id }),
-            createdAt: submission.created_at,
-            status: moocSubmissionStatus(submission),
-          })),
-        ),
-      ),
+  const listed = await actionContext.startup.langs.getOldSubmissions(id)
+  return listed.map((old) =>
+    match(
+      old,
+      ({ exerciseId, submissions }) =>
+        submissions.map<PickableSubmission>((submission) => ({
+          target: makeTmcKind({ exerciseId, submissionId: submission.id }),
+          createdAt: submission.created_at,
+          status: submission.all_tests_passed ? "Passed" : "Not passed",
+        })),
+      ({ exerciseId, submissions }) =>
+        submissions.map<PickableSubmission>((submission) => ({
+          target: makeMoocKind({ exerciseId, submissionId: submission.id }),
+          createdAt: submission.created_at,
+          status: moocSubmissionStatus(submission),
+        })),
+    ),
   )
 }
 
@@ -99,8 +82,7 @@ export async function listOldSubmissions(
  * that state first.
  *
  * Rejects as a `BottleneckError` while a submit, paste, reset or restore of the same
- * exercise is already in flight. The tmc CLI reports no outcome and only ever
- * restores, so its result is read as the mooc outcome the caller branches on.
+ * exercise is already in flight.
  */
 export async function restoreOldSubmission(
   actionContext: ReadyActionContext,
@@ -108,25 +90,9 @@ export async function restoreOldSubmission(
   target: RestoreTarget,
   submitFirst: boolean,
 ): Promise<Result<MoocOldSubmissionRestore, Error>> {
-  const { langs } = actionContext.startup
   return exerciseOperations.run(
     ExerciseIdentifier.from(unwrap(target).exerciseId),
     "restoring",
-    CLI_PROCESS_TIMEOUT + 30_000,
-    () =>
-      match(
-        target,
-        (tmc) =>
-          langs
-            .downloadTmcOldSubmission(tmc.exerciseId, exercisePath, tmc.submissionId, submitFirst)
-            .then((res) => res.map(() => "restored" as const)),
-        (mooc) =>
-          langs.downloadMoocOldSubmission(
-            mooc.exerciseId,
-            exercisePath,
-            mooc.submissionId,
-            submitFirst,
-          ),
-      ),
+    () => actionContext.startup.langs.restoreSubmission(target, exercisePath, submitFirst),
   )
 }

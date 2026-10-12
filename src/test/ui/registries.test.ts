@@ -1,5 +1,5 @@
 import { Ok } from "ts-results"
-import { afterEach, expect, onTestFinished, suite, test, vi } from "vitest"
+import { afterEach, expect, suite, test, vi } from "vitest"
 
 import { BottleneckError } from "../../errors"
 import { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
@@ -118,7 +118,7 @@ suite("exercise operations", () => {
 
   test("reports an operation while it runs, and nothing after", async () => {
     let during: unknown
-    await exerciseOperations.run(exercise, "testing", 60_000, async () => {
+    await exerciseOperations.run(exercise, "testing", async () => {
       during = exerciseOperations.current(exercise)
       return Ok.EMPTY
     })
@@ -130,8 +130,8 @@ suite("exercise operations", () => {
   test("refuses a conflicting operation on the same exercise, without running it", async () => {
     const work = vi.fn(async () => Ok.EMPTY)
     let refused: unknown
-    await exerciseOperations.run(exercise, "submitting", 60_000, async () => {
-      refused = await exerciseOperations.run(exercise, "pasting", 60_000, work)
+    await exerciseOperations.run(exercise, "submitting", async () => {
+      refused = await exerciseOperations.run(exercise, "pasting", work)
       return Ok.EMPTY
     })
 
@@ -144,14 +144,9 @@ suite("exercise operations", () => {
 
   test("lets unrelated operations, and other exercises, run alongside", async () => {
     let outcomes: boolean[] = []
-    await exerciseOperations.run(exercise, "submitting", 60_000, async () => {
-      const tested = await exerciseOperations.run(exercise, "testing", 60_000, async () => Ok.EMPTY)
-      const otherSubmitted = await exerciseOperations.run(
-        other,
-        "submitting",
-        60_000,
-        async () => Ok.EMPTY,
-      )
+    await exerciseOperations.run(exercise, "submitting", async () => {
+      const tested = await exerciseOperations.run(exercise, "testing", async () => Ok.EMPTY)
+      const otherSubmitted = await exerciseOperations.run(other, "submitting", async () => Ok.EMPTY)
       outcomes = [tested.ok, otherSubmitted.ok]
       return Ok.EMPTY
     })
@@ -160,13 +155,13 @@ suite("exercise operations", () => {
   })
 
   test("claims several exercises all or none, and releases them one at a time", () => {
-    const held = exerciseOperations.claim([exercise], "downloading", 60_000).unwrap()
+    const held = exerciseOperations.claim([exercise], "downloading").unwrap()
 
-    expect(exerciseOperations.claim([other, exercise], "downloading", 60_000).err).toBe(true)
+    expect(exerciseOperations.claim([other, exercise], "downloading").err).toBe(true)
     expect(exerciseOperations.isRunning(other, "downloading")).toBe(false)
     held.releaseAll()
 
-    const both = exerciseOperations.claim([exercise, other], "downloading", 60_000).unwrap()
+    const both = exerciseOperations.claim([exercise, other], "downloading").unwrap()
     both.release(exercise)
     expect(exerciseOperations.isRunning(exercise, "downloading")).toBe(false)
     expect(exerciseOperations.isRunning(other, "downloading")).toBe(true)
@@ -175,24 +170,11 @@ suite("exercise operations", () => {
 
   test("a failing operation still ends, and its error reaches the caller", async () => {
     await expect(
-      exerciseOperations.run(exercise, "testing", 60_000, async () => {
+      exerciseOperations.run(exercise, "testing", async () => {
         throw new Error("boom")
       }),
     ).rejects.toThrow("boom")
 
     expect(exerciseOperations.current(exercise)).toBeUndefined()
-  })
-
-  test("gives up a claim held past its limit", () => {
-    vi.useFakeTimers()
-    onTestFinished(() => {
-      vi.useRealTimers()
-    })
-    const held = exerciseOperations.claim([exercise], "testing", 1000).unwrap()
-
-    vi.advanceTimersByTime(1000)
-
-    expect(exerciseOperations.current(exercise)).toBeUndefined()
-    held.releaseAll()
   })
 })

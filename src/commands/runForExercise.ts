@@ -38,7 +38,5 @@ export async function runForExercise<T>(
     return Err(error)
   }
 
-  return withOperation(dialog, { failure: `${label} failed.`, backend: exercise.backend }, () =>
-    body(exercise),
-  )
+  return withOperation(dialog, { failure: `${label} failed.` }, () => body(exercise))
 }
