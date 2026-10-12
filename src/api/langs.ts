@@ -1715,9 +1715,15 @@ export interface LangsStdoutDecoding {
  * @param carry The previous chunk's unterminated tail; `""` at the start of the stream.
  */
 export function decodeLangsStdout(carry: string, chunk: string): LangsStdoutDecoding {
+  // Only `chunk` is searched: one output line can span many chunks, and rescanning the
+  // carry on each would make a long line quadratic.
+  const lastNewline = chunk.lastIndexOf("\n")
+  if (lastNewline === -1) {
+    return { carry: carry + chunk, events: [] }
+  }
   const events: LangsStdoutEvent[] = []
-  const lines = (carry + chunk).split("\n")
-  const tail = lines.pop() ?? ""
+  const lines = (carry + chunk.slice(0, lastNewline)).split("\n")
+  const tail = chunk.slice(lastNewline + 1)
   for (const line of lines) {
     const trimmed = line.trim()
     if (!trimmed) {

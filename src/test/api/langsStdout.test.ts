@@ -72,6 +72,17 @@ suite("Langs stdout decoding", function () {
     expect(events[0]?.kind).toBe("output-data")
   })
 
+  test("a line spread over many chunks, the next one starting mid-chunk, decodes both", function () {
+    const pieces = outputDataLine.match(/.{1,7}/g) ?? []
+    const { carry, events } = decodeAll(
+      ...pieces,
+      `\n${statusUpdateLine.slice(0, 5)}`,
+      `${statusUpdateLine.slice(5)}\n`,
+    )
+    expect(carry).toBe("")
+    expect(events.map((event) => event.kind)).toEqual(["output-data", "status-update"])
+  })
+
   test("two objects in one chunk are decoded as two events", function () {
     const { events } = decodeAll(`${outputDataLine}\n${statusUpdateLine}\n`)
     expect(events.map((event) => event.kind)).toEqual(["output-data", "status-update"])
