@@ -552,8 +552,7 @@ suite("TmcPanel ready handshake", () => {
   })
 
   test("resends whichever panel was rendered last, not the one mounted with", async () => {
-    // A stale _route is the way this feature makes things worse than the bug it
-    // fixes, so every render path has to keep it current.
+    // A reload resends `_route`, so every render path has to keep it current.
     const actionContext = createMockActionContext()
     const { panel, listener } = await mountSidePanel(actionContext)
 

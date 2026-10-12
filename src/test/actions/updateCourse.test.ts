@@ -114,9 +114,8 @@ suite("updateCourse action (mooc)", function () {
   })
 
   test("refreshes the course metadata that the backend can change", async function () {
-    // The mooc arm used to discard the fetched course entirely and write back only
-    // points, so a renamed or re-described course stayed stale forever. The stored
-    // fixture deliberately disagrees with the fetched one on every field here.
+    // A refresh writes back the fetched course, not just its points, or a renamed course
+    // stays stale forever. The stored fixture disagrees with the fetched one on every field.
     const result = await updateCourse(actionContext(), courseId)
     expect(result.val).toBe(true)
     const stored = userData.getMoocCourses()[0]

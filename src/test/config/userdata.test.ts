@@ -161,10 +161,8 @@ suite("UserData passed-state (Bug 1 regression)", function () {
   })
 
   test("updateExercises does not throw when the course already exists", async function () {
-    // Regression: updateExercises used to call addCourse on the existing
-    // course, which throws "Trying to add an already existing course" — so the
-    // whole course-update flow crashed. updateExercises is only ever called on
-    // an already-added course.
+    // updateExercises is only ever called on an already-added course, so it must not
+    // add the course again, which throws "Trying to add an already existing course".
     const [userData] = await makeUserData({
       courses: [tmcCourse({ exercises: [tmcExercise({ id: 1, name: "hello_world" })] })],
       mooc_courses: [],

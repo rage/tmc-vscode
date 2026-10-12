@@ -72,9 +72,8 @@ suite("ExerciseDecoratorProvider class", function () {
   })
 
   test("should decorate a mooc exercise from the mooc course data", function () {
-    // Regression: the provider used to look the exercise up with
-    // `getTmcExerciseByName` regardless of backend, so every mooc exercise missed
-    // and got the "not found in course" badge instead of its real decoration.
+    // A mooc exercise is found among the mooc course data, not the tmc data, so it gets
+    // its real decoration rather than the "not found in course" badge.
     workspaceManagerMockValues.getExerciseByPath = { ...exerciseHelloWorld, backend: "mooc" }
     userDataMockValues.getExerciseByName = undefined
     userDataMockValues.getMoocExerciseByName = {
