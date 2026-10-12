@@ -17,9 +17,9 @@ import { TmcPage } from "../pages/tmc"
 // -> the reduced mooc result panel.
 //
 // Reaching the file explorer, test run and submit depends on mooc workspace
-// tracking (the CLI's `list-local-exercises`, consumed by refreshLocalExercises). The submit result here is the reduced mooc panel
-// (grading progress and score, no per-test breakdown), distinct from the TMC
-// submission view.
+// tracking (the CLI's `list-local-exercises`, consumed by refreshLocalExercises).
+// The submit result here is the reduced mooc panel (grading progress and score,
+// no per-test breakdown), distinct from the TMC submission view.
 vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ page, webview }) => {
   const coursesView = new CoursesViewPage(page, webview)
   const testResultsPage = new TestResultsPage(page, webview)
