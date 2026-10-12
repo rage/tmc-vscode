@@ -327,6 +327,13 @@ describe("legacy TMC mock contract", () => {
     assert.equal(second.submission_url, first.submission_url)
   })
 
+  test("an exercise or course the fixtures lack is a 404, even without a token", async () => {
+    for (const endpoint of ["/api/v8/core/exercises/999999", "/api/v8/courses/999999/exercises"]) {
+      const response = await fetch(`${mock.base}${endpoint}`)
+      assert.equal(response.status, 404, endpoint)
+    }
+  })
+
   test("an unhandled endpoint is a 404, not a hang", async () => {
     const res = await authFetch(`${mock.base}/api/v8/courses/404`)
     assert.equal(res.status, 404)

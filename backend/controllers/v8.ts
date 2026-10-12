@@ -191,6 +191,51 @@ export const tmcMockOf = (app: Express): TmcMockControls => app.locals.tmcMock a
 // decides whether the CLI attaches its bearer to them.
 const originOf = (req: Request): string => `${req.protocol}://${req.get("host") ?? "localhost"}`
 
+const exerciseFixtures = courseExercises.flatMap(({ course, exercises }) =>
+  exercises.map(({ exercise, file }) => ({ course, exercise, file })),
+)
+
+const findCourse = (params: Record<string, unknown>): CourseWithExercises | undefined =>
+  courseExercises.find(({ course }) => course.id.toString() === params.courseId)
+
+const findExercise = (
+  params: Record<string, unknown>,
+): (typeof exerciseFixtures)[number] | undefined =>
+  exerciseFixtures.find(({ exercise }) => exercise.id.toString() === params.exerciseId)
+
+const findOrganization = (
+  params: Record<string, unknown>,
+): (typeof organizationCourses)[number] | undefined =>
+  organizationCourses.find(({ organization }) => organization.slug === params.slug)
+
+/**
+ * The handlers of a route answering for the fixture `find` picks out of the path, behind
+ * `guards`. A path naming no fixture skips the route before any guard, so it answers 404, token
+ * or not, as an unregistered path would.
+ */
+const forFixture = <Fixture>(
+  find: (params: Record<string, unknown>) => Fixture | undefined,
+  guards: RequestHandler[],
+  handler: (fixture: Fixture, req: Request, res: Response, next: NextFunction) => unknown,
+): RequestHandler[] => {
+  const fixtures = new WeakMap<Request, Fixture>()
+  return [
+    (req, _res, next) => {
+      const fixture = find(req.params)
+      if (fixture === undefined) {
+        next("route")
+        return
+      }
+      fixtures.set(req, fixture)
+      next()
+    },
+    ...guards,
+    (req, res, next) => {
+      handler(fixtures.get(req) as Fixture, req, res, next)
+    },
+  ]
+}
+
 /**
  * Turns away a request that carries neither {@link MOCK_TMC_ACCESS_TOKEN} nor a
  * courses.mooc.fi token with the exercise-services scope, as tmc-server's
@@ -243,175 +288,150 @@ export const registerV8Routes = (
   const authenticated = requireAccessToken(options)
 
   // getTmcCourseData(0), settings leg
-  for (const course of testCourses) {
-    app.get(`/api/v8/courses/${course.id}`, authenticated, (_req, res: Response<CourseData>) =>
-      res.json(course),
-    )
-  }
+  app.get(
+    "/api/v8/courses/:courseId",
+    ...forFixture(findCourse, [authenticated], ({ course }, _req, res) =>
+      res.json(course satisfies CourseData),
+    ),
+  )
 
   // getTmcCourseData(0), exercises leg
-  for (const { course, exercises } of courseExercises) {
-    app.get(
-      `/api/v8/courses/${course.id}/exercises`,
-      authenticated,
-      (_req, res: Response<CourseExercise[]>) => res.json(exercises.map((e) => e.exercise)),
-    )
-  }
+  app.get(
+    "/api/v8/courses/:courseId/exercises",
+    ...forFixture(findCourse, [authenticated], ({ exercises }, _req, res) =>
+      res.json(exercises.map((e) => e.exercise) satisfies CourseExercise[]),
+    ),
+  )
 
   // getOrganizations()
   app.get("/api/v8/org.json", (_req, res: Response<Organization[]>) => res.json(organizations))
 
-  for (const org of organizations) {
-    app.get(`/api/v8/org/${org.slug}.json`, (_req, res: Response<Organization>) => {
-      res.json(org)
-    })
-  }
+  app.get(
+    "/api/v8/org/:slug.json",
+    ...forFixture(findOrganization, [], ({ organization }, _req, res) =>
+      res.json(organization satisfies Organization),
+    ),
+  )
 
   // getTmcCourseData()
-  for (const { course, exercises } of courseExercises) {
-    app.get(
-      `/api/v8/core/courses/${course.id}`,
-      authenticated,
-      (_req, res: Response<{ course: CourseDetails }>) =>
-        res.json({
-          course: {
-            ...course,
-            exercises: exercises.map((e) => e.exercise),
-          },
-        }),
-    )
-  }
+  app.get(
+    "/api/v8/core/courses/:courseId",
+    ...forFixture(findCourse, [authenticated], ({ course, exercises }, _req, res) =>
+      res.json({
+        course: { ...course, exercises: exercises.map((e) => e.exercise) },
+      } satisfies { course: CourseDetails }),
+    ),
+  )
 
-  // downloadTmcExercises()
+  // downloadTmcExercises(); before the routes below, whose `:exerciseId` would match "details".
   app.get("/api/v8/core/exercises/details", (req, res: Response<DetailsForLangs>) => {
     // tmc-langs sends several ids as one comma-separated value.
     const rawIds = req.query.ids
     const ids = (Array.isArray(rawIds) ? rawIds : [rawIds]).flatMap((id) => String(id).split(","))
-    const downloadTargets: DetailsForLangs["exercises"] = []
-    courseExercises.forEach((ce) => {
-      ce.exercises
-        .filter(({ exercise: e }) => ids.includes(e.id.toString()))
-        .forEach(({ exercise: e }) => {
-          downloadTargets.push({
-            id: e.id,
-            checksum: e.checksum,
-            course_name: ce.course.name,
-            exercise_name: e.name,
-            hide_submission_results: false,
-          })
-        })
-    })
     return res.json({
-      exercises: downloadTargets,
+      exercises: exerciseFixtures
+        .filter(({ exercise }) => ids.includes(exercise.id.toString()))
+        .map(({ course, exercise }) => ({
+          id: exercise.id,
+          checksum: exercise.checksum,
+          course_name: course.name,
+          exercise_name: exercise.name,
+          hide_submission_results: false,
+        })),
     })
   })
 
-  for (const { course, exercises } of courseExercises) {
-    for (const { exercise } of exercises) {
-      app.get(
-        `/api/v8/core/exercises/${exercise.id}`,
-        authenticated,
-        (_req, res: Response<ExerciseDetails>) =>
-          res.json({ ...exercise, course_id: course.id, course_name: course.name }),
-      )
-    }
-  }
+  app.get(
+    "/api/v8/core/exercises/:exerciseId",
+    ...forFixture(findExercise, [authenticated], ({ course, exercise }, _req, res) =>
+      res.json({
+        ...exercise,
+        course_id: course.id,
+        course_name: course.name,
+      } satisfies ExerciseDetails),
+    ),
+  )
 
   // downloadExercise(1)
-  for (const { exercises } of courseExercises) {
-    for (const { exercise, file } of exercises) {
-      app.get(`/api/v8/core/exercises/${exercise.id}/download`, (_req, res) => {
-        return respondWithFile(res, file)
-      })
-    }
-  }
+  app.get(
+    "/api/v8/core/exercises/:exerciseId/download",
+    ...forFixture(findExercise, [], ({ file }, _req, res) => respondWithFile(res, file)),
+  )
 
   // submitExercise(1)
   // submitExerciseToPaste(1, ...)
-  for (const { course, exercises } of courseExercises) {
-    for (const { exercise, file } of exercises) {
-      app.post(
-        `/api/v8/core/exercises/${exercise.id}/submissions`,
-        authenticated,
-        (req, res: Response<NewSubmission>) => {
-          const newSubmissionId = state.nextSubmissionId++
-          state.submissions.push({
-            submission: createOldSubmission({
-              courseId: course.id,
-              exerciseName: exercise.name,
-              id: newSubmissionId,
-              passed: exercise.id !== failingExerciseId,
-              timestamp: new Date(),
-              userId: 0,
-            }),
-            file,
-            polls: 0,
-          })
-          const origin = originOf(req)
-          return res.json({
-            paste_url: `${origin}/paste/${newSubmissionId}`,
-            show_submission_url: `${origin}/submissions/${newSubmissionId}`,
-            submission_url: `${origin}/api/v8/core/exercises/${exercise.id}/submissions/${newSubmissionId}`,
-          })
-        },
+  app.post(
+    "/api/v8/core/exercises/:exerciseId/submissions",
+    ...forFixture(findExercise, [authenticated], ({ course, exercise, file }, req, res) => {
+      const newSubmissionId = state.nextSubmissionId++
+      state.submissions.push({
+        submission: createOldSubmission({
+          courseId: course.id,
+          exerciseName: exercise.name,
+          id: newSubmissionId,
+          passed: exercise.id !== failingExerciseId,
+          timestamp: new Date(),
+          userId: 0,
+        }),
+        file,
+        polls: 0,
+      })
+      const origin = originOf(req)
+      return res.json({
+        paste_url: `${origin}/paste/${newSubmissionId}`,
+        show_submission_url: `${origin}/submissions/${newSubmissionId}`,
+        submission_url: `${origin}/api/v8/core/exercises/${exercise.id}/submissions/${newSubmissionId}`,
+      } satisfies NewSubmission)
+    }),
+  )
+
+  app.get(
+    "/api/v8/core/exercises/:exerciseId/submissions/:id",
+    ...forFixture(findExercise, [authenticated], ({ course, exercise }, req, res, next) => {
+      const id = String(req.params.id)
+      const record = state.submissions.find((s) => s.submission.id.toString() === id)
+      if (!record) {
+        return next()
+      }
+
+      const sandboxStatus = SANDBOX_PROGRESSION[record.polls++]
+      if (sandboxStatus) {
+        return res.json({
+          status: "processing",
+          sandbox_status: sandboxStatus,
+        } satisfies SubmissionStatusReport)
+      }
+
+      return res.json(
+        createFinishedSubmission({
+          courseName: course.name,
+          exerciseName: exercise.name,
+          id: Math.trunc(Number(id)),
+          testCases: testCasesOf(exercise.id),
+        }) satisfies SubmissionStatusReport,
       )
-    }
-  }
-
-  for (const { course, exercises } of courseExercises) {
-    for (const { exercise } of exercises) {
-      app.get(
-        `/api/v8/core/exercises/${exercise.id}/submissions/:id`,
-        authenticated,
-        (req, res: Response<SubmissionStatusReport>, next) => {
-          const id = req.params.id
-          const record = state.submissions.find((s) => s.submission.id.toString() === id)
-          if (!record) {
-            return next()
-          }
-
-          const sandboxStatus = SANDBOX_PROGRESSION[record.polls++]
-          if (sandboxStatus) {
-            return res.json({ status: "processing", sandbox_status: sandboxStatus })
-          }
-
-          return res.json(
-            createFinishedSubmission({
-              courseName: course.name,
-              exerciseName: exercise.name,
-              id: Math.trunc(Number(id)),
-              testCases: testCasesOf(exercise.id),
-            }),
-          )
-        },
-      )
-    }
-  }
+    }),
+  )
 
   // getOldSubmissions(1)
-  for (const { exercises } of courseExercises) {
-    for (const { exercise } of exercises) {
-      app.get(
-        `/api/v8/exercises/${exercise.id}/users/current/submissions`,
-        authenticated,
-        (_req, res: Response<Submission[]>) =>
-          res.json(
-            state.submissions
-              .filter((s) => s.submission.exercise_name === exercise.name)
-              .map((s) => s.submission),
-          ),
-      )
-    }
-  }
+  app.get(
+    "/api/v8/exercises/:exerciseId/users/current/submissions",
+    ...forFixture(findExercise, [authenticated], ({ exercise }, _req, res) =>
+      res.json(
+        state.submissions
+          .filter((s) => s.submission.exercise_name === exercise.name)
+          .map((s) => s.submission) satisfies Submission[],
+      ),
+    ),
+  )
 
   // getCourses("test")
-  for (const { organization, courses } of organizationCourses) {
-    app.get(
-      `/api/v8/core/org/${organization.slug}/courses`,
-      authenticated,
-      (_req, res: Response<Course[]>) => res.json(courses),
-    )
-  }
+  app.get(
+    "/api/v8/core/org/:slug/courses",
+    ...forFixture(findOrganization, [authenticated], ({ courses }, _req, res) =>
+      res.json(courses satisfies Course[]),
+    ),
+  )
 
   // If submission exists, return arbitrary archive
   app.get("/api/v8/core/submissions/:id/download", authenticated, (req, res, next) => {
