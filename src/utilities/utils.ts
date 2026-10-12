@@ -153,6 +153,27 @@ export function sleep(millis: number): Promise<void> {
 }
 
 /** `count` and `noun`, with an "s" unless `count` is 1, e.g. "3 new exercises". */
+/**
+ * Like `Promise.all(items.map(task))`, with at most `limit` tasks running at once. Results
+ * keep the order of `items`; the first rejection rejects the whole, as with `Promise.all`.
+ */
+export async function mapConcurrently<T, R>(
+  items: readonly T[],
+  limit: number,
+  task: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = []
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const index = next++
+      results[index] = await task(items[index] as T)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
+
 export function countOf(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`
 }
