@@ -21,8 +21,8 @@ import {
 import type Resources from "../config/resources"
 import { EditorKind } from "../config/resources"
 import { FileSystemError } from "../errors"
-import type { BackendKind, CourseIdentifier } from "../shared/shared"
-import { ExerciseIdentifier } from "../shared/shared"
+import type { BackendKind } from "../shared/shared"
+import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { Logger } from "../utilities"
 
 /** What keeps VS Code from writing a course's `.code-workspace`. */
@@ -254,18 +254,45 @@ export default class WorkspaceManager implements vscode.Disposable {
    * @param isClosedStateKnown `false` when the durable record could not be read, so the
    * statuses are a guess; nothing is written to the record, and opening or closing errs,
    * until a call with it `true`.
+   *
+   * Fires {@link onDidChangeExercises} only when an exercise differs from the one known before.
    */
   public async setExercises(
     exercises: WorkspaceExercise[],
     isClosedStateKnown = true,
   ): Promise<Result<void, Error>> {
+    const isChanged = !WorkspaceManager._isSameExercises(this._exercises, exercises)
     this._exercises = exercises
     this._exercisesByPath = WorkspaceManager._indexByPath(exercises)
     this._exercisesById = WorkspaceManager._indexById(exercises)
     this._recordedClosedExercises = WorkspaceManager._closedByCourse(exercises)
     this._isClosedStateKnown = isClosedStateKnown
-    this._exercisesChanged.fire()
+    if (isChanged) {
+      this._exercisesChanged.fire()
+    }
     return this._refreshActiveCourseWorkspace()
+  }
+
+  private static _isSameExercises(
+    known: readonly WorkspaceExercise[],
+    replacing: readonly WorkspaceExercise[],
+  ): boolean {
+    return (
+      known.length === replacing.length &&
+      known.every((a, i) => {
+        const b = replacing[i]
+        return (
+          b !== undefined &&
+          ExerciseIdentifier.key(a.id) === ExerciseIdentifier.key(b.id) &&
+          CourseIdentifier.equals(a.courseId, b.courseId) &&
+          a.backend === b.backend &&
+          a.courseSlug === b.courseSlug &&
+          a.exerciseSlug === b.exerciseSlug &&
+          a.status === b.status &&
+          a.uri.fsPath === b.uri.fsPath
+        )
+      })
+    )
   }
 
   /**

@@ -219,15 +219,29 @@ suite("WorkspaceManager class", function () {
       expect(updateWorkspaceFolders).not.toHaveBeenCalled()
     })
 
-    test("announces each replacement of the known exercises", async function () {
+    test("announces a replacement that changes the known exercises", async function () {
       const open = exercise("mooc", "my python course", "hello_world", ExerciseStatus.Open)
       const manager = new WorkspaceManager(resources, persistForCourse)
       const changed = vi.fn()
       manager.onDidChangeExercises(changed)
 
       await manager.setExercises([open])
+      await manager.setExercises([{ ...open, status: ExerciseStatus.Closed }])
 
-      expect(changed).toHaveBeenCalledOnce()
+      expect(changed).toHaveBeenCalledTimes(2)
+    })
+
+    // Each listener rebuilds from scratch, the test items among them, and every refresh rescans.
+    test("announces nothing for a rescan that found the same exercises", async function () {
+      const open = exercise("mooc", "my python course", "hello_world", ExerciseStatus.Open)
+      const manager = new WorkspaceManager(resources, persistForCourse)
+      await manager.setExercises([open])
+      const changed = vi.fn()
+      manager.onDidChangeExercises(changed)
+
+      await manager.setExercises([{ ...open, uri: vscode.Uri.file(open.uri.fsPath) }])
+
+      expect(changed).not.toHaveBeenCalled()
     })
   })
 
