@@ -281,6 +281,19 @@ suite("CoursesTree", function () {
     expect(tree.getParent(children[0] as CoursesTreeItem)).toBe(course)
   })
 
+  test("two mooc exercises sharing a name are two rows", function () {
+    const [course] = show(
+      moocCourse({
+        exercises: [
+          { ...tmcExercise(0, "Exercise"), id: "ex-1" },
+          { ...tmcExercise(0, "Exercise"), id: "ex-2" },
+        ],
+      }),
+    )
+
+    expect(new Set(exercisesOf(course).map((item) => item.id)).size).toBe(2)
+  })
+
   test("a part names its next deadline, and withholds it while its backend is unreachable", function () {
     const course = tmcCourse({
       exercises: [

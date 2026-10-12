@@ -1,10 +1,11 @@
 import * as vscode from "vscode"
 
 import type WorkspaceManager from "../../api/workspaceManager"
-import type { BackendKind, ExerciseIdentifier } from "../../shared/shared"
+import type { BackendKind } from "../../shared/shared"
 import {
   backendName,
   CourseIdentifier,
+  ExerciseIdentifier,
   LocalCourseData,
   SOFT_DEADLINE_PENALTY,
 } from "../../shared/shared"
@@ -214,7 +215,8 @@ export class ExerciseTreeItem extends vscode.TreeItem {
     context: RenderContext,
   ) {
     super(exercise.name, vscode.TreeItemCollapsibleState.None)
-    this.id = `${parent.id}/${exercise.slug}`
+    // A mooc exercise's name need not be unique in its course; its id is.
+    this.id = `${parent.id}/${ExerciseIdentifier.key(exercise.id)}`
     this.exerciseId = exercise.id
     this.exerciseUri = exercise.onDisk?.uri
     this.status = exercise.status
