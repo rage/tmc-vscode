@@ -4,7 +4,7 @@ import type * as vscode from "vscode"
 
 import type Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
-import { v0 } from "../../storage/data"
+import { v0, v3 } from "../../storage/data"
 import migrateExerciseDataToLatest from "../../storage/migration/exerciseData"
 import { Logger, LogLevel } from "../../utilities"
 import * as exerciseData from "../fixtures/exerciseData"
@@ -37,6 +37,7 @@ suite("Exercise data migration", function () {
       const migrated = await migrateExerciseDataToLatest(memento, dialogMock, tmcMock)
       expect(migrated.data).toBeUndefined()
       expect(migrated.supersededKeys).toEqual([])
+      expect(dialogMock.progressNotification).not.toHaveBeenCalled()
     })
 
     test("should succeed with version 0.1.0 data", async function () {
@@ -44,7 +45,8 @@ suite("Exercise data migration", function () {
       await memento.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_1_0(dataPath))
       const migrated = await migrateExerciseDataToLatest(memento, dialogMock, tmcMock)
       expect(migrated.data).toBeUndefined()
-      expect(migrated.supersededKeys).toEqual([v0.EXERCISE_DATA_KEY])
+      expect(migrated.supersededKeys).toContain(v0.EXERCISE_DATA_KEY)
+      expect(migrated.destinationKey).toBeUndefined()
     })
 
     test("should succeed with version 0.2.0 data", async function () {
@@ -52,7 +54,8 @@ suite("Exercise data migration", function () {
       await memento.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_2_0(dataPath))
       const migrated = await migrateExerciseDataToLatest(memento, dialogMock, tmcMock)
       expect(migrated.data).toBeUndefined()
-      expect(migrated.supersededKeys).toEqual([v0.EXERCISE_DATA_KEY])
+      expect(migrated.supersededKeys).toContain(v0.EXERCISE_DATA_KEY)
+      expect(migrated.destinationKey).toBeUndefined()
     })
 
     test("should succeed with version 0.3.0 data", async function () {
@@ -61,7 +64,8 @@ suite("Exercise data migration", function () {
       await memento.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_3_0)
       const migrated = await migrateExerciseDataToLatest(memento, dialogMock, tmcMock)
       expect(migrated.data).toBeUndefined()
-      expect(migrated.supersededKeys).toEqual([v0.EXERCISE_DATA_KEY])
+      expect(migrated.supersededKeys).toContain(v0.EXERCISE_DATA_KEY)
+      expect(migrated.destinationKey).toBeUndefined()
     })
 
     test("should succeed with version 0.9.0 data", async function () {
@@ -70,7 +74,8 @@ suite("Exercise data migration", function () {
       await memento.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_9_0)
       const migrated = await migrateExerciseDataToLatest(memento, dialogMock, tmcMock)
       expect(migrated.data).toBeUndefined()
-      expect(migrated.supersededKeys).toEqual([v0.EXERCISE_DATA_KEY])
+      expect(migrated.supersededKeys).toContain(v0.EXERCISE_DATA_KEY)
+      expect(migrated.destinationKey).toBeUndefined()
     })
   })
 
@@ -96,18 +101,37 @@ suite("Exercise data migration", function () {
   })
 
   suite("with a partial migration", function () {
-    test("keeps the v0 data when langs refuses an exercise", async function () {
+    test("keeps the refused exercises, with their paths, for a retry", async function () {
       const dataPath = makeTmpDirs(virtualFileSystem)
-      await memento.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_1_0(dataPath))
+      await memento.update(v0.EXTENSION_SETTINGS_KEY, { dataPath })
+      await memento.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_3_0)
       vi.mocked(tmcMock.migrateExercise)
         .mockResolvedValueOnce(Ok.EMPTY)
         .mockResolvedValueOnce(Err(new Error("langs refused the exercise")))
 
       const migrated = await migrateExerciseDataToLatest(memento, dialogMock, tmcMock)
 
-      // The v0 record is the only pointer left to the files langs did not take.
-      expect(migrated.supersededKeys).toEqual([])
+      expect(migrated.destinationKey).toBe(v3.PENDING_EXERCISE_MIGRATION_KEY)
+      expect(migrated.data).toHaveLength(1)
+      expect(migrated.data?.[0]?.path?.startsWith(dataPath)).toBe(true)
+      expect(migrated.supersededKeys).toContain(v0.EXERCISE_DATA_KEY)
       expect(dialogMock.warningNotification).toHaveBeenCalled()
+    })
+
+    test("retries without dialogs and without rewriting closed exercises", async function () {
+      const dataPath = makeTmpDirs(virtualFileSystem)
+      const refused = exerciseData
+        .v0_1_0(dataPath)
+        .map((exercise) => ({ ...exercise, isOpen: false }))
+      await memento.update(v3.PENDING_EXERCISE_MIGRATION_KEY, refused)
+
+      const migrated = await migrateExerciseDataToLatest(memento, dialogMock, tmcMock)
+
+      expect(migrated.data).toBeUndefined()
+      expect(migrated.supersededKeys).toContain(v3.PENDING_EXERCISE_MIGRATION_KEY)
+      expect(dialogMock.progressNotification).not.toHaveBeenCalled()
+      expect(dialogMock.warningNotification).not.toHaveBeenCalled()
+      expect(tmcMock.setSetting).not.toHaveBeenCalled()
     })
 
     // Activation awaits the migration, and a notification's promise settles only when the

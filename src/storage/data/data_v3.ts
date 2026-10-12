@@ -5,6 +5,8 @@ import * as v2 from "./data_v2"
 // global storage keys
 export const USER_DATA_KEY = "user-data-v3"
 export import SESSION_STATE_KEY = v2.SESSION_STATE_KEY
+/** Pre-2.0 exercises langs refused to take over, in their v0 shape with `path` resolved. */
+export const PENDING_EXERCISE_MIGRATION_KEY = "pending-exercise-migration-v3"
 
 export type LogLevel = v2.LogLevel
 export type SessionState = v2.SessionState

@@ -1,6 +1,8 @@
 import * as path from "path"
 
 import * as fs from "fs-extra"
+import { Err, Ok } from "ts-results"
+import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type Dialog from "../../api/dialog"
@@ -21,6 +23,22 @@ import { makeTmpDirs } from "../utils"
 
 /** Spelled out rather than imported: no storage version declares it any more. */
 const RETIRED_EXTENSION_SETTINGS_KEY = "extension-settings-v3"
+
+const moocCourse: MoocLocalCourseData = {
+  id: "8bd5a0d6-8ba0-4b2a-a2e0-0dd1ba7f2af5",
+  name: "mooc-course",
+  title: "A courses.mooc.fi course",
+  description: null,
+  organization: "mooc",
+  exercises: [],
+  availablePoints: 0,
+  awardedPoints: 0,
+  perhapsExamMode: false,
+  newExercises: [],
+  notifyAfter: 0,
+  disabled: false,
+  materialUrl: null,
+}
 
 /** Puts the window in `<dataPath>/TMC workspace/<name>`, which is where v0 kept it. */
 function openLegacyWorkspace(dataPath: string, name: string): void {
@@ -55,6 +73,20 @@ suite("Extension data migration", function () {
     ;[tmcMock] = createTMCMock()
   })
 
+  /** Runs a migration whose exercise hand-over Langs refuses, and checks what it leaves behind. */
+  async function expectRefusedExercisesPending(): Promise<void> {
+    const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+    expect(result.kind).toBe("done")
+    expect(storage.getUserData()?.courses.length).toBeGreaterThan(0)
+    expect(context.globalState.get(v0.USER_DATA_KEY)).toBeUndefined()
+    expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toBeUndefined()
+    const pending = context.globalState.get<v0.LocalExerciseData[]>(
+      v3.PENDING_EXERCISE_MIGRATION_KEY,
+    )
+    expect(pending?.length).toBeGreaterThan(0)
+    pending?.forEach((exercise) => expect(fs.existsSync(exercise.path ?? "")).toBe(true))
+  }
+
   test("should succeed without any data", async function () {
     const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
     expect(result.kind).toBe("done")
@@ -72,15 +104,11 @@ suite("Extension data migration", function () {
       expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toBeUndefined()
     })
 
-    test("should not change anything if Langs fails", async function () {
+    test("keeps the exercises Langs refuses for a retry, and migrates the rest", async function () {
       ;[tmcMock] = createFailingTMCMock()
       await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_1_0(root))
       await context.globalState.update(v0.USER_DATA_KEY, userData.v0_1_0)
-      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
-      expect(result.kind).toBe("failed")
-      expect(storage.getUserData()).toBeUndefined()
-      expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toEqual(exerciseData.v0_1_0(root))
-      expect(context.globalState.get(v0.USER_DATA_KEY)).toEqual(userData.v0_1_0)
+      await expectRefusedExercisesPending()
     })
   })
 
@@ -94,15 +122,11 @@ suite("Extension data migration", function () {
       expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toBeUndefined()
     })
 
-    test("should not modify data if Langs fails", async function () {
+    test("keeps the exercises Langs refuses for a retry, and migrates the rest", async function () {
       ;[tmcMock] = createFailingTMCMock()
       await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_2_0(root))
       await context.globalState.update(v0.USER_DATA_KEY, userData.v0_2_0)
-      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
-      expect(result.kind).toBe("failed")
-      expect(storage.getUserData()).toBeUndefined()
-      expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toEqual(exerciseData.v0_2_0(root))
-      expect(context.globalState.get(v0.USER_DATA_KEY)).toEqual(userData.v0_2_0)
+      await expectRefusedExercisesPending()
     })
   })
 
@@ -119,19 +143,12 @@ suite("Extension data migration", function () {
       expect(context.globalState.get(v0.USER_DATA_KEY)).toBeUndefined()
     })
 
-    test("should not modify data if Langs fails", async function () {
+    test("keeps the exercises Langs refuses for a retry, and migrates the rest", async function () {
       ;[tmcMock] = createFailingTMCMock()
       await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_3_0)
       await context.globalState.update(v0.USER_DATA_KEY, userData.v0_3_0)
       await context.globalState.update(v0.EXTENSION_SETTINGS_KEY, extensionSettings.v0_3_0(root))
-      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
-      expect(result.kind).toBe("failed")
-      expect(storage.getUserData()).toBeUndefined()
-      expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toEqual(exerciseData.v0_3_0)
-      expect(context.globalState.get(v0.EXTENSION_SETTINGS_KEY)).toEqual(
-        extensionSettings.v0_3_0(root),
-      )
-      expect(context.globalState.get(v0.USER_DATA_KEY)).toEqual(userData.v0_3_0)
+      await expectRefusedExercisesPending()
     })
   })
 
@@ -148,19 +165,12 @@ suite("Extension data migration", function () {
       expect(context.globalState.get(v0.USER_DATA_KEY)).toBeUndefined()
     })
 
-    test("should not modify data if Langs fails", async function () {
+    test("keeps the exercises Langs refuses for a retry, and migrates the rest", async function () {
       ;[tmcMock] = createFailingTMCMock()
       await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_9_0)
       await context.globalState.update(v0.USER_DATA_KEY, userData.v0_9_0)
       await context.globalState.update(v0.EXTENSION_SETTINGS_KEY, extensionSettings.v0_9_0(root))
-      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
-      expect(result.kind).toBe("failed")
-      expect(storage.getUserData()).toBeUndefined()
-      expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toEqual(exerciseData.v0_9_0)
-      expect(context.globalState.get(v0.EXTENSION_SETTINGS_KEY)).toEqual(
-        extensionSettings.v0_9_0(root),
-      )
-      expect(context.globalState.get(v0.USER_DATA_KEY)).toEqual(userData.v0_9_0)
+      await expectRefusedExercisesPending()
     })
   })
 
@@ -187,6 +197,7 @@ suite("Extension data migration", function () {
       v1.EXTENSION_SETTINGS_KEY,
       v1.USER_DATA_KEY,
       v3.SESSION_STATE_KEY,
+      v3.PENDING_EXERCISE_MIGRATION_KEY,
       RETIRED_EXTENSION_SETTINGS_KEY,
       v3.USER_DATA_KEY,
     ]
@@ -247,27 +258,52 @@ suite("Extension data migration", function () {
 
       // Everything the user does between two activations: enrol on a mooc
       // course, which the v1 snapshot has no field for, and drop a tmc one.
-      const moocCourse: MoocLocalCourseData = {
-        id: "8bd5a0d6-8ba0-4b2a-a2e0-0dd1ba7f2af5",
-        name: "mooc-course",
-        title: "A courses.mooc.fi course",
-        description: null,
-        organization: "mooc",
-        exercises: [],
-        availablePoints: 0,
-        awardedPoints: 0,
-        perhapsExamMode: false,
-        newExercises: [],
-        notifyAfter: 0,
-        disabled: false,
-        materialUrl: null,
-      }
       await storage.updateUserData({ courses: [], mooc_courses: [moocCourse] })
 
       expect((await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)).kind).toBe(
         "done",
       )
       expect(storage.getUserData()).toEqual({ courses: [], mooc_courses: [moocCourse] })
+    })
+  })
+
+  suite("a pre-2.0 exercise migration that does not finish", function () {
+    beforeEach(async function () {
+      await context.globalState.update(v0.EXERCISE_DATA_KEY, exerciseData.v0_1_0(root))
+      await context.globalState.update(v0.USER_DATA_KEY, userData.v0_1_0)
+    })
+
+    test("does not replay the old courses over ones added before it is retried", async function () {
+      vi.mocked(tmcMock.migrateExercise).mockRejectedValueOnce(new Error("langs crashed"))
+      const first = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      expect(first.kind).toBe("failed")
+      expect(context.globalState.get(v0.USER_DATA_KEY)).toBeUndefined()
+
+      const migratedCourses = storage.getUserData()?.courses ?? []
+      expect(migratedCourses.length).toBeGreaterThan(0)
+      await storage.updateUserData({ courses: [], mooc_courses: [moocCourse] })
+
+      const second = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      expect(second.kind).toBe("done")
+      expect(storage.getUserData()).toEqual({ courses: [], mooc_courses: [moocCourse] })
+      expect(context.globalState.get(v0.EXERCISE_DATA_KEY)).toBeUndefined()
+    })
+
+    test("retries refused exercises quietly and forgets them once taken", async function () {
+      vi.mocked(tmcMock.migrateExercise).mockResolvedValue(Err(new Error("refused")))
+      await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      expect(context.globalState.get(v3.PENDING_EXERCISE_MIGRATION_KEY)).toBeDefined()
+      vi.mocked(dialogMock.progressNotification).mockClear()
+      vi.mocked(dialogMock.warningNotification).mockClear()
+
+      await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      expect(context.globalState.get(v3.PENDING_EXERCISE_MIGRATION_KEY)).toBeDefined()
+      expect(dialogMock.progressNotification).not.toHaveBeenCalled()
+      expect(dialogMock.warningNotification).not.toHaveBeenCalled()
+
+      vi.mocked(tmcMock.migrateExercise).mockResolvedValue(Ok.EMPTY)
+      await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+      expect(context.globalState.get(v3.PENDING_EXERCISE_MIGRATION_KEY)).toBeUndefined()
     })
   })
 
