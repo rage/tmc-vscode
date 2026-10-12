@@ -1,9 +1,11 @@
-Mock backends for testing. One Express app (`index.ts`, port 4001) hosts both:
+Mock backends for testing. One Express app (`index.ts`, `127.0.0.1:4001`) hosts both:
 
 - **Legacy TMC mock** (`tmc.mooc.fi`, REST API v8) — under `controllers/v8.ts`,
   mounted by `registerV8Routes`. Start it with `pnpm run backend:start`; point
-  langs at it with `TMC_LANGS_TMC_ROOT_URL`. Bearer auth is required by default;
-  opt out with `TMC_MOCK_REQUIRE_AUTH=0` or `requireAuth: false`. `/tmc-mock/reset`
+  langs at it with `TMC_LANGS_TMC_ROOT_URL`. Bearer auth is required by default
+  (opt out in-process with `requireAuth: false`): it takes the legacy token and,
+  as tmc-server does with `ACCEPT_COURSES_MOOC_FI_TOKENS`, any token the mooc mock
+  holds with the `exercise-services` scope. `/tmc-mock/reset`
   clears its submissions. `controllers/v8.test.ts` validates every response
   against `shared/bindings.schema.json`, the contract the CLI actually parses.
 
@@ -42,7 +44,8 @@ contract (a drift is a failing test). Highlights:
   `Authorization: Bearer <token>` and answers the real backend's 401
   `unauthorized` / 403 `forbidden` envelopes without one. `mooc/oauth.ts` mocks
   the device-flow endpoints the token is minted by. Pass `requireAuth: false`
-  in-process, or run the server with `MOOC_MOCK_REQUIRE_AUTH=0`, to opt out.
+  in-process to opt out. The tokens a tier can seed without the device flow are
+  in `mockSession.ts`.
 
 `conformance.test.ts` (run with `pnpm --filter tmc-vscode-mock-backend run test`)
 exercises the routing, the request/response validation, the archive route, and a
@@ -50,8 +53,8 @@ fault-injection case proving the response-validation guard fails loudly.
 
 ## Testing the mooc path end to end
 
-The mooc subcommands are newer than the released CLI, so build the CLI locally
-first (see `docs/development.md` → "Using a locally-built tmc-langs CLI"):
+To run against an unreleased CLI, build it into `backend/cli` first (see
+`docs/development.md` → "Using a locally-built tmc-langs CLI"):
 
 ```
 bin/useLocalLangs.bash        # builds ../tmc-langs-rust into backend/cli
@@ -61,8 +64,7 @@ Both tiers below also set `TMC_LANGS_MOOC_TRUST_LOCALHOST=1`: without it the CLI
 attaches no bearer to a localhost URL, so every authenticated mooc call 401s.
 
 - **Integration** (`src/test-integration/tmc_langs_cli.spec.ts`): drives the local
-  CLI straight at this mock; the mooc cases are gated behind the CLI version so
-  CI's released CLI skips them. `pnpm run test:integration`.
+  CLI straight at this mock. `pnpm run test:integration`.
 - **Playwright E2E** (`playwright/tests/add-new-mooc-course.spec.ts`): both mock
   backends run in this one process (`pnpm run backend:start`), and
   `playwright/fixtures.ts` sets `TMC_LANGS_MOOC_ROOT_URL` at it. Run with

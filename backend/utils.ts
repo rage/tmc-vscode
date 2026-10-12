@@ -4,15 +4,15 @@ import type { Response } from "express"
 
 import type {
   Course,
+  CourseData,
   CourseDetails,
   CourseExercise,
-  CourseSettings,
   Exercise,
   ExerciseDetails,
-  OldSubmission,
   Organization,
-  SubmissionResultReport,
-} from "./tmcApiTypes"
+  Submission,
+  SubmissionFinished,
+} from "../shared/generated/langs"
 
 interface CreateOrganizationParams {
   information: string
@@ -35,7 +35,7 @@ interface CreateCourseParams {
   title: string
 }
 
-export type BackendCourse = Omit<Course & CourseDetails["course"] & CourseSettings, "exercises">
+export type BackendCourse = Omit<Course & CourseDetails & CourseData, "exercises">
 
 const createCourse = (params: CreateCourseParams): BackendCourse => ({
   cache_version: null,
@@ -139,9 +139,7 @@ interface CreateFinishedSubmissionParams {
   testCases: { name: string; successful: boolean }[]
 }
 
-const createFinishedSubmission = (
-  params: CreateFinishedSubmissionParams,
-): SubmissionResultReport => {
+const createFinishedSubmission = (params: CreateFinishedSubmissionParams): SubmissionFinished => {
   const allPassed = params.testCases.every((x) => x.successful)
 
   return {
@@ -192,7 +190,7 @@ export const passingExerciseId = 1
 
 export const failingExerciseId = 2
 
-const createOldSubmission = (params: CreateOldSubmissionParams): OldSubmission => {
+const createOldSubmission = (params: CreateOldSubmissionParams): Submission => {
   const timestamp = params.timestamp.toISOString()
   const points = params.points ?? ""
   return {

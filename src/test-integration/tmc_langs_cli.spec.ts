@@ -10,13 +10,22 @@ import { first } from "lodash"
 import kill from "tree-kill"
 import type { Result } from "ts-results"
 
-import { MOCK_TMC_ACCESS_TOKEN } from "../../backend/controllers/accessToken"
+import {
+  CLIENT_CONFIG_DIR_NAME,
+  MOCK_BACKEND_URL,
+  MOCK_INVALID_REFRESH_TOKEN,
+  MOCK_SEEDED_ACCESS_TOKEN,
+  MOCK_SEEDED_REFRESH_TOKEN,
+  mockUserCode,
+  tmcCredentials,
+} from "../../backend/mockSession"
 import { TMC_ARCHIVE_MIME } from "../../backend/mooc/fixtures"
 import Langs from "../api/langs"
-import { CLIENT_NAME, MINIMUM_SUBMISSION_INTERVAL, TMC_LANGS_VERSION } from "../config/constants"
+import { CLIENT_NAME, TMC_LANGS_VERSION } from "../config/constants"
 import {
   AuthorizationError,
   BottleneckError,
+  DeviceLoginExpiredError,
   InvalidTokenError,
   NotFoundError,
   RuntimeError,
@@ -33,18 +42,9 @@ const ARTIFACT_ROOT = path.join(PROJECT_ROOT, "test-artifacts")
 const BACKEND_FOLDER = path.join(PROJECT_ROOT, "backend")
 const CLI_PATH = path.join(BACKEND_FOLDER, "cli")
 const CLI_FILE = path.join(CLI_PATH, getLangsCLIForPlatform(getPlatform(), TMC_LANGS_VERSION))
-const FEEDBACK_URL = "http://localhost:4001/feedback"
-
-// Config dir name must follow conventions mandated by TMC-langs.
-const CLIENT_CONFIG_DIR_NAME = `tmc-${CLIENT_NAME}`
+const FEEDBACK_URL = `${MOCK_BACKEND_URL}/feedback`
 
 const isString = (object: unknown): object is string => typeof object === "string"
-
-// Well-known tokens the mooc mock honours without a device-flow round trip, so a
-// suite can seed the credentials file directly (backend/mooc/oauth.ts).
-const SEEDED_ACCESS_TOKEN = "mock-seeded-access-token"
-const SEEDED_REFRESH_TOKEN = "mock-seeded-refresh-token"
-const INVALID_REFRESH_TOKEN = "mock-invalid-refresh-token"
 
 suite("tmc langs cli spec", function () {
   let server: cp.ChildProcess | undefined
@@ -62,7 +62,7 @@ suite("tmc langs cli spec", function () {
     // backend process (backend/mooc). This overrides the compiled
     // MOOC_BACKEND_URL define; _spawnLangsProcess reads it from the env and
     // passes it to the CLI child. Set before any Langs is constructed.
-    process.env.TMC_LANGS_MOOC_ROOT_URL = "http://localhost:4001"
+    process.env.TMC_LANGS_MOOC_ROOT_URL = MOCK_BACKEND_URL
     // The CLI only attaches a bearer to a localhost backend when localhost is
     // trusted, and both paths need one: the mooc mock rejects an anonymous
     // request outright, and the tmc path authenticates with the same mooc
@@ -91,6 +91,10 @@ suite("tmc langs cli spec", function () {
     if (this.currentTest?.state === "failed") {
       anyTestFailed = true
     }
+  })
+
+  test("the shared client config dir name is the one langs derives from CLIENT_NAME", function () {
+    expect(CLIENT_CONFIG_DIR_NAME).to.equal(`tmc-${CLIENT_NAME}`)
   })
 
   // A user with a pre-existing tmc token in credentials.json: still supported,
@@ -419,6 +423,25 @@ suite("tmc langs cli spec", function () {
       expect(await unwrapResult(tmc.isMoocAuthenticated())).to.be.true
     })
 
+    // What a new user has: the only login left issues a mooc credential, and
+    // tmc-server accepts it (ACCEPT_COURSES_MOOC_FI_TOKENS), as the mock does.
+    test("a stored mooc credential alone drives tmc commands", async function () {
+      writeMoocCredentials(configDir, { accessToken: MOCK_SEEDED_ACCESS_TOKEN })
+
+      const courses = await unwrapResult(tmc.getCourses("test"))
+      expect(courses.some((x) => x.name === "python-course")).to.be.true
+      const data = await unwrapResult(tmc.getTmcCourseData(1))
+      expect(data.details.name).to.be.equal("python-course")
+      const { tmc: downloads, tmcError } = await tmc.downloadExercises(
+        [ExerciseIdentifier.from(1)],
+        true,
+        () => {},
+      )
+      tmcError && expect.fail(`Expected the download to succeed: ${tmcError.message}`)
+      expect(downloads.downloaded.length).to.be.equal(1)
+      expect(fs.existsSync(path.join(configDir, "credentials.json"))).to.be.false
+    }).timeout(20000)
+
     test("tmc logout leaves the mooc credentials in place", async function () {
       writeCredentials(configDir)
       writeMoocCredentials(configDir)
@@ -549,7 +572,7 @@ suite("tmc langs cli spec", function () {
       // because suiteSetup trusts it -- so every case here goes through the same
       // authenticated path a real session does.
       clearMoocCredentials(configDir)
-      writeMoocCredentials(configDir, { accessToken: SEEDED_ACCESS_TOKEN })
+      writeMoocCredentials(configDir, { accessToken: MOCK_SEEDED_ACCESS_TOKEN })
       const projectsDir = path.join(testDir, "tmcdata")
       deleteSync(projectsDir, { force: true })
       setupProjectsDir(configDir, projectsDir)
@@ -612,8 +635,8 @@ suite("tmc langs cli spec", function () {
       const newest = first(submissions)
       expect(newest, "the submit must be listed").to.not.be.undefined
       const download = await fetch(
-        `http://localhost:4001/api/v0/exercise-services/client/submissions/${newest!.id}/download`,
-        { headers: { authorization: `Bearer ${SEEDED_ACCESS_TOKEN}` } },
+        `${MOCK_BACKEND_URL}/api/v0/exercise-services/client/submissions/${newest!.id}/download`,
+        { headers: { authorization: `Bearer ${MOCK_SEEDED_ACCESS_TOKEN}` } },
       )
       expect(download.status).to.equal(200)
       const body = (await download.json()) as { data_files: { name: string; mime: string }[] }
@@ -638,7 +661,7 @@ suite("tmc langs cli spec", function () {
       // timing -- the two calls are milliseconds apart -- so the mock is asked
       // to reap the next upload. Without the retry this submit fails with
       // `upload-expired`; with it, the submit succeeds and grades normally.
-      const armed = await fetch("http://localhost:4001/mooc-mock/expire-next-upload", {
+      const armed = await fetch(`${MOCK_BACKEND_URL}/mooc-mock/expire-next-upload`, {
         method: "POST",
       })
       expect(armed.status).to.be.equal(204)
@@ -749,16 +772,15 @@ suite("tmc langs cli spec", function () {
 
       // Two submissions of the same exercise. The CLI compresses the on-disk
       // directory into the submitted archive, so each submission captures the
-      // student file content at submit time. Consecutive submits within
-      // MINIMUM_SUBMISSION_INTERVAL are throttled by design (the TMC suite
-      // asserts the BottleneckError), so wait the interval out in between.
+      // student file content at submit time. Langs throttles consecutive submits
+      // per instance, so the second goes through a fresh one.
       fs.writeFileSync(studentFile, olderContent)
       ;(await submitMoocAndWaitForGrading(tmc, PASSING_EXERCISE_ID, exercisePath)).unwrap()
-      await new Promise((resolve) => {
-        setTimeout(resolve, MINIMUM_SUBMISSION_INTERVAL + 100)
-      })
       fs.writeFileSync(studentFile, newerContent)
-      ;(await submitMoocAndWaitForGrading(tmc, PASSING_EXERCISE_ID, exercisePath)).unwrap()
+      const secondSubmitter = new Langs(CLI_FILE, CLIENT_NAME, "test", { cliConfigDir: testDir })
+      ;(
+        await submitMoocAndWaitForGrading(secondSubmitter, PASSING_EXERCISE_ID, exercisePath)
+      ).unwrap()
 
       const after = (await tmc.getMoocOldSubmissions(PASSING_EXERCISE_ID)).unwrap()
       expect(after.length).to.be.equal(before.length + 2)
@@ -806,7 +828,7 @@ suite("tmc langs cli spec", function () {
       const exercisePath = (entry as { "exercise-path": string })["exercise-path"]
       const studentFile = path.join(exercisePath, "src", "passing_exercise.py")
 
-      const seedResponse = await fetch("http://localhost:4001/mooc-mock/seed-fileless-submission", {
+      const seedResponse = await fetch(`${MOCK_BACKEND_URL}/mooc-mock/seed-fileless-submission`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ exercise_id: PASSING_EXERCISE_ID }),
@@ -847,21 +869,57 @@ suite("tmc langs cli spec", function () {
       expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
     })
 
-    test("authenticateMooc runs the device flow and stores credentials", async function () {
-      clearMoocCredentials(configDir)
-      // Poll fast; the mock only approves the pending grant after ~5s of
-      // wall-clock time (backend/mooc/oauth.ts).
-      process.env.TMC_LANGS_MOOC_DEVICE_POLL_INTERVAL_MS = "50"
-      let deviceInfo: { user_code: string; verification_uri: string } | undefined
-      const { result } = tmc.authenticateMooc((info) => {
-        deviceInfo = info
+    suite("device flow", function () {
+      let savedClientId: string | undefined
+
+      setup(async function () {
+        clearMoocCredentials(configDir)
+        // Numbers the user codes from the first again.
+        const reset = await fetch(`${MOCK_BACKEND_URL}/mooc-mock/reset`, { method: "POST" })
+        expect(reset.status).to.equal(204)
+        // Poll fast; the mock only approves the pending grant after ~5s of
+        // wall-clock time (backend/mooc/oauth.ts).
+        process.env.TMC_LANGS_MOOC_DEVICE_POLL_INTERVAL_MS = "50"
+        savedClientId = process.env.TMC_LANGS_MOOC_CLIENT_ID
       })
-      const res = await result
-      expect(res.ok, res.err ? `login failed: ${res.val.message}` : "").to.be.true
-      // the CLI emitted the device code before blocking on the poll loop
-      expect(deviceInfo?.user_code).to.equal("WXYZ-1234")
-      expect(deviceInfo?.verification_uri).to.contain("/oauth_device")
-      expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+
+      teardown(function () {
+        if (savedClientId === undefined) {
+          delete process.env.TMC_LANGS_MOOC_CLIENT_ID
+        } else {
+          process.env.TMC_LANGS_MOOC_CLIENT_ID = savedClientId
+        }
+      })
+
+      test("authenticateMooc runs the device flow and stores credentials", async function () {
+        let deviceInfo: { user_code: string; verification_uri: string } | undefined
+        const { result } = tmc.authenticateMooc((info) => {
+          deviceInfo = info
+        })
+        const res = await result
+        expect(res.ok, res.err ? `login failed: ${res.val.message}` : "").to.be.true
+        // the CLI emitted the device code before blocking on the poll loop
+        expect(deviceInfo?.user_code).to.equal(mockUserCode(1))
+        expect(deviceInfo?.verification_uri).to.contain("/oauth_device")
+        expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+      })
+
+      test("a device code that expires before approval fails the login", async function () {
+        process.env.TMC_LANGS_MOOC_CLIENT_ID = "mooc-mock-expired"
+        const res = await tmc.authenticateMooc(() => {}).result
+        expect(res.val).to.be.instanceOf(DeviceLoginExpiredError)
+        expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
+      })
+
+      // The mock answers slow_down until a full interval has passed, whatever the
+      // poll rate, and approves only after two.
+      test("a login told to slow down still completes", async function () {
+        this.timeout(40000)
+        process.env.TMC_LANGS_MOOC_CLIENT_ID = "mooc-mock-slowdown"
+        const res = await tmc.authenticateMooc(() => {}).result
+        expect(res.ok, res.err ? `login failed: ${res.val.message}` : "").to.be.true
+        expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
+      })
     })
   })
 
@@ -882,11 +940,7 @@ suite("tmc langs cli spec", function () {
 
     suiteSetup(async function () {
       this.timeout(30000)
-      authServer = await startServer({
-        PORT: String(AUTH_PORT),
-        MOOC_MOCK_REQUIRE_AUTH: "1",
-        MOOC_MOCK_BASE_URL: AUTH_BASE,
-      })
+      authServer = await startServer({ PORT: String(AUTH_PORT) })
     })
 
     setup(async function () {
@@ -898,7 +952,8 @@ suite("tmc langs cli spec", function () {
       process.env.TMC_LANGS_MOOC_TRUST_LOCALHOST = "1"
       // Cases below expire tokens on the server, so restore the seeded ones
       // rather than leaving the suite order-dependent.
-      await fetch(`${AUTH_BASE}/mooc-mock/reset`, { method: "POST" })
+      const reset = await fetch(`${AUTH_BASE}/mooc-mock/reset`, { method: "POST" })
+      expect(reset.status).to.equal(204)
       configDir = path.join(testDir, CLIENT_CONFIG_DIR_NAME)
       clearMoocCredentials(configDir)
       const projectsDir = path.join(testDir, "tmcdata")
@@ -925,7 +980,7 @@ suite("tmc langs cli spec", function () {
     })
 
     test("attaches the bearer to a resource call and succeeds; the mock records it", async function () {
-      writeMoocCredentials(configDir, { accessToken: SEEDED_ACCESS_TOKEN })
+      writeMoocCredentials(configDir, { accessToken: MOCK_SEEDED_ACCESS_TOKEN })
       const courses = (await tmc.getEnrolledMoocCourses()).unwrap()
       expect(courses.length).to.be.greaterThan(0)
       // Cross-process proof the CLI attached the bearer; without
@@ -934,7 +989,7 @@ suite("tmc langs cli spec", function () {
         lastAuthorization: string
         authenticatedRequestCount: number
       }
-      expect(state.lastAuthorization).to.equal(`Bearer ${SEEDED_ACCESS_TOKEN}`)
+      expect(state.lastAuthorization).to.equal(`Bearer ${MOCK_SEEDED_ACCESS_TOKEN}`)
       expect(state.authenticatedRequestCount).to.be.greaterThan(0)
     })
 
@@ -945,7 +1000,7 @@ suite("tmc langs cli spec", function () {
         accessToken: "mock-access-expired",
         // The seeded refresh token the mock always honours; an arbitrary one
         // is rejected now that the grant only accepts tokens it issued.
-        refreshToken: SEEDED_REFRESH_TOKEN,
+        refreshToken: MOCK_SEEDED_REFRESH_TOKEN,
         expiresIn: 3600,
         obtainedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
       })
@@ -959,7 +1014,7 @@ suite("tmc langs cli spec", function () {
       writeMoocCredentials(configDir, {
         accessToken: "mock-access-expired",
         // The sentinel the mock rejects with a permanent `invalid_grant`.
-        refreshToken: INVALID_REFRESH_TOKEN,
+        refreshToken: MOCK_INVALID_REFRESH_TOKEN,
         expiresIn: 3600,
         obtainedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
       })
@@ -984,11 +1039,11 @@ suite("tmc langs cli spec", function () {
 
     test("refreshes and retries when a token it believed valid is rejected", async function () {
       writeMoocCredentials(configDir, {
-        accessToken: SEEDED_ACCESS_TOKEN,
-        refreshToken: SEEDED_REFRESH_TOKEN,
+        accessToken: MOCK_SEEDED_ACCESS_TOKEN,
+        refreshToken: MOCK_SEEDED_REFRESH_TOKEN,
         expiresIn: 3600,
       })
-      await expireAccessToken(SEEDED_ACCESS_TOKEN)
+      await expireAccessToken(MOCK_SEEDED_ACCESS_TOKEN)
       const courses = (await tmc.getEnrolledMoocCourses()).unwrap()
       expect(courses.length).to.be.greaterThan(0)
       expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.true
@@ -996,11 +1051,11 @@ suite("tmc langs cli spec", function () {
 
     test("deletes credentials when the refresh after a rejection also fails", async function () {
       writeMoocCredentials(configDir, {
-        accessToken: SEEDED_ACCESS_TOKEN,
-        refreshToken: INVALID_REFRESH_TOKEN,
+        accessToken: MOCK_SEEDED_ACCESS_TOKEN,
+        refreshToken: MOCK_INVALID_REFRESH_TOKEN,
         expiresIn: 3600,
       })
-      await expireAccessToken(SEEDED_ACCESS_TOKEN)
+      await expireAccessToken(MOCK_SEEDED_ACCESS_TOKEN)
       const res = await tmc.getEnrolledMoocCourses()
       expect(res.err).to.be.true
       expect((await tmc.isMoocAuthenticated()).unwrap()).to.be.false
@@ -1017,15 +1072,15 @@ suite("tmc langs cli spec", function () {
   })
 })
 
-// Defaults to the token the tmc mock issues and accepts; pass another to make
-// the backend reject the session.
-function writeCredentials(configDir: string, accessToken = MOCK_TMC_ACCESS_TOKEN): void {
+// Defaults to the token the tmc mock accepts; pass another to make the backend
+// reject the session.
+function writeCredentials(configDir: string, accessToken?: string): void {
   if (!fs.existsSync(configDir)) {
     fs.mkdirSync(configDir, { recursive: true })
   }
   fs.writeFileSync(
     path.join(configDir, "credentials.json"),
-    JSON.stringify({ access_token: accessToken, token_type: "bearer", scope: "public" }),
+    JSON.stringify(tmcCredentials(accessToken)),
   )
 }
 

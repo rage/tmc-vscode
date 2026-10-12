@@ -5,15 +5,13 @@ import { after, afterEach, before, describe, test } from "node:test"
 import type { Express } from "express"
 
 import {
-  DEVICE_GRANT_TYPE,
   MOCK_INVALID_REFRESH_TOKEN,
-  MOCK_OAUTH_CLIENT_IDS,
   MOCK_SEEDED_ACCESS_TOKEN,
   MOCK_SEEDED_NOSCOPE_ACCESS_TOKEN,
   MOCK_SEEDED_REFRESH_TOKEN,
-  MOCK_USER_CODE,
-  REAL_VSCODE_CLIENT_ID,
-} from "./oauth"
+  mockUserCode,
+} from "../mockSession"
+import { DEVICE_GRANT_TYPE, MOCK_OAUTH_CLIENT_IDS, REAL_VSCODE_CLIENT_ID } from "./oauth"
 import type { MoocMockControls } from "./router"
 import { createMoocApp, moocMockOf } from "./router"
 
@@ -81,11 +79,24 @@ describe("mooc device-flow oauth mock", () => {
     assert.equal(res.status, 200)
     const body = (await res.json()) as Record<string, unknown>
     assert.equal(typeof body.device_code, "string")
-    assert.equal(body.user_code, MOCK_USER_CODE)
+    assert.equal(body.user_code, mockUserCode(1))
     assert.match(String(body.verification_uri), /\/oauth_device$/)
     assert.match(String(body.verification_uri_complete), /user_code=/)
     assert.equal(typeof body.expires_in, "number")
     assert.equal(typeof body.interval, "number")
+  })
+
+  test("each device authorization gets its own device and user code", async () => {
+    const first = (await (await deviceAuthorization(REAL_VSCODE_CLIENT_ID)).json()) as {
+      device_code: string
+      user_code: string
+    }
+    const second = (await (await deviceAuthorization(REAL_VSCODE_CLIENT_ID)).json()) as {
+      device_code: string
+      user_code: string
+    }
+    assert.notEqual(second.device_code, first.device_code)
+    assert.equal(second.user_code, mockUserCode(2))
   })
 
   test("default client: pending before the interval elapses, then an approved token pair", async () => {
@@ -245,7 +256,8 @@ describe("mooc device-flow oauth mock", () => {
 
   test("device_authorization rejects an unregistered client_id with invalid_client", async () => {
     const res = await deviceAuthorization("some-unregistered-client")
-    assert.equal(res.status, 400)
+    assert.equal(res.status, 401)
+    assert.match(res.headers.get("www-authenticate") ?? "", /^Bearer error="invalid_client"/)
     const body = (await res.json()) as { error: string; error_description: string }
     assert.equal(body.error, "invalid_client")
     assert.equal(typeof body.error_description, "string")
@@ -277,13 +289,40 @@ describe("mooc device-flow oauth mock", () => {
     }
   }
 
-  test("the seeded refresh token always mints a fresh pair", async () => {
+  test("the seeded refresh token mints a fresh pair", async () => {
     const res = await refresh(MOCK_SEEDED_REFRESH_TOKEN)
     assert.equal(res.status, 200)
     const token = (await res.json()) as Record<string, unknown>
     assert.equal(typeof token.access_token, "string")
     assert.equal(typeof token.refresh_token, "string")
     assert.equal(token.token_type, "Bearer")
+  })
+
+  test("replaying the seeded refresh token revokes its family, seeded access token included", async () => {
+    assert.equal((await refresh(MOCK_SEEDED_REFRESH_TOKEN)).status, 200)
+    const replay = await refresh(MOCK_SEEDED_REFRESH_TOKEN)
+    assert.equal(replay.status, 400)
+    assert.equal(((await replay.json()) as { error: string }).error, "invalid_grant")
+    assert.equal(mock.introspect(MOCK_SEEDED_ACCESS_TOKEN), undefined)
+  })
+
+  test("the seeded refresh token belongs to the real client only", async () => {
+    const res = await refresh(MOCK_SEEDED_REFRESH_TOKEN, MOCK_OAUTH_CLIENT_IDS.never)
+    assert.equal(res.status, 400)
+    assert.equal(((await res.json()) as { error: string }).error, "invalid_grant")
+  })
+
+  test("a reset restores the seeded refresh token", async () => {
+    await refresh(MOCK_SEEDED_REFRESH_TOKEN)
+    mock.reset()
+    assert.equal((await refresh(MOCK_SEEDED_REFRESH_TOKEN)).status, 200)
+  })
+
+  test("the token endpoint rejects an unregistered client_id with invalid_client", async () => {
+    const res = await refresh(MOCK_SEEDED_REFRESH_TOKEN, "some-unregistered-client")
+    assert.equal(res.status, 401)
+    assert.match(res.headers.get("www-authenticate") ?? "", /^Bearer error="invalid_client"/)
+    assert.equal(((await res.json()) as { error: string }).error, "invalid_client")
   })
 
   test("a refresh token the provider never issued is invalid_grant", async () => {
@@ -356,7 +395,10 @@ describe("mooc device-flow oauth mock", () => {
   })
 
   test("unsupported grant type: 400", async () => {
-    const res = await postForm("/token", { grant_type: "password" })
+    const res = await postForm("/token", {
+      grant_type: "password",
+      client_id: REAL_VSCODE_CLIENT_ID,
+    })
     assert.equal(res.status, 400)
     assert.equal(((await res.json()) as { error: string }).error, "unsupported_grant_type")
   })

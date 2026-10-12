@@ -1,5 +1,7 @@
 import path from "path"
 
+import { MOCK_BACKEND_URL } from "../mockSession"
+
 // Fixture data for the courses.mooc.fi (`/api/v0/exercise-services/client`) mock.
 //
 // Shapes mirror the vendored OpenAPI schemas (Course / ExerciseSlide /
@@ -15,9 +17,7 @@ import path from "path"
 // response validation treats it as free-form. See
 // tmc-langs-rust/crates/tmc-mooc-client/src/exercise.rs.
 
-// Where a mock serves when nothing names an address: the port backend/index.ts
-// listens on.
-export const DEFAULT_MOOC_MOCK_BASE_URL = process.env.MOOC_MOCK_BASE_URL ?? "http://localhost:4001"
+export const DEFAULT_MOOC_MOCK_BASE_URL = MOCK_BACKEND_URL
 
 // Content-Type the CLI sends for a submission archive, and what the tmc exercise
 // service writes for the same archive made in its IFrame. The host echoes the part's

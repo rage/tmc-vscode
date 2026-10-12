@@ -7,9 +7,9 @@ import { after, before, beforeEach, describe, test } from "node:test"
 import { Ajv2020 } from "ajv/dist/2020"
 import type { Express } from "express"
 
+import { MOCK_SEEDED_ACCESS_TOKEN, MOCK_TMC_ACCESS_TOKEN } from "../mockSession"
 import type { BackendExercise } from "../utils"
 import { failingExerciseId, passingExerciseId } from "../utils"
-import { MOCK_TMC_ACCESS_TOKEN } from "./accessToken"
 import type { CourseWithExercises, TmcMockControls } from "./v8"
 import { courseExercises, createTmcApp, organizations, testCourses, tmcMockOf } from "./v8"
 
@@ -416,20 +416,41 @@ describe("legacy TMC mock authentication", () => {
     const res = await fetch(`${mock.base}/tmc-mock/reset`, { method: "POST" })
     assert.equal(res.status, 204)
   })
+})
 
-  test("the token /oauth/token issues is the one the API accepts", async () => {
-    const res = await fetch(`${mock.base}/oauth/token`, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ username: "student", password: "student" }),
-    })
-    assert.equal(res.status, 200)
-    const body = (await res.json()) as { access_token: string }
-    assert.equal(body.access_token, MOCK_TMC_ACCESS_TOKEN)
+describe("legacy TMC mock accepting courses.mooc.fi tokens", () => {
+  const introspected = new Map<string, string[]>([
+    [MOCK_SEEDED_ACCESS_TOKEN, ["exercise-services"]],
+    ["mooc-token-without-scope", []],
+  ])
+  let mock: Mock
 
-    const authenticated = await fetch(`${mock.base}/api/v8/courses/${pythonCourse.id}`, {
-      headers: { authorization: `Bearer ${body.access_token}` },
+  before(async () => {
+    mock = await listen(createTmcApp({ introspectMoocToken: (token) => introspected.get(token) }))
+  })
+
+  after(() => {
+    mock.server.close()
+  })
+
+  const coursesWith = (token: string): Promise<Response> =>
+    fetch(`${mock.base}/api/v8/courses/${pythonCourse.id}`, {
+      headers: { authorization: `Bearer ${token}` },
     })
-    assert.equal(authenticated.status, 200)
+
+  test("a token introspection reports active with the exercise-services scope is accepted", async () => {
+    assert.equal((await coursesWith(MOCK_SEEDED_ACCESS_TOKEN)).status, 200)
+  })
+
+  test("an active token lacking the exercise-services scope is refused", async () => {
+    assert.equal((await coursesWith("mooc-token-without-scope")).status, 401)
+  })
+
+  test("a token introspection does not know is refused", async () => {
+    assert.equal((await coursesWith("unknown-mooc-token")).status, 401)
+  })
+
+  test("the legacy token still works beside it", async () => {
+    assert.equal((await coursesWith(MOCK_TMC_ACCESS_TOKEN)).status, 200)
   })
 })

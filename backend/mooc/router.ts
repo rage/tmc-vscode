@@ -276,6 +276,11 @@ export interface MoocMockControls {
    * real wall time.
    */
   setOAuthClock: (clock?: () => number) => void
+  /**
+   * Scopes `token` carries while this instance honours it, or undefined -- what
+   * tmc-server learns about a courses.mooc.fi token from introspection.
+   */
+  introspect: (token: string) => string[] | undefined
 }
 
 /** Records one submission under both of its id spaces and against its exercise. */
@@ -361,6 +366,7 @@ const createMoocMockControls = (
   },
   rebase: (baseUrl) => void Object.assign(state, indexFixtures(baseUrl)),
   setOAuthClock: (clock) => setDeviceFlowClock(state.oauth, clock),
+  introspect: (token) => scopesForBearer(state.oauth, token),
 })
 
 // ---- response envelope threaded through the postResponseHandler ----
@@ -405,8 +411,7 @@ interface CreateMoocApiOptions {
    * Test-only fault injection: the named operationId returns a spec-violating
    * body, exercising the response-validation guard (which must turn it into a
    * 500). Process-lifetime, unlike the one-shot
-   * {@link MoocMockControls.failNext}; backend/index.ts reads it from
-   * `MOOC_MOCK_FAULT`.
+   * {@link MoocMockControls.failNext}.
    */
   injectResponseFault?: string | undefined
   /**
@@ -421,7 +426,7 @@ interface CreateMoocApiOptions {
    * Bearer validation. When enabled (the default), every resource endpoint
    * requires a valid `Authorization: Bearer <token>`: missing/unknown/expired
    * -> 401 `unauthorized`, recognised but lacking the `exercise-services` scope
-   * -> 403 `forbidden`. Pass `false` for the old auth-less behavior.
+   * -> 403 `forbidden`. Pass `false` to serve without auth.
    */
   requireAuth?: boolean
   /**

@@ -114,20 +114,9 @@ cp "$SOURCE" "$TARGET"
 REV="$(git -C "$SP331_CHECKOUT" rev-parse HEAD 2>/dev/null || echo "unknown")"
 SHA="$(sha256_of "$TARGET")"
 
-# Write the provenance stamp next to the vendored spec. The sha256 is of the
-# vendored spec itself (TARGET), so re-formatting this stamp does not affect it.
-cat > "$STAMP" <<EOF
-{
-  "//": "Provenance stamp for the vendored exercise-services client OpenAPI spec. Written by bin/updateLangsOpenapi.sh; do not hand-edit. CI asserts the vendored spec's sha256 matches the value below via 'bin/updateLangsOpenapi.sh --check-stamp', catching a hand-edit that never went through re-vendoring.",
-  "source_repo": "secret-project-331",
-  "source_rev": "$REV",
-  "source_url": "$SOURCE_URL",
-  "sha256": "$SHA"
-}
-EOF
-
-# Normalise the stamp to the repo's formatting so format:check stays green.
-pnpm exec oxfmt "$STAMP" >/dev/null 2>&1 || true
+write_stamp "$STAMP" \
+  "Provenance stamp for the vendored exercise-services client OpenAPI spec. Written by bin/updateLangsOpenapi.sh; do not hand-edit. CI asserts the vendored spec's sha256 matches the value below via 'bin/updateLangsOpenapi.sh --check-stamp', catching a hand-edit that never went through re-vendoring." \
+  source_repo=secret-project-331 source_rev="$REV" source_url="$SOURCE_URL" sha256="$SHA"
 
 echo "Vendored $SOURCE (secret-project-331 rev $REV) -> $TARGET"
 echo "Wrote provenance stamp $STAMP (sha256 $SHA)"

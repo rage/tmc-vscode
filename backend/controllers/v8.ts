@@ -3,16 +3,18 @@ import express from "express"
 
 import type {
   Course,
+  CourseData,
   CourseDetails,
   CourseExercise,
-  CourseSettings,
   ExerciseDetails,
-  OldSubmission,
+  NewSubmission,
   Organization,
+  Submission,
   SubmissionFeedbackResponse,
-  SubmissionResponse,
-  SubmissionStatusReport,
-} from "../tmcApiTypes"
+  SubmissionFinished,
+} from "../../shared/generated/langs"
+import { MOCK_TMC_ACCESS_TOKEN } from "../mockSession"
+import { EXERCISE_SERVICES_SCOPE } from "../mooc/oauth"
 import type { BackendCourse, ExerciseWithFile } from "../utils"
 import {
   createCourse,
@@ -24,8 +26,6 @@ import {
   passingExerciseId,
   respondWithFile,
 } from "../utils"
-import { MOCK_TMC_ACCESS_TOKEN } from "./accessToken"
-import oauthRouter from "./oauth"
 
 interface DetailsForLangs {
   exercises: {
@@ -125,8 +125,13 @@ const testCasesOf = (exerciseId: number): { name: string; successful: boolean }[
  */
 const SANDBOX_PROGRESSION = ["created", "sending_to_sandbox", "processing_on_sandbox"] as const
 
+/** What a submission's URL answers: tmc-langs models only the finished shape. */
+type SubmissionStatusReport =
+  | { status: "processing"; sandbox_status: (typeof SANDBOX_PROGRESSION)[number] }
+  | SubmissionFinished
+
 interface SubmissionRecord {
-  submission: OldSubmission
+  submission: Submission
   /** Archive served back for this submission's download. */
   file: string
   polls: number
@@ -187,14 +192,20 @@ export const tmcMockOf = (app: Express): TmcMockControls => app.locals.tmcMock a
 const originOf = (req: Request): string => `${req.protocol}://${req.get("host") ?? "localhost"}`
 
 /**
- * Turns away a request that does not carry {@link MOCK_TMC_ACCESS_TOKEN}, as
- * tmc-server's `unauthorize_guest!` turns away a guest, down to the response
- * body the CLI parses. Pass `requireAuth: false` to mount the routes open.
+ * Turns away a request that carries neither {@link MOCK_TMC_ACCESS_TOKEN} nor a
+ * courses.mooc.fi token with the exercise-services scope, as tmc-server's
+ * `unauthorize_guest!` turns away a guest, down to the response body the CLI
+ * parses.
  */
 const requireAccessToken =
-  (requireAuth: boolean): RequestHandler =>
+  (options: RegisterV8RoutesOptions): RequestHandler =>
   (req: Request, res: Response, next: NextFunction) => {
-    if (!requireAuth || req.get("authorization") === `Bearer ${MOCK_TMC_ACCESS_TOKEN}`) {
+    const token = /^Bearer (.+)$/.exec(req.get("authorization") ?? "")?.[1]
+    const isAuthenticated =
+      token === MOCK_TMC_ACCESS_TOKEN ||
+      (token !== undefined &&
+        (options.introspectMoocToken?.(token)?.includes(EXERCISE_SERVICES_SCOPE) ?? false))
+    if (options.requireAuth === false || isAuthenticated) {
       next()
       return
     }
@@ -204,6 +215,12 @@ const requireAccessToken =
 export interface RegisterV8RoutesOptions {
   /** Defaults to true, as tmc-server's own API is not open to a guest. */
   requireAuth?: boolean
+  /**
+   * The courses.mooc.fi introspection tmc-server consults with
+   * `ACCEPT_COURSES_MOOC_FI_TOKENS` on: the scopes an active token carries, or
+   * undefined. Without it only the legacy token is accepted.
+   */
+  introspectMoocToken?: (token: string) => string[] | undefined
 }
 
 /**
@@ -223,11 +240,11 @@ export const registerV8Routes = (
   const controls = createTmcMockControls(state)
   app.locals.tmcMock = controls
 
-  const authenticated = requireAccessToken(options.requireAuth ?? true)
+  const authenticated = requireAccessToken(options)
 
   // getTmcCourseData(0), settings leg
   for (const course of testCourses) {
-    app.get(`/api/v8/courses/${course.id}`, authenticated, (_req, res: Response<CourseSettings>) =>
+    app.get(`/api/v8/courses/${course.id}`, authenticated, (_req, res: Response<CourseData>) =>
       res.json(course),
     )
   }
@@ -255,7 +272,7 @@ export const registerV8Routes = (
     app.get(
       `/api/v8/core/courses/${course.id}`,
       authenticated,
-      (_req, res: Response<CourseDetails>) =>
+      (_req, res: Response<{ course: CourseDetails }>) =>
         res.json({
           course: {
             ...course,
@@ -316,7 +333,7 @@ export const registerV8Routes = (
       app.post(
         `/api/v8/core/exercises/${exercise.id}/submissions`,
         authenticated,
-        (req, res: Response<SubmissionResponse>) => {
+        (req, res: Response<NewSubmission>) => {
           const newSubmissionId = state.nextSubmissionId++
           state.submissions.push({
             submission: createOldSubmission({
@@ -377,7 +394,7 @@ export const registerV8Routes = (
       app.get(
         `/api/v8/exercises/${exercise.id}/users/current/submissions`,
         authenticated,
-        (_req, res: Response<OldSubmission[]>) =>
+        (_req, res: Response<Submission[]>) =>
           res.json(
             state.submissions
               .filter((s) => s.submission.exercise_name === exercise.name)
@@ -422,14 +439,12 @@ export const registerV8Routes = (
 }
 
 /**
- * A standalone app carrying the legacy TMC mock and its OAuth endpoint, for
- * tests that drive it over an ephemeral port instead of the shared mock server.
+ * A standalone app carrying the legacy TMC mock, for tests that drive it over an
+ * ephemeral port instead of the shared mock server.
  */
 export const createTmcApp = (options: RegisterV8RoutesOptions = {}): Express => {
   const app = express()
   app.use(express.json())
-  app.use(express.urlencoded({ extended: false }))
-  app.use("/oauth", oauthRouter)
   registerV8Routes(app, options)
   app.use((_req, res) => {
     res.status(404).json({ error: "Unhandled endpoint" })

@@ -1,5 +1,6 @@
 import { expect } from "@playwright/test"
 
+import { MOCK_BACKEND_URL } from "../../backend/mockSession"
 import { vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
@@ -45,7 +46,7 @@ vsCodeTest(
     })
 
     await vsCodeTest.step("seed a submission carrying no files", async () => {
-      const response = await fetch("http://localhost:4001/mooc-mock/seed-fileless-submission", {
+      const response = await fetch(`${MOCK_BACKEND_URL}/mooc-mock/seed-fileless-submission`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ exercise_id: exerciseId }),
