@@ -169,7 +169,6 @@ suite("toStoredMoocCourse", function () {
       organization: "Old organization",
       newExercises: ["new-exercise"],
       notifyAfter: 1234,
-      disabled: true,
     }
 
     expect(

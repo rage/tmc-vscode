@@ -107,11 +107,8 @@ suite("refreshLocalExercises action", function () {
       exercises: [],
       availablePoints: 0,
       awardedPoints: 0,
-      perhapsExamMode: false,
       newExercises: [],
       notifyAfter: 0,
-      disabled: false,
-      materialUrl: null,
     }
     userDataMockValues.getCourses = [makeMoocKind(moocCourse) as LocalCourseData]
     // A mooc entry is matched to its course by course id, since its on-disk slug

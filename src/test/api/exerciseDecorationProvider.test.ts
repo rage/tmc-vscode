@@ -84,7 +84,6 @@ suite("ExerciseDecoratorProvider class", function () {
       awardedPoints: 1,
       deadline: null,
       passed: true,
-      softDeadline: null,
     }
     const decoration = exerciseDecorationProvider.provideFileDecoration(exerciseHelloWorld.uri)
     expect((decoration as vscode.FileDecoration).badge).toBe("⬤")

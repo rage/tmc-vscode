@@ -24,11 +24,8 @@ const moocCourse: MoocLocalCourseData = {
   exercises: [],
   availablePoints: 0,
   awardedPoints: 0,
-  perhapsExamMode: false,
   newExercises: [],
   notifyAfter: 0,
-  disabled: false,
-  materialUrl: null,
 }
 
 // jest-mock-vscode ships no `env` namespace, and `Resources` reads `env.appName`.

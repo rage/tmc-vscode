@@ -7,8 +7,13 @@
   import Notice from "../components/Notice.svelte"
   import PanelHeader from "../components/PanelHeader.svelte"
   import Spinner from "../components/Spinner.svelte"
-  import type { CourseDetailsPanel, LocalCourseData, WebviewError } from "../shared/shared"
-  import { isSoftDeadlineBinding, SOFT_DEADLINE_PENALTY, unwrap } from "../shared/shared"
+  import type { CourseDetailsPanel, WebviewError } from "../shared/shared"
+  import {
+    isSoftDeadlineBinding,
+    LocalCourseData,
+    SOFT_DEADLINE_PENALTY,
+    unwrap,
+  } from "../shared/shared"
   import { announce, reducedMotion } from "../utilities/a11y.svelte"
   import { addMessageListener, createRequester, HOST_STATE_TIMEOUT_MS } from "../utilities/script"
   import { restoreScroll } from "../utilities/uiState.svelte"
@@ -26,6 +31,9 @@
   // common course fields, independent of the course's backend
   const course = $derived(courseData === undefined ? undefined : unwrap(courseData))
   const hasSoftDeadlines = $derived(course?.exercises.some(isSoftDeadlineBinding) ?? false)
+  const materialUrl = $derived(courseData?.kind === "tmc" ? courseData.data.materialUrl : null)
+  const isExamMode = $derived(courseData !== undefined && LocalCourseData.isExamMode(courseData))
+  const isDisabled = $derived(courseData !== undefined && LocalCourseData.isDisabled(courseData))
 
   const request = createRequester()
 
@@ -115,8 +123,8 @@
       <p>{course.description}</p>
     {/if}
     <Meter label="Points" value={course.awardedPoints} max={course.availablePoints} />
-    {#if course.materialUrl}
-      <p><a href={course.materialUrl}>Course material</a></p>
+    {#if materialUrl}
+      <p><a href={materialUrl}>Course material</a></p>
     {/if}
     {#if hasSoftDeadlines}
       <p class="muted">{SOFT_DEADLINE_PENALTY} A hard deadline cannot be exceeded.</p>
@@ -135,12 +143,12 @@
       dismissLabel="Dismiss refresh error"
     />
   {/if}
-  {#if course.perhapsExamMode}
+  {#if isExamMode}
     <Notice kind="info">
       <p>This is an exam. Exercise submission results will not be shown.</p>
     </Notice>
   {/if}
-  {#if course.disabled}
+  {#if isDisabled}
     <Notice kind="warning">
       <p>This course has been disabled. Exercises cannot be downloaded or submitted.</p>
     </Notice>

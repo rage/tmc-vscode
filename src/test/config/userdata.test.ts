@@ -42,7 +42,6 @@ function moocExercise(
     deadline: null,
     name: "mooc_hello",
     passed: false,
-    softDeadline: null,
     ...overrides,
   }
 }
@@ -86,11 +85,8 @@ function moocCourse(
     ],
     availablePoints: 2,
     awardedPoints: 0,
-    perhapsExamMode: false,
     newExercises: [],
     notifyAfter: 0,
-    disabled: false,
-    materialUrl: null,
     ...overrides,
   }
 }

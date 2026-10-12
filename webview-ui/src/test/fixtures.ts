@@ -69,16 +69,12 @@ export function moocCourseData(
         name: "loops",
         deadline: null,
         passed: false,
-        softDeadline: null,
       },
     ],
     availablePoints: 3,
     awardedPoints: 0,
-    perhapsExamMode: false,
     newExercises: [],
     notifyAfter: 0,
-    disabled: false,
-    materialUrl: null,
     ...overrides,
   }
 }

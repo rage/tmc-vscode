@@ -33,11 +33,8 @@ const moocCourse: MoocLocalCourseData = {
   exercises: [],
   availablePoints: 0,
   awardedPoints: 0,
-  perhapsExamMode: false,
   newExercises: [],
   notifyAfter: 0,
-  disabled: false,
-  materialUrl: null,
 }
 
 /** Puts the window in `<dataPath>/TMC workspace/<name>`, which is where v0 kept it. */

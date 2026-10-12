@@ -69,7 +69,9 @@ export async function updateExercises(
   const now = Date.now()
   const exercisesToUpdate = outdated.filter((x) => {
     const course = userData.getCourse(x.courseId)
-    return course.ok && course.val.data.notifyAfter <= now && !course.val.data.disabled
+    return (
+      course.ok && course.val.data.notifyAfter <= now && !LocalCourseData.isDisabled(course.val)
+    )
   })
 
   if (exercisesToUpdate.length === 0) {

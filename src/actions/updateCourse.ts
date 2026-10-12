@@ -87,7 +87,7 @@ export async function updateCourse(
       return Ok(false)
     }
     if (updateResult.val instanceof ForbiddenError) {
-      if (!courseData.data.disabled) {
+      if (courseData.kind === "tmc" && !courseData.data.disabled) {
         Logger.warn(`Failed to access information for course. Marking as disabled.`)
         courseData.data.disabled = true
         const disableResult = await userData.replaceCourse(courseData)

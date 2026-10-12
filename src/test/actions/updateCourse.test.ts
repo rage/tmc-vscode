@@ -43,11 +43,8 @@ const storedMoocCourse: MoocLocalCourseData = {
   exercises: [],
   availablePoints: 0,
   awardedPoints: 0,
-  perhapsExamMode: false,
   newExercises: [],
   notifyAfter: 0,
-  disabled: false,
-  materialUrl: null,
 }
 
 suite("updateCourse action (mooc)", function () {
@@ -142,14 +139,14 @@ suite("updateCourse action (mooc)", function () {
   })
 
   test("leaves the course alone when the session lacks the exercise scope", async function () {
-    // The mooc backend 403s an underscoped token, which says nothing about the course --
-    // and the mooc arm never clears `disabled`, so persisting it here would be permanent.
+    // The mooc backend 403s an underscoped token, which says nothing about the course.
     tmcMockValues.getMoocCourseData = Err(new InsufficientScopeError("no scope"))
+    const before = structuredClone(userData.getMoocCourses())
 
     const result = await updateCourse(actionContext(), courseId)
 
     expect(result.val).toBe(false)
-    expect(userData.getMoocCourses()[0]?.disabled).toBe(false)
+    expect(userData.getMoocCourses()).toEqual(before)
   })
 
   test("offers a login once per lapse, and again once the session is renewed", async function () {
@@ -177,24 +174,13 @@ suite("updateCourse action (mooc)", function () {
     expect(afterRenewal.dialog.reportError).toHaveBeenCalledTimes(1)
   })
 
-  test("clears a disabled flag an earlier failure persisted", async function () {
-    // `disabled` has no mooc equivalent, so nothing else would ever lift it.
-    await storeCourse({ ...storedMoocCourse, disabled: true })
-
-    const result = await updateCourse(actionContext(), courseId)
-
-    expect(result.val).toBe(true)
-    expect(userData.getMoocCourses()[0]?.disabled).toBe(false)
-  })
-
   test.each([new ConnectionError("down"), new ServerError("503")])(
-    "returns offline (not disabled) on %s",
+    "returns offline on %s",
     async function (error) {
       const warn = vi.spyOn(Logger, "warn").mockImplementation(() => {})
       tmcMockValues.getMoocCourseData = Err(error)
       const result = await updateCourse(actionContext(), courseId)
       expect(result.val).toBe(false)
-      expect(userData.getMoocCourses()[0]?.disabled).toBe(false)
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("courses.mooc.fi"))
     },
   )
