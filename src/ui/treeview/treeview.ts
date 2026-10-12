@@ -154,7 +154,7 @@ export class PartTreeItem extends vscode.TreeItem {
         : vscode.TreeItemCollapsibleState.Collapsed,
     )
     this.courseId = parent.courseId
-    this.id = `${parent.id}/${part.name}`
+    this.id = `${parent.id}/${part.key}`
     const passed = part.exercises.filter((ex) => ex.passed).length
     const nextDeadline =
       part.nextDeadline && !context.isOffline
