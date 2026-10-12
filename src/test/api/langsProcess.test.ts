@@ -500,7 +500,7 @@ suite("Langs CLI process cancellation", function () {
 
   test("killAllProcesses kills an in-flight submit's process tree", async function () {
     const langs = newLangs()
-    const submitting = langs.submitTmcExerciseToPaste(101, "/ex")
+    const submitting = langs.paste(ExerciseIdentifier.from(101), "/ex")
     const langsProcess = lastProcess()
 
     langs.killAllProcesses()
@@ -524,7 +524,7 @@ suite("Langs CLI process cancellation", function () {
 
   test("killAllProcesses leaves a download alone, so it can't be cut in half", async function () {
     const langs = newLangs()
-    const downloading = langs.downloadExercises([ExerciseIdentifier.from(1)], false, () => {})
+    const downloading = langs.downloadTmcExercises([1], false, () => {})
     const langsProcess = lastProcess()
 
     langs.killAllProcesses()
@@ -536,7 +536,7 @@ suite("Langs CLI process cancellation", function () {
 
   test("killAllProcesses stops tracking a process once it settles", async function () {
     const langs = newLangs()
-    const pasting = langs.submitTmcExerciseToPaste(101, "/ex")
+    const pasting = langs.paste(ExerciseIdentifier.from(101), "/ex")
     const langsProcess = lastProcess()
     endProcess(langsProcess)
     await pasting

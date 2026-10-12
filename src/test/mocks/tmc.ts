@@ -3,10 +3,9 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
 import type Langs from "../../api/langs"
+import type { ExerciseDownloads } from "../../api/langs"
 import type {
   CombinedMoocCourseData,
-  DownloadOrUpdateMoocCourseExercisesResult,
-  DownloadOrUpdateTmcCourseExercisesResult,
   LocalExercise,
   LocalTmcExercise,
   MoocCourse,
@@ -26,16 +25,10 @@ import {
 
 const NOT_MOCKED_ERROR = Err(new Error("Method was not mocked."))
 
-export interface DownloadExercisesMockResult {
-  tmc: DownloadOrUpdateTmcCourseExercisesResult
-  mooc: DownloadOrUpdateMoocCourseExercisesResult
-  tmcError?: Error
-  moocError?: Error
-}
-
 export interface TMCMockValues {
   clean: Result<void, Error>
-  downloadExercises: DownloadExercisesMockResult
+  downloadTmcExercises: Result<ExerciseDownloads, Error>
+  downloadMoocExercises: Result<ExerciseDownloads, Error>
   listLocalCourseExercisesPythonCourse: Result<LocalTmcExercise[], Error>
   listLocalExercises: Result<LocalExercise[], Error>
   getSettingClosedExercises: Result<string[], Error>
@@ -51,15 +44,13 @@ export interface TMCMockValues {
   getEnrolledMoocCourses: Result<MoocCourse[], Error>
 }
 
-const emptyDownloadExercisesResult: DownloadExercisesMockResult = {
-  tmc: { downloaded: [], skipped: [], failed: [] },
-  mooc: { downloaded: [], skipped: [], failed: [] },
-}
+const NO_DOWNLOADS: ExerciseDownloads = { downloaded: [], skipped: [], failed: [] }
 
 export function createTMCMock(): [Langs, TMCMockValues] {
   const values: TMCMockValues = {
     clean: Ok.EMPTY,
-    downloadExercises: emptyDownloadExercisesResult,
+    downloadTmcExercises: Ok(NO_DOWNLOADS),
+    downloadMoocExercises: Ok(NO_DOWNLOADS),
     listLocalCourseExercisesPythonCourse: Ok(listLocalCourseExercisesPythonCourse),
     listLocalExercises: Ok(localExercises),
     getSettingClosedExercises: Ok(closedExercisesPythonCourse),
@@ -89,11 +80,8 @@ export function createFailingTMCMock(): [Langs, TMCMockValues] {
   const error = Err(new Error())
   const values: TMCMockValues = {
     clean: error,
-    downloadExercises: {
-      ...emptyDownloadExercisesResult,
-      tmcError: new Error(),
-      moocError: new Error(),
-    },
+    downloadTmcExercises: error,
+    downloadMoocExercises: error,
     listLocalCourseExercisesPythonCourse: error,
     listLocalExercises: error,
     getSettingClosedExercises: error,
@@ -140,16 +128,8 @@ function setupMockValues(values: TMCMockValues): Langs {
     isMoocAuthenticated: vi.fn(async () => values.isMoocAuthenticated),
     getMoocCourseData: vi.fn(async () => values.getMoocCourseData),
     getEnrolledMoocCourses: vi.fn(async () => values.getEnrolledMoocCourses),
-    downloadExercises: vi.fn(
-      async (
-        _identifiers: unknown,
-        _downloadTemplate: unknown,
-        cb?: (progress: { id: number; fraction: number }) => void,
-      ) => {
-        void cb
-        return values.downloadExercises
-      },
-    ),
+    downloadTmcExercises: vi.fn(async () => values.downloadTmcExercises),
+    downloadMoocExercises: vi.fn(async () => values.downloadMoocExercises),
   }
 
   return mock as unknown as Langs

@@ -48,9 +48,11 @@ export async function downloadExerciseUpdates(
   setUpdateablesByCourse([])
   let stillUpdateable = updates.map((x) => x.exerciseId)
   try {
+    const [onlyCourse, ...otherCourses] = courseIds.values()
     const downloaded = await downloadOrUpdateExercises(
       actionContext,
       updates.map((x) => x.exerciseId),
+      otherCourses.length === 0 ? onlyCourse : undefined,
     )
     if (downloaded.err) {
       return downloaded

@@ -9,7 +9,12 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
 import { BottleneckError } from "../../errors"
-import { pasteServiceName } from "../../shared/shared"
+import {
+  ExerciseIdentifier,
+  makeMoocKind,
+  makeTmcKind,
+  pasteServiceName,
+} from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
 
 const COURSE_SLUG = "mooc-python-course"
@@ -18,8 +23,6 @@ const MOOC_EXERCISE_ID = "mooc-ex-1"
 const TMC_EXERCISE_ID = 4321
 const EXERCISE_PATH = "/path/to/exercise"
 
-// `langsMethods` holds only the backend's own paste call, so an exercise routed through
-// the other backend's method fails instead of quietly passing.
 function contextFor(
   langsMethods: Record<string, unknown>,
   userDataMethods: Record<string, unknown>,
@@ -44,8 +47,8 @@ function moocContextWith(pasteResult: unknown): {
 } {
   const submit = vi.fn().mockResolvedValue(pasteResult)
   const actionContext = contextFor(
-    { submitMoocExerciseToPaste: submit },
-    { getMoocExerciseByName: () => ({ id: MOOC_EXERCISE_ID }) },
+    { paste: submit },
+    { getExerciseByName: () => makeMoocKind({ id: MOOC_EXERCISE_ID }) },
   )
   return { actionContext, submit }
 }
@@ -56,8 +59,8 @@ function tmcContextWith(pasteResult: unknown): {
 } {
   const submit = vi.fn().mockResolvedValue(pasteResult)
   const actionContext = contextFor(
-    { submitTmcExerciseToPaste: submit },
-    { getTmcExerciseByName: () => ({ id: TMC_EXERCISE_ID }) },
+    { paste: submit },
+    { getExerciseByName: () => makeTmcKind({ id: TMC_EXERCISE_ID }) },
   )
   return { actionContext, submit }
 }
@@ -83,7 +86,7 @@ suite("paste action", () => {
 
     const result = await pasteExercise(actionContext, "tmc", COURSE_SLUG, EXERCISE_SLUG)
 
-    expect(submit).toHaveBeenCalledWith(TMC_EXERCISE_ID, EXERCISE_PATH)
+    expect(submit).toHaveBeenCalledWith(ExerciseIdentifier.from(TMC_EXERCISE_ID), EXERCISE_PATH)
     expect(result.val).toBe("https://tmc.mooc.fi/paste/abc123")
   })
 
@@ -92,7 +95,7 @@ suite("paste action", () => {
 
     const result = await pasteExercise(actionContext, "mooc", COURSE_SLUG, EXERCISE_SLUG)
 
-    expect(submit).toHaveBeenCalledWith(MOOC_EXERCISE_ID, EXERCISE_PATH)
+    expect(submit).toHaveBeenCalledWith(ExerciseIdentifier.from(MOOC_EXERCISE_ID), EXERCISE_PATH)
     expect(result.ok).toBe(true)
     expect(result.val).toBe("https://paste.example/abc123")
   })
@@ -103,8 +106,9 @@ suite("paste action", () => {
     // `withOperation`'s job at the command layer; showing it here too would double it.
     let finish!: () => void
     const { actionContext } = moocContextWith(undefined)
-    ;(actionContext.startup.langs as unknown as Record<string, unknown>).submitMoocExerciseToPaste =
-      vi.fn().mockReturnValue(
+    ;(actionContext.startup.langs as unknown as Record<string, unknown>).paste = vi
+      .fn()
+      .mockReturnValue(
         new Promise((resolve) => {
           finish = () => resolve(Ok("link"))
         }),
@@ -165,7 +169,7 @@ suite("paste action, through the real runForExercise boundary", () => {
         langs: {} as unknown as ReadyStartup["langs"],
         userData: {
           getCourseBySlug: () => Ok({}),
-          getMoocExerciseByName: () => ({ id: MOOC_EXERCISE_ID }),
+          getExerciseByName: () => makeMoocKind({ id: MOOC_EXERCISE_ID }),
         } as unknown as ReadyStartup["userData"],
         workspaceManager: {
           getExerciseBySlug: () => ({ uri: exercise.uri }),
@@ -182,8 +186,9 @@ suite("paste action, through the real runForExercise boundary", () => {
   test("a busy rejection notifies exactly once and reports no error", async () => {
     let finish!: () => void
     const { actionContext } = moocWorkspaceContext()
-    ;(actionContext.startup.langs as unknown as Record<string, unknown>).submitMoocExerciseToPaste =
-      vi.fn().mockReturnValue(
+    ;(actionContext.startup.langs as unknown as Record<string, unknown>).paste = vi
+      .fn()
+      .mockReturnValue(
         new Promise((resolve) => {
           finish = () => resolve(Ok("link"))
         }),

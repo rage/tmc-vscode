@@ -25,7 +25,7 @@ import {
 import type { OutputData, OutputResult } from "../../shared/langsSchema"
 import { CliOutputData } from "../../shared/langsSchema"
 import type { BaseError } from "../../shared/shared"
-import { ExerciseIdentifier } from "../../shared/shared"
+import { ExerciseIdentifier, makeMoocKind, makeTmcKind } from "../../shared/shared"
 import { courseData, courseDetails, moocCourse, submissionFinished } from "../fixtures/cliOutput"
 
 // `_spawnLangsProcess` is private; cast to `any` to stub it without spawning a
@@ -139,6 +139,8 @@ function nullOutput(message = "ok", result: OutputResult = "executed-command"): 
 function uuid(n: number): string {
   return `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
 }
+
+const MOOC_RESTORE_TARGET = makeMoocKind({ exerciseId: "ex-uuid", submissionId: "sub-uuid" })
 
 function newLangs(): Langs {
   return new Langs("dummy-cli-path", "test-client", "1.0.0")
@@ -259,10 +261,10 @@ suite("Langs class arg building", function () {
     expect(courses[0]?.slug).toBe("python-a")
   })
 
-  test("getMoocOldSubmissions", async function () {
+  test("getOldSubmissions builds the mooc command from a mooc exercise id", async function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
-    await langs.getMoocOldSubmissions("ex-uuid")
+    await langs.getOldSubmissions(ExerciseIdentifier.from("ex-uuid"))
     expect(calls[0]?.args).toEqual([
       "mooc",
       "--client-name",
@@ -288,10 +290,10 @@ suite("Langs class arg building", function () {
     expect(result.unwrap()).toEqual(combined)
   })
 
-  test("submitMoocExerciseToPaste", async function () {
+  test("paste builds the mooc command from a mooc exercise id", async function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
-    await langs.submitMoocExerciseToPaste("ex-uuid", "/path/to/ex")
+    await langs.paste(ExerciseIdentifier.from("ex-uuid"), "/path/to/ex")
     expect(calls[0]?.args).toEqual([
       "mooc",
       "--client-name",
@@ -330,10 +332,7 @@ suite("Langs class arg building", function () {
 
   test.each([
     ["submitMoocExercise", (langs: Langs) => langs.submitMoocExercise("ex-uuid", "/path/to/ex")],
-    [
-      "submitMoocExerciseToPaste",
-      (langs: Langs) => langs.submitMoocExerciseToPaste("ex-uuid", "/path/to/ex"),
-    ],
+    ["paste", (langs: Langs) => langs.paste(ExerciseIdentifier.from("ex-uuid"), "/path/to/ex")],
   ] as const)("%s reports a 404 as the exercise being gone", async function (_name, call) {
     const langs = newLangs()
     const line =
@@ -437,19 +436,21 @@ suite("Langs class arg building", function () {
         ]),
       ),
     )
-    const result = await langs.getMoocOldSubmissions("ex-uuid")
-    expect(result.ok).toBe(true)
-    const submissions = result.unwrap()
+    const listed = (await langs.getOldSubmissions(ExerciseIdentifier.from("ex-uuid"))).unwrap()
+    if (listed.kind !== "mooc") {
+      throw new Error("expected the mooc listing")
+    }
+    const { submissions } = listed.data
     expect(submissions).toHaveLength(2)
     expect(submissions[0]?.id).toBe(uuid(2))
     expect(submissions[0]?.grading_progress).toBe("FullyGraded")
     expect(submissions[1]?.score_given).toBe(0)
   })
 
-  test("downloadMoocOldSubmission includes --save-old-state when asked", async function () {
+  test("restoreSubmission includes --save-old-state when asked", async function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
-    await langs.downloadMoocOldSubmission("ex-uuid", "/path", "sub-uuid", true)
+    await langs.restoreSubmission(MOOC_RESTORE_TARGET, "/path", true)
     expect(calls[0]?.args).toEqual([
       "mooc",
       "--client-name",
@@ -465,29 +466,48 @@ suite("Langs class arg building", function () {
     ])
   })
 
-  test("downloadMoocOldSubmission reports a submission with no downloadable files", async function () {
+  test("restoreSubmission reports a submission with no downloadable files", async function () {
     // A submission the server has no files for makes the CLI report
     // `nothing-to-download` instead of failing.
     const langs = newLangs()
     stubSpawn(langs, () => Ok(dataOutput("mooc-old-submission-restore", "nothing-to-download")))
-    const result = await langs.downloadMoocOldSubmission("ex-uuid", "/path", "sub-uuid", true)
+    const result = await langs.restoreSubmission(MOOC_RESTORE_TARGET, "/path", true)
     expect(result.ok).toBe(true)
     expect(result.unwrap()).toBe("nothing-to-download")
   })
 
-  test("downloadMoocOldSubmission reports a restored submission", async function () {
+  test("restoreSubmission reports a restored submission", async function () {
     const langs = newLangs()
     stubSpawn(langs, () => Ok(dataOutput("mooc-old-submission-restore", "restored")))
-    const result = await langs.downloadMoocOldSubmission("ex-uuid", "/path", "sub-uuid", false)
+    const result = await langs.restoreSubmission(MOOC_RESTORE_TARGET, "/path", false)
     expect(result.unwrap()).toBe("restored")
   })
 
-  test("downloadExercises routes mooc ids through the mooc subcommand", async function () {
+  test("restoreSubmission reads a tmc restore, which reports no outcome, as restored", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, () => Ok(nullOutput()))
+    const result = await langs.restoreSubmission(
+      makeTmcKind({ exerciseId: 7, submissionId: 3 }),
+      "/path",
+      false,
+    )
+    expect(result.unwrap()).toBe("restored")
+    expect(calls[0]?.args.slice(-6)).toEqual([
+      "--submission-id",
+      "3",
+      "--exercise-id",
+      "7",
+      "--output-path",
+      "/path",
+    ])
+  })
+
+  test("downloadMoocExercises runs the mooc subcommand", async function () {
     const langs = newLangs()
     const calls = stubSpawn(langs, () =>
       Ok(dataOutput("mooc-exercise-download", { downloaded: [], skipped: [], failed: [] })),
     )
-    await langs.downloadExercises([ExerciseIdentifier.from("exercise-uuid")], true, () => {})
+    await langs.downloadMoocExercises(["exercise-uuid"], undefined, () => {})
     expect(calls[0]?.args).toEqual([
       "mooc",
       "--client-name",
@@ -498,17 +518,12 @@ suite("Langs class arg building", function () {
     ])
   })
 
-  test("downloadExercises forwards --course-id for mooc when a course id is given", async function () {
+  test("downloadMoocExercises forwards --course-id when a course id is given", async function () {
     const langs = newLangs()
     const calls = stubSpawn(langs, () =>
       Ok(dataOutput("mooc-exercise-download", { downloaded: [], skipped: [], failed: [] })),
     )
-    await langs.downloadExercises(
-      [ExerciseIdentifier.from("exercise-uuid")],
-      true,
-      () => {},
-      "course-uuid",
-    )
+    await langs.downloadMoocExercises(["exercise-uuid"], "course-uuid", () => {})
     expect(calls[0]?.args).toEqual([
       "mooc",
       "--client-name",
@@ -578,7 +593,7 @@ suite("Langs class arg building", function () {
     ])
   })
 
-  test("downloadExercises forwards mooc per-exercise progress updates", async function () {
+  test("downloadMoocExercises forwards per-exercise progress updates", async function () {
     const langs = newLangs()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
@@ -604,9 +619,7 @@ suite("Langs class arg building", function () {
       })
     })
     const downloaded: { id: unknown; fraction: number; message?: string | undefined }[] = []
-    await langs.downloadExercises([ExerciseIdentifier.from("ex-uuid")], false, (value) =>
-      downloaded.push(value),
-    )
+    await langs.downloadMoocExercises(["ex-uuid"], undefined, (value) => downloaded.push(value))
     expect(downloaded).toHaveLength(1)
     expect(downloaded[0]?.fraction).toBe(0.5)
     expect(downloaded[0]?.message).toBe("Downloading exercise")
@@ -812,41 +825,44 @@ suite("Langs cross-backend independence", function () {
     expect(tmc.ok).toBe(true)
   })
 
-  test("downloadExercises attempts the mooc leg even when the tmc leg errors", async function () {
+  test("downloadTmcExercises reports each exercise by id and path", async function () {
     const langs = newLangs()
-    stubSpawn(langs, (_index, args) => {
-      if (args[0] === "tmc") {
-        return Err(new RuntimeError("tmc download failed"))
-      }
-      return Ok(dataOutput("mooc-exercise-download", { downloaded: [], skipped: [], failed: [] }))
-    })
-    const result = await langs.downloadExercises(
-      [ExerciseIdentifier.from(1), ExerciseIdentifier.from("exercise-uuid")],
-      true,
-      () => {},
+    const exercise = { id: 1, "course-slug": "c", "exercise-slug": "e", path: "/p/e" }
+    stubSpawn(langs, () =>
+      Ok(
+        dataOutput("tmc-exercise-download", {
+          downloaded: [exercise],
+          skipped: [],
+          failed: [[{ ...exercise, id: 2, path: "/p/f" }, ["no space left"]]],
+        }),
+      ),
     )
-    // The mooc leg's result comes through alongside the tmc leg's failure.
-    expect(result.mooc).toEqual({ downloaded: [], skipped: [], failed: [] })
-    expect(result.tmcError).toBeInstanceOf(RuntimeError)
-    expect(result.moocError).toBeUndefined()
+    const result = await langs.downloadTmcExercises([1, 2], true, () => {})
+    expect(result.unwrap()).toEqual({
+      downloaded: [{ id: ExerciseIdentifier.from(1), path: "/p/e" }],
+      skipped: [],
+      failed: [[{ id: ExerciseIdentifier.from(2), path: "/p/f" }, ["no space left"]]],
+    })
   })
 
-  test("downloadExercises attempts the tmc leg even when the mooc leg errors", async function () {
+  // A call that never reached the server submitted nothing, so it must not cost a retry.
+  test("a submission that never reached the backend frees its throttle slot", async function () {
     const langs = newLangs()
-    stubSpawn(langs, (_index, args) => {
-      if (args[0] === "mooc") {
-        return Err(new RuntimeError("mooc download failed"))
-      }
-      return Ok(dataOutput("tmc-exercise-download", { downloaded: [], skipped: [], failed: [] }))
-    })
-    const result = await langs.downloadExercises(
-      [ExerciseIdentifier.from(1), ExerciseIdentifier.from("exercise-uuid")],
-      true,
-      () => {},
+    stubSpawn(langs, (i) =>
+      i === 0
+        ? Ok(errorOutput("connection-error"))
+        : Ok(dataOutput("mooc-submission-finished", moocSubmitted)),
     )
-    expect(result.tmc).toEqual({ downloaded: [], skipped: [], failed: [] })
-    expect(result.moocError).toBeInstanceOf(RuntimeError)
-    expect(result.tmcError).toBeUndefined()
+    expect((await langs.submitMoocExercise("ex-uuid", "/path/to/ex")).err).toBe(true)
+    expect((await langs.submitMoocExercise("ex-uuid", "/path/to/ex")).ok).toBe(true)
+  })
+
+  test("a submission the backend refused keeps its throttle slot", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, () => Ok(errorOutput("server-error", "boom", ["trace"], 500)))
+    await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
+    const second = await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
+    expect(second.val).toBeInstanceOf(BottleneckError)
   })
 })
 
@@ -1197,7 +1213,7 @@ suite("Langs exercise-update cache invalidation", function () {
     await langs.checkExerciseUpdates("mooc")
     expect(updateCheckCalls).toBe(1)
 
-    await langs.downloadExercises([ExerciseIdentifier.from("ex-uuid")], false, () => {})
+    await langs.downloadMoocExercises(["ex-uuid"], undefined, () => {})
 
     // The download must have dropped the mooc entry, forcing a real re-check.
     await langs.checkExerciseUpdates("mooc")
@@ -1223,7 +1239,7 @@ suite("Langs exercise-update cache invalidation", function () {
 
     await langs.checkExerciseUpdates("tmc")
     // Only mooc exercises are downloaded, so the tmc cache must survive.
-    await langs.downloadExercises([ExerciseIdentifier.from("ex-uuid")], false, () => {})
+    await langs.downloadMoocExercises(["ex-uuid"], undefined, () => {})
     await langs.checkExerciseUpdates("tmc")
     expect(tmcUpdateCheckCalls).toBe(1)
   })
