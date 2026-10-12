@@ -9,7 +9,7 @@ import type { ReadyActionContext } from "../actions/types"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { AiUseRefusedError, BottleneckError, SHOW_AI_USE_PROBLEM_COMMAND } from "../errors"
 import type { RunResult, TestResult } from "../shared/langsSchema"
-import { BaseError } from "../shared/shared"
+import { BaseError, withDistinctKeys } from "../shared/shared"
 import { countOf } from "../utilities"
 import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
 import { openCourseExercises } from "./openExercises"
@@ -274,11 +274,9 @@ export class ExerciseTestController implements vscode.Disposable {
     results: readonly TestResult[],
   ): Promise<void> {
     const children = new Map<string, [vscode.TestItem, TestResult]>()
-    for (const result of results) {
-      let id = `${item.id}/${result.name}`
-      for (let copy = 2; children.has(id); copy++) {
-        id = `${item.id}/${result.name}#${copy}`
-      }
+    const keyed = withDistinctKeys(results, (testResult) => testResult.name)
+    for (const { key, item: result } of keyed) {
+      const id = `${item.id}/${key}`
       const child = item.children.get(id) ?? this._controller.createTestItem(id, result.name)
       child.description = result.points.join(", ")
       children.set(id, [child, result])
