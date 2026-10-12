@@ -29,7 +29,7 @@ import type {
 import { backendName, LocalCourseData, LocalCourseExercise, match, unwrap } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { pointsText } from "../ui/points"
-import { submissionViews } from "../ui/submissionViews"
+import { isSameExercise, submissionViews } from "../ui/submissionViews"
 import { Logger, parseFeedbackQuestion } from "../utilities"
 import type { MoocStoredStanding } from "../utilities/apiData"
 import { moocStoredStanding } from "../utilities/apiData"
@@ -126,6 +126,17 @@ interface UnfinishedGrading extends Submission {
 
 // Keyed by the panel showing the submission, so a webview names only which panel it is.
 const unfinishedGradings = new Map<number, UnfinishedGrading>()
+
+/** Drops what earlier submissions of `panel`'s exercise left pending, which this one supersedes. */
+function forgetEarlierSubmissions(panel: ExerciseSubmissionPanel): void {
+  for (const pending of [unfinishedGradings, pendingFeedback]) {
+    for (const [id, earlier] of pending) {
+      if (isSameExercise(earlier.panel, panel)) {
+        pending.delete(id)
+      }
+    }
+  }
+}
 
 function tmcSubmitter(langs: Langs, exerciseId: number): ExerciseSubmitter {
   return async (submission) => {
@@ -333,10 +344,7 @@ export async function submitExercise(
         courseId,
         availablePoints: unwrap(courseExercise).availablePoints,
       }
-      // The side panel shows one submission at a time, so what the earlier ones kept is
-      // unreachable from here on.
-      unfinishedGradings.clear()
-      pendingFeedback.clear()
+      forgetEarlierSubmissions(submission.panel)
       submissionViews.open(submission.panel)
 
       const outcome = await submit(submission)

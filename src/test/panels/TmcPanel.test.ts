@@ -1308,6 +1308,53 @@ suite("TmcPanel side panel placement", () => {
       graded,
     ])
   })
+
+  test("offers a background submission's outcome instead of leaving the shown one", async () => {
+    const { panel, sendReady } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    const subscription = TmcPanel.showSubmissionViews(
+      createMockContext(),
+      createMockActionContext(),
+    )
+    onTestFinished(() => subscription.dispose())
+    const shown = exerciseSubmissionPanel()
+    const background = { ...exerciseSubmissionPanel(), exerciseSlug: "part01-02_other" }
+    submissionViews.open(shown)
+    await sendReady()
+    const offered = Promise.withResolvers<string | undefined>()
+    vi.mocked(vscode.window.showInformationMessage).mockReturnValueOnce(offered.promise as never)
+    vi.mocked(panel.webview.postMessage).mockClear()
+    const graded = submissionViewFor(background, "Exercise graded")
+
+    submissionViews.update({ panel: background, view: graded.view, shouldReopen: true })
+
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+      "Submission of part01-02_other: Exercise graded",
+      "Show result",
+    )
+    expect(panel.webview.postMessage).not.toHaveBeenCalled()
+
+    offered.resolve("Show result")
+    await vi.waitFor(() =>
+      expect(postedMessages(panel)).toEqual([
+        expect.objectContaining({ type: "setPanel", panel: background }),
+        graded,
+      ]),
+    )
+  })
+
+  test("a later submission of the same exercise forgets the earlier one's view", () => {
+    const earlier = exerciseSubmissionPanel()
+    submissionViews.update({
+      panel: earlier,
+      view: submissionViewFor(earlier, "Exercise graded").view,
+      shouldReopen: false,
+    })
+
+    submissionViews.open(exerciseSubmissionPanel())
+
+    expect(submissionViews.latestView(earlier.id)).toBeUndefined()
+  })
 })
 
 suite("TmcPanel tab identity", () => {

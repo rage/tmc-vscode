@@ -4,7 +4,7 @@ import type * as vscode from "vscode"
 
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
-import type { Panel } from "../shared/shared"
+import type { ExerciseSubmissionPanel, Panel, SubmissionView } from "../shared/shared"
 import { assertUnreachable, WebviewStateSchema } from "../shared/shared"
 import { submissionViews } from "../ui/submissionViews"
 import { Logger } from "../utilities"
@@ -62,26 +62,44 @@ export class TmcPanel {
   // `_panel.dispose()` fires `onDidDispose`, which calls back into `dispose()`
   private _isDisposed = false
 
-  /** Shows the submissions the submit actions report in the side panel. Call once, at activation. */
+  /**
+   * Shows the submissions the submit actions report in the side panel. Call once, at activation.
+   *
+   * An outcome for a submission the side panel is not showing reopens the panel on it if it is
+   * closed, and otherwise is offered in a notification, so the student's current view stays put.
+   */
   public static showSubmissionViews(
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
   ): Disposable {
+    const show = (panel: ExerciseSubmissionPanel): void =>
+      TmcPanel._showSubmission(extensionContext, actionContext, panel)
     return Disposable.from(
-      submissionViews.onDidOpen((panel) =>
-        TmcPanel.renderSide(extensionContext, actionContext, panel),
-      ),
+      submissionViews.onDidOpen(show),
       submissionViews.onDidUpdate(({ panel, view, shouldReopen }) => {
-        if (shouldReopen && TmcPanel.sidePanel === undefined) {
-          TmcPanel.renderSide(extensionContext, actionContext, panel)
+        const { sidePanel } = TmcPanel
+        if (sidePanel?._route?.id === panel.id) {
+          sidePanel._postMessage(submissionViewMessage(panel, view))
+        } else if (shouldReopen && sidePanel === undefined) {
+          show(panel)
+        } else if (shouldReopen) {
+          void offerSubmissionOutcome(panel, view, show)
         }
-        TmcPanel.sidePanel?._postMessage({
-          type: "submissionView",
-          target: { id: panel.id, type: panel.type },
-          view,
-        })
       }),
     )
+  }
+
+  /** Shows `panel` in the side panel with the latest view its submission reported. */
+  private static _showSubmission(
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+    panel: ExerciseSubmissionPanel,
+  ): void {
+    TmcPanel.renderSide(extensionContext, actionContext, panel)
+    const view = submissionViews.latestView(panel.id)
+    if (view !== undefined) {
+      TmcPanel.sidePanel?._postMessage(submissionViewMessage(panel, view))
+    }
   }
 
   /** Tells the two panels' log lines apart. */
@@ -332,6 +350,28 @@ export class TmcPanel {
     }
   }
 }
+
+function submissionViewMessage(panel: ExerciseSubmissionPanel, view: SubmissionView): PanelMessage {
+  return { type: "submissionView", target: { id: panel.id, type: panel.type }, view }
+}
+
+/** Offers to show the outcome of a submission the side panel is not showing. */
+async function offerSubmissionOutcome(
+  panel: ExerciseSubmissionPanel,
+  view: SubmissionView,
+  show: (panel: ExerciseSubmissionPanel) => void,
+): Promise<void> {
+  const choice = await window.showInformationMessage(
+    `Submission of ${panel.exerciseSlug}: ${view.headline}`,
+    SHOW_SUBMISSION,
+  )
+  // A later submission of the exercise supersedes this one.
+  if (choice === SHOW_SUBMISSION && submissionViews.latestView(panel.id) !== undefined) {
+    show(panel)
+  }
+}
+
+const SHOW_SUBMISSION = "Show result"
 
 function webviewOptions(extensionUri: Uri): WebviewOptions {
   return {
