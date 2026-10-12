@@ -113,7 +113,7 @@ async function refresh(
 
 /**
  * Offers, in one notification, the new exercises of every course whose reminder is due; each
- * button acts on all of those courses.
+ * button acts on all of those courses, one failing course not stopping the rest.
  */
 function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCourseData[]): void {
   const { dialog } = actionContext
@@ -140,13 +140,21 @@ function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCour
     ) =>
     (): void =>
       void withOperation(dialog, { failure: headline("a course") }, async () => {
+        const failed: [title: string, error: Error][] = []
         for (const course of offered) {
           const result = await step(course)
           if (result.err) {
-            return failure(headline(LocalCourseData.getCourseTitle(course)), result.val)
+            failed.push([LocalCourseData.getCourseTitle(course), result.val])
           }
         }
-        return Ok.EMPTY
+        const [first, ...others] = failed
+        if (!first) {
+          return Ok.EMPTY
+        }
+        for (const [title, error] of others) {
+          Logger.error(headline(title), error)
+        }
+        return failure(headline(failed.map(([title]) => title).join(", ")), first[1])
       })
 
   void dialog.notification(
