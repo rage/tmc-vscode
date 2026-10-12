@@ -77,6 +77,8 @@ export class ExerciseTestController implements vscode.Disposable {
       return await this._run(
         new vscode.TestRunRequest([item], undefined, this._profile, false, false),
         cancellation.token,
+        // A check that failed otherwise is the run's to repeat and report.
+        allowed.ok ? exercise : undefined,
       )
     } finally {
       cancellation.dispose()
@@ -122,9 +124,11 @@ export class ExerciseTestController implements vscode.Disposable {
     return [...requested.values()]
   }
 
+  /** @param aiUseChecked An exercise whose AI use the caller has already checked. */
   private async _run(
     request: vscode.TestRunRequest,
     token: vscode.CancellationToken,
+    aiUseChecked?: WorkspaceExercise,
   ): Promise<Result<void, Error>> {
     const requested = this._requestedExercises(request)
     const [only] = requested
@@ -147,7 +151,9 @@ export class ExerciseTestController implements vscode.Disposable {
           continue
         }
         run.started(item)
-        const outcome = await this._testExercise(exercise, cancellation.token)
+        const outcome = await testExercise(this._actionContext, exercise, cancellation.token, {
+          isAiUseChecked: exercise === aiUseChecked,
+        })
         if (cancellation.token.isCancellationRequested) {
           run.skipped(item)
         } else if (outcome.err) {
@@ -170,14 +176,10 @@ export class ExerciseTestController implements vscode.Disposable {
     return busy
   }
 
-  private _testExercise(
-    exercise: WorkspaceExercise,
-    token: vscode.CancellationToken,
-  ): Promise<Result<ExerciseTestOutcome, Error>> {
-    return testExercise(this._actionContext, exercise, token)
-  }
-
   private _reportError(run: vscode.TestRun, item: vscode.TestItem, error: Error): void {
+    if (!(error instanceof BottleneckError)) {
+      clearTests(item)
+    }
     if (error instanceof AiUseRefusedError) {
       run.errored(item, new vscode.TestMessage(refusalMessage(error)))
       return
@@ -202,6 +204,7 @@ export class ExerciseTestController implements vscode.Disposable {
     outcome: ExerciseTestOutcome,
   ): Promise<boolean> {
     if (outcome.kind === "examMode") {
+      clearTests(item)
       this._diagnostics.clear(exercise.uri)
       run.appendOutput(
         toTerminalText(
@@ -231,6 +234,7 @@ export class ExerciseTestController implements vscode.Disposable {
 
     const failure = runFailure(runResult)
     if (failure !== undefined) {
+      clearTests(item)
       run.errored(item, new vscode.TestMessage(failure))
       return false
     }
@@ -321,6 +325,12 @@ export class ExerciseTestController implements vscode.Disposable {
       (): void => void vscode.commands.executeCommand("tmc.submitExercise", exercise.uri),
     ])
   }
+}
+
+/** Drops the tests and pass count an earlier run reported under `item`, for a run that named none. */
+function clearTests(item: vscode.TestItem): void {
+  item.description = ""
+  item.children.replace([])
 }
 
 /** The refusal's sentence, and its remedy as the one command the message may run. */
