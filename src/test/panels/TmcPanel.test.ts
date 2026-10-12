@@ -179,8 +179,9 @@ suite("initializationErrorHelpPanel", () => {
   test("lists each failed service, named for the student, with the CLI hint on tmc-langs", () => {
     const actionContext = createDegradedContext({
       failures: {
-        langs: new Error("langs offline"),
         userData: new Error("corrupt user data"),
+        langs: new Error("langs offline"),
+        resources: new Error("disk full"),
       },
     })
 
@@ -193,6 +194,7 @@ suite("initializationErrorHelpPanel", () => {
         stack: expect.any(String),
         hint: expect.stringContaining(`${path.sep}cli'`),
       },
+      { service: "extension files", error: "disk full", stack: expect.any(String) },
       { service: "user data", error: "corrupt user data", stack: expect.any(String) },
     ])
   })

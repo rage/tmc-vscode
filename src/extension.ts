@@ -5,7 +5,13 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import { onDidFinishSubmission, refreshLocalExercises, scanLocalExercises } from "./actions"
-import type { ActionContext, ReadyActionContext, Startup } from "./actions/types"
+import type {
+  ActionContext,
+  DegradedStartup,
+  ReadyActionContext,
+  Startup,
+  StartupStep,
+} from "./actions/types"
 import { isReady } from "./actions/types"
 import AiRestriction, { isActiveCourseAiAllowed } from "./api/aiRestriction"
 import { AiUseGate } from "./api/aiUseGate"
@@ -93,11 +99,13 @@ function makeInitializationErrorReporter(dialog: Dialog): InitializationErrorRep
   }
 }
 
-/** The failed ones among these services, keyed by name. */
-function startupFailures(services: Record<string, Result<unknown, Error>>): Record<string, Error> {
+/** The failed ones among these steps; one never attempted is left out. */
+function startupFailures(
+  steps: Record<StartupStep, Result<unknown, Error> | undefined>,
+): DegradedStartup["failures"] {
   return Object.fromEntries(
-    Object.entries(services).flatMap(([service, result]) =>
-      result.err ? [[service, result.val] as const] : [],
+    Object.entries(steps).flatMap(([step, result]) =>
+      result?.err ? [[step, result.val] as const] : [],
     ),
   )
 }
@@ -332,13 +340,13 @@ async function activateInner(
     Logger.warn("Skipped version check", e)
   }
 
-  let userData: Result<UserData, Error>
-  let workspaceManager: Result<WorkspaceManager, Error>
+  let workspaceManager: WorkspaceManager | undefined
+  let userData: Result<UserData, Error> | undefined
   let aiRestriction: AiRestriction | undefined
-  let exerciseDecorationProvider: Result<ExerciseDecorationProvider, Error>
   if (resources.ok) {
-    workspaceManager = new Ok(
-      new WorkspaceManager(resources.val, (backend, courseSlug, closedExerciseSlugs) =>
+    workspaceManager = new WorkspaceManager(
+      resources.val,
+      (backend, courseSlug, closedExerciseSlugs) =>
         langs.ok
           ? langs.val.setSetting(
               closedExercisesSettingKey(backend, courseSlug),
@@ -347,12 +355,8 @@ async function activateInner(
           : Promise.resolve(
               new Err(new InitializationError("Cannot record closed exercises without tmc-langs")),
             ),
-      ),
     )
-    context.subscriptions.push(
-      workspaceManager.val,
-      trackActiveEditorExercise(workspaceManager.val),
-    )
+    context.subscriptions.push(workspaceManager, trackActiveEditorExercise(workspaceManager))
     // Stored data this version cannot parse must degrade the extension, not abort it.
     try {
       userData = new Ok(new UserData(storage))
@@ -362,10 +366,10 @@ async function activateInner(
       reportInitializationError("Reading your stored courses", error)
       userData = new Err(error)
     }
-    if (workspaceManager.val.activeCourse) {
+    if (workspaceManager.activeCourse) {
       await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true)
-      await workspaceManager.val.verifyWorkspaceSettingsIntegrity()
-      const courseWorkspace = workspaceManager.val
+      await workspaceManager.verifyWorkspaceSettingsIntegrity()
+      const courseWorkspace = workspaceManager
       const courses = userData.ok ? userData.val : undefined
       aiRestriction = new AiRestriction(
         courseWorkspace,
@@ -377,61 +381,28 @@ async function activateInner(
       // The AI-use gate enforces its own pass before a submit, test run or paste.
       void aiRestriction.apply()
     }
-    exerciseDecorationProvider = userData.ok
-      ? new Ok(new ExerciseDecorationProvider(userData.val, workspaceManager.val))
-      : new Err(
-          new InitializationError(
-            userData.val,
-            "Could not initialize exercise decoration provider without user data",
-          ),
-        )
   } else {
     Logger.warn("Skipped userdata setup")
-    userData = new Err(
-      new InitializationError(
-        resources.val,
-        "Could not read user data due to failure in resource initialization",
-      ),
-    )
-    workspaceManager = new Err(
-      new InitializationError(
-        resources.val,
-        "Could not initialize workspace manager due to failure in resource initialization",
-      ),
-    )
-    exerciseDecorationProvider = new Err(
-      new InitializationError(
-        resources.val,
-        "Could not initialize exercise decoration provider due to failure in resource initialization",
-      ),
-    )
   }
+  const exerciseDecorationProvider =
+    workspaceManager && userData?.ok
+      ? new ExerciseDecorationProvider(userData.val, workspaceManager)
+      : undefined
 
   const startup: Startup =
-    langs.ok && resources.ok && workspaceManager.ok && userData.ok && exerciseDecorationProvider.ok
+    langs.ok && resources.ok && workspaceManager && userData?.ok && exerciseDecorationProvider
       ? {
           kind: "ready",
           aiUseGate: new AiUseGate(aiRestriction),
           langs: langs.val,
           resources: resources.val,
-          workspaceManager: workspaceManager.val,
+          workspaceManager,
           userData: userData.val,
-          exerciseDecorationProvider: exerciseDecorationProvider.val,
+          exerciseDecorationProvider,
         }
-      : {
-          kind: "degraded",
-          failures: startupFailures({
-            langs,
-            resources,
-            workspaceManager,
-            userData,
-            exerciseDecorationProvider,
-          }),
-        }
+      : { kind: "degraded", failures: startupFailures({ langs, resources, userData }) }
   if (startup.kind === "degraded") {
-    // Only the root failures are reported as they happen; what they drag down with them
-    // is named nowhere else.
-    Logger.warn(`Activation degraded, missing: ${Object.keys(startup.failures).join(", ")}`)
+    Logger.warn(`Activation degraded, failed: ${Object.keys(startup.failures).join(", ")}`)
   }
   const actionContext: ActionContext = { authState, coursesTree, dialog, settings, startup }
   const readyContext = isReady(actionContext) ? actionContext : undefined
@@ -504,10 +475,10 @@ async function activateInner(
   )
   startupContext.isApplied = true
 
-  if (exerciseDecorationProvider.ok) {
+  if (exerciseDecorationProvider) {
     context.subscriptions.push(
-      exerciseDecorationProvider.val,
-      vscode.window.registerFileDecorationProvider(exerciseDecorationProvider.val),
+      exerciseDecorationProvider,
+      vscode.window.registerFileDecorationProvider(exerciseDecorationProvider),
     )
   }
 
