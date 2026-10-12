@@ -40,7 +40,7 @@ function contextWith(resolved: WorkspaceExercise | undefined): ReadyActionContex
 
 suite("Submit exercise command", function () {
   beforeEach(function () {
-    vi.mocked(actions.submitExercise).mockResolvedValue(Ok.EMPTY)
+    vi.mocked(actions.submitExercise).mockResolvedValue(Ok({ warnings: [] }))
   })
 
   test("submits the exercise the resource resolves to, and says it succeeded", async function () {

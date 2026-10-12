@@ -1,6 +1,7 @@
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
+import type { Warned } from "../api/withOperation"
 import type { CourseIdentifier } from "../shared/shared"
 import { LocalCourseData } from "../shared/shared"
 import { Logger, mapConcurrently } from "../utilities"
@@ -18,7 +19,7 @@ export interface CourseUpdateOptions {
 }
 
 /** What a pass of {@link checkForCourseUpdates} left behind. */
-export interface CourseUpdates {
+export interface CourseUpdates extends Warned {
   /** Every course read back after the pass, whether or not its own refresh succeeded. */
   courses: LocalCourseData[]
   /**
@@ -65,6 +66,7 @@ export async function checkForCourseUpdates(
       name: LocalCourseData.getCourseName(course),
       error: updateResult.err ? updateResult.val : reread.err ? reread.val : undefined,
       updated: reread.ok ? reread.val : undefined,
+      warnings: updateResult.ok ? updateResult.val.warnings : [],
     }
   })
   // Once for the whole pass, not once per course: a course update can drop exercises the
@@ -85,6 +87,7 @@ export async function checkForCourseUpdates(
   }
   return Ok({
     courses: updatedCourses,
+    warnings: refreshed.flatMap((x) => x.warnings),
     failure:
       failures.length > 0
         ? new Error(`Failed to fetch updates for ${names}: ${firstMessage}`)

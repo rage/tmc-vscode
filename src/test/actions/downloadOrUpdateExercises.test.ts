@@ -9,6 +9,7 @@ import type { ReadyActionContext } from "../../actions/types"
 import Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
 import type { ExerciseDownload, ExerciseDownloadProgress, ExerciseDownloads } from "../../api/langs"
+import type { Warned } from "../../api/withOperation"
 import type Settings from "../../config/settings"
 import * as errors from "../../errors"
 import { BottleneckError, InvalidTokenError } from "../../errors"
@@ -163,10 +164,9 @@ suite("downloadOrUpdateExercises action", function () {
     )
     expect(result.successful).toEqual([])
     expect(result.failed).toEqual([idOfTmcExercise(1), idOfTmcExercise(2)])
-    expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to download 2 exercises: hello_world, other_world.",
-      error,
-    )
+    expect(result.warnings).toEqual([
+      { headline: "Failed to download 2 exercises: hello_world, other_world.", error: error },
+    ])
   })
 
   test("reports every failed exercise in one notification, by name", async function () {
@@ -179,16 +179,18 @@ suite("downloadOrUpdateExercises action", function () {
       ],
     )
 
-    await downloadOrUpdateExercises(
+    const result = await downloadResults(
       actionContext(),
       [idOfTmcExercise(1), idOfTmcExercise(2)],
       TEST_COURSE_ID,
     )
 
-    expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to download 2 exercises: hello_world, other_world.",
-      expect.objectContaining({ message: "checksum mismatch" }),
-    )
+    expect(result.warnings).toEqual([
+      {
+        headline: "Failed to download 2 exercises: hello_world, other_world.",
+        error: expect.objectContaining({ message: "checksum mismatch" }),
+      },
+    ])
   })
 
   test("names the backend failure that has a remedy when both backends fail", async function () {
@@ -201,16 +203,15 @@ suite("downloadOrUpdateExercises action", function () {
       actions: error === moocError ? [{ label: "Log in", command: "tmc.showMoocLogin" }] : [],
     }))
 
-    await downloadOrUpdateExercises(
+    const result = await downloadResults(
       actionContext(),
       [idOfTmcExercise(1), idOfMoocExercise("mooc-exercise")],
       TEST_COURSE_ID,
     )
 
-    expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to download 2 exercises: hello_world, mooc-exercise.",
-      moocError,
-    )
+    expect(result.warnings).toEqual([
+      { headline: "Failed to download 2 exercises: hello_world, mooc-exercise.", error: moocError },
+    ])
   })
 
   test("claims a whole download at once", async function () {
@@ -358,10 +359,12 @@ suite("downloadOrUpdateExercises action", function () {
       TEST_COURSE_ID,
     )
 
-    expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to download 2 exercises: exercise-uuid-3, exercise-uuid-4.",
-      moocError,
-    )
+    expect(result.warnings).toEqual([
+      {
+        headline: "Failed to download 2 exercises: exercise-uuid-3, exercise-uuid-4.",
+        error: moocError,
+      },
+    ])
     expect(result.successful).toEqual([])
     expect(result.failed).toEqual([
       idOfMoocExercise(downloadedId),
@@ -473,7 +476,7 @@ function shownStatus(id: ExerciseIdentifier): ExerciseStatus {
 /** `downloadOrUpdateExercises` for a test whose download it lets run. */
 async function downloadResults(
   ...args: Parameters<typeof downloadOrUpdateExercises>
-): Promise<{ successful: ExerciseIdentifier[]; failed: ExerciseIdentifier[] }> {
+): Promise<{ successful: ExerciseIdentifier[]; failed: ExerciseIdentifier[] } & Warned> {
   return (await downloadOrUpdateExercises(...args)).unwrap()
 }
 

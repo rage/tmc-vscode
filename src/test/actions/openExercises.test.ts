@@ -17,7 +17,7 @@ import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
 vi.mock("../../actions/downloadCourseExercises", () => ({
-  downloadCourseExercises: vi.fn(async () => Ok([])),
+  downloadCourseExercises: vi.fn(async () => Ok({ warnings: [] })),
 }))
 
 const moocCourse: MoocLocalCourseData = {
@@ -154,6 +154,15 @@ suite("downloadAndOpenExercises action", function () {
     await downloadAndOpenExercises(contextFor(), [MOOC_ID], COURSE_ID)
 
     expect(downloadCourseExercises).toHaveBeenCalledWith(expect.anything(), COURSE_ID, [MOOC_ID])
+  })
+
+  test("passes on the warnings of the download", async function () {
+    const warning = { headline: "Failed to refresh local exercises.", error: new Error("disk") }
+    vi.mocked(downloadCourseExercises).mockResolvedValueOnce(Ok({ warnings: [warning] }))
+
+    const result = await downloadAndOpenExercises(contextFor(), [MOOC_ID], COURSE_ID)
+
+    expect(result.unwrap().warnings).toEqual([warning])
   })
 
   test("downloads nothing for an id the course does not hold", async function () {

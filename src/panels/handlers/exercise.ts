@@ -3,7 +3,7 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import * as actions from "../../actions"
-import { withOperation } from "../../api/withOperation"
+import { reportWarnings, withOperation } from "../../api/withOperation"
 import type { ExerciseSubmissionPanel } from "../../shared/shared"
 import { Logger } from "../../utilities"
 import type { HandlerMap, PanelHost } from "../router"
@@ -33,7 +33,11 @@ export const exerciseHandlers = {
         return Err(new Error("This submission is no longer shown."))
       }
       const waited = await actions.keepWaitingForGrading(actionContext, message.sourcePanel.id)
-      return waited.err ? waited : Ok(undefined)
+      if (waited.err) {
+        return waited
+      }
+      reportWarnings(actionContext.dialog, waited.val.warnings)
+      return Ok(undefined)
     },
   },
   sendFeedback: {

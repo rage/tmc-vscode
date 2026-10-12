@@ -61,7 +61,7 @@ function harness(
 
 suite("Download new exercises command", function () {
   beforeEach(function () {
-    vi.mocked(downloadNewExercisesForCourse).mockResolvedValue(Ok.EMPTY)
+    vi.mocked(downloadNewExercisesForCourse).mockResolvedValue(Ok({ warnings: [] }))
   })
 
   test("downloads the new exercises of the course the user picked", async function () {

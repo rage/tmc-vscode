@@ -1,5 +1,7 @@
 import { Ok, Result } from "ts-results"
 
+import type { Warned } from "../api/withOperation"
+import { logWarnings } from "../api/withOperation"
 import type { CourseIdentifier } from "../shared/shared"
 import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
@@ -10,14 +12,14 @@ import type { ReadyActionContext } from "./types"
 /**
  * Downloads a course's new exercises and takes the downloaded ones off its new-exercise list.
  *
- * An exercise that fails to download is warned about and stays on the list; the `Err` is for
+ * An exercise that fails to download is a warning and stays on the list; the `Err` is for
  * a course that is not stored or a list or rescan that could not be updated, and a
  * `BottleneckError` while some of the exercises are busy with another operation.
  */
 export async function downloadNewExercisesForCourse(
   actionContext: ReadyActionContext,
   courseId: CourseIdentifier,
-): Promise<Result<void, Error>> {
+): Promise<Result<Warned, Error>> {
   const { userData } = actionContext.startup
   const courseResult = userData.getCourse(courseId)
   if (courseResult.err) {
@@ -34,5 +36,9 @@ export async function downloadNewExercisesForCourse(
     await userData.clearFromNewExercises(courseId, downloaded.val.successful),
     await refreshLocalExercises(actionContext),
   )
-  return refreshResult.err ? refreshResult : Ok.EMPTY
+  if (refreshResult.err) {
+    logWarnings(downloaded.val.warnings)
+    return refreshResult
+  }
+  return Ok({ warnings: downloaded.val.warnings })
 }

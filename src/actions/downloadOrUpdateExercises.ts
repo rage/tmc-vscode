@@ -2,6 +2,7 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
 import type { ExerciseDownloadProgress, ExerciseDownloads } from "../api/langs"
+import type { OperationWarning, Warned } from "../api/withOperation"
 import { ExerciseUpdateError, presentationFor } from "../errors"
 import type { BackendKind, CourseIdentifier } from "../shared/shared"
 import {
@@ -32,9 +33,8 @@ interface DownloadResults {
  * Downloads given exercises and opens them in the course workspace.
  *
  * Fails as a whole only with a `BottleneckError`, downloading nothing, while any of the
- * exercises is busy with another operation. Every other failure is reported here, in one
- * notification naming the exercises, and lands in `failed`; a cancelled download returns
- * what had completed.
+ * exercises is busy with another operation. Every other failure lands in `failed`, with one
+ * warning naming the exercises; a cancelled download returns what had completed.
  *
  * @param exerciseIds Exercises to download.
  * @param courseId Course the exercises belong to, when they all share one. Passed
@@ -45,10 +45,10 @@ export async function downloadOrUpdateExercises(
   actionContext: ReadyActionContext,
   exerciseIds: ExerciseIdentifier[],
   courseId?: CourseIdentifier,
-): Promise<Result<DownloadResults, Error>> {
+): Promise<Result<DownloadResults & Warned, Error>> {
   Logger.info("Downloading exercises", exerciseIds)
   if (exerciseIds.length === 0) {
-    return Ok({ successful: [], failed: [] })
+    return Ok({ successful: [], failed: [], warnings: [] })
   }
   const claim = exerciseOperations.claim(exerciseIds, "downloading")
   if (claim.err) {
@@ -66,7 +66,7 @@ async function download(
   exerciseIds: ExerciseIdentifier[],
   courseId: CourseIdentifier | undefined,
   claim: ExerciseClaim,
-): Promise<DownloadResults> {
+): Promise<DownloadResults & Warned> {
   const { dialog, settings } = actionContext
   const { langs } = actionContext.startup
 
@@ -166,16 +166,17 @@ async function download(
   if (cancelled) {
     // The user chose to stop; what completed is the answer, not an error.
     Logger.info("Exercise download cancelled by the user")
-    return results
+    return { ...results, warnings: [] }
   }
+  const warnings: OperationWarning[] = []
   if (results.failed.length > 0) {
     const names = results.failed.map((id) => exerciseName(actionContext, id))
-    dialog.reportError(
-      `Failed to download ${describeExercises(names)}.`,
-      failureCause(failedLegs, exerciseReasons),
-    )
+    warnings.push({
+      headline: `Failed to download ${describeExercises(names)}.`,
+      error: failureCause(failedLegs, exerciseReasons),
+    })
   }
-  return results
+  return { ...results, warnings }
 }
 
 /**

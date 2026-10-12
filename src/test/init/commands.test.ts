@@ -629,7 +629,9 @@ suite("registered command handlers", function () {
   })
 
   test("tmc.submitExercise delegates to commands.submitExercise", async function () {
-    const submitExercise = vi.spyOn(commands, "submitExercise").mockResolvedValue(Ok.EMPTY)
+    const submitExercise = vi
+      .spyOn(commands, "submitExercise")
+      .mockResolvedValue(Ok({ warnings: [] }))
     const { handlers, actionContext } = registerAndCollect()
     const resource = vscode.Uri.file("/course/exercise")
 

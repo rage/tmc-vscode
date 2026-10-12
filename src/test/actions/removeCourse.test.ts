@@ -93,29 +93,27 @@ suite("removeCourse action", function () {
   test("warns about a cleanup it could not do and removes the course anyway", async function () {
     const error = new Error("settings file is read-only")
     const deleteCourse = vi.fn(async () => Ok.EMPTY)
-    const [actionContext, dialog] = contextWith(
+    const [actionContext] = contextWith(
       { getCourse: () => Ok(course), deleteCourse } as unknown as Partial<UserData>,
       vi.fn(async () => Err(error)),
     )
 
     const result = await removeCourse(actionContext, idOfTmcCourse(1))
 
-    expect(result.ok).toBe(true)
-    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(expect.any(String), error)
+    expect(result.unwrap().warnings).toEqual([{ headline: expect.any(String), error }])
     expect(deleteCourse).toHaveBeenCalled()
   })
 
   test("removes the stored course", async function () {
     const deleteCourse = vi.fn(async () => Ok.EMPTY)
-    const [actionContext, dialog] = contextWith({
+    const [actionContext] = contextWith({
       getCourse: () => Ok(course),
       deleteCourse,
     } as unknown as Partial<UserData>)
 
     const result = await removeCourse(actionContext, idOfTmcCourse(1))
 
-    expect(result.ok).toBe(true)
-    expect(dialog.reportError).not.toHaveBeenCalled()
+    expect(result.unwrap().warnings).toEqual([])
     expect(deleteCourse).toHaveBeenCalledWith(idOfTmcCourse(1))
   })
 

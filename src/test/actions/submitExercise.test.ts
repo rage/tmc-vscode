@@ -612,7 +612,7 @@ suite("submitExercise action, mooc", () => {
     const { actionContext, setStanding } = moocContextWithErr(error)
 
     const result = await submitExercise(actionContext, moocExercise)
-    expect(result).toEqual(Ok(undefined))
+    expect(result).toEqual(Ok({ warnings: [] }))
     expect(setStanding).not.toHaveBeenCalled()
     expect(finishedCourses).toEqual([])
     expect(lastView()).toMatchObject({

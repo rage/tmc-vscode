@@ -59,7 +59,7 @@ suite("downloadExerciseUpdates action", function () {
 
   test("leaves each course only its own failed exercises", async function () {
     downloadOrUpdateExercises.mockResolvedValue(
-      Ok({ successful: [idOfTmcExercise(10)], failed: [idOfTmcExercise(20)] }),
+      Ok({ successful: [idOfTmcExercise(10)], failed: [idOfTmcExercise(20)], warnings: [] }),
     )
 
     await downloadExerciseUpdates(createMockActionContext(), [update(1, 10), update(2, 20)])
@@ -86,16 +86,15 @@ suite("downloadExerciseUpdates action", function () {
   })
 
   test("rescans the exercises it replaced, reporting a rescan that fails", async function () {
-    downloadOrUpdateExercises.mockResolvedValue(Ok({ successful: [], failed: [] }))
+    downloadOrUpdateExercises.mockResolvedValue(Ok({ successful: [], failed: [], warnings: [] }))
     vi.mocked(refreshLocalExercises).mockResolvedValue(Err(new Error("refresh failed")))
     const actionContext = createMockActionContext()
 
-    await downloadExerciseUpdates(actionContext, [update(1, 10)])
+    const result = await downloadExerciseUpdates(actionContext, [update(1, 10)])
 
     expect(refreshLocalExercises).toHaveBeenCalledOnce()
-    expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
-      "Failed to refresh local exercises.",
-      expect.any(Error),
-    )
+    expect(result.unwrap().warnings).toEqual([
+      { headline: "Failed to refresh local exercises.", error: expect.any(Error) },
+    ])
   })
 })

@@ -2,6 +2,7 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
 import type Langs from "../api/langs"
+import type { OperationWarning, Warned } from "../api/withOperation"
 import {
   ConnectionError,
   ForbiddenError,
@@ -46,21 +47,27 @@ export async function fetchStoredCourse(
 }
 
 /**
- * Tells the user `backend` refuses their session, and stays quiet until it serves them again.
+ * The warning that `backend` refuses the user's session, or none until it serves them again.
  *
  * `updateCourse` runs once per course and from a half-hourly background poll, so an
- * unguarded dialog would repeat for every course on every refresh.
+ * unguarded warning would repeat for every course on every refresh.
  */
-function reportSessionRefusal(
-  { authState, dialog }: ReadyActionContext,
+function sessionRefusalWarnings(
+  { authState }: ReadyActionContext,
   backend: BackendKind,
   error: Error,
-): void {
+): OperationWarning[] {
   if (authState.sessionRefusalsReported.has(backend)) {
-    return
+    return []
   }
   authState.sessionRefusalsReported.add(backend)
-  dialog.reportError("Failed to update course data.", error)
+  return [{ headline: "Failed to update course data.", error }]
+}
+
+/** What {@link updateCourse} did. */
+export interface CourseUpdate extends Warned {
+  /** Whether the backend's data was received and stored. */
+  isUpdated: boolean
 }
 
 /**
@@ -71,12 +78,11 @@ function reportSessionRefusal(
  * updated every course it means to, so a rescan does not repeat per course.
  *
  * @param courseId ID of the course to update.
- * @returns Boolean value representing whether the data from server was successfully received.
  */
 export async function updateCourse(
   actionContext: ReadyActionContext,
   courseId: CourseIdentifier,
-): Promise<Result<boolean, Error>> {
+): Promise<Result<CourseUpdate, Error>> {
   const { exerciseDecorationProvider, langs, userData, workspaceManager } = actionContext.startup
   Logger.info("Updating course")
 
@@ -101,8 +107,10 @@ export async function updateCourse(
     ) {
       // Says nothing about the course, so nothing stored about it is touched.
       Logger.warn(`${backendName(courseId.kind)} refused the session.`, updateResult.val)
-      reportSessionRefusal(actionContext, courseId.kind, updateResult.val)
-      return Ok(false)
+      return Ok({
+        isUpdated: false,
+        warnings: sessionRefusalWarnings(actionContext, courseId.kind, updateResult.val),
+      })
     }
     if (updateResult.val instanceof ForbiddenError) {
       if (courseData.kind === "tmc" && !courseData.data.disabled) {
@@ -115,14 +123,14 @@ export async function updateCourse(
       } else {
         Logger.warn(`ForbiddenError above probably caused by course still being disabled`)
       }
-      return Ok(false)
+      return Ok({ isUpdated: false, warnings: [] })
     } else if (
       updateResult.val instanceof ConnectionError ||
       updateResult.val instanceof ServerError
     ) {
       Logger.warn(`Failed to fetch data from ${backendName(courseId.kind)}, data not updated.`)
       actionContext.coursesTree.setBackendReachable(courseId.kind, false)
-      return Ok(false)
+      return Ok({ isUpdated: false, warnings: [] })
     }
     return updateResult
   }
@@ -146,5 +154,5 @@ export async function updateCourse(
     )
   }
 
-  return Ok(true)
+  return Ok({ isUpdated: true, warnings: [] })
 }

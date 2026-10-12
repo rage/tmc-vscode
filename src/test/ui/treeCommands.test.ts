@@ -170,7 +170,7 @@ suite("Courses view commands", function () {
 
   test("open warns past the open-exercise limit, offering to close the completed ones", async function () {
     vi.mocked(downloadAndOpenExercises).mockResolvedValueOnce(
-      Ok({ ids: [], exceededOpenLimit: 50 }),
+      Ok({ ids: [], exceededOpenLimit: 50, warnings: [] }),
     )
     const actionContext = context()
 

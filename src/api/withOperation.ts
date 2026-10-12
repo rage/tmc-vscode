@@ -14,14 +14,46 @@ export interface OperationOptions {
   failure: string
   /**
    * Logs a failure or a busy rejection instead of showing it: for runs the user did not ask
-   * for, and for entry points that render the failure themselves. Warnings the operation
-   * reports for failures it carried on past are still shown.
+   * for, and for entry points that render the failure themselves. An operation's
+   * {@link Warned.warnings} are still shown.
    */
   silent?: boolean
   /** Runs `body` under a progress notification with this message. */
   progress?: string
   /** Shows {@link progress} there instead of in a notification. */
   progressLocation?: ProgressLocation
+}
+
+/** A failure an operation carried on past, shown as an error notification led by `headline`. */
+export interface OperationWarning {
+  headline: string
+  error: Error
+}
+
+/**
+ * The success of an operation that carried on past failures. {@link withOperation} shows its
+ * warnings; an entry point running the operation without it shows them with {@link reportWarnings}.
+ */
+export interface Warned {
+  warnings: OperationWarning[]
+}
+
+/** Shows each warning as its own error notification. */
+export function reportWarnings(dialog: Dialog, warnings: readonly OperationWarning[]): void {
+  for (const { headline, error } of warnings) {
+    void dialog.reportError(headline, error)
+  }
+}
+
+/** Logs the warnings of an operation that failed after them, its `Err` having no room for them. */
+export function logWarnings(warnings: readonly OperationWarning[]): void {
+  for (const { headline, error } of warnings) {
+    Logger.error(headline, error)
+  }
+}
+
+function isWarned(value: unknown): value is Warned {
+  return typeof value === "object" && value !== null && Array.isArray((value as Warned).warnings)
 }
 
 class OperationFailure extends Error {
@@ -45,8 +77,9 @@ export function failure(headline: string, cause?: Error): Err<Error> {
  * Runs one operation on the user's behalf and reports how it failed, exactly once.
  *
  * Resolves to what `body` resolved to; a throw becomes an `Err`. Never rejects, and never waits
- * on the notification it shows. Success is the caller's to announce. A busy rejection
- * (`BottleneckError`) is shown as information, not as an error.
+ * on the notification it shows. Success is the caller's to announce, but the warnings of a
+ * {@link Warned} success are shown here. A busy rejection (`BottleneckError`) is shown as
+ * information, not as an error.
  *
  * @param body The operation. `report` feeds the progress bar when `options.progress` is set,
  * and does nothing otherwise.
@@ -70,6 +103,8 @@ export async function withOperation<T>(
   }
   if (result.err) {
     reportFailure(dialog, options, result.val)
+  } else if (isWarned(result.val)) {
+    reportWarnings(dialog, result.val.warnings)
   }
   return result
 }

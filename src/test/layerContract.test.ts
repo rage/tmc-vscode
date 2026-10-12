@@ -2,7 +2,7 @@ import * as fs from "fs"
 import * as path from "path"
 
 // `.oxlintrc.json` bans the prompts and toasts in src/actions by name; what a rule cannot
-// express is which failures an operation may report itself, so that is pinned here.
+// express is which command an operation routes into.
 
 const actionsRoot = path.join(__dirname, "..", "actions")
 
@@ -21,35 +21,7 @@ function firstArguments(source: string, callee: string): string[] {
   )
 }
 
-// Failures an operation carried on past, so no entry point hears of them. The failure an
-// operation returns is never reported by the operation: `withOperation` does that.
-const carriedOnPastWarnings = [
-  "downloadCourseExercises.ts: Failed to refresh local exercises.",
-  "downloadExerciseUpdates.ts: Failed to refresh local exercises.",
-  // one notification for the whole download, naming every exercise that failed
-  "downloadOrUpdateExercises.ts: Failed to download ${describeExercises(names)}.",
-  'removeCourse.ts: Failed to clear the record of closed exercises for "${courseName}".',
-  'removeCourse.ts: Failed to remove the workspace file for "${courseName}".',
-  "submitExercise.ts: Failed to record the grading.",
-  // once per refusal; the only way a background poll tells the user a backend refuses the session
-  "updateCourse.ts: Failed to update course data.",
-]
-
 suite("the operation layer contract", function () {
-  test("an operation reports only the failures it carried on past", function () {
-    const reported = actionSources().flatMap(([file, source]) =>
-      firstArguments(source, "reportError").map((headline) => `${file}: ${headline}`),
-    )
-    expect(reported).toEqual(carriedOnPastWarnings)
-  })
-
-  test("an operation uses no dialog but reportError and a nested progress bar", function () {
-    const used = actionSources().flatMap(([file, source]) =>
-      [...source.matchAll(/\bdialog\s*\??\.\s*(\w+)/g)].map((match) => `${file}: ${match[1]}`),
-    )
-    expect(used.filter((use) => !/: (reportError|progressNotification)$/.test(use))).toEqual([])
-  })
-
   test("an operation never routes into one of the extension's own commands", function () {
     const routed = actionSources().flatMap(([file, source]) =>
       firstArguments(source, "executeCommand")

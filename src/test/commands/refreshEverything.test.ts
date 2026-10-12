@@ -15,7 +15,7 @@ import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions/updateCourse", () => ({
-  updateCourse: vi.fn(async () => Ok(true)),
+  updateCourse: vi.fn(async () => Ok({ isUpdated: true, warnings: [] })),
 }))
 
 // The course-update pass ends by rescanning the exercises on disk, which would otherwise
@@ -77,7 +77,7 @@ const headlineLogs = (): unknown[][] =>
 suite("refreshEverything command", function () {
   beforeEach(function () {
     vi.mocked(updateCourse).mockReset()
-    vi.mocked(updateCourse).mockResolvedValue(Ok(true))
+    vi.mocked(updateCourse).mockResolvedValue(Ok({ isUpdated: true, warnings: [] }))
     vi.mocked(updateExercises).mockReset()
     vi.mocked(updateExercises).mockResolvedValue(undefined)
   })
@@ -86,7 +86,7 @@ suite("refreshEverything command", function () {
     const order: string[] = []
     vi.mocked(updateCourse).mockImplementation(async () => {
       order.push("updateCourse")
-      return Ok(true)
+      return Ok({ isUpdated: true, warnings: [] })
     })
     vi.mocked(updateExercises).mockImplementation(async () => {
       order.push("updateExercises")
@@ -107,7 +107,7 @@ suite("refreshEverything command", function () {
     })
     vi.mocked(updateCourse).mockImplementation(async () => {
       await blocked
-      return Ok(true)
+      return Ok({ isUpdated: true, warnings: [] })
     })
     const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [])])
 
@@ -129,7 +129,7 @@ suite("refreshEverything command", function () {
     })
     vi.mocked(updateCourse).mockImplementationOnce(async () => {
       await blocked
-      return Ok(true)
+      return Ok({ isUpdated: true, warnings: [] })
     })
     const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [])])
     const queuedOptions = {
@@ -159,7 +159,7 @@ suite("refreshEverything command", function () {
     })
     vi.mocked(updateCourse).mockImplementation(async () => {
       await blocked
-      return Ok(true)
+      return Ok({ isUpdated: true, warnings: [] })
     })
     const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [])])
 
@@ -210,7 +210,7 @@ suite("refreshEverything reporting", function () {
   test("a silent refresh still shows the warning an operation raised", async function () {
     vi.mocked(updateCourse).mockImplementation(async (context) => {
       void context.dialog.reportError("Failed to update course data.", new Error("scope"))
-      return Ok(false)
+      return Ok({ isUpdated: false, warnings: [] })
     })
     const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [])])
 
@@ -226,11 +226,11 @@ suite("refreshEverything reporting", function () {
 suite("refreshEverything's new-exercises prompt", function () {
   beforeEach(function () {
     vi.mocked(updateCourse).mockReset()
-    vi.mocked(updateCourse).mockResolvedValue(Ok(true))
+    vi.mocked(updateCourse).mockResolvedValue(Ok({ isUpdated: true, warnings: [] }))
     vi.mocked(updateExercises).mockReset()
     vi.mocked(updateExercises).mockResolvedValue(undefined)
     vi.mocked(downloadNewExercisesForCourse).mockReset()
-    vi.mocked(downloadNewExercisesForCourse).mockResolvedValue(Ok.EMPTY)
+    vi.mocked(downloadNewExercisesForCourse).mockResolvedValue(Ok({ warnings: [] }))
   })
 
   type Button = [string, () => void]
@@ -314,7 +314,9 @@ suite("refreshEverything's new-exercises prompt", function () {
 
   test("Download All carries on past a course that fails, and reports it once", async function () {
     vi.mocked(downloadNewExercisesForCourse).mockImplementation(async (_context, courseId) =>
-      CourseIdentifier.equals(courseId, idOfTmcCourse(1)) ? Err(new Error("disk full")) : Ok.EMPTY,
+      CourseIdentifier.equals(courseId, idOfTmcCourse(1))
+        ? Err(new Error("disk full"))
+        : Ok({ warnings: [] }),
     )
     const [actionContext, dialog] = contextWithCourses([
       tmcCourse(1, 0, [10]),
@@ -371,7 +373,7 @@ suite("refreshEverything's new-exercises prompt", function () {
 suite("refreshCourses command", function () {
   beforeEach(function () {
     vi.mocked(updateCourse).mockReset()
-    vi.mocked(updateCourse).mockResolvedValue(Ok(true))
+    vi.mocked(updateCourse).mockResolvedValue(Ok({ isUpdated: true, warnings: [] }))
     vi.mocked(updateExercises).mockReset()
     vi.mocked(updateExercises).mockResolvedValue(undefined)
   })

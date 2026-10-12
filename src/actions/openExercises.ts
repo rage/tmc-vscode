@@ -3,6 +3,8 @@ import * as os from "os"
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
+import type { OperationWarning, Warned } from "../api/withOperation"
+import { logWarnings } from "../api/withOperation"
 import { ExerciseStatus } from "../api/workspaceManager"
 import type { CourseIdentifier } from "../shared/shared"
 import { ExerciseIdentifier, LocalCourseData, LocalCourseExercise } from "../shared/shared"
@@ -78,7 +80,7 @@ export async function downloadAndOpenExercises(
   actionContext: ReadyActionContext,
   exerciseIdsToOpen: ExerciseIdentifier[],
   courseId: CourseIdentifier,
-): Promise<Result<OpenedExercises, Error>> {
+): Promise<Result<OpenedExercises & Warned, Error>> {
   const { userData, workspaceManager } = actionContext.startup
 
   const courseResult = userData.getCourse(courseId)
@@ -90,6 +92,7 @@ export async function downloadAndOpenExercises(
       ExerciseIdentifier.key(LocalCourseExercise.getId(x)),
     ),
   )
+  const warnings: OperationWarning[] = []
   const exercisesToDownload = exerciseIdsToOpen.filter(
     (id) => courseExerciseKeys.has(ExerciseIdentifier.key(id)) && !workspaceManager.getExercise(id),
   )
@@ -98,7 +101,13 @@ export async function downloadAndOpenExercises(
     if (downloaded.err) {
       return downloaded
     }
+    warnings.push(...downloaded.val.warnings)
   }
 
-  return openExercises(actionContext, exerciseIdsToOpen, courseId)
+  const opened = await openExercises(actionContext, exerciseIdsToOpen, courseId)
+  if (opened.err) {
+    logWarnings(warnings)
+    return opened
+  }
+  return Ok({ ...opened.val, warnings })
 }

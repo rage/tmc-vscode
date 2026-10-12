@@ -341,7 +341,11 @@
         "no-restricted-properties": [
           "error",
           {
-            "property": "confirmation",
+            "property": "confirm",
+            "message": "Operations never prompt or toast. Return the outcome; the entry point shows it inside withOperation."
+          },
+          {
+            "property": "choose",
             "message": "Operations never prompt or toast. Return the outcome; the entry point shows it inside withOperation."
           },
           {
@@ -362,6 +366,14 @@
           },
           {
             "property": "errorNotification",
+            "message": "Operations never prompt or toast. Return the outcome; the entry point shows it inside withOperation."
+          },
+          {
+            "property": "reportError",
+            "message": "Operations never toast. Return a failure carried on past as one of the outcome's warnings."
+          },
+          {
+            "property": "statusMessage",
             "message": "Operations never prompt or toast. Return the outcome; the entry point shows it inside withOperation."
           },
           {

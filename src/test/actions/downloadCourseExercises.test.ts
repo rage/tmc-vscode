@@ -62,6 +62,7 @@ suite("downloadCourseExercises", function () {
       Ok({
         successful: [idOfTmcExercise(201)],
         failed: [idOfTmcExercise(202)],
+        warnings: [],
       }),
     )
     const [actionContext] = contextWith([201, 202])
@@ -74,16 +75,15 @@ suite("downloadCourseExercises", function () {
 
   test("reports a rescan that fails", async function () {
     vi.mocked(downloadOrUpdateExercises).mockResolvedValue(
-      Ok({ successful: requested, failed: [] }),
+      Ok({ successful: requested, failed: [], warnings: [] }),
     )
     vi.mocked(refreshLocalExercises).mockResolvedValue(Err(new Error("refresh failed")))
-    const [actionContext, dialog] = contextWith([201, 202])
+    const [actionContext] = contextWith([201, 202])
 
-    await downloadCourseExercises(actionContext, COURSE_ID, requested)
+    const result = await downloadCourseExercises(actionContext, COURSE_ID, requested)
 
-    expect(dialog.reportError).toHaveBeenCalledWith(
-      "Failed to refresh local exercises.",
-      expect.any(Error),
-    )
+    expect(result.unwrap().warnings).toEqual([
+      { headline: "Failed to refresh local exercises.", error: expect.any(Error) },
+    ])
   })
 })

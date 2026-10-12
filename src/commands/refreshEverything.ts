@@ -4,7 +4,8 @@ import { Err, Ok } from "ts-results"
 import type { CourseUpdateOptions } from "../actions"
 import { checkForCourseUpdates, downloadNewExercisesForCourse } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import { failure, withOperation } from "../api/withOperation"
+import type { Warned } from "../api/withOperation"
+import { failure, reportWarnings, withOperation } from "../api/withOperation"
 import { NOTIFICATION_DELAY } from "../config/constants"
 import { BottleneckError } from "../errors"
 import { CourseIdentifier, LocalCourseData } from "../shared/shared"
@@ -92,6 +93,7 @@ async function refresh(
   try {
     const refreshed = await checkForCourseUpdates(actionContext, { courseId, onProgress })
     if (refreshed.ok) {
+      reportWarnings(actionContext.dialog, refreshed.val.warnings)
       offerNewExercises(actionContext, refreshed.val.courses)
     }
     const refreshFailure = refreshed.err ? refreshed.val : refreshed.val.failure
@@ -136,7 +138,7 @@ function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCour
   const forEachCourse =
     (
       headline: (title: string) => string,
-      step: (course: LocalCourseData) => Promise<Result<void, Error>>,
+      step: (course: LocalCourseData) => Promise<Result<Warned | void, Error>>,
     ) =>
     (): void =>
       void withOperation(dialog, { failure: headline("a course") }, async () => {
@@ -145,6 +147,8 @@ function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCour
           const result = await step(course)
           if (result.err) {
             failed.push([LocalCourseData.getCourseTitle(course), result.val])
+          } else if (result.val) {
+            reportWarnings(dialog, result.val.warnings)
           }
         }
         const [first, ...others] = failed

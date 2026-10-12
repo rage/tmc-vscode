@@ -1,5 +1,6 @@
 import { Ok, Result } from "ts-results"
 
+import type { Warned } from "../api/withOperation"
 import type { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises"
 import { refreshLocalExercises } from "./refreshLocalExercises"
@@ -8,7 +9,7 @@ import type { ReadyActionContext } from "./types"
 /**
  * Downloads exercises of one course, takes them off its new-exercise list and rescans the
  * disk, so the Courses view shows the result. Errs, with nothing downloaded, only while some
- * of the exercises are busy with another operation.
+ * of the exercises are busy with another operation; any other failure is a warning.
  *
  * For exercises already on disk, see `downloadExerciseUpdates`.
  */
@@ -16,8 +17,7 @@ export async function downloadCourseExercises(
   actionContext: ReadyActionContext,
   courseId: CourseIdentifier,
   exerciseIds: ExerciseIdentifier[],
-): Promise<Result<void, Error>> {
-  const { dialog } = actionContext
+): Promise<Result<Warned, Error>> {
   const { userData } = actionContext.startup
   const downloaded = await downloadOrUpdateExercises(actionContext, exerciseIds, courseId)
   if (downloaded.err) {
@@ -27,8 +27,9 @@ export async function downloadCourseExercises(
     await userData.clearFromNewExercises(courseId, downloaded.val.successful),
     await refreshLocalExercises(actionContext),
   )
+  const { warnings } = downloaded.val
   if (refreshed.err) {
-    dialog.reportError("Failed to refresh local exercises.", refreshed.val)
+    warnings.push({ headline: "Failed to refresh local exercises.", error: refreshed.val })
   }
-  return Ok.EMPTY
+  return Ok({ warnings })
 }

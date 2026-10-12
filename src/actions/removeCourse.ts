@@ -2,6 +2,7 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type { OperationWarning, Warned } from "../api/withOperation"
 import { failure } from "../api/withOperation"
 import { closedExercisesSettingKey } from "../config/constants"
 import type { CourseIdentifier } from "../shared/shared"
@@ -14,7 +15,7 @@ import type { ReadyActionContext } from "./types"
  * for it: its closed-exercise setting and its `.code-workspace` file.
  *
  * The exercises already downloaded are deliberately left on disk. Failing to clean up the
- * setting or the workspace file is reported and does not stop the removal; an `Err` means
+ * setting or the workspace file is a warning and does not stop the removal; an `Err` means
  * the course is still in the user's courses.
  *
  * @param id ID of the course to remove
@@ -22,8 +23,7 @@ import type { ReadyActionContext } from "./types"
 export async function removeCourse(
   actionContext: ReadyActionContext,
   id: CourseIdentifier,
-): Promise<Result<void, Error>> {
-  const { dialog } = actionContext
+): Promise<Result<Warned, Error>> {
   const { langs, userData, workspaceManager } = actionContext.startup
 
   const courseResult = userData.getCourse(id)
@@ -40,22 +40,23 @@ export async function removeCourse(
     return failure(`Failed to remove "${courseName}" from your courses.`, deleteResult.val)
   }
 
+  const warnings: OperationWarning[] = []
   const unsetResult = await langs.unsetSetting(closedExercisesSettingKey(course.kind, courseName))
   if (unsetResult.err) {
-    dialog.reportError(
-      `Failed to clear the record of closed exercises for "${courseName}".`,
-      unsetResult.val,
-    )
+    warnings.push({
+      headline: `Failed to clear the record of closed exercises for "${courseName}".`,
+      error: unsetResult.val,
+    })
   }
 
   // Left behind, it would be reused verbatim if the course is added again, listing
   // folders for exercises the student may have deleted in the meantime.
   const workspaceFileResult = await workspaceManager.deleteWorkspaceFile(courseName, course.kind)
   if (workspaceFileResult.err) {
-    dialog.reportError(
-      `Failed to remove the workspace file for "${courseName}".`,
-      workspaceFileResult.val,
-    )
+    warnings.push({
+      headline: `Failed to remove the workspace file for "${courseName}".`,
+      error: workspaceFileResult.val,
+    })
   }
 
   if (
@@ -65,5 +66,5 @@ export async function removeCourse(
     Logger.info("Closing course workspace because it was removed.")
     await vscode.commands.executeCommand("workbench.action.closeFolder")
   }
-  return Ok.EMPTY
+  return Ok({ warnings })
 }

@@ -78,6 +78,7 @@ suite("downloadNewExercisesForCourse action", function () {
       Ok({
         successful: [idOfTmcExercise(1), idOfTmcExercise(2)],
         failed: [],
+        warnings: [],
       }),
     )
 
@@ -92,6 +93,7 @@ suite("downloadNewExercisesForCourse action", function () {
       Ok({
         successful: [idOfTmcExercise(1)],
         failed: [idOfTmcExercise(2)],
+        warnings: [],
       }),
     )
 

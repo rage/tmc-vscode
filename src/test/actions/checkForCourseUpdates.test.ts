@@ -13,7 +13,7 @@ import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions/updateCourse", () => ({
-  updateCourse: vi.fn(async () => Ok(true)),
+  updateCourse: vi.fn(async () => Ok({ isUpdated: true, warnings: [] })),
 }))
 
 // The course-update pass ends by rescanning the exercises on disk, which would otherwise
@@ -61,7 +61,7 @@ function contextWithCourses(courses: LocalCourseData[]): [ReadyActionContext, Di
 suite("checkForCourseUpdates action", function () {
   beforeEach(function () {
     vi.mocked(updateCourse).mockReset()
-    vi.mocked(updateCourse).mockResolvedValue(Ok(true))
+    vi.mocked(updateCourse).mockResolvedValue(Ok({ isUpdated: true, warnings: [] }))
   })
 
   test("refreshes a course whose new-exercise reminder is postponed", async function () {
@@ -88,7 +88,7 @@ suite("checkForCourseUpdates action", function () {
   })
 
   test("names a rescan that fails as the pass's failure", async function () {
-    vi.mocked(updateCourse).mockResolvedValue(Ok(true))
+    vi.mocked(updateCourse).mockResolvedValue(Ok({ isUpdated: true, warnings: [] }))
     const error = new Error("tmc-langs crashed")
     vi.mocked(refreshLocalExercises).mockResolvedValueOnce(Err(error))
     const [actionContext] = contextWithCourses([tmcCourse(1, 0, [])])
@@ -100,7 +100,9 @@ suite("checkForCourseUpdates action", function () {
 
   test("refreshes the other courses after one fails, and names the failure", async function () {
     vi.mocked(updateCourse).mockImplementation(async (_actionContext, id) =>
-      CourseIdentifier.toString(id) === "1" ? Err(new Error("boom")) : Ok(true),
+      CourseIdentifier.toString(id) === "1"
+        ? Err(new Error("boom"))
+        : Ok({ isUpdated: true, warnings: [] }),
     )
     const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, []), tmcCourse(2, 0, [])])
 
@@ -120,6 +122,7 @@ suite("checkForCourseUpdates action", function () {
     expect(result.ok && result.val).toEqual({
       courses: [tmcCourse(1, 0, [10])],
       failure: undefined,
+      warnings: [],
     })
     expect(dialog.notification).not.toHaveBeenCalled()
   })

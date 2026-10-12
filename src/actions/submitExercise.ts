@@ -3,6 +3,7 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type Langs from "../api/langs"
+import type { OperationWarning, Warned } from "../api/withOperation"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { OutOfTriesError } from "../errors"
 import { nextPanelId } from "../panels/routes"
@@ -247,14 +248,17 @@ function submitterFor(
   )
 }
 
-/** Records the grading locally and shows the outcome, reopening the panel if it was closed. */
+/**
+ * Records the grading locally and shows the outcome, reopening the panel if it was closed. A
+ * grading that could not be recorded is a warning.
+ */
 async function showOutcome(
   actionContext: ReadyActionContext,
   submission: Submission,
   outcome: SubmissionOutcome,
-): Promise<void> {
-  const { dialog } = actionContext
+): Promise<Warned> {
   const { exerciseDecorationProvider, userData } = actionContext.startup
+  const warnings: OperationWarning[] = []
   const { exercise, exerciseId } = submission
   const { recorded } = outcome
   if (recorded) {
@@ -267,7 +271,7 @@ async function showOutcome(
             recorded.awardedPoints,
           )
     if (written.err) {
-      dialog.reportError("Failed to record the grading.", written.val)
+      warnings.push({ headline: "Failed to record the grading.", error: written.val })
     } else {
       exerciseDecorationProvider.updateDecorationsForExercises(exercise)
     }
@@ -275,6 +279,7 @@ async function showOutcome(
 
   submissionViews.update({ panel: submission.panel, view: outcome.view, shouldReopen: true })
   submissionFinished.fire(submission.courseId)
+  return { warnings }
 }
 
 /**
@@ -290,7 +295,7 @@ async function showOutcome(
 export async function submitExercise(
   actionContext: ReadyActionContext,
   exercise: WorkspaceExercise,
-): Promise<Result<void, Error>> {
+): Promise<Result<Warned, Error>> {
   const { langs, userData } = actionContext.startup
   Logger.info(`Submitting exercise ${exercise.exerciseSlug} to ${backendName(exercise.backend)}`)
 
@@ -353,10 +358,9 @@ export async function submitExercise(
       Logger.error("Exercise submission failed", outcome.val)
       const error = toWebviewError(outcome.val)
       showSubmissionView(submission.panel, submitFailedView(error))
-      return Ok.EMPTY
+      return Ok({ warnings: [] })
     }
-    await showOutcome(actionContext, submission, outcome.val)
-    return Ok.EMPTY
+    return Ok(await showOutcome(actionContext, submission, outcome.val))
   })
 }
 
@@ -371,7 +375,7 @@ export async function submitExercise(
 export async function keepWaitingForGrading(
   actionContext: ReadyActionContext,
   panelId: number,
-): Promise<Result<void, Error>> {
+): Promise<Result<Warned, Error>> {
   const grading = unfinishedGradings.get(panelId)
   if (grading === undefined) {
     return Err(new Error("This submission has no grading left to wait for."))
@@ -384,8 +388,7 @@ export async function keepWaitingForGrading(
     unfinishedGradings.delete(panelId)
     const reporter = new SubmissionProgressReporter(grading.panel, "grading")
     const outcome = await waitForMoocGrading(actionContext.startup.langs, grading, reporter)
-    await showOutcome(actionContext, grading, outcome)
-    return Ok.EMPTY
+    return Ok(await showOutcome(actionContext, grading, outcome))
   })
 }
 

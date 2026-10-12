@@ -239,7 +239,7 @@ function stubHandlers(): {
     keepWaitingForGrading: vi
       .mocked(actions.keepWaitingForGrading)
       .mockReset()
-      .mockResolvedValue(Ok.EMPTY),
+      .mockResolvedValue(Ok({ warnings: [] })),
     openWorkspace,
     pasteExercise: vi.mocked(actions.pasteExercise).mockReset().mockResolvedValue(Ok("link")),
     refreshLocalExercises: vi
@@ -250,7 +250,10 @@ function stubHandlers(): {
       .mocked(actions.sendSubmissionFeedback)
       .mockReset()
       .mockResolvedValue(Ok.EMPTY),
-    updateCourse: vi.mocked(actions.updateCourse).mockReset().mockResolvedValue(Ok(true)),
+    updateCourse: vi
+      .mocked(actions.updateCourse)
+      .mockReset()
+      .mockResolvedValue(Ok({ isUpdated: true, warnings: [] })),
   }
 }
 

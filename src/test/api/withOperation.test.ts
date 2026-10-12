@@ -122,13 +122,24 @@ suite("withOperation", function () {
     warn.mockRestore()
   })
 
-  test("leaves the operation's own warnings visible when silent", async function () {
-    await withOperation(dialog, { failure: "Failed.", silent: true }, async () => {
-      void dialog.reportError("Log in again.", new InsufficientScopeError("scope"))
-      return Err(new Error("offline"))
-    })
+  test("shows each warning of a success, silent or not", async function () {
+    const scope = new InsufficientScopeError("scope")
+    const disk = new Error("disk full")
 
-    expect(dialog.reportError).toHaveBeenCalledOnce()
+    const result = await withOperation(dialog, { failure: "Failed.", silent: true }, async () =>
+      Ok({
+        warnings: [
+          { headline: "Log in again.", error: scope },
+          { headline: "Failed to refresh local exercises.", error: disk },
+        ],
+      }),
+    )
+
+    expect(result.ok).toBe(true)
+    expect(vi.mocked(dialog.reportError).mock.calls).toEqual([
+      ["Log in again.", scope],
+      ["Failed to refresh local exercises.", disk],
+    ])
   })
 
   test("resolves without waiting for the notification to be dismissed", async function () {
