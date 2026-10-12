@@ -18,6 +18,9 @@ importers:
       fs-extra:
         specifier: ^11.2.0
         version: 11.3.6
+      jsonc-parser:
+        specifier: ^3.3.1
+        version: 3.3.1
       lodash:
         specifier: ^4.17.21
         version: 4.18.1
@@ -8755,6 +8758,7 @@ time:
   husky@9.1.7: '2024-11-18T15:28:26.026Z'
   jest-mock-vscode@4.12.0: '2026-03-10T14:10:32.894Z'
   jsdom@29.1.1: '2026-04-30T08:52:48.353Z'
+  jsonc-parser@3.3.1: '2024-06-24T21:12:45.445Z'
   knip@6.35.1: '2026-09-09T06:51:30.554Z'
   lint-staged@17.0.8: '2026-06-20T19:37:47.480Z'
   lodash@4.18.1: '2026-04-01T21:01:20.458Z'

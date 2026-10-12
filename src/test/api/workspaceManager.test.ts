@@ -2,6 +2,7 @@ import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
 
+import * as jsonc from "jsonc-parser"
 import { Err, Ok } from "ts-results"
 import type { Mock } from "vitest"
 import { vi } from "vitest"
@@ -840,6 +841,34 @@ suite("WorkspaceManager class", function () {
         extensions: { recommendations: ["ikuyadeu.r", "ms-python.python"] },
       })
       expect(written).toContain("\n")
+    })
+
+    test("keeps comments and the other extension lists of a workspace file", async function () {
+      fs.writeFileSync(
+        workspaceFile,
+        [
+          "{",
+          "  // the course's own folders",
+          '  "folders": [],',
+          '  "extensions": {',
+          '    "recommendations": ["ikuyadeu.r"],',
+          '    "unwantedRecommendations": ["github.copilot"],',
+          "  },",
+          "}",
+        ].join("\n"),
+      )
+
+      await manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"])
+
+      const written = fs.readFileSync(workspaceFile, "utf-8")
+      expect(written).toContain("// the course's own folders")
+      expect(jsonc.parse(written)).toEqual({
+        folders: [],
+        extensions: {
+          recommendations: ["ikuyadeu.r", "ms-python.python"],
+          unwantedRecommendations: ["github.copilot"],
+        },
+      })
     })
 
     test("recommends into a workspace file that lists none yet", async function () {

@@ -1,6 +1,7 @@
 import * as path from "path"
 
 import * as fs from "fs-extra"
+import * as jsonc from "jsonc-parser"
 import * as _ from "lodash"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
@@ -350,19 +351,25 @@ export default class WorkspaceManager implements vscode.Disposable {
   ): Promise<void> {
     const pathToWorkspace = this._resources.getWorkspaceFilePath(workspace, backend)
     try {
-      await this._workspaceFileWrites.run(() => {
-        const workspaceData: { extensions?: { recommendations?: string[] } } = JSON.parse(
-          fs.readFileSync(pathToWorkspace, "utf-8"),
-        )
-        const current = workspaceData.extensions?.recommendations ?? []
+      await this._workspaceFileWrites.run(async () => {
+        const text = await fs.readFile(pathToWorkspace, "utf-8")
+        const errors: jsonc.ParseError[] = []
+        const workspaceData: { extensions?: { recommendations?: unknown } } | undefined =
+          jsonc.parse(text, errors, { allowTrailingComma: true })
+        const [error] = errors
+        if (error) {
+          throw new Error(`Unparseable workspace file: ${jsonc.printParseErrorCode(error.error)}`)
+        }
+        const stored = workspaceData?.extensions?.recommendations
+        const current = Array.isArray(stored) ? stored : []
         const recommendations = _.union(current, extensions)
         if (_.isEqual(recommendations, current)) {
           return
         }
-        fs.writeFileSync(
-          pathToWorkspace,
-          JSON.stringify({ ...workspaceData, extensions: { recommendations } }, null, 2),
-        )
+        const edits = jsonc.modify(text, ["extensions", "recommendations"], recommendations, {
+          formattingOptions: { insertSpaces: true, tabSize: 2 },
+        })
+        await fs.writeFile(pathToWorkspace, jsonc.applyEdits(text, edits))
       })
     } catch (e) {
       // Called from the document-open handler, where a recommendation the
