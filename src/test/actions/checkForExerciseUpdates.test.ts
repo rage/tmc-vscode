@@ -1,12 +1,19 @@
 import { Err, Ok } from "ts-results"
 
+import type { LocalCourseData } from "../../../shared/lib"
+import { makeMoocKind } from "../../../shared/lib"
 import { checkForExerciseUpdates } from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type { UserData } from "../../config/userdata"
-import type { LocalCourseData } from "../../shared/shared"
-import { CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
 import type { MoocLocalCourseData } from "../../storage/data"
+import { moocCourseData, moocCourseExercise } from "../fixtures/courses"
+import {
+  idOfMoocCourse,
+  idOfMoocExercise,
+  idOfTmcCourse,
+  idOfTmcExercise,
+} from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
@@ -16,36 +23,22 @@ import { createUserDataMock } from "../mocks/userdata"
 // The default userData mock exposes a single tmc course (id 0) whose exercises
 // are `1: hello_world` and `2: other_world`.
 const tmcOutdated = {
-  courseId: CourseIdentifier.from(0),
-  exerciseId: ExerciseIdentifier.from(2),
+  courseId: idOfTmcCourse(0),
+  exerciseId: idOfTmcExercise(2),
   exerciseName: "other_world",
 }
 
-const moocCourse: MoocLocalCourseData = {
+const moocCourse: MoocLocalCourseData = moocCourseData({
   id: "instance-uuid-1",
   name: "mooc-python-course",
   title: "Mooc Python",
-  description: null,
-  organization: "mooc",
-  exercises: [
-    {
-      id: "mooc-ex-1",
-      name: "mooc_hello",
-      availablePoints: 1,
-      awardedPoints: 0,
-      deadline: null,
-      passed: false,
-    },
-  ],
   availablePoints: 1,
-  awardedPoints: 0,
-  newExercises: [],
-  notifyAfter: 0,
-}
+  exercises: [moocCourseExercise({ id: "mooc-ex-1", name: "mooc_hello" })],
+})
 
 const moocOutdated = {
-  courseId: CourseIdentifier.from("instance-uuid-1"),
-  exerciseId: ExerciseIdentifier.from("mooc-ex-1"),
+  courseId: idOfMoocCourse("instance-uuid-1"),
+  exerciseId: idOfMoocExercise("mooc-ex-1"),
   exerciseName: "mooc_hello",
 }
 
@@ -93,10 +86,7 @@ suite("checkForExerciseUpdates action", function () {
   })
 
   test("should filter out unknown exercise ids", async function () {
-    tmcMockValues.tmcExerciseUpdates = Ok([
-      ExerciseIdentifier.from(2),
-      ExerciseIdentifier.from(404),
-    ])
+    tmcMockValues.tmcExerciseUpdates = Ok([idOfTmcExercise(2), idOfTmcExercise(404)])
     const result = await checkForExerciseUpdates(actionContext())
     expect(result.outdated).toEqual([tmcOutdated])
   })
@@ -106,7 +96,7 @@ suite("checkForExerciseUpdates action", function () {
       ...userDataMockValues.getCourses,
       makeMoocKind(moocCourse) as LocalCourseData,
     ]
-    tmcMockValues.moocExerciseUpdates = Ok([ExerciseIdentifier.from("mooc-ex-1")])
+    tmcMockValues.moocExerciseUpdates = Ok([idOfMoocExercise("mooc-ex-1")])
     const result = await checkForExerciseUpdates(actionContext())
     expect(result.outdated).toEqual([tmcOutdated, moocOutdated])
   })
@@ -118,7 +108,7 @@ suite("checkForExerciseUpdates action", function () {
     ]
     const error = new Error("tmc down")
     tmcMockValues.tmcExerciseUpdates = Err(error)
-    tmcMockValues.moocExerciseUpdates = Ok([ExerciseIdentifier.from("mooc-ex-1")])
+    tmcMockValues.moocExerciseUpdates = Ok([idOfMoocExercise("mooc-ex-1")])
     const result = await checkForExerciseUpdates(actionContext())
     expect(result.outdated).toEqual([moocOutdated])
     expect(result.failures).toEqual([{ backend: "tmc", error }])

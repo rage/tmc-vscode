@@ -1,6 +1,8 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
+import type { CourseIdentifier, ExerciseStatus as RowStatus } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import { closeExercises as closeExercisesAction } from "../../actions/closeExercises"
 import { downloadCourseExercises } from "../../actions/downloadCourseExercises"
 import { downloadExerciseUpdates } from "../../actions/downloadExerciseUpdates"
@@ -10,8 +12,6 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
 import { BottleneckError } from "../../errors"
-import type { CourseIdentifier, ExerciseStatus as RowStatus } from "../../shared/shared"
-import { makeMoocKind, makeTmcKind } from "../../shared/shared"
 import {
   closeCompletedExercises,
   closeExercises,
@@ -43,7 +43,7 @@ vi.mock("../../actions/closeExercises", () => ({
 const BUSY = "Some of these exercises are already downloading."
 
 const tmcCourse = makeTmcKind({ courseId: 1 })
-const moocCourse = makeMoocKind({ instanceId: "course-uuid" })
+const moocCourse = makeMoocKind({ moocCourseId: "course-uuid" })
 
 function row(courseId: CourseIdentifier, id: number | string, status: RowStatus): ExerciseTreeItem {
   return Object.assign(Object.create(ExerciseTreeItem.prototype) as ExerciseTreeItem, {
@@ -72,9 +72,9 @@ function courseContext(): ReadyActionContext {
     ],
   })
   const workspaceExercises = [
-    { exerciseSlug: "part01-01_done", status: ExerciseStatus.Open },
-    { exerciseSlug: "part01-02_todo", status: ExerciseStatus.Open },
-    { exerciseSlug: "part01-03_closed", status: ExerciseStatus.Closed },
+    { id: makeTmcKind({ tmcExerciseId: 1 }), status: ExerciseStatus.Open },
+    { id: makeTmcKind({ tmcExerciseId: 2 }), status: ExerciseStatus.Open },
+    { id: makeTmcKind({ tmcExerciseId: 3 }), status: ExerciseStatus.Closed },
   ]
   const [dialog] = createDialogMock()
   return {
@@ -170,7 +170,7 @@ suite("Courses view commands", function () {
 
   test("open warns past the open-exercise limit, offering to close the completed ones", async function () {
     vi.mocked(downloadAndOpenExercises).mockResolvedValueOnce(
-      Ok({ ids: [], exceededOpenLimit: 50 }),
+      Ok({ ids: [], exceededOpenLimit: 50, warnings: [] }),
     )
     const actionContext = context()
 

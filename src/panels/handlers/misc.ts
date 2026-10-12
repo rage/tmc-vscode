@@ -1,8 +1,8 @@
 import * as vscode from "vscode"
 
+import type { RunnableCommand } from "../../../shared/lib"
+import { assertUnreachable } from "../../../shared/lib"
 import { EXTENSION_ID } from "../../config/constants"
-import type { RunnableCommand } from "../../shared/shared"
-import { assertUnreachable } from "../../shared/shared"
 import { Logger, openWebLink } from "../../utilities"
 import type { HandlerMap } from "../router"
 

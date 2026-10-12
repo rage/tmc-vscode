@@ -1,11 +1,14 @@
 import * as path from "path"
 
 import * as fs from "fs-extra"
+import * as jsonc from "jsonc-parser"
 import * as _ from "lodash"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type { BackendKind } from "../../shared/lib"
+import { CourseIdentifier, ExerciseIdentifier } from "../../shared/lib"
 import {
   EXTENSION_ID,
   HIDE_META_FILES,
@@ -20,7 +23,6 @@ import {
 import type Resources from "../config/resources"
 import { EditorKind } from "../config/resources"
 import { FileSystemError } from "../errors"
-import type { BackendKind } from "../shared/shared"
 import { Logger } from "../utilities"
 
 /** What keeps VS Code from writing a course's `.code-workspace`. */
@@ -37,9 +39,17 @@ export enum ExerciseStatus {
   Open = "opened",
 }
 
+/** An exercise on disk, joined to the stored course it belongs to. */
 export interface WorkspaceExercise {
+  /** The stored exercise's id; join stored data on this, never on {@link exerciseSlug}. */
+  id: ExerciseIdentifier
+  courseId: CourseIdentifier
   backend: BackendKind
   courseSlug: string
+  /**
+   * The exercise's folder name. A mooc exercise's stored name is free text, which langs
+   * kebab-cases for its folder, so this need not equal any stored name.
+   */
   exerciseSlug: string
   status: ExerciseStatus
   uri: vscode.Uri
@@ -58,6 +68,30 @@ export type PersistClosedCourseExercises = (
   courseSlug: string,
   closedExerciseSlugs: string[],
 ) => Promise<Result<void, Error>>
+
+/** How long a workspace folder change may keep the workspace file to itself. */
+const FOLDER_CHANGE_TIMEOUT_MS = 5_000
+
+/**
+ * Runs `update`, an `updateWorkspaceFolders` call, and waits for the folder change event, which
+ * VS Code fires only once it has saved the new folder list into the workspace file.
+ */
+async function updateWorkspaceFoldersAndWait(
+  update: () => boolean,
+): Promise<"changed" | "refused" | "timedOut"> {
+  let listener: vscode.Disposable | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const changed = new Promise<"changed" | "timedOut">((resolve) => {
+    listener = vscode.workspace.onDidChangeWorkspaceFolders(() => resolve("changed"))
+    timer = setTimeout(() => resolve("timedOut"), FOLDER_CHANGE_TIMEOUT_MS)
+  })
+  try {
+    return update() ? await changed : "refused"
+  } finally {
+    listener?.dispose()
+    clearTimeout(timer)
+  }
+}
 
 /** Runs tasks one at a time, each once every earlier one has settled. */
 class SerialQueue {
@@ -122,15 +156,21 @@ export async function ensureWorkspaceRootFile(workspaceFileFolder: string): Prom
  */
 export default class WorkspaceManager implements vscode.Disposable {
   private _exercises: WorkspaceExercise[]
-  // The same objects as `_exercises`, keyed by `uri.fsPath`. Replace both together.
+  // The same objects as `_exercises`, keyed by `uri.fsPath` and by `ExerciseIdentifier.key`.
+  // Replace all three together.
   private _exercisesByPath: Map<string, WorkspaceExercise>
+  private _exercisesById: Map<string, WorkspaceExercise>
   private readonly _resources: Resources
   private readonly _disposables: vscode.Disposable[]
   private readonly _persistClosedExercises: PersistClosedCourseExercises
   private _recordedClosedExercises: Map<string, string>
+  private _isClosedStateKnown = true
+  // Per course key, so that one course's record is read and written by one change at a time.
+  private readonly _closedRecordWrites = new Map<string, SerialQueue>()
   private readonly _exercisesChanged = new vscode.EventEmitter<void>()
-  // A settings write and addWorkspaceRecommendation's raw rewrite of the same file would
-  // otherwise interleave, and one would lose the other's change.
+  // Every write of the open workspace file. VS Code refuses a settings write while it has the
+  // file's folder list unsaved, and addWorkspaceRecommendation's raw rewrite would lose a change
+  // interleaved with it.
   private readonly _workspaceFileWrites = new SerialQueue()
 
   /** Fires after the known exercises, or whether one is open or closed, change. */
@@ -149,6 +189,7 @@ export default class WorkspaceManager implements vscode.Disposable {
   ) {
     this._exercises = exercises ?? []
     this._exercisesByPath = WorkspaceManager._indexByPath(this._exercises)
+    this._exercisesById = WorkspaceManager._indexById(this._exercises)
     this._persistClosedExercises = persistClosedExercises
     this._recordedClosedExercises = WorkspaceManager._closedByCourse(this._exercises)
     this._resources = resources
@@ -234,13 +275,49 @@ export default class WorkspaceManager implements vscode.Disposable {
    * Replaces the known exercises. Their statuses are what the durable record
    * already says, so they become the last-written closed set rather than being
    * written back to it.
+   *
+   * @param isClosedStateKnown `false` when the durable record could not be read, so the
+   * statuses are a guess; nothing is written to the record, and opening or closing errs,
+   * until a call with it `true`.
+   *
+   * Fires {@link onDidChangeExercises} only when an exercise differs from the one known before.
    */
-  public async setExercises(exercises: WorkspaceExercise[]): Promise<Result<void, Error>> {
+  public async setExercises(
+    exercises: WorkspaceExercise[],
+    isClosedStateKnown = true,
+  ): Promise<Result<void, Error>> {
+    const isChanged = !WorkspaceManager._isSameExercises(this._exercises, exercises)
     this._exercises = exercises
     this._exercisesByPath = WorkspaceManager._indexByPath(exercises)
+    this._exercisesById = WorkspaceManager._indexById(exercises)
     this._recordedClosedExercises = WorkspaceManager._closedByCourse(exercises)
-    this._exercisesChanged.fire()
+    this._isClosedStateKnown = isClosedStateKnown
+    if (isChanged) {
+      this._exercisesChanged.fire()
+    }
     return this._refreshActiveCourseWorkspace()
+  }
+
+  private static _isSameExercises(
+    known: readonly WorkspaceExercise[],
+    replacing: readonly WorkspaceExercise[],
+  ): boolean {
+    return (
+      known.length === replacing.length &&
+      known.every((a, i) => {
+        const b = replacing[i]
+        return (
+          b !== undefined &&
+          ExerciseIdentifier.key(a.id) === ExerciseIdentifier.key(b.id) &&
+          CourseIdentifier.equals(a.courseId, b.courseId) &&
+          a.backend === b.backend &&
+          a.courseSlug === b.courseSlug &&
+          a.exerciseSlug === b.exerciseSlug &&
+          a.status === b.status &&
+          a.uri.fsPath === b.uri.fsPath
+        )
+      })
+    )
   }
 
   /**
@@ -277,15 +354,9 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
   }
 
-  public getExerciseBySlug(
-    backend: BackendKind,
-    courseSlug: string,
-    exerciseSlug: string,
-  ): WorkspaceExercise | undefined {
-    return this._exercises.find(
-      (x) =>
-        x.backend === backend && x.courseSlug === courseSlug && x.exerciseSlug === exerciseSlug,
-    )
+  /** The exercise on disk with this id, or `undefined` while it is not downloaded. */
+  public getExercise(id: ExerciseIdentifier): WorkspaceExercise | undefined {
+    return this._exercisesById.get(ExerciseIdentifier.key(id))
   }
 
   /** The open workspace folders that are exercises themselves; never `.tmc` or one added by hand. */
@@ -311,17 +382,17 @@ export default class WorkspaceManager implements vscode.Disposable {
   public openCourseExercises(
     backend: BackendKind,
     courseSlug: string,
-    exerciseSlugs: string[],
+    exerciseIds: ExerciseIdentifier[],
   ): Promise<Result<WorkspaceExercise[], Error>> {
-    return this._setOpen(backend, courseSlug, exerciseSlugs, true)
+    return this._setOpen(backend, courseSlug, exerciseIds, true)
   }
 
   public closeCourseExercises(
     backend: BackendKind,
     courseSlug: string,
-    exerciseSlugs: string[],
+    exerciseIds: ExerciseIdentifier[],
   ): Promise<Result<WorkspaceExercise[], Error>> {
-    return this._setOpen(backend, courseSlug, exerciseSlugs, false)
+    return this._setOpen(backend, courseSlug, exerciseIds, false)
   }
 
   /** Adds extension recommendations to a course's workspace file. Never rejects. */
@@ -332,19 +403,25 @@ export default class WorkspaceManager implements vscode.Disposable {
   ): Promise<void> {
     const pathToWorkspace = this._resources.getWorkspaceFilePath(workspace, backend)
     try {
-      await this._workspaceFileWrites.run(() => {
-        const workspaceData: { extensions?: { recommendations?: string[] } } = JSON.parse(
-          fs.readFileSync(pathToWorkspace, "utf-8"),
-        )
-        const current = workspaceData.extensions?.recommendations ?? []
+      await this._workspaceFileWrites.run(async () => {
+        const text = await fs.readFile(pathToWorkspace, "utf-8")
+        const errors: jsonc.ParseError[] = []
+        const workspaceData: { extensions?: { recommendations?: unknown } } | undefined =
+          jsonc.parse(text, errors, { allowTrailingComma: true })
+        const [error] = errors
+        if (error) {
+          throw new Error(`Unparseable workspace file: ${jsonc.printParseErrorCode(error.error)}`)
+        }
+        const stored = workspaceData?.extensions?.recommendations
+        const current = Array.isArray(stored) ? stored : []
         const recommendations = _.union(current, extensions)
         if (_.isEqual(recommendations, current)) {
           return
         }
-        fs.writeFileSync(
-          pathToWorkspace,
-          JSON.stringify({ ...workspaceData, extensions: { recommendations } }, null, 2),
-        )
+        const edits = jsonc.modify(text, ["extensions", "recommendations"], recommendations, {
+          formattingOptions: { insertSpaces: true, tabSize: 2 },
+        })
+        await fs.writeFile(pathToWorkspace, jsonc.applyEdits(text, edits))
       })
     } catch (e) {
       // Called from the document-open handler, where a recommendation the
@@ -658,7 +735,11 @@ export default class WorkspaceManager implements vscode.Disposable {
    * Refreshes current active course workspace by first making sure that the `.tmc` folder is at
    * the top and then lists all that course's open exercises in alphanumeric order.
    */
-  private async _refreshActiveCourseWorkspace(): Promise<Result<void, Error>> {
+  private _refreshActiveCourseWorkspace(): Promise<Result<void, Error>> {
+    return this._workspaceFileWrites.run(() => this._replaceWorkspaceFolders())
+  }
+
+  private async _replaceWorkspaceFolders(): Promise<Result<void, Error>> {
     const activeCourseWorkspace = this._activeCourseWorkspace
     const workspaceFolders = vscode.workspace.workspaceFolders
     if (!activeCourseWorkspace || !workspaceFolders) {
@@ -691,13 +772,18 @@ export default class WorkspaceManager implements vscode.Disposable {
 
     const deleteCount = workspaceFolders.length
     Logger.debug(`Replacing ${deleteCount} workspace folders with ${correctStructure.length}`)
-    const success = vscode.workspace.updateWorkspaceFolders(0, deleteCount, ...correctStructure)
-    if (!success) {
+    const outcome = await updateWorkspaceFoldersAndWait(() =>
+      vscode.workspace.updateWorkspaceFolders(0, deleteCount, ...correctStructure),
+    )
+    if (outcome === "refused") {
       Logger.error("Replace operation failed.")
       Logger.debug("Failed with folders:", ...correctStructure)
+      return Err(new Error("Failed to refresh active workspace."))
     }
-
-    return success ? Ok.EMPTY : Err(new Error("Failed to refresh active workspace."))
+    if (outcome === "timedOut") {
+      Logger.warn("VS Code did not confirm the workspace folder change in time.")
+    }
+    return Ok.EMPTY
   }
 
   /**
@@ -710,37 +796,47 @@ export default class WorkspaceManager implements vscode.Disposable {
    * @returns the exercises the request named — matched, not changed: one already
    * in the requested state is included.
    */
-  private async _setOpen(
+  private _setOpen(
     backend: BackendKind,
     courseSlug: string,
-    exerciseSlugs: string[],
+    exerciseIds: ExerciseIdentifier[],
     open: boolean,
   ): Promise<Result<WorkspaceExercise[], Error>> {
-    const courseExercises = this._exercises.filter(
-      (x) => x.backend === backend && x.courseSlug === courseSlug,
-    )
-    const requested = new Set(exerciseSlugs)
-    const closedAfterwards = courseExercises
-      .filter((x) => (requested.has(x.exerciseSlug) ? !open : x.status === ExerciseStatus.Closed))
-      .map((x) => x.exerciseSlug)
+    const requested = new Set(exerciseIds.map((id) => ExerciseIdentifier.key(id)))
+    const isRequested = (x: WorkspaceExercise): boolean =>
+      requested.has(ExerciseIdentifier.key(x.id))
+    const courseExercises = (): WorkspaceExercise[] =>
+      this._exercises.filter((x) => x.backend === backend && x.courseSlug === courseSlug)
 
-    const persisted = await this._persistClosedExercises(backend, courseSlug, closedAfterwards)
-    if (persisted.err) {
-      return persisted
-    }
-    this._recordedClosedExercises.set(
-      WorkspaceManager._courseKey(backend, courseSlug),
-      WorkspaceManager._closedFingerprint(closedAfterwards),
-    )
+    return this._closedRecordWrite(backend, courseSlug, async () => {
+      if (!this._isClosedStateKnown) {
+        return Err(
+          new Error("Which exercises are closed could not be read. Refresh the courses and retry."),
+        )
+      }
+      const closedAfterwards = courseExercises()
+        .filter((x) => (isRequested(x) ? !open : x.status === ExerciseStatus.Closed))
+        .map((x) => x.exerciseSlug)
 
-    const matched = courseExercises.filter((x) => requested.has(x.exerciseSlug))
-    for (const exercise of matched) {
-      exercise.status = open ? ExerciseStatus.Open : ExerciseStatus.Closed
-    }
-    this._exercisesChanged.fire()
+      const persisted = await this._persistClosedExercises(backend, courseSlug, closedAfterwards)
+      if (persisted.err) {
+        return persisted
+      }
+      this._recordedClosedExercises.set(
+        WorkspaceManager._courseKey(backend, courseSlug),
+        WorkspaceManager._closedFingerprint(closedAfterwards),
+      )
 
-    const refreshed = await this._refreshActiveCourseWorkspace()
-    return refreshed.err ? refreshed : Ok(matched)
+      // `setExercises` may have replaced the exercises while the write was in flight.
+      const matched = courseExercises().filter((x) => isRequested(x))
+      for (const exercise of matched) {
+        exercise.status = open ? ExerciseStatus.Open : ExerciseStatus.Closed
+      }
+      this._exercisesChanged.fire()
+
+      const refreshed = await this._refreshActiveCourseWorkspace()
+      return refreshed.err ? refreshed : Ok(matched)
+    })
   }
 
   /**
@@ -751,29 +847,46 @@ export default class WorkspaceManager implements vscode.Disposable {
    * re-enters the folder-change handler with the state it has just applied, so
    * writing unconditionally would cost a second CLI call per open or close.
    */
-  private async _recordClosedExercises(backend: BackendKind, courseSlug: string): Promise<void> {
-    const closedExerciseSlugs = this._exercises
-      .filter(
-        (x) =>
-          x.backend === backend &&
-          x.courseSlug === courseSlug &&
-          x.status === ExerciseStatus.Closed,
-      )
-      .map((x) => x.exerciseSlug)
-    const key = WorkspaceManager._courseKey(backend, courseSlug)
-    const fingerprint = WorkspaceManager._closedFingerprint(closedExerciseSlugs)
-    if (this._recordedClosedExercises.get(key) === fingerprint) {
-      return
-    }
+  private _recordClosedExercises(backend: BackendKind, courseSlug: string): Promise<void> {
+    return this._closedRecordWrite(backend, courseSlug, async () => {
+      if (!this._isClosedStateKnown) {
+        return
+      }
+      const closedExerciseSlugs = this._exercises
+        .filter(
+          (x) =>
+            x.backend === backend &&
+            x.courseSlug === courseSlug &&
+            x.status === ExerciseStatus.Closed,
+        )
+        .map((x) => x.exerciseSlug)
+      const key = WorkspaceManager._courseKey(backend, courseSlug)
+      const fingerprint = WorkspaceManager._closedFingerprint(closedExerciseSlugs)
+      if (this._recordedClosedExercises.get(key) === fingerprint) {
+        return
+      }
+      const persisted = await this._persistClosedExercises(backend, courseSlug, closedExerciseSlugs)
+      if (persisted.err) {
+        Logger.error(`Failed to record the closed exercises of ${courseSlug}.`, persisted.val)
+        return
+      }
+      this._recordedClosedExercises.set(key, fingerprint)
+    })
+  }
 
-    // Noted before the write, so two folder changes in flight do not both issue
-    // it; a failed write puts the course back in play for the next change.
-    this._recordedClosedExercises.set(key, fingerprint)
-    const persisted = await this._persistClosedExercises(backend, courseSlug, closedExerciseSlugs)
-    if (persisted.err) {
-      this._recordedClosedExercises.delete(key)
-      Logger.error(`Failed to record the closed exercises of ${courseSlug}.`, persisted.val)
+  /** Runs `task` after every earlier read-and-write of the course's closed record. */
+  private _closedRecordWrite<T>(
+    backend: BackendKind,
+    courseSlug: string,
+    task: () => Promise<T>,
+  ): Promise<T> {
+    const key = WorkspaceManager._courseKey(backend, courseSlug)
+    let queue = this._closedRecordWrites.get(key)
+    if (!queue) {
+      queue = new SerialQueue()
+      this._closedRecordWrites.set(key, queue)
     }
+    return queue.run(task)
   }
 
   private static _courseKey(backend: BackendKind, courseSlug: string): string {
@@ -804,6 +917,10 @@ export default class WorkspaceManager implements vscode.Disposable {
 
   private static _indexByPath(exercises: WorkspaceExercise[]): Map<string, WorkspaceExercise> {
     return new Map(exercises.map((x) => [x.uri.fsPath, x]))
+  }
+
+  private static _indexById(exercises: WorkspaceExercise[]): Map<string, WorkspaceExercise> {
+    return new Map(exercises.map((x) => [ExerciseIdentifier.key(x.id), x]))
   }
 
   private _onDidChangeWorkspaceFolders(e: vscode.WorkspaceFoldersChangeEvent): void {

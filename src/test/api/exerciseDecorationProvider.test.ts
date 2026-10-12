@@ -3,6 +3,7 @@ import * as vscode from "vscode"
 import ExerciseDecorationProvider from "../../api/exerciseDecorationProvider"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
+import { idOfMoocExercise } from "../fixtures/identifiers"
 import { userDataExerciseHelloWorld } from "../fixtures/userData"
 import { exerciseHelloWorld } from "../fixtures/workspaceManager"
 import type { UserDataMockValues } from "../mocks/userdata"
@@ -72,7 +73,12 @@ suite("ExerciseDecoratorProvider class", function () {
   })
 
   test("should decorate a mooc exercise from the mooc course data", function () {
-    workspaceManagerMockValues.getExerciseByPath = { ...exerciseHelloWorld, backend: "mooc" }
+    const moocExerciseId = idOfMoocExercise("mooc-ex-1")
+    workspaceManagerMockValues.getExerciseByPath = {
+      ...exerciseHelloWorld,
+      id: moocExerciseId,
+      backend: "mooc",
+    }
     userDataMockValues.tmcExercise = undefined
     userDataMockValues.moocExercise = {
       id: "mooc-ex-1",
@@ -84,17 +90,13 @@ suite("ExerciseDecoratorProvider class", function () {
     }
     const decoration = exerciseDecorationProvider.provideFileDecoration(exerciseHelloWorld.uri)
     expect((decoration as vscode.FileDecoration).badge).toBe("⬤")
-    expect(userDataMock.getExerciseByName).toHaveBeenCalledWith(
-      "mooc",
-      exerciseHelloWorld.courseSlug,
-      exerciseHelloWorld.exerciseSlug,
-    )
+    expect(userDataMock.getExercise).toHaveBeenCalledWith(moocExerciseId)
   })
 
   test("should not attempt to decorate a non-exercise", function () {
     const notExercise = vscode.Uri.file("something.txt")
     const decoration = exerciseDecorationProvider.provideFileDecoration(notExercise)
     expect(decoration).toBeUndefined()
-    expect(userDataMock.getExerciseByName).not.toHaveBeenCalled()
+    expect(userDataMock.getExercise).not.toHaveBeenCalled()
   })
 })

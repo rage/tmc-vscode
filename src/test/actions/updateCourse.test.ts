@@ -1,10 +1,15 @@
 import { Err, Ok } from "ts-results"
 
+import type {
+  CombinedCourseData,
+  CourseData,
+  CourseExercise,
+  Exercise,
+} from "../../../shared/langsSchema"
 import { addNewCourse } from "../../actions/addNewCourse"
 import type { ReadyActionContext } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
 import type { AuthState } from "../../api/authState"
-import type Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { UserData } from "../../config/userdata"
@@ -15,18 +20,13 @@ import {
   ServerError,
   TmcLoginNotAcceptedError,
 } from "../../errors"
-import type {
-  CombinedCourseData,
-  CourseData,
-  CourseExercise,
-  Exercise,
-} from "../../shared/langsSchema"
-import { CourseIdentifier } from "../../shared/shared"
 import Storage from "../../storage"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
 import type CoursesTree from "../../ui/treeview/treeview"
 import { Logger } from "../../utilities"
 import { combineTmcApiExerciseData } from "../../utilities/apiData"
+import { tmcCourseData as storedTmcCourseData } from "../fixtures/courses"
+import { idOfMoocCourse, idOfTmcCourse } from "../fixtures/identifiers"
 import {
   MOOC_COURSE_UUID,
   MOOC_EXERCISE_UUID,
@@ -39,7 +39,6 @@ import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
 import { createMockContext } from "../mocks/vscode"
 import { createWorkspaceMangerMock } from "../mocks/workspaceManager"
-import { autoMock } from "../support/mock"
 
 const storedMoocCourse: MoocLocalCourseData = {
   id: MOOC_COURSE_UUID,
@@ -55,7 +54,7 @@ const storedMoocCourse: MoocLocalCourseData = {
 }
 
 suite("updateCourse action (mooc)", function () {
-  const courseId = CourseIdentifier.from(MOOC_COURSE_UUID)
+  const courseId = idOfMoocCourse(MOOC_COURSE_UUID)
 
   let tmcMock: Langs
   let tmcMockValues: TMCMockValues
@@ -70,12 +69,6 @@ suite("updateCourse action (mooc)", function () {
     }),
     authState,
   })
-
-  // A context whose dialog is nobody else's, so its call count is this call's alone.
-  function contextWithOwnDialog(): { context: ReadyActionContext; dialog: Dialog } {
-    const dialog = autoMock<Dialog>()
-    return { context: { ...actionContext(), dialog }, dialog }
-  }
 
   // Replaces the stored course, for a test that needs it in some other starting state.
   async function storeCourse(course: MoocLocalCourseData): Promise<void> {
@@ -97,7 +90,7 @@ suite("updateCourse action (mooc)", function () {
 
   test("maps course slides into local mooc exercises keyed by exercise id", async function () {
     const result = await updateCourse(actionContext(), courseId)
-    expect(result.val).toBe(true)
+    expect(result.unwrap().isUpdated).toBe(true)
     const stored = userData.getMoocCourses()[0]
     // Keyed by the slide's exercise id (matches what the bulk download subcommand
     // resolves `--exercise-id` against), not the task id.
@@ -107,7 +100,7 @@ suite("updateCourse action (mooc)", function () {
 
   test("populates exercise and course points from the user's course progress", async function () {
     const result = await updateCourse(actionContext(), courseId)
-    expect(result.val).toBe(true)
+    expect(result.unwrap().isUpdated).toBe(true)
     const stored = userData.getMoocCourses()[0]
     // Fixture: passed, 1/1 points.
     expect(stored?.exercises[0]?.passed).toBe(true)
@@ -121,7 +114,7 @@ suite("updateCourse action (mooc)", function () {
     // A refresh writes back the fetched course, not just its points, or a renamed course
     // stays stale forever. The stored fixture disagrees with the fetched one on every field.
     const result = await updateCourse(actionContext(), courseId)
-    expect(result.val).toBe(true)
+    expect(result.unwrap().isUpdated).toBe(true)
     const stored = userData.getMoocCourses()[0]
     expect(stored?.description).toBe("A mooc course")
     expect(stored?.title).toBe("Mooc Python")
@@ -151,25 +144,20 @@ suite("updateCourse action (mooc)", function () {
 
     const result = await updateCourse(actionContext(), courseId)
 
-    expect(result.val).toBe(false)
+    expect(result.unwrap().isUpdated).toBe(false)
     expect(userData.getMoocCourses()).toEqual(before)
   })
 
   test("offers a login once per lapse, and again once the session is renewed", async function () {
     tmcMockValues.getMoocCourseData = Err(new InsufficientScopeError("no scope"))
 
-    const first = contextWithOwnDialog()
-    await updateCourse(first.context, courseId)
-    expect(first.dialog.reportError).toHaveBeenCalledWith(
-      "Failed to update course data.",
-      expect.any(InsufficientScopeError),
-    )
+    expect((await updateCourse(actionContext(), courseId)).unwrap().warnings).toEqual([
+      { headline: "Failed to update course data.", error: expect.any(InsufficientScopeError) },
+    ])
 
     // updateCourse runs once per course and from a background poll, so a second
     // failure must stay quiet.
-    const repeat = contextWithOwnDialog()
-    await updateCourse(repeat.context, courseId)
-    expect(repeat.dialog.reportError).not.toHaveBeenCalled()
+    expect((await updateCourse(actionContext(), courseId)).unwrap().warnings).toEqual([])
 
     tmcMockValues.getMoocCourseData = Ok({
       course: moocCourse,
@@ -179,9 +167,7 @@ suite("updateCourse action (mooc)", function () {
     await updateCourse(actionContext(), courseId)
     tmcMockValues.getMoocCourseData = Err(new InsufficientScopeError("no scope"))
 
-    const afterRenewal = contextWithOwnDialog()
-    await updateCourse(afterRenewal.context, courseId)
-    expect(afterRenewal.dialog.reportError).toHaveBeenCalledTimes(1)
+    expect((await updateCourse(actionContext(), courseId)).unwrap().warnings).toHaveLength(1)
   })
 
   test.each([new ConnectionError("down"), new ServerError("503")])(
@@ -190,7 +176,7 @@ suite("updateCourse action (mooc)", function () {
       const warn = vi.spyOn(Logger, "warn").mockImplementation(() => {})
       tmcMockValues.getMoocCourseData = Err(error)
       const result = await updateCourse(actionContext(), courseId)
-      expect(result.val).toBe(false)
+      expect(result.unwrap().isUpdated).toBe(false)
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("courses.mooc.fi"))
     },
   )
@@ -214,21 +200,14 @@ suite("updateCourse action (mooc)", function () {
   })
 })
 
-const tmcCourse: TmcLocalCourseData = {
+const tmcCourse: TmcLocalCourseData = storedTmcCourseData({
   id: 1,
   name: "test-python-course",
   title: "Stale title",
   description: "Stale description",
   organization: "test",
-  exercises: [],
-  availablePoints: 0,
-  awardedPoints: 0,
-  perhapsExamMode: false,
-  newExercises: [],
-  notifyAfter: 0,
   disabled: true,
-  materialUrl: null,
-}
+})
 
 const tmcExerciseDefaults: Omit<Exercise, "id" | "name" | "completed"> = {
   all_review_points_given: false,
@@ -328,7 +307,7 @@ const tmcCourseData: CombinedCourseData = {
 }
 
 suite("updateCourse action (tmc)", function () {
-  const courseId = CourseIdentifier.from(1)
+  const courseId = idOfTmcCourse(1)
 
   let langsMock: Langs
   let getTmcCourseData: ReturnType<typeof vi.fn>
@@ -357,7 +336,7 @@ suite("updateCourse action (tmc)", function () {
   test("refreshes the course metadata the tmc server owns", async function () {
     const result = await updateCourse(actionContext(), courseId)
 
-    expect(result.val).toBe(true)
+    expect(result.unwrap().isUpdated).toBe(true)
     const stored = userData.getTmcCourses()[0]
     expect(stored?.description).toBe("A tmc course")
     expect(stored?.materialUrl).toBe("https://materials.example/test-python-course")
@@ -386,7 +365,7 @@ suite("updateCourse action (tmc)", function () {
     })
     userData = new UserData(storage)
 
-    expect((await updateCourse(actionContext(), courseId)).val).toBe(true)
+    expect((await updateCourse(actionContext(), courseId)).unwrap().isUpdated).toBe(true)
 
     const stored = userData.getTmcCourses()[0]
     expect(stored?.name).toBe("old-slug")
@@ -408,7 +387,7 @@ suite("updateCourse action (tmc)", function () {
     })
     userData = new UserData(storage)
 
-    expect((await updateCourse(actionContext(), courseId)).val).toBe(true)
+    expect((await updateCourse(actionContext(), courseId)).unwrap().isUpdated).toBe(true)
 
     expect(userData.getTmcCourses()[0]?.newExercises).toEqual([3])
   })
@@ -418,7 +397,7 @@ suite("updateCourse action (tmc)", function () {
     // points; folding those into the totals would overstate what the course is worth.
     const result = await updateCourse(actionContext(), courseId)
 
-    expect(result.val).toBe(true)
+    expect(result.unwrap().isUpdated).toBe(true)
     const stored = userData.getTmcCourses()[0]
     expect(stored?.availablePoints).toBe(2)
     expect(stored?.awardedPoints).toBe(2)
@@ -427,7 +406,7 @@ suite("updateCourse action (tmc)", function () {
   test("falls back to placeholder points for an exercise the points endpoint omits", async function () {
     const result = await updateCourse(actionContext(), courseId)
 
-    expect(result.val).toBe(true)
+    expect(result.unwrap().isUpdated).toBe(true)
     const stored = userData.getTmcCourses()[0]
     const [first, second, third] = stored?.exercises ?? []
     expect(first).toMatchObject({ id: 1, availablePoints: 2, awardedPoints: 2, passed: true })
@@ -442,10 +421,11 @@ suite("updateCourse action (tmc)", function () {
     const context = actionContext()
     getTmcCourseData.mockResolvedValue(Err(new TmcLoginNotAcceptedError("not logged in")))
 
-    expect((await updateCourse(context, courseId)).val).toBe(false)
-    expect((await updateCourse(context, courseId)).val).toBe(false)
+    const first = (await updateCourse(context, courseId)).unwrap()
+    const repeat = (await updateCourse(context, courseId)).unwrap()
 
-    expect(context.dialog.reportError).toHaveBeenCalledOnce()
+    expect(first).toEqual({ isUpdated: false, warnings: [expect.anything()] })
+    expect(repeat).toEqual({ isUpdated: false, warnings: [] })
     expect(userData.getTmcCourses()[0]?.title).toBe("Stale title")
   })
 
@@ -455,7 +435,7 @@ suite("updateCourse action (tmc)", function () {
 
     const result = await updateCourse(actionContext(), courseId)
 
-    expect(result.val).toBe(false)
+    expect(result.unwrap().isUpdated).toBe(false)
     expect(userData.getTmcCourses()[0]?.disabled).toBe(true)
   })
 
@@ -466,7 +446,7 @@ suite("updateCourse action (tmc)", function () {
 
     const result = await updateCourse(actionContext(), courseId)
 
-    expect(result.val).toBe(false)
+    expect(result.unwrap().isUpdated).toBe(false)
     expect(userData.getTmcCourses()[0]?.disabled).toBe(false)
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("TMC Server"))
   })
@@ -508,21 +488,21 @@ suite("updateCourse after addNewCourse", function () {
   })
 
   test("a refresh of an unchanged tmc course stores what adding it stored", async function () {
-    const courseId = CourseIdentifier.from(tmcCourseData.details.id)
+    const courseId = idOfTmcCourse(tmcCourseData.details.id)
     expect((await addNewCourse(actionContext(), "test", courseId)).ok).toBe(true)
     const added = structuredClone(userData.getTmcCourses())
 
-    expect((await updateCourse(actionContext(), courseId)).val).toBe(true)
+    expect((await updateCourse(actionContext(), courseId)).unwrap().isUpdated).toBe(true)
 
     expect(userData.getTmcCourses()).toEqual(added)
   })
 
   test("a refresh of an unchanged mooc course stores what adding it stored", async function () {
-    const courseId = CourseIdentifier.from(MOOC_COURSE_UUID)
+    const courseId = idOfMoocCourse(MOOC_COURSE_UUID)
     expect((await addNewCourse(actionContext(), "", courseId)).ok).toBe(true)
     const added = structuredClone(userData.getMoocCourses())
 
-    expect((await updateCourse(actionContext(), courseId)).val).toBe(true)
+    expect((await updateCourse(actionContext(), courseId)).unwrap().isUpdated).toBe(true)
 
     expect(userData.getMoocCourses()).toEqual(added)
   })

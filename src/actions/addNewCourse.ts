@@ -1,7 +1,7 @@
 import type { Result } from "ts-results"
 
-import type { CourseIdentifier } from "../shared/shared"
-import { LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
+import type { CourseIdentifier } from "../../shared/lib"
+import { LocalCourseData, makeMoocKind, makeTmcKind, match } from "../../shared/lib"
 import { Logger } from "../utilities"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
@@ -26,7 +26,7 @@ export async function addNewCourse(
     match(
       course,
       (tmc) => makeTmcKind({ courseId: tmc.courseId, organization: organizationSlug }),
-      (mooc) => makeMoocKind({ courseId: mooc.instanceId }),
+      (mooc) => makeMoocKind({ courseId: mooc.moocCourseId }),
     ),
   )
   if (fetched.err) {

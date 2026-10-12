@@ -1,9 +1,9 @@
 import type { Result } from "ts-results"
 import { Err } from "ts-results"
 
-import type { BackendKind } from "../shared/shared"
-import { LocalCourseExercise } from "../shared/shared"
+import type { ExerciseIdentifier } from "../../shared/lib"
 import { exerciseOperations } from "../ui/exerciseOperations"
+import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import { checkAiUse } from "./checkAiUse"
 import type { ReadyActionContext } from "./types"
 
@@ -17,27 +17,26 @@ import type { ReadyActionContext } from "./types"
  */
 export async function pasteExercise(
   actionContext: ReadyActionContext,
-  backend: BackendKind,
-  courseSlug: string,
-  exerciseName: string,
+  exerciseId: ExerciseIdentifier,
 ): Promise<Result<string, Error>> {
-  const { langs, userData, workspaceManager } = actionContext.startup
+  const { langs, workspaceManager } = actionContext.startup
 
-  const stored = userData.getExerciseByName(backend, courseSlug, exerciseName)
-  const exercise = workspaceManager.getExerciseBySlug(backend, courseSlug, exerciseName)
-  if (!stored || !exercise) {
-    return Err(new Error("Failed to resolve exercise id"))
+  const exercise = workspaceManager.getExercise(exerciseId)
+  if (!exercise) {
+    return Err(new Error("The exercise is not downloaded."))
   }
-  const exerciseId = LocalCourseExercise.getId(stored)
   // Refused like a submit, which a mooc paste also is.
-  const allowed = await checkAiUse(actionContext, { backend, courseSlug, uri: exercise.uri })
+  const allowed = await checkAiUse(actionContext, exercise)
   if (allowed.err) {
     return allowed
   }
-  const exercisePath = exercise.uri.fsPath
 
   return exerciseOperations.run(exerciseId, "pasting", async () => {
-    const pasteResult = await langs.paste(exerciseId, exercisePath)
+    const saved = await saveExerciseDocuments(exercise)
+    if (saved.err) {
+      return saved
+    }
+    const pasteResult = await langs.paste(exerciseId, exercise.uri.fsPath)
     if (pasteResult.err) {
       return pasteResult
     }

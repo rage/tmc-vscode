@@ -10,10 +10,10 @@ import type { ReadyActionContext } from "./types"
  */
 export async function checkAiUse(
   actionContext: ReadyActionContext,
-  exercise: Pick<WorkspaceExercise, "backend" | "courseSlug" | "uri">,
+  exercise: Pick<WorkspaceExercise, "courseId" | "uri">,
 ): Promise<Result<void, Error>> {
   const { aiUseGate, userData } = actionContext.startup
-  const course = userData.getCourseBySlug(exercise.backend, exercise.courseSlug)
+  const course = userData.getCourse(exercise.courseId)
   if (course.err) {
     return course
   }

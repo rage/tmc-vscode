@@ -6,9 +6,12 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { registerTesting } from "../../init/testing"
 import type { ExerciseTestController } from "../../testing/exerciseTestController"
+import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
 const exercise: WorkspaceExercise = {
+  id: idOfTmcExercise(1),
+  courseId: idOfTmcCourse(1),
   backend: "tmc",
   courseSlug: "python-course",
   exerciseSlug: "part01-01_hello",

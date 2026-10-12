@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 
+import { backendName } from "../../shared/lib"
 import type Dialog from "../api/dialog"
-import { backendName } from "../shared/shared"
 
 const SITE = backendName("mooc")
 

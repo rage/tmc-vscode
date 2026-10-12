@@ -1,6 +1,6 @@
+import type { WebviewError } from "../../shared/lib"
+import { BaseError, toError } from "../../shared/lib"
 import { presentationFor } from "../errors"
-import type { WebviewError } from "../shared/shared"
-import { BaseError, toError } from "../shared/shared"
 
 /**
  * Flattens anything thrown into a {@link WebviewError}: the sentence and remedy buttons a

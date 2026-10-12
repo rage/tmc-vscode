@@ -19,7 +19,7 @@ import {
   CliOutputData,
   CliStatusUpdate,
   DataKind,
-} from "../shared/langsSchema"
+} from "../../shared/langsSchema"
 import type { CliOutputFixture } from "./fixtures/cliOutput"
 import { invalidCliOutputFixtures, validCliOutputFixtures } from "./fixtures/cliOutput"
 

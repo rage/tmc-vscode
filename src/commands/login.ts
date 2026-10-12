@@ -1,5 +1,7 @@
 import * as vscode from "vscode"
 
+import type { MoocDeviceLogin } from "../../shared/langsSchema"
+import { backendName } from "../../shared/lib"
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import {
@@ -9,8 +11,6 @@ import {
   presentationFor,
   ServerError,
 } from "../errors"
-import type { MoocDeviceLogin } from "../shared/langsSchema"
-import { backendName } from "../shared/shared"
 import { Logger, openWebLink } from "../utilities"
 import { refreshEverything } from "./refreshEverything"
 

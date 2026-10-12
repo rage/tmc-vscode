@@ -1,19 +1,15 @@
 import type { Result } from "ts-results"
 
-import type { RestoreTarget } from "../api/langs"
 import type {
   ExerciseSlideSubmissionListItem,
   MoocOldSubmissionRestore,
-} from "../shared/langsSchema"
-import {
-  assertUnreachable,
-  ExerciseIdentifier,
-  makeMoocKind,
-  makeTmcKind,
-  match,
-  unwrap,
-} from "../shared/shared"
+} from "../../shared/langsSchema"
+import type { ExerciseIdentifier } from "../../shared/lib"
+import { assertUnreachable, makeMoocKind, makeTmcKind, match } from "../../shared/lib"
+import type { RestoreTarget } from "../api/langs"
+import type { WorkspaceExercise } from "../api/workspaceManager"
 import { exerciseOperations } from "../ui/exerciseOperations"
+import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import type { ReadyActionContext } from "./types"
 
 /**
@@ -81,18 +77,21 @@ export async function listOldSubmissions(
  * Restores one earlier submission over an exercise's current state, optionally submitting
  * that state first.
  *
- * Rejects as a `BottleneckError` while a submit, paste, reset or restore of the same
- * exercise is already in flight.
+ * Rejects as a `BottleneckError` while another operation on the exercise is in flight.
  */
 export async function restoreOldSubmission(
   actionContext: ReadyActionContext,
-  exercisePath: string,
+  exercise: WorkspaceExercise,
   target: RestoreTarget,
   submitFirst: boolean,
 ): Promise<Result<MoocOldSubmissionRestore, Error>> {
-  return exerciseOperations.run(
-    ExerciseIdentifier.from(unwrap(target).exerciseId),
-    "restoring",
-    () => actionContext.startup.langs.restoreSubmission(target, exercisePath, submitFirst),
-  )
+  return exerciseOperations.run(exercise.id, "restoring", async () => {
+    if (submitFirst) {
+      const saved = await saveExerciseDocuments(exercise)
+      if (saved.err) {
+        return saved
+      }
+    }
+    return actionContext.startup.langs.restoreSubmission(target, exercise.uri.fsPath, submitFirst)
+  })
 }

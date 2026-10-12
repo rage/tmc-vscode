@@ -1,6 +1,6 @@
 // @ts-expect-error "No module found" error even though the file exists
 import FAQ from "../../docs/FAQ.md"
-import type { BackendKind } from "../shared/shared"
+import type { BackendKind } from "../../shared/lib"
 
 // Build time only globals defined in the esbuild configuration (esbuild.mjs
 // `define`, sourced from config.js). These values are inlined when bundling.
@@ -51,6 +51,12 @@ export const LOGIN_PROCESS_TIMEOUT = 30 * 60 * 1000
  */
 export const SUBMIT_PROCESS_TIMEOUT = 2 * 60 * 60 * 1000
 export const EXERCISE_CHECK_INTERVAL = 30 * 60 * 1000
+
+/**
+ * An activation skips its course refresh when any window finished one this recently: the
+ * stored courses it just read are that refresh's.
+ */
+export const STARTUP_REFRESH_SKIP_AGE = 10 * 60 * 1000
 
 /** Minimum time that should be waited between submission attempts. */
 export const MINIMUM_SUBMISSION_INTERVAL = 5 * 1000

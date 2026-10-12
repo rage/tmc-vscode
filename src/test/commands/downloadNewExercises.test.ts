@@ -2,13 +2,13 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
+import type { LocalCourseData } from "../../../shared/lib"
 import { downloadNewExercisesForCourse } from "../../actions/downloadNewExercisesForCourse"
 import type { ReadyActionContext } from "../../actions/types"
 import type { Item } from "../../api/dialog"
 import { downloadNewExercises } from "../../commands/downloadNewExercises"
 import type { UserData } from "../../config/userdata"
-import type { LocalCourseData } from "../../shared/shared"
-import { CourseIdentifier } from "../../shared/shared"
+import { idOfTmcCourse } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -61,7 +61,7 @@ function harness(
 
 suite("Download new exercises command", function () {
   beforeEach(function () {
-    vi.mocked(downloadNewExercisesForCourse).mockResolvedValue(Ok.EMPTY)
+    vi.mocked(downloadNewExercisesForCourse).mockResolvedValue(Ok({ warnings: [] }))
   })
 
   test("downloads the new exercises of the course the user picked", async function () {
@@ -70,10 +70,7 @@ suite("Download new exercises command", function () {
     await downloadNewExercises(context)
 
     expect(offered).toEqual(["Python Programming"])
-    expect(downloadNewExercisesForCourse).toHaveBeenCalledExactlyOnceWith(
-      context,
-      CourseIdentifier.from(1),
-    )
+    expect(downloadNewExercisesForCourse).toHaveBeenCalledExactlyOnceWith(context, idOfTmcCourse(1))
   })
 
   test("downloads nothing when the course pick is dismissed", async function () {

@@ -1,17 +1,20 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
+import type { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../../../shared/lib"
+import { CourseIdentifier as CourseIdentifierNs } from "../../../shared/lib"
 import type { ExerciseUpdateCheck } from "../../actions/checkForExerciseUpdates"
 import type { ReadyActionContext } from "../../actions/types"
 import { updateExercises } from "../../commands/updateExercises"
 import type Settings from "../../config/settings"
 import type { UserData } from "../../config/userdata"
-import type { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../../shared/shared"
-import {
-  CourseIdentifier as CourseIdentifierNs,
-  ExerciseIdentifier as ExerciseIdentifierNs,
-} from "../../shared/shared"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
+import {
+  idOfMoocCourse,
+  idOfMoocExercise,
+  idOfTmcCourse,
+  idOfTmcExercise,
+} from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -31,8 +34,8 @@ function outdated(
   exerciseName: string
 } {
   return {
-    courseId: CourseIdentifierNs.from(courseId),
-    exerciseId: ExerciseIdentifierNs.from(exerciseId),
+    courseId: idOfTmcCourse(courseId),
+    exerciseId: idOfTmcExercise(exerciseId),
     exerciseName: `exercise-${exerciseId}`,
   }
 }
@@ -82,9 +85,9 @@ suite("updateExercises command", function () {
   })
 
   test("records what it found per course, keeping a failed backend's last answer", async function () {
-    const staleMooc = [ExerciseIdentifierNs.from("mooc-exercise")]
-    updateablesRegistry.setMany([[CourseIdentifierNs.from(2), [ExerciseIdentifierNs.from(99)]]])
-    updateablesRegistry.setMany([[CourseIdentifierNs.from("mooc-course"), staleMooc]])
+    const staleMooc = [idOfMoocExercise("mooc-exercise")]
+    updateablesRegistry.setMany([[idOfTmcCourse(2), [idOfTmcExercise(99)]]])
+    updateablesRegistry.setMany([[idOfMoocCourse("mooc-course"), staleMooc]])
     checkForExerciseUpdates.mockResolvedValue({
       outdated: [outdated(1, 10), outdated(1, 11)],
       failures: [{ backend: "mooc", error: new Error("offline") }],
@@ -93,12 +96,12 @@ suite("updateExercises command", function () {
 
     await updateExercises(actionContext, "silent")
 
-    expect(updateablesRegistry.get(CourseIdentifierNs.from(1))).toEqual([
-      ExerciseIdentifierNs.from(10),
-      ExerciseIdentifierNs.from(11),
+    expect(updateablesRegistry.get(idOfTmcCourse(1))).toEqual([
+      idOfTmcExercise(10),
+      idOfTmcExercise(11),
     ])
-    expect(updateablesRegistry.get(CourseIdentifierNs.from(2))).toEqual([])
-    expect(updateablesRegistry.get(CourseIdentifierNs.from("mooc-course"))).toEqual(staleMooc)
+    expect(updateablesRegistry.get(idOfTmcCourse(2))).toEqual([])
+    expect(updateablesRegistry.get(idOfMoocCourse("mooc-course"))).toEqual(staleMooc)
   })
 
   test("does not credit a tmc course's updates to a mooc course with the same id", async function () {
@@ -112,10 +115,8 @@ suite("updateExercises command", function () {
 
     await updateExercises(actionContext, "silent")
 
-    expect(updateablesRegistry.get(CourseIdentifierNs.from(1))).toEqual([
-      ExerciseIdentifierNs.from(10),
-    ])
-    expect(updateablesRegistry.get(CourseIdentifierNs.from("1"))).toEqual([])
+    expect(updateablesRegistry.get(idOfTmcCourse(1))).toEqual([idOfTmcExercise(10)])
+    expect(updateablesRegistry.get(idOfMoocCourse("1"))).toEqual([])
   })
 
   test("postpones the reminder once per course, not once per exercise", async function () {
@@ -135,6 +136,43 @@ suite("updateExercises command", function () {
         CourseIdentifierNs.toString(id as CourseIdentifier),
       ),
     ).toEqual(["1", "2"])
+  })
+
+  suite("with the reminder postponed", function () {
+    function postponed(automaticallyUpdate: boolean): ReturnType<typeof contextWith> {
+      const context = contextWith(automaticallyUpdate)
+      context[0].startup.userData.getCourse = () =>
+        Ok({ data: { notifyAfter: Date.now() + 60_000, disabled: false } } as LocalCourseData)
+      return context
+    }
+
+    test("still downloads the updates when automatic updates are on", async function () {
+      const updates = [outdated(1, 10)]
+      checkForExerciseUpdates.mockResolvedValue(checked(updates))
+      const [actionContext] = postponed(true)
+
+      await updateExercises(actionContext, "silent")
+
+      expect(downloadExerciseUpdates).toHaveBeenCalledExactlyOnceWith(actionContext, updates)
+    })
+
+    test("does not prompt on a run the user did not ask for", async function () {
+      checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10)]))
+      const [actionContext, dialog] = postponed(false)
+
+      await updateExercises(actionContext, "silent")
+
+      expect(dialog.notification).not.toHaveBeenCalled()
+    })
+
+    test("prompts when the user asks for the updates", async function () {
+      checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10)]))
+      const [actionContext, dialog] = postponed(false)
+
+      await updateExercises(actionContext, "loud")
+
+      expect(dialog.notification).toHaveBeenCalledOnce()
+    })
   })
 
   test("downloads the updates without asking when automatic updates are on", async function () {

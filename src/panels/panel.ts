@@ -1,9 +1,9 @@
 import type { Webview } from "vscode"
 import { z } from "zod"
 
+import type { ExtensionToWebview, Panel } from "../../shared/lib"
+import { ExtensionToWebviewSchema } from "../../shared/lib"
 import { DEBUG_MODE } from "../config/constants"
-import type { ExtensionToWebview, Panel } from "../shared/shared"
-import { ExtensionToWebviewSchema } from "../shared/shared"
 import { Logger, LogLevel } from "../utilities/logger"
 
 export function renderPanel(panel: Panel, webview: Webview): void {

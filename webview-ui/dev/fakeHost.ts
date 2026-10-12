@@ -1,7 +1,7 @@
 import { z } from "zod"
 
-import type { ExtensionToWebview, WebviewToExtension } from "../src/shared/shared"
-import { ExtensionToWebviewSchema } from "../src/shared/shared"
+import type { ExtensionToWebview, WebviewToExtension } from "../../shared/lib"
+import { ExtensionToWebviewSchema } from "../../shared/lib"
 import type { Scenario } from "./scenarios"
 
 /**

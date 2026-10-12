@@ -1,5 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/svelte"
 
+import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../../../shared/langsSchema"
+import type { ExerciseSubmissionPanel, FeedbackQuestion, SubmissionView } from "../../../shared/lib"
+import { BaseError, makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import {
   gradingUnavailableView,
   inProgressView,
@@ -8,9 +11,6 @@ import {
   tmcResultView,
 } from "../../../src/panels/submissionView"
 import { toWebviewError } from "../../../src/panels/webviewError"
-import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../shared/langsSchema"
-import type { ExerciseSubmissionPanel, FeedbackQuestion, SubmissionView } from "../shared/shared"
-import { BaseError } from "../shared/shared"
 import { moocGrading, submissionFinished, submissionViewMessage } from "../test/fixtures"
 import { dispatchToWebview, postedMessages, reloadDocument, replyToRequest } from "../test/setup"
 import { withinShadowRoot } from "../test/shadow"
@@ -20,6 +20,7 @@ import ExerciseSubmission from "./ExerciseSubmission.svelte"
 const panel: ExerciseSubmissionPanel = {
   id: 12,
   type: "ExerciseSubmission",
+  exerciseId: makeTmcKind({ tmcExerciseId: 1 }),
   backend: "tmc",
   courseSlug: "python-course",
   exerciseSlug: "part01-01_hello",
@@ -28,6 +29,7 @@ const panel: ExerciseSubmissionPanel = {
 const moocPanel: ExerciseSubmissionPanel = {
   id: 13,
   type: "ExerciseSubmission",
+  exerciseId: makeMoocKind({ moocExerciseId: "mooc-ex-uuid" }),
   backend: "mooc",
   courseSlug: "mooc-course",
   exerciseSlug: "mooc-exercise",

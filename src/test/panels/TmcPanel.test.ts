@@ -4,6 +4,15 @@ import * as path from "path"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type {
+  BackendKind,
+  ExerciseSubmissionPanel,
+  ExtensionToWebview,
+  LocalCourseData,
+  Panel,
+  CourseIdentifier,
+} from "../../../shared/lib"
+import { makeTmcKind } from "../../../shared/lib"
 import * as actions from "../../actions"
 import type { ActionContext } from "../../actions/types"
 import type { UserData } from "../../config/userdata"
@@ -11,16 +20,10 @@ import { BottleneckError, InitializationError, presentationFor } from "../../err
 import type { PanelMessage } from "../../panels/router"
 import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
 import { MAIN_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
-import type {
-  BackendKind,
-  ExerciseSubmissionPanel,
-  ExtensionToWebview,
-  LocalCourseData,
-  Panel,
-} from "../../shared/shared"
-import { CourseIdentifier, makeTmcKind } from "../../shared/shared"
 import { submissionViews } from "../../ui/submissionViews"
 import { Logger } from "../../utilities"
+import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
+import { idOfMoocExercise, idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 import { createMockContext } from "../mocks/vscode"
 import { createFakeWebviewPanel } from "../support/webviewPanel"
@@ -77,7 +80,7 @@ suite("TmcPanel initialization guards", () => {
     const sourcePanel = {
       id: 5,
       type: "CourseDetails" as const,
-      courseId: CourseIdentifier.from(42),
+      courseId: idOfTmcCourse(42),
     }
 
     await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel })
@@ -99,7 +102,7 @@ suite("TmcPanel initialization guards", () => {
     const sourcePanel = {
       id: 5,
       type: "CourseDetails" as const,
-      courseId: CourseIdentifier.from(42),
+      courseId: idOfTmcCourse(42),
     }
 
     await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel })
@@ -121,7 +124,7 @@ suite("TmcPanel initialization guards", () => {
     const sourcePanel = {
       id: 5,
       type: "CourseDetails" as const,
-      courseId: CourseIdentifier.from(42),
+      courseId: idOfTmcCourse(42),
     }
 
     await listener({ type: "requestCourseDetailsData", requestId: 1, sourcePanel })
@@ -143,7 +146,7 @@ suite("TmcPanel initialization guards", () => {
     const sourcePanel = {
       id: 5,
       type: "CourseDetails" as const,
-      courseId: CourseIdentifier.from(42),
+      courseId: idOfTmcCourse(42),
     }
 
     await listener({ type: "requestCourseDetailsData", requestId: 7, sourcePanel })
@@ -160,7 +163,7 @@ suite("TmcPanel initialization guards", () => {
     const actionContext = createDegradedContext()
     const { listener } = await mountSidePanel(actionContext)
 
-    await listener({ type: "openCourseWorkspace", courseId: CourseIdentifier.from(1) })
+    await listener({ type: "openCourseWorkspace", courseId: idOfTmcCourse(1) })
 
     expect(actionContext.dialog.reportError).toHaveBeenCalledWith(
       "This action is unavailable.",
@@ -177,8 +180,9 @@ suite("initializationErrorHelpPanel", () => {
   test("lists each failed service, named for the student, with the CLI hint on tmc-langs", () => {
     const actionContext = createDegradedContext({
       failures: {
-        langs: new Error("langs offline"),
         userData: new Error("corrupt user data"),
+        langs: new Error("langs offline"),
+        resources: new Error("disk full"),
       },
     })
 
@@ -191,6 +195,7 @@ suite("initializationErrorHelpPanel", () => {
         stack: expect.any(String),
         hint: expect.stringContaining(`${path.sep}cli'`),
       },
+      { service: "extension files", error: "disk full", stack: expect.any(String) },
       { service: "user data", error: "corrupt user data", stack: expect.any(String) },
     ])
   })
@@ -235,7 +240,7 @@ function stubHandlers(): {
     keepWaitingForGrading: vi
       .mocked(actions.keepWaitingForGrading)
       .mockReset()
-      .mockResolvedValue(Ok.EMPTY),
+      .mockResolvedValue(Ok({ warnings: [] })),
     openWorkspace,
     pasteExercise: vi.mocked(actions.pasteExercise).mockReset().mockResolvedValue(Ok("link")),
     refreshLocalExercises: vi
@@ -246,7 +251,10 @@ function stubHandlers(): {
       .mocked(actions.sendSubmissionFeedback)
       .mockReset()
       .mockResolvedValue(Ok.EMPTY),
-    updateCourse: vi.mocked(actions.updateCourse).mockReset().mockResolvedValue(Ok(true)),
+    updateCourse: vi
+      .mocked(actions.updateCourse)
+      .mockReset()
+      .mockResolvedValue(Ok({ isUpdated: true, warnings: [] })),
   }
 }
 
@@ -261,7 +269,7 @@ suite("TmcPanel handler dispatch", () => {
     })
     const { listener } = await mountSidePanel(actionContext)
 
-    await listener({ type: "openCourseWorkspace", courseId: CourseIdentifier.from(42) })
+    await listener({ type: "openCourseWorkspace", courseId: idOfTmcCourse(42) })
 
     expect(actionContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
       "Something went wrong while handling that action.",
@@ -286,6 +294,7 @@ suite("TmcPanel handler dispatch", () => {
   ): Promise<{ panel: vscode.WebviewPanel; shown: Panel }> {
     const shown: Panel = {
       ...exerciseSubmissionPanel(),
+      exerciseId: backend === "tmc" ? idOfTmcExercise(7) : idOfMoocExercise("loops-uuid"),
       backend,
       courseSlug: "python-course",
       exerciseSlug: "loops",
@@ -300,12 +309,7 @@ suite("TmcPanel handler dispatch", () => {
 
     const { panel, shown } = await paste(createMockActionContext())
 
-    expect(handlers.pasteExercise).toHaveBeenCalledWith(
-      expect.anything(),
-      "tmc",
-      "python-course",
-      "loops",
-    )
+    expect(handlers.pasteExercise).toHaveBeenCalledWith(expect.anything(), idOfTmcExercise(7))
     expect(replyTo(panel, 1)).toEqual({
       type: "reply",
       target: targetOf(shown),
@@ -340,9 +344,7 @@ suite("TmcPanel handler dispatch", () => {
 
     expect(handlers.pasteExercise).toHaveBeenCalledWith(
       expect.anything(),
-      "mooc",
-      "python-course",
-      "loops",
+      idOfMoocExercise("loops-uuid"),
     )
   })
 
@@ -472,7 +474,7 @@ suite("TmcPanel inbound message guard", () => {
     return { handlers, posted: vi.mocked(panel.webview.postMessage) }
   }
 
-  const courseId = CourseIdentifier.from(42)
+  const courseId = idOfTmcCourse(42)
 
   test("ignores a message whose type it does not know", async () => {
     const { handlers, posted } = await drive({ type: "notAKnownMessage", courseId })
@@ -505,11 +507,11 @@ suite("TmcPanel webview-supplied paths and links", () => {
     })
     const { listener } = await mountSidePanel(actionContext)
 
-    await listener({ type: "openCourseWorkspace", courseId: CourseIdentifier.from(42) })
+    await listener({ type: "openCourseWorkspace", courseId: idOfTmcCourse(42) })
 
     expect(handlers.openWorkspace).toHaveBeenCalledExactlyOnceWith(
       "tmc.openCourseWorkspace",
-      CourseIdentifier.from(42),
+      idOfTmcCourse(42),
     )
   })
 
@@ -629,7 +631,7 @@ suite("TmcPanel ready handshake", () => {
     const courseDetails = {
       id: nextPanelId(),
       type: "CourseDetails" as const,
-      courseId: CourseIdentifier.from(42),
+      courseId: idOfTmcCourse(42),
     }
     renderSidePanel(courseDetails)
     postToSidePanel(courseDataFor(courseDetails))
@@ -764,7 +766,7 @@ suite("TmcPanel hidden webviews", () => {
     const shown = {
       id: nextPanelId(),
       type: "CourseDetails" as const,
-      courseId: CourseIdentifier.from(42),
+      courseId: idOfTmcCourse(42),
     }
     const { panel, sendReady, hide, reveal } = mountHideable(shown)
     await sendReady()
@@ -805,7 +807,7 @@ async function mountCourseDetails(actionContext: ActionContext): Promise<{
   const shown: CourseDetailsRoute = {
     id: nextPanelId(),
     type: "CourseDetails",
-    courseId: CourseIdentifier.from(42),
+    courseId: idOfTmcCourse(42),
   }
   const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
   return { panel, listener, shown }
@@ -1105,7 +1107,7 @@ suite("TmcPanel main panel lifecycle", () => {
     TmcPanel.renderMain(extensionContext, actionContext, {
       id: nextPanelId(),
       type: "CourseDetails",
-      courseId: CourseIdentifier.from(42),
+      courseId: idOfTmcCourse(42),
     })
     await sendReady()
     vi.mocked(panel.webview.postMessage).mockClear()
@@ -1132,14 +1134,14 @@ suite("TmcPanel main panel lifecycle", () => {
     TmcPanel.renderMain(extensionContext, actionContext, {
       id: nextPanelId(),
       type: "CourseDetails",
-      courseId: CourseIdentifier.from(42),
+      courseId: idOfTmcCourse(42),
     })
     const side = createFakeWebviewPanel()
     createWebviewPanel.mockReturnValue(side.panel)
     TmcPanel.renderSide(extensionContext, actionContext, {
       id: nextPanelId(),
       type: "CourseDetails",
-      courseId: CourseIdentifier.from(42),
+      courseId: idOfTmcCourse(42),
     })
 
     TmcPanel.renderMain(extensionContext, actionContext, helpPanel())
@@ -1154,14 +1156,14 @@ suite("TmcPanel main panel lifecycle", () => {
     renderMainPanel({
       id: nextPanelId(),
       type: "CourseDetails",
-      courseId: CourseIdentifier.from(42),
+      courseId: idOfTmcCourse(42),
     })
     const side = createFakeWebviewPanel()
     createWebviewPanel.mockReturnValue(side.panel)
     renderSidePanel({
       id: nextPanelId(),
       type: "CourseDetails",
-      courseId: CourseIdentifier.from(42),
+      courseId: idOfTmcCourse(42),
     })
 
     TmcPanel.mainPanel?.dispose()
@@ -1177,7 +1179,7 @@ suite("TmcPanel main panel lifecycle", () => {
     TmcPanel.renderMain(createMockContext(), createMockActionContext(), {
       id: nextPanelId(),
       type: "CourseDetails",
-      courseId: CourseIdentifier.from(42),
+      courseId: idOfTmcCourse(42),
     })
     const mainPanel = TmcPanel.mainPanel
     expect(mainPanel).toBeDefined()
@@ -1364,7 +1366,7 @@ suite("TmcPanel tab identity", () => {
       {
         id: nextPanelId(),
         type: "CourseDetails",
-        courseId: CourseIdentifier.from(42),
+        courseId: idOfTmcCourse(42),
       },
       actionContext,
     )
@@ -1386,7 +1388,7 @@ suite("TmcPanel tab identity", () => {
     renderMainPanel({
       id: nextPanelId(),
       type: "CourseDetails",
-      courseId: CourseIdentifier.from(42),
+      courseId: idOfTmcCourse(42),
     })
 
     expect(panel.title).toBe("Course Details")
@@ -1417,7 +1419,7 @@ async function mountedWebviewHtml(): Promise<string> {
   TmcPanel.renderMain(createMockContext(), createMockActionContext(), {
     id: nextPanelId(),
     type: "CourseDetails",
-    courseId: CourseIdentifier.from(42),
+    courseId: idOfTmcCourse(42),
   })
   return panel.webview.html
 }
@@ -1509,6 +1511,7 @@ function exerciseSubmissionPanel(): Extract<Panel, { type: "ExerciseSubmission" 
   return {
     id: nextPanelId(),
     type: "ExerciseSubmission",
+    exerciseId: idOfTmcExercise(1),
     backend: "tmc",
     courseSlug: "python-course",
     exerciseSlug: "part01-01_hello",
@@ -1516,28 +1519,16 @@ function exerciseSubmissionPanel(): Extract<Panel, { type: "ExerciseSubmission" 
 }
 
 function courseWith(exerciseCount: number, deadline: string | null = null) {
-  return makeTmcKind({
-    id: 42,
-    name: "python-course",
-    title: "Python Course",
-    description: "",
-    organization: "mooc",
-    exercises: Array.from({ length: exerciseCount }, (_, index) => ({
-      id: index + 1,
-      availablePoints: 1,
-      awardedPoints: 0,
-      name: `part01-${String(index).padStart(3, "0")}_exercise`,
-      deadline,
-      passed: false,
-      softDeadline: deadline,
-    })),
+  return tmcLocalCourse({
+    exercises: Array.from({ length: exerciseCount }, (_, index) =>
+      tmcCourseExercise({
+        id: index + 1,
+        name: `part01-${String(index).padStart(3, "0")}_exercise`,
+        deadline,
+        softDeadline: deadline,
+      }),
+    ),
     availablePoints: exerciseCount,
-    awardedPoints: 0,
-    perhapsExamMode: false,
-    newExercises: [],
-    notifyAfter: 0,
-    disabled: false,
-    materialUrl: null,
   })
 }
 
@@ -1604,7 +1595,7 @@ suite("TmcPanel keeps Course Details on the stored course", () => {
     const { actionContext, changed } = contextWithChangingCourse()
     const { panel } = await mountCourseDetails(actionContext)
 
-    changed.fire(CourseIdentifier.from(43))
+    changed.fire(idOfTmcCourse(43))
 
     expect(postedMessages(panel)).toEqual([])
   })
@@ -1649,7 +1640,7 @@ suite("TmcPanel main panel restore after a window reload", () => {
 
   const savedCourseDetails = {
     screen: "CourseDetails:tmc:42",
-    route: { type: "CourseDetails", courseId: CourseIdentifier.from(42) },
+    route: { type: "CourseDetails", courseId: idOfTmcCourse(42) },
     ui: { scrollY: 120 },
   }
 
@@ -1687,7 +1678,7 @@ suite("TmcPanel main panel restore after a window reload", () => {
     expect(setPanel?.panel).toEqual({
       id: expect.any(Number),
       type: "CourseDetails",
-      courseId: CourseIdentifier.from(42),
+      courseId: idOfTmcCourse(42),
     })
   })
 

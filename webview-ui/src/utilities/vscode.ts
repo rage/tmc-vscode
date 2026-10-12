@@ -1,8 +1,8 @@
 import type { WebviewApi } from "vscode-webview"
 import { z } from "zod"
 
-import type { WebviewState, WebviewToExtension } from "../shared/shared"
-import { WebviewStateSchema, WebviewToExtensionSchema } from "../shared/shared"
+import type { WebviewState, WebviewToExtension } from "../../../shared/lib"
+import { WebviewStateSchema, WebviewToExtensionSchema } from "../../../shared/lib"
 import { snapshot } from "./snapshot.svelte"
 
 /**

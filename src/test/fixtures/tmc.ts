@@ -4,9 +4,9 @@ import type {
   MoocCourse,
   CourseProgress,
   TmcExerciseSlide,
-} from "../../shared/langsSchema"
-import type { ExerciseIdentifier } from "../../shared/shared"
-import { makeTmcKind } from "../../shared/shared"
+} from "../../../shared/langsSchema"
+import type { ExerciseIdentifier } from "../../../shared/lib"
+import { makeTmcKind } from "../../../shared/lib"
 
 const tmcExerciseUpdates: ExerciseIdentifier[] = [makeTmcKind({ tmcExerciseId: 2 })]
 
@@ -14,7 +14,7 @@ const moocExerciseUpdates: ExerciseIdentifier[] = []
 
 const closedExercisesPythonCourse: string[] = ["other_world"]
 
-const listLocalCourseExercisesPythonCourse: LocalTmcExercise[] = [
+const localPythonCourseExercises: LocalTmcExercise[] = [
   {
     "course-slug": "test-python-course",
     "exercise-id": 1,
@@ -29,7 +29,7 @@ const listLocalCourseExercisesPythonCourse: LocalTmcExercise[] = [
   },
 ]
 
-const localExercises: LocalExercise[] = listLocalCourseExercisesPythonCourse.map((x) => ({
+const localExercises: LocalExercise[] = localPythonCourseExercises.map((x) => ({
   backend: "tmc",
   ...x,
 }))
@@ -92,7 +92,6 @@ const moocCourseProgress: CourseProgress = {
 
 export {
   closedExercisesPythonCourse,
-  listLocalCourseExercisesPythonCourse,
   localExercises,
   MOOC_COURSE_UUID,
   MOOC_EXERCISE_UUID,

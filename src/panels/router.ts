@@ -1,9 +1,6 @@
 import type { Result } from "ts-results"
 import { z } from "zod"
 
-import type { ActionContext, ReadyActionContext } from "../actions/types"
-import { isReady } from "../actions/types"
-import { InitializationError } from "../errors"
 import type {
   ExtensionToWebview,
   ReplyOutcome,
@@ -12,8 +9,11 @@ import type {
   RequestMessage,
   RequestType,
   WebviewToExtension,
-} from "../shared/shared"
-import { toError, WebviewToExtensionSchema } from "../shared/shared"
+} from "../../shared/lib"
+import { toError, WebviewToExtensionSchema } from "../../shared/lib"
+import type { ActionContext, ReadyActionContext } from "../actions/types"
+import { isReady } from "../actions/types"
+import { InitializationError } from "../errors"
 import { Logger } from "../utilities"
 import { toWebviewError } from "./webviewError"
 

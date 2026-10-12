@@ -1,7 +1,7 @@
 import { z } from "zod"
 
-import type { CourseIdentifier, Enum } from "./enum"
-import { EnumSchema, ExerciseIdentifier, makeMoocKind, makeTmcKind, match, unwrap } from "./enum"
+import type { CourseIdentifier, Enum, ExerciseIdentifier } from "./enum"
+import { EnumSchema, makeMoocKind, makeTmcKind, match, unwrap } from "./enum"
 
 // The live course schemas. Storage v3 persists exactly these (see `data_v3.ts`), so a change
 // here is a storage format change.
@@ -49,7 +49,7 @@ export const SharedMoocCourseExerciseSchema = z.object({
   id: z.string(),
   availablePoints: z.number(),
   awardedPoints: z.number(),
-  /** The exercise slug. */
+  /** The name the course author gave it; its folder on disk is a kebab-cased form of it. */
   name: z.string(),
   deadline: z.string().nullable(),
   passed: z.boolean(),
@@ -104,7 +104,11 @@ export namespace LocalCourseExercise {
   }
 
   export function getId(lce: LocalCourseExercise): ExerciseIdentifier {
-    return ExerciseIdentifier.from(unwrap(lce).id)
+    return match(
+      lce,
+      (tmc) => makeTmcKind({ tmcExerciseId: tmc.id }),
+      (mooc) => makeMoocKind({ moocExerciseId: mooc.id }),
+    )
   }
 
   /** The soft deadline as stored; mooc exercises have none. */
@@ -125,9 +129,7 @@ export namespace LocalCourseData {
     return match(
       lcd,
       (tmc) => makeTmcKind({ courseId: tmc.id }),
-      // mooc has no instance concept; the course id is the identifier (carried
-      // under the `instanceId` label on the CourseIdentifier mooc arm)
-      (mooc) => makeMoocKind({ instanceId: mooc.id }),
+      (mooc) => makeMoocKind({ moocCourseId: mooc.id }),
     )
   }
 

@@ -1,7 +1,7 @@
 import type { Result } from "ts-results"
 
+import type { Course, MoocCourse, Organization } from "../../shared/langsSchema"
 import { AuthorizationError } from "../errors"
-import type { Course, MoocCourse, Organization } from "../shared/langsSchema"
 import type { ReadyActionContext } from "./types"
 
 /**

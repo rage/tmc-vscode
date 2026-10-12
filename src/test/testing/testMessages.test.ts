@@ -4,7 +4,7 @@ import * as path from "path"
 
 import * as vscode from "vscode"
 
-import type { TestResult } from "../../shared/langsSchema"
+import type { TestResult } from "../../../shared/langsSchema"
 import { createSourceFileFinder } from "../../testing/sourceFiles"
 import { parseStackTrace } from "../../testing/stackTrace"
 import { failureMessage } from "../../testing/testMessages"

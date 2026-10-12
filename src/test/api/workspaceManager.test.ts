@@ -2,11 +2,13 @@ import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
 
+import * as jsonc from "jsonc-parser"
 import { Err, Ok } from "ts-results"
 import type { Mock } from "vitest"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import type { BackendKind } from "../../../shared/lib"
 import type { PersistClosedCourseExercises, WorkspaceExercise } from "../../api/workspaceManager"
 import WorkspaceManager, {
   ensureCourseWorkspaceFile,
@@ -24,8 +26,13 @@ import {
   workspaceFileName,
 } from "../../config/constants"
 import Resources from "../../config/resources"
-import type { BackendKind } from "../../shared/shared"
 import { Logger, LogLevel } from "../../utilities"
+import {
+  idOfMoocCourse,
+  idOfMoocExercise,
+  idOfTmcCourse,
+  idOfTmcExercise,
+} from "../fixtures/identifiers"
 
 // `Resources` reads `vscode.env.appName` to tell Code from VSCodium, and the
 // mock ships no `env`.
@@ -77,19 +84,34 @@ let resources: Resources
 let rootFolder: vscode.WorkspaceFolder
 let updateWorkspaceFolders: Mock<WorkspaceStubs["updateWorkspaceFolders"]>
 
+type FolderChangeListener = (e: vscode.WorkspaceFoldersChangeEvent) => void
+const folderChangeListeners = new Set<FolderChangeListener>()
+
+function notifyFolderChange(e: vscode.WorkspaceFoldersChangeEvent): void {
+  folderChangeListeners.forEach((listener) => listener(e))
+}
+
 function exercise(
   backend: BackendKind,
   courseSlug: string,
   exerciseSlug: string,
   status: ExerciseStatus,
 ): WorkspaceExercise {
+  const key = `${courseSlug}/${exerciseSlug}`
   return {
+    id: backend === "tmc" ? idOfTmcExercise(numberFor(key)) : idOfMoocExercise(key),
+    courseId: backend === "tmc" ? idOfTmcCourse(numberFor(courseSlug)) : idOfMoocCourse(courseSlug),
     backend,
     courseSlug,
     exerciseSlug,
     status,
     uri: vscode.Uri.file(path.join(PROJECTS_DIRECTORY, backend, courseSlug, exerciseSlug)),
   }
+}
+
+/** A tmc id that differs between the names the tests use. */
+function numberFor(name: string): number {
+  return [...name].reduce((hash, char) => (hash * 31 + (char.codePointAt(0) ?? 0)) % 1_000_003, 7)
 }
 
 function folderOf(uri: vscode.Uri, name: string): vscode.WorkspaceFolder {
@@ -130,15 +152,19 @@ suite("WorkspaceManager class", function () {
   beforeEach(function () {
     resources = new Resources(WORKSPACE_FILE_FOLDER, PROJECTS_DIRECTORY)
     rootFolder = folderOf(resources.workspaceRootFolder, WORKSPACE_ROOT_FOLDER_NAME)
-    updateWorkspaceFolders = vi.fn<WorkspaceStubs["updateWorkspaceFolders"]>(() => true)
+    updateWorkspaceFolders = vi.fn<WorkspaceStubs["updateWorkspaceFolders"]>(() => {
+      notifyFolderChange({ added: [], removed: [] })
+      return true
+    })
 
     stubWorkspace("workspaceFile", undefined)
     stubWorkspace("name", undefined)
     stubWorkspace("workspaceFolders", [rootFolder])
-    stubWorkspace(
-      "onDidChangeWorkspaceFolders",
-      vi.fn(() => ({ dispose: vi.fn() })),
-    )
+    folderChangeListeners.clear()
+    stubWorkspace("onDidChangeWorkspaceFolders", ((listener: FolderChangeListener) => {
+      folderChangeListeners.add(listener)
+      return { dispose: () => folderChangeListeners.delete(listener) }
+    }) as unknown as WorkspaceStubs["onDidChangeWorkspaceFolders"])
     stubWorkspace(
       "onDidOpenTextDocument",
       vi.fn(() => ({ dispose: vi.fn() })),
@@ -204,15 +230,29 @@ suite("WorkspaceManager class", function () {
       expect(updateWorkspaceFolders).not.toHaveBeenCalled()
     })
 
-    test("announces each replacement of the known exercises", async function () {
+    test("announces a replacement that changes the known exercises", async function () {
       const open = exercise("mooc", "my python course", "hello_world", ExerciseStatus.Open)
       const manager = new WorkspaceManager(resources, persistForCourse)
       const changed = vi.fn()
       manager.onDidChangeExercises(changed)
 
       await manager.setExercises([open])
+      await manager.setExercises([{ ...open, status: ExerciseStatus.Closed }])
 
-      expect(changed).toHaveBeenCalledOnce()
+      expect(changed).toHaveBeenCalledTimes(2)
+    })
+
+    // Each listener rebuilds from scratch, the test items among them, and every refresh rescans.
+    test("announces nothing for a rescan that found the same exercises", async function () {
+      const open = exercise("mooc", "my python course", "hello_world", ExerciseStatus.Open)
+      const manager = new WorkspaceManager(resources, persistForCourse)
+      await manager.setExercises([open])
+      const changed = vi.fn()
+      manager.onDidChangeExercises(changed)
+
+      await manager.setExercises([{ ...open, uri: vscode.Uri.file(open.uri.fsPath) }])
+
+      expect(changed).not.toHaveBeenCalled()
     })
   })
 
@@ -289,7 +329,7 @@ suite("WorkspaceManager class", function () {
     })
 
     test("records the whole closed set, not only the exercises the caller named", async function () {
-      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+      await manager.closeCourseExercises("tmc", courseSlug, [open.id])
 
       expect(record).toHaveBeenCalledExactlyOnceWith("tmc", courseSlug, [
         "hello_world",
@@ -304,7 +344,7 @@ suite("WorkspaceManager class", function () {
         return Ok.EMPTY
       })
 
-      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+      await manager.closeCourseExercises("tmc", courseSlug, [open.id])
 
       expect(workspaceWritesBeforeRecording).toBe(0)
       expect(updateWorkspaceFolders).toHaveBeenCalledOnce()
@@ -313,7 +353,7 @@ suite("WorkspaceManager class", function () {
     test("changes nothing the user can see when the closed set cannot be recorded", async function () {
       record.mockResolvedValue(Err(new Error("settings are read-only")))
 
-      const result = await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+      const result = await manager.closeCourseExercises("tmc", courseSlug, [open.id])
 
       expect(result.err).toBe(true)
       expect(open.status).toBe(ExerciseStatus.Open)
@@ -321,17 +361,71 @@ suite("WorkspaceManager class", function () {
     })
 
     test("drops the reopened exercise from the recorded closed set", async function () {
-      await manager.openCourseExercises("tmc", courseSlug, [closed.exerciseSlug])
+      await manager.openCourseExercises("tmc", courseSlug, [closed.id])
 
       expect(record).toHaveBeenCalledExactlyOnceWith("tmc", courseSlug, [])
       expect(closed.status).toBe(ExerciseStatus.Open)
+    })
+
+    test("records both of two closes requested at once", async function () {
+      let finishFirst!: () => void
+      record.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishFirst = () => resolve(Ok.EMPTY)
+          }),
+      )
+      const reopened = exercise("tmc", courseSlug, "part03-01_third", ExerciseStatus.Open)
+      await manager.setExercises([open, closed, reopened])
+
+      const first = manager.closeCourseExercises("tmc", courseSlug, [open.id])
+      const second = manager.closeCourseExercises("tmc", courseSlug, [reopened.id])
+      await vi.waitFor(() => expect(record).toHaveBeenCalledOnce())
+      finishFirst()
+      await Promise.all([first, second])
+
+      expect(record.mock.calls.at(-1)?.[2]).toEqual([
+        "hello_world",
+        "part02-01_greeting",
+        "part03-01_third",
+      ])
+    })
+
+    test("applies a close to the exercises a refresh put in place meanwhile", async function () {
+      let finish!: () => void
+      record.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = () => resolve(Ok.EMPTY)
+          }),
+      )
+      const closing = manager.closeCourseExercises("tmc", courseSlug, [open.id])
+      await vi.waitFor(() => expect(record).toHaveBeenCalledOnce())
+      const refreshedOpen = { ...open }
+      await manager.setExercises([refreshedOpen, closed])
+      finish()
+
+      const result = await closing
+
+      expect(result.unwrap()).toEqual([refreshedOpen])
+      expect(refreshedOpen.status).toBe(ExerciseStatus.Closed)
+    })
+
+    test("refuses to open or close while the closed set is unknown", async function () {
+      await manager.setExercises([open, closed], false)
+
+      const result = await manager.openCourseExercises("tmc", courseSlug, [closed.id])
+
+      expect(result.err).toBe(true)
+      expect(record).not.toHaveBeenCalled()
+      expect(closed.status).toBe(ExerciseStatus.Closed)
     })
 
     test("announces an exercise opening or closing", async function () {
       const changed = vi.fn()
       manager.onDidChangeExercises(changed)
 
-      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+      await manager.closeCourseExercises("tmc", courseSlug, [open.id])
 
       expect(changed).toHaveBeenCalled()
     })
@@ -341,7 +435,7 @@ suite("WorkspaceManager class", function () {
       const changed = vi.fn()
       manager.onDidChangeExercises(changed)
 
-      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+      await manager.closeCourseExercises("tmc", courseSlug, [open.id])
 
       expect(changed).not.toHaveBeenCalled()
     })
@@ -353,7 +447,6 @@ suite("WorkspaceManager class", function () {
     const courseSlug = "test-python-course"
     let open: WorkspaceExercise
     let closed: WorkspaceExercise
-    let notifyFolderChange: ((e: vscode.WorkspaceFoldersChangeEvent) => void) | undefined
     let write: Mock<PersistClosedCourseExercises>
     let manager: WorkspaceManager
 
@@ -364,13 +457,6 @@ suite("WorkspaceManager class", function () {
       openWorkspaceFile(workspaceFileName(courseSlug, "tmc"))
       stubWorkspace("workspaceFolders", [rootFolder, folderOf(open.uri, open.exerciseSlug)])
 
-      notifyFolderChange = undefined
-      stubWorkspace("onDidChangeWorkspaceFolders", ((
-        listener: (e: vscode.WorkspaceFoldersChangeEvent) => void,
-      ) => {
-        notifyFolderChange = listener
-        return { dispose: vi.fn() }
-      }) as unknown as WorkspaceStubs["onDidChangeWorkspaceFolders"])
       stubWorkspace("updateWorkspaceFolders", ((
         start: number,
         deleteCount: number,
@@ -387,7 +473,7 @@ suite("WorkspaceManager class", function () {
         // reported as neither added nor removed.
         const previousPaths = new Set(previous.map((folder) => folder.uri.fsPath))
         const nextPaths = new Set(next.map((folder) => folder.uri.fsPath))
-        notifyFolderChange?.({
+        notifyFolderChange({
           added: next.filter((folder) => !previousPaths.has(folder.uri.fsPath)),
           removed: previous.filter((folder) => !nextPaths.has(folder.uri.fsPath)),
         })
@@ -399,7 +485,7 @@ suite("WorkspaceManager class", function () {
     })
 
     test("a folder the user removed by hand is recorded as closed", async function () {
-      notifyFolderChange?.({ added: [], removed: [folderOf(open.uri, open.exerciseSlug)] })
+      notifyFolderChange({ added: [], removed: [folderOf(open.uri, open.exerciseSlug)] })
       await Promise.resolve()
 
       expect(write).toHaveBeenCalledExactlyOnceWith("tmc", courseSlug, [
@@ -413,7 +499,7 @@ suite("WorkspaceManager class", function () {
       const changed = vi.fn()
       manager.onDidChangeExercises(changed)
 
-      notifyFolderChange?.({ added: [], removed: [folderOf(open.uri, open.exerciseSlug)] })
+      notifyFolderChange({ added: [], removed: [folderOf(open.uri, open.exerciseSlug)] })
 
       expect(changed).toHaveBeenCalledOnce()
     })
@@ -421,8 +507,8 @@ suite("WorkspaceManager class", function () {
     // The workspace move each call makes re-enters the handler, so an
     // unconditional write here would double every CLI call the user's clicks cost.
     test("an open-then-close cycle writes once per change, not once per folder move", async function () {
-      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
-      await manager.openCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+      await manager.closeCourseExercises("tmc", courseSlug, [open.id])
+      await manager.openCourseExercises("tmc", courseSlug, [open.id])
 
       expect(write.mock.calls).toEqual([
         ["tmc", courseSlug, ["hello_world", "part02-01_greeting"]],
@@ -434,7 +520,7 @@ suite("WorkspaceManager class", function () {
       const changed = vi.fn()
       manager.onDidChangeExercises(changed)
 
-      await manager.closeCourseExercises("tmc", courseSlug, [open.exerciseSlug])
+      await manager.closeCourseExercises("tmc", courseSlug, [open.id])
 
       expect(changed).toHaveBeenCalledOnce()
     })
@@ -452,18 +538,119 @@ suite("WorkspaceManager class", function () {
       expect(write).not.toHaveBeenCalled()
     })
 
+    test("records no folder change while the closed set is unknown", async function () {
+      await manager.setExercises([open, closed], false)
+
+      notifyFolderChange({ added: [], removed: [folderOf(open.uri, open.exerciseSlug)] })
+      await new Promise((resolve) => {
+        setImmediate(resolve)
+      })
+
+      expect(write).not.toHaveBeenCalled()
+    })
+
     test("a failed write is retried on the next folder change", async function () {
       write.mockResolvedValueOnce(Err(new Error("settings are read-only")))
       const error = vi.spyOn(Logger, "error").mockImplementation(() => undefined)
 
-      notifyFolderChange?.({ added: [], removed: [folderOf(open.uri, open.exerciseSlug)] })
-      await Promise.resolve()
-      notifyFolderChange?.({ added: [], removed: [folderOf(open.uri, open.exerciseSlug)] })
-      await Promise.resolve()
+      notifyFolderChange({ added: [], removed: [folderOf(open.uri, open.exerciseSlug)] })
+      await vi.waitFor(() => expect(error).toHaveBeenCalledOnce())
+      notifyFolderChange({ added: [], removed: [folderOf(open.uri, open.exerciseSlug)] })
 
-      expect(write).toHaveBeenCalledTimes(2)
+      await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2))
       expect(error).toHaveBeenCalledOnce()
       error.mockRestore()
+    })
+  })
+
+  suite("settings writes during a workspace folder change", function () {
+    const courseSlug = "test-python-course"
+    let isWorkspaceFileDirty: boolean
+    let saveFolderChange: (() => void) | undefined
+    let update: Mock<UpdateSetting>
+
+    beforeEach(function () {
+      openWorkspaceFile(workspaceFileName(courseSlug, "tmc"))
+      isWorkspaceFileDirty = false
+      saveFolderChange = undefined
+      // Like VS Code: the folder list goes into the workspace file's buffer, which is saved
+      // before the change event fires.
+      stubWorkspace("updateWorkspaceFolders", () => {
+        isWorkspaceFileDirty = true
+        saveFolderChange = () => {
+          isWorkspaceFileDirty = false
+          notifyFolderChange({ added: [], removed: [] })
+        }
+        return true
+      })
+      update = vi.fn<UpdateSetting>(async () => {
+        if (isWorkspaceFileDirty) {
+          throw new Error(
+            "Unable to write into workspace settings because the file has unsaved changes.",
+          )
+        }
+      })
+      stubWorkspace("getConfiguration", () => configurationStub(update))
+    })
+
+    test("waits for VS Code to save the folder change before writing a setting", async function () {
+      const manager = new WorkspaceManager(resources, persistForCourse)
+
+      const refresh = manager.setExercises([
+        exercise("tmc", courseSlug, "hello_world", ExerciseStatus.Open),
+      ])
+      const settingsWrite = manager.replaceWorkspaceSetting("editor.inlineSuggest.enabled", false)
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0)
+      })
+      saveFolderChange?.()
+
+      await expect(settingsWrite).resolves.toBeUndefined()
+      expect((await refresh).ok).toBe(true)
+      expect(update).toHaveBeenCalledOnce()
+    })
+
+    test("moves no folders while a settings write is in flight", async function () {
+      let finishSettingsWrite: (() => void) | undefined
+      update.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishSettingsWrite = resolve
+          }),
+      )
+      const manager = new WorkspaceManager(resources, persistForCourse)
+
+      const settingsWrite = manager.replaceWorkspaceSetting("editor.inlineSuggest.enabled", false)
+      const refresh = manager.setExercises([
+        exercise("tmc", courseSlug, "hello_world", ExerciseStatus.Open),
+      ])
+      await vi.waitFor(() => expect(update).toHaveBeenCalledOnce())
+
+      expect(saveFolderChange).toBeUndefined()
+      finishSettingsWrite?.()
+      await settingsWrite
+      await vi.waitFor(() => expect(saveFolderChange).toBeDefined())
+      saveFolderChange?.()
+      expect((await refresh).ok).toBe(true)
+    })
+
+    test("writes anyway once VS Code has not confirmed a folder change in time", async function () {
+      vi.useFakeTimers()
+      try {
+        const manager = new WorkspaceManager(resources, persistForCourse)
+        stubWorkspace("updateWorkspaceFolders", () => true)
+
+        const refresh = manager.setExercises([
+          exercise("tmc", courseSlug, "hello_world", ExerciseStatus.Open),
+        ])
+        const settingsWrite = manager.replaceWorkspaceSetting("editor.inlineSuggest.enabled", false)
+        await vi.advanceTimersByTimeAsync(10_000)
+
+        await expect(settingsWrite).resolves.toBeUndefined()
+        expect((await refresh).ok).toBe(true)
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 
@@ -764,6 +951,34 @@ suite("WorkspaceManager class", function () {
       expect(written).toContain("\n")
     })
 
+    test("keeps comments and the other extension lists of a workspace file", async function () {
+      fs.writeFileSync(
+        workspaceFile,
+        [
+          "{",
+          "  // the course's own folders",
+          '  "folders": [],',
+          '  "extensions": {',
+          '    "recommendations": ["ikuyadeu.r"],',
+          '    "unwantedRecommendations": ["github.copilot"],',
+          "  },",
+          "}",
+        ].join("\n"),
+      )
+
+      await manager.addWorkspaceRecommendation(courseSlug, "tmc", ["ms-python.python"])
+
+      const written = fs.readFileSync(workspaceFile, "utf-8")
+      expect(written).toContain("// the course's own folders")
+      expect(jsonc.parse(written)).toEqual({
+        folders: [],
+        extensions: {
+          recommendations: ["ikuyadeu.r", "ms-python.python"],
+          unwantedRecommendations: ["github.copilot"],
+        },
+      })
+    })
+
     test("recommends into a workspace file that lists none yet", async function () {
       fs.writeFileSync(workspaceFile, JSON.stringify({ folders: [] }))
 
@@ -869,7 +1084,7 @@ suite("WorkspaceManager class", function () {
     })
 
     test("opens an exercise only in the requested backend", async function () {
-      const result = await manager.openCourseExercises("mooc", courseSlug, ["hello_world"])
+      const result = await manager.openCourseExercises("mooc", courseSlug, [moocExercise.id])
 
       expect(result.ok).toBe(true)
       expect(moocExercise.status).toBe(ExerciseStatus.Open)
@@ -881,7 +1096,7 @@ suite("WorkspaceManager class", function () {
       tmcExercise.status = ExerciseStatus.Open
       moocExercise.status = ExerciseStatus.Open
 
-      const result = await manager.closeCourseExercises("mooc", courseSlug, ["hello_world"])
+      const result = await manager.closeCourseExercises("mooc", courseSlug, [moocExercise.id])
 
       expect(result.val).toEqual([moocExercise])
       expect(tmcExercise.status).toBe(ExerciseStatus.Open)

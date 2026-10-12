@@ -7,7 +7,7 @@ import type {
   ExerciseTaskSubmissionStatus,
   SubmissionFinished,
   TestCase,
-} from "../shared/langsSchema"
+} from "../../../shared/langsSchema"
 import type {
   ExtensionToWebview,
   InitializationErrorHelpPanel,
@@ -16,8 +16,8 @@ import type {
   SharedTmcCourseData,
   SharedTmcCourseExercise,
   SubmissionView,
-} from "../shared/shared"
-import { makeMoocKind, makeTmcKind } from "../shared/shared"
+} from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 
 // valid v4 UUIDs (version nibble 4, variant nibble 8-b); mooc ids validate as `z.uuid()`
 export const MOOC_INSTANCE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"

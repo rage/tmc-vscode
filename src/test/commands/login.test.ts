@@ -3,6 +3,8 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import type { MoocDeviceLogin } from "../../../shared/langsSchema"
+import type { BaseError } from "../../../shared/lib"
 import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import { login } from "../../commands/login"
@@ -14,8 +16,6 @@ import {
   DeviceLoginExpiredError,
   ServerError,
 } from "../../errors"
-import type { MoocDeviceLogin } from "../../shared/langsSchema"
-import type { BaseError } from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 

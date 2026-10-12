@@ -2,12 +2,12 @@ import * as _ from "lodash"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
+import type { LocalCourseData } from "../../../shared/lib"
 import AiRestriction, { isActiveCourseAiAllowed, isAiAllowed } from "../../api/aiRestriction"
 import type { AiRestrictionEvents } from "../../api/aiRestriction"
 import type { SettingInspection, WorkspaceFileProblem } from "../../api/workspaceManager"
 import { AI_OFF_SETTINGS } from "../../config/constants"
-import { makeMoocKind, makeTmcKind } from "../../shared/shared"
-import type { LocalCourseData } from "../../shared/shared"
 import { Logger } from "../../utilities"
 import { createMockMemento } from "../mocks/vscode"
 
@@ -643,6 +643,38 @@ suite("AI restriction", function () {
       await vi.advanceTimersByTimeAsync(1)
 
       expect(workspace.stored.get(REFUSED)).toBe("none")
+    })
+
+    test("are announced once, and again only after a pass got every write through", async function () {
+      workspace.problem = "unsaved"
+      const announced = vi.fn()
+      restriction.onDidRefuseWorkspaceFile(announced)
+
+      await restriction.apply()
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(announced).toHaveBeenCalledExactlyOnceWith({
+        kind: "workspaceFileUnwritable",
+        file: WORKSPACE_FILE,
+        problem: "unsaved",
+        reason: "Unable to write into the workspace configuration file.",
+      })
+
+      workspace.rejected.clear()
+      await vi.advanceTimersByTimeAsync(10_000)
+      workspace.rejected.add(REFUSED)
+      workspace.stored.delete(REFUSED)
+      await restriction.apply()
+      expect(announced).toHaveBeenCalledTimes(2)
+    })
+
+    test("are left to an enforcing caller to report", async function () {
+      const announced = vi.fn()
+      restriction.onDidRefuseWorkspaceFile(announced)
+
+      await restriction.enforce()
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      expect(announced).not.toHaveBeenCalled()
     })
 
     test("are not retried once disposed", async function () {

@@ -110,14 +110,7 @@ for (const exercise of exercises) {
     })
 
     await vsCodeTest.step("reveal the exercise in the Courses view", async () => {
-      await page.keyboard.press("F1")
-      const palette = page.locator(".quick-input-widget")
-      await palette.locator("input").fill(">TestMyCode: Reveal in Courses View")
-      await palette
-        .locator(".quick-input-list .monaco-list-row")
-        .filter({ hasText: "Reveal in Courses View" })
-        .first()
-        .click()
+      await coursesView.runExercisePaletteCommand("TestMyCode: Reveal in Courses View")
       // A monaco list keeps DOM focus on itself and marks the focused row with a class.
       await expect(coursesView.tree()).toBeFocused()
       const row = coursesView.row(exercise.name)

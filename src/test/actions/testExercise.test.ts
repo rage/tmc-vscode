@@ -2,6 +2,7 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import { makeTmcKind } from "../../../shared/lib"
 import { testExercise } from "../../actions/testExercise"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { failure } from "../../api/withOperation"
@@ -9,7 +10,8 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
 import { BottleneckError } from "../../errors"
-import { makeTmcKind } from "../../shared/shared"
+import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
+import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
 vi.mock("../../window", () => ({ resolvePythonInterpreter: () => undefined }))
@@ -18,30 +20,11 @@ const COURSE_SLUG = "python-course"
 const EXERCISE_SLUG = "part01-01_hello"
 
 function course(perhapsExamMode = false) {
-  return makeTmcKind({
-    id: 42,
+  return tmcLocalCourse({
     name: COURSE_SLUG,
-    title: "Python Course",
-    description: "",
-    organization: "mooc",
-    exercises: [
-      {
-        id: 1,
-        name: EXERCISE_SLUG,
-        availablePoints: 1,
-        awardedPoints: 0,
-        deadline: null,
-        passed: false,
-        softDeadline: null,
-      },
-    ],
+    exercises: [tmcCourseExercise({ id: 1, name: EXERCISE_SLUG })],
     availablePoints: 1,
-    awardedPoints: 0,
     perhapsExamMode,
-    newExercises: [],
-    notifyAfter: 0,
-    disabled: false,
-    materialUrl: null,
   })
 }
 
@@ -50,6 +33,8 @@ const noToken = new vscode.CancellationTokenSource().token
 
 function workspaceExercise(): WorkspaceExercise {
   return {
+    id: idOfTmcExercise(1),
+    courseId: idOfTmcCourse(42),
     backend: "tmc",
     courseSlug: COURSE_SLUG,
     exerciseSlug: EXERCISE_SLUG,
@@ -82,7 +67,10 @@ function contextWithTestRun(
         }),
       } as unknown as ReadyStartup["langs"],
       userData: {
-        getCourseBySlug: () => Ok(course(options.examMode)),
+        getExercise: () => {
+          const stored = course(options.examMode)
+          return Ok({ course: stored, exercise: makeTmcKind(stored.data.exercises[0]) })
+        },
       } as unknown as ReadyStartup["userData"],
     },
   })

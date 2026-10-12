@@ -1,14 +1,16 @@
 import { Err, Ok } from "ts-results"
 
+import type { LocalCourseData } from "../../../shared/lib"
+import { makeMoocKind } from "../../../shared/lib"
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
 import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
-import type { LocalCourseData } from "../../shared/shared"
-import { makeMoocKind } from "../../shared/shared"
 import type { MoocLocalCourseData } from "../../storage/data"
+import { moocCourseData } from "../fixtures/courses"
+import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
@@ -46,18 +48,44 @@ suite("refreshLocalExercises action", function () {
     expect(workspaceManagerMock.setExercises).toHaveBeenCalledTimes(1)
   })
 
+  test("uses a scan it is given instead of asking the CLI", async function () {
+    const scan = { localExercises: Ok([]), settings: Ok({ projects_dir: "/projects" }) }
+    const result = await refreshLocalExercises(actionContext(), scan)
+    expect(result).toBe(Ok.EMPTY)
+    expect(tmcMock.listLocalExercises).not.toHaveBeenCalled()
+    expect(tmcMock.listSettings).not.toHaveBeenCalled()
+    expect(workspaceManagerMock.setExercises).toHaveBeenCalledWith([], true)
+  })
+
   test("should work without any courses", async function () {
     userDataMockValues.getCourses = []
     const result = await refreshLocalExercises(actionContext())
     expect(result).toBe(Ok.EMPTY)
   })
 
-  test("should default to open when the settings are unreadable", async function () {
+  test("keeps the statuses already shown, unrecorded, when the settings are unreadable", async function () {
     tmcMockValues.listSettings = Err(new Error())
     const result = await refreshLocalExercises(actionContext())
     expect(result).toBe(Ok.EMPTY)
     expect(workspaceManagerMock.setExercises).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.objectContaining({ status: ExerciseStatus.Open })]),
+      [
+        expect.objectContaining({ exerciseSlug: "hello_world", status: ExerciseStatus.Open }),
+        expect.objectContaining({ exerciseSlug: "other_world", status: ExerciseStatus.Closed }),
+      ],
+      false,
+    )
+  })
+
+  test("defaults an exercise not shown before to open when the settings are unreadable", async function () {
+    tmcMockValues.listSettings = Err(new Error())
+    workspaceManagerMockValues.getExercises = []
+    await refreshLocalExercises(actionContext())
+    expect(workspaceManagerMock.setExercises).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({ status: ExerciseStatus.Open }),
+        expect.objectContaining({ status: ExerciseStatus.Open }),
+      ],
+      false,
     )
   })
 
@@ -69,6 +97,7 @@ suite("refreshLocalExercises action", function () {
     expect(result).toBe(Ok.EMPTY)
     expect(workspaceManagerMock.setExercises).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ status: ExerciseStatus.Open })]),
+      true,
     )
   })
 
@@ -79,6 +108,7 @@ suite("refreshLocalExercises action", function () {
       expect.arrayContaining([
         expect.objectContaining({ exerciseSlug: "other_world", status: ExerciseStatus.Closed }),
       ]),
+      true,
     )
   })
 
@@ -98,18 +128,11 @@ suite("refreshLocalExercises action", function () {
   })
 
   test("should set mooc course exercises with the mooc backend", async function () {
-    const moocCourse: MoocLocalCourseData = {
+    const moocCourse: MoocLocalCourseData = moocCourseData({
       id: "course-uuid-1",
       name: "mooc-python-course",
       title: "Mooc Python",
-      description: null,
-      organization: "mooc",
-      exercises: [],
-      availablePoints: 0,
-      awardedPoints: 0,
-      newExercises: [],
-      notifyAfter: 0,
-    }
+    })
     userDataMockValues.getCourses = [makeMoocKind(moocCourse) as LocalCourseData]
     // A mooc entry is matched to its course by course id, since its on-disk slug
     // is derived locally and need not equal the course name the workspace uses.
@@ -126,14 +149,19 @@ suite("refreshLocalExercises action", function () {
 
     const result = await refreshLocalExercises(actionContext())
     expect(result).toBe(Ok.EMPTY)
-    expect(workspaceManagerMock.setExercises).toHaveBeenCalledWith([
-      expect.objectContaining({
-        backend: "mooc",
-        courseSlug: "mooc-python-course",
-        exerciseSlug: "mooc_hello",
-        status: ExerciseStatus.Open,
-      }),
-    ])
+    expect(workspaceManagerMock.setExercises).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          id: idOfMoocExercise("exercise-uuid-1"),
+          courseId: idOfMoocCourse("course-uuid-1"),
+          backend: "mooc",
+          courseSlug: "mooc-python-course",
+          exerciseSlug: "mooc_hello",
+          status: ExerciseStatus.Open,
+        }),
+      ],
+      true,
+    )
   })
 
   test("should list every course's exercises in one call", async function () {

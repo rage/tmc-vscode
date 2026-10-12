@@ -1,6 +1,6 @@
 import { render } from "@testing-library/svelte"
 
-import { makeTmcKind } from "../shared/shared"
+import { makeTmcKind } from "../../../shared/lib"
 import { tmcLocalCourse } from "../test/fixtures"
 import MessageListenerProbe from "../test/MessageListenerProbe.svelte"
 import RequesterProbe from "../test/RequesterProbe.svelte"

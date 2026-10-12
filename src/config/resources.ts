@@ -2,7 +2,7 @@ import * as path from "path"
 
 import * as vscode from "vscode"
 
-import type { BackendKind } from "../shared/shared"
+import type { BackendKind } from "../../shared/lib"
 import {
   WORKSPACE_ROOT_FILE_NAME,
   WORKSPACE_ROOT_FOLDER_NAME,

@@ -9,11 +9,14 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { testExercise } from "../../commands/testExercise"
 import type { ExerciseTestController } from "../../testing/exerciseTestController"
+import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 const uri = vscode.Uri.file("/workspace/tmc/python-course/ex-1")
 const activeExercise: WorkspaceExercise = {
+  id: idOfTmcExercise(1),
+  courseId: idOfTmcCourse(1),
   backend: "tmc",
   courseSlug: "python-course",
   exerciseSlug: "ex-1",

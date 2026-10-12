@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte"
 
-  import type { WebviewError } from "../shared/shared"
+  import type { WebviewError } from "../../../shared/lib"
   import { vscode } from "../utilities/vscode"
   import Button from "./Button.svelte"
   import CodeBlock from "./CodeBlock.svelte"

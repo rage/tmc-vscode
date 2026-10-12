@@ -97,6 +97,21 @@ export class TmcPage {
     await expect(palette).toBeHidden()
   }
 
+  /**
+   * Runs a command the palette lists only while the active editor is an exercise, such as
+   * "TestMyCode: Reset Exercise". The palette checks that once, when it opens, so this
+   * first waits for the Submit Solution editor action, shown under the same `when` keys
+   * (package.json).
+   */
+  public async runExercisePaletteCommand(title: string): Promise<void> {
+    await expect(
+      this.page
+        .getByRole("toolbar", { name: "Editor actions" })
+        .getByLabel("Submit Solution", { exact: true }),
+    ).toBeVisible()
+    await this.runPaletteCommand(title)
+  }
+
   public getSidePanel(): FrameLocator {
     return this.page.frameLocator(`.webview.ready`).last().frameLocator("iframe#active-frame")
   }

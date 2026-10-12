@@ -2,9 +2,18 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type {
+  BackendKind,
+  CourseIdentifier,
+  ExerciseIdentifier,
+  ExerciseSubmissionPanel,
+  FeedbackAnswer,
+  SubmissionView,
+} from "../../shared/lib"
+import { backendName, LocalCourseData, match, unwrap } from "../../shared/lib"
 import type Langs from "../api/langs"
+import type { OperationWarning, Warned } from "../api/withOperation"
 import type { WorkspaceExercise } from "../api/workspaceManager"
-import { findStoredExercise } from "../config/userdata"
 import { OutOfTriesError } from "../errors"
 import { nextPanelId } from "../panels/routes"
 import type { InProgressPhase, SubmissionProgress } from "../panels/submissionView"
@@ -17,21 +26,13 @@ import {
   withProgressStep,
 } from "../panels/submissionView"
 import { toWebviewError } from "../panels/webviewError"
-import type {
-  BackendKind,
-  CourseIdentifier,
-  ExerciseIdentifier,
-  ExerciseSubmissionPanel,
-  FeedbackAnswer,
-  SubmissionView,
-} from "../shared/shared"
-import { backendName, LocalCourseData, LocalCourseExercise, match, unwrap } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { pointsText } from "../ui/points"
 import { isSameExercise, submissionViews } from "../ui/submissionViews"
 import { Logger, parseFeedbackQuestion } from "../utilities"
 import type { MoocStoredStanding } from "../utilities/apiData"
 import { moocStoredStanding } from "../utilities/apiData"
+import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import { checkAiUse } from "./checkAiUse"
 import type { ReadyActionContext } from "./types"
 
@@ -115,6 +116,8 @@ interface PendingFeedback {
 // Keyed by panel id like `unfinishedGradings`; the answer URL never leaves the host, so the
 // webview cannot choose where answers are posted.
 const pendingFeedback = new Map<number, PendingFeedback>()
+// The panels whose feedback is being posted, so a second click does not post it twice.
+const feedbackBeingSent = new Set<number>()
 
 /** A mooc submission whose grading the host stopped waiting for. */
 interface UnfinishedGrading extends Submission {
@@ -245,28 +248,30 @@ function submitterFor(
   )
 }
 
-/** Records the grading locally and shows the outcome, reopening the panel if it was closed. */
+/**
+ * Records the grading locally and shows the outcome, reopening the panel if it was closed. A
+ * grading that could not be recorded is a warning.
+ */
 async function showOutcome(
   actionContext: ReadyActionContext,
   submission: Submission,
   outcome: SubmissionOutcome,
-): Promise<void> {
-  const { dialog } = actionContext
+): Promise<Warned> {
   const { exerciseDecorationProvider, userData } = actionContext.startup
-  const { exercise } = submission
+  const warnings: OperationWarning[] = []
+  const { exercise, exerciseId } = submission
   const { recorded } = outcome
   if (recorded) {
     const written =
       recorded.backend === "tmc"
-        ? await userData.setExerciseAsPassed("tmc", exercise.courseSlug, exercise.exerciseSlug)
+        ? await userData.setExerciseAsPassed(exerciseId)
         : await userData.setMoocExerciseStanding(
-            exercise.courseSlug,
-            exercise.exerciseSlug,
+            exerciseId,
             recorded.standing,
             recorded.awardedPoints,
           )
     if (written.err) {
-      dialog.reportError("Failed to record the grading.", written.val)
+      warnings.push({ headline: "Failed to record the grading.", error: written.val })
     } else {
       exerciseDecorationProvider.updateDecorationsForExercises(exercise)
     }
@@ -274,6 +279,7 @@ async function showOutcome(
 
   submissionViews.update({ panel: submission.panel, view: outcome.view, shouldReopen: true })
   submissionFinished.fire(submission.courseId)
+  return { warnings }
 }
 
 /**
@@ -281,24 +287,24 @@ async function showOutcome(
  *
  * Records what the backend says about the exercise after the grading, and fires
  * {@link onDidFinishSubmission} once the outcome is shown. A failed submission is `Ok`, as the
- * panel shows why. Errs for a failure before the panel opens: a submit or paste already in
- * flight for the same exercise is a `BottleneckError`, AI assistance that may be on is an
+ * panel shows why. Errs for a failure before the panel opens: another operation in flight on
+ * the exercise is a `BottleneckError`, AI assistance that may be on is an
  * `AiUseRefusedError`, and an exercise the backend last reported out of tries is an
  * `OutOfTriesError`.
  */
 export async function submitExercise(
   actionContext: ReadyActionContext,
   exercise: WorkspaceExercise,
-): Promise<Result<void, Error>> {
+): Promise<Result<Warned, Error>> {
   const { langs, userData } = actionContext.startup
   Logger.info(`Submitting exercise ${exercise.exerciseSlug} to ${backendName(exercise.backend)}`)
 
-  const stored = findStoredExercise(userData, exercise)
+  const stored = userData.getExercise(exercise.id)
   if (stored.err) {
     return stored
   }
   const { course, exercise: courseExercise } = stored.val
-  const exerciseId = LocalCourseExercise.getId(courseExercise)
+  const exerciseId = exercise.id
   const submit = submitterFor(langs, exercise.backend, exerciseId)
   if (!submit) {
     return Err(
@@ -326,10 +332,15 @@ export async function submitExercise(
   // Held only until the result is posted: the panel offers Paste from that point on, and
   // the refresh that follows doesn't need the same protection.
   return exerciseOperations.run(exerciseId, "submitting", async () => {
+    const saved = await saveExerciseDocuments(exercise)
+    if (saved.err) {
+      return saved
+    }
     const submission: Submission = {
       panel: {
         id: nextPanelId(),
         type: "ExerciseSubmission",
+        exerciseId,
         backend: exercise.backend,
         courseSlug: exercise.courseSlug,
         exerciseSlug: exercise.exerciseSlug,
@@ -347,10 +358,9 @@ export async function submitExercise(
       Logger.error("Exercise submission failed", outcome.val)
       const error = toWebviewError(outcome.val)
       showSubmissionView(submission.panel, submitFailedView(error))
-      return Ok.EMPTY
+      return Ok({ warnings: [] })
     }
-    await showOutcome(actionContext, submission, outcome.val)
-    return Ok.EMPTY
+    return Ok(await showOutcome(actionContext, submission, outcome.val))
   })
 }
 
@@ -359,13 +369,13 @@ export async function submitExercise(
  * followed its submit ended before the grading did.
  *
  * Fires {@link onDidFinishSubmission} like {@link submitExercise}. Errs when that panel shows
- * no such submission, when a submission of the exercise is already in progress, or as
+ * no such submission, when another operation on the exercise is in flight, or as
  * {@link submitExercise} does while AI assistance may be on.
  */
 export async function keepWaitingForGrading(
   actionContext: ReadyActionContext,
   panelId: number,
-): Promise<Result<void, Error>> {
+): Promise<Result<Warned, Error>> {
   const grading = unfinishedGradings.get(panelId)
   if (grading === undefined) {
     return Err(new Error("This submission has no grading left to wait for."))
@@ -378,8 +388,7 @@ export async function keepWaitingForGrading(
     unfinishedGradings.delete(panelId)
     const reporter = new SubmissionProgressReporter(grading.panel, "grading")
     const outcome = await waitForMoocGrading(actionContext.startup.langs, grading, reporter)
-    await showOutcome(actionContext, grading, outcome)
-    return Ok.EMPTY
+    return Ok(await showOutcome(actionContext, grading, outcome))
   })
 }
 
@@ -398,9 +407,15 @@ export async function sendSubmissionFeedback(
   if (pending === undefined) {
     return Err(new Error("This submission's feedback was already sent or was never asked for."))
   }
-  const sent = await actionContext.startup.langs.submitSubmissionFeedback(pending.answerUrl, {
-    status: answers.map(({ questionId, answer }) => ({ question_id: questionId, answer })),
-  })
+  if (feedbackBeingSent.has(panelId)) {
+    return Err(new Error("This submission's feedback is already being sent."))
+  }
+  feedbackBeingSent.add(panelId)
+  const sent = await actionContext.startup.langs
+    .submitSubmissionFeedback(pending.answerUrl, {
+      status: answers.map(({ questionId, answer }) => ({ question_id: questionId, answer })),
+    })
+    .finally(() => feedbackBeingSent.delete(panelId))
   if (sent.err) {
     return sent
   }

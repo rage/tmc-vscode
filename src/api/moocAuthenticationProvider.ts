@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 
-import { backendName } from "../shared/shared"
+import { backendName } from "../../shared/lib"
 
 /** Must match the `authentication` contribution's `id` in package.json. */
 export const MOOC_AUTHENTICATION_PROVIDER_ID = "courses-mooc-fi"

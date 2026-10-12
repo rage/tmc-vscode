@@ -5,6 +5,41 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import { z } from "zod"
 
+import type {
+  CombinedCourseData,
+  CombinedMoocCourseData,
+  Course,
+  DataKind,
+  ExerciseTaskSubmissionResult,
+  ExerciseTaskSubmissionStatus,
+  LocalExercise,
+  MoocCourse,
+  MoocDeviceLogin,
+  MoocOldSubmissionRestore,
+  ExerciseSlideSubmissionListItem,
+  Notification,
+  Organization,
+  OutputData,
+  RunResult,
+  StatusUpdateData,
+  StyleValidationResult,
+  Submission,
+  SubmissionFeedback,
+  SubmissionFeedbackResponse,
+  SubmissionFinished,
+  TmcConfig,
+} from "../../shared/langsSchema"
+import { CliNotification, CliOutputData, CliStatusUpdate } from "../../shared/langsSchema"
+import type { BackendKind, Enum } from "../../shared/lib"
+import {
+  backendName,
+  BaseError,
+  ExerciseIdentifier,
+  makeMoocKind,
+  makeTmcKind,
+  match,
+  unwrap,
+} from "../../shared/lib"
 import {
   API_CACHE_LIFETIME,
   CLI_PROCESS_TIMEOUT,
@@ -39,42 +74,6 @@ import {
   UnknownUploadError,
   UploadExpiredError,
 } from "../errors"
-import type {
-  CombinedCourseData,
-  CombinedMoocCourseData,
-  Course,
-  DataKind,
-  ExerciseTaskSubmissionResult,
-  ExerciseTaskSubmissionStatus,
-  LocalExercise,
-  LocalMoocExercise,
-  LocalTmcExercise,
-  MoocCourse,
-  MoocDeviceLogin,
-  MoocOldSubmissionRestore,
-  ExerciseSlideSubmissionListItem,
-  Notification,
-  Organization,
-  OutputData,
-  RunResult,
-  StatusUpdateData,
-  StyleValidationResult,
-  Submission,
-  SubmissionFeedback,
-  SubmissionFeedbackResponse,
-  SubmissionFinished,
-} from "../shared/langsSchema"
-import { CliNotification, CliOutputData, CliStatusUpdate } from "../shared/langsSchema"
-import type { BackendKind, Enum } from "../shared/shared"
-import {
-  backendName,
-  BaseError,
-  ExerciseIdentifier,
-  makeMoocKind,
-  makeTmcKind,
-  match,
-  unwrap,
-} from "../shared/shared"
 import { Logger, LogLevel } from "../utilities/logger"
 import type { FractionProgress } from "./dialog"
 
@@ -505,45 +504,6 @@ export default class Langs {
   }
 
   /**
-   * Lists local exercises for a given course. Dispatches on the backend: a core
-   * `list-local-tmc-course-exercises` keyed by course slug for TMC, or
-   * `mooc list-local-course-exercises` keyed by course id (mooc configs store
-   * no slug). Both return entries
-   * with an `exercise-slug` and an `exercise-path`, the fields the workspace manager
-   * needs.
-   *
-   * @param courseKind Which backend the course belongs to.
-   * @param courseIdentifier Course slug for TMC, course id (UUID) for mooc.
-   */
-  public async listLocalCourseExercises(
-    courseKind: BackendKind,
-    courseIdentifier: string,
-  ): Promise<Result<(LocalTmcExercise | LocalMoocExercise)[], Error>> {
-    if (courseKind === "mooc") {
-      return this._fetch(
-        {
-          backend: "mooc",
-          args: this._moocCmd("list-local-course-exercises", "--course-id", courseIdentifier),
-        },
-        "local-mooc-exercises",
-      )
-    }
-    return this._fetch(
-      {
-        backend: "tmc",
-        args: [
-          "list-local-tmc-course-exercises",
-          "--client-name",
-          this.clientName,
-          "--course-slug",
-          courseIdentifier,
-        ],
-      },
-      "local-tmc-exercises",
-    )
-  }
-
-  /**
    * Runs an exercise's tests locally, via `run-tests`.
    *
    * @param pythonExecutablePath The Python to run them with instead of the one on `PATH`.
@@ -669,11 +629,12 @@ export default class Langs {
    * Reads the whole settings file in one call. Uses TMC-langs `settings list` command
    * internally.
    *
-   * Values arrive unchecked and keyed by setting name, so a caller validates the shape of
-   * each key it reads, as it would pass a checker to {@link getSetting}. Prefer this
-   * whenever more than one key is wanted: {@link getSetting} costs a CLI process per key.
+   * Values other than `projects_dir` arrive unchecked and keyed by setting name, so a caller
+   * validates the shape of each key it reads, as it would pass a checker to
+   * {@link getSetting}. Prefer this whenever more than one key is wanted: {@link getSetting}
+   * costs a CLI process per key.
    */
-  public async listSettings(): Promise<Result<Record<string, unknown>, Error>> {
+  public async listSettings(): Promise<Result<TmcConfig & Record<string, unknown>, Error>> {
     return this._fetch({ args: this._settingsCmd("list") }, "tmc-config")
   }
 
@@ -1756,9 +1717,15 @@ export interface LangsStdoutDecoding {
  * @param carry The previous chunk's unterminated tail; `""` at the start of the stream.
  */
 export function decodeLangsStdout(carry: string, chunk: string): LangsStdoutDecoding {
+  // Only `chunk` is searched: one output line can span many chunks, and rescanning the
+  // carry on each would make a long line quadratic.
+  const lastNewline = chunk.lastIndexOf("\n")
+  if (lastNewline === -1) {
+    return { carry: carry + chunk, events: [] }
+  }
   const events: LangsStdoutEvent[] = []
-  const lines = (carry + chunk).split("\n")
-  const tail = lines.pop() ?? ""
+  const lines = (carry + chunk.slice(0, lastNewline)).split("\n")
+  const tail = chunk.slice(lastNewline + 1)
   for (const line of lines) {
     const trimmed = line.trim()
     if (!trimmed) {

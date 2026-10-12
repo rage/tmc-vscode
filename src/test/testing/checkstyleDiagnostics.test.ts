@@ -4,7 +4,7 @@ import * as path from "path"
 
 import * as vscode from "vscode"
 
-import type { StyleValidationResult } from "../../shared/langsSchema"
+import type { StyleValidationResult } from "../../../shared/langsSchema"
 import { CheckstyleDiagnostics } from "../../testing/checkstyleDiagnostics"
 
 function finding(line: number, column: number, message = "Indentation is wrong") {

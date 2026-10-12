@@ -1,4 +1,4 @@
-import type { WebviewToExtension } from "../src/shared/shared"
+import type { WebviewToExtension } from "../../shared/lib"
 import { createFakeHost } from "./fakeHost"
 import type { FrameControls } from "./frameControls"
 import { POSTED_EVENT } from "./frameControls"

@@ -8,6 +8,7 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { submitExercise } from "../../commands/submitExercise"
+import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -17,6 +18,8 @@ vi.mock("../../actions", () => ({
 
 const uri = vscode.Uri.file("/workspace/mooc/mooc-course/ex-1")
 const exercise: WorkspaceExercise = {
+  id: idOfMoocExercise("mooc-ex-uuid"),
+  courseId: idOfMoocCourse("mooc-course-uuid"),
   backend: "mooc",
   courseSlug: "mooc-course",
   exerciseSlug: "ex-1",
@@ -37,7 +40,7 @@ function contextWith(resolved: WorkspaceExercise | undefined): ReadyActionContex
 
 suite("Submit exercise command", function () {
   beforeEach(function () {
-    vi.mocked(actions.submitExercise).mockResolvedValue(Ok.EMPTY)
+    vi.mocked(actions.submitExercise).mockResolvedValue(Ok({ warnings: [] }))
   })
 
   test("submits the exercise the resource resolves to, and says it succeeded", async function () {

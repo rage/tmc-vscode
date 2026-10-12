@@ -1,15 +1,15 @@
 import type { Result } from "ts-results"
 
+import type { ExerciseIdentifier } from "../../shared/lib"
 import type { WorkspaceExercise } from "../api/workspaceManager"
-import type { ExerciseIdentifier } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
+import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import type { ReadyActionContext } from "./types"
 
 /**
  * Resets an exercise to its initial state on disk, optionally submitting it first.
  *
- * Rejects as a `BottleneckError` while a submit, paste, reset or restore of the same
- * exercise is already in flight.
+ * Rejects as a `BottleneckError` while another operation on the exercise is in flight.
  */
 export async function resetExercise(
   actionContext: ReadyActionContext,
@@ -18,7 +18,13 @@ export async function resetExercise(
   submitFirst: boolean,
 ): Promise<Result<void, Error>> {
   const { langs } = actionContext.startup
-  return exerciseOperations.run(id, "resetting", () =>
-    langs.resetExercise(id, exercise.uri.fsPath, submitFirst),
-  )
+  return exerciseOperations.run(id, "resetting", async () => {
+    if (submitFirst) {
+      const saved = await saveExerciseDocuments(exercise)
+      if (saved.err) {
+        return saved
+      }
+    }
+    return langs.resetExercise(id, exercise.uri.fsPath, submitFirst)
+  })
 }

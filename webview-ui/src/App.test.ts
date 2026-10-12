@@ -1,8 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/svelte"
 import { tick } from "svelte"
 
+import { makeTmcKind } from "../../shared/lib"
 import App from "./App.svelte"
-import { makeTmcKind } from "./shared/shared"
 import { tmcLocalCourse } from "./test/fixtures"
 import { dispatchToWebview, postedMessages } from "./test/setup"
 

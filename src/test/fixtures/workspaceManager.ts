@@ -2,8 +2,11 @@ import * as vscode from "vscode"
 
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
+import { idOfTmcCourse, idOfTmcExercise } from "./identifiers"
 
 export const exerciseHelloWorld: WorkspaceExercise = {
+  id: idOfTmcExercise(1),
+  courseId: idOfTmcCourse(0),
   backend: "tmc",
   courseSlug: "test-python-course",
   exerciseSlug: "hello_world",
@@ -12,6 +15,8 @@ export const exerciseHelloWorld: WorkspaceExercise = {
 }
 
 export const exerciseOtherWorld: WorkspaceExercise = {
+  id: idOfTmcExercise(2),
+  courseId: idOfTmcCourse(0),
   backend: "tmc",
   courseSlug: "test-python-course",
   exerciseSlug: "other_world",

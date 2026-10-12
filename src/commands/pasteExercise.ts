@@ -1,9 +1,9 @@
 import type * as vscode from "vscode"
 
+import { pasteServiceName } from "../../shared/lib"
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure } from "../api/withOperation"
-import { pasteServiceName } from "../shared/shared"
 import { openWebLink } from "../utilities"
 import { runForExercise } from "./runForExercise"
 
@@ -19,13 +19,7 @@ export async function pasteExercise(
     async (exercise) => {
       const result = await dialog.progressNotification(
         `Sending ${exercise.exerciseSlug} to ${pasteServiceName(exercise.backend)}…`,
-        () =>
-          actions.pasteExercise(
-            actionContext,
-            exercise.backend,
-            exercise.courseSlug,
-            exercise.exerciseSlug,
-          ),
+        () => actions.pasteExercise(actionContext, exercise.id),
       )
       if (result.ok) {
         return result

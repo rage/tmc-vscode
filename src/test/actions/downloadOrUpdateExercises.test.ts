@@ -4,63 +4,49 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import type { ExerciseStatus } from "../../../shared/lib"
+import { ExerciseIdentifier } from "../../../shared/lib"
 import { downloadOrUpdateExercises } from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
 import type { ExerciseDownload, ExerciseDownloadProgress, ExerciseDownloads } from "../../api/langs"
+import type { Warned } from "../../api/withOperation"
 import type Settings from "../../config/settings"
 import * as errors from "../../errors"
 import { BottleneckError, InvalidTokenError } from "../../errors"
-import type { ExerciseStatus } from "../../shared/shared"
-import { CourseIdentifier, ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
 import { downloadFailures } from "../../ui/downloadFailures"
 import { exerciseOperations } from "../../ui/exerciseOperations"
+import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
+import { idOfMoocExercise, idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 import type { SettingsMockValues } from "../mocks/settings"
 import { createSettingsMock } from "../mocks/settings"
 import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
+import { exerciseLookupOver } from "../mocks/userdata"
 
 const helloWorld: ExerciseDownload = {
-  id: ExerciseIdentifier.from(1),
+  id: idOfTmcExercise(1),
   path: "/tmc/vscode/test-python-course/hello_world",
 }
 
 const otherWorld: ExerciseDownload = {
-  id: ExerciseIdentifier.from(2),
+  id: idOfTmcExercise(2),
   path: "/tmc/vscode/test-python-course/other_world",
 }
 
 // Fixed id shared by all tests, since they all operate within a single course.
-const TEST_COURSE_ID = CourseIdentifier.from(0)
+const TEST_COURSE_ID = idOfTmcCourse(0)
 
-const storedCourse = makeTmcKind({
+const storedCourse = tmcLocalCourse({
   id: 0,
-  name: "python-course",
-  title: "Python Course",
-  description: "",
-  organization: "mooc",
   exercises: [
-    [1, "hello_world"],
-    [2, "other_world"],
-  ].map(([id, name]) => ({
-    id: id as number,
-    name: name as string,
-    availablePoints: 1,
-    awardedPoints: 0,
-    deadline: null,
-    passed: false,
-    softDeadline: null,
-  })),
+    tmcCourseExercise({ id: 1, name: "hello_world" }),
+    tmcCourseExercise({ id: 2, name: "other_world" }),
+  ],
   availablePoints: 2,
-  awardedPoints: 0,
-  perhapsExamMode: false,
-  newExercises: [],
-  notifyAfter: 0,
-  disabled: false,
-  materialUrl: null,
 })
 
 const createDownloadResult = (
@@ -81,7 +67,7 @@ function fakeDownloads(langs: Langs, download: FakeDownload): void {
   langs.downloadTmcExercises = vi.fn<Langs["downloadTmcExercises"]>(
     async (ids, _template, onDownloaded, onHandle) =>
       download(
-        ids.map((id) => ExerciseIdentifier.from(id)),
+        ids.map((id) => idOfTmcExercise(id)),
         onDownloaded,
         onHandle,
       ),
@@ -89,7 +75,7 @@ function fakeDownloads(langs: Langs, download: FakeDownload): void {
   langs.downloadMoocExercises = vi.fn<Langs["downloadMoocExercises"]>(
     async (ids, _courseId, onDownloaded, onHandle) =>
       download(
-        ids.map((id) => ExerciseIdentifier.from(id)),
+        ids.map((id) => idOfMoocExercise(id)),
         onDownloaded,
         onHandle,
       ),
@@ -107,7 +93,13 @@ suite("downloadOrUpdateExercises action", function () {
 
   const actionContext = (): ReadyActionContext => ({
     ...createMockActionContext({
-      startup: { langs: tmcMock, userData: { getCourses: () => [storedCourse] } as never },
+      startup: {
+        langs: tmcMock,
+        userData: {
+          getCourses: () => [storedCourse],
+          getExercise: exerciseLookupOver([storedCourse]),
+        } as never,
+      },
     }),
     dialog: dialogMock,
     settings: settingsMock,
@@ -150,15 +142,14 @@ suite("downloadOrUpdateExercises action", function () {
     tmcMockValues.downloadTmcExercises = Err(error)
     const result = await downloadResults(
       actionContext(),
-      [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
+      [idOfTmcExercise(1), idOfTmcExercise(2)],
       TEST_COURSE_ID,
     )
     expect(result.successful).toEqual([])
-    expect(result.failed).toEqual([ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)])
-    expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to download 2 exercises: hello_world, other_world.",
-      error,
-    )
+    expect(result.failed).toEqual([idOfTmcExercise(1), idOfTmcExercise(2)])
+    expect(result.warnings).toEqual([
+      { headline: "Failed to download 2 exercises: hello_world, other_world.", error: error },
+    ])
   })
 
   test("reports every failed exercise in one notification, by name", async function () {
@@ -171,16 +162,18 @@ suite("downloadOrUpdateExercises action", function () {
       ],
     )
 
-    await downloadOrUpdateExercises(
+    const result = await downloadResults(
       actionContext(),
-      [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
+      [idOfTmcExercise(1), idOfTmcExercise(2)],
       TEST_COURSE_ID,
     )
 
-    expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to download 2 exercises: hello_world, other_world.",
-      expect.objectContaining({ message: "checksum mismatch" }),
-    )
+    expect(result.warnings).toEqual([
+      {
+        headline: "Failed to download 2 exercises: hello_world, other_world.",
+        error: expect.objectContaining({ message: "checksum mismatch" }),
+      },
+    ])
   })
 
   test("names the backend failure that has a remedy when both backends fail", async function () {
@@ -193,20 +186,19 @@ suite("downloadOrUpdateExercises action", function () {
       actions: error === moocError ? [{ label: "Log in", command: "tmc.showMoocLogin" }] : [],
     }))
 
-    await downloadOrUpdateExercises(
+    const result = await downloadResults(
       actionContext(),
-      [ExerciseIdentifier.from(1), ExerciseIdentifier.from("mooc-exercise")],
+      [idOfTmcExercise(1), idOfMoocExercise("mooc-exercise")],
       TEST_COURSE_ID,
     )
 
-    expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to download 2 exercises: hello_world, mooc-exercise.",
-      moocError,
-    )
+    expect(result.warnings).toEqual([
+      { headline: "Failed to download 2 exercises: hello_world, mooc-exercise.", error: moocError },
+    ])
   })
 
   test("claims a whole download at once", async function () {
-    const ids = Array.from({ length: 50 }, (_, index) => ExerciseIdentifier.from(index + 1))
+    const ids = Array.from({ length: 50 }, (_, index) => idOfTmcExercise(index + 1))
     const claimedAtFirstChange: boolean[] = []
     const subscription = exerciseOperations.onDidChange(() => {
       if (claimedAtFirstChange.length === 0) {
@@ -225,14 +217,14 @@ suite("downloadOrUpdateExercises action", function () {
   test("marks a running download for a view drawn meanwhile, and clears it after", async function () {
     let duringDownload: unknown
     fakeDownloads(tmcMock, async () => {
-      duringDownload = exerciseOperations.isRunning(ExerciseIdentifier.from(1), "downloading")
+      duringDownload = exerciseOperations.isRunning(idOfTmcExercise(1), "downloading")
       return createDownloadResult([helloWorld], [])
     })
 
-    await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
+    await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
 
     expect(duringDownload).toBe(true)
-    expect(exerciseOperations.isRunning(ExerciseIdentifier.from(1), "downloading")).toBe(false)
+    expect(exerciseOperations.isRunning(idOfTmcExercise(1), "downloading")).toBe(false)
   })
 
   test("refuses to download an exercise already downloading, without calling tmc-langs", async function () {
@@ -241,15 +233,11 @@ suite("downloadOrUpdateExercises action", function () {
       await release.promise
       return createDownloadResult([helloWorld], [])
     })
-    const running = downloadOrUpdateExercises(
-      actionContext(),
-      [ExerciseIdentifier.from(1)],
-      TEST_COURSE_ID,
-    )
+    const running = downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
 
     const second = await downloadOrUpdateExercises(
       actionContext(),
-      [ExerciseIdentifier.from(2), ExerciseIdentifier.from(1)],
+      [idOfTmcExercise(2), idOfTmcExercise(1)],
       TEST_COURSE_ID,
     )
     release.resolve()
@@ -257,37 +245,37 @@ suite("downloadOrUpdateExercises action", function () {
 
     expect(second.err && second.val).toBeInstanceOf(BottleneckError)
     expect(tmcMock.downloadTmcExercises).toHaveBeenCalledOnce()
-    expect(exerciseOperations.isRunning(ExerciseIdentifier.from(2), "downloading")).toBe(false)
+    expect(exerciseOperations.isRunning(idOfTmcExercise(2), "downloading")).toBe(false)
   })
 
   test("should return ids of successful downloads", async function () {
     tmcMockValues.downloadTmcExercises = createDownloadResult([helloWorld, otherWorld], [])
     const result = await downloadResults(
       actionContext(),
-      [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
+      [idOfTmcExercise(1), idOfTmcExercise(2)],
       TEST_COURSE_ID,
     )
-    expect(result.successful).toEqual([ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)])
+    expect(result.successful).toEqual([idOfTmcExercise(1), idOfTmcExercise(2)])
   })
 
   test("should return ids of skipped downloads as successful", async function () {
     tmcMockValues.downloadTmcExercises = createDownloadResult([], [helloWorld, otherWorld])
     const result = await downloadResults(
       actionContext(),
-      [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
+      [idOfTmcExercise(1), idOfTmcExercise(2)],
       TEST_COURSE_ID,
     )
-    expect(result.successful).toEqual([ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)])
+    expect(result.successful).toEqual([idOfTmcExercise(1), idOfTmcExercise(2)])
   })
 
   test("should combine successful and skipped downloads", async function () {
     tmcMockValues.downloadTmcExercises = createDownloadResult([helloWorld], [otherWorld])
     const result = await downloadResults(
       actionContext(),
-      [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
+      [idOfTmcExercise(1), idOfTmcExercise(2)],
       TEST_COURSE_ID,
     )
-    expect(result.successful).toEqual([ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)])
+    expect(result.successful).toEqual([idOfTmcExercise(1), idOfTmcExercise(2)])
   })
 
   test("should return ids of failed downloads", async function () {
@@ -301,10 +289,10 @@ suite("downloadOrUpdateExercises action", function () {
     )
     const result = await downloadResults(
       actionContext(),
-      [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)],
+      [idOfTmcExercise(1), idOfTmcExercise(2)],
       TEST_COURSE_ID,
     )
-    expect(result.failed).toEqual([ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)])
+    expect(result.failed).toEqual([idOfTmcExercise(1), idOfTmcExercise(2)])
   })
 
   test("should handle mooc download results keyed by exercise id", async function () {
@@ -312,15 +300,15 @@ suite("downloadOrUpdateExercises action", function () {
     // editor task id), so the status must land on the exercise the user asked for.
     const moocExerciseId = "exercise-uuid-1"
     tmcMockValues.downloadMoocExercises = createDownloadResult(
-      [{ id: ExerciseIdentifier.from(moocExerciseId), path: "/mooc/ex" }],
+      [{ id: idOfMoocExercise(moocExerciseId), path: "/mooc/ex" }],
       [],
     )
     const result = await downloadResults(
       actionContext(),
-      [ExerciseIdentifier.from(moocExerciseId)],
+      [idOfMoocExercise(moocExerciseId)],
       TEST_COURSE_ID,
     )
-    expect(result.successful).toEqual([ExerciseIdentifier.from(moocExerciseId)])
+    expect(result.successful).toEqual([idOfMoocExercise(moocExerciseId)])
     expect(result.failed).toEqual([])
   })
 
@@ -329,14 +317,14 @@ suite("downloadOrUpdateExercises action", function () {
     tmcMockValues.downloadMoocExercises = createDownloadResult(
       [],
       [],
-      [[{ id: ExerciseIdentifier.from(moocExerciseId), path: "/mooc/ex" }, ["boom"]]],
+      [[{ id: idOfMoocExercise(moocExerciseId), path: "/mooc/ex" }, ["boom"]]],
     )
     const result = await downloadResults(
       actionContext(),
-      [ExerciseIdentifier.from(moocExerciseId)],
+      [idOfMoocExercise(moocExerciseId)],
       TEST_COURSE_ID,
     )
-    expect(result.failed).toEqual([ExerciseIdentifier.from(moocExerciseId)])
+    expect(result.failed).toEqual([idOfMoocExercise(moocExerciseId)])
     expect(result.successful).toEqual([])
   })
 
@@ -350,18 +338,20 @@ suite("downloadOrUpdateExercises action", function () {
 
     const result = await downloadResults(
       actionContext(),
-      [ExerciseIdentifier.from(downloadedId), ExerciseIdentifier.from(undownloadedId)],
+      [idOfMoocExercise(downloadedId), idOfMoocExercise(undownloadedId)],
       TEST_COURSE_ID,
     )
 
-    expect(dialogMock.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to download 2 exercises: exercise-uuid-3, exercise-uuid-4.",
-      moocError,
-    )
+    expect(result.warnings).toEqual([
+      {
+        headline: "Failed to download 2 exercises: exercise-uuid-3, exercise-uuid-4.",
+        error: moocError,
+      },
+    ])
     expect(result.successful).toEqual([])
     expect(result.failed).toEqual([
-      ExerciseIdentifier.from(downloadedId),
-      ExerciseIdentifier.from(undownloadedId),
+      idOfMoocExercise(downloadedId),
+      idOfMoocExercise(undownloadedId),
     ])
   })
 
@@ -372,13 +362,13 @@ suite("downloadOrUpdateExercises action", function () {
     const closedId = "exercise-uuid-5"
     const undownloadedId = "exercise-uuid-6"
     fakeDownloads(tmcMock, async (_ids, onDownloaded) => {
-      onDownloaded({ id: ExerciseIdentifier.from(closedId), fraction: 1 })
+      onDownloaded({ id: idOfMoocExercise(closedId), fraction: 1 })
       return Err(new InvalidTokenError("401 unauthorized"))
     })
 
     await downloadOrUpdateExercises(
       actionContext(),
-      [ExerciseIdentifier.from(closedId), ExerciseIdentifier.from(undownloadedId)],
+      [idOfMoocExercise(closedId), idOfMoocExercise(undownloadedId)],
       TEST_COURSE_ID,
     )
     // The last status for each id reflects the final broadcast.
@@ -389,7 +379,7 @@ suite("downloadOrUpdateExercises action", function () {
   test("should download template if downloadOldSubmission setting is off", async function () {
     tmcMockValues.downloadTmcExercises = createDownloadResult([helloWorld], [])
     settingsMockValues.downloadOldSubmission = false
-    await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
+    await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
     expect(tmcMock.downloadTmcExercises).toHaveBeenCalledWith(
       [1],
       true,
@@ -401,7 +391,7 @@ suite("downloadOrUpdateExercises action", function () {
   test("should not necessarily download template if downloadOldSubmission setting is on", async function () {
     tmcMockValues.downloadTmcExercises = createDownloadResult([helloWorld], [])
     settingsMockValues.downloadOldSubmission = true
-    await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
+    await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
     expect(tmcMock.downloadTmcExercises).toHaveBeenCalledWith(
       [1],
       false,
@@ -417,43 +407,46 @@ suite("downloadOrUpdateExercises action", function () {
       onDownloaded({ id: helloWorld.id, fraction: 0.5 })
       return createDownloadResult([helloWorld], [])
     })
-    await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
+    await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
     expect(first(recordedStatuses(recorded, 1))).toBe("downloading")
     expect(last(recordedStatuses(recorded, 1))).toBe("closed")
   })
 
   test("should post status updates for skipped download", async function () {
     tmcMockValues.downloadTmcExercises = createDownloadResult([], [helloWorld])
-    await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
+    await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
     expect(first(recordedStatuses(recorded, 1))).toBe("downloading")
     expect(last(recordedStatuses(recorded, 1))).toBe("closed")
   })
 
   test("should post status updates for failing download", async function () {
     tmcMockValues.downloadTmcExercises = createDownloadResult([], [], [[helloWorld, [""]]])
-    await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
+    await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
     expect(first(recordedStatuses(recorded, 1))).toBe("downloading")
     expect(last(recordedStatuses(recorded, 1))).toBe("downloadFailed")
   })
 
   test("should post status updates for exercises missing from langs response", async function () {
     tmcMockValues.downloadTmcExercises = createDownloadResult([], [])
-    await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
+    await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
     expect(first(recordedStatuses(recorded, 1))).toBe("downloading")
     expect(last(recordedStatuses(recorded, 1))).toBe("downloadFailed")
   })
 
   test("should post status updates when TMC-langs operation fails", async function () {
     tmcMockValues.downloadTmcExercises = Err(new Error())
-    await downloadOrUpdateExercises(actionContext(), [ExerciseIdentifier.from(1)], TEST_COURSE_ID)
+    await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
     expect(first(recordedStatuses(recorded, 1))).toBe("downloading")
     expect(last(recordedStatuses(recorded, 1))).toBe("downloadFailed")
   })
 })
 
-const WATCHED_IDS = [1, 2, "exercise-uuid-5", "exercise-uuid-6"].map((id) =>
-  ExerciseIdentifier.from(id),
-)
+const WATCHED_IDS = [
+  idOfTmcExercise(1),
+  idOfTmcExercise(2),
+  idOfMoocExercise("exercise-uuid-5"),
+  idOfMoocExercise("exercise-uuid-6"),
+]
 
 /** An exercise's status as the Courses view derives it while it is not on disk. */
 function shownStatus(id: ExerciseIdentifier): ExerciseStatus {
@@ -466,7 +459,7 @@ function shownStatus(id: ExerciseIdentifier): ExerciseStatus {
 /** `downloadOrUpdateExercises` for a test whose download it lets run. */
 async function downloadResults(
   ...args: Parameters<typeof downloadOrUpdateExercises>
-): Promise<{ successful: ExerciseIdentifier[]; failed: ExerciseIdentifier[] }> {
+): Promise<{ successful: ExerciseIdentifier[]; failed: ExerciseIdentifier[] } & Warned> {
   return (await downloadOrUpdateExercises(...args)).unwrap()
 }
 
@@ -477,14 +470,14 @@ function recordedStatuses(
 ): ExerciseStatus[] {
   return records.flatMap((statuses) =>
     statuses
-      .filter(([id]) => ExerciseIdentifier.unwrap(id) === exerciseId)
+      .filter(([id]) => ExerciseIdentifier.toString(id) === String(exerciseId))
       .map(([, status]) => status),
   )
 }
 
 suite("downloadOrUpdateExercises cancellation and progress", function () {
-  const tmcIds = [ExerciseIdentifier.from(1), ExerciseIdentifier.from(2)]
-  const moocIds = [ExerciseIdentifier.from("mooc-1"), ExerciseIdentifier.from("mooc-2")]
+  const tmcIds = [idOfTmcExercise(1), idOfTmcExercise(2)]
+  const moocIds = [idOfMoocExercise("mooc-1"), idOfMoocExercise("mooc-2")]
 
   // Mirrors what the CLI reports back for a leg that downloaded everything it was given.
   const downloadedAll = (ids: ExerciseIdentifier[]): Result<ExerciseDownloads, Error> =>
@@ -566,6 +559,25 @@ suite("downloadOrUpdateExercises cancellation and progress", function () {
     expect(result.failed).toEqual([...tmcIds, ...moocIds])
   })
 
+  test("keeps what a leg finished before the cancel, skipped exercises included", async function () {
+    fakeDownloads(tmcMock, async (ids) => {
+      downloadedIdsPerCall.push(ids)
+      // The tmc leg finishes, reporting one exercise skipped as already up to date; the
+      // user cancels before the mooc leg starts.
+      cancel()
+      return createDownloadResult(
+        [{ id: tmcIds[0]!, path: "/exercise" }],
+        [{ id: tmcIds[1]!, path: "/exercise" }],
+      )
+    })
+
+    const result = await downloadResults(actionContext(), [...tmcIds, ...moocIds], TEST_COURSE_ID)
+
+    expect(downloadedIdsPerCall).toEqual([tmcIds])
+    expect(result.successful).toEqual(tmcIds)
+    expect(result.failed).toEqual(moocIds)
+  })
+
   test("kills a leg that was still starting up when the user cancelled", async function () {
     const interruptedLegs: ExerciseIdentifier[][] = []
     fakeDownloads(tmcMock, async (ids, _onDownloaded, onHandle) => {
@@ -593,7 +605,7 @@ suite("downloadOrUpdateExercises cancellation and progress", function () {
         onDownloaded({
           id,
           fraction: (index + 1) / ids.length,
-          message: `Downloaded ${ExerciseIdentifier.unwrap(id)}`,
+          message: `Downloaded ${ExerciseIdentifier.toString(id)}`,
         }),
       )
       return downloadedAll(ids)

@@ -1,20 +1,22 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
+import type { LocalCourseData } from "../../../shared/lib"
+import { CourseIdentifier } from "../../../shared/lib"
 import { downloadNewExercisesForCourse } from "../../actions/downloadNewExercisesForCourse"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
 import type Dialog from "../../api/dialog"
 import { refreshCourses, refreshEverything } from "../../commands/refreshEverything"
 import { updateExercises } from "../../commands/updateExercises"
-import type { LocalCourseData } from "../../shared/shared"
-import { CourseIdentifier, makeTmcKind } from "../../shared/shared"
 import { Logger } from "../../utilities"
+import { tmcLocalCourse } from "../fixtures/courses"
+import { idOfTmcCourse } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions/updateCourse", () => ({
-  updateCourse: vi.fn(async () => Ok(true)),
+  updateCourse: vi.fn(async () => Ok({ isUpdated: true, warnings: [] })),
 }))
 
 // The course-update pass ends by rescanning the exercises on disk, which would otherwise
@@ -32,20 +34,13 @@ vi.mock("../../commands/updateExercises", () => ({
 }))
 
 const tmcCourse = (id: number, notifyAfter: number, newExercises: number[]): LocalCourseData =>
-  makeTmcKind({
+  tmcLocalCourse({
     id,
     name: `course-${id}`,
     title: `Course ${id}`,
-    description: "",
     organization: "test",
-    exercises: [],
-    availablePoints: 0,
-    awardedPoints: 0,
-    perhapsExamMode: false,
     newExercises,
     notifyAfter,
-    disabled: false,
-    materialUrl: null,
   })
 
 function contextWithCourses(courses: LocalCourseData[]): [ReadyActionContext, Dialog] {
@@ -76,7 +71,7 @@ const headlineLogs = (): unknown[][] =>
 suite("refreshEverything command", function () {
   beforeEach(function () {
     vi.mocked(updateCourse).mockReset()
-    vi.mocked(updateCourse).mockResolvedValue(Ok(true))
+    vi.mocked(updateCourse).mockResolvedValue(Ok({ isUpdated: true, warnings: [] }))
     vi.mocked(updateExercises).mockReset()
     vi.mocked(updateExercises).mockResolvedValue(undefined)
   })
@@ -85,7 +80,7 @@ suite("refreshEverything command", function () {
     const order: string[] = []
     vi.mocked(updateCourse).mockImplementation(async () => {
       order.push("updateCourse")
-      return Ok(true)
+      return Ok({ isUpdated: true, warnings: [] })
     })
     vi.mocked(updateExercises).mockImplementation(async () => {
       order.push("updateExercises")
@@ -106,7 +101,7 @@ suite("refreshEverything command", function () {
     })
     vi.mocked(updateCourse).mockImplementation(async () => {
       await blocked
-      return Ok(true)
+      return Ok({ isUpdated: true, warnings: [] })
     })
     const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [])])
 
@@ -128,13 +123,13 @@ suite("refreshEverything command", function () {
     })
     vi.mocked(updateCourse).mockImplementationOnce(async () => {
       await blocked
-      return Ok(true)
+      return Ok({ isUpdated: true, warnings: [] })
     })
     const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [])])
     const queuedOptions = {
       silent: true,
       isQueuedWhenBusy: true,
-      courseId: CourseIdentifier.from(1),
+      courseId: idOfTmcCourse(1),
     }
 
     const first = refreshEverything(actionContext, { silent: true })
@@ -158,7 +153,7 @@ suite("refreshEverything command", function () {
     })
     vi.mocked(updateCourse).mockImplementation(async () => {
       await blocked
-      return Ok(true)
+      return Ok({ isUpdated: true, warnings: [] })
     })
     const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [])])
 
@@ -209,7 +204,7 @@ suite("refreshEverything reporting", function () {
   test("a silent refresh still shows the warning an operation raised", async function () {
     vi.mocked(updateCourse).mockImplementation(async (context) => {
       void context.dialog.reportError("Failed to update course data.", new Error("scope"))
-      return Ok(false)
+      return Ok({ isUpdated: false, warnings: [] })
     })
     const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [])])
 
@@ -225,11 +220,11 @@ suite("refreshEverything reporting", function () {
 suite("refreshEverything's new-exercises prompt", function () {
   beforeEach(function () {
     vi.mocked(updateCourse).mockReset()
-    vi.mocked(updateCourse).mockResolvedValue(Ok(true))
+    vi.mocked(updateCourse).mockResolvedValue(Ok({ isUpdated: true, warnings: [] }))
     vi.mocked(updateExercises).mockReset()
     vi.mocked(updateExercises).mockResolvedValue(undefined)
     vi.mocked(downloadNewExercisesForCourse).mockReset()
-    vi.mocked(downloadNewExercisesForCourse).mockResolvedValue(Ok.EMPTY)
+    vi.mocked(downloadNewExercisesForCourse).mockResolvedValue(Ok({ warnings: [] }))
   })
 
   type Button = [string, () => void]
@@ -290,7 +285,7 @@ suite("refreshEverything's new-exercises prompt", function () {
     await vi.waitFor(() =>
       expect(downloadNewExercisesForCourse).toHaveBeenCalledExactlyOnceWith(
         actionContext,
-        CourseIdentifier.from(1),
+        idOfTmcCourse(1),
       ),
     )
     expect(dialog.reportError).not.toHaveBeenCalled()
@@ -313,9 +308,9 @@ suite("refreshEverything's new-exercises prompt", function () {
 
   test("Download All carries on past a course that fails, and reports it once", async function () {
     vi.mocked(downloadNewExercisesForCourse).mockImplementation(async (_context, courseId) =>
-      CourseIdentifier.equals(courseId, CourseIdentifier.from(1))
+      CourseIdentifier.equals(courseId, idOfTmcCourse(1))
         ? Err(new Error("disk full"))
-        : Ok.EMPTY,
+        : Ok({ warnings: [] }),
     )
     const [actionContext, dialog] = contextWithCourses([
       tmcCourse(1, 0, [10]),
@@ -344,12 +339,10 @@ suite("refreshEverything's new-exercises prompt", function () {
 
     await vi.waitFor(() => {
       expect(userData.setNewExerciseNotifyAfter).toHaveBeenCalledExactlyOnceWith(
-        CourseIdentifier.from(1),
+        idOfTmcCourse(1),
         expect.any(Number),
       )
-      expect(userData.clearFromNewExercises).toHaveBeenCalledExactlyOnceWith(
-        CourseIdentifier.from(1),
-      )
+      expect(userData.clearFromNewExercises).toHaveBeenCalledExactlyOnceWith(idOfTmcCourse(1))
     })
   })
 
@@ -374,7 +367,7 @@ suite("refreshEverything's new-exercises prompt", function () {
 suite("refreshCourses command", function () {
   beforeEach(function () {
     vi.mocked(updateCourse).mockReset()
-    vi.mocked(updateCourse).mockResolvedValue(Ok(true))
+    vi.mocked(updateCourse).mockResolvedValue(Ok({ isUpdated: true, warnings: [] }))
     vi.mocked(updateExercises).mockReset()
     vi.mocked(updateExercises).mockResolvedValue(undefined)
   })

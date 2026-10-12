@@ -61,14 +61,11 @@ export default class ExerciseDecorationProvider
       return
     }
 
-    const apiExercise = this.userData.getExerciseByName(
-      exercise.backend,
-      exercise.courseSlug,
-      exercise.exerciseSlug,
-    )?.data
-    if (!apiExercise) {
+    const stored = this.userData.getExercise(exercise.id)
+    if (stored.err) {
       return ExerciseDecorationProvider._missingExercise
     }
+    const apiExercise = stored.val.exercise.data
 
     if (apiExercise.passed) {
       return ExerciseDecorationProvider._passedExercise

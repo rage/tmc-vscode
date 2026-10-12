@@ -1,18 +1,20 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
+import type { LocalCourseData } from "../../../shared/lib"
+import { CourseIdentifier } from "../../../shared/lib"
 import { checkForCourseUpdates } from "../../actions/checkForCourseUpdates"
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
 import type Dialog from "../../api/dialog"
-import type { LocalCourseData } from "../../shared/shared"
-import { CourseIdentifier, makeTmcKind } from "../../shared/shared"
+import { tmcLocalCourse } from "../fixtures/courses"
+import { idOfTmcCourse } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions/updateCourse", () => ({
-  updateCourse: vi.fn(async () => Ok(true)),
+  updateCourse: vi.fn(async () => Ok({ isUpdated: true, warnings: [] })),
 }))
 
 // The course-update pass ends by rescanning the exercises on disk, which would otherwise
@@ -22,20 +24,13 @@ vi.mock("../../actions/refreshLocalExercises", () => ({
 }))
 
 const tmcCourse = (id: number, notifyAfter: number, newExercises: number[]): LocalCourseData =>
-  makeTmcKind({
+  tmcLocalCourse({
     id,
     name: `course-${id}`,
     title: `Course ${id}`,
-    description: "",
     organization: "test",
-    exercises: [],
-    availablePoints: 0,
-    awardedPoints: 0,
-    perhapsExamMode: false,
     newExercises,
     notifyAfter,
-    disabled: false,
-    materialUrl: null,
   })
 
 function contextWithCourses(courses: LocalCourseData[]): [ReadyActionContext, Dialog] {
@@ -60,7 +55,7 @@ function contextWithCourses(courses: LocalCourseData[]): [ReadyActionContext, Di
 suite("checkForCourseUpdates action", function () {
   beforeEach(function () {
     vi.mocked(updateCourse).mockReset()
-    vi.mocked(updateCourse).mockResolvedValue(Ok(true))
+    vi.mocked(updateCourse).mockResolvedValue(Ok({ isUpdated: true, warnings: [] }))
   })
 
   test("refreshes a course whose new-exercise reminder is postponed", async function () {
@@ -69,7 +64,7 @@ suite("checkForCourseUpdates action", function () {
     await checkForCourseUpdates(actionContext)
 
     expect(updateCourse).toHaveBeenCalledTimes(1)
-    expect(updateCourse).toHaveBeenCalledWith(actionContext, CourseIdentifier.from(1))
+    expect(updateCourse).toHaveBeenCalledWith(actionContext, idOfTmcCourse(1))
   })
 
   test("rescans the exercises on disk once, however many courses were refreshed", async function () {
@@ -87,7 +82,7 @@ suite("checkForCourseUpdates action", function () {
   })
 
   test("names a rescan that fails as the pass's failure", async function () {
-    vi.mocked(updateCourse).mockResolvedValue(Ok(true))
+    vi.mocked(updateCourse).mockResolvedValue(Ok({ isUpdated: true, warnings: [] }))
     const error = new Error("tmc-langs crashed")
     vi.mocked(refreshLocalExercises).mockResolvedValueOnce(Err(error))
     const [actionContext] = contextWithCourses([tmcCourse(1, 0, [])])
@@ -99,7 +94,9 @@ suite("checkForCourseUpdates action", function () {
 
   test("refreshes the other courses after one fails, and names the failure", async function () {
     vi.mocked(updateCourse).mockImplementation(async (_actionContext, id) =>
-      CourseIdentifier.toString(id) === "1" ? Err(new Error("boom")) : Ok(true),
+      CourseIdentifier.toString(id) === "1"
+        ? Err(new Error("boom"))
+        : Ok({ isUpdated: true, warnings: [] }),
     )
     const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, []), tmcCourse(2, 0, [])])
 
@@ -119,6 +116,7 @@ suite("checkForCourseUpdates action", function () {
     expect(result.ok && result.val).toEqual({
       courses: [tmcCourse(1, 0, [10])],
       failure: undefined,
+      warnings: [],
     })
     expect(dialog.notification).not.toHaveBeenCalled()
   })
@@ -128,7 +126,7 @@ suite("checkForCourseUpdates action", function () {
     actionContext.startup.userData.getCourse = (): Err<Error> => Err(new Error("no such course"))
 
     const result = await checkForCourseUpdates(actionContext, {
-      courseId: CourseIdentifier.from(9),
+      courseId: idOfTmcCourse(9),
     })
 
     expect(result.err && result.val.message).toBe("no such course")

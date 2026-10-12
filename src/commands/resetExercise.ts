@@ -1,11 +1,11 @@
 import { Ok } from "ts-results"
-import * as vscode from "vscode"
+import type * as vscode from "vscode"
 
+import { backendName } from "../../shared/lib"
 import { checkAiUse, resetExercise as resetExerciseAction } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure } from "../api/withOperation"
-import { backendName, LocalCourseExercise } from "../shared/shared"
-import { Logger } from "../utilities"
+import { revertExerciseDocuments } from "../window/exerciseDocuments"
 import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
 import { runForExercise } from "./runForExercise"
 
@@ -21,16 +21,12 @@ export async function resetExercise(
   const { dialog } = actionContext
   const { userData } = actionContext.startup
   await runForExercise(actionContext, resource, "Resetting the exercise", async (exercise) => {
-    const stored = userData.getExerciseByName(
-      exercise.backend,
-      exercise.courseSlug,
-      exercise.exerciseSlug,
-    )
-    if (!stored) {
-      return failure(`Missing exercise data for ${exercise.exerciseSlug}.`)
+    const stored = userData.getExercise(exercise.id)
+    if (stored.err) {
+      return failure(`Missing exercise data for ${exercise.exerciseSlug}.`, stored.val)
     }
 
-    const id = LocalCourseExercise.getId(stored)
+    const { id } = exercise
     const submitFirst = await confirmSubmitBeforeDestructiveAction(actionContext, {
       message: `Reset ${exercise.exerciseSlug}?`,
       replacement: "the exercise template",
@@ -47,8 +43,6 @@ export async function resetExercise(
       }
     }
 
-    const editor = vscode.window.activeTextEditor
-    const document = editor?.document.uri
     const resetResult = await dialog.progressNotification(
       submitFirst
         ? `Submitting and resetting ${exercise.exerciseSlug}…`
@@ -59,10 +53,7 @@ export async function resetExercise(
       return failure("Failed to reset exercise.", resetResult.val)
     }
 
-    if (editor && document) {
-      Logger.debug(`Reopening original file "${document.fsPath}"`)
-      await vscode.commands.executeCommand("workbench.action.files.revert", document)
-    }
+    await revertExerciseDocuments(exercise)
     dialog.statusMessage(`Reset ${exercise.exerciseSlug}.`)
     return Ok.EMPTY
   })

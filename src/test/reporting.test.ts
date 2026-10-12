@@ -5,6 +5,8 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import type { ExerciseStatus as RowStatus, ExtensionToWebview } from "../../shared/lib"
+import { backendName, makeMoocKind } from "../../shared/lib"
 import type { ReadyActionContext, ReadyStartup } from "../actions/types"
 import { AiUseGate } from "../api/aiUseGate"
 import type Dialog from "../api/dialog"
@@ -20,13 +22,13 @@ import { registerCommands } from "../init/commands"
 import { registerTesting } from "../init/testing"
 import { nextPanelId } from "../panels/routes"
 import { TmcPanel } from "../panels/TmcPanel"
-import type { ExerciseStatus as RowStatus, ExtensionToWebview } from "../shared/shared"
-import { backendName, CourseIdentifier, ExerciseIdentifier, makeMoocKind } from "../shared/shared"
 import Storage from "../storage"
 import type { MoocLocalCourseData } from "../storage/data"
 import { CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
 import type CoursesTree from "../ui/treeview/treeview"
 import { updateablesRegistry } from "../ui/updateablesRegistry"
+import { moocCourseData, moocCourseExercise } from "./fixtures/courses"
+import { idOfMoocCourse, idOfMoocExercise } from "./fixtures/identifiers"
 import { createMockActionContext } from "./mocks/actionContext"
 import { createMockContext } from "./mocks/vscode"
 import { autoMock } from "./support/mock"
@@ -39,14 +41,14 @@ import { createFakeWebviewPanel } from "./support/webviewPanel"
 const COURSE = "mooc-course"
 const EXERCISE = "loops"
 const EXERCISE_ID = "mooc-ex-1"
-const COURSE_ID = CourseIdentifier.from("instance-1")
+const COURSE_ID = idOfMoocCourse("instance-1")
 
 /** The stored exercise's row in the Courses view, as its commands receive it. */
 function exerciseRow(status: RowStatus): ExerciseTreeItem {
   return Object.assign(Object.create(ExerciseTreeItem.prototype) as ExerciseTreeItem, {
     id: EXERCISE_ID,
     courseId: COURSE_ID,
-    exerciseId: ExerciseIdentifier.from(EXERCISE_ID),
+    exerciseId: idOfMoocExercise(EXERCISE_ID),
     status,
   })
 }
@@ -58,31 +60,19 @@ function courseRow(): CourseTreeItem {
 }
 
 function storedCourse(overrides: Partial<MoocLocalCourseData> = {}): MoocLocalCourseData {
-  return {
+  return moocCourseData({
     id: "instance-1",
     name: COURSE,
     title: "Mooc Course",
-    description: null,
-    organization: "mooc",
-    exercises: [
-      {
-        id: EXERCISE_ID,
-        name: EXERCISE,
-        availablePoints: 1,
-        awardedPoints: 0,
-        deadline: null,
-        passed: false,
-      },
-    ],
     availablePoints: 1,
-    awardedPoints: 0,
-    newExercises: [],
-    notifyAfter: 0,
+    exercises: [moocCourseExercise({ id: EXERCISE_ID, name: EXERCISE })],
     ...overrides,
-  }
+  })
 }
 
 const exercise: WorkspaceExercise = {
+  id: idOfMoocExercise(EXERCISE_ID),
+  courseId: COURSE_ID,
   backend: "mooc",
   courseSlug: COURSE,
   exerciseSlug: EXERCISE,
@@ -162,13 +152,12 @@ async function harness(
     listSettings: async () => Ok({}),
     checkExerciseUpdates: async () => Ok([]),
     unsetSetting: async () => Ok.EMPTY,
-    listLocalCourseExercises: async () => Ok([{ "exercise-id": EXERCISE_ID }]),
   })
   const workspaceManager = fakeService<WorkspaceManager>(services.workspaceManager ?? {}, {
     activeExercise: exercise,
     activeCourse: undefined,
     getExerciseContaining: () => exercise,
-    getExerciseBySlug: () => exercise,
+    getExercise: () => exercise,
     getExercisesByCourseSlug: () => [exercise],
     getExercises: () => [exercise],
     setExercises: async () => Ok.EMPTY,
@@ -288,6 +277,7 @@ function showSubmission(actionContext: ReadyActionContext): void {
   TmcPanel.renderSide(createMockContext(), actionContext, {
     id: nextPanelId(),
     type: "ExerciseSubmission",
+    exerciseId: idOfMoocExercise(EXERCISE_ID),
     backend: "mooc",
     courseSlug: storedCourse().name,
     exerciseSlug: storedExercise.name,
@@ -350,13 +340,13 @@ suite("reported once: exercise commands", function () {
   })
 
   test("a test run that cannot start shows in Test Results, and nothing else", async function () {
-    const { run, shown } = await harness({ course: storedCourse({ name: "renamed" }) })
+    const { run, shown } = await harness({ course: storedCourse({ exercises: [] }) })
 
     await run("tmc.testExercise")
 
     expect(shown).toEqual([])
     expect(lastTestRunErrors()).toEqual([
-      "The tests could not be run: No mooc course with slug mooc-course",
+      "The tests could not be run: No stored mooc exercise mooc-ex-1.",
     ])
   })
 
@@ -621,7 +611,7 @@ suite("reported once: the Courses view and course details", function () {
 
   test("a failed update from the Courses view is one warning", async function () {
     const { run, shown } = await harness({ langs: moocDownloadFails })
-    updateablesRegistry.setMany([[COURSE_ID, [ExerciseIdentifier.from(EXERCISE_ID)]]])
+    updateablesRegistry.setMany([[COURSE_ID, [idOfMoocExercise(EXERCISE_ID)]]])
 
     await run("tmc.updateCourseExercises", courseRow())
 
@@ -643,7 +633,7 @@ suite("reported once: the Courses view and course details", function () {
     const { actionContext, run, shown } = await harness({
       langs: {
         ...moocDownloadFails,
-        checkExerciseUpdates: async () => Ok([ExerciseIdentifier.from(EXERCISE_ID)]),
+        checkExerciseUpdates: async () => Ok([idOfMoocExercise(EXERCISE_ID)]),
       },
     })
     vi.mocked(actionContext.settings.getAutomaticallyUpdateExercises).mockReturnValue(true)

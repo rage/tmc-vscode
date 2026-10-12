@@ -1,10 +1,10 @@
-import type { BackendKind, CourseIdentifier } from "../shared/shared"
+import type { BackendKind, CourseIdentifier } from "../../shared/lib"
 import {
   backendName,
   ExerciseIdentifier,
   LocalCourseData,
   LocalCourseExercise,
-} from "../shared/shared"
+} from "../../shared/lib"
 import { Logger } from "../utilities"
 import type { ReadyActionContext } from "./types"
 

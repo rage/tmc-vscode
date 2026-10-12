@@ -1,7 +1,12 @@
-import { Ok } from "ts-results"
+import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import type {
+  ExerciseSlideSubmissionListItem,
+  MoocOldSubmissionRestore,
+} from "../../../shared/langsSchema"
+import { makeMoocKind } from "../../../shared/lib"
 import type { PickableSubmission } from "../../actions"
 import type { ActionContext, ReadyActionContext } from "../../actions/types"
 import type { Item } from "../../api/dialog"
@@ -11,14 +16,16 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { downloadOldSubmission } from "../../commands/downloadOldSubmission"
 import type { UserData } from "../../config/userdata"
-import type {
-  ExerciseSlideSubmissionListItem,
-  MoocOldSubmissionRestore,
-} from "../../shared/langsSchema"
-import { ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
 import { exerciseOperations } from "../../ui/exerciseOperations"
+import { revertExerciseDocuments, saveExerciseDocuments } from "../../window/exerciseDocuments"
+import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
+
+vi.mock("../../window/exerciseDocuments", () => ({
+  revertExerciseDocuments: vi.fn(async () => {}),
+  saveExerciseDocuments: vi.fn(async () => Ok.EMPTY),
+}))
 
 // jest-mock-vscode ships no `env` namespace.
 beforeAll(function () {
@@ -29,6 +36,8 @@ beforeAll(function () {
 suite("Download old submission command (mooc branch)", function () {
   const uri = vscode.Uri.file("/workspace/mooc/course/ex-1")
   const moocExercise: WorkspaceExercise = {
+    id: idOfMoocExercise("mooc-ex-uuid"),
+    courseId: idOfMoocCourse("mooc-course-uuid"),
     backend: "mooc",
     courseSlug: "mooc-course",
     exerciseSlug: "ex-1",
@@ -82,8 +91,8 @@ suite("Download old submission command (mooc branch)", function () {
     const langs = { getOldSubmissions, restoreSubmission } as unknown as Langs
 
     const userData = {
-      getExerciseByName: () => makeMoocKind({ id: "mooc-ex-uuid" }),
-      getCourseBySlug: () => Ok({}),
+      getExercise: () => Ok({}),
+      getCourse: () => Ok({}),
     } as unknown as UserData
 
     const workspaceManager = {
@@ -120,9 +129,7 @@ suite("Download old submission command (mooc branch)", function () {
   test("lists submissions newest first, dated in the UI language, with the status beside", async function () {
     await downloadOldSubmission(actionContext({ submissions: moocSubmissions.toReversed() }), uri)
 
-    expect(getOldSubmissions).toHaveBeenCalledExactlyOnceWith(
-      ExerciseIdentifier.from("mooc-ex-uuid"),
-    )
+    expect(getOldSubmissions).toHaveBeenCalledExactlyOnceWith(idOfMoocExercise("mooc-ex-uuid"))
     expect(pickPrompt).toEqual({
       title: "Download Old Submission — ex-1",
       placeHolder: "Pick a submission to restore",
@@ -202,11 +209,28 @@ suite("Download old submission command (mooc branch)", function () {
   test("submits the current state first when the user asks for it", async function () {
     await downloadOldSubmission(actionContext({ answer: "Submit and Restore" }), uri)
 
+    expect(saveExerciseDocuments).toHaveBeenCalledExactlyOnceWith(moocExercise)
     expect(restoreSubmission).toHaveBeenCalledExactlyOnceWith(
       makeMoocKind({ exerciseId: "mooc-ex-uuid", submissionId: "sub-newer" }),
       uri.fsPath,
       true,
     )
+  })
+
+  test("reverts the restored exercise's editors after the restore", async function () {
+    await downloadOldSubmission(actionContext(), uri)
+
+    expect(saveExerciseDocuments).not.toHaveBeenCalled()
+    expect(revertExerciseDocuments).toHaveBeenCalledExactlyOnceWith(moocExercise)
+  })
+
+  test("leaves the editors alone when the restore fails", async function () {
+    const context = actionContext()
+    restoreSubmission.mockResolvedValue(Err(new Error("disk full")))
+
+    await downloadOldSubmission(context, uri)
+
+    expect(revertExerciseDocuments).not.toHaveBeenCalled()
   })
 
   test("downloads nothing when the confirmation is cancelled", async function () {
@@ -217,7 +241,7 @@ suite("Download old submission command (mooc branch)", function () {
 
   test("refuses to restore while a submission of the same exercise is in flight", async function () {
     const submission = exerciseOperations
-      .claim([ExerciseIdentifier.from("mooc-ex-uuid")], "submitting")
+      .claim([idOfMoocExercise("mooc-ex-uuid")], "submitting")
       .unwrap()
     try {
       await downloadOldSubmission(actionContext({ answer: "Submit and Restore" }), uri)

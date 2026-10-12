@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { TestCase, TmcStyleValidationResult } from "../shared/langsSchema"
-  import { withDistinctKeys } from "../shared/shared"
+  import type { TestCase, TmcStyleValidationResult } from "../../../shared/langsSchema"
+  import { withDistinctKeys } from "../../../shared/lib"
   import { uiState } from "../utilities/uiState.svelte"
   import Checkbox from "./Checkbox.svelte"
   import CodeBlock from "./CodeBlock.svelte"

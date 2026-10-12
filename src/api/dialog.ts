@@ -1,8 +1,8 @@
 import * as vscode from "vscode"
 
+import type { CourseIdentifier } from "../../shared/lib"
+import { backendName, LocalCourseData } from "../../shared/lib"
 import { presentationFor } from "../errors"
-import type { CourseIdentifier } from "../shared/shared"
-import { backendName, LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
 
 /**

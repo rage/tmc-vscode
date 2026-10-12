@@ -11,19 +11,29 @@ import { Logger } from "../utilities"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
 
+/** Where {@link moveExtensionDataPath} moved the exercises. */
+export interface MovedExercisesFolder {
+  /** The folder the exercises ended up in, which callers must report rather than the choice. */
+  projectsDirectory: string
+  /**
+   * Why the exercises could not be listed in their new place, when they could not; the move
+   * itself is done either way.
+   */
+  rescanError: Error | undefined
+}
+
 /**
  * Moves the physical location of all exercises on disk and refreshes them.
  *
  * @param newPath Folder the user chose. A non-empty one is not used as-is; the
- * exercises go into a `tmcdata` subfolder of it instead.
- * @returns The folder the exercises actually ended up in, which callers must
- * report rather than `newPath`.
+ * exercises go into a `tmcdata` subfolder of it instead. Errs, moving nothing, for the
+ * current exercises folder or a folder inside it.
  */
 export async function moveExtensionDataPath(
   actionContext: ReadyActionContext,
   newPath: vscode.Uri,
   onUpdate?: (progress: FractionProgress) => void,
-): Promise<Result<string, Error>> {
+): Promise<Result<MovedExercisesFolder, Error>> {
   const { langs, resources } = actionContext.startup
   Logger.info("Moving extension data path")
 
@@ -38,6 +48,18 @@ export async function moveExtensionDataPath(
     newFsPath = path.join(newFsPath, "tmcdata")
   }
 
+  const current = resources.projectsDirectory
+  if (current !== undefined) {
+    const relative = path.relative(current, newFsPath)
+    if (!relative.startsWith("..") && !path.isAbsolute(relative)) {
+      return Err(
+        new Error(
+          `The exercises folder cannot be moved into itself: ${newFsPath} is inside ${current}.`,
+        ),
+      )
+    }
+  }
+
   const moveResult = await langs.moveProjectsDirectory(newFsPath, onUpdate)
   if (moveResult.err) {
     return moveResult
@@ -45,5 +67,11 @@ export async function moveExtensionDataPath(
 
   resources.projectsDirectory = newFsPath
   const refreshed = await refreshLocalExercises(actionContext)
-  return refreshed.ok ? Ok(newFsPath) : refreshed
+  if (refreshed.err) {
+    Logger.error("Failed to list the exercises in their new folder", refreshed.val)
+  }
+  return Ok({
+    projectsDirectory: newFsPath,
+    rescanError: refreshed.err ? refreshed.val : undefined,
+  })
 }

@@ -1,16 +1,17 @@
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
-import type { ExerciseDownloadProgress, ExerciseDownloads } from "../api/langs"
-import { ExerciseUpdateError, presentationFor } from "../errors"
-import type { BackendKind, CourseIdentifier } from "../shared/shared"
+import type { BackendKind, CourseIdentifier } from "../../shared/lib"
 import {
   backendName,
   ExerciseIdentifier,
-  LocalCourseData,
   LocalCourseExercise,
   match,
-} from "../shared/shared"
+  partition,
+} from "../../shared/lib"
+import type { ExerciseDownloadProgress, ExerciseDownloads } from "../api/langs"
+import type { OperationWarning, Warned } from "../api/withOperation"
+import { ExerciseUpdateError, presentationFor } from "../errors"
 import { downloadFailures } from "../ui/downloadFailures"
 import type { ExerciseClaim } from "../ui/exerciseOperations"
 import { exerciseOperations } from "../ui/exerciseOperations"
@@ -32,9 +33,8 @@ interface DownloadResults {
  * Downloads given exercises and opens them in the course workspace.
  *
  * Fails as a whole only with a `BottleneckError`, downloading nothing, while any of the
- * exercises is already downloading. Every other failure is reported here, in one
- * notification naming the exercises, and lands in `failed`; a cancelled download returns
- * what had completed.
+ * exercises is busy with another operation. Every other failure lands in `failed`, with one
+ * warning naming the exercises; a cancelled download returns what had completed.
  *
  * @param exerciseIds Exercises to download.
  * @param courseId Course the exercises belong to, when they all share one. Passed
@@ -45,10 +45,10 @@ export async function downloadOrUpdateExercises(
   actionContext: ReadyActionContext,
   exerciseIds: ExerciseIdentifier[],
   courseId?: CourseIdentifier,
-): Promise<Result<DownloadResults, Error>> {
+): Promise<Result<DownloadResults & Warned, Error>> {
   Logger.info("Downloading exercises", exerciseIds)
   if (exerciseIds.length === 0) {
-    return Ok({ successful: [], failed: [] })
+    return Ok({ successful: [], failed: [], warnings: [] })
   }
   const claim = exerciseOperations.claim(exerciseIds, "downloading")
   if (claim.err) {
@@ -66,32 +66,21 @@ async function download(
   exerciseIds: ExerciseIdentifier[],
   courseId: CourseIdentifier | undefined,
   claim: ExerciseClaim,
-): Promise<DownloadResults> {
+): Promise<DownloadResults & Warned> {
   const { dialog, settings } = actionContext
   const { langs } = actionContext.startup
 
   const succeeded = new Set<string>()
   const downloadTemplate = !settings.getDownloadOldSubmission()
-  const tmcIds = exerciseIds.flatMap((id) =>
-    match(
-      id,
-      (tmc) => [tmc.tmcExerciseId],
-      () => [],
-    ),
-  )
-  const moocIds = exerciseIds.flatMap((id) =>
-    match(
-      id,
-      () => [],
-      (mooc) => [mooc.moocExerciseId],
-    ),
-  )
+  const byBackend = partition(exerciseIds)
+  const tmcIds = byBackend.tmc.map((id) => id.tmcExerciseId)
+  const moocIds = byBackend.mooc.map((id) => id.moocExerciseId)
   const moocCourseId =
     courseId &&
     match(
       courseId,
       () => undefined,
-      (mooc) => mooc.instanceId,
+      (mooc) => mooc.moocCourseId,
     )
 
   let cancelled = false
@@ -148,19 +137,13 @@ async function download(
     },
     { cancellable: true },
   )
-  if (cancelled) {
-    // The user chose to stop; report what completed instead of erroring.
-    const results = sortResults(exerciseIds, succeeded)
-    downloadFailures.record(results.failed, results.successful)
-    Logger.info("Exercise download cancelled by the user")
-    return results
-  }
-
   const failedLegs: Error[] = []
   const exerciseReasons: string[][] = []
   for (const { backend, result } of legs) {
     if (result.err) {
-      Logger.error(`Failed to download exercises from ${backendName(backend)}`, result.val)
+      if (!cancelled) {
+        Logger.error(`Failed to download exercises from ${backendName(backend)}`, result.val)
+      }
       failedLegs.push(result.val)
       continue
     }
@@ -180,14 +163,20 @@ async function download(
 
   const results = sortResults(exerciseIds, succeeded)
   downloadFailures.record(results.failed, results.successful)
+  if (cancelled) {
+    // The user chose to stop; what completed is the answer, not an error.
+    Logger.info("Exercise download cancelled by the user")
+    return { ...results, warnings: [] }
+  }
+  const warnings: OperationWarning[] = []
   if (results.failed.length > 0) {
     const names = results.failed.map((id) => exerciseName(actionContext, id))
-    dialog.reportError(
-      `Failed to download ${describeExercises(names)}.`,
-      failureCause(failedLegs, exerciseReasons),
-    )
+    warnings.push({
+      headline: `Failed to download ${describeExercises(names)}.`,
+      error: failureCause(failedLegs, exerciseReasons),
+    })
   }
-  return results
+  return { ...results, warnings }
 }
 
 /**
@@ -209,14 +198,10 @@ function failureCause(failedLegs: Error[], exerciseReasons: string[][]): Error {
 
 /** The name the student knows `exerciseId` by, or its id if no stored course has it. */
 function exerciseName(actionContext: ReadyActionContext, exerciseId: ExerciseIdentifier): string {
-  const wanted = ExerciseIdentifier.unwrap(exerciseId)
-  for (const course of actionContext.startup.userData.getCourses()) {
-    const exercise = LocalCourseData.getExercises(course).find((x) => x.data.id === wanted)
-    if (exercise) {
-      return LocalCourseExercise.getSlug(exercise)
-    }
-  }
-  return String(wanted)
+  const stored = actionContext.startup.userData.getExercise(exerciseId)
+  return stored.ok
+    ? LocalCourseExercise.getSlug(stored.val.exercise)
+    : ExerciseIdentifier.toString(exerciseId)
 }
 
 const LISTED_EXERCISE_LIMIT = 5

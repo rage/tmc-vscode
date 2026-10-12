@@ -4,11 +4,18 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { onDidFinishSubmission, refreshLocalExercises } from "./actions"
-import type { ActionContext, Startup } from "./actions/types"
+import { backendName } from "../shared/lib"
+import { onDidFinishSubmission, refreshLocalExercises, scanLocalExercises } from "./actions"
+import type {
+  ActionContext,
+  DegradedStartup,
+  ReadyActionContext,
+  Startup,
+  StartupStep,
+} from "./actions/types"
 import { isReady } from "./actions/types"
 import AiRestriction, { isActiveCourseAiAllowed } from "./api/aiRestriction"
-import { AiUseGate } from "./api/aiUseGate"
+import { AiUseGate, warnOfUnwritableWorkspaceFile } from "./api/aiUseGate"
 import { createAuthState } from "./api/authState"
 import type { NotificationButton } from "./api/dialog"
 import Dialog from "./api/dialog"
@@ -30,6 +37,7 @@ import {
   EXERCISE_CHECK_INTERVAL,
   EXTENSION_ID,
   EXTENSION_VERSION,
+  STARTUP_REFRESH_SKIP_AGE,
   TMC_LANGS_CONFIG_DIR,
   TMC_LANGS_DL_URL,
   TMC_LANGS_VERSION,
@@ -40,7 +48,6 @@ import { FileSystemError, InitializationError, presentationFor } from "./errors"
 import * as init from "./init"
 import { TmcPanel } from "./panels/TmcPanel"
 import { createSessionExpiryTracker } from "./sessionExpiryTracker"
-import { backendName } from "./shared/shared"
 import Storage from "./storage"
 import { trackActiveEditorExercise, trackHasCourses } from "./ui/contextKeys"
 import { exerciseOperations } from "./ui/exerciseOperations"
@@ -92,11 +99,13 @@ function makeInitializationErrorReporter(dialog: Dialog): InitializationErrorRep
   }
 }
 
-/** The failed ones among these services, keyed by name. */
-function startupFailures(services: Record<string, Result<unknown, Error>>): Record<string, Error> {
+/** The failed ones among these steps; one never attempted is left out. */
+function startupFailures(
+  steps: Record<StartupStep, Result<unknown, Error> | undefined>,
+): DegradedStartup["failures"] {
   return Object.fromEntries(
-    Object.entries(services).flatMap(([service, result]) =>
-      result.err ? [[service, result.val] as const] : [],
+    Object.entries(steps).flatMap(([step, result]) =>
+      result?.err ? [[step, result.val] as const] : [],
     ),
   )
 }
@@ -185,7 +194,7 @@ async function activateInner(
     reportInitializationError("Setting up the TestMyCode tools", cliPathResult.val)
   } else {
     // fire-and-forget: verify the CLI's output contract matches this build's schema
-    void init.verifyCliSchema(cliPathResult.val, context.extensionPath)
+    void init.verifyCliSchema(cliPathResult.val, context.extensionPath, context.globalState)
     const langsInstance = new Langs(cliPathResult.val, CLIENT_NAME, EXTENSION_VERSION, {
       cliConfigDir: TMC_LANGS_CONFIG_DIR,
       javaHome: () => settings.getJavaHome(),
@@ -197,10 +206,9 @@ async function activateInner(
 
   const authState = createAuthState(langs)
   authState.subscribe((loggedIn) => coursesTree.setLoggedIn(loggedIn))
-  const initialAuthCheck = await authState.refresh({ timeout: 15000 })
-  if (initialAuthCheck.err) {
-    reportInitializationError("Checking your login", initialAuthCheck.val)
-  }
+  // Awaited only after the migration: it can refresh a token over the network, and nothing
+  // before needs its answer.
+  const initialAuthCheck = authState.refresh({ timeout: 15000 })
 
   const workspaceFileFolder = path.join(context.globalStorageUri.fsPath, "workspaces")
 
@@ -226,21 +234,23 @@ async function activateInner(
     Logger.warn("Skipped data migration")
   }
 
-  // get data path
+  // After the migration, which can move the exercises and the projects-dir setting.
+  const [authChecked, startupScan] = await Promise.all([
+    initialAuthCheck,
+    langs.ok ? scanLocalExercises(langs.val) : undefined,
+  ])
+  if (authChecked.err) {
+    reportInitializationError("Checking your login", authChecked.val)
+  }
+
   let tmcDataPath: string | undefined
-  if (langs.ok) {
-    const dataPathResult = await langs.val.getSetting(
-      "projects-dir",
-      (object): object is string => typeof object === "string",
-    )
-    if (dataPathResult.err) {
-      Logger.error("Failed to define datapath:", dataPathResult.val)
-      reportInitializationError("Finding the exercises folder", dataPathResult.val)
-    } else if (dataPathResult.val === undefined) {
-      Logger.error("Failed to define datapath: no value found.")
-      reportInitializationError("Finding the exercises folder", new Error("No value for datapath."))
+  if (startupScan) {
+    const { settings: cliSettings } = startupScan
+    if (cliSettings.err) {
+      Logger.error("Failed to define datapath:", cliSettings.val)
+      reportInitializationError("Finding the exercises folder", cliSettings.val)
     } else {
-      tmcDataPath = dataPathResult.val
+      tmcDataPath = cliSettings.val.projects_dir
     }
   }
 
@@ -326,13 +336,13 @@ async function activateInner(
     Logger.warn("Skipped version check", e)
   }
 
-  let userData: Result<UserData, Error>
-  let workspaceManager: Result<WorkspaceManager, Error>
+  let workspaceManager: WorkspaceManager | undefined
+  let userData: Result<UserData, Error> | undefined
   let aiRestriction: AiRestriction | undefined
-  let exerciseDecorationProvider: Result<ExerciseDecorationProvider, Error>
   if (resources.ok) {
-    workspaceManager = new Ok(
-      new WorkspaceManager(resources.val, (backend, courseSlug, closedExerciseSlugs) =>
+    workspaceManager = new WorkspaceManager(
+      resources.val,
+      (backend, courseSlug, closedExerciseSlugs) =>
         langs.ok
           ? langs.val.setSetting(
               closedExercisesSettingKey(backend, courseSlug),
@@ -341,12 +351,8 @@ async function activateInner(
           : Promise.resolve(
               new Err(new InitializationError("Cannot record closed exercises without tmc-langs")),
             ),
-      ),
     )
-    context.subscriptions.push(
-      workspaceManager.val,
-      trackActiveEditorExercise(workspaceManager.val),
-    )
+    context.subscriptions.push(workspaceManager, trackActiveEditorExercise(workspaceManager))
     // Stored data this version cannot parse must degrade the extension, not abort it.
     try {
       userData = new Ok(new UserData(storage))
@@ -356,10 +362,10 @@ async function activateInner(
       reportInitializationError("Reading your stored courses", error)
       userData = new Err(error)
     }
-    if (workspaceManager.val.activeCourse) {
+    if (workspaceManager.activeCourse) {
       await vscode.commands.executeCommand("setContext", "test-my-code:WorkspaceActive", true)
-      await workspaceManager.val.verifyWorkspaceSettingsIntegrity()
-      const courseWorkspace = workspaceManager.val
+      await workspaceManager.verifyWorkspaceSettingsIntegrity()
+      const courseWorkspace = workspaceManager
       const courses = userData.ok ? userData.val : undefined
       aiRestriction = new AiRestriction(
         courseWorkspace,
@@ -367,71 +373,43 @@ async function activateInner(
         () => isActiveCourseAiAllowed(courseWorkspace, courses),
         courses?.onDidChangeCourses,
       )
-      context.subscriptions.push(aiRestriction)
+      context.subscriptions.push(
+        aiRestriction,
+        aiRestriction.onDidRefuseWorkspaceFile(
+          (lapse) => void warnOfUnwritableWorkspaceFile(dialog, lapse),
+        ),
+      )
       // The AI-use gate enforces its own pass before a submit, test run or paste.
       void aiRestriction.apply()
     }
-    exerciseDecorationProvider = userData.ok
-      ? new Ok(new ExerciseDecorationProvider(userData.val, workspaceManager.val))
-      : new Err(
-          new InitializationError(
-            userData.val,
-            "Could not initialize exercise decoration provider without user data",
-          ),
-        )
   } else {
     Logger.warn("Skipped userdata setup")
-    userData = new Err(
-      new InitializationError(
-        resources.val,
-        "Could not read user data due to failure in resource initialization",
-      ),
-    )
-    workspaceManager = new Err(
-      new InitializationError(
-        resources.val,
-        "Could not initialize workspace manager due to failure in resource initialization",
-      ),
-    )
-    exerciseDecorationProvider = new Err(
-      new InitializationError(
-        resources.val,
-        "Could not initialize exercise decoration provider due to failure in resource initialization",
-      ),
-    )
   }
+  const exerciseDecorationProvider =
+    workspaceManager && userData?.ok
+      ? new ExerciseDecorationProvider(userData.val, workspaceManager)
+      : undefined
 
   const startup: Startup =
-    langs.ok && resources.ok && workspaceManager.ok && userData.ok && exerciseDecorationProvider.ok
+    langs.ok && resources.ok && workspaceManager && userData?.ok && exerciseDecorationProvider
       ? {
           kind: "ready",
           aiUseGate: new AiUseGate(aiRestriction),
           langs: langs.val,
           resources: resources.val,
-          workspaceManager: workspaceManager.val,
+          workspaceManager,
           userData: userData.val,
-          exerciseDecorationProvider: exerciseDecorationProvider.val,
+          exerciseDecorationProvider,
         }
-      : {
-          kind: "degraded",
-          failures: startupFailures({
-            langs,
-            resources,
-            workspaceManager,
-            userData,
-            exerciseDecorationProvider,
-          }),
-        }
+      : { kind: "degraded", failures: startupFailures({ langs, resources, userData }) }
   if (startup.kind === "degraded") {
-    // Only the root failures are reported as they happen; what they drag down with them
-    // is named nowhere else.
-    Logger.warn(`Activation degraded, missing: ${Object.keys(startup.failures).join(", ")}`)
+    Logger.warn(`Activation degraded, failed: ${Object.keys(startup.failures).join(", ")}`)
   }
   const actionContext: ActionContext = { authState, coursesTree, dialog, settings, startup }
   const readyContext = isReady(actionContext) ? actionContext : undefined
 
   if (readyContext) {
-    const refreshResult = await refreshLocalExercises(readyContext)
+    const refreshResult = await refreshLocalExercises(readyContext, startupScan)
     if (refreshResult.err) {
       Logger.warn("Failed to set initial exercises.", refreshResult.val)
     }
@@ -498,17 +476,32 @@ async function activateInner(
   )
   startupContext.isApplied = true
 
-  if (exerciseDecorationProvider.ok) {
+  if (exerciseDecorationProvider) {
     context.subscriptions.push(
-      exerciseDecorationProvider.val,
-      vscode.window.registerFileDecorationProvider(exerciseDecorationProvider.val),
+      exerciseDecorationProvider,
+      vscode.window.registerFileDecorationProvider(exerciseDecorationProvider),
     )
   }
 
+  /** Refreshes every course quietly, recording a success for the next activation of any window. */
+  async function refreshInBackground(ready: ReadyActionContext): Promise<void> {
+    try {
+      const refreshed = await refreshEverything(ready, { silent: true })
+      if (refreshed.ok) {
+        await storage.setCoursesRefreshedAt(Date.now())
+      }
+    } catch (e) {
+      Logger.error("Background refresh failed", e)
+    }
+  }
+
+  const refreshAge = Date.now() - (storage.getCoursesRefreshedAt() ?? Number.NEGATIVE_INFINITY)
   if (readyContext && authState.loggedIn) {
-    void refreshEverything(readyContext, { silent: true }).catch((e) =>
-      Logger.error("Background refresh failed", e),
-    )
+    if (refreshAge >= 0 && refreshAge < STARTUP_REFRESH_SKIP_AGE) {
+      Logger.info("Skipped the startup refresh: the courses were refreshed moments ago")
+    } else {
+      void refreshInBackground(readyContext)
+    }
   }
 
   async function runMaintenancePoll(): Promise<void> {
@@ -520,9 +513,7 @@ async function activateInner(
       // Proactively catches a session dropping between polls, not just on a failed command.
       sessionExpiry.onAuthChecked(authState.loggedIn)
       if (readyContext && authState.loggedIn) {
-        void refreshEverything(readyContext, { silent: true }).catch((e) =>
-          Logger.error("Background refresh failed", e),
-        )
+        void refreshInBackground(readyContext)
       }
     } catch (e) {
       Logger.error("Maintenance check failed", e)

@@ -1,5 +1,5 @@
-import type { Panel, RestorableRoute } from "../shared/shared"
-import { CourseIdentifier } from "../shared/shared"
+import type { Panel, RestorableRoute } from "../../../shared/lib"
+import { CourseIdentifier } from "../../../shared/lib"
 import { snapshot } from "./snapshot.svelte"
 import { vscode } from "./vscode"
 

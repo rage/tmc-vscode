@@ -20,10 +20,13 @@ export interface ReadyStartup {
   workspaceManager: WorkspaceManager
 }
 
-/** The errors behind a failed activation, keyed by the service that failed. */
+/** An activation step whose failure degrades the extension; every other service depends on these. */
+export type StartupStep = "langs" | "resources" | "userData"
+
+/** The errors behind a failed activation, keyed by the step that failed. */
 export interface DegradedStartup {
   kind: "degraded"
-  failures: Record<string, Error>
+  failures: Partial<Record<StartupStep, Error>>
 }
 
 /**

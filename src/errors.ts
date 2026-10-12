@@ -1,5 +1,5 @@
-import type { RunnableCommand } from "./shared/shared"
-import { backendName, BaseError } from "./shared/shared"
+import type { RunnableCommand } from "../shared/lib"
+import { backendName, BaseError } from "../shared/lib"
 
 export class AuthorizationError extends BaseError {
   public override readonly name: string = "Authorization Error"

@@ -12,21 +12,15 @@ import Storage from "../../storage"
 import { v3 } from "../../storage/data"
 import type { MoocLocalCourseData } from "../../storage/data"
 import { Logger, LogLevel } from "../../utilities"
+import { moocCourseData } from "../fixtures/courses"
 import * as userData from "../fixtures/userData"
 import { createMockContext } from "../mocks/vscode"
 
-const moocCourse: MoocLocalCourseData = {
+const moocCourse: MoocLocalCourseData = moocCourseData({
   id: "8bd5a0d6-8ba0-4b2a-a2e0-0dd1ba7f2af5",
   name: "a-mooc-course",
   title: "A courses.mooc.fi course",
-  description: null,
-  organization: "mooc",
-  exercises: [],
-  availablePoints: 0,
-  awardedPoints: 0,
-  newExercises: [],
-  notifyAfter: 0,
-}
+})
 
 // jest-mock-vscode ships no `env` namespace, and `Resources` reads `env.appName`.
 vi.mock("vscode", async (importOriginal) => ({

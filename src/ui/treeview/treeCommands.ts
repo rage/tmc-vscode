@@ -1,5 +1,12 @@
 import { Ok } from "ts-results"
 
+import type { CourseIdentifier, ExerciseIdentifier } from "../../../shared/lib"
+import {
+  CourseIdentifier as CourseIdentifierNs,
+  ExerciseIdentifier as ExerciseIdentifierNs,
+  LocalCourseData,
+  LocalCourseExercise,
+} from "../../../shared/lib"
 import {
   closeExercises as closeExercisesAction,
   downloadAndOpenExercises,
@@ -9,13 +16,6 @@ import {
 import type { ReadyActionContext } from "../../actions/types"
 import { withOperation } from "../../api/withOperation"
 import { ExerciseStatus } from "../../api/workspaceManager"
-import type { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
-import {
-  CourseIdentifier as CourseIdentifierNs,
-  ExerciseIdentifier as ExerciseIdentifierNs,
-  LocalCourseData,
-  LocalCourseExercise,
-} from "../../shared/shared"
 import { countOf } from "../../utilities"
 import { updateablesRegistry } from "../updateablesRegistry"
 import type { CoursesTreeItem, ExerciseTreeItem } from "./treeview"
@@ -104,15 +104,17 @@ export async function closeCompletedExercises(
       return course
     }
     const courseName = LocalCourseData.getCourseName(course.val)
-    const openSlugs = new Set(
-      workspaceManager
-        .getExercisesByCourseSlug(course.val.kind, courseName)
-        .filter((ex) => ex.status === ExerciseStatus.Open)
-        .map((ex) => ex.exerciseSlug),
+    const passed = new Set(
+      LocalCourseData.getExercises(course.val)
+        .filter((ex) => ex.data.passed)
+        .map((ex) => ExerciseIdentifierNs.key(LocalCourseExercise.getId(ex))),
     )
-    const ids: ExerciseIdentifier[] = LocalCourseData.getExercises(course.val)
-      .filter((ex) => ex.data.passed && openSlugs.has(LocalCourseExercise.getSlug(ex)))
-      .map((ex) => LocalCourseExercise.getId(ex))
+    const ids: ExerciseIdentifier[] = workspaceManager
+      .getExercisesByCourseSlug(course.val.kind, courseName)
+      .filter(
+        (ex) => ex.status === ExerciseStatus.Open && passed.has(ExerciseIdentifierNs.key(ex.id)),
+      )
+      .map((ex) => ex.id)
     if (ids.length === 0) {
       dialog.statusMessage("No completed exercises are open.")
       return Ok.EMPTY

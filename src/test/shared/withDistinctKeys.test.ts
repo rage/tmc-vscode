@@ -1,4 +1,4 @@
-import { withDistinctKeys } from "../../shared/shared"
+import { withDistinctKeys } from "../../../shared/lib"
 
 suite("withDistinctKeys", function () {
   test("keys a name already ending in a suffix apart from a repeat that would take it", function () {

@@ -1,12 +1,15 @@
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
-import type { CourseIdentifier } from "../shared/shared"
-import { LocalCourseData } from "../shared/shared"
-import { Logger } from "../utilities"
+import type { CourseIdentifier } from "../../shared/lib"
+import { LocalCourseData } from "../../shared/lib"
+import type { Warned } from "../api/withOperation"
+import { Logger, mapConcurrently } from "../utilities"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
 import { updateCourse } from "./updateCourse"
+
+const COURSE_REFRESH_CONCURRENCY = 4
 
 export interface CourseUpdateOptions {
   /** Refresh only this course instead of every added one. */
@@ -16,7 +19,7 @@ export interface CourseUpdateOptions {
 }
 
 /** What a pass of {@link checkForCourseUpdates} left behind. */
-export interface CourseUpdates {
+export interface CourseUpdates extends Warned {
   /** Every course read back after the pass, whether or not its own refresh succeeded. */
   courses: LocalCourseData[]
   /**
@@ -52,21 +55,20 @@ export async function checkForCourseUpdates(
   Logger.info(`Checking for course updates for courses`)
   let done = 0
   onProgress?.(done, courses.length)
-  // Courses hold disjoint records and `UserData` serializes its own writes, so
-  // these run together rather than one course's CLI round trips after another's.
-  const refreshed = await Promise.all(
-    courses.map(async (course) => {
-      const id = LocalCourseData.getCourseId(course)
-      const updateResult = await updateCourse(actionContext, id)
-      onProgress?.(++done, courses.length)
-      const reread = userData.getCourse(id)
-      return {
-        name: LocalCourseData.getCourseName(course),
-        error: updateResult.err ? updateResult.val : reread.err ? reread.val : undefined,
-        updated: reread.ok ? reread.val : undefined,
-      }
-    }),
-  )
+  // Courses hold disjoint records and `UserData` serializes its own writes, so these
+  // overlap; capped, since each is a CLI process contending for the credential lock.
+  const refreshed = await mapConcurrently(courses, COURSE_REFRESH_CONCURRENCY, async (course) => {
+    const id = LocalCourseData.getCourseId(course)
+    const updateResult = await updateCourse(actionContext, id)
+    onProgress?.(++done, courses.length)
+    const reread = userData.getCourse(id)
+    return {
+      name: LocalCourseData.getCourseName(course),
+      error: updateResult.err ? updateResult.val : reread.err ? reread.val : undefined,
+      updated: reread.ok ? reread.val : undefined,
+      warnings: updateResult.ok ? updateResult.val.warnings : [],
+    }
+  })
   // Once for the whole pass, not once per course: a course update can drop exercises the
   // backend no longer has, and only a rescan stops those still showing as open.
   const rescanned = await refreshLocalExercises(actionContext)
@@ -85,6 +87,7 @@ export async function checkForCourseUpdates(
   }
   return Ok({
     courses: updatedCourses,
+    warnings: refreshed.flatMap((x) => x.warnings),
     failure:
       failures.length > 0
         ? new Error(`Failed to fetch updates for ${names}: ${firstMessage}`)

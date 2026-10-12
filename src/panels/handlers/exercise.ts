@@ -2,9 +2,9 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type { ExerciseSubmissionPanel } from "../../../shared/lib"
 import * as actions from "../../actions"
-import { withOperation } from "../../api/withOperation"
-import type { ExerciseSubmissionPanel } from "../../shared/shared"
+import { reportWarnings, withOperation } from "../../api/withOperation"
 import { Logger } from "../../utilities"
 import type { HandlerMap, PanelHost } from "../router"
 
@@ -22,8 +22,7 @@ export const exerciseHandlers = {
       return withOperation(
         actionContext.dialog,
         { failure: "Failed to paste the exercise.", silent: true },
-        () =>
-          actions.pasteExercise(actionContext, shown.backend, shown.courseSlug, shown.exerciseSlug),
+        () => actions.pasteExercise(actionContext, shown.exerciseId),
       )
     },
   },
@@ -34,7 +33,11 @@ export const exerciseHandlers = {
         return Err(new Error("This submission is no longer shown."))
       }
       const waited = await actions.keepWaitingForGrading(actionContext, message.sourcePanel.id)
-      return waited.err ? waited : Ok(undefined)
+      if (waited.err) {
+        return waited
+      }
+      reportWarnings(actionContext.dialog, waited.val.warnings)
+      return Ok(undefined)
     },
   },
   sendFeedback: {

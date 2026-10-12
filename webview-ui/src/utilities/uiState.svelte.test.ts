@@ -1,8 +1,8 @@
 import { render } from "@testing-library/svelte"
 
+import type { Panel } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import App from "../App.svelte"
-import type { Panel } from "../shared/shared"
-import { makeMoocKind, makeTmcKind } from "../shared/shared"
 import { initializationErrorHelpPanel } from "../test/fixtures"
 import { dispatchToWebview, reloadDocument, savedWebviewState } from "../test/setup"
 import { enterScreen, restoreScroll, uiState } from "./uiState.svelte"
@@ -46,7 +46,7 @@ suite("UI state across a document reload", () => {
     enterScreen({
       id: 5,
       type: "CourseDetails",
-      courseId: makeMoocKind({ instanceId: "42" }),
+      courseId: makeMoocKind({ moocCourseId: "42" }),
     })
 
     expect(uiState("showPassedTests", false).current).toBe(false)
@@ -167,6 +167,7 @@ suite("the screen a window reload reopens", () => {
     enterScreen({
       id: 7,
       type: "ExerciseSubmission",
+      exerciseId: makeTmcKind({ tmcExerciseId: 1 }),
       backend: "tmc",
       courseSlug: "python-course",
       exerciseSlug: "part01-01_hello",

@@ -1,17 +1,17 @@
+import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../../shared/langsSchema"
+import type {
+  CourseDetailsPanel,
+  ExtensionToWebview,
+  Panel,
+  WebviewToExtension,
+} from "../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../shared/lib"
 import {
   inProgressView,
   moocGradingView,
   submitFailedView,
   tmcResultView,
 } from "../../src/panels/submissionView"
-import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../src/shared/langsSchema"
-import type {
-  CourseDetailsPanel,
-  ExtensionToWebview,
-  Panel,
-  WebviewToExtension,
-} from "../src/shared/shared"
-import { makeMoocKind, makeTmcKind } from "../src/shared/shared"
 import {
   MOOC_INSTANCE_ID,
   moocGrading as baseMoocGrading,
@@ -68,6 +68,7 @@ function answerCourseDetails(panel: { id: number }, course: typeof tmcCourse) {
 const submissionPanel = {
   id: 30,
   type: "ExerciseSubmission" as const,
+  exerciseId: makeTmcKind({ tmcExerciseId: 3 }),
   backend: "tmc" as const,
   courseSlug: "python-course",
   exerciseSlug: "part01-03_exercise",
@@ -88,6 +89,7 @@ function submissionFinished(overrides: Partial<SubmissionFinished>): SubmissionF
 const moocSubmissionPanel = {
   id: 31,
   type: "ExerciseSubmission" as const,
+  exerciseId: makeMoocKind({ moocExerciseId: "mooc-exercise-uuid" }),
   backend: "mooc" as const,
   courseSlug: "mooc-course",
   exerciseSlug: "mooc-exercise",
@@ -114,7 +116,7 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: "course-details/mooc",
-    panel: courseDetailsPanel(4, makeMoocKind({ instanceId: MOOC_INSTANCE_ID })),
+    panel: courseDetailsPanel(4, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
     reply: answerCourseDetails({ id: 4 }, moocCourse),
   },
   // Never answered, so the panel shows its loading state until the request times out.

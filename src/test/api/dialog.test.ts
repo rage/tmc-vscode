@@ -2,14 +2,14 @@ import { vi } from "vitest"
 import type { OutputChannel } from "vscode"
 import * as vscode from "vscode"
 
-import Dialog, { courseSelectionItems, separator } from "../../api/dialog"
-import { InsufficientScopeError, RuntimeError } from "../../errors"
 import type {
   LocalCourseData,
   SharedMoocCourseData,
   SharedTmcCourseData,
-} from "../../shared/shared"
-import { makeMoocKind, makeTmcKind } from "../../shared/shared"
+} from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
+import Dialog, { courseSelectionItems, separator } from "../../api/dialog"
+import { InsufficientScopeError, RuntimeError } from "../../errors"
 import { Logger, LogLevel } from "../../utilities"
 
 suite("Dialog.selectItem", function () {
@@ -266,7 +266,7 @@ suite("courseSelectionItems", function () {
       { label: "Programming 1", value: makeTmcKind({ courseId: 3 }), description: "TMC Server" },
       {
         label: "Programming 1",
-        value: makeMoocKind({ instanceId: "course-uuid" }),
+        value: makeMoocKind({ moocCourseId: "course-uuid" }),
         description: "courses.mooc.fi",
       },
     ])

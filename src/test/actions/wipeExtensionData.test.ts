@@ -8,9 +8,9 @@ import { wipeExtensionData } from "../../actions/wipeExtensionData"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
-import { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
 import { downloadFailures } from "../../ui/downloadFailures"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
+import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
 vi.mock("fs-extra", () => ({ remove: vi.fn() }))
@@ -93,8 +93,8 @@ suite("wipeExtensionData action", function () {
   })
 
   test("forgets the updates and failed downloads of the courses it wiped", async function () {
-    const course = CourseIdentifier.from(1)
-    const exercise = ExerciseIdentifier.from(2)
+    const course = idOfTmcCourse(1)
+    const exercise = idOfTmcExercise(2)
     updateablesRegistry.setMany([[course, [exercise]]])
     downloadFailures.record([exercise], [])
 

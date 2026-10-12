@@ -2,13 +2,13 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import type { LocalCourseData } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import { addNewCourse } from "../../commands/addNewCourse"
 import type { UserData } from "../../config/userdata"
-import type { LocalCourseData } from "../../shared/shared"
-import { makeMoocKind, makeTmcKind } from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -192,12 +192,12 @@ suite("Add New Course command", function () {
     expect(quickPick.busy).toBe(false)
   })
 
-  test("shows each backend's rows as soon as it answers", async function () {
+  test("shows no rows until both backends have answered, so none moves under a click", async function () {
     const tmc = deferred<ReturnType<typeof Ok>>()
     const { quickPick } = harness({ organizations: tmc.promise })
     await flush()
 
-    expect(quickPick.rows).toEqual(["--- courses.mooc.fi — your courses", "Shared Slug Course"])
+    expect(quickPick.rows).toEqual([])
     expect(quickPick.busy).toBe(true)
 
     tmc.resolve(Ok(organizations))
@@ -214,7 +214,7 @@ suite("Add New Course command", function () {
     quickPick.accept("Shared Slug Course")
     await done
 
-    const courseId = makeMoocKind({ instanceId: moocCourse.id })
+    const courseId = makeMoocKind({ moocCourseId: moocCourse.id })
     expect(actions.addNewCourse).toHaveBeenCalledExactlyOnceWith(context, "", courseId)
     expect(context.dialog.progressNotification).toHaveBeenCalledWith(
       "Adding Shared Slug Course…",

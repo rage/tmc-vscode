@@ -1,4 +1,4 @@
-import type { WebviewToExtension } from "../src/shared/shared"
+import type { WebviewToExtension } from "../../shared/lib"
 
 /** What the harness page and the accessibility tests reach into the webview frame through. */
 export interface FrameControls {

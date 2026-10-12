@@ -275,6 +275,7 @@ export interface MoocFixtures {
   futureDeadlineExercise: MoocExerciseFixture
   limitedTriesExercise: MoocExerciseFixture
   notClientCapableExercise: MoocExerciseFixture
+  spacedNameExercise: MoocExerciseFixture
   notEnrolledExercise: MoocExerciseFixture
 }
 
@@ -447,6 +448,23 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     checksum: "mooc-checksum-quiz",
   })
 
+  // Named the way course authors name exercises: langs stores it on disk under the
+  // kebab-cased "exercise-1", so nothing on the client may join it to its stored
+  // data by name.
+  const spacedNameExercise = makeExercise({
+    baseUrl,
+    exerciseId: "dadadada-0000-4000-8000-000000000001",
+    slideId: "dadadada-0000-4000-8000-000000000101",
+    courseId: variantsCourse.id,
+    tasks: [{ taskId: "dadadada-0000-4000-8000-000000000201", type: "editor" }],
+    name: "Exercise 1",
+    order: 6,
+    archiveSlug: "spaced-name-exercise",
+    sourceDir: path.join(RESOURCES, "part01-01_passing_exercise"),
+    studentFiles: ["src/passing_exercise.py"],
+    checksum: "mooc-checksum-spaced-name",
+  })
+
   const notEnrolledExercise = makeExercise({
     baseUrl,
     exerciseId: notEnrolledExerciseId,
@@ -474,6 +492,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
         futureDeadlineExercise,
         limitedTriesExercise,
         notClientCapableExercise,
+        spacedNameExercise,
       ],
     },
     { course: notEnrolledCourse, enrolled: false, exercises: [notEnrolledExercise] },
@@ -501,6 +520,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     futureDeadlineExercise,
     limitedTriesExercise,
     notClientCapableExercise,
+    spacedNameExercise,
     notEnrolledExercise,
   }
 }
@@ -519,5 +539,6 @@ export const {
   futureDeadlineExercise,
   limitedTriesExercise,
   notClientCapableExercise,
+  spacedNameExercise,
   notEnrolledExercise,
 } = createMoocFixtures(DEFAULT_MOOC_MOCK_BASE_URL)
