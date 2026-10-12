@@ -4,16 +4,10 @@ import { vi } from "vitest"
 
 import type Langs from "../../api/langs"
 import type { ExerciseDownloads } from "../../api/langs"
-import type {
-  CombinedMoocCourseData,
-  LocalExercise,
-  LocalTmcExercise,
-  MoocCourse,
-} from "../../shared/langsSchema"
+import type { CombinedMoocCourseData, LocalExercise, MoocCourse } from "../../shared/langsSchema"
 import type { BackendKind, ExerciseIdentifier } from "../../shared/shared"
 import {
   closedExercisesPythonCourse,
-  listLocalCourseExercisesPythonCourse,
   localExercises,
   moocCourse,
   moocCourseProgress,
@@ -29,7 +23,6 @@ export interface TMCMockValues {
   clean: Result<void, Error>
   downloadTmcExercises: Result<ExerciseDownloads, Error>
   downloadMoocExercises: Result<ExerciseDownloads, Error>
-  listLocalCourseExercisesPythonCourse: Result<LocalTmcExercise[], Error>
   listLocalExercises: Result<LocalExercise[], Error>
   getSettingClosedExercises: Result<string[], Error>
   getSettingProjectsDir: Result<string, Error>
@@ -50,7 +43,6 @@ export function createTMCMock(): [Langs, TMCMockValues] {
     clean: Ok.EMPTY,
     downloadTmcExercises: Ok(NO_DOWNLOADS),
     downloadMoocExercises: Ok(NO_DOWNLOADS),
-    listLocalCourseExercisesPythonCourse: Ok(listLocalCourseExercisesPythonCourse),
     listLocalExercises: Ok(localExercises),
     getSettingClosedExercises: Ok(closedExercisesPythonCourse),
     getSettingProjectsDir: Ok("/langs/path/to/exercises"),
@@ -80,7 +72,6 @@ export function createFailingTMCMock(): [Langs, TMCMockValues] {
     clean: error,
     downloadTmcExercises: error,
     downloadMoocExercises: error,
-    listLocalCourseExercisesPythonCourse: error,
     listLocalExercises: error,
     getSettingClosedExercises: error,
     getSettingProjectsDir: error,
@@ -101,11 +92,6 @@ function setupMockValues(values: TMCMockValues): Langs {
   const mock = {
     clean: vi.fn(async () => values.clean),
     listLocalExercises: vi.fn(async () => values.listLocalExercises),
-    listLocalCourseExercises: vi.fn(async (backend: string, slug: string) =>
-      backend === "tmc" && slug === "test-python-course"
-        ? values.listLocalCourseExercisesPythonCourse
-        : NOT_MOCKED_ERROR,
-    ),
     getSetting: vi.fn(async (key: string) =>
       key === "closed-exercises-for:test-python-course"
         ? values.getSettingClosedExercises

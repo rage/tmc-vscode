@@ -118,8 +118,7 @@ webview-transported data. `matchBackend` does the same for the flatter
 Ids are modelled with it rather than as bare numbers/strings, because the two
 backends disagree on both type and meaning:
 
-- `CourseIdentifier` — tmc `{ courseId: number }`, mooc `{ instanceId: string }`
-  (mooc has no separate course-instance concept, so this is the course UUID)
+- `CourseIdentifier` — tmc `{ courseId: number }`, mooc `{ moocCourseId: string }`
 - `ExerciseIdentifier` — tmc `{ tmcExerciseId: number }`, mooc
   `{ moocExerciseId: string }`
 

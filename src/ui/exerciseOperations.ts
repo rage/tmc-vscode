@@ -64,8 +64,8 @@ export class ExerciseOperations {
 
   /**
    * Runs `work` as a `kind` operation on `exerciseId`, or returns a `BottleneckError` without
-   * running it while another operation runs on that exercise. The claim lasts until `work` settles, which every
-   * CLI call does once its process ends or is killed.
+   * running it while another operation runs on that exercise. The claim lasts until `work`
+   * settles, which every CLI call does once its process ends or is killed.
    */
   public async run<T>(
     exerciseId: ExerciseIdentifier,
