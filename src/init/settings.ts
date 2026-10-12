@@ -4,14 +4,10 @@ export function registerSettingsCallbacks(actionContext: ReadyActionContext): vo
   const { settings } = actionContext
   const { workspaceManager } = actionContext.startup
 
-  settings.onChangeHideMetaFiles = async (value: boolean): Promise<void> => {
-    await workspaceManager.updateWorkspaceSetting("testMyCode.hideMetaFiles", value)
-    await workspaceManager.excludeMetaFilesInWorkspace(value)
-  }
-  settings.onChangeDownloadOldSubmission = async (value: boolean): Promise<void> => {
-    await workspaceManager.updateWorkspaceSetting("testMyCode.downloadOldSubmission", value)
-  }
-  settings.onChangeUpdateExercisesAutomatically = async (value: boolean): Promise<void> => {
-    await workspaceManager.updateWorkspaceSetting("testMyCode.updateExercisesAutomatically", value)
+  settings.onChangeMirroredSetting = async (section, value): Promise<void> => {
+    await workspaceManager.updateWorkspaceSetting(`testMyCode.${section}`, value)
+    if (section === "hideMetaFiles") {
+      await workspaceManager.excludeMetaFilesInWorkspace(value)
+    }
   }
 }
