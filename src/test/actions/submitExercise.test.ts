@@ -841,6 +841,19 @@ suite("sendSubmissionFeedback action", () => {
     expect(actionContext.startup.langs.submitSubmissionFeedback).toHaveBeenCalledOnce()
   })
 
+  test("posts once when sent twice before the first send finishes", async () => {
+    const actionContext = await submitAskingFeedback(FEEDBACK_URL)
+    const panelId = shownPanelId()
+
+    const [first, second] = await Promise.all([
+      sendSubmissionFeedback(actionContext, panelId, [{ questionId: 3, answer: "Fun" }]),
+      sendSubmissionFeedback(actionContext, panelId, [{ questionId: 3, answer: "Fun" }]),
+    ])
+
+    expect([first.ok, second.ok]).toEqual([true, false])
+    expect(actionContext.startup.langs.submitSubmissionFeedback).toHaveBeenCalledOnce()
+  })
+
   test("a submission of another exercise leaves the earlier questions to answer", async () => {
     const actionContext = await submitAskingFeedback(FEEDBACK_URL)
     const panelId = shownPanelId()

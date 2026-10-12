@@ -115,6 +115,8 @@ interface PendingFeedback {
 // Keyed by panel id like `unfinishedGradings`; the answer URL never leaves the host, so the
 // webview cannot choose where answers are posted.
 const pendingFeedback = new Map<number, PendingFeedback>()
+// The panels whose feedback is being posted, so a second click does not post it twice.
+const feedbackBeingSent = new Set<number>()
 
 /** A mooc submission whose grading the host stopped waiting for. */
 interface UnfinishedGrading extends Submission {
@@ -402,9 +404,15 @@ export async function sendSubmissionFeedback(
   if (pending === undefined) {
     return Err(new Error("This submission's feedback was already sent or was never asked for."))
   }
-  const sent = await actionContext.startup.langs.submitSubmissionFeedback(pending.answerUrl, {
-    status: answers.map(({ questionId, answer }) => ({ question_id: questionId, answer })),
-  })
+  if (feedbackBeingSent.has(panelId)) {
+    return Err(new Error("This submission's feedback is already being sent."))
+  }
+  feedbackBeingSent.add(panelId)
+  const sent = await actionContext.startup.langs
+    .submitSubmissionFeedback(pending.answerUrl, {
+      status: answers.map(({ questionId, answer }) => ({ question_id: questionId, answer })),
+    })
+    .finally(() => feedbackBeingSent.delete(panelId))
   if (sent.err) {
     return sent
   }
