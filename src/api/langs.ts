@@ -310,7 +310,7 @@ class BoundedStderr {
 
   public text(): string {
     if (this._text === undefined) {
-      const tail = this._chunks.join("\n")
+      const tail = this._chunks.join("")
       this._text =
         this._droppedBytes === 0
           ? tail
@@ -1413,7 +1413,7 @@ export default class Langs {
       return Err(new BaseError(langsResponse.message || "Langs process crashed.", stderr))
     }
     if (!dataMatchesKind(langsResponse, outputDataKind)) {
-      // Not the envelope: a `logged-in` response carries a live OAuth token.
+      // The kinds, not the payload: that is the user's data, in a log users paste into bug reports.
       Logger.error(
         "Unexpected TMC-langs response.",
         `result: ${langsResponse.result}, output-data-kind: ${langsResponse.data?.["output-data-kind"]}`,
@@ -1749,9 +1749,9 @@ export interface LangsStdoutDecoding {
 /**
  * Splits one chunk of the CLI's stdout into whole lines and classifies each one.
  *
- * Pure, and deliberately silent. The `logged-in` envelope carries a live OAuth token and
- * the output channel is what users are asked to paste into bug reports, so a rejected line
- * is described by shape alone and callers have no payload to log.
+ * Pure, and deliberately silent. A payload is the user's data and the output channel is what
+ * users are asked to paste into bug reports, so a rejected line is described by shape alone
+ * and callers have no payload to log.
  *
  * @param carry The previous chunk's unterminated tail; `""` at the start of the stream.
  */

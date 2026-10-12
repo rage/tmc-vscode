@@ -154,8 +154,7 @@ async function activateInner(
   const storage = new Storage(context)
   const settings = new Settings()
   context.subscriptions.push(settings)
-  // Must precede the first CLI invocation below: the user's level decides what the output
-  // channel keeps of a `logged-in` response, which carries a live OAuth token.
+  // Must precede the first CLI invocation below, which logs at the user's level.
   Logger.configure(settings.getLogLevel())
   context.subscriptions.push({ dispose: () => Logger.dispose() })
   // Kept at every level: it carries no credential, and it is what makes a pasted log

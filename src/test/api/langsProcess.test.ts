@@ -260,6 +260,18 @@ suite("Langs CLI process failures", function () {
     expect((result.val as SpawnError).details).toBe("permission denied")
   })
 
+  // Chunk boundaries fall wherever the pipe's buffer does, not at line ends.
+  test("stderr split across chunks reads as it was written", async function () {
+    const langs = newLangs()
+    const pending = langs.isAuthenticated()
+    const langsProcess = lastProcess()
+    langsProcess.stderr.emit("data", "permission ")
+    langsProcess.stderr.emit("data", "denied\nsecond line")
+    langsProcess.emit("error", new Error("spawn dummy-cli-path ENOENT"))
+
+    expect(((await pending).val as SpawnError).details).toBe("permission denied\nsecond line")
+  })
+
   test("stderr past the retention cap keeps the newest output and counts the rest", async function () {
     const langs = newLangs()
     const pending = langs.isAuthenticated()
