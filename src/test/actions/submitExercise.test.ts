@@ -510,6 +510,18 @@ suite("submitExercise action, mooc", () => {
     expect(current.ok).toBe(true)
   })
 
+  test("a submission of another exercise leaves the earlier one's grading to wait for", async () => {
+    const { actionContext } = moocContextWith(grading({ grading_progress: "Pending" }))
+    await submitExercise(actionContext, moocExercise)
+    const earlierPanelId = shownPanelId()
+
+    const tmcSubmission = { status: "ok", all_tests_passed: true, points: [], test_cases: [] }
+    await submitExercise(tmcContextWith(tmcSubmission).actionContext, tmcExercise)
+
+    const waited = await keepWaitingForGrading(actionContext, earlierPanelId)
+    expect(waited.ok).toBe(true)
+  })
+
   test("a failed status check after the submit still offers to keep waiting", async () => {
     const { actionContext, wait } = moocContextWith(undefined)
     wait.mockResolvedValue(Err(new Error("Connection reset by peer")))
@@ -798,6 +810,18 @@ suite("sendSubmissionFeedback action", () => {
 
     expect(second.err).toBe(true)
     expect(actionContext.startup.langs.submitSubmissionFeedback).toHaveBeenCalledOnce()
+  })
+
+  test("a submission of another exercise leaves the earlier questions to answer", async () => {
+    const actionContext = await submitAskingFeedback(FEEDBACK_URL)
+    const panelId = shownPanelId()
+
+    await submitExercise(moocContextWith(grading({})).actionContext, moocExercise)
+
+    const sent = await sendSubmissionFeedback(actionContext, panelId, [
+      { questionId: 3, answer: "Fun" },
+    ])
+    expect(sent.ok).toBe(true)
   })
 
   test("a failed send can be retried", async () => {

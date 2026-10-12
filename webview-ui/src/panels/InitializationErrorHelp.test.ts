@@ -13,28 +13,29 @@ suite("InitializationErrorHelp panel", () => {
     expect(postedMessages).not.toHaveBeenCalled()
   })
 
-  test("renders a specific initialization error with the CLI folder hint", () => {
-    const panel = initializationErrorHelpPanel({ tmc: { error: "langs boom", stack: "at foo" } })
+  test("renders a failure with the hint the host gave for it", () => {
+    const panel = initializationErrorHelpPanel([
+      { service: "tmc-langs", error: "langs boom", stack: "at foo", hint: "Check /tmp/cli." },
+    ])
     render(InitializationErrorHelp, { props: { panel } })
 
     expect(screen.getByText(/Failed to initialize tmc-langs: langs boom/)).toBeInTheDocument()
-    expect(screen.getByText(/\/tmp\/cli/)).toBeInTheDocument()
+    expect(screen.getByText("Check /tmp/cli.")).toBeInTheDocument()
   })
 
-  test("reports a non-tmc error without also claiming there is no error data", () => {
-    const panel = initializationErrorHelpPanel({
-      workspaceManager: { error: "workspace boom", stack: "at bar" },
-    })
+  test("reports a failure without also claiming there is no error data", () => {
+    const panel = initializationErrorHelpPanel([
+      { service: "workspace manager", error: "workspace boom", stack: "at bar" },
+    ])
     render(InitializationErrorHelp, { props: { panel } })
 
     expect(
       screen.getByText(/Failed to initialize workspace manager: workspace boom/),
     ).toBeInTheDocument()
-    // the guard must not contradict itself and print the empty-state message too
     expect(screen.queryByText("No error data found")).not.toBeInTheDocument()
   })
 
-  test("shows the empty-state message only when every error is null", () => {
+  test("shows the empty-state message when there are no failures", () => {
     render(InitializationErrorHelp, { props: { panel: initializationErrorHelpPanel() } })
 
     const empty = screen.getByText("No error data found")
@@ -43,10 +44,10 @@ suite("InitializationErrorHelp panel", () => {
   })
 
   test("lists each failure with its stack trace behind a disclosure", async () => {
-    const panel = initializationErrorHelpPanel({
-      userData: { error: "userdata boom", stack: "at userData" },
-      resources: { error: "resources boom", stack: "at resources" },
-    })
+    const panel = initializationErrorHelpPanel([
+      { service: "user data", error: "userdata boom", stack: "at userData" },
+      { service: "resources", error: "resources boom", stack: "at resources" },
+    ])
     render(InitializationErrorHelp, { props: { panel } })
 
     const items = screen.getAllByRole("listitem")

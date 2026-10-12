@@ -12,6 +12,7 @@ import { ExerciseStatus } from "../../api/workspaceManager"
 import type { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
 import {
   CourseIdentifier as CourseIdentifierNs,
+  ExerciseIdentifier as ExerciseIdentifierNs,
   LocalCourseData,
   LocalCourseExercise,
 } from "../../shared/shared"
@@ -165,7 +166,7 @@ function byCourse(
     }
     const courseKey = CourseIdentifierNs.key(item.courseId)
     const course = courses.get(courseKey) ?? { courseId: item.courseId, ids: new Map() }
-    course.ids.set(item.id ?? "", item.exerciseId)
+    course.ids.set(ExerciseIdentifierNs.key(item.exerciseId), item.exerciseId)
     courses.set(courseKey, course)
   }
   return [...courses.values()].map(({ courseId, ids }) => ({ courseId, ids: [...ids.values()] }))

@@ -26,9 +26,9 @@ suite("updateables registry", () => {
     const second = [ExerciseIdentifier.from(202)]
     const mooc = [ExerciseIdentifier.from("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")]
 
-    updateablesRegistry.set(tmcCourse, first)
-    updateablesRegistry.set(otherTmcCourse, second)
-    updateablesRegistry.set(moocCourse, mooc)
+    updateablesRegistry.setMany([[tmcCourse, first]])
+    updateablesRegistry.setMany([[otherTmcCourse, second]])
+    updateablesRegistry.setMany([[moocCourse, mooc]])
 
     expect(updateablesRegistry.get(tmcCourse)).toEqual(first)
     expect(updateablesRegistry.get(otherTmcCourse)).toEqual(second)
@@ -37,21 +37,21 @@ suite("updateables registry", () => {
 
   test("keeps a tmc and a mooc course with the same id apart", () => {
     const tmc = [ExerciseIdentifier.from(101)]
-    updateablesRegistry.set(CourseIdentifier.from(1), tmc)
-    updateablesRegistry.set(CourseIdentifier.from("1"), [])
+    updateablesRegistry.setMany([[CourseIdentifier.from(1), tmc]])
+    updateablesRegistry.setMany([[CourseIdentifier.from("1"), []]])
 
     expect(updateablesRegistry.get(CourseIdentifier.from(1))).toEqual(tmc)
   })
 
-  test("a later set replaces the course's list rather than adding to it", () => {
-    updateablesRegistry.set(tmcCourse, [ExerciseIdentifier.from(101)])
-    updateablesRegistry.set(tmcCourse, [])
+  test("a later list replaces the course's list rather than adding to it", () => {
+    updateablesRegistry.setMany([[tmcCourse, [ExerciseIdentifier.from(101)]]])
+    updateablesRegistry.setMany([[tmcCourse, []]])
 
     expect(updateablesRegistry.get(tmcCourse)).toEqual([])
   })
 
   test("looks up by value, not by object identity", () => {
-    updateablesRegistry.set(CourseIdentifier.from(1), [ExerciseIdentifier.from(101)])
+    updateablesRegistry.setMany([[CourseIdentifier.from(1), [ExerciseIdentifier.from(101)]]])
 
     expect(updateablesRegistry.get(CourseIdentifier.from(1))).toHaveLength(1)
   })
@@ -60,7 +60,7 @@ suite("updateables registry", () => {
     const changed = vi.fn()
     const subscription = updateablesRegistry.onDidChange(changed)
 
-    updateablesRegistry.set(tmcCourse, [])
+    updateablesRegistry.setMany([[tmcCourse, []]])
     updateablesRegistry.clear()
     subscription.dispose()
 

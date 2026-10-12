@@ -157,23 +157,6 @@ export function countOf(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`
 }
 
-export function formatSizeInBytes(size: number, precision = 3): string {
-  let suffix = "B"
-  let cSize = size
-  const targetPrecision = Math.min(size === 0 ? 1 : Math.floor(Math.log10(size) + 1), 21, precision)
-
-  for (const s of ["kB", "MB", "GB", "TB", "EB"]) {
-    if (Number(cSize.toPrecision(targetPrecision)) >= 1000) {
-      cSize /= 1000
-      suffix = s
-    } else {
-      break
-    }
-  }
-
-  return `${cSize.toPrecision(targetPrecision)} ${suffix}`
-}
-
 export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): FeedbackQuestion[] {
   const feedbackQuestions: FeedbackQuestion[] = []
   questions.forEach((x) => {

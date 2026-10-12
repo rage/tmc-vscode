@@ -254,14 +254,16 @@ export const SCENARIOS: Scenario[] = [
     panel: {
       id: 50,
       type: "InitializationErrorHelp",
-      cliFolder: "/home/student/.local/share/tmc/cli",
-      initializationErrors: {
-        tmc: { error: "Failed to download the TMC-langs CLI", stack: "Error: ENOTFOUND" },
-        userData: null,
-        workspaceManager: null,
-        exerciseDecorationProvider: null,
-        resources: null,
-      },
+      failures: [
+        {
+          service: "tmc-langs",
+          error: "Failed to download the TMC-langs CLI",
+          stack: "Error: ENOTFOUND",
+          hint:
+            "A proxy, firewall or antivirus program blocking network requests can cause this. " +
+            "Try adding an exception for the directory '/home/student/.local/share/tmc/cli'.",
+        },
+      ],
     },
   },
 ]

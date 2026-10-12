@@ -1,6 +1,6 @@
 import { presentationFor } from "../errors"
 import type { WebviewError } from "../shared/shared"
-import { BaseError, RunnableCommandSchema, toError } from "../shared/shared"
+import { BaseError, toError } from "../shared/shared"
 
 /**
  * Flattens anything thrown into a {@link WebviewError}: the sentence and remedy buttons a
@@ -8,13 +8,9 @@ import { BaseError, RunnableCommandSchema, toError } from "../shared/shared"
  */
 export function toWebviewError(thrown: unknown): WebviewError {
   const error = toError(thrown)
-  const presentation = presentationFor(error)
-  const actions = presentation.actions.flatMap(({ label, command }) => {
-    const runnable = RunnableCommandSchema.safeParse(command)
-    return runnable.success ? [{ label, command: runnable.data }] : []
-  })
+  const { message, actions } = presentationFor(error)
   return {
-    message: presentation.message,
+    message,
     ...(error instanceof BaseError && error.details ? { details: error.details } : {}),
     ...(actions.length > 0 ? { actions } : {}),
   }

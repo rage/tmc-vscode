@@ -11,7 +11,7 @@ import {
 } from "../errors"
 import type { MoocDeviceLogin } from "../shared/langsSchema"
 import { backendName } from "../shared/shared"
-import { Logger } from "../utilities"
+import { Logger, openWebLink } from "../utilities"
 import { refreshEverything } from "./refreshEverything"
 
 const SITE = backendName("mooc")
@@ -142,7 +142,7 @@ async function offerCode(info: MoocDeviceLogin, ended: Promise<unknown>): Promis
  * the page to open by hand.
  */
 async function openInBrowser(url: string): Promise<void> {
-  if (!(await vscode.env.openExternal(vscode.Uri.parse(url)))) {
+  if (!(await openWebLink(url))) {
     Logger.warn(`Could not open ${url} in a browser`)
   }
 }

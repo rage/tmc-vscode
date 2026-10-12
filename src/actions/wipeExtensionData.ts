@@ -4,6 +4,8 @@ import { Err, Ok } from "ts-results"
 
 import type { FractionProgress } from "../api/dialog"
 import { FileSystemError } from "../errors"
+import { downloadFailures } from "../ui/downloadFailures"
+import { updateablesRegistry } from "../ui/updateablesRegistry"
 import type { ReadyActionContext } from "./types"
 
 /**
@@ -39,6 +41,8 @@ export async function wipeExtensionData(
   if (storageWiped.err) {
     return storageWiped
   }
+  updateablesRegistry.clear()
+  downloadFailures.clear()
   report({ fraction: 0.6 })
 
   const workspaceFilesRemoved = await workspaceManager.deleteAllWorkspaceFiles()

@@ -114,21 +114,9 @@ export function testCase(overrides: Partial<TestCase> = {}): TestCase {
 }
 
 export function initializationErrorHelpPanel(
-  initializationErrors: Partial<InitializationErrorHelpPanel["initializationErrors"]> = {},
+  failures: InitializationErrorHelpPanel["failures"] = [],
 ): InitializationErrorHelpPanel {
-  return {
-    id: 4,
-    type: "InitializationErrorHelp",
-    cliFolder: "/tmp/cli",
-    initializationErrors: {
-      tmc: null,
-      userData: null,
-      workspaceManager: null,
-      exerciseDecorationProvider: null,
-      resources: null,
-      ...initializationErrors,
-    },
-  }
+  return { id: 4, type: "InitializationErrorHelp", failures }
 }
 
 /** A TMC server's graded submission of `part01-01_hello`, all tests passed. */
