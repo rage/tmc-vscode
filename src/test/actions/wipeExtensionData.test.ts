@@ -8,6 +8,9 @@ import { wipeExtensionData } from "../../actions/wipeExtensionData"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
+import { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
+import { downloadFailures } from "../../ui/downloadFailures"
+import { updateablesRegistry } from "../../ui/updateablesRegistry"
 import { createMockActionContext } from "../mocks/actionContext"
 
 vi.mock("fs-extra", () => ({ removeSync: vi.fn() }))
@@ -73,6 +76,18 @@ suite("wipeExtensionData action", function () {
       "deleteAllWorkspaceFiles",
       "removeSync",
     ])
+  })
+
+  test("forgets the updates and failed downloads of the courses it wiped", async function () {
+    const course = CourseIdentifier.from(1)
+    const exercise = ExerciseIdentifier.from(2)
+    updateablesRegistry.setMany([[course, [exercise]]])
+    downloadFailures.record([exercise], [])
+
+    await wipeExtensionData(context(), PROJECTS_DIRECTORY)
+
+    expect(updateablesRegistry.get(course)).toEqual([])
+    expect(downloadFailures.has(exercise)).toBe(false)
   })
 
   test("leaves the exercises on disk when an earlier step fails", async function () {

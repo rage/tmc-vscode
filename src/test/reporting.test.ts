@@ -644,7 +644,7 @@ suite("reported once: the Courses view and course details", function () {
 
   test("a failed update from the Courses view is one warning", async function () {
     const { run, shown } = await harness({ langs: moocDownloadFails })
-    updateablesRegistry.set(COURSE_ID, [ExerciseIdentifier.from(EXERCISE_ID)])
+    updateablesRegistry.setMany([[COURSE_ID, [ExerciseIdentifier.from(EXERCISE_ID)]]])
 
     await run("tmc.updateCourseExercises", courseRow())
 
