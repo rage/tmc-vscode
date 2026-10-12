@@ -194,7 +194,7 @@ async function activateInner(
     reportInitializationError("Setting up the TestMyCode tools", cliPathResult.val)
   } else {
     // fire-and-forget: verify the CLI's output contract matches this build's schema
-    void init.verifyCliSchema(cliPathResult.val, context.extensionPath)
+    void init.verifyCliSchema(cliPathResult.val, context.extensionPath, context.globalState)
     const langsInstance = new Langs(cliPathResult.val, CLIENT_NAME, EXTENSION_VERSION, {
       cliConfigDir: TMC_LANGS_CONFIG_DIR,
       javaHome: () => settings.getJavaHome(),
