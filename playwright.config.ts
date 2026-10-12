@@ -7,13 +7,22 @@ export default defineConfig({
   testDir: "./playwright",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  // The retry exists to record a trace (see `use.trace`); a test that passes only
+  // on it still fails the run.
+  retries: process.env.CI ? 1 : 0,
+  failOnFlakyTests: !!process.env.CI,
   workers: 1,
   // The html reporter writes a report nobody opens in CI, and on its own it
   // prints no per-test output, so a failing run's log says only that the report
   // was written. `list` puts the failures in the log; `open: never` stops the
   // html reporter launching a browser on a local run.
   reporter: [["list"], ["html", { open: "never" }]],
+
+  use: {
+    // Honoured by playwright/fixtures.ts on the VS Code window; recording every
+    // run costs time on every pass.
+    trace: "on-first-retry",
+  },
 
   timeout: 60 * 1000,
   expect: {

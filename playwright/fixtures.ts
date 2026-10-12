@@ -9,10 +9,12 @@ import type {
   Fixtures,
   FrameLocator,
   Page,
+  PlaywrightWorkerOptions,
+  TestInfo,
 } from "@playwright/test"
 import { downloadAndUnzipVSCode } from "@vscode/test-electron"
 
-import { MOCK_TMC_ACCESS_TOKEN } from "../backend/controllers/accessToken"
+import { CLIENT_CONFIG_DIR_NAME, MOCK_BACKEND_URL, tmcCredentials } from "../backend/mockSession"
 import { VSCODE_TEST_VERSION } from "../config"
 
 const rootPath = resolve(__dirname, "..")
@@ -91,31 +93,20 @@ function launchArgs(userDataDir: string): string[] {
   ]
 }
 
-// tmc-langs' per-client config directory inside TMC_LANGS_CONFIG_DIR
-// (src/config/constants.ts CLIENT_NAME).
-const CLIENT_CONFIG_DIR_NAME = "tmc-vscode_plugin"
-
 // The only login is the courses.mooc.fi device flow. Seeding a stored tmc token
 // exercises the "existing credentials keep working" path and lets the tmc specs
 // start logged in without a device-flow round trip.
 function seedTmcCredentials(configDir: string): void {
   const clientConfigDir = join(configDir, CLIENT_CONFIG_DIR_NAME)
   fs.mkdirSync(clientConfigDir, { recursive: true })
-  fs.writeFileSync(
-    join(clientConfigDir, "credentials.json"),
-    JSON.stringify({
-      access_token: MOCK_TMC_ACCESS_TOKEN,
-      token_type: "bearer",
-      scope: "public",
-    }),
-  )
+  fs.writeFileSync(join(clientConfigDir, "credentials.json"), JSON.stringify(tmcCredentials()))
 }
 
 // The mock backend is a long-lived process shared across specs, so both of its
 // mocks carry in-memory state from one test into the next; reset them the same
 // way the per-test config/projects dirs isolate on-disk state.
 async function resetMockBackend(mock: string): Promise<void> {
-  const reset = await fetch(`http://localhost:4001/${mock}-mock/reset`, { method: "POST" })
+  const reset = await fetch(`${MOCK_BACKEND_URL}/${mock}-mock/reset`, { method: "POST" })
   if (!reset.ok) {
     throw new Error(
       `Could not reset the ${mock} mock state: ${reset.status} ${reset.statusText}. ` +
@@ -124,9 +115,48 @@ async function resetMockBackend(mock: string): Promise<void> {
   }
 }
 
+type TraceMode = Exclude<PlaywrightWorkerOptions["trace"], { mode: unknown }>
+
+// The `trace` option's modes, applied to the Electron context Playwright's own
+// tracing never sees.
+const isTraceRecorded = (mode: TraceMode, testInfo: TestInfo): boolean => {
+  switch (mode) {
+    case "on":
+    case "retain-on-failure":
+    case "retain-on-failure-and-retries":
+      return true
+    case "retain-on-first-failure":
+      return testInfo.retry === 0
+    case "on-first-retry":
+      return testInfo.retry === 1
+    case "on-all-retries":
+      return testInfo.retry > 0
+    default:
+      return false
+  }
+}
+
+// Each test gets fresh dirs; a ~50MB user data dir per test fills this
+// machine's 16G /tmp tmpfs within a few runs if one leaks.
+const tempDirFixture =
+  (prefix: string) =>
+  // oxlint-disable-next-line no-empty-pattern -- Playwright requires the fixtures argument to be destructured
+  async ({}, run: (dir: string) => Promise<void>): Promise<void> => {
+    const dir = fs.mkdtempSync(join(tmpdir(), prefix))
+    try {
+      await run(dir)
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }
+
 interface CustomTestFixtures {
   /** VS Code's `--user-data-dir`, where the extension's global storage and course workspace files live. */
   userDataDir: string
+  /** TMC_LANGS_CONFIG_DIR. */
+  configDir: string
+  /** TMC_LANGS_DEFAULT_PROJECTS_DIR. */
+  projectsDir: string
   vsCode: ElectronApplication
   /** The URLs VS Code has been asked to open in a browser, which no test really opens. */
   openedExternalUrls: () => Promise<string[]>
@@ -145,22 +175,29 @@ interface CustomTestOptions {
   seedTmcCredentials: boolean
 }
 
-export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions> = {
+export const customTestFixtures: Fixtures<
+  CustomTestFixtures & CustomTestOptions,
+  object,
+  object,
+  PlaywrightWorkerOptions
+> = {
   moocClientId: [undefined, { option: true }],
   seedTmcCredentials: [true, { option: true }],
-  // oxlint-disable-next-line no-empty-pattern -- Playwright requires the fixtures argument to be destructured
-  userDataDir: async ({}, run) => {
-    const userDataDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-user"))
-    await run(userDataDir)
-    fs.rmSync(userDataDir, { recursive: true, force: true })
-  },
+  userDataDir: tempDirFixture("tmc-vscode-playwright-user"),
+  configDir: tempDirFixture("tmc-vscode-playwright-config"),
+  projectsDir: tempDirFixture("tmc-vscode-playwright-projects"),
   vsCode: async (
-    { moocClientId, seedTmcCredentials: shouldSeedTmcCredentials, userDataDir },
+    {
+      configDir,
+      moocClientId,
+      projectsDir,
+      seedTmcCredentials: shouldSeedTmcCredentials,
+      trace,
+      userDataDir,
+    },
     run,
     testInfo,
   ) => {
-    const configDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-config"))
-    const projectsDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-playwright-projects"))
     // A native dialog is outside the page, where Playwright cannot press its buttons; the
     // extension's confirmations are modal dialogs.
     fs.mkdirSync(join(userDataDir, "User"))
@@ -178,12 +215,11 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
       args: launchArgs(userDataDir),
       env: {
         ...process.env,
-        RUST_LOG: "TRACE",
-        TMC_LANGS_TMC_ROOT_URL: "http://localhost:4001",
+        TMC_LANGS_TMC_ROOT_URL: MOCK_BACKEND_URL,
         // Route mooc (courses.mooc.fi) CLI calls at the mock mounted in the same
         // backend process (backend/mooc). Overrides the compiled MOOC_BACKEND_URL
         // define.
-        TMC_LANGS_MOOC_ROOT_URL: "http://localhost:4001",
+        TMC_LANGS_MOOC_ROOT_URL: MOCK_BACKEND_URL,
         // The CLI only attaches its bearer to trusted domains, not localhost, so
         // without this every mooc resource call would 401 (same knob the
         // integration bearer-auth suite uses).
@@ -195,31 +231,33 @@ export const customTestFixtures: Fixtures<CustomTestFixtures & CustomTestOptions
         TMC_LANGS_DEFAULT_PROJECTS_DIR: projectsDir,
       },
     })
-    await electronApp.context().tracing.start({ screenshots: true, snapshots: true })
-    // Evaluated before the main process opens its first window, the stub can lose its
-    // execution context mid-call ("Execution context was destroyed").
-    await electronApp.firstWindow()
-    await electronApp.evaluate(({ shell }) => {
-      const opened: string[] = []
-      Object.assign(globalThis, { tmcOpenedExternalUrls: opened })
-      shell.openExternal = async (url: string): Promise<void> => void opened.push(url)
-    })
+    const traceMode = typeof trace === "string" ? trace : trace.mode
+    const isTracing = isTraceRecorded(traceMode, testInfo)
+    try {
+      if (isTracing) {
+        await electronApp.context().tracing.start({ screenshots: true, snapshots: true })
+      }
+      // Evaluated before the main process opens its first window, the stub can lose its
+      // execution context mid-call ("Execution context was destroyed").
+      await electronApp.firstWindow()
+      await electronApp.evaluate(({ shell }) => {
+        const opened: string[] = []
+        Object.assign(globalThis, { tmcOpenedExternalUrls: opened })
+        shell.openExternal = async (url: string): Promise<void> => void opened.push(url)
+      })
 
-    await run(electronApp)
+      await run(electronApp)
 
-    // outputPath sanitises the title and scopes the file to this test, so two
-    // titles cannot collide on one trace.
-    const tracePath = testInfo.status === "passed" ? undefined : testInfo.outputPath("trace.zip")
-    await electronApp.context().tracing.stop(tracePath ? { path: tracePath } : {})
-
-    await closeElectron(electronApp)
-
-    // A per-test user data dir is ~50MB of re-extracted VS Code state, on top of
-    // the workspace and config dirs; /tmp here is a 16G tmpfs, so leaking these
-    // fills it within a few suite runs. Only after the process is gone; `userDataDir` goes in
-    // its own fixture's teardown, which runs after this one.
-    for (const dir of [configDir, projectsDir]) {
-      fs.rmSync(dir, { recursive: true, force: true })
+      if (isTracing) {
+        const isDiscarded = traceMode.startsWith("retain-on-") && testInfo.status === "passed"
+        // outputPath sanitises the title and scopes the file to this test, so two
+        // titles cannot collide on one trace.
+        await electronApp
+          .context()
+          .tracing.stop(isDiscarded ? {} : { path: testInfo.outputPath("trace.zip") })
+      }
+    } finally {
+      await closeElectron(electronApp)
     }
   },
   openedExternalUrls: async ({ vsCode }, run) => {

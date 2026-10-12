@@ -29,7 +29,6 @@
     "build": "node esbuild.mjs",
     "check:svelte": "pnpm --dir webview-ui run check",
     "ci:all": "pnpm install --frozen-lockfile",
-    "clean-local-rust-config": "cd backend && cd cli && rm -rf tmc-vscode_plugin",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "generate:langs-schema": "node bin/generateLangsSchema.mjs",

@@ -10,15 +10,10 @@ set -euo pipefail
 #
 # LOCAL DEV/TEST ONLY. CI is unchanged and keeps using the released CLI.
 #
-# Version-pin reconciliation: config.js pins a single TMC_LANGS_RUST_VERSION
-# (shared by all three build profiles) and the harness locates the CLI by the
-# `...-<version>` filename. Rather than split or bump that pin (which would
-# touch the production download path), we install the local build UNDER THE
-# PINNED FILENAME. The real version is still reported by `<cli> --version`
-# (newer than the version pinned in config.js, for the migration branch),
-# which is what the integration suite uses to decide whether to run the
-# migration-contract tests. So: pinned name on disk, honest version over
-# --version.
+# The harness finds the CLI by the `...-<version>` filename config.js pins, so
+# the local build is installed under that name without bumping the pin, which
+# the production download path shares. `<cli> --version` still reports the
+# build's real version.
 #
 # backend/cli is gitignored, so nothing here is ever committed.
 

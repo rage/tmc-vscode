@@ -19,6 +19,24 @@ stamp_field() {
   node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'))[process.argv[2]]??''))" "$1" "$2"
 }
 
+# Writes a stamp whose "//" member is <description>, followed by each key=value
+# pair in order: write_stamp <stamp> <description> key=value...
+write_stamp() {
+  local stamp=$1
+  shift
+  node -e '
+    const [stamp, description, ...pairs] = process.argv.slice(1)
+    const fields = { "//": description }
+    for (const pair of pairs) {
+      const at = pair.indexOf("=")
+      fields[pair.slice(0, at)] = pair.slice(at + 1)
+    }
+    require("fs").writeFileSync(stamp, JSON.stringify(fields, null, 2) + "\n")
+  ' "$stamp" "$@"
+  # Normalise to the repo's formatting so format:check stays green.
+  pnpm exec oxfmt "$stamp" >/dev/null 2>&1 || true
+}
+
 # Fails unless the vendored file still hashes to what its stamp records:
 # verify_stamp <vendored file> <stamp> <re-vendor command>
 verify_stamp() {

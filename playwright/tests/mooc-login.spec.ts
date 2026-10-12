@@ -1,5 +1,6 @@
 import { expect } from "@playwright/test"
 
+import { MOCK_BACKEND_URL, mockUserCode } from "../../backend/mockSession"
 import { vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import { MoocLoginPage } from "../pages/mooc-login"
@@ -28,13 +29,14 @@ vsCodeTest(
       await expect(moocLoginPage.waitingNotification()).toBeVisible()
       await expect
         .poll(openedExternalUrls)
-        .toStrictEqual(["http://localhost:4001/oauth_device?user_code=WXYZ-1234"])
-      await expect(moocLoginPage.modalDialog()).toHaveCount(0)
+        .toStrictEqual([`${MOCK_BACKEND_URL}/oauth_device?user_code=${mockUserCode(1)}`])
     })
 
     await vsCodeTest.step("the mock approves and the login is confirmed", async () => {
       await expect(coursesView.notificationToast("Logged in to courses.mooc.fi.")).toBeVisible()
       await expect(moocLoginPage.waitingNotification()).toBeHidden()
+      // A modal stays until answered, so with the flow over, none was ever raised.
+      await expect(moocLoginPage.modalDialog()).toHaveCount(0)
     })
 
     await vsCodeTest.step("the enrolled courses are now offered", async () => {
@@ -59,7 +61,7 @@ vsCodeTest.describe(() => {
       .filter({ hasText: "The login was denied in the browser." })
     await expect(error).toBeVisible()
     await error.getByRole("button", { name: "Try again" }).click()
-    await expect(moocLoginPage.waitingNotification()).toBeVisible()
+    await expect(moocLoginPage.waitingNotification(2)).toBeVisible()
   })
 })
 
@@ -91,19 +93,24 @@ vsCodeTest.describe(() => {
     const coursesView = new CoursesViewPage(page, webview)
     const moocLoginPage = new MoocLoginPage(page, webview)
 
+    await coursesView.goto()
+    await coursesView.startMoocLogin()
+    await expect(moocLoginPage.waitingNotification(1)).toBeVisible()
+    const shownToasts = await moocLoginPage.recordToasts()
+
     await vsCodeTest.step("cancel the pending login", async () => {
-      await coursesView.goto()
-      await coursesView.startMoocLogin()
-      await moocLoginPage.cancelWaiting()
-      await expect(moocLoginPage.waitingNotification()).toBeHidden()
+      await moocLoginPage.cancelWaiting(1)
+      await expect(moocLoginPage.waitingNotification(1)).toBeHidden()
     })
 
     await vsCodeTest.step("retry lands on a fresh code with no error", async () => {
       await coursesView.startMoocLogin()
-      await expect(moocLoginPage.waitingNotification()).toBeVisible()
-      await expect(
-        page.locator(".notification-toast").filter({ hasText: /login|failed/ }),
-      ).toHaveCount(0)
+      await expect(moocLoginPage.waitingNotification(2)).toBeVisible()
+      // By now the killed attempt has long ended, so any toast it caused was shown.
+      const errors = (await shownToasts()).filter(
+        (text) => !text.includes("Waiting for you to approve") && /login|failed/i.test(text),
+      )
+      expect(errors).toStrictEqual([])
     })
   })
 })

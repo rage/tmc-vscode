@@ -40,6 +40,7 @@ cd "$SCRIPT_DIR/.."
 TARGET="./shared/bindings.schema.json"
 STAMP="./shared/bindings.schema.source.json"
 REVENDOR="pnpm run vendor:langs-schema"
+STAMP_DESCRIPTION="Provenance stamp for the vendored tmc-langs-cli output contract schema. Written by bin/updateLangsSchema.sh; do not hand-edit. CI asserts the vendored schema's sha256 matches the value below via 'bin/updateLangsSchema.sh --check-stamp', catching a hand-edit that never went through re-vendoring."
 
 MODE="$(vendor_mode "$@")"
 
@@ -59,16 +60,8 @@ if [ "$MODE" = "--from-checkout" ]; then
   cp "$SOURCE" "$TARGET"
   REV="$(git -C "$LANGS_REPO" rev-parse HEAD 2>/dev/null || echo "unknown")"
   SHA="$(sha256_of "$TARGET")"
-  cat > "$STAMP" <<EOF
-{
-  "//": "Provenance stamp for the vendored tmc-langs-cli output contract schema. Written by bin/updateLangsSchema.sh; do not hand-edit. CI asserts the vendored schema's sha256 matches the value below via 'bin/updateLangsSchema.sh --check-stamp', catching a hand-edit that never went through re-vendoring.",
-  "source_repo": "tmc-langs-rust",
-  "source_release": "unreleased",
-  "source_rev": "$REV",
-  "sha256": "$SHA"
-}
-EOF
-  pnpm exec oxfmt "$STAMP" >/dev/null 2>&1 || true
+  write_stamp "$STAMP" "$STAMP_DESCRIPTION" \
+    source_repo=tmc-langs-rust source_release=unreleased source_rev="$REV" sha256="$SHA"
   echo "Vendored $SOURCE (tmc-langs-rust rev $REV, unreleased) -> $TARGET"
   exit 0
 fi
@@ -107,20 +100,8 @@ cp "$fetched" "$TARGET"
 
 SHA="$(sha256_of "$TARGET")"
 
-# The sha256 is of the vendored schema itself (TARGET), so re-formatting this
-# stamp does not affect it.
-cat > "$STAMP" <<EOF
-{
-  "//": "Provenance stamp for the vendored tmc-langs-cli output contract schema. Written by bin/updateLangsSchema.sh; do not hand-edit. CI asserts the vendored schema's sha256 matches the value below via 'bin/updateLangsSchema.sh --check-stamp', catching a hand-edit that never went through re-vendoring.",
-  "source_repo": "tmc-langs-rust",
-  "source_release": "$VERSION",
-  "source_url": "$SOURCE_URL",
-  "sha256": "$SHA"
-}
-EOF
-
-# Normalise the stamp to the repo's formatting so format:check stays green.
-pnpm exec oxfmt "$STAMP" >/dev/null 2>&1 || true
+write_stamp "$STAMP" "$STAMP_DESCRIPTION" \
+  source_repo=tmc-langs-rust source_release="$VERSION" source_url="$SOURCE_URL" sha256="$SHA"
 
 echo "Vendored $SOURCE_URL -> $TARGET"
 echo "Wrote provenance stamp $STAMP (sha256 $SHA)"

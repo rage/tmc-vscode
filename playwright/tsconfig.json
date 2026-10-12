@@ -2,7 +2,8 @@
   // Shares the strict baseline with the rest of the workspace.
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["ESNext"],
+    // DOM for the callbacks page.evaluate runs in the window.
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "types": ["node"],
     // fixtures.ts reads the VS Code test version from ../config.js
     "allowJs": true

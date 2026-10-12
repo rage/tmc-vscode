@@ -8,6 +8,7 @@ import { zstdDecompressSync } from "node:zlib"
 
 import type { Express } from "express"
 
+import { MOCK_SEEDED_ACCESS_TOKEN, MOCK_SEEDED_NOSCOPE_ACCESS_TOKEN } from "../mockSession"
 import { API_ERRORS, type ApiErrorMessageKey } from "./apiErrors"
 import type { MoocExerciseFixture } from "./fixtures"
 import {
@@ -28,7 +29,6 @@ import {
   TMC_ARCHIVE_MIME,
   variantsCourse,
 } from "./fixtures"
-import { MOCK_SEEDED_ACCESS_TOKEN, MOCK_SEEDED_NOSCOPE_ACCESS_TOKEN } from "./oauth"
 import type { MoocMockControls } from "./router"
 import { createMoocApp, moocMockOf } from "./router"
 

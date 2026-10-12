@@ -6,11 +6,9 @@
 const Mocha = require("mocha")
 const path = require("path")
 
-// Zero tests are zero failures, so a suite that stopped reaching the bundle
-// would pass. Raise this with the suite; mocha counts a pending test in
-// `stats.tests`, so the figure is the number of cases src/test-integration
-// declares.
-const MINIMUM_TESTS = 63
+// Zero tests are zero failures, so a suite that stopped reaching the bundle, or
+// whose cases were all skipped, would pass. Raise this with the suite.
+const MINIMUM_PASSING = 62
 
 function run() {
   const mocha = new Mocha({
@@ -29,12 +27,12 @@ function run() {
         const runner = mocha.run((failures) => {
           if (failures > 0) {
             e(new Error(`${failures} tests failed.`))
-          } else if (runner.stats.tests < MINIMUM_TESTS) {
+          } else if (runner.stats.passes < MINIMUM_PASSING) {
             e(
               new Error(
-                `Integration suite ran ${runner.stats.tests} tests, expected at least ` +
-                  `${MINIMUM_TESTS}. Either the suite shrank and MINIMUM_TESTS in ` +
-                  `bin/integrationTestLoader.js needs updating, or the bundle is missing tests.`,
+                `Integration suite passed ${runner.stats.passes} tests, expected at least ` +
+                  `${MINIMUM_PASSING}. Either the suite shrank and MINIMUM_PASSING in ` +
+                  `bin/integrationTestLoader.js needs updating, or tests are missing or skipped.`,
               ),
             )
           } else {
