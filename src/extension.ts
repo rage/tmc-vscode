@@ -4,8 +4,8 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { onDidFinishSubmission, refreshLocalExercises } from "./actions"
-import type { ActionContext, Startup } from "./actions/types"
+import { onDidFinishSubmission, refreshLocalExercises, scanLocalExercises } from "./actions"
+import type { ActionContext, ReadyActionContext, Startup } from "./actions/types"
 import { isReady } from "./actions/types"
 import AiRestriction, { isActiveCourseAiAllowed } from "./api/aiRestriction"
 import { AiUseGate } from "./api/aiUseGate"
@@ -30,6 +30,7 @@ import {
   EXERCISE_CHECK_INTERVAL,
   EXTENSION_ID,
   EXTENSION_VERSION,
+  STARTUP_REFRESH_SKIP_AGE,
   TMC_LANGS_CONFIG_DIR,
   TMC_LANGS_DL_URL,
   TMC_LANGS_VERSION,
@@ -197,10 +198,9 @@ async function activateInner(
 
   const authState = createAuthState(langs)
   authState.subscribe((loggedIn) => coursesTree.setLoggedIn(loggedIn))
-  const initialAuthCheck = await authState.refresh({ timeout: 15000 })
-  if (initialAuthCheck.err) {
-    reportInitializationError("Checking your login", initialAuthCheck.val)
-  }
+  // Awaited only after the migration: it can refresh a token over the network, and nothing
+  // before needs its answer.
+  const initialAuthCheck = authState.refresh({ timeout: 15000 })
 
   const workspaceFileFolder = path.join(context.globalStorageUri.fsPath, "workspaces")
 
@@ -226,21 +226,27 @@ async function activateInner(
     Logger.warn("Skipped data migration")
   }
 
-  // get data path
+  // After the migration, which can move the exercises and the projects-dir setting.
+  const [authChecked, startupScan] = await Promise.all([
+    initialAuthCheck,
+    langs.ok ? scanLocalExercises(langs.val) : undefined,
+  ])
+  if (authChecked.err) {
+    reportInitializationError("Checking your login", authChecked.val)
+  }
+
   let tmcDataPath: string | undefined
-  if (langs.ok) {
-    const dataPathResult = await langs.val.getSetting(
-      "projects-dir",
-      (object): object is string => typeof object === "string",
-    )
-    if (dataPathResult.err) {
-      Logger.error("Failed to define datapath:", dataPathResult.val)
-      reportInitializationError("Finding the exercises folder", dataPathResult.val)
-    } else if (dataPathResult.val === undefined) {
+  if (startupScan) {
+    const { settings: cliSettings } = startupScan
+    const projectsDir = cliSettings.ok ? cliSettings.val["projects-dir"] : undefined
+    if (cliSettings.err) {
+      Logger.error("Failed to define datapath:", cliSettings.val)
+      reportInitializationError("Finding the exercises folder", cliSettings.val)
+    } else if (typeof projectsDir !== "string") {
       Logger.error("Failed to define datapath: no value found.")
       reportInitializationError("Finding the exercises folder", new Error("No value for datapath."))
     } else {
-      tmcDataPath = dataPathResult.val
+      tmcDataPath = projectsDir
     }
   }
 
@@ -431,7 +437,7 @@ async function activateInner(
   const readyContext = isReady(actionContext) ? actionContext : undefined
 
   if (readyContext) {
-    const refreshResult = await refreshLocalExercises(readyContext)
+    const refreshResult = await refreshLocalExercises(readyContext, startupScan)
     if (refreshResult.err) {
       Logger.warn("Failed to set initial exercises.", refreshResult.val)
     }
@@ -505,10 +511,25 @@ async function activateInner(
     )
   }
 
+  /** Refreshes every course quietly, recording a success for the next activation of any window. */
+  async function refreshInBackground(ready: ReadyActionContext): Promise<void> {
+    try {
+      const refreshed = await refreshEverything(ready, { silent: true })
+      if (refreshed.ok) {
+        await storage.setCoursesRefreshedAt(Date.now())
+      }
+    } catch (e) {
+      Logger.error("Background refresh failed", e)
+    }
+  }
+
+  const refreshAge = Date.now() - (storage.getCoursesRefreshedAt() ?? Number.NEGATIVE_INFINITY)
   if (readyContext && authState.loggedIn) {
-    void refreshEverything(readyContext, { silent: true }).catch((e) =>
-      Logger.error("Background refresh failed", e),
-    )
+    if (refreshAge >= 0 && refreshAge < STARTUP_REFRESH_SKIP_AGE) {
+      Logger.info("Skipped the startup refresh: the courses were refreshed moments ago")
+    } else {
+      void refreshInBackground(readyContext)
+    }
   }
 
   async function runMaintenancePoll(): Promise<void> {
@@ -520,9 +541,7 @@ async function activateInner(
       // Proactively catches a session dropping between polls, not just on a failed command.
       sessionExpiry.onAuthChecked(authState.loggedIn)
       if (readyContext && authState.loggedIn) {
-        void refreshEverything(readyContext, { silent: true }).catch((e) =>
-          Logger.error("Background refresh failed", e),
-        )
+        void refreshInBackground(readyContext)
       }
     } catch (e) {
       Logger.error("Maintenance check failed", e)

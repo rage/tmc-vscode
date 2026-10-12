@@ -47,6 +47,15 @@ suite("refreshLocalExercises action", function () {
     expect(workspaceManagerMock.setExercises).toHaveBeenCalledTimes(1)
   })
 
+  test("uses a scan it is given instead of asking the CLI", async function () {
+    const scan = { localExercises: Ok([]), settings: Ok({}) }
+    const result = await refreshLocalExercises(actionContext(), scan)
+    expect(result).toBe(Ok.EMPTY)
+    expect(tmcMock.listLocalExercises).not.toHaveBeenCalled()
+    expect(tmcMock.listSettings).not.toHaveBeenCalled()
+    expect(workspaceManagerMock.setExercises).toHaveBeenCalledWith([], true)
+  })
+
   test("should work without any courses", async function () {
     userDataMockValues.getCourses = []
     const result = await refreshLocalExercises(actionContext())

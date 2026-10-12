@@ -2,6 +2,7 @@ import type { Result } from "ts-results"
 import * as vscode from "vscode"
 import { z } from "zod"
 
+import type Langs from "../api/langs"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { ExerciseStatus } from "../api/workspaceManager"
 import { closedExercisesSettingKey } from "../config/constants"
@@ -22,19 +23,36 @@ function readClosedExercises(settings: Record<string, unknown>, key: string): st
   return parsed.data ?? []
 }
 
+/** What {@link refreshLocalExercises} reads from the CLI: the exercises on disk and the settings. */
+export interface LocalExerciseScan {
+  localExercises: Result<LocalExercise[], Error>
+  settings: Result<Record<string, unknown>, Error>
+}
+
+/** Reads a {@link LocalExerciseScan}; both reads run, and fail, independently. */
+export async function scanLocalExercises(langs: Langs): Promise<LocalExerciseScan> {
+  const [localExercises, settings] = await Promise.all([
+    langs.listLocalExercises(),
+    langs.listSettings(),
+  ])
+  return { localExercises, settings }
+}
+
 /**
- * Asks for all local exercises from TMC-Langs and passes them to WorkspaceManager.
+ * Passes the local exercises of every stored course to WorkspaceManager.
+ *
+ * @param scan A scan read since the last change on disk or to the settings; read afresh
+ * when omitted.
  */
 export async function refreshLocalExercises(
   actionContext: ReadyActionContext,
+  scan?: LocalExerciseScan,
 ): Promise<Result<void, Error>> {
   const { langs, userData, workspaceManager } = actionContext.startup
   Logger.info("Refreshing local exercises")
 
-  const [localExercisesResult, settingsResult] = await Promise.all([
-    langs.listLocalExercises(),
-    langs.listSettings(),
-  ])
+  const { localExercises: localExercisesResult, settings: settingsResult } =
+    scan ?? (await scanLocalExercises(langs))
   if (localExercisesResult.err) {
     return localExercisesResult
   }
