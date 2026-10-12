@@ -15,12 +15,7 @@ import {
   LocalCourseData,
 } from "../shared/shared"
 import type Storage from "../storage"
-import type {
-  MoocLocalCourseData,
-  MoocLocalCourseExercise,
-  TmcLocalCourseData,
-  TmcLocalCourseExercise,
-} from "../storage/data"
+import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
 import type { MoocStoredStanding } from "../utilities/apiData"
 import { Logger } from "../utilities/logger"
 
@@ -50,6 +45,27 @@ function replaceIn<Id, Course extends StoredCourse<Id>>(
   ])
   courses.set(id, refreshed)
   return true
+}
+
+/**
+ * The exercise named `exerciseName` in a course with slug `courseSlug`. Searches every such
+ * course: stored slugs are not guaranteed unique, and the first match need not hold the
+ * exercise.
+ */
+function findExerciseByName<Exercise extends { name: string }>(
+  courses: Map<unknown, { name: string; exercises: Exercise[] }>,
+  courseSlug: string,
+  exerciseName: string,
+): Exercise | undefined {
+  for (const course of courses.values()) {
+    if (course.name === courseSlug) {
+      const exercise = course.exercises.find((x) => x.name === exerciseName)
+      if (exercise) {
+        return exercise
+      }
+    }
+  }
+  return undefined
 }
 
 export class UserData {
@@ -164,15 +180,6 @@ export class UserData {
     return Err(new Error(`No ${backend} course with slug ${slug}`))
   }
 
-  public getTmcCourse(id: number): Readonly<TmcLocalCourseData> {
-    const course = this._tmcCourses.get(id)
-    return course as TmcLocalCourseData
-  }
-
-  public getTmcCourseByName(name: string): Readonly<TmcLocalCourseData> | undefined {
-    return this.getTmcCourses().find((x) => x.name === name)
-  }
-
   /**
    * Looks up an exercise by course slug and exercise name **within one backend**,
    * returning it tagged with that backend.
@@ -185,54 +192,20 @@ export class UserData {
     backend: BackendKind,
     courseSlug: string,
     exerciseName: string,
-  ): Readonly<LocalCourseExercise> | undefined {
+  ): LocalCourseExercise | undefined {
     switch (backend) {
       case "tmc": {
-        const exercise = this.getTmcExerciseByName(courseSlug, exerciseName)
-        return exercise ? makeTmcKind(exercise) : undefined
+        const exercise = findExerciseByName(this._tmcCourses, courseSlug, exerciseName)
+        return exercise && makeTmcKind(exercise)
       }
       case "mooc": {
-        const exercise = this.getMoocExerciseByName(courseSlug, exerciseName)
-        return exercise ? makeMoocKind(exercise) : undefined
+        const exercise = findExerciseByName(this._moocCourses, courseSlug, exerciseName)
+        return exercise && makeMoocKind(exercise)
       }
       default: {
         assertUnreachable(backend)
       }
     }
-  }
-
-  public getTmcExerciseByName(
-    courseSlug: string,
-    exerciseName: string,
-  ): Readonly<TmcLocalCourseExercise> | undefined {
-    for (const course of this._tmcCourses.values()) {
-      if (course.name === courseSlug) {
-        const exercise = course.exercises.find((x) => x.name === exerciseName)
-        if (exercise) {
-          return exercise
-        }
-        // Keep scanning: a matching course slug is not proof the exercise lives
-        // there, and slugs are not guaranteed unique across stored entries.
-      }
-    }
-    return undefined
-  }
-
-  public getMoocExerciseByName(
-    courseSlug: string,
-    exerciseName: string,
-  ): Readonly<MoocLocalCourseExercise> | undefined {
-    for (const course of this._moocCourses.values()) {
-      if (course.name === courseSlug) {
-        const exercise = course.exercises.find((x) => x.name === exerciseName)
-        if (exercise) {
-          return exercise
-        }
-        // Keep scanning: a matching course slug is not proof the exercise lives
-        // there, and slugs are not guaranteed unique across stored entries.
-      }
-    }
-    return undefined
   }
 
   /**
@@ -271,9 +244,7 @@ export class UserData {
     standing: MoocStoredStanding,
     awardedPoints: number,
   ): Promise<Result<void, Error>> {
-    const exercise = this.getMoocExerciseByName(courseSlug, exerciseName) as
-      | MoocLocalCourseExercise
-      | undefined
+    const exercise = findExerciseByName(this._moocCourses, courseSlug, exerciseName)
     if (!exercise) {
       return Err(
         new Error(`No mooc exercise ${courseSlug}/${exerciseName} to record a grading for`),
@@ -450,7 +421,7 @@ export class UserData {
       (mooc) => this._moocCourses.get(mooc.instanceId),
     )
     if (!courseData) {
-      return new Err(new Error(`Course data missing for ${courseId}`))
+      return new Err(new Error(`Course data missing for ${CourseIdentifier.toString(courseId)}`))
     }
     Logger.info(`Notifying user for course again at ${new Date(dateInMillis).toString()}`)
     courseData.notifyAfter = dateInMillis

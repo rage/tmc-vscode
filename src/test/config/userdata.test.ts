@@ -352,6 +352,12 @@ suite("UserData course add/get/update/delete", function () {
     expect(userData.getMoocCourses()).toEqual([])
   })
 
+  test("setNewExerciseNotifyAfter names a course it cannot find", async function () {
+    const [userData] = await makeUserData({ courses: [], mooc_courses: [] })
+    const result = await userData.setNewExerciseNotifyAfter(CourseIdentifier.from(5), 111)
+    expect(result.err && result.val.message).toBe("Course data missing for 5")
+  })
+
   test("setNewExerciseNotifyAfter updates the notify timer for both backends", async function () {
     const [userData] = await makeUserData({
       courses: [tmcCourse({ id: 0 })],
@@ -610,7 +616,9 @@ suite("UserData slug collision across backends (Bug 3 regression)", function () 
         }),
       ],
     })
-    expect(userData.getMoocExerciseByName("two-instances", "mooc_late")?.id).toBe("late-uuid")
+    expect(userData.getExerciseByName("mooc", "two-instances", "mooc_late")?.data.id).toBe(
+      "late-uuid",
+    )
   })
 })
 

@@ -4,8 +4,8 @@ import { Err } from "ts-results"
 import type Langs from "../api/langs"
 import { CLI_PROCESS_TIMEOUT } from "../config/constants"
 import type { UserData } from "../config/userdata"
-import type { BackendKind } from "../shared/shared"
-import { ExerciseIdentifier } from "../shared/shared"
+import type { BackendKind, ExerciseIdentifier } from "../shared/shared"
+import { LocalCourseExercise, match } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { checkAiUse } from "./checkAiUse"
 import type { ReadyActionContext } from "./types"
@@ -24,22 +24,22 @@ function pasterFor(
   courseSlug: string,
   exerciseName: string,
 ): { exerciseId: ExerciseIdentifier; paste: ExercisePaster } | undefined {
-  if (backend === "tmc") {
-    const exerciseId = userData.getTmcExerciseByName(courseSlug, exerciseName)?.id
-    return exerciseId
-      ? {
-          exerciseId: ExerciseIdentifier.from(exerciseId),
-          paste: (exercisePath) => langs.submitTmcExerciseToPaste(exerciseId, exercisePath),
-        }
-      : undefined
+  const exercise = userData.getExerciseByName(backend, courseSlug, exerciseName)
+  if (!exercise) {
+    return undefined
   }
-  const exerciseId = userData.getMoocExerciseByName(courseSlug, exerciseName)?.id
-  return exerciseId
-    ? {
-        exerciseId: ExerciseIdentifier.from(exerciseId),
-        paste: (exercisePath) => langs.submitMoocExerciseToPaste(exerciseId, exercisePath),
-      }
-    : undefined
+  return {
+    exerciseId: LocalCourseExercise.getId(exercise),
+    paste: match(
+      exercise,
+      (tmc): ExercisePaster =>
+        (exercisePath) =>
+          langs.submitTmcExerciseToPaste(tmc.id, exercisePath),
+      (mooc): ExercisePaster =>
+        (exercisePath) =>
+          langs.submitMoocExerciseToPaste(mooc.id, exercisePath),
+    ),
+  }
 }
 
 /**

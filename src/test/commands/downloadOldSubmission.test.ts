@@ -15,7 +15,7 @@ import type {
   ExerciseSlideSubmissionListItem,
   MoocOldSubmissionRestore,
 } from "../../shared/langsSchema"
-import { ExerciseIdentifier } from "../../shared/shared"
+import { ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
 import { exerciseOperations } from "../../ui/exerciseOperations"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -78,8 +78,7 @@ suite("Download old submission command (mooc branch)", function () {
     } as unknown as Langs
 
     const userData = {
-      // a mooc exercise yields a string uuid id
-      getMoocExerciseByName: () => ({ id: "mooc-ex-uuid" }),
+      getExerciseByName: () => makeMoocKind({ id: "mooc-ex-uuid" }),
       getCourseBySlug: () => Ok({}),
     } as unknown as UserData
 
