@@ -35,7 +35,10 @@ export async function wipeExtensionData(
   }
   report({ fraction: 0.4 })
 
-  await userData.wipeDataFromStorage()
+  const storageWiped = await userData.wipeDataFromStorage()
+  if (storageWiped.err) {
+    return storageWiped
+  }
   report({ fraction: 0.6 })
 
   const workspaceFilesRemoved = await workspaceManager.deleteAllWorkspaceFiles()
@@ -45,7 +48,7 @@ export async function wipeExtensionData(
   report({ fraction: 0.8 })
 
   try {
-    fs.removeSync(projectsDirectory)
+    await fs.remove(projectsDirectory)
   } catch (e) {
     return Err(new FileSystemError(e, "Failed to remove projects directory."))
   }
