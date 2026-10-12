@@ -89,6 +89,7 @@ const USER_DATA_KEYS = [
   data.v3.USER_DATA_KEY,
 ]
 
+/** Brings older user data up to v3; `data` is `undefined` when v3 is already current. */
 export default function migrateUserDataToLatest(
   memento: vscode.Memento,
 ): MigratedData<data.v3.UserData> {
@@ -103,13 +104,8 @@ export default function migrateUserDataToLatest(
     ? { ...dataV1, courses: v1_resolveMissingFields(dataV1?.courses) }
     : validateData(memento.get(data.v2.USER_DATA_KEY), data.v2.userDataSchema)
 
-  // v2 => v3
-  const dataV3 = dataV2
-    ? v3_migrateFromV2(dataV2)
-    : validateData(memento.get(data.v3.USER_DATA_KEY), data.v3.userDataSchema)
-
   return {
-    data: dataV3,
+    data: dataV2 && v3_migrateFromV2(dataV2),
     supersededKeys: USER_DATA_KEYS,
     destinationKey: data.v3.USER_DATA_KEY,
   }

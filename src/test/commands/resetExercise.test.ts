@@ -11,7 +11,7 @@ import { ExerciseStatus } from "../../api/workspaceManager"
 import { resetExercise } from "../../commands/resetExercise"
 import type { UserData } from "../../config/userdata"
 import { AiUseRefusedError } from "../../errors"
-import { ExerciseIdentifier } from "../../shared/shared"
+import { ExerciseIdentifier, makeMoocKind } from "../../shared/shared"
 import { exerciseOperations } from "../../ui/exerciseOperations"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -55,7 +55,7 @@ suite("Reset exercise command", function () {
         aiUseGate: { refusal: async () => refusal } as unknown as AiUseGate,
         langs: { resetExercise: reset } as unknown as Langs,
         userData: {
-          getMoocExerciseByName: () => ({ id: "mooc-ex-uuid" }),
+          getExerciseByName: () => makeMoocKind({ id: "mooc-ex-uuid" }),
           getCourseBySlug: () => Ok({}),
         } as unknown as UserData,
         workspaceManager: {

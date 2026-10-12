@@ -3,7 +3,7 @@ import { Err, Ok } from "ts-results"
 
 import { ConnectionError, ForbiddenError, InsufficientScopeError, ServerError } from "../errors"
 import type { CombinedCourseData, MoocCourse, TmcExerciseSlide } from "../shared/langsSchema"
-import type { BackendKind, Enum, LocalCourseExercise } from "../shared/shared"
+import type { BackendKind, Enum } from "../shared/shared"
 import {
   backendName,
   CourseIdentifier,
@@ -15,11 +15,6 @@ import {
 import { Logger } from "../utilities"
 import { toStoredMoocCourse, toStoredTmcCourse } from "../utilities/apiData"
 import type { ReadyActionContext } from "./types"
-
-interface RefreshedCourse {
-  course: LocalCourseData
-  exercises: LocalCourseExercise[]
-}
 
 /**
  * The stored course and the refetched data are looked up by the same id, so this
@@ -92,10 +87,10 @@ export async function updateCourse(
       return Ok(false)
     }
     if (updateResult.val instanceof ForbiddenError) {
-      if (!courseData.data.disabled) {
+      if (courseData.kind === "tmc" && !courseData.data.disabled) {
         Logger.warn(`Failed to access information for course. Marking as disabled.`)
         courseData.data.disabled = true
-        const disableResult = await userData.updateCourse(courseData)
+        const disableResult = await userData.replaceCourse(courseData)
         if (disableResult.err) {
           return disableResult
         }
@@ -116,21 +111,16 @@ export async function updateCourse(
 
   actionContext.coursesTree.setBackendReachable(courseId.kind, true)
 
-  // `updateExercises` finds the new exercises by diffing against the stored list,
-  // so the course is stored with its old list and the fresh one goes in after.
   const refreshed = await match(
     updateResult.val,
-    async (tmc): Promise<Result<RefreshedCourse, Error>> => {
+    async (tmc): Promise<Result<LocalCourseData, Error>> => {
       if (courseData.kind !== "tmc") {
         return Err(mismatchedBackend(courseId, "tmc"))
       }
       const next = toStoredTmcCourse(tmc, courseData.data.organization, courseData.data)
-      return Ok({
-        course: makeTmcKind({ ...next, exercises: courseData.data.exercises }),
-        exercises: next.exercises.map((x) => makeTmcKind(x)),
-      })
+      return Ok(makeTmcKind(next))
     },
-    async ([moocCourse, slides]): Promise<Result<RefreshedCourse, Error>> => {
+    async ([moocCourse, slides]): Promise<Result<LocalCourseData, Error>> => {
       // The fetch the session was refused before has now gone through, so the next
       // lapse is worth telling the user about again.
       actionContext.authState.insufficientScopeReported = false
@@ -151,26 +141,17 @@ export async function updateCourse(
         progressRes.ok ? progressRes.val : undefined,
         courseData.data,
       )
-      return Ok({
-        course: makeMoocKind({ ...next, exercises: courseData.data.exercises }),
-        exercises: next.exercises.map((x) => makeMoocKind(x)),
-      })
+      return Ok(makeMoocKind(next))
     },
   )
   if (refreshed.err) {
     return refreshed
   }
-  const stored = await userData.updateCourse(refreshed.val.course)
+  const course = refreshed.val
+  const stored = await userData.replaceCourse(course)
   if (stored.err) {
     return stored
   }
-  const updateExercisesResult = await userData.updateExercises(courseId, refreshed.val.exercises)
-  if (updateExercisesResult.err) {
-    return updateExercisesResult
-  }
-
-  // `updateExercises` mutated this same stored object, so it is already current.
-  const course = refreshed.val.course
   const courseName = LocalCourseData.getCourseName(course)
   if (
     courseName === workspaceManager.activeCourse &&

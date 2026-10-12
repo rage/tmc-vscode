@@ -5,13 +5,14 @@ import type {
   ExerciseSlideSubmissionListItem,
   MoocOldSubmissionRestore,
 } from "../shared/langsSchema"
+import type { Enum } from "../shared/shared"
 import {
   assertUnreachable,
-  Enum,
   ExerciseIdentifier,
   makeMoocKind,
   makeTmcKind,
   match,
+  unwrap,
 } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import type { ReadyActionContext } from "./types"
@@ -109,7 +110,7 @@ export async function restoreOldSubmission(
 ): Promise<Result<MoocOldSubmissionRestore, Error>> {
   const { langs } = actionContext.startup
   return exerciseOperations.run(
-    ExerciseIdentifier.from(Enum.unwrap(target).exerciseId),
+    ExerciseIdentifier.from(unwrap(target).exerciseId),
     "restoring",
     CLI_PROCESS_TIMEOUT + 30_000,
     () =>

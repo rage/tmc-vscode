@@ -109,6 +109,11 @@ suite("User data migration", function () {
       expect(migrateUserData(memento).data).toEqual(userData.v3_0_0)
     })
 
+    test("has nothing to write when v3 data is current", async function () {
+      await memento.update("user-data-v3", userData.v3_0_0)
+      expect(migrateUserData(memento).data).toBeUndefined()
+    })
+
     test("should succeed with backwards compatible future data", async function () {
       const data = { ...userData.v2_1_0, batman: "Bruce Wayne" }
       await memento.update(USER_DATA_KEY_V1, data)

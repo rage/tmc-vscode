@@ -451,6 +451,17 @@ suite("activation with unreadable stored data", function () {
   test("runs no command it left unregistered", async function () {
     expect(await unregisteredCommandsRun(createContext())).toEqual([])
   })
+
+  test("blames the stored courses, not the workspace files", async function () {
+    const logError = vi.spyOn(Logger, "error")
+
+    await activate(createContext())
+
+    const failedSteps = logError.mock.calls
+      .map((call) => String(call[0]))
+      .filter((m) => m.includes("Initialization error"))
+    expect(failedSteps).toEqual(["Initialization error: Reading your stored courses failed."])
+  })
 })
 
 suite("activation with usable storage", function () {
@@ -543,7 +554,7 @@ suite("the record of a course's closed exercises", function () {
     ])
 
     expect(langsStub.settingsWritten).toEqual([
-      ["closed-exercises-for:mooc:mooc-python-course", ["mooc_hello"]],
+      ["closed-exercises-for-mooc:mooc-python-course", ["mooc_hello"]],
     ])
   })
 })

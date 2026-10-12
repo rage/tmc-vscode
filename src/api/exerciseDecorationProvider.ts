@@ -61,15 +61,11 @@ export default class ExerciseDecorationProvider
       return
     }
 
-    // Look up by the exercise's known backend rather than a name-only match. A
-    // tmc-only lookup made every mooc exercise fall through to "missing", so mooc
-    // exercises never showed passed/partial/expired decorations. The two stored
-    // shapes agree on `passed`, `deadline` and `awardedPoints`, so only the lookup
-    // differs.
-    const apiExercise =
-      exercise.backend === "mooc"
-        ? this.userData.getMoocExerciseByName(exercise.courseSlug, exercise.exerciseSlug)
-        : this.userData.getTmcExerciseByName(exercise.courseSlug, exercise.exerciseSlug)
+    const apiExercise = this.userData.getExerciseByName(
+      exercise.backend,
+      exercise.courseSlug,
+      exercise.exerciseSlug,
+    )?.data
     if (!apiExercise) {
       return ExerciseDecorationProvider._missingExercise
     }

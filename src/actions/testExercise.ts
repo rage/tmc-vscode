@@ -6,7 +6,7 @@ import type { WorkspaceExercise } from "../api/workspaceManager"
 import { CLI_PROCESS_TIMEOUT } from "../config/constants"
 import { findStoredExercise } from "../config/userdata"
 import type { RunResult, StyleValidationResult } from "../shared/langsSchema"
-import { LocalCourseExercise } from "../shared/shared"
+import { LocalCourseData, LocalCourseExercise } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { Logger } from "../utilities"
 import { resolvePythonInterpreter } from "../window"
@@ -46,7 +46,7 @@ export async function testExercise(
     return stored
   }
   const { course, exercise: courseExercise } = stored.val
-  if (course.data.perhapsExamMode) {
+  if (LocalCourseData.isExamMode(course)) {
     return Ok({ kind: "examMode" })
   }
   const refused = await actionContext.startup.aiUseGate.refusal(course, exercise.uri)
@@ -91,7 +91,7 @@ export async function testExercise(
           kind: "ran",
           runResult: testResults.val,
           styleValidation,
-          isCourseDisabled: course.data.disabled,
+          isCourseDisabled: LocalCourseData.isDisabled(course),
         })
       } finally {
         cancellation.dispose()

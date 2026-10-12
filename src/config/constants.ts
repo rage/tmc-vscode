@@ -214,25 +214,25 @@ export const WORKSPACE_ROOT_FILE_TEXT = FAQ
 export const WORKSPACE_ROOT_FOLDER_NAME = ".tmc"
 
 /**
- * Settings key for a course's manually-closed exercises, namespaced by
- * backend since a tmc and mooc course can share a slug. See
- * `backendNamespacing.ts` for the legacy-key migration.
+ * Settings key for a course's manually-closed exercises. A tmc key keeps its pre-mooc
+ * spelling; a mooc key differs from every tmc key at the character after
+ * `closed-exercises-for`, so courses sharing a slug cannot collide.
  */
 export function closedExercisesSettingKey(backend: BackendKind, courseName: string): string {
-  return `closed-exercises-for:${backend}:${courseName}`
+  return backend === "tmc"
+    ? `closed-exercises-for:${courseName}`
+    : `closed-exercises-for-mooc:${courseName}`
 }
 
-/** The pre-namespacing key shape. Only referenced by the migration. */
-export function legacyClosedExercisesSettingKey(courseName: string): string {
-  return `closed-exercises-for:${courseName}`
-}
+/** Appended to a mooc course's workspace file name; tmc course names never contain a space. */
+const MOOC_WORKSPACE_FILE_SUFFIX = " (mooc)"
 
-/** Basename of a course's `.code-workspace` file; backend-tagged for the same collision reason as {@link closedExercisesSettingKey}. */
+/**
+ * Basename of a course's `.code-workspace` file. A tmc file keeps its pre-mooc name; a
+ * mooc one carries a suffix no tmc name can, for the same reason as
+ * {@link closedExercisesSettingKey}.
+ */
 export function workspaceFileName(courseName: string, backend: BackendKind): string {
-  return `${courseName}-${backend}.code-workspace`
-}
-
-/** The pre-namespacing workspace filename. Only referenced by the migration. */
-export function legacyWorkspaceFileName(courseName: string): string {
-  return `${courseName}.code-workspace`
+  const suffix = backend === "mooc" ? MOOC_WORKSPACE_FILE_SUFFIX : ""
+  return `${courseName}${suffix}.code-workspace`
 }

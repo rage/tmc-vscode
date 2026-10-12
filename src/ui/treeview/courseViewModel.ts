@@ -86,7 +86,8 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
     const id = LocalCourseExercise.getId(ex)
     const key = ExerciseIdentifier.key(id)
     const onDisk = onDiskBySlug.get(slug)
-    const softDeadline = ex.data.softDeadline ? parseDate(ex.data.softDeadline) : null
+    const softDeadlineText = LocalCourseExercise.getSoftDeadline(ex)
+    const softDeadline = softDeadlineText ? parseDate(softDeadlineText) : null
     const hardDeadline = ex.data.deadline ? parseDate(ex.data.deadline) : null
     const view: ExerciseView = {
       id,

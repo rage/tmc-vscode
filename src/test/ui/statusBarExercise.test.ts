@@ -36,7 +36,7 @@ interface Harness {
   workspace: WorkspaceManagerMockValues
   stored: { exercise: LocalCourseExercise | undefined }
   editorChanged: vscode.EventEmitter<void>
-  coursesChanged: vscode.EventEmitter<void>
+  coursesChanged: vscode.EventEmitter<undefined>
 }
 
 function harness(): Harness {
@@ -45,7 +45,7 @@ function harness(): Harness {
   workspace.getExerciseByPath = exerciseHelloWorld
   const stored = { exercise: storedExercise(1, 2) as LocalCourseExercise | undefined }
   const editorChanged = new vscode.EventEmitter<void>()
-  const coursesChanged = new vscode.EventEmitter<void>()
+  const coursesChanged = new vscode.EventEmitter<undefined>()
   vi.spyOn(vscode.window, "onDidChangeActiveTextEditor").mockImplementation(
     editorChanged.event as never,
   )
@@ -157,7 +157,7 @@ suite("ExerciseStatusBarItem", function () {
     track(new ExerciseStatusBarItem(h.sources))
 
     h.stored.exercise = storedExercise(2, 2)
-    h.coursesChanged.fire()
+    h.coursesChanged.fire(undefined)
 
     expect(itemOf().text).toContain("2/2")
     expect(tooltipText(itemOf())).toContain("passed")
@@ -185,7 +185,7 @@ suite("ExerciseStatusBarItem", function () {
 
     exerciseItem.dispose()
     h.stored.exercise = storedExercise(2, 2)
-    h.coursesChanged.fire()
+    h.coursesChanged.fire(undefined)
 
     expect(itemOf().isDisposed).toBe(true)
     expect(itemOf().text).toContain("1/2")

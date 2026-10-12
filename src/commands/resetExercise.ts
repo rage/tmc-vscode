@@ -4,7 +4,7 @@ import * as vscode from "vscode"
 import { checkAiUse, resetExercise as resetExerciseAction } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure } from "../api/withOperation"
-import { backendName, ExerciseIdentifier } from "../shared/shared"
+import { backendName, LocalCourseExercise } from "../shared/shared"
 import { Logger } from "../utilities"
 import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
 import { runForExercise } from "./runForExercise"
@@ -21,17 +21,16 @@ export async function resetExercise(
   const { dialog } = actionContext
   const { userData } = actionContext.startup
   await runForExercise(actionContext, resource, "Resetting the exercise", async (exercise) => {
-    // Look up by known backend rather than a name-only match, which could
-    // resolve to the wrong backend if a tmc and mooc exercise share a slug.
-    const exerciseDetails =
-      exercise.backend === "mooc"
-        ? userData.getMoocExerciseByName(exercise.courseSlug, exercise.exerciseSlug)
-        : userData.getTmcExerciseByName(exercise.courseSlug, exercise.exerciseSlug)
-    if (!exerciseDetails) {
+    const stored = userData.getExerciseByName(
+      exercise.backend,
+      exercise.courseSlug,
+      exercise.exerciseSlug,
+    )
+    if (!stored) {
       return failure(`Missing exercise data for ${exercise.exerciseSlug}.`)
     }
 
-    const id = ExerciseIdentifier.from(exerciseDetails.id)
+    const id = LocalCourseExercise.getId(stored)
     const submitFirst = await confirmSubmitBeforeDestructiveAction(actionContext, {
       message: `Reset ${exercise.exerciseSlug}?`,
       replacement: "the exercise template",

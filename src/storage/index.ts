@@ -11,8 +11,8 @@ import { CorruptStoredDataError } from "../errors"
 import { Logger } from "../utilities"
 import * as storage from "./data"
 import { v0 } from "./data"
+import type { MigratedData } from "./migration"
 import { obsoleteKeys } from "./migration"
-import migrateBackendNamespacing from "./migration/backendNamespacing"
 import migrateExerciseDataToLatest from "./migration/exerciseData"
 import migrateExtensionSettingsToLatest from "./migration/extensionSettings"
 import migrateSessionState from "./migration/sessionState"
@@ -102,9 +102,6 @@ export default class Storage {
       const migratedSessionState = migrateSessionState(memento)
       const migratedUserData = migrateUserDataToLatest(memento)
 
-      // Workspace data migration - this one is a bit more tricky so do it last.
-      const migratedExerciseData = await migrateExerciseDataToLatest(memento, dialog, tmc)
-
       // A migration yields `undefined` when nothing was stored under any of its
       // keys; that means "nothing to migrate", not "delete what is there".
       if (migratedSessionState.data) {
@@ -113,27 +110,27 @@ export default class Storage {
       if (migratedUserData.data) {
         await this.updateUserData(migratedUserData.data)
       }
+      // Retired before the exercise migration can fail, or a later activation would
+      // replay the old snapshot over courses added since.
+      await retire(memento, [migratedSessionState, migratedUserData])
 
-      // Runs after userData is settled so it can enumerate the user's courses.
-      // Idempotent and flag-gated (see backendNamespacing.ts).
-      const workspaceFileFolder = path.join(context.globalStoragePath, "workspaces")
-      await migrateBackendNamespacing(memento, tmc, workspaceFileFolder, migratedUserData.data)
-
-      const keysToRemove = obsoleteKeys([
-        migratedExerciseData,
-        migratedExtensionSettings,
-        migratedSessionState,
-        migratedUserData,
-      ])
-      for (const key of keysToRemove) {
-        await memento.update(key, undefined)
+      // Last, since it reads the pre-2.0 settings for where exercises used to live.
+      const migratedExerciseData = await migrateExerciseDataToLatest(memento, dialog, tmc)
+      if (migratedExerciseData.destinationKey) {
+        await memento.update(migratedExerciseData.destinationKey, migratedExerciseData.data)
       }
+      await retire(memento, [migratedExerciseData, migratedExtensionSettings])
     } catch (e) {
-      // Typing change from update
-      return { kind: "failed", error: e as Error }
+      return { kind: "failed", error: e instanceof Error ? e : new Error(String(e)) }
     }
 
     return { kind: "done" }
+  }
+}
+
+async function retire(memento: vscode.Memento, migrations: MigratedData<unknown>[]): Promise<void> {
+  for (const key of obsoleteKeys(migrations)) {
+    await memento.update(key, undefined)
   }
 }
 

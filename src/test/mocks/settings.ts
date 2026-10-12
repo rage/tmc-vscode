@@ -2,6 +2,7 @@
 import { vi } from "vitest"
 
 import type Settings from "../../config/settings"
+import type { MirroredSetting } from "../../config/settings"
 import { LogLevel } from "../../utilities/logger"
 
 /**
@@ -36,9 +37,7 @@ export function createSettingsMock(): [Settings, SettingsMockValues, SettingsMoc
     logLevel: LogLevel.Errors,
   }
 
-  let onChangeDownloadOldSubmission: ((value: boolean) => void) | undefined
-  let onChangeHideMetaFiles: ((value: boolean) => void) | undefined
-  let onChangeUpdateExercisesAutomatically: ((value: boolean) => void) | undefined
+  let onChangeMirroredSetting: ((section: MirroredSetting, value: boolean) => void) | undefined
 
   const mock = {
     getDownloadOldSubmission: vi.fn(() => values.downloadOldSubmission),
@@ -46,26 +45,20 @@ export function createSettingsMock(): [Settings, SettingsMockValues, SettingsMoc
     getJavaHome: vi.fn(() => values.javaHome),
     getLogLevel: vi.fn(() => values.logLevel),
     dispose: vi.fn(),
-    set onChangeDownloadOldSubmission(callback: (value: boolean) => void) {
-      onChangeDownloadOldSubmission = callback
-    },
-    set onChangeHideMetaFiles(callback: (value: boolean) => void) {
-      onChangeHideMetaFiles = callback
-    },
-    set onChangeUpdateExercisesAutomatically(callback: (value: boolean) => void) {
-      onChangeUpdateExercisesAutomatically = callback
+    set onChangeMirroredSetting(callback: (section: MirroredSetting, value: boolean) => void) {
+      onChangeMirroredSetting = callback
     },
   }
 
   const changes: SettingsMockChanges = {
     downloadOldSubmission: (value) => {
       values.downloadOldSubmission = value
-      onChangeDownloadOldSubmission?.(value)
+      onChangeMirroredSetting?.("downloadOldSubmission", value)
     },
-    hideMetaFiles: (value) => onChangeHideMetaFiles?.(value),
+    hideMetaFiles: (value) => onChangeMirroredSetting?.("hideMetaFiles", value),
     updateExercisesAutomatically: (value) => {
       values.updateExercisesAutomatically = value
-      onChangeUpdateExercisesAutomatically?.(value)
+      onChangeMirroredSetting?.("updateExercisesAutomatically", value)
     },
   }
 
