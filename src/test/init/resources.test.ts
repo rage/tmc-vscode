@@ -6,7 +6,7 @@ import { vi } from "vitest"
 import type * as vscode from "vscode"
 
 import { workspaceFileName } from "../../config/constants"
-import { CorruptStoredDataError, FileSystemError } from "../../errors"
+import { FileSystemError } from "../../errors"
 import { resourceInitialization } from "../../init/resources"
 import Storage from "../../storage"
 import { v3 } from "../../storage/data"
@@ -53,13 +53,7 @@ suite("resourceInitialization", function () {
     await context.globalState.update(v3.USER_DATA_KEY, userData.v3_0_0)
     const workspaceFileFolder = path.join(temporaryRoot, "workspaces")
 
-    const result = await resourceInitialization(
-      context,
-      storage,
-      "3.0.0",
-      undefined,
-      workspaceFileFolder,
-    )
+    const result = await resourceInitialization(storage, undefined, workspaceFileFolder)
 
     expect(result.ok).toBe(true)
     expect(fs.existsSync(path.join(workspaceFileFolder, ".tmc"))).toBe(true)
@@ -75,13 +69,7 @@ suite("resourceInitialization", function () {
     })
     const workspaceFileFolder = path.join(temporaryRoot, "workspaces")
 
-    const result = await resourceInitialization(
-      context,
-      storage,
-      "3.0.0",
-      undefined,
-      workspaceFileFolder,
-    )
+    const result = await resourceInitialization(storage, undefined, workspaceFileFolder)
 
     expect(result.ok).toBe(true)
     expect(
@@ -96,7 +84,7 @@ suite("resourceInitialization", function () {
     const blocked = path.join(temporaryRoot, "workspaces")
     fs.writeFileSync(blocked, "a regular file where the folder belongs")
 
-    const result = await resourceInitialization(context, storage, "3.0.0", undefined, blocked)
+    const result = await resourceInitialization(storage, undefined, blocked)
 
     expect(result.err).toBe(true)
     expect(result.val).toBeInstanceOf(FileSystemError)
@@ -107,9 +95,7 @@ suite("resourceInitialization", function () {
     fs.writeFileSync(blocked, "a regular file where the folder belongs")
 
     const result = await resourceInitialization(
-      context,
       storage,
-      "3.0.0",
       path.join(blocked, "exercises"),
       path.join(temporaryRoot, "workspaces"),
     )
@@ -118,18 +104,14 @@ suite("resourceInitialization", function () {
     expect(result.val).toBeInstanceOf(FileSystemError)
   })
 
-  test("errs, keeping the diagnosis, when the stored course data cannot be read", async function () {
+  // Unreadable courses are `UserData`'s to report; the workspace files do not need them.
+  test("succeeds when the stored course data cannot be read", async function () {
     await context.globalState.update(v3.USER_DATA_KEY, { courses: "not a list of courses" })
+    const workspaceFileFolder = path.join(temporaryRoot, "workspaces")
 
-    const result = await resourceInitialization(
-      context,
-      storage,
-      "3.0.0",
-      undefined,
-      path.join(temporaryRoot, "workspaces"),
-    )
+    const result = await resourceInitialization(storage, undefined, workspaceFileFolder)
 
-    expect(result.err).toBe(true)
-    expect(result.val).toBeInstanceOf(CorruptStoredDataError)
+    expect(result.ok).toBe(true)
+    expect(fs.existsSync(path.join(workspaceFileFolder, ".tmc"))).toBe(true)
   })
 })

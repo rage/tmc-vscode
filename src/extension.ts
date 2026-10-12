@@ -249,13 +249,7 @@ async function activateInner(
     }
   }
 
-  const resources = await init.resourceInitialization(
-    context,
-    storage,
-    EXTENSION_VERSION,
-    tmcDataPath,
-    workspaceFileFolder,
-  )
+  const resources = await init.resourceInitialization(storage, tmcDataPath, workspaceFileFolder)
   if (resources.err) {
     reportInitializationError("Preparing the extension's files", resources.val)
   }
@@ -325,25 +319,20 @@ async function activateInner(
   }
 
   let versionChange: "installed" | "updated" | undefined
-  if (resources.ok) {
-    const currentVersion = resources.val.extensionVersion
-    try {
-      const previousVersion = storage.getSessionState()?.extensionVersion
-      if (currentVersion !== previousVersion) {
-        storage.updateSessionState({ extensionVersion: currentVersion })
-      }
-      const versionDiff = semVerCompare(currentVersion, previousVersion || "", "minor")
-      if (versionDiff === undefined) {
-        versionChange = "installed"
-      } else if (versionDiff > 0) {
-        versionChange = "updated"
-      }
-    } catch (e) {
-      // An unreadable session state costs the walkthrough or the update notice, nothing else.
-      Logger.warn("Skipped version check", e)
+  try {
+    const previousVersion = storage.getSessionState()?.extensionVersion
+    if (EXTENSION_VERSION !== previousVersion) {
+      await storage.updateSessionState({ extensionVersion: EXTENSION_VERSION })
     }
-  } else {
-    Logger.warn("Skipped version check")
+    const versionDiff = semVerCompare(EXTENSION_VERSION, previousVersion || "", "minor")
+    if (versionDiff === undefined) {
+      versionChange = "installed"
+    } else if (versionDiff > 0) {
+      versionChange = "updated"
+    }
+  } catch (e) {
+    // An unreadable session state costs the walkthrough or the update notice, nothing else.
+    Logger.warn("Skipped version check", e)
   }
 
   let userData: Result<UserData, Error>
