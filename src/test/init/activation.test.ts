@@ -543,7 +543,7 @@ suite("the record of a course's closed exercises", function () {
     ])
 
     expect(langsStub.settingsWritten).toEqual([
-      ["closed-exercises-for:mooc:mooc-python-course", ["mooc_hello"]],
+      ["closed-exercises-for-mooc:mooc-python-course", ["mooc_hello"]],
     ])
   })
 })

@@ -14,6 +14,7 @@ import WorkspaceManager, {
   ExerciseStatus,
 } from "../../api/workspaceManager"
 import {
+  closedExercisesSettingKey,
   HIDE_META_FILES,
   WATCHER_EXCLUDE,
   WORKSPACE_ROOT_FILE_NAME,
@@ -167,11 +168,20 @@ suite("WorkspaceManager class", function () {
       expect(manager.activeCourseBackend).toBe("mooc")
     })
 
-    test("treats an untagged workspace file as a tmc course", function () {
+    // Released versions wrote tmc workspace files under this name; it must keep opening.
+    test("reads a tmc workspace file named after the bare course slug", function () {
       openWorkspaceFile("test-python-course.code-workspace")
       const manager = new WorkspaceManager(resources, persistForCourse)
       expect(manager.activeCourse).toBe("test-python-course")
       expect(manager.activeCourseBackend).toBe("tmc")
+    })
+
+    test("gives a tmc and a mooc course sharing a slug distinct files and settings", function () {
+      expect(workspaceFileName("python", "tmc")).not.toBe(workspaceFileName("python", "mooc"))
+      expect(closedExercisesSettingKey("tmc", "python")).toBe("closed-exercises-for:python")
+      expect(closedExercisesSettingKey("mooc", "python")).not.toBe(
+        closedExercisesSettingKey("tmc", "python"),
+      )
     })
 
     test("reads a course slug containing a space", function () {

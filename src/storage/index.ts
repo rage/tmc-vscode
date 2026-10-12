@@ -12,7 +12,6 @@ import { Logger } from "../utilities"
 import * as storage from "./data"
 import { v0 } from "./data"
 import { obsoleteKeys } from "./migration"
-import migrateBackendNamespacing from "./migration/backendNamespacing"
 import migrateExerciseDataToLatest from "./migration/exerciseData"
 import migrateExtensionSettingsToLatest from "./migration/extensionSettings"
 import migrateSessionState from "./migration/sessionState"
@@ -113,11 +112,6 @@ export default class Storage {
       if (migratedUserData.data) {
         await this.updateUserData(migratedUserData.data)
       }
-
-      // Runs after userData is settled so it can enumerate the user's courses.
-      // Idempotent and flag-gated (see backendNamespacing.ts).
-      const workspaceFileFolder = path.join(context.globalStoragePath, "workspaces")
-      await migrateBackendNamespacing(memento, tmc, workspaceFileFolder, migratedUserData.data)
 
       const keysToRemove = obsoleteKeys([
         migratedExerciseData,

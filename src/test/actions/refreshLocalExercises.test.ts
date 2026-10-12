@@ -63,7 +63,7 @@ suite("refreshLocalExercises action", function () {
 
   test("should default to open when a closed-exercise setting is malformed", async function () {
     tmcMockValues.listSettings = Ok({
-      "closed-exercises-for:tmc:test-python-course": { notAnArray: true },
+      "closed-exercises-for:test-python-course": { notAnArray: true },
     })
     const result = await refreshLocalExercises(actionContext())
     expect(result).toBe(Ok.EMPTY)

@@ -68,7 +68,7 @@ export function createTMCMock(): [Langs, TMCMockValues] {
     getSettingProjectsDir: Ok("/langs/path/to/exercises"),
     listSettings: Ok({
       projects_dir: "/langs/path/to/exercises",
-      "closed-exercises-for:tmc:test-python-course": closedExercisesPythonCourse,
+      "closed-exercises-for:test-python-course": closedExercisesPythonCourse,
     }),
     migrateExercise: Ok.EMPTY,
     moveProjectsDirectory: Ok.EMPTY,
@@ -122,13 +122,13 @@ function setupMockValues(values: TMCMockValues): Langs {
         : NOT_MOCKED_ERROR,
     ),
     getSetting: vi.fn(async (key: string) =>
-      key === "closed-exercises-for:tmc:test-python-course"
+      key === "closed-exercises-for:test-python-course"
         ? values.getSettingClosedExercises
         : NOT_MOCKED_ERROR,
     ),
     listSettings: vi.fn(async () => values.listSettings),
     setSetting: vi.fn(async (key: string, _value: unknown) =>
-      key === "closed-exercises-for:tmc:test-python-course"
+      key === "closed-exercises-for:test-python-course"
         ? values.setSettingClosedExercises
         : NOT_MOCKED_ERROR,
     ),
