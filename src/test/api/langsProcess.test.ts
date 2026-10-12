@@ -1,6 +1,7 @@
 import { vi } from "vitest"
 
 import Langs from "../../api/langs"
+import { CLI_PROCESS_TIMEOUT } from "../../config/constants"
 import {
   EmptyLangsResponseError,
   LangsResponseSchemaError,
@@ -479,6 +480,37 @@ suite("Langs CLI process cancellation", function () {
 
     login.interrupt()
     expect(killedProcessTrees()).toEqual([])
+  })
+
+  test("a command with no limit of its own is killed after the default one", async function () {
+    vi.useFakeTimers()
+    try {
+      const langs = newLangs()
+      const pending = langs.listLocalExercises()
+      const langsProcess = lastProcess()
+      vi.advanceTimersByTime(CLI_PROCESS_TIMEOUT)
+
+      expect((await pending).val).toBeInstanceOf(TimeoutError)
+      expect(killedProcessTrees()).toContain(langsProcess.pid)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("moving the projects directory is never killed for taking long", async function () {
+    vi.useFakeTimers()
+    try {
+      const langs = newLangs()
+      const moving = langs.moveProjectsDirectory("/new")
+      const langsProcess = lastProcess()
+      vi.advanceTimersByTime(24 * 60 * 60 * 1000)
+
+      expect(killedProcessTrees()).toEqual([])
+      endProcess(langsProcess)
+      await moving
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   test("a process that outlives its timeout is killed and reported as a timeout", async function () {

@@ -8,6 +8,8 @@ import { z } from "zod"
 import {
   API_CACHE_LIFETIME,
   CLI_PROCESS_TIMEOUT,
+  DOWNLOAD_PROCESS_TIMEOUT,
+  LOGIN_PROCESS_TIMEOUT,
   MINIMUM_SUBMISSION_INTERVAL,
   MOOC_BACKEND_URL,
   SUBMIT_PROCESS_TIMEOUT,
@@ -101,7 +103,8 @@ interface LangsProcessArgs {
    * so a background poll cannot toast.
    */
   onNotification?: ((notification: Notification) => void) | undefined
-  processTimeout?: number | undefined
+  /** Kills the process after this many milliseconds: `CLI_PROCESS_TIMEOUT` when unset, never when `null`. */
+  processTimeout?: number | null | undefined
   /** Set on login/logout commands, where an auth-flavored error is expected rather than a lost session. */
   suppressAuthEvents?: boolean | undefined
   onInterruptHandle?: ((interrupt: () => void) => void) | undefined
@@ -441,6 +444,7 @@ export default class Langs {
         backend: "mooc",
         args: this._moocCmd("login"),
         onStdout,
+        processTimeout: LOGIN_PROCESS_TIMEOUT,
         suppressAuthEvents: true,
         interruptOnDeactivate: true,
       },
@@ -557,7 +561,6 @@ export default class Langs {
         args: ["run-tests", "--exercise-path", exercisePath],
         env,
         onNotification: (notification) => this._showNotification(notification),
-        processTimeout: CLI_PROCESS_TIMEOUT,
         interruptOnDeactivate: true,
       },
       "test-result",
@@ -577,7 +580,6 @@ export default class Langs {
       {
         args: ["checkstyle", "--locale", "en", "--exercise-path", exercisePath],
         onNotification: (notification) => this._showNotification(notification),
-        processTimeout: CLI_PROCESS_TIMEOUT,
         interruptOnDeactivate: true,
       },
       "validation",
@@ -614,6 +616,7 @@ export default class Langs {
         "--exercise-checksum",
         exerciseChecksum,
       ),
+      processTimeout: DOWNLOAD_PROCESS_TIMEOUT,
     })
   }
 
@@ -634,7 +637,12 @@ export default class Langs {
         message: res.message ?? undefined,
       })
     }
-    return this._run({ args: this._settingsCmd("move-projects-dir", newDirectory), onStdout })
+    // Killing it midway would leave the exercises split between the two directories.
+    return this._run({
+      args: this._settingsCmd("move-projects-dir", newDirectory),
+      onStdout,
+      processTimeout: null,
+    })
   }
 
   /**
@@ -762,6 +770,7 @@ export default class Langs {
           }
         },
         onInterruptHandle,
+        processTimeout: DOWNLOAD_PROCESS_TIMEOUT,
       },
       "tmc-exercise-download",
     )
@@ -812,6 +821,7 @@ export default class Langs {
           }
         },
         onInterruptHandle,
+        processTimeout: DOWNLOAD_PROCESS_TIMEOUT,
       },
       "mooc-exercise-download",
     )
@@ -891,6 +901,7 @@ export default class Langs {
         "--output-path",
         exercisePath,
       ),
+      processTimeout: DOWNLOAD_PROCESS_TIMEOUT,
     }
     const restore = (): Promise<Result<MoocOldSubmissionRestore, Error>> =>
       match(
@@ -993,6 +1004,7 @@ export default class Langs {
           "--exercise-path",
           exercisePath,
         ),
+        processTimeout: DOWNLOAD_PROCESS_TIMEOUT,
       })
     return saveOldState ? this._submitting(exerciseId.kind, reset) : reset()
   }
@@ -1073,7 +1085,7 @@ export default class Langs {
             exercisePath,
           ),
           onNotification: (notification) => this._showNotification(notification),
-          processTimeout: CLI_PROCESS_TIMEOUT,
+          processTimeout: SUBMIT_PROCESS_TIMEOUT,
           interruptOnDeactivate: true,
         },
         "mooc-submission-finished",
@@ -1134,7 +1146,7 @@ export default class Langs {
         "--submission-path",
         exercisePath,
       ),
-      processTimeout: CLI_PROCESS_TIMEOUT,
+      processTimeout: SUBMIT_PROCESS_TIMEOUT,
       interruptOnDeactivate: true,
     }
     const res = await this._submitting(exerciseId.kind, () =>
@@ -1557,14 +1569,15 @@ export default class Langs {
       let resultCode: number | undefined
       let stdoutEnded = false
 
+      const timeoutMs = processTimeout === undefined ? CLI_PROCESS_TIMEOUT : processTimeout
       const timeout =
-        processTimeout &&
+        timeoutMs !== null &&
         setTimeout(() => {
           killProcessTree(cprocess)
           reject(
             new TimeoutError("Process didn't seem to finish or was taking a really long time."),
           )
-        }, processTimeout)
+        }, timeoutMs)
 
       cprocess.on("error", (error) => {
         active = false

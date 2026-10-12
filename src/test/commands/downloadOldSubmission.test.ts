@@ -218,7 +218,7 @@ suite("Download old submission command (mooc branch)", function () {
 
   test("refuses to restore while a submission of the same exercise is in flight", async function () {
     const submission = exerciseOperations
-      .claim([ExerciseIdentifier.from("mooc-ex-uuid")], "submitting", 60_000)
+      .claim([ExerciseIdentifier.from("mooc-ex-uuid")], "submitting")
       .unwrap()
     try {
       await downloadOldSubmission(actionContext({ answer: "Submit and Restore" }), uri)

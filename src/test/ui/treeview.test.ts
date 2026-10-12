@@ -394,7 +394,7 @@ suite("CoursesTree", function () {
 
     test("downloading spins, and a failed download says so", function () {
       const exerciseId = makeTmcKind({ tmcExerciseId: 1 })
-      const claim = exerciseOperations.claim([exerciseId], "downloading", 60_000).unwrap()
+      const claim = exerciseOperations.claim([exerciseId], "downloading").unwrap()
       expect(icon(onlyExercise())).toEqual(["sync~spin", undefined])
 
       claim.releaseAll()
@@ -503,7 +503,7 @@ suite("CoursesTree", function () {
     tree.onDidChangeTreeData((node) => refreshed.push(node))
 
     const claim = exerciseOperations
-      .claim([makeTmcKind({ tmcExerciseId: 1 })], "downloading", 60_000)
+      .claim([makeTmcKind({ tmcExerciseId: 1 })], "downloading")
       .unwrap()
     for (let id = 1; id <= 20; id++) {
       downloadFailures.record([makeTmcKind({ tmcExerciseId: id })], [])

@@ -2,7 +2,6 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
 import type { ExerciseDownloadProgress, ExerciseDownloads } from "../api/langs"
-import { CLI_PROCESS_TIMEOUT } from "../config/constants"
 import { ExerciseUpdateError, presentationFor } from "../errors"
 import type { BackendKind, CourseIdentifier } from "../shared/shared"
 import {
@@ -29,9 +28,6 @@ interface DownloadResults {
   failed: ExerciseIdentifier[]
 }
 
-// one CLI download per backend
-const DOWNLOAD_MAX_HOLD_MS = 3 * CLI_PROCESS_TIMEOUT
-
 /**
  * Downloads given exercises and opens them in the course workspace.
  *
@@ -54,7 +50,7 @@ export async function downloadOrUpdateExercises(
   if (exerciseIds.length === 0) {
     return Ok({ successful: [], failed: [] })
   }
-  const claim = exerciseOperations.claim(exerciseIds, "downloading", DOWNLOAD_MAX_HOLD_MS)
+  const claim = exerciseOperations.claim(exerciseIds, "downloading")
   if (claim.err) {
     return claim
   }

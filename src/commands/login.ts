@@ -14,9 +14,6 @@ import { backendName } from "../shared/shared"
 import { Logger } from "../utilities"
 import { refreshEverything } from "./refreshEverything"
 
-/** How long past the code's own lifetime the host waits for the CLI before giving up on it. */
-const EXPIRY_GRACE_MS = 30_000
-
 const SITE = backendName("mooc")
 
 /** How a login ended. `cancelled` also covers a newer login replacing this one. */
@@ -26,7 +23,6 @@ type Settled =
   | { kind: "deviceCode"; info: MoocDeviceLogin }
   | { kind: "finished"; error: Error | undefined }
   | { kind: "cancelled" }
-  | { kind: "timedOut" }
 
 let cancelCurrentLogin: (() => void) | undefined
 
@@ -86,18 +82,7 @@ export async function login(actionContext: ReadyActionContext): Promise<LoginOut
         cancel()
         return { kind: "cancelled" }
       }
-      let timer: NodeJS.Timeout | undefined
-      const timedOut = new Promise<Settled>((resolve) => {
-        timer = setTimeout(
-          () => resolve({ kind: "timedOut" }),
-          info.expires_in * 1000 + EXPIRY_GRACE_MS,
-        )
-      })
-      try {
-        return await Promise.race([ended, timedOut])
-      } finally {
-        clearTimeout(timer)
-      }
+      return ended
     },
   )
 
@@ -106,11 +91,6 @@ export async function login(actionContext: ReadyActionContext): Promise<LoginOut
   }
   if (settled.kind === "cancelled") {
     return "cancelled"
-  }
-  if (settled.kind === "timedOut") {
-    interrupt()
-    reportFailure(actionContext, "The login code expired before it was approved.")
-    return "failed"
   }
   if (settled.kind === "finished" && settled.error) {
     reportFailure(actionContext, ...failureMessage(settled.error))

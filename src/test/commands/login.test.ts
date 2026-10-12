@@ -289,20 +289,6 @@ suite("login command", function () {
     )
   })
 
-  test("gives up on a CLI still running past the code's lifetime", async function () {
-    vi.useFakeTimers()
-    const h = harness()
-    const { outcome } = await runToCode(h)
-
-    await vi.advanceTimersByTimeAsync(DEVICE.expires_in * 1000 + 30_000)
-
-    expect(await outcome).toBe("failed")
-    expect(h.logins[0]?.interrupt).toHaveBeenCalled()
-    expect(errorNotificationCall(h.context)?.[0]).toBe(
-      "The login code expired before it was approved.",
-    )
-  })
-
   test("a new login cancels the one in flight", async function () {
     const h = harness()
     const { outcome: first } = await runToCode(h)

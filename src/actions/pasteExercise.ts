@@ -1,7 +1,6 @@
 import type { Result } from "ts-results"
 import { Err } from "ts-results"
 
-import { CLI_PROCESS_TIMEOUT } from "../config/constants"
 import type { BackendKind } from "../shared/shared"
 import { LocalCourseExercise } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
@@ -37,7 +36,7 @@ export async function pasteExercise(
   }
   const exercisePath = exercise.uri.fsPath
 
-  return exerciseOperations.run(exerciseId, "pasting", CLI_PROCESS_TIMEOUT + 30_000, async () => {
+  return exerciseOperations.run(exerciseId, "pasting", async () => {
     const pasteResult = await langs.paste(exerciseId, exercisePath)
     if (pasteResult.err) {
       return pasteResult

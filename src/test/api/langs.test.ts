@@ -3,6 +3,7 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
 import Langs, { decodeLangsStdout } from "../../api/langs"
+import { LOGIN_PROCESS_TIMEOUT } from "../../config/constants"
 import {
   AuthorizationError,
   BottleneckError,
@@ -654,7 +655,8 @@ suite("Langs class arg building", function () {
     expect(calls[0]?.args).toEqual(["mooc", "--client-name", "test-client", "login"])
   })
 
-  test("authenticate sets no process timeout (device flow can take minutes)", async function () {
+  // The device flow can take minutes; the CLI reports the code's expiry itself.
+  test("authenticate outlasts the device code", async function () {
     const langs = newLangs()
     let captured: { processTimeout?: number } | undefined
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -663,7 +665,7 @@ suite("Langs class arg building", function () {
       return Err(new Error("stopped before spawning a real process"))
     })
     langs.authenticate(() => {})
-    expect(captured?.processTimeout).toBeUndefined()
+    expect(captured?.processTimeout).toBe(LOGIN_PROCESS_TIMEOUT)
   })
 
   test("authenticate surfaces the device-login status update and resolves on success", async function () {

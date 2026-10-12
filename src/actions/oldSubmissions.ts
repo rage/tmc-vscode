@@ -1,7 +1,6 @@
 import type { Result } from "ts-results"
 
 import type { RestoreTarget } from "../api/langs"
-import { CLI_PROCESS_TIMEOUT } from "../config/constants"
 import type {
   ExerciseSlideSubmissionListItem,
   MoocOldSubmissionRestore,
@@ -94,7 +93,6 @@ export async function restoreOldSubmission(
   return exerciseOperations.run(
     ExerciseIdentifier.from(unwrap(target).exerciseId),
     "restoring",
-    CLI_PROCESS_TIMEOUT + 30_000,
     () => actionContext.startup.langs.restoreSubmission(target, exercisePath, submitFirst),
   )
 }

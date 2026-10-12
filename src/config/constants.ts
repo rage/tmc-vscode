@@ -32,7 +32,18 @@ export const OUTPUT_CHANNEL_NAME = "TestMyCode"
 export const NOTIFICATION_DELAY = 30 * 60 * 1000
 
 export const API_CACHE_LIFETIME = 5 * 60 * 1000
+
+/** How long a CLI command may run before it is killed, unless its kind has a limit of its own below. */
 export const CLI_PROCESS_TIMEOUT = 2 * 60 * 1000
+
+/**
+ * The limit on a command that writes exercises to disk. Killing one mid-write can leave an
+ * exercise half-written, so this is set to outlast a slow connection, not to catch it.
+ */
+export const DOWNLOAD_PROCESS_TIMEOUT = 30 * 60 * 1000
+
+/** Outlasts the device code, whose expiry the CLI reports as an error of its own. */
+export const LOGIN_PROCESS_TIMEOUT = 30 * 60 * 1000
 
 /**
  * The CLI polls for test results with no timeout of its own, so this is the only bound on a submit;

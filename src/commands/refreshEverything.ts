@@ -5,7 +5,7 @@ import type { CourseUpdateOptions } from "../actions"
 import { checkForCourseUpdates, downloadNewExercisesForCourse } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure, withOperation } from "../api/withOperation"
-import { EXERCISE_CHECK_INTERVAL, NOTIFICATION_DELAY } from "../config/constants"
+import { NOTIFICATION_DELAY } from "../config/constants"
 import { BottleneckError } from "../errors"
 import { CourseIdentifier, LocalCourseData } from "../shared/shared"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
@@ -66,8 +66,7 @@ export async function refreshCourses(actionContext: ReadyActionContext): Promise
   )
 }
 
-/** When the refresh in progress started, in epoch milliseconds, if one is. */
-let runningSince: number | undefined
+let isRunning = false
 
 /** The refresh to run once the one in progress ends; no `courseId` means every course. */
 let queued: { courseId?: CourseIdentifier | undefined } | undefined
@@ -77,8 +76,7 @@ async function refresh(
   options: { silent: boolean; isQueuedWhenBusy?: boolean } & CourseUpdateOptions,
 ): Promise<Result<void, Error>> {
   const { silent, courseId, onProgress, isQueuedWhenBusy } = options
-  // A wedged refresh stops counting as running by the time the next poll wants one.
-  if (runningSince !== undefined && Date.now() - runningSince < EXERCISE_CHECK_INTERVAL) {
+  if (isRunning) {
     if (isQueuedWhenBusy) {
       const isSameCourse =
         queued === undefined ||
@@ -91,8 +89,7 @@ async function refresh(
     Logger.warn("Rejected a refresh, one is already in flight")
     return Err(new BottleneckError("A refresh is already in progress."))
   }
-  const startedAt = Date.now()
-  runningSince = startedAt
+  isRunning = true
   try {
     const refreshed = await checkForCourseUpdates(actionContext, { courseId, onProgress })
     if (refreshed.ok) {
@@ -102,9 +99,7 @@ async function refresh(
     await updateExercises(actionContext, silent || refreshFailure ? "silent" : "loud")
     return refreshFailure ? Err(refreshFailure) : Ok.EMPTY
   } finally {
-    if (runningSince === startedAt) {
-      runningSince = undefined
-    }
+    isRunning = false
     const next = queued
     queued = undefined
     if (next) {
