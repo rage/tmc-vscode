@@ -1743,6 +1743,11 @@ suite("TmcPanel main panel restore after a window reload", () => {
       }),
     ],
     ["a course while activation degraded", savedCourseDetails, createDegradedContext()],
+    [
+      "the initialization help after a healthy activation",
+      { screen: "InitializationErrorHelp", route: { type: "InitializationErrorHelp" }, ui: {} },
+      createMockActionContext(),
+    ],
   ]
   for (const [description, state, actionContext] of unrestorable) {
     test(`closes a restored panel naming ${description}`, async () => {

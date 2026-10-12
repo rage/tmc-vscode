@@ -176,7 +176,8 @@ export class TmcPanel {
 
   /**
    * Reopens the main panel VS Code restores after a window reload, on the screen its webview
-   * saved. One whose screen cannot be shown any more is closed instead.
+   * saved. One whose screen cannot be shown any more, or whose activation failures this one
+   * did not repeat, is closed instead.
    */
   public static registerSerializer(
     extensionContext: vscode.ExtensionContext,
@@ -395,7 +396,9 @@ function restoredRoute(
       return isCourseStored ? { id: nextPanelId(), ...route } : undefined
     }
     case "InitializationErrorHelp":
-      return initializationErrorHelpPanel(actionContext, extensionContext)
+      return isReady(actionContext)
+        ? undefined
+        : initializationErrorHelpPanel(actionContext, extensionContext)
     case undefined:
       return undefined
     default:
