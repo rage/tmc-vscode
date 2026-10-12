@@ -2,10 +2,10 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
+import type { CombinedMoocCourseData, LocalExercise, MoocCourse } from "../../../shared/langsSchema"
+import type { BackendKind, ExerciseIdentifier } from "../../../shared/lib"
 import type Langs from "../../api/langs"
 import type { ExerciseDownloads } from "../../api/langs"
-import type { CombinedMoocCourseData, LocalExercise, MoocCourse } from "../../shared/langsSchema"
-import type { BackendKind, ExerciseIdentifier } from "../../shared/shared"
 import {
   closedExercisesPythonCourse,
   localExercises,

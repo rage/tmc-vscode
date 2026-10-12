@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte"
 
+  import type { InitializationErrorHelpPanel, RunnableCommand } from "../../../shared/lib"
   import Button from "../components/Button.svelte"
   import CodeBlock from "../components/CodeBlock.svelte"
   import Disclosure from "../components/Disclosure.svelte"
   import PanelHeader from "../components/PanelHeader.svelte"
-  import type { InitializationErrorHelpPanel, RunnableCommand } from "../shared/shared"
   import { restoreScroll } from "../utilities/uiState.svelte"
   import { vscode } from "../utilities/vscode"
 

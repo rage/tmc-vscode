@@ -5,8 +5,7 @@ extension host decides what to show and supplies everything on it, and the app
 posts the user's actions back. All communication is `postMessage` in both
 directions — the webview cannot import extension code, and vice versa.
 
-`src/shared/` re-exports the repository-root `shared/`, so both sides import the
-same schemas from one file.
+Both sides import the schemas from the repository-root `shared/`, so they come from one file.
 
 ## Panels
 

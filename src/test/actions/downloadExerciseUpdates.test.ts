@@ -1,9 +1,9 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
+import { CourseIdentifier, ExerciseIdentifier } from "../../../shared/lib"
 import { downloadExerciseUpdates } from "../../actions/downloadExerciseUpdates"
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
-import { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
 import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"

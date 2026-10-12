@@ -1,10 +1,10 @@
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type { BackendKind } from "../../shared/lib"
+import { backendName } from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
-import type { BackendKind } from "../shared/shared"
-import { backendName } from "../shared/shared"
 import { Logger } from "../utilities"
 
 /**

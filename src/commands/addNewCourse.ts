@@ -1,18 +1,18 @@
 import type { Result } from "ts-results"
 import * as vscode from "vscode"
 
-import * as actions from "../actions"
-import type { ReadyActionContext } from "../actions/types"
-import { separator } from "../api/dialog"
-import { withOperation } from "../api/withOperation"
-import type { Course, MoocCourse, Organization } from "../shared/langsSchema"
+import type { Course, MoocCourse, Organization } from "../../shared/langsSchema"
 import {
   backendName,
   CourseIdentifier,
   LocalCourseData,
   makeMoocKind,
   makeTmcKind,
-} from "../shared/shared"
+} from "../../shared/lib"
+import * as actions from "../actions"
+import type { ReadyActionContext } from "../actions/types"
+import { separator } from "../api/dialog"
+import { withOperation } from "../api/withOperation"
 import { Logger } from "../utilities"
 
 const TITLE = "Add New Course"

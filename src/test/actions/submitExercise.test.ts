@@ -2,6 +2,9 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import type * as vscode from "vscode"
 
+import type { ExerciseStanding } from "../../../shared/langsSchema"
+import type { CourseIdentifier, ExerciseSubmissionPanel, SubmissionView } from "../../../shared/lib"
+import { LocalCourseData, makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import {
   keepWaitingForGrading,
   onDidFinishSubmission,
@@ -19,9 +22,6 @@ import {
   InsufficientScopeError,
   OutOfTriesError,
 } from "../../errors"
-import type { ExerciseStanding } from "../../shared/langsSchema"
-import type { CourseIdentifier, ExerciseSubmissionPanel, SubmissionView } from "../../shared/shared"
-import { LocalCourseData, makeMoocKind, makeTmcKind } from "../../shared/shared"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
 import type { SubmissionViewUpdate } from "../../ui/submissionViews"
 import { submissionViews } from "../../ui/submissionViews"

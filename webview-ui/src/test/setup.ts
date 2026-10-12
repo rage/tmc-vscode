@@ -4,8 +4,8 @@ import { afterEach, vi } from "vitest"
 import { z } from "zod"
 
 import "../elements"
-import type { RequestMessage, RequestType, WebviewError, WebviewState } from "../shared/shared"
-import { ExtensionToWebviewSchema } from "../shared/shared"
+import type { RequestMessage, RequestType, WebviewError, WebviewState } from "../../../shared/lib"
+import { ExtensionToWebviewSchema } from "../../../shared/lib"
 
 // The webview wrapper (src/utilities/vscode.ts) calls the global
 // `acquireVsCodeApi()` in its constructor. jsdom has no such global, so stub a

@@ -2,14 +2,14 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
-import type { StoredExercise, UserData } from "../../config/userdata"
 import {
   ExerciseIdentifier,
   LocalCourseData,
   LocalCourseExercise,
   makeMoocKind,
   makeTmcKind,
-} from "../../shared/shared"
+} from "../../../shared/lib"
+import type { StoredExercise, UserData } from "../../config/userdata"
 import type { MoocLocalCourseExercise, TmcLocalCourseExercise } from "../../storage/data"
 import { v2_1_0 as userData } from "../fixtures/userData"
 

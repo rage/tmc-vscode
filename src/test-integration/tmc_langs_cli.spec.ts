@@ -20,6 +20,13 @@ import {
   tmcCredentials,
 } from "../../backend/mockSession"
 import { TMC_ARCHIVE_MIME } from "../../backend/mooc/fixtures"
+import type {
+  ExerciseSlideSubmissionListItem,
+  ExerciseTaskSubmissionStatus,
+  Submission,
+  SubmissionFeedback,
+} from "../../shared/langsSchema"
+import { makeMoocKind, makeTmcKind } from "../../shared/lib"
 import Langs from "../api/langs"
 import { CLIENT_NAME, TMC_LANGS_VERSION } from "../config/constants"
 import {
@@ -30,13 +37,6 @@ import {
   NotFoundError,
   RuntimeError,
 } from "../errors"
-import type {
-  ExerciseSlideSubmissionListItem,
-  ExerciseTaskSubmissionStatus,
-  Submission,
-  SubmissionFeedback,
-} from "../shared/langsSchema"
-import { makeMoocKind, makeTmcKind } from "../shared/shared"
 import { idOfMoocExercise, idOfTmcExercise } from "../test/fixtures/identifiers"
 import { getLangsCLIForPlatform, getPlatform } from "../utilities"
 

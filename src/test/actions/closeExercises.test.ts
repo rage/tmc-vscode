@@ -1,11 +1,11 @@
 import { Ok } from "ts-results"
 import { vi } from "vitest"
 
+import type { LocalCourseData } from "../../../shared/lib"
+import { makeMoocKind } from "../../../shared/lib"
 import { closeExercises } from "../../actions/closeExercises"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
-import type { LocalCourseData } from "../../shared/shared"
-import { makeMoocKind } from "../../shared/shared"
 import type { MoocLocalCourseData } from "../../storage/data"
 import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"

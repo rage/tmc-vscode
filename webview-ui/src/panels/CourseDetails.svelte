@@ -1,19 +1,19 @@
 <script lang="ts">
   import { onMount, tick, untrack } from "svelte"
 
+  import type { CourseDetailsPanel, WebviewError } from "../../../shared/lib"
+  import {
+    isSoftDeadlineBinding,
+    LocalCourseData,
+    SOFT_DEADLINE_PENALTY,
+    unwrap,
+  } from "../../../shared/lib"
   import Button from "../components/Button.svelte"
   import ErrorNotice from "../components/ErrorNotice.svelte"
   import Meter from "../components/Meter.svelte"
   import Notice from "../components/Notice.svelte"
   import PanelHeader from "../components/PanelHeader.svelte"
   import Spinner from "../components/Spinner.svelte"
-  import type { CourseDetailsPanel, WebviewError } from "../shared/shared"
-  import {
-    isSoftDeadlineBinding,
-    LocalCourseData,
-    SOFT_DEADLINE_PENALTY,
-    unwrap,
-  } from "../shared/shared"
   import { announce, reducedMotion } from "../utilities/a11y.svelte"
   import { addMessageListener, createRequester, HOST_STATE_TIMEOUT_MS } from "../utilities/script"
   import { restoreScroll } from "../utilities/uiState.svelte"

@@ -6,6 +6,7 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import type { BackendKind } from "../../../shared/lib"
 import {
   EXERCISE_CHECK_INTERVAL,
   EXTENSION_VERSION,
@@ -13,7 +14,6 @@ import {
 } from "../../config/constants"
 import { CorruptStoredDataError } from "../../errors"
 import { activate } from "../../extension"
-import type { BackendKind } from "../../shared/shared"
 import { Logger, LogLevel } from "../../utilities"
 import { createMockMemento } from "../mocks/vscode"
 

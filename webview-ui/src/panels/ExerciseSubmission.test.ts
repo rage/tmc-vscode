@@ -1,5 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/svelte"
 
+import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../../../shared/langsSchema"
+import type { ExerciseSubmissionPanel, FeedbackQuestion, SubmissionView } from "../../../shared/lib"
+import { BaseError, makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import {
   gradingUnavailableView,
   inProgressView,
@@ -8,9 +11,6 @@ import {
   tmcResultView,
 } from "../../../src/panels/submissionView"
 import { toWebviewError } from "../../../src/panels/webviewError"
-import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../shared/langsSchema"
-import type { ExerciseSubmissionPanel, FeedbackQuestion, SubmissionView } from "../shared/shared"
-import { BaseError, makeMoocKind, makeTmcKind } from "../shared/shared"
 import { moocGrading, submissionFinished, submissionViewMessage } from "../test/fixtures"
 import { dispatchToWebview, postedMessages, reloadDocument, replyToRequest } from "../test/setup"
 import { withinShadowRoot } from "../test/shadow"

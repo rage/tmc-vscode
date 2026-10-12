@@ -4,6 +4,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import { backendName } from "../shared/lib"
 import { onDidFinishSubmission, refreshLocalExercises, scanLocalExercises } from "./actions"
 import type {
   ActionContext,
@@ -47,7 +48,6 @@ import { FileSystemError, InitializationError, presentationFor } from "./errors"
 import * as init from "./init"
 import { TmcPanel } from "./panels/TmcPanel"
 import { createSessionExpiryTracker } from "./sessionExpiryTracker"
-import { backendName } from "./shared/shared"
 import Storage from "./storage"
 import { trackActiveEditorExercise, trackHasCourses } from "./ui/contextKeys"
 import { exerciseOperations } from "./ui/exerciseOperations"

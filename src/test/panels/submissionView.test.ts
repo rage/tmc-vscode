@@ -1,3 +1,10 @@
+import type {
+  ExerciseStanding,
+  ExerciseTaskSubmissionStatus,
+  GradingProgress,
+  SubmissionFinished,
+} from "../../../shared/langsSchema"
+import { SubmissionViewSchema } from "../../../shared/lib"
 import { moocGrading as gradingOf, submissionFinished } from "../../../webview-ui/src/test/fixtures"
 import {
   gradingUnavailableView,
@@ -7,13 +14,6 @@ import {
   tmcResultView,
   withProgressStep,
 } from "../../panels/submissionView"
-import type {
-  ExerciseStanding,
-  ExerciseTaskSubmissionStatus,
-  GradingProgress,
-  SubmissionFinished,
-} from "../../shared/langsSchema"
-import { SubmissionViewSchema } from "../../shared/shared"
 
 function tmcResult(overrides: Partial<SubmissionFinished> = {}): SubmissionFinished {
   return submissionFinished({

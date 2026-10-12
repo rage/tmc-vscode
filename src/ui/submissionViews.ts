@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 
-import type { ExerciseSubmissionPanel, SubmissionView } from "../shared/shared"
-import { ExerciseIdentifier } from "../shared/shared"
+import type { ExerciseSubmissionPanel, SubmissionView } from "../../shared/lib"
+import { ExerciseIdentifier } from "../../shared/lib"
 
 /** A view of a submission, for the side panel showing `panel`. */
 export interface SubmissionViewUpdate {

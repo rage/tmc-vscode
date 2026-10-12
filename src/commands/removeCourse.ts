@@ -1,8 +1,8 @@
+import type { CourseIdentifier } from "../../shared/lib"
+import { LocalCourseData } from "../../shared/lib"
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
-import type { CourseIdentifier } from "../shared/shared"
-import { LocalCourseData } from "../shared/shared"
 import { pickCourse } from "./pickCourse"
 
 /**

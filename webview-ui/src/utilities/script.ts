@@ -9,8 +9,8 @@ import type {
   RequestType,
   Targeted,
   WebviewError,
-} from "../shared/shared"
-import { ExtensionToWebviewSchema, ReplyValueSchemas } from "../shared/shared"
+} from "../../../shared/lib"
+import { ExtensionToWebviewSchema, ReplyValueSchemas } from "../../../shared/lib"
 import { vscode } from "./vscode"
 
 type ReplyMessage = Extract<ExtensionToWebview, { type: "reply" }>

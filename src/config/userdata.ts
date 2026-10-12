@@ -3,7 +3,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import type { BackendKind } from "../shared/shared"
+import type { BackendKind } from "../../shared/lib"
 import {
   assertUnreachable,
   CourseIdentifier,
@@ -15,7 +15,7 @@ import {
   LocalCourseData,
   partition,
   toError,
-} from "../shared/shared"
+} from "../../shared/lib"
 import type Storage from "../storage"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
 import type { MoocStoredStanding } from "../utilities/apiData"

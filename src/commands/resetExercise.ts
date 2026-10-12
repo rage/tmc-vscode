@@ -1,10 +1,10 @@
 import { Ok } from "ts-results"
 import type * as vscode from "vscode"
 
+import { backendName } from "../../shared/lib"
 import { checkAiUse, resetExercise as resetExerciseAction } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure } from "../api/withOperation"
-import { backendName } from "../shared/shared"
 import { revertExerciseDocuments } from "../window/exerciseDocuments"
 import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
 import { runForExercise } from "./runForExercise"

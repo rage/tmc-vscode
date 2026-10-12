@@ -2,7 +2,7 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import type { BackendKind } from "../shared/shared"
+import type { BackendKind } from "../../shared/lib"
 import { Logger } from "../utilities"
 import type Langs from "./langs"
 

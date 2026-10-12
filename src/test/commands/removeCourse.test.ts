@@ -1,11 +1,11 @@
 import { Ok } from "ts-results"
 import { vi } from "vitest"
 
+import { makeMoocKind } from "../../../shared/lib"
 import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import { removeCourse } from "../../commands/removeCourse"
 import type { UserData } from "../../config/userdata"
-import { makeMoocKind } from "../../shared/shared"
 import { idOfMoocCourse } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"

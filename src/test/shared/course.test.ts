@@ -1,4 +1,4 @@
-import { isSoftDeadlineBinding } from "../../shared/shared"
+import { isSoftDeadlineBinding } from "../../../shared/lib"
 
 suite("isSoftDeadlineBinding", () => {
   const early = "2026-10-01T00:00:00Z"

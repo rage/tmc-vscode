@@ -2,13 +2,13 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import type { BackendKind } from "../../../shared/lib"
 import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { pasteExercise } from "../../commands/pasteExercise"
-import type { BackendKind } from "../../shared/shared"
 import {
   idOfMoocCourse,
   idOfMoocExercise,

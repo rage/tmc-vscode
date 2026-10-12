@@ -1,14 +1,14 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
+import type { LocalCourseData, CourseIdentifier } from "../../../shared/lib"
+import { ExerciseIdentifier, makeTmcKind } from "../../../shared/lib"
 import { downloadNewExercisesForCourse } from "../../actions/downloadNewExercisesForCourse"
 import { downloadOrUpdateExercises } from "../../actions/downloadOrUpdateExercises"
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
 import type { ReadyActionContext } from "../../actions/types"
 import type { UserData } from "../../config/userdata"
 import { BottleneckError } from "../../errors"
-import type { LocalCourseData, CourseIdentifier } from "../../shared/shared"
-import { ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
 import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 

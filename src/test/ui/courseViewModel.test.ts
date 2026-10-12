@@ -1,14 +1,14 @@
 import * as vscode from "vscode"
 
-import type { WorkspaceExercise } from "../../api/workspaceManager"
-import { ExerciseStatus } from "../../api/workspaceManager"
 import type {
   LocalCourseData,
   SharedMoocCourseExercise,
   SharedTmcCourseData,
   SharedTmcCourseExercise,
-} from "../../shared/shared"
-import { ExerciseIdentifier, makeTmcKind } from "../../shared/shared"
+} from "../../../shared/lib"
+import { ExerciseIdentifier, makeTmcKind } from "../../../shared/lib"
+import type { WorkspaceExercise } from "../../api/workspaceManager"
+import { ExerciseStatus } from "../../api/workspaceManager"
 import type { CourseViewState, PartView } from "../../ui/treeview/courseViewModel"
 import { buildCourseView, onDiskByCourse } from "../../ui/treeview/courseViewModel"
 import {

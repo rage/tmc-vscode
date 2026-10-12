@@ -22,7 +22,7 @@ import {
   CourseProgress,
   TmcExerciseSlide,
   TmcExerciseTask,
-} from "../shared/langsSchema"
+} from "../../shared/langsSchema"
 
 // Reconciles the two independently-generated descriptions of the same wire: the
 // mooc mock validates against the OpenAPI spec vendored from

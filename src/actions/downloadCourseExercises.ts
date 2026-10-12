@@ -1,7 +1,7 @@
 import { Ok, Result } from "ts-results"
 
+import type { CourseIdentifier, ExerciseIdentifier } from "../../shared/lib"
 import type { Warned } from "../api/withOperation"
-import type { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"

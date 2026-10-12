@@ -2,7 +2,7 @@ import * as path from "path"
 
 import * as vscode from "vscode"
 
-import type { StyleValidationError, StyleValidationResult } from "../shared/langsSchema"
+import type { StyleValidationError, StyleValidationResult } from "../../shared/langsSchema"
 import { findSourceFile } from "./sourceFiles"
 
 /** Shows an exercise's code-quality findings as diagnostics: squiggles plus the Problems panel. */

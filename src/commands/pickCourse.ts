@@ -1,8 +1,8 @@
 import * as vscode from "vscode"
 
+import type { CourseIdentifier, LocalCourseData } from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
 import { courseSelectionItems } from "../api/dialog"
-import type { CourseIdentifier, LocalCourseData } from "../shared/shared"
 
 interface PickCourseOptions {
   title: string

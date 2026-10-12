@@ -1,4 +1,4 @@
-import type { WebviewToExtension } from "../shared/shared"
+import type { WebviewToExtension } from "../../../shared/lib"
 import { postedMessages } from "../test/setup"
 import { deepState } from "../test/state.svelte"
 import { vscode } from "./vscode"

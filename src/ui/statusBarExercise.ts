@@ -1,12 +1,12 @@
 import * as vscode from "vscode"
 
+import type { LocalCourseExercise } from "../../shared/lib"
 import type Dialog from "../api/dialog"
 import type { Item } from "../api/dialog"
 import { separator } from "../api/dialog"
 import type WorkspaceManager from "../api/workspaceManager"
 import { exerciseFor } from "../api/workspaceManager"
 import type { UserData } from "../config/userdata"
-import type { LocalCourseExercise } from "../shared/shared"
 import type { ExerciseOperationKind, ExerciseOperations } from "./exerciseOperations"
 import { pointsText } from "./points"
 import { tooltipOf } from "./tooltip"

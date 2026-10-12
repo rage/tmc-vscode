@@ -6,10 +6,10 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import type { ExtensionContext } from "vscode"
 
+import type { SubmissionFeedbackQuestion } from "../../shared/langsSchema"
+import type { FeedbackQuestion } from "../../shared/lib"
+import { BaseError } from "../../shared/lib"
 import { ConnectionError } from "../errors"
-import type { SubmissionFeedbackQuestion } from "../shared/langsSchema"
-import type { FeedbackQuestion } from "../shared/shared"
-import { BaseError } from "../shared/shared"
 import { Logger } from "./logger"
 
 /** Budget for a whole download, from request to last byte. */

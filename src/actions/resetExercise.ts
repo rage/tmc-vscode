@@ -1,7 +1,7 @@
 import type { Result } from "ts-results"
 
+import type { ExerciseIdentifier } from "../../shared/lib"
 import type { WorkspaceExercise } from "../api/workspaceManager"
-import type { ExerciseIdentifier } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import type { ReadyActionContext } from "./types"

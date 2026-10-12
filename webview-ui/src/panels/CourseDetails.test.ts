@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/svelte"
 
-import type { CourseDetailsPanel } from "../shared/shared"
-import { makeMoocKind, makeTmcKind } from "../shared/shared"
+import type { CourseDetailsPanel } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import { MOOC_INSTANCE_ID, moocLocalCourse, tmcExercise, tmcLocalCourse } from "../test/fixtures"
 import {
   dispatchToWebview as dispatch,

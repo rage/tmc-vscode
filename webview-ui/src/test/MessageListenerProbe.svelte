@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ExtensionToWebview, Panel } from "../shared/shared"
+  import type { ExtensionToWebview, Panel } from "../../../shared/lib"
   import { addMessageListener } from "../utilities/script"
 
   interface Props {

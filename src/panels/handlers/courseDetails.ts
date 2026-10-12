@@ -2,9 +2,9 @@ import type { Result } from "ts-results"
 import { Err } from "ts-results"
 import * as vscode from "vscode"
 
+import type { LocalCourseData } from "../../../shared/lib"
 import * as actions from "../../actions"
 import { withOperation } from "../../api/withOperation"
-import type { LocalCourseData } from "../../shared/shared"
 import { Logger } from "../../utilities"
 import type { HandlerMap } from "../router"
 

@@ -1,14 +1,14 @@
-import {
-  LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
-  LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
-  LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
-} from "../../config/constants"
 import type {
   CourseExercise,
   Exercise,
   ExerciseProgress,
   CourseProgress,
-} from "../../shared/langsSchema"
+} from "../../../shared/langsSchema"
+import {
+  LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
+  LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
+  LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
+} from "../../config/constants"
 import type { MoocLocalCourseData } from "../../storage/data"
 import {
   combineMoocApiExerciseData,

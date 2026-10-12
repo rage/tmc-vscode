@@ -2,6 +2,10 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
+import type { OutputData, OutputResult } from "../../../shared/langsSchema"
+import { CliOutputData } from "../../../shared/langsSchema"
+import type { BaseError } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import Langs, { decodeLangsStdout } from "../../api/langs"
 import { LOGIN_PROCESS_TIMEOUT } from "../../config/constants"
 import {
@@ -23,10 +27,6 @@ import {
   UnknownUploadError,
   UploadExpiredError,
 } from "../../errors"
-import type { OutputData, OutputResult } from "../../shared/langsSchema"
-import { CliOutputData } from "../../shared/langsSchema"
-import type { BaseError } from "../../shared/shared"
-import { makeMoocKind, makeTmcKind } from "../../shared/shared"
 import { courseData, courseDetails, moocCourse, submissionFinished } from "../fixtures/cliOutput"
 import { idOfMoocExercise, idOfTmcExercise } from "../fixtures/identifiers"
 

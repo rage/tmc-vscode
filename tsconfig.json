@@ -1,8 +1,7 @@
 {
-  // Extension-host project: everything under src/ (incl. the src/shared
-  // symlinks into shared/ and the mocha test suites). The sources are
-  // authored as ESM and bundled to a single CJS file by esbuild, so module
-  // resolution follows the bundler. No DOM: the extension host runs in
+  // Extension-host project: everything under src/ and the shared/ it imports.
+  // The sources are authored as ESM and bundled to a single CJS file by
+  // esbuild, so module resolution follows the bundler. No DOM: the extension host runs in
   // Node; the webview has its own project (webview-ui/tsconfig.json).
   "extends": "./tsconfig.base.json",
   "compilerOptions": {

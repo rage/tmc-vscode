@@ -4,13 +4,6 @@ import * as path from "path"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import * as actions from "../../actions"
-import type { ActionContext } from "../../actions/types"
-import type { UserData } from "../../config/userdata"
-import { BottleneckError, InitializationError, presentationFor } from "../../errors"
-import type { PanelMessage } from "../../panels/router"
-import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
-import { MAIN_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
 import type {
   BackendKind,
   ExerciseSubmissionPanel,
@@ -18,8 +11,15 @@ import type {
   LocalCourseData,
   Panel,
   CourseIdentifier,
-} from "../../shared/shared"
-import { makeTmcKind } from "../../shared/shared"
+} from "../../../shared/lib"
+import { makeTmcKind } from "../../../shared/lib"
+import * as actions from "../../actions"
+import type { ActionContext } from "../../actions/types"
+import type { UserData } from "../../config/userdata"
+import { BottleneckError, InitializationError, presentationFor } from "../../errors"
+import type { PanelMessage } from "../../panels/router"
+import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
+import { MAIN_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
 import { submissionViews } from "../../ui/submissionViews"
 import { Logger } from "../../utilities"
 import { idOfMoocExercise, idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"

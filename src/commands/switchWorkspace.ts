@@ -1,8 +1,8 @@
 import * as vscode from "vscode"
 
+import type { CourseIdentifier } from "../../shared/lib"
+import { LocalCourseData } from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
-import type { CourseIdentifier } from "../shared/shared"
-import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
 import { openWorkspace } from "./openWorkspace"
 import { pickCourse } from "./pickCourse"

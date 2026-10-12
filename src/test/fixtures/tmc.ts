@@ -4,9 +4,9 @@ import type {
   MoocCourse,
   CourseProgress,
   TmcExerciseSlide,
-} from "../../shared/langsSchema"
-import type { ExerciseIdentifier } from "../../shared/shared"
-import { makeTmcKind } from "../../shared/shared"
+} from "../../../shared/langsSchema"
+import type { ExerciseIdentifier } from "../../../shared/lib"
+import { makeTmcKind } from "../../../shared/lib"
 
 const tmcExerciseUpdates: ExerciseIdentifier[] = [makeTmcKind({ tmcExerciseId: 2 })]
 

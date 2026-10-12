@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { FeedbackAnswer, FeedbackQuestion, WebviewError } from "../shared/shared"
+  import type { FeedbackAnswer, FeedbackQuestion, WebviewError } from "../../../shared/lib"
   import { uiState } from "../utilities/uiState.svelte"
   import Button from "./Button.svelte"
   import ErrorNotice from "./ErrorNotice.svelte"

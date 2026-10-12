@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { Panel } from "../../shared/lib"
+  import { assertUnreachable } from "../../shared/lib"
   import Button from "./components/Button.svelte"
   import CodeBlock from "./components/CodeBlock.svelte"
   import Notice from "./components/Notice.svelte"
@@ -7,8 +9,6 @@
   import CourseDetails from "./panels/CourseDetails.svelte"
   import ExerciseSubmission from "./panels/ExerciseSubmission.svelte"
   import InitializationErrorHelp from "./panels/InitializationErrorHelp.svelte"
-  import type { Panel } from "./shared/shared"
-  import { assertUnreachable } from "./shared/shared"
   import { onSetPanel } from "./utilities/script"
   import { enterScreen } from "./utilities/uiState.svelte"
   import { vscode } from "./utilities/vscode"

@@ -1,11 +1,11 @@
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
+import { backendName, CourseIdentifier, LocalCourseData } from "../../shared/lib"
 import { checkForExerciseUpdates, downloadExerciseUpdates } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
 import { NOTIFICATION_DELAY } from "../config/constants"
-import { backendName, CourseIdentifier, LocalCourseData } from "../shared/shared"
 import { updateablesRegistry } from "../ui/updateablesRegistry"
 import { Logger } from "../utilities"
 

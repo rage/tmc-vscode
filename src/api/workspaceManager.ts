@@ -7,6 +7,8 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type { BackendKind } from "../../shared/lib"
+import { CourseIdentifier, ExerciseIdentifier } from "../../shared/lib"
 import {
   EXTENSION_ID,
   HIDE_META_FILES,
@@ -21,8 +23,6 @@ import {
 import type Resources from "../config/resources"
 import { EditorKind } from "../config/resources"
 import { FileSystemError } from "../errors"
-import type { BackendKind } from "../shared/shared"
-import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { Logger } from "../utilities"
 
 /** What keeps VS Code from writing a course's `.code-workspace`. */

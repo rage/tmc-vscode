@@ -1,4 +1,4 @@
-import { BaseError } from "../../shared/shared"
+import { BaseError } from "../../../shared/lib"
 
 suite("BaseError", function () {
   test("keeps the message, stack and errno fields of an Error", function () {

@@ -1,8 +1,8 @@
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
-import type { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
-import { LocalCourseData } from "../shared/shared"
+import type { CourseIdentifier, ExerciseIdentifier } from "../../shared/lib"
+import { LocalCourseData } from "../../shared/lib"
 import type { ReadyActionContext } from "./types"
 
 /**

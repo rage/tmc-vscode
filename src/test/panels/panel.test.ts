@@ -1,7 +1,7 @@
 import type { Webview } from "vscode"
 
+import type { ExtensionToWebview } from "../../../shared/lib"
 import { postMessageToWebview } from "../../panels/panel"
-import type { ExtensionToWebview } from "../../shared/shared"
 import { idOfTmcCourse } from "../fixtures/identifiers"
 
 function fakeWebview(): { webview: Webview; postMessage: ReturnType<typeof vi.fn> } {

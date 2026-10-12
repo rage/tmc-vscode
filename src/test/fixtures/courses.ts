@@ -4,8 +4,8 @@ import type {
   SharedMoocCourseExercise,
   SharedTmcCourseData,
   SharedTmcCourseExercise,
-} from "../../shared/shared"
-import { makeMoocKind, makeTmcKind } from "../../shared/shared"
+} from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 
 export const MOOC_COURSE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 

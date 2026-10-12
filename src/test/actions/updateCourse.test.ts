@@ -1,5 +1,11 @@
 import { Err, Ok } from "ts-results"
 
+import type {
+  CombinedCourseData,
+  CourseData,
+  CourseExercise,
+  Exercise,
+} from "../../../shared/langsSchema"
 import { addNewCourse } from "../../actions/addNewCourse"
 import type { ReadyActionContext } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
@@ -14,12 +20,6 @@ import {
   ServerError,
   TmcLoginNotAcceptedError,
 } from "../../errors"
-import type {
-  CombinedCourseData,
-  CourseData,
-  CourseExercise,
-  Exercise,
-} from "../../shared/langsSchema"
 import Storage from "../../storage"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
 import type CoursesTree from "../../ui/treeview/treeview"

@@ -2,12 +2,12 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import { CourseIdentifier, LocalCourseData } from "../../../shared/lib"
 import type { ReadyActionContext } from "../../actions/types"
 import type { Item } from "../../api/dialog"
 import { openWorkspace } from "../../commands/openWorkspace"
 import { switchWorkspace } from "../../commands/switchWorkspace"
 import type { UserData } from "../../config/userdata"
-import { CourseIdentifier, LocalCourseData } from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 

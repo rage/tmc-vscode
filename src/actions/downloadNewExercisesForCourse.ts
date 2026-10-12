@@ -1,9 +1,9 @@
 import { Ok, Result } from "ts-results"
 
+import type { CourseIdentifier } from "../../shared/lib"
+import { LocalCourseData } from "../../shared/lib"
 import type { Warned } from "../api/withOperation"
 import { logWarnings } from "../api/withOperation"
-import type { CourseIdentifier } from "../shared/shared"
-import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises"
 import { refreshLocalExercises } from "./refreshLocalExercises"

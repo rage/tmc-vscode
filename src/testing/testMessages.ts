@@ -2,7 +2,7 @@ import * as path from "path"
 
 import * as vscode from "vscode"
 
-import type { TestResult } from "../shared/langsSchema"
+import type { TestResult } from "../../shared/langsSchema"
 import type { SourceFileFinder } from "./sourceFiles"
 import type { StackFrame } from "./stackTrace"
 import { parseStackTrace } from "./stackTrace"

@@ -1,9 +1,9 @@
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import type { LocalCourseData } from "../../../shared/lib"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
-import type { LocalCourseData } from "../../shared/shared"
 import { trackActiveEditorExercise, trackHasCourses } from "../../ui/contextKeys"
 import type { WorkspaceManagerMockValues } from "../mocks/workspaceManager"
 import { createWorkspaceMangerMock } from "../mocks/workspaceManager"

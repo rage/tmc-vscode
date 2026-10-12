@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 
-import type { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
-import { CourseIdentifier as CourseIdentifierNs } from "../shared/shared"
+import type { CourseIdentifier, ExerciseIdentifier } from "../../shared/lib"
+import { CourseIdentifier as CourseIdentifierNs } from "../../shared/lib"
 
 /**
  * Remembers which exercises have updates available, per course, for the Courses view.

@@ -1,9 +1,9 @@
 import type * as vscode from "vscode"
 
+import { pasteServiceName } from "../../shared/lib"
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure } from "../api/withOperation"
-import { pasteServiceName } from "../shared/shared"
 import { openWebLink } from "../utilities"
 import { runForExercise } from "./runForExercise"
 

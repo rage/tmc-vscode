@@ -1,8 +1,8 @@
 import { vi } from "vitest"
 
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import { UserData } from "../../config/userdata"
 import { CorruptStoredDataError } from "../../errors"
-import { makeMoocKind, makeTmcKind } from "../../shared/shared"
 import Storage from "../../storage"
 import type * as storage from "../../storage/data"
 import { USER_DATA_KEY } from "../../storage/data"

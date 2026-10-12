@@ -1,15 +1,15 @@
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import type { WorkspaceExercise } from "../../api/workspaceManager"
-import { ExerciseStatus } from "../../api/workspaceManager"
 import type {
   LocalCourseData,
   SharedMoocCourseData,
   SharedTmcCourseData,
   SharedTmcCourseExercise,
-} from "../../shared/shared"
-import { makeTmcKind } from "../../shared/shared"
+} from "../../../shared/lib"
+import { makeTmcKind } from "../../../shared/lib"
+import type { WorkspaceExercise } from "../../api/workspaceManager"
+import { ExerciseStatus } from "../../api/workspaceManager"
 import { downloadFailures } from "../../ui/downloadFailures"
 import { exerciseOperations } from "../../ui/exerciseOperations"
 import type { CoursesTreeItem, CoursesTreeSource } from "../../ui/treeview/treeview"

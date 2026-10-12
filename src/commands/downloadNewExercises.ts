@@ -1,11 +1,11 @@
 import { Ok } from "ts-results"
 
+import type { CourseIdentifier } from "../../shared/lib"
+import { LocalCourseData } from "../../shared/lib"
 import { downloadNewExercisesForCourse } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import type { Warned } from "../api/withOperation"
 import { failure, withOperation } from "../api/withOperation"
-import type { CourseIdentifier } from "../shared/shared"
-import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
 import { pickCourse } from "./pickCourse"
 

@@ -1,9 +1,9 @@
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
+import type { CourseIdentifier } from "../../shared/lib"
+import { LocalCourseData } from "../../shared/lib"
 import type { Warned } from "../api/withOperation"
-import type { CourseIdentifier } from "../shared/shared"
-import { LocalCourseData } from "../shared/shared"
 import { Logger, mapConcurrently } from "../utilities"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"

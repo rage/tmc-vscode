@@ -1,8 +1,8 @@
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
+import { CourseIdentifier, ExerciseIdentifier } from "../../shared/lib"
 import type { OperationWarning, Warned } from "../api/withOperation"
-import { CourseIdentifier, ExerciseIdentifier } from "../shared/shared"
 import { updateablesRegistry } from "../ui/updateablesRegistry"
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises"
 import { refreshLocalExercises } from "./refreshLocalExercises"

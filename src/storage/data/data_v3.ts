@@ -5,7 +5,7 @@ import {
   SharedMoocCourseExerciseSchema,
   SharedTmcCourseDataSchema,
   SharedTmcCourseExerciseSchema,
-} from "../../shared/shared"
+} from "../../../shared/lib"
 import * as v2 from "./data_v2"
 
 // global storage keys

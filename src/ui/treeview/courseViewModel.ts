@@ -1,6 +1,4 @@
-import { ExerciseStatus as WorkspaceStatus } from "../../api/workspaceManager"
-import type { WorkspaceExercise } from "../../api/workspaceManager"
-import type { ExerciseStatus } from "../../shared/shared"
+import type { ExerciseStatus } from "../../../shared/lib"
 import {
   CourseIdentifier,
   ExerciseIdentifier,
@@ -8,7 +6,9 @@ import {
   LocalCourseData,
   LocalCourseExercise,
   match,
-} from "../../shared/shared"
+} from "../../../shared/lib"
+import { ExerciseStatus as WorkspaceStatus } from "../../api/workspaceManager"
+import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { findNextDateAfter, parseDate } from "../../utilities"
 
 /** One exercise of a course, as the Courses view shows it. */

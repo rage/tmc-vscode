@@ -2,9 +2,9 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type { ExerciseSubmissionPanel } from "../../../shared/lib"
 import * as actions from "../../actions"
 import { reportWarnings, withOperation } from "../../api/withOperation"
-import type { ExerciseSubmissionPanel } from "../../shared/shared"
 import { Logger } from "../../utilities"
 import type { HandlerMap, PanelHost } from "../router"
 

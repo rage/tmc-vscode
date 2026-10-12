@@ -2,6 +2,15 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type {
+  BackendKind,
+  CourseIdentifier,
+  ExerciseIdentifier,
+  ExerciseSubmissionPanel,
+  FeedbackAnswer,
+  SubmissionView,
+} from "../../shared/lib"
+import { backendName, LocalCourseData, match, unwrap } from "../../shared/lib"
 import type Langs from "../api/langs"
 import type { OperationWarning, Warned } from "../api/withOperation"
 import type { WorkspaceExercise } from "../api/workspaceManager"
@@ -17,15 +26,6 @@ import {
   withProgressStep,
 } from "../panels/submissionView"
 import { toWebviewError } from "../panels/webviewError"
-import type {
-  BackendKind,
-  CourseIdentifier,
-  ExerciseIdentifier,
-  ExerciseSubmissionPanel,
-  FeedbackAnswer,
-  SubmissionView,
-} from "../shared/shared"
-import { backendName, LocalCourseData, match, unwrap } from "../shared/shared"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { pointsText } from "../ui/points"
 import { isSameExercise, submissionViews } from "../ui/submissionViews"

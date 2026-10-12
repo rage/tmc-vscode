@@ -1,6 +1,8 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
+import type { CourseIdentifier, ExerciseStatus as RowStatus } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import { closeExercises as closeExercisesAction } from "../../actions/closeExercises"
 import { downloadCourseExercises } from "../../actions/downloadCourseExercises"
 import { downloadExerciseUpdates } from "../../actions/downloadExerciseUpdates"
@@ -10,8 +12,6 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
 import { BottleneckError } from "../../errors"
-import type { CourseIdentifier, ExerciseStatus as RowStatus } from "../../shared/shared"
-import { makeMoocKind, makeTmcKind } from "../../shared/shared"
 import {
   closeCompletedExercises,
   closeExercises,

@@ -1,17 +1,17 @@
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
-import type { ExerciseDownloadProgress, ExerciseDownloads } from "../api/langs"
-import type { OperationWarning, Warned } from "../api/withOperation"
-import { ExerciseUpdateError, presentationFor } from "../errors"
-import type { BackendKind, CourseIdentifier } from "../shared/shared"
+import type { BackendKind, CourseIdentifier } from "../../shared/lib"
 import {
   backendName,
   ExerciseIdentifier,
   LocalCourseExercise,
   match,
   partition,
-} from "../shared/shared"
+} from "../../shared/lib"
+import type { ExerciseDownloadProgress, ExerciseDownloads } from "../api/langs"
+import type { OperationWarning, Warned } from "../api/withOperation"
+import { ExerciseUpdateError, presentationFor } from "../errors"
 import { downloadFailures } from "../ui/downloadFailures"
 import type { ExerciseClaim } from "../ui/exerciseOperations"
 import { exerciseOperations } from "../ui/exerciseOperations"

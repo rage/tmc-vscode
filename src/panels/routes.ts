@@ -1,9 +1,9 @@
 import type * as vscode from "vscode"
 
+import type { InitializationErrorHelpPanel, Panel } from "../../shared/lib"
+import { assertUnreachable, LocalCourseData } from "../../shared/lib"
 import type { ActionContext, StartupStep } from "../actions/types"
 import { isReady } from "../actions/types"
-import type { InitializationErrorHelpPanel, Panel } from "../shared/shared"
-import { assertUnreachable, LocalCourseData } from "../shared/shared"
 import { cliFolder } from "../utilities"
 
 /** The editor tab label for `route`, so tabs can be told apart in Open Editors and Ctrl+Tab. */

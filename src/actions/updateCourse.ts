@@ -1,6 +1,8 @@
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
+import type { BackendKind, CourseIdentifier, Enum } from "../../shared/lib"
+import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../../shared/lib"
 import type Langs from "../api/langs"
 import type { OperationWarning, Warned } from "../api/withOperation"
 import {
@@ -10,8 +12,6 @@ import {
   ServerError,
   TmcLoginNotAcceptedError,
 } from "../errors"
-import type { BackendKind, CourseIdentifier, Enum } from "../shared/shared"
-import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
 import { Logger } from "../utilities"
 import { toStoredMoocCourse, toStoredTmcCourse } from "../utilities/apiData"

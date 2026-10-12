@@ -1,14 +1,14 @@
 import * as vscode from "vscode"
 
-import type WorkspaceManager from "../../api/workspaceManager"
-import type { BackendKind } from "../../shared/shared"
+import type { BackendKind } from "../../../shared/lib"
 import {
   backendName,
   CourseIdentifier,
   ExerciseIdentifier,
   LocalCourseData,
   SOFT_DEADLINE_PENALTY,
-} from "../../shared/shared"
+} from "../../../shared/lib"
+import type WorkspaceManager from "../../api/workspaceManager"
 import { countOf, formatDeadline } from "../../utilities"
 import { downloadFailures } from "../downloadFailures"
 import { exerciseOperations } from "../exerciseOperations"

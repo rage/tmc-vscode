@@ -1,7 +1,7 @@
 import type { Result } from "ts-results"
 import { Err } from "ts-results"
 
-import type { ExerciseIdentifier } from "../shared/shared"
+import type { ExerciseIdentifier } from "../../shared/lib"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import { checkAiUse } from "./checkAiUse"

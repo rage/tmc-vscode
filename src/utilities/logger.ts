@@ -3,8 +3,8 @@ import { env } from "process"
 import type { OutputChannel } from "vscode"
 import { Uri, window } from "vscode"
 
+import { BaseError } from "../../shared/lib"
 import { DEBUG_MODE, OUTPUT_CHANNEL_NAME } from "../config/constants"
-import { BaseError } from "../shared/shared"
 
 export enum LogLevel {
   None = "none",

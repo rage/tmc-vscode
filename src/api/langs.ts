@@ -5,6 +5,40 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import { z } from "zod"
 
+import type {
+  CombinedCourseData,
+  CombinedMoocCourseData,
+  Course,
+  DataKind,
+  ExerciseTaskSubmissionResult,
+  ExerciseTaskSubmissionStatus,
+  LocalExercise,
+  MoocCourse,
+  MoocDeviceLogin,
+  MoocOldSubmissionRestore,
+  ExerciseSlideSubmissionListItem,
+  Notification,
+  Organization,
+  OutputData,
+  RunResult,
+  StatusUpdateData,
+  StyleValidationResult,
+  Submission,
+  SubmissionFeedback,
+  SubmissionFeedbackResponse,
+  SubmissionFinished,
+} from "../../shared/langsSchema"
+import { CliNotification, CliOutputData, CliStatusUpdate } from "../../shared/langsSchema"
+import type { BackendKind, Enum } from "../../shared/lib"
+import {
+  backendName,
+  BaseError,
+  ExerciseIdentifier,
+  makeMoocKind,
+  makeTmcKind,
+  match,
+  unwrap,
+} from "../../shared/lib"
 import {
   API_CACHE_LIFETIME,
   CLI_PROCESS_TIMEOUT,
@@ -39,40 +73,6 @@ import {
   UnknownUploadError,
   UploadExpiredError,
 } from "../errors"
-import type {
-  CombinedCourseData,
-  CombinedMoocCourseData,
-  Course,
-  DataKind,
-  ExerciseTaskSubmissionResult,
-  ExerciseTaskSubmissionStatus,
-  LocalExercise,
-  MoocCourse,
-  MoocDeviceLogin,
-  MoocOldSubmissionRestore,
-  ExerciseSlideSubmissionListItem,
-  Notification,
-  Organization,
-  OutputData,
-  RunResult,
-  StatusUpdateData,
-  StyleValidationResult,
-  Submission,
-  SubmissionFeedback,
-  SubmissionFeedbackResponse,
-  SubmissionFinished,
-} from "../shared/langsSchema"
-import { CliNotification, CliOutputData, CliStatusUpdate } from "../shared/langsSchema"
-import type { BackendKind, Enum } from "../shared/shared"
-import {
-  backendName,
-  BaseError,
-  ExerciseIdentifier,
-  makeMoocKind,
-  makeTmcKind,
-  match,
-  unwrap,
-} from "../shared/shared"
 import { Logger, LogLevel } from "../utilities/logger"
 import type { FractionProgress } from "./dialog"
 

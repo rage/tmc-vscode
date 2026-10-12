@@ -1,6 +1,6 @@
 // @ts-expect-error "No module found" error even though the file exists
 import FAQ from "../../docs/FAQ.md"
-import type { BackendKind } from "../shared/shared"
+import type { BackendKind } from "../../shared/lib"
 
 // Build time only globals defined in the esbuild configuration (esbuild.mjs
 // `define`, sourced from config.js). These values are inlined when bundling.

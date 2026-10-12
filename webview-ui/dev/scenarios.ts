@@ -1,17 +1,17 @@
+import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../../shared/langsSchema"
+import type {
+  CourseDetailsPanel,
+  ExtensionToWebview,
+  Panel,
+  WebviewToExtension,
+} from "../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../shared/lib"
 import {
   inProgressView,
   moocGradingView,
   submitFailedView,
   tmcResultView,
 } from "../../src/panels/submissionView"
-import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../src/shared/langsSchema"
-import type {
-  CourseDetailsPanel,
-  ExtensionToWebview,
-  Panel,
-  WebviewToExtension,
-} from "../src/shared/shared"
-import { makeMoocKind, makeTmcKind } from "../src/shared/shared"
 import {
   MOOC_INSTANCE_ID,
   moocGrading as baseMoocGrading,

@@ -1,5 +1,5 @@
-import type { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
-import { makeMoocKind, makeTmcKind } from "../../shared/shared"
+import type { CourseIdentifier, ExerciseIdentifier } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 
 export function idOfTmcExercise(tmcExerciseId: number): ExerciseIdentifier {
   return makeTmcKind({ tmcExerciseId })

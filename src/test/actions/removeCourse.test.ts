@@ -1,11 +1,11 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
+import { makeTmcKind } from "../../../shared/lib"
 import { removeCourse } from "../../actions/removeCourse"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import type Dialog from "../../api/dialog"
 import type { UserData } from "../../config/userdata"
-import { makeTmcKind } from "../../shared/shared"
 import { idOfTmcCourse } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"

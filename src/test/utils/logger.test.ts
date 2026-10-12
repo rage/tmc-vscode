@@ -2,7 +2,7 @@ import type { Mock } from "vitest"
 import type { OutputChannel } from "vscode"
 import { window } from "vscode"
 
-import { BaseError } from "../../shared/shared"
+import { BaseError } from "../../../shared/lib"
 import { Logger, LogLevel } from "../../utilities/logger"
 
 const TOKEN = "super-secret-refresh-token"

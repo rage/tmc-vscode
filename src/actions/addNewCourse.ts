@@ -1,7 +1,7 @@
 import type { Result } from "ts-results"
 
-import type { CourseIdentifier } from "../shared/shared"
-import { LocalCourseData, makeMoocKind, makeTmcKind, match } from "../shared/shared"
+import type { CourseIdentifier } from "../../shared/lib"
+import { LocalCourseData, makeMoocKind, makeTmcKind, match } from "../../shared/lib"
 import { Logger } from "../utilities"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"

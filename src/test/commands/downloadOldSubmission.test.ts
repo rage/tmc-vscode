@@ -2,6 +2,11 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import type {
+  ExerciseSlideSubmissionListItem,
+  MoocOldSubmissionRestore,
+} from "../../../shared/langsSchema"
+import { makeMoocKind } from "../../../shared/lib"
 import type { PickableSubmission } from "../../actions"
 import type { ActionContext, ReadyActionContext } from "../../actions/types"
 import type { Item } from "../../api/dialog"
@@ -11,11 +16,6 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { downloadOldSubmission } from "../../commands/downloadOldSubmission"
 import type { UserData } from "../../config/userdata"
-import type {
-  ExerciseSlideSubmissionListItem,
-  MoocOldSubmissionRestore,
-} from "../../shared/langsSchema"
-import { makeMoocKind } from "../../shared/shared"
 import { exerciseOperations } from "../../ui/exerciseOperations"
 import { revertExerciseDocuments, saveExerciseDocuments } from "../../window/exerciseDocuments"
 import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"

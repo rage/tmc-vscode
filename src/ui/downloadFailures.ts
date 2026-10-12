@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 
-import { ExerciseIdentifier } from "../shared/shared"
+import { ExerciseIdentifier } from "../../shared/lib"
 
 /**
  * Remembers which exercises failed to download.

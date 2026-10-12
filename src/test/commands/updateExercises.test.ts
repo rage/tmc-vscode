@@ -1,13 +1,13 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
+import type { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../../../shared/lib"
+import { CourseIdentifier as CourseIdentifierNs } from "../../../shared/lib"
 import type { ExerciseUpdateCheck } from "../../actions/checkForExerciseUpdates"
 import type { ReadyActionContext } from "../../actions/types"
 import { updateExercises } from "../../commands/updateExercises"
 import type Settings from "../../config/settings"
 import type { UserData } from "../../config/userdata"
-import type { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../../shared/shared"
-import { CourseIdentifier as CourseIdentifierNs } from "../../shared/shared"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
 import {
   idOfMoocCourse,

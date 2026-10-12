@@ -2,9 +2,9 @@ import type {
   ExerciseStanding,
   ExerciseTaskSubmissionStatus,
   SubmissionFinished,
-} from "../shared/langsSchema"
-import type { FeedbackQuestion, SubmissionView, WebviewError } from "../shared/shared"
-import { assertUnreachable } from "../shared/shared"
+} from "../../shared/langsSchema"
+import type { FeedbackQuestion, SubmissionView, WebviewError } from "../../shared/lib"
+import { assertUnreachable } from "../../shared/lib"
 
 /** The phases in which the backend is still working on the submission. */
 export type InProgressPhase = "uploading" | "grading"

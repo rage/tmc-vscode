@@ -1,13 +1,13 @@
 import type { Result } from "ts-results"
 
-import type { RestoreTarget } from "../api/langs"
-import type { WorkspaceExercise } from "../api/workspaceManager"
 import type {
   ExerciseSlideSubmissionListItem,
   MoocOldSubmissionRestore,
-} from "../shared/langsSchema"
-import type { ExerciseIdentifier } from "../shared/shared"
-import { assertUnreachable, makeMoocKind, makeTmcKind, match } from "../shared/shared"
+} from "../../shared/langsSchema"
+import type { ExerciseIdentifier } from "../../shared/lib"
+import { assertUnreachable, makeMoocKind, makeTmcKind, match } from "../../shared/lib"
+import type { RestoreTarget } from "../api/langs"
+import type { WorkspaceExercise } from "../api/workspaceManager"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import type { ReadyActionContext } from "./types"

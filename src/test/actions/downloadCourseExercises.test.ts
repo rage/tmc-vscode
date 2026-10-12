@@ -1,11 +1,11 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
+import type { LocalCourseData } from "../../../shared/lib"
 import { downloadCourseExercises } from "../../actions/downloadCourseExercises"
 import { downloadOrUpdateExercises } from "../../actions/downloadOrUpdateExercises"
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
-import type { LocalCourseData } from "../../shared/shared"
 import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"

@@ -1,5 +1,12 @@
 import { Ok } from "ts-results"
 
+import type { CourseIdentifier, ExerciseIdentifier } from "../../../shared/lib"
+import {
+  CourseIdentifier as CourseIdentifierNs,
+  ExerciseIdentifier as ExerciseIdentifierNs,
+  LocalCourseData,
+  LocalCourseExercise,
+} from "../../../shared/lib"
 import {
   closeExercises as closeExercisesAction,
   downloadAndOpenExercises,
@@ -9,13 +16,6 @@ import {
 import type { ReadyActionContext } from "../../actions/types"
 import { withOperation } from "../../api/withOperation"
 import { ExerciseStatus } from "../../api/workspaceManager"
-import type { CourseIdentifier, ExerciseIdentifier } from "../../shared/shared"
-import {
-  CourseIdentifier as CourseIdentifierNs,
-  ExerciseIdentifier as ExerciseIdentifierNs,
-  LocalCourseData,
-  LocalCourseExercise,
-} from "../../shared/shared"
 import { countOf } from "../../utilities"
 import { updateablesRegistry } from "../updateablesRegistry"
 import type { CoursesTreeItem, ExerciseTreeItem } from "./treeview"

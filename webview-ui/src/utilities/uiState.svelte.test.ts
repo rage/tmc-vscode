@@ -1,8 +1,8 @@
 import { render } from "@testing-library/svelte"
 
+import type { Panel } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import App from "../App.svelte"
-import type { Panel } from "../shared/shared"
-import { makeMoocKind, makeTmcKind } from "../shared/shared"
 import { initializationErrorHelpPanel } from "../test/fixtures"
 import { dispatchToWebview, reloadDocument, savedWebviewState } from "../test/setup"
 import { enterScreen, restoreScroll, uiState } from "./uiState.svelte"

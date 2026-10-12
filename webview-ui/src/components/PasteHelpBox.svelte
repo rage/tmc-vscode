@@ -8,8 +8,8 @@
     ExerciseSubmissionPanel,
     TargetPanel,
     WebviewError,
-  } from "../shared/shared"
-  import { pasteServiceName } from "../shared/shared"
+  } from "../../../shared/lib"
+  import { pasteServiceName } from "../../../shared/lib"
   import { reducedMotion } from "../utilities/a11y.svelte"
   import { createRequester } from "../utilities/script"
   import { uiState } from "../utilities/uiState.svelte"

@@ -1,6 +1,12 @@
 <script lang="ts">
   import { tick } from "svelte"
 
+  import type {
+    ExerciseSubmissionPanel,
+    FeedbackAnswer,
+    SubmissionView,
+    WebviewError,
+  } from "../../../shared/lib"
   import Button from "../components/Button.svelte"
   import CodeBlock from "../components/CodeBlock.svelte"
   import Disclosure from "../components/Disclosure.svelte"
@@ -13,12 +19,6 @@
   import SubmissionFeedbackForm from "../components/SubmissionFeedbackForm.svelte"
   import TestResults from "../components/TestResults.svelte"
   import ToolbarButton from "../components/ToolbarButton.svelte"
-  import type {
-    ExerciseSubmissionPanel,
-    FeedbackAnswer,
-    SubmissionView,
-    WebviewError,
-  } from "../shared/shared"
   import { announce } from "../utilities/a11y.svelte"
   import { addMessageListener, createRequester } from "../utilities/script"
   import { restoreScroll } from "../utilities/uiState.svelte"

@@ -1,11 +1,11 @@
 import { Err, Ok } from "ts-results"
 
+import type { LocalCourseData } from "../../../shared/lib"
+import { makeMoocKind } from "../../../shared/lib"
 import { checkForExerciseUpdates } from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import type { UserData } from "../../config/userdata"
-import type { LocalCourseData } from "../../shared/shared"
-import { makeMoocKind } from "../../shared/shared"
 import type { MoocLocalCourseData } from "../../storage/data"
 import {
   idOfMoocCourse,

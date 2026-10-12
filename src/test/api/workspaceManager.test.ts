@@ -8,6 +8,7 @@ import type { Mock } from "vitest"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import type { BackendKind } from "../../../shared/lib"
 import type { PersistClosedCourseExercises, WorkspaceExercise } from "../../api/workspaceManager"
 import WorkspaceManager, {
   ensureCourseWorkspaceFile,
@@ -25,7 +26,6 @@ import {
   workspaceFileName,
 } from "../../config/constants"
 import Resources from "../../config/resources"
-import type { BackendKind } from "../../shared/shared"
 import { Logger, LogLevel } from "../../utilities"
 import {
   idOfMoocCourse,

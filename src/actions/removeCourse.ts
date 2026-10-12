@@ -2,11 +2,11 @@ import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type { CourseIdentifier } from "../../shared/lib"
+import { LocalCourseData } from "../../shared/lib"
 import type { OperationWarning, Warned } from "../api/withOperation"
 import { failure } from "../api/withOperation"
 import { closedExercisesSettingKey } from "../config/constants"
-import type { CourseIdentifier } from "../shared/shared"
-import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
 import type { ReadyActionContext } from "./types"
 

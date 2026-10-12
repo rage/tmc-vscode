@@ -2,9 +2,9 @@ import * as path from "path"
 
 import * as vscode from "vscode"
 
+import { LocalCourseData } from "../../shared/lib"
 import { AI_EXTENSIONS } from "../config/constants"
 import { AiUseRefusedError } from "../errors"
-import { LocalCourseData } from "../shared/shared"
 import { Logger } from "../utilities"
 import type AiRestriction from "./aiRestriction"
 import type { AiRestrictionLapse } from "./aiRestriction"

@@ -2,8 +2,8 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import { ExerciseIdentifier } from "../../shared/lib"
 import { BottleneckError } from "../errors"
-import { ExerciseIdentifier } from "../shared/shared"
 import { Logger } from "../utilities/logger"
 
 /** What can run against one exercise. */

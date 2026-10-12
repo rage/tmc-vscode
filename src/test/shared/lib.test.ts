@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import type { LocalCourseData, LocalCourseExercise } from "../../shared/shared"
+import type { LocalCourseData, LocalCourseExercise } from "../../../shared/lib"
 import {
   CourseIdentifier,
   EnumSchema,
@@ -11,7 +11,7 @@ import {
   makeTmcKind,
   match,
   partition,
-} from "../../shared/shared"
+} from "../../../shared/lib"
 import {
   idOfMoocCourse,
   idOfMoocExercise,

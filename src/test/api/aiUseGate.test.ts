@@ -1,12 +1,12 @@
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import type { LocalCourseData } from "../../../shared/lib"
+import { makeMoocKind } from "../../../shared/lib"
 import * as aiRestriction from "../../api/aiRestriction"
 import type { AiRestrictionLapse } from "../../api/aiRestriction"
 import { AiUseGate, enabledAiExtensions } from "../../api/aiUseGate"
 import { AiUseRefusedError, presentationFor, SHOW_AI_USE_PROBLEM_COMMAND } from "../../errors"
-import type { LocalCourseData } from "../../shared/shared"
-import { makeMoocKind } from "../../shared/shared"
 import { Logger } from "../../utilities"
 import { idOfMoocCourse } from "../fixtures/identifiers"
 
