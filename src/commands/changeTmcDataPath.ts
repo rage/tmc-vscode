@@ -42,13 +42,21 @@ export async function changeTmcDataPath(actionContext: ReadyActionContext): Prom
     },
     (report) => moveExtensionDataPath(actionContext, newPath, report),
   )
-  if (res.ok) {
-    Logger.info(`Moved workspace folder from ${old} to ${res.val}`)
-    dialog.notification(
-      res.val === newPath.fsPath
-        ? `Moved the exercises folder to ${res.val}.`
-        : `Moved the exercises folder to ${res.val}. The folder you chose was not empty, so a` +
-            " tmcdata subfolder was used.",
-    )
+  if (res.err) {
+    return
+  }
+  const { projectsDirectory, rescanError } = res.val
+  Logger.info(`Moved workspace folder from ${old} to ${projectsDirectory}`)
+  dialog.notification(
+    projectsDirectory === newPath.fsPath
+      ? `Moved the exercises folder to ${projectsDirectory}.`
+      : `Moved the exercises folder to ${projectsDirectory}. The folder you chose was not empty,` +
+          " so a tmcdata subfolder was used.",
+  )
+  if (rescanError) {
+    dialog.warningNotification("The exercises could not be listed in their new folder.", [
+      "Refresh Courses",
+      (): void => void vscode.commands.executeCommand("tmcTreeView.refreshCourses"),
+    ])
   }
 }

@@ -61,7 +61,7 @@ suite("Change TMC data path command", function () {
 
   test("names the folder the user chose when that folder was used", async function () {
     vi.mocked(actions.moveExtensionDataPath).mockResolvedValue(
-      Ok(vscode.Uri.file(CHOSEN_PATH).fsPath),
+      Ok({ projectsDirectory: vscode.Uri.file(CHOSEN_PATH).fsPath, rescanError: undefined }),
     )
     const { context, notifications } = harness()
 
@@ -74,7 +74,9 @@ suite("Change TMC data path command", function () {
 
   test("names the tmcdata subfolder, and why it was used, when the choice was not empty", async function () {
     const used = vscode.Uri.file(CHOSEN_PATH + "/tmcdata").fsPath
-    vi.mocked(actions.moveExtensionDataPath).mockResolvedValue(Ok(used))
+    vi.mocked(actions.moveExtensionDataPath).mockResolvedValue(
+      Ok({ projectsDirectory: used, rescanError: undefined }),
+    )
     const { context, notifications } = harness()
 
     await changeTmcDataPath(context)
@@ -97,6 +99,27 @@ suite("Change TMC data path command", function () {
     expect(actions.moveExtensionDataPath).not.toHaveBeenCalled()
     expect(notifications).toEqual([])
     expect(errors).toEqual([])
+  })
+
+  test("reports a move whose rescan failed as done, with a warning", async function () {
+    vi.mocked(actions.moveExtensionDataPath).mockResolvedValue(
+      Ok({
+        projectsDirectory: vscode.Uri.file(CHOSEN_PATH).fsPath,
+        rescanError: new Error("tmc-langs crashed"),
+      }),
+    )
+    const { context, notifications, errors } = harness()
+
+    await changeTmcDataPath(context)
+
+    expect(notifications).toEqual([
+      `Moved the exercises folder to ${vscode.Uri.file(CHOSEN_PATH).fsPath}.`,
+    ])
+    expect(errors).toEqual([])
+    expect(context.dialog.warningNotification).toHaveBeenCalledExactlyOnceWith(
+      "The exercises could not be listed in their new folder.",
+      ["Refresh Courses", expect.any(Function)],
+    )
   })
 
   test("reports a failed move", async function () {

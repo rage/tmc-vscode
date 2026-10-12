@@ -67,7 +67,10 @@ suite("moveExtensionDataPath action", function () {
 
   test("should change extension data path", async function () {
     const result = await moveExtensionDataPath(actionContext(), emptyFolder(root))
-    expect(result.val).toBe(emptyFolder(root).fsPath)
+    expect(result.unwrap()).toEqual({
+      projectsDirectory: emptyFolder(root).fsPath,
+      rescanError: undefined,
+    })
     expect(tmcMock.moveProjectsDirectory).toHaveBeenCalledExactlyOnceWith(
       emptyFolder(root).fsPath,
       undefined,
@@ -77,7 +80,7 @@ suite("moveExtensionDataPath action", function () {
   test("should append tmcdata to path if target is not empty", async function () {
     const result = await moveExtensionDataPath(actionContext(), nonEmptyFolder(root))
     const expected = path.join(nonEmptyFolder(root).fsPath, "tmcdata")
-    expect(result.val).toBe(expected)
+    expect(result.unwrap().projectsDirectory).toBe(expected)
     expect(tmcMock.moveProjectsDirectory).toHaveBeenCalledExactlyOnceWith(expected, undefined)
   })
 
@@ -98,6 +101,35 @@ suite("moveExtensionDataPath action", function () {
   test("should not close exercises before moving", async function () {
     await moveExtensionDataPath(actionContext(), emptyFolder(root))
     expect(workspaceManagerMock.closeCourseExercises).not.toHaveBeenCalled()
+  })
+
+  test("refuses to move the exercises folder into itself", async function () {
+    resources.projectsDirectory = nonEmptyFolder(root).fsPath
+
+    const result = await moveExtensionDataPath(actionContext(), nonEmptyFolder(root))
+
+    expect(result.err).toBe(true)
+    expect(tmcMock.moveProjectsDirectory).not.toHaveBeenCalled()
+  })
+
+  test("refuses to move the exercises folder into a folder inside it", async function () {
+    resources.projectsDirectory = path.dirname(emptyFolder(root).fsPath)
+
+    const result = await moveExtensionDataPath(actionContext(), emptyFolder(root))
+
+    expect(result.err).toBe(true)
+    expect(tmcMock.moveProjectsDirectory).not.toHaveBeenCalled()
+  })
+
+  test("reports a completed move whose rescan failed as moved", async function () {
+    tmcMockValues.listLocalExercises = Err(new Error("tmc-langs crashed"))
+
+    const result = await moveExtensionDataPath(actionContext(), emptyFolder(root))
+
+    expect(result.unwrap()).toMatchObject({
+      projectsDirectory: emptyFolder(root).fsPath,
+      rescanError: expect.objectContaining({ message: "tmc-langs crashed" }),
+    })
   })
 
   test("should result in error if TMC operation fails", async function () {
