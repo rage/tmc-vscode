@@ -1,5 +1,4 @@
 import type { Result } from "ts-results"
-import type * as vscode from "vscode"
 import { z } from "zod"
 
 import type { ActionContext, ReadyActionContext } from "../actions/types"
@@ -30,10 +29,6 @@ export interface PanelHost {
   readonly route: Panel | undefined
   /** Sends `message` to this webview alone, kept for a reload if it targets `route`. */
   post: (message: PanelMessage) => void
-  /** Shows `route` in this webview. */
-  render: (route: Panel) => void
-  /** Shows `route` in the main panel, creating it if needed. */
-  renderMain: (route: Panel) => void
   closeSidePanel: () => void
 }
 
@@ -41,7 +36,6 @@ export interface PanelHost {
 export interface HandlerContext<C extends ActionContext = ActionContext> {
   host: PanelHost
   actionContext: C
-  extensionContext: vscode.ExtensionContext
 }
 
 /** The type of a webview-to-host message. */

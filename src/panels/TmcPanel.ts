@@ -252,11 +252,7 @@ export class TmcPanel {
       )
     }
 
-    const handlerContext: HandlerContext = {
-      host: this._createHost(extensionContext),
-      actionContext,
-      extensionContext,
-    }
+    const handlerContext: HandlerContext = { host: this._createHost(), actionContext }
     const handlers = {
       ...messageHandlers,
       ready: { requiresReady: false, handle: () => this._onReady() },
@@ -289,7 +285,7 @@ export class TmcPanel {
     }
   }
 
-  private _createHost(extensionContext: vscode.ExtensionContext): PanelHost {
+  private _createHost(): PanelHost {
     const currentRoute = (): Panel | undefined => this._route
     return {
       name: this._webviewName,
@@ -297,8 +293,6 @@ export class TmcPanel {
         return currentRoute()
       },
       post: (message) => this._postMessage(message),
-      render: (route) => this._render(route),
-      renderMain: (route) => TmcPanel.renderMain(extensionContext, this._actionContext, route),
       closeSidePanel: () => TmcPanel.sidePanel?.dispose(),
     }
   }
