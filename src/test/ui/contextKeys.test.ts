@@ -80,15 +80,15 @@ suite("trackHasCourses", function () {
   test("sets the key from the stored courses, and on each change it makes", function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     let courses: LocalCourseData[] = []
-    const changed = new vscode.EventEmitter<void>()
+    const changed = new vscode.EventEmitter<undefined>()
 
     trackHasCourses({ getCourses: () => courses, onDidChangeCourses: changed.event })
-    changed.fire()
+    changed.fire(undefined)
     courses = [{} as LocalCourseData]
-    changed.fire()
-    changed.fire()
+    changed.fire(undefined)
+    changed.fire(undefined)
     courses = []
-    changed.fire()
+    changed.fire(undefined)
 
     const updates = executeCommand.mock.calls
       .filter(([command, key]) => command === "setContext" && key === "test-my-code:HasCourses")

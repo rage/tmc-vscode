@@ -1,14 +1,16 @@
 import { z } from "zod"
 
 import type { CourseIdentifier, Enum } from "./enum"
-import { EnumSchema, ExerciseIdentifier, makeMoocKind, makeTmcKind, match } from "./enum"
+import { EnumSchema, ExerciseIdentifier, makeMoocKind, makeTmcKind, match, unwrap } from "./enum"
 
-// duplicated from the data module; keep in sync manually
+// The live course schemas. Storage v3 persists exactly these (see `data_v3.ts`), so a change
+// here is a storage format change.
+
 export const SharedTmcCourseExerciseSchema = z.object({
   id: z.number(),
   availablePoints: z.number(),
   awardedPoints: z.number(),
-  /// Equivalent to exercise slug
+  /** The exercise slug. */
   name: z.string(),
   deadline: z.string().nullable(),
   passed: z.boolean(),
@@ -26,6 +28,7 @@ export const SharedTmcCourseDataSchema = z.object({
   exercises: z.array(SharedTmcCourseExerciseSchema),
   availablePoints: z.number(),
   awardedPoints: z.number(),
+  /** The course hides submission results. */
   perhapsExamMode: z.boolean(),
   newExercises: z.array(z.number()),
   notifyAfter: z.number(),
@@ -35,29 +38,33 @@ export const SharedTmcCourseDataSchema = z.object({
 
 export type SharedTmcCourseData = z.infer<typeof SharedTmcCourseDataSchema>
 
+/** A chapter of a mooc course, as its exercises are grouped by. */
+const MoocExerciseChapterSchema = z.object({
+  name: z.string(),
+  /** The chapter's position in the course, from 1. */
+  number: z.number(),
+})
+
 export const SharedMoocCourseExerciseSchema = z.object({
   id: z.string(),
   availablePoints: z.number(),
   awardedPoints: z.number(),
-  /// Equivalent to exercise slug
+  /** The exercise slug. */
   name: z.string(),
   deadline: z.string().nullable(),
   passed: z.boolean(),
   /** Below full points with the try limit used up, so the score is final; absent means no. */
   outOfTries: z.boolean().optional(),
-  softDeadline: z.string().nullable(),
   /** The chapter the course material puts the exercise in; absent outside any chapter. */
-  chapter: z.object({ name: z.string(), number: z.number() }).optional(),
+  chapter: MoocExerciseChapterSchema.optional(),
 })
 
 export type SharedMoocCourseExercise = z.infer<typeof SharedMoocCourseExerciseSchema>
 
 export const SharedMoocCourseDataSchema = z.object({
-  // The courses.mooc.fi course id. There is no separate course-instance concept
-  // on this backend (the backend resolves the enrolled instance from the user's
-  // identity), so the course id is the sole client-side course key.
+  /** The courses.mooc.fi course id, which is the course's only client-side key. */
   id: z.string(),
-  // course slug
+  /** The course slug. */
   name: z.string(),
   title: z.string(),
   description: z.string().nullable(),
@@ -65,11 +72,8 @@ export const SharedMoocCourseDataSchema = z.object({
   exercises: z.array(SharedMoocCourseExerciseSchema),
   availablePoints: z.number(),
   awardedPoints: z.number(),
-  perhapsExamMode: z.boolean(),
   newExercises: z.array(z.string()),
   notifyAfter: z.number(),
-  disabled: z.boolean(),
-  materialUrl: z.string().nullable(),
 })
 
 export type SharedMoocCourseData = z.infer<typeof SharedMoocCourseDataSchema>
@@ -83,10 +87,11 @@ export type LocalCourseExercise = Enum<SharedTmcCourseExercise, SharedMoocCourse
 export function isSoftDeadlineBinding({
   softDeadline,
   deadline,
-}: Pick<SharedTmcCourseExercise, "softDeadline" | "deadline">): boolean {
-  return (
-    softDeadline !== null && deadline !== null && Date.parse(softDeadline) < Date.parse(deadline)
-  )
+}: {
+  softDeadline?: string | null
+  deadline: string | null
+}): boolean {
+  return !!softDeadline && deadline !== null && Date.parse(softDeadline) < Date.parse(deadline)
 }
 
 /** What missing a binding soft deadline costs, as one sentence for the student. */
@@ -95,20 +100,16 @@ export const SOFT_DEADLINE_PENALTY =
 
 export namespace LocalCourseExercise {
   export function getSlug(lce: LocalCourseExercise): string {
-    return match(
-      lce,
-      (tmc) => tmc.name,
-      (mooc) => mooc.name,
-    )
+    return unwrap(lce).name
   }
 
   export function getId(lce: LocalCourseExercise): ExerciseIdentifier {
-    const id = match(
-      lce,
-      (tmc) => tmc.id,
-      (mooc) => mooc.id,
-    )
-    return ExerciseIdentifier.from(id)
+    return ExerciseIdentifier.from(unwrap(lce).id)
+  }
+
+  /** The soft deadline as stored; mooc exercises have none. */
+  export function getSoftDeadline(lce: LocalCourseExercise): string | null {
+    return lce.kind === "tmc" ? lce.data.softDeadline : null
   }
 }
 
@@ -135,20 +136,22 @@ export namespace LocalCourseData {
    * per-course settings. Use {@link getCourseTitle} for anything the user reads.
    */
   export function getCourseName(lcd: LocalCourseData): string {
-    return match(
-      lcd,
-      (tmc) => tmc.name,
-      (mooc) => mooc.name,
-    )
+    return unwrap(lcd).name
   }
 
   /** The course's human-readable name, for every label shown to the user. */
   export function getCourseTitle(lcd: LocalCourseData): string {
-    return match(
-      lcd,
-      (tmc) => tmc.title,
-      (mooc) => mooc.title,
-    )
+    return unwrap(lcd).title
+  }
+
+  /** Whether the backend has closed the course to downloads and submissions; never for mooc. */
+  export function isDisabled(lcd: LocalCourseData): boolean {
+    return lcd.kind === "tmc" && lcd.data.disabled
+  }
+
+  /** Whether the course hides submission results, as an exam does; never for mooc. */
+  export function isExamMode(lcd: LocalCourseData): boolean {
+    return lcd.kind === "tmc" && lcd.data.perhapsExamMode
   }
 
   export function getNewExercises(lcd: LocalCourseData): ExerciseIdentifier[] {

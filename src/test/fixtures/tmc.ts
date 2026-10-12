@@ -2,7 +2,7 @@ import type {
   LocalExercise,
   LocalTmcExercise,
   MoocCourse,
-  MoocCourseProgress,
+  CourseProgress,
   TmcExerciseSlide,
 } from "../../shared/langsSchema"
 import type { ExerciseIdentifier } from "../../shared/shared"
@@ -76,7 +76,7 @@ const moocExerciseSlides: TmcExerciseSlide[] = [
 const moocEnrolledCourses: MoocCourse[] = [moocCourse]
 
 // The user's progress for `moocCourse`: the one exercise passed with full points.
-const moocCourseProgress: MoocCourseProgress = {
+const moocCourseProgress: CourseProgress = {
   course_id: MOOC_COURSE_UUID,
   exercises: [
     {

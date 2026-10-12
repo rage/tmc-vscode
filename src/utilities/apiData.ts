@@ -9,7 +9,7 @@ import type {
   Exercise,
   ExerciseProgress,
   MoocCourse,
-  MoocCourseProgress,
+  CourseProgress,
   TmcExerciseSlide,
 } from "../shared/langsSchema"
 import type {
@@ -61,7 +61,7 @@ export function combineTmcApiExerciseData(
  */
 export function combineMoocApiExerciseData(
   slides: TmcExerciseSlide[],
-  progress: MoocCourseProgress | undefined,
+  progress: CourseProgress | undefined,
   previousExercises: MoocLocalCourseExercise[] = [],
 ): MoocLocalCourseExercise[] {
   const progressById = new Map(progress?.exercises.map((x) => [x.exercise_id, x]) ?? [])
@@ -73,7 +73,6 @@ export function combineMoocApiExerciseData(
       id: slide.exercise_id,
       name: slide.exercise_name,
       deadline: slide.deadline,
-      softDeadline: slide.deadline,
       ...moocStoredStanding(exerciseProgress, previous),
       availablePoints: exerciseProgress?.score_maximum ?? previous?.availablePoints ?? 0,
       awardedPoints: exerciseProgress?.score_given ?? previous?.awardedPoints ?? 0,
@@ -182,7 +181,7 @@ export function toStoredTmcCourse(
 export function toStoredMoocCourse(
   course: MoocCourse,
   slides: TmcExerciseSlide[],
-  progress: MoocCourseProgress | undefined,
+  progress: CourseProgress | undefined,
   previous?: MoocLocalCourseData,
 ): MoocLocalCourseData {
   const exercises = combineMoocApiExerciseData(slides, progress, previous?.exercises)
@@ -195,10 +194,6 @@ export function toStoredMoocCourse(
     organization: course.organization_name,
     exercises,
     ...sumCoursePoints(exercises),
-    // courses.mooc.fi has no exam mode, course material link or disabled state.
-    perhapsExamMode: false,
-    materialUrl: null,
-    disabled: false,
     newExercises: previous?.newExercises ?? [],
     notifyAfter: previous?.notifyAfter ?? 0,
   }

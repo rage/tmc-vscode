@@ -66,15 +66,11 @@ export async function vscodeapi_migrateFromV1(
   await settings.update(data.v2.TMC_LOG_LEVEL_KEY, storageSettings.logLevel, true)
 }
 
-/** The last key extension settings were persisted under; no storage version declares it any more. */
-const RETIRED_V3_SETTINGS_KEY = "extension-settings-v3"
-
 /** Every key extension settings have ever been stored under; one left out survives as a stale copy. */
 const EXTENSION_SETTINGS_KEYS = [
   data.v0.EXTENSION_SETTINGS_KEY,
   data.v1.EXTENSION_SETTINGS_KEY,
   data.v2.EXTENSION_SETTINGS_KEY,
-  RETIRED_V3_SETTINGS_KEY,
 ]
 
 /**

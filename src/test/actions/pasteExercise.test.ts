@@ -9,7 +9,7 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
 import { BottleneckError } from "../../errors"
-import { pasteServiceName } from "../../shared/shared"
+import { makeMoocKind, makeTmcKind, pasteServiceName } from "../../shared/shared"
 import { createMockActionContext } from "../mocks/actionContext"
 
 const COURSE_SLUG = "mooc-python-course"
@@ -45,7 +45,7 @@ function moocContextWith(pasteResult: unknown): {
   const submit = vi.fn().mockResolvedValue(pasteResult)
   const actionContext = contextFor(
     { submitMoocExerciseToPaste: submit },
-    { getMoocExerciseByName: () => ({ id: MOOC_EXERCISE_ID }) },
+    { getExerciseByName: () => makeMoocKind({ id: MOOC_EXERCISE_ID }) },
   )
   return { actionContext, submit }
 }
@@ -57,7 +57,7 @@ function tmcContextWith(pasteResult: unknown): {
   const submit = vi.fn().mockResolvedValue(pasteResult)
   const actionContext = contextFor(
     { submitTmcExerciseToPaste: submit },
-    { getTmcExerciseByName: () => ({ id: TMC_EXERCISE_ID }) },
+    { getExerciseByName: () => makeTmcKind({ id: TMC_EXERCISE_ID }) },
   )
   return { actionContext, submit }
 }
@@ -165,7 +165,7 @@ suite("paste action, through the real runForExercise boundary", () => {
         langs: {} as unknown as ReadyStartup["langs"],
         userData: {
           getCourseBySlug: () => Ok({}),
-          getMoocExerciseByName: () => ({ id: MOOC_EXERCISE_ID }),
+          getExerciseByName: () => makeMoocKind({ id: MOOC_EXERCISE_ID }),
         } as unknown as ReadyStartup["userData"],
         workspaceManager: {
           getExerciseBySlug: () => ({ uri: exercise.uri }),

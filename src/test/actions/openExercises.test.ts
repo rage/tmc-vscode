@@ -33,16 +33,12 @@ const moocCourse: MoocLocalCourseData = {
       awardedPoints: 0,
       deadline: null,
       passed: false,
-      softDeadline: null,
     },
   ],
   availablePoints: 1,
   awardedPoints: 0,
-  perhapsExamMode: false,
   newExercises: [],
   notifyAfter: 0,
-  disabled: false,
-  materialUrl: null,
 }
 
 const GIB = 1024 ** 3

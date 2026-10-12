@@ -20,7 +20,7 @@ suite("the settings mock", () => {
     // pass on a disagreement that cannot happen.
     const [settings, values, change] = createSettingsMock()
     const notified: boolean[] = []
-    settings.onChangeUpdateExercisesAutomatically = (value): void => void notified.push(value)
+    settings.onChangeMirroredSetting = (_, value): void => void notified.push(value)
 
     change.updateExercisesAutomatically(true)
 

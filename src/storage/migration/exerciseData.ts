@@ -10,8 +10,7 @@ import type { MigratedData } from "."
 import validateData from "."
 import type Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
-import { legacyClosedExercisesSettingKey } from "../../config/constants"
-import { ExerciseMigrationError } from "../../errors"
+import { closedExercisesSettingKey } from "../../config/constants"
 import { Logger } from "../../utilities"
 import * as data from "../data"
 
@@ -59,129 +58,124 @@ export function v0_resolveExercisePath(
 }
 
 /**
- * Hands the v0 exercises that are still on disk over to langs, which owns the
- * exercise directory from v1 on.
+ * Hands v0 exercises that are still on disk over to langs, which owns the exercise
+ * directory from v1 on.
  *
- * Returns `course/name` for every exercise langs refused. The v0 record is the
- * only remaining pointer to those files, so a non-empty return means the
- * caller must keep it. Exercises whose files are already gone are dropped
- * rather than reported: there is nothing left to point at.
+ * Returns the exercises langs refused, each with `path` set to where its files were
+ * found, so a retry needs nothing else from v0 storage. Exercises whose files are
+ * already gone are dropped rather than returned: there is nothing left to point at.
  */
-export async function v1_migrateFromV0(
-  exerciseData: data.v0.LocalExerciseData[],
-  memento: vscode.Memento,
-  dialog: Dialog,
+async function handOverToLangs(
+  exercises: data.v0.LocalExerciseData[],
+  dataPath: string | undefined,
   langs: Langs,
-): Promise<string[]> {
-  interface ExtensionSettingsPartial {
-    dataPath: string
-  }
-
-  const dataPath = memento.get<ExtensionSettingsPartial>(data.v0.EXTENSION_SETTINGS_KEY)?.dataPath
-  const closedExercises: Record<string, string[]> = {}
-
-  const exercisesToMigrate: [data.v0.LocalExerciseData, string][] = []
-  for (const exercise of exerciseData) {
-    const { id, course, isOpen, name, path: exercisePath, organization, status } = exercise
-    if (v0_exerciseIsClosed(status, isOpen)) {
-      if (closedExercises[course]) {
-        closedExercises[course].push(name)
-      } else {
-        closedExercises[course] = [name]
-      }
-    }
-
+  onProgress?: (fraction: number) => void,
+): Promise<data.v0.LocalExerciseData[]> {
+  const refused: data.v0.LocalExerciseData[] = []
+  let index = 0
+  for (const exercise of exercises) {
+    const { checksum, course, id, name, organization } = exercise
     const pathResult = v0_resolveExercisePath(
       id,
       name,
       course,
       organization,
-      exercisePath,
+      exercise.path,
       dataPath,
     )
     if (pathResult.err) {
       Logger.error(`Have to discard exercise ${course}/${name}:`, pathResult.val)
-      continue
-    }
-
-    exercisesToMigrate.push([exercise, pathResult.val])
-  }
-
-  if (exercisesToMigrate.length === 0) {
-    return []
-  }
-
-  const unmigrated: string[] = []
-  const message =
-    "Migrating exercises on disk for extension version 2. Please do not close the editor…"
-  const result = await dialog.progressNotification(message, async (progress) => {
-    let atLeastOneSuccess = false
-    let index = 0
-    for (const [exercise, targetPath] of exercisesToMigrate) {
-      const { checksum, course, id, name } = exercise
-      const migrationResult = await langs.migrateExercise(course, checksum, id, targetPath, name)
-      if (migrationResult.ok) {
-        atLeastOneSuccess = true
-      } else {
+    } else {
+      const migrationResult = await langs.migrateExercise(
+        course,
+        checksum,
+        id,
+        pathResult.val,
+        name,
+      )
+      if (migrationResult.err) {
         Logger.error(`Migration failed for exercise ${course}/${name}:`, migrationResult.val)
-        unmigrated.push(`${course}/${name}`)
+        refused.push({ ...exercise, path: pathResult.val })
       }
-
-      progress.report({
-        fraction: ++index / exercisesToMigrate.length,
-        message,
-      })
     }
-
-    return atLeastOneSuccess ? Ok.EMPTY : Err("Exercise migration failed.")
-  })
-
-  if (result.err) {
-    throw new ExerciseMigrationError(result.val, "Exercise migration failed.")
+    onProgress?.(++index / exercises.length)
   }
-
-  for (const courseName of Object.keys(closedExercises)) {
-    const closeExercisesResult = await langs.setSetting(
-      legacyClosedExercisesSettingKey(courseName),
-      closedExercises[courseName],
-    )
-    if (closeExercisesResult.err) {
-      Logger.error("Failed to migrate status of closed exercises.", closeExercisesResult.val)
-    }
-  }
-
-  return unmigrated
+  return refused
 }
 
+/** Records each course's closed v0 exercises under the setting the workspace manager reads. */
+async function migrateClosedExercises(
+  exercises: data.v0.LocalExerciseData[],
+  langs: Langs,
+): Promise<void> {
+  const closedByCourse = new Map<string, string[]>()
+  for (const { course, isOpen, name, status } of exercises) {
+    if (v0_exerciseIsClosed(status, isOpen)) {
+      closedByCourse.set(course, [...(closedByCourse.get(course) ?? []), name])
+    }
+  }
+  for (const [course, closed] of closedByCourse) {
+    const result = await langs.setSetting(closedExercisesSettingKey("tmc", course), closed)
+    if (result.err) {
+      Logger.error("Failed to migrate status of closed exercises.", result.val)
+    }
+  }
+}
+
+/**
+ * Moves pre-2.0 exercises into langs' care.
+ *
+ * Exercises langs refuses are kept under {@link data.v3.PENDING_EXERCISE_MIGRATION_KEY}
+ * and retried quietly on later activations; only the first attempt shows progress and
+ * warns.
+ */
 export default async function migrateExerciseDataToLatest(
   memento: vscode.Memento,
   dialog: Dialog,
-  tmc: Langs,
-): Promise<MigratedData<undefined>> {
-  const supersededKeys: string[] = []
+  langs: Langs,
+): Promise<MigratedData<data.v0.LocalExerciseData[]>> {
+  const exercisesSchema = z.array(data.v0.localExerciseDataSchema)
+  const supersededKeys = [data.v0.EXERCISE_DATA_KEY, data.v3.PENDING_EXERCISE_MIGRATION_KEY]
 
-  // v0 => v1
-  const dataV0 = validateData(
-    memento.get(data.v0.EXERCISE_DATA_KEY),
-    z.array(data.v0.localExerciseDataSchema),
-  )
+  let refused: data.v0.LocalExerciseData[]
+  const dataV0 = validateData(memento.get(data.v0.EXERCISE_DATA_KEY), exercisesSchema)
   if (dataV0) {
-    const unmigrated = await v1_migrateFromV0(dataV0, memento, dialog, tmc)
-    if (unmigrated.length === 0) {
-      supersededKeys.push(data.v0.EXERCISE_DATA_KEY)
-    } else {
-      Logger.error("Exercises left unmigrated:", unmigrated.join(", "))
+    const dataPath = memento.get<{ dataPath?: string }>(data.v0.EXTENSION_SETTINGS_KEY)?.dataPath
+    await migrateClosedExercises(dataV0, langs)
+    const message =
+      "Migrating exercises on disk for extension version 2. Please do not close the editor…"
+    refused = await dialog.progressNotification(message, (progress) =>
+      handOverToLangs(dataV0, dataPath, langs, (fraction) =>
+        progress.report({ fraction, message }),
+      ),
+    )
+    if (refused.length > 0) {
       void dialog.warningNotification(
-        `${unmigrated.length} exercise(s) could not be migrated and were left where they are. ` +
+        `${refused.length} exercise(s) could not be migrated and were left where they are. ` +
           "The migration will try again the next time the extension starts.",
       )
     }
+  } else {
+    const pending = validateData(
+      memento.get(data.v3.PENDING_EXERCISE_MIGRATION_KEY),
+      exercisesSchema,
+    )
+    if (!pending) {
+      return { data: undefined, supersededKeys: [], destinationKey: undefined }
+    }
+    refused = await handOverToLangs(pending, undefined, langs)
   }
 
-  // to support the mooc backend, langs stores new courses in distinct tmc and mooc dirs
-  // but it also supports the old way of storing courses so there's no need to do anything here
-  // though we can still do the migration later if we want to just for consistency
-  // await v3_migrateFromV1();
-
-  return { data: undefined, supersededKeys, destinationKey: undefined }
+  if (refused.length === 0) {
+    return { data: undefined, supersededKeys, destinationKey: undefined }
+  }
+  Logger.error(
+    "Exercises left unmigrated:",
+    refused.map(({ course, name }) => `${course}/${name}`).join(", "),
+  )
+  return {
+    data: refused,
+    supersededKeys,
+    destinationKey: data.v3.PENDING_EXERCISE_MIGRATION_KEY,
+  }
 }

@@ -35,7 +35,6 @@ export function moocCourseExercise(
     availablePoints: 1,
     awardedPoints: 0,
     deadline: null,
-    softDeadline: null,
     passed: false,
     ...overrides,
   }

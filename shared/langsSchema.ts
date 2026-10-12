@@ -2,7 +2,6 @@ import { z } from "zod"
 
 import {
   zCliOutput,
-  zCourseProgress,
   zMoocOldSubmissionRestore,
   zNotification,
   zOutputData,
@@ -40,12 +39,6 @@ export * from "./generated/langs"
 // Not part of the generated CliOutput contract: CLI input helpers and
 // client-side composites, kept hand-written for compatibility.
 // ---------------------------------------------------------------------------
-
-export const Locale = z.string()
-export type Locale = z.infer<typeof Locale>
-
-export const Compression = z.enum(["tar", "zip", "zstd"])
-export type Compression = z.infer<typeof Compression>
 
 /**
  * The answers a user gave to a submission's feedback questions.
@@ -86,10 +79,6 @@ export const CliStatusUpdate = zStatusUpdateData.and(
   z.object({ "output-kind": z.literal("status-update") }),
 )
 export type CliStatusUpdate = z.infer<typeof CliStatusUpdate>
-
-/** Per-exercise progress for a course, from `mooc course-progress` (`mooc-course-progress` output kind); course totals are derived by summation. */
-export const MoocCourseProgress = zCourseProgress
-export type MoocCourseProgress = z.infer<typeof MoocCourseProgress>
 
 /** Outcome of `mooc download-old-submission`: `nothing-to-download` for a submission the server has no files for, which only an exercise type with no files at all can be. */
 export const MoocOldSubmissionRestore = zMoocOldSubmissionRestore
