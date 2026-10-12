@@ -135,3 +135,8 @@ export class BaseError extends Error {
     return errorMessage
   }
 }
+
+/** `thrown` as an `Error`: itself if it is one, else an `Error` with it as the message. */
+export function toError(thrown: unknown): Error {
+  return thrown instanceof Error ? thrown : new Error(String(thrown))
+}

@@ -14,7 +14,7 @@ import type {
   RequestType,
   WebviewToExtension,
 } from "../shared/shared"
-import { WebviewToExtensionSchema } from "../shared/shared"
+import { toError, WebviewToExtensionSchema } from "../shared/shared"
 import { Logger } from "../utilities"
 import { toWebviewError } from "./webviewError"
 
@@ -120,7 +120,7 @@ export async function dispatch(
     Logger.error(`Failed to handle "${message.type}" from the webview`, error)
     void actionContext.dialog.reportError(
       "Something went wrong while handling that action.",
-      error instanceof Error ? error : new Error(String(error)),
+      toError(error),
     )
     if (request) {
       reply(context.host, request, {

@@ -9,6 +9,7 @@ import { SHOW_AI_USE_PROBLEM_COMMAND } from "../errors"
 import { initializationErrorHelpPanel, nextPanelId } from "../panels/routes"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { CourseIdentifier } from "../shared/shared"
+import { toError } from "../shared/shared"
 import type { ExerciseTestController } from "../testing/exerciseTestController"
 import { showAccountMenu } from "../ui/statusBarAccount"
 import { showExerciseActions } from "../ui/statusBarExercise"
@@ -61,10 +62,7 @@ function commandRegistrar(
         try {
           return await run(...args)
         } catch (e) {
-          void dialog.reportError(
-            `Failed to run ${commandTitle(id)}.`,
-            e instanceof Error ? e : new Error(String(e)),
-          )
+          void dialog.reportError(`Failed to run ${commandTitle(id)}.`, toError(e))
           return undefined
         }
       }),

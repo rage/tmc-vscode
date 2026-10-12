@@ -3,6 +3,7 @@ import { Err } from "ts-results"
 import * as vscode from "vscode"
 
 import { AiUseRefusedError, BottleneckError, presentationFor } from "../errors"
+import { toError } from "../shared/shared"
 import { Logger } from "../utilities"
 import type Dialog from "./dialog"
 import type { FractionProgress, NotificationButton, ProgressLocation } from "./dialog"
@@ -65,7 +66,7 @@ export async function withOperation<T>(
         )
       : await body(() => {})
   } catch (thrown) {
-    result = Err(thrown instanceof Error ? thrown : new Error(String(thrown)))
+    result = Err(toError(thrown))
   }
   if (result.err) {
     reportFailure(dialog, options, result.val)

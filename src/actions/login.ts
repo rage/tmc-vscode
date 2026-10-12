@@ -2,6 +2,7 @@ import type { Result } from "ts-results"
 import { Err } from "ts-results"
 
 import type { MoocDeviceLogin } from "../shared/langsSchema"
+import { toError } from "../shared/shared"
 import type { ReadyActionContext } from "./types"
 
 /** A running `mooc login`. */
@@ -20,9 +21,7 @@ export function startMoocLogin(actionContext: ReadyActionContext): MoocLoginProc
   const { result, interrupt } = actionContext.startup.langs.authenticate(deviceCode.resolve)
   return {
     deviceCode: deviceCode.promise,
-    result: result.catch((error: unknown) =>
-      Err(error instanceof Error ? error : new Error(String(error))),
-    ),
+    result: result.catch((error: unknown) => Err(toError(error))),
     interrupt,
   }
 }
