@@ -77,8 +77,7 @@ suite("ensureLangsUpdated checksum parsing", function () {
   const upperHash = lowerHash.toUpperCase()
 
   test("normalizes an uppercase .sha256 hash to lowercase", function () {
-    // Regression: server-served uppercase hashes used to trigger a
-    // redownload on every startup.
+    // An uppercase hash from the server must still match, or every startup redownloads.
     expect(parseSha256Sum(`${upperHash}  tmc-langs-cli`)).toBe(lowerHash)
   })
 

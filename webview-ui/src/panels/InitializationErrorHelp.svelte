@@ -15,26 +15,6 @@
 
   let { panel }: Props = $props()
 
-  type InitializationErrors = InitializationErrorHelpPanel["initializationErrors"]
-
-  const components: ReadonlyArray<{ key: keyof InitializationErrors; label: string }> = [
-    { key: "tmc", label: "tmc-langs" },
-    { key: "userData", label: "user data" },
-    { key: "workspaceManager", label: "workspace manager" },
-    { key: "exerciseDecorationProvider", label: "exercise decoration provider" },
-    { key: "resources", label: "resources" },
-  ]
-
-  const failures = $derived.by(() => {
-    const cliHint =
-      "A proxy, firewall or antivirus program blocking network requests can cause this. " +
-      `Try adding an exception for the directory '${panel.cliFolder}'.`
-    return components.flatMap(({ key, label }) => {
-      const failure = panel.initializationErrors[key]
-      return failure ? [{ key, label, ...failure, hint: key === "tmc" ? cliHint : undefined }] : []
-    })
-  })
-
   onMount(restoreScroll)
 
   function runCommand(command: RunnableCommand) {
@@ -46,20 +26,20 @@
 <p>Something went wrong while initializing the extension.</p>
 
 <h2>What failed</h2>
-{#if failures.length === 0}
+{#if panel.failures.length === 0}
   <p>No error data found</p>
 {:else}
   <ul class="failures">
-    {#each failures as failure (failure.key)}
+    {#each panel.failures as failure (failure.service)}
       <li>
-        <p>Failed to initialize {failure.label}: {failure.error}</p>
+        <p>Failed to initialize {failure.service}: {failure.error}</p>
         {#if failure.hint}<p>{failure.hint}</p>{/if}
         <Disclosure
-          title="Stack trace of {failure.label}"
+          title="Stack trace of {failure.service}"
           headingLevel={3}
-          persistAs="stackTrace:{failure.key}"
+          persistAs="stackTrace:{failure.service}"
         >
-          <CodeBlock label="Stack trace of {failure.label}" code={failure.stack} />
+          <CodeBlock label="Stack trace of {failure.service}" code={failure.stack} />
         </Disclosure>
       </li>
     {/each}

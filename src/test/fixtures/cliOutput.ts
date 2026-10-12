@@ -709,8 +709,8 @@ const invalidCliOutputFixtures: CliOutputFixture[] = [
     value: outputData("mooc-courses", [{ ...moocCourse, id: 590 }]),
   },
   {
-    // The shape langs used to expect but the `tmc` exercise service never emitted;
-    // accepting it again would mean the two have drifted apart once more.
+    // A shape the `tmc` exercise service never emits; accepting it would mean langs and
+    // the service have drifted apart.
     name: "mooc exercise slide with a type-tagged Editor model solution",
     value: outputData("mooc-exercise-slide", {
       ...moocExerciseSlide,

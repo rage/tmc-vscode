@@ -281,6 +281,19 @@ suite("CoursesTree", function () {
     expect(tree.getParent(children[0] as CoursesTreeItem)).toBe(course)
   })
 
+  test("two mooc exercises sharing a name are two rows", function () {
+    const [course] = show(
+      moocCourse({
+        exercises: [
+          { ...tmcExercise(0, "Exercise"), id: "ex-1" },
+          { ...tmcExercise(0, "Exercise"), id: "ex-2" },
+        ],
+      }),
+    )
+
+    expect(new Set(exercisesOf(course).map((item) => item.id)).size).toBe(2)
+  })
+
   test("a part names its next deadline, and withholds it while its backend is unreachable", function () {
     const course = tmcCourse({
       exercises: [
@@ -388,8 +401,10 @@ suite("CoursesTree", function () {
       expect(icon(item)).toEqual(["circle-slash", "testing.iconSkipped"])
       expect(item.contextValue).toBe("exercise.missing")
       expect(item.description).toBe("not downloaded · 2/3 points · no tries left")
-      expect(item.accessibilityInformation?.label).toMatch(/^loops, not passed, no tries left, /)
-      expect(tooltipOf(item)).toContain("2/3 points · no tries left")
+      expect(item.accessibilityInformation?.label).toBe(
+        "loops, not passed, not downloaded, 2 of 3 points, no tries left",
+      )
+      expect(tooltipOf(item)).toContain("No tries left, so this score is final.")
     })
 
     test("downloading spins, and a failed download says so", function () {
@@ -435,7 +450,7 @@ suite("CoursesTree", function () {
 
     test("with an update is marked, and the course and badge count it", function () {
       workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Open)]
-      updateablesRegistry.set(CourseIdentifier.from(1), [makeTmcKind({ tmcExerciseId: 1 })])
+      updateablesRegistry.setMany([[CourseIdentifier.from(1), [makeTmcKind({ tmcExerciseId: 1 })]]])
       const item = onlyExercise()
 
       expect(item.contextValue).toBe("exercise.opened.updateable")
@@ -484,7 +499,7 @@ suite("CoursesTree", function () {
     tree.onDidChangeTreeData((node) => refreshed.push(node))
     const changes = [
       () => downloadFailures.record([makeTmcKind({ tmcExerciseId: 1 })], []),
-      () => updateablesRegistry.set(CourseIdentifier.from(1), []),
+      () => updateablesRegistry.setMany([[CourseIdentifier.from(1), []]]),
       () => exercisesChanged.fire(),
       () => coursesChanged.fire(),
     ]
@@ -592,6 +607,17 @@ suite("CoursesTree", function () {
       const [item, options] = view.reveal.mock.calls[0] as [ExerciseTreeItem, object]
       expect(item.label).toBe("01_hello")
       expect(options).toEqual({ select: true, focus: true })
+    })
+
+    test("builds no other course's rows to find the exercise", async function () {
+      show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }), moocCourse())
+      const childrenRead = vi.spyOn(CourseTreeItem.prototype, "children", "get")
+
+      await tree.revealExercise(vscode.Uri.file("/exercises/tmc-slug/part01-01_hello/src/hello.py"))
+
+      expect(childrenRead.mock.contexts.map((course) => (course as CourseTreeItem).label)).toEqual([
+        "The Python Course",
+      ])
     })
 
     test("on request, reports a file no row holds", async function () {

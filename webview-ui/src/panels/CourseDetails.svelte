@@ -87,6 +87,10 @@
       courseId: panel.courseId,
     })
   }
+  // Not an `<a href>`: VS Code would open the backend-supplied URL itself, whatever its scheme.
+  function openInBrowser(url: string) {
+    vscode.postMessage({ type: "openLinkInBrowser", url })
+  }
   function showExercises() {
     vscode.postMessage({ type: "runCommand", command: "tmc.myCourses" })
   }
@@ -116,7 +120,12 @@
     {/if}
     <Meter label="Points" value={course.awardedPoints} max={course.availablePoints} />
     {#if course.materialUrl}
-      <p><a href={course.materialUrl}>Course material</a></p>
+      {@const materialUrl = course.materialUrl}
+      <p>
+        <Button secondary icon="link-external" onclick={() => openInBrowser(materialUrl)}>
+          Course material
+        </Button>
+      </p>
     {/if}
     {#if hasSoftDeadlines}
       <p class="muted">{SOFT_DEADLINE_PENALTY} A hard deadline cannot be exceeded.</p>

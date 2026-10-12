@@ -83,10 +83,12 @@ suite("CourseDetails panel", () => {
       "aria-valuetext",
       "1 / 2 points",
     )
-    expect(screen.getByRole("link", { name: "Course material" })).toHaveAttribute(
-      "href",
-      "https://example.com/material",
-    )
+    screen.getByRole("button", { name: "Course material" }).click()
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "openLinkInBrowser",
+      url: "https://example.com/material",
+    })
+    expect(screen.queryByRole("link")).not.toBeInTheDocument()
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument()
     expect(screen.queryByRole("heading", { level: 2 })).not.toBeInTheDocument()
   })

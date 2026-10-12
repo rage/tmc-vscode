@@ -39,21 +39,20 @@ export const ExerciseSubmissionPanelSchema = z.object({
 
 export type ExerciseSubmissionPanel = z.infer<typeof ExerciseSubmissionPanelSchema>
 
-const InitializationFailureSchema = z.object({ error: z.string(), stack: z.string() }).nullable()
+const InitializationFailureSchema = z.object({
+  /** The service that failed, named for the student. */
+  service: z.string(),
+  error: z.string(),
+  stack: z.string(),
+  /** What the student can do about this particular failure. */
+  hint: z.string().optional(),
+})
 
 export const InitializationErrorHelpPanelSchema = z.object({
   id: z.number(),
   type: z.literal("InitializationErrorHelp"),
-  /** Where the tmc-langs CLI is kept, for a firewall or antivirus exception. */
-  cliFolder: z.string(),
-  /** Each service's activation failure; `null` for one that did not fail. */
-  initializationErrors: z.object({
-    tmc: InitializationFailureSchema,
-    userData: InitializationFailureSchema,
-    workspaceManager: InitializationFailureSchema,
-    exerciseDecorationProvider: InitializationFailureSchema,
-    resources: InitializationFailureSchema,
-  }),
+  /** The activation's failures; empty when it had none. */
+  failures: z.array(InitializationFailureSchema),
 })
 
 export type InitializationErrorHelpPanel = z.infer<typeof InitializationErrorHelpPanelSchema>

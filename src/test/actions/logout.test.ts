@@ -58,8 +58,7 @@ suite("logout action", function () {
   })
 
   test("still attempts the mooc logout when the tmc logout throws instead of returning an Err", async function () {
-    // Regression test: an earlier `logout` relied on deauthenticate calls
-    // never rejecting; this guards against that assumption breaking.
+    // A deauthenticate call that rejects instead of returning an Err must not skip the other.
     const error = new Error("tmc logout exploded")
     deauthenticate = vi.fn(async () => {
       throw error

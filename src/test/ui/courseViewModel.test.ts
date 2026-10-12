@@ -213,6 +213,29 @@ suite("buildCourseView", () => {
     expect(parts[1]?.exercises.map((ex) => ex.name)).toEqual(["While", "For"])
   })
 
+  test("keeps two chapters that share a name apart, and one named like the course grouped", () => {
+    const parts = build(
+      moocCourse([
+        moocExercise("cccccccc-cccc-4ccc-accc-000000000001", "Recap 1", {
+          chapter: { name: "Recap", number: 1 },
+        }),
+        moocExercise("cccccccc-cccc-4ccc-accc-000000000002", "Recap 2", {
+          chapter: { name: "Recap", number: 2 },
+        }),
+        moocExercise("cccccccc-cccc-4ccc-accc-000000000003", "Intro", {
+          chapter: { name: "MOOC Python", number: 3 },
+        }),
+      ]),
+    )
+
+    expect(parts.map((part) => [part.name, part.isUngrouped, part.exercises.length])).toEqual([
+      ["Recap", false, 1],
+      ["Recap", false, 1],
+      ["MOOC Python", false, 1],
+    ])
+    expect(new Set(parts.map((part) => part.key)).size).toBe(3)
+  })
+
   test("marks an undownloaded exercise past its hard deadline as expired", () => {
     const parts = build(
       course([

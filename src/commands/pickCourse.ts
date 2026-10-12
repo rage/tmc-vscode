@@ -7,6 +7,8 @@ import type { CourseIdentifier, LocalCourseData } from "../shared/shared"
 interface PickCourseOptions {
   title: string
   placeHolder: string
+  /** See `courseSelectionItems`. */
+  decorate?: (course: LocalCourseData, title: string) => string
 }
 
 /**
@@ -15,29 +17,14 @@ interface PickCourseOptions {
  * On an empty course list, offers to add one instead of showing an empty quick pick.
  *
  * @returns The picked course, or `undefined` if there are no courses or the pick was
- * dismissed. Picking yields a {@link CourseIdentifier} unless `value` says otherwise.
+ * dismissed.
  */
 export async function pickCourse(
   actionContext: ReadyActionContext,
   options: PickCourseOptions,
-): Promise<CourseIdentifier | undefined>
-export async function pickCourse<T>(
-  actionContext: ReadyActionContext,
-  options: PickCourseOptions & {
-    value: (course: LocalCourseData) => T
-    decorate?: (course: LocalCourseData, title: string) => string
-  },
-): Promise<T | undefined>
-export async function pickCourse<T>(
-  actionContext: ReadyActionContext,
-  options: PickCourseOptions & {
-    value?: (course: LocalCourseData) => T
-    decorate?: (course: LocalCourseData, title: string) => string
-  },
-): Promise<T | CourseIdentifier | undefined> {
+): Promise<CourseIdentifier | undefined> {
   const { dialog } = actionContext
-  const { userData } = actionContext.startup
-  const courses = userData.getCourses()
+  const courses = actionContext.startup.userData.getCourses()
   if (courses.length === 0) {
     await dialog.notification("No courses added yet.", [
       "Add a course",
@@ -45,18 +32,6 @@ export async function pickCourse<T>(
     ])
     return undefined
   }
-
-  // Omit `decorate` rather than pass `decorate: options.decorate`, since
-  // `exactOptionalPropertyTypes` rejects an optional field explicitly set to `undefined`.
-  const { decorate, value } = options
-  if (value) {
-    const items = decorate
-      ? courseSelectionItems(courses, { value, decorate })
-      : courseSelectionItems(courses, { value })
-    return dialog.selectItem(options, ...items)
-  }
-  const items = decorate
-    ? courseSelectionItems(courses, { decorate })
-    : courseSelectionItems(courses)
-  return dialog.selectItem(options, ...items)
+  const { title, placeHolder, decorate } = options
+  return dialog.selectItem({ title, placeHolder }, ...courseSelectionItems(courses, decorate))
 }

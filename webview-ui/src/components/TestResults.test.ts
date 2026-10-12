@@ -114,6 +114,7 @@ suite("TestResults component", () => {
         testCases: [
           testCase({ name: "same", successful: false, message: "first" }),
           testCase({ name: "same", successful: false, message: "second" }),
+          testCase({ name: "same#1", successful: false, message: "third" }),
         ],
         validations: undefined,
       },
@@ -121,5 +122,6 @@ suite("TestResults component", () => {
 
     expect(screen.getByText("first")).toBeInTheDocument()
     expect(screen.getByText("second")).toBeInTheDocument()
+    expect(screen.getByText("third")).toBeInTheDocument()
   })
 })

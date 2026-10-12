@@ -273,20 +273,14 @@ suite("courseSelectionItems", function () {
   })
 
   test("decorate replaces the label of the course it marks and leaves the rest alone", function () {
-    const items = courseSelectionItems(courses, {
-      decorate: (course, title) => (course.kind === "mooc" ? `${title} (Currently open)` : title),
-    })
+    const items = courseSelectionItems(courses, (course, title) =>
+      course.kind === "mooc" ? `${title} (Currently open)` : title,
+    )
 
     expect(items.map(({ label }) => label)).toEqual([
       "Programming 1",
       "Programming 1 (Currently open)",
     ])
-  })
-
-  test("value chooses what picking a row yields", function () {
-    const items = courseSelectionItems(courses, { value: (course) => course })
-
-    expect(items.map(({ value }) => value)).toEqual(courses)
   })
 })
 

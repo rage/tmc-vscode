@@ -104,6 +104,18 @@ suite("ExerciseStatusBarItem", function () {
     expect(tooltipText(item)).toContain("1/2 points")
   })
 
+  test("shows a course name in the tooltip as text, never as markdown", function () {
+    const h = harness()
+    const courseSlug = "[x](command:tmc.wipe)"
+    h.workspace.activeExercise = { ...exerciseHelloWorld, courseSlug }
+    const appendText = vi.spyOn(vscode.MarkdownString.prototype, "appendText")
+    const appendMarkdown = vi.spyOn(vscode.MarkdownString.prototype, "appendMarkdown")
+    track(new ExerciseStatusBarItem(h.sources))
+
+    expect(appendText).toHaveBeenCalledWith(courseSlug)
+    expect(appendMarkdown.mock.calls.flat().join("")).not.toContain(courseSlug)
+  })
+
   test("leaves the points out when the exercise has none", function () {
     const h = harness()
     h.stored.exercise = storedExercise(0, 0)
