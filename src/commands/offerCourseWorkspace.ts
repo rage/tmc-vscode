@@ -11,10 +11,23 @@ import { Logger } from "../utilities"
  */
 const OFFER_DELAY_MS = 1000
 
+/** The courses whose workspace this window has been asked to open, by `backend:slug`. */
+const openingCourseWorkspaces = new Set<string>()
+
+/** Withholds the offer for a course whose workspace is being opened anyway. */
+export function withholdCourseWorkspaceOffer(course: CourseWorkspaceKey): void {
+  openingCourseWorkspaces.add(courseKey(course))
+}
+
+function courseKey({ backend, courseSlug }: CourseWorkspaceKey): string {
+  return `${backend}:${courseSlug}`
+}
+
 /**
  * Tells the student that exercises they just opened show only in their course's workspace,
  * which this window does not show, and offers to open it. Asks once for as long as the
- * notification for that course is up.
+ * notification for that course is up, and not at all once the student has gone to open that
+ * workspace; see {@link withholdCourseWorkspaceOffer}.
  */
 export function createCourseWorkspaceOffer(
   actionContext: ReadyActionContext,
@@ -24,7 +37,7 @@ export function createCourseWorkspaceOffer(
     const course = actionContext.startup.userData
       .getCourses()
       .find((x) => x.kind === backend && LocalCourseData.getCourseName(x) === courseSlug)
-    const key = `${backend}:${courseSlug}`
+    const key = courseKey({ backend, courseSlug })
     if (!course || shown.has(key)) {
       return
     }
@@ -32,6 +45,10 @@ export function createCourseWorkspaceOffer(
     Logger.info(`Exercises of ${courseSlug} opened outside its course workspace`)
     const courseId = LocalCourseData.getCourseId(course)
     setTimeout(() => {
+      if (openingCourseWorkspaces.has(key)) {
+        shown.delete(key)
+        return
+      }
       void actionContext.dialog
         .notification(
           `The exercises of ${LocalCourseData.getCourseTitle(course)} open in its course workspace.`,

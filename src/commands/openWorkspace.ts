@@ -5,6 +5,7 @@ import { LocalCourseData } from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
 import { Logger } from "../utilities"
+import { withholdCourseWorkspaceOffer } from "./offerCourseWorkspace"
 
 /**
  * Opens a course's workspace in this window.
@@ -20,11 +21,10 @@ export async function openWorkspace(
   const { dialog } = actionContext
   const { courseWorkspaceSwitches, resources, workspaceManager } = actionContext.startup
 
+  const courseSlug = LocalCourseData.getCourseName(course)
+  withholdCourseWorkspaceOffer({ backend: course.kind, courseSlug })
   const currentWorkspaceFile = vscode.workspace.workspaceFile
-  const workspaceFile = resources.getWorkspaceFilePath(
-    LocalCourseData.getCourseName(course),
-    course.kind,
-  )
+  const workspaceFile = resources.getWorkspaceFilePath(courseSlug, course.kind)
   const workspaceAsUri = vscode.Uri.file(workspaceFile)
   Logger.info(`Current workspace: ${currentWorkspaceFile?.fsPath}`)
   Logger.info(`Course workspace: ${workspaceFile}`)
@@ -53,7 +53,7 @@ export async function openWorkspace(
   }
 
   await withOperation(dialog, { failure: "Failed to open the course workspace." }, async () => {
-    await workspaceManager.createWorkspaceFile(LocalCourseData.getCourseName(course), course.kind)
+    await workspaceManager.createWorkspaceFile(courseSlug, course.kind)
     await courseWorkspaceSwitches.record(workspaceAsUri.fsPath)
     await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri, {
       forceNewWindow: where === "newWindow",

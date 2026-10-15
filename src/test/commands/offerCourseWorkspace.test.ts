@@ -3,7 +3,10 @@ import * as vscode from "vscode"
 
 import type { ReadyStartup } from "../../actions/types"
 import type { NotificationButton } from "../../api/dialog"
-import { createCourseWorkspaceOffer } from "../../commands/offerCourseWorkspace"
+import {
+  createCourseWorkspaceOffer,
+  withholdCourseWorkspaceOffer,
+} from "../../commands/offerCourseWorkspace"
 import { moocLocalCourse } from "../fixtures/courses"
 import { createMockActionContext } from "../mocks/actionContext"
 
@@ -74,6 +77,17 @@ suite("createCourseWorkspaceOffer", function () {
     const { offer, shown } = setup()
 
     offer({ backend: "tmc", courseSlug: "python-course" })
+    vi.runAllTimers()
+
+    expect(shown).toEqual([])
+  })
+
+  // e.g. "Download and Open Course", which opens the workspace right after the download.
+  test("says nothing for a course whose workspace the student is opening anyway", function () {
+    const { offer, shown } = setup()
+
+    offer({ backend: "mooc", courseSlug: "python-course" })
+    withholdCourseWorkspaceOffer({ backend: "mooc", courseSlug: "python-course" })
     vi.runAllTimers()
 
     expect(shown).toEqual([])
