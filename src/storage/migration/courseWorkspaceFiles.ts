@@ -11,9 +11,10 @@ import { Logger } from "../../utilities/logger"
  * Moves the course workspace files out of `legacyFolder`, the extension's global storage, into
  * the exercises folder, where one Workspace Trust decision covers them and every exercise.
  *
- * Each file keeps its settings, such as the AI restriction and extension recommendations; its
- * folder list starts over from the exercises folder, as the extension rebuilds the rest from the
- * stored open exercises. A file already in the new place wins. A legacy file is deleted once
+ * Each file keeps its settings, such as the AI restriction and extension recommendations, but for
+ * the extension's own settings, which earlier versions copied into it; its folder list starts
+ * over from the exercises folder, as the extension rebuilds the rest from the stored open
+ * exercises. A file already in the new place wins. A legacy file is deleted once
  * copied, unless `openWorkspaceFile` names it: VS Code still has that one open, and the next
  * activation, in the new place, deletes it.
  */
@@ -49,15 +50,32 @@ async function migrateFile(legacyFile: string, target: string): Promise<boolean>
   }
   const text = await fs.readFile(legacyFile, "utf-8")
   const errors: jsonc.ParseError[] = []
-  jsonc.parse(text, errors, { allowTrailingComma: true })
-  if (errors.length > 0) {
+  const tree = jsonc.parseTree(text, errors, { allowTrailingComma: true })
+  if (!tree || errors.length > 0) {
     Logger.warn(`Left ${legacyFile} in place: it is not valid JSON.`)
     return false
   }
-  const edits = jsonc.modify(text, ["folders"], WORKSPACE_SETTINGS.folders, {
-    formattingOptions: { insertSpaces: true, tabSize: 2 },
-  })
+  let migrated = text
+  const changes: [jsonc.JSONPath, unknown][] = [
+    [["folders"], WORKSPACE_SETTINGS.folders],
+    ...UNPINNED_SETTINGS.filter((key) => jsonc.findNodeAtLocation(tree, ["settings", key])).map(
+      (key): [jsonc.JSONPath, unknown] => [["settings", key], undefined],
+    ),
+  ]
+  for (const [jsonPath, value] of changes) {
+    const edits = jsonc.modify(migrated, jsonPath, value, {
+      formattingOptions: { insertSpaces: true, tabSize: 2 },
+    })
+    migrated = jsonc.applyEdits(migrated, edits)
+  }
   await fs.ensureDir(path.dirname(target))
-  await fs.writeFile(target, jsonc.applyEdits(text, edits), { flag: "wx" })
+  await fs.writeFile(target, migrated, { flag: "wx" })
   return true
 }
+
+/** Settings earlier versions copied into course workspace files, outranking the User settings. */
+const UNPINNED_SETTINGS = [
+  "testMyCode.downloadOldSubmission",
+  "testMyCode.hideMetaFiles",
+  "testMyCode.updateExercisesAutomatically",
+]

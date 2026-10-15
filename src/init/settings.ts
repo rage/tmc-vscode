@@ -4,10 +4,7 @@ export function registerSettingsCallbacks(actionContext: ReadyActionContext): vo
   const { settings } = actionContext
   const { workspaceManager } = actionContext.startup
 
-  settings.onChangeMirroredSetting = async (section, value): Promise<void> => {
-    await workspaceManager.updateWorkspaceSetting(`testMyCode.${section}`, value)
-    if (section === "hideMetaFiles") {
-      await workspaceManager.excludeMetaFilesInWorkspace(value)
-    }
+  settings.onChangeHideMetaFiles = async (hide): Promise<void> => {
+    await workspaceManager.excludeMetaFilesInWorkspace(hide)
   }
 }

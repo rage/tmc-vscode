@@ -697,8 +697,20 @@ suite("WorkspaceManager class", function () {
       return update.mock.calls.map(([section]) => section)
     }
 
-    test("keeps verifying when the extension's own record is missing", async function () {
-      stubExtensions(() => undefined)
+    // A copy in the workspace file would outrank the student's later changes in User settings.
+    test("copies none of the extension's own settings into the workspace file", async function () {
+      stubExtensions(
+        () =>
+          ({
+            packageJSON: {
+              contributes: {
+                configuration: {
+                  properties: { "testMyCode.downloadOldSubmission": { type: "boolean" } },
+                },
+              },
+            },
+          }) as unknown as vscode.Extension<unknown>,
+      )
       stubWorkspace("getConfiguration", () => configurationStub(update))
 
       await new WorkspaceManager(resources, persistForCourse).verifyWorkspaceSettingsIntegrity()
@@ -710,6 +722,7 @@ suite("WorkspaceManager class", function () {
           "problems.decorations.enabled",
         ]),
       )
+      expect(sectionsWritten().filter((section) => section.startsWith("testMyCode."))).toEqual([])
     })
 
     test("merges a section's stored workspace value, not the effective config", async function () {

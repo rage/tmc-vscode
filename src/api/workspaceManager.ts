@@ -10,7 +10,6 @@ import * as vscode from "vscode"
 import type { BackendKind } from "../../shared/lib"
 import { CourseIdentifier, ExerciseIdentifier } from "../../shared/lib"
 import {
-  EXTENSION_ID,
   HIDE_META_FILES,
   SHOW_META_FILES,
   WATCHER_EXCLUDE,
@@ -104,15 +103,6 @@ class SerialQueue {
     this._tail = result.catch(() => undefined)
     return result
   }
-}
-
-interface ConfigurationProperties {
-  default?: unknown
-  type?: string
-  description?: string
-  scope?: string
-  enum?: string[]
-  enumDescriptions?: string[]
 }
 
 /**
@@ -533,7 +523,6 @@ export default class WorkspaceManager implements vscode.Disposable {
     )
     await this._updateWorkspaceSettings({
       "files.exclude": hideMetaFiles ? HIDE_META_FILES : SHOW_META_FILES,
-      ...this._settingsDeclaredByExtension(),
       // Our watcher would otherwise delete an exercise folder's `.vscode`, and
       // with it per-folder settings such as the exercise's Python interpreter.
       "files.watcherExclude": WATCHER_EXCLUDE,
@@ -717,42 +706,6 @@ export default class WorkspaceManager implements vscode.Disposable {
       undefined,
       languageId === undefined ? uri : { uri, languageId },
     )
-  }
-
-  /**
-   * The extension's own boolean settings with the value the workspace file should
-   * hold: whatever it already stores, else the user-scope value, else the
-   * declared default.
-   *
-   * Workaround for https://github.com/microsoft/vscode/issues/58038, which is why
-   * these are copied into the workspace file at all.
-   */
-  private _settingsDeclaredByExtension(): Record<string, unknown> {
-    const extension = vscode.extensions.getExtension(EXTENSION_ID)
-    const declared: Record<string, ConfigurationProperties> =
-      extension?.packageJSON?.contributes?.configuration?.properties ?? {}
-    if (Object.keys(declared).length === 0) {
-      // A fork or a renamed publisher: nothing to copy, and the rest of the
-      // integrity pass still has work to do.
-      Logger.warn(`No declared settings found for extension ${EXTENSION_ID}.`)
-      return {}
-    }
-
-    const desired: Record<string, unknown> = {}
-    for (const [key, property] of Object.entries(declared)) {
-      if (property.scope === "application" || property.type !== "boolean") {
-        continue
-      }
-      const stored = this.getWorkspaceSettings().inspect<boolean>(key)
-      if (stored?.workspaceValue !== undefined) {
-        desired[key] = stored.workspaceValue
-      } else if (stored?.globalValue !== undefined) {
-        desired[key] = stored.globalValue
-      } else {
-        desired[key] = stored?.defaultValue
-      }
-    }
-    return desired
   }
 
   /**

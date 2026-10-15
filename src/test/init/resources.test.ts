@@ -118,7 +118,12 @@ suite("resourceInitialization", function () {
     const legacyText = `{
   // the student's note
   "folders": [{ "path": ".tmc" }, { "path": "/old/exercises/hello" }],
-  "settings": { "chat.disableAIFeatures": true },
+  "settings": {
+    "chat.disableAIFeatures": true,
+    "testMyCode.downloadOldSubmission": false,
+    "testMyCode.hideMetaFiles": true,
+    "testMyCode.updateExercisesAutomatically": true
+  },
   "extensions": { "recommendations": ["ms-python.python"] }
 }`
 
@@ -131,7 +136,8 @@ suite("resourceInitialization", function () {
       )
     })
 
-    test("moves them into the exercises folder, keeping their settings", async function () {
+    // Earlier versions copied the extension's settings there, out of the student's reach.
+    test("moves them into the exercises folder, keeping their settings but the extension's", async function () {
       const result = await resourceInitialization(storage, projectsDirectory, legacyFolder)
 
       expect(result.ok).toBe(true)
