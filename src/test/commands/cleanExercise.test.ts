@@ -1,5 +1,6 @@
 import * as path from "path"
 
+import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { ReadyActionContext } from "../../actions/types"
@@ -7,11 +8,13 @@ import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { cleanExercise } from "../../commands"
+import { WorkspaceUntrustedError } from "../../errors"
 import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createTMCMock } from "../mocks/tmc"
 import type { WorkspaceManagerMockValues } from "../mocks/workspaceManager"
 import { createWorkspaceMangerMock } from "../mocks/workspaceManager"
+import { restrictedTrustGate } from "../support/trustGate"
 
 suite("Clean exercise command", function () {
   const BACKEND_FOLDER = path.join(__dirname, "..", "backend")
@@ -55,6 +58,34 @@ suite("Clean exercise command", function () {
     workspaceManagerMockValues.activeExercise = exercise
     await cleanExercise(actionContext(), undefined)
     expect(tmcMock.clean).toHaveBeenCalledExactlyOnceWith(uri.fsPath)
+  })
+
+  // Cleaning runs the exercise's build tool, e.g. `make clean`.
+  test("cleans nothing in Restricted Mode, and offers to trust the workspace", async function () {
+    workspaceManagerMockValues.activeExercise = exercise
+    const context = actionContext()
+    context.startup.trustGate = restrictedTrustGate().trustGate
+
+    await cleanExercise(context, undefined)
+
+    expect(tmcMock.clean).not.toHaveBeenCalled()
+    expect(context.dialog.reportError).toHaveBeenCalledWith(
+      "Cleaning the exercise failed.",
+      expect.any(WorkspaceUntrustedError),
+    )
+  })
+
+  test("cleans the exercise once the workspace is trusted", async function () {
+    workspaceManagerMockValues.activeExercise = exercise
+    const context = actionContext()
+    const { trustGate, retries } = restrictedTrustGate()
+    context.startup.trustGate = trustGate
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await cleanExercise(context, undefined)
+    retries.at(-1)?.()
+
+    expect(executeCommand).toHaveBeenCalledWith("tmc.cleanExercise", uri)
   })
 
   test("should tell the user when no exercise is active", async function () {

@@ -29,6 +29,7 @@ import WorkspaceManager, {
   ensureCourseWorkspaceFile,
   ensureWorkspaceRootFile,
 } from "./api/workspaceManager"
+import { WorkspaceTrustGate } from "./api/workspaceTrustGate"
 import { login, logout, refreshEverything } from "./commands"
 import {
   CLIENT_NAME,
@@ -406,6 +407,8 @@ async function activateInner(
       ? new ExerciseDecorationProvider(userData.val, workspaceManager)
       : undefined
 
+  const trustGate = new WorkspaceTrustGate()
+  context.subscriptions.push(trustGate)
   const startup: Startup =
     langs.ok && resources.ok && workspaceManager && userData?.ok && exerciseDecorationProvider
       ? {
@@ -413,6 +416,7 @@ async function activateInner(
           aiUseGate: new AiUseGate(aiRestriction),
           langs: langs.val,
           resources: resources.val,
+          trustGate,
           workspaceManager,
           userData: userData.val,
           exerciseDecorationProvider,
@@ -431,6 +435,12 @@ async function activateInner(
     }
     // A failed activation leaves the view empty, and its `viewsWelcome` offers the way out.
     const { startup: ready } = readyContext
+    coursesTree.setRestricted(
+      !vscode.workspace.isTrusted && ready.workspaceManager.activeCourse !== undefined,
+    )
+    context.subscriptions.push(
+      vscode.workspace.onDidGrantWorkspaceTrust(() => coursesTree.setRestricted(false)),
+    )
     coursesTree.setSource({
       getCourses: () => ready.userData.getCourses(),
       onDidChangeCourses: ready.userData.onDidChangeCourses,

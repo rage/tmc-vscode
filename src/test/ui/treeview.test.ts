@@ -536,6 +536,18 @@ suite("CoursesTree", function () {
     expect(view.message).toBe("")
   })
 
+  test("explains Restricted Mode until the course workspace is trusted", function () {
+    show(tmcCourse())
+
+    tree.setRestricted(true)
+    settle()
+    expect(view.message).toMatch(/Restricted Mode: trust it to run tests, submit and share/)
+
+    tree.setRestricted(false)
+    settle()
+    expect(view.message).toBe("")
+  })
+
   test("re-renders on each download status, change on disk and change to the courses", function () {
     show(tmcCourse())
     const refreshed: unknown[] = []

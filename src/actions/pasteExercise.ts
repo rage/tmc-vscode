@@ -5,6 +5,7 @@ import type { ExerciseIdentifier } from "../../shared/lib"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import { checkAiUse } from "./checkAiUse"
+import { checkWorkspaceTrust } from "./checkWorkspaceTrust"
 import type { ReadyActionContext } from "./types"
 
 /**
@@ -13,7 +14,7 @@ import type { ReadyActionContext } from "./types"
  * Nothing is reported here: the caller shows the failure, once, in the place the user
  * asked from. A paste that comes back without a link is an error rather than an empty
  * `Ok`, so no caller has to check for one. Errs with `AiUseRefusedError` while AI assistance
- * may be on.
+ * may be on, and with `WorkspaceUntrustedError` in Restricted Mode.
  */
 export async function pasteExercise(
   actionContext: ReadyActionContext,
@@ -24,6 +25,10 @@ export async function pasteExercise(
   const exercise = workspaceManager.getExercise(exerciseId)
   if (!exercise) {
     return Err(new Error("The exercise is not downloaded."))
+  }
+  const trusted = checkWorkspaceTrust(actionContext)
+  if (trusted.err) {
+    return trusted
   }
   // Refused like a submit, which a mooc paste also is.
   const allowed = await checkAiUse(actionContext, exercise)

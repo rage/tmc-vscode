@@ -9,10 +9,11 @@ import { failure } from "../../api/withOperation"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
-import { BottleneckError } from "../../errors"
+import { BottleneckError, WorkspaceUntrustedError } from "../../errors"
 import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
 import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
+import { restrictedTrustGate } from "../support/trustGate"
 
 vi.mock("../../window", () => ({ resolvePythonInterpreter: () => undefined }))
 
@@ -146,6 +147,16 @@ suite("testExercise action", () => {
     const outcome = await testExercise(actionContext, workspaceExercise(), noToken)
 
     expect(outcome.ok && outcome.val).toEqual({ kind: "examMode" })
+    expect(actionContext.startup.langs.runTests).not.toHaveBeenCalled()
+  })
+
+  test("runs nothing in Restricted Mode", async () => {
+    const actionContext = contextWithTestRun(Ok(passingRun))
+    actionContext.startup.trustGate = restrictedTrustGate().trustGate
+
+    const result = await testExercise(actionContext, workspaceExercise(), noToken)
+
+    expect(result.val).toBeInstanceOf(WorkspaceUntrustedError)
     expect(actionContext.startup.langs.runTests).not.toHaveBeenCalled()
   })
 

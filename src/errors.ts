@@ -135,6 +135,18 @@ export class LangsResponseSchemaError extends BaseError {
   public override readonly name = "Langs Response Schema Error"
 }
 
+/** The command that opens VS Code's Workspace Trust editor; see {@link WorkspaceUntrustedError}. */
+export const TRUST_COURSE_WORKSPACE_COMMAND = "tmc.trustCourseWorkspace"
+
+/**
+ * Running, submitting or sharing exercise code was refused because the window is in Restricted
+ * Mode. The refused command may run again once the user trusts the workspace; see
+ * `WorkspaceTrustGate`.
+ */
+export class WorkspaceUntrustedError extends BaseError {
+  public override readonly name = "Workspace Untrusted Error"
+}
+
 /** The command that opens where the last {@link AiUseRefusedError}'s cause can be fixed. */
 export const SHOW_AI_USE_PROBLEM_COMMAND = "tmc.showAiUseProblem"
 
@@ -216,6 +228,12 @@ export function presentationFor(error: Error): ErrorPresentation {
       actions: error.remedyLabel
         ? [{ label: error.remedyLabel, command: SHOW_AI_USE_PROBLEM_COMMAND }]
         : [],
+    }
+  }
+  if (error instanceof WorkspaceUntrustedError) {
+    return {
+      message: reported,
+      actions: [{ label: "Trust Course Workspace", command: TRUST_COURSE_WORKSPACE_COMMAND }],
     }
   }
   if (error instanceof TmcLoginNotAcceptedError) {

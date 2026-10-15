@@ -223,4 +223,19 @@ for (const [namespace, name] of registrationsReturningDisposables) {
   )
 }
 
+// jest-mock-vscode leaves out Workspace Trust. Trusted unless a test says otherwise; the
+// grant event fires only when a test fires `vscode.workspace.grantWorkspaceTrustForTest()`.
+const workspaceTrustGranted = new vscode.EventEmitter()
+Object.defineProperty(vscode.workspace, "isTrusted", {
+  value: true,
+  configurable: true,
+  enumerable: true,
+  writable: true,
+})
+vscode.workspace.onDidGrantWorkspaceTrust = workspaceTrustGranted.event
+vscode.workspace.grantWorkspaceTrustForTest = () => {
+  vscode.workspace.isTrusted = true
+  workspaceTrustGranted.fire(undefined)
+}
+
 module.exports = vscode

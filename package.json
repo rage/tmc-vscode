@@ -280,6 +280,12 @@
         "category": "TestMyCode"
       },
       {
+        "command": "tmc.trustCourseWorkspace",
+        "title": "Trust Course Workspace",
+        "icon": "$(workspace-untrusted)",
+        "category": "TestMyCode"
+      },
+      {
         "command": "tmc.debug",
         "title": "Show Logs (Debug)",
         "category": "TestMyCode"
@@ -524,6 +530,10 @@
         {
           "command": "tmc.updateCourseExercises",
           "when": "false"
+        },
+        {
+          "command": "tmc.trustCourseWorkspace",
+          "when": "test-my-code:WorkspaceActive && !isWorkspaceTrusted"
         }
       ],
       "editor/title": [
@@ -588,6 +598,11 @@
         }
       ],
       "view/title": [
+        {
+          "command": "tmc.trustCourseWorkspace",
+          "group": "navigation@0",
+          "when": "view == tmcView && test-my-code:WorkspaceActive && !isWorkspaceTrusted"
+        },
         {
           "command": "tmc.addNewCourse",
           "group": "navigation@1",
@@ -939,8 +954,11 @@
   "packageManager": "pnpm@11.9.0",
   "capabilities": {
     "untrustedWorkspaces": {
-      "supported": false,
-      "description": "TestMyCode runs exercise code and the TMC-langs CLI on files in the workspace."
+      "supported": "limited",
+      "description": "In Restricted Mode, TestMyCode lists, downloads and opens exercises, but does not run, submit or share exercise code until you trust the course workspace.",
+      "restrictedConfigurations": [
+        "testMyCode.javaHome"
+      ]
     },
     "virtualWorkspaces": {
       "supported": false,

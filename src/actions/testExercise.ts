@@ -9,6 +9,7 @@ import { exerciseOperations } from "../ui/exerciseOperations"
 import { Logger } from "../utilities"
 import { resolvePythonInterpreter } from "../window"
 import { saveExerciseDocuments } from "../window/exerciseDocuments"
+import { checkWorkspaceTrust } from "./checkWorkspaceTrust"
 import type { ReadyActionContext } from "./types"
 
 /** What running an exercise's tests locally produced. */
@@ -32,8 +33,8 @@ export type ExerciseTestOutcome =
  * @param options.isAiUseChecked The caller has just had `checkAiUse` pass, so it is not asked
  * again.
  * @returns `Err(BottleneckError)` while another operation on the exercise is in flight,
- * `Err(AiUseRefusedError)` while AI assistance may be on, and `Err` when the tests could not
- * be run at all.
+ * `Err(AiUseRefusedError)` while AI assistance may be on, `Err(WorkspaceUntrustedError)` in
+ * Restricted Mode, and `Err` when the tests could not be run at all.
  */
 export async function testExercise(
   actionContext: ReadyActionContext,
@@ -50,6 +51,10 @@ export async function testExercise(
   const { course } = stored.val
   if (LocalCourseData.isExamMode(course)) {
     return Ok({ kind: "examMode" })
+  }
+  const trusted = checkWorkspaceTrust(actionContext)
+  if (trusted.err) {
+    return trusted
   }
   const refused =
     !options.isAiUseChecked && (await actionContext.startup.aiUseGate.refusal(course, exercise.uri))

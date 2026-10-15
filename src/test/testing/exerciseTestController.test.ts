@@ -13,7 +13,13 @@ import type { AiUseGate } from "../../api/aiUseGate"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
-import { AiUseRefusedError, BottleneckError, SHOW_AI_USE_PROBLEM_COMMAND } from "../../errors"
+import {
+  AiUseRefusedError,
+  BottleneckError,
+  SHOW_AI_USE_PROBLEM_COMMAND,
+  TRUST_COURSE_WORKSPACE_COMMAND,
+  WorkspaceUntrustedError,
+} from "../../errors"
 import { CheckstyleDiagnostics } from "../../testing/checkstyleDiagnostics"
 import { ExerciseTestController } from "../../testing/exerciseTestController"
 import { exerciseOperations } from "../../ui/exerciseOperations"
@@ -22,6 +28,8 @@ import { idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 import { exerciseLookupOver } from "../mocks/userdata"
+import { autoMock } from "../support/mock"
+import { restrictedTrustGate } from "../support/trustGate"
 
 vi.mock("../../window", () => ({ resolvePythonInterpreter: () => undefined }))
 
@@ -574,5 +582,55 @@ suite("ExerciseTestController while AI may be on", function () {
 
     expect(finalStates(lastRun(s)).get(itemOf(s, exerciseAt(s)).id)?.[0]).toBe("skipped")
     expect(refusalAsked).not.toHaveBeenCalled()
+  })
+})
+
+suite("ExerciseTestController in Restricted Mode", function () {
+  function restrictedSetup(): Setup & { retries: (() => void)[] } {
+    const s = setup()
+    const { trustGate, retries } = restrictedTrustGate()
+    s.actionContext.startup.trustGate = trustGate
+    return { ...s, retries }
+  }
+
+  test("a Test Explorer run errors every item with a link that trusts the workspace", async function () {
+    const s = restrictedSetup()
+    const item = itemOf(s, exerciseAt(s))
+
+    await s.fake.profiles[0]?.runHandler(
+      new vscode.TestRunRequest([item]),
+      new vscode.CancellationTokenSource().token,
+    )
+
+    expect(s.runTests).not.toHaveBeenCalled()
+    const reported = finalStates(lastRun(s)).get(item.id)
+    expect(reported?.[0]).toBe("errored")
+    const message = messagesOf(reported)[0]?.message as vscode.MarkdownString
+    expect(message.value).toContain(
+      `[Trust Course Workspace](command:${TRUST_COURSE_WORKSPACE_COMMAND})`,
+    )
+    expect(message.isTrusted).toEqual({ enabledCommands: [TRUST_COURSE_WORKSPACE_COMMAND] })
+  })
+
+  test("the refused run runs once the workspace is trusted", async function () {
+    const s = restrictedSetup()
+    const item = itemOf(s, exerciseAt(s))
+    await s.fake.profiles[0]?.runHandler(
+      new vscode.TestRunRequest([item]),
+      new vscode.CancellationTokenSource().token,
+    )
+
+    s.actionContext.startup.trustGate = autoMock<ReadyStartup["trustGate"]>()
+    s.retries.at(-1)?.()
+    await vi.waitFor(() => expect(s.runTests).toHaveBeenCalledOnce())
+  })
+
+  test("a run the Run Tests command asks for is refused before any test run starts", async function () {
+    const s = restrictedSetup()
+
+    const result = await s.controller.runExercise(exerciseAt(s))
+
+    expect(result.val).toBeInstanceOf(WorkspaceUntrustedError)
+    expect(s.fake.runs).toEqual([])
   })
 })

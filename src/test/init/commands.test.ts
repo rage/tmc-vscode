@@ -60,6 +60,7 @@ const expectedCommands = [
   "tmc.testExercise",
   "tmc.testing.pasteExercise",
   "tmc.testing.submitExercise",
+  "tmc.trustCourseWorkspace",
   "tmc.updateExercises",
   "tmc.logs",
   "tmc.debug",
@@ -68,17 +69,23 @@ const expectedCommands = [
 ]
 
 // Of those, the ones that reach no service, so a failed activation can still offer them:
-// `registerServiceFreeCommands`'s three, plus `tmc.viewInitializationErrorHelp`, which
+// `registerServiceFreeCommands`'s, plus `tmc.viewInitializationErrorHelp`, which
 // needs an `ActionContext` but no service and so stays in `registerCommands`.
 const expectedDegradedCommands = [
   "tmc.settings",
   "tmc.logs",
   "tmc.debug",
+  "tmc.trustCourseWorkspace",
   "tmc.viewInitializationErrorHelp",
 ]
 
 // What `registerServiceFreeCommands` registers on its own, regardless of startup state.
-const expectedServiceFreeCommands = ["tmc.settings", "tmc.logs", "tmc.debug"]
+const expectedServiceFreeCommands = [
+  "tmc.settings",
+  "tmc.logs",
+  "tmc.debug",
+  "tmc.trustCourseWorkspace",
+]
 
 function registerAndCollect(actionContext: ActionContext = createMockActionContext()): {
   ids: string[]
@@ -199,7 +206,7 @@ suite("registerCommands", function () {
   })
 
   // Pins the split itself: `registerServiceFreeCommands` must register exactly these
-  // three and nothing `registerCommands` also registers, or the two other set
+  // and nothing `registerCommands` also registers, or the two other set
   // assertions in this suite would only prove the union is right, not the partition.
   test("registerServiceFreeCommands registers exactly the ids that need no service", function () {
     const { serviceFreeIds } = registerAndCollect()
@@ -240,6 +247,17 @@ suite("registerCommands", function () {
         .map((entry) => `${menu}: ${entry.command ?? entry.submenu}`),
     )
     expect(ungated).toEqual([])
+  })
+
+  // Without "limited", VS Code disables the extension in Restricted Mode, Courses view and all.
+  test("runs in Restricted Mode, ignoring a workspace's JDK setting there", function () {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),
+    )
+    expect(manifest.capabilities.untrustedWorkspaces).toMatchObject({
+      supported: "limited",
+      restrictedConfigurations: ["testMyCode.javaHome"],
+    })
   })
 
   // The device flow is the only login left; nothing may register a TMC

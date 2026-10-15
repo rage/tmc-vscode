@@ -10,9 +10,10 @@ import { failure } from "../../api/withOperation"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
-import { BottleneckError } from "../../errors"
+import { BottleneckError, WorkspaceUntrustedError } from "../../errors"
 import { idOfMoocCourse, idOfMoocExercise, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
+import { restrictedTrustGate } from "../support/trustGate"
 
 const COURSE_SLUG = "mooc-python-course"
 const EXERCISE_SLUG = "loops"
@@ -68,6 +69,16 @@ function pasteBody(actionContext: ReadyActionContext) {
 }
 
 suite("paste action", () => {
+  test("sends nothing in Restricted Mode", async () => {
+    const { actionContext, submit } = contextWith(Ok("https://tmc.mooc.fi/paste/abc123"))
+    actionContext.startup.trustGate = restrictedTrustGate().trustGate
+
+    const result = await pasteExercise(actionContext, TMC_ID)
+
+    expect(result.val).toBeInstanceOf(WorkspaceUntrustedError)
+    expect(submit).not.toHaveBeenCalled()
+  })
+
   test("a tmc exercise goes to the tmc paste service with its numeric id", async () => {
     const { actionContext, submit } = contextWith(Ok("https://tmc.mooc.fi/paste/abc123"))
 

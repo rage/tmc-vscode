@@ -329,6 +329,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
   private _source: CoursesTreeSource | undefined
   private _sourceSubscriptions: vscode.Disposable[] = []
   private _isLoggedIn = false
+  private _isRestricted = false
   private readonly _unreachableBackends = new Set<BackendKind>()
   private _views: CourseView[] | undefined
   private _roots: CourseTreeItem[] | undefined
@@ -383,6 +384,14 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
     }
   }
 
+  /** Records whether this window is a course workspace in Restricted Mode. */
+  public setRestricted(isRestricted: boolean): void {
+    if (isRestricted !== this._isRestricted) {
+      this._isRestricted = isRestricted
+      this.refresh()
+    }
+  }
+
   /** Records whether `backend` answered the last course refresh. */
   public setBackendReachable(backend: BackendKind, isReachable: boolean): void {
     const wasUnreachable = this._unreachableBackends.has(backend)
@@ -427,16 +436,20 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
     this._view.badge =
       counts.length > 0 ? { value: newCount + updateCount, tooltip: counts.join(", ") } : undefined
     const unreachable = [...this._unreachableBackends].map((backend) => backendName(backend))
-    // An empty message hides it; the typings do not admit `undefined`.
+    const restricted = this._isRestricted
+      ? "This course workspace is in Restricted Mode: trust it to run tests, submit and share" +
+        " exercises."
+      : undefined
+    let status: string | undefined
     if (views.length === 0) {
-      this._view.message = ""
+      // Nothing to say about courses there are none of.
     } else if (!this._isLoggedIn) {
-      this._view.message = `Log in to ${backendName("mooc")} to download and submit exercises. The exercises on this computer still open and run their tests.`
+      status = `Log in to ${backendName("mooc")} to download and submit exercises. The exercises on this computer still open and run their tests.`
     } else if (unreachable.length > 0) {
-      this._view.message = `${unreachable.join(" and ")} could not be reached. Showing the exercises saved on this computer; deadlines may be out of date.`
-    } else {
-      this._view.message = ""
+      status = `${unreachable.join(" and ")} could not be reached. Showing the exercises saved on this computer; deadlines may be out of date.`
     }
+    // An empty message hides it; the typings do not admit `undefined`.
+    this._view.message = [restricted, status].filter((x) => x !== undefined).join(" ")
     if (this._view.visible) {
       this._changed.fire(undefined)
     } else {

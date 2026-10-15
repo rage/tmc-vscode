@@ -12,12 +12,18 @@ export async function cleanExercise(
   actionContext: ReadyActionContext,
   resource: vscode.Uri | undefined,
 ): Promise<void> {
-  await runForExercise(actionContext, resource, "Cleaning the exercise", async (exercise) => {
-    const result = await cleanExerciseAction(actionContext, exercise)
-    if (result.err) {
-      return failure("Failed to clean exercise.", result.val)
-    }
-    actionContext.dialog.statusMessage(`Cleaned ${exercise.exerciseSlug}.`)
-    return result
-  })
+  await runForExercise(
+    actionContext,
+    resource,
+    "Cleaning the exercise",
+    async (exercise) => {
+      const result = await cleanExerciseAction(actionContext, exercise)
+      if (result.err) {
+        return failure("Failed to clean exercise.", result.val)
+      }
+      actionContext.dialog.statusMessage(`Cleaned ${exercise.exerciseSlug}.`)
+      return result
+    },
+    { trustedCommand: "tmc.cleanExercise" },
+  )
 }

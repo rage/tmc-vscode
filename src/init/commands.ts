@@ -7,7 +7,7 @@ import { isReady } from "../actions/types"
 import type Dialog from "../api/dialog"
 import * as commands from "../commands"
 import { EXTENSION_ID } from "../config/constants"
-import { SHOW_AI_USE_PROBLEM_COMMAND } from "../errors"
+import { SHOW_AI_USE_PROBLEM_COMMAND, TRUST_COURSE_WORKSPACE_COMMAND } from "../errors"
 import { initializationErrorHelpPanel, nextPanelId } from "../panels/routes"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseTestController } from "../testing/exerciseTestController"
@@ -92,6 +92,11 @@ export function registerServiceFreeCommands(
     Logger.show()
   })
 
+  // Trust is the remedy for a refusal, so it must not wait for a ready activation.
+  register(TRUST_COURSE_WORKSPACE_COMMAND, async () => {
+    await vscode.commands.executeCommand("workbench.trust.manage")
+  })
+
   register("tmc.debug", async () => {
     await vscode.commands.executeCommand("workbench.output.action.clearOutput")
     Logger.show()
@@ -101,7 +106,7 @@ export function registerServiceFreeCommands(
 
 /**
  * Registers the commands that need the startup state, i.e. everything except
- * {@link registerServiceFreeCommands}'s three.
+ * {@link registerServiceFreeCommands}'s.
  *
  * A degraded activation still reaches `tmc.viewInitializationErrorHelp`, the one
  * exception that needs an `ActionContext` but no service; every id after it requires

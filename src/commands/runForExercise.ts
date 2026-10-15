@@ -1,8 +1,8 @@
 import * as path from "path"
 
 import type { Result } from "ts-results"
-import { Err } from "ts-results"
-import type * as vscode from "vscode"
+import { Err, Ok } from "ts-results"
+import * as vscode from "vscode"
 
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
@@ -20,6 +20,9 @@ import { Logger } from "../utilities"
  * it has to read as a sentence subject.
  * @param body The command's actual work. Return `failure` for anything the user should
  * hear about and `Ok` for a path the user chose, such as dismissing a prompt.
+ * @param options.trustedCommand The command being run, when it runs, submits or shares
+ * exercise code: in Restricted Mode `body` does not run, and the command runs again once the
+ * user trusts the workspace.
  * @returns What `body` returned, or `Err` when there was no exercise to run it against.
  * A failure has already been reported by the time this resolves.
  */
@@ -28,6 +31,7 @@ export async function runForExercise<T>(
   resource: vscode.Uri | undefined,
   label: string,
   body: (exercise: WorkspaceExercise) => Promise<Result<T, Error>>,
+  options: { trustedCommand?: string } = {},
 ): Promise<Result<T, Error>> {
   const { dialog } = actionContext
   const { workspaceManager } = actionContext.startup
@@ -44,5 +48,26 @@ export async function runForExercise<T>(
     return Err(error)
   }
 
-  return withOperation(dialog, { failure: `${label} failed.` }, () => body(exercise))
+  const { trustedCommand } = options
+  return withOperation(dialog, { failure: `${label} failed.` }, () => {
+    const trusted = trustedCommand
+      ? checkTrustRetrying(actionContext, trustedCommand, exercise)
+      : Ok.EMPTY
+    return trusted.err ? Promise.resolve(trusted) : body(exercise)
+  })
+}
+
+/**
+ * `Err(WorkspaceUntrustedError)` in Restricted Mode, where `command` then runs on `exercise`
+ * again once the user trusts the workspace.
+ */
+export function checkTrustRetrying(
+  actionContext: ReadyActionContext,
+  command: string,
+  exercise: Pick<WorkspaceExercise, "uri">,
+): Result<void, Error> {
+  const refused = actionContext.startup.trustGate.refusal(
+    () => void vscode.commands.executeCommand(command, exercise.uri),
+  )
+  return refused ? Err(refused) : Ok.EMPTY
 }
