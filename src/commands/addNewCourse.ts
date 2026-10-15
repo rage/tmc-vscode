@@ -13,7 +13,8 @@ import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { separator } from "../api/dialog"
 import { withOperation } from "../api/withOperation"
-import { Logger } from "../utilities"
+import { MOOC_BACKEND_URL } from "../config/constants"
+import { Logger, openWebLink } from "../utilities"
 import { downloadExercisesOfCourse } from "./downloadExercisesOfCourse"
 
 const TITLE = "Add New Course"
@@ -21,6 +22,7 @@ const TITLE = "Add New Course"
 /** What accepting a row of the pick does. */
 type Choice =
   | { kind: "login" }
+  | { kind: "findCourse" }
   | { kind: "organization"; organization: Organization }
   | { kind: "course"; courseId: CourseIdentifier; name: string; organizationSlug: string }
   | { kind: "added"; courseId: CourseIdentifier }
@@ -77,6 +79,10 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
   }
   if (chosen.kind === "login") {
     await vscode.commands.executeCommand("tmc.showMoocLogin")
+    return
+  }
+  if (chosen.kind === "findCourse") {
+    await openWebLink(MOOC_BACKEND_URL)
     return
   }
   if (chosen.kind === "added") {
@@ -249,18 +255,10 @@ function pickCourse(
       }
       renderFirstStep()
       if (quickPick.items.length === 0) {
-        if (unavailable.includes(backendName("mooc"))) {
-          void dialog.errorNotification(
-            `Failed to fetch courses from ${unavailableNames().join(" or ")}. ` +
-              "Check your network connection and that you are logged in.",
-          )
-        } else {
-          const tmcDown = unavailable.length > 0 ? `, and ${backendName("tmc")} is unavailable` : ""
-          void dialog.notification(
-            `You have no courses to add: you are not enrolled on any ${backendName("mooc")}` +
-              ` course with programming exercises${tmcDown}.`,
-          )
-        }
+        void dialog.errorNotification(
+          `Failed to fetch courses from ${unavailableNames().join(" or ")}. ` +
+            "Check your network connection and that you are logged in.",
+        )
         settle(undefined)
       }
     })
@@ -289,6 +287,16 @@ function moocListingRows(
     unavailable.push(backendName("mooc"))
     Logger.warn(`Failed to fetch ${backendName("mooc")} courses.`, listing.val)
     return []
+  }
+  if (listing.val.length === 0) {
+    return [
+      {
+        label: `Find a course on ${backendName("mooc")}`,
+        description: "You are not enrolled on any course with programming exercises yet",
+        iconPath: new vscode.ThemeIcon("link-external"),
+        choice: { kind: "findCourse" },
+      },
+    ]
   }
   return listing.val.map((course) => {
     const id = makeMoocKind({ moocCourseId: course.id })

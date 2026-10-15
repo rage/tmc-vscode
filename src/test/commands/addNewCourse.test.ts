@@ -9,12 +9,17 @@ import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import { addNewCourse } from "../../commands/addNewCourse"
 import { downloadExercisesOfCourse } from "../../commands/downloadExercisesOfCourse"
+import { MOOC_BACKEND_URL } from "../../config/constants"
 import type { UserData } from "../../config/userdata"
+import { openWebLink } from "../../utilities/webLink"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions/addNewCourse", () => ({
   addNewCourse: vi.fn(async () => Ok.EMPTY),
+}))
+vi.mock("../../utilities/webLink", () => ({
+  openWebLink: vi.fn(async () => true),
 }))
 vi.mock("../../commands/downloadExercisesOfCourse", () => ({
   downloadExercisesOfCourse: vi.fn(async () => {}),
@@ -369,30 +374,38 @@ suite("Add New Course command", function () {
     )
   })
 
-  test.each([
-    ["TMC Server lists no organizations", Promise.resolve(Ok([])), ""],
-    [
-      "TMC Server is down",
-      Promise.resolve(Err(new Error("down"))),
-      ", and TMC Server is unavailable",
-    ],
-  ])(
-    "says there is nothing to add when no course is enrolled and %s",
-    async function (_, organizationListing, tmcDown) {
-      const { context, quickPick, done } = harness({
-        organizations: organizationListing,
-        moocCourses: Promise.resolve(Ok([])),
-      })
-      await done
+  test("without an enrolled course, offers to find one on courses.mooc.fi instead", async function () {
+    const { context, quickPick, done } = harness({
+      organizations: Promise.resolve(Ok([])),
+      moocCourses: Promise.resolve(Ok([])),
+    })
+    await flush()
 
-      expect(quickPick.isShown).toBe(false)
-      expect(context.dialog.errorNotification).not.toHaveBeenCalled()
-      expect(context.dialog.notification).toHaveBeenCalledWith(
-        "You have no courses to add: you are not enrolled on any courses.mooc.fi course with" +
-          ` programming exercises${tmcDown}.`,
-      )
-    },
-  )
+    expect(quickPick.isShown).toBe(true)
+    expect(quickPick.rows).toEqual([
+      "--- courses.mooc.fi — your courses",
+      "Find a course on courses.mooc.fi",
+    ])
+    quickPick.accept("Find a course on courses.mooc.fi")
+    await done
+
+    expect(openWebLink).toHaveBeenCalledExactlyOnceWith(MOOC_BACKEND_URL)
+    expect(context.dialog.notification).not.toHaveBeenCalled()
+    expect(actions.addNewCourse).not.toHaveBeenCalled()
+  })
+
+  test("still lists the TMC organizations beside the way to find a course", async function () {
+    const { quickPick } = harness({ moocCourses: Promise.resolve(Ok([])) })
+    await flush()
+
+    expect(quickPick.rows).toEqual([
+      "--- courses.mooc.fi — your courses",
+      "Find a course on courses.mooc.fi",
+      "--- TMC Server — organizations",
+      "MOOC",
+      "Test org",
+    ])
+  })
 
   test("marks courses already added, and opening one shows its details instead of re-adding", async function () {
     const added = [
