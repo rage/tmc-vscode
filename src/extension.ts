@@ -54,7 +54,11 @@ import * as init from "./init"
 import { TmcPanel } from "./panels/TmcPanel"
 import { createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
-import { trackActiveEditorExercise, trackHasCourses } from "./ui/contextKeys"
+import {
+  trackActiveEditorExercise,
+  trackHasCourses,
+  trackHasDownloadedExercises,
+} from "./ui/contextKeys"
 import { exerciseOperations } from "./ui/exerciseOperations"
 import { AccountStatusBarItem } from "./ui/statusBarAccount"
 import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
@@ -466,6 +470,7 @@ async function activateInner(
         operations: exerciseOperations,
       }),
       trackHasCourses(readyContext.startup.userData),
+      trackHasDownloadedExercises(readyContext.startup.workspaceManager),
       // Point totals come from the backend, so without this the Courses view and Course
       // Details totals stay stale until the user refreshes by hand.
       onDidFinishSubmission((courseId) => {

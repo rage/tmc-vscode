@@ -4,7 +4,11 @@ import * as vscode from "vscode"
 import type { LocalCourseData } from "../../../shared/lib"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
-import { trackActiveEditorExercise, trackHasCourses } from "../../ui/contextKeys"
+import {
+  trackActiveEditorExercise,
+  trackHasCourses,
+  trackHasDownloadedExercises,
+} from "../../ui/contextKeys"
 import type { WorkspaceManagerMockValues } from "../mocks/workspaceManager"
 import { createWorkspaceMangerMock } from "../mocks/workspaceManager"
 
@@ -94,5 +98,29 @@ suite("trackHasCourses", function () {
       .filter(([command, key]) => command === "setContext" && key === "test-my-code:HasCourses")
       .map(([, , value]) => value)
     expect(updates).toEqual([false, true, false])
+  })
+})
+
+suite("trackHasDownloadedExercises", function () {
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("sets the key from the exercises on disk, and on each change of them", function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const [workspaceManager, workspace] = createWorkspaceMangerMock()
+    workspace.getExercises = []
+
+    trackHasDownloadedExercises(workspaceManager)
+    workspace.getExercises = [workspace.getExercisesByCoursePythonCourse[0]!]
+    workspace.exercisesChanged.fire()
+
+    const updates = executeCommand.mock.calls
+      .filter(
+        ([command, key]) =>
+          command === "setContext" && key === "test-my-code:HasDownloadedExercises",
+      )
+      .map(([, , value]) => value)
+    expect(updates).toEqual([false, true])
   })
 })

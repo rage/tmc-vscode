@@ -447,6 +447,19 @@ suite("walkthrough", function () {
     expect(withoutButton.map((x) => x.id)).toEqual([])
   })
 
+  // Entering an empty course workspace is not having downloaded anything.
+  test("the download step completes on exercises on disk in a course workspace", function () {
+    const step = packageJson().contributes.walkthroughs?.[0]?.steps.find(
+      (x) => x.id === "openExercises",
+    )
+    expect(step?.completionEvents).toEqual([
+      "onContext:test-my-code:WorkspaceActive && test-my-code:HasDownloadedExercises",
+    ])
+    expect(step?.description).toContain(
+      "[Download All Exercises](command:tmc.downloadAllExercises)",
+    )
+  })
+
   // The walkthrough is the onboarding a new user sees, so the privacy notice has to be in it.
   test("a step carries the data-collection notice", function () {
     const root = path.join(__dirname, "..", "..", "..")

@@ -50,3 +50,17 @@ export function trackHasCourses(
     userData.onDidChangeCourses,
   ])
 }
+
+/**
+ * Keeps `test-my-code:HasDownloadedExercises` true exactly while some exercise is on disk,
+ * which with an open course workspace completes the walkthrough's download step.
+ */
+export function trackHasDownloadedExercises(
+  workspaceManager: Pick<WorkspaceManager, "getExercises" | "onDidChangeExercises">,
+): vscode.Disposable {
+  return trackContextKey(
+    "test-my-code:HasDownloadedExercises",
+    () => workspaceManager.getExercises().length > 0,
+    [workspaceManager.onDidChangeExercises],
+  )
+}
