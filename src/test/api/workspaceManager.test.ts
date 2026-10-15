@@ -887,6 +887,13 @@ suite("WorkspaceManager class", function () {
       await expect(manager.workspaceFileProblem()).resolves.toBe("readOnly")
     })
 
+    test("reports a read-only file left dirty by a failed write as read-only", async function () {
+      fs.chmodSync(workspaceFile, 0o444)
+      stubWorkspace("textDocuments", [{ uri: vscode.Uri.file(workspaceFile), isDirty: true }])
+
+      await expect(manager.workspaceFileProblem()).resolves.toBe("readOnly")
+    })
+
     test("finds nothing outside a course workspace", async function () {
       stubWorkspace("workspaceFile", undefined)
 

@@ -623,10 +623,8 @@ export default class WorkspaceManager implements vscode.Disposable {
     if (!uri) {
       return undefined
     }
-    // VS Code refuses every extension write to a settings file with unsaved changes.
-    if (vscode.workspace.textDocuments.some((d) => d.isDirty && d.uri.fsPath === uri.fsPath)) {
-      return "unsaved"
-    }
+    // Checked first: a write VS Code fails to save leaves the file dirty, and saving a
+    // read-only file cannot clear that.
     try {
       await fs.access(uri.fsPath, fs.constants.W_OK)
     } catch (e) {
@@ -634,6 +632,10 @@ export default class WorkspaceManager implements vscode.Disposable {
       if (code === "EACCES" || code === "EPERM") {
         return "readOnly"
       }
+    }
+    // VS Code refuses every extension write to a settings file with unsaved changes.
+    if (vscode.workspace.textDocuments.some((d) => d.isDirty && d.uri.fsPath === uri.fsPath)) {
+      return "unsaved"
     }
     return undefined
   }
