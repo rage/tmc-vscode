@@ -16,6 +16,7 @@ import {
   DeviceLoginExpiredError,
   ServerError,
 } from "../../errors"
+import { tmcLocalCourse } from "../fixtures/courses"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -73,6 +74,7 @@ function harness(): Harness {
     ...createMockActionContext({ startup: { langs: { authenticate } as unknown as Langs } }),
     dialog,
   }
+  vi.mocked(context.startup.userData.getCourses).mockReturnValue([])
 
   const progressMessages: string[] = []
   const progressCancellation = new vscode.CancellationTokenSource()
@@ -164,6 +166,18 @@ suite("login command", function () {
       expect.any(Function),
     ])
     expect(refreshEverything).toHaveBeenCalledWith(h.context, { silent: true })
+  })
+
+  test("a login that finds courses already added offers no course to add", async function () {
+    const h = harness()
+    vi.mocked(h.context.startup.userData.getCourses).mockReturnValue([tmcLocalCourse()])
+    const { outcome } = await runToCode(h)
+
+    h.logins[0]?.finish(Ok(undefined))
+    expect(await outcome).toBe("loggedIn")
+    expect(h.context.dialog.notification).toHaveBeenCalledExactlyOnceWith(
+      "Logged in to courses.mooc.fi.",
+    )
   })
 
   test("without a page carrying the code, offers to copy it before opening the page", async function () {
