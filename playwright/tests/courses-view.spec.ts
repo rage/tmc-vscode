@@ -33,12 +33,11 @@ vsCodeTest(
       await expect(failing).toHaveAccessibleName(/, closed,/)
     })
 
-    // An inline action on a selected row acts on the whole selection, as in VS Code's own views.
-    await vsCodeTest.step("open one on its own", async () => {
+    await vsCodeTest.step("selecting a closed exercise opens it alone, and its code", async () => {
       await passing.click()
-      await coursesView.runInlineAction(passing, "Open")
       await expect(passing).toHaveAccessibleName(/, open,/)
       await expect(failing).toHaveAccessibleName(/, closed,/)
+      await expect(page.getByRole("tab", { name: /passing_exercise\.py/ })).toBeVisible()
     })
   },
 )
