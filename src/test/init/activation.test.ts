@@ -231,6 +231,7 @@ vi.mock("../../commands", () => ({
   changeTmcDataPath: async (): Promise<void> => {},
   cleanExercise: async (): Promise<void> => {},
   closeExercise: async (): Promise<void> => {},
+  createCourseWorkspaceOffer: () => (): void => {},
   downloadNewExercises: async (): Promise<void> => {},
   downloadOldSubmission: async (): Promise<void> => {},
   logout: async (): Promise<void> => {},

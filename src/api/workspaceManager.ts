@@ -69,6 +69,12 @@ export type PersistClosedCourseExercises = (
   closedExerciseSlugs: string[],
 ) => Promise<Result<void, Error>>
 
+/** A course, as its workspace knows it. */
+export interface CourseWorkspaceKey {
+  backend: BackendKind
+  courseSlug: string
+}
+
 /** How long a workspace folder change may keep the workspace file to itself. */
 const FOLDER_CHANGE_TIMEOUT_MS = 5_000
 
@@ -180,6 +186,9 @@ export default class WorkspaceManager implements vscode.Disposable {
   // Per course key, so that one course's record is read and written by one change at a time.
   private readonly _closedRecordWrites = new Map<string, SerialQueue>()
   private readonly _exercisesChanged = new vscode.EventEmitter<void>()
+  private readonly _openedOutsideCourseWorkspace = new vscode.EventEmitter<CourseWorkspaceKey>()
+  /** Whether a scan has set `_exercises` yet: the first one finds nothing newly opened. */
+  private _isScanned = false
   // Every write of the open workspace file. VS Code refuses a settings write while it has the
   // file's folder list unsaved, and addWorkspaceRecommendation's raw rewrite would lose a change
   // interleaved with it.
@@ -187,6 +196,12 @@ export default class WorkspaceManager implements vscode.Disposable {
 
   /** Fires after the known exercises, or whether one is open or closed, change. */
   public readonly onDidChangeExercises = this._exercisesChanged.event
+
+  /**
+   * Fires, once per course, when exercises become open in a course whose workspace this window
+   * does not show, so nothing visible changes: one downloaded, or opened, from elsewhere.
+   */
+  public readonly onDidOpenOutsideCourseWorkspace = this._openedOutsideCourseWorkspace.event
 
   /**
    * Creates a new instance of the WorkspaceManager class.
@@ -299,6 +314,13 @@ export default class WorkspaceManager implements vscode.Disposable {
     isClosedStateKnown = true,
   ): Promise<Result<void, Error>> {
     const isChanged = !WorkspaceManager._isSameExercises(this._exercises, exercises)
+    const known = new Set(this._exercises.map((x) => ExerciseIdentifier.key(x.id)))
+    const newlyOpen = this._isScanned
+      ? exercises.filter(
+          (x) => x.status === ExerciseStatus.Open && !known.has(ExerciseIdentifier.key(x.id)),
+        )
+      : []
+    this._isScanned = true
     this._exercises = exercises
     this._exercisesByPath = WorkspaceManager._indexByPath(exercises)
     this._exercisesById = WorkspaceManager._indexById(exercises)
@@ -307,7 +329,19 @@ export default class WorkspaceManager implements vscode.Disposable {
     if (isChanged) {
       this._exercisesChanged.fire()
     }
+    this._announceOpenedOutsideCourseWorkspace(newlyOpen)
     return this._refreshActiveCourseWorkspace()
+  }
+
+  private _announceOpenedOutsideCourseWorkspace(opened: WorkspaceExercise[]): void {
+    const active = this._activeCourseWorkspace
+    const courses = new Map<string, CourseWorkspaceKey>()
+    for (const { backend, courseSlug } of opened) {
+      if (backend !== active?.backend || courseSlug !== active.slug) {
+        courses.set(WorkspaceManager._courseKey(backend, courseSlug), { backend, courseSlug })
+      }
+    }
+    courses.forEach((course) => this._openedOutsideCourseWorkspace.fire(course))
   }
 
   private static _isSameExercises(
@@ -493,6 +527,7 @@ export default class WorkspaceManager implements vscode.Disposable {
   public dispose(): void {
     this._disposables.forEach((x) => x.dispose())
     this._exercisesChanged.dispose()
+    this._openedOutsideCourseWorkspace.dispose()
   }
 
   public async excludeMetaFilesInWorkspace(hide: boolean): Promise<void> {
@@ -810,6 +845,11 @@ export default class WorkspaceManager implements vscode.Disposable {
 
       // `setExercises` may have replaced the exercises while the write was in flight.
       const matched = courseExercises().filter((x) => isRequested(x))
+      if (open) {
+        this._announceOpenedOutsideCourseWorkspace(
+          matched.filter((x) => x.status !== ExerciseStatus.Open),
+        )
+      }
       for (const exercise of matched) {
         exercise.status = open ? ExerciseStatus.Open : ExerciseStatus.Closed
       }

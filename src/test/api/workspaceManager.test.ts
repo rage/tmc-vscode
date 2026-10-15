@@ -9,7 +9,11 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { BackendKind } from "../../../shared/lib"
-import type { PersistClosedCourseExercises, WorkspaceExercise } from "../../api/workspaceManager"
+import type {
+  CourseWorkspaceKey,
+  PersistClosedCourseExercises,
+  WorkspaceExercise,
+} from "../../api/workspaceManager"
 import WorkspaceManager, {
   ensureCourseWorkspaceFile,
   ensureWorkspaceRoot,
@@ -1144,6 +1148,61 @@ suite("WorkspaceManager class", function () {
 
       expect(result.ok).toBe(true)
       expect(fs.readdirSync(workspaceFileFolder)).toEqual(["notes.txt"])
+    })
+  })
+
+  suite("exercises opened where this window does not show them", function () {
+    const courseSlug = "test-python-course"
+    let opened: CourseWorkspaceKey[]
+    let manager: WorkspaceManager
+
+    beforeEach(async function () {
+      opened = []
+      manager = new WorkspaceManager(resources, persistForCourse)
+      manager.onDidOpenOutsideCourseWorkspace((course) => void opened.push(course))
+      await manager.setExercises([exercise("mooc", courseSlug, "first", ExerciseStatus.Closed)])
+    })
+
+    test("a download, open by default, is announced once for its course", async function () {
+      await manager.setExercises([
+        exercise("mooc", courseSlug, "first", ExerciseStatus.Closed),
+        exercise("mooc", courseSlug, "second", ExerciseStatus.Open),
+        exercise("mooc", courseSlug, "third", ExerciseStatus.Open),
+      ])
+
+      expect(opened).toEqual([{ backend: "mooc", courseSlug }])
+    })
+
+    test("the exercises found on startup are not announced", async function () {
+      const startup = new WorkspaceManager(resources, persistForCourse)
+      startup.onDidOpenOutsideCourseWorkspace((course) => void opened.push(course))
+
+      await startup.setExercises([exercise("mooc", courseSlug, "first", ExerciseStatus.Open)])
+
+      expect(opened).toEqual([])
+    })
+
+    test("opening a closed exercise is announced, and opening an open one is not", async function () {
+      const closed = exercise("mooc", courseSlug, "first", ExerciseStatus.Closed)
+
+      await manager.openCourseExercises("mooc", courseSlug, [closed.id])
+      await manager.openCourseExercises("mooc", courseSlug, [closed.id])
+
+      expect(opened).toEqual([{ backend: "mooc", courseSlug }])
+    })
+
+    test("nothing is announced inside that course's own workspace", async function () {
+      openWorkspaceFile(workspaceFileName(courseSlug, "mooc"))
+
+      await manager.setExercises([
+        exercise("mooc", courseSlug, "first", ExerciseStatus.Closed),
+        exercise("mooc", courseSlug, "second", ExerciseStatus.Open),
+      ])
+      await manager.openCourseExercises("mooc", courseSlug, [
+        exercise("mooc", courseSlug, "first", ExerciseStatus.Closed).id,
+      ])
+
+      expect(opened).toEqual([])
     })
   })
 

@@ -31,7 +31,7 @@ import WorkspaceManager, {
   ensureWorkspaceRoot,
 } from "./api/workspaceManager"
 import { WorkspaceTrustGate } from "./api/workspaceTrustGate"
-import { login, logout, refreshEverything } from "./commands"
+import { createCourseWorkspaceOffer, login, logout, refreshEverything } from "./commands"
 import {
   CLIENT_NAME,
   closedExercisesSettingKey,
@@ -459,14 +459,17 @@ async function activateInner(
     if (refreshResult.err) {
       Logger.warn("Failed to set initial exercises.", refreshResult.val)
     }
-    // A failed activation leaves the view empty, and its `viewsWelcome` offers the way out.
     const { startup: ready } = readyContext
     coursesTree.setRestricted(
       !vscode.workspace.isTrusted && ready.workspaceManager.activeCourse !== undefined,
     )
     context.subscriptions.push(
       vscode.workspace.onDidGrantWorkspaceTrust(() => coursesTree.setRestricted(false)),
+      ready.workspaceManager.onDidOpenOutsideCourseWorkspace(
+        createCourseWorkspaceOffer(readyContext),
+      ),
     )
+    // A failed activation leaves the view empty, and its `viewsWelcome` offers the way out.
     coursesTree.setSource({
       getCourses: () => ready.userData.getCourses(),
       onDidChangeCourses: ready.userData.onDidChangeCourses,
