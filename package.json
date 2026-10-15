@@ -431,7 +431,7 @@
         },
         {
           "command": "tmcTreeView.refreshCourses",
-          "when": "false"
+          "when": "test-my-code:Initialized && test-my-code:LoggedIn"
         },
         {
           "command": "tmc.testExercise",

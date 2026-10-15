@@ -370,6 +370,14 @@ suite("registerCommands", function () {
 
   // A `when` naming a key nothing ever sets is never true, so the entry it
   // gates silently disappears from the UI instead of failing anywhere.
+  test("the palette offers Refresh Courses and Download All Exercises to a logged-in user", function () {
+    for (const command of ["tmcTreeView.refreshCourses", "tmc.downloadAllExercises"]) {
+      expect(commandPalette().find((x) => x.command === command)?.when).toBe(
+        "test-my-code:Initialized && test-my-code:LoggedIn",
+      )
+    }
+  })
+
   test("every context key the manifest gates on is one the extension sets", function () {
     const sourceRoot = path.join(__dirname, "..", "..")
     const settable = new Set(
