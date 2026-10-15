@@ -7,7 +7,11 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { BackendKind } from "../../../shared/lib"
-import { EXERCISE_CHECK_INTERVAL, EXTENSION_VERSION } from "../../config/constants"
+import {
+  EXERCISE_CHECK_INTERVAL,
+  EXTENSION_VERSION,
+  FOCUS_REFRESH_INTERVAL,
+} from "../../config/constants"
 import { CorruptStoredDataError } from "../../errors"
 import { activate } from "../../extension"
 import { Logger, LogLevel } from "../../utilities"
@@ -26,6 +30,7 @@ const recorded = vi.hoisted(() => ({
   /** How many times activation registered the panel serializer. */
   serializerRegistrations: 0,
   uiDisposals: 0,
+  windowStateListeners: [] as ((state: { focused: boolean }) => void)[],
 }))
 
 /** The stubbed CLI's answers, and what activation asked of it. */
@@ -94,6 +99,10 @@ vi.mock("vscode", async (importOriginal) => {
     window: {
       ...(original["window"] as Record<string, unknown>),
       registerFileDecorationProvider: () => registration,
+      onDidChangeWindowState: (listener: (state: { focused: boolean }) => void) => {
+        recorded.windowStateListeners.push(listener)
+        return registration
+      },
       onDidChangeActiveTextEditor: () => registration,
       withProgress: (_options: unknown, task: (progress: unknown, token: unknown) => unknown) =>
         task({ report: () => {} }, { isCancellationRequested: false }),
@@ -634,6 +643,47 @@ suite("the startup course refresh", function () {
     await activate(createContext())
 
     await vi.waitFor(() => expect(courseRefresh.runs).toBe(2))
+  })
+})
+
+suite("the refresh on regaining focus", function () {
+  beforeEach(function () {
+    resetActivationRecording()
+    recorded.windowStateListeners.length = 0
+    langsStub.authenticated = true
+    vi.useFakeTimers()
+  })
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  const focus = (): void => recorded.windowStateListeners.at(-1)?.({ focused: true })
+
+  test("refreshes once a while has passed since the last refresh, and not sooner", async function () {
+    await activate(createContext())
+    await vi.waitFor(() => expect(courseRefresh.runs).toBe(1))
+
+    focus()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(courseRefresh.runs).toBe(1)
+
+    await vi.advanceTimersByTimeAsync(FOCUS_REFRESH_INTERVAL)
+    focus()
+    await vi.waitFor(() => expect(courseRefresh.runs).toBe(2))
+  })
+
+  test("does nothing while logged out", async function () {
+    langsStub.authenticated = false
+    await activate(createContext())
+    await vi.advanceTimersByTimeAsync(FOCUS_REFRESH_INTERVAL)
+
+    focus()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(courseRefresh.runs).toBe(0)
   })
 })
 

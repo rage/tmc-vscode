@@ -16,7 +16,7 @@ import { Logger } from "../utilities"
  * the refresh after a submit. It suppresses the "up to date" toast and the failure
  * notification but deliberately not the "Found updates" prompt, which together with
  * its "Remind me later" postponement is the only thing that reaches a user who has
- * turned automatic updates off.
+ * turned automatic updates off. A run the user asked for skips the CLI's cached answer.
  */
 export async function updateExercises(
   actionContext: ReadyActionContext,
@@ -30,7 +30,7 @@ export async function updateExercises(
   const updateablesResult = await withOperation(
     dialog,
     { failure: "Failed to check for exercise updates.", silent },
-    async () => Ok(await checkForExerciseUpdates(actionContext)),
+    async () => Ok(await checkForExerciseUpdates(actionContext, { forceRefresh: !silent })),
   )
   if (updateablesResult.err) {
     return

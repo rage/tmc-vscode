@@ -54,6 +54,14 @@ function contextWithCourses(courses: LocalCourseData[]): [ReadyActionContext, Di
             getCourses: () => courses,
             getCourse: (id: CourseIdentifier) => Ok(byId.get(CourseIdentifier.toString(id))),
             setNewExerciseNotifyAfter: vi.fn(async () => Ok.EMPTY),
+            setNewExercisesOffered: vi.fn(async (id: CourseIdentifier) => {
+              const course = byId.get(CourseIdentifier.toString(id))
+              if (course) {
+                course.data.offeredNewExercises = [...course.data.newExercises] as never
+              }
+              return Ok.EMPTY
+            }),
+            postponeNewExercises: vi.fn(async () => Ok.EMPTY),
             clearFromNewExercises: vi.fn(async () => Ok.EMPTY),
           } as unknown as ReadyStartup["userData"],
         },
@@ -276,6 +284,32 @@ suite("refreshEverything's new-exercises prompt", function () {
     expect(dialog.notification).not.toHaveBeenCalled()
   })
 
+  test("offers the same new exercises once, and again when more arrive", async function () {
+    const course = tmcCourse(1, 0, [10])
+    const [actionContext, dialog] = contextWithCourses([course])
+
+    await refreshEverything(actionContext, { silent: true })
+    await refreshEverything(actionContext, { silent: true })
+    expect(dialog.notification).toHaveBeenCalledOnce()
+
+    course.data.newExercises = [10, 11]
+    await refreshEverything(actionContext, { silent: true })
+    expect(dialog.notification).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(dialog.notification).mock.calls[1]?.[0]).toBe(
+      "Course 1 has 2 new exercises. Download them now?",
+    )
+  })
+
+  test("holds the offer back for a refresh that asks it to, until a later one", async function () {
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
+
+    await refreshEverything(actionContext, { silent: true, offersNewExercises: false })
+    expect(dialog.notification).not.toHaveBeenCalled()
+
+    await refreshEverything(actionContext, { silent: true })
+    expect(dialog.notification).toHaveBeenCalledOnce()
+  })
+
   test("downloads the course's new exercises from the Download button", async function () {
     const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
     await refreshEverything(actionContext, { silent: true })
@@ -338,7 +372,7 @@ suite("refreshEverything's new-exercises prompt", function () {
     press(dialog, "Don't Remind Again")
 
     await vi.waitFor(() => {
-      expect(userData.setNewExerciseNotifyAfter).toHaveBeenCalledExactlyOnceWith(
+      expect(userData.postponeNewExercises).toHaveBeenCalledExactlyOnceWith(
         idOfTmcCourse(1),
         expect.any(Number),
       )
@@ -348,7 +382,7 @@ suite("refreshEverything's new-exercises prompt", function () {
 
   test("reports a reminder that could not be postponed once", async function () {
     const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
-    vi.mocked(actionContext.startup.userData.setNewExerciseNotifyAfter).mockResolvedValue(
+    vi.mocked(actionContext.startup.userData.postponeNewExercises).mockResolvedValue(
       Err(new Error("storage full")),
     )
     await refreshEverything(actionContext, { silent: true })
@@ -365,6 +399,27 @@ suite("refreshEverything's new-exercises prompt", function () {
 })
 
 suite("refreshCourses command", function () {
+  test("waits for a background refresh instead of refusing", async function () {
+    let release!: () => void
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    vi.mocked(updateCourse).mockImplementationOnce(async () => {
+      await blocked
+      return Ok({ isUpdated: true, warnings: [] })
+    })
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [])])
+
+    const background = refreshEverything(actionContext, { silent: true })
+    const asked = refreshCourses(actionContext)
+    release()
+    await Promise.all([background, asked])
+
+    expect(updateCourse).toHaveBeenCalledTimes(2)
+    expect(updateExercises).toHaveBeenLastCalledWith(actionContext, "loud")
+    expect(dialog.notification).not.toHaveBeenCalled()
+  })
+
   beforeEach(function () {
     vi.mocked(updateCourse).mockReset()
     vi.mocked(updateCourse).mockResolvedValue(Ok({ isUpdated: true, warnings: [] }))

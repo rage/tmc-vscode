@@ -32,6 +32,8 @@ export const SharedTmcCourseDataSchema = z.object({
   /** The course hides submission results. */
   perhapsExamMode: z.boolean(),
   newExercises: z.array(z.number()),
+  /** The new exercises a notification has offered; they are not offered again unprompted. */
+  offeredNewExercises: z.array(z.number()).optional(),
   notifyAfter: z.number(),
   disabled: z.boolean(),
   materialUrl: z.string().nullable(),
@@ -76,6 +78,8 @@ export const SharedMoocCourseDataSchema = z.object({
   availablePoints: z.number(),
   awardedPoints: z.number(),
   newExercises: z.array(z.string()),
+  /** The new exercises a notification has offered; they are not offered again unprompted. */
+  offeredNewExercises: z.array(z.string()).optional(),
   notifyAfter: z.number(),
 })
 

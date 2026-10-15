@@ -26,10 +26,8 @@ export const CLIENT_NAME = "vscode_plugin"
 export const EXTENSION_ID = "moocfi.test-my-code"
 export const OUTPUT_CHANNEL_NAME = "TestMyCode"
 
-/**
- * Delay for notifications that offer a "remind me later" option.
- */
-export const NOTIFICATION_DELAY = 30 * 60 * 1000
+/** How long "Remind Me Later" holds a notification back: well past the next poll. */
+export const NOTIFICATION_DELAY = 24 * 60 * 60 * 1000
 
 export const API_CACHE_LIFETIME = 5 * 60 * 1000
 
@@ -51,6 +49,9 @@ export const LOGIN_PROCESS_TIMEOUT = 30 * 60 * 1000
  */
 export const SUBMIT_PROCESS_TIMEOUT = 2 * 60 * 60 * 1000
 export const EXERCISE_CHECK_INTERVAL = 30 * 60 * 1000
+
+/** How long after an unprompted refresh the window regaining focus refreshes again. */
+export const FOCUS_REFRESH_INTERVAL = 10 * 60 * 1000
 
 /** Minimum time that should be waited between submission attempts. */
 export const MINIMUM_SUBMISSION_INTERVAL = 5 * 1000

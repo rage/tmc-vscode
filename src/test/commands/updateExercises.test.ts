@@ -186,6 +186,19 @@ suite("updateExercises command", function () {
     expect(dialog.notification).not.toHaveBeenCalled()
   })
 
+  test("asks the backends afresh when the user asked, and accepts a cached answer otherwise", async function () {
+    checkForExerciseUpdates.mockResolvedValue(checked([]))
+    const [actionContext] = contextWith(true)
+
+    await updateExercises(actionContext, "loud")
+    await updateExercises(actionContext, "silent")
+
+    expect(checkForExerciseUpdates.mock.calls.map(([, options]) => options)).toEqual([
+      { forceRefresh: true },
+      { forceRefresh: false },
+    ])
+  })
+
   test("downloads the updates the user accepts", async function () {
     const updates = [outdated(1, 10)]
     checkForExerciseUpdates.mockResolvedValue(checked(updates))

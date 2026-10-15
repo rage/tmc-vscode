@@ -470,6 +470,52 @@ suite("UserData replaceCourse", function () {
     expect(userData.getMoocCourses()[0]?.newExercises).toEqual(["c"])
   })
 
+  test("an arriving exercise ends a postponed reminder; a refresh without one keeps it", async function () {
+    const later = Date.now() + 60_000
+    const [userData] = await makeUserData({
+      courses: [tmcCourse({ id: 0, notifyAfter: later, exercises: [tmcExercise({ id: 1 })] })],
+      mooc_courses: [],
+    })
+
+    await userData.replaceCourse(
+      makeTmcKind(tmcCourse({ id: 0, notifyAfter: 0, exercises: [tmcExercise({ id: 1 })] })),
+    )
+    expect(storedTmcCourse(userData, 0).notifyAfter).toBe(later)
+
+    await userData.replaceCourse(
+      makeTmcKind(
+        tmcCourse({ id: 0, exercises: [tmcExercise({ id: 1 }), tmcExercise({ id: 2 })] }),
+      ),
+    )
+    expect(storedTmcCourse(userData, 0).notifyAfter).toBe(0)
+  })
+
+  test("remembers which new exercises were offered while they stay new", async function () {
+    const [userData] = await makeUserData({
+      courses: [
+        tmcCourse({
+          id: 0,
+          newExercises: [2, 3],
+          exercises: [tmcExercise({ id: 2 }), tmcExercise({ id: 3 })],
+        }),
+      ],
+      mooc_courses: [],
+    })
+    await userData.setNewExercisesOffered(makeTmcKind({ courseId: 0 }))
+    expect(storedTmcCourse(userData, 0).offeredNewExercises).toEqual([2, 3])
+
+    await userData.replaceCourse(
+      makeTmcKind(tmcCourse({ id: 0, exercises: [tmcExercise({ id: 3 })] })),
+    )
+    expect(storedTmcCourse(userData, 0).offeredNewExercises).toEqual([3])
+
+    await userData.postponeNewExercises(makeTmcKind({ courseId: 0 }), 123)
+    expect(storedTmcCourse(userData, 0)).toMatchObject({
+      offeredNewExercises: [],
+      notifyAfter: 123,
+    })
+  })
+
   test("writes once and announces the replaced course", async function () {
     const [userData, store] = await makeUserData({
       courses: [tmcCourse({ id: 0 })],

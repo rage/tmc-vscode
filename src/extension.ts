@@ -36,6 +36,7 @@ import {
   DEBUG_MODE,
   EXERCISE_CHECK_INTERVAL,
   EXTENSION_ID,
+  FOCUS_REFRESH_INTERVAL,
   EXTENSION_VERSION,
   TMC_LANGS_CONFIG_DIR,
   TMC_LANGS_DL_URL,
@@ -155,7 +156,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
 }
 
+/** When the last unprompted refresh started, in epoch milliseconds. */
+let lastBackgroundRefreshAt = 0
+
 function refreshInBackground(ready: ReadyActionContext): void {
+  lastBackgroundRefreshAt = Date.now()
   void refreshEverything(ready, { silent: true }).catch((e) =>
     Logger.error("Background refresh failed", e),
   )
@@ -463,7 +468,12 @@ async function activateInner(
       // Point totals come from the backend, so without this the Courses view and Course
       // Details totals stay stale until the user refreshes by hand.
       onDidFinishSubmission((courseId) => {
-        void refreshEverything(readyContext, { silent: true, isQueuedWhenBusy: true, courseId })
+        void refreshEverything(readyContext, {
+          silent: true,
+          isQueuedWhenBusy: true,
+          courseId,
+          offersNewExercises: false,
+        })
       }),
     )
   }
@@ -510,6 +520,21 @@ async function activateInner(
   }
 
   setMaintenancePollArmed(authState.loggedIn)
+
+  // The poll alone would leave exercises published mid-session unnoticed for up to its whole
+  // interval; coming back to the window is when the student would want to hear of them.
+  context.subscriptions.push(
+    vscode.window.onDidChangeWindowState((state) => {
+      if (
+        state.focused &&
+        readyContext &&
+        authState.loggedIn &&
+        Date.now() - lastBackgroundRefreshAt >= FOCUS_REFRESH_INTERVAL
+      ) {
+        refreshInBackground(readyContext)
+      }
+    }),
+  )
 
   // `tmc.showWelcome` is registered only in the ready case, and VS Code rejects a command
   // it cannot find -- which would abort the rest of this function.
