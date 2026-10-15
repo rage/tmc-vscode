@@ -1,12 +1,13 @@
-import type * as vscode from "vscode"
+import * as vscode from "vscode"
 
 import { pasteServiceName } from "../../shared/lib"
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure } from "../api/withOperation"
-import { openWebLink } from "../utilities"
+import { Logger, openWebLink } from "../utilities"
 import { runForExercise } from "./runForExercise"
 
+/** Shares the exercise via its backend's paste service and copies the link it gets. */
 export async function pasteExercise(
   actionContext: ReadyActionContext,
   resource: vscode.Uri | undefined,
@@ -34,8 +35,16 @@ export async function pasteExercise(
     return
   }
 
-  dialog.notification(`Paste link: ${pasteResult.val}`, [
-    "Open URL",
-    (): Promise<boolean> => openWebLink(pasteResult.val),
-  ])
+  const link = pasteResult.val
+  const isCopied = await Promise.resolve(vscode.env.clipboard.writeText(link)).then(
+    () => true,
+    (error: unknown) => {
+      Logger.warn("Could not copy the paste link", error)
+      return false
+    },
+  )
+  void dialog.notification(
+    isCopied ? `Copied the paste link to the clipboard: ${link}` : `Paste link: ${link}`,
+    ["Open in Browser", (): void => void openWebLink(link)],
+  )
 }

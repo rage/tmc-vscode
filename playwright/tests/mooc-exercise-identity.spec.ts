@@ -81,7 +81,9 @@ vsCodeTest(
       await expect(async () => {
         await page.getByText("def hello()").click()
         await coursesView.runExercisePaletteCommand("TestMyCode: Share Exercise via Paste")
-        await expect(coursesView.notificationToast("Paste link:")).toBeVisible({ timeout: 2_000 })
+        await expect(coursesView.notificationToast("Copied the paste link")).toBeVisible({
+          timeout: 2_000,
+        })
       }).toPass()
     })
   },
