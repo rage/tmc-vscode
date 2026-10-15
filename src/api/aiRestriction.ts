@@ -486,8 +486,13 @@ export default class AiRestriction implements vscode.Disposable {
     if (owned.length === 0) {
       return false
     }
+    // Last: turning it back on restarts the extension host, which would cut off the removals after it.
+    const ordered = _.sortBy(
+      owned,
+      (key) => parseTargetKey(key).section === "chat.disableAIFeatures",
+    )
     const kept: string[] = []
-    for (const key of owned) {
+    for (const key of ordered) {
       if (this._isDisposed) {
         kept.push(key)
         continue

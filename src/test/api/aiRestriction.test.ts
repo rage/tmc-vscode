@@ -508,6 +508,20 @@ suite("AI restriction", function () {
 
       expect(workspace.replaceWorkspaceSetting).not.toHaveBeenCalled()
     })
+
+    test("removes the one that restarts the extension host last", async function () {
+      holdEverySetting(workspace)
+      workspace.stored.set("chat.disableAIFeatures", false)
+      await restriction.apply()
+      workspace.stored.set(INLINE_SUGGEST, true)
+      await restriction.apply()
+      workspace.replaceWorkspaceSetting.mockClear()
+      isAllowed = true
+
+      await restriction.apply()
+
+      expect(workspace.writtenKeys()).toEqual([INLINE_SUGGEST, "chat.disableAIFeatures"])
+    })
   })
 
   suite("live re-apply", function () {
