@@ -1,15 +1,28 @@
 import * as _ from "lodash"
+import { Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
-import type { LocalCourseData } from "../../../shared/lib"
+import type { CourseAiPolicy } from "../../../shared/langsSchema"
+import { updateCourse } from "../../actions/updateCourse"
 import AiRestriction, { isActiveCourseAiAllowed, isAiAllowed } from "../../api/aiRestriction"
 import type { AiRestrictionEvents } from "../../api/aiRestriction"
 import type { SettingInspection, WorkspaceFileProblem } from "../../api/workspaceManager"
 import { AI_OFF_SETTINGS } from "../../config/constants"
+import { UserData } from "../../config/userdata"
+import Storage from "../../storage"
 import { Logger } from "../../utilities"
-import { createMockMemento } from "../mocks/vscode"
+import { moocCourseData, moocLocalCourse, tmcLocalCourse } from "../fixtures/courses"
+import { idOfMoocCourse } from "../fixtures/identifiers"
+import {
+  MOOC_COURSE_UUID,
+  moocCourse,
+  moocCourseProgress,
+  moocExerciseSlides,
+} from "../fixtures/tmc"
+import { createMockActionContext, createMockAuthState } from "../mocks/actionContext"
+import { createTMCMock } from "../mocks/tmc"
+import { createMockContext, createMockMemento } from "../mocks/vscode"
 
 const AI_SECTIONS = Object.keys(AI_OFF_SETTINGS)
 const INLINE_SUGGEST = "editor.inlineSuggest.enabled"
@@ -495,6 +508,61 @@ suite("AI restriction", function () {
 
       expect(workspace.replaceWorkspaceSetting).not.toHaveBeenCalled()
     })
+
+    test("removes the one that restarts the extension host last", async function () {
+      holdEverySetting(workspace)
+      workspace.stored.set("chat.disableAIFeatures", false)
+      await restriction.apply()
+      workspace.stored.set(INLINE_SUGGEST, true)
+      await restriction.apply()
+      workspace.replaceWorkspaceSetting.mockClear()
+      isAllowed = true
+
+      await restriction.apply()
+
+      expect(workspace.writtenKeys()).toEqual([INLINE_SUGGEST, "chat.disableAIFeatures"])
+    })
+
+    suite("with no record of what it wrote, as 3.5.4 kept none", function () {
+      test("removes the workspace file's values that equal its own, the restarting one last", async function () {
+        holdEverySetting(workspace)
+        isAllowed = true
+
+        await restriction.apply()
+
+        expect(workspace.stored.size).toBe(0)
+        expect(workspace.writtenKeys().at(-1)).toBe("chat.disableAIFeatures")
+      })
+
+      test("keeps other values, the student's entries of a per-language map and language blocks", async function () {
+        holdEverySetting(workspace)
+        workspace.stored.set("cody.suggestions.mode", "autocomplete")
+        workspace.stored.set("github.copilot.enable", {
+          ...(AI_OFF_SETTINGS["github.copilot.enable"] as object),
+          rust: true,
+        })
+        workspace.stored.set(keyOf(INLINE_SUGGEST, "python"), false)
+        isAllowed = true
+
+        await restriction.apply()
+
+        expect(Object.fromEntries(workspace.stored)).toEqual({
+          "cody.suggestions.mode": "autocomplete",
+          "github.copilot.enable": { rust: true },
+          [keyOf(INLINE_SUGGEST, "python")]: false,
+        })
+      })
+
+      test("takes them as its own only on the first pass", async function () {
+        isAllowed = true
+        await restriction.apply()
+        workspace.stored.set(INLINE_SUGGEST, false)
+
+        await restriction.apply()
+
+        expect(workspace.stored.get(INLINE_SUGGEST)).toBe(false)
+      })
+    })
   })
 
   suite("live re-apply", function () {
@@ -954,15 +1022,20 @@ suite("AI restriction", function () {
 })
 
 suite("isAiAllowed", function () {
-  const tmcCourse = makeTmcKind({ id: 1, name: "python-course" }) as unknown as LocalCourseData
-  const moocCourse = makeMoocKind({ id: "c1", name: "python-course" }) as unknown as LocalCourseData
+  test.each([
+    ["full_use", true],
+    ["required", true],
+    ["not_set", false],
+    ["no_ai", false],
+    ["planning_only", false],
+    ["limited", false],
+    ["unrecognized", false],
+  ] as const)("a mooc course whose policy is %s: %s", function (aiPolicy, isAllowed) {
+    expect(isAiAllowed(moocLocalCourse({ aiPolicy }))).toBe(isAllowed)
+  })
 
-  test("no course is allowed AI: tmc, mooc or unknown", function () {
-    expect([isAiAllowed(tmcCourse), isAiAllowed(moocCourse), isAiAllowed(undefined)]).toEqual([
-      false,
-      false,
-      false,
-    ])
+  test("a tmc course or an unknown one is not allowed AI", function () {
+    expect([isAiAllowed(tmcLocalCourse()), isAiAllowed(undefined)]).toEqual([false, false])
   })
 
   test("the open course is not allowed AI without course data", function () {
@@ -972,5 +1045,54 @@ suite("isAiAllowed", function () {
         undefined,
       ),
     ).toBe(false)
+  })
+})
+
+suite("a course refresh that changes the AI policy", function () {
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("removes the settings once the course allows AI, and writes them back once it does not", async function () {
+    declare(AI_SECTIONS)
+    vi.spyOn(Logger, "info").mockImplementation(() => undefined)
+    const storage = new Storage(createMockContext())
+    await storage.updateUserData({
+      courses: [],
+      mooc_courses: [moocCourseData({ id: MOOC_COURSE_UUID, name: "python-course" })],
+    })
+    const userData = new UserData(storage)
+    const workspace = Object.assign(new FakeCourseWorkspace(), {
+      activeCourseBackend: "mooc" as const,
+    })
+    const [langs, langsValues] = createTMCMock()
+    const context = {
+      ...createMockActionContext({ startup: { langs, userData } }),
+      authState: createMockAuthState(),
+    }
+    const refreshWithPolicy = async (aiPolicy: CourseAiPolicy): Promise<void> => {
+      langsValues.getMoocCourseData = Ok({
+        course: { ...moocCourse, ai_policy: aiPolicy },
+        slides: moocExerciseSlides,
+        progress: moocCourseProgress,
+      })
+      ;(await updateCourse(context, idOfMoocCourse(MOOC_COURSE_UUID))).unwrap()
+    }
+    const restriction = new AiRestriction(
+      workspace,
+      createMockMemento(),
+      () => isActiveCourseAiAllowed(workspace, userData),
+      userData.onDidChangeCourses,
+      new FakeEvents(),
+    )
+    await restriction.apply()
+    expect(Object.fromEntries(workspace.stored)).toEqual(AI_OFF_SETTINGS)
+
+    await refreshWithPolicy("full_use")
+    await vi.waitFor(() => expect(workspace.stored.size).toBe(0))
+
+    await refreshWithPolicy("limited")
+    await vi.waitFor(() => expect(Object.fromEntries(workspace.stored)).toEqual(AI_OFF_SETTINGS))
+    restriction.dispose()
   })
 })

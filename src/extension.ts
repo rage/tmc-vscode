@@ -29,27 +29,36 @@ import WorkspaceManager, {
   ensureCourseWorkspaceFile,
   ensureWorkspaceRootFile,
 } from "./api/workspaceManager"
-import { login, logoutConfirmed, refreshEverything } from "./commands"
+import { login, logout, refreshEverything } from "./commands"
 import {
   CLIENT_NAME,
   closedExercisesSettingKey,
   DEBUG_MODE,
   EXERCISE_CHECK_INTERVAL,
   EXTENSION_ID,
+  FOCUS_REFRESH_INTERVAL,
   EXTENSION_VERSION,
-  STARTUP_REFRESH_SKIP_AGE,
   TMC_LANGS_CONFIG_DIR,
   TMC_LANGS_DL_URL,
   TMC_LANGS_VERSION,
 } from "./config/constants"
 import Settings from "./config/settings"
 import { UserData } from "./config/userdata"
-import { FileSystemError, InitializationError, presentationFor } from "./errors"
+import {
+  FileSystemError,
+  InitializationError,
+  presentationFor,
+  SESSION_ENDED_MESSAGE,
+} from "./errors"
 import * as init from "./init"
 import { TmcPanel } from "./panels/TmcPanel"
 import { createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
-import { trackActiveEditorExercise, trackHasCourses } from "./ui/contextKeys"
+import {
+  trackActiveEditorExercise,
+  trackHasCourses,
+  trackHasDownloadedExercises,
+} from "./ui/contextKeys"
 import { exerciseOperations } from "./ui/exerciseOperations"
 import { AccountStatusBarItem } from "./ui/statusBarAccount"
 import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
@@ -149,11 +158,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       void vscode.commands.executeCommand("setContext", "test-my-code:Degraded", true)
     }
     const message = e instanceof Error ? e.message : String(e)
-    vscode.window.showErrorMessage(
-      `Fatal error during TestMyCode extension initialization: ${message}`,
-    )
-    Logger.show()
+    void vscode.window
+      .showErrorMessage(`TestMyCode could not start. ${message}`, "Show Logs")
+      .then((picked) => picked && Logger.show())
   }
+}
+
+/** When the last unprompted refresh started, in epoch milliseconds. */
+let lastBackgroundRefreshAt = 0
+
+function refreshInBackground(ready: ReadyActionContext): void {
+  lastBackgroundRefreshAt = Date.now()
+  void refreshEverything(ready, { silent: true }).catch((e) =>
+    Logger.error("Background refresh failed", e),
+  )
 }
 
 async function activateInner(
@@ -283,24 +301,22 @@ async function activateInner(
   const sessionExpiredWarning = (): void => {
     accountStatus?.markSessionExpired()
     const logIn: NotificationButton = [
-      "Log in",
+      "Log In",
       (): void => void vscode.commands.executeCommand("tmc.showMoocLogin"),
     ]
-    dialog.warningNotification(
-      "Your session has expired, please log in.",
-      ...(canOfferLogin ? [logIn] : []),
-    )
+    dialog.warningNotification(SESSION_ENDED_MESSAGE, ...(canOfferLogin ? [logIn] : []))
   }
 
   // Seeded from the startup check above; shared with the background poll further down.
   const sessionExpiry = createSessionExpiryTracker(authState.loggedIn, sessionExpiredWarning)
+  dialog.setSessionLostReporter((cause) => sessionExpiry.onSessionLost(cause))
 
   if (langs.ok) {
     langs.val.on("login", async () => {
       await authState.set(true)
       sessionExpiry.onLogin()
     })
-    langs.val.on("logout", async (expected) => {
+    langs.val.on("logout", async (expected, rejection) => {
       if (expected) {
         await authState.set(false)
         sessionExpiry.onLogout()
@@ -310,7 +326,7 @@ async function activateInner(
       if (checked.err) {
         Logger.error("Failed to check if authenticated", checked.val)
       }
-      sessionExpiry.onAuthChecked(authState.loggedIn)
+      sessionExpiry.onAuthChecked(authState.loggedIn, rejection)
     })
     langs.val.on("notification", (notification) => {
       void dialog.warningNotification(notification.message)
@@ -426,7 +442,7 @@ async function activateInner(
   init.registerCommands(context, actionContext, testController)
   canOfferLogin = readyContext !== undefined
   context.subscriptions.push(
-    TmcPanel.registerSerializer(context, actionContext),
+    TmcPanel.registerSerializers(context, actionContext),
     TmcPanel.showSubmissionViews(context, actionContext),
   )
   if (readyContext) {
@@ -437,7 +453,7 @@ async function activateInner(
     const moocAccount = new MoocAuthenticationProvider({
       isLoggedIn: () => authState.loggedIn,
       login: async () => (await login(readyContext)) === "loggedIn",
-      logout: () => logoutConfirmed(readyContext),
+      logout: () => logout(readyContext),
     })
     authState.subscribe((loggedIn) => moocAccount.setLoggedIn(loggedIn))
     context.subscriptions.push(
@@ -454,10 +470,16 @@ async function activateInner(
         operations: exerciseOperations,
       }),
       trackHasCourses(readyContext.startup.userData),
+      trackHasDownloadedExercises(readyContext.startup.workspaceManager),
       // Point totals come from the backend, so without this the Courses view and Course
       // Details totals stay stale until the user refreshes by hand.
       onDidFinishSubmission((courseId) => {
-        void refreshEverything(readyContext, { silent: true, isQueuedWhenBusy: true, courseId })
+        void refreshEverything(readyContext, {
+          silent: true,
+          isQueuedWhenBusy: true,
+          courseId,
+          offersNewExercises: false,
+        })
       }),
     )
   }
@@ -483,25 +505,8 @@ async function activateInner(
     )
   }
 
-  /** Refreshes every course quietly, recording a success for the next activation of any window. */
-  async function refreshInBackground(ready: ReadyActionContext): Promise<void> {
-    try {
-      const refreshed = await refreshEverything(ready, { silent: true })
-      if (refreshed.ok) {
-        await storage.setCoursesRefreshedAt(Date.now())
-      }
-    } catch (e) {
-      Logger.error("Background refresh failed", e)
-    }
-  }
-
-  const refreshAge = Date.now() - (storage.getCoursesRefreshedAt() ?? Number.NEGATIVE_INFINITY)
   if (readyContext && authState.loggedIn) {
-    if (refreshAge >= 0 && refreshAge < STARTUP_REFRESH_SKIP_AGE) {
-      Logger.info("Skipped the startup refresh: the courses were refreshed moments ago")
-    } else {
-      void refreshInBackground(readyContext)
-    }
+    refreshInBackground(readyContext)
   }
 
   async function runMaintenancePoll(): Promise<void> {
@@ -513,7 +518,7 @@ async function activateInner(
       // Proactively catches a session dropping between polls, not just on a failed command.
       sessionExpiry.onAuthChecked(authState.loggedIn)
       if (readyContext && authState.loggedIn) {
-        void refreshInBackground(readyContext)
+        refreshInBackground(readyContext)
       }
     } catch (e) {
       Logger.error("Maintenance check failed", e)
@@ -522,19 +527,27 @@ async function activateInner(
 
   setMaintenancePollArmed(authState.loggedIn)
 
+  // The poll alone would leave exercises published mid-session unnoticed for up to its whole
+  // interval; coming back to the window is when the student would want to hear of them.
+  context.subscriptions.push(
+    vscode.window.onDidChangeWindowState((state) => {
+      if (
+        state.focused &&
+        readyContext &&
+        authState.loggedIn &&
+        Date.now() - lastBackgroundRefreshAt >= FOCUS_REFRESH_INTERVAL
+      ) {
+        refreshInBackground(readyContext)
+      }
+    }),
+  )
+
   // `tmc.showWelcome` is registered only in the ready case, and VS Code rejects a command
   // it cannot find -- which would abort the rest of this function.
   if (readyContext && versionChange === "installed") {
     await vscode.commands.executeCommand("tmc.showWelcome")
   } else if (readyContext && versionChange === "updated") {
-    void dialog.notification(`TestMyCode was updated to ${EXTENSION_VERSION}.`, [
-      "What's New",
-      (): void =>
-        void vscode.commands.executeCommand(
-          "markdown.showPreview",
-          vscode.Uri.joinPath(context.extensionUri, "CHANGELOG.md"),
-        ),
-    ])
+    dialog.statusMessage(`TestMyCode was updated to ${EXTENSION_VERSION}.`)
   }
 
   initializationErrors.notify(!readyContext)

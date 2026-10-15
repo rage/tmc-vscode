@@ -176,15 +176,28 @@ suite("CoursesTree", function () {
   })
 
   // An empty view is what lets `viewsWelcome` explain why there is nothing in it.
-  test("is empty until logged in, and until activation gives it courses", function () {
+  test("is empty until activation gives it courses", function () {
     courses = [tmcCourse()]
-    expect(tree.getChildren()).toEqual([])
-    tree.setLoggedIn(true)
     expect(tree.getChildren()).toEqual([])
     tree.setSource(source())
     expect(tree.getChildren()).toHaveLength(1)
+  })
+
+  // A lost session must not take the exercises on disk away: they open and test offline.
+  test("keeps listing the courses logged out, and says what logging in adds", function () {
+    courses = [tmcCourse()]
+    tree.setSource(source())
     tree.setLoggedIn(false)
-    expect(tree.getChildren()).toEqual([])
+    settle()
+
+    expect(tree.getChildren()).toHaveLength(1)
+    expect(view.message).toBe(
+      "Log in to courses.mooc.fi to download and submit exercises. The exercises on this computer still open and run their tests.",
+    )
+
+    tree.setLoggedIn(true)
+    settle()
+    expect(view.message).toBe("")
   })
 
   test("lists the courses as roots, read afresh on every refresh", function () {
@@ -202,9 +215,9 @@ suite("CoursesTree", function () {
   test("a course item carries its points, backend and id, and no click command", function () {
     const item = first(show(tmcCourse())) as CourseTreeItem
 
-    expect(item.description).toBe("12/40 · TMC Server")
+    expect(item.description).toBe("12/40 · tmc.mooc.fi")
     expect(item.accessibilityInformation?.label).toBe(
-      "The Python Course, 12 of 40 points, TMC Server",
+      "The Python Course, 12 of 40 points, tmc.mooc.fi",
     )
     expect(item.contextValue).toBe("course.tmc")
     expect(item.courseId).toEqual(idOfTmcCourse(1))
@@ -220,7 +233,7 @@ suite("CoursesTree", function () {
   test("a disabled course says so", function () {
     const item = first(show(tmcCourse({ disabled: true })))
 
-    expect(item.description).toBe("12/40 · TMC Server · disabled")
+    expect(item.description).toBe("12/40 · tmc.mooc.fi · disabled")
     expect(tooltipOf(item)).toContain("disabled")
   })
 
@@ -229,6 +242,27 @@ suite("CoursesTree", function () {
 
     expect(item.contextValue).toBe("course.mooc.hasNew")
     expect(tooltipOf(item)).toContain("2 new exercises")
+  })
+
+  test("reveals a course expanded, and only focuses the view for one it does not list", async function () {
+    const [item] = show(tmcCourse())
+    vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await tree.revealCourse(idOfTmcCourse(1))
+    await tree.revealCourse(idOfTmcCourse(999))
+
+    expect(view.reveal).toHaveBeenCalledExactlyOnceWith(item, {
+      select: true,
+      focus: true,
+      expand: true,
+    })
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith("tmcView.focus")
+  })
+
+  test("a course with exercises not downloaded is marked for downloading them all", function () {
+    const [item] = show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))
+
+    expect(item?.contextValue).toBe("course.tmc.hasMissing")
   })
 
   test("a course with a passed exercise still open is marked for closing it", function () {
@@ -354,6 +388,16 @@ suite("CoursesTree", function () {
       expect(item.exerciseUri).toBeUndefined()
     })
 
+    test("a click opens it, downloading it first when it is not on disk", function () {
+      const item = onlyExercise()
+
+      expect(item.command).toEqual({
+        command: "tmc.openExercises",
+        title: "Open",
+        arguments: [item],
+      })
+    })
+
     test("new is told apart from merely not downloaded", function () {
       const item = onlyExercise({}, { newExercises: [1] })
 
@@ -468,10 +512,6 @@ suite("CoursesTree", function () {
     show(tmcCourse({ newExercises: [7] }), moocCourse({ newExercises: ["a"] }))
 
     expect(view.badge).toEqual({ value: 2, tooltip: "2 new exercises" })
-
-    tree.setLoggedIn(false)
-    settle()
-    expect(view.badge).toBeUndefined()
   })
 
   test("updates the badge when the stored courses change", function () {
@@ -489,7 +529,7 @@ suite("CoursesTree", function () {
 
     tree.setBackendReachable("tmc", false)
     settle()
-    expect(view.message).toMatch(/^TMC Server could not be reached\./)
+    expect(view.message).toMatch(/^tmc.mooc.fi could not be reached\./)
 
     tree.setBackendReachable("tmc", true)
     settle()

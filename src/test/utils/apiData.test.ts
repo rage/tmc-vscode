@@ -164,6 +164,19 @@ const addedMoocCourse = (): MoocLocalCourseData =>
   })
 
 suite("toStoredMoocCourse", function () {
+  test("stores the course's AI policy, replacing the one it refreshes", function () {
+    const stored = toStoredMoocCourse(
+      {
+        course: { ...moocCourse, ai_policy: "full_use" },
+        slides: moocExerciseSlides,
+        progress: moocCourseProgress,
+      },
+      { ...addedMoocCourse(), aiPolicy: "no_ai" },
+    )
+
+    expect(stored.aiPolicy).toBe("full_use")
+  })
+
   test("keeps only the slug and the new-exercise state of the course it refreshes", function () {
     const previous: MoocLocalCourseData = {
       ...addedMoocCourse(),

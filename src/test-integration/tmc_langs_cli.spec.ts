@@ -28,11 +28,11 @@ import type {
 } from "../../shared/langsSchema"
 import { makeMoocKind, makeTmcKind } from "../../shared/lib"
 import Langs from "../api/langs"
-import { CLIENT_NAME, TMC_LANGS_VERSION } from "../config/constants"
+import { CLIENT_NAME, MINIMUM_SUBMISSION_INTERVAL, TMC_LANGS_VERSION } from "../config/constants"
 import {
   AuthorizationError,
-  BottleneckError,
   DeviceLoginExpiredError,
+  ExerciseNotFoundError,
   InvalidTokenError,
   NotFoundError,
   RuntimeError,
@@ -201,7 +201,7 @@ suite("tmc langs cli spec", function () {
       expect(coursesResult.val).to.be.instanceOf(NotFoundError)
 
       const submissionsResult = await tmcSubmissions(tmc, 404)
-      expect(submissionsResult.val).to.be.instanceOf(NotFoundError)
+      expect(submissionsResult.val).to.be.instanceOf(ExerciseNotFoundError)
     })
 
     test("should be able to give feedback", async function () {
@@ -323,23 +323,18 @@ suite("tmc langs cli spec", function () {
         !url && expect.fail("expected to receive submission url during submission.")
       })
 
-      test("should encounter an error if trying to submit the exercise twice too soon", async function () {
+      test("should wait out the submission interval before a second submission", async function () {
+        const started = Date.now()
         const firstSubmission = tmc.submitTmcExerciseAndWaitForResults(1, exercisePath)
         const second = tmc.submitTmcExerciseAndWaitForResults(1, exercisePath)
         const [, secondResult] = await Promise.all([firstSubmission, second])
-        expect(secondResult.val).to.be.instanceOf(BottleneckError)
+        expect(secondResult.ok).to.be.true
+        expect(Date.now() - started).to.be.at.least(MINIMUM_SUBMISSION_INTERVAL)
       })
 
       test("should be able to submit the exercise to TMC-paste", async function () {
         const pasteUrl = await unwrapResult(tmc.paste(idOfTmcExercise(1), exercisePath))
         expect(pasteUrl).to.include("localhost")
-      })
-
-      test("should encounter an error if trying to submit to paste twice too soon", async function () {
-        const firstSubmission = tmc.paste(idOfTmcExercise(1), exercisePath)
-        const second = tmc.paste(idOfTmcExercise(1), exercisePath)
-        const [, secondResult] = await Promise.all([firstSubmission, second])
-        expect(secondResult.val).to.be.instanceOf(BottleneckError)
       })
     })
 
@@ -549,6 +544,7 @@ suite("tmc langs cli spec", function () {
 
     // fixed fixture ids (backend/mooc/fixtures.ts)
     const PYTHON_COURSE_ID = "11111111-1111-4111-8111-111111111111"
+    const EXTRA_COURSE_ID = "22222222-2222-4222-8222-222222222222"
     const PASSING_EXERCISE_ID = "a1a1a1a1-0000-4000-8000-000000000001"
     const FAILING_EXERCISE_ID = "b2b2b2b2-0000-4000-8000-000000000001"
     const NONEXISTENT_EXERCISE_ID = "ffffffff-0000-4000-8000-000000000000"
@@ -588,6 +584,16 @@ suite("tmc langs cli spec", function () {
       expect(slides.length).to.be.equal(1)
       expect(slides[0]?.exercise_id).to.be.equal(PASSING_EXERCISE_ID)
       expect(slides[0]?.tasks[0]?.public_spec).to.not.be.undefined
+    })
+
+    test("should get each mooc course's AI policy, not_set where the host sends none", async function () {
+      const courses = (await tmc.getEnrolledMoocCourses()).unwrap()
+      const policies = Object.fromEntries(courses.map((c) => [c.id, c.ai_policy]))
+      expect(policies[EXTRA_COURSE_ID]).to.equal("full_use")
+      expect(policies[PYTHON_COURSE_ID]).to.equal("not_set")
+
+      const { course } = (await tmc.getMoocCourseData(EXTRA_COURSE_ID)).unwrap()
+      expect(course.ai_policy).to.equal("full_use")
     })
 
     // Writes a minimal submittable python project (the `requirements.txt` marker
@@ -664,6 +670,12 @@ suite("tmc langs cli spec", function () {
         throw new Error(`expected a grading record, got ${status.status}`)
       }
       expect(status.grading.grading_progress).to.equal("FullyGraded")
+    })
+
+    test("should report submitting a nonexistent mooc exercise as the exercise being gone", async function () {
+      const dir = writeSubmittableProject("mooc-submit-nonexistent")
+      const result = await tmc.submitMoocExercise(NONEXISTENT_EXERCISE_ID, dir)
+      expect(result.val).to.be.instanceOf(ExerciseNotFoundError)
     })
 
     test("should submit a mooc exercise to paste and return a share URL", async function () {
@@ -753,8 +765,8 @@ suite("tmc langs cli spec", function () {
 
       // Two submissions of the same exercise. The CLI compresses the on-disk
       // directory into the submitted archive, so each submission captures the
-      // student file content at submit time. Langs throttles consecutive submits
-      // per instance, so the second goes through a fresh one.
+      // student file content at submit time. A fresh Langs skips the wait between
+      // consecutive submits of one instance.
       fs.writeFileSync(studentFile, olderContent)
       ;(await submitMoocAndWaitForGrading(tmc, PASSING_EXERCISE_ID, exercisePath)).unwrap()
       fs.writeFileSync(studentFile, newerContent)

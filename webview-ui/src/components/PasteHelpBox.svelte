@@ -89,7 +89,7 @@
         >
           Open link
         </Button>
-        <Button secondary icon="copy" onclick={() => oncopy(url)}>Copy link</Button>
+        <Button secondary icon="copy" onclick={() => oncopy(url)}>Copy Link</Button>
       </div>
     {/if}
     {#if pasteError !== undefined}

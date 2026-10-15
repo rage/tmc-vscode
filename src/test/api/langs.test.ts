@@ -7,10 +7,9 @@ import { CliOutputData } from "../../../shared/langsSchema"
 import type { BaseError } from "../../../shared/lib"
 import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import Langs, { decodeLangsStdout } from "../../api/langs"
-import { LOGIN_PROCESS_TIMEOUT } from "../../config/constants"
+import { LOGIN_PROCESS_TIMEOUT, MINIMUM_SUBMISSION_INTERVAL } from "../../config/constants"
 import {
   AuthorizationError,
-  BottleneckError,
   ConnectionError,
   DeviceLoginDeniedError,
   DeviceLoginExpiredError,
@@ -226,43 +225,6 @@ suite("Langs class arg building", function () {
     expect(result.unwrap()).toEqual(settings)
   })
 
-  test("getEnrolledMoocCourses de-duplicates courses by id", async function () {
-    // The backend can return the same course twice (two live enrollments of one
-    // course); since the extension keys courses by course id, the list must be
-    // de-duplicated so the same course never shows up — or gets added — twice.
-    const langs = newLangs()
-    const fixtures = [
-      {
-        id: uuid(1),
-        slug: "python-a",
-        name: "python-a",
-        description: null,
-        organization_name: "mooc.fi",
-      },
-      {
-        id: uuid(1),
-        slug: "python-b",
-        name: "python-b",
-        description: null,
-        organization_name: "mooc.fi",
-      },
-      {
-        id: uuid(2),
-        slug: "java",
-        name: "java",
-        description: null,
-        organization_name: "mooc.fi",
-      },
-    ]
-    stubSpawn(langs, () => Ok(dataOutput("mooc-courses", fixtures)))
-    const result = await langs.getEnrolledMoocCourses()
-    expect(result.ok).toBe(true)
-    const courses = result.unwrap()
-    expect(courses.map((c) => c.id)).toEqual([uuid(1), uuid(2)])
-    // the first occurrence is kept
-    expect(courses[0]?.slug).toBe("python-a")
-  })
-
   test("getOldSubmissions builds the mooc command from a mooc exercise id", async function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
@@ -335,12 +297,12 @@ suite("Langs class arg building", function () {
   test.each([
     ["submitMoocExercise", (langs: Langs) => langs.submitMoocExercise("ex-uuid", "/path/to/ex")],
     ["paste", (langs: Langs) => langs.paste(idOfMoocExercise("ex-uuid"), "/path/to/ex")],
-  ] as const)("%s reports a 404 as the exercise being gone", async function (_name, call) {
+  ] as const)("%s reports the exercise being gone", async function (_name, call) {
     const langs = newLangs()
     const line =
       "HTTP error 404 Not Found for https://courses.mooc.fi/api/v0/exercise-services/client/" +
       'exercises/ex-uuid: {"title":"Not Found"}. Obsolete client: false.'
-    stubSpawn(langs, () => Ok(errorOutput("not-found", line, [`Caused by: ${line}`], 404)))
+    stubSpawn(langs, () => Ok(errorOutput("exercise-not-found", line, [`Caused by: ${line}`], 404)))
     const result = await call(langs)
     expect(result.val).toBeInstanceOf(ExerciseNotFoundError)
     expect((result.val as Error).message).toBe("This exercise no longer exists on courses.mooc.fi.")
@@ -721,10 +683,30 @@ suite("Langs class arg building", function () {
     expect(onLogout).not.toHaveBeenCalled()
   })
 
+  test("getStudentFilePaths reads the exercise's packaging configuration", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, () =>
+      Ok(
+        dataOutput("exercise-packaging-configuration", {
+          student_file_paths: ["src", "lib/helper.py"],
+          exercise_file_paths: ["test"],
+        }),
+      ),
+    )
+    const res = await langs.getStudentFilePaths("/p/hello_world")
+    expect(calls[0]?.args).toEqual([
+      "get-exercise-packaging-configuration",
+      "--exercise-path",
+      "/p/hello_world",
+    ])
+    expect(res.unwrap()).toEqual(["src", "lib/helper.py"])
+  })
+
   test("listLocalExercises asks for every course and both backends in one call", async function () {
     const langs = newLangs()
     const tmcExercise = {
       "course-slug": "python-course",
+      "course-id": 1,
       "exercise-slug": "hello_world",
       "exercise-id": 1,
       "exercise-path": "/p/hello_world",
@@ -761,10 +743,6 @@ suite("Langs cross-backend independence", function () {
     const firstTmc = await langs.submitTmcExerciseAndWaitForResults(1, "/path/to/ex")
     expect(firstTmc.ok).toBe(true)
 
-    const secondTmc = await langs.submitTmcExerciseAndWaitForResults(1, "/path/to/ex")
-    expect(secondTmc.val).toBeInstanceOf(BottleneckError)
-
-    // Throttle state is per-backend, so a mooc submission right after is unaffected.
     stubSpawn(langs, () => Ok(dataOutput("mooc-submission-finished", moocSubmitted)))
     const mooc = await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
     expect(mooc.ok).toBe(true)
@@ -775,9 +753,6 @@ suite("Langs cross-backend independence", function () {
     stubSpawn(langs, () => Ok(dataOutput("mooc-submission-finished", moocSubmitted)))
     const firstMooc = await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
     expect(firstMooc.ok).toBe(true)
-
-    const secondMooc = await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
-    expect(secondMooc.val).toBeInstanceOf(BottleneckError)
 
     stubSpawn(langs, () => Ok(dataOutput("submission-finished", submissionFinished)))
     const tmc = await langs.submitTmcExerciseAndWaitForResults(1, "/path/to/ex")
@@ -817,18 +792,47 @@ suite("Langs cross-backend independence", function () {
   })
 
   test("a submission the backend refused keeps its throttle slot", async function () {
-    const langs = newLangs()
-    stubSpawn(langs, () => Ok(errorOutput("server-error", "boom", ["trace"], 500)))
-    await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
-    const second = await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
-    expect(second.val).toBeInstanceOf(BottleneckError)
+    vi.useFakeTimers()
+    try {
+      const langs = newLangs()
+      const calls = stubSpawn(langs, () => Ok(errorOutput("server-error", "boom", ["trace"], 500)))
+      await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
+      void langs.submitMoocExercise("ex-uuid", "/path/to/ex")
+      await vi.advanceTimersByTimeAsync(MINIMUM_SUBMISSION_INTERVAL - 1)
+      expect(calls).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("a submission right after another waits out the interval, then goes through", async function () {
+    vi.useFakeTimers()
+    try {
+      const langs = newLangs()
+      const calls = stubSpawn(langs, () =>
+        Ok(dataOutput("mooc-submission-finished", moocSubmitted)),
+      )
+      expect((await langs.submitMoocExercise("ex-uuid", "/path/to/ex")).ok).toBe(true)
+
+      const second = langs.submitMoocExercise("ex-uuid", "/path/to/ex")
+      await vi.advanceTimersByTimeAsync(MINIMUM_SUBMISSION_INTERVAL - 1)
+      expect(calls).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect((await second).ok).toBe(true)
+      expect(calls).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
 suite("Langs error-kind mapping", function () {
   const cases: [unknown, new (...args: never[]) => Error][] = [
     ["connection-error", ConnectionError],
-    ["forbidden", InsufficientScopeError],
+    ["forbidden", ForbiddenError],
+    ["insufficient-scope", InsufficientScopeError],
+    ["exercise-not-found", ExerciseNotFoundError],
     ["invalid-token", InvalidTokenError],
     ["not-logged-in", AuthorizationError],
     ["obsolete-client", ObsoleteClientError],
@@ -864,20 +868,12 @@ suite("Langs error-kind mapping", function () {
     }
   }
 
-  test("forbidden is a course verdict on tmc and a session verdict on mooc", async function () {
-    // tmc.mooc.fi 403s a course the user may not see, which `updateCourse` persists as a
-    // disabled course; courses.mooc.fi 403s an underscoped token, which says nothing
-    // about the course and must never be persisted as one.
-    const langsTmc = newLangs()
-    stubSpawn(langsTmc, () => Ok(errorOutput("forbidden")))
-    const tmcResult = await langsTmc.getTmcOrganizations()
-    expect(tmcResult.val).toBeInstanceOf(ForbiddenError)
-    expect(tmcResult.val).not.toBeInstanceOf(InsufficientScopeError)
-
-    const langsMooc = newLangs()
-    stubSpawn(langsMooc, () => Ok(errorOutput("forbidden")))
-    const moocResult = await langsMooc.getEnrolledMoocCourses()
-    expect(moocResult.val).toBeInstanceOf(InsufficientScopeError)
+  test("an underscoped session is not a course the user may not see", async function () {
+    // `updateCourse` persists a `ForbiddenError` as a disabled course.
+    const langs = newLangs()
+    stubSpawn(langs, () => Ok(errorOutput("insufficient-scope")))
+    const result = await langs.getEnrolledMoocCourses()
+    expect(result.val).not.toBeInstanceOf(ForbiddenError)
   })
 
   test.each([
@@ -962,7 +958,7 @@ suite("Langs error-kind mapping", function () {
 
     const result = await langs.getEnrolledMoocCourses()
     expect(result.val).toBeInstanceOf(InvalidTokenError)
-    expect(onLogout).toHaveBeenCalledExactlyOnceWith(false)
+    expect(onLogout).toHaveBeenCalledExactlyOnceWith(false, result.val)
 
     // tmc.mooc.fi did not reject anything, so its data is still good.
     await langs.getTmcOrganizations()
@@ -1004,7 +1000,7 @@ suite("Langs error-kind mapping", function () {
 
     const tmc = await langs.getTmcOrganizations()
     expect(tmc.val).toBeInstanceOf(TmcLoginNotAcceptedError)
-    expect(onLogout).toHaveBeenCalledExactlyOnceWith(false)
+    expect(onLogout).toHaveBeenCalledExactlyOnceWith(false, tmc.val)
 
     const mooc = await langs.getEnrolledMoocCourses()
     expect(mooc.val).toBeInstanceOf(AuthorizationError)
@@ -1039,12 +1035,28 @@ suite("Langs error-kind mapping", function () {
     expect(onLogout).not.toHaveBeenCalled()
   })
 
-  test("isAuthenticated builds `tmc logged-in` and maps the result", async function () {
+  test("isAuthenticated is true on stored courses.mooc.fi credentials without asking tmc", async function () {
     const langs = newLangs()
     const calls = stubSpawn(langs, () => Ok(nullOutput("currently logged in", "logged-in")))
 
     expect((await langs.isAuthenticated()).val).toBe(true)
-    expect(calls[0]?.args).toEqual([
+    expect(calls.map((c) => c.args)).toEqual([
+      ["mooc", "--client-name", "test-client", "logged-in"],
+    ])
+  })
+
+  test("isAuthenticated falls back to a stored tmc token", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, (i) =>
+      Ok(
+        i === 0
+          ? nullOutput("currently not logged in", "not-logged-in")
+          : nullOutput("currently logged in", "logged-in"),
+      ),
+    )
+
+    expect((await langs.isAuthenticated()).val).toBe(true)
+    expect(calls[1]?.args).toEqual([
       "tmc",
       "--client-name",
       "test-client",
@@ -1054,11 +1066,20 @@ suite("Langs error-kind mapping", function () {
     ])
   })
 
-  test("isAuthenticated returns false when not logged in", async function () {
+  test("isAuthenticated returns false when neither backend has a session", async function () {
     const langs = newLangs()
-    stubSpawn(langs, () => Ok(nullOutput("currently not logged in", "not-logged-in")))
+    const calls = stubSpawn(langs, () => Ok(nullOutput("currently not logged in", "not-logged-in")))
 
     expect((await langs.isAuthenticated()).val).toBe(false)
+    expect(calls).toHaveLength(2)
+  })
+
+  test("isAuthenticated does not guess from tmc when the mooc check fails", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, () => Ok(errorOutput("generic")))
+
+    expect((await langs.isAuthenticated()).err).toBe(true)
+    expect(calls).toHaveLength(1)
   })
 })
 

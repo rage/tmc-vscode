@@ -1,16 +1,16 @@
-import { Ok } from "ts-results"
-
 import type { CourseIdentifier } from "../../shared/lib"
 import { LocalCourseData } from "../../shared/lib"
 import { downloadNewExercisesForCourse } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import type { Warned } from "../api/withOperation"
-import { failure, withOperation } from "../api/withOperation"
+import { withOperation } from "../api/withOperation"
 import { Logger } from "../utilities"
+import { downloadExercisesOfCourse } from "./downloadExercisesOfCourse"
 import { pickCourse } from "./pickCourse"
 
 /**
- * Downloads the exercises a course has gained since they were last downloaded.
+ * Downloads the exercises a course has gained since they were last downloaded; for a course
+ * with none, the exercises not downloaded yet, so a course just added is not a dead end.
  *
  * @param target The course; asks the user to pick one when omitted.
  */
@@ -31,27 +31,19 @@ export async function downloadNewExercises(
   if (!courseId) {
     return
   }
-
-  await withOperation<Warned | void>(
+  const courseResult = userData.getCourse(courseId)
+  if (courseResult.err) {
+    void dialog.reportError("Failed to read the selected course.", courseResult.val)
+    return
+  }
+  if (LocalCourseData.getNewExercises(courseResult.val).length === 0) {
+    await downloadExercisesOfCourse(actionContext, courseId)
+    return
+  }
+  const title = LocalCourseData.getCourseTitle(courseResult.val)
+  await withOperation<Warned>(
     dialog,
-    { failure: "Failed to download new exercises." },
-    async () => {
-      const courseResult = userData.getCourse(courseId)
-      if (courseResult.err) {
-        return failure("Failed to read the selected course.", courseResult.val)
-      }
-      const courseName = LocalCourseData.getCourseName(courseResult.val)
-      if (LocalCourseData.getNewExercises(courseResult.val).length === 0) {
-        void dialog.notification(`There are no new exercises for the course ${courseName}.`)
-        return Ok.EMPTY
-      }
-      const downloadResult = await downloadNewExercisesForCourse(actionContext, courseId)
-      return downloadResult.err
-        ? failure(
-            `Failed to download new exercises for course "${courseName}".`,
-            downloadResult.val,
-          )
-        : downloadResult
-    },
+    { failure: `Failed to download the new exercises of ${title}.` },
+    () => downloadNewExercisesForCourse(actionContext, courseId),
   )
 }

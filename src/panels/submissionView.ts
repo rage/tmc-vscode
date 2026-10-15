@@ -169,16 +169,16 @@ export function moocGradingView(
     feedbackText: grading.feedback_text ?? undefined,
   }
   const standing = grading.exercise_progress?.standing
+  // A pass may come from an earlier submission; a short score is about this one.
+  const isBelowMax = given !== undefined && given < maxPoints
   switch (grading.grading_progress) {
     case "FullyGraded":
       return {
         ...graded,
         phase: "finished",
-        headline: fullyGradedHeadline(standing),
-        ...(standing === "OutOfTries"
-          ? { explanation: "You have no tries left on this exercise, so this score is final." }
-          : {}),
-        canPaste: standing !== "Passed",
+        headline: isBelowMax ? "Some tests failed on the server" : fullyGradedHeadline(standing),
+        ...fullyGradedExplanation(standing, isBelowMax),
+        canPaste: standing !== "Passed" || isBelowMax,
       }
     case "Failed":
       return { ...graded, phase: "failed", headline: "Grading failed", canPaste: true }
@@ -199,10 +199,20 @@ export function moocGradingView(
   }
 }
 
-/**
- * The outcome the backend's standing tells. A pass may come from an earlier submission, so only
- * a standing short of full points says something about this submission's tests.
- */
+function fullyGradedExplanation(
+  standing: ExerciseStanding | null | undefined,
+  isBelowMax: boolean,
+): { explanation?: string } {
+  if (standing === "OutOfTries") {
+    return { explanation: "You have no tries left on this exercise, so this score is final." }
+  }
+  if (standing === "Passed" && isBelowMax) {
+    return { explanation: "You have already passed this exercise with an earlier submission." }
+  }
+  return {}
+}
+
+/** The outcome the backend's standing tells, for a submission scored in full or not at all. */
 function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): string {
   switch (standing) {
     case "Passed":

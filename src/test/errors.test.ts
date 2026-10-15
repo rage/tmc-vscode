@@ -1,8 +1,10 @@
 import {
+  AuthorizationError,
   ConnectionError,
   ExerciseNotFoundError,
   InitializationError,
   InsufficientScopeError,
+  InvalidTokenError,
   NotEnrolledError,
   NotFoundError,
   ObsoleteClientError,
@@ -55,19 +57,46 @@ suite("presentationFor", function () {
     ])
   })
 
-  test("an unreachable server keeps its own message", function () {
+  // The CLI's message quotes the request URL, which belongs in the logs.
+  test("an unreachable backend is named, not its request URL", function () {
     const presentation = presentationFor(
-      Object.assign(new ConnectionError("dns error"), { backend: "mooc" }),
+      Object.assign(
+        new ConnectionError(
+          "Connection error trying to GET http://project-331.local/api/v0/exercise-services/client/courses",
+        ),
+        { backend: "mooc" },
+      ),
     )
 
-    expect(presentation.message).toBe("Dns error.")
+    expect(presentation.message).toBe(
+      "courses.mooc.fi could not be reached. Check your network connection.",
+    )
+  })
+
+  test("an unreachable server no backend raised keeps its own message", function () {
+    expect(presentationFor(new ConnectionError("dns error")).message).toBe("Dns error.")
   })
 
   test("a lost courses.mooc.fi scope offers the login command", function () {
     const presentation = presentationFor(new InsufficientScopeError("403 forbidden"))
 
     expect(presentation.message).toContain("Log in again to continue")
-    expect(presentation.actions).toEqual([{ label: "Log in", command: "tmc.showMoocLogin" }])
+    expect(presentation.actions).toEqual([{ label: "Log In", command: "tmc.showMoocLogin" }])
+  })
+
+  test.each([
+    ["a rejected token", new InvalidTokenError("Invalid token. Deleted credentials file.")],
+    [
+      "a lost courses.mooc.fi login",
+      Object.assign(new AuthorizationError("Authentication required"), { backend: "mooc" }),
+    ],
+  ])("%s says the session ended and offers the login command", function (_, error) {
+    const presentation = presentationFor(error)
+
+    expect(presentation.message).toBe(
+      "Your courses.mooc.fi session has ended. Log in again to continue.",
+    )
+    expect(presentation.actions).toEqual([{ label: "Log In", command: "tmc.showMoocLogin" }])
   })
 
   // Logging in again cannot make tmc.mooc.fi accept the login.
@@ -75,7 +104,7 @@ suite("presentationFor", function () {
     const presentation = presentationFor(new TmcLoginNotAcceptedError("not logged in"))
 
     expect(presentation.message).toBe(
-      "TMC Server did not accept your login. It may not accept courses.mooc.fi logins yet.",
+      "tmc.mooc.fi did not accept your login. It may not accept courses.mooc.fi logins yet.",
     )
     expect(presentation.actions).toEqual([])
   })
@@ -87,7 +116,7 @@ suite("presentationFor", function () {
       "Langs is missing. The help page lists what failed and how to fix it.",
     )
     expect(presentation.actions).toEqual([
-      { label: "Show help", command: "tmc.viewInitializationErrorHelp" },
+      { label: "Show Help", command: "tmc.viewInitializationErrorHelp" },
     ])
   })
 
@@ -97,9 +126,9 @@ suite("presentationFor", function () {
     )
     const withoutBackend = presentationFor(new NotEnrolledError("not enrolled"))
 
-    expect(withBackend.message).toContain("Enroll on the course again on TMC Server")
+    expect(withBackend.message).toContain("Enroll on the course again on tmc.mooc.fi")
     expect(withoutBackend.message).toContain("Enroll on the course again,")
-    expect(withoutBackend.message).not.toContain("TMC Server")
+    expect(withoutBackend.message).not.toContain("tmc.mooc.fi")
   })
 
   test("a CLI that cannot run points at the antivirus help", function () {
@@ -107,7 +136,7 @@ suite("presentationFor", function () {
 
     expect(presentation.message).toContain("antivirus")
     expect(presentation.actions).toEqual([
-      { label: "Show help", command: "tmc.viewInitializationErrorHelp" },
+      { label: "Show Help", command: "tmc.viewInitializationErrorHelp" },
     ])
   })
 

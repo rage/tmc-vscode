@@ -193,12 +193,16 @@ export function registerCommands(
     treeCommands.closeExercises(readyContext, treeCommands.targetRows(row, rows)),
   )
 
-  register("tmc.updateCourseExercises", async (target: CourseTreeItem) =>
-    treeCommands.updateCourseExercises(readyContext, target.courseId),
+  register("tmc.updateCourseExercises", async (row: CoursesTreeItem) =>
+    treeCommands.updateCourseExercises(readyContext, row),
   )
 
   register("tmc.downloadNewExercises", async (target?: CourseTarget) =>
     commands.downloadNewExercises(readyContext, courseIdOf(target)),
+  )
+
+  register("tmc.downloadAllExercises", async (target?: CourseTarget) =>
+    commands.downloadExercisesOfCourse(readyContext, courseIdOf(target)),
   )
 
   register("tmc.downloadOldSubmission", async (target: ExerciseTarget | undefined) =>
@@ -216,6 +220,10 @@ export function registerCommands(
   )
 
   register("tmc.openTMCExercisesFolder", async () => commands.openExercisesFolder(readyContext))
+
+  register("tmc.openNextExercise", async (target: ExerciseTarget | undefined) =>
+    commands.openNextExercise(readyContext, resourceOf(target)),
+  )
 
   register("tmc.pasteExercise", async (target: ExerciseTarget | undefined) =>
     commands.pasteExercise(readyContext, resourceOf(target)),

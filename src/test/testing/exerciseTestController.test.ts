@@ -477,14 +477,27 @@ suite("ExerciseTestController", function () {
     )
   })
 
-  test("Submit is not offered for a disabled course, when logged out, or for several exercises", async function () {
+  test("logged out, a pass offers to log in and then submit", async function () {
+    const s = setup({ loggedIn: false })
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue("loggedIn")
+    await s.controller.runExercise(exerciseAt(s))
+
+    const [, [label, logInToSubmit]] = vi.mocked(s.actionContext.dialog.notification).mock
+      .calls[0] as [string, [string, () => void]]
+    expect(label).toBe("Log In to Submit")
+    logInToSubmit()
+
+    await vi.waitFor(() =>
+      expect(executeCommand).toHaveBeenCalledWith("tmc.submitExercise", exerciseAt(s).uri),
+    )
+    expect(executeCommand).toHaveBeenCalledWith("tmc.showMoocLogin")
+    executeCommand.mockRestore()
+  })
+
+  test("Submit is not offered for a disabled course, or for several exercises", async function () {
     const disabled = setup({ disabled: true })
     await disabled.controller.runExercise(exerciseAt(disabled))
     expect(disabled.actionContext.dialog.notification).not.toHaveBeenCalled()
-
-    const loggedOut = setup({ loggedIn: false })
-    await loggedOut.controller.runExercise(exerciseAt(loggedOut))
-    expect(loggedOut.actionContext.dialog.notification).not.toHaveBeenCalled()
 
     const several = setup({ slugs: ["a", "b"] })
     await several.fake.profiles[0]?.runHandler(

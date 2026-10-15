@@ -178,6 +178,10 @@ export const SubmissionViewSchema = z.object({
     .optional(),
   /** Whether to offer sending the exercise to the backend's paste service for help. */
   canPaste: z.boolean(),
+  /** The exercise counts as passed now; absent means not, or not known yet. */
+  isExercisePassed: z.boolean().optional(),
+  /** The exercise to go on to, offered once this one is passed. */
+  nextExercise: z.object({ name: z.string() }).optional(),
 })
 
 export type SubmissionView = z.infer<typeof SubmissionViewSchema>
@@ -249,6 +253,12 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     // the webview must not be the one choosing it.
     courseId: CourseIdentifierSchema,
   }),
+  // Acts on the course the named panel shows.
+  z.object({
+    type: z.literal("courseAction"),
+    sourcePanel: targetPanelSchema("CourseDetails"),
+    action: z.enum(["downloadAllExercises", "revealInCoursesView"]),
+  }),
   // Refreshes the course the named panel shows.
   z.object({
     type: z.literal("refreshCourseDetails"),
@@ -271,6 +281,12 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     type: z.literal("keepWaitingForGrading"),
     requestId: z.number(),
     sourcePanel: targetPanelSchema("ExerciseSubmission"),
+  }),
+  // Runs an exercise command on the exercise the named panel shows.
+  z.object({
+    type: z.literal("exerciseAction"),
+    sourcePanel: targetPanelSchema("ExerciseSubmission"),
+    action: z.enum(["runTests", "submit", "openNextExercise"]),
   }),
   z.object({
     type: z.literal("sendFeedback"),

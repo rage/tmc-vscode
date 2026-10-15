@@ -151,6 +151,7 @@ async function harness(
     listLocalExercises: async () => Ok([]),
     listSettings: async () => Ok({}),
     checkExerciseUpdates: async () => Ok([]),
+    getStudentFilePaths: async () => Ok([]),
     unsetSetting: async () => Ok.EMPTY,
   })
   const workspaceManager = fakeService<WorkspaceManager>(services.workspaceManager ?? {}, {
@@ -285,8 +286,8 @@ function showSubmission(actionContext: ReadyActionContext): void {
 }
 
 const offline = (): Error => new Error("offline")
-const throttled = async (): Promise<Err<Error>> =>
-  Err(new BottleneckError("This command can't be executed at the moment."))
+const busy = async (): Promise<Err<Error>> =>
+  Err(new BottleneckError("This exercise is being reset."))
 const oldSubmission = makeMoocKind({
   exerciseId: EXERCISE_ID,
   submissions: [{ id: "sub-1", created_at: "2026-01-01T00:00:00Z", grading_progress: null }],
@@ -390,14 +391,14 @@ suite("reported once: exercise commands", function () {
     ["tmc.pasteExercise", "paste"],
     ["tmc.resetExercise", "resetExercise"],
     ["tmc.downloadOldSubmission", "restoreSubmission"],
-  ])("a throttled %s says so, as information", async function (id, method) {
+  ])("a busy %s says so, as information", async function (id, method) {
     const { run, shown } = await harness({
-      langs: { getOldSubmissions: oldSubmissions, [method]: throttled },
+      langs: { getOldSubmissions: oldSubmissions, [method]: busy },
     })
 
     await run(id)
 
-    expect(shown).toEqual(["info: This command can't be executed at the moment."])
+    expect(shown).toEqual(["info: This exercise is being reset."])
   })
 
   test("a failed paste from the panel shows in the panel only", async function () {
@@ -615,7 +616,9 @@ suite("reported once: the Courses view and course details", function () {
 
     await run("tmc.updateCourseExercises", courseRow())
 
-    expect(shown).toEqual(["error: Failed to download the exercise loops."])
+    expect(shown).toEqual([
+      "error: Failed to update the exercise loops. Retry from the Courses view.",
+    ])
   })
 
   test("a failed new-exercise download from the palette is one warning", async function () {
@@ -640,7 +643,9 @@ suite("reported once: the Courses view and course details", function () {
 
     await run("tmc.updateExercises", "loud")
 
-    expect(shown).toEqual(["error: Failed to download the exercise loops."])
+    expect(shown).toEqual([
+      "error: Failed to update the exercise loops. Retry from the Courses view.",
+    ])
   })
 
   test("an update check that throws is one notification, or none when silent", async function () {
@@ -728,7 +733,7 @@ suite("reported once: the refresh", function () {
 
     await run("tmcTreeView.refreshCourses")
 
-    expect(shown).toEqual(["error: Failed to check for course updates."])
+    expect(shown).toEqual([expect.stringMatching(/^error: Failed to fetch updates for \S+\.$/)])
   })
 
   test("a lost session scope is warned on a tree refresh too", async function () {

@@ -97,10 +97,11 @@ export async function login(actionContext: ReadyActionContext): Promise<LoginOut
     return "failed"
   }
 
-  void dialog.notification(`Logged in to ${SITE}.`, [
-    "Add new course",
-    (): void => void vscode.commands.executeCommand("tmc.addNewCourse"),
-  ])
+  dialog.statusMessage(`Logged in to ${SITE}.`)
+  // A login that restores an expired session finds the user's courses still added.
+  if (actionContext.startup.userData.getCourses().length === 0) {
+    void vscode.commands.executeCommand("tmc.addNewCourse")
+  }
   void refreshEverything(actionContext, { silent: true }).catch((e) =>
     Logger.error("Refresh after login failed", e),
   )
@@ -166,7 +167,7 @@ function failureMessage(error: Error): [message: string, error?: Error] {
 
 function reportFailure(actionContext: ReadyActionContext, message: string, error?: Error): void {
   void actionContext.dialog.errorNotification(message, error, [
-    "Try again",
+    "Try Again",
     (): void => void vscode.commands.executeCommand("tmc.showMoocLogin"),
   ])
 }

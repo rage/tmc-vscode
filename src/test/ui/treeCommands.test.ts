@@ -12,6 +12,7 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
 import { BottleneckError } from "../../errors"
+import { showExerciseSourceFile } from "../../ui/exerciseSourceFile"
 import {
   closeCompletedExercises,
   closeExercises,
@@ -21,7 +22,7 @@ import {
   targetRows,
   updateCourseExercises,
 } from "../../ui/treeview/treeCommands"
-import { ExerciseTreeItem, PartTreeItem } from "../../ui/treeview/treeview"
+import { CourseTreeItem, ExerciseTreeItem, PartTreeItem } from "../../ui/treeview/treeview"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -39,6 +40,9 @@ vi.mock("../../actions/openExercises", () => ({
 vi.mock("../../actions/closeExercises", () => ({
   closeExercises: vi.fn(async (_context: unknown, ids: unknown[]) => Ok(ids)),
 }))
+vi.mock("../../ui/exerciseSourceFile", () => ({
+  showExerciseSourceFile: vi.fn(async () => true),
+}))
 
 const BUSY = "Some of these exercises are already downloading."
 
@@ -55,6 +59,10 @@ function row(courseId: CourseIdentifier, id: number | string, status: RowStatus)
         : makeMoocKind({ moocExerciseId: id }),
     status,
   })
+}
+
+function courseRow(courseId: CourseIdentifier): CourseTreeItem {
+  return Object.assign(Object.create(CourseTreeItem.prototype) as CourseTreeItem, { courseId })
 }
 
 function part(...children: ExerciseTreeItem[]): PartTreeItem {
@@ -168,6 +176,50 @@ suite("Courses view commands", function () {
     ])
   })
 
+  test("open of one exercise row shows its main source file, even when it was open", async function () {
+    const onDisk = { id: makeTmcKind({ tmcExerciseId: 2 }), exerciseSlug: "two" }
+    const actionContext = {
+      ...createMockActionContext({
+        startup: {
+          workspaceManager: { getExercise: () => onDisk } as unknown as WorkspaceManager,
+        },
+      }),
+      dialog: createDialogMock()[0],
+    }
+
+    await openExercises(actionContext, [row(tmcCourse, 2, "opened")])
+
+    expect(downloadAndOpenExercises).not.toHaveBeenCalled()
+    const [shownIn, shown] = vi.mocked(showExerciseSourceFile).mock.calls[0] ?? []
+    expect(shownIn).toBe(actionContext)
+    expect(shown).toBe(onDisk)
+  })
+
+  test("download of one exercise row shows its main source file once it is on disk", async function () {
+    const onDisk = { id: makeTmcKind({ tmcExerciseId: 2 }), exerciseSlug: "two" }
+    const actionContext = {
+      ...createMockActionContext({
+        startup: {
+          workspaceManager: { getExercise: () => onDisk } as unknown as WorkspaceManager,
+        },
+      }),
+      dialog: createDialogMock()[0],
+    }
+
+    await downloadExercises(actionContext, [row(tmcCourse, 2, "missing")])
+
+    expect(vi.mocked(showExerciseSourceFile).mock.calls[0]?.[1]).toBe(onDisk)
+  })
+
+  test("open of several rows, or of a part, shows no file", async function () {
+    const actionContext = context()
+
+    await openExercises(actionContext, [row(tmcCourse, 1, "closed"), row(tmcCourse, 3, "missing")])
+    await openExercises(actionContext, [part(row(tmcCourse, 1, "closed"))])
+
+    expect(showExerciseSourceFile).not.toHaveBeenCalled()
+  })
+
   test("open warns past the open-exercise limit, offering to close the completed ones", async function () {
     vi.mocked(downloadAndOpenExercises).mockResolvedValueOnce(
       Ok({ ids: [], exceededOpenLimit: 50, warnings: [] }),
@@ -228,10 +280,23 @@ suite("Courses view commands", function () {
     updateablesRegistry.setMany([[tmcCourse, updates]])
     const actionContext = context()
 
-    await updateCourseExercises(actionContext, tmcCourse)
+    await updateCourseExercises(actionContext, courseRow(tmcCourse))
 
     expect(downloadExerciseUpdates).toHaveBeenCalledWith(actionContext, [
       { courseId: tmcCourse, exerciseId: updates[0] },
+    ])
+  })
+
+  test("update on an exercise row updates that exercise alone", async function () {
+    updateablesRegistry.setMany([
+      [tmcCourse, [makeTmcKind({ tmcExerciseId: 5 }), makeTmcKind({ tmcExerciseId: 6 })]],
+    ])
+    const actionContext = context()
+
+    await updateCourseExercises(actionContext, row(tmcCourse, 6, "opened"))
+
+    expect(downloadExerciseUpdates).toHaveBeenCalledWith(actionContext, [
+      { courseId: tmcCourse, exerciseId: makeTmcKind({ tmcExerciseId: 6 }) },
     ])
   })
 
@@ -239,7 +304,7 @@ suite("Courses view commands", function () {
     vi.mocked(downloadExerciseUpdates).mockResolvedValueOnce(Err(new BottleneckError(BUSY)))
     const actionContext = context()
 
-    await updateCourseExercises(actionContext, tmcCourse)
+    await updateCourseExercises(actionContext, courseRow(tmcCourse))
 
     expect(actionContext.dialog.notification).toHaveBeenCalledWith(BUSY)
   })

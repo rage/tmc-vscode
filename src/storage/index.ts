@@ -18,9 +18,6 @@ import migrateExtensionSettingsToLatest from "./migration/extensionSettings"
 import migrateSessionState from "./migration/sessionState"
 import migrateUserDataToLatest from "./migration/userData"
 
-// Unversioned: a timestamp that reads as absent costs one refresh, nothing else.
-const COURSES_REFRESHED_AT_KEY = "courses-refreshed-at"
-
 /**
  * Interface class for accessing stored TMC configuration and data.
  */
@@ -53,20 +50,6 @@ export default class Storage {
     await this._context.globalState.update(storage.SESSION_STATE_KEY, sessionState)
   }
 
-  /**
-   * When a full background course refresh last succeeded, in any window, in milliseconds
-   * since the epoch.
-   */
-  public getCoursesRefreshedAt(): number | undefined {
-    const stored = this._context.globalState.get<unknown>(COURSES_REFRESHED_AT_KEY)
-    return typeof stored === "number" ? stored : undefined
-  }
-
-  /** Records what {@link getCoursesRefreshedAt} reads; `undefined` forgets it. */
-  public async setCoursesRefreshedAt(time: number | undefined): Promise<void> {
-    await this._context.globalState.update(COURSES_REFRESHED_AT_KEY, time)
-  }
-
   private _readValidated<T>(key: string, schema: z.ZodType<T>): T | undefined {
     const stored = this._context.globalState.get<unknown>(key)
     if (stored === undefined) {
@@ -92,7 +75,6 @@ export default class Storage {
   public async wipeStorage(): Promise<void> {
     await this.updateSessionState(undefined)
     await this.updateUserData(undefined)
-    await this.setCoursesRefreshedAt(undefined)
   }
 
   /**

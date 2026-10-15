@@ -2,7 +2,7 @@ import * as vscode from "vscode"
 
 import type { CourseIdentifier } from "../../shared/lib"
 import { backendName, LocalCourseData } from "../../shared/lib"
-import { presentationFor } from "../errors"
+import { isSessionLost, presentationFor } from "../errors"
 import { Logger } from "../utilities"
 
 /**
@@ -82,13 +82,16 @@ export function courseSelectionItems(
  * A class that provides a centralized interface to user dialogue.
  */
 export default class Dialog {
-  private static readonly _logsButton: NotificationButton = ["Show logs", (): void => Logger.show()]
+  private static readonly _logsButton: NotificationButton = ["Show Logs", (): void => Logger.show()]
+
+  private _reportSessionLost: ((cause: Error) => void) | undefined
 
   /**
    * Asks the user to confirm an action, in a modal dialog.
    *
-   * @param message The question, naming what the action acts on, e.g. "Close part01-01?".
-   * @param options `confirmLabel` is the verb on the confirm button, e.g. "Close Exercise";
+   * @param message The question, naming what the action acts on, e.g. "Remove Python from your
+   * courses?".
+   * @param options `confirmLabel` is the verb on the confirm button, e.g. "Remove Course";
    * the dialog adds Cancel itself. `detail` says what follows from confirming.
    * @returns Whether the user confirmed. Cancel, Escape and closing the dialog all say no.
    */
@@ -140,14 +143,27 @@ export default class Dialog {
   }
 
   /**
+   * Takes over {@link reportError}'s notification for a lost session, which the session's own
+   * warning already tells about; `undefined` hands it back.
+   */
+  public setSessionLostReporter(reporter: ((cause: Error) => void) | undefined): void {
+    this._reportSessionLost = reporter
+  }
+
+  /**
    * Reports a failed operation: `message` says what was being done, and `error` supplies
    * the rest of the sentence and any buttons its class prescribes.
    *
    * The notification carries the sentence and nothing else: the error's diagnostics —
-   * details, cause chain and stack — go to the output channel behind the "Show logs"
+   * details, cause chain and stack — go to the output channel behind the "Show Logs"
    * button, which {@link Logger} writes in full.
    */
   public async reportError(message: string, error: Error): Promise<void> {
+    if (this._reportSessionLost && isSessionLost(error)) {
+      Logger.warn(message, error)
+      this._reportSessionLost(error)
+      return
+    }
     const presentation = presentationFor(error)
     const buttons = presentation.actions.map<NotificationButton>(({ label, command }) => [
       label,

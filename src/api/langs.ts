@@ -53,7 +53,6 @@ import {
 import type { InitializationError } from "../errors"
 import {
   AuthorizationError,
-  BottleneckError,
   ConnectionError,
   DeviceLoginDeniedError,
   DeviceLoginExpiredError,
@@ -75,6 +74,7 @@ import {
   UploadExpiredError,
 } from "../errors"
 import { Logger, LogLevel } from "../utilities/logger"
+import { sleep } from "../utilities/utils"
 import type { FractionProgress } from "./dialog"
 
 interface Options {
@@ -174,19 +174,6 @@ const MAX_LOGGED_ARG_LENGTH = 120
  */
 function loggableArg(arg: string): string {
   return arg.length > MAX_LOGGED_ARG_LENGTH ? `<${arg.length} characters>` : arg
-}
-
-/** Every request a submit or paste makes names the exercise, so a 404 means it is gone. */
-function exerciseGoneOn404(error: Error, backend: BackendKind): Error {
-  return error instanceof NotFoundError
-    ? Object.assign(
-        new ExerciseNotFoundError(
-          `This exercise no longer exists on ${backendName(backend)}.`,
-          error.details,
-        ),
-        { backend },
-      )
-    : error
 }
 
 /**
@@ -328,7 +315,7 @@ export default class Langs {
   private readonly _options: Options
   private readonly _responseCache: Map<string, ResponseCacheEntry>
   private _onLogin?: () => void
-  private _onLogout?: (expected: boolean) => void
+  private _onLogout?: (expected: boolean, rejection?: Error) => void
   private _onNotification?: (notification: Notification) => void
   /** Messages already surfaced; the CLI repeats a plugin's warning on every run. */
   private readonly _shownNotifications = new Set<string>()
@@ -369,23 +356,27 @@ export default class Langs {
    * Sets the callback to an event, replacing any earlier one.
    *
    * There is one session: `login` follows a successful {@link authenticate}, and `logout`
-   * carries `expected: true` after {@link deauthenticate} and `false` when a backend rejected
-   * the credentials it was sent. A rejection need not end the session, as the other
-   * credential may still be good, so a subscriber re-checks with {@link isAuthenticated}.
+   * carries `expected: true` after {@link deauthenticate} and `false`, with the error the call
+   * resolves to, when a backend rejected the credentials it was sent. A rejection need not end
+   * the session, as the other credential may still be good, so a subscriber re-checks with
+   * {@link isAuthenticated}.
    */
   public on(event: "login", callback: () => void): void
-  public on(event: "logout", callback: (expected: boolean) => void): void
+  public on(event: "logout", callback: (expected: boolean, rejection?: Error) => void): void
   public on(event: "notification", callback: (notification: Notification) => void): void
   public on(
     event: "login" | "logout" | "notification",
-    callback: (() => void) | ((expected: boolean) => void) | ((notification: Notification) => void),
+    callback:
+      | (() => void)
+      | ((expected: boolean, rejection?: Error) => void)
+      | ((notification: Notification) => void),
   ): void {
     switch (event) {
       case "login":
         this._onLogin = callback as () => void
         break
       case "logout":
-        this._onLogout = callback as (expected: boolean) => void
+        this._onLogout = callback as (expected: boolean, rejection?: Error) => void
         break
       case "notification":
         this._onNotification = callback as (notification: Notification) => void
@@ -398,14 +389,27 @@ export default class Langs {
   // ---------------------------------------------------------------------------------------------
 
   /**
-   * Whether the user has a session, via `tmc logged-in`: a usable courses.mooc.fi access token
-   * counts, and so does a tmc token stored before courses.mooc.fi logins replaced tmc ones.
+   * Whether the user has a session: stored courses.mooc.fi credentials, or else a tmc token
+   * stored before courses.mooc.fi logins replaced tmc ones.
    */
   public async isAuthenticated(options?: ExecutionOptions): Promise<Result<boolean, Error>> {
+    // Not `tmc logged-in` alone: it reports the courses.mooc.fi login only to a tmc server
+    // trusted with its token, so any other tmc root would read as logged out.
+    const mooc = await this._isLoggedIn("mooc", options)
+    if (mooc.err || mooc.val) {
+      return mooc
+    }
+    return this._isLoggedIn("tmc", options)
+  }
+
+  private async _isLoggedIn(
+    backend: BackendKind,
+    options?: ExecutionOptions,
+  ): Promise<Result<boolean, Error>> {
     const res = await this._executeLangsCommand(
       {
-        backend: "tmc",
-        args: this._tmcCmd("logged-in"),
+        backend,
+        args: this._backendCmd(backend, "logged-in"),
         processTimeout: options?.timeout,
       },
       null,
@@ -487,6 +491,18 @@ export default class Langs {
   /** Removes build output and other generated files from an exercise, via `clean`. */
   public async clean(exercisePath: string): Promise<Result<void, Error>> {
     return this._run({ args: ["clean", "--exercise-path", exercisePath] })
+  }
+
+  /**
+   * The files and folders of an exercise that hold the student's work, relative to the
+   * exercise folder, as its language plugin and `.tmcproject.yml` define them.
+   */
+  public async getStudentFilePaths(exercisePath: string): Promise<Result<string[], Error>> {
+    const res = await this._fetch(
+      { args: ["get-exercise-packaging-configuration", "--exercise-path", exercisePath] },
+      "exercise-packaging-configuration",
+    )
+    return res.map((configuration) => configuration.student_file_paths)
   }
 
   /**
@@ -749,8 +765,9 @@ export default class Langs {
 
   /**
    * Downloads courses.mooc.fi exercises into the projects directory, or updates those already
-   * there, via `mooc download-or-update-course-exercises`. Each exercise is its template:
-   * courses.mooc.fi has no latest-submission download.
+   * there, via `mooc download-or-update-course-exercises`. Each exercise is its template: the
+   * CLI has no latest-submission download for courses.mooc.fi, so `downloadOrUpdateExercises`
+   * restores that itself.
    *
    * @param courseId The course every exercise belongs to, when they share one; without it the
    * CLI looks for each exercise in every course the user is enrolled in.
@@ -842,9 +859,8 @@ export default class Langs {
    * an exercise type with no files at all can be. Nothing on disk or on the server is touched
    * then, `saveOldState` included.
    *
-   * @param saveOldState Submits the exercise's current state first. That takes a slot in the
-   * backend's submission throttle, so it can make this err with a `BottleneckError` without
-   * touching the exercise.
+   * @param saveOldState Submits the exercise's current state first, through the backend's
+   * submission throttle, so it may wait for up to `MINIMUM_SUBMISSION_INTERVAL` before that.
    */
   public async restoreSubmission(
     target: RestoreTarget,
@@ -947,9 +963,8 @@ export default class Langs {
    * Reverts an exercise to its template, via `reset-exercise`. The CLI downloads the template
    * before clearing the directory, so a failed download leaves the student's work in place.
    *
-   * @param saveOldState Submits the exercise's current state first. That takes a slot in the
-   * backend's submission throttle, so it can make this err with a `BottleneckError` without
-   * touching the exercise.
+   * @param saveOldState Submits the exercise's current state first, through the backend's
+   * submission throttle, so it may wait for up to `MINIMUM_SUBMISSION_INTERVAL` before that.
    */
   public async resetExercise(
     exerciseId: ExerciseIdentifier,
@@ -978,8 +993,7 @@ export default class Langs {
    * command internally.
    *
    * Throttled to one call per `MINIMUM_SUBMISSION_INTERVAL` shared with every other tmc call
-   * that submits — paste, and `--save-old-state` on reset and restore — and errs with a
-   * `BottleneckError` over that rate rather than waiting.
+   * that submits — paste, and `--save-old-state` on reset and restore — waiting its turn.
    *
    * @param exerciseId Id of the exercise.
    * @param progressCallback Reports completion as a 0..1 fraction, the unit every
@@ -1036,7 +1050,7 @@ export default class Langs {
     exerciseId: string,
     exercisePath: string,
   ): Promise<Result<ExerciseTaskSubmissionResult, Error>> {
-    const res = await this._submitting("mooc", () =>
+    return this._submitting("mooc", () =>
       this._fetch(
         {
           backend: "mooc",
@@ -1055,7 +1069,6 @@ export default class Langs {
         "mooc-submission-finished",
       ),
     )
-    return res.mapErr((error) => exerciseGoneOn404(error, "mooc"))
   }
 
   /**
@@ -1093,7 +1106,7 @@ export default class Langs {
    * courses.mooc.fi that is a submission the CLI then shares.
    *
    * Takes a slot in the backend's submission throttle, shared with every call that submits,
-   * and errs with a `BottleneckError` over that rate rather than waiting. Errs with an
+   * waiting its turn. Errs with an
    * `ExerciseNotFoundError` when the exercise is gone from its backend.
    */
   public async paste(
@@ -1120,9 +1133,7 @@ export default class Langs {
         () => this._fetch(command, "mooc-paste"),
       ),
     )
-    return res
-      .map((pasted) => pasted.paste_url)
-      .mapErr((error) => exerciseGoneOn404(error, exerciseId.kind))
+    return res.map((pasted) => pasted.paste_url)
   }
 
   /**
@@ -1149,33 +1160,14 @@ export default class Langs {
     )
   }
 
-  /**
-   * Lists the courses.mooc.fi courses the user is enrolled in. The backend keys
-   * enrollments by (user, course, instance) and can therefore return the same
-   * course twice when a user has two live enrollments of it; since the extension
-   * keys courses by course id, the list is de-duplicated by `id` (keeping the
-   * first occurrence) so the same course never appears — or is added — twice.
-   */
+  /** Lists the courses.mooc.fi courses the user is enrolled in. */
   public async getEnrolledMoocCourses(): Promise<Result<MoocCourse[], Error>> {
-    const res = await this._fetch(
-      { backend: "mooc", args: this._moocCmd("courses") },
-      "mooc-courses",
-    )
-    return res.map((courses) => {
-      const seen = new Set<string>()
-      return courses.filter((course) => {
-        if (seen.has(course.id)) {
-          return false
-        }
-        seen.add(course.id)
-        return true
-      })
-    })
+    return this._fetch({ backend: "mooc", args: this._moocCmd("courses") }, "mooc-courses")
   }
 
   /**
-   * Runs `submit`, a call that makes the CLI submit to `backend`, unless one did less than
-   * `MINIMUM_SUBMISSION_INTERVAL` ago, which errs with a `BottleneckError` instead.
+   * Runs `submit`, a call that makes the CLI submit to `backend`, at least
+   * `MINIMUM_SUBMISSION_INTERVAL` after the previous one, waiting out the rest of it first.
    *
    * Every call that submits goes through here — the submit and paste commands, and
    * `--save-old-state` on reset and old-submission restore — so they throttle each other
@@ -1186,12 +1178,14 @@ export default class Langs {
     submit: () => Promise<Result<T, Error>>,
   ): Promise<Result<T, Error>> {
     const previous = this._nextSubmissionAllowedTimestamp[backend]
-    const now = Date.now()
-    if (now < previous) {
-      return Err(new BottleneckError("This command can't be executed at the moment."))
-    }
-    const claimed = now + MINIMUM_SUBMISSION_INTERVAL
+    const start = Math.max(Date.now(), previous)
+    const claimed = start + MINIMUM_SUBMISSION_INTERVAL
     this._nextSubmissionAllowedTimestamp[backend] = claimed
+    const wait = start - Date.now()
+    if (wait > 0) {
+      Logger.info(`Submitting in ${wait} ms, ${MINIMUM_SUBMISSION_INTERVAL} ms after the previous`)
+      await sleep(wait)
+    }
     const result = await submit()
     if (
       result.err &&
@@ -1403,13 +1397,9 @@ export default class Langs {
       case "connection-error":
         return Err(new ConnectionError(message, details))
       case "forbidden":
-        // courses.mooc.fi 403s a token whose scopes don't cover programming exercises;
-        // tmc.mooc.fi 403s a course the user may not see. Only the latter is about the
-        // course, so only it may be read as one being unavailable.
-        if (auth.backend === "mooc") {
-          return Err(new InsufficientScopeError(message, details))
-        }
         return Err(new ForbiddenError(message, details))
+      case "insufficient-scope":
+        return Err(new InsufficientScopeError(message, details))
       case "not-enrolled":
         return Err(new NotEnrolledError(message, details))
       case "upload-expired":
@@ -1418,30 +1408,42 @@ export default class Langs {
         // Never a race: the backend has no record of a file the CLI named for this
         // exercise, so a retry cannot help.
         return Err(new UnknownUploadError(message, details))
-      case "invalid-token":
+      case "invalid-token": {
         this._clearBackendCache(auth.backend)
+        const rejection = new InvalidTokenError(message)
         if (!auth.expected) {
-          this._onLogout?.(false)
+          this._onLogout?.(false, rejection)
         }
-        return Err(new InvalidTokenError(message))
-      case "not-logged-in":
+        return Err(rejection)
+      }
+      case "not-logged-in": {
         this._clearBackendCache(auth.backend)
-        if (!auth.expected) {
-          this._onLogout?.(false)
-        }
         // tmc.mooc.fi may not accept courses.mooc.fi tokens yet, and logging in again
         // cannot change that.
-        return Err(
+        const rejection =
           auth.backend === "tmc"
             ? new TmcLoginNotAcceptedError(message, details)
-            : new AuthorizationError(message, details),
-        )
+            : new AuthorizationError(message, details)
+        if (!auth.expected) {
+          this._onLogout?.(false, rejection)
+        }
+        return Err(rejection)
+      }
       case "device-login-denied":
         return Err(new DeviceLoginDeniedError(message, details))
       case "device-login-expired":
         return Err(new DeviceLoginExpiredError(message, details))
       case "not-found":
         return Err(Object.assign(new NotFoundError(message, details), { httpStatus }))
+      case "exercise-not-found":
+        return Err(
+          new ExerciseNotFoundError(
+            auth.backend
+              ? `This exercise no longer exists on ${backendName(auth.backend)}.`
+              : message,
+            details,
+          ),
+        )
       case "server-error":
         return Err(Object.assign(new ServerError(message, details), { httpStatus }))
       case "obsolete-client":

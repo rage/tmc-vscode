@@ -70,6 +70,7 @@ export function moocCourseData(
     title: "MOOC Python",
     description: null,
     organization: "mooc",
+    aiPolicy: "not_set",
     exercises: [],
     availablePoints: 0,
     awardedPoints: 0,

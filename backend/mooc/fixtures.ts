@@ -93,6 +93,8 @@ export interface Course {
   name: string
   description: string | null
   organization_name: string
+  /** Absent, as from a host that predates it, means `not_set`. */
+  ai_policy?: "not_set" | "no_ai" | "planning_only" | "limited" | "full_use" | "required"
 }
 
 /**
@@ -140,6 +142,7 @@ export const extraCourse: Course = {
   name: "MOOC Extra Course",
   description: null,
   organization_name: ORG,
+  ai_policy: "full_use",
 }
 
 // Holds the exercises that are not a plain submittable editor exercise. Each one

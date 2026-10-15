@@ -131,6 +131,37 @@ suite("downloadOrUpdateExercises action", function () {
     expect(result.failed.length).toBe(0)
   })
 
+  test("shows a requested download in a cancellable notification, an automatic one in the status bar", async function () {
+    tmcMockValues.downloadTmcExercises = createDownloadResult([helloWorld], [])
+
+    await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
+    await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID, {
+      isUnrequested: true,
+    })
+
+    expect(
+      vi.mocked(dialogMock.progressNotification).mock.calls.map(([, , options]) => options),
+    ).toEqual([
+      { cancellable: true, location: vscode.ProgressLocation.Notification },
+      { location: vscode.ProgressLocation.Window },
+    ])
+  })
+
+  test("says a failed update failed to update, and where to retry it", async function () {
+    tmcMockValues.downloadTmcExercises = Err(new Error("boom"))
+
+    const result = await downloadOrUpdateExercises(
+      actionContext(),
+      [idOfTmcExercise(1)],
+      TEST_COURSE_ID,
+      { isUpdate: true },
+    )
+
+    expect(result.unwrap().warnings[0]?.headline).toBe(
+      "Failed to update the exercise hello_world. Retry from the Courses view.",
+    )
+  })
+
   test("should not call TMC-langs if no exercises are given", async function () {
     await downloadOrUpdateExercises(actionContext(), [], TEST_COURSE_ID)
     expect(tmcMock.downloadTmcExercises).not.toHaveBeenCalled()
@@ -183,7 +214,7 @@ suite("downloadOrUpdateExercises action", function () {
     tmcMockValues.downloadMoocExercises = Err(moocError)
     vi.spyOn(errors, "presentationFor").mockImplementation((error) => ({
       message: error.message,
-      actions: error === moocError ? [{ label: "Log in", command: "tmc.showMoocLogin" }] : [],
+      actions: error === moocError ? [{ label: "Log In", command: "tmc.showMoocLogin" }] : [],
     }))
 
     const result = await downloadResults(
@@ -398,6 +429,95 @@ suite("downloadOrUpdateExercises action", function () {
       expect.any(Function),
       expect.any(Function),
     )
+  })
+
+  suite("with downloadOldSubmission on, a mooc exercise", function () {
+    const freshId = "11111111-1111-4111-8111-111111111111"
+    const fresh: ExerciseDownload = { id: idOfMoocExercise(freshId), path: "/mooc/fresh" }
+
+    beforeEach(function () {
+      settingsMockValues.downloadOldSubmission = true
+      tmcMockValues.downloadMoocExercises = createDownloadResult([fresh], [])
+      tmcMock.getOldSubmissions = vi.fn<Langs["getOldSubmissions"]>(async () =>
+        Ok({
+          kind: "mooc",
+          data: {
+            exerciseId: freshId,
+            submissions: [{ id: "latest" }, { id: "older" }] as never,
+          },
+        }),
+      )
+      tmcMock.restoreSubmission = vi.fn<Langs["restoreSubmission"]>(async () => Ok("restored"))
+    })
+
+    test("downloaded for the first time gets its latest submission", async function () {
+      const result = await downloadResults(actionContext(), [fresh.id], TEST_COURSE_ID)
+
+      expect(tmcMock.restoreSubmission).toHaveBeenCalledWith(
+        { kind: "mooc", data: { exerciseId: freshId, submissionId: "latest" } },
+        "/mooc/fresh",
+        false,
+      )
+      expect(result.warnings).toEqual([])
+    })
+
+    test("already on disk keeps its files", async function () {
+      tmcMockValues.listLocalExercises = Ok([
+        {
+          backend: "mooc",
+          "course-id": freshId,
+          "course-slug": "course",
+          "exercise-id": freshId,
+          "exercise-path": "/mooc/fresh",
+          "exercise-slug": "fresh",
+        },
+      ])
+
+      await downloadOrUpdateExercises(actionContext(), [fresh.id], TEST_COURSE_ID)
+
+      expect(tmcMock.restoreSubmission).not.toHaveBeenCalled()
+    })
+
+    test("stays a template when the local exercises cannot be listed", async function () {
+      tmcMockValues.listLocalExercises = Err(new Error("no projects dir"))
+
+      await downloadOrUpdateExercises(actionContext(), [fresh.id], TEST_COURSE_ID)
+
+      expect(tmcMock.restoreSubmission).not.toHaveBeenCalled()
+    })
+
+    test("with no submissions stays a template", async function () {
+      tmcMock.getOldSubmissions = vi.fn<Langs["getOldSubmissions"]>(async () =>
+        Ok({ kind: "mooc", data: { exerciseId: freshId, submissions: [] } }),
+      )
+
+      const result = await downloadResults(actionContext(), [fresh.id], TEST_COURSE_ID)
+
+      expect(tmcMock.restoreSubmission).not.toHaveBeenCalled()
+      expect(result.warnings).toEqual([])
+    })
+
+    test("whose restore fails is downloaded with a warning", async function () {
+      tmcMock.restoreSubmission = vi.fn<Langs["restoreSubmission"]>(async () =>
+        Err(new Error("boom")),
+      )
+
+      const result = await downloadResults(actionContext(), [fresh.id], TEST_COURSE_ID)
+
+      expect(result.successful).toEqual([fresh.id])
+      expect(result.warnings.map((w) => w.headline)).toEqual([
+        `Downloaded the template of the exercise ${freshId}: the latest submission could not be restored. Use Download Old Submission to get it.`,
+      ])
+    })
+
+    test("with the setting off is not restored", async function () {
+      settingsMockValues.downloadOldSubmission = false
+
+      await downloadOrUpdateExercises(actionContext(), [fresh.id], TEST_COURSE_ID)
+
+      expect(tmcMock.listLocalExercises).not.toHaveBeenCalled()
+      expect(tmcMock.restoreSubmission).not.toHaveBeenCalled()
+    })
   })
 
   test("should post status updates of succeeding download", async function () {

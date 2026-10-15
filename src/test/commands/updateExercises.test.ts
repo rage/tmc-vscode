@@ -153,7 +153,7 @@ suite("updateExercises command", function () {
 
       await updateExercises(actionContext, "silent")
 
-      expect(downloadExerciseUpdates).toHaveBeenCalledExactlyOnceWith(actionContext, updates)
+      expect(downloadExerciseUpdates).toHaveBeenCalledExactlyOnceWith(actionContext, updates, true)
     })
 
     test("does not prompt on a run the user did not ask for", async function () {
@@ -182,8 +182,21 @@ suite("updateExercises command", function () {
 
     await updateExercises(actionContext, "loud")
 
-    expect(downloadExerciseUpdates).toHaveBeenCalledExactlyOnceWith(actionContext, updates)
+    expect(downloadExerciseUpdates).toHaveBeenCalledExactlyOnceWith(actionContext, updates, false)
     expect(dialog.notification).not.toHaveBeenCalled()
+  })
+
+  test("asks the backends afresh when the user asked, and accepts a cached answer otherwise", async function () {
+    checkForExerciseUpdates.mockResolvedValue(checked([]))
+    const [actionContext] = contextWith(true)
+
+    await updateExercises(actionContext, "loud")
+    await updateExercises(actionContext, "silent")
+
+    expect(checkForExerciseUpdates.mock.calls.map(([, options]) => options)).toEqual([
+      { forceRefresh: true },
+      { forceRefresh: false },
+    ])
   })
 
   test("downloads the updates the user accepts", async function () {
@@ -250,7 +263,7 @@ suite("updateExercises command", function () {
     await updateExercises(context, "loud")
 
     expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to check TMC Server and courses.mooc.fi for exercise updates.",
+      "Failed to check tmc.mooc.fi and courses.mooc.fi for exercise updates.",
       tmcError,
     )
   })

@@ -240,6 +240,7 @@ const exerciseDetails = {
 
 const localTmcExercise = {
   "course-slug": "python-course",
+  "course-id": 1,
   "exercise-slug": "part01-Part01_01.Sandbox",
   "exercise-id": 4321,
   "exercise-path": "/p/ex",
@@ -259,6 +260,7 @@ const moocCourse = {
   name: "Introduction to Everything",
   description: "An example course.",
   organization_name: "University of Helsinki",
+  ai_policy: "not_set",
 }
 
 const moocExerciseSlide = {

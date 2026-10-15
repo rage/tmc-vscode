@@ -8,6 +8,12 @@ import { reportWarnings, withOperation } from "../../api/withOperation"
 import { Logger } from "../../utilities"
 import type { HandlerMap, PanelHost } from "../router"
 
+const EXERCISE_ACTION_COMMANDS = {
+  runTests: "tmc.testExercise",
+  submit: "tmc.submitExercise",
+  openNextExercise: "tmc.openNextExercise",
+} as const
+
 /** The submission screen's messages. */
 export const exerciseHandlers = {
   pasteExercise: {
@@ -56,6 +62,18 @@ export const exerciseHandlers = {
         return sent
       }
       return Ok(undefined)
+    },
+  },
+  exerciseAction: {
+    requiresReady: true,
+    async handle(message, { host, actionContext }): Promise<void> {
+      const shown = shownExercisePanel(host, message.sourcePanel.id)
+      const exercise = shown && actionContext.startup.workspaceManager.getExercise(shown.exerciseId)
+      if (!exercise) {
+        void actionContext.dialog.errorNotification("This exercise is no longer downloaded.")
+        return
+      }
+      await vscode.commands.executeCommand(EXERCISE_ACTION_COMMANDS[message.action], exercise.uri)
     },
   },
   copyToClipboard: {

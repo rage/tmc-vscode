@@ -260,3 +260,57 @@ function compareParts(a: PartPlace, b: PartPlace, isAnyNumbered: boolean): numbe
 function compareNames(a: string, b: string): number {
   return a.localeCompare(b, undefined, { numeric: true })
 }
+
+/**
+ * The exercise a student goes on to after `current`: the first one after it, in the order the
+ * Courses view lists them, that is not passed, has tries left and is not past its hard deadline;
+ * failing that, the first such one before it. `undefined` when none is left.
+ */
+export function nextExerciseAfter(
+  course: LocalCourseData,
+  current: ExerciseIdentifier,
+  now: Date,
+): ExerciseIdentifier | undefined {
+  const ordered = buildCourseView(course, {
+    onDisk: [],
+    downloadStatusOf: () => undefined,
+    updateable: [],
+    now,
+  }).flatMap((part) => part.exercises)
+  const currentKey = ExerciseIdentifier.key(current)
+  const index = ordered.findIndex((exercise) => ExerciseIdentifier.key(exercise.id) === currentKey)
+  const isLeftToDo = (exercise: ExerciseView): boolean =>
+    ExerciseIdentifier.key(exercise.id) !== currentKey &&
+    !exercise.passed &&
+    !exercise.isOutOfTries &&
+    !(exercise.hardDeadline !== null && exercise.hardDeadline <= now)
+  const next =
+    ordered.slice(index + 1).find((exercise) => isLeftToDo(exercise)) ??
+    ordered.slice(0, Math.max(index, 0)).find((exercise) => isLeftToDo(exercise))
+  return next?.id
+}
+
+/**
+ * The course's exercises that are not on disk and can still be submitted, in the order the
+ * Courses view lists them.
+ *
+ * @param scope `"startingParts"` keeps only the parts the Courses view opens first: every part
+ * of a short course, else the one with the soonest deadline.
+ */
+export function exercisesToDownload(
+  course: LocalCourseData,
+  onDisk: readonly WorkspaceExercise[],
+  now: Date,
+  scope: "all" | "startingParts",
+): ExerciseIdentifier[] {
+  return buildCourseView(course, {
+    onDisk,
+    downloadStatusOf: () => undefined,
+    updateable: [],
+    now,
+  })
+    .filter((part) => scope === "all" || part.isDefaultOpen)
+    .flatMap((part) => part.exercises)
+    .filter((exercise) => exercise.status === "missing" || exercise.status === "new")
+    .map((exercise) => exercise.id)
+}

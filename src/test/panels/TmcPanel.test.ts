@@ -15,11 +15,12 @@ import type {
 import { makeTmcKind } from "../../../shared/lib"
 import * as actions from "../../actions"
 import type { ActionContext } from "../../actions/types"
+import type WorkspaceManager from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
 import { BottleneckError, InitializationError, presentationFor } from "../../errors"
 import type { PanelMessage } from "../../panels/router"
 import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
-import { MAIN_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
+import { MAIN_PANEL_VIEW_TYPE, SIDE_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
 import { submissionViews } from "../../ui/submissionViews"
 import { Logger } from "../../utilities"
 import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
@@ -171,7 +172,7 @@ suite("TmcPanel initialization guards", () => {
     )
     const [, error] = vi.mocked(actionContext.dialog.reportError).mock.calls[0] as [string, Error]
     expect(presentationFor(error).actions).toEqual([
-      { label: "Show help", command: "tmc.viewInitializationErrorHelp" },
+      { label: "Show Help", command: "tmc.viewInitializationErrorHelp" },
     ])
   })
 })
@@ -287,6 +288,35 @@ suite("TmcPanel handler dispatch", () => {
     expect(handlers.refreshLocalExercises).toHaveBeenCalledWith(actionContext)
   })
 
+  test("a course action acts on the course the host shows", async () => {
+    const handlers = stubHandlers()
+    const actionContext = courseDetailsContext()
+    const { listener, shown } = await mountCourseDetails(actionContext)
+
+    await listener({
+      type: "courseAction",
+      sourcePanel: { id: shown.id, type: shown.type },
+      action: "downloadAllExercises",
+    })
+    await listener({
+      type: "courseAction",
+      sourcePanel: { id: shown.id, type: shown.type },
+      action: "revealInCoursesView",
+    })
+    await listener({
+      type: "courseAction",
+      sourcePanel: { id: 9999, type: "CourseDetails" },
+      action: "downloadAllExercises",
+    })
+
+    expect(handlers.openWorkspace.mock.calls).toEqual([
+      ["tmc.downloadAllExercises", idOfTmcCourse(42)],
+    ])
+    expect(actionContext.coursesTree.revealCourse).toHaveBeenCalledExactlyOnceWith(
+      idOfTmcCourse(42),
+    )
+  })
+
   /** Mounts the submission of `python-course`'s `loops` and asks it to paste the exercise. */
   async function paste(
     actionContext: ActionContext,
@@ -335,6 +365,43 @@ suite("TmcPanel handler dispatch", () => {
 
     expect(handlers.pasteExercise).not.toHaveBeenCalled()
     expect(replyTo(panel, 1)).toMatchObject({ outcome: { ok: false } })
+  })
+
+  test("an exercise action runs its command on the exercise the host shows", async () => {
+    const handlers = stubHandlers()
+    const shown = { ...exerciseSubmissionPanel(), exerciseId: idOfTmcExercise(7) }
+    const exerciseUri = vscode.Uri.file("/exercises/loops")
+    const actionContext = createMockActionContext({
+      startup: {
+        workspaceManager: {
+          getExercise: (id: unknown) =>
+            JSON.stringify(id) === JSON.stringify(idOfTmcExercise(7))
+              ? { uri: exerciseUri }
+              : undefined,
+        } as unknown as WorkspaceManager,
+      },
+    })
+    const { listener } = await mountSidePanel(actionContext, createMockContext(), shown)
+
+    await listener({ type: "exerciseAction", sourcePanel: targetOf(shown), action: "submit" })
+    await listener({
+      type: "exerciseAction",
+      sourcePanel: targetOf(shown),
+      action: "openNextExercise",
+    })
+    await listener({
+      type: "exerciseAction",
+      sourcePanel: { id: 9999, type: "ExerciseSubmission" },
+      action: "runTests",
+    })
+
+    expect(handlers.openWorkspace.mock.calls).toEqual([
+      ["tmc.submitExercise", exerciseUri],
+      ["tmc.openNextExercise", exerciseUri],
+    ])
+    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
+      "This exercise is no longer downloaded.",
+    )
   })
 
   test("a mooc course's exercise is pasted through the mooc backend", async () => {
@@ -1312,11 +1379,11 @@ suite("TmcPanel side panel placement", () => {
 
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
       "Submission of part01-02_other: Exercise graded",
-      "Show result",
+      "Show Result",
     )
     expect(panel.webview.postMessage).not.toHaveBeenCalled()
 
-    offered.resolve("Show result")
+    offered.resolve("Show Result")
     await vi.waitFor(() =>
       expect(postedMessages(panel)).toEqual([
         expect.objectContaining({ type: "setPanel", panel: background }),
@@ -1496,7 +1563,7 @@ suite("TmcPanel webview document", () => {
 /** The failure a panel is answered with before activation succeeded, remedy included. */
 const notInitialized = {
   message: expect.stringContaining("did not initialize properly"),
-  actions: [{ label: "Show help", command: "tmc.viewInitializationErrorHelp" }],
+  actions: [{ label: "Show Help", command: "tmc.viewInitializationErrorHelp" }],
 }
 
 function helpPanel(): Panel {
@@ -1629,8 +1696,10 @@ async function restore(
 ): Promise<void> {
   const register = vi.mocked(vscode.window.registerWebviewPanelSerializer)
   register.mockClear()
-  TmcPanel.registerSerializer(createMockContext(), actionContext)
-  const serializer = register.mock.calls[0]?.[1]
+  TmcPanel.registerSerializers(createMockContext(), actionContext)
+  const serializer = register.mock.calls.find(
+    ([viewType]) => viewType === MAIN_PANEL_VIEW_TYPE,
+  )?.[1]
   await serializer?.deserializeWebviewPanel(fake.panel, state)
 }
 
@@ -1644,13 +1713,16 @@ suite("TmcPanel main panel restore after a window reload", () => {
     ui: { scrollY: 120 },
   }
 
-  test("registers a serializer for the main panel alone", () => {
+  test("registers a serializer for both panels", () => {
     const register = vi.mocked(vscode.window.registerWebviewPanelSerializer)
     register.mockClear()
 
-    TmcPanel.registerSerializer(createMockContext(), createMockActionContext())
+    TmcPanel.registerSerializers(createMockContext(), createMockActionContext())
 
-    expect(register.mock.calls.map(([viewType]) => viewType)).toEqual(["tmc.mainPanel"])
+    expect(register.mock.calls.map(([viewType]) => viewType)).toEqual([
+      MAIN_PANEL_VIEW_TYPE,
+      SIDE_PANEL_VIEW_TYPE,
+    ])
   })
 
   test("is activated for by package.json", () => {
@@ -1658,7 +1730,28 @@ suite("TmcPanel main panel restore after a window reload", () => {
       fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),
     ) as { activationEvents: string[] }
 
-    expect(manifest.activationEvents).toContain(`onWebviewPanel:${MAIN_PANEL_VIEW_TYPE}`)
+    expect(manifest.activationEvents).toEqual(
+      expect.arrayContaining([
+        `onWebviewPanel:${MAIN_PANEL_VIEW_TYPE}`,
+        `onWebviewPanel:${SIDE_PANEL_VIEW_TYPE}`,
+      ]),
+    )
+  })
+
+  // Without a serializer VS Code restores the panel's editor group empty.
+  test("closes a restored submission panel, whose submission is gone", async () => {
+    const register = vi.mocked(vscode.window.registerWebviewPanelSerializer)
+    register.mockClear()
+    TmcPanel.registerSerializers(createMockContext(), createMockActionContext())
+    const serializer = register.mock.calls.find(
+      ([viewType]) => viewType === SIDE_PANEL_VIEW_TYPE,
+    )?.[1]
+    const fake = createFakeWebviewPanel()
+
+    await serializer?.deserializeWebviewPanel(fake.panel, undefined)
+
+    expect(fake.dispose).toHaveBeenCalled()
+    expect(TmcPanel.sidePanel).toBeUndefined()
   })
 
   test("reopens the saved Course Details as the main panel, with a fresh id", async () => {

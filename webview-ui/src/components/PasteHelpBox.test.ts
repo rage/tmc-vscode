@@ -12,7 +12,7 @@ const moocProps = { ...tmcProps, backend: "mooc" } as const
 /** Opens the help and starts a paste. */
 async function paste(): Promise<HTMLElement> {
   ;(await screen.findByRole("button", { name: "Need help?" })).click()
-  const submit = await screen.findByRole("button", { name: "Submit to TMC Server paste" })
+  const submit = await screen.findByRole("button", { name: "Submit to tmc.mooc.fi paste" })
   submit.click()
   return submit
 }
@@ -85,7 +85,7 @@ suite("PasteHelpBox component", () => {
 
     const submit = await paste()
     await vi.waitFor(() => expect(submit).toHaveAttribute("disabled"))
-    expect(screen.getByText("Sending to TMC Server paste…")).toBeInTheDocument()
+    expect(screen.getByText("Sending to tmc.mooc.fi paste…")).toBeInTheDocument()
 
     replyToRequest("pasteExercise", { ok: true, value: "https://paste.example/abc" })
     await vi.waitFor(() => expect(submit).not.toHaveAttribute("disabled"))
@@ -96,7 +96,7 @@ suite("PasteHelpBox component", () => {
     await paste()
     replyToRequest("pasteExercise", { ok: true, value: "https://paste.example/abc" })
 
-    ;(await screen.findByRole("button", { name: "Copy link" })).click()
+    ;(await screen.findByRole("button", { name: "Copy Link" })).click()
     expect(oncopy).toHaveBeenCalledWith("https://paste.example/abc")
   })
 

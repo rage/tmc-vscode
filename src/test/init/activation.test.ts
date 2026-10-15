@@ -10,7 +10,7 @@ import type { BackendKind } from "../../../shared/lib"
 import {
   EXERCISE_CHECK_INTERVAL,
   EXTENSION_VERSION,
-  STARTUP_REFRESH_SKIP_AGE,
+  FOCUS_REFRESH_INTERVAL,
 } from "../../config/constants"
 import { CorruptStoredDataError } from "../../errors"
 import { activate } from "../../extension"
@@ -30,6 +30,7 @@ const recorded = vi.hoisted(() => ({
   /** How many times activation registered the panel serializer. */
   serializerRegistrations: 0,
   uiDisposals: 0,
+  windowStateListeners: [] as ((state: { focused: boolean }) => void)[],
 }))
 
 /** The stubbed CLI's answers, and what activation asked of it. */
@@ -65,11 +66,7 @@ const sessionState = vi.hoisted(() => ({ previousVersion: undefined as string | 
 
 const storedMigration = vi.hoisted(() => ({ outcome: { kind: "done" } as unknown }))
 
-/** Global state's record of the last background course refresh. */
-const courseRefresh = vi.hoisted(() => ({
-  refreshedAt: undefined as number | undefined,
-  runs: 0,
-}))
+const courseRefresh = vi.hoisted(() => ({ runs: 0 }))
 
 const registration = vi.hoisted(() => ({ dispose: (): void => {} }))
 
@@ -102,6 +99,10 @@ vi.mock("vscode", async (importOriginal) => {
     window: {
       ...(original["window"] as Record<string, unknown>),
       registerFileDecorationProvider: () => registration,
+      onDidChangeWindowState: (listener: (state: { focused: boolean }) => void) => {
+        recorded.windowStateListeners.push(listener)
+        return registration
+      },
       onDidChangeActiveTextEditor: () => registration,
       withProgress: (_options: unknown, task: (progress: unknown, token: unknown) => unknown) =>
         task({ report: () => {} }, { isCancellationRequested: false }),
@@ -137,7 +138,7 @@ vi.mock("../../panels/TmcPanel", () => ({
       recorded.panelTypes.push(panel.type)
     },
     showSubmissionViews: () => ({ dispose: () => {} }),
-    registerSerializer: () => {
+    registerSerializers: () => {
       recorded.serializerRegistrations += 1
       return { dispose: () => {} }
     },
@@ -192,10 +193,6 @@ vi.mock("../../storage", () => ({
         : { extensionVersion: sessionState.previousVersion }
     public updateSessionState = async (): Promise<void> => {}
     public migrateToLatest = async (): Promise<unknown> => storedMigration.outcome
-    public getCoursesRefreshedAt = (): number | undefined => courseRefresh.refreshedAt
-    public setCoursesRefreshedAt = async (time: number | undefined): Promise<void> => {
-      courseRefresh.refreshedAt = time
-    }
   },
 }))
 
@@ -297,7 +294,6 @@ function resetActivationRecording(): void {
   recorded.serializerRegistrations = 0
   storedUserData.read = (): unknown => undefined
   storedMigration.outcome = { kind: "done" }
-  courseRefresh.refreshedAt = undefined
   courseRefresh.runs = 0
   sessionState.previousVersion = undefined
   langsStub.authenticated = false
@@ -392,7 +388,7 @@ suite("activation with unusable storage", function () {
     expect(message).toMatch(
       /^TestMyCode could not start\. Preparing the extension's files failed: /,
     )
-    expect(buttons.map((button) => button.title)).toEqual(["Show Details", "Show logs"])
+    expect(buttons.map((button) => button.title)).toEqual(["Show Details", "Show Logs"])
   })
 })
 
@@ -410,9 +406,18 @@ suite("activation that throws", function () {
     })
     vi.spyOn(Logger, "show").mockImplementation(() => {})
 
+    const showErrorMessage = vi
+      .spyOn(vscode.window, "showErrorMessage")
+      .mockResolvedValue(undefined)
+
     await activate(createContext())
 
     expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(true)
+    expect(showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+      "TestMyCode could not start. boom",
+      "Show Logs",
+    )
+    expect(Logger.show).not.toHaveBeenCalled()
   })
 })
 
@@ -639,28 +644,55 @@ suite("the startup course refresh", function () {
     vi.restoreAllMocks()
   })
 
-  test("runs and records its success for the next activation", async function () {
+  // Progress may have changed outside VS Code since, e.g. a submission made in the browser.
+  test("runs even right after another window's refresh", async function () {
     await activate(createContext())
-    await vi.waitFor(() => expect(courseRefresh.refreshedAt).toBeDefined())
+    await vi.waitFor(() => expect(courseRefresh.runs).toBe(1))
 
-    expect(courseRefresh.runs).toBe(1)
+    await activate(createContext())
+
+    await vi.waitFor(() => expect(courseRefresh.runs).toBe(2))
+  })
+})
+
+suite("the refresh on regaining focus", function () {
+  beforeEach(function () {
+    resetActivationRecording()
+    recorded.windowStateListeners.length = 0
+    langsStub.authenticated = true
+    vi.useFakeTimers()
   })
 
-  // Another window's refresh is already in the stored courses this activation just read.
-  test("is skipped when any window refreshed moments ago", async function () {
-    courseRefresh.refreshedAt = Date.now() - 1000
+  afterEach(function () {
+    disposeActivatedContexts()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
 
+  const focus = (): void => recorded.windowStateListeners.at(-1)?.({ focused: true })
+
+  test("refreshes once a while has passed since the last refresh, and not sooner", async function () {
     await activate(createContext())
+    await vi.waitFor(() => expect(courseRefresh.runs).toBe(1))
+
+    focus()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(courseRefresh.runs).toBe(1)
+
+    await vi.advanceTimersByTimeAsync(FOCUS_REFRESH_INTERVAL)
+    focus()
+    await vi.waitFor(() => expect(courseRefresh.runs).toBe(2))
+  })
+
+  test("does nothing while logged out", async function () {
+    langsStub.authenticated = false
+    await activate(createContext())
+    await vi.advanceTimersByTimeAsync(FOCUS_REFRESH_INTERVAL)
+
+    focus()
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(courseRefresh.runs).toBe(0)
-  })
-
-  test("runs when the last refresh is older than the skip age", async function () {
-    courseRefresh.refreshedAt = Date.now() - STARTUP_REFRESH_SKIP_AGE
-
-    await activate(createContext())
-
-    expect(courseRefresh.runs).toBe(1)
   })
 })
 
@@ -773,27 +805,20 @@ suite("the first start of a new version", function () {
     expect(recorded.panelTypes).toEqual([])
   })
 
-  // Opening a panel unasked on every update covers whatever the user was doing.
-  test("an update offers the changelog in a notification instead", async function () {
+  // Opening a panel, or even a toast, unasked on every update covers whatever the user was doing.
+  test("an update says so in the status bar alone", async function () {
     sessionState.previousVersion = "1.0.0"
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
-    const context = createContext()
+    const setStatusBarMessage = vi.spyOn(vscode.window, "setStatusBarMessage")
 
-    await activate(context)
+    await activate(createContext())
 
     expect(executeCommand).not.toHaveBeenCalledWith("tmc.showWelcome")
-    const [message, whatsNew] = vi.mocked(vscode.window.showInformationMessage).mock.calls[0] as [
-      string,
-      { title: string; callback: () => void },
-    ]
-    expect(message).toBe(`TestMyCode was updated to ${EXTENSION_VERSION}.`)
-    expect(whatsNew.title).toBe("What's New")
-    whatsNew.callback()
-    expect(executeCommand).toHaveBeenCalledWith(
-      "markdown.showPreview",
-      vscode.Uri.joinPath(context.extensionUri, "CHANGELOG.md"),
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
+    expect(setStatusBarMessage).toHaveBeenCalledWith(
+      `TestMyCode was updated to ${EXTENSION_VERSION}.`,
+      expect.any(Number),
     )
-    expect(executeCommand).not.toHaveBeenCalledWith("tmc.showWelcome")
   })
 
   test("a patch release says nothing", async function () {
@@ -881,7 +906,7 @@ suite("status bar", function () {
     await (langsStub.handlers.get("logout") as (expected: boolean) => Promise<void>)(false)
 
     expect(showWarningMessage).toHaveBeenCalledExactlyOnceWith(
-      "Your session has expired, please log in.",
+      "Your courses.mooc.fi session has ended. Log in again to continue.",
     )
   })
 })

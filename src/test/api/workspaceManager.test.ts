@@ -887,10 +887,50 @@ suite("WorkspaceManager class", function () {
       await expect(manager.workspaceFileProblem()).resolves.toBe("readOnly")
     })
 
+    test("reports a read-only file left dirty by a failed write as read-only", async function () {
+      fs.chmodSync(workspaceFile, 0o444)
+      stubWorkspace("textDocuments", [{ uri: vscode.Uri.file(workspaceFile), isDirty: true }])
+
+      await expect(manager.workspaceFileProblem()).resolves.toBe("readOnly")
+    })
+
     test("finds nothing outside a course workspace", async function () {
       stubWorkspace("workspaceFile", undefined)
 
       await expect(manager.workspaceFileProblem()).resolves.toBeUndefined()
+    })
+  })
+
+  suite("a document opened in the course workspace", function () {
+    function openDocument(fileName: string, languageId: string): WorkspaceManager {
+      openWorkspaceFile(workspaceFileName("test-python-course", "tmc"))
+      const manager = new WorkspaceManager(resources, persistForCourse)
+      const [listener] = vi.mocked(vscode.workspace.onDidOpenTextDocument).mock.calls.at(-1) as [
+        (document: vscode.TextDocument) => void,
+      ]
+      vi.spyOn(manager, "addWorkspaceRecommendation").mockResolvedValue(undefined)
+      listener({ languageId, uri: vscode.Uri.file(`/exercises/hello/${fileName}`) } as never)
+      return manager
+    }
+
+    test("opens rendered when it is a README, as it is the exercise's instructions", function () {
+      const executeCommand = vi
+        .spyOn(vscode.commands, "executeCommand")
+        .mockResolvedValue(undefined)
+
+      openDocument("README.md", "markdown")
+      openDocument("notes.md", "markdown")
+
+      expect(
+        executeCommand.mock.calls.map(([command, uri]) => [command, (uri as vscode.Uri).fsPath]),
+      ).toEqual([["markdown.showPreview", vscode.Uri.file("/exercises/hello/README.md").fsPath]])
+      executeCommand.mockRestore()
+    })
+
+    test("adds no workspace recommendation in VS Code, which recommends by language itself", function () {
+      const manager = openDocument("main.py", "python")
+
+      expect(manager.addWorkspaceRecommendation).not.toHaveBeenCalled()
     })
   })
 

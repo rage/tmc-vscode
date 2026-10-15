@@ -73,8 +73,15 @@ suite("Exercise command runner", function () {
 
     expect(body).not.toHaveBeenCalled()
     expect(result.err).toBe(true)
-    expect(String(result.val)).toContain("not part of a course exercise")
-    expect(stubContext.dialog.errorNotification).toHaveBeenCalledOnce()
+    expect(stubContext.dialog.errorNotification).toHaveBeenCalledExactlyOnceWith(
+      "Open a file of an exercise first.",
+    )
+
+    await runForExercise(context, vscode.Uri.file("/elsewhere/notes.txt"), "Testing", body)
+
+    expect(stubContext.dialog.errorNotification).toHaveBeenLastCalledWith(
+      "notes.txt is not part of a course exercise.",
+    )
   })
 
   test("leads with the sentence the body chose, keeping the cause as the detail", async function () {

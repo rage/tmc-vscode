@@ -137,17 +137,16 @@ export async function showExerciseActions(
     ...(isLoggedIn
       ? [
           action("$(cloud-upload) Submit Solution", "tmc.submitExercise"),
-          action("$(link) Share via Paste", "tmc.pasteExercise"),
+          action("$(link) Share Exercise via Paste", "tmc.pasteExercise"),
           separator("Restore"),
           action("$(history) Download Old Submission…", "tmc.downloadOldSubmission"),
           action("$(discard) Reset Exercise", "tmc.resetExercise"),
-          ...(course.ok
-            ? [
-                separator("Course"),
-                action("$(list-tree) Reveal in Courses View", "tmc.revealInCoursesView"),
-              ]
-            : []),
         ]
+      : []),
+    separator("Course"),
+    action("$(arrow-right) Open Next Exercise", "tmc.openNextExercise"),
+    ...(course.ok
+      ? [action("$(list-tree) Reveal in Courses View", "tmc.revealInCoursesView")]
       : []),
   )
   if (picked) {

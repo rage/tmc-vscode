@@ -38,6 +38,7 @@ const expectedCommands = [
   "tmc.closeExercises",
   "tmc.updateCourseExercises",
   "tmc.downloadNewExercises",
+  "tmc.downloadAllExercises",
   "tmc.downloadOldSubmission",
   "tmc.logout",
   "tmc.myCourses",
@@ -45,6 +46,7 @@ const expectedCommands = [
   "tmc.removeCourse",
   "tmc.revealInCoursesView",
   "tmc.settings",
+  "tmc.openNextExercise",
   "tmc.openTMCExercisesFolder",
   "tmc.pasteExercise",
   "tmc.resetExercise",
@@ -368,6 +370,14 @@ suite("registerCommands", function () {
 
   // A `when` naming a key nothing ever sets is never true, so the entry it
   // gates silently disappears from the UI instead of failing anywhere.
+  test("the palette offers Refresh Courses and Download All Exercises to a logged-in user", function () {
+    for (const command of ["tmcTreeView.refreshCourses", "tmc.downloadAllExercises"]) {
+      expect(commandPalette().find((x) => x.command === command)?.when).toBe(
+        "test-my-code:Initialized && test-my-code:LoggedIn",
+      )
+    }
+  })
+
   test("every context key the manifest gates on is one the extension sets", function () {
     const sourceRoot = path.join(__dirname, "..", "..")
     const settable = new Set(
@@ -435,6 +445,19 @@ suite("walkthrough", function () {
     const steps = packageJson().contributes.walkthroughs?.[0]?.steps ?? []
     const withoutButton = steps.filter((step) => !/^\[[^\]]+\]\([^)]+\)$/m.test(step.description))
     expect(withoutButton.map((x) => x.id)).toEqual([])
+  })
+
+  // Entering an empty course workspace is not having downloaded anything.
+  test("the download step completes on exercises on disk in a course workspace", function () {
+    const step = packageJson().contributes.walkthroughs?.[0]?.steps.find(
+      (x) => x.id === "openExercises",
+    )
+    expect(step?.completionEvents).toEqual([
+      "onContext:test-my-code:WorkspaceActive && test-my-code:HasDownloadedExercises",
+    ])
+    expect(step?.description).toContain(
+      "[Download All Exercises](command:tmc.downloadAllExercises)",
+    )
   })
 
   // The walkthrough is the onboarding a new user sees, so the privacy notice has to be in it.

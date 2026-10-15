@@ -33,8 +33,6 @@ export async function addNewCourse(
     return fetched
   }
 
-  // A duplicate enrollment of the same mooc course can surface twice from the
-  // backend, so an already-added course id is a plausible input here.
   const addResult = await userData.addCourse(fetched.val)
   if (addResult.err) {
     return addResult

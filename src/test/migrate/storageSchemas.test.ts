@@ -2,6 +2,7 @@ import { z } from "zod"
 
 import { v0, v1, v2, v3 } from "../../storage/data"
 import validateData from "../../storage/migration"
+import { moocCourseData } from "../fixtures/courses"
 import * as exerciseData from "../fixtures/exerciseData"
 import * as extensionSettings from "../fixtures/extensionSettings"
 import * as sessionState from "../fixtures/sessionState"
@@ -128,6 +129,12 @@ suite("Versioned storage schemas", function () {
 
     test("userDataSchema rejects v2 data without mooc_courses", function () {
       expectRejects(v3.userDataSchema, userData.v2_1_0)
+    })
+
+    test("a mooc course stored before AI policies reads as having none set", function () {
+      const { aiPolicy: _, ...storedBefore } = moocCourseData()
+      const parsed = v3.userDataSchema.parse({ ...userData.v3_0_0, mooc_courses: [storedBefore] })
+      expect(parsed.mooc_courses[0]?.aiPolicy).toBe("not_set")
     })
 
     test("userDataSchema rejects mooc course with numeric id", function () {

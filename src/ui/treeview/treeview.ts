@@ -52,8 +52,10 @@ export type CoursesTreeItem = CourseTreeItem | PartTreeItem | ExerciseTreeItem
  * One of the user's courses in the Courses view.
  *
  * `contextValue` is `course.<backend>` followed by the flags package.json's `viewItem`
- * clauses match on: `.hasNew` (exercises the user has not downloaded), `.hasUpdates` and
- * `.hasCompleted` (passed exercises still open).
+ * clauses match on: `.hasNew` (exercises announced as new), `.hasMissing` (exercises not
+ * downloaded that can still be submitted), `.hasUpdates` and `.hasCompleted` (passed
+ * exercises still open). The order is part of the contract: the inline Download All shows
+ * only where `.hasMissing` directly follows the backend, i.e. without `.hasNew`.
  */
 export class CourseTreeItem extends vscode.TreeItem {
   public readonly courseId: CourseIdentifier
@@ -79,6 +81,7 @@ export class CourseTreeItem extends vscode.TreeItem {
     const newCount = LocalCourseData.getNewExercises(course).length
     const updateCount = exercises.filter((ex) => ex.isUpdateable).length
     const hasCompleted = exercises.some((ex) => ex.passed && ex.status === "opened")
+    const hasMissing = exercises.some((ex) => ex.status === "missing" || ex.status === "new")
     const disabled = LocalCourseData.isDisabled(course)
     const points = pointsText(course.data.awardedPoints, course.data.availablePoints)
     const backend = backendName(course.kind)
@@ -89,6 +92,7 @@ export class CourseTreeItem extends vscode.TreeItem {
     this.contextValue = [
       `course.${course.kind}`,
       ...(newCount > 0 ? ["hasNew"] : []),
+      ...(hasMissing ? ["hasMissing"] : []),
       ...(updateCount > 0 ? ["hasUpdates"] : []),
       ...(hasCompleted ? ["hasCompleted"] : []),
     ].join(".")
@@ -226,6 +230,7 @@ export class ExerciseTreeItem extends vscode.TreeItem {
       ...(exercise.passed ? ["passed"] : []),
       ...(exercise.isUpdateable ? ["updateable"] : []),
     ].join(".")
+    this.command = { command: "tmc.openExercises", title: "Open", arguments: [this] }
 
     const { now, locale } = context
     const deadline = shownDeadline(exercise)
@@ -312,9 +317,9 @@ interface CourseView {
 }
 
 /**
- * The Courses view: the user's courses, their parts and exercises while logged in, and
- * nothing otherwise, so that package.json's `viewsWelcome` explains the empty, logged-out
- * and failed states.
+ * The Courses view: the user's courses, their parts and exercises, logged in or not, since
+ * the exercises on disk stay usable; with none, package.json's `viewsWelcome` explains the
+ * empty, logged-out and failed states.
  */
 export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeItem> {
   private readonly _changed = new vscode.EventEmitter<undefined>()
@@ -423,10 +428,15 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
       counts.length > 0 ? { value: newCount + updateCount, tooltip: counts.join(", ") } : undefined
     const unreachable = [...this._unreachableBackends].map((backend) => backendName(backend))
     // An empty message hides it; the typings do not admit `undefined`.
-    this._view.message =
-      unreachable.length > 0 && views.length > 0
-        ? `${unreachable.join(" and ")} could not be reached. Showing the exercises saved on this computer; deadlines may be out of date.`
-        : ""
+    if (views.length === 0) {
+      this._view.message = ""
+    } else if (!this._isLoggedIn) {
+      this._view.message = `Log in to ${backendName("mooc")} to download and submit exercises. The exercises on this computer still open and run their tests.`
+    } else if (unreachable.length > 0) {
+      this._view.message = `${unreachable.join(" and ")} could not be reached. Showing the exercises saved on this computer; deadlines may be out of date.`
+    } else {
+      this._view.message = ""
+    }
     if (this._view.visible) {
       this._changed.fire(undefined)
     } else {
@@ -492,6 +502,18 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
     return true
   }
 
+  /** Opens the view with the course's row selected, focused and expanded. */
+  public async revealCourse(courseId: CourseIdentifier): Promise<void> {
+    const item = this._currentRoots().find((root) =>
+      CourseIdentifier.equals(root.courseId, courseId),
+    )
+    if (item) {
+      await this._view.reveal(item, { select: true, focus: true, expand: true })
+    } else {
+      await vscode.commands.executeCommand(`${COURSES_VIEW_ID}.focus`)
+    }
+  }
+
   private _exerciseItemContaining(uri: vscode.Uri): ExerciseTreeItem | undefined {
     const exercise = this._source?.workspaceManager.getExerciseContaining(uri)
     if (!exercise) {
@@ -547,7 +569,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
   }
 
   private _visibleCourses(): LocalCourseData[] {
-    return this._isLoggedIn && this._source ? this._source.getCourses() : []
+    return this._source ? this._source.getCourses() : []
   }
 }
 

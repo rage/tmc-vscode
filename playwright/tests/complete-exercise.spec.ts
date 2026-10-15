@@ -5,6 +5,7 @@ import { expect } from "@playwright/test"
 import type { Locator, Page } from "@playwright/test"
 
 import { VSCODE_TEST_VERSION } from "../../config"
+import { courseWorkspaceSettings } from "../courseWorkspace"
 import { vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
@@ -167,18 +168,4 @@ function expectedResultInSubmissionView(expectedResult: "pass" | "fail"): string
     return "All tests passed on the server"
   }
   return "Some tests failed on the server"
-}
-
-/** The `settings` of the one course workspace file, or `undefined` while there is none to read. */
-function courseWorkspaceSettings(userDataDir: string): Record<string, unknown> | undefined {
-  const folder = join(userDataDir, "User", "globalStorage", "moocfi.test-my-code", "workspaces")
-  try {
-    const [workspaceFile] = fs.readdirSync(folder).filter((f) => f.endsWith(".code-workspace"))
-    if (!workspaceFile) {
-      return undefined
-    }
-    return JSON.parse(fs.readFileSync(join(folder, workspaceFile), "utf-8")).settings
-  } catch {
-    return undefined
-  }
 }

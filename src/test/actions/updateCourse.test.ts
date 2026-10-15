@@ -46,6 +46,7 @@ const storedMoocCourse: MoocLocalCourseData = {
   title: "Mooc Python",
   description: null,
   organization: "mooc",
+  aiPolicy: "not_set",
   exercises: [],
   availablePoints: 0,
   awardedPoints: 0,
@@ -448,7 +449,7 @@ suite("updateCourse action (tmc)", function () {
 
     expect(result.unwrap().isUpdated).toBe(false)
     expect(userData.getTmcCourses()[0]?.disabled).toBe(false)
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("TMC Server"))
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("tmc.mooc.fi"))
   })
 
   // The failure arms must start from an enabled course, or "still disabled" and

@@ -53,14 +53,14 @@
 </p>
 <div class="actions">
   <Button onclick={() => runCommand("workbench.action.restartExtensionHost")}>
-    Restart extension host
+    Restart Extension Host
   </Button>
-  <Button secondary onclick={() => runCommand("tmc.logs")}>Show logs</Button>
+  <Button secondary onclick={() => runCommand("tmc.logs")}>Show Logs</Button>
   <Button secondary onclick={() => runCommand("workbench.action.openSettings")}>
-    Open log level setting
+    Open Log Level Setting
   </Button>
   <Button secondary onclick={() => runCommand("workbench.action.openIssueReporter")}>
-    Report an issue
+    Report an Issue
   </Button>
 </div>
 

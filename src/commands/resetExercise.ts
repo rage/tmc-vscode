@@ -27,7 +27,7 @@ export async function resetExercise(
     }
 
     const { id } = exercise
-    const submitFirst = await confirmSubmitBeforeDestructiveAction(actionContext, {
+    const submitFirst = await confirmSubmitBeforeDestructiveAction(actionContext, exercise, {
       message: `Reset ${exercise.exerciseSlug}?`,
       replacement: "the exercise template",
       verb: "Reset",

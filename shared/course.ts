@@ -2,6 +2,7 @@ import { z } from "zod"
 
 import type { CourseIdentifier, Enum, ExerciseIdentifier } from "./enum"
 import { EnumSchema, makeMoocKind, makeTmcKind, match, unwrap } from "./enum"
+import { CourseAiPolicy } from "./generated/langs"
 
 // The live course schemas. Storage v3 persists exactly these (see `data_v3.ts`), so a change
 // here is a storage format change.
@@ -31,6 +32,8 @@ export const SharedTmcCourseDataSchema = z.object({
   /** The course hides submission results. */
   perhapsExamMode: z.boolean(),
   newExercises: z.array(z.number()),
+  /** The new exercises a notification has offered; they are not offered again unprompted. */
+  offeredNewExercises: z.array(z.number()).optional(),
   notifyAfter: z.number(),
   disabled: z.boolean(),
   materialUrl: z.string().nullable(),
@@ -69,10 +72,14 @@ export const SharedMoocCourseDataSchema = z.object({
   title: z.string(),
   description: z.string().nullable(),
   organization: z.string(),
+  /** The teacher's AI-use policy as courses.mooc.fi sends it; see `isAiAllowed`. */
+  aiPolicy: CourseAiPolicy.default("not_set"),
   exercises: z.array(SharedMoocCourseExerciseSchema),
   availablePoints: z.number(),
   awardedPoints: z.number(),
   newExercises: z.array(z.string()),
+  /** The new exercises a notification has offered; they are not offered again unprompted. */
+  offeredNewExercises: z.array(z.string()).optional(),
   notifyAfter: z.number(),
 })
 

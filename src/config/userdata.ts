@@ -24,11 +24,14 @@ import { Logger } from "../utilities/logger"
 interface StoredCourse<Id> {
   exercises: { id: Id }[]
   newExercises: Id[]
+  offeredNewExercises?: Id[] | undefined
+  notifyAfter: number
 }
 
 /**
  * Puts `refreshed` in `courses` in place of the course stored under `id`, carrying over which
- * exercises are new. Returns whether a course was stored there.
+ * exercises are new and which of those were offered. An exercise that arrives with it ends a
+ * postponed reminder. Returns whether a course was stored there.
  */
 function replaceIn<Id, Course extends StoredCourse<Id>>(
   courses: Map<Id, Course>,
@@ -41,10 +44,14 @@ function replaceIn<Id, Course extends StoredCourse<Id>>(
   }
   const refreshedIds = new Set(refreshed.exercises.map((exercise) => exercise.id))
   const storedIds = new Set(stored.exercises.map((exercise) => exercise.id))
+  const arrived = [...refreshedIds].filter((exerciseId) => !storedIds.has(exerciseId))
   refreshed.newExercises = _.uniq([
     ...stored.newExercises.filter((exerciseId) => refreshedIds.has(exerciseId)),
-    ...[...refreshedIds].filter((exerciseId) => !storedIds.has(exerciseId)),
+    ...arrived,
   ])
+  const isNew = new Set(refreshed.newExercises)
+  refreshed.offeredNewExercises = stored.offeredNewExercises?.filter((x) => isNew.has(x))
+  refreshed.notifyAfter = arrived.length > 0 ? 0 : stored.notifyAfter
   courses.set(id, refreshed)
   return true
 }
@@ -400,6 +407,40 @@ export class UserData {
     Logger.info(`Notifying user for course again at ${new Date(dateInMillis).toString()}`)
     courseData.notifyAfter = dateInMillis
     return this._updatePersistentData(courseId)
+  }
+
+  /** Records that a notification has offered the course's new exercises as they are now. */
+  public async setNewExercisesOffered(courseId: CourseIdentifier): Promise<Result<void, Error>> {
+    const course = this.getCourse(courseId)
+    if (course.err) {
+      return course
+    }
+    match(
+      course.val,
+      (tmc) => {
+        tmc.offeredNewExercises = [...tmc.newExercises]
+      },
+      (mooc) => {
+        mooc.offeredNewExercises = [...mooc.newExercises]
+      },
+    )
+    return this._updatePersistentData(courseId)
+  }
+
+  /**
+   * Offers the course's new exercises again once `dateInMillis` has passed, or sooner when
+   * more arrive.
+   */
+  public async postponeNewExercises(
+    courseId: CourseIdentifier,
+    dateInMillis: number,
+  ): Promise<Result<void, Error>> {
+    const course = this.getCourse(courseId)
+    if (course.err) {
+      return course
+    }
+    course.val.data.offeredNewExercises = []
+    return this.setNewExerciseNotifyAfter(courseId, dateInMillis)
   }
 
   /**

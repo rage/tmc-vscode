@@ -8,12 +8,21 @@ import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import { addNewCourse } from "../../commands/addNewCourse"
+import { downloadExercisesOfCourse } from "../../commands/downloadExercisesOfCourse"
+import { MOOC_BACKEND_URL } from "../../config/constants"
 import type { UserData } from "../../config/userdata"
+import { openWebLink } from "../../utilities/webLink"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions/addNewCourse", () => ({
   addNewCourse: vi.fn(async () => Ok.EMPTY),
+}))
+vi.mock("../../utilities/webLink", () => ({
+  openWebLink: vi.fn(async () => true),
+}))
+vi.mock("../../commands/downloadExercisesOfCourse", () => ({
+  downloadExercisesOfCourse: vi.fn(async () => {}),
 }))
 
 const organizations = [
@@ -174,7 +183,7 @@ suite("Add New Course command", function () {
     expect(quickPick.isShown).toBe(true)
     expect(quickPick.busy).toBe(true)
     expect(quickPick.matchOnDescription).toBe(true)
-    expect(quickPick.title).toBe("Add New Course")
+    expect(quickPick.title).toBe("Add Course")
   })
 
   test("lists the user's mooc courses before the TMC organizations, under separators", async function () {
@@ -184,7 +193,7 @@ suite("Add New Course command", function () {
     expect(quickPick.rows).toEqual([
       "--- courses.mooc.fi — your courses",
       "Shared Slug Course",
-      "--- TMC Server — organizations",
+      "--- tmc.mooc.fi — organizations",
       "MOOC",
       "Test org",
     ])
@@ -221,12 +230,23 @@ suite("Add New Course command", function () {
       expect.any(Function),
       undefined,
     )
-    const [message, [label, open]] = vi.mocked(context.dialog.notification).mock.calls[0] as [
-      string,
-      [string, () => void],
-    ]
-    expect([message, label]).toEqual(["Added Shared Slug Course.", "Open Course"])
-    open()
+    const [message, [label, downloadAndOpen], [detailsLabel, details]] = vi.mocked(
+      context.dialog.notification,
+    ).mock.calls[0] as [string, [string, () => void], [string, () => void]]
+    expect([message, label, detailsLabel]).toEqual([
+      "Added Shared Slug Course.",
+      "Download and Open Course",
+      "Course Details",
+    ])
+    downloadAndOpen()
+    await flush()
+    expect(downloadExercisesOfCourse).toHaveBeenCalledExactlyOnceWith(
+      context,
+      courseId,
+      "startingParts",
+    )
+    expect(executeCommand).toHaveBeenCalledWith("tmc.openCourseWorkspace", courseId)
+    details()
     expect(executeCommand).toHaveBeenCalledWith("tmc.courseDetails", courseId)
     expect(quickPick.isDisposed).toBe(true)
   })
@@ -318,12 +338,12 @@ suite("Add New Course command", function () {
 
   test("names an unreachable backend and still offers the other", async function () {
     const { quickPick } = harness({
-      organizations: Promise.resolve(Err(new Error("TMC Server down"))),
+      organizations: Promise.resolve(Err(new Error("tmc.mooc.fi down"))),
     })
     await flush()
 
     expect(quickPick.rows).toEqual(["--- courses.mooc.fi — your courses", "Shared Slug Course"])
-    expect(quickPick.placeholder).toContain("TMC Server unavailable")
+    expect(quickPick.placeholder).toContain("tmc.mooc.fi unavailable")
   })
 
   test("offers the courses.mooc.fi login without a session, and adds nothing when picked", async function () {
@@ -349,9 +369,42 @@ suite("Add New Course command", function () {
 
     expect(quickPick.isShown).toBe(false)
     expect(context.dialog.errorNotification).toHaveBeenCalledWith(
-      "Failed to fetch courses from courses.mooc.fi or TMC Server. " +
+      "Failed to fetch courses from courses.mooc.fi or tmc.mooc.fi. " +
         "Check your network connection and that you are logged in.",
     )
+  })
+
+  test("without an enrolled course, offers to find one on courses.mooc.fi instead", async function () {
+    const { context, quickPick, done } = harness({
+      organizations: Promise.resolve(Ok([])),
+      moocCourses: Promise.resolve(Ok([])),
+    })
+    await flush()
+
+    expect(quickPick.isShown).toBe(true)
+    expect(quickPick.rows).toEqual([
+      "--- courses.mooc.fi — your courses",
+      "Find a course on courses.mooc.fi",
+    ])
+    quickPick.accept("Find a course on courses.mooc.fi")
+    await done
+
+    expect(openWebLink).toHaveBeenCalledExactlyOnceWith(MOOC_BACKEND_URL)
+    expect(context.dialog.notification).not.toHaveBeenCalled()
+    expect(actions.addNewCourse).not.toHaveBeenCalled()
+  })
+
+  test("still lists the TMC organizations beside the way to find a course", async function () {
+    const { quickPick } = harness({ moocCourses: Promise.resolve(Ok([])) })
+    await flush()
+
+    expect(quickPick.rows).toEqual([
+      "--- courses.mooc.fi — your courses",
+      "Find a course on courses.mooc.fi",
+      "--- tmc.mooc.fi — organizations",
+      "MOOC",
+      "Test org",
+    ])
   })
 
   test("marks courses already added, and opening one shows its details instead of re-adding", async function () {

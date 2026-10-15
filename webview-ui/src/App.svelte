@@ -87,7 +87,7 @@
         secondary
         onclick={() => vscode.postMessage({ type: "runCommand", command: "tmc.logs" })}
       >
-        Show logs
+        Show Logs
       </Button>
     {/snippet}
   </Notice>

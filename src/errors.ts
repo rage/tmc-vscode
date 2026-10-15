@@ -176,7 +176,7 @@ export interface ErrorPresentation {
  * on a CLI failure that is the process's backtrace and the tail of its stderr — the `cause`
  * chain, and the stack. Those diagnose a failure rather than describe it, and a notification
  * is the one place they cannot be scrolled or copied. The logger still writes all of them to
- * the output channel, which the "Show logs" button reveals.
+ * the output channel, which the "Show Logs" button reveals.
  */
 function userSentence(error: Error): string {
   const trimmed = error.message.trim() || error.name
@@ -196,6 +196,17 @@ function userSentence(error: Error): string {
  * for a failure the user cannot act on. No message carries diagnostics; see
  * {@link userSentence}. An error a backend raised names that backend where it matters.
  */
+/** Whether `error` means the courses.mooc.fi session is gone, which only a new login fixes. */
+export function isSessionLost(error: Error): boolean {
+  const backend = error instanceof BaseError ? error.backend : undefined
+  return (
+    error instanceof InvalidTokenError || (error instanceof AuthorizationError && backend !== "tmc")
+  )
+}
+
+/** What every surface that tells of a lost session says. */
+export const SESSION_ENDED_MESSAGE = `Your ${backendName("mooc")} session has ended. Log in again to continue.`
+
 export function presentationFor(error: Error): ErrorPresentation {
   const backend = error instanceof BaseError ? error.backend : undefined
   const reported = userSentence(error)
@@ -215,12 +226,18 @@ export function presentationFor(error: Error): ErrorPresentation {
       actions: [],
     }
   }
+  if (isSessionLost(error)) {
+    return {
+      message: SESSION_ENDED_MESSAGE,
+      actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
+    }
+  }
   if (error instanceof InsufficientScopeError) {
     return {
       message:
         `${reported} Your ${backendName("mooc")} session no longer grants access to` +
         " programming exercises. Log in again to continue.",
-      actions: [{ label: "Log in", command: "tmc.showMoocLogin" }],
+      actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
     }
   }
   if (error instanceof NotEnrolledError) {
@@ -253,13 +270,13 @@ export function presentationFor(error: Error): ErrorPresentation {
       message:
         `${reported} An antivirus program may be blocking the TestMyCode tools;` +
         " the help page says how to allow them.",
-      actions: [{ label: "Show help", command: "tmc.viewInitializationErrorHelp" }],
+      actions: [{ label: "Show Help", command: "tmc.viewInitializationErrorHelp" }],
     }
   }
   if (error instanceof InitializationError) {
     return {
       message: `${reported} The help page lists what failed and how to fix it.`,
-      actions: [{ label: "Show help", command: "tmc.viewInitializationErrorHelp" }],
+      actions: [{ label: "Show Help", command: "tmc.viewInitializationErrorHelp" }],
     }
   }
   if (error instanceof ObsoleteClientError) {
@@ -268,6 +285,12 @@ export function presentationFor(error: Error): ErrorPresentation {
       actions: [
         { label: "Update Extension", command: "workbench.extensions.action.checkForUpdates" },
       ],
+    }
+  }
+  if (error instanceof ConnectionError && backend !== undefined) {
+    return {
+      message: `${backendName(backend)} could not be reached. Check your network connection.`,
+      actions: [],
     }
   }
   if (

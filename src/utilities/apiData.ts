@@ -187,6 +187,7 @@ export function toStoredMoocCourse(
     title: course.name,
     description: course.description,
     organization: course.organization_name,
+    aiPolicy: course.ai_policy,
     exercises,
     ...sumCoursePoints(exercises),
     newExercises: previous?.newExercises ?? [],

@@ -13,13 +13,16 @@ import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { separator } from "../api/dialog"
 import { withOperation } from "../api/withOperation"
-import { Logger } from "../utilities"
+import { MOOC_BACKEND_URL } from "../config/constants"
+import { Logger, openWebLink } from "../utilities"
+import { downloadExercisesOfCourse } from "./downloadExercisesOfCourse"
 
-const TITLE = "Add New Course"
+const TITLE = "Add Course"
 
 /** What accepting a row of the pick does. */
 type Choice =
   | { kind: "login" }
+  | { kind: "findCourse" }
   | { kind: "organization"; organization: Organization }
   | { kind: "course"; courseId: CourseIdentifier; name: string; organizationSlug: string }
   | { kind: "added"; courseId: CourseIdentifier }
@@ -54,7 +57,7 @@ function courseItem(
  * Lets the user pick a course from either backend and adds it.
  *
  * courses.mooc.fi lists only the courses the user is enrolled in, so they come first and add in
- * one step. TMC Server hides thousands of courses behind its organizations, so picking one of
+ * one step. tmc.mooc.fi hides thousands of courses behind its organizations, so picking one of
  * those opens a second step, with Back, listing its courses. The rows appear once both backends
  * have answered, so that none moves under the pointer as the other backend's arrive.
  */
@@ -78,6 +81,10 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
     await vscode.commands.executeCommand("tmc.showMoocLogin")
     return
   }
+  if (chosen.kind === "findCourse") {
+    await openWebLink(MOOC_BACKEND_URL)
+    return
+  }
   if (chosen.kind === "added") {
     await vscode.commands.executeCommand("tmc.courseDetails", chosen.courseId)
     return
@@ -91,11 +98,27 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
     () => actions.addNewCourse(actionContext, chosen.organizationSlug, chosen.courseId),
   )
   if (added.ok) {
-    void dialog.notification(`Added ${chosen.name}.`, [
-      "Open Course",
-      (): void => void vscode.commands.executeCommand("tmc.courseDetails", chosen.courseId),
-    ])
+    void dialog.notification(
+      `Added ${chosen.name}.`,
+      [
+        "Download and Open Course",
+        (): void => void downloadAndOpenCourse(actionContext, chosen.courseId),
+      ],
+      [
+        "Course Details",
+        (): void => void vscode.commands.executeCommand("tmc.courseDetails", chosen.courseId),
+      ],
+    )
   }
+}
+
+/** Downloads the exercises a new course starts with, then opens its workspace. */
+async function downloadAndOpenCourse(
+  actionContext: ReadyActionContext,
+  courseId: CourseIdentifier,
+): Promise<void> {
+  await downloadExercisesOfCourse(actionContext, courseId, "startingParts")
+  await vscode.commands.executeCommand("tmc.openCourseWorkspace", courseId)
 }
 
 /** Runs the pick to a course, a login request, or `undefined` when dismissed. */
@@ -134,10 +157,11 @@ function pickCourse(
   const renderFirstStep = (): void => {
     // Naming the missing backend in the placeholder keeps it visible for as long as the pick
     // is open, so a half-populated list is never mistaken for a complete one.
+    const search = `Search your courses or ${backendName("tmc")} organizations`
     quickPick.placeholder =
       unavailable.length === 0
-        ? "Search your courses or TMC organizations"
-        : `Search your courses or TMC organizations (${unavailableNames().join(" and ")} unavailable)`
+        ? search
+        : `${search} (${unavailableNames().join(" and ")} unavailable)`
     if (moocRows === undefined || tmcRows === undefined) {
       quickPick.items = []
       quickPick.busy = true
@@ -264,6 +288,16 @@ function moocListingRows(
     unavailable.push(backendName("mooc"))
     Logger.warn(`Failed to fetch ${backendName("mooc")} courses.`, listing.val)
     return []
+  }
+  if (listing.val.length === 0) {
+    return [
+      {
+        label: `Find a course on ${backendName("mooc")}`,
+        description: "You are not enrolled on any course with programming exercises yet",
+        iconPath: new vscode.ThemeIcon("link-external"),
+        choice: { kind: "findCourse" },
+      },
+    ]
   }
   return listing.val.map((course) => {
     const id = makeMoocKind({ moocCourseId: course.id })

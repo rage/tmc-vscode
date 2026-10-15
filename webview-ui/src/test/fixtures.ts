@@ -61,6 +61,7 @@ export function moocCourseData(
     title: "MOOC Python",
     description: "A mooc.fi course about Python.",
     organization: "mooc",
+    aiPolicy: "not_set",
     exercises: [
       {
         id: MOOC_EXERCISE_ID,

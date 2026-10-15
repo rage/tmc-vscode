@@ -46,8 +46,17 @@
   const isInProgress = $derived(
     view === undefined || view.phase === "uploading" || view.phase === "grading",
   )
-  const primaryAction = $derived<"runInBackground" | "keepWaiting" | "close">(
-    isInProgress ? "runInBackground" : view?.canKeepWaiting ? "keepWaiting" : "close",
+  const primaryAction = $derived<"runInBackground" | "keepWaiting" | "openNext" | "close">(
+    isInProgress
+      ? "runInBackground"
+      : view?.canKeepWaiting
+        ? "keepWaiting"
+        : view?.nextExercise
+          ? "openNext"
+          : "close",
+  )
+  const canRetry = $derived(
+    (view?.phase === "finished" || view?.phase === "failed") && !view.isExercisePassed,
   )
 
   // svelte-ignore state_referenced_locally -- the panel identity (id/type)
@@ -68,6 +77,9 @@
 
   function closePanel() {
     vscode.postMessage({ type: "closeSidePanel" })
+  }
+  function runExerciseAction(action: "runTests" | "submit" | "openNextExercise") {
+    vscode.postMessage({ type: "exerciseAction", sourcePanel, action })
   }
   function showInBrowser(url: string) {
     vscode.postMessage({ type: "openLinkInBrowser", url })
@@ -151,23 +163,36 @@
 
   <div class="actions">
     {#if primaryAction === "runInBackground"}
-      <Button onclick={closePanel}>Run in background</Button>
+      <Button onclick={closePanel}>Run in Background</Button>
     {:else if primaryAction === "keepWaiting"}
-      <Button disabled={isKeepWaitingRequested} onclick={keepWaiting}>Keep waiting</Button>
+      <Button disabled={isKeepWaitingRequested} onclick={keepWaiting}>Keep Waiting</Button>
+      <Button secondary onclick={closePanel}>Close</Button>
+    {:else if primaryAction === "openNext"}
+      <Button icon="arrow-right" onclick={() => runExerciseAction("openNextExercise")}>
+        Next: {view.nextExercise?.name}
+      </Button>
       <Button secondary onclick={closePanel}>Close</Button>
     {:else}
       <Button onclick={closePanel}>Close</Button>
     {/if}
+    {#if canRetry}
+      <Button secondary icon="beaker" onclick={() => runExerciseAction("runTests")}>
+        Run Tests
+      </Button>
+      <Button secondary icon="cloud-upload" onclick={() => runExerciseAction("submit")}>
+        Submit Again
+      </Button>
+    {/if}
     {#if view.submissionUrl}
       {@const submissionUrl = view.submissionUrl}
       <Button secondary onclick={() => showInBrowser(submissionUrl)}>
-        Show submission in browser
+        Show Submission in Browser
       </Button>
     {/if}
     {#if view.solutionUrl}
       {@const solutionUrl = view.solutionUrl}
       <Button secondary onclick={() => showInBrowser(solutionUrl)}>
-        Show model solution in browser
+        Show Model Solution in Browser
       </Button>
     {/if}
   </div>

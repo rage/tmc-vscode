@@ -1,7 +1,7 @@
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 
-import { CourseIdentifier, LocalCourseData } from "../../shared/lib"
+import { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../../shared/lib"
 import type { CourseUpdateOptions } from "../actions"
 import { checkForCourseUpdates, downloadNewExercisesForCourse } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
@@ -15,6 +15,13 @@ import { updateExercises } from "./updateExercises"
 
 const REFRESH_FAILED = "Failed to check for course updates."
 
+/** How a refresh runs; see {@link refreshEverything}. */
+type RefreshOptions = {
+  silent: boolean
+  isQueuedWhenBusy?: boolean
+  offersNewExercises?: boolean
+} & CourseUpdateOptions
+
 /**
  * The extension's one background refresh: course data first, then the exercise
  * update check.
@@ -24,20 +31,21 @@ const REFRESH_FAILED = "Failed to check for course updates."
  * writes to `UserData` and prompt twice about the same exercises. A call made while
  * another is running comes back as a `BottleneckError`, unless it asks to be queued.
  *
- * Offers to download the new exercises it finds, silent or not.
- *
  * @param courseId Refresh only that course's data; the exercise update check
  * always covers every course.
  * @param silent Logs a failed refresh, or one rejected as already running, instead
  * of notifying, and runs the exercise update check quietly. A refresh that fails runs
  * that check quietly either way: its own failure is the one report, and stale course
- * data cannot vouch for "All exercises are up to date."
+ * data cannot vouch for "All exercises are up to date." A refresh that is not silent
+ * bypasses the CLI's cached update check.
  * @param isQueuedWhenBusy While another refresh runs, runs this one silently once that one
  * ends, and returns `Ok` at once. Calls queued meanwhile run together, as one refresh.
+ * @param offersNewExercises `false` keeps the new exercises found for a later refresh to
+ * offer, e.g. while a submission's result is what the student is reading.
  */
 export async function refreshEverything(
   actionContext: ReadyActionContext,
-  options: { silent: boolean; isQueuedWhenBusy?: boolean } & CourseUpdateOptions,
+  options: RefreshOptions,
 ): Promise<Result<void, Error>> {
   return withOperation(
     actionContext.dialog,
@@ -48,9 +56,13 @@ export async function refreshEverything(
 
 /**
  * {@link refreshEverything} for the Courses view's refresh button: loud, with each finished
- * course advancing the view's progress bar.
+ * course advancing the view's progress bar. One already running is waited for, not refused.
  */
 export async function refreshCourses(actionContext: ReadyActionContext): Promise<void> {
+  // A refresh queued behind the running one starts as it ends, so wait until none runs.
+  for (let busy = running; busy; busy = running) {
+    await busy
+  }
   await withOperation(
     actionContext.dialog,
     {
@@ -66,41 +78,38 @@ export async function refreshCourses(actionContext: ReadyActionContext): Promise
   )
 }
 
-let isRunning = false
+/** The refresh in progress; settles, never rejecting, once it ends. */
+let running: Promise<unknown> | undefined
 
 /** The refresh to run once the one in progress ends; no `courseId` means every course. */
-let queued: { courseId?: CourseIdentifier | undefined } | undefined
+let queued: { courseId?: CourseIdentifier | undefined; offersNewExercises: boolean } | undefined
 
-async function refresh(
+function refresh(
   actionContext: ReadyActionContext,
-  options: { silent: boolean; isQueuedWhenBusy?: boolean } & CourseUpdateOptions,
+  options: RefreshOptions,
 ): Promise<Result<void, Error>> {
-  const { silent, courseId, onProgress, isQueuedWhenBusy } = options
-  if (isRunning) {
+  const { courseId, isQueuedWhenBusy } = options
+  const offersNewExercises = options.offersNewExercises ?? true
+  if (running) {
     if (isQueuedWhenBusy) {
       const isSameCourse =
         queued === undefined ||
         (queued.courseId !== undefined &&
           courseId !== undefined &&
           CourseIdentifier.equals(queued.courseId, courseId))
-      queued = { courseId: isSameCourse ? courseId : undefined }
-      return Ok.EMPTY
+      queued = {
+        courseId: isSameCourse ? courseId : undefined,
+        offersNewExercises: offersNewExercises || (queued?.offersNewExercises ?? false),
+      }
+      return Promise.resolve(Ok.EMPTY)
     }
     Logger.warn("Rejected a refresh, one is already in flight")
-    return Err(new BottleneckError("A refresh is already in progress."))
+    return Promise.resolve(Err(new BottleneckError("A refresh is already in progress.")))
   }
-  isRunning = true
-  try {
-    const refreshed = await checkForCourseUpdates(actionContext, { courseId, onProgress })
-    if (refreshed.ok) {
-      reportWarnings(actionContext.dialog, refreshed.val.warnings)
-      offerNewExercises(actionContext, refreshed.val.courses)
-    }
-    const refreshFailure = refreshed.err ? refreshed.val : refreshed.val.failure
-    await updateExercises(actionContext, silent || refreshFailure ? "silent" : "loud")
-    return refreshFailure ? Err(refreshFailure) : Ok.EMPTY
-  } finally {
-    isRunning = false
+  const result = runRefresh(actionContext, { ...options, offersNewExercises })
+  running = result.catch(() => undefined)
+  return result.finally(() => {
+    running = undefined
     const next = queued
     queued = undefined
     if (next) {
@@ -110,7 +119,24 @@ async function refresh(
         ...next,
       }).catch((e) => Logger.error("Queued refresh failed", e))
     }
+  })
+}
+
+async function runRefresh(
+  actionContext: ReadyActionContext,
+  options: RefreshOptions,
+): Promise<Result<void, Error>> {
+  const { silent, courseId, onProgress, offersNewExercises } = options
+  const refreshed = await checkForCourseUpdates(actionContext, { courseId, onProgress })
+  if (refreshed.ok) {
+    reportWarnings(actionContext.dialog, refreshed.val.warnings)
+    if (offersNewExercises) {
+      offerNewExercises(actionContext, refreshed.val.courses)
+    }
   }
+  const refreshFailure = refreshed.err ? refreshed.val : refreshed.val.failure
+  await updateExercises(actionContext, silent || refreshFailure ? "silent" : "loud")
+  return refreshFailure ? Err(refreshFailure) : Ok.EMPTY
 }
 
 /**
@@ -127,12 +153,19 @@ function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCour
   const now = Date.now()
   const offered = courses.filter(
     (course) =>
-      LocalCourseData.getNewExercises(course).length > 0 &&
+      hasUnofferedNewExercises(course) &&
       !LocalCourseData.isDisabled(course) &&
       course.data.notifyAfter <= now,
   )
   if (offered.length === 0) {
     return
+  }
+  for (const course of offered) {
+    void userData.setNewExercisesOffered(LocalCourseData.getCourseId(course)).then((recorded) => {
+      if (recorded.err) {
+        Logger.error("Failed to record the offered new exercises", recorded.val)
+      }
+    })
   }
 
   const forEachCourse =
@@ -176,7 +209,7 @@ function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCour
       forEachCourse(
         (title) => `Failed to postpone the reminder for ${title}.`,
         (course) =>
-          userData.setNewExerciseNotifyAfter(
+          userData.postponeNewExercises(
             LocalCourseData.getCourseId(course),
             Date.now() + NOTIFICATION_DELAY,
           ),
@@ -189,6 +222,14 @@ function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCour
         (course) => userData.clearFromNewExercises(LocalCourseData.getCourseId(course)),
       ),
     ],
+  )
+}
+
+/** Whether the course has new exercises no notification has offered yet. */
+function hasUnofferedNewExercises(course: LocalCourseData): boolean {
+  const offered = new Set((course.data.offeredNewExercises ?? []).map(String))
+  return LocalCourseData.getNewExercises(course).some(
+    (id) => !offered.has(ExerciseIdentifier.toString(id)),
   )
 }
 

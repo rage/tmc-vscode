@@ -22,6 +22,7 @@ export async function removeCourse(
     (await pickCourse(actionContext, {
       title: "Remove Course",
       placeHolder: "Which course do you want to remove?",
+      alwaysAsk: true,
     }))
   if (!target) {
     return

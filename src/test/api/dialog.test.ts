@@ -9,7 +9,7 @@ import type {
 } from "../../../shared/lib"
 import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import Dialog, { courseSelectionItems, separator } from "../../api/dialog"
-import { InsufficientScopeError, RuntimeError } from "../../errors"
+import { InsufficientScopeError, InvalidTokenError, RuntimeError } from "../../errors"
 import { Logger, LogLevel } from "../../utilities"
 
 suite("Dialog.selectItem", function () {
@@ -29,7 +29,7 @@ suite("Dialog.selectItem", function () {
   test("shows the items as given, with their descriptions", async function () {
     stubPick(() => undefined)
     const items = [
-      { label: "Programming 1", value: "a", description: "TMC Server" },
+      { label: "Programming 1", value: "a", description: "tmc.mooc.fi" },
       { label: "Programming 1", value: "b", description: "courses.mooc.fi" },
       { label: "No description", value: "c" },
     ]
@@ -51,7 +51,7 @@ suite("Dialog.selectItem", function () {
     stubPick((items) => items[1])
     const picked = await new Dialog().selectItem(
       "Which course?",
-      { label: "shared-slug", value: "tmc-course", description: "TMC Server" },
+      { label: "shared-slug", value: "tmc-course", description: "tmc.mooc.fi" },
       { label: "shared-slug", value: "mooc-course", description: "courses.mooc.fi" },
     )
     expect(picked).toBe("mooc-course")
@@ -233,7 +233,7 @@ suite("Dialog.errorNotification with an error", function () {
     await new Dialog().errorNotification("Download failed", boom, ["Retry", (): void => {}])
 
     expect(logError).toHaveBeenCalledWith("Download failed", boom)
-    expect(buttonTitles(show)).toEqual(["Retry", "Show logs"])
+    expect(buttonTitles(show)).toEqual(["Retry", "Show Logs"])
     expect(showLogs).toHaveBeenCalledOnce()
   })
 
@@ -263,7 +263,7 @@ suite("courseSelectionItems", function () {
 
   test("labels a course by its title and describes it by its backend", function () {
     expect(courseSelectionItems(courses)).toEqual([
-      { label: "Programming 1", value: makeTmcKind({ courseId: 3 }), description: "TMC Server" },
+      { label: "Programming 1", value: makeTmcKind({ courseId: 3 }), description: "tmc.mooc.fi" },
       {
         label: "Programming 1",
         value: makeMoocKind({ moocCourseId: "course-uuid" }),
@@ -297,8 +297,23 @@ suite("Dialog.reportError", function () {
     const show = stubMessage("showErrorMessage", (actions) => actions[0])
     await new Dialog().reportError("Could not read the course.", new InsufficientScopeError("403"))
 
-    expect(buttonTitles(show)).toEqual(["Log in", "Show logs"])
+    expect(buttonTitles(show)).toEqual(["Log In", "Show Logs"])
     expect(executeCommand).toHaveBeenCalledWith("tmc.showMoocLogin")
+  })
+
+  // The session-expired warning is the one message for a lost session.
+  test("hands a lost session to the session reporter instead of a notification", async function () {
+    vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    const show = stubMessage("showErrorMessage", () => undefined)
+    const reportSessionLost = vi.fn()
+    const dialog = new Dialog()
+    dialog.setSessionLostReporter(reportSessionLost)
+    const rejection = new InvalidTokenError("Invalid token. Deleted credentials file.")
+
+    await dialog.reportError("Failed to fetch updates for python.", rejection)
+
+    expect(reportSessionLost).toHaveBeenCalledWith(rejection)
+    expect(show).not.toHaveBeenCalled()
   })
 
   test("an error with no remedy of its own reads as the operation plus the error", async function () {
@@ -309,7 +324,7 @@ suite("Dialog.reportError", function () {
 
     expect(show.mock.calls[0]?.[0]).toBe("Could not run the tests. The CLI exited with 1.")
     expect(logError).toHaveBeenCalledOnce()
-    expect(buttonTitles(show)).toEqual(["Show logs"])
+    expect(buttonTitles(show)).toEqual(["Show Logs"])
   })
 
   test("a CLI failure's diagnostics reach the logs and not the notification", async function () {

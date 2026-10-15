@@ -53,13 +53,12 @@ vsCodeTest(
       await expect(sidePanel.getByRole("heading", { name: "Exercise passed" })).toBeVisible()
     })
 
-    await vsCodeTest.step("reset it", async () => {
+    await vsCodeTest.step("reset it, with no offer to submit the code just submitted", async () => {
       await page.getByText("def hello()").click()
       await coursesView.runExercisePaletteCommand("TestMyCode: Reset Exercise")
-      await page
-        .locator(".monaco-dialog-box")
-        .getByRole("button", { name: "Reset Without Submitting" })
-        .click()
+      const dialog = page.locator(".monaco-dialog-box")
+      await expect(dialog.getByRole("button", { name: "Submit and Reset" })).toHaveCount(0)
+      await dialog.getByRole("button", { name: "Reset", exact: true }).click()
       await expect(statusBarText(page, "Reset exercise-1.")).toBeVisible()
       await expect(editor.getByText(edit)).toBeHidden()
     })
@@ -81,7 +80,9 @@ vsCodeTest(
       await expect(async () => {
         await page.getByText("def hello()").click()
         await coursesView.runExercisePaletteCommand("TestMyCode: Share Exercise via Paste")
-        await expect(coursesView.notificationToast("Paste link:")).toBeVisible({ timeout: 2_000 })
+        await expect(coursesView.notificationToast("Copied the paste link")).toBeVisible({
+          timeout: 2_000,
+        })
       }).toPass()
     })
   },

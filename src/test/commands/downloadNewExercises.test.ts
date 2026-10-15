@@ -6,6 +6,7 @@ import type { LocalCourseData } from "../../../shared/lib"
 import { downloadNewExercisesForCourse } from "../../actions/downloadNewExercisesForCourse"
 import type { ReadyActionContext } from "../../actions/types"
 import type { Item } from "../../api/dialog"
+import { downloadExercisesOfCourse } from "../../commands/downloadExercisesOfCourse"
 import { downloadNewExercises } from "../../commands/downloadNewExercises"
 import type { UserData } from "../../config/userdata"
 import { idOfTmcCourse } from "../fixtures/identifiers"
@@ -14,6 +15,9 @@ import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions/downloadNewExercisesForCourse", () => ({
   downloadNewExercisesForCourse: vi.fn(async () => Ok.EMPTY),
+}))
+vi.mock("../../commands/downloadExercisesOfCourse", () => ({
+  downloadExercisesOfCourse: vi.fn(async () => {}),
 }))
 
 function courseWith(newExercises: number[]): LocalCourseData {
@@ -48,7 +52,8 @@ function harness(
   }) as unknown as typeof dialog.selectItem
 
   const userData = {
-    getCourses: () => [courseWith([10])],
+    // Two, or the pick would be skipped.
+    getCourses: () => [courseWith([10]), { ...courseWith([]), data: { id: 2, title: "Java" } }],
     getCourse: () => options.course ?? Ok(courseWith([10])),
   } as unknown as UserData
 
@@ -69,7 +74,7 @@ suite("Download new exercises command", function () {
 
     await downloadNewExercises(context)
 
-    expect(offered).toEqual(["Python Programming"])
+    expect(offered).toEqual(["Python Programming", "Java"])
     expect(downloadNewExercisesForCourse).toHaveBeenCalledExactlyOnceWith(context, idOfTmcCourse(1))
   })
 
@@ -81,12 +86,12 @@ suite("Download new exercises command", function () {
     expect(downloadNewExercisesForCourse).not.toHaveBeenCalled()
   })
 
-  test("says so, and downloads nothing, when the course has no new exercises", async function () {
-    const { context, notifications } = harness({ course: Ok(courseWith([])) })
+  test("for a course with no new exercises, downloads those not downloaded yet", async function () {
+    const { context } = harness({ course: Ok(courseWith([])) })
 
     await downloadNewExercises(context)
 
-    expect(notifications).toEqual(["There are no new exercises for the course python-course."])
+    expect(downloadExercisesOfCourse).toHaveBeenCalledExactlyOnceWith(context, idOfTmcCourse(1))
     expect(downloadNewExercisesForCourse).not.toHaveBeenCalled()
   })
 
@@ -109,7 +114,7 @@ suite("Download new exercises command", function () {
     await downloadNewExercises(context)
 
     expect(context.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-      'Failed to download new exercises for course "python-course".',
+      "Failed to download the new exercises of Python Programming.",
       expect.objectContaining({ message: "connection error" }),
     )
   })

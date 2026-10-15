@@ -104,6 +104,17 @@ describe("mooc mock conformance", () => {
     assert.equal(body.slug, pythonCourse.slug)
   })
 
+  test("a course carries its AI policy only where one is seeded", async () => {
+    const policies = await Promise.all(
+      [extraCourse, pythonCourse].map(async (course) => {
+        const res = await authFetch(api(`/courses/${course.id}`))
+        assert.equal(res.status, 200)
+        return ((await res.json()) as { ai_policy?: string }).ai_policy
+      }),
+    )
+    assert.deepEqual(policies, ["full_use", undefined])
+  })
+
   test("GET courses/{id}/exercises returns slides carrying an editor public_spec", async () => {
     const res = await authFetch(api(`/courses/${pythonCourse.id}/exercises`))
     assert.equal(res.status, 200)

@@ -3,7 +3,7 @@ import { vi } from "vitest"
 
 import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
-import { logout, logoutConfirmed } from "../../commands/logout"
+import { logout } from "../../commands/logout"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -11,55 +11,33 @@ vi.mock("../../actions", () => ({
   logout: vi.fn(async () => Ok.EMPTY),
 }))
 
-function contextWith(
-  confirmed: boolean,
-): [ReadyActionContext, ReturnType<typeof createDialogMock>[0]] {
-  const [dialog, values] = createDialogMock()
-  values.confirmation = confirmed
-  const notification = vi.fn(async () => undefined)
-  dialog.notification = notification
-  return [{ ...createMockActionContext(), dialog }, dialog]
+function context(): ReadyActionContext {
+  return { ...createMockActionContext(), dialog: createDialogMock()[0] }
 }
 
 suite("logout command", function () {
-  test("logs out and announces success once the user confirms", async function () {
-    const [context, dialog] = contextWith(true)
-
-    await logout(context)
-
-    expect(actions.logout).toHaveBeenCalledOnce()
-    expect(vi.mocked(dialog.notification)).toHaveBeenCalledExactlyOnceWith("Logged out.")
+  beforeEach(function () {
+    vi.mocked(actions.logout).mockReset().mockResolvedValue(Ok.EMPTY)
   })
 
-  test("does nothing when the user declines", async function () {
-    const [context, dialog] = contextWith(false)
+  test("logs out without asking, and says so in the status bar", async function () {
+    const actionContext = context()
 
-    await logout(context)
+    await logout(actionContext)
 
-    expect(actions.logout).not.toHaveBeenCalled()
-    expect(dialog.notification).not.toHaveBeenCalled()
+    expect(actionContext.dialog.confirm).not.toHaveBeenCalled()
+    expect(actions.logout).toHaveBeenCalledOnce()
+    expect(actionContext.dialog.statusMessage).toHaveBeenCalledExactlyOnceWith("Logged out.")
+    expect(actionContext.dialog.notification).not.toHaveBeenCalled()
   })
 
   test("reports a failure once, through withOperation, and announces no success", async function () {
     vi.mocked(actions.logout).mockResolvedValue(Err(new Error("deauthentication failed")))
-    const [context, dialog] = contextWith(true)
+    const actionContext = context()
 
-    await logout(context)
+    await logout(actionContext)
 
-    expect(dialog.notification).not.toHaveBeenCalled()
-    expect(dialog.reportError).toHaveBeenCalledOnce()
-  })
-})
-
-suite("logoutConfirmed", function () {
-  test("logs out without asking again", async function () {
-    vi.mocked(actions.logout).mockResolvedValue(Ok.EMPTY)
-    const [context, dialog] = contextWith(false)
-
-    await logoutConfirmed(context)
-
-    expect(dialog.confirm).not.toHaveBeenCalled()
-    expect(actions.logout).toHaveBeenCalledOnce()
-    expect(vi.mocked(dialog.notification)).toHaveBeenCalledExactlyOnceWith("Logged out.")
+    expect(actionContext.dialog.statusMessage).not.toHaveBeenCalled()
+    expect(actionContext.dialog.reportError).toHaveBeenCalledOnce()
   })
 })

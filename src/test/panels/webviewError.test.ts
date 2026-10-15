@@ -5,7 +5,7 @@ suite("toWebviewError", () => {
   test("carries the sentence and remedies a notification of the error would show", () => {
     expect(toWebviewError(new InsufficientScopeError("403 forbidden"))).toEqual({
       message: expect.stringContaining("Log in again to continue."),
-      actions: [{ label: "Log in", command: "tmc.showMoocLogin" }],
+      actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
     })
   })
 

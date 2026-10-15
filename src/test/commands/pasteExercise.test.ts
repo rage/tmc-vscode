@@ -26,7 +26,12 @@ vi.mock("../../actions", () => ({
 
 // jest-mock-vscode ships no `env` namespace, so the link-opening assertions
 // install one on the mock the `vscode` alias resolves to.
-const vscodeMock = vscode as unknown as { env: { openExternal: (uri: vscode.Uri) => void } }
+const vscodeMock = vscode as unknown as {
+  env: {
+    openExternal: (uri: vscode.Uri) => void
+    clipboard: { writeText: (text: string) => Promise<void> }
+  }
+}
 
 type NotificationCall = [string, ...[string, () => unknown][]]
 
@@ -75,7 +80,7 @@ suite("Paste exercise command", function () {
     vi.mocked(actions.pasteExercise).mockImplementation(async (_context, id) =>
       Ok(`https://pastebin.example/${id.kind}`),
     )
-    vscodeMock.env = { openExternal: vi.fn() }
+    vscodeMock.env = { openExternal: vi.fn(), clipboard: { writeText: vi.fn(async () => {}) } }
   })
 
   test("shows progress naming the exercise and the paste service", async function () {
@@ -95,7 +100,12 @@ suite("Paste exercise command", function () {
     await pasteExercise(context, undefined)
 
     expect(actions.pasteExercise).toHaveBeenCalledExactlyOnceWith(context, TMC_ID)
-    expect(notifications[0]?.[0]).toBe("Paste link: https://pastebin.example/tmc")
+    expect(vscodeMock.env.clipboard.writeText).toHaveBeenCalledExactlyOnceWith(
+      "https://pastebin.example/tmc",
+    )
+    expect(notifications[0]?.[0]).toBe(
+      "Copied the paste link to the clipboard: https://pastebin.example/tmc",
+    )
   })
 
   test("pastes a mooc exercise through the mooc backend", async function () {
@@ -104,6 +114,17 @@ suite("Paste exercise command", function () {
     await pasteExercise(context, undefined)
 
     expect(actions.pasteExercise).toHaveBeenCalledExactlyOnceWith(context, MOOC_ID)
+    expect(notifications[0]?.[0]).toBe(
+      "Copied the paste link to the clipboard: https://pastebin.example/mooc",
+    )
+  })
+
+  test("still shows the link when it could not be copied", async function () {
+    vi.mocked(vscodeMock.env.clipboard.writeText).mockRejectedValue(new Error("no clipboard"))
+    const { context, notifications } = harness("mooc")
+
+    await pasteExercise(context, undefined)
+
     expect(notifications[0]?.[0]).toBe("Paste link: https://pastebin.example/mooc")
   })
 
@@ -112,7 +133,7 @@ suite("Paste exercise command", function () {
 
     await pasteExercise(context, undefined)
     const [label, open] = notifications[0]?.[1] ?? []
-    expect(label).toBe("Open URL")
+    expect(label).toBe("Open in Browser")
     await open?.()
 
     expect(vscodeMock.env.openExternal).toHaveBeenCalledExactlyOnceWith(

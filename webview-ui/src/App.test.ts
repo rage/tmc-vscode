@@ -85,7 +85,7 @@ suite("App global error handling", () => {
     render(App)
     window.dispatchEvent(new ErrorEvent("error", { message: "boom", error: new Error("boom") }))
 
-    ;(await screen.findByRole("button", { name: "Show logs" })).click()
+    ;(await screen.findByRole("button", { name: "Show Logs" })).click()
 
     expect(postedMessages).toHaveBeenCalledWith({ type: "runCommand", command: "tmc.logs" })
   })

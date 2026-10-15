@@ -84,6 +84,11 @@ export class TmcPage {
     return this.page.locator(".notifications-toasts").getByText(text)
   }
 
+  /** A message the extension shows in the status bar for a few seconds, matched on `text`. */
+  public statusBarMessage(text: string): Locator {
+    return this.page.locator('[id="workbench\\.parts\\.statusbar"]').getByText(text)
+  }
+
   /** Runs the command titled `title` ("Category: Name") from the command palette. */
   public async runPaletteCommand(title: string): Promise<void> {
     await this.page.keyboard.press("F1")
