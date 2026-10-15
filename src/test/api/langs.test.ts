@@ -997,12 +997,28 @@ suite("Langs error-kind mapping", function () {
     expect(onLogout).not.toHaveBeenCalled()
   })
 
-  test("isAuthenticated builds `tmc logged-in` and maps the result", async function () {
+  test("isAuthenticated is true on stored courses.mooc.fi credentials without asking tmc", async function () {
     const langs = newLangs()
     const calls = stubSpawn(langs, () => Ok(nullOutput("currently logged in", "logged-in")))
 
     expect((await langs.isAuthenticated()).val).toBe(true)
-    expect(calls[0]?.args).toEqual([
+    expect(calls.map((c) => c.args)).toEqual([
+      ["mooc", "--client-name", "test-client", "logged-in"],
+    ])
+  })
+
+  test("isAuthenticated falls back to a stored tmc token", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, (i) =>
+      Ok(
+        i === 0
+          ? nullOutput("currently not logged in", "not-logged-in")
+          : nullOutput("currently logged in", "logged-in"),
+      ),
+    )
+
+    expect((await langs.isAuthenticated()).val).toBe(true)
+    expect(calls[1]?.args).toEqual([
       "tmc",
       "--client-name",
       "test-client",
@@ -1012,11 +1028,20 @@ suite("Langs error-kind mapping", function () {
     ])
   })
 
-  test("isAuthenticated returns false when not logged in", async function () {
+  test("isAuthenticated returns false when neither backend has a session", async function () {
     const langs = newLangs()
-    stubSpawn(langs, () => Ok(nullOutput("currently not logged in", "not-logged-in")))
+    const calls = stubSpawn(langs, () => Ok(nullOutput("currently not logged in", "not-logged-in")))
 
     expect((await langs.isAuthenticated()).val).toBe(false)
+    expect(calls).toHaveLength(2)
+  })
+
+  test("isAuthenticated does not guess from tmc when the mooc check fails", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, () => Ok(errorOutput("generic")))
+
+    expect((await langs.isAuthenticated()).err).toBe(true)
+    expect(calls).toHaveLength(1)
   })
 })
 

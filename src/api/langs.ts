@@ -385,14 +385,27 @@ export default class Langs {
   // ---------------------------------------------------------------------------------------------
 
   /**
-   * Whether the user has a session, via `tmc logged-in`: a usable courses.mooc.fi access token
-   * counts, and so does a tmc token stored before courses.mooc.fi logins replaced tmc ones.
+   * Whether the user has a session: stored courses.mooc.fi credentials, or else a tmc token
+   * stored before courses.mooc.fi logins replaced tmc ones.
    */
   public async isAuthenticated(options?: ExecutionOptions): Promise<Result<boolean, Error>> {
+    // Not `tmc logged-in` alone: it reports the courses.mooc.fi login only to a tmc server
+    // trusted with its token, so any other tmc root would read as logged out.
+    const mooc = await this._isLoggedIn("mooc", options)
+    if (mooc.err || mooc.val) {
+      return mooc
+    }
+    return this._isLoggedIn("tmc", options)
+  }
+
+  private async _isLoggedIn(
+    backend: BackendKind,
+    options?: ExecutionOptions,
+  ): Promise<Result<boolean, Error>> {
     const res = await this._executeLangsCommand(
       {
-        backend: "tmc",
-        args: this._tmcCmd("logged-in"),
+        backend,
+        args: this._backendCmd(backend, "logged-in"),
         processTimeout: options?.timeout,
       },
       null,
