@@ -432,7 +432,7 @@ async function activateInner(
   init.registerCommands(context, actionContext, testController)
   canOfferLogin = readyContext !== undefined
   context.subscriptions.push(
-    TmcPanel.registerSerializer(context, actionContext),
+    TmcPanel.registerSerializers(context, actionContext),
     TmcPanel.showSubmissionViews(context, actionContext),
   )
   if (readyContext) {

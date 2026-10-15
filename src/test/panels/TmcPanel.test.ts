@@ -19,7 +19,7 @@ import type { UserData } from "../../config/userdata"
 import { BottleneckError, InitializationError, presentationFor } from "../../errors"
 import type { PanelMessage } from "../../panels/router"
 import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
-import { MAIN_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
+import { MAIN_PANEL_VIEW_TYPE, SIDE_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
 import { submissionViews } from "../../ui/submissionViews"
 import { Logger } from "../../utilities"
 import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
@@ -1629,8 +1629,10 @@ async function restore(
 ): Promise<void> {
   const register = vi.mocked(vscode.window.registerWebviewPanelSerializer)
   register.mockClear()
-  TmcPanel.registerSerializer(createMockContext(), actionContext)
-  const serializer = register.mock.calls[0]?.[1]
+  TmcPanel.registerSerializers(createMockContext(), actionContext)
+  const serializer = register.mock.calls.find(
+    ([viewType]) => viewType === MAIN_PANEL_VIEW_TYPE,
+  )?.[1]
   await serializer?.deserializeWebviewPanel(fake.panel, state)
 }
 
@@ -1644,13 +1646,16 @@ suite("TmcPanel main panel restore after a window reload", () => {
     ui: { scrollY: 120 },
   }
 
-  test("registers a serializer for the main panel alone", () => {
+  test("registers a serializer for both panels", () => {
     const register = vi.mocked(vscode.window.registerWebviewPanelSerializer)
     register.mockClear()
 
-    TmcPanel.registerSerializer(createMockContext(), createMockActionContext())
+    TmcPanel.registerSerializers(createMockContext(), createMockActionContext())
 
-    expect(register.mock.calls.map(([viewType]) => viewType)).toEqual(["tmc.mainPanel"])
+    expect(register.mock.calls.map(([viewType]) => viewType)).toEqual([
+      MAIN_PANEL_VIEW_TYPE,
+      SIDE_PANEL_VIEW_TYPE,
+    ])
   })
 
   test("is activated for by package.json", () => {
@@ -1658,7 +1663,28 @@ suite("TmcPanel main panel restore after a window reload", () => {
       fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),
     ) as { activationEvents: string[] }
 
-    expect(manifest.activationEvents).toContain(`onWebviewPanel:${MAIN_PANEL_VIEW_TYPE}`)
+    expect(manifest.activationEvents).toEqual(
+      expect.arrayContaining([
+        `onWebviewPanel:${MAIN_PANEL_VIEW_TYPE}`,
+        `onWebviewPanel:${SIDE_PANEL_VIEW_TYPE}`,
+      ]),
+    )
+  })
+
+  // Without a serializer VS Code restores the panel's editor group empty.
+  test("closes a restored submission panel, whose submission is gone", async () => {
+    const register = vi.mocked(vscode.window.registerWebviewPanelSerializer)
+    register.mockClear()
+    TmcPanel.registerSerializers(createMockContext(), createMockActionContext())
+    const serializer = register.mock.calls.find(
+      ([viewType]) => viewType === SIDE_PANEL_VIEW_TYPE,
+    )?.[1]
+    const fake = createFakeWebviewPanel()
+
+    await serializer?.deserializeWebviewPanel(fake.panel, undefined)
+
+    expect(fake.dispose).toHaveBeenCalled()
+    expect(TmcPanel.sidePanel).toBeUndefined()
   })
 
   test("reopens the saved Course Details as the main panel, with a fresh id", async () => {

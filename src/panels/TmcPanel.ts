@@ -24,8 +24,8 @@ import { initializationErrorHelpPanel, nextPanelId, panelTitle } from "./routes"
  */
 export const MAIN_PANEL_VIEW_TYPE = "tmc.mainPanel"
 
-// No serializer: a submission's view lives only in this extension host's memory.
-const SIDE_PANEL_VIEW_TYPE = "tmc.sidePanel"
+/** The side panel's webview type; like {@link MAIN_PANEL_VIEW_TYPE}, an activation event names it. */
+export const SIDE_PANEL_VIEW_TYPE = "tmc.sidePanel"
 
 /**
  * Manages the extension's two webview panels: their lifecycle, and the transport to and
@@ -177,9 +177,25 @@ export class TmcPanel {
   /**
    * Reopens the main panel VS Code restores after a window reload, on the screen its webview
    * saved. One whose screen cannot be shown any more, or whose activation failures this one
-   * did not repeat, is closed instead.
+   * did not repeat, is closed instead. A restored side panel is always closed: the submission
+   * it showed lived only in the previous extension host's memory.
    */
-  public static registerSerializer(
+  public static registerSerializers(
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+  ): Disposable {
+    const main = TmcPanel._registerMainSerializer(extensionContext, actionContext)
+    // Without a serializer VS Code would restore the side panel's editor group empty.
+    const side = window.registerWebviewPanelSerializer(SIDE_PANEL_VIEW_TYPE, {
+      deserializeWebviewPanel: async (webviewPanel) => {
+        Logger.info("Closing a restored side panel, whose submission is gone")
+        webviewPanel.dispose()
+      },
+    })
+    return Disposable.from(main, side)
+  }
+
+  private static _registerMainSerializer(
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
   ): Disposable {
