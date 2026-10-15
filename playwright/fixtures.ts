@@ -65,7 +65,7 @@ async function closeElectron(electronApp: ElectronApplication): Promise<void> {
 
 // Must be per-test, hence built here rather than at module load: a shared user data dir makes
 // VS Code restore the previous test's window and workspace state.
-function launchArgs(userDataDir: string): string[] {
+function launchArgs(userDataDir: string, isWorkspaceTrustEnabled: boolean): string[] {
   return [
     "--disable-gpu-sandbox",
     // Xvfb has no real display, so Chromium sometimes backgrounds/kills the
@@ -80,7 +80,7 @@ function launchArgs(userDataDir: string): string[] {
     "--disable-updates",
     // The workspace-trust prompt interrupts at unpredictable points once a
     // course workspace is opened.
-    "--disable-workspace-trust",
+    ...(isWorkspaceTrustEnabled ? [] : ["--disable-workspace-trust"]),
     "--extensionDevelopmentPath=" + rootPath,
     "--new-window",
     "--no-sandbox",
@@ -173,6 +173,10 @@ interface CustomTestOptions {
   // Set false for specs that need a logged-out extension, e.g. the login entry
   // points, which are hidden while a session exists.
   seedTmcCredentials: boolean
+  // Set true to run under Workspace Trust as current VS Code ships it: an untrusted workspace
+  // opens in Restricted Mode without asking. Newer VS Code keeps the trusted folders in the
+  // home directory, so the run gets a home of its own.
+  isWorkspaceTrustEnabled: boolean
 }
 
 export const customTestFixtures: Fixtures<
@@ -183,12 +187,14 @@ export const customTestFixtures: Fixtures<
 > = {
   moocClientId: [undefined, { option: true }],
   seedTmcCredentials: [true, { option: true }],
+  isWorkspaceTrustEnabled: [false, { option: true }],
   userDataDir: tempDirFixture("tmc-vscode-playwright-user"),
   configDir: tempDirFixture("tmc-vscode-playwright-config"),
   projectsDir: tempDirFixture("tmc-vscode-playwright-projects"),
   vsCode: async (
     {
       configDir,
+      isWorkspaceTrustEnabled,
       moocClientId,
       projectsDir,
       seedTmcCredentials: shouldSeedTmcCredentials,
@@ -203,8 +209,14 @@ export const customTestFixtures: Fixtures<
     fs.mkdirSync(join(userDataDir, "User"))
     fs.writeFileSync(
       join(userDataDir, "User", "settings.json"),
-      JSON.stringify({ "window.dialogStyle": "custom" }),
+      JSON.stringify({
+        "window.dialogStyle": "custom",
+        ...(isWorkspaceTrustEnabled && { "security.workspace.trust.startupPrompt": "never" }),
+      }),
     )
+    if (isWorkspaceTrustEnabled) {
+      fs.mkdirSync(join(userDataDir, "home"))
+    }
     if (shouldSeedTmcCredentials) {
       seedTmcCredentials(configDir)
     }
@@ -212,9 +224,10 @@ export const customTestFixtures: Fixtures<
     await resetMockBackend("tmc")
     const electronApp = await electron.launch({
       executablePath: await downloadAndUnzipVSCode(VSCODE_TEST_VERSION),
-      args: launchArgs(userDataDir),
+      args: launchArgs(userDataDir, isWorkspaceTrustEnabled),
       env: {
         ...process.env,
+        ...(isWorkspaceTrustEnabled && { HOME: join(userDataDir, "home") }),
         TMC_LANGS_TMC_ROOT_URL: MOCK_BACKEND_URL,
         // Route mooc (courses.mooc.fi) CLI calls at the mock mounted in the same
         // backend process (backend/mooc). Overrides the compiled MOOC_BACKEND_URL
