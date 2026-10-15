@@ -34,9 +34,8 @@ export function isAiAllowed(course: LocalCourseData | undefined): boolean {
     course,
     // tmc-server has no AI policy.
     () => false,
-    // The seam for the planned mooc course AI policy: true only for the value that allows AI
-    // use outright; "limited" and "planning only" are not allowed.
-    () => false,
+    // Settings cannot allow AI for only some uses, so "limited" and "planning_only" stay off.
+    (mooc) => mooc.aiPolicy === "full_use" || mooc.aiPolicy === "required",
   )
 }
 
