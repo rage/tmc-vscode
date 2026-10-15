@@ -20,7 +20,12 @@
 - Submitting, including before a reset or restore, running tests and sharing via paste are refused, with what to change, while the course workspace's AI settings can't be applied or an AI extension no setting turns off, such as Cline or Claude Code, is enabled.
 - Logging in now always uses the courses.mooc.fi account (a browser-based device-code login); the TestMyCode username and password form has been removed. An existing TestMyCode session keeps working until it expires.
 - Raised the minimum required VS Code version to 1.100.
-- The extension now declares itself unsupported in untrusted (restricted-mode) workspaces, since it downloads and runs the TMC-langs CLI against workspace files.
+- In Restricted Mode the Courses view, login, adding courses and downloading keep working, and the view says why running tests, submitting, sharing via paste and deleting generated files are held back; their notification offers Trust Course Workspace, and the refused action runs once the workspace is trusted. A workspace cannot set `testMyCode.javaHome` until it is trusted.
+- Course workspaces now open with the exercises folder as their first folder, and their files live in it, so trusting one course workspace trusts every course and every exercise downloaded later. Existing course workspaces move there on the next start, keeping their settings, and an open one reopens from its new place. Moving the exercises folder reopens the open course workspace from where it moved.
+- Course workspaces no longer keep their own copy of TestMyCode's settings, so a change in User settings applies inside them too; the copies earlier versions made are removed when the workspace moves.
+- Downloading or opening exercises outside their course workspace offers to open it, naming the course, instead of only marking them open.
+- Switching from one course workspace to another no longer asks first; opening a course workspace over a folder of your own asks, naming the course and the folder, and offers a new window instead. The window a switch opens does not repeat the new-exercise and update offers the previous one made. Switch Course Workspace marks the course that is open.
+- The walkthrough says to trust the course workspace.
 - The extension now declares itself unsupported in virtual workspaces, such as a repository opened straight from GitHub, since it runs the TMC-langs CLI as a local process and stores exercises on disk.
 - The backend name beside a course in the Courses view is now shown dimmed, next to the title, instead of appended to it.
 - Logging in no longer opens a panel: courses.mooc.fi opens in your browser with your login code, and a notification you can cancel shows the code and waits while you approve there. A denied or expired login says so and offers Try Again.
@@ -28,7 +33,6 @@
 - An error answer from courses.mooc.fi or tmc.mooc.fi now says the server returned an error, with its status, instead of asking you to check your internet connection or showing the raw response.
 - Submitting or pasting a courses.mooc.fi exercise that has been removed from the course now says the exercise no longer exists and offers Refresh Courses, and an error's details no longer repeat the same cause twice.
 - Every initialization error notification now offers Show Help.
-- Open Exercises Folder, Wipe and Change data path now say why they cannot run when TMC-langs reported no exercise directory.
 - Fixed a newly added course's passed exercises not showing as passed right away.
 - Fixed a courses.mooc.fi exercise showing as completed after any graded submission; it now takes full points.
 - A graded courses.mooc.fi submission now says whether the exercise is passed or some tests failed, instead of only Exercise graded, and links to the exercise's page in the course material.
