@@ -217,6 +217,10 @@ export function registerCommands(
 
   register("tmc.openTMCExercisesFolder", async () => commands.openExercisesFolder(readyContext))
 
+  register("tmc.openNextExercise", async (target: ExerciseTarget | undefined) =>
+    commands.openNextExercise(readyContext, resourceOf(target)),
+  )
+
   register("tmc.pasteExercise", async (target: ExerciseTarget | undefined) =>
     commands.pasteExercise(readyContext, resourceOf(target)),
   )

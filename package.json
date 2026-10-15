@@ -169,6 +169,12 @@
         "category": "TestMyCode"
       },
       {
+        "command": "tmc.openNextExercise",
+        "title": "Open Next Exercise",
+        "category": "TestMyCode",
+        "icon": "$(arrow-right)"
+      },
+      {
         "command": "tmc.openCourseWorkspace",
         "title": "Open Course Workspace",
         "icon": "$(folder-opened)",
@@ -426,6 +432,10 @@
           "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise"
         },
         {
+          "command": "tmc.openNextExercise",
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise"
+        },
+        {
           "command": "tmc.cleanExercise",
           "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise"
         },
@@ -559,6 +569,11 @@
         {
           "command": "tmc.closeExercise",
           "group": "3_close@2",
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive"
+        },
+        {
+          "command": "tmc.openNextExercise",
+          "group": "4_next@1",
           "when": "test-my-code:Initialized && test-my-code:WorkspaceActive"
         }
       ],

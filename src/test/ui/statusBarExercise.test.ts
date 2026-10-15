@@ -239,6 +239,7 @@ suite("showExerciseActions", function () {
       "Share via Paste",
       "Download Old Submission…",
       "Reset Exercise",
+      "Open Next Exercise",
       "Reveal in Courses View",
     ])
     expect(executeCommand).toHaveBeenCalledWith("tmc.submitExercise", exerciseHelloWorld.uri)
@@ -260,7 +261,7 @@ suite("showExerciseActions", function () {
 
     await showExerciseActions(new Dialog(), harness().sources, false)
 
-    expect(offered()).toEqual(["Run Tests"])
+    expect(offered()).toEqual(["Run Tests", "Open Next Exercise"])
   })
 
   test("leaves the reveal out for a course that is not stored", async function () {

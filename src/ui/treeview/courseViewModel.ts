@@ -260,3 +260,32 @@ function compareParts(a: PartPlace, b: PartPlace, isAnyNumbered: boolean): numbe
 function compareNames(a: string, b: string): number {
   return a.localeCompare(b, undefined, { numeric: true })
 }
+
+/**
+ * The exercise a student goes on to after `current`: the first one after it, in the order the
+ * Courses view lists them, that is not passed, has tries left and is not past its hard deadline;
+ * failing that, the first such one before it. `undefined` when none is left.
+ */
+export function nextExerciseAfter(
+  course: LocalCourseData,
+  current: ExerciseIdentifier,
+  now: Date,
+): ExerciseIdentifier | undefined {
+  const ordered = buildCourseView(course, {
+    onDisk: [],
+    downloadStatusOf: () => undefined,
+    updateable: [],
+    now,
+  }).flatMap((part) => part.exercises)
+  const currentKey = ExerciseIdentifier.key(current)
+  const index = ordered.findIndex((exercise) => ExerciseIdentifier.key(exercise.id) === currentKey)
+  const isLeftToDo = (exercise: ExerciseView): boolean =>
+    ExerciseIdentifier.key(exercise.id) !== currentKey &&
+    !exercise.passed &&
+    !exercise.isOutOfTries &&
+    !(exercise.hardDeadline !== null && exercise.hardDeadline <= now)
+  const next =
+    ordered.slice(index + 1).find(isLeftToDo) ??
+    ordered.slice(0, Math.max(index, 0)).find(isLeftToDo)
+  return next?.id
+}

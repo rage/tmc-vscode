@@ -10,7 +10,11 @@ import { ExerciseIdentifier, makeTmcKind } from "../../../shared/lib"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import type { CourseViewState, PartView } from "../../ui/treeview/courseViewModel"
-import { buildCourseView, onDiskByCourse } from "../../ui/treeview/courseViewModel"
+import {
+  buildCourseView,
+  nextExerciseAfter,
+  onDiskByCourse,
+} from "../../ui/treeview/courseViewModel"
 import {
   moocCourseExercise,
   moocLocalCourse,
@@ -342,5 +346,46 @@ suite("buildCourseView", () => {
     )
 
     expect(parts.map((part) => part.isDefaultOpen)).toEqual([true, false, false, false])
+  })
+})
+
+suite("nextExerciseAfter", () => {
+  test("is the next exercise in view order that is still to do", () => {
+    const courseData = course([
+      exercise({ id: 3, name: "part02-01_loops" }),
+      exercise({ id: 1, name: "part01-01_hello" }),
+      exercise({ id: 2, name: "part01-02_world", passed: true }),
+    ])
+
+    expect(nextExerciseAfter(courseData, idOfTmcExercise(1), NOW)).toEqual(idOfTmcExercise(3))
+  })
+
+  test("skips the expired, then wraps around to an earlier one left to do", () => {
+    const courseData = course([
+      exercise({ id: 1, name: "part01-01_hello" }),
+      exercise({ id: 2, name: "part01-02_world", passed: true }),
+      exercise({ id: 3, name: "part01-03_late", deadline: "2026-05-01T00:00:00Z" }),
+    ])
+
+    expect(nextExerciseAfter(courseData, idOfTmcExercise(2), NOW)).toEqual(idOfTmcExercise(1))
+  })
+
+  test("skips a mooc exercise with no tries left", () => {
+    const courseData = moocCourse([
+      moocExercise("a", "first", { passed: true }),
+      moocExercise("b", "second", { outOfTries: true }),
+      moocExercise("c", "third"),
+    ])
+
+    expect(nextExerciseAfter(courseData, idOfMoocExercise("a"), NOW)).toEqual(idOfMoocExercise("c"))
+  })
+
+  test("is nothing when every other exercise is done", () => {
+    const courseData = course([
+      exercise({ id: 1, name: "part01-01_hello" }),
+      exercise({ id: 2, name: "part01-02_world", passed: true }),
+    ])
+
+    expect(nextExerciseAfter(courseData, idOfTmcExercise(1), NOW)).toBeUndefined()
   })
 })

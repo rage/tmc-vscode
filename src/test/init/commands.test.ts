@@ -45,6 +45,7 @@ const expectedCommands = [
   "tmc.removeCourse",
   "tmc.revealInCoursesView",
   "tmc.settings",
+  "tmc.openNextExercise",
   "tmc.openTMCExercisesFolder",
   "tmc.pasteExercise",
   "tmc.resetExercise",
