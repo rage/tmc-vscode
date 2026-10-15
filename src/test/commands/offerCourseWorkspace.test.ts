@@ -27,7 +27,12 @@ function setup(): {
 }
 
 suite("createCourseWorkspaceOffer", function () {
+  beforeEach(function () {
+    vi.useFakeTimers()
+  })
+
   afterEach(function () {
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -36,6 +41,7 @@ suite("createCourseWorkspaceOffer", function () {
     const { offer, shown } = setup()
 
     offer({ backend: "mooc", courseSlug: "python-course" })
+    vi.runAllTimers()
 
     expect(shown.map((x) => x.message)).toEqual([
       "The exercises of Python Course open in its course workspace.",
@@ -54,19 +60,21 @@ suite("createCourseWorkspaceOffer", function () {
 
     offer({ backend: "mooc", courseSlug: "python-course" })
     offer({ backend: "mooc", courseSlug: "python-course" })
+    vi.runAllTimers()
     expect(shown).toHaveLength(1)
 
     shown[0]?.dismiss()
-    await vi.waitFor(() => {
-      offer({ backend: "mooc", courseSlug: "python-course" })
-      expect(shown).toHaveLength(2)
-    })
+    await vi.runAllTimersAsync()
+    offer({ backend: "mooc", courseSlug: "python-course" })
+    vi.runAllTimers()
+    expect(shown).toHaveLength(2)
   })
 
   test("says nothing about a course that is not stored", function () {
     const { offer, shown } = setup()
 
     offer({ backend: "tmc", courseSlug: "python-course" })
+    vi.runAllTimers()
 
     expect(shown).toEqual([])
   })
