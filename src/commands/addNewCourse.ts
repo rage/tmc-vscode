@@ -232,10 +232,18 @@ function pickCourse(
       }
       renderFirstStep()
       if (quickPick.items.length === 0) {
-        void dialog.errorNotification(
-          `Failed to fetch courses from ${unavailableNames().join(" or ")}. ` +
-            "Check your network connection and that you are logged in.",
-        )
+        if (unavailable.includes(backendName("mooc"))) {
+          void dialog.errorNotification(
+            `Failed to fetch courses from ${unavailableNames().join(" or ")}. ` +
+              "Check your network connection and that you are logged in.",
+          )
+        } else {
+          const tmcDown = unavailable.length > 0 ? `, and ${backendName("tmc")} is unavailable` : ""
+          void dialog.notification(
+            `You have no courses to add: you are not enrolled on any ${backendName("mooc")}` +
+              ` course with programming exercises${tmcDown}.`,
+          )
+        }
         settle(undefined)
       }
     })

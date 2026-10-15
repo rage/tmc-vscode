@@ -354,6 +354,31 @@ suite("Add New Course command", function () {
     )
   })
 
+  test.each([
+    ["TMC Server lists no organizations", Promise.resolve(Ok([])), ""],
+    [
+      "TMC Server is down",
+      Promise.resolve(Err(new Error("down"))),
+      ", and TMC Server is unavailable",
+    ],
+  ])(
+    "says there is nothing to add when no course is enrolled and %s",
+    async function (_, organizationListing, tmcDown) {
+      const { context, quickPick, done } = harness({
+        organizations: organizationListing,
+        moocCourses: Promise.resolve(Ok([])),
+      })
+      await done
+
+      expect(quickPick.isShown).toBe(false)
+      expect(context.dialog.errorNotification).not.toHaveBeenCalled()
+      expect(context.dialog.notification).toHaveBeenCalledWith(
+        "You have no courses to add: you are not enrolled on any courses.mooc.fi course with" +
+          ` programming exercises${tmcDown}.`,
+      )
+    },
+  )
+
   test("marks courses already added, and opening one shows its details instead of re-adding", async function () {
     const added = [
       { kind: "mooc", data: { id: moocCourse.id } },
