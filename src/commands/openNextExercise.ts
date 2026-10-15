@@ -6,8 +6,8 @@ import { downloadAndOpenExercises } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
 import { exerciseFor } from "../api/workspaceManager"
+import { showExerciseSourceFile } from "../ui/exerciseSourceFile"
 import { nextExerciseAfter } from "../ui/treeview/courseViewModel"
-import { showExerciseSourceFile } from "../window/exerciseSourceFile"
 
 /**
  * Opens the exercise to do after this one, downloading it when needed, and shows its main
@@ -21,7 +21,7 @@ export async function openNextExercise(
   from: ExerciseIdentifier | vscode.Uri | undefined,
 ): Promise<void> {
   const { dialog } = actionContext
-  const { langs, userData, workspaceManager } = actionContext.startup
+  const { userData, workspaceManager } = actionContext.startup
   const currentId =
     from !== undefined && "kind" in from ? from : exerciseFor(workspaceManager, from)?.id
   if (!currentId) {
@@ -44,6 +44,6 @@ export async function openNextExercise(
   )
   const next = opened.ok ? workspaceManager.getExercise(nextId) : undefined
   if (next) {
-    await showExerciseSourceFile(langs, next)
+    await showExerciseSourceFile(actionContext, next)
   }
 }

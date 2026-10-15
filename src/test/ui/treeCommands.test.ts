@@ -12,6 +12,7 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
 import { BottleneckError } from "../../errors"
+import { showExerciseSourceFile } from "../../ui/exerciseSourceFile"
 import {
   closeCompletedExercises,
   closeExercises,
@@ -23,7 +24,6 @@ import {
 } from "../../ui/treeview/treeCommands"
 import { ExerciseTreeItem, PartTreeItem } from "../../ui/treeview/treeview"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
-import { showExerciseSourceFile } from "../../window/exerciseSourceFile"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -40,7 +40,7 @@ vi.mock("../../actions/openExercises", () => ({
 vi.mock("../../actions/closeExercises", () => ({
   closeExercises: vi.fn(async (_context: unknown, ids: unknown[]) => Ok(ids)),
 }))
-vi.mock("../../window/exerciseSourceFile", () => ({
+vi.mock("../../ui/exerciseSourceFile", () => ({
   showExerciseSourceFile: vi.fn(async () => true),
 }))
 
@@ -186,8 +186,8 @@ suite("Courses view commands", function () {
     await openExercises(actionContext, [row(tmcCourse, 2, "opened")])
 
     expect(downloadAndOpenExercises).not.toHaveBeenCalled()
-    const [langs, shown] = vi.mocked(showExerciseSourceFile).mock.calls[0] ?? []
-    expect(langs).toBe(actionContext.startup.langs)
+    const [shownIn, shown] = vi.mocked(showExerciseSourceFile).mock.calls[0] ?? []
+    expect(shownIn).toBe(actionContext)
     expect(shown).toBe(onDisk)
   })
 

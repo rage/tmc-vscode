@@ -6,7 +6,7 @@ import { downloadAndOpenExercises } from "../../actions/openExercises"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { openNextExercise } from "../../commands/openNextExercise"
 import type { UserData } from "../../config/userdata"
-import { showExerciseSourceFile } from "../../window/exerciseSourceFile"
+import { showExerciseSourceFile } from "../../ui/exerciseSourceFile"
 import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
 import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
@@ -18,7 +18,7 @@ vi.mock("../../actions/openExercises", () => ({
   ),
   openExercises: vi.fn(),
 }))
-vi.mock("../../window/exerciseSourceFile", () => ({
+vi.mock("../../ui/exerciseSourceFile", () => ({
   showExerciseSourceFile: vi.fn(async () => true),
 }))
 

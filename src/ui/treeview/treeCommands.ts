@@ -17,7 +17,7 @@ import type { ReadyActionContext } from "../../actions/types"
 import { withOperation } from "../../api/withOperation"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { countOf } from "../../utilities"
-import { showExerciseSourceFile } from "../../window/exerciseSourceFile"
+import { showExerciseSourceFile } from "../exerciseSourceFile"
 import { updateablesRegistry } from "../updateablesRegistry"
 import type { CoursesTreeItem } from "./treeview"
 import { ExerciseTreeItem, exerciseItems, isDownloadable } from "./treeview"
@@ -93,12 +93,11 @@ async function showSourceFileOfOnlyExercise(
   actionContext: ReadyActionContext,
   rows: CoursesTreeItem[],
 ): Promise<void> {
-  const { langs, workspaceManager } = actionContext.startup
   const [only, ...others] = rows
   if (only instanceof ExerciseTreeItem && others.length === 0) {
-    const exercise = workspaceManager.getExercise(only.exerciseId)
+    const exercise = actionContext.startup.workspaceManager.getExercise(only.exerciseId)
     if (exercise) {
-      await showExerciseSourceFile(langs, exercise)
+      await showExerciseSourceFile(actionContext, exercise)
     }
   }
 }

@@ -1,11 +1,9 @@
 import { promises as fs } from "fs"
 import * as path from "path"
 
-import * as vscode from "vscode"
-
-import type Langs from "../api/langs"
 import type { WorkspaceExercise } from "../api/workspaceManager"
-import { Logger } from "../utilities/logger"
+import { Logger } from "../utilities"
+import type { ReadyActionContext } from "./types"
 
 const SOURCE_EXTENSIONS = new Set([
   ".c",
@@ -103,26 +101,20 @@ export async function findMainSourceFile(
 }
 
 /**
- * Opens the exercise's main source file in an editor.
- *
- * @returns Whether a file was opened; `false` when the exercise holds no source file.
+ * The exercise's main source file, from the student files tmc-langs names for it, else from
+ * the language plugins' default folders. `undefined` when the exercise holds no source file.
  */
-export async function showExerciseSourceFile(
-  langs: Pick<Langs, "getStudentFilePaths">,
+export async function findExerciseSourceFile(
+  actionContext: ReadyActionContext,
   exercise: Pick<WorkspaceExercise, "uri" | "exerciseSlug">,
-): Promise<boolean> {
+): Promise<string | undefined> {
   const exercisePath = exercise.uri.fsPath
-  const studentPaths = await langs.getStudentFilePaths(exercisePath)
+  const studentPaths = await actionContext.startup.langs.getStudentFilePaths(exercisePath)
   if (studentPaths.err) {
     Logger.warn(`Could not read the student files of ${exercise.exerciseSlug}`, studentPaths.val)
   }
-  const file =
+  return (
     (studentPaths.ok ? await findMainSourceFile(exercisePath, studentPaths.val) : undefined) ??
     (await findMainSourceFile(exercisePath, DEFAULT_STUDENT_PATHS))
-  if (!file) {
-    Logger.info(`${exercise.exerciseSlug} has no source file to open`)
-    return false
-  }
-  await vscode.window.showTextDocument(vscode.Uri.file(file), { preview: false })
-  return true
+  )
 }

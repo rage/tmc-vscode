@@ -285,7 +285,7 @@ export function nextExerciseAfter(
     !exercise.isOutOfTries &&
     !(exercise.hardDeadline !== null && exercise.hardDeadline <= now)
   const next =
-    ordered.slice(index + 1).find(isLeftToDo) ??
-    ordered.slice(0, Math.max(index, 0)).find(isLeftToDo)
+    ordered.slice(index + 1).find((exercise) => isLeftToDo(exercise)) ??
+    ordered.slice(0, Math.max(index, 0)).find((exercise) => isLeftToDo(exercise))
   return next?.id
 }

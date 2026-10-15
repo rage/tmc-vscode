@@ -151,6 +151,7 @@ async function harness(
     listLocalExercises: async () => Ok([]),
     listSettings: async () => Ok({}),
     checkExerciseUpdates: async () => Ok([]),
+    getStudentFilePaths: async () => Ok([]),
     unsetSetting: async () => Ok.EMPTY,
   })
   const workspaceManager = fakeService<WorkspaceManager>(services.workspaceManager ?? {}, {
