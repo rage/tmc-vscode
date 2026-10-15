@@ -167,6 +167,15 @@ suite("moocGradingView", () => {
     })
   })
 
+  test("a submission below full points to an exercise passed earlier says its tests failed", () => {
+    expect(moocGradingView(moocGrading("FullyGraded", 0, "Passed"), 1)).toMatchObject({
+      phase: "finished",
+      headline: "Some tests failed on the server",
+      explanation: "You have already passed this exercise with an earlier submission.",
+      points: { given: 0, max: 1 },
+    })
+  })
+
   test("the last try below full points says the score is final", () => {
     const view = moocGradingView(moocGrading("FullyGraded", 2, "OutOfTries"), 3)
     expect(view).toMatchObject({
