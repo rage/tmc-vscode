@@ -37,7 +37,6 @@ import {
   EXERCISE_CHECK_INTERVAL,
   EXTENSION_ID,
   EXTENSION_VERSION,
-  STARTUP_REFRESH_SKIP_AGE,
   TMC_LANGS_CONFIG_DIR,
   TMC_LANGS_DL_URL,
   TMC_LANGS_VERSION,
@@ -154,6 +153,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     )
     Logger.show()
   }
+}
+
+function refreshInBackground(ready: ReadyActionContext): void {
+  void refreshEverything(ready, { silent: true }).catch((e) =>
+    Logger.error("Background refresh failed", e),
+  )
 }
 
 async function activateInner(
@@ -483,25 +488,8 @@ async function activateInner(
     )
   }
 
-  /** Refreshes every course quietly, recording a success for the next activation of any window. */
-  async function refreshInBackground(ready: ReadyActionContext): Promise<void> {
-    try {
-      const refreshed = await refreshEverything(ready, { silent: true })
-      if (refreshed.ok) {
-        await storage.setCoursesRefreshedAt(Date.now())
-      }
-    } catch (e) {
-      Logger.error("Background refresh failed", e)
-    }
-  }
-
-  const refreshAge = Date.now() - (storage.getCoursesRefreshedAt() ?? Number.NEGATIVE_INFINITY)
   if (readyContext && authState.loggedIn) {
-    if (refreshAge >= 0 && refreshAge < STARTUP_REFRESH_SKIP_AGE) {
-      Logger.info("Skipped the startup refresh: the courses were refreshed moments ago")
-    } else {
-      void refreshInBackground(readyContext)
-    }
+    refreshInBackground(readyContext)
   }
 
   async function runMaintenancePoll(): Promise<void> {
@@ -513,7 +501,7 @@ async function activateInner(
       // Proactively catches a session dropping between polls, not just on a failed command.
       sessionExpiry.onAuthChecked(authState.loggedIn)
       if (readyContext && authState.loggedIn) {
-        void refreshInBackground(readyContext)
+        refreshInBackground(readyContext)
       }
     } catch (e) {
       Logger.error("Maintenance check failed", e)

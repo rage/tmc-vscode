@@ -7,11 +7,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { BackendKind } from "../../../shared/lib"
-import {
-  EXERCISE_CHECK_INTERVAL,
-  EXTENSION_VERSION,
-  STARTUP_REFRESH_SKIP_AGE,
-} from "../../config/constants"
+import { EXERCISE_CHECK_INTERVAL, EXTENSION_VERSION } from "../../config/constants"
 import { CorruptStoredDataError } from "../../errors"
 import { activate } from "../../extension"
 import { Logger, LogLevel } from "../../utilities"
@@ -65,11 +61,7 @@ const sessionState = vi.hoisted(() => ({ previousVersion: undefined as string | 
 
 const storedMigration = vi.hoisted(() => ({ outcome: { kind: "done" } as unknown }))
 
-/** Global state's record of the last background course refresh. */
-const courseRefresh = vi.hoisted(() => ({
-  refreshedAt: undefined as number | undefined,
-  runs: 0,
-}))
+const courseRefresh = vi.hoisted(() => ({ runs: 0 }))
 
 const registration = vi.hoisted(() => ({ dispose: (): void => {} }))
 
@@ -192,10 +184,6 @@ vi.mock("../../storage", () => ({
         : { extensionVersion: sessionState.previousVersion }
     public updateSessionState = async (): Promise<void> => {}
     public migrateToLatest = async (): Promise<unknown> => storedMigration.outcome
-    public getCoursesRefreshedAt = (): number | undefined => courseRefresh.refreshedAt
-    public setCoursesRefreshedAt = async (time: number | undefined): Promise<void> => {
-      courseRefresh.refreshedAt = time
-    }
   },
 }))
 
@@ -297,7 +285,6 @@ function resetActivationRecording(): void {
   recorded.serializerRegistrations = 0
   storedUserData.read = (): unknown => undefined
   storedMigration.outcome = { kind: "done" }
-  courseRefresh.refreshedAt = undefined
   courseRefresh.runs = 0
   sessionState.previousVersion = undefined
   langsStub.authenticated = false
@@ -639,28 +626,14 @@ suite("the startup course refresh", function () {
     vi.restoreAllMocks()
   })
 
-  test("runs and records its success for the next activation", async function () {
+  // Progress may have changed outside VS Code since, e.g. a submission made in the browser.
+  test("runs even right after another window's refresh", async function () {
     await activate(createContext())
-    await vi.waitFor(() => expect(courseRefresh.refreshedAt).toBeDefined())
-
-    expect(courseRefresh.runs).toBe(1)
-  })
-
-  // Another window's refresh is already in the stored courses this activation just read.
-  test("is skipped when any window refreshed moments ago", async function () {
-    courseRefresh.refreshedAt = Date.now() - 1000
+    await vi.waitFor(() => expect(courseRefresh.runs).toBe(1))
 
     await activate(createContext())
 
-    expect(courseRefresh.runs).toBe(0)
-  })
-
-  test("runs when the last refresh is older than the skip age", async function () {
-    courseRefresh.refreshedAt = Date.now() - STARTUP_REFRESH_SKIP_AGE
-
-    await activate(createContext())
-
-    expect(courseRefresh.runs).toBe(1)
+    await vi.waitFor(() => expect(courseRefresh.runs).toBe(2))
   })
 })
 
