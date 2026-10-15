@@ -95,7 +95,7 @@ export class Logger {
   /**
    * Reveals the output channel, creating one to explain itself if logging is off.
    *
-   * `none` disposes the channel, so every "Show logs" affordance would otherwise do
+   * `none` disposes the channel, so every "Show Logs" affordance would otherwise do
    * nothing at all — including the one offered next to a fatal activation error.
    */
   public static show(): void {

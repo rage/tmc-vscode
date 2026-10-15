@@ -32,7 +32,7 @@ export async function pickCourse(
   const courses = userData.getCourses()
   if (courses.length === 0) {
     await dialog.notification("No courses added yet.", [
-      "Add a course",
+      "Add Course",
       (): void => void vscode.commands.executeCommand("tmc.addNewCourse"),
     ])
     return undefined

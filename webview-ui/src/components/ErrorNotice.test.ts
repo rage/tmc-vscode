@@ -19,12 +19,12 @@ suite("ErrorNotice component", () => {
       props: {
         error: {
           message: "Log in again to continue.",
-          actions: [{ label: "Log in", command: "tmc.showMoocLogin" }],
+          actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
         },
       },
     })
 
-    ;(await screen.findByRole("button", { name: "Log in" })).click()
+    ;(await screen.findByRole("button", { name: "Log In" })).click()
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "runCommand",
@@ -37,13 +37,13 @@ suite("ErrorNotice component", () => {
       props: {
         error: {
           message: "Offline.",
-          actions: [{ label: "Show help", command: "tmc.viewInitializationErrorHelp" }],
+          actions: [{ label: "Show Help", command: "tmc.viewInitializationErrorHelp" }],
         },
         actions: createRawSnippet(() => ({ render: () => "<button>Retry</button>" })),
       },
     })
 
-    const remedy = await screen.findByRole("button", { name: "Show help" })
+    const remedy = await screen.findByRole("button", { name: "Show Help" })
     const retry = screen.getByRole("button", { name: "Retry" })
     expect(remedy.compareDocumentPosition(retry) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })

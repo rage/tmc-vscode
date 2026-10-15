@@ -449,7 +449,7 @@ suite("updateCourse action (tmc)", function () {
 
     expect(result.unwrap().isUpdated).toBe(false)
     expect(userData.getTmcCourses()[0]?.disabled).toBe(false)
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("TMC Server"))
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("tmc.mooc.fi"))
   })
 
   // The failure arms must start from an enabled course, or "still disabled" and

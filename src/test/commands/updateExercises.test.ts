@@ -263,7 +263,7 @@ suite("updateExercises command", function () {
     await updateExercises(context, "loud")
 
     expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to check TMC Server and courses.mooc.fi for exercise updates.",
+      "Failed to check tmc.mooc.fi and courses.mooc.fi for exercise updates.",
       tmcError,
     )
   })

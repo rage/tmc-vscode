@@ -44,7 +44,7 @@ vsCodeTest(
       "with no course added, the login goes on to the enrolled courses",
       async () => {
         const quickPick = new QuickPickPage(page)
-        await quickPick.waitForTitle("Add New Course")
+        await quickPick.waitForTitle("Add Course")
         await quickPick.expectItem("MOOC Python Course")
       },
     )
@@ -65,7 +65,7 @@ vsCodeTest.describe(() => {
       .locator(".notification-toast")
       .filter({ hasText: "The login was denied in the browser." })
     await expect(error).toBeVisible()
-    await error.getByRole("button", { name: "Try again" }).click()
+    await error.getByRole("button", { name: "Try Again" }).click()
     await expect(moocLoginPage.waitingNotification(2)).toBeVisible()
   })
 })

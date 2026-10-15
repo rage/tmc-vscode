@@ -387,7 +387,7 @@ async function offerSubmissionOutcome(
   }
 }
 
-const SHOW_SUBMISSION = "Show result"
+const SHOW_SUBMISSION = "Show Result"
 
 function webviewOptions(extensionUri: Uri): WebviewOptions {
   return {

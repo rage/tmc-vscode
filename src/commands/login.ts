@@ -167,7 +167,7 @@ function failureMessage(error: Error): [message: string, error?: Error] {
 
 function reportFailure(actionContext: ReadyActionContext, message: string, error?: Error): void {
   void actionContext.dialog.errorNotification(message, error, [
-    "Try again",
+    "Try Again",
     (): void => void vscode.commands.executeCommand("tmc.showMoocLogin"),
   ])
 }

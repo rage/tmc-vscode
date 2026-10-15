@@ -176,7 +176,7 @@ export interface ErrorPresentation {
  * on a CLI failure that is the process's backtrace and the tail of its stderr — the `cause`
  * chain, and the stack. Those diagnose a failure rather than describe it, and a notification
  * is the one place they cannot be scrolled or copied. The logger still writes all of them to
- * the output channel, which the "Show logs" button reveals.
+ * the output channel, which the "Show Logs" button reveals.
  */
 function userSentence(error: Error): string {
   const trimmed = error.message.trim() || error.name
@@ -229,7 +229,7 @@ export function presentationFor(error: Error): ErrorPresentation {
   if (isSessionLost(error)) {
     return {
       message: SESSION_ENDED_MESSAGE,
-      actions: [{ label: "Log in", command: "tmc.showMoocLogin" }],
+      actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
     }
   }
   if (error instanceof InsufficientScopeError) {
@@ -237,7 +237,7 @@ export function presentationFor(error: Error): ErrorPresentation {
       message:
         `${reported} Your ${backendName("mooc")} session no longer grants access to` +
         " programming exercises. Log in again to continue.",
-      actions: [{ label: "Log in", command: "tmc.showMoocLogin" }],
+      actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
     }
   }
   if (error instanceof NotEnrolledError) {
@@ -270,13 +270,13 @@ export function presentationFor(error: Error): ErrorPresentation {
       message:
         `${reported} An antivirus program may be blocking the TestMyCode tools;` +
         " the help page says how to allow them.",
-      actions: [{ label: "Show help", command: "tmc.viewInitializationErrorHelp" }],
+      actions: [{ label: "Show Help", command: "tmc.viewInitializationErrorHelp" }],
     }
   }
   if (error instanceof InitializationError) {
     return {
       message: `${reported} The help page lists what failed and how to fix it.`,
-      actions: [{ label: "Show help", command: "tmc.viewInitializationErrorHelp" }],
+      actions: [{ label: "Show Help", command: "tmc.viewInitializationErrorHelp" }],
     }
   }
   if (error instanceof ObsoleteClientError) {

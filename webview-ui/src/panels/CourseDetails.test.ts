@@ -83,7 +83,7 @@ suite("CourseDetails panel", () => {
       "aria-valuetext",
       "1 / 2 points",
     )
-    screen.getByRole("button", { name: "Course material" }).click()
+    screen.getByRole("button", { name: "Course Material" }).click()
     expect(postedMessages).toHaveBeenCalledWith({
       type: "openLinkInBrowser",
       url: "https://example.com/material",

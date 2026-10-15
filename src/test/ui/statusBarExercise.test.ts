@@ -236,7 +236,7 @@ suite("showExerciseActions", function () {
     expect(offered()).toEqual([
       "Run Tests",
       "Submit Solution",
-      "Share via Paste",
+      "Share Exercise via Paste",
       "Download Old Submission…",
       "Reset Exercise",
       "Open Next Exercise",

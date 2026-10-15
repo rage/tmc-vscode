@@ -81,7 +81,7 @@ suite("presentationFor", function () {
     const presentation = presentationFor(new InsufficientScopeError("403 forbidden"))
 
     expect(presentation.message).toContain("Log in again to continue")
-    expect(presentation.actions).toEqual([{ label: "Log in", command: "tmc.showMoocLogin" }])
+    expect(presentation.actions).toEqual([{ label: "Log In", command: "tmc.showMoocLogin" }])
   })
 
   test.each([
@@ -96,7 +96,7 @@ suite("presentationFor", function () {
     expect(presentation.message).toBe(
       "Your courses.mooc.fi session has ended. Log in again to continue.",
     )
-    expect(presentation.actions).toEqual([{ label: "Log in", command: "tmc.showMoocLogin" }])
+    expect(presentation.actions).toEqual([{ label: "Log In", command: "tmc.showMoocLogin" }])
   })
 
   // Logging in again cannot make tmc.mooc.fi accept the login.
@@ -104,7 +104,7 @@ suite("presentationFor", function () {
     const presentation = presentationFor(new TmcLoginNotAcceptedError("not logged in"))
 
     expect(presentation.message).toBe(
-      "TMC Server did not accept your login. It may not accept courses.mooc.fi logins yet.",
+      "tmc.mooc.fi did not accept your login. It may not accept courses.mooc.fi logins yet.",
     )
     expect(presentation.actions).toEqual([])
   })
@@ -116,7 +116,7 @@ suite("presentationFor", function () {
       "Langs is missing. The help page lists what failed and how to fix it.",
     )
     expect(presentation.actions).toEqual([
-      { label: "Show help", command: "tmc.viewInitializationErrorHelp" },
+      { label: "Show Help", command: "tmc.viewInitializationErrorHelp" },
     ])
   })
 
@@ -126,9 +126,9 @@ suite("presentationFor", function () {
     )
     const withoutBackend = presentationFor(new NotEnrolledError("not enrolled"))
 
-    expect(withBackend.message).toContain("Enroll on the course again on TMC Server")
+    expect(withBackend.message).toContain("Enroll on the course again on tmc.mooc.fi")
     expect(withoutBackend.message).toContain("Enroll on the course again,")
-    expect(withoutBackend.message).not.toContain("TMC Server")
+    expect(withoutBackend.message).not.toContain("tmc.mooc.fi")
   })
 
   test("a CLI that cannot run points at the antivirus help", function () {
@@ -136,7 +136,7 @@ suite("presentationFor", function () {
 
     expect(presentation.message).toContain("antivirus")
     expect(presentation.actions).toEqual([
-      { label: "Show help", command: "tmc.viewInitializationErrorHelp" },
+      { label: "Show Help", command: "tmc.viewInitializationErrorHelp" },
     ])
   })
 

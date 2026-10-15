@@ -280,7 +280,7 @@ async function restoreLatestSubmissions(
  * The one error a failed download is reported with.
  *
  * A backend that failed as a whole is the cause worth naming, preferring one whose
- * presentation carries a remedy (e.g. "Log in"); otherwise the per-exercise reasons.
+ * presentation carries a remedy (e.g. "Log In"); otherwise the per-exercise reasons.
  */
 function failureCause(failedLegs: Error[], exerciseReasons: string[][]): Error {
   const leg = failedLegs.find((error) => presentationFor(error).actions.length > 0) ?? failedLegs[0]

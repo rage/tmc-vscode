@@ -172,7 +172,7 @@ suite("TmcPanel initialization guards", () => {
     )
     const [, error] = vi.mocked(actionContext.dialog.reportError).mock.calls[0] as [string, Error]
     expect(presentationFor(error).actions).toEqual([
-      { label: "Show help", command: "tmc.viewInitializationErrorHelp" },
+      { label: "Show Help", command: "tmc.viewInitializationErrorHelp" },
     ])
   })
 })
@@ -1379,11 +1379,11 @@ suite("TmcPanel side panel placement", () => {
 
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
       "Submission of part01-02_other: Exercise graded",
-      "Show result",
+      "Show Result",
     )
     expect(panel.webview.postMessage).not.toHaveBeenCalled()
 
-    offered.resolve("Show result")
+    offered.resolve("Show Result")
     await vi.waitFor(() =>
       expect(postedMessages(panel)).toEqual([
         expect.objectContaining({ type: "setPanel", panel: background }),
@@ -1563,7 +1563,7 @@ suite("TmcPanel webview document", () => {
 /** The failure a panel is answered with before activation succeeded, remedy included. */
 const notInitialized = {
   message: expect.stringContaining("did not initialize properly"),
-  actions: [{ label: "Show help", command: "tmc.viewInitializationErrorHelp" }],
+  actions: [{ label: "Show Help", command: "tmc.viewInitializationErrorHelp" }],
 }
 
 function helpPanel(): Panel {

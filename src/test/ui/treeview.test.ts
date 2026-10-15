@@ -215,9 +215,9 @@ suite("CoursesTree", function () {
   test("a course item carries its points, backend and id, and no click command", function () {
     const item = first(show(tmcCourse())) as CourseTreeItem
 
-    expect(item.description).toBe("12/40 · TMC Server")
+    expect(item.description).toBe("12/40 · tmc.mooc.fi")
     expect(item.accessibilityInformation?.label).toBe(
-      "The Python Course, 12 of 40 points, TMC Server",
+      "The Python Course, 12 of 40 points, tmc.mooc.fi",
     )
     expect(item.contextValue).toBe("course.tmc")
     expect(item.courseId).toEqual(idOfTmcCourse(1))
@@ -233,7 +233,7 @@ suite("CoursesTree", function () {
   test("a disabled course says so", function () {
     const item = first(show(tmcCourse({ disabled: true })))
 
-    expect(item.description).toBe("12/40 · TMC Server · disabled")
+    expect(item.description).toBe("12/40 · tmc.mooc.fi · disabled")
     expect(tooltipOf(item)).toContain("disabled")
   })
 
@@ -529,7 +529,7 @@ suite("CoursesTree", function () {
 
     tree.setBackendReachable("tmc", false)
     settle()
-    expect(view.message).toMatch(/^TMC Server could not be reached\./)
+    expect(view.message).toMatch(/^tmc.mooc.fi could not be reached\./)
 
     tree.setBackendReachable("tmc", true)
     settle()

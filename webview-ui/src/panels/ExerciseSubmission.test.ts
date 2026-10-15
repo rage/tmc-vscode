@@ -110,17 +110,17 @@ suite("ExerciseSubmission panel (in progress)", () => {
     expect(document.querySelector("vscode-progress-bar")!.indeterminate).toBe(true)
   })
 
-  test("offers Run in background, and the submission's page once there is one", async () => {
+  test("offers Run in Background, and the submission's page once there is one", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showView(
       panel.id,
       inProgressView("grading", { steps: [], submissionUrl: "https://tmc.mooc.fi/submissions/1" }),
     )
 
-    const background = await screen.findByRole("button", { name: "Run in background" })
+    const background = await screen.findByRole("button", { name: "Run in Background" })
     expect(background).not.toHaveAttribute("secondary")
     postedMessages.mockClear()
-    screen.getByRole("button", { name: "Show submission in browser" }).click()
+    screen.getByRole("button", { name: "Show Submission in Browser" }).click()
     expect(postedMessages).toHaveBeenCalledWith({
       type: "openLinkInBrowser",
       url: "https://tmc.mooc.fi/submissions/1",
@@ -166,7 +166,7 @@ suite("ExerciseSubmission panel (failures)", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Failed to submit")
     expect(screen.getByRole("alert")).toHaveTextContent("ECONNRESET")
     expect(document.querySelector("vscode-progress-bar")).toBeNull()
-    expect(screen.queryByText("Run in background")).not.toBeInTheDocument()
+    expect(screen.queryByText("Run in Background")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument()
   })
 
@@ -176,11 +176,11 @@ suite("ExerciseSubmission panel (failures)", () => {
       moocPanel.id,
       submitFailedView({
         message: "Log in again to continue.",
-        actions: [{ label: "Log in", command: "tmc.showMoocLogin" }],
+        actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
       }),
     )
 
-    ;(await screen.findByRole("button", { name: "Log in" })).click()
+    ;(await screen.findByRole("button", { name: "Log In" })).click()
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "runCommand",
@@ -243,10 +243,10 @@ suite("ExerciseSubmission panel (tmc results)", () => {
     render(ExerciseSubmission, { props: { panel } })
     showTmcResult(submissionFinished({ solution_url: "https://tmc.mooc.fi/solutions/1" }))
 
-    const show = await screen.findByRole("button", { name: "Show submission in browser" })
+    const show = await screen.findByRole("button", { name: "Show Submission in Browser" })
     postedMessages.mockClear()
     show.click()
-    screen.getByRole("button", { name: "Show model solution in browser" }).click()
+    screen.getByRole("button", { name: "Show Model Solution in Browser" }).click()
     expect(postedMessages.mock.calls).toEqual([
       [{ type: "openLinkInBrowser", url: "https://tmc.mooc.fi/submissions/1" }],
       [{ type: "openLinkInBrowser", url: "https://tmc.mooc.fi/solutions/1" }],
@@ -414,7 +414,7 @@ suite("ExerciseSubmission panel (mooc results)", () => {
       screen.queryByText(/tests? (passed|failed)/i, { ignore: "h1, h2, h3, script, style" }),
     ).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument()
-    expect(screen.queryByText("Run in background")).not.toBeInTheDocument()
+    expect(screen.queryByText("Run in Background")).not.toBeInTheDocument()
   })
 
   test("a partial score offers paste help, a full one does not", async () => {
@@ -507,8 +507,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     showMoocGrading(moocGrading({ grading_progress: "PendingManual" }))
 
     expect(await screen.findByText(/A teacher will grade this submission/)).toBeInTheDocument()
-    expect(screen.queryByText("Run in background")).not.toBeInTheDocument()
-    expect(screen.queryByText("Keep waiting")).not.toBeInTheDocument()
+    expect(screen.queryByText("Run in Background")).not.toBeInTheDocument()
+    expect(screen.queryByText("Keep Waiting")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument()
   })
 
@@ -517,40 +517,40 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     ["grading not ready", moocGrading({ grading_progress: "NotReady" })],
     ["no grading yet", { status: "no-grading-yet" }],
   ] as const) {
-    test(`${name}: offers Keep waiting first, and Close`, async () => {
+    test(`${name}: offers Keep Waiting first, and Close`, async () => {
       render(ExerciseSubmission, { props: { panel: moocPanel } })
       showMoocGrading(status)
 
       expect(await screen.findByText(/VS Code stopped waiting/)).toBeInTheDocument()
-      const keepWaiting = screen.getByRole("button", { name: "Keep waiting" })
+      const keepWaiting = screen.getByRole("button", { name: "Keep Waiting" })
       expect(keepWaiting).not.toHaveAttribute("secondary")
       expect(screen.getByRole("button", { name: "Close" })).toHaveAttribute("secondary")
-      expect(screen.queryByText("Run in background")).not.toBeInTheDocument()
+      expect(screen.queryByText("Run in Background")).not.toBeInTheDocument()
     })
   }
 
-  test("Keep waiting asks the host to wait for the grading again", async () => {
+  test("Keep Waiting asks the host to wait for the grading again", async () => {
     render(ExerciseSubmission, { props: { panel: moocPanel } })
     showMoocGrading(moocGrading({ grading_progress: "Pending" }))
     postedMessages.mockClear()
 
-    ;(await screen.findByRole("button", { name: "Keep waiting" })).click()
+    ;(await screen.findByRole("button", { name: "Keep Waiting" })).click()
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "keepWaitingForGrading",
       requestId: expect.any(Number),
       sourcePanel: { id: moocPanel.id, type: "ExerciseSubmission" },
     })
-    expect(await screen.findByRole("button", { name: "Keep waiting" })).toHaveAttribute("disabled")
+    expect(await screen.findByRole("button", { name: "Keep Waiting" })).toHaveAttribute("disabled")
 
     showView(moocPanel.id, inProgressView("grading", { steps: ["Grading in progress"] }))
-    expect(await screen.findByRole("button", { name: "Run in background" })).toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: "Run in Background" })).toBeInTheDocument()
   })
 
-  test("a refused Keep waiting says why", async () => {
+  test("a refused Keep Waiting says why", async () => {
     render(ExerciseSubmission, { props: { panel: moocPanel } })
     showView(moocPanel.id, gradingUnavailableView({ message: "offline" }))
-    ;(await screen.findByRole("button", { name: "Keep waiting" })).click()
+    ;(await screen.findByRole("button", { name: "Keep Waiting" })).click()
 
     replyToRequest("keepWaitingForGrading", {
       ok: false,
@@ -560,7 +560,7 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     expect(
       await screen.findByText("Already waiting for this submission's grading."),
     ).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Keep waiting" })).not.toHaveAttribute("disabled")
+    expect(screen.getByRole("button", { name: "Keep Waiting" })).not.toHaveAttribute("disabled")
   })
 })
 

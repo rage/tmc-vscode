@@ -29,7 +29,7 @@ suite("Dialog.selectItem", function () {
   test("shows the items as given, with their descriptions", async function () {
     stubPick(() => undefined)
     const items = [
-      { label: "Programming 1", value: "a", description: "TMC Server" },
+      { label: "Programming 1", value: "a", description: "tmc.mooc.fi" },
       { label: "Programming 1", value: "b", description: "courses.mooc.fi" },
       { label: "No description", value: "c" },
     ]
@@ -51,7 +51,7 @@ suite("Dialog.selectItem", function () {
     stubPick((items) => items[1])
     const picked = await new Dialog().selectItem(
       "Which course?",
-      { label: "shared-slug", value: "tmc-course", description: "TMC Server" },
+      { label: "shared-slug", value: "tmc-course", description: "tmc.mooc.fi" },
       { label: "shared-slug", value: "mooc-course", description: "courses.mooc.fi" },
     )
     expect(picked).toBe("mooc-course")
@@ -233,7 +233,7 @@ suite("Dialog.errorNotification with an error", function () {
     await new Dialog().errorNotification("Download failed", boom, ["Retry", (): void => {}])
 
     expect(logError).toHaveBeenCalledWith("Download failed", boom)
-    expect(buttonTitles(show)).toEqual(["Retry", "Show logs"])
+    expect(buttonTitles(show)).toEqual(["Retry", "Show Logs"])
     expect(showLogs).toHaveBeenCalledOnce()
   })
 
@@ -263,7 +263,7 @@ suite("courseSelectionItems", function () {
 
   test("labels a course by its title and describes it by its backend", function () {
     expect(courseSelectionItems(courses)).toEqual([
-      { label: "Programming 1", value: makeTmcKind({ courseId: 3 }), description: "TMC Server" },
+      { label: "Programming 1", value: makeTmcKind({ courseId: 3 }), description: "tmc.mooc.fi" },
       {
         label: "Programming 1",
         value: makeMoocKind({ moocCourseId: "course-uuid" }),
@@ -297,7 +297,7 @@ suite("Dialog.reportError", function () {
     const show = stubMessage("showErrorMessage", (actions) => actions[0])
     await new Dialog().reportError("Could not read the course.", new InsufficientScopeError("403"))
 
-    expect(buttonTitles(show)).toEqual(["Log in", "Show logs"])
+    expect(buttonTitles(show)).toEqual(["Log In", "Show Logs"])
     expect(executeCommand).toHaveBeenCalledWith("tmc.showMoocLogin")
   })
 
@@ -324,7 +324,7 @@ suite("Dialog.reportError", function () {
 
     expect(show.mock.calls[0]?.[0]).toBe("Could not run the tests. The CLI exited with 1.")
     expect(logError).toHaveBeenCalledOnce()
-    expect(buttonTitles(show)).toEqual(["Show logs"])
+    expect(buttonTitles(show)).toEqual(["Show Logs"])
   })
 
   test("a CLI failure's diagnostics reach the logs and not the notification", async function () {

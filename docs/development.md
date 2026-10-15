@@ -37,10 +37,10 @@ The extension talks to two unrelated backends:
 | Auth   | courses.mooc.fi access token | OAuth2 device authorization (RFC 8628) bearer |
 
 Both are supported at the same time, and a course carries its platform with it
-from then on. The user is not asked which platform to use: the `Add New Course`
+from then on. The user is not asked which platform to use: the `Add Course`
 command lists the courses.mooc.fi courses the user is enrolled in alongside the
 TMC organizations in one quick pick, each item naming its backend, and dispatches
-on what was picked. TMC Server has far too many courses to enumerate, so its arm
+on what was picked. tmc.mooc.fi has far too many courses to enumerate, so its arm
 still needs a second pick within the chosen organization; a mooc course is added
 in one step. If one backend is unreachable the other's courses are still
 offered, and the quick pick's placeholder names what is missing. When
@@ -51,7 +51,7 @@ already satisfies the `LoggedIn` context key.
 Because course slugs and titles are only unique within one backend, anything
 listing courses from both must name the backend beside them — `backendName` in
 `shared/lib.ts`, passed as `Dialog.selectItem`'s optional third tuple element.
-That function is the single source of those names: "TMC Server" and
+That function is the single source of those names: "tmc.mooc.fi" and
 "courses.mooc.fi" are the only two spellings, and nothing else writes either.
 
 ### One login

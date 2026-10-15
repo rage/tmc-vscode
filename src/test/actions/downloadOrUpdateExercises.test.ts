@@ -214,7 +214,7 @@ suite("downloadOrUpdateExercises action", function () {
     tmcMockValues.downloadMoocExercises = Err(moocError)
     vi.spyOn(errors, "presentationFor").mockImplementation((error) => ({
       message: error.message,
-      actions: error === moocError ? [{ label: "Log in", command: "tmc.showMoocLogin" }] : [],
+      actions: error === moocError ? [{ label: "Log In", command: "tmc.showMoocLogin" }] : [],
     }))
 
     const result = await downloadResults(

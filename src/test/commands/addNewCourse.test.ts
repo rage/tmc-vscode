@@ -183,7 +183,7 @@ suite("Add New Course command", function () {
     expect(quickPick.isShown).toBe(true)
     expect(quickPick.busy).toBe(true)
     expect(quickPick.matchOnDescription).toBe(true)
-    expect(quickPick.title).toBe("Add New Course")
+    expect(quickPick.title).toBe("Add Course")
   })
 
   test("lists the user's mooc courses before the TMC organizations, under separators", async function () {
@@ -193,7 +193,7 @@ suite("Add New Course command", function () {
     expect(quickPick.rows).toEqual([
       "--- courses.mooc.fi — your courses",
       "Shared Slug Course",
-      "--- TMC Server — organizations",
+      "--- tmc.mooc.fi — organizations",
       "MOOC",
       "Test org",
     ])
@@ -338,12 +338,12 @@ suite("Add New Course command", function () {
 
   test("names an unreachable backend and still offers the other", async function () {
     const { quickPick } = harness({
-      organizations: Promise.resolve(Err(new Error("TMC Server down"))),
+      organizations: Promise.resolve(Err(new Error("tmc.mooc.fi down"))),
     })
     await flush()
 
     expect(quickPick.rows).toEqual(["--- courses.mooc.fi — your courses", "Shared Slug Course"])
-    expect(quickPick.placeholder).toContain("TMC Server unavailable")
+    expect(quickPick.placeholder).toContain("tmc.mooc.fi unavailable")
   })
 
   test("offers the courses.mooc.fi login without a session, and adds nothing when picked", async function () {
@@ -369,7 +369,7 @@ suite("Add New Course command", function () {
 
     expect(quickPick.isShown).toBe(false)
     expect(context.dialog.errorNotification).toHaveBeenCalledWith(
-      "Failed to fetch courses from courses.mooc.fi or TMC Server. " +
+      "Failed to fetch courses from courses.mooc.fi or tmc.mooc.fi. " +
         "Check your network connection and that you are logged in.",
     )
   })
@@ -401,7 +401,7 @@ suite("Add New Course command", function () {
     expect(quickPick.rows).toEqual([
       "--- courses.mooc.fi — your courses",
       "Find a course on courses.mooc.fi",
-      "--- TMC Server — organizations",
+      "--- tmc.mooc.fi — organizations",
       "MOOC",
       "Test org",
     ])

@@ -59,13 +59,13 @@ export class CoursesViewPage extends TmcPage {
 
   /** Opens the add-course quick pick from the view's title bar. */
   public async openAddCourseQuickPick(): Promise<QuickPickPage> {
-    await this.page.getByRole("button", { name: "Add New Course...", exact: true }).click()
+    await this.page.getByRole("button", { name: "Add Course...", exact: true }).click()
     const quickPick = new QuickPickPage(this.page)
-    await quickPick.waitForTitle("Add New Course")
+    await quickPick.waitForTitle("Add Course")
     return quickPick
   }
 
-  /** Adds a TMC Server course, which is picked inside its organization. */
+  /** Adds a tmc.mooc.fi course, which is picked inside its organization. */
   public async addNewCourse(name: string): Promise<void> {
     const quickPick = await this.openAddCourseQuickPick()
     await quickPick.selectByLabel("Test Organization")

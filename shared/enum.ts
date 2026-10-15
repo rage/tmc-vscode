@@ -106,12 +106,12 @@ export function match<A, B, C, D>(data: Enum<A, B>, tmc: (x: A) => C, mooc: (x: 
  * the backend alongside them.
  *
  * This is the only place those names are spelled: no component, panel or message
- * writes "TMC Server", "TestMyCode", "courses.mooc.fi" or "Courses MOOC" itself.
+ * writes "tmc.mooc.fi", "TestMyCode", "courses.mooc.fi" or "Courses MOOC" itself.
  * Backend base URLs follow the same rule and come from the `__TMC_BACKEND_URL__`
  * and `__MOOC_BACKEND_URL__` build defines in `config.js`, never from a literal.
  */
 export function backendName(kind: BackendKind): string {
-  return kind === "tmc" ? "TMC Server" : "courses.mooc.fi"
+  return kind === "tmc" ? "tmc.mooc.fi" : "courses.mooc.fi"
 }
 
 /**

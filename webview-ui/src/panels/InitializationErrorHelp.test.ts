@@ -64,10 +64,10 @@ suite("InitializationErrorHelp panel", () => {
   })
 
   test.each([
-    ["Restart extension host", "workbench.action.restartExtensionHost"],
-    ["Show logs", "tmc.logs"],
-    ["Open log level setting", "workbench.action.openSettings"],
-    ["Report an issue", "workbench.action.openIssueReporter"],
+    ["Restart Extension Host", "workbench.action.restartExtensionHost"],
+    ["Show Logs", "tmc.logs"],
+    ["Open Log Level Setting", "workbench.action.openSettings"],
+    ["Report an Issue", "workbench.action.openIssueReporter"],
   ])("%s runs %s in the extension host", async (name, command) => {
     render(InitializationErrorHelp, { props: { panel: initializationErrorHelpPanel() } })
     ;(await screen.findByRole("button", { name })).click()

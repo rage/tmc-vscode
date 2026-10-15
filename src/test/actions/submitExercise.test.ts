@@ -367,7 +367,7 @@ suite("submitExercise action, tmc", () => {
     })
 
     expect(result.err).toBe(true)
-    expect((result.val as Error).message).toContain("is not a TMC Server exercise")
+    expect((result.val as Error).message).toContain("is not a tmc.mooc.fi exercise")
     expect(submit).not.toHaveBeenCalled()
   })
 })
@@ -760,7 +760,7 @@ suite("submitExercise action, through the real runForExercise boundary", () => {
     )
 
     expect(reportError).not.toHaveBeenCalled()
-    expect(lastView()?.error?.actions).toEqual([{ label: "Log in", command: "tmc.showMoocLogin" }])
+    expect(lastView()?.error?.actions).toEqual([{ label: "Log In", command: "tmc.showMoocLogin" }])
   })
 
   test("an exercise gone from the server says so and offers a refresh", async () => {

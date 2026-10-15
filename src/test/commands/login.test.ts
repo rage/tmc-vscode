@@ -268,7 +268,7 @@ suite("login command", function () {
     expect(errorNotificationCall(h.context)).toEqual([
       shown,
       undefined,
-      ["Try again", expect.any(Function)],
+      ["Try Again", expect.any(Function)],
     ])
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     const [, , [, tryAgain]] = errorNotificationCall(h.context) as [
@@ -293,7 +293,7 @@ suite("login command", function () {
     expect(errorNotificationCall(h.context)).toEqual([
       "Could not reach courses.mooc.fi. Check your internet connection.",
       error,
-      ["Try again", expect.any(Function)],
+      ["Try Again", expect.any(Function)],
     ])
   })
 

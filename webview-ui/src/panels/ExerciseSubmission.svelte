@@ -163,9 +163,9 @@
 
   <div class="actions">
     {#if primaryAction === "runInBackground"}
-      <Button onclick={closePanel}>Run in background</Button>
+      <Button onclick={closePanel}>Run in Background</Button>
     {:else if primaryAction === "keepWaiting"}
-      <Button disabled={isKeepWaitingRequested} onclick={keepWaiting}>Keep waiting</Button>
+      <Button disabled={isKeepWaitingRequested} onclick={keepWaiting}>Keep Waiting</Button>
       <Button secondary onclick={closePanel}>Close</Button>
     {:else if primaryAction === "openNext"}
       <Button icon="arrow-right" onclick={() => runExerciseAction("openNextExercise")}>
@@ -186,13 +186,13 @@
     {#if view.submissionUrl}
       {@const submissionUrl = view.submissionUrl}
       <Button secondary onclick={() => showInBrowser(submissionUrl)}>
-        Show submission in browser
+        Show Submission in Browser
       </Button>
     {/if}
     {#if view.solutionUrl}
       {@const solutionUrl = view.solutionUrl}
       <Button secondary onclick={() => showInBrowser(solutionUrl)}>
-        Show model solution in browser
+        Show Model Solution in Browser
       </Button>
     {/if}
   </div>

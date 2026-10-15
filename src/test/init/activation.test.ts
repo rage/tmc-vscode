@@ -388,7 +388,7 @@ suite("activation with unusable storage", function () {
     expect(message).toMatch(
       /^TestMyCode could not start\. Preparing the extension's files failed: /,
     )
-    expect(buttons.map((button) => button.title)).toEqual(["Show Details", "Show logs"])
+    expect(buttons.map((button) => button.title)).toEqual(["Show Details", "Show Logs"])
   })
 })
 

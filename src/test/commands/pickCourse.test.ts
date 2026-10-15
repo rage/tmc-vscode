@@ -74,7 +74,7 @@ suite("pickCourse", function () {
     const [prompt, ...items] = selectItem.mock.calls[0] ?? []
     expect(prompt).toEqual({ title: "Course Details", placeHolder: "Which course?" })
     expect(items).toEqual([
-      { label: "The Python Course", value: idOfTmcCourse(1), description: "TMC Server" },
+      { label: "The Python Course", value: idOfTmcCourse(1), description: "tmc.mooc.fi" },
       {
         label: "Introduction to CS",
         value: idOfMoocCourse("course-uuid"),

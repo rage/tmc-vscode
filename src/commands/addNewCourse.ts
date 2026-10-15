@@ -17,7 +17,7 @@ import { MOOC_BACKEND_URL } from "../config/constants"
 import { Logger, openWebLink } from "../utilities"
 import { downloadExercisesOfCourse } from "./downloadExercisesOfCourse"
 
-const TITLE = "Add New Course"
+const TITLE = "Add Course"
 
 /** What accepting a row of the pick does. */
 type Choice =
@@ -57,7 +57,7 @@ function courseItem(
  * Lets the user pick a course from either backend and adds it.
  *
  * courses.mooc.fi lists only the courses the user is enrolled in, so they come first and add in
- * one step. TMC Server hides thousands of courses behind its organizations, so picking one of
+ * one step. tmc.mooc.fi hides thousands of courses behind its organizations, so picking one of
  * those opens a second step, with Back, listing its courses. The rows appear once both backends
  * have answered, so that none moves under the pointer as the other backend's arrive.
  */
@@ -157,10 +157,11 @@ function pickCourse(
   const renderFirstStep = (): void => {
     // Naming the missing backend in the placeholder keeps it visible for as long as the pick
     // is open, so a half-populated list is never mistaken for a complete one.
+    const search = `Search your courses or ${backendName("tmc")} organizations`
     quickPick.placeholder =
       unavailable.length === 0
-        ? "Search your courses or TMC organizations"
-        : `Search your courses or TMC organizations (${unavailableNames().join(" and ")} unavailable)`
+        ? search
+        : `${search} (${unavailableNames().join(" and ")} unavailable)`
     if (moocRows === undefined || tmcRows === undefined) {
       quickPick.items = []
       quickPick.busy = true

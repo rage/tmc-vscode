@@ -137,7 +137,7 @@ export async function showExerciseActions(
     ...(isLoggedIn
       ? [
           action("$(cloud-upload) Submit Solution", "tmc.submitExercise"),
-          action("$(link) Share via Paste", "tmc.pasteExercise"),
+          action("$(link) Share Exercise via Paste", "tmc.pasteExercise"),
           separator("Restore"),
           action("$(history) Download Old Submission…", "tmc.downloadOldSubmission"),
           action("$(discard) Reset Exercise", "tmc.resetExercise"),

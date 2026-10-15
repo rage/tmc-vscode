@@ -18,7 +18,7 @@ vsCodeTest(
       await coursesView.addNewCourse("Python Course")
       await coursesView.runContextMenuCommand(
         coursesView.row("Python Course"),
-        "Go To Course Details...",
+        "Show Course Details...",
       )
       await expect(courseHeading).toBeVisible()
     })

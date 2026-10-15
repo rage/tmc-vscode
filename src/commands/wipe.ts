@@ -26,7 +26,7 @@ export async function wipe(
       "Extension data can't be wiped now because a course workspace is open. \
 Please close the workspace and any related files before running this command again.",
       [
-        "Close workspace",
+        "Close Workspace",
         (): void => {
           vscode.commands.executeCommand("workbench.action.closeFolder")
         },

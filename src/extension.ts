@@ -297,7 +297,7 @@ async function activateInner(
   const sessionExpiredWarning = (): void => {
     accountStatus?.markSessionExpired()
     const logIn: NotificationButton = [
-      "Log in",
+      "Log In",
       (): void => void vscode.commands.executeCommand("tmc.showMoocLogin"),
     ]
     dialog.warningNotification(SESSION_ENDED_MESSAGE, ...(canOfferLogin ? [logIn] : []))

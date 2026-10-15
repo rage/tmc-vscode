@@ -96,7 +96,7 @@ suite("openWorkspace command", function () {
     await openWorkspace(actionContext(), "python-course", "tmc")
 
     expect(dialogMock.confirm).toHaveBeenCalledWith(
-      "Open the TMC Server course workspace?",
+      "Open the tmc.mooc.fi course workspace?",
       expect.objectContaining({ confirmLabel: "Open Workspace" }),
     )
     expect(executeCommand).not.toHaveBeenCalledWith("vscode.openFolder", expect.anything())

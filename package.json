@@ -112,7 +112,7 @@
     "commands": [
       {
         "command": "tmc.addNewCourse",
-        "title": "Add New Course...",
+        "title": "Add Course...",
         "category": "TestMyCode",
         "icon": "$(add)"
       },
@@ -123,7 +123,7 @@
       },
       {
         "command": "tmc.cleanExercise",
-        "title": "Clean Exercise",
+        "title": "Delete Generated Files",
         "category": "TestMyCode"
       },
       {
@@ -144,7 +144,7 @@
       },
       {
         "command": "tmc.courseDetails",
-        "title": "Go To Course Details...",
+        "title": "Show Course Details...",
         "category": "TestMyCode"
       },
       {
@@ -822,12 +822,12 @@
       {
         "view": "tmcView",
         "when": "test-my-code:Initialized && !test-my-code:LoggedIn",
-        "contents": "Log in with your courses.mooc.fi account to download, test and submit exercises.\n[Log In](command:tmc.showMoocLogin)\n[Read the installation guide](https://www.mooc.fi/en/installation/vscode)"
+        "contents": "Log in with your courses.mooc.fi account to download, test and submit exercises.\n[Log In](command:tmc.showMoocLogin)\n[Read the Installation Guide](https://www.mooc.fi/en/installation/vscode)"
       },
       {
         "view": "tmcView",
         "when": "test-my-code:Initialized && test-my-code:LoggedIn",
-        "contents": "You have not added any courses yet.\n[Add a Course](command:tmc.addNewCourse)"
+        "contents": "You have not added any courses yet.\n[Add Course](command:tmc.addNewCourse)"
       }
     ],
     "walkthroughs": [
@@ -850,7 +850,7 @@
           {
             "id": "addCourse",
             "title": "Add a course",
-            "description": "Pick the course you are taking.\n[Add a Course](command:tmc.addNewCourse)",
+            "description": "Pick the course you are taking.\n[Add Course](command:tmc.addNewCourse)",
             "media": {
               "markdown": "media/walkthrough/add-course.md"
             },

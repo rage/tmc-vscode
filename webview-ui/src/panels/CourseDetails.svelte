@@ -134,7 +134,7 @@
     {#if materialUrl}
       <p>
         <Button secondary icon="link-external" onclick={() => openInBrowser(materialUrl)}>
-          Course material
+          Course Material
         </Button>
       </p>
     {/if}

@@ -82,7 +82,7 @@ export function courseSelectionItems(
  * A class that provides a centralized interface to user dialogue.
  */
 export default class Dialog {
-  private static readonly _logsButton: NotificationButton = ["Show logs", (): void => Logger.show()]
+  private static readonly _logsButton: NotificationButton = ["Show Logs", (): void => Logger.show()]
 
   private _reportSessionLost: ((cause: Error) => void) | undefined
 
@@ -155,7 +155,7 @@ export default class Dialog {
    * the rest of the sentence and any buttons its class prescribes.
    *
    * The notification carries the sentence and nothing else: the error's diagnostics —
-   * details, cause chain and stack — go to the output channel behind the "Show logs"
+   * details, cause chain and stack — go to the output channel behind the "Show Logs"
    * button, which {@link Logger} writes in full.
    */
   public async reportError(message: string, error: Error): Promise<void> {
