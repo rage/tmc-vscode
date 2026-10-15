@@ -82,7 +82,7 @@ export async function downloadOldSubmission(
         return Ok.EMPTY
       }
 
-      const submitFirst = await confirmSubmitBeforeDestructiveAction(actionContext, {
+      const submitFirst = await confirmSubmitBeforeDestructiveAction(actionContext, exercise, {
         message: `Restore this submission of ${exercise.exerciseSlug}?`,
         replacement: "the submission",
         verb: "Restore",

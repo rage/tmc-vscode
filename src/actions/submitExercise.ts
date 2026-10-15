@@ -36,6 +36,7 @@ import type { MoocStoredStanding } from "../utilities/apiData"
 import { moocStoredStanding } from "../utilities/apiData"
 import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import { checkAiUse } from "./checkAiUse"
+import { fingerprintStudentFiles, recordSubmittedFingerprint } from "./submittedState"
 import type { ReadyActionContext } from "./types"
 
 /** What a backend answered a submission with, reduced to what the shared flow acts on. */
@@ -362,6 +363,7 @@ export async function submitExercise(
     if (saved.err) {
       return saved
     }
+    const fingerprint = await fingerprintStudentFiles(actionContext, exercise)
     const submission: Submission = {
       panel: {
         id: nextPanelId(),
@@ -380,6 +382,7 @@ export async function submitExercise(
     submissionViews.open(submission.panel)
 
     const outcome = await submit(submission)
+    recordSubmittedFingerprint(exerciseId, outcome.ok ? fingerprint : undefined)
     if (outcome.err) {
       Logger.error("Exercise submission failed", outcome.val)
       const error = toWebviewError(outcome.val)
