@@ -4,7 +4,6 @@ import type { MoocDeviceLogin } from "../../shared/langsSchema"
 import { backendName } from "../../shared/lib"
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import type { NotificationButton } from "../api/dialog"
 import {
   ConnectionError,
   DeviceLoginDeniedError,
@@ -98,19 +97,11 @@ export async function login(actionContext: ReadyActionContext): Promise<LoginOut
     return "failed"
   }
 
+  dialog.statusMessage(`Logged in to ${SITE}.`)
   // A login that restores an expired session finds the user's courses still added.
-  const hasCourses = actionContext.startup.userData.getCourses().length > 0
-  void dialog.notification(
-    `Logged in to ${SITE}.`,
-    ...(hasCourses
-      ? []
-      : [
-          [
-            "Add new course",
-            (): void => void vscode.commands.executeCommand("tmc.addNewCourse"),
-          ] satisfies NotificationButton,
-        ]),
-  )
+  if (actionContext.startup.userData.getCourses().length === 0) {
+    void vscode.commands.executeCommand("tmc.addNewCourse")
+  }
   void refreshEverything(actionContext, { silent: true }).catch((e) =>
     Logger.error("Refresh after login failed", e),
   )

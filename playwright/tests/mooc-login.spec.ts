@@ -4,6 +4,7 @@ import { MOCK_BACKEND_URL, mockUserCode } from "../../backend/mockSession"
 import { vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import { MoocLoginPage } from "../pages/mooc-login"
+import { QuickPickPage } from "../pages/quick-pick"
 
 // E2E of the courses.mooc.fi device-flow login, the extension's only login. The
 // mock's OAuth endpoints (backend/mooc/oauth.ts) are not part of the vendored
@@ -33,16 +34,20 @@ vsCodeTest(
     })
 
     await vsCodeTest.step("the mock approves and the login is confirmed", async () => {
-      await expect(coursesView.notificationToast("Logged in to courses.mooc.fi.")).toBeVisible()
+      await expect(coursesView.statusBarMessage("Logged in to courses.mooc.fi.")).toBeVisible()
       await expect(moocLoginPage.waitingNotification()).toBeHidden()
       // A modal stays until answered, so with the flow over, none was ever raised.
       await expect(moocLoginPage.modalDialog()).toHaveCount(0)
     })
 
-    await vsCodeTest.step("the enrolled courses are now offered", async () => {
-      const quickPick = await coursesView.openAddCourseQuickPick()
-      await quickPick.expectItem("MOOC Python Course")
-    })
+    await vsCodeTest.step(
+      "with no course added, the login goes on to the enrolled courses",
+      async () => {
+        const quickPick = new QuickPickPage(page)
+        await quickPick.waitForTitle("Add New Course")
+        await quickPick.expectItem("MOOC Python Course")
+      },
+    )
   },
 )
 
@@ -135,7 +140,8 @@ vsCodeTest.describe(() => {
     const moocLoginPage = new MoocLoginPage(page, webview)
 
     await moocLoginPage.gotoFromCoursesView()
-    await expect(moocLoginPage.notificationToast("Logged in to courses.mooc.fi.")).toBeVisible()
+    await expect(moocLoginPage.statusBarMessage("Logged in to courses.mooc.fi.")).toBeVisible()
+    await page.keyboard.press("Escape")
 
     await page.getByRole("button", { name: "Accounts" }).click()
     await expect(page.getByRole("menuitem", { name: /courses\.mooc\.fi/ })).toBeVisible()

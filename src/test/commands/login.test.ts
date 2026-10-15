@@ -161,23 +161,23 @@ suite("login command", function () {
 
     h.logins[0]?.finish(Ok(undefined))
     expect(await outcome).toBe("loggedIn")
-    expect(h.context.dialog.notification).toHaveBeenCalledWith("Logged in to courses.mooc.fi.", [
-      "Add new course",
-      expect.any(Function),
-    ])
+    expect(h.context.dialog.statusMessage).toHaveBeenCalledWith("Logged in to courses.mooc.fi.")
+    expect(h.context.dialog.notification).not.toHaveBeenCalled()
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith("tmc.addNewCourse")
     expect(refreshEverything).toHaveBeenCalledWith(h.context, { silent: true })
   })
 
-  test("a login that finds courses already added offers no course to add", async function () {
+  test("a login that finds courses already added goes to no course pick", async function () {
     const h = harness()
     vi.mocked(h.context.startup.userData.getCourses).mockReturnValue([tmcLocalCourse()])
     const { outcome } = await runToCode(h)
 
     h.logins[0]?.finish(Ok(undefined))
     expect(await outcome).toBe("loggedIn")
-    expect(h.context.dialog.notification).toHaveBeenCalledExactlyOnceWith(
+    expect(h.context.dialog.statusMessage).toHaveBeenCalledExactlyOnceWith(
       "Logged in to courses.mooc.fi.",
     )
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith("tmc.addNewCourse")
   })
 
   test("without a page carrying the code, offers to copy it before opening the page", async function () {

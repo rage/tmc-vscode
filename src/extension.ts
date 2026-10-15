@@ -44,7 +44,12 @@ import {
 } from "./config/constants"
 import Settings from "./config/settings"
 import { UserData } from "./config/userdata"
-import { FileSystemError, InitializationError, presentationFor } from "./errors"
+import {
+  FileSystemError,
+  InitializationError,
+  presentationFor,
+  SESSION_ENDED_MESSAGE,
+} from "./errors"
 import * as init from "./init"
 import { TmcPanel } from "./panels/TmcPanel"
 import { createSessionExpiryTracker } from "./sessionExpiryTracker"
@@ -149,10 +154,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       void vscode.commands.executeCommand("setContext", "test-my-code:Degraded", true)
     }
     const message = e instanceof Error ? e.message : String(e)
-    vscode.window.showErrorMessage(
-      `Fatal error during TestMyCode extension initialization: ${message}`,
-    )
-    Logger.show()
+    void vscode.window
+      .showErrorMessage(`TestMyCode could not start. ${message}`, "Show Logs")
+      .then((picked) => picked && Logger.show())
   }
 }
 
@@ -296,10 +300,7 @@ async function activateInner(
       "Log in",
       (): void => void vscode.commands.executeCommand("tmc.showMoocLogin"),
     ]
-    dialog.warningNotification(
-      "Your session has expired, please log in.",
-      ...(canOfferLogin ? [logIn] : []),
-    )
+    dialog.warningNotification(SESSION_ENDED_MESSAGE, ...(canOfferLogin ? [logIn] : []))
   }
 
   // Seeded from the startup check above; shared with the background poll further down.
@@ -541,14 +542,7 @@ async function activateInner(
   if (readyContext && versionChange === "installed") {
     await vscode.commands.executeCommand("tmc.showWelcome")
   } else if (readyContext && versionChange === "updated") {
-    void dialog.notification(`TestMyCode was updated to ${EXTENSION_VERSION}.`, [
-      "What's New",
-      (): void =>
-        void vscode.commands.executeCommand(
-          "markdown.showPreview",
-          vscode.Uri.joinPath(context.extensionUri, "CHANGELOG.md"),
-        ),
-    ])
+    dialog.statusMessage(`TestMyCode was updated to ${EXTENSION_VERSION}.`)
   }
 
   initializationErrors.notify(!readyContext)

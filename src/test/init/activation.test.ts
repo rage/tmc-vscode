@@ -406,9 +406,18 @@ suite("activation that throws", function () {
     })
     vi.spyOn(Logger, "show").mockImplementation(() => {})
 
+    const showErrorMessage = vi
+      .spyOn(vscode.window, "showErrorMessage")
+      .mockResolvedValue(undefined)
+
     await activate(createContext())
 
     expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(true)
+    expect(showErrorMessage).toHaveBeenCalledExactlyOnceWith(
+      "TestMyCode could not start. boom",
+      "Show Logs",
+    )
+    expect(Logger.show).not.toHaveBeenCalled()
   })
 })
 
@@ -796,27 +805,20 @@ suite("the first start of a new version", function () {
     expect(recorded.panelTypes).toEqual([])
   })
 
-  // Opening a panel unasked on every update covers whatever the user was doing.
-  test("an update offers the changelog in a notification instead", async function () {
+  // Opening a panel, or even a toast, unasked on every update covers whatever the user was doing.
+  test("an update says so in the status bar alone", async function () {
     sessionState.previousVersion = "1.0.0"
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
-    const context = createContext()
+    const setStatusBarMessage = vi.spyOn(vscode.window, "setStatusBarMessage")
 
-    await activate(context)
+    await activate(createContext())
 
     expect(executeCommand).not.toHaveBeenCalledWith("tmc.showWelcome")
-    const [message, whatsNew] = vi.mocked(vscode.window.showInformationMessage).mock.calls[0] as [
-      string,
-      { title: string; callback: () => void },
-    ]
-    expect(message).toBe(`TestMyCode was updated to ${EXTENSION_VERSION}.`)
-    expect(whatsNew.title).toBe("What's New")
-    whatsNew.callback()
-    expect(executeCommand).toHaveBeenCalledWith(
-      "markdown.showPreview",
-      vscode.Uri.joinPath(context.extensionUri, "CHANGELOG.md"),
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
+    expect(setStatusBarMessage).toHaveBeenCalledWith(
+      `TestMyCode was updated to ${EXTENSION_VERSION}.`,
+      expect.any(Number),
     )
-    expect(executeCommand).not.toHaveBeenCalledWith("tmc.showWelcome")
   })
 
   test("a patch release says nothing", async function () {
@@ -904,7 +906,7 @@ suite("status bar", function () {
     await (langsStub.handlers.get("logout") as (expected: boolean) => Promise<void>)(false)
 
     expect(showWarningMessage).toHaveBeenCalledExactlyOnceWith(
-      "Your session has expired, please log in.",
+      "Your courses.mooc.fi session has ended. Log in again to continue.",
     )
   })
 })

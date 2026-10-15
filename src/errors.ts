@@ -204,6 +204,9 @@ export function isSessionLost(error: Error): boolean {
   )
 }
 
+/** What every surface that tells of a lost session says. */
+export const SESSION_ENDED_MESSAGE = `Your ${backendName("mooc")} session has ended. Log in again to continue.`
+
 export function presentationFor(error: Error): ErrorPresentation {
   const backend = error instanceof BaseError ? error.backend : undefined
   const reported = userSentence(error)
@@ -225,7 +228,7 @@ export function presentationFor(error: Error): ErrorPresentation {
   }
   if (isSessionLost(error)) {
     return {
-      message: `Your ${backendName("mooc")} session has ended. Log in again to continue.`,
+      message: SESSION_ENDED_MESSAGE,
       actions: [{ label: "Log in", command: "tmc.showMoocLogin" }],
     }
   }
