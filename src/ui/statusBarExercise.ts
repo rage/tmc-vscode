@@ -145,7 +145,7 @@ export async function showExerciseActions(
       : []),
     separator("Course"),
     action("$(arrow-right) Open Next Exercise", "tmc.openNextExercise"),
-    ...(isLoggedIn && course.ok
+    ...(course.ok
       ? [action("$(list-tree) Reveal in Courses View", "tmc.revealInCoursesView")]
       : []),
   )

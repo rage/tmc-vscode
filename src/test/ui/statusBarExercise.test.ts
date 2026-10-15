@@ -261,7 +261,7 @@ suite("showExerciseActions", function () {
 
     await showExerciseActions(new Dialog(), harness().sources, false)
 
-    expect(offered()).toEqual(["Run Tests", "Open Next Exercise"])
+    expect(offered()).toEqual(["Run Tests", "Open Next Exercise", "Reveal in Courses View"])
   })
 
   test("leaves the reveal out for a course that is not stored", async function () {

@@ -176,15 +176,28 @@ suite("CoursesTree", function () {
   })
 
   // An empty view is what lets `viewsWelcome` explain why there is nothing in it.
-  test("is empty until logged in, and until activation gives it courses", function () {
+  test("is empty until activation gives it courses", function () {
     courses = [tmcCourse()]
-    expect(tree.getChildren()).toEqual([])
-    tree.setLoggedIn(true)
     expect(tree.getChildren()).toEqual([])
     tree.setSource(source())
     expect(tree.getChildren()).toHaveLength(1)
+  })
+
+  // A lost session must not take the exercises on disk away: they open and test offline.
+  test("keeps listing the courses logged out, and says what logging in adds", function () {
+    courses = [tmcCourse()]
+    tree.setSource(source())
     tree.setLoggedIn(false)
-    expect(tree.getChildren()).toEqual([])
+    settle()
+
+    expect(tree.getChildren()).toHaveLength(1)
+    expect(view.message).toBe(
+      "Log in to courses.mooc.fi to download and submit exercises. The exercises on this computer still open and run their tests.",
+    )
+
+    tree.setLoggedIn(true)
+    settle()
+    expect(view.message).toBe("")
   })
 
   test("lists the courses as roots, read afresh on every refresh", function () {
@@ -499,10 +512,6 @@ suite("CoursesTree", function () {
     show(tmcCourse({ newExercises: [7] }), moocCourse({ newExercises: ["a"] }))
 
     expect(view.badge).toEqual({ value: 2, tooltip: "2 new exercises" })
-
-    tree.setLoggedIn(false)
-    settle()
-    expect(view.badge).toBeUndefined()
   })
 
   test("updates the badge when the stored courses change", function () {

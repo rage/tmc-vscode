@@ -379,7 +379,7 @@
         },
         {
           "command": "tmc.courseDetails",
-          "when": "test-my-code:Initialized && test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized"
         },
         {
           "command": "tmc.downloadNewExercises",
@@ -399,7 +399,7 @@
         },
         {
           "command": "tmc.myCourses",
-          "when": "test-my-code:Initialized && test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized"
         },
         {
           "command": "tmc.pasteExercise",
@@ -479,11 +479,11 @@
         },
         {
           "command": "tmc.removeCourse",
-          "when": "test-my-code:Initialized && test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized"
         },
         {
           "command": "tmc.revealInCoursesView",
-          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise"
         },
         {
           "command": "tmc.testing.submitExercise",
@@ -503,7 +503,7 @@
         },
         {
           "command": "tmc.closeCompletedExercises",
-          "when": "test-my-code:Initialized && test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized"
         },
         {
           "command": "tmc.closeExercises",
@@ -643,17 +643,17 @@
         {
           "command": "tmc.openCourseWorkspace",
           "group": "inline@3",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^course\\./"
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^course\\./"
         },
         {
           "command": "tmc.courseDetails",
           "group": "1_course@1",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^course\\./"
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^course\\./"
         },
         {
           "command": "tmc.openCourseWorkspace",
           "group": "1_course@2",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^course\\./"
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^course\\./"
         },
         {
           "command": "tmc.downloadAllExercises",
@@ -673,17 +673,17 @@
         {
           "command": "tmc.dismissNewExercises",
           "group": "2_exercises@3",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^course\\..*\\.hasNew(\\.|$)/"
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^course\\..*\\.hasNew(\\.|$)/"
         },
         {
           "command": "tmc.closeCompletedExercises",
           "group": "2_exercises@4",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^course\\..*\\.hasCompleted(\\.|$)/"
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^course\\..*\\.hasCompleted(\\.|$)/"
         },
         {
           "command": "tmc.removeCourse",
           "group": "9_remove@1",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^course\\./"
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^course\\./"
         },
         {
           "command": "tmc.downloadExercises",
@@ -693,7 +693,7 @@
         {
           "command": "tmc.openExercises",
           "group": "inline@2",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^part\\..*hasClosed(\\.|$)/"
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^part\\..*hasClosed(\\.|$)/"
         },
         {
           "command": "tmc.downloadExercises",
@@ -708,7 +708,7 @@
         {
           "command": "tmc.closeExercises",
           "group": "1_exercises@3",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^part\\..*hasOpened(\\.|$)/"
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^part\\..*hasOpened(\\.|$)/"
         },
         {
           "command": "tmc.downloadExercises",
@@ -718,12 +718,12 @@
         {
           "command": "tmc.openExercises",
           "group": "inline@2",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\.closed(\\.|$)/"
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\.closed(\\.|$)/"
         },
         {
           "command": "tmc.testExercise",
           "group": "inline@3",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\.opened(\\.|$)/"
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\.opened(\\.|$)/"
         },
         {
           "command": "tmc.submitExercise",
@@ -743,12 +743,12 @@
         {
           "command": "tmc.closeExercises",
           "group": "1_exercises@3",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && (viewItem =~ /^exercise\\.opened(\\.|$)/ || viewItem =~ /^exercise\\./ && listMultiSelection)"
+          "when": "view == tmcView && test-my-code:Initialized && (viewItem =~ /^exercise\\.opened(\\.|$)/ || viewItem =~ /^exercise\\./ && listMultiSelection)"
         },
         {
           "command": "tmc.testExercise",
           "group": "2_check@1",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\.opened(\\.|$)/ && !listMultiSelection"
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\.opened(\\.|$)/ && !listMultiSelection"
         },
         {
           "command": "tmc.submitExercise",
@@ -773,7 +773,7 @@
         {
           "command": "tmc.cleanExercise",
           "group": "4_clean@1",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\.opened(\\.|$)/ && !listMultiSelection"
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\.opened(\\.|$)/ && !listMultiSelection"
         }
       ],
       "testing/item/context": [

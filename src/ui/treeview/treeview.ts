@@ -317,9 +317,9 @@ interface CourseView {
 }
 
 /**
- * The Courses view: the user's courses, their parts and exercises while logged in, and
- * nothing otherwise, so that package.json's `viewsWelcome` explains the empty, logged-out
- * and failed states.
+ * The Courses view: the user's courses, their parts and exercises, logged in or not, since
+ * the exercises on disk stay usable; with none, package.json's `viewsWelcome` explains the
+ * empty, logged-out and failed states.
  */
 export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeItem> {
   private readonly _changed = new vscode.EventEmitter<undefined>()
@@ -428,10 +428,15 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
       counts.length > 0 ? { value: newCount + updateCount, tooltip: counts.join(", ") } : undefined
     const unreachable = [...this._unreachableBackends].map((backend) => backendName(backend))
     // An empty message hides it; the typings do not admit `undefined`.
-    this._view.message =
-      unreachable.length > 0 && views.length > 0
-        ? `${unreachable.join(" and ")} could not be reached. Showing the exercises saved on this computer; deadlines may be out of date.`
-        : ""
+    if (views.length === 0) {
+      this._view.message = ""
+    } else if (!this._isLoggedIn) {
+      this._view.message = `Log in to ${backendName("mooc")} to download and submit exercises. The exercises on this computer still open and run their tests.`
+    } else if (unreachable.length > 0) {
+      this._view.message = `${unreachable.join(" and ")} could not be reached. Showing the exercises saved on this computer; deadlines may be out of date.`
+    } else {
+      this._view.message = ""
+    }
     if (this._view.visible) {
       this._changed.fire(undefined)
     } else {
@@ -564,7 +569,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
   }
 
   private _visibleCourses(): LocalCourseData[] {
-    return this._isLoggedIn && this._source ? this._source.getCourses() : []
+    return this._source ? this._source.getCourses() : []
   }
 }
 
