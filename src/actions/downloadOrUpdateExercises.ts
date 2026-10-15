@@ -27,6 +27,11 @@ interface DownloadLeg {
   result: Result<ExerciseDownloads, Error>
 }
 
+interface DownloadOptions {
+  isUpdate?: boolean
+  isUnrequested?: boolean
+}
+
 interface DownloadResults {
   successful: ExerciseIdentifier[]
   failed: ExerciseIdentifier[]
@@ -43,14 +48,16 @@ interface DownloadResults {
  * @param courseId Course the exercises belong to, when they all share one. Passed
  *   to the mooc bulk download so it can fetch just that course's slides instead of
  *   scanning every enrolled course. Omit when the exercises span multiple courses.
- * @param isUnrequested For a download the user did not ask for, such as an automatic
- *   update: its progress shows in the status bar, not in a cancellable notification.
+ * @param options `isUpdate` for exercises already on disk, which the warning then says were
+ *   not updated; `isUnrequested` for a download the user did not ask for, such as an
+ *   automatic update, whose progress shows in the status bar, not in a cancellable
+ *   notification.
  */
 export async function downloadOrUpdateExercises(
   actionContext: ReadyActionContext,
   exerciseIds: ExerciseIdentifier[],
   courseId?: CourseIdentifier,
-  isUnrequested = false,
+  options: DownloadOptions = {},
 ): Promise<Result<DownloadResults & Warned, Error>> {
   Logger.info("Downloading exercises", exerciseIds)
   if (exerciseIds.length === 0) {
@@ -61,7 +68,7 @@ export async function downloadOrUpdateExercises(
     return claim
   }
   try {
-    return Ok(await download(actionContext, exerciseIds, courseId, claim.val, isUnrequested))
+    return Ok(await download(actionContext, exerciseIds, courseId, claim.val, options))
   } finally {
     claim.val.releaseAll()
   }
@@ -72,7 +79,7 @@ async function download(
   exerciseIds: ExerciseIdentifier[],
   courseId: CourseIdentifier | undefined,
   claim: ExerciseClaim,
-  isUnrequested: boolean,
+  options: DownloadOptions,
 ): Promise<DownloadResults & Warned> {
   const { dialog, settings } = actionContext
   const { langs } = actionContext.startup
@@ -156,7 +163,7 @@ async function download(
       })
       return finished
     },
-    isUnrequested
+    options.isUnrequested
       ? { location: vscode.ProgressLocation.Window }
       : { cancellable: true, location: vscode.ProgressLocation.Notification },
   )
@@ -202,7 +209,9 @@ async function download(
   if (results.failed.length > 0) {
     const names = results.failed.map((id) => exerciseName(actionContext, id))
     warnings.push({
-      headline: `Failed to download ${describeExercises(names)}.`,
+      headline: options.isUpdate
+        ? `Failed to update ${describeExercises(names)}. Retry from the Courses view.`
+        : `Failed to download ${describeExercises(names)}.`,
       error: failureCause(failedLegs, exerciseReasons),
     })
   }

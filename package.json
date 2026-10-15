@@ -303,7 +303,7 @@
       },
       {
         "command": "tmc.updateCourseExercises",
-        "title": "Update Exercises",
+        "title": "Update",
         "category": "TestMyCode",
         "icon": "$(sync)"
       },
@@ -714,6 +714,11 @@
           "command": "tmc.downloadExercises",
           "group": "inline@1",
           "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\.(missing|new|expired|downloadFailed)(\\.|$)/"
+        },
+        {
+          "command": "tmc.updateCourseExercises",
+          "group": "inline@1",
+          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\..*\\.updateable(\\.|$)/ && !listMultiSelection"
         },
         {
           "command": "tmc.openExercises",

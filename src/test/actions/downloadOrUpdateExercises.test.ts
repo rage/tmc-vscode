@@ -135,7 +135,9 @@ suite("downloadOrUpdateExercises action", function () {
     tmcMockValues.downloadTmcExercises = createDownloadResult([helloWorld], [])
 
     await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
-    await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID, true)
+    await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID, {
+      isUnrequested: true,
+    })
 
     expect(
       vi.mocked(dialogMock.progressNotification).mock.calls.map(([, , options]) => options),
@@ -143,6 +145,21 @@ suite("downloadOrUpdateExercises action", function () {
       { cancellable: true, location: vscode.ProgressLocation.Notification },
       { location: vscode.ProgressLocation.Window },
     ])
+  })
+
+  test("says a failed update failed to update, and where to retry it", async function () {
+    tmcMockValues.downloadTmcExercises = Err(new Error("boom"))
+
+    const result = await downloadOrUpdateExercises(
+      actionContext(),
+      [idOfTmcExercise(1)],
+      TEST_COURSE_ID,
+      { isUpdate: true },
+    )
+
+    expect(result.unwrap().warnings[0]?.headline).toBe(
+      "Failed to update the exercise hello_world. Retry from the Courses view.",
+    )
   })
 
   test("should not call TMC-langs if no exercises are given", async function () {

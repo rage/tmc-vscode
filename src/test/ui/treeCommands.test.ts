@@ -22,7 +22,7 @@ import {
   targetRows,
   updateCourseExercises,
 } from "../../ui/treeview/treeCommands"
-import { ExerciseTreeItem, PartTreeItem } from "../../ui/treeview/treeview"
+import { CourseTreeItem, ExerciseTreeItem, PartTreeItem } from "../../ui/treeview/treeview"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -59,6 +59,10 @@ function row(courseId: CourseIdentifier, id: number | string, status: RowStatus)
         : makeMoocKind({ moocExerciseId: id }),
     status,
   })
+}
+
+function courseRow(courseId: CourseIdentifier): CourseTreeItem {
+  return Object.assign(Object.create(CourseTreeItem.prototype) as CourseTreeItem, { courseId })
 }
 
 function part(...children: ExerciseTreeItem[]): PartTreeItem {
@@ -276,10 +280,23 @@ suite("Courses view commands", function () {
     updateablesRegistry.setMany([[tmcCourse, updates]])
     const actionContext = context()
 
-    await updateCourseExercises(actionContext, tmcCourse)
+    await updateCourseExercises(actionContext, courseRow(tmcCourse))
 
     expect(downloadExerciseUpdates).toHaveBeenCalledWith(actionContext, [
       { courseId: tmcCourse, exerciseId: updates[0] },
+    ])
+  })
+
+  test("update on an exercise row updates that exercise alone", async function () {
+    updateablesRegistry.setMany([
+      [tmcCourse, [makeTmcKind({ tmcExerciseId: 5 }), makeTmcKind({ tmcExerciseId: 6 })]],
+    ])
+    const actionContext = context()
+
+    await updateCourseExercises(actionContext, row(tmcCourse, 6, "opened"))
+
+    expect(downloadExerciseUpdates).toHaveBeenCalledWith(actionContext, [
+      { courseId: tmcCourse, exerciseId: makeTmcKind({ tmcExerciseId: 6 }) },
     ])
   })
 
@@ -287,7 +304,7 @@ suite("Courses view commands", function () {
     vi.mocked(downloadExerciseUpdates).mockResolvedValueOnce(Err(new BottleneckError(BUSY)))
     const actionContext = context()
 
-    await updateCourseExercises(actionContext, tmcCourse)
+    await updateCourseExercises(actionContext, courseRow(tmcCourse))
 
     expect(actionContext.dialog.notification).toHaveBeenCalledWith(BUSY)
   })

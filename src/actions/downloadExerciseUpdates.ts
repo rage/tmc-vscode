@@ -24,7 +24,7 @@ interface ExerciseUpdate {
  *
  * For exercises not on disk yet, see `downloadCourseExercises`.
  *
- * @param isUnrequested See `downloadOrUpdateExercises`.
+ * @param isUnrequested See `downloadOrUpdateExercises`'s options.
  */
 export async function downloadExerciseUpdates(
   actionContext: ReadyActionContext,
@@ -59,7 +59,7 @@ export async function downloadExerciseUpdates(
       actionContext,
       updates.map((x) => x.exerciseId),
       otherCourses.length === 0 ? onlyCourse : undefined,
-      isUnrequested,
+      { isUpdate: true, isUnrequested },
     )
     if (downloaded.err) {
       return downloaded

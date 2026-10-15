@@ -151,15 +151,21 @@ export async function closeCompletedExercises(
   })
 }
 
-/** Downloads the updates the last check found for the course's exercises. */
+/**
+ * Downloads the updates the last check found for the course's exercises, or for the one
+ * exercise when `row` is an exercise's.
+ */
 export async function updateCourseExercises(
   actionContext: ReadyActionContext,
-  courseId: CourseIdentifier,
+  row: CoursesTreeItem,
 ): Promise<void> {
+  const { courseId } = row
+  const exerciseIds =
+    row instanceof ExerciseTreeItem ? [row.exerciseId] : updateablesRegistry.get(courseId)
   await withOperation(actionContext.dialog, { failure: "Failed to update the exercises." }, () =>
     downloadExerciseUpdates(
       actionContext,
-      updateablesRegistry.get(courseId).map((exerciseId) => ({ courseId, exerciseId })),
+      exerciseIds.map((exerciseId) => ({ courseId, exerciseId })),
     ),
   )
 }

@@ -193,8 +193,8 @@ export function registerCommands(
     treeCommands.closeExercises(readyContext, treeCommands.targetRows(row, rows)),
   )
 
-  register("tmc.updateCourseExercises", async (target: CourseTreeItem) =>
-    treeCommands.updateCourseExercises(readyContext, target.courseId),
+  register("tmc.updateCourseExercises", async (row: CoursesTreeItem) =>
+    treeCommands.updateCourseExercises(readyContext, row),
   )
 
   register("tmc.downloadNewExercises", async (target?: CourseTarget) =>

@@ -616,7 +616,9 @@ suite("reported once: the Courses view and course details", function () {
 
     await run("tmc.updateCourseExercises", courseRow())
 
-    expect(shown).toEqual(["error: Failed to download the exercise loops."])
+    expect(shown).toEqual([
+      "error: Failed to update the exercise loops. Retry from the Courses view.",
+    ])
   })
 
   test("a failed new-exercise download from the palette is one warning", async function () {
@@ -641,7 +643,9 @@ suite("reported once: the Courses view and course details", function () {
 
     await run("tmc.updateExercises", "loud")
 
-    expect(shown).toEqual(["error: Failed to download the exercise loops."])
+    expect(shown).toEqual([
+      "error: Failed to update the exercise loops. Retry from the Courses view.",
+    ])
   })
 
   test("an update check that throws is one notification, or none when silent", async function () {
