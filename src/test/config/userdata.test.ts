@@ -58,6 +58,7 @@ function moocCourse(
     title: "Mooc Python",
     description: "Mooc description",
     organization: "mooc",
+    aiPolicy: "not_set",
     exercises: [
       moocExercise({ id: "exercise-uuid-1", name: "mooc_hello" }),
       moocExercise({ id: "exercise-uuid-2", name: "mooc_other" }),

@@ -27,6 +27,7 @@ const moocCourse: MoocLocalCourseData = {
   title: "A courses.mooc.fi course",
   description: null,
   organization: "mooc",
+  aiPolicy: "not_set",
   exercises: [],
   availablePoints: 0,
   awardedPoints: 0,
