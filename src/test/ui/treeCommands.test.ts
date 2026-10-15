@@ -23,6 +23,7 @@ import {
 } from "../../ui/treeview/treeCommands"
 import { ExerciseTreeItem, PartTreeItem } from "../../ui/treeview/treeview"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
+import { showExerciseSourceFile } from "../../window/exerciseSourceFile"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -38,6 +39,9 @@ vi.mock("../../actions/openExercises", () => ({
 }))
 vi.mock("../../actions/closeExercises", () => ({
   closeExercises: vi.fn(async (_context: unknown, ids: unknown[]) => Ok(ids)),
+}))
+vi.mock("../../window/exerciseSourceFile", () => ({
+  showExerciseSourceFile: vi.fn(async () => true),
 }))
 
 const BUSY = "Some of these exercises are already downloading."
@@ -166,6 +170,50 @@ suite("Courses view commands", function () {
         tmcCourse,
       ],
     ])
+  })
+
+  test("open of one exercise row shows its main source file, even when it was open", async function () {
+    const onDisk = { id: makeTmcKind({ tmcExerciseId: 2 }), exerciseSlug: "two" }
+    const actionContext = {
+      ...createMockActionContext({
+        startup: {
+          workspaceManager: { getExercise: () => onDisk } as unknown as WorkspaceManager,
+        },
+      }),
+      dialog: createDialogMock()[0],
+    }
+
+    await openExercises(actionContext, [row(tmcCourse, 2, "opened")])
+
+    expect(downloadAndOpenExercises).not.toHaveBeenCalled()
+    const [langs, shown] = vi.mocked(showExerciseSourceFile).mock.calls[0] ?? []
+    expect(langs).toBe(actionContext.startup.langs)
+    expect(shown).toBe(onDisk)
+  })
+
+  test("download of one exercise row shows its main source file once it is on disk", async function () {
+    const onDisk = { id: makeTmcKind({ tmcExerciseId: 2 }), exerciseSlug: "two" }
+    const actionContext = {
+      ...createMockActionContext({
+        startup: {
+          workspaceManager: { getExercise: () => onDisk } as unknown as WorkspaceManager,
+        },
+      }),
+      dialog: createDialogMock()[0],
+    }
+
+    await downloadExercises(actionContext, [row(tmcCourse, 2, "missing")])
+
+    expect(vi.mocked(showExerciseSourceFile).mock.calls[0]?.[1]).toBe(onDisk)
+  })
+
+  test("open of several rows, or of a part, shows no file", async function () {
+    const actionContext = context()
+
+    await openExercises(actionContext, [row(tmcCourse, 1, "closed"), row(tmcCourse, 3, "missing")])
+    await openExercises(actionContext, [part(row(tmcCourse, 1, "closed"))])
+
+    expect(showExerciseSourceFile).not.toHaveBeenCalled()
   })
 
   test("open warns past the open-exercise limit, offering to close the completed ones", async function () {

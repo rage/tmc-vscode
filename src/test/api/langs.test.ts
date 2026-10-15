@@ -683,6 +683,25 @@ suite("Langs class arg building", function () {
     expect(onLogout).not.toHaveBeenCalled()
   })
 
+  test("getStudentFilePaths reads the exercise's packaging configuration", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, () =>
+      Ok(
+        dataOutput("exercise-packaging-configuration", {
+          student_file_paths: ["src", "lib/helper.py"],
+          exercise_file_paths: ["test"],
+        }),
+      ),
+    )
+    const res = await langs.getStudentFilePaths("/p/hello_world")
+    expect(calls[0]?.args).toEqual([
+      "get-exercise-packaging-configuration",
+      "--exercise-path",
+      "/p/hello_world",
+    ])
+    expect(res.unwrap()).toEqual(["src", "lib/helper.py"])
+  })
+
   test("listLocalExercises asks for every course and both backends in one call", async function () {
     const langs = newLangs()
     const tmcExercise = {

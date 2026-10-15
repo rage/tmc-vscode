@@ -494,6 +494,18 @@ export default class Langs {
   }
 
   /**
+   * The files and folders of an exercise that hold the student's work, relative to the
+   * exercise folder, as its language plugin and `.tmcproject.yml` define them.
+   */
+  public async getStudentFilePaths(exercisePath: string): Promise<Result<string[], Error>> {
+    const res = await this._fetch(
+      { args: ["get-exercise-packaging-configuration", "--exercise-path", exercisePath] },
+      "exercise-packaging-configuration",
+    )
+    return res.map((configuration) => configuration.student_file_paths)
+  }
+
+  /**
    * Lists every exercise in the projects directory, from both backends, in one call.
    *
    * Each entry is tagged with the backend it came from and carries the ids needed to

@@ -17,9 +17,10 @@ import type { ReadyActionContext } from "../../actions/types"
 import { withOperation } from "../../api/withOperation"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { countOf } from "../../utilities"
+import { showExerciseSourceFile } from "../../window/exerciseSourceFile"
 import { updateablesRegistry } from "../updateablesRegistry"
-import type { CoursesTreeItem, ExerciseTreeItem } from "./treeview"
-import { exerciseItems, isDownloadable } from "./treeview"
+import type { CoursesTreeItem } from "./treeview"
+import { ExerciseTreeItem, exerciseItems, isDownloadable } from "./treeview"
 
 /**
  * The rows a Courses view command acts on: the whole selection when the clicked row is part
@@ -38,7 +39,10 @@ export function targetRows(
   return selection?.includes(clicked) ? [...selection] : [clicked]
 }
 
-/** Downloads the exercises among `rows`, and under them, that are not on disk yet. */
+/**
+ * Downloads the exercises among `rows`, and under them, that are not on disk yet. A single
+ * exercise row also gets its main source file shown.
+ */
 export async function downloadExercises(
   actionContext: ReadyActionContext,
   rows: CoursesTreeItem[],
@@ -50,9 +54,13 @@ export async function downloadExercises(
       () => downloadCourseExercises(actionContext, courseId, ids),
     )
   }
+  await showSourceFileOfOnlyExercise(actionContext, rows)
 }
 
-/** Opens the exercises among `rows`, and under them, downloading any that are not on disk. */
+/**
+ * Opens the exercises among `rows`, and under them, downloading any that are not on disk. A
+ * single exercise row also gets its main source file shown, which is what clicking one does.
+ */
 export async function openExercises(
   actionContext: ReadyActionContext,
   rows: CoursesTreeItem[],
@@ -75,6 +83,22 @@ export async function openExercises(
           (): void => void closeCompletedExercises(actionContext, courseId),
         ],
       )
+    }
+  }
+  await showSourceFileOfOnlyExercise(actionContext, rows)
+}
+
+/** Shows the main source file of the exercise when `rows` is one exercise row now on disk. */
+async function showSourceFileOfOnlyExercise(
+  actionContext: ReadyActionContext,
+  rows: CoursesTreeItem[],
+): Promise<void> {
+  const { langs, workspaceManager } = actionContext.startup
+  const [only, ...others] = rows
+  if (only instanceof ExerciseTreeItem && others.length === 0) {
+    const exercise = workspaceManager.getExercise(only.exerciseId)
+    if (exercise) {
+      await showExerciseSourceFile(langs, exercise)
     }
   }
 }

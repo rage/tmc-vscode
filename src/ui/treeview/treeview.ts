@@ -226,6 +226,7 @@ export class ExerciseTreeItem extends vscode.TreeItem {
       ...(exercise.passed ? ["passed"] : []),
       ...(exercise.isUpdateable ? ["updateable"] : []),
     ].join(".")
+    this.command = { command: "tmc.openExercises", title: "Open", arguments: [this] }
 
     const { now, locale } = context
     const deadline = shownDeadline(exercise)

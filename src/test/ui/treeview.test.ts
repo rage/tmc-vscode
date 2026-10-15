@@ -354,6 +354,16 @@ suite("CoursesTree", function () {
       expect(item.exerciseUri).toBeUndefined()
     })
 
+    test("a click opens it, downloading it first when it is not on disk", function () {
+      const item = onlyExercise()
+
+      expect(item.command).toEqual({
+        command: "tmc.openExercises",
+        title: "Open",
+        arguments: [item],
+      })
+    })
+
     test("new is told apart from merely not downloaded", function () {
       const item = onlyExercise({}, { newExercises: [1] })
 
