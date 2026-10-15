@@ -274,12 +274,13 @@ function createContext(): vscode.ExtensionContext {
 }
 
 /**
- * An extension context whose global storage path is unwritable: the folder the
- * workspace files go in is occupied by a regular file.
+ * An extension context whose exercises folder, where the workspace files go, is occupied by a
+ * regular file.
  */
 function createContextWithBlockedStorage(): vscode.ExtensionContext {
   const context = createContext()
-  fs.writeFileSync(path.join(context.globalStorageUri.fsPath, "workspaces"), "not a folder")
+  cliSettings.projectsDirectory = path.join(context.globalStorageUri.fsPath, "projects")
+  fs.writeFileSync(cliSettings.projectsDirectory, "not a folder")
   return context
 }
 
@@ -450,7 +451,7 @@ suite("initialization error deduplication", function () {
       .mocked(vscode.window.showErrorMessage)
       .mock.calls.map((call) => String(call[0]))
     expect(toasts).toEqual([
-      "TestMyCode started with a problem. Checking your login failed: tmc-langs-cli is unreachable.",
+      "TestMyCode could not start. Checking your login failed: tmc-langs-cli is unreachable.",
     ])
   })
 })
@@ -746,6 +747,43 @@ suite("notifications from the CLI", function () {
   })
 })
 
+suite("activation in a course workspace kept where earlier versions kept them", function () {
+  const workspaceName = "python-course (mooc).code-workspace"
+
+  beforeEach(resetActivationRecording)
+
+  afterEach(function () {
+    Object.defineProperty(vscode.workspace, "workspaceFile", {
+      value: undefined,
+      configurable: true,
+    })
+    disposeActivatedContexts()
+    vi.restoreAllMocks()
+  })
+
+  test("reopens the window on the course workspace in the exercises folder", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const context = createContext()
+    const legacyFile = path.join(context.globalStorageUri.fsPath, "workspaces", workspaceName)
+    fs.mkdirSync(path.dirname(legacyFile))
+    fs.writeFileSync(legacyFile, JSON.stringify({ folders: [{ path: ".tmc" }] }))
+    Object.defineProperty(vscode.workspace, "workspaceFile", {
+      value: vscode.Uri.file(legacyFile),
+      configurable: true,
+    })
+
+    await activate(context)
+
+    const movedFile = path.join(cliSettings.projectsDirectory, "workspaces", workspaceName)
+    expect(fs.existsSync(movedFile)).toBe(true)
+    expect(executeCommand).toHaveBeenCalledWith(
+      "vscode.openFolder",
+      expect.objectContaining({ fsPath: movedFile }),
+    )
+    expect(recorded.isCourseViewFilled).toBe(false)
+  })
+})
+
 suite("activation in a workspace the migration cannot use in place", function () {
   const workspaceName = "python-course.code-workspace"
 
@@ -765,7 +803,7 @@ suite("activation in a workspace the migration cannot use in place", function ()
 
     await activate(context)
 
-    const workspaceFile = path.join(context.globalStorageUri.fsPath, "workspaces", workspaceName)
+    const workspaceFile = path.join(cliSettings.projectsDirectory, "workspaces", workspaceName)
     expect(fs.existsSync(workspaceFile)).toBe(true)
     expect(executeCommand).toHaveBeenCalledWith(
       "vscode.openFolder",

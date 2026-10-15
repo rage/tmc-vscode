@@ -151,11 +151,11 @@ const tempDirFixture =
   }
 
 interface CustomTestFixtures {
-  /** VS Code's `--user-data-dir`, where the extension's global storage and course workspace files live. */
+  /** VS Code's `--user-data-dir`, where the extension's global storage lives. */
   userDataDir: string
   /** TMC_LANGS_CONFIG_DIR. */
   configDir: string
-  /** TMC_LANGS_DEFAULT_PROJECTS_DIR. */
+  /** TMC_LANGS_DEFAULT_PROJECTS_DIR; see `exercisesFolder` for the folder tmc-langs makes of it. */
   projectsDir: string
   vsCode: ElectronApplication
   /** The URLs VS Code has been asked to open in a browser, which no test really opens. */

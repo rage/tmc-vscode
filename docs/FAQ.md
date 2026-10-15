@@ -1,4 +1,4 @@
-**Please do not remove/move/delete/close the (.tmc) folder in course workspaces, otherwise the TMC extension will not work properly.**
+**Please do not remove/move/delete/close the TestMyCode folder at the top of course workspaces, otherwise the TMC extension will not work properly.**
 
 # FAQ
 

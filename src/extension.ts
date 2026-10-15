@@ -1,5 +1,6 @@
 import * as path from "path"
 
+import * as fs from "fs-extra"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
@@ -27,7 +28,7 @@ import {
 } from "./api/moocAuthenticationProvider"
 import WorkspaceManager, {
   ensureCourseWorkspaceFile,
-  ensureWorkspaceRootFile,
+  ensureWorkspaceRoot,
 } from "./api/workspaceManager"
 import { WorkspaceTrustGate } from "./api/workspaceTrustGate"
 import { login, logout, refreshEverything } from "./commands"
@@ -43,6 +44,7 @@ import {
   TMC_LANGS_DL_URL,
   TMC_LANGS_VERSION,
 } from "./config/constants"
+import Resources from "./config/resources"
 import Settings from "./config/settings"
 import { UserData } from "./config/userdata"
 import {
@@ -125,13 +127,18 @@ function startupFailures(
  * the window there, which is what lets the next activation migrate its stored data.
  */
 async function reopenInMigratedWorkspace(
-  workspaceFileFolder: string,
+  langs: Langs,
   workspaceName: string,
 ): Promise<Result<void, Error>> {
-  const workspaceFile = path.join(workspaceFileFolder, workspaceName)
+  const settings = await langs.listSettings()
+  if (settings.err) {
+    return settings
+  }
+  const resources = new Resources(settings.val.projects_dir)
+  const workspaceFile = path.join(resources.workspaceFileFolder, workspaceName)
   try {
     await ensureCourseWorkspaceFile(workspaceFile)
-    await ensureWorkspaceRootFile(workspaceFileFolder)
+    await ensureWorkspaceRoot(resources.projectsDirectory)
   } catch (e) {
     return new Err(new FileSystemError(e, "Failed to create the migrated workspace files"))
   }
@@ -229,7 +236,8 @@ async function activateInner(
   // before needs its answer.
   const initialAuthCheck = authState.refresh({ timeout: 15000 })
 
-  const workspaceFileFolder = path.join(context.globalStorageUri.fsPath, "workspaces")
+  // Where course workspace files lived before they moved into the exercises folder.
+  const legacyWorkspaceFileFolder = path.join(context.globalStorageUri.fsPath, "workspaces")
 
   // migrate data between versions
   if (langs.ok) {
@@ -240,7 +248,7 @@ async function activateInner(
       vscode.workspace.getConfiguration(),
     )
     if (migration.kind === "needsReload") {
-      const reopened = await reopenInMigratedWorkspace(workspaceFileFolder, migration.workspaceName)
+      const reopened = await reopenInMigratedWorkspace(langs.val, migration.workspaceName)
       if (reopened.ok) {
         Logger.warn("Extension expected to restart to migrate the open workspace")
         return
@@ -273,9 +281,27 @@ async function activateInner(
     }
   }
 
-  const resources = await init.resourceInitialization(storage, tmcDataPath, workspaceFileFolder)
-  if (resources.err) {
+  const resources = await init.resourceInitialization(
+    storage,
+    tmcDataPath,
+    legacyWorkspaceFileFolder,
+  )
+  // Without an exercises folder the failure that left it unknown is the one to report.
+  if (resources.err && tmcDataPath !== undefined) {
     reportInitializationError("Preparing the extension's files", resources.val)
+  }
+  const openWorkspaceFile = vscode.workspace.workspaceFile?.fsPath
+  if (
+    resources.ok &&
+    openWorkspaceFile &&
+    path.dirname(openWorkspaceFile) === legacyWorkspaceFileFolder
+  ) {
+    const movedTo = path.join(resources.val.workspaceFileFolder, path.basename(openWorkspaceFile))
+    if (await fs.pathExists(movedTo)) {
+      Logger.warn("Reopening the course workspace in its new place")
+      await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(movedTo))
+      return
+    }
   }
 
   // Armed only while logged in: a session can only drop silently for someone who has one.

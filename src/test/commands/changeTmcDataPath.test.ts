@@ -2,15 +2,23 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import type { BackendKind } from "../../../shared/lib"
 import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
+import type WorkspaceManager from "../../api/workspaceManager"
 import { changeTmcDataPath } from "../../commands/changeTmcDataPath"
-import type Resources from "../../config/resources"
+import Resources from "../../config/resources"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions/moveExtensionDataPath", () => ({
   moveExtensionDataPath: vi.fn(),
+}))
+
+// jest-mock-vscode ships no `env` namespace, and `Resources` reads `env.appName`.
+vi.mock("vscode", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  env: { appName: "Visual Studio Code" },
 }))
 
 const OLD_PATH = "/tmp/tmcdata/projects"
@@ -22,9 +30,10 @@ interface Harness {
   errors: string[]
 }
 
-/** `"none"` stands for an activation tmc-langs gave no exercise directory. */
-function harness(projectsDirectory: string | "none" = OLD_PATH): Harness {
+/** @param openCourse The course whose workspace the window has open. */
+function harness(openCourse?: { slug: string; backend: BackendKind }): Harness {
   const [dialog] = createDialogMock()
+  const resources = new Resources(OLD_PATH)
   const notifications: string[] = []
   const errors: string[] = []
   dialog.notification = vi.fn(async (message: string) => {
@@ -37,9 +46,11 @@ function harness(projectsDirectory: string | "none" = OLD_PATH): Harness {
     context: {
       ...createMockActionContext({
         startup: {
-          resources: {
-            projectsDirectory: projectsDirectory === "none" ? undefined : projectsDirectory,
-          } as Resources,
+          resources,
+          workspaceManager: {
+            activeCourse: openCourse?.slug,
+            activeCourseBackend: openCourse?.backend,
+          } as WorkspaceManager,
         },
       }),
       dialog,
@@ -86,21 +97,6 @@ suite("Change TMC data path command", function () {
     expect(notifications[0]).toContain("not empty")
   })
 
-  test("says why it cannot run when tmc-langs reported no exercise directory", async function () {
-    const { context, notifications, errors } = harness("none")
-
-    await changeTmcDataPath(context)
-
-    expect(context.dialog.errorNotification).toHaveBeenCalledExactlyOnceWith(
-      "Moving the exercises folder is unavailable: the TestMyCode tools did not report where the exercises folder is.",
-      expect.any(Error),
-    )
-    expect(vscode.window.showOpenDialog).not.toHaveBeenCalled()
-    expect(actions.moveExtensionDataPath).not.toHaveBeenCalled()
-    expect(notifications).toEqual([])
-    expect(errors).toEqual([])
-  })
-
   test("reports a move whose rescan failed as done, with a warning", async function () {
     vi.mocked(actions.moveExtensionDataPath).mockResolvedValue(
       Ok({
@@ -132,5 +128,32 @@ suite("Change TMC data path command", function () {
 
     expect(notifications).toEqual([])
     expect(errors).toEqual(["Failed to move the exercises folder."])
+  })
+
+  test("reopens the open course workspace from the folder it moved to", async function () {
+    const { context } = harness({ slug: "python-course", backend: "mooc" })
+    vi.mocked(actions.moveExtensionDataPath).mockImplementation(async (actionContext) => {
+      actionContext.startup.resources.projectsDirectory = CHOSEN_PATH
+      return Ok({ projectsDirectory: CHOSEN_PATH, rescanError: undefined })
+    })
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await changeTmcDataPath(context)
+
+    expect(executeCommand).toHaveBeenCalledWith(
+      "vscode.openFolder",
+      vscode.Uri.file(`${CHOSEN_PATH}/workspaces/python-course (mooc).code-workspace`),
+    )
+  })
+
+  test("reopens nothing when no course workspace is open", async function () {
+    vi.mocked(actions.moveExtensionDataPath).mockResolvedValue(
+      Ok({ projectsDirectory: CHOSEN_PATH, rescanError: undefined }),
+    )
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await changeTmcDataPath(harness().context)
+
+    expect(executeCommand).not.toHaveBeenCalledWith("vscode.openFolder", expect.anything())
   })
 })

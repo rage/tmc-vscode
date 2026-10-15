@@ -17,11 +17,11 @@ const EXERCISE_CONTENTS = "def hello()"
 
 vsCodeTest(
   "unsaved changes to the course workspace file stop Run Tests, with the reason",
-  async ({ page, userDataDir, webview }) => {
+  async ({ page, projectsDir, webview }) => {
     const coursesView = new CoursesViewPage(page, webview)
     const explorerPage = new ExplorerPage(page)
     const tmc = new TmcPage(page, webview)
-    const workspaceFolder = courseWorkspaceFolder(userDataDir)
+    const workspaceFolder = courseWorkspaceFolder(projectsDir)
     const workspaceFile = (): string | undefined =>
       fs.readdirSync(workspaceFolder).find((f) => f.endsWith(".code-workspace"))
 
@@ -33,7 +33,7 @@ vsCodeTest(
       await expect(coursesView.row(EXERCISE)).toHaveAccessibleName(/, open,/)
       await coursesView.runInlineAction(coursesView.row(COURSE), "Open Course Workspace")
       await expect
-        .poll(() => courseWorkspaceSettings(userDataDir))
+        .poll(() => courseWorkspaceSettings(projectsDir))
         .toMatchObject({ "editor.inlineSuggest.enabled": false })
       await explorerPage.openPath(EXERCISE_FILE)
       await expect(page.getByText(EXERCISE_CONTENTS)).toBeVisible()
@@ -79,7 +79,7 @@ vsCodeTest(
 
 vsCodeTest(
   "a mooc course that allows AI keeps AI assistance on in its workspace",
-  async ({ page, userDataDir, webview }) => {
+  async ({ page, projectsDir, webview }) => {
     const coursesView = new CoursesViewPage(page, webview)
     const explorerPage = new ExplorerPage(page)
     const testResultsPage = new TestResultsPage(page, webview)
@@ -112,7 +112,7 @@ vsCodeTest(
     )
 
     await vsCodeTest.step("the workspace file turns no AI setting off", async () => {
-      const settings = courseWorkspaceSettings(userDataDir)
+      const settings = courseWorkspaceSettings(projectsDir)
       expect(settings).toBeDefined()
       for (const section of [
         "chat.agent.enabled",

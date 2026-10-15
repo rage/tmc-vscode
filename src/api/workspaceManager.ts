@@ -14,6 +14,7 @@ import {
   HIDE_META_FILES,
   SHOW_META_FILES,
   WATCHER_EXCLUDE,
+  WORKSPACE_FILE_FOLDER_NAME,
   WORKSPACE_ROOT_FILE_NAME,
   WORKSPACE_ROOT_FILE_TEXT,
   WORKSPACE_ROOT_FOLDER_NAME,
@@ -134,20 +135,41 @@ export async function ensureCourseWorkspaceFile(workspaceFilePath: string): Prom
 }
 
 /**
- * Creates the `.tmc` folder every course workspace opens at its root, and the
- * readme inside it.
+ * Prepares the exercises folder to be every course workspace's first folder: writes the
+ * readme into it, and has the folder's own settings hide everything else in it, which the
+ * workspace lists as folders of their own or the student never needs to see.
  *
  * The readme ships with the extension, so an upgrade has to replace an older
- * copy; an unchanged one is left alone rather than rewritten on every startup.
+ * copy; an unchanged file is left alone rather than rewritten on every startup.
  */
-export async function ensureWorkspaceRootFile(workspaceFileFolder: string): Promise<void> {
-  const rootFolder = path.join(workspaceFileFolder, WORKSPACE_ROOT_FOLDER_NAME)
-  await fs.ensureDir(rootFolder)
+export async function ensureWorkspaceRoot(projectsDirectory: string): Promise<void> {
+  await fs.ensureDir(projectsDirectory)
+  const rootFile = path.join(projectsDirectory, WORKSPACE_ROOT_FILE_NAME)
+  await writeIfChanged(rootFile, WORKSPACE_ROOT_FILE_TEXT)
 
-  const rootFile = path.join(rootFolder, WORKSPACE_ROOT_FILE_NAME)
-  const stored = await fs.readFile(rootFile, "utf-8").catch(() => undefined)
-  if (stored !== WORKSPACE_ROOT_FILE_TEXT) {
-    await fs.writeFile(rootFile, WORKSPACE_ROOT_FILE_TEXT)
+  const entries = await fs.readdir(projectsDirectory)
+  const hidden = _.union(WORKSPACE_ROOT_HIDDEN_ENTRIES, entries)
+    .filter((entry) => entry !== WORKSPACE_ROOT_FILE_NAME)
+    .toSorted()
+  const settingsFile = path.join(projectsDirectory, ".vscode", "settings.json")
+  const stored = await fs.readFile(settingsFile, "utf-8").catch(() => "{}")
+  const edits = jsonc.modify(
+    stored,
+    ["files.exclude"],
+    Object.fromEntries(hidden.map((entry) => [entry, true])),
+    { formattingOptions: { insertSpaces: true, tabSize: 2 } },
+  )
+  await fs.ensureDir(path.dirname(settingsFile))
+  await writeIfChanged(settingsFile, jsonc.applyEdits(stored, edits))
+}
+
+/** Hidden in the exercises folder even before they exist; course folders are created later. */
+const WORKSPACE_ROOT_HIDDEN_ENTRIES = ["tmc", "mooc", WORKSPACE_FILE_FOLDER_NAME, ".vscode"]
+
+async function writeIfChanged(file: string, text: string): Promise<void> {
+  const stored = await fs.readFile(file, "utf-8").catch(() => undefined)
+  if (stored !== text) {
+    await fs.writeFile(file, text)
   }
 }
 
@@ -359,7 +381,10 @@ export default class WorkspaceManager implements vscode.Disposable {
     return this._exercisesById.get(ExerciseIdentifier.key(id))
   }
 
-  /** The open workspace folders that are exercises themselves; never `.tmc` or one added by hand. */
+  /**
+   * The open workspace folders that are exercises themselves; never the exercises folder at the
+   * top, or one added by hand.
+   */
   public exerciseFolders(): vscode.Uri[] {
     return (vscode.workspace.workspaceFolders ?? [])
       .map((folder) => folder.uri)
@@ -459,10 +484,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     return Ok.EMPTY
   }
 
-  /**
-   * Deletes every course's `.code-workspace` file, leaving the `.tmc` root folder
-   * each of them opens at its top.
-   */
+  /** Deletes every course's `.code-workspace` file. */
   public async deleteAllWorkspaceFiles(): Promise<Result<void, Error>> {
     const workspaceFileFolder = this._resources.workspaceFileFolder
     try {
@@ -734,8 +756,8 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   /**
-   * Refreshes current active course workspace by first making sure that the `.tmc` folder is at
-   * the top and then lists all that course's open exercises in alphanumeric order.
+   * Refreshes current active course workspace by first making sure that the exercises folder is
+   * at the top and then lists all that course's open exercises in alphanumeric order.
    */
   private _refreshActiveCourseWorkspace(): Promise<Result<void, Error>> {
     return this._workspaceFileWrites.run(() => this._replaceWorkspaceFolders())
@@ -759,8 +781,12 @@ export default class WorkspaceManager implements vscode.Disposable {
       )
       .toSorted((a, b) => a.exerciseSlug.localeCompare(b.exerciseSlug))
       .map((x) => ({ uri: x.uri }))
-    const correctStructure = [{ uri: rootFolder }, ...openExercises]
+    const correctStructure = [
+      { uri: rootFolder, name: WORKSPACE_ROOT_FOLDER_NAME },
+      ...openExercises,
+    ]
     if (
+      workspaceFolders[0]?.name === WORKSPACE_ROOT_FOLDER_NAME &&
       _.zip(correctStructure, workspaceFolders).every(([a, b]) => a?.uri.fsPath === b?.uri.fsPath)
     ) {
       Logger.debug("Workspace refresh was a no-op.")
@@ -768,7 +794,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     Logger.info("Refreshing workspace structure in the current workspace")
-    if (workspaceFolders[0]?.name !== WORKSPACE_ROOT_FOLDER_NAME) {
+    if (workspaceFolders[0]?.uri.fsPath !== rootFolder.fsPath) {
       Logger.warn("Fixing incorrect root folder. This may restart the extension.")
     }
 
