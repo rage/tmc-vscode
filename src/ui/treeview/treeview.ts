@@ -52,8 +52,10 @@ export type CoursesTreeItem = CourseTreeItem | PartTreeItem | ExerciseTreeItem
  * One of the user's courses in the Courses view.
  *
  * `contextValue` is `course.<backend>` followed by the flags package.json's `viewItem`
- * clauses match on: `.hasNew` (exercises the user has not downloaded), `.hasUpdates` and
- * `.hasCompleted` (passed exercises still open).
+ * clauses match on: `.hasNew` (exercises announced as new), `.hasMissing` (exercises not
+ * downloaded that can still be submitted), `.hasUpdates` and `.hasCompleted` (passed
+ * exercises still open). The order is part of the contract: the inline Download All shows
+ * only where `.hasMissing` directly follows the backend, i.e. without `.hasNew`.
  */
 export class CourseTreeItem extends vscode.TreeItem {
   public readonly courseId: CourseIdentifier
@@ -79,6 +81,7 @@ export class CourseTreeItem extends vscode.TreeItem {
     const newCount = LocalCourseData.getNewExercises(course).length
     const updateCount = exercises.filter((ex) => ex.isUpdateable).length
     const hasCompleted = exercises.some((ex) => ex.passed && ex.status === "opened")
+    const hasMissing = exercises.some((ex) => ex.status === "missing" || ex.status === "new")
     const disabled = LocalCourseData.isDisabled(course)
     const points = pointsText(course.data.awardedPoints, course.data.availablePoints)
     const backend = backendName(course.kind)
@@ -89,6 +92,7 @@ export class CourseTreeItem extends vscode.TreeItem {
     this.contextValue = [
       `course.${course.kind}`,
       ...(newCount > 0 ? ["hasNew"] : []),
+      ...(hasMissing ? ["hasMissing"] : []),
       ...(updateCount > 0 ? ["hasUpdates"] : []),
       ...(hasCompleted ? ["hasCompleted"] : []),
     ].join(".")

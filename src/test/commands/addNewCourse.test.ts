@@ -8,12 +8,16 @@ import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import { addNewCourse } from "../../commands/addNewCourse"
+import { downloadExercisesOfCourse } from "../../commands/downloadExercisesOfCourse"
 import type { UserData } from "../../config/userdata"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions/addNewCourse", () => ({
   addNewCourse: vi.fn(async () => Ok.EMPTY),
+}))
+vi.mock("../../commands/downloadExercisesOfCourse", () => ({
+  downloadExercisesOfCourse: vi.fn(async () => {}),
 }))
 
 const organizations = [
@@ -221,12 +225,23 @@ suite("Add New Course command", function () {
       expect.any(Function),
       undefined,
     )
-    const [message, [label, open]] = vi.mocked(context.dialog.notification).mock.calls[0] as [
-      string,
-      [string, () => void],
-    ]
-    expect([message, label]).toEqual(["Added Shared Slug Course.", "Open Course"])
-    open()
+    const [message, [label, downloadAndOpen], [detailsLabel, details]] = vi.mocked(
+      context.dialog.notification,
+    ).mock.calls[0] as [string, [string, () => void], [string, () => void]]
+    expect([message, label, detailsLabel]).toEqual([
+      "Added Shared Slug Course.",
+      "Download and Open Course",
+      "Course Details",
+    ])
+    downloadAndOpen()
+    await flush()
+    expect(downloadExercisesOfCourse).toHaveBeenCalledExactlyOnceWith(
+      context,
+      courseId,
+      "startingParts",
+    )
+    expect(executeCommand).toHaveBeenCalledWith("tmc.openCourseWorkspace", courseId)
+    details()
     expect(executeCommand).toHaveBeenCalledWith("tmc.courseDetails", courseId)
     expect(quickPick.isDisposed).toBe(true)
   })

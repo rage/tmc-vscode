@@ -154,6 +154,12 @@
         "icon": "$(cloud-download)"
       },
       {
+        "command": "tmc.downloadAllExercises",
+        "title": "Download All Exercises...",
+        "category": "TestMyCode",
+        "icon": "$(cloud-download)"
+      },
+      {
         "command": "tmc.downloadOldSubmission",
         "title": "Download Old Submission...",
         "category": "TestMyCode"
@@ -377,6 +383,10 @@
         },
         {
           "command": "tmc.downloadNewExercises",
+          "when": "test-my-code:Initialized && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.downloadAllExercises",
           "when": "test-my-code:Initialized && test-my-code:LoggedIn"
         },
         {
@@ -621,6 +631,11 @@
           "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^course\\..*\\.hasNew(\\.|$)/"
         },
         {
+          "command": "tmc.downloadAllExercises",
+          "group": "inline@1",
+          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^course\\.[a-z]+\\.hasMissing(\\.|$)/"
+        },
+        {
           "command": "tmc.updateCourseExercises",
           "group": "inline@2",
           "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^course\\..*\\.hasUpdates(\\.|$)/"
@@ -639,6 +654,11 @@
           "command": "tmc.openCourseWorkspace",
           "group": "1_course@2",
           "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^course\\./"
+        },
+        {
+          "command": "tmc.downloadAllExercises",
+          "group": "2_exercises@0",
+          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^course\\..*\\.hasMissing(\\.|$)/"
         },
         {
           "command": "tmc.downloadNewExercises",

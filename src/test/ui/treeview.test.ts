@@ -231,6 +231,12 @@ suite("CoursesTree", function () {
     expect(tooltipOf(item)).toContain("2 new exercises")
   })
 
+  test("a course with exercises not downloaded is marked for downloading them all", function () {
+    const [item] = show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))
+
+    expect(item?.contextValue).toBe("course.tmc.hasMissing")
+  })
+
   test("a course with a passed exercise still open is marked for closing it", function () {
     workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Open)]
 

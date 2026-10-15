@@ -289,3 +289,28 @@ export function nextExerciseAfter(
     ordered.slice(0, Math.max(index, 0)).find((exercise) => isLeftToDo(exercise))
   return next?.id
 }
+
+/**
+ * The course's exercises that are not on disk and can still be submitted, in the order the
+ * Courses view lists them.
+ *
+ * @param scope `"startingParts"` keeps only the parts the Courses view opens first: every part
+ * of a short course, else the one with the soonest deadline.
+ */
+export function exercisesToDownload(
+  course: LocalCourseData,
+  onDisk: readonly WorkspaceExercise[],
+  now: Date,
+  scope: "all" | "startingParts",
+): ExerciseIdentifier[] {
+  return buildCourseView(course, {
+    onDisk,
+    downloadStatusOf: () => undefined,
+    updateable: [],
+    now,
+  })
+    .filter((part) => scope === "all" || part.isDefaultOpen)
+    .flatMap((part) => part.exercises)
+    .filter((exercise) => exercise.status === "missing" || exercise.status === "new")
+    .map((exercise) => exercise.id)
+}

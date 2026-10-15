@@ -38,6 +38,7 @@ const expectedCommands = [
   "tmc.closeExercises",
   "tmc.updateCourseExercises",
   "tmc.downloadNewExercises",
+  "tmc.downloadAllExercises",
   "tmc.downloadOldSubmission",
   "tmc.logout",
   "tmc.myCourses",

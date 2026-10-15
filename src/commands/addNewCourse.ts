@@ -14,6 +14,7 @@ import type { ReadyActionContext } from "../actions/types"
 import { separator } from "../api/dialog"
 import { withOperation } from "../api/withOperation"
 import { Logger } from "../utilities"
+import { downloadExercisesOfCourse } from "./downloadExercisesOfCourse"
 
 const TITLE = "Add New Course"
 
@@ -91,11 +92,27 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
     () => actions.addNewCourse(actionContext, chosen.organizationSlug, chosen.courseId),
   )
   if (added.ok) {
-    void dialog.notification(`Added ${chosen.name}.`, [
-      "Open Course",
-      (): void => void vscode.commands.executeCommand("tmc.courseDetails", chosen.courseId),
-    ])
+    void dialog.notification(
+      `Added ${chosen.name}.`,
+      [
+        "Download and Open Course",
+        (): void => void downloadAndOpenCourse(actionContext, chosen.courseId),
+      ],
+      [
+        "Course Details",
+        (): void => void vscode.commands.executeCommand("tmc.courseDetails", chosen.courseId),
+      ],
+    )
   }
+}
+
+/** Downloads the exercises a new course starts with, then opens its workspace. */
+async function downloadAndOpenCourse(
+  actionContext: ReadyActionContext,
+  courseId: CourseIdentifier,
+): Promise<void> {
+  await downloadExercisesOfCourse(actionContext, courseId, "startingParts")
+  await vscode.commands.executeCommand("tmc.openCourseWorkspace", courseId)
 }
 
 /** Runs the pick to a course, a login request, or `undefined` when dismissed. */

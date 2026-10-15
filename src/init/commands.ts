@@ -201,6 +201,10 @@ export function registerCommands(
     commands.downloadNewExercises(readyContext, courseIdOf(target)),
   )
 
+  register("tmc.downloadAllExercises", async (target?: CourseTarget) =>
+    commands.downloadExercisesOfCourse(readyContext, courseIdOf(target)),
+  )
+
   register("tmc.downloadOldSubmission", async (target: ExerciseTarget | undefined) =>
     commands.downloadOldSubmission(readyContext, resourceOf(target)),
   )

@@ -12,6 +12,7 @@ import { ExerciseStatus } from "../../api/workspaceManager"
 import type { CourseViewState, PartView } from "../../ui/treeview/courseViewModel"
 import {
   buildCourseView,
+  exercisesToDownload,
   nextExerciseAfter,
   onDiskByCourse,
 } from "../../ui/treeview/courseViewModel"
@@ -387,5 +388,43 @@ suite("nextExerciseAfter", () => {
     ])
 
     expect(nextExerciseAfter(courseData, idOfTmcExercise(1), NOW)).toBeUndefined()
+  })
+})
+
+suite("exercisesToDownload", () => {
+  const fiveParts = course(
+    [1, 2, 3, 4, 5].map((n) =>
+      exercise({
+        id: n,
+        name: `part0${n}-01_ex`,
+        deadline: n === 2 ? "2026-06-08T00:00:00Z" : n === 1 ? "2026-05-01T00:00:00Z" : null,
+      }),
+    ),
+  )
+
+  test("is every exercise not on disk that is not past its deadline", () => {
+    const onDiskNow = [onDisk(3, "part03-01_ex", ExerciseStatus.Closed)]
+
+    expect(exercisesToDownload(fiveParts, onDiskNow, NOW, "all")).toEqual([
+      idOfTmcExercise(2),
+      idOfTmcExercise(4),
+      idOfTmcExercise(5),
+    ])
+  })
+
+  test("in a long course, the starting parts are the one due next", () => {
+    expect(exercisesToDownload(fiveParts, [], NOW, "startingParts")).toEqual([idOfTmcExercise(2)])
+  })
+
+  test("in a short course, the starting parts are all of them", () => {
+    const short = course([
+      exercise({ id: 1, name: "part01-01_ex" }),
+      exercise({ id: 2, name: "part02-01_ex" }),
+    ])
+
+    expect(exercisesToDownload(short, [], NOW, "startingParts")).toEqual([
+      idOfTmcExercise(1),
+      idOfTmcExercise(2),
+    ])
   })
 })
