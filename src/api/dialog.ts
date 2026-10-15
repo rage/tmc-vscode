@@ -89,8 +89,9 @@ export default class Dialog {
   /**
    * Asks the user to confirm an action, in a modal dialog.
    *
-   * @param message The question, naming what the action acts on, e.g. "Close part01-01?".
-   * @param options `confirmLabel` is the verb on the confirm button, e.g. "Close Exercise";
+   * @param message The question, naming what the action acts on, e.g. "Remove Python from your
+   * courses?".
+   * @param options `confirmLabel` is the verb on the confirm button, e.g. "Remove Course";
    * the dialog adds Cancel itself. `detail` says what follows from confirming.
    * @returns Whether the user confirmed. Cancel, Escape and closing the dialog all say no.
    */

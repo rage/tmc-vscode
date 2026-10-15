@@ -32,18 +32,16 @@ function step<T>(name: string, outcome: () => T): () => Promise<T> {
 
 function wipeContext(
   options: {
-    /** Answers to the modal confirmation, then to the typed one. */
-    confirmations?: [boolean, boolean]
+    /** The answer to the typed confirmation. */
+    isConfirmed?: boolean
     noProjectsDirectory?: boolean
     resetSettings?: Result<void, Error>
     wipeDataFromStorage?: Result<void, Error>
     deleteAllWorkspaceFiles?: Result<void, Error>
   } = {},
 ): ReadyActionContext {
-  const confirmations = options.confirmations ?? [true, true]
   const [dialog] = createDialogMock()
-  dialog.confirm = vi.fn(async () => confirmations[0])
-  dialog.explicitConfirmation = vi.fn(async () => confirmations[1])
+  dialog.explicitConfirmation = vi.fn(async () => options.isConfirmed ?? true)
   return {
     ...createMockActionContext({
       startup: {
@@ -135,20 +133,12 @@ suite("Wipe command", function () {
     )
   })
 
-  test("deletes nothing when the user cancels the modal", async function () {
-    const context = wipeContext({ confirmations: [false, true] })
+  test("asks once, by typing, and deletes nothing unless the user types the confirmation", async function () {
+    const context = wipeContext({ isConfirmed: false })
 
     await wipe(context, extensionContext)
 
-    expect(context.dialog.explicitConfirmation).not.toHaveBeenCalled()
-    expect(fs.remove).not.toHaveBeenCalled()
-  })
-
-  test("deletes nothing unless the user also types the confirmation", async function () {
-    const context = wipeContext({ confirmations: [true, false] })
-
-    await wipe(context, extensionContext)
-
+    expect(context.dialog.confirm).not.toHaveBeenCalled()
     expect(context.dialog.explicitConfirmation).toHaveBeenCalledWith(expect.any(String), "DELETE")
     expect(fs.remove).not.toHaveBeenCalled()
   })

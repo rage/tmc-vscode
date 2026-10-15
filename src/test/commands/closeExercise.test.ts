@@ -77,23 +77,13 @@ suite("Close exercise command", function () {
     )
   })
 
-  test("closes a passed exercise without asking", async function () {
-    const { context, confirmation } = harness({ passed: true })
+  test("closes an unfinished exercise without asking: closing loses nothing", async function () {
+    const { context, confirmation } = harness({ passed: false, confirmed: false })
 
     await closeExercise(context, uri)
 
     expect(confirmation).not.toHaveBeenCalled()
     expect(actions.closeExercises).toHaveBeenCalledOnce()
-  })
-
-  test("asks before closing an unfinished exercise, and closes nothing when refused", async function () {
-    const { context, confirmation } = harness({ passed: false, confirmed: false })
-
-    await closeExercise(context, uri)
-
-    expect(confirmation).toHaveBeenCalledOnce()
-    expect(String(confirmation.mock.calls[0]?.[0])).toContain("ex-1")
-    expect(actions.closeExercises).not.toHaveBeenCalled()
   })
 
   test("closes the exercise's editors once the exercise is closed", async function () {

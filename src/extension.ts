@@ -29,7 +29,7 @@ import WorkspaceManager, {
   ensureCourseWorkspaceFile,
   ensureWorkspaceRootFile,
 } from "./api/workspaceManager"
-import { login, logoutConfirmed, refreshEverything } from "./commands"
+import { login, logout, refreshEverything } from "./commands"
 import {
   CLIENT_NAME,
   closedExercisesSettingKey,
@@ -448,7 +448,7 @@ async function activateInner(
     const moocAccount = new MoocAuthenticationProvider({
       isLoggedIn: () => authState.loggedIn,
       login: async () => (await login(readyContext)) === "loggedIn",
-      logout: () => logoutConfirmed(readyContext),
+      logout: () => logout(readyContext),
     })
     authState.subscribe((loggedIn) => moocAccount.setLoggedIn(loggedIn))
     context.subscriptions.push(
