@@ -482,8 +482,12 @@ export default class AiRestriction implements vscode.Disposable {
 
   /** @returns Whether VS Code refused a removal. */
   private async _removeOwnedSettings(): Promise<boolean> {
-    const owned = this._ownedTargets()
+    const recorded = this._state.get<string[]>(OWNED_SECTIONS_KEY)
+    const owned = recorded ?? this._unrecordedTargets()
     if (owned.length === 0) {
+      if (recorded === undefined) {
+        await this._state.update(OWNED_SECTIONS_KEY, [])
+      }
       return false
     }
     // Last: turning it back on restarts the extension host, which would cut off the removals after it.
@@ -510,9 +514,22 @@ export default class AiRestriction implements vscode.Disposable {
         kept.push(key)
       }
     }
-    await this._state.update(OWNED_SECTIONS_KEY, kept.length > 0 ? kept : undefined)
+    await this._state.update(OWNED_SECTIONS_KEY, kept)
     Logger.info("The course allows AI, so its workspace no longer turns AI assistance off.")
     return kept.length > 0 && !this._isDisposed
+  }
+
+  /**
+   * The workspace file's top-level sections that hold {@link AI_OFF_SETTINGS}, taken as this
+   * extension's own when no ownership record exists: 3.5.4 wrote them without keeping one.
+   */
+  private _unrecordedTargets(): string[] {
+    return Object.entries(AI_OFF_SETTINGS)
+      .filter(([section, off]) => {
+        const stored = this._workspace.getStoredWorkspaceSetting(section)
+        return stored !== undefined && holds(stored, off)
+      })
+      .map(([section]) => section)
   }
 
   /**

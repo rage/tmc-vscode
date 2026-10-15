@@ -522,6 +522,47 @@ suite("AI restriction", function () {
 
       expect(workspace.writtenKeys()).toEqual([INLINE_SUGGEST, "chat.disableAIFeatures"])
     })
+
+    suite("with no record of what it wrote, as 3.5.4 kept none", function () {
+      test("removes the workspace file's values that equal its own, the restarting one last", async function () {
+        holdEverySetting(workspace)
+        isAllowed = true
+
+        await restriction.apply()
+
+        expect(workspace.stored.size).toBe(0)
+        expect(workspace.writtenKeys().at(-1)).toBe("chat.disableAIFeatures")
+      })
+
+      test("keeps other values, the student's entries of a per-language map and language blocks", async function () {
+        holdEverySetting(workspace)
+        workspace.stored.set("cody.suggestions.mode", "autocomplete")
+        workspace.stored.set("github.copilot.enable", {
+          ...(AI_OFF_SETTINGS["github.copilot.enable"] as object),
+          rust: true,
+        })
+        workspace.stored.set(keyOf(INLINE_SUGGEST, "python"), false)
+        isAllowed = true
+
+        await restriction.apply()
+
+        expect(Object.fromEntries(workspace.stored)).toEqual({
+          "cody.suggestions.mode": "autocomplete",
+          "github.copilot.enable": { rust: true },
+          [keyOf(INLINE_SUGGEST, "python")]: false,
+        })
+      })
+
+      test("takes them as its own only on the first pass", async function () {
+        isAllowed = true
+        await restriction.apply()
+        workspace.stored.set(INLINE_SUGGEST, false)
+
+        await restriction.apply()
+
+        expect(workspace.stored.get(INLINE_SUGGEST)).toBe(false)
+      })
+    })
   })
 
   suite("live re-apply", function () {
