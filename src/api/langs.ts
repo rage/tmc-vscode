@@ -1133,28 +1133,9 @@ export default class Langs {
     )
   }
 
-  /**
-   * Lists the courses.mooc.fi courses the user is enrolled in. The backend keys
-   * enrollments by (user, course, instance) and can therefore return the same
-   * course twice when a user has two live enrollments of it; since the extension
-   * keys courses by course id, the list is de-duplicated by `id` (keeping the
-   * first occurrence) so the same course never appears — or is added — twice.
-   */
+  /** Lists the courses.mooc.fi courses the user is enrolled in. */
   public async getEnrolledMoocCourses(): Promise<Result<MoocCourse[], Error>> {
-    const res = await this._fetch(
-      { backend: "mooc", args: this._moocCmd("courses") },
-      "mooc-courses",
-    )
-    return res.map((courses) => {
-      const seen = new Set<string>()
-      return courses.filter((course) => {
-        if (seen.has(course.id)) {
-          return false
-        }
-        seen.add(course.id)
-        return true
-      })
-    })
+    return this._fetch({ backend: "mooc", args: this._moocCmd("courses") }, "mooc-courses")
   }
 
   /**

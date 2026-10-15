@@ -226,43 +226,6 @@ suite("Langs class arg building", function () {
     expect(result.unwrap()).toEqual(settings)
   })
 
-  test("getEnrolledMoocCourses de-duplicates courses by id", async function () {
-    // The backend can return the same course twice (two live enrollments of one
-    // course); since the extension keys courses by course id, the list must be
-    // de-duplicated so the same course never shows up — or gets added — twice.
-    const langs = newLangs()
-    const fixtures = [
-      {
-        id: uuid(1),
-        slug: "python-a",
-        name: "python-a",
-        description: null,
-        organization_name: "mooc.fi",
-      },
-      {
-        id: uuid(1),
-        slug: "python-b",
-        name: "python-b",
-        description: null,
-        organization_name: "mooc.fi",
-      },
-      {
-        id: uuid(2),
-        slug: "java",
-        name: "java",
-        description: null,
-        organization_name: "mooc.fi",
-      },
-    ]
-    stubSpawn(langs, () => Ok(dataOutput("mooc-courses", fixtures)))
-    const result = await langs.getEnrolledMoocCourses()
-    expect(result.ok).toBe(true)
-    const courses = result.unwrap()
-    expect(courses.map((c) => c.id)).toEqual([uuid(1), uuid(2)])
-    // the first occurrence is kept
-    expect(courses[0]?.slug).toBe("python-a")
-  })
-
   test("getOldSubmissions builds the mooc command from a mooc exercise id", async function () {
     const langs = newLangs()
     const calls = spyOnSpawn(langs)
