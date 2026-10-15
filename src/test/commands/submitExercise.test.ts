@@ -8,6 +8,7 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { submitExercise } from "../../commands/submitExercise"
+import { OutOfTriesError } from "../../errors"
 import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -50,6 +51,21 @@ suite("Submit exercise command", function () {
 
     expect(actions.submitExercise).toHaveBeenCalledExactlyOnceWith(context, exercise)
     expect(result.ok).toBe(true)
+  })
+
+  test("tells of no tries left as the final score it is, not as a failure", async function () {
+    vi.mocked(actions.submitExercise).mockResolvedValue(
+      Err(new OutOfTriesError("You have no tries left on ex-1, so its 2/3 points are final.")),
+    )
+    const context = contextWith(exercise)
+
+    await submitExercise(context, uri)
+
+    expect(context.dialog.notification).toHaveBeenCalledExactlyOnceWith(
+      "You have no tries left on ex-1, so its 2/3 points are final.",
+    )
+    expect(context.dialog.reportError).not.toHaveBeenCalled()
+    expect(context.dialog.errorNotification).not.toHaveBeenCalled()
   })
 
   test("reports a failed submission under its own headline", async function () {

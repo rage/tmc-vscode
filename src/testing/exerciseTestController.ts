@@ -318,12 +318,18 @@ export class ExerciseTestController implements vscode.Disposable {
     } else {
       return
     }
-    if (!this._actionContext.authState.loggedIn) {
+    const submit = (): void =>
+      void vscode.commands.executeCommand("tmc.submitExercise", exercise.uri)
+    if (this._actionContext.authState.loggedIn) {
+      void this._actionContext.dialog.notification(message, ["Submit", submit])
       return
     }
     void this._actionContext.dialog.notification(message, [
-      "Submit",
-      (): void => void vscode.commands.executeCommand("tmc.submitExercise", exercise.uri),
+      "Log In to Submit",
+      (): void =>
+        void Promise.resolve(vscode.commands.executeCommand("tmc.showMoocLogin")).then(
+          (loginOutcome) => loginOutcome === "loggedIn" && submit(),
+        ),
     ])
   }
 }

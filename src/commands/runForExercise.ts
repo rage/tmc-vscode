@@ -1,3 +1,5 @@
+import * as path from "path"
+
 import type { Result } from "ts-results"
 import { Err } from "ts-results"
 import type * as vscode from "vscode"
@@ -33,8 +35,12 @@ export async function runForExercise<T>(
 
   const exercise = exerciseFor(workspaceManager, resource)
   if (!exercise) {
-    const error = new Error("The active editor is not part of a course exercise.")
-    dialog.errorNotification(error.message)
+    const error = new Error(
+      resource
+        ? `${path.basename(resource.fsPath)} is not part of a course exercise.`
+        : "Open a file of an exercise first.",
+    )
+    void dialog.errorNotification(error.message)
     return Err(error)
   }
 
