@@ -1,8 +1,10 @@
 import {
+  AuthorizationError,
   ConnectionError,
   ExerciseNotFoundError,
   InitializationError,
   InsufficientScopeError,
+  InvalidTokenError,
   NotEnrolledError,
   NotFoundError,
   ObsoleteClientError,
@@ -67,6 +69,21 @@ suite("presentationFor", function () {
     const presentation = presentationFor(new InsufficientScopeError("403 forbidden"))
 
     expect(presentation.message).toContain("Log in again to continue")
+    expect(presentation.actions).toEqual([{ label: "Log in", command: "tmc.showMoocLogin" }])
+  })
+
+  test.each([
+    ["a rejected token", new InvalidTokenError("Invalid token. Deleted credentials file.")],
+    [
+      "a lost courses.mooc.fi login",
+      Object.assign(new AuthorizationError("Authentication required"), { backend: "mooc" }),
+    ],
+  ])("%s says the session ended and offers the login command", function (_, error) {
+    const presentation = presentationFor(error)
+
+    expect(presentation.message).toBe(
+      "Your courses.mooc.fi session has ended. Log in again to continue.",
+    )
     expect(presentation.actions).toEqual([{ label: "Log in", command: "tmc.showMoocLogin" }])
   })
 

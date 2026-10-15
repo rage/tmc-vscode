@@ -215,6 +215,15 @@ export function presentationFor(error: Error): ErrorPresentation {
       actions: [],
     }
   }
+  if (
+    error instanceof InvalidTokenError ||
+    (error instanceof AuthorizationError && backend !== "tmc")
+  ) {
+    return {
+      message: `Your ${backendName("mooc")} session has ended. Log in again to continue.`,
+      actions: [{ label: "Log in", command: "tmc.showMoocLogin" }],
+    }
+  }
   if (error instanceof InsufficientScopeError) {
     return {
       message:

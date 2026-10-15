@@ -66,7 +66,7 @@ function contextWithCourses(courses: LocalCourseData[]): [ReadyActionContext, Di
 
 /** Failed-refresh headlines logged rather than shown. */
 const headlineLogs = (): unknown[][] =>
-  vi.mocked(Logger.warn).mock.calls.filter(([m]) => m === "Failed to check for course updates.")
+  vi.mocked(Logger.warn).mock.calls.filter(([m]) => m === "Failed to fetch updates for course-1.")
 
 suite("refreshEverything command", function () {
   beforeEach(function () {
@@ -195,8 +195,8 @@ suite("refreshEverything reporting", function () {
     await refreshEverything(actionContext, { silent: false })
 
     expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to check for course updates.",
-      expect.objectContaining({ message: expect.stringContaining("course-1") }),
+      "Failed to fetch updates for course-1.",
+      expect.objectContaining({ message: "connection lost" }),
     )
     expect(headlineLogs()).toHaveLength(0)
   })

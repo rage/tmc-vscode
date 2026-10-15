@@ -108,6 +108,17 @@ suite("checkForCourseUpdates action", function () {
     expect(dialog.reportError).not.toHaveBeenCalled()
   })
 
+  // The cause's class carries the remedy, such as logging in again after a lost session.
+  test("keeps the failing course's error as the failure's cause", async function () {
+    const error = new Error("boom")
+    vi.mocked(updateCourse).mockImplementation(async () => Err(error))
+    const [actionContext] = contextWithCourses([tmcCourse(1, 0, [])])
+
+    const result = await checkForCourseUpdates(actionContext)
+
+    expect(result.ok && result.val.failure?.cause).toBe(error)
+  })
+
   test("returns the courses as stored after the pass, and no failure", async function () {
     const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
 

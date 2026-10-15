@@ -728,7 +728,7 @@ suite("reported once: the refresh", function () {
 
     await run("tmcTreeView.refreshCourses")
 
-    expect(shown).toEqual(["error: Failed to check for course updates."])
+    expect(shown).toEqual([expect.stringMatching(/^error: Failed to fetch updates for \S+\.$/)])
   })
 
   test("a lost session scope is warned on a tree refresh too", async function () {

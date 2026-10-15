@@ -4,6 +4,7 @@ import { Ok } from "ts-results"
 import type { CourseIdentifier } from "../../shared/lib"
 import { LocalCourseData } from "../../shared/lib"
 import type { Warned } from "../api/withOperation"
+import { failure } from "../api/withOperation"
 import { Logger, mapConcurrently } from "../utilities"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
@@ -81,7 +82,6 @@ export async function checkForCourseUpdates(
   }
 
   const names = failures.map((x) => x.name).join(", ")
-  const firstMessage = failures[0]?.error?.message ?? "unknown error"
   if (rescanned.err) {
     Logger.warn("Failed to rescan the local exercises after refreshing the courses", rescanned.val)
   }
@@ -90,7 +90,7 @@ export async function checkForCourseUpdates(
     warnings: refreshed.flatMap((x) => x.warnings),
     failure:
       failures.length > 0
-        ? new Error(`Failed to fetch updates for ${names}: ${firstMessage}`)
+        ? failure(`Failed to fetch updates for ${names}.`, failures[0]?.error).val
         : rescanned.err
           ? rescanned.val
           : undefined,
