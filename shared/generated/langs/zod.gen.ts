@@ -38,6 +38,20 @@ export const zCourse = z.object({
 });
 
 /**
+ * A course's AI-use policy as chosen by its teacher, uninterpreted: what each value permits
+ * is the client's decision.
+ */
+export const zCourseAiPolicy = z.union([
+    z.literal('not_set'),
+    z.literal('no_ai'),
+    z.literal('planning_only'),
+    z.literal('limited'),
+    z.literal('full_use'),
+    z.literal('required'),
+    z.literal('unrecognized')
+]);
+
+/**
  * get /api/v8/courses/{course_id}
  * get /api/v8/org/{organization_slug}/courses/{course_name}
  */
@@ -286,7 +300,9 @@ export const zKind = z.union([
     z.literal('device-login-denied'),
     z.literal('device-login-expired'),
     z.literal('not-found'),
-    z.literal('server-error')
+    z.literal('server-error'),
+    z.literal('insufficient-scope'),
+    z.literal('exercise-not-found')
 ]);
 
 /**
@@ -304,6 +320,7 @@ export const zLocalMoocExercise = z.object({
  * TMC exercise inside the projects directory.
  */
 export const zLocalTmcExercise = z.object({
+    'course-id': z.int().gte(0).max(4294967295, { error: 'Invalid value: Expected uint32 to be <= 4294967295' }).nullable(),
     'course-slug': z.string(),
     'exercise-id': z.int().gte(0).max(4294967295, { error: 'Invalid value: Expected uint32 to be <= 4294967295' }),
     'exercise-path': z.string(),
@@ -345,6 +362,7 @@ export const zMoocClientUpdateData = z.object({
 });
 
 export const zMoocCourse = z.object({
+    ai_policy: zCourseAiPolicy.default('not_set'),
     description: z.string().nullable(),
     id: z.uuid(),
     name: z.string(),

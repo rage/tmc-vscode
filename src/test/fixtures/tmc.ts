@@ -16,12 +16,14 @@ const closedExercisesPythonCourse: string[] = ["other_world"]
 
 const localPythonCourseExercises: LocalTmcExercise[] = [
   {
+    "course-id": 0,
     "course-slug": "test-python-course",
     "exercise-id": 1,
     "exercise-path": "/tmc/vscode/test-python-course/hello_world",
     "exercise-slug": "hello_world",
   },
   {
+    "course-id": 0,
     "course-slug": "test-python-course",
     "exercise-id": 2,
     "exercise-path": "/tmc/vscode/test-python-course/other_world",
@@ -48,6 +50,7 @@ const moocCourse: MoocCourse = {
   name: "Mooc Python",
   description: "A mooc course",
   organization_name: "University of Helsinki",
+  ai_policy: "not_set",
 }
 
 const moocExerciseSlides: TmcExerciseSlide[] = [

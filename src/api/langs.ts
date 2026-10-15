@@ -176,19 +176,6 @@ function loggableArg(arg: string): string {
   return arg.length > MAX_LOGGED_ARG_LENGTH ? `<${arg.length} characters>` : arg
 }
 
-/** Every request a submit or paste makes names the exercise, so a 404 means it is gone. */
-function exerciseGoneOn404(error: Error, backend: BackendKind): Error {
-  return error instanceof NotFoundError
-    ? Object.assign(
-        new ExerciseNotFoundError(
-          `This exercise no longer exists on ${backendName(backend)}.`,
-          error.details,
-        ),
-        { backend },
-      )
-    : error
-}
-
 /**
  * Whether a failed call is known not to have reached its backend: the CLI never ran, could
  * not connect, or failed without an answer from the server.
@@ -1036,7 +1023,7 @@ export default class Langs {
     exerciseId: string,
     exercisePath: string,
   ): Promise<Result<ExerciseTaskSubmissionResult, Error>> {
-    const res = await this._submitting("mooc", () =>
+    return this._submitting("mooc", () =>
       this._fetch(
         {
           backend: "mooc",
@@ -1055,7 +1042,6 @@ export default class Langs {
         "mooc-submission-finished",
       ),
     )
-    return res.mapErr((error) => exerciseGoneOn404(error, "mooc"))
   }
 
   /**
@@ -1120,9 +1106,7 @@ export default class Langs {
         () => this._fetch(command, "mooc-paste"),
       ),
     )
-    return res
-      .map((pasted) => pasted.paste_url)
-      .mapErr((error) => exerciseGoneOn404(error, exerciseId.kind))
+    return res.map((pasted) => pasted.paste_url)
   }
 
   /**
@@ -1403,13 +1387,9 @@ export default class Langs {
       case "connection-error":
         return Err(new ConnectionError(message, details))
       case "forbidden":
-        // courses.mooc.fi 403s a token whose scopes don't cover programming exercises;
-        // tmc.mooc.fi 403s a course the user may not see. Only the latter is about the
-        // course, so only it may be read as one being unavailable.
-        if (auth.backend === "mooc") {
-          return Err(new InsufficientScopeError(message, details))
-        }
         return Err(new ForbiddenError(message, details))
+      case "insufficient-scope":
+        return Err(new InsufficientScopeError(message, details))
       case "not-enrolled":
         return Err(new NotEnrolledError(message, details))
       case "upload-expired":
@@ -1442,6 +1422,15 @@ export default class Langs {
         return Err(new DeviceLoginExpiredError(message, details))
       case "not-found":
         return Err(Object.assign(new NotFoundError(message, details), { httpStatus }))
+      case "exercise-not-found":
+        return Err(
+          new ExerciseNotFoundError(
+            auth.backend
+              ? `This exercise no longer exists on ${backendName(auth.backend)}.`
+              : message,
+            details,
+          ),
+        )
       case "server-error":
         return Err(Object.assign(new ServerError(message, details), { httpStatus }))
       case "obsolete-client":

@@ -33,6 +33,7 @@ import {
   AuthorizationError,
   BottleneckError,
   DeviceLoginExpiredError,
+  ExerciseNotFoundError,
   InvalidTokenError,
   NotFoundError,
   RuntimeError,
@@ -201,7 +202,7 @@ suite("tmc langs cli spec", function () {
       expect(coursesResult.val).to.be.instanceOf(NotFoundError)
 
       const submissionsResult = await tmcSubmissions(tmc, 404)
-      expect(submissionsResult.val).to.be.instanceOf(NotFoundError)
+      expect(submissionsResult.val).to.be.instanceOf(ExerciseNotFoundError)
     })
 
     test("should be able to give feedback", async function () {
@@ -664,6 +665,12 @@ suite("tmc langs cli spec", function () {
         throw new Error(`expected a grading record, got ${status.status}`)
       }
       expect(status.grading.grading_progress).to.equal("FullyGraded")
+    })
+
+    test("should report submitting a nonexistent mooc exercise as the exercise being gone", async function () {
+      const dir = writeSubmittableProject("mooc-submit-nonexistent")
+      const result = await tmc.submitMoocExercise(NONEXISTENT_EXERCISE_ID, dir)
+      expect(result.val).to.be.instanceOf(ExerciseNotFoundError)
     })
 
     test("should submit a mooc exercise to paste and return a share URL", async function () {

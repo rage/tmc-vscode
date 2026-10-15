@@ -10,6 +10,7 @@ import {
     zCombinedMoocCourseData,
     zConfigValue,
     zCourse,
+    zCourseAiPolicy,
     zCourseData,
     zCourseDetails,
     zCourseExercise,
@@ -119,6 +120,13 @@ export type ConfigValue = z.infer<typeof ConfigValue>;
  */
 export const Course = zCourse;
 export type Course = z.infer<typeof Course>;
+
+/**
+ * A course's AI-use policy as chosen by its teacher, uninterpreted: what each value permits
+ * is the client's decision.
+ */
+export const CourseAiPolicy = zCourseAiPolicy;
+export type CourseAiPolicy = z.infer<typeof CourseAiPolicy>;
 
 /**
  * get /api/v8/courses/{course_id}

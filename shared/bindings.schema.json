@@ -226,6 +226,46 @@
         "spyware_urls"
       ]
     },
+    "CourseAiPolicy": {
+      "description": "A course's AI-use policy as chosen by its teacher, uninterpreted: what each value permits\nis the client's decision.",
+      "oneOf": [
+        {
+          "description": "The teacher has not chosen a policy.",
+          "type": "string",
+          "const": "not_set"
+        },
+        {
+          "description": "AI may not be used at any point.",
+          "type": "string",
+          "const": "no_ai"
+        },
+        {
+          "description": "AI may be used for planning, such as brainstorming or outlining, but not in the final work.",
+          "type": "string",
+          "const": "planning_only"
+        },
+        {
+          "description": "AI may be used for specific tasks only, with disclosure.",
+          "type": "string",
+          "const": "limited"
+        },
+        {
+          "description": "AI may be used freely, with disclosure.",
+          "type": "string",
+          "const": "full_use"
+        },
+        {
+          "description": "AI use is expected.",
+          "type": "string",
+          "const": "required"
+        },
+        {
+          "description": "A value newer than this client.",
+          "type": "string",
+          "const": "unrecognized"
+        }
+      ]
+    },
     "CourseData": {
       "description": "get /api/v8/courses/{course_id}\nget /api/v8/org/{organization_slug}/courses/{course_name}",
       "type": "object",
@@ -2073,7 +2113,7 @@
           "const": "generic"
         },
         {
-          "description": "403 from server",
+          "description": "tmc.mooc.fi answered 403: the user may not see what was asked for.",
           "type": "string",
           "const": "forbidden"
         },
@@ -2123,7 +2163,7 @@
           "const": "device-login-expired"
         },
         {
-          "description": "The server answered 404: what was asked for does not exist, or not for this user.",
+          "description": "The server answered 404: what was asked for does not exist, or not for this user.\nA 404 for a request addressing one exercise is `ExerciseNotFound` instead.",
           "type": "string",
           "const": "not-found"
         },
@@ -2131,6 +2171,16 @@
           "description": "The server answered with a 5xx status. Transient, so stored credentials are kept.",
           "type": "string",
           "const": "server-error"
+        },
+        {
+          "description": "courses.mooc.fi answered 403, typically because the access token lacks the\n`exercise-services` scope. Unlike tmc.mooc.fi's `Forbidden`, says nothing about the course.",
+          "type": "string",
+          "const": "insufficient-scope"
+        },
+        {
+          "description": "The server answered 404 to a request addressing one exercise: the exercise does not\nexist, or not for this user.",
+          "type": "string",
+          "const": "exercise-not-found"
         }
       ]
     },
@@ -2201,6 +2251,15 @@
       "description": "TMC exercise inside the projects directory.",
       "type": "object",
       "properties": {
+        "course-id": {
+          "description": "`None` for a course downloaded before course ids were recorded.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "course-slug": {
           "description": "The course's on-disk directory name, which is also its TMC slug.",
           "type": "string"
@@ -2219,6 +2278,7 @@
       },
       "required": [
         "course-slug",
+        "course-id",
         "exercise-slug",
         "exercise-id",
         "exercise-path"
@@ -2269,6 +2329,11 @@
     "MoocCourse": {
       "type": "object",
       "properties": {
+        "ai_policy": {
+          "description": "`not_set` from a host that predates the field.",
+          "$ref": "#/$defs/CourseAiPolicy",
+          "default": "not_set"
+        },
         "description": {
           "type": [
             "string",
@@ -2294,7 +2359,8 @@
         "slug",
         "name",
         "description",
-        "organization_name"
+        "organization_name",
+        "ai_policy"
       ]
     },
     "MoocDeviceLogin": {

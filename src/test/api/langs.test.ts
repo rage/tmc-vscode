@@ -335,12 +335,12 @@ suite("Langs class arg building", function () {
   test.each([
     ["submitMoocExercise", (langs: Langs) => langs.submitMoocExercise("ex-uuid", "/path/to/ex")],
     ["paste", (langs: Langs) => langs.paste(idOfMoocExercise("ex-uuid"), "/path/to/ex")],
-  ] as const)("%s reports a 404 as the exercise being gone", async function (_name, call) {
+  ] as const)("%s reports the exercise being gone", async function (_name, call) {
     const langs = newLangs()
     const line =
       "HTTP error 404 Not Found for https://courses.mooc.fi/api/v0/exercise-services/client/" +
       'exercises/ex-uuid: {"title":"Not Found"}. Obsolete client: false.'
-    stubSpawn(langs, () => Ok(errorOutput("not-found", line, [`Caused by: ${line}`], 404)))
+    stubSpawn(langs, () => Ok(errorOutput("exercise-not-found", line, [`Caused by: ${line}`], 404)))
     const result = await call(langs)
     expect(result.val).toBeInstanceOf(ExerciseNotFoundError)
     expect((result.val as Error).message).toBe("This exercise no longer exists on courses.mooc.fi.")
@@ -725,6 +725,7 @@ suite("Langs class arg building", function () {
     const langs = newLangs()
     const tmcExercise = {
       "course-slug": "python-course",
+      "course-id": 1,
       "exercise-slug": "hello_world",
       "exercise-id": 1,
       "exercise-path": "/p/hello_world",
@@ -828,7 +829,9 @@ suite("Langs cross-backend independence", function () {
 suite("Langs error-kind mapping", function () {
   const cases: [unknown, new (...args: never[]) => Error][] = [
     ["connection-error", ConnectionError],
-    ["forbidden", InsufficientScopeError],
+    ["forbidden", ForbiddenError],
+    ["insufficient-scope", InsufficientScopeError],
+    ["exercise-not-found", ExerciseNotFoundError],
     ["invalid-token", InvalidTokenError],
     ["not-logged-in", AuthorizationError],
     ["obsolete-client", ObsoleteClientError],
@@ -864,20 +867,12 @@ suite("Langs error-kind mapping", function () {
     }
   }
 
-  test("forbidden is a course verdict on tmc and a session verdict on mooc", async function () {
-    // tmc.mooc.fi 403s a course the user may not see, which `updateCourse` persists as a
-    // disabled course; courses.mooc.fi 403s an underscoped token, which says nothing
-    // about the course and must never be persisted as one.
-    const langsTmc = newLangs()
-    stubSpawn(langsTmc, () => Ok(errorOutput("forbidden")))
-    const tmcResult = await langsTmc.getTmcOrganizations()
-    expect(tmcResult.val).toBeInstanceOf(ForbiddenError)
-    expect(tmcResult.val).not.toBeInstanceOf(InsufficientScopeError)
-
-    const langsMooc = newLangs()
-    stubSpawn(langsMooc, () => Ok(errorOutput("forbidden")))
-    const moocResult = await langsMooc.getEnrolledMoocCourses()
-    expect(moocResult.val).toBeInstanceOf(InsufficientScopeError)
+  test("an underscoped session is not a course the user may not see", async function () {
+    // `updateCourse` persists a `ForbiddenError` as a disabled course.
+    const langs = newLangs()
+    stubSpawn(langs, () => Ok(errorOutput("insufficient-scope")))
+    const result = await langs.getEnrolledMoocCourses()
+    expect(result.val).not.toBeInstanceOf(ForbiddenError)
   })
 
   test.each([
