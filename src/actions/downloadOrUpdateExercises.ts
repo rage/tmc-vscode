@@ -1,5 +1,6 @@
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
+import * as vscode from "vscode"
 
 import type { BackendKind, CourseIdentifier } from "../../shared/lib"
 import {
@@ -42,11 +43,14 @@ interface DownloadResults {
  * @param courseId Course the exercises belong to, when they all share one. Passed
  *   to the mooc bulk download so it can fetch just that course's slides instead of
  *   scanning every enrolled course. Omit when the exercises span multiple courses.
+ * @param isUnrequested For a download the user did not ask for, such as an automatic
+ *   update: its progress shows in the status bar, not in a cancellable notification.
  */
 export async function downloadOrUpdateExercises(
   actionContext: ReadyActionContext,
   exerciseIds: ExerciseIdentifier[],
   courseId?: CourseIdentifier,
+  isUnrequested = false,
 ): Promise<Result<DownloadResults & Warned, Error>> {
   Logger.info("Downloading exercises", exerciseIds)
   if (exerciseIds.length === 0) {
@@ -57,7 +61,7 @@ export async function downloadOrUpdateExercises(
     return claim
   }
   try {
-    return Ok(await download(actionContext, exerciseIds, courseId, claim.val))
+    return Ok(await download(actionContext, exerciseIds, courseId, claim.val, isUnrequested))
   } finally {
     claim.val.releaseAll()
   }
@@ -68,6 +72,7 @@ async function download(
   exerciseIds: ExerciseIdentifier[],
   courseId: CourseIdentifier | undefined,
   claim: ExerciseClaim,
+  isUnrequested: boolean,
 ): Promise<DownloadResults & Warned> {
   const { dialog, settings } = actionContext
   const { langs } = actionContext.startup
@@ -151,7 +156,9 @@ async function download(
       })
       return finished
     },
-    { cancellable: true },
+    isUnrequested
+      ? { location: vscode.ProgressLocation.Window }
+      : { cancellable: true, location: vscode.ProgressLocation.Notification },
   )
   const failedLegs: Error[] = []
   const exerciseReasons: string[][] = []

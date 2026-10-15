@@ -68,7 +68,7 @@ export async function updateExercises(
   })
   if (updateable.length > 0 && settings.getAutomaticallyUpdateExercises()) {
     await withOperation(dialog, { failure: "Failed to update exercises." }, () =>
-      downloadExerciseUpdates(actionContext, updateable),
+      downloadExerciseUpdates(actionContext, updateable, silent),
     )
     return
   }

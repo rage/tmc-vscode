@@ -23,10 +23,13 @@ interface ExerciseUpdate {
  * operation; any other failure is a warning.
  *
  * For exercises not on disk yet, see `downloadCourseExercises`.
+ *
+ * @param isUnrequested See `downloadOrUpdateExercises`.
  */
 export async function downloadExerciseUpdates(
   actionContext: ReadyActionContext,
   updates: readonly ExerciseUpdate[],
+  isUnrequested = false,
 ): Promise<Result<Warned, Error>> {
   // Each `courseId` is a fresh object, so only a key tells two of them are one course.
   const courseIds = new Map(updates.map((x) => [CourseIdentifier.key(x.courseId), x.courseId]))
@@ -56,6 +59,7 @@ export async function downloadExerciseUpdates(
       actionContext,
       updates.map((x) => x.exerciseId),
       otherCourses.length === 0 ? onlyCourse : undefined,
+      isUnrequested,
     )
     if (downloaded.err) {
       return downloaded

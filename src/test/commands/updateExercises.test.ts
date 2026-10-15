@@ -153,7 +153,7 @@ suite("updateExercises command", function () {
 
       await updateExercises(actionContext, "silent")
 
-      expect(downloadExerciseUpdates).toHaveBeenCalledExactlyOnceWith(actionContext, updates)
+      expect(downloadExerciseUpdates).toHaveBeenCalledExactlyOnceWith(actionContext, updates, true)
     })
 
     test("does not prompt on a run the user did not ask for", async function () {
@@ -182,7 +182,7 @@ suite("updateExercises command", function () {
 
     await updateExercises(actionContext, "loud")
 
-    expect(downloadExerciseUpdates).toHaveBeenCalledExactlyOnceWith(actionContext, updates)
+    expect(downloadExerciseUpdates).toHaveBeenCalledExactlyOnceWith(actionContext, updates, false)
     expect(dialog.notification).not.toHaveBeenCalled()
   })
 

@@ -131,6 +131,20 @@ suite("downloadOrUpdateExercises action", function () {
     expect(result.failed.length).toBe(0)
   })
 
+  test("shows a requested download in a cancellable notification, an automatic one in the status bar", async function () {
+    tmcMockValues.downloadTmcExercises = createDownloadResult([helloWorld], [])
+
+    await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
+    await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID, true)
+
+    expect(
+      vi.mocked(dialogMock.progressNotification).mock.calls.map(([, , options]) => options),
+    ).toEqual([
+      { cancellable: true, location: vscode.ProgressLocation.Notification },
+      { location: vscode.ProgressLocation.Window },
+    ])
+  })
+
   test("should not call TMC-langs if no exercises are given", async function () {
     await downloadOrUpdateExercises(actionContext(), [], TEST_COURSE_ID)
     expect(tmcMock.downloadTmcExercises).not.toHaveBeenCalled()
