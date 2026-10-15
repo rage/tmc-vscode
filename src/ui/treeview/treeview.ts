@@ -497,6 +497,18 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
     return true
   }
 
+  /** Opens the view with the course's row selected, focused and expanded. */
+  public async revealCourse(courseId: CourseIdentifier): Promise<void> {
+    const item = this._currentRoots().find((root) =>
+      CourseIdentifier.equals(root.courseId, courseId),
+    )
+    if (item) {
+      await this._view.reveal(item, { select: true, focus: true, expand: true })
+    } else {
+      await vscode.commands.executeCommand(`${COURSES_VIEW_ID}.focus`)
+    }
+  }
+
   private _exerciseItemContaining(uri: vscode.Uri): ExerciseTreeItem | undefined {
     const exercise = this._source?.workspaceManager.getExerciseContaining(uri)
     if (!exercise) {

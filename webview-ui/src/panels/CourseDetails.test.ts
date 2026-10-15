@@ -124,15 +124,31 @@ suite("CourseDetails panel", () => {
     expect(await screen.findByText(/awards only 75% of its points/)).toBeInTheDocument()
   })
 
-  test("sends the student to the Courses view for the exercises", async () => {
+  test("downloads the course's exercises and shows the course in the Courses view", async () => {
     const panel = tmcPanel()
     render(CourseDetails, { props: { panel } })
     sendCourse(panel)
     postedMessages.mockClear()
 
-    ;(await screen.findByRole("button", { name: "Show exercises" })).click()
+    ;(await screen.findByRole("button", { name: "Download All Exercises" })).click()
+    screen.getByRole("button", { name: "Show in Courses View" }).click()
 
-    expect(postedMessages).toHaveBeenCalledWith({ type: "runCommand", command: "tmc.myCourses" })
+    expect(postedMessages.mock.calls).toEqual([
+      [
+        {
+          type: "courseAction",
+          sourcePanel: { id: panel.id, type: panel.type },
+          action: "downloadAllExercises",
+        },
+      ],
+      [
+        {
+          type: "courseAction",
+          sourcePanel: { id: panel.id, type: panel.type },
+          action: "revealInCoursesView",
+        },
+      ],
+    ])
   })
 
   test("asks for its own course by id, leaving the slug to the extension", async () => {
@@ -143,7 +159,8 @@ suite("CourseDetails panel", () => {
     sendCourse(panel, moocLocalCourse())
     await screen.findByRole("heading", { level: 1, name: "MOOC Python" })
 
-    const open = await screen.findByRole("button", { name: "Open workspace" })
+    const open = await screen.findByRole("button", { name: "Open Course Workspace" })
+    expect(open).not.toHaveAttribute("secondary")
     postedMessages.mockClear()
     open.click()
 

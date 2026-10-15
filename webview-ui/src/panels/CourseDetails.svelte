@@ -99,8 +99,12 @@
   function openInBrowser(url: string) {
     vscode.postMessage({ type: "openLinkInBrowser", url })
   }
-  function showExercises() {
-    vscode.postMessage({ type: "runCommand", command: "tmc.myCourses" })
+  function runCourseAction(action: "downloadAllExercises" | "revealInCoursesView") {
+    vscode.postMessage({
+      type: "courseAction",
+      sourcePanel: { id: panel.id, type: panel.type },
+      action,
+    })
   }
 </script>
 
@@ -138,8 +142,17 @@
       <p class="muted">{SOFT_DEADLINE_PENALTY} A hard deadline cannot be exceeded.</p>
     {/if}
     <div class="actions">
-      <Button onclick={showExercises}>Show exercises</Button>
-      <Button secondary onclick={openWorkspace}>Open workspace</Button>
+      <Button onclick={openWorkspace}>Open Course Workspace</Button>
+      <Button
+        secondary
+        icon="cloud-download"
+        onclick={() => runCourseAction("downloadAllExercises")}
+      >
+        Download All Exercises
+      </Button>
+      <Button secondary onclick={() => runCourseAction("revealInCoursesView")}>
+        Show in Courses View
+      </Button>
     </div>
   </div>
 

@@ -231,6 +231,21 @@ suite("CoursesTree", function () {
     expect(tooltipOf(item)).toContain("2 new exercises")
   })
 
+  test("reveals a course expanded, and only focuses the view for one it does not list", async function () {
+    const [item] = show(tmcCourse())
+    vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await tree.revealCourse(idOfTmcCourse(1))
+    await tree.revealCourse(idOfTmcCourse(999))
+
+    expect(view.reveal).toHaveBeenCalledExactlyOnceWith(item, {
+      select: true,
+      focus: true,
+      expand: true,
+    })
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith("tmcView.focus")
+  })
+
   test("a course with exercises not downloaded is marked for downloading them all", function () {
     const [item] = show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))
 

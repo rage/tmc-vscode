@@ -288,6 +288,35 @@ suite("TmcPanel handler dispatch", () => {
     expect(handlers.refreshLocalExercises).toHaveBeenCalledWith(actionContext)
   })
 
+  test("a course action acts on the course the host shows", async () => {
+    const handlers = stubHandlers()
+    const actionContext = courseDetailsContext()
+    const { listener, shown } = await mountCourseDetails(actionContext)
+
+    await listener({
+      type: "courseAction",
+      sourcePanel: { id: shown.id, type: shown.type },
+      action: "downloadAllExercises",
+    })
+    await listener({
+      type: "courseAction",
+      sourcePanel: { id: shown.id, type: shown.type },
+      action: "revealInCoursesView",
+    })
+    await listener({
+      type: "courseAction",
+      sourcePanel: { id: 9999, type: "CourseDetails" },
+      action: "downloadAllExercises",
+    })
+
+    expect(handlers.openWorkspace.mock.calls).toEqual([
+      ["tmc.downloadAllExercises", idOfTmcCourse(42)],
+    ])
+    expect(actionContext.coursesTree.revealCourse).toHaveBeenCalledExactlyOnceWith(
+      idOfTmcCourse(42),
+    )
+  })
+
   /** Mounts the submission of `python-course`'s `loops` and asks it to paste the exercise. */
   async function paste(
     actionContext: ActionContext,

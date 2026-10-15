@@ -3,6 +3,7 @@ import { Err } from "ts-results"
 import * as vscode from "vscode"
 
 import type { LocalCourseData } from "../../../shared/lib"
+import { assertUnreachable } from "../../../shared/lib"
 import * as actions from "../../actions"
 import { withOperation } from "../../api/withOperation"
 import { Logger } from "../../utilities"
@@ -43,6 +44,26 @@ export const courseDetailsHandlers = {
         return updateResult
       }
       return actionContext.startup.userData.getCourse(courseId)
+    },
+  },
+  courseAction: {
+    requiresReady: true,
+    async handle(message, { host, actionContext }): Promise<void> {
+      const route = host.route
+      if (route?.type !== "CourseDetails" || route.id !== message.sourcePanel.id) {
+        Logger.warn("Ignoring a course action from a panel that no longer shows a course")
+        return
+      }
+      switch (message.action) {
+        case "downloadAllExercises":
+          await vscode.commands.executeCommand("tmc.downloadAllExercises", route.courseId)
+          return
+        case "revealInCoursesView":
+          await actionContext.coursesTree.revealCourse(route.courseId)
+          return
+        default:
+          assertUnreachable(message.action)
+      }
     },
   },
   openCourseWorkspace: {

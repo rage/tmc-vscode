@@ -253,6 +253,12 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     // the webview must not be the one choosing it.
     courseId: CourseIdentifierSchema,
   }),
+  // Acts on the course the named panel shows.
+  z.object({
+    type: z.literal("courseAction"),
+    sourcePanel: targetPanelSchema("CourseDetails"),
+    action: z.enum(["downloadAllExercises", "revealInCoursesView"]),
+  }),
   // Refreshes the course the named panel shows.
   z.object({
     type: z.literal("refreshCourseDetails"),
