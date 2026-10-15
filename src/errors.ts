@@ -284,6 +284,12 @@ export function presentationFor(error: Error): ErrorPresentation {
       ],
     }
   }
+  if (error instanceof ConnectionError && backend !== undefined) {
+    return {
+      message: `${backendName(backend)} could not be reached. Check your network connection.`,
+      actions: [],
+    }
+  }
   if (
     (error instanceof NotFoundError ||
       error instanceof ServerError ||

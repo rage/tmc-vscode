@@ -57,12 +57,24 @@ suite("presentationFor", function () {
     ])
   })
 
-  test("an unreachable server keeps its own message", function () {
+  // The CLI's message quotes the request URL, which belongs in the logs.
+  test("an unreachable backend is named, not its request URL", function () {
     const presentation = presentationFor(
-      Object.assign(new ConnectionError("dns error"), { backend: "mooc" }),
+      Object.assign(
+        new ConnectionError(
+          "Connection error trying to GET http://project-331.local/api/v0/exercise-services/client/courses",
+        ),
+        { backend: "mooc" },
+      ),
     )
 
-    expect(presentation.message).toBe("Dns error.")
+    expect(presentation.message).toBe(
+      "courses.mooc.fi could not be reached. Check your network connection.",
+    )
+  })
+
+  test("an unreachable server no backend raised keeps its own message", function () {
+    expect(presentationFor(new ConnectionError("dns error")).message).toBe("Dns error.")
   })
 
   test("a lost courses.mooc.fi scope offers the login command", function () {
