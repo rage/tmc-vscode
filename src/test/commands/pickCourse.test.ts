@@ -5,6 +5,7 @@ import type { LocalCourseData } from "../../../shared/lib"
 import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import type { ReadyActionContext } from "../../actions/types"
 import type { Item } from "../../api/dialog"
+import type WorkspaceManager from "../../api/workspaceManager"
 import { pickCourse } from "../../commands/pickCourse"
 import type { UserData } from "../../config/userdata"
 import { idOfMoocCourse, idOfTmcCourse } from "../fixtures/identifiers"
@@ -21,12 +22,17 @@ const courses = [
 
 function contextWith(
   courseList: LocalCourseData[],
+  openCourse?: { slug: string; backend: string },
 ): [ReadyActionContext, ReturnType<typeof createDialogMock>[0]] {
   const [dialog] = createDialogMock()
+  const workspaceManager = {
+    activeCourse: openCourse?.slug,
+    activeCourseBackend: openCourse?.backend,
+  } as unknown as WorkspaceManager
   return [
     {
       ...createMockActionContext({
-        startup: { userData: { getCourses: () => courseList } as UserData },
+        startup: { userData: { getCourses: () => courseList } as UserData, workspaceManager },
       }),
       dialog,
     },
@@ -102,5 +108,31 @@ suite("pickCourse", function () {
       "The Python Course (Currently open)",
       "Introduction to CS (Currently open)",
     ])
+  })
+
+  test("with one course, picks it without asking", async function () {
+    const [context, dialog] = contextWith([courses[0] as LocalCourseData])
+
+    const picked = await pickCourse(context, { title: "Title", placeHolder: "Pick one" })
+
+    expect(picked).toEqual(idOfTmcCourse(1))
+    expect(dialog.selectItem).not.toHaveBeenCalled()
+  })
+
+  test("with one course, still asks when told to", async function () {
+    const [context, dialog] = contextWith([courses[0] as LocalCourseData])
+
+    await pickCourse(context, { title: "Remove Course", placeHolder: "Pick one", alwaysAsk: true })
+
+    expect(dialog.selectItem).toHaveBeenCalledOnce()
+  })
+
+  test("offers the course whose workspace is open first", async function () {
+    const [context, dialog] = contextWith(courses, { slug: "mooc-slug", backend: "mooc" })
+
+    await pickCourse(context, { title: "Title", placeHolder: "Pick one" })
+
+    const [, ...items] = vi.mocked(dialog.selectItem).mock.calls[0] ?? []
+    expect(items.map((item) => item.label)).toEqual(["Introduction to CS", "The Python Course"])
   })
 })
