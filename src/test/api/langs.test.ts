@@ -7,10 +7,9 @@ import { CliOutputData } from "../../../shared/langsSchema"
 import type { BaseError } from "../../../shared/lib"
 import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import Langs, { decodeLangsStdout } from "../../api/langs"
-import { LOGIN_PROCESS_TIMEOUT } from "../../config/constants"
+import { LOGIN_PROCESS_TIMEOUT, MINIMUM_SUBMISSION_INTERVAL } from "../../config/constants"
 import {
   AuthorizationError,
-  BottleneckError,
   ConnectionError,
   DeviceLoginDeniedError,
   DeviceLoginExpiredError,
@@ -725,10 +724,6 @@ suite("Langs cross-backend independence", function () {
     const firstTmc = await langs.submitTmcExerciseAndWaitForResults(1, "/path/to/ex")
     expect(firstTmc.ok).toBe(true)
 
-    const secondTmc = await langs.submitTmcExerciseAndWaitForResults(1, "/path/to/ex")
-    expect(secondTmc.val).toBeInstanceOf(BottleneckError)
-
-    // Throttle state is per-backend, so a mooc submission right after is unaffected.
     stubSpawn(langs, () => Ok(dataOutput("mooc-submission-finished", moocSubmitted)))
     const mooc = await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
     expect(mooc.ok).toBe(true)
@@ -739,9 +734,6 @@ suite("Langs cross-backend independence", function () {
     stubSpawn(langs, () => Ok(dataOutput("mooc-submission-finished", moocSubmitted)))
     const firstMooc = await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
     expect(firstMooc.ok).toBe(true)
-
-    const secondMooc = await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
-    expect(secondMooc.val).toBeInstanceOf(BottleneckError)
 
     stubSpawn(langs, () => Ok(dataOutput("submission-finished", submissionFinished)))
     const tmc = await langs.submitTmcExerciseAndWaitForResults(1, "/path/to/ex")
@@ -781,11 +773,38 @@ suite("Langs cross-backend independence", function () {
   })
 
   test("a submission the backend refused keeps its throttle slot", async function () {
-    const langs = newLangs()
-    stubSpawn(langs, () => Ok(errorOutput("server-error", "boom", ["trace"], 500)))
-    await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
-    const second = await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
-    expect(second.val).toBeInstanceOf(BottleneckError)
+    vi.useFakeTimers()
+    try {
+      const langs = newLangs()
+      const calls = stubSpawn(langs, () => Ok(errorOutput("server-error", "boom", ["trace"], 500)))
+      await langs.submitMoocExercise("ex-uuid", "/path/to/ex")
+      void langs.submitMoocExercise("ex-uuid", "/path/to/ex")
+      await vi.advanceTimersByTimeAsync(MINIMUM_SUBMISSION_INTERVAL - 1)
+      expect(calls).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test("a submission right after another waits out the interval, then goes through", async function () {
+    vi.useFakeTimers()
+    try {
+      const langs = newLangs()
+      const calls = stubSpawn(langs, () =>
+        Ok(dataOutput("mooc-submission-finished", moocSubmitted)),
+      )
+      expect((await langs.submitMoocExercise("ex-uuid", "/path/to/ex")).ok).toBe(true)
+
+      const second = langs.submitMoocExercise("ex-uuid", "/path/to/ex")
+      await vi.advanceTimersByTimeAsync(MINIMUM_SUBMISSION_INTERVAL - 1)
+      expect(calls).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect((await second).ok).toBe(true)
+      expect(calls).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

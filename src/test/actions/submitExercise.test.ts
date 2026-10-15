@@ -155,8 +155,7 @@ function moocContextWith(gradingResult: unknown): {
   return { actionContext, setStanding, submit, wait }
 }
 
-// Like `moocContextWith`, but the submit itself resolves to an `Err` (e.g. the
-// submission-throttle BottleneckError or a submit failure).
+// Like `moocContextWith`, but the submit itself resolves to an `Err`.
 function moocContextWithErr(error: Error): {
   actionContext: ReadyActionContext
   setStanding: ReturnType<typeof vi.fn>
@@ -583,21 +582,6 @@ suite("submitExercise action, mooc", () => {
     // and the key is free again once the first submit finishes
     await submitExercise(actionContext, moocExercise)
     expect(submit).toHaveBeenCalledTimes(2)
-  })
-
-  test("a BottleneckError from the submission throttle is shown in the panel", async () => {
-    const error = new BottleneckError("You are submitting too fast, try again later.")
-    const { actionContext, setStanding } = moocContextWithErr(error)
-
-    const result = await submitExercise(actionContext, moocExercise)
-    expect(result).toEqual(Ok({ warnings: [] }))
-    expect(setStanding).not.toHaveBeenCalled()
-    expect(finishedCourses).toEqual([])
-    expect(lastView()).toMatchObject({
-      phase: "failed",
-      canKeepWaiting: false,
-      error: { message: "You are submitting too fast, try again later." },
-    })
   })
 
   test("the failure survives the webview boundary with its message intact", async () => {

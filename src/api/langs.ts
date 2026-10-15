@@ -53,7 +53,6 @@ import {
 import type { InitializationError } from "../errors"
 import {
   AuthorizationError,
-  BottleneckError,
   ConnectionError,
   DeviceLoginDeniedError,
   DeviceLoginExpiredError,
@@ -75,6 +74,7 @@ import {
   UploadExpiredError,
 } from "../errors"
 import { Logger, LogLevel } from "../utilities/logger"
+import { sleep } from "../utilities/utils"
 import type { FractionProgress } from "./dialog"
 
 interface Options {
@@ -843,9 +843,8 @@ export default class Langs {
    * an exercise type with no files at all can be. Nothing on disk or on the server is touched
    * then, `saveOldState` included.
    *
-   * @param saveOldState Submits the exercise's current state first. That takes a slot in the
-   * backend's submission throttle, so it can make this err with a `BottleneckError` without
-   * touching the exercise.
+   * @param saveOldState Submits the exercise's current state first, through the backend's
+   * submission throttle, so it may wait for up to `MINIMUM_SUBMISSION_INTERVAL` before that.
    */
   public async restoreSubmission(
     target: RestoreTarget,
@@ -948,9 +947,8 @@ export default class Langs {
    * Reverts an exercise to its template, via `reset-exercise`. The CLI downloads the template
    * before clearing the directory, so a failed download leaves the student's work in place.
    *
-   * @param saveOldState Submits the exercise's current state first. That takes a slot in the
-   * backend's submission throttle, so it can make this err with a `BottleneckError` without
-   * touching the exercise.
+   * @param saveOldState Submits the exercise's current state first, through the backend's
+   * submission throttle, so it may wait for up to `MINIMUM_SUBMISSION_INTERVAL` before that.
    */
   public async resetExercise(
     exerciseId: ExerciseIdentifier,
@@ -979,8 +977,7 @@ export default class Langs {
    * command internally.
    *
    * Throttled to one call per `MINIMUM_SUBMISSION_INTERVAL` shared with every other tmc call
-   * that submits — paste, and `--save-old-state` on reset and restore — and errs with a
-   * `BottleneckError` over that rate rather than waiting.
+   * that submits — paste, and `--save-old-state` on reset and restore — waiting its turn.
    *
    * @param exerciseId Id of the exercise.
    * @param progressCallback Reports completion as a 0..1 fraction, the unit every
@@ -1093,7 +1090,7 @@ export default class Langs {
    * courses.mooc.fi that is a submission the CLI then shares.
    *
    * Takes a slot in the backend's submission throttle, shared with every call that submits,
-   * and errs with a `BottleneckError` over that rate rather than waiting. Errs with an
+   * waiting its turn. Errs with an
    * `ExerciseNotFoundError` when the exercise is gone from its backend.
    */
   public async paste(
@@ -1153,8 +1150,8 @@ export default class Langs {
   }
 
   /**
-   * Runs `submit`, a call that makes the CLI submit to `backend`, unless one did less than
-   * `MINIMUM_SUBMISSION_INTERVAL` ago, which errs with a `BottleneckError` instead.
+   * Runs `submit`, a call that makes the CLI submit to `backend`, at least
+   * `MINIMUM_SUBMISSION_INTERVAL` after the previous one, waiting out the rest of it first.
    *
    * Every call that submits goes through here — the submit and paste commands, and
    * `--save-old-state` on reset and old-submission restore — so they throttle each other
@@ -1165,12 +1162,14 @@ export default class Langs {
     submit: () => Promise<Result<T, Error>>,
   ): Promise<Result<T, Error>> {
     const previous = this._nextSubmissionAllowedTimestamp[backend]
-    const now = Date.now()
-    if (now < previous) {
-      return Err(new BottleneckError("This command can't be executed at the moment."))
-    }
-    const claimed = now + MINIMUM_SUBMISSION_INTERVAL
+    const start = Math.max(Date.now(), previous)
+    const claimed = start + MINIMUM_SUBMISSION_INTERVAL
     this._nextSubmissionAllowedTimestamp[backend] = claimed
+    const wait = start - Date.now()
+    if (wait > 0) {
+      Logger.info(`Submitting in ${wait} ms, ${MINIMUM_SUBMISSION_INTERVAL} ms after the previous`)
+      await sleep(wait)
+    }
     const result = await submit()
     if (
       result.err &&

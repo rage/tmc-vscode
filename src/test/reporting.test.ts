@@ -285,8 +285,8 @@ function showSubmission(actionContext: ReadyActionContext): void {
 }
 
 const offline = (): Error => new Error("offline")
-const throttled = async (): Promise<Err<Error>> =>
-  Err(new BottleneckError("This command can't be executed at the moment."))
+const busy = async (): Promise<Err<Error>> =>
+  Err(new BottleneckError("This exercise is being reset."))
 const oldSubmission = makeMoocKind({
   exerciseId: EXERCISE_ID,
   submissions: [{ id: "sub-1", created_at: "2026-01-01T00:00:00Z", grading_progress: null }],
@@ -390,14 +390,14 @@ suite("reported once: exercise commands", function () {
     ["tmc.pasteExercise", "paste"],
     ["tmc.resetExercise", "resetExercise"],
     ["tmc.downloadOldSubmission", "restoreSubmission"],
-  ])("a throttled %s says so, as information", async function (id, method) {
+  ])("a busy %s says so, as information", async function (id, method) {
     const { run, shown } = await harness({
-      langs: { getOldSubmissions: oldSubmissions, [method]: throttled },
+      langs: { getOldSubmissions: oldSubmissions, [method]: busy },
     })
 
     await run(id)
 
-    expect(shown).toEqual(["info: This command can't be executed at the moment."])
+    expect(shown).toEqual(["info: This exercise is being reset."])
   })
 
   test("a failed paste from the panel shows in the panel only", async function () {

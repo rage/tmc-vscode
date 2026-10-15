@@ -28,10 +28,9 @@ import type {
 } from "../../shared/langsSchema"
 import { makeMoocKind, makeTmcKind } from "../../shared/lib"
 import Langs from "../api/langs"
-import { CLIENT_NAME, TMC_LANGS_VERSION } from "../config/constants"
+import { CLIENT_NAME, MINIMUM_SUBMISSION_INTERVAL, TMC_LANGS_VERSION } from "../config/constants"
 import {
   AuthorizationError,
-  BottleneckError,
   DeviceLoginExpiredError,
   ExerciseNotFoundError,
   InvalidTokenError,
@@ -324,23 +323,18 @@ suite("tmc langs cli spec", function () {
         !url && expect.fail("expected to receive submission url during submission.")
       })
 
-      test("should encounter an error if trying to submit the exercise twice too soon", async function () {
+      test("should wait out the submission interval before a second submission", async function () {
+        const started = Date.now()
         const firstSubmission = tmc.submitTmcExerciseAndWaitForResults(1, exercisePath)
         const second = tmc.submitTmcExerciseAndWaitForResults(1, exercisePath)
         const [, secondResult] = await Promise.all([firstSubmission, second])
-        expect(secondResult.val).to.be.instanceOf(BottleneckError)
+        expect(secondResult.ok).to.be.true
+        expect(Date.now() - started).to.be.at.least(MINIMUM_SUBMISSION_INTERVAL)
       })
 
       test("should be able to submit the exercise to TMC-paste", async function () {
         const pasteUrl = await unwrapResult(tmc.paste(idOfTmcExercise(1), exercisePath))
         expect(pasteUrl).to.include("localhost")
-      })
-
-      test("should encounter an error if trying to submit to paste twice too soon", async function () {
-        const firstSubmission = tmc.paste(idOfTmcExercise(1), exercisePath)
-        const second = tmc.paste(idOfTmcExercise(1), exercisePath)
-        const [, secondResult] = await Promise.all([firstSubmission, second])
-        expect(secondResult.val).to.be.instanceOf(BottleneckError)
       })
     })
 
@@ -771,8 +765,8 @@ suite("tmc langs cli spec", function () {
 
       // Two submissions of the same exercise. The CLI compresses the on-disk
       // directory into the submitted archive, so each submission captures the
-      // student file content at submit time. Langs throttles consecutive submits
-      // per instance, so the second goes through a fresh one.
+      // student file content at submit time. A fresh Langs skips the wait between
+      // consecutive submits of one instance.
       fs.writeFileSync(studentFile, olderContent)
       ;(await submitMoocAndWaitForGrading(tmc, PASSING_EXERCISE_ID, exercisePath)).unwrap()
       fs.writeFileSync(studentFile, newerContent)
