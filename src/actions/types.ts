@@ -1,5 +1,6 @@
 import type { AiUseGate } from "../api/aiUseGate"
 import type { AuthState } from "../api/authState"
+import type { CourseWorkspaceSwitches } from "../api/courseWorkspaceSwitches"
 import type Dialog from "../api/dialog"
 import type ExerciseDecorationProvider from "../api/exerciseDecorationProvider"
 import type Langs from "../api/langs"
@@ -14,6 +15,7 @@ import type CoursesTree from "../ui/treeview/treeview"
 export interface ReadyStartup {
   kind: "ready"
   aiUseGate: AiUseGate
+  courseWorkspaceSwitches: CourseWorkspaceSwitches
   exerciseDecorationProvider: ExerciseDecorationProvider
   langs: Langs
   resources: Resources

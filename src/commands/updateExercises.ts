@@ -16,15 +16,16 @@ import { Logger } from "../utilities"
  * the refresh after a submit. It suppresses the "up to date" toast and the failure
  * notification but deliberately not the "Found updates" prompt, which together with
  * its "Remind me later" postponement is the only thing that reaches a user who has
- * turned automatic updates off. A run the user asked for skips the CLI's cached answer.
+ * turned automatic updates off. `"promptless"` is `"silent"` without that prompt too. A run the
+ * user asked for skips the CLI's cached answer.
  */
 export async function updateExercises(
   actionContext: ReadyActionContext,
-  mode?: "silent" | "loud",
+  mode?: "silent" | "promptless" | "loud",
 ): Promise<void> {
   const { dialog, settings } = actionContext
   const { userData } = actionContext.startup
-  const silent = mode === "silent"
+  const silent = mode === "silent" || mode === "promptless"
   Logger.info("Checking for exercise updates")
 
   const updateablesResult = await withOperation(
@@ -82,7 +83,7 @@ export async function updateExercises(
       })
     : updateable
 
-  if (exercisesToUpdate.length === 0) {
+  if (exercisesToUpdate.length === 0 || mode === "promptless") {
     if (!silent && failures.length === 0) {
       dialog.statusMessage("All exercises are up to date.")
     }

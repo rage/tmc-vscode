@@ -24,7 +24,7 @@ export async function openCourseWorkspace(
     void actionContext.dialog.reportError("Failed to open the course workspace.", course.val)
     return
   }
-  await openWorkspace(actionContext, LocalCourseData.getCourseName(course.val), course.val.kind)
+  await openWorkspace(actionContext, course.val)
 }
 
 export async function switchWorkspace(actionContext: ReadyActionContext): Promise<void> {

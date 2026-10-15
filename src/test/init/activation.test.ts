@@ -7,6 +7,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { BackendKind } from "../../../shared/lib"
+import { CourseWorkspaceSwitches } from "../../api/courseWorkspaceSwitches"
 import {
   EXERCISE_CHECK_INTERVAL,
   EXTENSION_VERSION,
@@ -66,7 +67,7 @@ const sessionState = vi.hoisted(() => ({ previousVersion: undefined as string | 
 
 const storedMigration = vi.hoisted(() => ({ outcome: { kind: "done" } as unknown }))
 
-const courseRefresh = vi.hoisted(() => ({ runs: 0 }))
+const courseRefresh = vi.hoisted(() => ({ runs: 0, options: [] as unknown[] }))
 
 const registration = vi.hoisted(() => ({ dispose: (): void => {} }))
 
@@ -222,8 +223,9 @@ vi.mock("../../actions", () => ({
 
 // Only `refreshEverything` (the activation background refresh) actually runs.
 vi.mock("../../commands", () => ({
-  refreshEverything: async (): Promise<unknown> => {
+  refreshEverything: async (_context: unknown, options: unknown): Promise<unknown> => {
     courseRefresh.runs += 1
+    courseRefresh.options.push(options)
     return Ok.EMPTY
   },
   refreshCourses: async (): Promise<void> => {},
@@ -298,6 +300,7 @@ function resetActivationRecording(): void {
   storedUserData.read = (): unknown => undefined
   storedMigration.outcome = { kind: "done" }
   courseRefresh.runs = 0
+  courseRefresh.options.length = 0
   sessionState.previousVersion = undefined
   langsStub.authenticated = false
   langsStub.authChecks = 0
@@ -655,6 +658,28 @@ suite("the startup course refresh", function () {
     await activate(createContext())
 
     await vi.waitFor(() => expect(courseRefresh.runs).toBe(2))
+  })
+
+  test("offers nothing in a window another one has just switched to", async function () {
+    const context = createContext()
+    const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
+    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo)
+    Object.defineProperty(vscode.workspace, "workspaceFile", {
+      value: vscode.Uri.file(switchedTo),
+      configurable: true,
+    })
+    try {
+      await activate(context)
+    } finally {
+      Object.defineProperty(vscode.workspace, "workspaceFile", {
+        value: undefined,
+        configurable: true,
+      })
+    }
+
+    await vi.waitFor(() =>
+      expect(courseRefresh.options).toEqual([{ silent: true, isPromptless: true }]),
+    )
   })
 })
 

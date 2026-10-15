@@ -1,29 +1,33 @@
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import type { BackendKind } from "../../shared/lib"
-import { backendName } from "../../shared/lib"
+import { LocalCourseData } from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
 import { Logger } from "../utilities"
 
 /**
- * Opens `backend`'s course workspace in explorer. If a workspace is already open,
- * asks the user first.
+ * Opens a course's workspace in this window.
+ *
+ * Asks first only when that closes something of the student's own, a folder or a workspace
+ * that is not a course workspace, and then offers a new window instead. Another course's
+ * workspace has nothing to lose: course workspaces save on focus change.
  */
 export async function openWorkspace(
   actionContext: ReadyActionContext,
-  name: string,
-  backend: BackendKind,
+  course: LocalCourseData,
 ): Promise<void> {
   const { dialog } = actionContext
-  const { resources, workspaceManager } = actionContext.startup
+  const { courseWorkspaceSwitches, resources, workspaceManager } = actionContext.startup
 
   const currentWorkspaceFile = vscode.workspace.workspaceFile
-  const workspaceFile = resources.getWorkspaceFilePath(name, backend)
+  const workspaceFile = resources.getWorkspaceFilePath(
+    LocalCourseData.getCourseName(course),
+    course.kind,
+  )
   const workspaceAsUri = vscode.Uri.file(workspaceFile)
   Logger.info(`Current workspace: ${currentWorkspaceFile?.fsPath}`)
-  Logger.info(`${backendName(backend)} workspace: ${workspaceFile}`)
+  Logger.info(`Course workspace: ${workspaceFile}`)
 
   // `vscode.openFolder` reloads the window even for the workspace already open,
   // discarding unsaved editors, so only focus the explorer in that case.
@@ -33,21 +37,27 @@ export async function openWorkspace(
     return
   }
 
-  const openCourseWorkspace = async (): Promise<void> => {
-    await withOperation(dialog, { failure: "Failed to open the course workspace." }, async () => {
-      await workspaceManager.createWorkspaceFile(name, backend)
-      await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri)
-      return Ok.EMPTY
-    })
+  const isEmptyWindow =
+    !currentWorkspaceFile && (vscode.workspace.workspaceFolders ?? []).length === 0
+  const where =
+    isEmptyWindow || workspaceManager.activeCourse !== undefined
+      ? "here"
+      : await dialog.choose(
+          `Open the ${LocalCourseData.getCourseTitle(course)} course workspace?`,
+          { detail: `${vscode.workspace.name ?? "The open folder"} will close in this window.` },
+          ["Open Here", "here" as const],
+          ["Open in New Window", "newWindow" as const],
+        )
+  if (where === undefined) {
+    return
   }
 
-  if (
-    !currentWorkspaceFile ||
-    (await dialog.confirm(`Open the ${backendName(backend)} course workspace?`, {
-      confirmLabel: "Open Workspace",
-      detail: "The workspace open in this window will be closed.",
-    }))
-  ) {
-    await openCourseWorkspace()
-  }
+  await withOperation(dialog, { failure: "Failed to open the course workspace." }, async () => {
+    await workspaceManager.createWorkspaceFile(LocalCourseData.getCourseName(course), course.kind)
+    await courseWorkspaceSwitches.record(workspaceAsUri.fsPath)
+    await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri, {
+      forceNewWindow: where === "newWindow",
+    })
+    return Ok.EMPTY
+  })
 }

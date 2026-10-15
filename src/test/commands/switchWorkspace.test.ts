@@ -70,7 +70,7 @@ suite("Switch workspace command", function () {
 
     await switchWorkspace(context)
 
-    expect(openWorkspace).toHaveBeenCalledExactlyOnceWith(context, "python-course", "mooc")
+    expect(openWorkspace).toHaveBeenCalledExactlyOnceWith(context, courses[1])
   })
 
   test("marks the course whose workspace is already open", async function () {

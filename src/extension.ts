@@ -18,6 +18,7 @@ import { isReady } from "./actions/types"
 import AiRestriction, { isActiveCourseAiAllowed } from "./api/aiRestriction"
 import { AiUseGate, warnOfUnwritableWorkspaceFile } from "./api/aiUseGate"
 import { createAuthState } from "./api/authState"
+import { CourseWorkspaceSwitches } from "./api/courseWorkspaceSwitches"
 import type { NotificationButton } from "./api/dialog"
 import Dialog from "./api/dialog"
 import ExerciseDecorationProvider from "./api/exerciseDecorationProvider"
@@ -175,9 +176,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 /** When the last unprompted refresh started, in epoch milliseconds. */
 let lastBackgroundRefreshAt = 0
 
-function refreshInBackground(ready: ReadyActionContext): void {
+function refreshInBackground(ready: ReadyActionContext, isPromptless = false): void {
   lastBackgroundRefreshAt = Date.now()
-  void refreshEverything(ready, { silent: true }).catch((e) =>
+  void refreshEverything(ready, { silent: true, isPromptless }).catch((e) =>
     Logger.error("Background refresh failed", e),
   )
 }
@@ -433,6 +434,11 @@ async function activateInner(
       ? new ExerciseDecorationProvider(userData.val, workspaceManager)
       : undefined
 
+  const courseWorkspaceSwitches = new CourseWorkspaceSwitches(context.globalState)
+  // The window that switched here has just offered whatever the startup refresh would.
+  const isOpenedBySwitch = await courseWorkspaceSwitches.take(
+    vscode.workspace.workspaceFile?.fsPath,
+  )
   const trustGate = new WorkspaceTrustGate()
   context.subscriptions.push(trustGate)
   const startup: Startup =
@@ -440,6 +446,7 @@ async function activateInner(
       ? {
           kind: "ready",
           aiUseGate: new AiUseGate(aiRestriction),
+          courseWorkspaceSwitches,
           langs: langs.val,
           resources: resources.val,
           trustGate,
@@ -545,7 +552,7 @@ async function activateInner(
   }
 
   if (readyContext && authState.loggedIn) {
-    refreshInBackground(readyContext)
+    refreshInBackground(readyContext, isOpenedBySwitch)
   }
 
   async function runMaintenancePoll(): Promise<void> {

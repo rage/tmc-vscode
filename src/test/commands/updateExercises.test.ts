@@ -293,6 +293,16 @@ suite("updateExercises command", function () {
     )
   })
 
+  test("a promptless run offers nothing, but still records what it found", async function () {
+    checkForExerciseUpdates.mockResolvedValueOnce(checked([outdated(1, 10)]))
+    const [actionContext, dialog] = contextWith(false)
+
+    await updateExercises(actionContext, "promptless")
+
+    expect(dialog.notification).not.toHaveBeenCalled()
+    expect(updateablesRegistry.get(idOfTmcCourse(1))).toHaveLength(1)
+  })
+
   test("reports a reminder that could not be postponed once", async function () {
     checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10), outdated(2, 20)]))
     const [actionContext, dialog, setNewExerciseNotifyAfter] = contextWith(false)
