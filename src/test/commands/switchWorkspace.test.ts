@@ -1,10 +1,10 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
-import * as vscode from "vscode"
 
 import { CourseIdentifier, LocalCourseData } from "../../../shared/lib"
 import type { ReadyActionContext } from "../../actions/types"
 import type { Item } from "../../api/dialog"
+import type WorkspaceManager from "../../api/workspaceManager"
 import { openWorkspace } from "../../commands/openWorkspace"
 import { switchWorkspace } from "../../commands/switchWorkspace"
 import type { UserData } from "../../config/userdata"
@@ -26,17 +26,15 @@ const courses = [
   },
 ] as LocalCourseData[]
 
-/** VS Code names a course window `<slug>-<backend> (Workspace)`. */
-function openWorkspaceNamed(name: string | undefined): void {
-  Object.defineProperty(vscode.workspace, "name", { value: name, configurable: true })
-}
-
 interface Harness {
   context: ReadyActionContext
   offered: string[]
 }
 
-function harness(pick: number | "dismissed" = 0): Harness {
+function harness(
+  pick: number | "dismissed" = 0,
+  open?: Pick<WorkspaceManager, "activeCourse" | "activeCourseBackend">,
+): Harness {
   const [dialog] = createDialogMock()
   const offered: string[] = []
   dialog.selectItem = vi.fn(async (_prompt: unknown, ...items: Item<unknown>[]) => {
@@ -55,16 +53,23 @@ function harness(pick: number | "dismissed" = 0): Harness {
     },
   } as unknown as UserData
   return {
-    context: { ...createMockActionContext({ startup: { userData } }), dialog },
+    context: {
+      ...createMockActionContext({
+        startup: {
+          userData,
+          workspaceManager: {
+            activeCourse: open?.activeCourse,
+            activeCourseBackend: open?.activeCourseBackend,
+          } as WorkspaceManager,
+        },
+      }),
+      dialog,
+    },
     offered,
   }
 }
 
 suite("Switch workspace command", function () {
-  beforeEach(function () {
-    openWorkspaceNamed(undefined)
-  })
-
   test("opens the workspace of the course the user picked, tagged by its backend", async function () {
     const { context } = harness(1)
 
@@ -74,8 +79,10 @@ suite("Switch workspace command", function () {
   })
 
   test("marks the course whose workspace is already open", async function () {
-    openWorkspaceNamed("python-course-tmc (Workspace)")
-    const { context, offered } = harness()
+    const { context, offered } = harness(0, {
+      activeCourse: "python-course",
+      activeCourseBackend: "tmc",
+    })
 
     await switchWorkspace(context)
 

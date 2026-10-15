@@ -1,5 +1,3 @@
-import * as vscode from "vscode"
-
 import type { CourseIdentifier } from "../../shared/lib"
 import { LocalCourseData } from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
@@ -30,15 +28,15 @@ export async function openCourseWorkspace(
 export async function switchWorkspace(actionContext: ReadyActionContext): Promise<void> {
   Logger.info("Switching workspace")
 
-  // Workspace files are named `<slug>-<backend>`, so compare against the tagged name.
-  const currentWorkspace = vscode.workspace.name?.split(" ")[0]
+  const { workspaceManager } = actionContext.startup
   const courseId = await pickCourse(actionContext, {
     title: "Switch Course Workspace",
     placeHolder: "Select a course workspace to open",
-    decorate: (course, title) => {
-      const taggedName = `${LocalCourseData.getCourseName(course)}-${course.kind}`
-      return taggedName === currentWorkspace ? `${title} (Currently open)` : title
-    },
+    decorate: (course, title) =>
+      course.kind === workspaceManager.activeCourseBackend &&
+      LocalCourseData.getCourseName(course) === workspaceManager.activeCourse
+        ? `${title} (Currently open)`
+        : title,
   })
   if (courseId) {
     await openCourseWorkspace(actionContext, courseId)
