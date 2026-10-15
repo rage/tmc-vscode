@@ -299,13 +299,14 @@ async function activateInner(
 
   // Seeded from the startup check above; shared with the background poll further down.
   const sessionExpiry = createSessionExpiryTracker(authState.loggedIn, sessionExpiredWarning)
+  dialog.setSessionLostReporter((cause) => sessionExpiry.onSessionLost(cause))
 
   if (langs.ok) {
     langs.val.on("login", async () => {
       await authState.set(true)
       sessionExpiry.onLogin()
     })
-    langs.val.on("logout", async (expected) => {
+    langs.val.on("logout", async (expected, rejection) => {
       if (expected) {
         await authState.set(false)
         sessionExpiry.onLogout()
@@ -315,7 +316,7 @@ async function activateInner(
       if (checked.err) {
         Logger.error("Failed to check if authenticated", checked.val)
       }
-      sessionExpiry.onAuthChecked(authState.loggedIn)
+      sessionExpiry.onAuthChecked(authState.loggedIn, rejection)
     })
     langs.val.on("notification", (notification) => {
       void dialog.warningNotification(notification.message)

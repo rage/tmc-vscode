@@ -9,7 +9,7 @@ import type {
 } from "../../../shared/lib"
 import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import Dialog, { courseSelectionItems, separator } from "../../api/dialog"
-import { InsufficientScopeError, RuntimeError } from "../../errors"
+import { InsufficientScopeError, InvalidTokenError, RuntimeError } from "../../errors"
 import { Logger, LogLevel } from "../../utilities"
 
 suite("Dialog.selectItem", function () {
@@ -299,6 +299,21 @@ suite("Dialog.reportError", function () {
 
     expect(buttonTitles(show)).toEqual(["Log in", "Show logs"])
     expect(executeCommand).toHaveBeenCalledWith("tmc.showMoocLogin")
+  })
+
+  // The session-expired warning is the one message for a lost session.
+  test("hands a lost session to the session reporter instead of a notification", async function () {
+    vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    const show = stubMessage("showErrorMessage", () => undefined)
+    const reportSessionLost = vi.fn()
+    const dialog = new Dialog()
+    dialog.setSessionLostReporter(reportSessionLost)
+    const rejection = new InvalidTokenError("Invalid token. Deleted credentials file.")
+
+    await dialog.reportError("Failed to fetch updates for python.", rejection)
+
+    expect(reportSessionLost).toHaveBeenCalledWith(rejection)
+    expect(show).not.toHaveBeenCalled()
   })
 
   test("an error with no remedy of its own reads as the operation plus the error", async function () {

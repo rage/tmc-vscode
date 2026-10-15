@@ -196,6 +196,14 @@ function userSentence(error: Error): string {
  * for a failure the user cannot act on. No message carries diagnostics; see
  * {@link userSentence}. An error a backend raised names that backend where it matters.
  */
+/** Whether `error` means the courses.mooc.fi session is gone, which only a new login fixes. */
+export function isSessionLost(error: Error): boolean {
+  const backend = error instanceof BaseError ? error.backend : undefined
+  return (
+    error instanceof InvalidTokenError || (error instanceof AuthorizationError && backend !== "tmc")
+  )
+}
+
 export function presentationFor(error: Error): ErrorPresentation {
   const backend = error instanceof BaseError ? error.backend : undefined
   const reported = userSentence(error)
@@ -215,10 +223,7 @@ export function presentationFor(error: Error): ErrorPresentation {
       actions: [],
     }
   }
-  if (
-    error instanceof InvalidTokenError ||
-    (error instanceof AuthorizationError && backend !== "tmc")
-  ) {
+  if (isSessionLost(error)) {
     return {
       message: `Your ${backendName("mooc")} session has ended. Log in again to continue.`,
       actions: [{ label: "Log in", command: "tmc.showMoocLogin" }],

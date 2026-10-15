@@ -315,7 +315,7 @@ export default class Langs {
   private readonly _options: Options
   private readonly _responseCache: Map<string, ResponseCacheEntry>
   private _onLogin?: () => void
-  private _onLogout?: (expected: boolean) => void
+  private _onLogout?: (expected: boolean, rejection?: Error) => void
   private _onNotification?: (notification: Notification) => void
   /** Messages already surfaced; the CLI repeats a plugin's warning on every run. */
   private readonly _shownNotifications = new Set<string>()
@@ -356,23 +356,27 @@ export default class Langs {
    * Sets the callback to an event, replacing any earlier one.
    *
    * There is one session: `login` follows a successful {@link authenticate}, and `logout`
-   * carries `expected: true` after {@link deauthenticate} and `false` when a backend rejected
-   * the credentials it was sent. A rejection need not end the session, as the other
-   * credential may still be good, so a subscriber re-checks with {@link isAuthenticated}.
+   * carries `expected: true` after {@link deauthenticate} and `false`, with the error the call
+   * resolves to, when a backend rejected the credentials it was sent. A rejection need not end
+   * the session, as the other credential may still be good, so a subscriber re-checks with
+   * {@link isAuthenticated}.
    */
   public on(event: "login", callback: () => void): void
-  public on(event: "logout", callback: (expected: boolean) => void): void
+  public on(event: "logout", callback: (expected: boolean, rejection?: Error) => void): void
   public on(event: "notification", callback: (notification: Notification) => void): void
   public on(
     event: "login" | "logout" | "notification",
-    callback: (() => void) | ((expected: boolean) => void) | ((notification: Notification) => void),
+    callback:
+      | (() => void)
+      | ((expected: boolean, rejection?: Error) => void)
+      | ((notification: Notification) => void),
   ): void {
     switch (event) {
       case "login":
         this._onLogin = callback as () => void
         break
       case "logout":
-        this._onLogout = callback as (expected: boolean) => void
+        this._onLogout = callback as (expected: boolean, rejection?: Error) => void
         break
       case "notification":
         this._onNotification = callback as (notification: Notification) => void
@@ -1392,24 +1396,27 @@ export default class Langs {
         // Never a race: the backend has no record of a file the CLI named for this
         // exercise, so a retry cannot help.
         return Err(new UnknownUploadError(message, details))
-      case "invalid-token":
+      case "invalid-token": {
         this._clearBackendCache(auth.backend)
+        const rejection = new InvalidTokenError(message)
         if (!auth.expected) {
-          this._onLogout?.(false)
+          this._onLogout?.(false, rejection)
         }
-        return Err(new InvalidTokenError(message))
-      case "not-logged-in":
+        return Err(rejection)
+      }
+      case "not-logged-in": {
         this._clearBackendCache(auth.backend)
-        if (!auth.expected) {
-          this._onLogout?.(false)
-        }
         // tmc.mooc.fi may not accept courses.mooc.fi tokens yet, and logging in again
         // cannot change that.
-        return Err(
+        const rejection =
           auth.backend === "tmc"
             ? new TmcLoginNotAcceptedError(message, details)
-            : new AuthorizationError(message, details),
-        )
+            : new AuthorizationError(message, details)
+        if (!auth.expected) {
+          this._onLogout?.(false, rejection)
+        }
+        return Err(rejection)
+      }
       case "device-login-denied":
         return Err(new DeviceLoginDeniedError(message, details))
       case "device-login-expired":

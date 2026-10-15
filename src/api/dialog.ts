@@ -2,7 +2,7 @@ import * as vscode from "vscode"
 
 import type { CourseIdentifier } from "../../shared/lib"
 import { backendName, LocalCourseData } from "../../shared/lib"
-import { presentationFor } from "../errors"
+import { isSessionLost, presentationFor } from "../errors"
 import { Logger } from "../utilities"
 
 /**
@@ -84,6 +84,8 @@ export function courseSelectionItems(
 export default class Dialog {
   private static readonly _logsButton: NotificationButton = ["Show logs", (): void => Logger.show()]
 
+  private _reportSessionLost: ((cause: Error) => void) | undefined
+
   /**
    * Asks the user to confirm an action, in a modal dialog.
    *
@@ -140,6 +142,14 @@ export default class Dialog {
   }
 
   /**
+   * Takes over {@link reportError}'s notification for a lost session, which the session's own
+   * warning already tells about; `undefined` hands it back.
+   */
+  public setSessionLostReporter(reporter: ((cause: Error) => void) | undefined): void {
+    this._reportSessionLost = reporter
+  }
+
+  /**
    * Reports a failed operation: `message` says what was being done, and `error` supplies
    * the rest of the sentence and any buttons its class prescribes.
    *
@@ -148,6 +158,11 @@ export default class Dialog {
    * button, which {@link Logger} writes in full.
    */
   public async reportError(message: string, error: Error): Promise<void> {
+    if (this._reportSessionLost && isSessionLost(error)) {
+      Logger.warn(message, error)
+      this._reportSessionLost(error)
+      return
+    }
     const presentation = presentationFor(error)
     const buttons = presentation.actions.map<NotificationButton>(({ label, command }) => [
       label,

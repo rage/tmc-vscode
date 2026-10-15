@@ -939,7 +939,7 @@ suite("Langs error-kind mapping", function () {
 
     const result = await langs.getEnrolledMoocCourses()
     expect(result.val).toBeInstanceOf(InvalidTokenError)
-    expect(onLogout).toHaveBeenCalledExactlyOnceWith(false)
+    expect(onLogout).toHaveBeenCalledExactlyOnceWith(false, result.val)
 
     // tmc.mooc.fi did not reject anything, so its data is still good.
     await langs.getTmcOrganizations()
@@ -981,7 +981,7 @@ suite("Langs error-kind mapping", function () {
 
     const tmc = await langs.getTmcOrganizations()
     expect(tmc.val).toBeInstanceOf(TmcLoginNotAcceptedError)
-    expect(onLogout).toHaveBeenCalledExactlyOnceWith(false)
+    expect(onLogout).toHaveBeenCalledExactlyOnceWith(false, tmc.val)
 
     const mooc = await langs.getEnrolledMoocCourses()
     expect(mooc.val).toBeInstanceOf(AuthorizationError)
