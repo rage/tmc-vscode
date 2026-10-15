@@ -749,8 +749,9 @@ export default class Langs {
 
   /**
    * Downloads courses.mooc.fi exercises into the projects directory, or updates those already
-   * there, via `mooc download-or-update-course-exercises`. Each exercise is its template:
-   * courses.mooc.fi has no latest-submission download.
+   * there, via `mooc download-or-update-course-exercises`. Each exercise is its template: the
+   * CLI has no latest-submission download for courses.mooc.fi, so `downloadOrUpdateExercises`
+   * restores that itself.
    *
    * @param courseId The course every exercise belongs to, when they share one; without it the
    * CLI looks for each exercise in every course the user is enrolled in.

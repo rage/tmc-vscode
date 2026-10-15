@@ -6,10 +6,12 @@ import {
   backendName,
   ExerciseIdentifier,
   LocalCourseExercise,
+  makeMoocKind,
   match,
   partition,
 } from "../../shared/lib"
-import type { ExerciseDownloadProgress, ExerciseDownloads } from "../api/langs"
+import type Langs from "../api/langs"
+import type { ExerciseDownload, ExerciseDownloadProgress, ExerciseDownloads } from "../api/langs"
 import type { OperationWarning, Warned } from "../api/withOperation"
 import { ExerciseUpdateError, presentationFor } from "../errors"
 import { downloadFailures } from "../ui/downloadFailures"
@@ -84,6 +86,7 @@ async function download(
     )
 
   let cancelled = false
+  const unrestored: ExerciseIdentifier[] = []
   const legs = await dialog.progressNotification(
     "Downloading exercises…",
     async (progress, token) => {
@@ -130,9 +133,22 @@ async function download(
       await runLeg("tmc", tmcIds.length, () =>
         langs.downloadTmcExercises(tmcIds, downloadTemplate, onDownloaded, registerInterrupt),
       )
-      await runLeg("mooc", moocIds.length, () =>
-        langs.downloadMoocExercises(moocIds, moocCourseId, onDownloaded, registerInterrupt),
-      )
+      await runLeg("mooc", moocIds.length, async () => {
+        const alreadyLocal = downloadTemplate ? undefined : await localMoocExerciseIds(langs)
+        const downloads = await langs.downloadMoocExercises(
+          moocIds,
+          moocCourseId,
+          onDownloaded,
+          registerInterrupt,
+        )
+        if (alreadyLocal && downloads.ok && !cancelled) {
+          const fresh = downloads.val.downloaded.filter(
+            ({ id }) => !alreadyLocal.has(ExerciseIdentifier.toString(id)),
+          )
+          unrestored.push(...(await restoreLatestSubmissions(langs, fresh)))
+        }
+        return downloads
+      })
       return finished
     },
     { cancellable: true },
@@ -169,6 +185,13 @@ async function download(
     return { ...results, warnings: [] }
   }
   const warnings: OperationWarning[] = []
+  if (unrestored.length > 0) {
+    const names = unrestored.map((id) => exerciseName(actionContext, id))
+    warnings.push({
+      headline: `Downloaded the template of ${describeExercises(names)}: the latest submission could not be restored. Use Download Old Submission to get it.`,
+      error: new ExerciseUpdateError("restoring the latest submission failed"),
+    })
+  }
   if (results.failed.length > 0) {
     const names = results.failed.map((id) => exerciseName(actionContext, id))
     warnings.push({
@@ -177,6 +200,64 @@ async function download(
     })
   }
   return { ...results, warnings }
+}
+
+/**
+ * The mooc exercises already in the projects directory, by id, or `undefined` when they cannot
+ * be listed: a download then must not put a submission over what may be the student's work.
+ */
+async function localMoocExerciseIds(langs: Langs): Promise<Set<string> | undefined> {
+  const local = await langs.listLocalExercises()
+  if (local.err) {
+    Logger.error("Could not list local exercises; downloading templates only", local.val)
+    return undefined
+  }
+  return new Set(
+    local.val.flatMap((exercise) => (exercise.backend === "mooc" ? [exercise["exercise-id"]] : [])),
+  )
+}
+
+/**
+ * Puts each newly downloaded mooc exercise's latest submission over its template, as the tmc
+ * download does itself for `testMyCode.downloadOldSubmission`.
+ *
+ * @returns The exercises left at their template because the restore failed.
+ */
+async function restoreLatestSubmissions(
+  langs: Langs,
+  downloads: ExerciseDownload[],
+): Promise<ExerciseIdentifier[]> {
+  const unrestored: ExerciseIdentifier[] = []
+  for (const { id, path } of downloads) {
+    const listed = await langs.getOldSubmissions(id)
+    if (listed.err) {
+      Logger.error(
+        `Could not list the submissions of ${ExerciseIdentifier.toString(id)}`,
+        listed.val,
+      )
+      unrestored.push(id)
+      continue
+    }
+    // `get-exercise-submissions` lists newest first.
+    const latest = match(
+      listed.val,
+      () => undefined,
+      ({ exerciseId, submissions }) =>
+        submissions[0] && makeMoocKind({ exerciseId, submissionId: submissions[0].id }),
+    )
+    if (!latest) {
+      continue
+    }
+    const restored = await langs.restoreSubmission(latest, path, false)
+    if (restored.err) {
+      Logger.error(
+        `Could not restore the latest submission of ${ExerciseIdentifier.toString(id)}`,
+        restored.val,
+      )
+      unrestored.push(id)
+    }
+  }
+  return unrestored
 }
 
 /**
