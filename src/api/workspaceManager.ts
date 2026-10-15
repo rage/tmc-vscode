@@ -977,29 +977,19 @@ export default class WorkspaceManager implements vscode.Disposable {
       return
     }
     const { slug: activeCourse, backend: activeBackend } = activeCourseWorkspace
-
-    // TODO: Check that document is a valid exercise
-    const isCode = this._resources.editorKind === EditorKind.Code
-    Logger.debug("Text document languageId", e.languageId)
+    if (e.languageId === "markdown") {
+      // Only instructions open rendered: other markdown may be the student's own writing.
+      if (/^(tmc-)?readme\b/i.test(path.basename(e.uri.fsPath))) {
+        void vscode.commands.executeCommand("markdown.showPreview", e.uri)
+      }
+      return
+    }
+    // VS Code itself recommends a language's extension when a file of it opens; a workspace
+    // recommendation on top only adds a second toast. Other editors lack that.
+    if (this._resources.editorKind === EditorKind.Code) {
+      return
+    }
     switch (e.languageId) {
-      case "c":
-      case "cpp":
-      case "objective-c":
-      case "objective-cpp":
-        if (isCode && !vscode.extensions.getExtension("ms-vscode.cpptools")) {
-          void this.addWorkspaceRecommendation(activeCourse, activeBackend, ["ms-vscode.cpptools"])
-        }
-        break
-      case "csharp":
-        if (isCode && !vscode.extensions.getExtension("ms-dotnettools.csharp")) {
-          void this.addWorkspaceRecommendation(activeCourse, activeBackend, [
-            "ms-dotnettools.csharp",
-          ])
-        }
-        break
-      case "markdown":
-        vscode.commands.executeCommand("markdown.showPreview", e.uri)
-        break
       case "r":
         if (!vscode.extensions.getExtension("ikuyadeu.r")) {
           void this.addWorkspaceRecommendation(activeCourse, activeBackend, ["ikuyadeu.r"])
@@ -1007,22 +997,7 @@ export default class WorkspaceManager implements vscode.Disposable {
         break
       case "python":
         if (!vscode.extensions.getExtension("ms-python.python")) {
-          if (isCode && !vscode.extensions.getExtension("ms-python.vscode-pylance")) {
-            void this.addWorkspaceRecommendation(activeCourse, activeBackend, [
-              "ms-python.vscode-pylance",
-              "ms-python.python",
-            ])
-          } else {
-            void this.addWorkspaceRecommendation(activeCourse, activeBackend, ["ms-python.python"])
-          }
-        }
-
-        break
-      case "java":
-        if (isCode && !vscode.extensions.getExtension("vscjava.vscode-java-pack")) {
-          void this.addWorkspaceRecommendation(activeCourse, activeBackend, [
-            "vscjava.vscode-java-pack",
-          ])
+          void this.addWorkspaceRecommendation(activeCourse, activeBackend, ["ms-python.python"])
         }
         break
     }
