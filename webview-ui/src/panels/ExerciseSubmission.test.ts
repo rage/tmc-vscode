@@ -462,6 +462,46 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     ).toBeInTheDocument()
   })
 
+  test("a pass leads on to the next exercise, with Close beside it", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...tmcResultView(submissionFinished({ all_tests_passed: true }), [], 2),
+      isExercisePassed: true,
+      nextExercise: { name: "part01-02_world" },
+    })
+    postedMessages.mockClear()
+
+    const next = await screen.findByRole("button", { name: "Next: part01-02_world" })
+    expect(next).not.toHaveAttribute("secondary")
+    expect(screen.getByRole("button", { name: "Close" })).toHaveAttribute("secondary")
+    expect(screen.queryByRole("button", { name: "Submit Again" })).not.toBeInTheDocument()
+    next.click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "exerciseAction",
+      sourcePanel: { id: panel.id, type: panel.type },
+      action: "openNextExercise",
+    })
+  })
+
+  test("a result short of a pass offers to test and submit again", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...tmcResultView(submissionFinished({ all_tests_passed: false }), [], 2),
+      isExercisePassed: false,
+    })
+    postedMessages.mockClear()
+
+    ;(await screen.findByRole("button", { name: "Run Tests" })).click()
+    screen.getByRole("button", { name: "Submit Again" }).click()
+
+    expect(postedMessages.mock.calls.map(([message]) => message.action)).toEqual([
+      "runTests",
+      "submit",
+    ])
+    expect(screen.queryByRole("button", { name: /^Next:/ })).not.toBeInTheDocument()
+  })
+
   test("awaiting manual grading explains itself and offers Close", async () => {
     render(ExerciseSubmission, { props: { panel: moocPanel } })
     showMoocGrading(moocGrading({ grading_progress: "PendingManual" }))

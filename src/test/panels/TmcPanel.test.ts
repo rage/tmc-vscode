@@ -15,6 +15,7 @@ import type {
 import { makeTmcKind } from "../../../shared/lib"
 import * as actions from "../../actions"
 import type { ActionContext } from "../../actions/types"
+import type WorkspaceManager from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
 import { BottleneckError, InitializationError, presentationFor } from "../../errors"
 import type { PanelMessage } from "../../panels/router"
@@ -335,6 +336,43 @@ suite("TmcPanel handler dispatch", () => {
 
     expect(handlers.pasteExercise).not.toHaveBeenCalled()
     expect(replyTo(panel, 1)).toMatchObject({ outcome: { ok: false } })
+  })
+
+  test("an exercise action runs its command on the exercise the host shows", async () => {
+    const handlers = stubHandlers()
+    const shown = { ...exerciseSubmissionPanel(), exerciseId: idOfTmcExercise(7) }
+    const exerciseUri = vscode.Uri.file("/exercises/loops")
+    const actionContext = createMockActionContext({
+      startup: {
+        workspaceManager: {
+          getExercise: (id: unknown) =>
+            JSON.stringify(id) === JSON.stringify(idOfTmcExercise(7))
+              ? { uri: exerciseUri }
+              : undefined,
+        } as unknown as WorkspaceManager,
+      },
+    })
+    const { listener } = await mountSidePanel(actionContext, createMockContext(), shown)
+
+    await listener({ type: "exerciseAction", sourcePanel: targetOf(shown), action: "submit" })
+    await listener({
+      type: "exerciseAction",
+      sourcePanel: targetOf(shown),
+      action: "openNextExercise",
+    })
+    await listener({
+      type: "exerciseAction",
+      sourcePanel: { id: 9999, type: "ExerciseSubmission" },
+      action: "runTests",
+    })
+
+    expect(handlers.openWorkspace.mock.calls).toEqual([
+      ["tmc.submitExercise", exerciseUri],
+      ["tmc.openNextExercise", exerciseUri],
+    ])
+    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
+      "This exercise is no longer downloaded.",
+    )
   })
 
   test("a mooc course's exercise is pasted through the mooc backend", async () => {

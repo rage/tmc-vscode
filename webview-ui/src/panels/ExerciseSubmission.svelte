@@ -46,8 +46,17 @@
   const isInProgress = $derived(
     view === undefined || view.phase === "uploading" || view.phase === "grading",
   )
-  const primaryAction = $derived<"runInBackground" | "keepWaiting" | "close">(
-    isInProgress ? "runInBackground" : view?.canKeepWaiting ? "keepWaiting" : "close",
+  const primaryAction = $derived<"runInBackground" | "keepWaiting" | "openNext" | "close">(
+    isInProgress
+      ? "runInBackground"
+      : view?.canKeepWaiting
+        ? "keepWaiting"
+        : view?.nextExercise
+          ? "openNext"
+          : "close",
+  )
+  const canRetry = $derived(
+    (view?.phase === "finished" || view?.phase === "failed") && !view.isExercisePassed,
   )
 
   // svelte-ignore state_referenced_locally -- the panel identity (id/type)
@@ -68,6 +77,9 @@
 
   function closePanel() {
     vscode.postMessage({ type: "closeSidePanel" })
+  }
+  function runExerciseAction(action: "runTests" | "submit" | "openNextExercise") {
+    vscode.postMessage({ type: "exerciseAction", sourcePanel, action })
   }
   function showInBrowser(url: string) {
     vscode.postMessage({ type: "openLinkInBrowser", url })
@@ -155,8 +167,21 @@
     {:else if primaryAction === "keepWaiting"}
       <Button disabled={isKeepWaitingRequested} onclick={keepWaiting}>Keep waiting</Button>
       <Button secondary onclick={closePanel}>Close</Button>
+    {:else if primaryAction === "openNext"}
+      <Button icon="arrow-right" onclick={() => runExerciseAction("openNextExercise")}>
+        Next: {view.nextExercise?.name}
+      </Button>
+      <Button secondary onclick={closePanel}>Close</Button>
     {:else}
       <Button onclick={closePanel}>Close</Button>
+    {/if}
+    {#if canRetry}
+      <Button secondary icon="beaker" onclick={() => runExerciseAction("runTests")}>
+        Run Tests
+      </Button>
+      <Button secondary icon="cloud-upload" onclick={() => runExerciseAction("submit")}>
+        Submit Again
+      </Button>
     {/if}
     {#if view.submissionUrl}
       {@const submissionUrl = view.submissionUrl}

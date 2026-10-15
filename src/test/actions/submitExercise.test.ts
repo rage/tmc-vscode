@@ -4,7 +4,13 @@ import type * as vscode from "vscode"
 
 import type { ExerciseStanding } from "../../../shared/langsSchema"
 import type { CourseIdentifier, ExerciseSubmissionPanel, SubmissionView } from "../../../shared/lib"
-import { LocalCourseData, makeMoocKind, makeTmcKind } from "../../../shared/lib"
+import {
+  ExerciseIdentifier,
+  LocalCourseData,
+  LocalCourseExercise,
+  makeMoocKind,
+  makeTmcKind,
+} from "../../../shared/lib"
 import {
   keepWaitingForGrading,
   onDidFinishSubmission,
@@ -112,13 +118,30 @@ function contextFor(
   setPassed: ReturnType<typeof vi.fn>
   setStanding: ReturnType<typeof vi.fn>
 } {
-  const setPassed = vi.fn().mockResolvedValue(Ok.EMPTY)
-  const setStanding = vi.fn().mockResolvedValue(Ok.EMPTY)
+  let isPassed = false
+  const setPassed = vi.fn(async () => {
+    isPassed = true
+    return Ok.EMPTY
+  })
+  const setStanding = vi.fn(async (_id: unknown, standing: { passed: boolean }) => {
+    isPassed = standing.passed
+    return Ok.EMPTY
+  })
   const actionContext = createMockActionContext({
     startup: {
       langs: langsMethods as unknown as ReadyStartup["langs"],
       userData: {
-        getExercise: () => Ok({ course, exercise: LocalCourseData.getExercises(course)[0] }),
+        // Any id but another exercise of the course is the submitted one.
+        getExercise: (id: ExerciseIdentifier) => {
+          const exercises = LocalCourseData.getExercises(course)
+          const exercise =
+            exercises.find(
+              (x) =>
+                ExerciseIdentifier.key(LocalCourseExercise.getId(x)) === ExerciseIdentifier.key(id),
+            ) ?? exercises[0]
+          return Ok({ course, exercise })
+        },
+        getPassed: () => isPassed,
         getCourse: () => Ok(course),
         setExerciseAsPassed: setPassed,
         setMoocExerciseStanding: setStanding,
@@ -208,13 +231,16 @@ function grading(overrides: Record<string, unknown>): unknown {
   }
 }
 
-function tmcContextWith(submitResult: unknown): {
+function tmcContextWith(
+  submitResult: unknown,
+  course: TmcLocalCourseData = tmcCourse,
+): {
   actionContext: ReadyActionContext
   setPassed: ReturnType<typeof vi.fn>
   submit: ReturnType<typeof vi.fn>
 } {
   const submit = vi.fn().mockResolvedValue(Ok(submitResult))
-  const { actionContext, setPassed } = contextFor(makeTmcKind(tmcCourse), {
+  const { actionContext, setPassed } = contextFor(makeTmcKind(course), {
     submitTmcExerciseAndWaitForResults: submit,
   })
   return { actionContext, setPassed, submit }
@@ -294,6 +320,38 @@ suite("submitExercise action, tmc", () => {
 
     expect(setPassed).not.toHaveBeenCalled()
     expect(lastView()).toMatchObject({ phase: "finished", canPaste: true, feedback: undefined })
+  })
+
+  test("a pass offers the next exercise left to do", async () => {
+    const { actionContext } = tmcContextWith(passingSubmission, {
+      ...tmcCourse,
+      exercises: [
+        ...tmcCourse.exercises,
+        tmcCourseExercise({ id: TMC_EXERCISE_ID + 1, name: "part02-01_next" }),
+      ],
+    })
+
+    await submitExercise(actionContext, tmcExercise)
+
+    expect(lastView()).toMatchObject({
+      isExercisePassed: true,
+      nextExercise: { name: "part02-01_next" },
+    })
+  })
+
+  test("a failure offers no next exercise", async () => {
+    const { actionContext } = tmcContextWith(
+      { status: "ok", all_tests_passed: false, points: [], test_cases: [] },
+      {
+        ...tmcCourse,
+        exercises: [...tmcCourse.exercises, tmcCourseExercise({ id: 1, name: "part02-01_next" })],
+      },
+    )
+
+    await submitExercise(actionContext, tmcExercise)
+
+    expect(lastView()?.isExercisePassed).toBe(false)
+    expect(lastView()?.nextExercise).toBeUndefined()
   })
 
   test("an exercise whose id is from the other backend is refused", async () => {
