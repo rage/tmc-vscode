@@ -550,6 +550,7 @@ suite("tmc langs cli spec", function () {
 
     // fixed fixture ids (backend/mooc/fixtures.ts)
     const PYTHON_COURSE_ID = "11111111-1111-4111-8111-111111111111"
+    const EXTRA_COURSE_ID = "22222222-2222-4222-8222-222222222222"
     const PASSING_EXERCISE_ID = "a1a1a1a1-0000-4000-8000-000000000001"
     const FAILING_EXERCISE_ID = "b2b2b2b2-0000-4000-8000-000000000001"
     const NONEXISTENT_EXERCISE_ID = "ffffffff-0000-4000-8000-000000000000"
@@ -589,6 +590,16 @@ suite("tmc langs cli spec", function () {
       expect(slides.length).to.be.equal(1)
       expect(slides[0]?.exercise_id).to.be.equal(PASSING_EXERCISE_ID)
       expect(slides[0]?.tasks[0]?.public_spec).to.not.be.undefined
+    })
+
+    test("should get each mooc course's AI policy, not_set where the host sends none", async function () {
+      const courses = (await tmc.getEnrolledMoocCourses()).unwrap()
+      const policies = Object.fromEntries(courses.map((c) => [c.id, c.ai_policy]))
+      expect(policies[EXTRA_COURSE_ID]).to.equal("full_use")
+      expect(policies[PYTHON_COURSE_ID]).to.equal("not_set")
+
+      const { course } = (await tmc.getMoocCourseData(EXTRA_COURSE_ID)).unwrap()
+      expect(course.ai_policy).to.equal("full_use")
     })
 
     // Writes a minimal submittable python project (the `requirements.txt` marker

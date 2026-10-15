@@ -3,9 +3,11 @@ import { join } from "node:path"
 
 import { expect } from "@playwright/test"
 
+import { courseWorkspaceFolder, courseWorkspaceSettings } from "../courseWorkspace"
 import { vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
+import { TestResultsPage } from "../pages/test-results"
 import { TmcPage } from "../pages/tmc"
 
 const COURSE = "Python Course"
@@ -19,13 +21,7 @@ vsCodeTest(
     const coursesView = new CoursesViewPage(page, webview)
     const explorerPage = new ExplorerPage(page)
     const tmc = new TmcPage(page, webview)
-    const workspaceFolder = join(
-      userDataDir,
-      "User",
-      "globalStorage",
-      "moocfi.test-my-code",
-      "workspaces",
-    )
+    const workspaceFolder = courseWorkspaceFolder(userDataDir)
     const workspaceFile = (): string | undefined =>
       fs.readdirSync(workspaceFolder).find((f) => f.endsWith(".code-workspace"))
 
@@ -37,10 +33,7 @@ vsCodeTest(
       await expect(coursesView.row(EXERCISE)).toHaveAccessibleName(/, open,/)
       await coursesView.runInlineAction(coursesView.row(COURSE), "Open Course Workspace")
       await expect
-        .poll(() => {
-          const file = workspaceFile()
-          return file && JSON.parse(fs.readFileSync(join(workspaceFolder, file), "utf-8")).settings
-        })
+        .poll(() => courseWorkspaceSettings(userDataDir))
         .toMatchObject({ "editor.inlineSuggest.enabled": false })
       await explorerPage.openPath(EXERCISE_FILE)
       await expect(page.getByText(EXERCISE_CONTENTS)).toBeVisible()
@@ -80,6 +73,55 @@ vsCodeTest(
           .filter({ hasText: reason })
           .getByRole("button", { name: `Open ${fileName}` }),
       ).toBeVisible()
+    })
+  },
+)
+
+vsCodeTest(
+  "a mooc course that allows AI keeps AI assistance on in its workspace",
+  async ({ page, userDataDir, webview }) => {
+    const coursesView = new CoursesViewPage(page, webview)
+    const explorerPage = new ExplorerPage(page)
+    const testResultsPage = new TestResultsPage(page, webview)
+    // backend/mooc/fixtures.ts seeds this course's policy as full_use.
+    const courseTitle = "MOOC Extra Course"
+
+    await vsCodeTest.step("open an exercise in the course's workspace", async () => {
+      await coursesView.goto()
+      await coursesView.addNewMoocCourse(courseTitle)
+      await coursesView.expand(coursesView.row(courseTitle))
+      const row = coursesView.row("failing_exercise")
+      await coursesView.runContextMenuCommand(row, "Open")
+      await expect(row).toHaveAccessibleName(/, open,/)
+      await coursesView.runInlineAction(coursesView.row(courseTitle), "Open Course Workspace")
+      await explorerPage.openPath(["src", "failing_exercise.py"])
+      await expect(page.getByText("def hello()")).toBeVisible()
+    })
+
+    await vsCodeTest.step(
+      "run its tests, which applies the course's AI settings first",
+      async () => {
+        await page.getByText("def hello()").click()
+        await page
+          .getByRole("toolbar", { name: "Editor actions" })
+          .getByLabel("Run Tests", { exact: true })
+          .click()
+        await testResultsPage.open()
+        await expect(testResultsPage.result("1 of 1 tests failed.").first()).toBeVisible()
+      },
+    )
+
+    await vsCodeTest.step("the workspace file turns no AI setting off", async () => {
+      const settings = courseWorkspaceSettings(userDataDir)
+      expect(settings).toBeDefined()
+      for (const section of [
+        "chat.agent.enabled",
+        "chat.disableAIFeatures",
+        "chat.extensionTools.enabled",
+        "editor.inlineSuggest.enabled",
+      ]) {
+        expect(settings).not.toHaveProperty([section])
+      }
     })
   },
 )

@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test"
 
 import { MOCK_BACKEND_URL } from "../../backend/mockSession"
+import { courseWorkspaceSettings } from "../courseWorkspace"
 import { vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
@@ -20,90 +21,101 @@ import { TmcPage } from "../pages/tmc"
 // tracking (the CLI's `list-local-exercises`, consumed by refreshLocalExercises).
 // The submit result here is the reduced mooc panel (grading progress and score,
 // no per-test breakdown), distinct from the TMC submission view.
-vsCodeTest("can add, open, test and submit a mooc course exercise", async ({ page, webview }) => {
-  const coursesView = new CoursesViewPage(page, webview)
-  const testResultsPage = new TestResultsPage(page, webview)
-  const sidePanel = new TmcPage(page, webview).getSidePanel()
-  const explorerPage = new ExplorerPage(page)
+vsCodeTest(
+  "can add, open, test and submit a mooc course exercise",
+  async ({ page, userDataDir, webview }) => {
+    const coursesView = new CoursesViewPage(page, webview)
+    const testResultsPage = new TestResultsPage(page, webview)
+    const sidePanel = new TmcPage(page, webview).getSidePanel()
+    const explorerPage = new ExplorerPage(page)
 
-  // course + exercise are served by backend/mooc/fixtures.ts; the exercise packs
-  // the same python resource the TMC course uses, so its tests run locally.
-  const courseTitle = "MOOC Python Course"
-  const exerciseName = "passing_exercise"
-  const filePath = ["src", "passing_exercise.py"]
-  const fileContents = "def hello()"
+    // course + exercise are served by backend/mooc/fixtures.ts; the exercise packs
+    // the same python resource the TMC course uses, so its tests run locally.
+    const courseTitle = "MOOC Python Course"
+    const exerciseName = "passing_exercise"
+    const filePath = ["src", "passing_exercise.py"]
+    const fileContents = "def hello()"
 
-  await vsCodeTest.step("open the Courses view", async () => {
-    await coursesView.goto()
-  })
-
-  await vsCodeTest.step("add the mooc course", async () => {
-    const course = coursesView.row(courseTitle)
-    await expect(course).toBeHidden()
-    await coursesView.addNewMoocCourse(courseTitle)
-    await expect(course).toHaveAccessibleName(/, courses\.mooc\.fi(,|$)/)
-  })
-
-  await vsCodeTest.step("expand the course and see its exercises", async () => {
-    await coursesView.expand(coursesView.row(courseTitle))
-    // A mooc course names no parts, so its exercises sit right under it.
-    await expect(coursesView.row(exerciseName)).toHaveAccessibleName(/, not downloaded,/)
-  })
-
-  await vsCodeTest.step("open an exercise, downloading it on the way", async () => {
-    const row = coursesView.row(exerciseName)
-    await coursesView.runContextMenuCommand(row, "Open")
-    await expect(row).toHaveAccessibleName(/, open,/)
-  })
-
-  await vsCodeTest.step("open workspace", async () => {
-    await coursesView.runInlineAction(coursesView.row(courseTitle), "Open Course Workspace")
-  })
-
-  await vsCodeTest.step("open exercise file", async () => {
-    // The file only surfaces if the downloaded mooc exercise was registered as a
-    // WorkspaceExercise (the workspace-tracking fix); before it, the "src" folder
-    // never appeared.
-    const contents = page.getByText(fileContents)
-    await expect(contents).toBeHidden()
-    await explorerPage.openPath(filePath)
-    await expect(contents).toBeVisible()
-  })
-
-  const allPassed = page
-    .locator(".notifications-toasts .notification-toast")
-    .filter({ hasText: "All tests of passing_exercise passed." })
-
-  await vsCodeTest.step("run tests", async () => {
-    await page.getByText(fileContents).click()
-    await expect(allPassed).toBeHidden()
-    // The editor-title action is contributed under `test-my-code:ActiveEditorIsExercise`
-    // (package.json), so it renders only once the extension has recognised the
-    // open exercise.
-    const runTests = page.getByLabel("Run Tests", { exact: true })
-    await expect(runTests).toBeVisible()
-    await runTests.click()
-    await expect(allPassed).toBeVisible()
-    await testResultsPage.open()
-    await expect(testResultsPage.result("PassingExercise: test_passing").first()).toBeVisible()
-  })
-
-  await vsCodeTest.step("submit exercise and see the reduced mooc result", async () => {
-    // The mooc submit renders the reduced result panel: an "Exercise passed" heading
-    // (full points, as the backend's standing says) plus the score, not the TMC per-test
-    // submission view.
-    const gradedHeading = sidePanel.getByRole("heading", {
-      name: "Exercise passed",
+    await vsCodeTest.step("open the Courses view", async () => {
+      await coursesView.goto()
     })
-    await expect(gradedHeading).toBeHidden()
-    await allPassed.getByRole("button", { name: "Submit" }).click()
-    await expect(gradedHeading).toBeVisible()
-    await expect(sidePanel.getByRole("meter", { name: "Points" })).toHaveAttribute(
-      "aria-valuetext",
-      /^1 \/ \d+ points$/,
+
+    await vsCodeTest.step("add the mooc course", async () => {
+      const course = coursesView.row(courseTitle)
+      await expect(course).toBeHidden()
+      await coursesView.addNewMoocCourse(courseTitle)
+      await expect(course).toHaveAccessibleName(/, courses\.mooc\.fi(,|$)/)
+    })
+
+    await vsCodeTest.step("expand the course and see its exercises", async () => {
+      await coursesView.expand(coursesView.row(courseTitle))
+      // A mooc course names no parts, so its exercises sit right under it.
+      await expect(coursesView.row(exerciseName)).toHaveAccessibleName(/, not downloaded,/)
+    })
+
+    await vsCodeTest.step("open an exercise, downloading it on the way", async () => {
+      const row = coursesView.row(exerciseName)
+      await coursesView.runContextMenuCommand(row, "Open")
+      await expect(row).toHaveAccessibleName(/, open,/)
+    })
+
+    await vsCodeTest.step("open workspace", async () => {
+      await coursesView.runInlineAction(coursesView.row(courseTitle), "Open Course Workspace")
+    })
+
+    await vsCodeTest.step(
+      "the course sets no AI policy, so its workspace turns AI off",
+      async () => {
+        await expect
+          .poll(() => courseWorkspaceSettings(userDataDir))
+          .toMatchObject({ "editor.inlineSuggest.enabled": false })
+      },
     )
-  })
-})
+
+    await vsCodeTest.step("open exercise file", async () => {
+      // The file only surfaces once the downloaded mooc exercise is registered as a
+      // WorkspaceExercise.
+      const contents = page.getByText(fileContents)
+      await expect(contents).toBeHidden()
+      await explorerPage.openPath(filePath)
+      await expect(contents).toBeVisible()
+    })
+
+    const allPassed = page
+      .locator(".notifications-toasts .notification-toast")
+      .filter({ hasText: "All tests of passing_exercise passed." })
+
+    await vsCodeTest.step("run tests", async () => {
+      await page.getByText(fileContents).click()
+      await expect(allPassed).toBeHidden()
+      // The editor-title action is contributed under `test-my-code:ActiveEditorIsExercise`
+      // (package.json), so it renders only once the extension has recognised the
+      // open exercise.
+      const runTests = page.getByLabel("Run Tests", { exact: true })
+      await expect(runTests).toBeVisible()
+      await runTests.click()
+      await expect(allPassed).toBeVisible()
+      await testResultsPage.open()
+      await expect(testResultsPage.result("PassingExercise: test_passing").first()).toBeVisible()
+    })
+
+    await vsCodeTest.step("submit exercise and see the reduced mooc result", async () => {
+      // The mooc submit renders the reduced result panel: an "Exercise passed" heading
+      // (full points, as the backend's standing says) plus the score, not the TMC per-test
+      // submission view.
+      const gradedHeading = sidePanel.getByRole("heading", {
+        name: "Exercise passed",
+      })
+      await expect(gradedHeading).toBeHidden()
+      await allPassed.getByRole("button", { name: "Submit" }).click()
+      await expect(gradedHeading).toBeVisible()
+      await expect(sidePanel.getByRole("meter", { name: "Points" })).toHaveAttribute(
+        "aria-valuetext",
+        /^1 \/ \d+ points$/,
+      )
+    })
+  },
+)
 
 vsCodeTest("submitting an exercise gone from the server says so", async ({ page, webview }) => {
   const coursesView = new CoursesViewPage(page, webview)
