@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- The Workspace Trust editor that Trust Course Workspace opens closes once you trust the workspace.
+- The Workspace Trust editor, where Manage in VS Code's trust question leads, closes once you trust the workspace.
 - Opening an exercise from the Courses view or with Next shows its file among your code instead of in the submission result's split, and Next closes the result.
 - A Courses view row action used right after the view changed no longer answers "Open a file of an exercise first.": the view is redrawn only when its rows change.
 - Selecting an exercise in the Courses view opens it, downloading it first, and shows its main source file; downloading or opening a single exercise does too.
@@ -23,7 +23,7 @@
 - Submitting, including before a reset or restore, running tests and sharing via paste are refused, with what to change, while the course workspace's AI settings can't be applied or an AI extension no setting turns off, such as Cline or Claude Code, is enabled.
 - Logging in now always uses the courses.mooc.fi account (a browser-based device-code login); the TestMyCode username and password form has been removed. An existing TestMyCode session keeps working until it expires.
 - Raised the minimum required VS Code version to 1.100.
-- In Restricted Mode the Courses view, login, adding courses and downloading keep working, and the view says why running tests, submitting, sharing via paste and deleting generated files are held back; their notification offers Trust Course Workspace, and the refused action runs once the workspace is trusted. A workspace cannot set `testMyCode.javaHome` until it is trusted.
+- In Restricted Mode the Courses view, login, adding courses and downloading keep working, and the view says why running tests, submitting, sharing via paste and deleting generated files are held back, with Trust Course Workspace as its first row; their notification says trust is needed and offers Trust Course Workspace, and the refused action runs once the workspace is trusted. A workspace cannot set `testMyCode.javaHome` until it is trusted.
 - A course workspace that opens untrusted asks to be trusted, through VS Code's own trust question; where VS Code asks on startup, TestMyCode waits for that question instead of asking twice. Trust Course Workspace asks the same way. A course workspace opens with its exercises already in it, so one answer covers them; an exercise downloaded while it is open asks again.
 - Course workspaces no longer keep their own copy of TestMyCode's settings, so a change in User settings applies inside them too; the copies earlier versions made are removed on the next start.
 - Downloading or opening exercises outside their course workspace offers to open it, naming the course, instead of only marking them open.
