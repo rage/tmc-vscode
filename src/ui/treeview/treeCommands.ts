@@ -11,11 +11,11 @@ import {
   closeExercises as closeExercisesAction,
   downloadAndOpenExercises,
   downloadCourseExercises,
-  downloadExerciseUpdates,
 } from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import { withOperation } from "../../api/withOperation"
 import { ExerciseStatus } from "../../api/workspaceManager"
+import { downloadUpdates } from "../../commands/updateExercises"
 import { countOf } from "../../utilities"
 import { showExerciseSourceFile } from "../exerciseSourceFile"
 import { updateablesRegistry } from "../updateablesRegistry"
@@ -171,11 +171,9 @@ export async function updateCourseExercises(
   const { courseId } = row
   const exerciseIds =
     row instanceof ExerciseTreeItem ? [row.exerciseId] : updateablesRegistry.get(courseId)
-  await withOperation(actionContext.dialog, { failure: "Failed to update the exercises." }, () =>
-    downloadExerciseUpdates(
-      actionContext,
-      exerciseIds.map((exerciseId) => ({ courseId, exerciseId })),
-    ),
+  await downloadUpdates(
+    actionContext,
+    exerciseIds.map((exerciseId) => ({ courseId, exerciseId })),
   )
 }
 

@@ -36,7 +36,7 @@ vi.mock("../../actions/downloadCourseExercises", () => ({
   downloadCourseExercises: vi.fn(async () => Ok.EMPTY),
 }))
 vi.mock("../../actions/downloadExerciseUpdates", () => ({
-  downloadExerciseUpdates: vi.fn(async () => Ok.EMPTY),
+  downloadExerciseUpdates: vi.fn(async () => Ok({ updated: [], warnings: [] })),
 }))
 vi.mock("../../actions/openExercises", () => ({
   downloadAndOpenExercises: vi.fn(async () => Ok({ ids: [], exceededOpenLimit: undefined })),
@@ -293,9 +293,11 @@ suite("Courses view commands", function () {
 
     await updateCourseExercises(actionContext, courseRow(tmcCourse))
 
-    expect(downloadExerciseUpdates).toHaveBeenCalledWith(actionContext, [
-      { courseId: tmcCourse, exerciseId: updates[0] },
-    ])
+    expect(downloadExerciseUpdates).toHaveBeenCalledWith(
+      actionContext,
+      [{ courseId: tmcCourse, exerciseId: updates[0] }],
+      false,
+    )
   })
 
   test("update on an exercise row updates that exercise alone", async function () {
@@ -306,9 +308,11 @@ suite("Courses view commands", function () {
 
     await updateCourseExercises(actionContext, row(tmcCourse, 6, "opened"))
 
-    expect(downloadExerciseUpdates).toHaveBeenCalledWith(actionContext, [
-      { courseId: tmcCourse, exerciseId: makeTmcKind({ tmcExerciseId: 6 }) },
-    ])
+    expect(downloadExerciseUpdates).toHaveBeenCalledWith(
+      actionContext,
+      [{ courseId: tmcCourse, exerciseId: makeTmcKind({ tmcExerciseId: 6 }) }],
+      false,
+    )
   })
 
   test("an update refused as already running says so", async function () {

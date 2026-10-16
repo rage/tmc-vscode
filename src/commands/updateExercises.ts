@@ -1,8 +1,10 @@
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
+import type { ExerciseIdentifier } from "../../shared/lib"
 import { backendName, CourseIdentifier, LocalCourseData } from "../../shared/lib"
 import { checkForExerciseUpdates, downloadExerciseUpdates } from "../actions"
+import { describeExercises, exerciseName } from "../actions/exerciseNames"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
 import { NOTIFICATION_DELAY } from "../config/constants"
@@ -68,9 +70,7 @@ export async function updateExercises(
     return course.ok && !LocalCourseData.isDisabled(course.val)
   })
   if (updateable.length > 0 && settings.getAutomaticallyUpdateExercises()) {
-    await withOperation(dialog, { failure: "Failed to update exercises." }, () =>
-      downloadExerciseUpdates(actionContext, updateable, silent),
-    )
+    await downloadUpdates(actionContext, updateable, silent)
     return
   }
 
@@ -95,11 +95,7 @@ export async function updateExercises(
     exercisesToUpdate.map((x) => [CourseIdentifier.key(x.courseId), x.courseId]),
   )
 
-  const download = async (): Promise<void> => {
-    await withOperation(dialog, { failure: "Failed to update exercises." }, () =>
-      downloadExerciseUpdates(actionContext, exercisesToUpdate),
-    )
-  }
+  const download = (): Promise<void> => downloadUpdates(actionContext, exercisesToUpdate)
 
   const postpone = async (): Promise<Result<void, Error>> => {
     const notifyAfter = Date.now() + NOTIFICATION_DELAY
@@ -123,4 +119,25 @@ export async function updateExercises(
         void withOperation(dialog, { failure: "Failed to postpone the reminder." }, postpone),
     ],
   )
+}
+
+/**
+ * Downloads `updates` and says in the status bar which exercises it updated.
+ *
+ * @param isUnrequested See `downloadExerciseUpdates`.
+ */
+export async function downloadUpdates(
+  actionContext: ReadyActionContext,
+  updates: readonly { courseId: CourseIdentifier; exerciseId: ExerciseIdentifier }[],
+  isUnrequested = false,
+): Promise<void> {
+  const result = await withOperation(
+    actionContext.dialog,
+    { failure: "Failed to update exercises." },
+    () => downloadExerciseUpdates(actionContext, updates, isUnrequested),
+  )
+  if (result.ok && result.val.updated.length > 0) {
+    const names = result.val.updated.map((id) => exerciseName(actionContext, id))
+    actionContext.dialog.statusMessage(`Updated ${describeExercises(names)}.`)
+  }
 }

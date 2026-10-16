@@ -80,7 +80,7 @@ function contextWith(
 suite("updateExercises command", function () {
   beforeEach(function () {
     checkForExerciseUpdates.mockReset()
-    downloadExerciseUpdates.mockReset().mockResolvedValue(Ok.EMPTY)
+    downloadExerciseUpdates.mockReset().mockResolvedValue(Ok({ updated: [], warnings: [] }))
     updateablesRegistry.clear()
   })
 
@@ -209,7 +209,20 @@ suite("updateExercises command", function () {
     const download = vi.mocked(dialog.notification).mock.calls[0]?.[1]
     download?.[1]()
 
-    expect(downloadExerciseUpdates).toHaveBeenCalledExactlyOnceWith(actionContext, updates)
+    expect(downloadExerciseUpdates).toHaveBeenCalledExactlyOnceWith(actionContext, updates, false)
+  })
+
+  test("says in the status bar which exercises an automatic update updated", async function () {
+    checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10)]))
+    downloadExerciseUpdates.mockResolvedValue(Ok({ updated: [idOfTmcExercise(10)], warnings: [] }))
+    const [actionContext, dialog] = contextWith(true)
+    Object.assign(actionContext.startup.userData, {
+      getExercise: () => Ok({ exercise: { kind: "tmc", data: { name: "loops" } } }),
+    })
+
+    await updateExercises(actionContext, "silent")
+
+    expect(dialog.statusMessage).toHaveBeenCalledExactlyOnceWith("Updated the exercise loops.")
   })
 
   test("reports a failed check once when loud, and only logs it when silent", async function () {

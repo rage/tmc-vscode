@@ -108,15 +108,18 @@ suite("downloadExerciseUpdates action", function () {
     ])
   })
 
-  test("announces the exercises it updated in the status bar", async function () {
+  test("returns the exercises it updated", async function () {
     downloadOrUpdateExercises.mockResolvedValue(
-      Ok({ successful: [idOfTmcExercise(10)], failed: [], warnings: [] }),
+      Ok({ successful: [idOfTmcExercise(10)], failed: [idOfTmcExercise(11)], warnings: [] }),
     )
-    const actionContext = contextNamingById()
 
-    await downloadExerciseUpdates(actionContext, [update(1, 10)], true)
+    const result = await downloadExerciseUpdates(
+      contextNamingById(),
+      [update(1, 10), update(1, 11)],
+      true,
+    )
 
-    expect(actionContext.dialog.statusMessage).toHaveBeenCalledWith("Updated the exercise 10.")
+    expect(result.unwrap().updated).toEqual([idOfTmcExercise(10)])
   })
 
   test("remembers the failed exercises with their cause, and forgets the updated ones", async function () {
