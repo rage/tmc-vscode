@@ -173,9 +173,8 @@ interface CustomTestOptions {
   // Set false for specs that need a logged-out extension, e.g. the login entry
   // points, which are hidden while a session exists.
   seedTmcCredentials: boolean
-  // Set true to run under Workspace Trust as current VS Code ships it: an untrusted workspace
-  // opens in Restricted Mode without asking. Newer VS Code keeps the trusted folders in the
-  // home directory, so the run gets a home of its own.
+  // Set true to run under Workspace Trust with the VS Code version's own defaults. Newer VS Code
+  // keeps the trusted folders in the home directory, so the run gets a home of its own.
   isWorkspaceTrustEnabled: boolean
 }
 
@@ -209,10 +208,7 @@ export const customTestFixtures: Fixtures<
     fs.mkdirSync(join(userDataDir, "User"))
     fs.writeFileSync(
       join(userDataDir, "User", "settings.json"),
-      JSON.stringify({
-        "window.dialogStyle": "custom",
-        ...(isWorkspaceTrustEnabled && { "security.workspace.trust.startupPrompt": "never" }),
-      }),
+      JSON.stringify({ "window.dialogStyle": "custom" }),
     )
     if (isWorkspaceTrustEnabled) {
       fs.mkdirSync(join(userDataDir, "home"))

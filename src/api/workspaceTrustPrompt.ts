@@ -62,6 +62,7 @@ export async function promptForCourseWorkspaceTrust(courseTitle: string): Promis
  * where no modal comes up. Settles once the student has answered.
  */
 export async function requestWorkspaceTrust(): Promise<void> {
+  Logger.info("Requesting workspace trust.")
   // VS Code's modal offers Manage, which opens the editor, as does the fallback below.
   closeTrustEditorWhenTrusted()
   const askedAt = Date.now()
