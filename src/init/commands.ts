@@ -17,6 +17,7 @@ import * as treeCommands from "../ui/treeview/treeCommands"
 import type { CoursesTreeItem } from "../ui/treeview/treeview"
 import { COURSES_VIEW_ID, CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
 import { Logger } from "../utilities"
+import { closeTrustEditorWhenTrusted } from "../window/workspaceTrustEditor"
 
 /** Must match the `walkthroughs` entry's `id` in package.json. */
 const WALKTHROUGH_ID = "gettingStarted"
@@ -94,6 +95,7 @@ export function registerServiceFreeCommands(
 
   // Trust is the remedy for a refusal, so it must not wait for a ready activation.
   register(TRUST_COURSE_WORKSPACE_COMMAND, async () => {
+    closeTrustEditorWhenTrusted()
     await vscode.commands.executeCommand("workbench.trust.manage")
   })
 
