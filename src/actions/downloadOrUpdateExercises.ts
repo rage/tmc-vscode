@@ -3,14 +3,7 @@ import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { BackendKind, CourseIdentifier } from "../../shared/lib"
-import {
-  backendName,
-  ExerciseIdentifier,
-  LocalCourseExercise,
-  makeMoocKind,
-  match,
-  partition,
-} from "../../shared/lib"
+import { backendName, ExerciseIdentifier, makeMoocKind, match, partition } from "../../shared/lib"
 import type Langs from "../api/langs"
 import type { ExerciseDownload, ExerciseDownloadProgress, ExerciseDownloads } from "../api/langs"
 import type { OperationWarning, Warned } from "../api/withOperation"
@@ -19,6 +12,7 @@ import { downloadFailures } from "../ui/downloadFailures"
 import type { ExerciseClaim } from "../ui/exerciseOperations"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { Logger } from "../utilities"
+import { describeExercises, exerciseName } from "./exerciseNames"
 import type { ReadyActionContext } from "./types"
 
 /** What one backend's download came back with. */
@@ -35,6 +29,8 @@ interface DownloadOptions {
 interface DownloadResults {
   successful: ExerciseIdentifier[]
   failed: ExerciseIdentifier[]
+  /** Why the `failed` exercises failed; `undefined` when none did or the user cancelled. */
+  failureCause?: Error | undefined
 }
 
 /**
@@ -51,7 +47,8 @@ interface DownloadResults {
  * @param options `isUpdate` for exercises already on disk, which the warning then says were
  *   not updated; `isUnrequested` for a download the user did not ask for, such as an
  *   automatic update, whose progress shows in the status bar, not in a cancellable
- *   notification.
+ *   notification, and whose failed exercises get no warning: the caller reports
+ *   `failureCause` where it can be withdrawn once the cause is gone.
  */
 export async function downloadOrUpdateExercises(
   actionContext: ReadyActionContext,
@@ -206,16 +203,18 @@ async function download(
       error: new ExerciseUpdateError("restoring the latest submission failed"),
     })
   }
-  if (results.failed.length > 0) {
+  if (results.failed.length === 0) {
+    return { ...results, warnings }
+  }
+  const cause = failureCause(failedLegs, exerciseReasons)
+  if (!options.isUnrequested) {
     const names = results.failed.map((id) => exerciseName(actionContext, id))
     warnings.push({
-      headline: options.isUpdate
-        ? `Failed to update ${describeExercises(names)}. Retry from the Courses view.`
-        : `Failed to download ${describeExercises(names)}.`,
-      error: failureCause(failedLegs, exerciseReasons),
+      headline: `Failed to ${options.isUpdate ? "update" : "download"} ${describeExercises(names)}.`,
+      error: cause,
     })
   }
-  return { ...results, warnings }
+  return { ...results, failureCause: cause, warnings }
 }
 
 /**
@@ -276,11 +275,15 @@ async function restoreLatestSubmissions(
   return unrestored
 }
 
+/** tmc-langs' reasons for an exercise whose package on the server cannot be unpacked. */
+const BROKEN_PACKAGE_REASON = /archive|\bzip\b|project directory/i
+
 /**
  * The one error a failed download is reported with.
  *
  * A backend that failed as a whole is the cause worth naming, preferring one whose
- * presentation carries a remedy (e.g. "Log In"); otherwise the per-exercise reasons.
+ * presentation carries a remedy (e.g. "Log In"); otherwise the per-exercise reasons, in plain
+ * words, with tmc-langs' own as the details the log gets.
  */
 function failureCause(failedLegs: Error[], exerciseReasons: string[][]): Error {
   const leg = failedLegs.find((error) => presentationFor(error).actions.length > 0) ?? failedLegs[0]
@@ -288,28 +291,15 @@ function failureCause(failedLegs: Error[], exerciseReasons: string[][]): Error {
     return leg
   }
   const reasons = [...new Set(exerciseReasons.flat().filter((reason) => reason !== ""))]
-  return new ExerciseUpdateError(
-    reasons.length > 0 ? reasons.join("; ") : "tmc-langs did not report them as downloaded",
-  )
-}
-
-/** The name the student knows `exerciseId` by, or its id if no stored course has it. */
-function exerciseName(actionContext: ReadyActionContext, exerciseId: ExerciseIdentifier): string {
-  const stored = actionContext.startup.userData.getExercise(exerciseId)
-  return stored.ok
-    ? LocalCourseExercise.getSlug(stored.val.exercise)
-    : ExerciseIdentifier.toString(exerciseId)
-}
-
-const LISTED_EXERCISE_LIMIT = 5
-
-function describeExercises(names: string[]): string {
-  const listed = names.slice(0, LISTED_EXERCISE_LIMIT).join(", ")
-  const rest = names.length - LISTED_EXERCISE_LIMIT
-  if (names.length === 1) {
-    return `the exercise ${listed}`
+  const details =
+    reasons.length > 0 ? reasons.join("; ") : "tmc-langs did not report them as downloaded"
+  if (reasons.length > 0 && reasons.every((reason) => BROKEN_PACKAGE_REASON.test(reason))) {
+    return new ExerciseUpdateError(
+      "The exercise on the server is not a valid exercise package; the course staff need to fix it.",
+      details,
+    )
   }
-  return `${names.length} exercises: ${listed}${rest > 0 ? ` and ${rest} more` : ""}`
+  return new ExerciseUpdateError("Show Logs has the details.", details)
 }
 
 function sortResults(exerciseIds: ExerciseIdentifier[], succeeded: Set<string>): DownloadResults {

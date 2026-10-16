@@ -3,8 +3,11 @@ import { Ok } from "ts-results"
 
 import { CourseIdentifier, ExerciseIdentifier } from "../../shared/lib"
 import type { OperationWarning, Warned } from "../api/withOperation"
+import { isSessionLost, presentationFor } from "../errors"
+import { failedUpdates } from "../ui/failedUpdates"
 import { updateablesRegistry } from "../ui/updateablesRegistry"
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises"
+import { exerciseName } from "./exerciseNames"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
 
@@ -20,7 +23,8 @@ interface ExerciseUpdate {
  * sees the work begin, and afterwards holds only the exercises that failed. It is refilled
  * even when the download throws, lest the student conclude there is nothing left to update.
  * Errs, with nothing downloaded, only while some of the exercises are busy with another
- * operation; any other failure is a warning.
+ * operation. The exercises that failed stay in `failedUpdates` until they update or have no
+ * update left; a requested update also warns of them.
  *
  * For exercises not on disk yet, see `downloadCourseExercises`.
  *
@@ -64,8 +68,22 @@ export async function downloadExerciseUpdates(
     if (downloaded.err) {
       return downloaded
     }
-    stillUpdateable = downloaded.val.failed
+    const { successful, failed, failureCause } = downloaded.val
+    stillUpdateable = failed
     warnings = downloaded.val.warnings
+    const reason = failureCause ? presentationFor(failureCause).message : ""
+    failedUpdates.record(
+      updates
+        .filter((x) =>
+          failed.some((id) => ExerciseIdentifier.key(id) === ExerciseIdentifier.key(x.exerciseId)),
+        )
+        .map((x) => ({ ...x, exerciseName: exerciseName(actionContext, x.exerciseId), reason })),
+      successful,
+    )
+    if (isUnrequested && failureCause && isSessionLost(failureCause)) {
+      // A lost session still warns: that warning is what offers Log In.
+      warnings.push({ headline: "Failed to update exercises.", error: failureCause })
+    }
   } finally {
     setUpdateablesByCourse(stillUpdateable)
   }

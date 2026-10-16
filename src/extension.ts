@@ -63,8 +63,10 @@ import {
   trackHasDownloadedExercises,
 } from "./ui/contextKeys"
 import { exerciseOperations } from "./ui/exerciseOperations"
+import { failedUpdates } from "./ui/failedUpdates"
 import { AccountStatusBarItem } from "./ui/statusBarAccount"
 import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
+import { FailedUpdatesStatusBarItem } from "./ui/statusBarFailedUpdates"
 import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
 
@@ -496,6 +498,7 @@ async function activateInner(
         userData: readyContext.startup.userData,
         operations: exerciseOperations,
       }),
+      new FailedUpdatesStatusBarItem(failedUpdates),
       trackHasCourses(readyContext.startup.userData),
       trackHasDownloadedExercises(readyContext.startup.workspaceManager),
       // Point totals come from the backend, so without this the Courses view and Course

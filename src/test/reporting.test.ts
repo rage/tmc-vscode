@@ -24,6 +24,7 @@ import { nextPanelId } from "../panels/routes"
 import { TmcPanel } from "../panels/TmcPanel"
 import Storage from "../storage"
 import type { MoocLocalCourseData } from "../storage/data"
+import { failedUpdates } from "../ui/failedUpdates"
 import { CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
 import type CoursesTree from "../ui/treeview/treeview"
 import { updateablesRegistry } from "../ui/updateablesRegistry"
@@ -315,6 +316,7 @@ function lastTestRunErrors(): string[] {
 beforeEach(function () {
   vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
   updateablesRegistry.clear()
+  failedUpdates.clear()
 })
 
 // jest-mock-vscode ships no `env` namespace; the old-submission picker formats dates with it.
@@ -617,9 +619,7 @@ suite("reported once: the Courses view and course details", function () {
 
     await run("tmc.updateCourseExercises", courseRow())
 
-    expect(shown).toEqual([
-      "error: Failed to update the exercise loops. Retry from the Courses view.",
-    ])
+    expect(shown).toEqual(["error: Failed to update the exercise loops."])
   })
 
   test("a failed new-exercise download from the palette is one warning", async function () {
@@ -644,9 +644,38 @@ suite("reported once: the Courses view and course details", function () {
 
     await run("tmc.updateExercises", "loud")
 
-    expect(shown).toEqual([
-      "error: Failed to update the exercise loops. Retry from the Courses view.",
-    ])
+    expect(shown).toEqual(["error: Failed to update the exercise loops."])
+  })
+
+  test("a failed automatic update shows in the status bar only, until an update succeeds", async function () {
+    const updateable = { checkExerciseUpdates: async () => Ok([idOfMoocExercise(EXERCISE_ID)]) }
+    const failing = await harness({ langs: { ...moocDownloadFails, ...updateable } })
+    vi.mocked(failing.actionContext.settings.getAutomaticallyUpdateExercises).mockReturnValue(true)
+
+    await failing.run("tmc.updateExercises", "silent")
+
+    expect(failing.shown).toEqual([])
+    expect(failedUpdates.all().map((x) => x.exerciseName)).toEqual([EXERCISE])
+
+    const succeeding = await harness({
+      langs: {
+        ...updateable,
+        downloadMoocExercises: async () =>
+          Ok({
+            downloaded: [{ id: idOfMoocExercise(EXERCISE_ID), path: "/tmp/loops" }],
+            skipped: [],
+            failed: [],
+          }),
+      },
+    })
+    vi.mocked(succeeding.actionContext.settings.getAutomaticallyUpdateExercises).mockReturnValue(
+      true,
+    )
+
+    await succeeding.run("tmc.updateExercises", "silent")
+
+    expect(succeeding.shown).toEqual([])
+    expect(failedUpdates.all()).toEqual([])
   })
 
   test("an update check that throws is one notification, or none when silent", async function () {
