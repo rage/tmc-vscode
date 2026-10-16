@@ -205,18 +205,8 @@ export const AI_EXTENSIONS: Readonly<Record<string, string>> = {
   "ZencoderAI.zencoder": "Zencoder",
 }
 
-/**
- * The name the exercises folder goes by as every course workspace's first folder. Listing that
- * folder itself, rather than one inside it, is what lets a single Workspace Trust decision cover
- * every course and every exercise downloaded later: VS Code trusts a path and all below it.
- */
-export const WORKSPACE_ROOT_FOLDER_NAME = "TestMyCode"
-
-/** The folder inside the exercises folder that holds the courses' `.code-workspace` files. */
-export const WORKSPACE_FILE_FOLDER_NAME = "workspaces"
-
 export const WORKSPACE_SETTINGS = {
-  folders: [{ path: "..", name: WORKSPACE_ROOT_FOLDER_NAME }],
+  folders: [{ path: ".tmc" }],
   settings: {
     "explorer.decorations.colors": false,
     "files.autoSave": "onFocusChange",
@@ -230,6 +220,7 @@ export const WORKSPACE_SETTINGS = {
 /** package.json's `workspaceContains:**\/TMC-Readme.md` activation event names it too. */
 export const WORKSPACE_ROOT_FILE_NAME = "TMC-Readme.md"
 export const WORKSPACE_ROOT_FILE_TEXT = FAQ
+export const WORKSPACE_ROOT_FOLDER_NAME = ".tmc"
 
 /**
  * Settings key for a course's manually-closed exercises. A tmc key keeps its pre-mooc

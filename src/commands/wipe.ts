@@ -13,6 +13,13 @@ export async function wipe(
   const { resources, workspaceManager } = actionContext.startup
   Logger.info("Wiping")
   const projectsDirectory = resources.projectsDirectory
+  if (!projectsDirectory) {
+    void dialog.errorNotification(
+      "Wiping the extension data is unavailable: the TestMyCode tools did not report where the exercises folder is.",
+      new Error("tmc-langs did not report an exercise directory"),
+    )
+    return
+  }
 
   if (workspaceManager.activeCourse) {
     dialog.warningNotification(

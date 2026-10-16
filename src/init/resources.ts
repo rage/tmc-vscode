@@ -1,48 +1,40 @@
 import * as fs from "fs-extra"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
-import * as vscode from "vscode"
 
-import { ensureCourseWorkspaceFile, ensureWorkspaceRoot } from "../api/workspaceManager"
+import { ensureCourseWorkspaceFile, ensureWorkspaceRootFile } from "../api/workspaceManager"
 import Resources from "../config/resources"
-import { CorruptStoredDataError, FileSystemError, InitializationError } from "../errors"
+import { CorruptStoredDataError, FileSystemError } from "../errors"
 import type Storage from "../storage"
-import { migrateCourseWorkspaceFiles } from "../storage/migration/courseWorkspaceFiles"
+import { unpinExtensionSettings } from "../storage/migration/courseWorkspaceFiles"
 import { Logger } from "../utilities/logger"
 
 /**
  * Creates the directories and workspace files the extension needs, and describes where
- * they live. Moves the course workspace files from `legacyWorkspaceFileFolder`, where earlier
- * versions kept them, into the exercises folder.
+ * they live.
  *
- * Returns `Err` for every failure, such as a filesystem the user cannot write to or no
- * `projectsDirectory`.
+ * Returns `Err` for every failure, such as a filesystem the user cannot write to.
  * Activation degrades on that `Err` instead of aborting, so nothing here may throw.
  * Unreadable stored courses are not a failure here: `UserData` reports them, and only
  * what needs the courses degrades.
  */
 export async function resourceInitialization(
   storage: Storage,
-  projectsDirectory: string | undefined,
-  legacyWorkspaceFileFolder: string,
+  tmcDataPath: string | undefined,
+  workspaceFileFolder: string,
 ): Promise<Result<Resources, Error>> {
-  if (!projectsDirectory) {
-    return new Err(
-      new InitializationError("The TestMyCode tools did not report where the exercises folder is."),
-    )
-  }
   try {
-    const created = await fs.mkdir(projectsDirectory, { recursive: true })
-    if (created !== undefined) {
-      Logger.info(`Created tmc data directory at ${projectsDirectory}`)
+    if (tmcDataPath) {
+      const created = await fs.mkdir(tmcDataPath, { recursive: true })
+      if (created !== undefined) {
+        Logger.info(`Created tmc data directory at ${tmcDataPath}`)
+      }
+    } else {
+      Logger.warn("Skipped tmc data directory check")
     }
 
-    const resources = new Resources(projectsDirectory)
-    await migrateCourseWorkspaceFiles(
-      legacyWorkspaceFileFolder,
-      resources,
-      vscode.workspace.workspaceFile?.fsPath,
-    )
+    const resources = new Resources(workspaceFileFolder, tmcDataPath)
+    await unpinExtensionSettings(workspaceFileFolder)
 
     const userData = readableUserData(storage)
     const storedCourses = [
@@ -52,15 +44,14 @@ export async function resourceInitialization(
 
     // A course whose workspace file went missing is unopenable, so every stored
     // course gets one back on startup.
-    await Promise.all(
-      storedCourses.flatMap(([backend, courses]) =>
+    await Promise.all([
+      ensureWorkspaceRootFile(workspaceFileFolder),
+      ...storedCourses.flatMap(([backend, courses]) =>
         courses.map((course) =>
           ensureCourseWorkspaceFile(resources.getWorkspaceFilePath(course.name, backend)),
         ),
       ),
-    )
-    // After the files: it hides what it finds in the exercises folder.
-    await ensureWorkspaceRoot(projectsDirectory)
+    ])
 
     return new Ok(resources)
   } catch (e) {

@@ -3,7 +3,11 @@ import * as path from "path"
 import * as vscode from "vscode"
 
 import type { BackendKind } from "../../shared/lib"
-import { WORKSPACE_FILE_FOLDER_NAME, workspaceFileName } from "./constants"
+import {
+  WORKSPACE_ROOT_FILE_NAME,
+  WORKSPACE_ROOT_FOLDER_NAME,
+  workspaceFileName,
+} from "./constants"
 
 export enum EditorKind {
   Code = 0,
@@ -13,15 +17,17 @@ export enum EditorKind {
 /** Where the exercises and the course workspaces live on disk. */
 export default class Resources {
   public readonly editorKind: EditorKind
-  private _projectsDirectory: string
+  private _projectsDirectory: string | undefined
 
-  public constructor(projectsDirectory: string) {
+  public constructor(
+    public readonly workspaceFileFolder: string,
+    projectsDirectory: string | undefined,
+  ) {
     this.editorKind = vscode.env.appName === "VSCodium" ? EditorKind.VSCodium : EditorKind.Code
     this._projectsDirectory = projectsDirectory
   }
 
-  /** The exercises folder, which also holds the course workspace files. */
-  public get projectsDirectory(): string {
+  public get projectsDirectory(): string | undefined {
     return this._projectsDirectory
   }
 
@@ -29,13 +35,14 @@ export default class Resources {
     this._projectsDirectory = directory
   }
 
-  public get workspaceFileFolder(): string {
-    return path.join(this._projectsDirectory, WORKSPACE_FILE_FOLDER_NAME)
+  public get workspaceRootFolder(): vscode.Uri {
+    return vscode.Uri.file(path.join(this.workspaceFileFolder, WORKSPACE_ROOT_FOLDER_NAME))
   }
 
-  /** Every course workspace's first folder: the exercises folder itself. */
-  public get workspaceRootFolder(): vscode.Uri {
-    return vscode.Uri.file(this._projectsDirectory)
+  public get workspaceRootFile(): vscode.Uri {
+    return vscode.Uri.file(
+      path.join(this.workspaceFileFolder, WORKSPACE_ROOT_FOLDER_NAME, WORKSPACE_ROOT_FILE_NAME),
+    )
   }
 
   public getWorkspaceFilePath(courseName: string, backend: BackendKind): string {

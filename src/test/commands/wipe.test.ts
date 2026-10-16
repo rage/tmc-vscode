@@ -34,6 +34,7 @@ function wipeContext(
   options: {
     /** The answer to the typed confirmation. */
     isConfirmed?: boolean
+    noProjectsDirectory?: boolean
     resetSettings?: Result<void, Error>
     wipeDataFromStorage?: Result<void, Error>
     deleteAllWorkspaceFiles?: Result<void, Error>
@@ -45,7 +46,7 @@ function wipeContext(
     ...createMockActionContext({
       startup: {
         resources: {
-          projectsDirectory: PROJECTS_DIRECTORY,
+          projectsDirectory: options.noProjectsDirectory ? undefined : PROJECTS_DIRECTORY,
         } as Resources,
         langs: {
           resetSettings: vi.fn(step("resetSettings", () => options.resetSettings ?? Ok.EMPTY)),
@@ -117,6 +118,19 @@ suite("Wipe command", function () {
 
     expect(fs.remove).not.toHaveBeenCalled()
     expect(context.dialog.reportError).toHaveBeenCalledOnce()
+  })
+
+  test("wipes nothing and says why when tmc-langs reported no exercise directory", async function () {
+    const context = wipeContext({ noProjectsDirectory: true })
+
+    await wipe(context, extensionContext)
+
+    expect(stepsRun).toEqual([])
+    expect(context.dialog.confirm).not.toHaveBeenCalled()
+    expect(context.dialog.errorNotification).toHaveBeenCalledWith(
+      "Wiping the extension data is unavailable: the TestMyCode tools did not report where the exercises folder is.",
+      expect.any(Error),
+    )
   })
 
   test("asks once, by typing, and deletes nothing unless the user types the confirmation", async function () {

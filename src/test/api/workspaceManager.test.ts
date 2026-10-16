@@ -16,14 +16,13 @@ import type {
 } from "../../api/workspaceManager"
 import WorkspaceManager, {
   ensureCourseWorkspaceFile,
-  ensureWorkspaceRoot,
+  ensureWorkspaceRootFile,
   ExerciseStatus,
 } from "../../api/workspaceManager"
 import {
   closedExercisesSettingKey,
   HIDE_META_FILES,
   WATCHER_EXCLUDE,
-  WORKSPACE_FILE_FOLDER_NAME,
   WORKSPACE_ROOT_FILE_NAME,
   WORKSPACE_ROOT_FILE_TEXT,
   WORKSPACE_ROOT_FOLDER_NAME,
@@ -58,8 +57,8 @@ function stubExtensions(getExtension: (id: string) => vscode.Extension<unknown> 
   })
 }
 
+const WORKSPACE_FILE_FOLDER = "/tmc/workspaces"
 const PROJECTS_DIRECTORY = "/tmc/projects"
-const WORKSPACE_FILE_FOLDER = path.join(PROJECTS_DIRECTORY, WORKSPACE_FILE_FOLDER_NAME)
 
 interface WorkspaceStubs {
   workspaceFile: vscode.Uri | undefined
@@ -155,7 +154,7 @@ function configurationStub(
 
 suite("WorkspaceManager class", function () {
   beforeEach(function () {
-    resources = new Resources(PROJECTS_DIRECTORY)
+    resources = new Resources(WORKSPACE_FILE_FOLDER, PROJECTS_DIRECTORY)
     rootFolder = folderOf(resources.workspaceRootFolder, WORKSPACE_ROOT_FOLDER_NAME)
     updateWorkspaceFolders = vi.fn<WorkspaceStubs["updateWorkspaceFolders"]>(() => {
       notifyFolderChange({ added: [], removed: [] })
@@ -221,29 +220,6 @@ suite("WorkspaceManager class", function () {
       const manager = new WorkspaceManager(resources, persistForCourse)
       expect(manager.activeCourse).toBeUndefined()
       expect(manager.activeCourseBackend).toBeUndefined()
-    })
-
-    // A workspace of an earlier version listed a `.tmc` folder in global storage first.
-    test("puts the exercises folder first, under its name, in place of another first folder", async function () {
-      const open = exercise("mooc", "my python course", "hello_world", ExerciseStatus.Open)
-      openWorkspaceFile(workspaceFileName("my python course", "mooc"))
-      stubWorkspace("workspaceFolders", [
-        folderOf(vscode.Uri.file("/global-storage/workspaces/.tmc"), ".tmc"),
-        folderOf(open.uri, open.exerciseSlug),
-      ])
-
-      const manager = new WorkspaceManager(resources, persistForCourse)
-      await manager.setExercises([open])
-
-      expect(updateWorkspaceFolders).toHaveBeenCalledExactlyOnceWith(
-        0,
-        2,
-        {
-          uri: expect.objectContaining({ path: PROJECTS_DIRECTORY }),
-          name: WORKSPACE_ROOT_FOLDER_NAME,
-        },
-        { uri: open.uri },
-      )
     })
 
     test("keeps a spaced-slug course's open exercises in its workspace", async function () {
@@ -893,16 +869,13 @@ suite("WorkspaceManager class", function () {
   })
 
   suite("workspaceFileProblem", function () {
-    let projectsDirectory: string
     let workspaceFileFolder: string
     let workspaceFile: string
     let manager: WorkspaceManager
 
     beforeEach(function () {
-      projectsDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "workspace-manager-"))
-      resources = new Resources(projectsDirectory)
-      workspaceFileFolder = resources.workspaceFileFolder
-      fs.mkdirSync(workspaceFileFolder)
+      workspaceFileFolder = fs.mkdtempSync(path.join(os.tmpdir(), "workspace-manager-"))
+      resources = new Resources(workspaceFileFolder, PROJECTS_DIRECTORY)
       workspaceFile = resources.getWorkspaceFilePath("test-python-course", "tmc")
       fs.writeFileSync(workspaceFile, "{}")
       stubWorkspace("workspaceFile", vscode.Uri.file(workspaceFile))
@@ -912,7 +885,7 @@ suite("WorkspaceManager class", function () {
 
     afterEach(function () {
       fs.chmodSync(workspaceFile, 0o644)
-      fs.rmSync(projectsDirectory, { recursive: true, force: true })
+      fs.rmSync(workspaceFileFolder, { recursive: true, force: true })
     })
 
     test("finds nothing wrong with a saved, writable file", async function () {
@@ -980,22 +953,19 @@ suite("WorkspaceManager class", function () {
 
   suite("addWorkspaceRecommendation", function () {
     const courseSlug = "test-python-course"
-    let projectsDirectory: string
     let workspaceFileFolder: string
     let workspaceFile: string
     let manager: WorkspaceManager
 
     beforeEach(function () {
-      projectsDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "workspace-manager-"))
-      resources = new Resources(projectsDirectory)
-      workspaceFileFolder = resources.workspaceFileFolder
-      fs.mkdirSync(workspaceFileFolder)
+      workspaceFileFolder = fs.mkdtempSync(path.join(os.tmpdir(), "workspace-manager-"))
+      resources = new Resources(workspaceFileFolder, PROJECTS_DIRECTORY)
       workspaceFile = resources.getWorkspaceFilePath(courseSlug, "tmc")
       manager = new WorkspaceManager(resources, persistForCourse)
     })
 
     afterEach(function () {
-      fs.rmSync(projectsDirectory, { recursive: true, force: true })
+      fs.rmSync(workspaceFileFolder, { recursive: true, force: true })
     })
 
     test("warns instead of rejecting when the workspace file is unreadable", async function () {
@@ -1136,18 +1106,19 @@ suite("WorkspaceManager class", function () {
       expect(result.ok).toBe(true)
     })
 
-    test("deletes every workspace file and nothing else beside them", async function () {
+    test("deletes every workspace file but keeps the shared root folder", async function () {
+      const rootFolderPath = path.join(workspaceFileFolder, WORKSPACE_ROOT_FOLDER_NAME)
       fs.writeFileSync(workspaceFile, JSON.stringify({ folders: [] }))
       fs.writeFileSync(
         resources.getWorkspaceFilePath("another course", "mooc"),
         JSON.stringify({ folders: [] }),
       )
-      fs.writeFileSync(path.join(workspaceFileFolder, "notes.txt"), "kept")
+      fs.mkdirSync(rootFolderPath)
 
       const result = await manager.deleteAllWorkspaceFiles()
 
       expect(result.ok).toBe(true)
-      expect(fs.readdirSync(workspaceFileFolder)).toEqual(["notes.txt"])
+      expect(fs.readdirSync(workspaceFileFolder)).toEqual([WORKSPACE_ROOT_FOLDER_NAME])
     })
   })
 
@@ -1254,7 +1225,7 @@ suite("WorkspaceManager class", function () {
       expect(updateWorkspaceFolders).toHaveBeenCalledExactlyOnceWith(
         0,
         1,
-        { uri: rootFolder.uri, name: WORKSPACE_ROOT_FOLDER_NAME },
+        { uri: rootFolder.uri },
         { uri: tmcExercise.uri },
       )
     })
@@ -1302,42 +1273,29 @@ suite("workspace file creation", function () {
     expect(fs.existsSync(workspaceFile)).toBe(true)
   })
 
-  test("writes the readme into the exercises folder", async function () {
-    await ensureWorkspaceRoot(workspaceFileFolder)
+  test("writes the readme into the workspace root folder", async function () {
+    await ensureWorkspaceRootFile(workspaceFileFolder)
 
-    const rootFile = path.join(workspaceFileFolder, WORKSPACE_ROOT_FILE_NAME)
+    const rootFile = path.join(
+      workspaceFileFolder,
+      WORKSPACE_ROOT_FOLDER_NAME,
+      WORKSPACE_ROOT_FILE_NAME,
+    )
     expect(fs.readFileSync(rootFile, "utf-8")).toBe(WORKSPACE_ROOT_FILE_TEXT)
   })
 
   // It ships with the extension, so an upgrade has to replace the copy on disk.
   test("replaces a readme left by an older version", async function () {
-    const rootFile = path.join(workspaceFileFolder, WORKSPACE_ROOT_FILE_NAME)
+    const rootFile = path.join(
+      workspaceFileFolder,
+      WORKSPACE_ROOT_FOLDER_NAME,
+      WORKSPACE_ROOT_FILE_NAME,
+    )
+    fs.mkdirSync(path.dirname(rootFile), { recursive: true })
     fs.writeFileSync(rootFile, "an older FAQ")
 
-    await ensureWorkspaceRoot(workspaceFileFolder)
+    await ensureWorkspaceRootFile(workspaceFileFolder)
 
     expect(fs.readFileSync(rootFile, "utf-8")).toBe(WORKSPACE_ROOT_FILE_TEXT)
-  })
-
-  // The course folders are workspace folders of their own, so in the first folder only the
-  // readme is shown.
-  test("hides everything in the exercises folder but the readme, keeping its other settings", async function () {
-    const settingsFile = path.join(workspaceFileFolder, ".vscode", "settings.json")
-    fs.mkdirSync(path.dirname(settingsFile))
-    fs.writeFileSync(settingsFile, '{ "editor.tabSize": 2 }')
-    fs.mkdirSync(path.join(workspaceFileFolder, "legacy-course"))
-
-    await ensureWorkspaceRoot(workspaceFileFolder)
-
-    expect(jsonc.parse(fs.readFileSync(settingsFile, "utf-8"))).toEqual({
-      "editor.tabSize": 2,
-      "files.exclude": {
-        ".vscode": true,
-        "legacy-course": true,
-        mooc: true,
-        tmc: true,
-        [WORKSPACE_FILE_FOLDER_NAME]: true,
-      },
-    })
   })
 })

@@ -833,6 +833,22 @@ suite("registered command handlers", function () {
       vscode.Uri.file("/tmp/tmcdata/projects"),
     )
   })
+
+  test("tmc.openTMCExercisesFolder says why it opens nothing without a known projects directory", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const actionContext = createMockActionContext({
+      startup: { resources: { projectsDirectory: undefined } as Resources },
+    })
+    const { handlers } = registerAndCollect(actionContext)
+
+    await handlers.get("tmc.openTMCExercisesFolder")?.()
+
+    expect(executeCommand).not.toHaveBeenCalled()
+    expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
+      "Opening the exercises folder is unavailable: the TestMyCode tools did not report where the exercises folder is.",
+      expect.any(Error),
+    )
+  })
 })
 
 // VS Code's own Windows/Linux defaults, transcribed. An extension binding of

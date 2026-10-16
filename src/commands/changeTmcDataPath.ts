@@ -10,10 +10,16 @@ import { Logger } from "../utilities"
  */
 export async function changeTmcDataPath(actionContext: ReadyActionContext): Promise<void> {
   const { dialog } = actionContext
-  const { resources, workspaceManager } = actionContext.startup
+  const { resources } = actionContext.startup
   Logger.info("Moving the exercises folder")
-  const openCourse = workspaceManager.activeCourse
-  const openCourseBackend = workspaceManager.activeCourseBackend
+  if (!resources.projectsDirectory) {
+    await dialog.errorNotification(
+      "Moving the exercises folder is unavailable: the TestMyCode tools did not report where the exercises folder is.",
+      new Error("tmc-langs did not report an exercise directory"),
+    )
+    return
+  }
+
   const old = resources.projectsDirectory
   const options: vscode.OpenDialogOptions = {
     canSelectFiles: false,
@@ -52,12 +58,5 @@ export async function changeTmcDataPath(actionContext: ReadyActionContext): Prom
       "Refresh Courses",
       (): void => void vscode.commands.executeCommand("tmcTreeView.refreshCourses"),
     ])
-  }
-  // The open course workspace's file moved with the exercises.
-  if (openCourse !== undefined && openCourseBackend !== undefined) {
-    await vscode.commands.executeCommand(
-      "vscode.openFolder",
-      vscode.Uri.file(resources.getWorkspaceFilePath(openCourse, openCourseBackend)),
-    )
   }
 }

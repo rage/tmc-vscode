@@ -4,15 +4,10 @@ import * as fs from "fs-extra"
 import * as jsonc from "jsonc-parser"
 import * as tmp from "tmp"
 import { vi } from "vitest"
-import * as vscode from "vscode"
+import type * as vscode from "vscode"
 
-import {
-  WORKSPACE_FILE_FOLDER_NAME,
-  WORKSPACE_ROOT_FILE_NAME,
-  WORKSPACE_SETTINGS,
-  workspaceFileName,
-} from "../../config/constants"
-import { FileSystemError, InitializationError } from "../../errors"
+import { workspaceFileName } from "../../config/constants"
+import { FileSystemError } from "../../errors"
 import { resourceInitialization } from "../../init/resources"
 import Storage from "../../storage"
 import { v3 } from "../../storage/data"
@@ -38,34 +33,25 @@ suite("resourceInitialization", function () {
   let context: vscode.ExtensionContext
   let storage: Storage
   let temporaryRoot: string
-  let projectsDirectory: string
-  let legacyFolder: string
 
   beforeEach(function () {
     Logger.configure(LogLevel.None)
     context = createMockContext()
     storage = new Storage(context)
     temporaryRoot = tmp.dirSync().name
-    projectsDirectory = path.join(temporaryRoot, "projects")
-    legacyFolder = path.join(temporaryRoot, "globalStorage", "workspaces")
   })
 
-  function workspaceFile(name: string, backend: "tmc" | "mooc"): string {
-    return path.join(
-      projectsDirectory,
-      WORKSPACE_FILE_FOLDER_NAME,
-      workspaceFileName(name, backend),
-    )
-  }
-
-  test("creates the workspace files for every stored course in the exercises folder", async function () {
+  test("creates the workspace files for every stored course", async function () {
     await context.globalState.update(v3.USER_DATA_KEY, userData.v3_0_0)
+    const workspaceFileFolder = path.join(temporaryRoot, "workspaces")
 
-    const result = await resourceInitialization(storage, projectsDirectory, legacyFolder)
+    const result = await resourceInitialization(storage, undefined, workspaceFileFolder)
 
     expect(result.ok).toBe(true)
-    expect(fs.existsSync(path.join(projectsDirectory, WORKSPACE_ROOT_FILE_NAME))).toBe(true)
-    expect(fs.existsSync(workspaceFile("test-python-course", "tmc"))).toBe(true)
+    expect(fs.existsSync(path.join(workspaceFileFolder, ".tmc"))).toBe(true)
+    expect(
+      fs.existsSync(path.join(workspaceFileFolder, workspaceFileName("test-python-course", "tmc"))),
+    ).toBe(true)
   })
 
   test("creates the workspace files for a stored mooc course", async function () {
@@ -73,23 +59,29 @@ suite("resourceInitialization", function () {
       courses: [],
       mooc_courses: [moocCourse],
     })
+    const workspaceFileFolder = path.join(temporaryRoot, "workspaces")
 
-    const result = await resourceInitialization(storage, projectsDirectory, legacyFolder)
+    const result = await resourceInitialization(storage, undefined, workspaceFileFolder)
 
     expect(result.ok).toBe(true)
-    expect(fs.existsSync(workspaceFile("a-mooc-course", "mooc"))).toBe(true)
-  })
-
-  test("errs without an exercises folder to keep the workspace files in", async function () {
-    const result = await resourceInitialization(storage, undefined, legacyFolder)
-
-    expect(result.err).toBe(true)
-    expect(result.val).toBeInstanceOf(InitializationError)
+    expect(
+      fs.existsSync(path.join(workspaceFileFolder, workspaceFileName("a-mooc-course", "mooc"))),
+    ).toBe(true)
   })
 
   // The whole degraded mode -- the tree view's recovery entries, the
   // InitializationErrorHelp panel -- hangs off this `Err`. A throw here instead skips
   // every one of them and aborts activation.
+  test("errs instead of throwing when the workspace folder cannot be created", async function () {
+    const blocked = path.join(temporaryRoot, "workspaces")
+    fs.writeFileSync(blocked, "a regular file where the folder belongs")
+
+    const result = await resourceInitialization(storage, undefined, blocked)
+
+    expect(result.err).toBe(true)
+    expect(result.val).toBeInstanceOf(FileSystemError)
+  })
+
   test("errs instead of throwing when the projects directory cannot be created", async function () {
     const blocked = path.join(temporaryRoot, "projects")
     fs.writeFileSync(blocked, "a regular file where the folder belongs")
@@ -97,7 +89,7 @@ suite("resourceInitialization", function () {
     const result = await resourceInitialization(
       storage,
       path.join(blocked, "exercises"),
-      legacyFolder,
+      path.join(temporaryRoot, "workspaces"),
     )
 
     expect(result.err).toBe(true)
@@ -107,17 +99,19 @@ suite("resourceInitialization", function () {
   // Unreadable courses are `UserData`'s to report; the workspace files do not need them.
   test("succeeds when the stored course data cannot be read", async function () {
     await context.globalState.update(v3.USER_DATA_KEY, { courses: "not a list of courses" })
+    const workspaceFileFolder = path.join(temporaryRoot, "workspaces")
 
-    const result = await resourceInitialization(storage, projectsDirectory, legacyFolder)
+    const result = await resourceInitialization(storage, undefined, workspaceFileFolder)
 
     expect(result.ok).toBe(true)
-    expect(fs.existsSync(path.join(projectsDirectory, WORKSPACE_ROOT_FILE_NAME))).toBe(true)
+    expect(fs.existsSync(path.join(workspaceFileFolder, ".tmc"))).toBe(true)
   })
 
-  suite("with course workspace files where earlier versions kept them", function () {
-    const legacyText = `{
+  // Earlier versions copied them there, where they outranked the User settings.
+  suite("with the extension's settings in a course workspace file", function () {
+    const pinnedText = `{
   // the student's note
-  "folders": [{ "path": ".tmc" }, { "path": "/old/exercises/hello" }],
+  "folders": [{ "path": ".tmc" }, { "path": "/exercises/hello" }],
   "settings": {
     "chat.disableAIFeatures": true,
     "testMyCode.downloadOldSubmission": false,
@@ -126,72 +120,37 @@ suite("resourceInitialization", function () {
   },
   "extensions": { "recommendations": ["ms-python.python"] }
 }`
+    let workspaceFileFolder: string
 
     beforeEach(function () {
-      fs.mkdirSync(path.join(legacyFolder, ".tmc"), { recursive: true })
-      fs.writeFileSync(path.join(legacyFolder, ".tmc", WORKSPACE_ROOT_FILE_NAME), "old readme")
-      fs.writeFileSync(
-        path.join(legacyFolder, workspaceFileName("a-mooc-course", "mooc")),
-        legacyText,
-      )
+      workspaceFileFolder = path.join(temporaryRoot, "workspaces")
+      fs.mkdirSync(workspaceFileFolder, { recursive: true })
     })
 
-    // Earlier versions copied the extension's settings there, out of the student's reach.
-    test("moves them into the exercises folder, keeping their settings but the extension's", async function () {
-      const result = await resourceInitialization(storage, projectsDirectory, legacyFolder)
+    test("removes them in place, keeping everything else", async function () {
+      const file = path.join(workspaceFileFolder, workspaceFileName("a-mooc-course", "mooc"))
+      fs.writeFileSync(file, pinnedText)
+
+      const result = await resourceInitialization(storage, undefined, workspaceFileFolder)
 
       expect(result.ok).toBe(true)
-      const moved = fs.readFileSync(workspaceFile("a-mooc-course", "mooc"), "utf-8")
-      expect(moved).toContain("// the student's note")
-      expect(jsonc.parse(moved)).toEqual({
-        folders: WORKSPACE_SETTINGS.folders,
+      const unpinned = fs.readFileSync(file, "utf-8")
+      expect(unpinned).toContain("// the student's note")
+      expect(jsonc.parse(unpinned)).toEqual({
+        folders: [{ path: ".tmc" }, { path: "/exercises/hello" }],
         settings: { "chat.disableAIFeatures": true },
         extensions: { recommendations: ["ms-python.python"] },
       })
-      expect(fs.existsSync(legacyFolder)).toBe(false)
     })
 
-    test("keeps the one VS Code has open until a later start", async function () {
-      const open = path.join(legacyFolder, workspaceFileName("a-mooc-course", "mooc"))
-      const workspace = vscode.workspace as unknown as { workspaceFile: vscode.Uri | undefined }
-      Object.defineProperty(workspace, "workspaceFile", {
-        value: vscode.Uri.file(open),
-        configurable: true,
-      })
-      try {
-        await resourceInitialization(storage, projectsDirectory, legacyFolder)
-      } finally {
-        Object.defineProperty(workspace, "workspaceFile", { value: undefined, configurable: true })
-      }
-
-      expect(fs.existsSync(open)).toBe(true)
-      expect(fs.existsSync(workspaceFile("a-mooc-course", "mooc"))).toBe(true)
-
-      await resourceInitialization(storage, projectsDirectory, legacyFolder)
-      expect(fs.existsSync(legacyFolder)).toBe(false)
-    })
-
-    test("leaves a file already in the exercises folder as it is", async function () {
-      fs.mkdirSync(path.dirname(workspaceFile("a-mooc-course", "mooc")), { recursive: true })
-      fs.writeFileSync(workspaceFile("a-mooc-course", "mooc"), '{"folders":[]}')
-
-      await resourceInitialization(storage, projectsDirectory, legacyFolder)
-
-      expect(fs.readFileSync(workspaceFile("a-mooc-course", "mooc"), "utf-8")).toBe(
-        '{"folders":[]}',
-      )
-      expect(fs.existsSync(legacyFolder)).toBe(false)
-    })
-
-    test("leaves a file it cannot read as JSON where it is", async function () {
-      const broken = path.join(legacyFolder, workspaceFileName("broken", "tmc"))
+    test("leaves a file it cannot read as JSON as it is", async function () {
+      const broken = path.join(workspaceFileFolder, workspaceFileName("broken", "tmc"))
       fs.writeFileSync(broken, "{ not json")
 
-      const result = await resourceInitialization(storage, projectsDirectory, legacyFolder)
+      const result = await resourceInitialization(storage, undefined, workspaceFileFolder)
 
       expect(result.ok).toBe(true)
       expect(fs.readFileSync(broken, "utf-8")).toBe("{ not json")
-      expect(fs.existsSync(workspaceFile("a-mooc-course", "mooc"))).toBe(true)
     })
   })
 })

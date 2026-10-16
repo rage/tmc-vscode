@@ -53,105 +53,102 @@ const exercises: Exercise[] = [
 for (const exercise of exercises) {
   // The title is also the trace filename (fixtures.ts), so a constant one would
   // have every case overwrite the last one's trace.
-  vsCodeTest(
-    `can complete ${exercise.name}`,
-    async ({ page, projectsDir, userDataDir, webview }) => {
-      const coursesView = new CoursesViewPage(page, webview)
-      const testResultsPage = new TestResultsPage(page, webview)
-      const sidePanel = new TmcPage(page, webview).getSidePanel()
-      const explorerPage = new ExplorerPage(page)
+  vsCodeTest(`can complete ${exercise.name}`, async ({ page, userDataDir, webview }) => {
+    const coursesView = new CoursesViewPage(page, webview)
+    const testResultsPage = new TestResultsPage(page, webview)
+    const sidePanel = new TmcPage(page, webview).getSidePanel()
+    const explorerPage = new ExplorerPage(page)
 
-      // The session comes from the tmc credentials the fixture seeds (fixtures.ts).
-      await vsCodeTest.step("open the Courses view", async () => {
-        await coursesView.goto()
-      })
+    // The session comes from the tmc credentials the fixture seeds (fixtures.ts).
+    await vsCodeTest.step("open the Courses view", async () => {
+      await coursesView.goto()
+    })
 
-      await vsCodeTest.step("add and expand the course", async () => {
-        await coursesView.addNewCourse(exercise.course)
-        await coursesView.expand(coursesView.row(exercise.course))
-        await expect(coursesView.row("Part 1")).toHaveAttribute("aria-expanded", "true")
-      })
+    await vsCodeTest.step("add and expand the course", async () => {
+      await coursesView.addNewCourse(exercise.course)
+      await coursesView.expand(coursesView.row(exercise.course))
+      await expect(coursesView.row("Part 1")).toHaveAttribute("aria-expanded", "true")
+    })
 
-      await vsCodeTest.step("download the exercise, which opens it", async () => {
-        const row = coursesView.row(exercise.name)
-        await expect(row).toHaveAccessibleName(/, not downloaded,/)
-        await coursesView.runInlineAction(row, "Download")
-        await expect(row).toHaveAccessibleName(/, open,/)
-      })
+    await vsCodeTest.step("download the exercise, which opens it", async () => {
+      const row = coursesView.row(exercise.name)
+      await expect(row).toHaveAccessibleName(/, not downloaded,/)
+      await coursesView.runInlineAction(row, "Download")
+      await expect(row).toHaveAccessibleName(/, open,/)
+    })
 
-      await vsCodeTest.step("open workspace", async () => {
-        await coursesView.runInlineAction(coursesView.row(exercise.course), "Open Course Workspace")
-      })
+    await vsCodeTest.step("open workspace", async () => {
+      await coursesView.runInlineAction(coursesView.row(exercise.course), "Open Course Workspace")
+    })
 
-      await vsCodeTest.step("the course workspace turns AI assistance off", async () => {
-        const hasNewerSettings = isAtLeast1104(VSCODE_TEST_VERSION)
-        await expect
-          .poll(() => courseWorkspaceSettings(projectsDir))
-          .toMatchObject({
-            "chat.agent.enabled": false,
-            "chat.extensionTools.enabled": false,
-            "editor.inlineSuggest.enabled": false,
-            ...(hasNewerSettings ? SETTINGS_SINCE_1_104 : {}),
-          })
-        if (!hasNewerSettings) {
-          const settings = courseWorkspaceSettings(projectsDir)
-          for (const section of Object.keys(SETTINGS_SINCE_1_104)) {
-            expect(settings).not.toHaveProperty([section])
-          }
+    await vsCodeTest.step("the course workspace turns AI assistance off", async () => {
+      const hasNewerSettings = isAtLeast1104(VSCODE_TEST_VERSION)
+      await expect
+        .poll(() => courseWorkspaceSettings(userDataDir))
+        .toMatchObject({
+          "chat.agent.enabled": false,
+          "chat.extensionTools.enabled": false,
+          "editor.inlineSuggest.enabled": false,
+          ...(hasNewerSettings ? SETTINGS_SINCE_1_104 : {}),
+        })
+      if (!hasNewerSettings) {
+        const settings = courseWorkspaceSettings(userDataDir)
+        for (const section of Object.keys(SETTINGS_SINCE_1_104)) {
+          expect(settings).not.toHaveProperty([section])
         }
-        const userSettings = JSON.parse(
-          fs.readFileSync(join(userDataDir, "User", "settings.json"), "utf-8"),
-        )
-        expect(userSettings).toStrictEqual({ "window.dialogStyle": "custom" })
-      })
+      }
+      const userSettings = JSON.parse(
+        fs.readFileSync(join(userDataDir, "User", "settings.json"), "utf-8"),
+      )
+      expect(userSettings).toStrictEqual({ "window.dialogStyle": "custom" })
+    })
 
-      await vsCodeTest.step("open exercise file", async () => {
-        const contents = page.getByText(exercise.file_contents)
-        await expect(contents).toBeHidden()
-        await explorerPage.openPath(exercise.file_path)
-        await expect(contents).toBeVisible()
-      })
+    await vsCodeTest.step("open exercise file", async () => {
+      const contents = page.getByText(exercise.file_contents)
+      await expect(contents).toBeHidden()
+      await explorerPage.openPath(exercise.file_path)
+      await expect(contents).toBeVisible()
+    })
 
-      await vsCodeTest.step("reveal the exercise in the Courses view", async () => {
-        await coursesView.runExercisePaletteCommand("TestMyCode: Reveal in Courses View")
-        // A monaco list keeps DOM focus on itself and marks the focused row with a class.
-        await expect(coursesView.tree()).toBeFocused()
-        const row = coursesView.row(exercise.name)
-        await expect(row).toHaveClass(/\bfocused\b/)
-        await expect(row).toHaveAttribute("aria-selected", "true")
-      })
+    await vsCodeTest.step("reveal the exercise in the Courses view", async () => {
+      await coursesView.runExercisePaletteCommand("TestMyCode: Reveal in Courses View")
+      // A monaco list keeps DOM focus on itself and marks the focused row with a class.
+      await expect(coursesView.tree()).toBeFocused()
+      const row = coursesView.row(exercise.name)
+      await expect(row).toHaveClass(/\bfocused\b/)
+      await expect(row).toHaveAttribute("aria-selected", "true")
+    })
 
-      await vsCodeTest.step("run tests", async () => {
-        await page.getByText(exercise.file_contents).click()
-        // The editor-title action is contributed under `test-my-code:ActiveEditorIsExercise`
-        // (package.json), so it renders only once the extension has recognised the
-        // open exercise.
-        const runTests = editorActions(page).getByLabel("Run Tests", { exact: true })
-        await expect(runTests).toBeVisible()
-        await runTests.click()
-        if (exercise.expected_result === "pass") {
-          await expect(allPassedToast(page)).toBeVisible()
-        }
-        await testResultsPage.open()
-        await expect(testResultsPage.result(exercise.test_name).first()).toBeVisible()
-        if (exercise.expected_result === "fail") {
-          await expect(testResultsPage.result("1 of 1 tests failed.").first()).toBeVisible()
-          await expect(allPassedToast(page)).toBeHidden()
-        }
-      })
+    await vsCodeTest.step("run tests", async () => {
+      await page.getByText(exercise.file_contents).click()
+      // The editor-title action is contributed under `test-my-code:ActiveEditorIsExercise`
+      // (package.json), so it renders only once the extension has recognised the
+      // open exercise.
+      const runTests = editorActions(page).getByLabel("Run Tests", { exact: true })
+      await expect(runTests).toBeVisible()
+      await runTests.click()
+      if (exercise.expected_result === "pass") {
+        await expect(allPassedToast(page)).toBeVisible()
+      }
+      await testResultsPage.open()
+      await expect(testResultsPage.result(exercise.test_name).first()).toBeVisible()
+      if (exercise.expected_result === "fail") {
+        await expect(testResultsPage.result("1 of 1 tests failed.").first()).toBeVisible()
+        await expect(allPassedToast(page)).toBeHidden()
+      }
+    })
 
-      await vsCodeTest.step("submit exercise", async () => {
-        const expectedString = expectedResultInSubmissionView(exercise.expected_result)
-        await expect(sidePanel.getByRole("heading", { name: expectedString })).toBeHidden()
-        if (exercise.expected_result === "pass") {
-          await allPassedToast(page).getByRole("button", { name: "Submit" }).click()
-        } else {
-          await editorActions(page).getByLabel("Submit Solution", { exact: true }).click()
-        }
-        await expect(sidePanel.getByRole("heading", { name: expectedString })).toBeVisible()
-      })
-    },
-  )
+    await vsCodeTest.step("submit exercise", async () => {
+      const expectedString = expectedResultInSubmissionView(exercise.expected_result)
+      await expect(sidePanel.getByRole("heading", { name: expectedString })).toBeHidden()
+      if (exercise.expected_result === "pass") {
+        await allPassedToast(page).getByRole("button", { name: "Submit" }).click()
+      } else {
+        await editorActions(page).getByLabel("Submit Solution", { exact: true }).click()
+      }
+      await expect(sidePanel.getByRole("heading", { name: expectedString })).toBeVisible()
+    })
+  })
 }
 
 /** The editor title bar's actions; the Courses view's exercise rows carry the same labels. */

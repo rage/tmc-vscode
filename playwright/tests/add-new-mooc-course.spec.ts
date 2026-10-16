@@ -23,7 +23,7 @@ import { TmcPage } from "../pages/tmc"
 // no per-test breakdown), distinct from the TMC submission view.
 vsCodeTest(
   "can add, open, test and submit a mooc course exercise",
-  async ({ page, projectsDir, webview }) => {
+  async ({ page, userDataDir, webview }) => {
     const coursesView = new CoursesViewPage(page, webview)
     const testResultsPage = new TestResultsPage(page, webview)
     const sidePanel = new TmcPage(page, webview).getSidePanel()
@@ -67,7 +67,7 @@ vsCodeTest(
       "the course sets no AI policy, so its workspace turns AI off",
       async () => {
         await expect
-          .poll(() => courseWorkspaceSettings(projectsDir))
+          .poll(() => courseWorkspaceSettings(userDataDir))
           .toMatchObject({ "editor.inlineSuggest.enabled": false })
       },
     )
