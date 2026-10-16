@@ -3,11 +3,8 @@ import * as vscode from "vscode"
 import { Logger } from "../utilities"
 import { closeTrustEditorWhenTrusted } from "../window/workspaceTrustEditor"
 
-/**
- * How long VS Code's own startup trust modal may take to appear once the window has focus. A
- * request made while that modal is pending joins it; one made before it shows a second modal.
- */
-const STARTUP_MODAL_SETTLE_MS = 2000
+/** Marks a workspace that has opened untrusted before, in its `workspaceState`. */
+const OPENED_UNTRUSTED_KEY = "workspaceTrust.openedUntrusted"
 
 /** A trust request that settles faster than this showed no dialog. */
 const NO_DIALOG_MS = 300
@@ -20,21 +17,34 @@ const TRUST_REQUEST_TASK_TYPE = "testMyCode.workspaceTrust"
  * own trust modal. Does nothing in a trusted window. Settles once the question is answered or
  * dismissed, so activation must not await it.
  *
- * Where VS Code asks on startup by itself, this waits for that question and joins it rather than
- * asking twice; elsewhere it explains first why TestMyCode needs trust.
+ * Asks nothing where VS Code asks on this startup by itself: always with `startupPrompt` "always",
+ * and on a workspace's first untrusted opening with "once". A request made around VS Code's own
+ * question would ask a student who has just answered it a second time. Elsewhere it explains first
+ * why TestMyCode needs trust.
+ *
+ * @param workspaceState Where this records that the workspace has opened untrusted.
  */
-export async function promptForCourseWorkspaceTrust(courseTitle: string): Promise<void> {
+export async function promptForCourseWorkspaceTrust(
+  courseTitle: string,
+  workspaceState: vscode.Memento,
+): Promise<void> {
   if (vscode.workspace.isTrusted) {
     return
   }
   const startupPrompt = vscode.workspace
     .getConfiguration("security.workspace.trust")
     .get<string>("startupPrompt")
+  if (startupPrompt === "always") {
+    return
+  }
   if (startupPrompt !== "never") {
+    // Mirrors VS Code's own record of having asked, which it keeps per workspace as well.
+    const hasOpenedUntrusted = workspaceState.get<boolean>(OPENED_UNTRUSTED_KEY) === true
+    await workspaceState.update(OPENED_UNTRUSTED_KEY, true)
+    if (!hasOpenedUntrusted) {
+      return
+    }
     await windowFocus()
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, STARTUP_MODAL_SETTLE_MS)
-    })
     if (!vscode.workspace.isTrusted) {
       await requestWorkspaceTrust()
     }

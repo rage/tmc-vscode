@@ -468,6 +468,7 @@ async function activateInner(
       const course = ready.userData.getCourseBySlug(activeCourseBackend, activeCourse)
       void promptForCourseWorkspaceTrust(
         course.ok ? LocalCourseData.getCourseTitle(course.val) : activeCourse,
+        context.workspaceState,
       )
     }
     context.subscriptions.push(

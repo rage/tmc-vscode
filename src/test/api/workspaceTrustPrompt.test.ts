@@ -6,6 +6,7 @@ import {
   requestWorkspaceTrust,
 } from "../../api/workspaceTrustPrompt"
 import { Logger, LogLevel } from "../../utilities"
+import { createMockMemento } from "../mocks/vscode"
 
 type WindowStateListener = (state: vscode.WindowState) => void
 
@@ -19,6 +20,7 @@ suite("workspace trust prompt", function () {
   let executeCommand: ReturnType<typeof vi.spyOn>
   let showWarningMessage: ReturnType<typeof vi.spyOn>
   let fetchTasks: ReturnType<typeof vi.spyOn>
+  let workspaceState: vscode.Memento
 
   beforeEach(function () {
     Logger.configure(LogLevel.None)
@@ -28,6 +30,7 @@ suite("workspace trust prompt", function () {
     startupPrompt = "never"
     windowStateListeners = []
     trustModal = { answer: "trust", delayMs: 1000 }
+    workspaceState = createMockMemento()
     Object.defineProperty(vscode.workspace, "isTrusted", {
       get: () => isTrusted,
       set: (value: boolean) => {
@@ -137,7 +140,7 @@ suite("workspace trust prompt", function () {
     test("asks nothing in a trusted window", async function () {
       isTrusted = true
 
-      await promptForCourseWorkspaceTrust("Python Course")
+      await promptForCourseWorkspaceTrust("Python Course", workspaceState)
 
       expect(showWarningMessage).not.toHaveBeenCalled()
       expect(fetchTasks).not.toHaveBeenCalled()
@@ -147,7 +150,7 @@ suite("workspace trust prompt", function () {
       test("explains first, then asks through VS Code", async function () {
         showWarningMessage.mockResolvedValue("Trust Course Workspace")
 
-        const prompt = promptForCourseWorkspaceTrust("Python Course")
+        const prompt = promptForCourseWorkspaceTrust("Python Course", workspaceState)
         await vi.runAllTimersAsync()
         await prompt
 
@@ -163,22 +166,30 @@ suite("workspace trust prompt", function () {
       test("asks VS Code nothing once the student cancels", async function () {
         showWarningMessage.mockResolvedValue(undefined)
 
-        await promptForCourseWorkspaceTrust("Python Course")
+        await promptForCourseWorkspaceTrust("Python Course", workspaceState)
 
         expect(fetchTasks).not.toHaveBeenCalled()
       })
     })
 
-    suite("where VS Code asks on startup", function () {
+    suite("where VS Code asks the first time a workspace opens", function () {
       beforeEach(function () {
         startupPrompt = "once"
       })
 
-      test("waits for its question, then joins it without explaining", async function () {
-        const prompt = promptForCourseWorkspaceTrust("Python Course")
-        await vi.advanceTimersByTimeAsync(1999)
-        expect(fetchTasks).not.toHaveBeenCalled()
+      test("leaves the first opening's question to VS Code, even once answered No", async function () {
+        const prompt = promptForCourseWorkspaceTrust("Python Course", workspaceState)
+        await vi.runAllTimersAsync()
+        await prompt
 
+        expect(fetchTasks).not.toHaveBeenCalled()
+        expect(showWarningMessage).not.toHaveBeenCalled()
+      })
+
+      test("asks through VS Code on a later opening, which VS Code does not ask on", async function () {
+        await promptForCourseWorkspaceTrust("Python Course", workspaceState)
+
+        const prompt = promptForCourseWorkspaceTrust("Python Course", workspaceState)
         await vi.runAllTimersAsync()
         await prompt
 
@@ -186,10 +197,11 @@ suite("workspace trust prompt", function () {
         expect(showWarningMessage).not.toHaveBeenCalled()
       })
 
-      test("waits for the window to have focus first", async function () {
+      test("asks a later opening only once the window has focus", async function () {
+        await promptForCourseWorkspaceTrust("Python Course", workspaceState)
         isFocused = false
 
-        const prompt = promptForCourseWorkspaceTrust("Python Course")
+        const prompt = promptForCourseWorkspaceTrust("Python Course", workspaceState)
         await vi.advanceTimersByTimeAsync(10_000)
         expect(fetchTasks).not.toHaveBeenCalled()
 
@@ -201,14 +213,25 @@ suite("workspace trust prompt", function () {
         expect(fetchTasks).toHaveBeenCalledOnce()
       })
 
-      test("asks nothing once its question was answered with Trust", async function () {
-        const prompt = promptForCourseWorkspaceTrust("Python Course")
+      test("does not count an opening that was already trusted", async function () {
         isTrusted = true
-        await vi.runAllTimersAsync()
-        await prompt
+        await promptForCourseWorkspaceTrust("Python Course", workspaceState)
+        isTrusted = false
+
+        await promptForCourseWorkspaceTrust("Python Course", workspaceState)
 
         expect(fetchTasks).not.toHaveBeenCalled()
       })
+    })
+
+    test("leaves every question to VS Code where it asks on every startup", async function () {
+      startupPrompt = "always"
+      await promptForCourseWorkspaceTrust("Python Course", workspaceState)
+
+      await promptForCourseWorkspaceTrust("Python Course", workspaceState)
+
+      expect(fetchTasks).not.toHaveBeenCalled()
+      expect(showWarningMessage).not.toHaveBeenCalled()
     })
   })
 })
