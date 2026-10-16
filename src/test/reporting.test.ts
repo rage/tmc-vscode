@@ -164,6 +164,7 @@ async function harness(
     setExercises: async () => Ok.EMPTY,
     deleteWorkspaceFile: async () => Ok.EMPTY,
     createWorkspaceFile: async () => {},
+    prepareWorkspaceFileToOpen: async () => {},
   })
 
   const actionContext: ReadyActionContext = {
@@ -565,7 +566,7 @@ suite("reported once: course administration", function () {
   test("a course workspace that fails to open is one notification", async function () {
     const { post, shown } = await harness({
       workspaceManager: {
-        createWorkspaceFile: async () => {
+        prepareWorkspaceFileToOpen: async () => {
           throw offline()
         },
       },

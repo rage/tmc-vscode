@@ -1080,6 +1080,39 @@ suite("WorkspaceManager class", function () {
       expect(JSON.parse(fs.readFileSync(workspaceFile, "utf-8"))).toEqual(WORKSPACE_SETTINGS)
     })
 
+    test("lists the course's open exercises in its workspace file before it opens", async function () {
+      manager = new WorkspaceManager(resources, persistForCourse, [
+        exercise("tmc", courseSlug, "b_exercise", ExerciseStatus.Open),
+        exercise("tmc", courseSlug, "a_exercise", ExerciseStatus.Open),
+        exercise("tmc", courseSlug, "closed_exercise", ExerciseStatus.Closed),
+        exercise("tmc", "another-course", "a_exercise", ExerciseStatus.Open),
+        exercise("mooc", courseSlug, "a_exercise", ExerciseStatus.Open),
+      ])
+      fs.writeFileSync(
+        workspaceFile,
+        '{\n  // the student\'s note\n  "folders": [{ "path": ".tmc" }],\n  "settings": { "a": 1 }\n}',
+      )
+
+      await manager.prepareWorkspaceFileToOpen(courseSlug, "tmc")
+
+      const text = fs.readFileSync(workspaceFile, "utf-8")
+      expect(text).toContain("// the student's note")
+      expect(jsonc.parse(text)).toEqual({
+        folders: [
+          { path: WORKSPACE_ROOT_FOLDER_NAME },
+          { path: path.join(PROJECTS_DIRECTORY, "tmc", courseSlug, "a_exercise") },
+          { path: path.join(PROJECTS_DIRECTORY, "tmc", courseSlug, "b_exercise") },
+        ],
+        settings: { a: 1 },
+      })
+    })
+
+    test("creates the workspace file it prepares to open", async function () {
+      await manager.prepareWorkspaceFileToOpen(courseSlug, "tmc")
+
+      expect(JSON.parse(fs.readFileSync(workspaceFile, "utf-8"))).toEqual(WORKSPACE_SETTINGS)
+    })
+
     test("leaves a course's existing workspace file untouched", async function () {
       fs.writeFileSync(workspaceFile, '{"folders":[{"path":"kept"}]}')
 

@@ -22,7 +22,7 @@ suite("openWorkspace command", function () {
   const courseWorkspaceFile = "/tmc/workspaces/python-course.code-workspace"
 
   let dialogMock: Dialog
-  let createWorkspaceFile: ReturnType<typeof vi.fn>
+  let prepareWorkspaceFileToOpen: ReturnType<typeof vi.fn>
   let recordSwitch: ReturnType<typeof vi.fn>
   let executeCommand: ReturnType<typeof vi.spyOn>
   let activeCourse: string | undefined
@@ -37,7 +37,10 @@ suite("openWorkspace command", function () {
           resources: {
             getWorkspaceFilePath: () => courseWorkspaceFile,
           } as unknown as Resources,
-          workspaceManager: { createWorkspaceFile, activeCourse } as unknown as WorkspaceManager,
+          workspaceManager: {
+            prepareWorkspaceFileToOpen,
+            activeCourse,
+          } as unknown as WorkspaceManager,
         },
       }),
       dialog: dialogMock,
@@ -50,7 +53,7 @@ suite("openWorkspace command", function () {
 
   beforeEach(function () {
     ;[dialogMock] = createDialogMock()
-    createWorkspaceFile = vi.fn()
+    prepareWorkspaceFileToOpen = vi.fn()
     recordSwitch = vi.fn()
     activeCourse = undefined
     executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
@@ -98,6 +101,15 @@ suite("openWorkspace command", function () {
     expect(openedFolder()).toBeDefined()
   })
 
+  test("lists the course's open exercises in its workspace file before opening it", async function () {
+    await openWorkspace(actionContext(), course)
+
+    expect(prepareWorkspaceFileToOpen).toHaveBeenCalledWith("python-course", "tmc")
+    expect(prepareWorkspaceFileToOpen.mock.invocationCallOrder[0]).toBeLessThan(
+      executeCommand.mock.invocationCallOrder.at(-1) ?? 0,
+    )
+  })
+
   test("remembers the switch for the window it opens", async function () {
     await openWorkspace(actionContext(), course)
 
@@ -133,7 +145,7 @@ suite("openWorkspace command", function () {
 
   test("reports a workspace file it cannot write, once, and opens nothing", async function () {
     const error = new Error("disk full")
-    createWorkspaceFile.mockRejectedValue(error)
+    prepareWorkspaceFileToOpen.mockRejectedValue(error)
 
     await openWorkspace(actionContext(), course)
 

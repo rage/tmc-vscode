@@ -465,6 +465,28 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   /**
+   * Creates the course's `.code-workspace` file if needed, and lists the course's open exercises
+   * as its folders, so that VS Code asks once to trust the workspace with all of them rather than
+   * again for each folder added after it is trusted. Keeps the file's other contents.
+   */
+  public async prepareWorkspaceFileToOpen(courseSlug: string, backend: BackendKind): Promise<void> {
+    const workspaceFile = this._resources.getWorkspaceFilePath(courseSlug, backend)
+    await ensureCourseWorkspaceFile(workspaceFile)
+    const text = await fs.readFile(workspaceFile, "utf-8")
+    const folders = [
+      { path: WORKSPACE_ROOT_FOLDER_NAME },
+      ...this._openExerciseFolders(courseSlug, backend).map((uri) => ({ path: uri.fsPath })),
+    ]
+    const edits = jsonc.modify(text, ["folders"], folders, {
+      formattingOptions: { insertSpaces: true, tabSize: 2 },
+    })
+    const prepared = jsonc.applyEdits(text, edits)
+    if (prepared !== text) {
+      await fs.writeFile(workspaceFile, prepared)
+    }
+  }
+
+  /**
    * Deletes a course's `.code-workspace` file, so that re-adding the course gets
    * a fresh one instead of a folder list pointing at exercises that are gone.
    *
@@ -729,6 +751,17 @@ export default class WorkspaceManager implements vscode.Disposable {
     return this._workspaceFileWrites.run(() => this._replaceWorkspaceFolders())
   }
 
+  /** The folders of the course's open exercises, in the order its workspace lists them. */
+  private _openExerciseFolders(courseSlug: string, backend: BackendKind): vscode.Uri[] {
+    return this._exercises
+      .filter(
+        (x) =>
+          x.courseSlug === courseSlug && x.backend === backend && x.status === ExerciseStatus.Open,
+      )
+      .toSorted((a, b) => a.exerciseSlug.localeCompare(b.exerciseSlug))
+      .map((x) => x.uri)
+  }
+
   private async _replaceWorkspaceFolders(): Promise<Result<void, Error>> {
     const activeCourseWorkspace = this._activeCourseWorkspace
     const workspaceFolders = vscode.workspace.workspaceFolders
@@ -738,15 +771,10 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     const rootFolder = this._resources.workspaceRootFolder
-    const openExercises = this._exercises
-      .filter(
-        (x) =>
-          x.courseSlug === activeCourseWorkspace.slug &&
-          x.backend === activeCourseWorkspace.backend &&
-          x.status === ExerciseStatus.Open,
-      )
-      .toSorted((a, b) => a.exerciseSlug.localeCompare(b.exerciseSlug))
-      .map((x) => ({ uri: x.uri }))
+    const openExercises = this._openExerciseFolders(
+      activeCourseWorkspace.slug,
+      activeCourseWorkspace.backend,
+    ).map((uri) => ({ uri }))
     const correctStructure = [{ uri: rootFolder }, ...openExercises]
     if (
       _.zip(correctStructure, workspaceFolders).every(([a, b]) => a?.uri.fsPath === b?.uri.fsPath)

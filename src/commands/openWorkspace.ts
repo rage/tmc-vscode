@@ -53,7 +53,7 @@ export async function openWorkspace(
   }
 
   await withOperation(dialog, { failure: "Failed to open the course workspace." }, async () => {
-    await workspaceManager.createWorkspaceFile(courseSlug, course.kind)
+    await workspaceManager.prepareWorkspaceFileToOpen(courseSlug, course.kind)
     await courseWorkspaceSwitches.record(workspaceAsUri.fsPath)
     await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri, {
       forceNewWindow: where === "newWindow",
