@@ -4,7 +4,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { backendName } from "../shared/lib"
+import { backendName, LocalCourseData } from "../shared/lib"
 import { onDidFinishSubmission, refreshLocalExercises, scanLocalExercises } from "./actions"
 import type {
   ActionContext,
@@ -31,6 +31,7 @@ import WorkspaceManager, {
   ensureWorkspaceRootFile,
 } from "./api/workspaceManager"
 import { WorkspaceTrustGate } from "./api/workspaceTrustGate"
+import { promptForCourseWorkspaceTrust } from "./api/workspaceTrustPrompt"
 import { createCourseWorkspaceOffer, login, logout, refreshEverything } from "./commands"
 import {
   CLIENT_NAME,
@@ -441,9 +442,15 @@ async function activateInner(
       Logger.warn("Failed to set initial exercises.", refreshResult.val)
     }
     const { startup: ready } = readyContext
-    coursesTree.setRestricted(
-      !vscode.workspace.isTrusted && ready.workspaceManager.activeCourse !== undefined,
-    )
+    const { activeCourse, activeCourseBackend } = ready.workspaceManager
+    const isRestrictedCourseWorkspace = !vscode.workspace.isTrusted && activeCourse !== undefined
+    coursesTree.setRestricted(isRestrictedCourseWorkspace)
+    if (isRestrictedCourseWorkspace && activeCourseBackend !== undefined) {
+      const course = ready.userData.getCourseBySlug(activeCourseBackend, activeCourse)
+      void promptForCourseWorkspaceTrust(
+        course.ok ? LocalCourseData.getCourseTitle(course.val) : activeCourse,
+      )
+    }
     context.subscriptions.push(
       vscode.workspace.onDidGrantWorkspaceTrust(() => coursesTree.setRestricted(false)),
       ready.workspaceManager.onDidOpenOutsideCourseWorkspace(

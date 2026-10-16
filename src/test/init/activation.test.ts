@@ -12,6 +12,7 @@ import {
   EXERCISE_CHECK_INTERVAL,
   EXTENSION_VERSION,
   FOCUS_REFRESH_INTERVAL,
+  workspaceFileName,
 } from "../../config/constants"
 import { CorruptStoredDataError } from "../../errors"
 import { activate } from "../../extension"
@@ -70,6 +71,9 @@ const storedMigration = vi.hoisted(() => ({ outcome: { kind: "done" } as unknown
 const courseRefresh = vi.hoisted(() => ({ runs: 0, options: [] as unknown[] }))
 
 const registration = vi.hoisted(() => ({ dispose: (): void => {} }))
+
+/** The course titles activation asked the student to trust a course workspace for. */
+const trustPrompts = vi.hoisted(() => [] as string[])
 
 /** When set, `ensureLangsUpdated` fails with it. */
 const langsDownload = vi.hoisted(() => ({ failure: undefined as Error | undefined }))
@@ -198,6 +202,23 @@ vi.mock("../../storage", () => ({
   },
 }))
 
+// It watches editors, chat and extensions through APIs jest-mock-vscode lacks.
+vi.mock("../../api/aiRestriction", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  default: class {
+    public onDidRefuseWorkspaceFile = (): unknown => registration
+    public apply = async (): Promise<void> => {}
+    public dispose = (): void => {}
+  },
+}))
+
+vi.mock("../../api/workspaceTrustPrompt", () => ({
+  promptForCourseWorkspaceTrust: async (courseTitle: string): Promise<void> => {
+    trustPrompts.push(courseTitle)
+  },
+  requestWorkspaceTrust: async (): Promise<void> => {},
+}))
+
 vi.mock("../../init/ensureLangsUpdated", () => ({
   ensureLangsUpdated: async (): Promise<unknown> => {
     recorded.commandsRegisteredBeforeCliDownload = [...recorded.registeredCommandIds]
@@ -270,6 +291,7 @@ function createContext(): vscode.ExtensionContext {
     globalStorageUri: vscode.Uri.file(globalStorage),
     globalStoragePath: globalStorage,
     globalState: createMockMemento(),
+    workspaceState: createMockMemento(),
     asAbsolutePath: (relative: string) => path.join(globalStorage, relative),
   } as unknown as vscode.ExtensionContext
   activatedContexts.push(context)
@@ -541,6 +563,66 @@ suite("activation with usable storage", function () {
 
   test("runs no command it left unregistered", async function () {
     expect(await unregisteredCommandsRun(createContext())).toEqual([])
+  })
+})
+
+/** Opens the window on the course workspace of a mooc course `a-course`. */
+function openCourseWorkspace(context: vscode.ExtensionContext): void {
+  const workspaceFile = path.join(
+    context.globalStorageUri.fsPath,
+    "workspaces",
+    workspaceFileName("a-course", "mooc"),
+  )
+  Object.defineProperty(vscode.workspace, "workspaceFile", {
+    value: vscode.Uri.file(workspaceFile),
+    configurable: true,
+  })
+}
+
+suite("activation in a course workspace", function () {
+  let isTrusted: boolean
+
+  beforeEach(function () {
+    resetActivationRecording()
+    trustPrompts.length = 0
+    isTrusted = false
+    Object.defineProperty(vscode.workspace, "isTrusted", {
+      get: () => isTrusted,
+      configurable: true,
+    })
+  })
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    for (const key of ["isTrusted", "workspaceFile"]) {
+      Object.defineProperty(vscode.workspace, key, { value: undefined, configurable: true })
+    }
+    vi.restoreAllMocks()
+  })
+
+  test("asks to trust it while it is untrusted", async function () {
+    const context = createContext()
+    openCourseWorkspace(context)
+
+    await activate(context)
+
+    expect(trustPrompts).toEqual(["a-course"])
+  })
+
+  test("asks nothing once it is trusted", async function () {
+    isTrusted = true
+    const context = createContext()
+    openCourseWorkspace(context)
+
+    await activate(context)
+
+    expect(trustPrompts).toEqual([])
+  })
+
+  test("asks nothing outside a course workspace", async function () {
+    await activate(createContext())
+
+    expect(trustPrompts).toEqual([])
   })
 })
 
