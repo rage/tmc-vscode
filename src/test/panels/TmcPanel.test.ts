@@ -1797,6 +1797,29 @@ suite("TmcPanel main panel restore after a window reload", () => {
     expect(TmcPanel.sidePanel).toBeUndefined()
   })
 
+  test("closes a submission panel tab restored in the background, which VS Code does not revive", async () => {
+    const submission = { input: { viewType: `mainThreadWebview-${SIDE_PANEL_VIEW_TYPE}` } }
+    const courseDetails = { input: { viewType: `mainThreadWebview-${MAIN_PANEL_VIEW_TYPE}` } }
+    const code = { input: { uri: vscode.Uri.file("/exercise/main.py") } }
+    const close = vi.fn(async () => true)
+    const initialTabGroups = vscode.window.tabGroups
+    Object.defineProperty(vscode.window, "tabGroups", {
+      value: { all: [{ tabs: [code, submission] }, { tabs: [courseDetails] }], close },
+      configurable: true,
+    })
+    try {
+      TmcPanel.registerSerializers(createMockContext(), createMockActionContext())
+      await vi.waitFor(() => expect(close).toHaveBeenCalled())
+    } finally {
+      Object.defineProperty(vscode.window, "tabGroups", {
+        value: initialTabGroups,
+        configurable: true,
+      })
+    }
+
+    expect(close).toHaveBeenCalledExactlyOnceWith([submission])
+  })
+
   test("reopens the saved Course Details as the main panel, with a fresh id", async () => {
     const fake = createFakeWebviewPanel()
 
