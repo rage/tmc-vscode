@@ -336,6 +336,8 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
   private _pendingRender: ReturnType<typeof setTimeout> | undefined
   /** A render happened while the view was hidden, so VS Code still shows the one before. */
   private _isShownStale = false
+  /** {@link drawnRows} of the rows VS Code last fetched or was last told to draw. */
+  private _drawnRows: string | undefined
   private _isDisposed = false
 
   public constructor() {
@@ -451,7 +453,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
     // An empty message hides it; the typings do not admit `undefined`.
     this._view.message = [restricted, status].filter((x) => x !== undefined).join(" ")
     if (this._view.visible) {
-      this._changed.fire(undefined)
+      this._redrawIfChanged()
     } else {
       this._isShownStale = true
     }
@@ -460,14 +462,28 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
   private _onDidChangeVisibility(): void {
     if (this._view.visible && this._isShownStale) {
       this._isShownStale = false
-      this._changed.fire(undefined)
+      this._redrawIfChanged()
     }
     void this.revealActiveExercise()
   }
 
+  /**
+   * Asks VS Code to redraw only rows it has not drawn: it forgets every row while it redraws,
+   * and a row action clicked meanwhile runs without its row.
+   */
+  private _redrawIfChanged(): void {
+    const rows = drawnRows(this._currentRoots())
+    if (rows !== this._drawnRows) {
+      this._drawnRows = rows
+      this._changed.fire(undefined)
+    }
+  }
+
   public getChildren(element?: CoursesTreeItem): CoursesTreeItem[] {
     if (!element) {
-      return this._currentRoots()
+      const roots = this._currentRoots()
+      this._drawnRows = drawnRows(roots)
+      return roots
     }
     return element instanceof ExerciseTreeItem ? [] : element.children
   }
@@ -591,6 +607,24 @@ function downloadStatusOf(id: ExerciseIdentifier): "downloading" | "downloadFail
     return "downloading"
   }
   return downloadFailures.has(id) ? "downloadFailed" : undefined
+}
+
+/** Everything VS Code draws of `items` and the rows under them, and what their actions act on. */
+function drawnRows(items: readonly CoursesTreeItem[]): string {
+  const drawn = (item: CoursesTreeItem): unknown => [
+    item.id,
+    item.label,
+    item.description,
+    item.contextValue,
+    item.collapsibleState,
+    item.iconPath,
+    item.accessibilityInformation,
+    item.buildTooltip().value,
+    item instanceof ExerciseTreeItem
+      ? item.exerciseUri?.fsPath
+      : item.children.map((child) => drawn(child)),
+  ]
+  return JSON.stringify(items.map((item) => drawn(item)))
 }
 
 /** Every exercise under `item`, in view order. */

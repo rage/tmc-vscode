@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- A Courses view row action used right after the view changed no longer answers "Open a file of an exercise first.": the view is redrawn only when its rows change.
 - Selecting an exercise in the Courses view opens it, downloading it first, and shows its main source file; downloading or opening a single exercise does too.
 - After a passing submission the result offers Next with the exercise to do next, as does "TestMyCode: Open Next Exercise"; a result short of a pass offers Run Tests and Submit Again.
 - A course's menu, Course Details and "TestMyCode: Download All Exercises..." download every exercise not downloaded yet, and Download New Exercises does so for a course with nothing new. Course Details opens the course workspace and shows the course, expanded, in the Courses view.
