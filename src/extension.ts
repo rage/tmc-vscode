@@ -71,6 +71,7 @@ import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
 import { FailedUpdatesStatusBarItem } from "./ui/statusBarFailedUpdates"
 import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
+import { showNextWalkthroughStep } from "./window/walkthrough"
 
 interface InitializationErrorReporter {
   /** Logs a failed step; the user hears about it from {@link notify}. */
@@ -603,6 +604,15 @@ async function activateInner(
         ),
     })
     context.subscriptions.push(openCourseRefresh)
+  }
+
+  if (readyContext && isOpenedBySwitch) {
+    const { startup: ready } = readyContext
+    void showNextWalkthroughStep({
+      isLoggedIn: authState.loggedIn,
+      hasCourses: ready.userData.getCourses().length > 0,
+      hasDownloadedExercises: ready.workspaceManager.getExercises().length > 0,
+    }).catch((e) => Logger.warn("Could not show the next walkthrough step", e))
   }
 
   // `tmc.showWelcome` is registered only in the ready case, and VS Code rejects a command

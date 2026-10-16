@@ -1,8 +1,13 @@
 import { expect } from "@playwright/test"
 
+import { VSCODE_TEST_VERSION } from "../../config"
 import { vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import { TmcPage } from "../pages/tmc"
+
+const isBefore1137 =
+  VSCODE_TEST_VERSION !== "stable" &&
+  VSCODE_TEST_VERSION.localeCompare("1.137.0", undefined, { numeric: true }) < 0
 
 // The way from a course just added to the code of its exercises, and from a passed exercise
 // to the next one, without the Explorer: backend/mooc/fixtures.ts serves the courses.
@@ -24,6 +29,11 @@ vsCodeTest(
     await expect(
       page.locator(".explorer-folders-view").getByText("passing_exercise", { exact: true }),
     ).toBeVisible({ timeout: 30_000 })
+    // The fresh install opened the walkthrough, which the reload restores on the next step. Before
+    // 1.137 VS Code shows its own walkthrough in a new workspace instead.
+    if (!isBefore1137) {
+      await expect(page.locator(".getting-started-step.expanded")).toContainText("Run the tests")
+    }
     await coursesView.goto()
     await expect(coursesView.row("passing_exercise")).toHaveAccessibleName(/, open,/)
   },

@@ -18,9 +18,7 @@ import * as treeCommands from "../ui/treeview/treeCommands"
 import type { CoursesTreeItem } from "../ui/treeview/treeview"
 import { COURSES_VIEW_ID, CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
 import { Logger } from "../utilities"
-
-/** Must match the `walkthroughs` entry's `id` in package.json. */
-const WALKTHROUGH_ID = "gettingStarted"
+import { WALKTHROUGH } from "../window/walkthrough"
 
 /** A course command's argument: a course id from code, or the Courses view item it runs on. */
 type CourseTarget = CourseIdentifier | CourseTreeItem
@@ -260,11 +258,7 @@ export function registerCommands(
   )
 
   register("tmc.showWelcome", async () => {
-    await vscode.commands.executeCommand(
-      "workbench.action.openWalkthrough",
-      `${EXTENSION_ID}#${WALKTHROUGH_ID}`,
-      false,
-    )
+    await vscode.commands.executeCommand("workbench.action.openWalkthrough", WALKTHROUGH, false)
   })
 
   register("tmc.showMoocLogin", async () => commands.login(readyContext))

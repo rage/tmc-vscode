@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- A window TestMyCode reopens in a course workspace shows the walkthrough on your next step instead of the one it last showed.
 - A submission result left open behind another editor no longer comes back after a restart as a tab with nothing in it.
 - The Workspace Trust editor, where Manage in VS Code's trust question leads, closes once you trust the workspace.
 - Opening an exercise from the Courses view or with Next shows its file among your code instead of in the submission result's split, and Next closes the result.
