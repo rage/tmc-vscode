@@ -10,6 +10,7 @@
 4. [How do I download updates for exercises?](#how-do-i-download-updates-for-exercises)
 5. [How do I wipe all data related to the TMC Extension?](#how-do-i-wipe-all-data-related-to-the-tmc-extension)
 6. [Why are Copilot and other AI features off?](#why-are-copilot-and-other-ai-features-off)
+7. [Why does VS Code ask whether I trust the course workspace?](#why-does-vs-code-ask-whether-i-trust-the-course-workspace)
 
 ## Where can I find all actions related to TMC?
 
@@ -41,3 +42,9 @@ This will delete all files and folders under the tmcdata folder and vscode stora
 Course workspaces turn off Copilot, inline suggestions and, wherever a setting can, the AI features of other extensions. AI assistance is not allowed in course exercises unless your course allows it.
 
 Submitting (also before a reset or restore), running tests and sharing via paste are refused while AI assistance may be on: when the course workspace's AI settings can't be applied (its `.code-workspace` file has unsaved changes or can't be written, or one of your User settings, or an exercise folder's `.vscode/settings.json` that can't be written, turns one back on), or while an AI extension that no setting turns off is enabled, such as Cline, Roo Code, Claude Code, Codex or Continue. The message says what to change. To keep such an extension for other projects, disable it only for the course workspace with Extensions → Disable (Workspace). Nothing about this is sent anywhere.
+
+## Why does VS Code ask whether I trust the course workspace?
+
+Running tests and submitting run your exercise code, which VS Code allows only in a trusted workspace. When a course workspace opens untrusted, TestMyCode asks you to trust it; choose **Trust Workspace & Continue** (**Yes, I trust the authors** in older VS Code versions). VS Code asks again for each exercise downloaded while the course workspace is open; answer **Yes**.
+
+If you chose not to trust it, the workspace is in Restricted Mode: you can still download and open exercises, but running tests, submitting and sharing via paste are held back. Run `TestMyCode: Trust Course Workspace` from the Command Palette (`CTRL + SHIFT + P`), or use the button in the Courses view, to be asked again.
