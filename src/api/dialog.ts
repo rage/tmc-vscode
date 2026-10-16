@@ -156,7 +156,8 @@ export default class Dialog {
    *
    * The notification carries the sentence and nothing else: the error's diagnostics —
    * details, cause chain and stack — go to the output channel behind the "Show Logs"
-   * button, which {@link Logger} writes in full.
+   * button, which {@link Logger} writes in full. An operation the error only held back, such as
+   * one refused in Restricted Mode, is a warning with the error's sentence alone.
    */
   public async reportError(message: string, error: Error): Promise<void> {
     if (this._reportSessionLost && isSessionLost(error)) {
@@ -169,6 +170,10 @@ export default class Dialog {
       label,
       (): void => void vscode.commands.executeCommand(command),
     ])
+    if (presentation.isHeldBack) {
+      Logger.info(message, error)
+      return this.warningNotification(presentation.message, ...buttons)
+    }
     return this.errorNotification(`${message} ${presentation.message}`, error, ...buttons)
   }
 

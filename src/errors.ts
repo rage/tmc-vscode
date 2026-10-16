@@ -179,6 +179,8 @@ export interface ErrorAction {
 export interface ErrorPresentation {
   message: string
   actions: ErrorAction[]
+  /** The operation was held back rather than failed, so the message stands alone as a warning. */
+  isHeldBack?: boolean
 }
 
 /**
@@ -234,6 +236,7 @@ export function presentationFor(error: Error): ErrorPresentation {
     return {
       message: reported,
       actions: [{ label: "Trust Course Workspace", command: TRUST_COURSE_WORKSPACE_COMMAND }],
+      isHeldBack: true,
     }
   }
   if (error instanceof TmcLoginNotAcceptedError) {
