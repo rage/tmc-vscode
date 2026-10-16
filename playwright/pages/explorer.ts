@@ -41,9 +41,17 @@ export class ExplorerPage {
    * `tmc.exercise`).
    */
   public async runContextMenuCommand(filename: string, command: string): Promise<void> {
-    await this.page.locator(".explorer-folders-view").getByText(filename).click({ button: "right" })
     const submenu = this.page.locator(".monaco-menu").getByRole("menuitem", { name: "TestMyCode" })
-    await expect(submenu).toBeVisible()
+    // The submenu appears only once the extension has started, and a course workspace lists its
+    // exercises before that.
+    await expect(async () => {
+      await this.page.keyboard.press("Escape")
+      await this.page
+        .locator(".explorer-folders-view")
+        .getByText(filename)
+        .click({ button: "right" })
+      await expect(submenu).toBeVisible({ timeout: 2000 })
+    }).toPass()
     await submenu.hover()
     const item = this.page.locator(".monaco-menu").getByRole("menuitem", { name: command })
     await expect(item).toBeVisible()
