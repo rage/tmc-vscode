@@ -19,8 +19,13 @@ import { ExerciseStatus } from "../../api/workspaceManager"
 import { countOf } from "../../utilities"
 import { showExerciseSourceFile } from "../exerciseSourceFile"
 import { updateablesRegistry } from "../updateablesRegistry"
-import type { CoursesTreeItem } from "./treeview"
-import { ExerciseTreeItem, exerciseItems, isDownloadable } from "./treeview"
+import type { CoursesTreeItem, CoursesViewRow } from "./treeview"
+import {
+  ExerciseTreeItem,
+  exerciseItems,
+  isDownloadable,
+  TrustCourseWorkspaceTreeItem,
+} from "./treeview"
 
 /**
  * The rows a Courses view command acts on: the whole selection when the clicked row is part
@@ -31,12 +36,16 @@ import { ExerciseTreeItem, exerciseItems, isDownloadable } from "./treeview"
  */
 export function targetRows(
   clicked: CoursesTreeItem | undefined,
-  selection: readonly CoursesTreeItem[] | undefined,
+  selection: readonly CoursesViewRow[] | undefined,
 ): CoursesTreeItem[] {
   if (!clicked) {
     return []
   }
-  return selection?.includes(clicked) ? [...selection] : [clicked]
+  return selection?.includes(clicked)
+    ? selection.filter(
+        (row): row is CoursesTreeItem => !(row instanceof TrustCourseWorkspaceTreeItem),
+      )
+    : [clicked]
 }
 
 /**

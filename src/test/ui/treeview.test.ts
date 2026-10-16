@@ -15,6 +15,7 @@ import { exerciseOperations } from "../../ui/exerciseOperations"
 import type { CoursesTreeItem, CoursesTreeSource } from "../../ui/treeview/treeview"
 import CoursesTree, {
   CourseTreeItem,
+  TrustCourseWorkspaceTreeItem,
   ExerciseTreeItem,
   exerciseItems,
   PartTreeItem,
@@ -137,7 +138,9 @@ suite("CoursesTree", function () {
     tree.setLoggedIn(true)
     tree.setSource(source())
     settle()
-    return tree.getChildren()
+    return tree
+      .getChildren()
+      .filter((row): row is CoursesTreeItem => !(row instanceof TrustCourseWorkspaceTreeItem))
   }
 
   function tooltipOf(item: CoursesTreeItem | undefined): string {
@@ -548,6 +551,22 @@ suite("CoursesTree", function () {
     expect(view.message).toBe("")
   })
 
+  test("offers to trust the course workspace in its first row while in Restricted Mode", function () {
+    show(tmcCourse())
+
+    tree.setRestricted(true)
+    settle()
+    const [trustRow, ...courseRows] = tree.getChildren()
+    expect(trustRow?.label).toBe("Trust Course Workspace")
+    expect(trustRow?.command?.command).toBe("tmc.trustCourseWorkspace")
+    expect(trustRow && tree.getChildren(trustRow)).toEqual([])
+    expect(courseRows).toHaveLength(1)
+
+    tree.setRestricted(false)
+    settle()
+    expect(tree.getChildren().map((row) => row.label)).not.toContain("Trust Course Workspace")
+  })
+
   test("re-renders on each download status, change on disk and change to the courses", function () {
     show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))
     const refreshed: unknown[] = []
@@ -581,8 +600,6 @@ suite("CoursesTree", function () {
 
     exercisesChanged.fire()
     coursesChanged.fire()
-    settle()
-    tree.setRestricted(true)
     settle()
 
     expect(refreshed).toEqual([])

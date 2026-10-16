@@ -163,6 +163,9 @@ vsCodeTest(
     await vsCodeTest.step("Restricted Mode keeps the Courses view, and says why", async () => {
       await coursesView.goto()
       await expect(page.getByText(RESTRICTED_MESSAGE)).toBeVisible()
+      await expect(
+        coursesView.tree().getByRole("treeitem", { name: /^Trust Course Workspace/ }),
+      ).toBeVisible()
       await coursesView.expand(coursesView.row(COURSE))
       await expect(coursesView.row(FIRST_EXERCISE)).toHaveAccessibleName(/, open,/)
     })

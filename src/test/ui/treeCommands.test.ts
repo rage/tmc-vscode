@@ -22,7 +22,12 @@ import {
   targetRows,
   updateCourseExercises,
 } from "../../ui/treeview/treeCommands"
-import { CourseTreeItem, ExerciseTreeItem, PartTreeItem } from "../../ui/treeview/treeview"
+import {
+  CourseTreeItem,
+  ExerciseTreeItem,
+  PartTreeItem,
+  TrustCourseWorkspaceTreeItem,
+} from "../../ui/treeview/treeview"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -117,6 +122,12 @@ suite("Courses view commands", function () {
     expect(targetRows(clicked, [other])).toEqual([clicked])
     expect(targetRows(clicked, undefined)).toEqual([clicked])
     expect(targetRows(undefined, [other])).toEqual([])
+  })
+
+  test("acts on no trust row selected along with exercises", function () {
+    const clicked = row(tmcCourse, 1, "missing")
+
+    expect(targetRows(clicked, [new TrustCourseWorkspaceTreeItem(), clicked])).toEqual([clicked])
   })
 
   test("download fetches only what is not on disk, one call per course", async function () {
