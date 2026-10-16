@@ -30,6 +30,9 @@ suite("workspace trust prompt", function () {
     trustModal = { answer: "trust", delayMs: 1000 }
     Object.defineProperty(vscode.workspace, "isTrusted", {
       get: () => isTrusted,
+      set: (value: boolean) => {
+        isTrusted = value
+      },
       configurable: true,
     })
     Object.defineProperty(vscode.window, "state", {
@@ -70,7 +73,11 @@ suite("workspace trust prompt", function () {
   afterEach(function () {
     vi.useRealTimers()
     vi.restoreAllMocks()
-    Object.defineProperty(vscode.workspace, "isTrusted", { value: true, configurable: true })
+    Object.defineProperty(vscode.workspace, "isTrusted", {
+      value: true,
+      configurable: true,
+      writable: true,
+    })
   })
 
   suite("requestWorkspaceTrust", function () {
@@ -100,6 +107,29 @@ suite("workspace trust prompt", function () {
       await requestWorkspaceTrust()
 
       expect(executeCommand).toHaveBeenCalledWith("workbench.trust.manage")
+    })
+    test("closes the trust editor it opened once the workspace is trusted", async function () {
+      trustModal.answer = "none"
+      const trustEditor = { label: "Workspace Trust", input: undefined }
+      const close = vi.fn(async () => true)
+      const initialTabGroups = vscode.window.tabGroups
+      Object.defineProperty(vscode.window, "tabGroups", {
+        value: { activeTabGroup: { activeTab: trustEditor }, close },
+        configurable: true,
+      })
+      try {
+        await requestWorkspaceTrust()
+        ;(
+          vscode.workspace as unknown as { grantWorkspaceTrustForTest: () => void }
+        ).grantWorkspaceTrustForTest()
+      } finally {
+        Object.defineProperty(vscode.window, "tabGroups", {
+          value: initialTabGroups,
+          configurable: true,
+        })
+      }
+
+      expect(close).toHaveBeenCalledExactlyOnceWith(trustEditor)
     })
   })
 

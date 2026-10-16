@@ -1,6 +1,7 @@
 import * as vscode from "vscode"
 
 import { Logger } from "../utilities"
+import { closeTrustEditorWhenTrusted } from "../window/workspaceTrustEditor"
 
 /**
  * How long VS Code's own startup trust modal may take to appear once the window has focus. A
@@ -61,6 +62,8 @@ export async function promptForCourseWorkspaceTrust(courseTitle: string): Promis
  * where no modal comes up. Settles once the student has answered.
  */
 export async function requestWorkspaceTrust(): Promise<void> {
+  // VS Code's modal offers Manage, which opens the editor, as does the fallback below.
+  closeTrustEditorWhenTrusted()
   const askedAt = Date.now()
   // The only stable API that reaches the trust modal: listing tasks asks for trust first.
   await vscode.tasks.fetchTasks({ type: TRUST_REQUEST_TASK_TYPE })

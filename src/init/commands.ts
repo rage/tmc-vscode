@@ -5,6 +5,7 @@ import { toError } from "../../shared/lib"
 import type { ActionContext, ReadyActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type Dialog from "../api/dialog"
+import { requestWorkspaceTrust } from "../api/workspaceTrustPrompt"
 import * as commands from "../commands"
 import { EXTENSION_ID } from "../config/constants"
 import { SHOW_AI_USE_PROBLEM_COMMAND, TRUST_COURSE_WORKSPACE_COMMAND } from "../errors"
@@ -17,7 +18,6 @@ import * as treeCommands from "../ui/treeview/treeCommands"
 import type { CoursesTreeItem } from "../ui/treeview/treeview"
 import { COURSES_VIEW_ID, CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
 import { Logger } from "../utilities"
-import { closeTrustEditorWhenTrusted } from "../window/workspaceTrustEditor"
 
 /** Must match the `walkthroughs` entry's `id` in package.json. */
 const WALKTHROUGH_ID = "gettingStarted"
@@ -94,10 +94,7 @@ export function registerServiceFreeCommands(
   })
 
   // Trust is the remedy for a refusal, so it must not wait for a ready activation.
-  register(TRUST_COURSE_WORKSPACE_COMMAND, async () => {
-    closeTrustEditorWhenTrusted()
-    await vscode.commands.executeCommand("workbench.trust.manage")
-  })
+  register(TRUST_COURSE_WORKSPACE_COMMAND, () => requestWorkspaceTrust())
 
   register("tmc.debug", async () => {
     await vscode.commands.executeCommand("workbench.output.action.clearOutput")

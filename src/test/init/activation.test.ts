@@ -594,9 +594,15 @@ suite("activation in a course workspace", function () {
 
   afterEach(function () {
     disposeActivatedContexts()
-    for (const key of ["isTrusted", "workspaceFile"]) {
-      Object.defineProperty(vscode.workspace, key, { value: undefined, configurable: true })
-    }
+    Object.defineProperty(vscode.workspace, "isTrusted", {
+      value: true,
+      configurable: true,
+      writable: true,
+    })
+    Object.defineProperty(vscode.workspace, "workspaceFile", {
+      value: undefined,
+      configurable: true,
+    })
     vi.restoreAllMocks()
   })
 

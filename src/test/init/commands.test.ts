@@ -512,6 +512,15 @@ suite("registered command handlers", function () {
     )
   })
 
+  test("tmc.trustCourseWorkspace asks through VS Code's trust modal", async function () {
+    const fetchTasks = vi.spyOn(vscode.tasks, "fetchTasks").mockResolvedValue([])
+    const { handlers } = registerAndCollect()
+
+    await handlers.get("tmc.trustCourseWorkspace")?.()
+
+    expect(fetchTasks).toHaveBeenCalledOnce()
+  })
+
   test("tmc.logs shows the output channel", async function () {
     const show = vi.spyOn(Logger, "show").mockImplementation(() => {})
     const { handlers } = registerAndCollect()
