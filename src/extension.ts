@@ -4,6 +4,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
+import type { CourseIdentifier } from "../shared/lib"
 import { backendName, LocalCourseData } from "../shared/lib"
 import { onDidFinishSubmission, refreshLocalExercises, scanLocalExercises } from "./actions"
 import type {
@@ -54,6 +55,7 @@ import {
   SESSION_ENDED_MESSAGE,
 } from "./errors"
 import * as init from "./init"
+import { OpenCourseRefresh } from "./openCourseRefresh"
 import { TmcPanel } from "./panels/TmcPanel"
 import { createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
@@ -172,11 +174,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 /** When the last unprompted refresh started, in epoch milliseconds. */
 let lastBackgroundRefreshAt = 0
 
-function refreshInBackground(ready: ReadyActionContext, isPromptless = false): void {
+function refreshInBackground(
+  ready: ReadyActionContext,
+  openCourseRefresh: OpenCourseRefresh | undefined,
+  isPromptless = false,
+): void {
   lastBackgroundRefreshAt = Date.now()
+  openCourseRefresh?.noteRefreshed()
   void refreshEverything(ready, { silent: true, isPromptless }).catch((e) =>
     Logger.error("Background refresh failed", e),
   )
+}
+
+/** The course of the course workspace the window has open, if it is one of the stored courses. */
+function openCourseId({ startup }: ReadyActionContext): CourseIdentifier | undefined {
+  const { activeCourse, activeCourseBackend } = startup.workspaceManager
+  if (activeCourse === undefined || activeCourseBackend === undefined) {
+    return undefined
+  }
+  const course = startup.userData.getCourseBySlug(activeCourseBackend, activeCourse)
+  return course.ok ? LocalCourseData.getCourseId(course.val) : undefined
 }
 
 async function activateInner(
@@ -535,8 +552,10 @@ async function activateInner(
     )
   }
 
+  // Created further down, once the listeners it must follow are registered.
+  let openCourseRefresh: OpenCourseRefresh | undefined
   if (readyContext && authState.loggedIn) {
-    refreshInBackground(readyContext, isOpenedBySwitch)
+    refreshInBackground(readyContext, openCourseRefresh, isOpenedBySwitch)
   }
 
   async function runMaintenancePoll(): Promise<void> {
@@ -548,7 +567,7 @@ async function activateInner(
       // Proactively catches a session dropping between polls, not just on a failed command.
       sessionExpiry.onAuthChecked(authState.loggedIn)
       if (readyContext && authState.loggedIn) {
-        refreshInBackground(readyContext)
+        refreshInBackground(readyContext, openCourseRefresh)
       }
     } catch (e) {
       Logger.error("Maintenance check failed", e)
@@ -567,10 +586,23 @@ async function activateInner(
         authState.loggedIn &&
         Date.now() - lastBackgroundRefreshAt >= FOCUS_REFRESH_INTERVAL
       ) {
-        refreshInBackground(readyContext)
+        refreshInBackground(readyContext, openCourseRefresh)
       }
     }),
   )
+
+  // Created after the listener above, so that a full refresh due on the same focus runs first and
+  // stands in for this one.
+  if (readyContext) {
+    openCourseRefresh = new OpenCourseRefresh({
+      openCourse: () => (authState.loggedIn ? openCourseId(readyContext) : undefined),
+      refresh: (courseId) =>
+        void refreshEverything(readyContext, { silent: true, courseId }).catch((e) =>
+          Logger.error("Open course refresh failed", e),
+        ),
+    })
+    context.subscriptions.push(openCourseRefresh)
+  }
 
   // `tmc.showWelcome` is registered only in the ready case, and VS Code rejects a command
   // it cannot find -- which would abort the rest of this function.

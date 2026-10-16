@@ -784,7 +784,8 @@ suite("the refresh on regaining focus", function () {
     vi.restoreAllMocks()
   })
 
-  const focus = (): void => recorded.windowStateListeners.at(-1)?.({ focused: true })
+  const focus = (): void =>
+    recorded.windowStateListeners.forEach((listener) => listener({ focused: true }))
 
   test("refreshes once a while has passed since the last refresh, and not sooner", async function () {
     await activate(createContext())

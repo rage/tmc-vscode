@@ -53,6 +53,16 @@ export const EXERCISE_CHECK_INTERVAL = 30 * 60 * 1000
 /** How long after an unprompted refresh the window regaining focus refreshes again. */
 export const FOCUS_REFRESH_INTERVAL = 10 * 60 * 1000
 
+/**
+ * How long after the open course was last checked the window regaining focus checks it again.
+ * Short, since a student back from the course material may be looking for what was just
+ * published; it costs one course's data per return at most.
+ */
+export const OPEN_COURSE_FOCUS_REFRESH_INTERVAL = 60 * 1000
+
+/** How often the open course is checked while the window has focus. */
+export const OPEN_COURSE_POLL_INTERVAL = 5 * 60 * 1000
+
 /** Minimum time that should be waited between submission attempts. */
 export const MINIMUM_SUBMISSION_INTERVAL = 5 * 1000
 
