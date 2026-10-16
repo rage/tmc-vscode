@@ -488,14 +488,15 @@ suite("walkthrough", function () {
     expect(texts.some((text) => text.includes("Data collected by the extension"))).toBe(true)
   })
 
-  // Current VS Code opens an untrusted workspace in Restricted Mode without asking.
-  test("the step that opens a course workspace says to trust it", function () {
+  test("the step that opens a course workspace says to trust it and each new exercise", function () {
     const root = path.join(__dirname, "..", "..", "..")
     const step = packageJson().contributes.walkthroughs?.[0]?.steps.find((x) =>
       x.description.includes("command:tmc.openCourseWorkspace"),
     )
     const text = fs.readFileSync(path.join(root, step?.media.markdown ?? ""), "utf8")
-    expect(text).toMatch(/Restricted Mode.*Choose \*\*Trust\*\*/s)
+    expect(text).toMatch(/\*\*Trust Workspace & Continue\*\*/)
+    expect(text).toMatch(/exercise you download.*\*\*Yes\*\*/s)
+    expect(text).not.toMatch(/covers all your courses/)
   })
 })
 
