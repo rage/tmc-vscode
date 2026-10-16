@@ -398,7 +398,6 @@ function webviewOptions(extensionUri: Uri): WebviewOptions {
   }
 }
 
-/** The screen a restored main panel's saved `state` names, if it can still be shown. */
 /** Closes every side panel tab, which at activation can only be one restored from before. */
 async function closeSidePanelTabs(): Promise<void> {
   const tabs = window.tabGroups.all.flatMap((group) =>
@@ -419,6 +418,7 @@ async function closeSidePanelTabs(): Promise<void> {
   }
 }
 
+/** The screen a restored main panel's saved `state` names, if it can still be shown. */
 function restoredRoute(
   state: unknown,
   actionContext: ActionContext,
