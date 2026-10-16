@@ -135,7 +135,7 @@ export class LangsResponseSchemaError extends BaseError {
   public override readonly name = "Langs Response Schema Error"
 }
 
-/** The command that opens VS Code's Workspace Trust editor; see {@link WorkspaceUntrustedError}. */
+/** The command that asks to trust the course workspace; see {@link WorkspaceUntrustedError}. */
 export const TRUST_COURSE_WORKSPACE_COMMAND = "tmc.trustCourseWorkspace"
 
 /**
