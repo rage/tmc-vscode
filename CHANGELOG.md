@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Opening an exercise from the Courses view or with Next shows its file among your code instead of in the submission result's split, and Next closes the result.
 - A Courses view row action used right after the view changed no longer answers "Open a file of an exercise first.": the view is redrawn only when its rows change.
 - Selecting an exercise in the Courses view opens it, downloading it first, and shows its main source file; downloading or opening a single exercise does too.
 - After a passing submission the result offers Next with the exercise to do next, as does "TestMyCode: Open Next Exercise"; a result short of a pass offers Run Tests and Submit Again.

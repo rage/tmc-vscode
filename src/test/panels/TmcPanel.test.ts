@@ -404,6 +404,49 @@ suite("TmcPanel handler dispatch", () => {
     )
   })
 
+  test("Next closes the submission result before the next exercise opens", async () => {
+    const handlers = stubHandlers()
+    const shown = { ...exerciseSubmissionPanel(), exerciseId: idOfTmcExercise(7) }
+    const actionContext = createMockActionContext({
+      startup: {
+        workspaceManager: {
+          getExercise: () => ({ uri: vscode.Uri.file("/exercises/loops") }),
+        } as unknown as WorkspaceManager,
+      },
+    })
+    const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
+    let wasClosedFirst: boolean | undefined
+    handlers.openWorkspace.mockImplementation(async () => {
+      wasClosedFirst = vi.mocked(panel.dispose).mock.calls.length > 0
+    })
+
+    await listener({
+      type: "exerciseAction",
+      sourcePanel: targetOf(shown),
+      action: "openNextExercise",
+    })
+
+    expect(wasClosedFirst).toBe(true)
+  })
+
+  test("Run Tests and Submit Again keep the submission result open", async () => {
+    stubHandlers()
+    const shown = { ...exerciseSubmissionPanel(), exerciseId: idOfTmcExercise(7) }
+    const actionContext = createMockActionContext({
+      startup: {
+        workspaceManager: {
+          getExercise: () => ({ uri: vscode.Uri.file("/exercises/loops") }),
+        } as unknown as WorkspaceManager,
+      },
+    })
+    const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
+
+    await listener({ type: "exerciseAction", sourcePanel: targetOf(shown), action: "runTests" })
+    await listener({ type: "exerciseAction", sourcePanel: targetOf(shown), action: "submit" })
+
+    expect(panel.dispose).not.toHaveBeenCalled()
+  })
+
   test("a mooc course's exercise is pasted through the mooc backend", async () => {
     const handlers = stubHandlers()
 
