@@ -674,7 +674,7 @@ suite("reported once: the Courses view and course details", function () {
 
     await succeeding.run("tmc.updateExercises", "silent")
 
-    expect(succeeding.shown).toEqual([])
+    expect(succeeding.shown).toEqual(["status: Updated the exercise loops."])
     expect(failedUpdates.all()).toEqual([])
   })
 

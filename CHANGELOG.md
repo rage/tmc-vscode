@@ -15,6 +15,7 @@
 - A paste link is copied to the clipboard as it arrives.
 - Submitting with no tries left says the score is final instead of reporting a failed submission, and an exercise command run on a file outside every exercise names the file.
 - A failed exercise update says the exercise was not updated and why, in plain words, and its row offers Update to retry. A failed automatic update shows in the status bar instead of a notification, and goes away once the exercise updates or no longer has an update.
+- An exercise update that succeeds, automatic or not, says in the status bar which exercises it updated.
 - Only README files open as a preview, and VS Code's own suggestion to install a language's extension is no longer joined by a second one for the workspace.
 - A course pick with a single course added is skipped, except for Remove Course, and the open course is listed first.
 - One name for each thing, and Title Case on every button: Add Course (was Add New Course / Add a Course), Show Course Details (was Go To Course Details), Delete Generated Files (was Clean Exercise), tmc.mooc.fi (was TMC Server).

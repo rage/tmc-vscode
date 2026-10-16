@@ -7,7 +7,7 @@ import { isSessionLost, presentationFor } from "../errors"
 import { failedUpdates } from "../ui/failedUpdates"
 import { updateablesRegistry } from "../ui/updateablesRegistry"
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises"
-import { exerciseName } from "./exerciseNames"
+import { describeExercises, exerciseName } from "./exerciseNames"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
 
@@ -24,7 +24,8 @@ interface ExerciseUpdate {
  * even when the download throws, lest the student conclude there is nothing left to update.
  * Errs, with nothing downloaded, only while some of the exercises are busy with another
  * operation. The exercises that failed stay in `failedUpdates` until they update or have no
- * update left; a requested update also warns of them.
+ * update left; a requested update also warns of them. What updated is announced in the status
+ * bar.
  *
  * For exercises not on disk yet, see `downloadCourseExercises`.
  *
@@ -83,6 +84,10 @@ export async function downloadExerciseUpdates(
     if (isUnrequested && failureCause && isSessionLost(failureCause)) {
       // A lost session still warns: that warning is what offers Log In.
       warnings.push({ headline: "Failed to update exercises.", error: failureCause })
+    }
+    if (successful.length > 0) {
+      const names = successful.map((id) => exerciseName(actionContext, id))
+      actionContext.dialog.statusMessage(`Updated ${describeExercises(names)}.`)
     }
   } finally {
     setUpdateablesByCourse(stillUpdateable)

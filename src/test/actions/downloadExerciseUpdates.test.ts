@@ -108,6 +108,17 @@ suite("downloadExerciseUpdates action", function () {
     ])
   })
 
+  test("announces the exercises it updated in the status bar", async function () {
+    downloadOrUpdateExercises.mockResolvedValue(
+      Ok({ successful: [idOfTmcExercise(10)], failed: [], warnings: [] }),
+    )
+    const actionContext = contextNamingById()
+
+    await downloadExerciseUpdates(actionContext, [update(1, 10)], true)
+
+    expect(actionContext.dialog.statusMessage).toHaveBeenCalledWith("Updated the exercise 10.")
+  })
+
   test("remembers the failed exercises with their cause, and forgets the updated ones", async function () {
     const connection = new ConnectionError("connect ECONNREFUSED")
     connection.backend = "mooc"
