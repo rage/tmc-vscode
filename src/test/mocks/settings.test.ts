@@ -20,13 +20,13 @@ suite("the settings mock", () => {
     // pass on a disagreement that cannot happen.
     const [settings, values, change] = createSettingsMock()
     const notified: boolean[] = []
-    settings.onChangeMirroredSetting = (_, value): void => void notified.push(value)
+    settings.onChangeHideMetaFiles = (hide): void => void notified.push(hide)
 
-    change.updateExercisesAutomatically(true)
+    change.hideMetaFiles(false)
 
-    expect(notified).toEqual([true])
-    expect(settings.getAutomaticallyUpdateExercises()).toBe(true)
-    expect(values.updateExercisesAutomatically).toBe(true)
+    expect(notified).toEqual([false])
+    expect(settings.getHideMetaFiles()).toBe(false)
+    expect(values.hideMetaFiles).toBe(false)
   })
 
   test("each value field feeds the getter for that same setting", () => {

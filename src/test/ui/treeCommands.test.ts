@@ -22,7 +22,12 @@ import {
   targetRows,
   updateCourseExercises,
 } from "../../ui/treeview/treeCommands"
-import { CourseTreeItem, ExerciseTreeItem, PartTreeItem } from "../../ui/treeview/treeview"
+import {
+  CourseTreeItem,
+  ExerciseTreeItem,
+  PartTreeItem,
+  TrustCourseWorkspaceTreeItem,
+} from "../../ui/treeview/treeview"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -31,7 +36,7 @@ vi.mock("../../actions/downloadCourseExercises", () => ({
   downloadCourseExercises: vi.fn(async () => Ok.EMPTY),
 }))
 vi.mock("../../actions/downloadExerciseUpdates", () => ({
-  downloadExerciseUpdates: vi.fn(async () => Ok.EMPTY),
+  downloadExerciseUpdates: vi.fn(async () => Ok({ updated: [], warnings: [] })),
 }))
 vi.mock("../../actions/openExercises", () => ({
   downloadAndOpenExercises: vi.fn(async () => Ok({ ids: [], exceededOpenLimit: undefined })),
@@ -117,6 +122,12 @@ suite("Courses view commands", function () {
     expect(targetRows(clicked, [other])).toEqual([clicked])
     expect(targetRows(clicked, undefined)).toEqual([clicked])
     expect(targetRows(undefined, [other])).toEqual([])
+  })
+
+  test("acts on no trust row selected along with exercises", function () {
+    const clicked = row(tmcCourse, 1, "missing")
+
+    expect(targetRows(clicked, [new TrustCourseWorkspaceTreeItem(), clicked])).toEqual([clicked])
   })
 
   test("download fetches only what is not on disk, one call per course", async function () {
@@ -282,9 +293,11 @@ suite("Courses view commands", function () {
 
     await updateCourseExercises(actionContext, courseRow(tmcCourse))
 
-    expect(downloadExerciseUpdates).toHaveBeenCalledWith(actionContext, [
-      { courseId: tmcCourse, exerciseId: updates[0] },
-    ])
+    expect(downloadExerciseUpdates).toHaveBeenCalledWith(
+      actionContext,
+      [{ courseId: tmcCourse, exerciseId: updates[0] }],
+      false,
+    )
   })
 
   test("update on an exercise row updates that exercise alone", async function () {
@@ -295,9 +308,11 @@ suite("Courses view commands", function () {
 
     await updateCourseExercises(actionContext, row(tmcCourse, 6, "opened"))
 
-    expect(downloadExerciseUpdates).toHaveBeenCalledWith(actionContext, [
-      { courseId: tmcCourse, exerciseId: makeTmcKind({ tmcExerciseId: 6 }) },
-    ])
+    expect(downloadExerciseUpdates).toHaveBeenCalledWith(
+      actionContext,
+      [{ courseId: tmcCourse, exerciseId: makeTmcKind({ tmcExerciseId: 6 }) }],
+      false,
+    )
   })
 
   test("an update refused as already running says so", async function () {

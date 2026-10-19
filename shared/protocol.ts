@@ -106,6 +106,7 @@ export const RunnableCommandSchema = z.enum([
   "tmc.myCourses",
   "tmc.showAiUseProblem",
   "tmc.showMoocLogin",
+  "tmc.trustCourseWorkspace",
   "tmc.viewInitializationErrorHelp",
   "tmcTreeView.refreshCourses",
   "workbench.action.restartExtensionHost",

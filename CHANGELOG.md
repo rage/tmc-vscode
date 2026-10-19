@@ -2,16 +2,23 @@
 
 ## [Unreleased]
 
+- A window TestMyCode opens in a course workspace shows the Courses view instead of the Explorer.
+- A window TestMyCode reopens in a course workspace shows the walkthrough on your next step instead of the one it last showed.
+- A submission result left open behind another editor no longer comes back after a restart as a tab with nothing in it.
+- The Workspace Trust editor, where Manage in VS Code's trust question leads, closes once you trust the workspace.
+- Opening an exercise from the Courses view or with Next shows its file among your code instead of in the submission result's split, and Next closes the result.
+- A Courses view row action used right after the view changed no longer answers "Open a file of an exercise first.": the view is redrawn only when its rows change.
 - Selecting an exercise in the Courses view opens it, downloading it first, and shows its main source file; downloading or opening a single exercise does too.
 - After a passing submission the result offers Next with the exercise to do next, as does "TestMyCode: Open Next Exercise"; a result short of a pass offers Run Tests and Submit Again.
 - A course's menu, Course Details and "TestMyCode: Download All Exercises..." download every exercise not downloaded yet, and Download New Exercises does so for a course with nothing new. Course Details opens the course workspace and shows the course, expanded, in the Courses view.
-- New exercises are offered once, when they appear, not again at every start, poll and submission; Remind Me Later waits a day, or until more arrive. Nothing is offered right after a submission, automatic exercise updates show their progress in the status bar instead of a notification, and returning to the VS Code window checks for new exercises if the last check was over ten minutes ago.
+- New exercises are offered once, when they appear, not again at every start, poll and submission; Remind Me Later waits a day, or until more arrive. Nothing is offered right after a submission, automatic exercise updates show their progress in the status bar instead of a notification, and returning to the VS Code window checks for new exercises if the last check was over ten minutes ago. The course whose workspace is open is checked sooner: on returning to the window a minute or more after its last check, and every five minutes while the window has focus.
 - Refresh Courses, now also in the Command Palette, asks the sites afresh instead of reusing an exercise update check from the last five minutes, and waits for a refresh already running instead of refusing.
 - A lost session keeps your courses in the Courses view, where the exercises on your computer still open, close and run their tests; passing tests while logged out offers Log In to Submit. The session warning and the error for a lost session now say the same thing.
 - Logging in and out are reported in the status bar.
 - A paste link is copied to the clipboard as it arrives.
 - Submitting with no tries left says the score is final instead of reporting a failed submission, and an exercise command run on a file outside every exercise names the file.
-- A failed exercise update says the exercise was not updated, and its row offers Update to retry.
+- A failed exercise update says the exercise was not updated and why, in plain words, and its row offers Update to retry. A failed automatic update shows in the status bar instead of a notification, and goes away once the exercise updates or no longer has an update.
+- An exercise update that succeeds, automatic or not, says in the status bar which exercises it updated.
 - Only README files open as a preview, and VS Code's own suggestion to install a language's extension is no longer joined by a second one for the workspace.
 - A course pick with a single course added is skipped, except for Remove Course, and the open course is listed first.
 - One name for each thing, and Title Case on every button: Add Course (was Add New Course / Add a Course), Show Course Details (was Go To Course Details), Delete Generated Files (was Clean Exercise), tmc.mooc.fi (was TMC Server).
@@ -20,7 +27,12 @@
 - Submitting, including before a reset or restore, running tests and sharing via paste are refused, with what to change, while the course workspace's AI settings can't be applied or an AI extension no setting turns off, such as Cline or Claude Code, is enabled.
 - Logging in now always uses the courses.mooc.fi account (a browser-based device-code login); the TestMyCode username and password form has been removed. An existing TestMyCode session keeps working until it expires.
 - Raised the minimum required VS Code version to 1.100.
-- The extension now declares itself unsupported in untrusted (restricted-mode) workspaces, since it downloads and runs the TMC-langs CLI against workspace files.
+- In Restricted Mode the Courses view, login, adding courses and downloading keep working, and the view says why running tests, submitting, sharing via paste and deleting generated files are held back, with Trust Course Workspace as its first row; their notification says trust is needed and offers Trust Course Workspace, and the refused action runs once the workspace is trusted. A workspace cannot set `testMyCode.javaHome` until it is trusted.
+- A course workspace that opens untrusted asks to be trusted, through VS Code's own trust question; where VS Code asks on startup, TestMyCode leaves that opening's question to VS Code, so a quick No is not asked again, and asks itself on later openings, which VS Code no longer asks on. Trust Course Workspace asks the same way. A course workspace opens with its exercises already in it, so one answer covers them; an exercise downloaded while it is open asks again.
+- Course workspaces no longer keep their own copy of TestMyCode's settings, so a change in User settings applies inside them too; the copies earlier versions made are removed on the next start.
+- Downloading or opening exercises outside their course workspace offers to open it, naming the course, instead of only marking them open.
+- Switching from one course workspace to another no longer asks first; opening a course workspace over a folder of your own asks, naming the course and the folder, and offers a new window instead. The window a switch opens does not repeat the new-exercise and update offers the previous one made. Switch Course Workspace marks the course that is open.
+- The walkthrough and the FAQ say to trust the course workspace, and each exercise downloaded into it.
 - The extension now declares itself unsupported in virtual workspaces, such as a repository opened straight from GitHub, since it runs the TMC-langs CLI as a local process and stores exercises on disk.
 - The backend name beside a course in the Courses view is now shown dimmed, next to the title, instead of appended to it.
 - Logging in no longer opens a panel: courses.mooc.fi opens in your browser with your login code, and a notification you can cancel shows the code and waits while you approve there. A denied or expired login says so and offers Try Again.
@@ -28,7 +40,6 @@
 - An error answer from courses.mooc.fi or tmc.mooc.fi now says the server returned an error, with its status, instead of asking you to check your internet connection or showing the raw response.
 - Submitting or pasting a courses.mooc.fi exercise that has been removed from the course now says the exercise no longer exists and offers Refresh Courses, and an error's details no longer repeat the same cause twice.
 - Every initialization error notification now offers Show Help.
-- Open Exercises Folder, Wipe and Change data path now say why they cannot run when TMC-langs reported no exercise directory.
 - Fixed a newly added course's passed exercises not showing as passed right away.
 - Fixed a courses.mooc.fi exercise showing as completed after any graded submission; it now takes full points.
 - A graded courses.mooc.fi submission now says whether the exercise is passed or some tests failed, instead of only Exercise graded, and links to the exercise's page in the course material.

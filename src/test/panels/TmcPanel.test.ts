@@ -404,6 +404,49 @@ suite("TmcPanel handler dispatch", () => {
     )
   })
 
+  test("Next closes the submission result before the next exercise opens", async () => {
+    const handlers = stubHandlers()
+    const shown = { ...exerciseSubmissionPanel(), exerciseId: idOfTmcExercise(7) }
+    const actionContext = createMockActionContext({
+      startup: {
+        workspaceManager: {
+          getExercise: () => ({ uri: vscode.Uri.file("/exercises/loops") }),
+        } as unknown as WorkspaceManager,
+      },
+    })
+    const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
+    let wasClosedFirst: boolean | undefined
+    handlers.openWorkspace.mockImplementation(async () => {
+      wasClosedFirst = vi.mocked(panel.dispose).mock.calls.length > 0
+    })
+
+    await listener({
+      type: "exerciseAction",
+      sourcePanel: targetOf(shown),
+      action: "openNextExercise",
+    })
+
+    expect(wasClosedFirst).toBe(true)
+  })
+
+  test("Run Tests and Submit Again keep the submission result open", async () => {
+    stubHandlers()
+    const shown = { ...exerciseSubmissionPanel(), exerciseId: idOfTmcExercise(7) }
+    const actionContext = createMockActionContext({
+      startup: {
+        workspaceManager: {
+          getExercise: () => ({ uri: vscode.Uri.file("/exercises/loops") }),
+        } as unknown as WorkspaceManager,
+      },
+    })
+    const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
+
+    await listener({ type: "exerciseAction", sourcePanel: targetOf(shown), action: "runTests" })
+    await listener({ type: "exerciseAction", sourcePanel: targetOf(shown), action: "submit" })
+
+    expect(panel.dispose).not.toHaveBeenCalled()
+  })
+
   test("a mooc course's exercise is pasted through the mooc backend", async () => {
     const handlers = stubHandlers()
 
@@ -1752,6 +1795,29 @@ suite("TmcPanel main panel restore after a window reload", () => {
 
     expect(fake.dispose).toHaveBeenCalled()
     expect(TmcPanel.sidePanel).toBeUndefined()
+  })
+
+  test("closes a submission panel tab restored in the background, which VS Code does not revive", async () => {
+    const submission = { input: { viewType: `mainThreadWebview-${SIDE_PANEL_VIEW_TYPE}` } }
+    const courseDetails = { input: { viewType: `mainThreadWebview-${MAIN_PANEL_VIEW_TYPE}` } }
+    const code = { input: { uri: vscode.Uri.file("/exercise/main.py") } }
+    const close = vi.fn(async () => true)
+    const initialTabGroups = vscode.window.tabGroups
+    Object.defineProperty(vscode.window, "tabGroups", {
+      value: { all: [{ tabs: [code, submission] }, { tabs: [courseDetails] }], close },
+      configurable: true,
+    })
+    try {
+      TmcPanel.registerSerializers(createMockContext(), createMockActionContext())
+      await vi.waitFor(() => expect(close).toHaveBeenCalled())
+    } finally {
+      Object.defineProperty(vscode.window, "tabGroups", {
+        value: initialTabGroups,
+        configurable: true,
+      })
+    }
+
+    expect(close).toHaveBeenCalledExactlyOnceWith([submission])
   })
 
   test("reopens the saved Course Details as the main panel, with a fresh id", async () => {

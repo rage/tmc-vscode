@@ -1,9 +1,11 @@
 import type { AiUseGate } from "../api/aiUseGate"
 import type { AuthState } from "../api/authState"
+import type { CourseWorkspaceSwitches } from "../api/courseWorkspaceSwitches"
 import type Dialog from "../api/dialog"
 import type ExerciseDecorationProvider from "../api/exerciseDecorationProvider"
 import type Langs from "../api/langs"
 import type WorkspaceManager from "../api/workspaceManager"
+import type { WorkspaceTrustGate } from "../api/workspaceTrustGate"
 import type Resources from "../config/resources"
 import type Settings from "../config/settings"
 import type { UserData } from "../config/userdata"
@@ -13,9 +15,11 @@ import type CoursesTree from "../ui/treeview/treeview"
 export interface ReadyStartup {
   kind: "ready"
   aiUseGate: AiUseGate
+  courseWorkspaceSwitches: CourseWorkspaceSwitches
   exerciseDecorationProvider: ExerciseDecorationProvider
   langs: Langs
   resources: Resources
+  trustGate: WorkspaceTrustGate
   userData: UserData
   workspaceManager: WorkspaceManager
 }

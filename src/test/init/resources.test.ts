@@ -1,6 +1,7 @@
 import * as path from "path"
 
 import * as fs from "fs-extra"
+import * as jsonc from "jsonc-parser"
 import * as tmp from "tmp"
 import { vi } from "vitest"
 import type * as vscode from "vscode"
@@ -104,5 +105,52 @@ suite("resourceInitialization", function () {
 
     expect(result.ok).toBe(true)
     expect(fs.existsSync(path.join(workspaceFileFolder, ".tmc"))).toBe(true)
+  })
+
+  // Earlier versions copied them there, where they outranked the User settings.
+  suite("with the extension's settings in a course workspace file", function () {
+    const pinnedText = `{
+  // the student's note
+  "folders": [{ "path": ".tmc" }, { "path": "/exercises/hello" }],
+  "settings": {
+    "chat.disableAIFeatures": true,
+    "testMyCode.downloadOldSubmission": false,
+    "testMyCode.hideMetaFiles": true,
+    "testMyCode.updateExercisesAutomatically": true
+  },
+  "extensions": { "recommendations": ["ms-python.python"] }
+}`
+    let workspaceFileFolder: string
+
+    beforeEach(function () {
+      workspaceFileFolder = path.join(temporaryRoot, "workspaces")
+      fs.mkdirSync(workspaceFileFolder, { recursive: true })
+    })
+
+    test("removes them in place, keeping everything else", async function () {
+      const file = path.join(workspaceFileFolder, workspaceFileName("a-mooc-course", "mooc"))
+      fs.writeFileSync(file, pinnedText)
+
+      const result = await resourceInitialization(storage, undefined, workspaceFileFolder)
+
+      expect(result.ok).toBe(true)
+      const unpinned = fs.readFileSync(file, "utf-8")
+      expect(unpinned).toContain("// the student's note")
+      expect(jsonc.parse(unpinned)).toEqual({
+        folders: [{ path: ".tmc" }, { path: "/exercises/hello" }],
+        settings: { "chat.disableAIFeatures": true },
+        extensions: { recommendations: ["ms-python.python"] },
+      })
+    })
+
+    test("leaves a file it cannot read as JSON as it is", async function () {
+      const broken = path.join(workspaceFileFolder, workspaceFileName("broken", "tmc"))
+      fs.writeFileSync(broken, "{ not json")
+
+      const result = await resourceInitialization(storage, undefined, workspaceFileFolder)
+
+      expect(result.ok).toBe(true)
+      expect(fs.readFileSync(broken, "utf-8")).toBe("{ not json")
+    })
   })
 })

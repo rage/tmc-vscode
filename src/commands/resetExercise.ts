@@ -7,7 +7,7 @@ import type { ReadyActionContext } from "../actions/types"
 import { failure } from "../api/withOperation"
 import { revertExerciseDocuments } from "../window/exerciseDocuments"
 import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
-import { runForExercise } from "./runForExercise"
+import { checkTrustRetrying, runForExercise } from "./runForExercise"
 
 /**
  * Resets an exercise to its initial state, optionally submitting it beforehand.
@@ -37,6 +37,10 @@ export async function resetExercise(
       return Ok.EMPTY
     }
     if (submitFirst) {
+      const trusted = checkTrustRetrying(actionContext, "tmc.resetExercise", exercise)
+      if (trusted.err) {
+        return trusted
+      }
       const allowed = await checkAiUse(actionContext, exercise)
       if (allowed.err) {
         return allowed

@@ -1,5 +1,5 @@
 import type { Result } from "ts-results"
-import { Ok } from "ts-results"
+import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { RunResult, TestResult } from "../../shared/langsSchema"
@@ -11,7 +11,13 @@ import type { ReadyActionContext } from "../actions/types"
 import type WorkspaceManager from "../api/workspaceManager"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { ExerciseStatus } from "../api/workspaceManager"
-import { AiUseRefusedError, BottleneckError, SHOW_AI_USE_PROBLEM_COMMAND } from "../errors"
+import {
+  AiUseRefusedError,
+  BottleneckError,
+  SHOW_AI_USE_PROBLEM_COMMAND,
+  TRUST_COURSE_WORKSPACE_COMMAND,
+  WorkspaceUntrustedError,
+} from "../errors"
 import { countOf } from "../utilities"
 import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
 import { createSourceFileFinder } from "./sourceFiles"
@@ -59,11 +65,18 @@ export class ExerciseTestController implements vscode.Disposable {
    * Runs an exercise's tests as a run of its test item, so the results land in the Test
    * Results view.
    *
-   * @returns `Err(BottleneckError)` when the exercise was already being tested, and
-   * `Err(AiUseRefusedError)`, with no run, while AI assistance may be on; every other outcome,
+   * @returns `Err(BottleneckError)` when the exercise was already being tested, and, with no
+   * run, `Err(WorkspaceUntrustedError)` in Restricted Mode and `Err(AiUseRefusedError)` while AI
+   * assistance may be on; every other outcome,
    * failures included, is reported in the run itself.
    */
   public async runExercise(exercise: WorkspaceExercise): Promise<Result<void, Error>> {
+    const untrusted = this._actionContext.startup.trustGate.refusal(
+      () => void vscode.commands.executeCommand("tmc.testExercise", exercise.uri),
+    )
+    if (untrusted) {
+      return Err(untrusted)
+    }
     const allowed = await checkAiUse(this._actionContext, exercise)
     if (allowed.err && allowed.val instanceof AiUseRefusedError) {
       return allowed
@@ -137,6 +150,16 @@ export class ExerciseTestController implements vscode.Disposable {
       request,
       requested.length === 1 ? only?.[1].exerciseSlug : undefined,
     )
+    const untrusted = this._actionContext.startup.trustGate.refusal(
+      () => void this._run(request, new vscode.CancellationTokenSource().token),
+    )
+    if (untrusted) {
+      for (const [item] of requested) {
+        run.errored(item, new vscode.TestMessage(untrustedMessage(untrusted)))
+      }
+      run.end()
+      return Err(untrusted)
+    }
     const cancellation = new vscode.CancellationTokenSource()
     const forwards = [token, run.token].map((source) =>
       source.onCancellationRequested(() => cancellation.cancel()),
@@ -183,6 +206,10 @@ export class ExerciseTestController implements vscode.Disposable {
     }
     if (error instanceof AiUseRefusedError) {
       run.errored(item, new vscode.TestMessage(refusalMessage(error)))
+      return
+    }
+    if (error instanceof WorkspaceUntrustedError) {
+      run.errored(item, new vscode.TestMessage(untrustedMessage(error)))
       return
     }
     if (error instanceof BottleneckError) {
@@ -359,6 +386,14 @@ function refusalMessage(error: AiUseRefusedError): vscode.MarkdownString {
     message.appendMarkdown(` [${error.remedyLabel}](command:${SHOW_AI_USE_PROBLEM_COMMAND})`)
     message.isTrusted = { enabledCommands: [SHOW_AI_USE_PROBLEM_COMMAND] }
   }
+  return message
+}
+
+function untrustedMessage(error: WorkspaceUntrustedError): vscode.MarkdownString {
+  const message = new vscode.MarkdownString()
+  message.appendText(error.message)
+  message.appendMarkdown(` [Trust Course Workspace](command:${TRUST_COURSE_WORKSPACE_COMMAND})`)
+  message.isTrusted = { enabledCommands: [TRUST_COURSE_WORKSPACE_COMMAND] }
   return message
 }
 

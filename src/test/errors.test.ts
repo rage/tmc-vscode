@@ -14,6 +14,7 @@ import {
   SpawnError,
   TmcLoginNotAcceptedError,
   UploadExpiredError,
+  WorkspaceUntrustedError,
 } from "../errors"
 import { Logger, LogLevel } from "../utilities/logger"
 
@@ -107,6 +108,14 @@ suite("presentationFor", function () {
       "tmc.mooc.fi did not accept your login. It may not accept courses.mooc.fi logins yet.",
     )
     expect(presentation.actions).toEqual([])
+  })
+
+  test("Restricted Mode offers to trust the course workspace", function () {
+    const presentation = presentationFor(new WorkspaceUntrustedError("restricted"))
+
+    expect(presentation.actions).toEqual([
+      { label: "Trust Course Workspace", command: "tmc.trustCourseWorkspace" },
+    ])
   })
 
   test("a failed initialization offers the help panel", function () {

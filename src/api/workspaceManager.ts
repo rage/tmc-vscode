@@ -10,7 +10,6 @@ import * as vscode from "vscode"
 import type { BackendKind } from "../../shared/lib"
 import { CourseIdentifier, ExerciseIdentifier } from "../../shared/lib"
 import {
-  EXTENSION_ID,
   HIDE_META_FILES,
   SHOW_META_FILES,
   WATCHER_EXCLUDE,
@@ -69,6 +68,12 @@ export type PersistClosedCourseExercises = (
   closedExerciseSlugs: string[],
 ) => Promise<Result<void, Error>>
 
+/** A course, as its workspace knows it. */
+export interface CourseWorkspaceKey {
+  backend: BackendKind
+  courseSlug: string
+}
+
 /** How long a workspace folder change may keep the workspace file to itself. */
 const FOLDER_CHANGE_TIMEOUT_MS = 5_000
 
@@ -103,15 +108,6 @@ class SerialQueue {
     this._tail = result.catch(() => undefined)
     return result
   }
-}
-
-interface ConfigurationProperties {
-  default?: unknown
-  type?: string
-  description?: string
-  scope?: string
-  enum?: string[]
-  enumDescriptions?: string[]
 }
 
 /**
@@ -168,6 +164,9 @@ export default class WorkspaceManager implements vscode.Disposable {
   // Per course key, so that one course's record is read and written by one change at a time.
   private readonly _closedRecordWrites = new Map<string, SerialQueue>()
   private readonly _exercisesChanged = new vscode.EventEmitter<void>()
+  private readonly _openedOutsideCourseWorkspace = new vscode.EventEmitter<CourseWorkspaceKey>()
+  /** Whether a scan has set `_exercises` yet: the first one finds nothing newly opened. */
+  private _isScanned = false
   // Every write of the open workspace file. VS Code refuses a settings write while it has the
   // file's folder list unsaved, and addWorkspaceRecommendation's raw rewrite would lose a change
   // interleaved with it.
@@ -175,6 +174,12 @@ export default class WorkspaceManager implements vscode.Disposable {
 
   /** Fires after the known exercises, or whether one is open or closed, change. */
   public readonly onDidChangeExercises = this._exercisesChanged.event
+
+  /**
+   * Fires, once per course, when exercises become open in a course whose workspace this window
+   * does not show, so nothing visible changes: one downloaded, or opened, from elsewhere.
+   */
+  public readonly onDidOpenOutsideCourseWorkspace = this._openedOutsideCourseWorkspace.event
 
   /**
    * Creates a new instance of the WorkspaceManager class.
@@ -287,6 +292,13 @@ export default class WorkspaceManager implements vscode.Disposable {
     isClosedStateKnown = true,
   ): Promise<Result<void, Error>> {
     const isChanged = !WorkspaceManager._isSameExercises(this._exercises, exercises)
+    const known = new Set(this._exercises.map((x) => ExerciseIdentifier.key(x.id)))
+    const newlyOpen = this._isScanned
+      ? exercises.filter(
+          (x) => x.status === ExerciseStatus.Open && !known.has(ExerciseIdentifier.key(x.id)),
+        )
+      : []
+    this._isScanned = true
     this._exercises = exercises
     this._exercisesByPath = WorkspaceManager._indexByPath(exercises)
     this._exercisesById = WorkspaceManager._indexById(exercises)
@@ -295,7 +307,19 @@ export default class WorkspaceManager implements vscode.Disposable {
     if (isChanged) {
       this._exercisesChanged.fire()
     }
+    this._announceOpenedOutsideCourseWorkspace(newlyOpen)
     return this._refreshActiveCourseWorkspace()
+  }
+
+  private _announceOpenedOutsideCourseWorkspace(opened: WorkspaceExercise[]): void {
+    const active = this._activeCourseWorkspace
+    const courses = new Map<string, CourseWorkspaceKey>()
+    for (const { backend, courseSlug } of opened) {
+      if (backend !== active?.backend || courseSlug !== active.slug) {
+        courses.set(WorkspaceManager._courseKey(backend, courseSlug), { backend, courseSlug })
+      }
+    }
+    courses.forEach((course) => this._openedOutsideCourseWorkspace.fire(course))
   }
 
   private static _isSameExercises(
@@ -441,6 +465,28 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   /**
+   * Creates the course's `.code-workspace` file if needed, and lists the course's open exercises
+   * as its folders, so that VS Code asks once to trust the workspace with all of them rather than
+   * again for each folder added after it is trusted. Keeps the file's other contents.
+   */
+  public async prepareWorkspaceFileToOpen(courseSlug: string, backend: BackendKind): Promise<void> {
+    const workspaceFile = this._resources.getWorkspaceFilePath(courseSlug, backend)
+    await ensureCourseWorkspaceFile(workspaceFile)
+    const text = await fs.readFile(workspaceFile, "utf-8")
+    const folders = [
+      { path: WORKSPACE_ROOT_FOLDER_NAME },
+      ...this._openExerciseFolders(courseSlug, backend).map((uri) => ({ path: uri.fsPath })),
+    ]
+    const edits = jsonc.modify(text, ["folders"], folders, {
+      formattingOptions: { insertSpaces: true, tabSize: 2 },
+    })
+    const prepared = jsonc.applyEdits(text, edits)
+    if (prepared !== text) {
+      await fs.writeFile(workspaceFile, prepared)
+    }
+  }
+
+  /**
    * Deletes a course's `.code-workspace` file, so that re-adding the course gets
    * a fresh one instead of a folder list pointing at exercises that are gone.
    *
@@ -481,6 +527,7 @@ export default class WorkspaceManager implements vscode.Disposable {
   public dispose(): void {
     this._disposables.forEach((x) => x.dispose())
     this._exercisesChanged.dispose()
+    this._openedOutsideCourseWorkspace.dispose()
   }
 
   public async excludeMetaFilesInWorkspace(hide: boolean): Promise<void> {
@@ -511,7 +558,6 @@ export default class WorkspaceManager implements vscode.Disposable {
     )
     await this._updateWorkspaceSettings({
       "files.exclude": hideMetaFiles ? HIDE_META_FILES : SHOW_META_FILES,
-      ...this._settingsDeclaredByExtension(),
       // Our watcher would otherwise delete an exercise folder's `.vscode`, and
       // with it per-folder settings such as the exercise's Python interpreter.
       "files.watcherExclude": WATCHER_EXCLUDE,
@@ -698,47 +744,22 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   /**
-   * The extension's own boolean settings with the value the workspace file should
-   * hold: whatever it already stores, else the user-scope value, else the
-   * declared default.
-   *
-   * Workaround for https://github.com/microsoft/vscode/issues/58038, which is why
-   * these are copied into the workspace file at all.
-   */
-  private _settingsDeclaredByExtension(): Record<string, unknown> {
-    const extension = vscode.extensions.getExtension(EXTENSION_ID)
-    const declared: Record<string, ConfigurationProperties> =
-      extension?.packageJSON?.contributes?.configuration?.properties ?? {}
-    if (Object.keys(declared).length === 0) {
-      // A fork or a renamed publisher: nothing to copy, and the rest of the
-      // integrity pass still has work to do.
-      Logger.warn(`No declared settings found for extension ${EXTENSION_ID}.`)
-      return {}
-    }
-
-    const desired: Record<string, unknown> = {}
-    for (const [key, property] of Object.entries(declared)) {
-      if (property.scope === "application" || property.type !== "boolean") {
-        continue
-      }
-      const stored = this.getWorkspaceSettings().inspect<boolean>(key)
-      if (stored?.workspaceValue !== undefined) {
-        desired[key] = stored.workspaceValue
-      } else if (stored?.globalValue !== undefined) {
-        desired[key] = stored.globalValue
-      } else {
-        desired[key] = stored?.defaultValue
-      }
-    }
-    return desired
-  }
-
-  /**
    * Refreshes current active course workspace by first making sure that the `.tmc` folder is at
    * the top and then lists all that course's open exercises in alphanumeric order.
    */
   private _refreshActiveCourseWorkspace(): Promise<Result<void, Error>> {
     return this._workspaceFileWrites.run(() => this._replaceWorkspaceFolders())
+  }
+
+  /** The folders of the course's open exercises, in the order its workspace lists them. */
+  private _openExerciseFolders(courseSlug: string, backend: BackendKind): vscode.Uri[] {
+    return this._exercises
+      .filter(
+        (x) =>
+          x.courseSlug === courseSlug && x.backend === backend && x.status === ExerciseStatus.Open,
+      )
+      .toSorted((a, b) => a.exerciseSlug.localeCompare(b.exerciseSlug))
+      .map((x) => x.uri)
   }
 
   private async _replaceWorkspaceFolders(): Promise<Result<void, Error>> {
@@ -750,15 +771,10 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     const rootFolder = this._resources.workspaceRootFolder
-    const openExercises = this._exercises
-      .filter(
-        (x) =>
-          x.courseSlug === activeCourseWorkspace.slug &&
-          x.backend === activeCourseWorkspace.backend &&
-          x.status === ExerciseStatus.Open,
-      )
-      .toSorted((a, b) => a.exerciseSlug.localeCompare(b.exerciseSlug))
-      .map((x) => ({ uri: x.uri }))
+    const openExercises = this._openExerciseFolders(
+      activeCourseWorkspace.slug,
+      activeCourseWorkspace.backend,
+    ).map((uri) => ({ uri }))
     const correctStructure = [{ uri: rootFolder }, ...openExercises]
     if (
       _.zip(correctStructure, workspaceFolders).every(([a, b]) => a?.uri.fsPath === b?.uri.fsPath)
@@ -831,6 +847,11 @@ export default class WorkspaceManager implements vscode.Disposable {
 
       // `setExercises` may have replaced the exercises while the write was in flight.
       const matched = courseExercises().filter((x) => isRequested(x))
+      if (open) {
+        this._announceOpenedOutsideCourseWorkspace(
+          matched.filter((x) => x.status !== ExerciseStatus.Open),
+        )
+      }
       for (const exercise of matched) {
         exercise.status = open ? ExerciseStatus.Open : ExerciseStatus.Closed
       }

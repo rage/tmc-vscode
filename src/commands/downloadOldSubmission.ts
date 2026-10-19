@@ -12,7 +12,7 @@ import { failure } from "../api/withOperation"
 import { formatDateTime, parseDate } from "../utilities"
 import { revertExerciseDocuments } from "../window/exerciseDocuments"
 import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
-import { runForExercise } from "./runForExercise"
+import { checkTrustRetrying, runForExercise } from "./runForExercise"
 
 const TITLE = "Download Old Submission"
 
@@ -92,6 +92,10 @@ export async function downloadOldSubmission(
         return Ok.EMPTY
       }
       if (submitFirst) {
+        const trusted = checkTrustRetrying(actionContext, "tmc.downloadOldSubmission", exercise)
+        if (trusted.err) {
+          return trusted
+        }
         const allowed = await checkAiUse(actionContext, exercise)
         if (allowed.err) {
           return allowed

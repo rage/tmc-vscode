@@ -9,7 +9,11 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { BackendKind } from "../../../shared/lib"
-import type { PersistClosedCourseExercises, WorkspaceExercise } from "../../api/workspaceManager"
+import type {
+  CourseWorkspaceKey,
+  PersistClosedCourseExercises,
+  WorkspaceExercise,
+} from "../../api/workspaceManager"
 import WorkspaceManager, {
   ensureCourseWorkspaceFile,
   ensureWorkspaceRootFile,
@@ -673,8 +677,20 @@ suite("WorkspaceManager class", function () {
       return update.mock.calls.map(([section]) => section)
     }
 
-    test("keeps verifying when the extension's own record is missing", async function () {
-      stubExtensions(() => undefined)
+    // A copy in the workspace file would outrank the student's later changes in User settings.
+    test("copies none of the extension's own settings into the workspace file", async function () {
+      stubExtensions(
+        () =>
+          ({
+            packageJSON: {
+              contributes: {
+                configuration: {
+                  properties: { "testMyCode.downloadOldSubmission": { type: "boolean" } },
+                },
+              },
+            },
+          }) as unknown as vscode.Extension<unknown>,
+      )
       stubWorkspace("getConfiguration", () => configurationStub(update))
 
       await new WorkspaceManager(resources, persistForCourse).verifyWorkspaceSettingsIntegrity()
@@ -686,6 +702,7 @@ suite("WorkspaceManager class", function () {
           "problems.decorations.enabled",
         ]),
       )
+      expect(sectionsWritten().filter((section) => section.startsWith("testMyCode."))).toEqual([])
     })
 
     test("merges a section's stored workspace value, not the effective config", async function () {
@@ -1063,6 +1080,39 @@ suite("WorkspaceManager class", function () {
       expect(JSON.parse(fs.readFileSync(workspaceFile, "utf-8"))).toEqual(WORKSPACE_SETTINGS)
     })
 
+    test("lists the course's open exercises in its workspace file before it opens", async function () {
+      manager = new WorkspaceManager(resources, persistForCourse, [
+        exercise("tmc", courseSlug, "b_exercise", ExerciseStatus.Open),
+        exercise("tmc", courseSlug, "a_exercise", ExerciseStatus.Open),
+        exercise("tmc", courseSlug, "closed_exercise", ExerciseStatus.Closed),
+        exercise("tmc", "another-course", "a_exercise", ExerciseStatus.Open),
+        exercise("mooc", courseSlug, "a_exercise", ExerciseStatus.Open),
+      ])
+      fs.writeFileSync(
+        workspaceFile,
+        '{\n  // the student\'s note\n  "folders": [{ "path": ".tmc" }],\n  "settings": { "a": 1 }\n}',
+      )
+
+      await manager.prepareWorkspaceFileToOpen(courseSlug, "tmc")
+
+      const text = fs.readFileSync(workspaceFile, "utf-8")
+      expect(text).toContain("// the student's note")
+      expect(jsonc.parse(text)).toEqual({
+        folders: [
+          { path: WORKSPACE_ROOT_FOLDER_NAME },
+          { path: path.join(PROJECTS_DIRECTORY, "tmc", courseSlug, "a_exercise") },
+          { path: path.join(PROJECTS_DIRECTORY, "tmc", courseSlug, "b_exercise") },
+        ],
+        settings: { a: 1 },
+      })
+    })
+
+    test("creates the workspace file it prepares to open", async function () {
+      await manager.prepareWorkspaceFileToOpen(courseSlug, "tmc")
+
+      expect(JSON.parse(fs.readFileSync(workspaceFile, "utf-8"))).toEqual(WORKSPACE_SETTINGS)
+    })
+
     test("leaves a course's existing workspace file untouched", async function () {
       fs.writeFileSync(workspaceFile, '{"folders":[{"path":"kept"}]}')
 
@@ -1102,6 +1152,61 @@ suite("WorkspaceManager class", function () {
 
       expect(result.ok).toBe(true)
       expect(fs.readdirSync(workspaceFileFolder)).toEqual([WORKSPACE_ROOT_FOLDER_NAME])
+    })
+  })
+
+  suite("exercises opened where this window does not show them", function () {
+    const courseSlug = "test-python-course"
+    let opened: CourseWorkspaceKey[]
+    let manager: WorkspaceManager
+
+    beforeEach(async function () {
+      opened = []
+      manager = new WorkspaceManager(resources, persistForCourse)
+      manager.onDidOpenOutsideCourseWorkspace((course) => void opened.push(course))
+      await manager.setExercises([exercise("mooc", courseSlug, "first", ExerciseStatus.Closed)])
+    })
+
+    test("a download, open by default, is announced once for its course", async function () {
+      await manager.setExercises([
+        exercise("mooc", courseSlug, "first", ExerciseStatus.Closed),
+        exercise("mooc", courseSlug, "second", ExerciseStatus.Open),
+        exercise("mooc", courseSlug, "third", ExerciseStatus.Open),
+      ])
+
+      expect(opened).toEqual([{ backend: "mooc", courseSlug }])
+    })
+
+    test("the exercises found on startup are not announced", async function () {
+      const startup = new WorkspaceManager(resources, persistForCourse)
+      startup.onDidOpenOutsideCourseWorkspace((course) => void opened.push(course))
+
+      await startup.setExercises([exercise("mooc", courseSlug, "first", ExerciseStatus.Open)])
+
+      expect(opened).toEqual([])
+    })
+
+    test("opening a closed exercise is announced, and opening an open one is not", async function () {
+      const closed = exercise("mooc", courseSlug, "first", ExerciseStatus.Closed)
+
+      await manager.openCourseExercises("mooc", courseSlug, [closed.id])
+      await manager.openCourseExercises("mooc", courseSlug, [closed.id])
+
+      expect(opened).toEqual([{ backend: "mooc", courseSlug }])
+    })
+
+    test("nothing is announced inside that course's own workspace", async function () {
+      openWorkspaceFile(workspaceFileName(courseSlug, "mooc"))
+
+      await manager.setExercises([
+        exercise("mooc", courseSlug, "first", ExerciseStatus.Closed),
+        exercise("mooc", courseSlug, "second", ExerciseStatus.Open),
+      ])
+      await manager.openCourseExercises("mooc", courseSlug, [
+        exercise("mooc", courseSlug, "first", ExerciseStatus.Closed).id,
+      ])
+
+      expect(opened).toEqual([])
     })
   })
 

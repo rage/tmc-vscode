@@ -6,6 +6,7 @@ import { ensureCourseWorkspaceFile, ensureWorkspaceRootFile } from "../api/works
 import Resources from "../config/resources"
 import { CorruptStoredDataError, FileSystemError } from "../errors"
 import type Storage from "../storage"
+import { unpinExtensionSettings } from "../storage/migration/courseWorkspaceFiles"
 import { Logger } from "../utilities/logger"
 
 /**
@@ -33,6 +34,7 @@ export async function resourceInitialization(
     }
 
     const resources = new Resources(workspaceFileFolder, tmcDataPath)
+    await unpinExtensionSettings(workspaceFileFolder)
 
     const userData = readableUserData(storage)
     const storedCourses = [

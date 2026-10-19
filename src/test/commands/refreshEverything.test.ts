@@ -259,6 +259,16 @@ suite("refreshEverything's new-exercises prompt", function () {
     ])
   })
 
+  // The window that switched to this course workspace has just offered them.
+  test("a promptless refresh offers neither new exercises nor updates", async function () {
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
+
+    await refreshEverything(actionContext, { silent: true, isPromptless: true })
+
+    expect(dialog.notification).not.toHaveBeenCalled()
+    expect(updateExercises).toHaveBeenCalledWith(actionContext, "promptless")
+  })
+
   test("offers several courses' new exercises in one notification, acting on all", async function () {
     const [actionContext, dialog] = contextWithCourses([
       tmcCourse(1, 0, [10, 11]),

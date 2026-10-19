@@ -20,6 +20,7 @@ type RefreshOptions = {
   silent: boolean
   isQueuedWhenBusy?: boolean
   offersNewExercises?: boolean
+  isPromptless?: boolean
 } & CourseUpdateOptions
 
 /**
@@ -42,6 +43,8 @@ type RefreshOptions = {
  * ends, and returns `Ok` at once. Calls queued meanwhile run together, as one refresh.
  * @param offersNewExercises `false` keeps the new exercises found for a later refresh to
  * offer, e.g. while a submission's result is what the student is reading.
+ * @param isPromptless Offers neither new exercises nor exercise updates, for a window that
+ * another one has just opened after offering them itself.
  */
 export async function refreshEverything(
   actionContext: ReadyActionContext,
@@ -89,7 +92,7 @@ function refresh(
   options: RefreshOptions,
 ): Promise<Result<void, Error>> {
   const { courseId, isQueuedWhenBusy } = options
-  const offersNewExercises = options.offersNewExercises ?? true
+  const offersNewExercises = (options.offersNewExercises ?? true) && !options.isPromptless
   if (running) {
     if (isQueuedWhenBusy) {
       const isSameCourse =
@@ -126,7 +129,7 @@ async function runRefresh(
   actionContext: ReadyActionContext,
   options: RefreshOptions,
 ): Promise<Result<void, Error>> {
-  const { silent, courseId, onProgress, offersNewExercises } = options
+  const { silent, courseId, onProgress, offersNewExercises, isPromptless } = options
   const refreshed = await checkForCourseUpdates(actionContext, { courseId, onProgress })
   if (refreshed.ok) {
     reportWarnings(actionContext.dialog, refreshed.val.warnings)
@@ -135,7 +138,10 @@ async function runRefresh(
     }
   }
   const refreshFailure = refreshed.err ? refreshed.val : refreshed.val.failure
-  await updateExercises(actionContext, silent || refreshFailure ? "silent" : "loud")
+  await updateExercises(
+    actionContext,
+    isPromptless ? "promptless" : silent || refreshFailure ? "silent" : "loud",
+  )
   return refreshFailure ? Err(refreshFailure) : Ok.EMPTY
 }
 

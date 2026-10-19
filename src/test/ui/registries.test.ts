@@ -4,6 +4,7 @@ import { afterEach, expect, suite, test, vi } from "vitest"
 import { BottleneckError } from "../../errors"
 import { downloadFailures } from "../../ui/downloadFailures"
 import { exerciseOperations } from "../../ui/exerciseOperations"
+import { failedUpdates } from "../../ui/failedUpdates"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
 import {
   idOfMoocCourse,
@@ -19,6 +20,7 @@ const moocCourse = idOfMoocCourse("11111111-2222-3333-4444-555555555555")
 afterEach(() => {
   updateablesRegistry.clear()
   downloadFailures.clear()
+  failedUpdates.clear()
 })
 
 suite("updateables registry", () => {
@@ -209,5 +211,36 @@ suite("exercise operations", () => {
     ).rejects.toThrow("boom")
 
     expect(exerciseOperations.current(exercise)).toBeUndefined()
+  })
+})
+
+suite("failed updates", () => {
+  const failure = (exerciseId: number): Parameters<typeof failedUpdates.record>[0][number] => ({
+    courseId: tmcCourse,
+    exerciseId: idOfTmcExercise(exerciseId),
+    exerciseName: `exercise_${exerciseId}`,
+    reason: "Show Logs has the details.",
+  })
+
+  test("forgets an exercise once it updates", () => {
+    updateablesRegistry.setMany([[tmcCourse, [idOfTmcExercise(1), idOfTmcExercise(2)]]])
+    failedUpdates.record([failure(1), failure(2)], [])
+
+    failedUpdates.record([], [idOfTmcExercise(1)])
+
+    expect(failedUpdates.all()).toEqual([failure(2)])
+  })
+
+  test("forgets an exercise that no longer has an update", () => {
+    updateablesRegistry.setMany([[tmcCourse, [idOfTmcExercise(1), idOfTmcExercise(2)]]])
+    failedUpdates.record([failure(1), failure(2)], [])
+    const changed = vi.fn()
+    const subscription = failedUpdates.onDidChange(changed)
+
+    updateablesRegistry.setMany([[tmcCourse, [idOfTmcExercise(2)]]])
+    subscription.dispose()
+
+    expect(failedUpdates.all()).toEqual([failure(2)])
+    expect(changed).toHaveBeenCalledOnce()
   })
 })

@@ -60,6 +60,7 @@ const expectedCommands = [
   "tmc.testExercise",
   "tmc.testing.pasteExercise",
   "tmc.testing.submitExercise",
+  "tmc.trustCourseWorkspace",
   "tmc.updateExercises",
   "tmc.logs",
   "tmc.debug",
@@ -68,17 +69,23 @@ const expectedCommands = [
 ]
 
 // Of those, the ones that reach no service, so a failed activation can still offer them:
-// `registerServiceFreeCommands`'s three, plus `tmc.viewInitializationErrorHelp`, which
+// `registerServiceFreeCommands`'s, plus `tmc.viewInitializationErrorHelp`, which
 // needs an `ActionContext` but no service and so stays in `registerCommands`.
 const expectedDegradedCommands = [
   "tmc.settings",
   "tmc.logs",
   "tmc.debug",
+  "tmc.trustCourseWorkspace",
   "tmc.viewInitializationErrorHelp",
 ]
 
 // What `registerServiceFreeCommands` registers on its own, regardless of startup state.
-const expectedServiceFreeCommands = ["tmc.settings", "tmc.logs", "tmc.debug"]
+const expectedServiceFreeCommands = [
+  "tmc.settings",
+  "tmc.logs",
+  "tmc.debug",
+  "tmc.trustCourseWorkspace",
+]
 
 function registerAndCollect(actionContext: ActionContext = createMockActionContext()): {
   ids: string[]
@@ -199,7 +206,7 @@ suite("registerCommands", function () {
   })
 
   // Pins the split itself: `registerServiceFreeCommands` must register exactly these
-  // three and nothing `registerCommands` also registers, or the two other set
+  // and nothing `registerCommands` also registers, or the two other set
   // assertions in this suite would only prove the union is right, not the partition.
   test("registerServiceFreeCommands registers exactly the ids that need no service", function () {
     const { serviceFreeIds } = registerAndCollect()
@@ -240,6 +247,17 @@ suite("registerCommands", function () {
         .map((entry) => `${menu}: ${entry.command ?? entry.submenu}`),
     )
     expect(ungated).toEqual([])
+  })
+
+  // Without "limited", VS Code disables the extension in Restricted Mode, Courses view and all.
+  test("runs in Restricted Mode, ignoring a workspace's JDK setting there", function () {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),
+    )
+    expect(manifest.capabilities.untrustedWorkspaces).toMatchObject({
+      supported: "limited",
+      restrictedConfigurations: ["testMyCode.javaHome"],
+    })
   })
 
   // The device flow is the only login left; nothing may register a TMC
@@ -469,6 +487,17 @@ suite("walkthrough", function () {
     const texts = media.map((file) => fs.readFileSync(path.join(root, file), "utf8"))
     expect(texts.some((text) => text.includes("Data collected by the extension"))).toBe(true)
   })
+
+  test("the step that opens a course workspace says to trust it and each new exercise", function () {
+    const root = path.join(__dirname, "..", "..", "..")
+    const step = packageJson().contributes.walkthroughs?.[0]?.steps.find((x) =>
+      x.description.includes("command:tmc.openCourseWorkspace"),
+    )
+    const text = fs.readFileSync(path.join(root, step?.media.markdown ?? ""), "utf8")
+    expect(text).toMatch(/\*\*Trust Workspace & Continue\*\*/)
+    expect(text).toMatch(/exercise you download.*\*\*Yes\*\*/s)
+    expect(text).not.toMatch(/covers all your courses/)
+  })
 })
 
 suite("registered command handlers", function () {
@@ -482,6 +511,15 @@ suite("registered command handlers", function () {
       "workbench.action.openSettings",
       "@ext:moocfi.test-my-code",
     )
+  })
+
+  test("tmc.trustCourseWorkspace asks through VS Code's trust modal", async function () {
+    const fetchTasks = vi.spyOn(vscode.tasks, "fetchTasks").mockResolvedValue([])
+    const { handlers } = registerAndCollect()
+
+    await handlers.get("tmc.trustCourseWorkspace")?.()
+
+    expect(fetchTasks).toHaveBeenCalledOnce()
   })
 
   test("tmc.logs shows the output channel", async function () {

@@ -27,6 +27,7 @@ import {
   ExerciseNotFoundError,
   InsufficientScopeError,
   OutOfTriesError,
+  WorkspaceUntrustedError,
 } from "../../errors"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
 import type { SubmissionViewUpdate } from "../../ui/submissionViews"
@@ -45,6 +46,7 @@ import {
   idOfTmcExercise,
 } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
+import { restrictedTrustGate } from "../support/trustGate"
 
 vi.mock("../../window/exerciseDocuments", () => ({
   saveExerciseDocuments: vi.fn(async () => Ok.EMPTY),
@@ -491,6 +493,17 @@ suite("submitExercise action, mooc", () => {
     expect((result.val as Error).message).toBe(
       `You have no tries left on ${EXERCISE_SLUG}, so its 2/3 points are final.`,
     )
+    expect(submit).not.toHaveBeenCalled()
+  })
+
+  test("submits nothing in Restricted Mode", async () => {
+    const submit = vi.fn()
+    const { actionContext } = contextFor(makeMoocKind(moocCourse), { submitMoocExercise: submit })
+    actionContext.startup.trustGate = restrictedTrustGate().trustGate
+
+    const result = await submitExercise(actionContext, moocExercise)
+
+    expect(result.val).toBeInstanceOf(WorkspaceUntrustedError)
     expect(submit).not.toHaveBeenCalled()
   })
 

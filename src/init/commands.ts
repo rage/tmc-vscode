@@ -5,9 +5,10 @@ import { toError } from "../../shared/lib"
 import type { ActionContext, ReadyActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type Dialog from "../api/dialog"
+import { requestWorkspaceTrust } from "../api/workspaceTrustPrompt"
 import * as commands from "../commands"
 import { EXTENSION_ID } from "../config/constants"
-import { SHOW_AI_USE_PROBLEM_COMMAND } from "../errors"
+import { SHOW_AI_USE_PROBLEM_COMMAND, TRUST_COURSE_WORKSPACE_COMMAND } from "../errors"
 import { initializationErrorHelpPanel, nextPanelId } from "../panels/routes"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseTestController } from "../testing/exerciseTestController"
@@ -17,9 +18,7 @@ import * as treeCommands from "../ui/treeview/treeCommands"
 import type { CoursesTreeItem } from "../ui/treeview/treeview"
 import { COURSES_VIEW_ID, CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
 import { Logger } from "../utilities"
-
-/** Must match the `walkthroughs` entry's `id` in package.json. */
-const WALKTHROUGH_ID = "gettingStarted"
+import { WALKTHROUGH } from "../window/walkthrough"
 
 /** A course command's argument: a course id from code, or the Courses view item it runs on. */
 type CourseTarget = CourseIdentifier | CourseTreeItem
@@ -92,6 +91,9 @@ export function registerServiceFreeCommands(
     Logger.show()
   })
 
+  // Trust is the remedy for a refusal, so it must not wait for a ready activation.
+  register(TRUST_COURSE_WORKSPACE_COMMAND, () => requestWorkspaceTrust())
+
   register("tmc.debug", async () => {
     await vscode.commands.executeCommand("workbench.output.action.clearOutput")
     Logger.show()
@@ -101,7 +103,7 @@ export function registerServiceFreeCommands(
 
 /**
  * Registers the commands that need the startup state, i.e. everything except
- * {@link registerServiceFreeCommands}'s three.
+ * {@link registerServiceFreeCommands}'s.
  *
  * A degraded activation still reaches `tmc.viewInitializationErrorHelp`, the one
  * exception that needs an `ActionContext` but no service; every id after it requires
@@ -256,11 +258,7 @@ export function registerCommands(
   )
 
   register("tmc.showWelcome", async () => {
-    await vscode.commands.executeCommand(
-      "workbench.action.openWalkthrough",
-      `${EXTENSION_ID}#${WALKTHROUGH_ID}`,
-      false,
-    )
+    await vscode.commands.executeCommand("workbench.action.openWalkthrough", WALKTHROUGH, false)
   })
 
   register("tmc.showMoocLogin", async () => commands.login(readyContext))

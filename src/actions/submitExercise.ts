@@ -36,6 +36,7 @@ import type { MoocStoredStanding } from "../utilities/apiData"
 import { moocStoredStanding } from "../utilities/apiData"
 import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import { checkAiUse } from "./checkAiUse"
+import { checkWorkspaceTrust } from "./checkWorkspaceTrust"
 import { fingerprintStudentFiles, recordSubmittedFingerprint } from "./submittedState"
 import type { ReadyActionContext } from "./types"
 
@@ -316,8 +317,8 @@ function withNextExercise(
  * {@link onDidFinishSubmission} once the outcome is shown. A failed submission is `Ok`, as the
  * panel shows why. Errs for a failure before the panel opens: another operation in flight on
  * the exercise is a `BottleneckError`, AI assistance that may be on is an
- * `AiUseRefusedError`, and an exercise the backend last reported out of tries is an
- * `OutOfTriesError`.
+ * `AiUseRefusedError`, Restricted Mode is a `WorkspaceUntrustedError`, and an exercise the
+ * backend last reported out of tries is an `OutOfTriesError`.
  */
 export async function submitExercise(
   actionContext: ReadyActionContext,
@@ -349,6 +350,10 @@ export async function submitExercise(
           (points ? `, so its ${points.short} points are final.` : "."),
       ),
     )
+  }
+  const trusted = checkWorkspaceTrust(actionContext)
+  if (trusted.err) {
+    return trusted
   }
   const refused = await actionContext.startup.aiUseGate.refusal(course, exercise.uri)
   if (refused) {

@@ -9,7 +9,12 @@ import type {
 } from "../../../shared/lib"
 import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import Dialog, { courseSelectionItems, separator } from "../../api/dialog"
-import { InsufficientScopeError, InvalidTokenError, RuntimeError } from "../../errors"
+import {
+  InsufficientScopeError,
+  InvalidTokenError,
+  RuntimeError,
+  WorkspaceUntrustedError,
+} from "../../errors"
 import { Logger, LogLevel } from "../../utilities"
 
 suite("Dialog.selectItem", function () {
@@ -314,6 +319,18 @@ suite("Dialog.reportError", function () {
 
     expect(reportSessionLost).toHaveBeenCalledWith(rejection)
     expect(show).not.toHaveBeenCalled()
+  })
+
+  test("a Restricted Mode refusal says trust is needed, not that the operation failed", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const show = stubMessage("showWarningMessage", (actions) => actions[0])
+    const refusal = new WorkspaceUntrustedError("Trust the course workspace to run tests.")
+
+    await new Dialog().reportError("Testing the exercise failed.", refusal)
+
+    expect(show.mock.calls[0]?.[0]).toBe("Trust the course workspace to run tests.")
+    expect(buttonTitles(show)).toEqual(["Trust Course Workspace"])
+    expect(executeCommand).toHaveBeenCalledWith("tmc.trustCourseWorkspace")
   })
 
   test("an error with no remedy of its own reads as the operation plus the error", async function () {

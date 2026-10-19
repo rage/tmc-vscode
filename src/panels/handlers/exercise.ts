@@ -73,6 +73,10 @@ export const exerciseHandlers = {
         void actionContext.dialog.errorNotification("This exercise is no longer downloaded.")
         return
       }
+      if (message.action === "openNextExercise") {
+        // The result is done with, and its split would take the next exercise's file.
+        host.closeSidePanel()
+      }
       await vscode.commands.executeCommand(EXERCISE_ACTION_COMMANDS[message.action], exercise.uri)
     },
   },

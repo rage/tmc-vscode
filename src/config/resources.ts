@@ -14,6 +14,7 @@ export enum EditorKind {
   VSCodium = 1,
 }
 
+/** Where the exercises and the course workspaces live on disk. */
 export default class Resources {
   public readonly editorKind: EditorKind
   private _projectsDirectory: string | undefined

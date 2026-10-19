@@ -15,6 +15,7 @@ import { exerciseOperations } from "../../ui/exerciseOperations"
 import type { CoursesTreeItem, CoursesTreeSource } from "../../ui/treeview/treeview"
 import CoursesTree, {
   CourseTreeItem,
+  TrustCourseWorkspaceTreeItem,
   ExerciseTreeItem,
   exerciseItems,
   PartTreeItem,
@@ -137,7 +138,9 @@ suite("CoursesTree", function () {
     tree.setLoggedIn(true)
     tree.setSource(source())
     settle()
-    return tree.getChildren()
+    return tree
+      .getChildren()
+      .filter((row): row is CoursesTreeItem => !(row instanceof TrustCourseWorkspaceTreeItem))
   }
 
   function tooltipOf(item: CoursesTreeItem | undefined): string {
@@ -536,15 +539,49 @@ suite("CoursesTree", function () {
     expect(view.message).toBe("")
   })
 
-  test("re-renders on each download status, change on disk and change to the courses", function () {
+  test("explains Restricted Mode until the course workspace is trusted", function () {
     show(tmcCourse())
+
+    tree.setRestricted(true)
+    settle()
+    expect(view.message).toMatch(/Restricted Mode: trust it to run tests, submit and share/)
+
+    tree.setRestricted(false)
+    settle()
+    expect(view.message).toBe("")
+  })
+
+  test("offers to trust the course workspace in its first row while in Restricted Mode", function () {
+    show(tmcCourse())
+
+    tree.setRestricted(true)
+    settle()
+    const [trustRow, ...courseRows] = tree.getChildren()
+    expect(trustRow?.label).toBe("Trust Course Workspace")
+    expect(trustRow?.command?.command).toBe("tmc.trustCourseWorkspace")
+    expect(trustRow && tree.getChildren(trustRow)).toEqual([])
+    expect(courseRows).toHaveLength(1)
+
+    tree.setRestricted(false)
+    settle()
+    expect(tree.getChildren().map((row) => row.label)).not.toContain("Trust Course Workspace")
+  })
+
+  test("re-renders on each download status, change on disk and change to the courses", function () {
+    show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))
     const refreshed: unknown[] = []
     tree.onDidChangeTreeData((node) => refreshed.push(node))
     const changes = [
       () => downloadFailures.record([makeTmcKind({ tmcExerciseId: 1 })], []),
-      () => updateablesRegistry.setMany([[idOfTmcCourse(1), []]]),
-      () => exercisesChanged.fire(),
-      () => coursesChanged.fire(),
+      () => updateablesRegistry.setMany([[idOfTmcCourse(1), [makeTmcKind({ tmcExerciseId: 1 })]]]),
+      () => {
+        workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Open)]
+        exercisesChanged.fire()
+      },
+      () => {
+        courses = [tmcCourse({ title: "Renamed", exercises: [tmcExercise(1, "part01-01_hello")] })]
+        coursesChanged.fire()
+      },
     ]
 
     for (const change of changes) {
@@ -555,8 +592,34 @@ suite("CoursesTree", function () {
     expect(refreshed).toEqual([undefined, undefined, undefined, undefined])
   })
 
+  // VS Code forgets every row while it redraws, so a row action clicked then runs on nothing.
+  test("does not redraw when a change leaves every row as it was", function () {
+    show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))
+    const refreshed: unknown[] = []
+    tree.onDidChangeTreeData((node) => refreshed.push(node))
+
+    exercisesChanged.fire()
+    coursesChanged.fire()
+    settle()
+
+    expect(refreshed).toEqual([])
+  })
+
+  test("does not redraw the rows VS Code has already fetched", function () {
+    courses = [tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] })]
+    tree.setLoggedIn(true)
+    const refreshed: unknown[] = []
+    tree.onDidChangeTreeData((node) => refreshed.push(node))
+
+    tree.setSource(source())
+    tree.getChildren()
+    settle()
+
+    expect(refreshed).toEqual([])
+  })
+
   test("renders a burst of changes once", function () {
-    show(tmcCourse())
+    show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))
     const refreshed: unknown[] = []
     tree.onDidChangeTreeData((node) => refreshed.push(node))
 
@@ -592,6 +655,26 @@ suite("CoursesTree", function () {
     view.visible = true
     visibilityChanged.fire(undefined)
     expect(refreshed).toEqual([undefined])
+  })
+
+  test("a view VS Code fetched afresh on showing is not drawn again", function () {
+    const visibilityChanged = new vscode.EventEmitter<unknown>()
+    view.onDidChangeVisibility = visibilityChanged.event
+    tree.dispose()
+    tree = new CoursesTree()
+    show(tmcCourse())
+    const refreshed: unknown[] = []
+    tree.onDidChangeTreeData((node) => refreshed.push(node))
+    view.visible = false
+
+    courses = [tmcCourse({ newExercises: [7] })]
+    coursesChanged.fire()
+    settle()
+    view.visible = true
+    tree.getChildren()
+    visibilityChanged.fire(undefined)
+
+    expect(refreshed).toEqual([])
   })
 
   suite("revealing the active exercise", function () {

@@ -13,13 +13,19 @@ export async function submitExercise(
   actionContext: ReadyActionContext,
   resource: vscode.Uri | undefined,
 ): Promise<Result<Warned, Error>> {
-  return runForExercise(actionContext, resource, "Submitting the exercise", async (exercise) => {
-    const result = await actions.submitExercise(actionContext, exercise)
-    if (result.err && result.val instanceof OutOfTriesError) {
-      // A final score, not a failure.
-      void actionContext.dialog.notification(result.val.message)
-      return Ok({ warnings: [] })
-    }
-    return result.err ? failure("Exercise submission failed.", result.val) : result
-  })
+  return runForExercise(
+    actionContext,
+    resource,
+    "Submitting the exercise",
+    async (exercise) => {
+      const result = await actions.submitExercise(actionContext, exercise)
+      if (result.err && result.val instanceof OutOfTriesError) {
+        // A final score, not a failure.
+        void actionContext.dialog.notification(result.val.message)
+        return Ok({ warnings: [] })
+      }
+      return result.err ? failure("Exercise submission failed.", result.val) : result
+    },
+    { trustedCommand: "tmc.submitExercise" },
+  )
 }

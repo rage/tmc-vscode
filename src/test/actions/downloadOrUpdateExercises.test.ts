@@ -147,7 +147,7 @@ suite("downloadOrUpdateExercises action", function () {
     ])
   })
 
-  test("says a failed update failed to update, and where to retry it", async function () {
+  test("says a failed update failed to update", async function () {
     tmcMockValues.downloadTmcExercises = Err(new Error("boom"))
 
     const result = await downloadOrUpdateExercises(
@@ -157,9 +157,34 @@ suite("downloadOrUpdateExercises action", function () {
       { isUpdate: true },
     )
 
-    expect(result.unwrap().warnings[0]?.headline).toBe(
-      "Failed to update the exercise hello_world. Retry from the Courses view.",
+    expect(result.unwrap().warnings[0]?.headline).toBe("Failed to update the exercise hello_world.")
+  })
+
+  test("leaves an automatic update's failed exercises to its caller, with their cause", async function () {
+    const error = new Error("boom")
+    tmcMockValues.downloadTmcExercises = Err(error)
+
+    const result = await downloadOrUpdateExercises(
+      actionContext(),
+      [idOfTmcExercise(1)],
+      TEST_COURSE_ID,
+      { isUpdate: true, isUnrequested: true },
     )
+
+    expect(result.unwrap()).toMatchObject({ warnings: [], failureCause: error })
+  })
+
+  test("says in plain words that an exercise package is broken, and logs tmc-langs' reason", async function () {
+    const reason = "No project directory found in archive"
+    tmcMockValues.downloadTmcExercises = createDownloadResult([], [], [[helloWorld, [reason]]])
+
+    const result = await downloadResults(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
+
+    const [warning] = result.warnings
+    expect(errors.presentationFor(warning?.error ?? new Error()).message).toBe(
+      "The exercise on the server is not a valid exercise package; the course staff need to fix it.",
+    )
+    expect(warning?.error).toMatchObject({ details: reason })
   })
 
   test("should not call TMC-langs if no exercises are given", async function () {
@@ -202,7 +227,10 @@ suite("downloadOrUpdateExercises action", function () {
     expect(result.warnings).toEqual([
       {
         headline: "Failed to download 2 exercises: hello_world, other_world.",
-        error: expect.objectContaining({ message: "checksum mismatch" }),
+        error: expect.objectContaining({
+          message: "Show Logs has the details.",
+          details: "checksum mismatch",
+        }),
       },
     ])
   })

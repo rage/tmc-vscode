@@ -9,6 +9,7 @@ import {
   SOFT_DEADLINE_PENALTY,
 } from "../../../shared/lib"
 import type WorkspaceManager from "../../api/workspaceManager"
+import { TRUST_COURSE_WORKSPACE_COMMAND } from "../../errors"
 import { countOf, formatDeadline } from "../../utilities"
 import { downloadFailures } from "../downloadFailures"
 import { exerciseOperations } from "../exerciseOperations"
@@ -45,8 +46,22 @@ interface RenderContext {
   activeCourse: { slug: string; backend: BackendKind } | undefined
 }
 
-/** Any row of the Courses view; the view's commands receive these. */
+/** A course, part or exercise row of the Courses view; the view's row commands receive these. */
 export type CoursesTreeItem = CourseTreeItem | PartTreeItem | ExerciseTreeItem
+
+/** Any row of the Courses view. */
+export type CoursesViewRow = CoursesTreeItem | TrustCourseWorkspaceTreeItem
+
+/** The Courses view's first row while its course workspace is in Restricted Mode. */
+export class TrustCourseWorkspaceTreeItem extends vscode.TreeItem {
+  public constructor() {
+    super("Trust Course Workspace", vscode.TreeItemCollapsibleState.None)
+    this.id = "trustCourseWorkspace"
+    this.description = "to run tests and submit"
+    this.iconPath = new vscode.ThemeIcon("workspace-untrusted")
+    this.command = { command: TRUST_COURSE_WORKSPACE_COMMAND, title: "Trust Course Workspace" }
+  }
+}
 
 /**
  * One of the user's courses in the Courses view.
@@ -321,20 +336,23 @@ interface CourseView {
  * the exercises on disk stay usable; with none, package.json's `viewsWelcome` explains the
  * empty, logged-out and failed states.
  */
-export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeItem> {
+export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewRow> {
   private readonly _changed = new vscode.EventEmitter<undefined>()
   public readonly onDidChangeTreeData = this._changed.event
-  private readonly _view: vscode.TreeView<CoursesTreeItem>
+  private readonly _view: vscode.TreeView<CoursesViewRow>
   private readonly _disposables: vscode.Disposable[]
   private _source: CoursesTreeSource | undefined
   private _sourceSubscriptions: vscode.Disposable[] = []
   private _isLoggedIn = false
+  private _isRestricted = false
   private readonly _unreachableBackends = new Set<BackendKind>()
   private _views: CourseView[] | undefined
   private _roots: CourseTreeItem[] | undefined
   private _pendingRender: ReturnType<typeof setTimeout> | undefined
   /** A render happened while the view was hidden, so VS Code still shows the one before. */
   private _isShownStale = false
+  /** {@link drawnRows} of the rows VS Code last fetched or was last told to draw. */
+  private _drawnRows: string | undefined
   private _isDisposed = false
 
   public constructor() {
@@ -383,6 +401,14 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
     }
   }
 
+  /** Records whether this window is a course workspace in Restricted Mode. */
+  public setRestricted(isRestricted: boolean): void {
+    if (isRestricted !== this._isRestricted) {
+      this._isRestricted = isRestricted
+      this.refresh()
+    }
+  }
+
   /** Records whether `backend` answered the last course refresh. */
   public setBackendReachable(backend: BackendKind, isReachable: boolean): void {
     const wasUnreachable = this._unreachableBackends.has(backend)
@@ -427,18 +453,22 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
     this._view.badge =
       counts.length > 0 ? { value: newCount + updateCount, tooltip: counts.join(", ") } : undefined
     const unreachable = [...this._unreachableBackends].map((backend) => backendName(backend))
-    // An empty message hides it; the typings do not admit `undefined`.
+    const restricted = this._isRestricted
+      ? "This course workspace is in Restricted Mode: trust it to run tests, submit and share" +
+        " exercises."
+      : undefined
+    let status: string | undefined
     if (views.length === 0) {
-      this._view.message = ""
+      // Nothing to say about courses there are none of.
     } else if (!this._isLoggedIn) {
-      this._view.message = `Log in to ${backendName("mooc")} to download and submit exercises. The exercises on this computer still open and run their tests.`
+      status = `Log in to ${backendName("mooc")} to download and submit exercises. The exercises on this computer still open and run their tests.`
     } else if (unreachable.length > 0) {
-      this._view.message = `${unreachable.join(" and ")} could not be reached. Showing the exercises saved on this computer; deadlines may be out of date.`
-    } else {
-      this._view.message = ""
+      status = `${unreachable.join(" and ")} could not be reached. Showing the exercises saved on this computer; deadlines may be out of date.`
     }
+    // An empty message hides it; the typings do not admit `undefined`.
+    this._view.message = [restricted, status].filter((x) => x !== undefined).join(" ")
     if (this._view.visible) {
-      this._changed.fire(undefined)
+      this._redrawIfChanged()
     } else {
       this._isShownStale = true
     }
@@ -447,30 +477,48 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesTreeI
   private _onDidChangeVisibility(): void {
     if (this._view.visible && this._isShownStale) {
       this._isShownStale = false
-      this._changed.fire(undefined)
+      this._redrawIfChanged()
     }
     void this.revealActiveExercise()
   }
 
-  public getChildren(element?: CoursesTreeItem): CoursesTreeItem[] {
-    if (!element) {
-      return this._currentRoots()
+  /**
+   * Asks VS Code to redraw only rows it has not drawn: it forgets every row while it redraws,
+   * and a row action clicked meanwhile runs without its row.
+   */
+  private _redrawIfChanged(): void {
+    const rows = drawnRows(this._currentRoots(), this._isRestricted)
+    if (rows !== this._drawnRows) {
+      this._drawnRows = rows
+      this._changed.fire(undefined)
     }
-    return element instanceof ExerciseTreeItem ? [] : element.children
   }
 
-  public getTreeItem(element: CoursesTreeItem): CoursesTreeItem {
+  public getChildren(element?: CoursesViewRow): CoursesViewRow[] {
+    if (!element) {
+      const roots = this._currentRoots()
+      this._drawnRows = drawnRows(roots, this._isRestricted)
+      return this._isRestricted ? [new TrustCourseWorkspaceTreeItem(), ...roots] : roots
+    }
+    return element instanceof ExerciseTreeItem || element instanceof TrustCourseWorkspaceTreeItem
+      ? []
+      : element.children
+  }
+
+  public getTreeItem(element: CoursesViewRow): CoursesViewRow {
     return element
   }
 
   /** Builds a row's hover only when it is hovered. */
-  public resolveTreeItem(_item: vscode.TreeItem, element: CoursesTreeItem): CoursesTreeItem {
-    element.tooltip ??= element.buildTooltip()
+  public resolveTreeItem(_item: vscode.TreeItem, element: CoursesViewRow): CoursesViewRow {
+    if (!(element instanceof TrustCourseWorkspaceTreeItem)) {
+      element.tooltip ??= element.buildTooltip()
+    }
     return element
   }
 
-  public getParent(element: CoursesTreeItem): CoursesTreeItem | undefined {
-    return element.parent
+  public getParent(element: CoursesViewRow): CoursesTreeItem | undefined {
+    return element instanceof TrustCourseWorkspaceTreeItem ? undefined : element.parent
   }
 
   /**
@@ -578,6 +626,27 @@ function downloadStatusOf(id: ExerciseIdentifier): "downloading" | "downloadFail
     return "downloading"
   }
   return downloadFailures.has(id) ? "downloadFailed" : undefined
+}
+
+/**
+ * Everything VS Code draws of `items` and the rows under them, and what their actions act on,
+ * below the trust row while `isRestricted`.
+ */
+function drawnRows(items: readonly CoursesTreeItem[], isRestricted: boolean): string {
+  const drawn = (item: CoursesTreeItem): unknown => [
+    item.id,
+    item.label,
+    item.description,
+    item.contextValue,
+    item.collapsibleState,
+    item.iconPath,
+    item.accessibilityInformation,
+    item.buildTooltip().value,
+    item instanceof ExerciseTreeItem
+      ? item.exerciseUri?.fsPath
+      : item.children.map((child) => drawn(child)),
+  ]
+  return JSON.stringify([isRestricted, items.map((item) => drawn(item))])
 }
 
 /** Every exercise under `item`, in view order. */

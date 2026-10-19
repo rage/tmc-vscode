@@ -7,13 +7,16 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { BackendKind } from "../../../shared/lib"
+import { CourseWorkspaceSwitches } from "../../api/courseWorkspaceSwitches"
 import {
   EXERCISE_CHECK_INTERVAL,
   EXTENSION_VERSION,
   FOCUS_REFRESH_INTERVAL,
+  workspaceFileName,
 } from "../../config/constants"
 import { CorruptStoredDataError } from "../../errors"
 import { activate } from "../../extension"
+import { COURSES_VIEW_ID } from "../../ui/treeview/treeview"
 import { Logger, LogLevel } from "../../utilities"
 import { createMockMemento } from "../mocks/vscode"
 
@@ -66,9 +69,12 @@ const sessionState = vi.hoisted(() => ({ previousVersion: undefined as string | 
 
 const storedMigration = vi.hoisted(() => ({ outcome: { kind: "done" } as unknown }))
 
-const courseRefresh = vi.hoisted(() => ({ runs: 0 }))
+const courseRefresh = vi.hoisted(() => ({ runs: 0, options: [] as unknown[] }))
 
 const registration = vi.hoisted(() => ({ dispose: (): void => {} }))
+
+/** The course titles activation asked the student to trust a course workspace for. */
+const trustPrompts = vi.hoisted(() => [] as string[])
 
 /** When set, `ensureLangsUpdated` fails with it. */
 const langsDownload = vi.hoisted(() => ({ failure: undefined as Error | undefined }))
@@ -125,6 +131,7 @@ vi.mock("../../ui/treeview/treeview", async (importOriginal) => ({
     public setLoggedIn = (loggedIn: boolean): void => {
       recorded.treeLoggedIn.push(loggedIn)
     }
+    public setRestricted = (): void => {}
     public refresh = (): void => {}
     public dispose = (): void => {
       recorded.uiDisposals += 1
@@ -196,6 +203,23 @@ vi.mock("../../storage", () => ({
   },
 }))
 
+// It watches editors, chat and extensions through APIs jest-mock-vscode lacks.
+vi.mock("../../api/aiRestriction", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  default: class {
+    public onDidRefuseWorkspaceFile = (): unknown => registration
+    public apply = async (): Promise<void> => {}
+    public dispose = (): void => {}
+  },
+}))
+
+vi.mock("../../api/workspaceTrustPrompt", () => ({
+  promptForCourseWorkspaceTrust: async (courseTitle: string): Promise<void> => {
+    trustPrompts.push(courseTitle)
+  },
+  requestWorkspaceTrust: async (): Promise<void> => {},
+}))
+
 vi.mock("../../init/ensureLangsUpdated", () => ({
   ensureLangsUpdated: async (): Promise<unknown> => {
     recorded.commandsRegisteredBeforeCliDownload = [...recorded.registeredCommandIds]
@@ -221,8 +245,9 @@ vi.mock("../../actions", () => ({
 
 // Only `refreshEverything` (the activation background refresh) actually runs.
 vi.mock("../../commands", () => ({
-  refreshEverything: async (): Promise<unknown> => {
+  refreshEverything: async (_context: unknown, options: unknown): Promise<unknown> => {
     courseRefresh.runs += 1
+    courseRefresh.options.push(options)
     return Ok.EMPTY
   },
   refreshCourses: async (): Promise<void> => {},
@@ -230,6 +255,7 @@ vi.mock("../../commands", () => ({
   changeTmcDataPath: async (): Promise<void> => {},
   cleanExercise: async (): Promise<void> => {},
   closeExercise: async (): Promise<void> => {},
+  createCourseWorkspaceOffer: () => (): void => {},
   downloadNewExercises: async (): Promise<void> => {},
   downloadOldSubmission: async (): Promise<void> => {},
   logout: async (): Promise<void> => {},
@@ -266,6 +292,7 @@ function createContext(): vscode.ExtensionContext {
     globalStorageUri: vscode.Uri.file(globalStorage),
     globalStoragePath: globalStorage,
     globalState: createMockMemento(),
+    workspaceState: createMockMemento(),
     asAbsolutePath: (relative: string) => path.join(globalStorage, relative),
   } as unknown as vscode.ExtensionContext
   activatedContexts.push(context)
@@ -295,6 +322,7 @@ function resetActivationRecording(): void {
   storedUserData.read = (): unknown => undefined
   storedMigration.outcome = { kind: "done" }
   courseRefresh.runs = 0
+  courseRefresh.options.length = 0
   sessionState.previousVersion = undefined
   langsStub.authenticated = false
   langsStub.authChecks = 0
@@ -539,6 +567,72 @@ suite("activation with usable storage", function () {
   })
 })
 
+/** Opens the window on the course workspace of a mooc course `a-course`. */
+function openCourseWorkspace(context: vscode.ExtensionContext): void {
+  const workspaceFile = path.join(
+    context.globalStorageUri.fsPath,
+    "workspaces",
+    workspaceFileName("a-course", "mooc"),
+  )
+  Object.defineProperty(vscode.workspace, "workspaceFile", {
+    value: vscode.Uri.file(workspaceFile),
+    configurable: true,
+  })
+}
+
+suite("activation in a course workspace", function () {
+  let isTrusted: boolean
+
+  beforeEach(function () {
+    resetActivationRecording()
+    trustPrompts.length = 0
+    isTrusted = false
+    Object.defineProperty(vscode.workspace, "isTrusted", {
+      get: () => isTrusted,
+      configurable: true,
+    })
+  })
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    Object.defineProperty(vscode.workspace, "isTrusted", {
+      value: true,
+      configurable: true,
+      writable: true,
+    })
+    Object.defineProperty(vscode.workspace, "workspaceFile", {
+      value: undefined,
+      configurable: true,
+    })
+    vi.restoreAllMocks()
+  })
+
+  test("asks to trust it while it is untrusted", async function () {
+    const context = createContext()
+    openCourseWorkspace(context)
+
+    await activate(context)
+
+    expect(trustPrompts).toEqual(["a-course"])
+  })
+
+  test("asks nothing once it is trusted", async function () {
+    isTrusted = true
+    const context = createContext()
+    openCourseWorkspace(context)
+
+    await activate(context)
+
+    expect(trustPrompts).toEqual([])
+  })
+
+  test("asks nothing outside a course workspace", async function () {
+    await activate(createContext())
+
+    expect(trustPrompts).toEqual([])
+  })
+})
+
 // The only failure reachable here that leaves the resources and the stored data intact.
 suite("activation without the CLI", function () {
   beforeEach(function () {
@@ -653,6 +747,66 @@ suite("the startup course refresh", function () {
 
     await vi.waitFor(() => expect(courseRefresh.runs).toBe(2))
   })
+
+  test("offers nothing in a window another one has just switched to", async function () {
+    const context = createContext()
+    const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
+    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo)
+    Object.defineProperty(vscode.workspace, "workspaceFile", {
+      value: vscode.Uri.file(switchedTo),
+      configurable: true,
+    })
+    try {
+      await activate(context)
+    } finally {
+      Object.defineProperty(vscode.workspace, "workspaceFile", {
+        value: undefined,
+        configurable: true,
+      })
+    }
+
+    await vi.waitFor(() =>
+      expect(courseRefresh.options).toEqual([{ silent: true, isPromptless: true }]),
+    )
+  })
+})
+
+suite("the Courses view on startup", function () {
+  beforeEach(resetActivationRecording)
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    vi.restoreAllMocks()
+  })
+
+  test("shows in a window a course workspace switch opened", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const context = createContext()
+    const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
+    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo)
+    Object.defineProperty(vscode.workspace, "workspaceFile", {
+      value: vscode.Uri.file(switchedTo),
+      configurable: true,
+    })
+    try {
+      await activate(context)
+    } finally {
+      Object.defineProperty(vscode.workspace, "workspaceFile", {
+        value: undefined,
+        configurable: true,
+      })
+    }
+
+    expect(executeCommand).toHaveBeenCalledWith(`${COURSES_VIEW_ID}.focus`)
+  })
+
+  test("is left to VS Code in any other window", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await activate(createContext())
+
+    expect(executeCommand).not.toHaveBeenCalledWith(`${COURSES_VIEW_ID}.focus`)
+  })
 })
 
 suite("the refresh on regaining focus", function () {
@@ -669,7 +823,8 @@ suite("the refresh on regaining focus", function () {
     vi.restoreAllMocks()
   })
 
-  const focus = (): void => recorded.windowStateListeners.at(-1)?.({ focused: true })
+  const focus = (): void =>
+    recorded.windowStateListeners.forEach((listener) => listener({ focused: true }))
 
   test("refreshes once a while has passed since the last refresh, and not sooner", async function () {
     await activate(createContext())
@@ -844,12 +999,16 @@ suite("status bar", function () {
     vi.restoreAllMocks()
   })
 
-  test("a ready activation shows the account and exercise items", async function () {
+  test("a ready activation creates the account, exercise and failed-update items", async function () {
     vi.mocked(vscode.window.createStatusBarItem).mockClear()
 
     await activate(createContext())
 
-    expect(createdStatusBarItemIds()).toEqual(["tmc.account", "tmc.activeExercise"])
+    expect(createdStatusBarItemIds()).toEqual([
+      "tmc.account",
+      "tmc.activeExercise",
+      "tmc.failedUpdates",
+    ])
     expect(recorded.contextKeys.get("test-my-code:HasCourses")).toBe(false)
   })
 

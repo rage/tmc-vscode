@@ -4,7 +4,8 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { backendName } from "../shared/lib"
+import type { CourseIdentifier } from "../shared/lib"
+import { backendName, LocalCourseData } from "../shared/lib"
 import { onDidFinishSubmission, refreshLocalExercises, scanLocalExercises } from "./actions"
 import type {
   ActionContext,
@@ -17,6 +18,7 @@ import { isReady } from "./actions/types"
 import AiRestriction, { isActiveCourseAiAllowed } from "./api/aiRestriction"
 import { AiUseGate, warnOfUnwritableWorkspaceFile } from "./api/aiUseGate"
 import { createAuthState } from "./api/authState"
+import { CourseWorkspaceSwitches } from "./api/courseWorkspaceSwitches"
 import type { NotificationButton } from "./api/dialog"
 import Dialog from "./api/dialog"
 import ExerciseDecorationProvider from "./api/exerciseDecorationProvider"
@@ -29,7 +31,9 @@ import WorkspaceManager, {
   ensureCourseWorkspaceFile,
   ensureWorkspaceRootFile,
 } from "./api/workspaceManager"
-import { login, logout, refreshEverything } from "./commands"
+import { WorkspaceTrustGate } from "./api/workspaceTrustGate"
+import { promptForCourseWorkspaceTrust } from "./api/workspaceTrustPrompt"
+import { createCourseWorkspaceOffer, login, logout, refreshEverything } from "./commands"
 import {
   CLIENT_NAME,
   closedExercisesSettingKey,
@@ -51,6 +55,7 @@ import {
   SESSION_ENDED_MESSAGE,
 } from "./errors"
 import * as init from "./init"
+import { OpenCourseRefresh } from "./openCourseRefresh"
 import { TmcPanel } from "./panels/TmcPanel"
 import { createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
@@ -60,10 +65,13 @@ import {
   trackHasDownloadedExercises,
 } from "./ui/contextKeys"
 import { exerciseOperations } from "./ui/exerciseOperations"
+import { failedUpdates } from "./ui/failedUpdates"
 import { AccountStatusBarItem } from "./ui/statusBarAccount"
 import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
+import { FailedUpdatesStatusBarItem } from "./ui/statusBarFailedUpdates"
 import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
+import { showNextWalkthroughStep } from "./window/walkthrough"
 
 interface InitializationErrorReporter {
   /** Logs a failed step; the user hears about it from {@link notify}. */
@@ -167,11 +175,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 /** When the last unprompted refresh started, in epoch milliseconds. */
 let lastBackgroundRefreshAt = 0
 
-function refreshInBackground(ready: ReadyActionContext): void {
+function refreshInBackground(
+  ready: ReadyActionContext,
+  openCourseRefresh: OpenCourseRefresh | undefined,
+  isPromptless = false,
+): void {
   lastBackgroundRefreshAt = Date.now()
-  void refreshEverything(ready, { silent: true }).catch((e) =>
+  openCourseRefresh?.noteRefreshed()
+  void refreshEverything(ready, { silent: true, isPromptless }).catch((e) =>
     Logger.error("Background refresh failed", e),
   )
+}
+
+/** The course of the course workspace the window has open, if it is one of the stored courses. */
+function openCourseId({ startup }: ReadyActionContext): CourseIdentifier | undefined {
+  const { activeCourse, activeCourseBackend } = startup.workspaceManager
+  if (activeCourse === undefined || activeCourseBackend === undefined) {
+    return undefined
+  }
+  const course = startup.userData.getCourseBySlug(activeCourseBackend, activeCourse)
+  return course.ok ? LocalCourseData.getCourseId(course.val) : undefined
 }
 
 async function activateInner(
@@ -406,13 +429,22 @@ async function activateInner(
       ? new ExerciseDecorationProvider(userData.val, workspaceManager)
       : undefined
 
+  const courseWorkspaceSwitches = new CourseWorkspaceSwitches(context.globalState)
+  // The window that switched here has just offered whatever the startup refresh would.
+  const isOpenedBySwitch = await courseWorkspaceSwitches.take(
+    vscode.workspace.workspaceFile?.fsPath,
+  )
+  const trustGate = new WorkspaceTrustGate()
+  context.subscriptions.push(trustGate)
   const startup: Startup =
     langs.ok && resources.ok && workspaceManager && userData?.ok && exerciseDecorationProvider
       ? {
           kind: "ready",
           aiUseGate: new AiUseGate(aiRestriction),
+          courseWorkspaceSwitches,
           langs: langs.val,
           resources: resources.val,
+          trustGate,
           workspaceManager,
           userData: userData.val,
           exerciseDecorationProvider,
@@ -429,8 +461,24 @@ async function activateInner(
     if (refreshResult.err) {
       Logger.warn("Failed to set initial exercises.", refreshResult.val)
     }
-    // A failed activation leaves the view empty, and its `viewsWelcome` offers the way out.
     const { startup: ready } = readyContext
+    const { activeCourse, activeCourseBackend } = ready.workspaceManager
+    const isRestrictedCourseWorkspace = !vscode.workspace.isTrusted && activeCourse !== undefined
+    coursesTree.setRestricted(isRestrictedCourseWorkspace)
+    if (isRestrictedCourseWorkspace && activeCourseBackend !== undefined) {
+      const course = ready.userData.getCourseBySlug(activeCourseBackend, activeCourse)
+      void promptForCourseWorkspaceTrust(
+        course.ok ? LocalCourseData.getCourseTitle(course.val) : activeCourse,
+        context.workspaceState,
+      )
+    }
+    context.subscriptions.push(
+      vscode.workspace.onDidGrantWorkspaceTrust(() => coursesTree.setRestricted(false)),
+      ready.workspaceManager.onDidOpenOutsideCourseWorkspace(
+        createCourseWorkspaceOffer(readyContext),
+      ),
+    )
+    // A failed activation leaves the view empty, and its `viewsWelcome` offers the way out.
     coursesTree.setSource({
       getCourses: () => ready.userData.getCourses(),
       onDidChangeCourses: ready.userData.onDidChangeCourses,
@@ -469,6 +517,7 @@ async function activateInner(
         userData: readyContext.startup.userData,
         operations: exerciseOperations,
       }),
+      new FailedUpdatesStatusBarItem(failedUpdates),
       trackHasCourses(readyContext.startup.userData),
       trackHasDownloadedExercises(readyContext.startup.workspaceManager),
       // Point totals come from the backend, so without this the Courses view and Course
@@ -505,8 +554,10 @@ async function activateInner(
     )
   }
 
+  // Created further down, once the listeners it must follow are registered.
+  let openCourseRefresh: OpenCourseRefresh | undefined
   if (readyContext && authState.loggedIn) {
-    refreshInBackground(readyContext)
+    refreshInBackground(readyContext, openCourseRefresh, isOpenedBySwitch)
   }
 
   async function runMaintenancePoll(): Promise<void> {
@@ -518,7 +569,7 @@ async function activateInner(
       // Proactively catches a session dropping between polls, not just on a failed command.
       sessionExpiry.onAuthChecked(authState.loggedIn)
       if (readyContext && authState.loggedIn) {
-        refreshInBackground(readyContext)
+        refreshInBackground(readyContext, openCourseRefresh)
       }
     } catch (e) {
       Logger.error("Maintenance check failed", e)
@@ -537,10 +588,37 @@ async function activateInner(
         authState.loggedIn &&
         Date.now() - lastBackgroundRefreshAt >= FOCUS_REFRESH_INTERVAL
       ) {
-        refreshInBackground(readyContext)
+        refreshInBackground(readyContext, openCourseRefresh)
       }
     }),
   )
+
+  // Created after the listener above, so that a full refresh due on the same focus runs first and
+  // stands in for this one.
+  if (readyContext) {
+    openCourseRefresh = new OpenCourseRefresh({
+      openCourse: () => (authState.loggedIn ? openCourseId(readyContext) : undefined),
+      refresh: (courseId) =>
+        void refreshEverything(readyContext, { silent: true, courseId }).catch((e) =>
+          Logger.error("Open course refresh failed", e),
+        ),
+    })
+    context.subscriptions.push(openCourseRefresh)
+  }
+
+  if (readyContext && isOpenedBySwitch) {
+    const { startup: ready } = readyContext
+    // Outside a window reload, a released VS Code opens the Explorer in place of the extension
+    // view a workspace last showed in its sidebar.
+    void Promise.resolve(vscode.commands.executeCommand(`${COURSES_VIEW_ID}.focus`)).catch((e) =>
+      Logger.warn("Could not show the Courses view", e),
+    )
+    void showNextWalkthroughStep({
+      isLoggedIn: authState.loggedIn,
+      hasCourses: ready.userData.getCourses().length > 0,
+      hasDownloadedExercises: ready.workspaceManager.getExercises().length > 0,
+    }).catch((e) => Logger.warn("Could not show the next walkthrough step", e))
+  }
 
   // `tmc.showWelcome` is registered only in the ready case, and VS Code rejects a command
   // it cannot find -- which would abort the rest of this function.

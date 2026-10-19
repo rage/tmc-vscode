@@ -30,6 +30,7 @@ export async function pasteExercise(
         result.val,
       )
     },
+    { trustedCommand: "tmc.pasteExercise" },
   )
   if (pasteResult.err) {
     return

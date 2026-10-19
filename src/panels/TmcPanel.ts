@@ -192,6 +192,8 @@ export class TmcPanel {
         webviewPanel.dispose()
       },
     })
+    // VS Code asks the serializer only once a restored tab is shown, so a background one stays.
+    void closeSidePanelTabs()
     return Disposable.from(main, side)
   }
 
@@ -393,6 +395,26 @@ function webviewOptions(extensionUri: Uri): WebviewOptions {
   return {
     enableScripts: true,
     localResourceRoots: [Uri.joinPath(extensionUri, "webview-ui/public/build")],
+  }
+}
+
+/** Closes every side panel tab, which at activation can only be one restored from before. */
+async function closeSidePanelTabs(): Promise<void> {
+  const tabs = window.tabGroups.all.flatMap((group) =>
+    group.tabs.filter((tab) => {
+      const viewType = (tab.input as { viewType?: unknown } | undefined)?.viewType
+      // VS Code prefixes the type a webview was created with, e.g. "mainThreadWebview-".
+      return typeof viewType === "string" && viewType.endsWith(SIDE_PANEL_VIEW_TYPE)
+    }),
+  )
+  if (tabs.length === 0) {
+    return
+  }
+  Logger.info(`Closing ${tabs.length} restored side panel tab(s), whose submission is gone`)
+  try {
+    await window.tabGroups.close(tabs)
+  } catch (error) {
+    Logger.warn("Could not close a restored side panel tab", error)
   }
 }
 

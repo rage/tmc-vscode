@@ -4,19 +4,10 @@ import * as vscode from "vscode"
 import Settings from "../../config/settings"
 import { Logger, LogLevel } from "../../utilities/logger"
 
-/** One VS Code setting as the three scopes `WorkspaceConfiguration.inspect` reports. */
-interface Scoped {
-  defaultValue?: boolean | string
-  globalValue?: boolean | string
-  workspaceValue?: boolean | string
-}
-
-/** Stubs the `testMyCode` configuration; `get` answers the user scope, as VS Code does. */
-function stubConfiguration(sections: Record<string, Scoped>): void {
+/** Stubs the `testMyCode` configuration with the effective values VS Code would answer. */
+function stubConfiguration(effective: Record<string, unknown>): void {
   vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
-    get: (section: string, fallback?: unknown) =>
-      sections[section]?.globalValue ?? sections[section]?.defaultValue ?? fallback,
-    inspect: (section: string) => sections[section],
+    get: (section: string, fallback?: unknown) => effective[section] ?? fallback,
   } as unknown as vscode.WorkspaceConfiguration)
 }
 
@@ -31,19 +22,11 @@ suite("Settings", function () {
 
   beforeEach(function () {
     stubConfiguration({
-      logLevel: { defaultValue: LogLevel.Errors, globalValue: LogLevel.Verbose },
-      hideMetaFiles: { defaultValue: true, globalValue: true, workspaceValue: false },
-      downloadOldSubmission: { defaultValue: false, globalValue: false, workspaceValue: true },
-      updateExercisesAutomatically: {
-        defaultValue: true,
-        globalValue: true,
-        workspaceValue: false,
-      },
-      javaHome: {
-        defaultValue: "",
-        globalValue: "/user/java",
-        workspaceValue: "/usr/lib/jvm/java-21",
-      },
+      logLevel: LogLevel.Verbose,
+      hideMetaFiles: false,
+      downloadOldSubmission: false,
+      updateExercisesAutomatically: false,
+      javaHome: " /usr/lib/jvm/java-21 ",
     })
     settings = new Settings()
     changed = vi.mocked(vscode.workspace.onDidChangeConfiguration).mock.calls.at(-1)?.[0] as never
@@ -61,75 +44,19 @@ suite("Settings", function () {
     expect(configure).toHaveBeenCalledWith(LogLevel.Verbose)
   })
 
-  test("each mirrored setting notifies the subscriber with its name and new value", async function () {
-    const notified: [string, boolean][] = []
-    settings.onChangeMirroredSetting = (section, value): void =>
-      void notified.push([section, value])
+  test("a meta-file visibility change notifies the subscriber with the new value", async function () {
+    const notified: boolean[] = []
+    settings.onChangeHideMetaFiles = (hide): void => void notified.push(hide)
 
     await changeSection("testMyCode.hideMetaFiles")
-    await changeSection("testMyCode.downloadOldSubmission")
-    await changeSection("testMyCode.updateExercisesAutomatically")
-
-    expect(notified).toEqual([
-      ["hideMetaFiles", false],
-      ["downloadOldSubmission", true],
-      ["updateExercisesAutomatically", false],
-    ])
-  })
-
-  // The workspace file keeps its own copy, which would otherwise shadow the User tab for as
-  // long as the course workspace is open.
-  test("a User-tab edit reaches the subscriber over a stale workspace copy", async function () {
-    const notified: boolean[] = []
-    settings.onChangeMirroredSetting = (_, value): void => void notified.push(value)
-    stubConfiguration({
-      downloadOldSubmission: { defaultValue: false, globalValue: true, workspaceValue: true },
-    })
-    await changeSection("testMyCode.downloadOldSubmission")
-    stubConfiguration({
-      downloadOldSubmission: { defaultValue: false, globalValue: false, workspaceValue: true },
-    })
-    await changeSection("testMyCode.downloadOldSubmission")
-
-    expect(notified).toEqual([true, false])
-  })
-
-  test("a workspace edit leaves the User value alone", async function () {
-    const notified: boolean[] = []
-    settings.onChangeMirroredSetting = (_, value): void => void notified.push(value)
-    stubConfiguration({
-      downloadOldSubmission: { defaultValue: false, globalValue: false, workspaceValue: false },
-    })
-    await changeSection("testMyCode.downloadOldSubmission")
 
     expect(notified).toEqual([false])
-  })
-
-  test("a User edit made before anyone subscribed is not mistaken for a later one", async function () {
-    stubConfiguration({
-      downloadOldSubmission: { defaultValue: false, globalValue: true, workspaceValue: true },
-    })
-    await changeSection("testMyCode.downloadOldSubmission")
-    const notified: boolean[] = []
-    settings.onChangeMirroredSetting = (_, value): void => void notified.push(value)
-    stubConfiguration({
-      downloadOldSubmission: { defaultValue: false, globalValue: true, workspaceValue: false },
-    })
-    await changeSection("testMyCode.downloadOldSubmission")
-
-    expect(notified).toEqual([false])
-  })
-
-  test("a setting the workspace has no copy of reads the User value", function () {
-    stubConfiguration({ updateExercisesAutomatically: { defaultValue: true, globalValue: false } })
-
-    expect(settings.getAutomaticallyUpdateExercises()).toBe(false)
   })
 
   test("a change to an unrelated section notifies nobody", async function () {
     const configure = vi.spyOn(Logger, "configure").mockImplementation(() => {})
-    const notified: string[] = []
-    settings.onChangeMirroredSetting = (section): void => void notified.push(section)
+    const notified: boolean[] = []
+    settings.onChangeHideMetaFiles = (hide): void => void notified.push(hide)
 
     await changeSection("editor.fontSize")
 
@@ -137,33 +64,22 @@ suite("Settings", function () {
     expect(notified).toEqual([])
   })
 
-  test("the workspace scope wins over the user scope for a workspace setting", function () {
-    expect(settings.getDownloadOldSubmission()).toBe(true)
+  test("reads every setting's effective value", function () {
+    expect(settings.getLogLevel()).toBe(LogLevel.Verbose)
+    expect(settings.getHideMetaFiles()).toBe(false)
+    expect(settings.getDownloadOldSubmission()).toBe(false)
     expect(settings.getAutomaticallyUpdateExercises()).toBe(false)
-  })
-
-  // Machine-overridable, unlike the booleans: a JDK path belongs to the machine, and the
-  // course workspace file must not pin one.
-  test("the Java home is the effective value, trimmed", function () {
-    stubConfiguration({ javaHome: { defaultValue: "", globalValue: " /usr/lib/jvm/java-21 " } })
-
     expect(settings.getJavaHome()).toBe("/usr/lib/jvm/java-21")
   })
 
-  test("a setting the workspace does not override falls back to its default", function () {
-    // A multi-root workspace reports no workspace value when it matches the
-    // default, so the default has to stand in rather than read as `false`.
-    stubConfiguration({
-      downloadOldSubmission: { defaultValue: true },
-      updateExercisesAutomatically: { defaultValue: false, workspaceValue: true },
-    })
+  test("falls back to the declared defaults", function () {
+    stubConfiguration({})
 
+    expect(settings.getLogLevel()).toBe(LogLevel.Errors)
+    expect(settings.getHideMetaFiles()).toBe(true)
     expect(settings.getDownloadOldSubmission()).toBe(true)
     expect(settings.getAutomaticallyUpdateExercises()).toBe(true)
-  })
-
-  test("the log level comes from the user scope", function () {
-    expect(settings.getLogLevel()).toBe(LogLevel.Verbose)
+    expect(settings.getJavaHome()).toBe("")
   })
 
   test("disposing stops the configuration listener", function () {

@@ -8,10 +8,11 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { submitExercise } from "../../commands/submitExercise"
-import { OutOfTriesError } from "../../errors"
+import { OutOfTriesError, WorkspaceUntrustedError } from "../../errors"
 import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
+import { restrictedTrustGate } from "../support/trustGate"
 
 vi.mock("../../actions", () => ({
   submitExercise: vi.fn(async () => Ok.EMPTY),
@@ -66,6 +67,20 @@ suite("Submit exercise command", function () {
     )
     expect(context.dialog.reportError).not.toHaveBeenCalled()
     expect(context.dialog.errorNotification).not.toHaveBeenCalled()
+  })
+
+  test("in Restricted Mode submits nothing, and submits once the workspace is trusted", async function () {
+    const context = contextWith(exercise)
+    const { trustGate, retries } = restrictedTrustGate()
+    context.startup.trustGate = trustGate
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    const result = await submitExercise(context, uri)
+
+    expect(result.val).toBeInstanceOf(WorkspaceUntrustedError)
+    expect(actions.submitExercise).not.toHaveBeenCalled()
+    retries.at(-1)?.()
+    expect(executeCommand).toHaveBeenCalledWith("tmc.submitExercise", uri)
   })
 
   test("reports a failed submission under its own headline", async function () {

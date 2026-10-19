@@ -4,10 +4,12 @@ import { vi } from "vitest"
 import type { ActionContext, ReadyActionContext, ReadyStartup } from "../../actions/types"
 import type { AiUseGate } from "../../api/aiUseGate"
 import type { AuthState } from "../../api/authState"
+import type { CourseWorkspaceSwitches } from "../../api/courseWorkspaceSwitches"
 import type Dialog from "../../api/dialog"
 import type ExerciseDecorationProvider from "../../api/exerciseDecorationProvider"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
+import type { WorkspaceTrustGate } from "../../api/workspaceTrustGate"
 import type Resources from "../../config/resources"
 import type Settings from "../../config/settings"
 import type { UserData } from "../../config/userdata"
@@ -62,9 +64,12 @@ export function createMockActionContext(
       kind: "ready",
       // Refuses nothing: `refusal` resolves to `undefined`.
       aiUseGate: autoMock<AiUseGate>(),
+      courseWorkspaceSwitches: autoMock<CourseWorkspaceSwitches>(),
       exerciseDecorationProvider: autoMock<ExerciseDecorationProvider>(),
       langs: autoMock<Langs>(),
       resources: autoMock<Resources>(),
+      // Refuses nothing: `refusal` returns `undefined`.
+      trustGate: autoMock<WorkspaceTrustGate>(),
       userData: autoMock<UserData>(),
       workspaceManager: autoMock<WorkspaceManager>(),
       ...options.startup,
