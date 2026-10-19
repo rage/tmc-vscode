@@ -25,17 +25,23 @@ vsCodeTest(
       .getByRole("button", { name: "Download and Open Course" })
       .click()
 
-    // The window reloads into the course workspace, whose roots are its open exercises.
-    await expect(
-      page.locator(".explorer-folders-view").getByText("passing_exercise", { exact: true }),
-    ).toBeVisible({ timeout: 30_000 })
+    // The window reloads into the course workspace, on the Courses view rather than the Explorer.
+    await expect(page).toHaveTitle(/\(mooc\) \(Workspace\)/, { timeout: 30_000 })
+    await expect(coursesView.row("passing_exercise")).toHaveAccessibleName(/, open,/)
+    await expect(page.locator(".explorer-folders-view")).toBeHidden()
     // The fresh install opened the walkthrough, which the reload restores on the next step. Before
     // 1.137 VS Code shows its own walkthrough in a new workspace instead.
     if (!isBefore1137) {
       await expect(page.locator(".getting-started-step.expanded")).toContainText("Run the tests")
     }
-    await coursesView.goto()
-    await expect(coursesView.row("passing_exercise")).toHaveAccessibleName(/, open,/)
+    // The workspace's roots are its open exercises.
+    await page
+      .locator('[id="workbench\\.parts\\.activitybar"]')
+      .getByRole("tab", { name: /^Explorer/ })
+      .click()
+    await expect(
+      page.locator(".explorer-folders-view").getByText("passing_exercise", { exact: true }),
+    ).toBeVisible()
   },
 )
 

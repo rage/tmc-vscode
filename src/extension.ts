@@ -608,6 +608,11 @@ async function activateInner(
 
   if (readyContext && isOpenedBySwitch) {
     const { startup: ready } = readyContext
+    // Outside a window reload, a released VS Code opens the Explorer in place of the extension
+    // view a workspace last showed in its sidebar.
+    void Promise.resolve(vscode.commands.executeCommand(`${COURSES_VIEW_ID}.focus`)).catch((e) =>
+      Logger.warn("Could not show the Courses view", e),
+    )
     void showNextWalkthroughStep({
       isLoggedIn: authState.loggedIn,
       hasCourses: ready.userData.getCourses().length > 0,

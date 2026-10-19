@@ -16,6 +16,7 @@ import {
 } from "../../config/constants"
 import { CorruptStoredDataError } from "../../errors"
 import { activate } from "../../extension"
+import { COURSES_VIEW_ID } from "../../ui/treeview/treeview"
 import { Logger, LogLevel } from "../../utilities"
 import { createMockMemento } from "../mocks/vscode"
 
@@ -767,6 +768,44 @@ suite("the startup course refresh", function () {
     await vi.waitFor(() =>
       expect(courseRefresh.options).toEqual([{ silent: true, isPromptless: true }]),
     )
+  })
+})
+
+suite("the Courses view on startup", function () {
+  beforeEach(resetActivationRecording)
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    vi.restoreAllMocks()
+  })
+
+  test("shows in a window a course workspace switch opened", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const context = createContext()
+    const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
+    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo)
+    Object.defineProperty(vscode.workspace, "workspaceFile", {
+      value: vscode.Uri.file(switchedTo),
+      configurable: true,
+    })
+    try {
+      await activate(context)
+    } finally {
+      Object.defineProperty(vscode.workspace, "workspaceFile", {
+        value: undefined,
+        configurable: true,
+      })
+    }
+
+    expect(executeCommand).toHaveBeenCalledWith(`${COURSES_VIEW_ID}.focus`)
+  })
+
+  test("is left to VS Code in any other window", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await activate(createContext())
+
+    expect(executeCommand).not.toHaveBeenCalledWith(`${COURSES_VIEW_ID}.focus`)
   })
 })
 

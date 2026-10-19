@@ -5,28 +5,22 @@ export class ExplorerPage {
   public constructor(public readonly page: Page) {}
 
   public async openFile(filename: string): Promise<void> {
-    // first, let's make sure that the target isn't a directory that's already open,
-    // as naively clicking it would close it
-    const isOpenDir = await this.page
-      // selects the file explorer sidebar
-      .locator(".explorer-folders-view")
-      // selects collapsible elements in the sidebar that are not collapsed
-      .locator("div.collapsible:not(.collapsed) + div")
-      // gets an expanded collapsible element with the name we're looking for
-      .getByText(filename)
-      .isVisible()
-    if (isOpenDir) {
-      // if the target is an open directory, we shouldn't click it because that would close it
-      return
-    }
-
-    // otherwise, click it
-    await this.page
-      // selects the file explorer sidebar
-      .locator(".explorer-folders-view")
-      // selects the actual file
-      .getByText(filename)
-      .click()
+    const folders = this.page.locator(".explorer-folders-view")
+    // TestMyCode shows its Courses view once it has started in a window it opened, which may
+    // replace the Explorer between any two steps here.
+    await expect(async () => {
+      await this.show()
+      // A click on an expanded folder would collapse it.
+      if (
+        await folders
+          .locator("div.collapsible:not(.collapsed) + div")
+          .getByText(filename)
+          .isVisible()
+      ) {
+        return
+      }
+      await folders.getByText(filename).click({ timeout: 2000 })
+    }).toPass({ timeout: 30_000 })
   }
 
   public async openPath(path: string[]): Promise<void> {
@@ -46,10 +40,11 @@ export class ExplorerPage {
     // exercises before that.
     await expect(async () => {
       await this.page.keyboard.press("Escape")
+      await this.show()
       await this.page
         .locator(".explorer-folders-view")
         .getByText(filename)
-        .click({ button: "right" })
+        .click({ button: "right", timeout: 2000 })
       await expect(submenu).toBeVisible({ timeout: 2000 })
     }).toPass()
     await submenu.hover()
@@ -62,5 +57,16 @@ export class ExplorerPage {
     await this.page.keyboard.press("Enter")
     // The menu closing is the only signal the item was actually activated.
     await expect(item).toBeHidden()
+  }
+
+  /** Shows the Explorer unless it is up, as a click on its activity bar entry would hide it. */
+  private async show(): Promise<void> {
+    if (await this.page.locator(".explorer-folders-view").isVisible()) {
+      return
+    }
+    await this.page
+      .locator('[id="workbench\\.parts\\.activitybar"]')
+      .getByRole("tab", { name: /^Explorer/ })
+      .click()
   }
 }
