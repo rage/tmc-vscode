@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- The walkthrough ticks off logging in, adding a course and downloading exercises when they were done before it was first shown, such as a login that carried over from an earlier install.
 - The submission result is redesigned: it is titled with the exercise's name and its course, states the result in one banner with the points beside a thin bar, and offers one suggested next step: Run Tests after failing tests, Submit Again after a failed submission, Next after a pass. Showing the submission or the model solution in the browser and asking for help via paste are in its "⋯" menu, and the Close button is gone; the tab and the header still close it.
 - Failing server tests are listed first with their messages, the passed ones behind Show passed tests, and the grader's feedback on a courses.mooc.fi submission is labelled as such.
 - An error with a remedy, such as Log In, offers it as the result's first button.

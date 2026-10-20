@@ -1,7 +1,12 @@
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import { nextWalkthroughStep, showNextWalkthroughStep, WALKTHROUGH } from "../../window/walkthrough"
+import {
+  nextWalkthroughStep,
+  showNextWalkthroughStep,
+  trackWalkthroughActive,
+  WALKTHROUGH,
+} from "../../window/walkthrough"
 
 function activeTab(tab: { label: string; input: unknown } | undefined): void {
   Object.defineProperty(vscode.window, "tabGroups", {
@@ -52,5 +57,25 @@ suite("walkthrough", function () {
     await showNextWalkthroughStep(done)
 
     expect(executeCommand).not.toHaveBeenCalled()
+  })
+
+  test("says whether the walkthrough is the active tab, as the tabs change", function () {
+    const tabsChanged = new vscode.EventEmitter<unknown>()
+    const tabGroups = {
+      activeTabGroup: { activeTab: { label: "main.py", input: {} } as unknown },
+      onDidChangeTabs: tabsChanged.event,
+      onDidChangeTabGroups: new vscode.EventEmitter<unknown>().event,
+    }
+    Object.defineProperty(vscode.window, "tabGroups", { value: tabGroups, configurable: true })
+
+    const tracking = trackWalkthroughActive()
+    tabGroups.activeTabGroup.activeTab = { label: "Welcome", input: undefined }
+    tabsChanged.fire(undefined)
+    tracking.dispose()
+
+    expect(executeCommand.mock.calls).toEqual([
+      ["setContext", "test-my-code:WalkthroughActive", false],
+      ["setContext", "test-my-code:WalkthroughActive", true],
+    ])
   })
 })

@@ -71,7 +71,7 @@ import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
 import { FailedUpdatesStatusBarItem } from "./ui/statusBarFailedUpdates"
 import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
-import { showNextWalkthroughStep } from "./window/walkthrough"
+import { showNextWalkthroughStep, trackWalkthroughActive } from "./window/walkthrough"
 
 interface InitializationErrorReporter {
   /** Logs a failed step; the user hears about it from {@link notify}. */
@@ -247,6 +247,7 @@ async function activateInner(
 
   const authState = createAuthState(langs)
   authState.subscribe((loggedIn) => coursesTree.setLoggedIn(loggedIn))
+  context.subscriptions.push(trackWalkthroughActive())
   // Awaited only after the migration: it can refresh a token over the network, and nothing
   // before needs its answer.
   const initialAuthCheck = authState.refresh({ timeout: 15000 })

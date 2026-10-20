@@ -458,6 +458,21 @@ suite("walkthrough", function () {
     expect(missing).toEqual([])
   })
 
+  // VS Code skips an `onContext` event that already holds when it registers the walkthrough.
+  test("every context-completed step also completes once the walkthrough is shown", function () {
+    const steps = packageJson().contributes.walkthroughs?.[0]?.steps ?? []
+    const unpaired = steps.filter((step) => {
+      const events = step.completionEvents ?? []
+      const contexts = events
+        .filter((event) => event.startsWith("onContext:"))
+        .filter((event) => !event.endsWith(" && test-my-code:WalkthroughActive"))
+      return contexts.some(
+        (event) => !events.includes(`${event} && test-my-code:WalkthroughActive`),
+      )
+    })
+    expect(unpaired.map((step) => step.id)).toEqual([])
+  })
+
   // A step without a way to act on it is a paragraph, not a step.
   test("every step offers a button", function () {
     const steps = packageJson().contributes.walkthroughs?.[0]?.steps ?? []
@@ -472,6 +487,7 @@ suite("walkthrough", function () {
     )
     expect(step?.completionEvents).toEqual([
       "onContext:test-my-code:WorkspaceActive && test-my-code:HasDownloadedExercises",
+      "onContext:test-my-code:WorkspaceActive && test-my-code:HasDownloadedExercises && test-my-code:WalkthroughActive",
     ])
     expect(step?.description).toContain(
       "[Download All Exercises](command:tmc.downloadAllExercises)",
