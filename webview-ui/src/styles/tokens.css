@@ -14,7 +14,12 @@
   --tmc-radius: var(--vscode-cornerRadius-small, 4px);
 
   --tmc-font-size-body: var(--vscode-font-size, 13px);
-  --tmc-font-size-heading: var(--vscode-fontSize-heading2, 18px);
+  --tmc-font-size-heading: 1.4em;
+  /* VS Code's own section headers (Explorer, Settings groups) are 11px uppercase. */
+  --tmc-font-size-section: 11px;
+  --tmc-content-max-width: 720px;
+  /* The tree's row height, for lists that sit beside it. */
+  --tmc-list-row-height: 22px;
   --tmc-font-mono: var(--vscode-editor-font-family, monospace);
   --tmc-font-size-mono: var(--vscode-editor-font-size, 13px);
 
@@ -41,8 +46,29 @@
     --vscode-contrastActiveBorder,
     var(--vscode-button-background, var(--vscode-foreground))
   );
-  /* input.border is a hairline outside High Contrast, too faint to show the track's extent. */
-  --tmc-meter-track-border: var(--vscode-contrastBorder, var(--vscode-descriptionForeground));
+  --tmc-meter-track: var(--vscode-scrollbarSlider-background, transparent);
+
+  --tmc-list-hover: var(--vscode-list-hoverBackground, transparent);
+  --tmc-list-active: var(--vscode-list-activeSelectionBackground, transparent);
+  --tmc-list-active-foreground: var(--vscode-list-activeSelectionForeground, inherit);
+  --tmc-list-focus-outline: var(--vscode-list-focusOutline, var(--tmc-focus-border));
+
+  --tmc-badge-background: var(--vscode-badge-background);
+  --tmc-badge-foreground: var(--vscode-badge-foreground);
+
+  --tmc-toolbar-hover: var(--vscode-toolbar-hoverBackground, transparent);
+  --tmc-icon-foreground: var(--vscode-icon-foreground, var(--vscode-foreground));
+
+  --tmc-menu-background: var(--vscode-menu-background);
+  --tmc-menu-foreground: var(--vscode-menu-foreground);
+  --tmc-menu-border: var(--vscode-menu-border, var(--vscode-contrastBorder, transparent));
+  --tmc-menu-selection-background: var(--vscode-menu-selectionBackground, transparent);
+  --tmc-menu-selection-foreground: var(--vscode-menu-selectionForeground, inherit);
+  --tmc-menu-selection-border: var(--vscode-menu-selectionBorder, transparent);
+  --tmc-menu-shadow: var(--vscode-widget-shadow, transparent);
+
+  /* The banner states an outcome; its tone is the accent alone, so one background serves all. */
+  --tmc-banner-background: var(--vscode-textBlockQuote-background, transparent);
 
   --tmc-notice-error-background: var(--vscode-inputValidation-errorBackground, transparent);
   --tmc-notice-warning-background: var(--vscode-inputValidation-warningBackground, transparent);

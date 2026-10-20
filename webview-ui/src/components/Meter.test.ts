@@ -7,7 +7,7 @@ function fillFraction(meter: HTMLElement): string {
 }
 
 suite("Meter component", () => {
-  test("is a meter named by its visible label and read out as a count", () => {
+  test("is a meter named by its label and read out as a count", () => {
     render(Meter, { props: { label: "Points", value: 3, max: 5 } })
     const meter = screen.getByRole("meter", { name: "Points" })
     expect(meter).toHaveAttribute("aria-valuenow", "3")
@@ -22,12 +22,9 @@ suite("Meter component", () => {
     expect(screen.getByText("1 / 3 points")).toBeInTheDocument()
   })
 
-  test("keeps a valid range when there is nothing to score", () => {
-    render(Meter, { props: { label: "Points", value: 0, max: 0 } })
-    const meter = screen.getByRole("meter", { name: "Points" })
-    expect(meter).toHaveAttribute("aria-valuemax", "1")
-    expect(meter).toHaveAttribute("aria-valuetext", "0 / 0 points")
-    expect(fillFraction(meter)).toBe("0")
+  test("renders nothing when there is nothing to score", () => {
+    const { container } = render(Meter, { props: { label: "Points", value: 0, max: 0 } })
+    expect(container.firstElementChild).toBeNull()
   })
 
   test("clamps the fill to the track", () => {

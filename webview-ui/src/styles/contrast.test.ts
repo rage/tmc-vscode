@@ -73,7 +73,61 @@ const PAIRINGS: Pairing[] = [
     minimum: NON_TEXT,
   })),
   { name: "meter fill", foreground: "var(--tmc-meter-fill)", minimum: NON_TEXT },
-  { name: "meter track outline", foreground: "var(--tmc-meter-track-border)", minimum: NON_TEXT },
+  {
+    name: "banner text",
+    foreground: BODY_TEXT,
+    background: "var(--tmc-banner-background)",
+    minimum: TEXT,
+  },
+  ...(["passed", "failed"] as const).map((status) => ({
+    name: `${status} banner accent`,
+    foreground: `var(--tmc-status-${status})`,
+    background: "var(--tmc-banner-background)",
+    minimum: NON_TEXT,
+  })),
+  ...(["warning", "info"] as const).map((kind) => ({
+    name: `${kind} banner accent`,
+    foreground: `var(--tmc-notice-${kind}-accent)`,
+    background: "var(--tmc-banner-background)",
+    minimum: NON_TEXT,
+  })),
+  {
+    name: "list row text on hover",
+    foreground: BODY_TEXT,
+    background: "var(--tmc-list-hover)",
+    minimum: TEXT,
+  },
+  {
+    name: "selected list row text",
+    foreground: "var(--tmc-list-active-foreground)",
+    background: "var(--tmc-list-active)",
+    minimum: TEXT,
+  },
+  { name: "list focus outline", foreground: "var(--tmc-list-focus-outline)", minimum: NON_TEXT },
+  {
+    name: "badge text",
+    foreground: "var(--tmc-badge-foreground)",
+    background: "var(--tmc-badge-background)",
+    minimum: TEXT,
+  },
+  {
+    name: "toolbar icon on hover",
+    foreground: "var(--tmc-icon-foreground)",
+    background: "var(--tmc-toolbar-hover)",
+    minimum: NON_TEXT,
+  },
+  {
+    name: "menu item text",
+    foreground: "var(--tmc-menu-foreground)",
+    background: "var(--tmc-menu-background)",
+    minimum: TEXT,
+  },
+  {
+    name: "selected menu item text",
+    foreground: "var(--tmc-menu-selection-foreground)",
+    background: "var(--tmc-menu-selection-background)",
+    minimum: TEXT,
+  },
   { name: "focus ring", foreground: "var(--tmc-focus-border)", minimum: NON_TEXT },
 ]
 
@@ -83,6 +137,10 @@ const UNPAIRED_COLOUR_TOKENS: Record<string, string> = {
   "--tmc-hc-outline": "transparent outside High Contrast, where the theme picks it",
   "--tmc-hc-active-outline": "transparent outside High Contrast, where the theme picks it",
   "--tmc-section-header-border": "decorative",
+  "--tmc-meter-track": "decorative: the meter's inline label states the score",
+  "--tmc-menu-border": "decorative",
+  "--tmc-menu-selection-border": "transparent outside High Contrast, where the theme picks it",
+  "--tmc-menu-shadow": "decorative",
 }
 
 /**
@@ -240,7 +298,7 @@ suite("theme contrast", () => {
       ),
     )
     const colourTokens = [...tokenDefinitions.keys()].filter(
-      (name) => !/^--tmc-(space|radius|font)/.test(name),
+      (name) => !/^--tmc-(space|radius|font|content-max-width|list-row-height)/.test(name),
     )
     const unaccounted = colourTokens.filter(
       (name) => !paired.includes(name) && !(name in UNPAIRED_COLOUR_TOKENS),

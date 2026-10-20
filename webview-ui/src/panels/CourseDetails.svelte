@@ -109,7 +109,7 @@
 </script>
 
 <PanelHeader {title}>
-  {#snippet actions()}
+  {#snippet toolbar()}
     {#if course}
       <Button
         secondary

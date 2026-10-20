@@ -111,7 +111,7 @@
 </script>
 
 <PanelHeader title={panel.exerciseSlug} shouldFocusOnMount={false}>
-  {#snippet actions()}
+  {#snippet toolbar()}
     <ToolbarButton icon="close" label="Close" onclick={closePanel} />
   {/snippet}
 </PanelHeader>

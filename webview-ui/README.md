@@ -121,6 +121,18 @@ Styles use the `--tmc-*` tokens in `src/styles/tokens.css` rather than raw
 `--vscode-*` names or literals; element defaults and utilities (`.muted`,
 `.actions`, `.visually-hidden`, reduced motion) live in `src/styles/base.css`.
 
+Every screen is composed the same way:
+
+- `PanelHeader` holds the one `h1`: the display name, never a slug, a muted subtitle (course ·
+  organization) and icon controls at the right, including the `ActionMenu` "⋯".
+- `StatusBanner` states the screen's current outcome under it, such as a submission's result.
+- `ActionBar` holds the buttons of a state: at most one primary and two secondary. Further
+  actions go into the header's `ActionMenu`. Close is never a button: the tab and the header
+  close a panel.
+- `Section` heads each further part in VS Code's section-header style; `h2` is styled that way
+  everywhere. Content is at most `--tmc-content-max-width` wide.
+- `Meter` shows a score and renders nothing when there are no points to give.
+
 ## Developing in a browser
 
 `pnpm run harness` serves the app at <http://localhost:5199/> outside VS Code, with hot reload.
