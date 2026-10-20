@@ -359,8 +359,8 @@
       {/snippet}
     </ErrorNotice>
   {:else}
-    <PanelHeader title="Loading course…" />
-    <Spinner label="Loading course" />
+    <PanelHeader title="Course Details" />
+    <Spinner label="Loading the course…" />
   {/if}
 </div>
 

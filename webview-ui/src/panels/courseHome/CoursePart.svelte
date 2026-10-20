@@ -91,16 +91,18 @@
 
 <section class="part" aria-labelledby={headingId}>
   <div class="part-header">
-    <button
-      type="button"
-      class="part-toggle"
-      aria-expanded={isExpanded}
-      aria-controls="{headingId}-rows"
-      onclick={ontoggle}
-    >
-      <vscode-icon name={isExpanded ? "chevron-down" : "chevron-right"}></vscode-icon>
-      <h2 id={headingId}>{part.name}</h2>
-    </button>
+    <h2 id={headingId}>
+      <button
+        type="button"
+        class="part-toggle"
+        aria-expanded={isExpanded}
+        aria-controls="{headingId}-rows"
+        onclick={ontoggle}
+      >
+        <vscode-icon name={isExpanded ? "chevron-down" : "chevron-right"}></vscode-icon>
+        {part.name}
+      </button>
+    </h2>
     <span class="muted part-progress">{passedCount}/{part.exercises.length} passed</span>
   </div>
   {#if isExpanded}
@@ -183,22 +185,25 @@
     border-bottom: 1px solid var(--tmc-section-header-border);
     padding-bottom: var(--tmc-space-1);
   }
+  .part-header h2 {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+  }
   .part-toggle {
     display: flex;
     align-items: center;
     gap: var(--tmc-space-1);
-    flex: 1;
-    min-width: 0;
+    width: 100%;
     padding: 0;
     border: none;
     background: none;
     color: inherit;
     font: inherit;
+    letter-spacing: inherit;
     text-align: start;
+    text-transform: inherit;
     cursor: pointer;
-  }
-  .part-toggle h2 {
-    margin: 0;
   }
   .part-progress {
     flex: none;

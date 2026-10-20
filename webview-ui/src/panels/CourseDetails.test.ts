@@ -403,7 +403,7 @@ suite("the course home", () => {
   test("shows only why the course could not be loaded, and offers to ask again", async () => {
     const panel = tmcPanel()
     render(CourseDetails, { props: { panel } })
-    expect(screen.getByText("Loading course")).toBeInTheDocument()
+    expect(screen.getByText("Loading the course…")).toBeInTheDocument()
 
     replyToRequest("requestCourseDetailsData", {
       ok: false,
