@@ -678,7 +678,7 @@ suite("reported once: the Courses view and course details", function () {
 
     await succeeding.run("tmc.updateExercises", "silent")
 
-    expect(succeeding.shown).toEqual(["status: Updated the exercise loops."])
+    expect(succeeding.shown).toEqual(["info: Updated the exercise loops to the latest version."])
     expect(failedUpdates.all()).toEqual([])
   })
 
@@ -792,8 +792,8 @@ suite("reported once: the refresh", function () {
     expect(shown).toEqual([])
   })
 
-  test("a reminder that cannot be postponed is one notification", async function () {
-    const { actionContext, shown, storage } = await harness({
+  test("new exercises are one notification, whose one button shows the course", async function () {
+    const { actionContext, shown } = await harness({
       langs: { getMoocCourseData: async () => Err(new ConnectionError("offline")) },
       course: storedCourse({ newExercises: [EXERCISE_ID] }),
     })
@@ -802,15 +802,9 @@ suite("reported once: the refresh", function () {
     const offer = vi
       .mocked(actionContext.dialog.notification)
       .mock.calls.find(([message]) => message.includes("new exercise"))
-    vi.spyOn(storage, "updateUserData").mockRejectedValue(new Error("disk full"))
-    offer?.[2]?.[1]()
 
-    await vi.waitFor(() =>
-      expect(shown).toEqual([
-        "info: Mooc Course has 1 new exercise. Download it now?",
-        "error: Failed to postpone the reminder for Mooc Course.",
-      ]),
-    )
+    expect(shown).toEqual(["info: Mooc Course has 1 new exercise."])
+    expect(offer?.slice(1).map((button) => button?.[0])).toEqual(["Show"])
   })
 })
 
