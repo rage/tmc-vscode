@@ -166,5 +166,12 @@ Chromium's accessibility tree: every control has a name, each panel has one leve
 spinner raises an alert or live regions nest, and each disclosure's `aria-expanded` matches what
 it shows. Install the browser once with `pnpm exec playwright install chromium`.
 
-Both suites list the checks that fail today in `KNOWN_FAILURES`, each a bug still to fix. Such a
+`pnpm run test:visual` builds the harness too and compares a screenshot of every scenario in Light
+Modern, Dark Modern and Default High Contrast against its baseline in
+`visual/screens.spec.ts-snapshots/`. The fonts are pinned to DejaVu and the clock to a fixed date,
+so a run on Linux is repeatable; other platforms render text differently and have no baselines.
+After a deliberate visual change, rerun it with `--update-snapshots` and look at every changed
+image before committing it. CI does not run it.
+
+The contrast and accessibility suites list the checks that fail today in `KNOWN_FAILURES`, each a bug still to fix. Such a
 check is expected to fail, so fixing the bug fails the suite until its entry is deleted.

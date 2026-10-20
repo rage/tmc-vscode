@@ -177,7 +177,7 @@ jobs:
         if: failure()
         with:
           name: webview-a11y-results
-          path: ./test-results/webview-a11y/
+          path: ./test-results/webview-harness/
           if-no-files-found: ignore
 
   gates:
