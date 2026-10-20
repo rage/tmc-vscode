@@ -26,9 +26,6 @@ export const CLIENT_NAME = "vscode_plugin"
 export const EXTENSION_ID = "moocfi.test-my-code"
 export const OUTPUT_CHANNEL_NAME = "TestMyCode"
 
-/** How long "Remind Me Later" holds a notification back: well past the next poll. */
-export const NOTIFICATION_DELAY = 24 * 60 * 60 * 1000
-
 export const API_CACHE_LIFETIME = 5 * 60 * 1000
 
 /** How long a CLI command may run before it is killed, unless its kind has a limit of its own below. */

@@ -1,56 +1,54 @@
 <script lang="ts">
   interface Props {
-    /** Visible name of what is measured, e.g. "Points". */
+    /** The accessible name of what is measured, e.g. "Points"; the visible text is the count. */
     label: string
     value: number
-    /** May be 0, e.g. an exercise worth no points; the scale then runs to 1 and shows empty. */
+    /** At 0 there is nothing to score, and the meter renders nothing. */
     max: number
   }
 
+  /**
+   * A score as a thin bar with "<value> / <max> points" beside it. Not for activity: work in
+   * progress belongs in `vscode-progress-bar`, and work of unknown length in `Spinner`.
+   */
   let { label, value, max }: Props = $props()
 
-  const labelId = $props.id()
-  const scaleMax = $derived(Math.max(1, max))
-  const scaleValue = $derived(Math.min(scaleMax, Math.max(0, value)))
+  const scaleValue = $derived(Math.min(max, Math.max(0, value)))
   const valueText = $derived(`${value} / ${max} points`)
 </script>
 
-<!--
-  A score, not activity: work in progress belongs in `vscode-progress-bar`, and work of unknown
-  length in `Spinner`.
--->
-<div class="meter">
-  <div class="meter-label">
-    <span id={labelId}>{label}</span>
-    <span class="muted" aria-hidden="true">{valueText}</span>
+{#if max > 0}
+  <div class="meter">
+    <div
+      class="track"
+      role="meter"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={max}
+      aria-valuenow={scaleValue}
+      aria-valuetext={valueText}
+      style:--meter-fraction={scaleValue / max}
+    >
+      <div class="fill"></div>
+    </div>
+    <span class="value" aria-hidden="true">{valueText}</span>
   </div>
-  <div
-    class="track"
-    role="meter"
-    aria-labelledby={labelId}
-    aria-valuemin={0}
-    aria-valuemax={scaleMax}
-    aria-valuenow={scaleValue}
-    aria-valuetext={valueText}
-    style:--meter-fraction={scaleValue / scaleMax}
-  >
-    <div class="fill"></div>
-  </div>
-</div>
+{/if}
 
 <style>
-  .meter-label {
+  .meter {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: var(--tmc-space-2);
-    margin-bottom: var(--tmc-space-1);
+    align-items: center;
+    gap: var(--tmc-space-3);
   }
   .track {
-    height: 6px;
-    border: 1px solid var(--tmc-meter-track-border);
-    border-radius: var(--tmc-radius);
-    background: transparent;
+    flex: 1;
+    min-width: 48px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--tmc-meter-track);
+    /* High Contrast draws extents with outlines, not fills. */
+    outline: 1px solid var(--tmc-hc-outline);
     overflow: hidden;
   }
   .fill {
@@ -58,5 +56,9 @@
     width: calc(var(--meter-fraction) * 100%);
     background: var(--tmc-meter-fill);
     transition: width 0.3s;
+  }
+  .value {
+    flex: none;
+    font-variant-numeric: tabular-nums;
   }
 </style>

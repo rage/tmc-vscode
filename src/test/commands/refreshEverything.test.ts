@@ -1,14 +1,15 @@
 import { Err, Ok } from "ts-results"
-import { vi } from "vitest"
+import { onTestFinished, vi } from "vitest"
+import * as vscode from "vscode"
 
 import type { LocalCourseData } from "../../../shared/lib"
 import { CourseIdentifier } from "../../../shared/lib"
-import { downloadNewExercisesForCourse } from "../../actions/downloadNewExercisesForCourse"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
 import type Dialog from "../../api/dialog"
 import { refreshCourses, refreshEverything } from "../../commands/refreshEverything"
 import { updateExercises } from "../../commands/updateExercises"
+import { shownCourseHome } from "../../ui/shownCourseHome"
 import { Logger } from "../../utilities"
 import { tmcLocalCourse } from "../fixtures/courses"
 import { idOfTmcCourse } from "../fixtures/identifiers"
@@ -23,10 +24,6 @@ vi.mock("../../actions/updateCourse", () => ({
 // drive real CLI calls.
 vi.mock("../../actions/refreshLocalExercises", () => ({
   refreshLocalExercises: vi.fn(async () => Ok.EMPTY),
-}))
-
-vi.mock("../../actions/downloadNewExercisesForCourse", () => ({
-  downloadNewExercisesForCourse: vi.fn(async () => Ok.EMPTY),
 }))
 
 vi.mock("../../commands/updateExercises", () => ({
@@ -231,8 +228,6 @@ suite("refreshEverything's new-exercises prompt", function () {
     vi.mocked(updateCourse).mockResolvedValue(Ok({ isUpdated: true, warnings: [] }))
     vi.mocked(updateExercises).mockReset()
     vi.mocked(updateExercises).mockResolvedValue(undefined)
-    vi.mocked(downloadNewExercisesForCourse).mockReset()
-    vi.mocked(downloadNewExercisesForCourse).mockResolvedValue(Ok({ warnings: [] }))
   })
 
   type Button = [string, () => void]
@@ -247,16 +242,33 @@ suite("refreshEverything's new-exercises prompt", function () {
     await refreshEverything(actionContext, { silent: true })
 
     expect(dialog.notification).toHaveBeenCalledExactlyOnceWith(
-      "Course 1 has 1 new exercise. Download it now?",
-      expect.anything(),
-      expect.anything(),
+      "Course 1 has 1 new exercise.",
       expect.anything(),
     )
-    expect(buttons(dialog).map(([label]) => label)).toEqual([
-      "Download",
-      "Remind Me Later",
-      "Don't Remind Again",
-    ])
+    expect(buttons(dialog).map(([label]) => label)).toEqual(["Show"])
+  })
+
+  test("Show opens the course home of the course with new exercises", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
+    await refreshEverything(actionContext, { silent: true })
+
+    press(dialog, "Show")
+
+    expect(executeCommand).toHaveBeenCalledWith("tmc.courseDetails", idOfTmcCourse(1))
+  })
+
+  test("offers nothing about the course its course home shows, but still records the offer", async function () {
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
+    shownCourseHome.set(idOfTmcCourse(1))
+    onTestFinished(() => shownCourseHome.set(undefined))
+
+    await refreshEverything(actionContext, { silent: true })
+
+    expect(dialog.notification).not.toHaveBeenCalled()
+    expect(actionContext.startup.userData.setNewExercisesOffered).toHaveBeenCalledWith(
+      idOfTmcCourse(1),
+    )
   })
 
   // The window that switched to this course workspace has just offered them.
@@ -269,7 +281,7 @@ suite("refreshEverything's new-exercises prompt", function () {
     expect(updateExercises).toHaveBeenCalledWith(actionContext, "promptless")
   })
 
-  test("offers several courses' new exercises in one notification, acting on all", async function () {
+  test("offers several courses' new exercises in one notification", async function () {
     const [actionContext, dialog] = contextWithCourses([
       tmcCourse(1, 0, [10, 11]),
       tmcCourse(2, 0, [20]),
@@ -278,11 +290,8 @@ suite("refreshEverything's new-exercises prompt", function () {
 
     expect(dialog.notification).toHaveBeenCalledOnce()
     expect(vi.mocked(dialog.notification).mock.calls[0]?.[0]).toBe(
-      "New exercises in 2 courses: Course 1 (2), Course 2 (1). Download them now?",
+      "New exercises in 2 courses: Course 1 (2), Course 2 (1).",
     )
-    press(dialog, "Download All")
-
-    await vi.waitFor(() => expect(downloadNewExercisesForCourse).toHaveBeenCalledTimes(2))
   })
 
   test("does not offer the exercises of a course whose reminder is postponed", async function () {
@@ -305,9 +314,7 @@ suite("refreshEverything's new-exercises prompt", function () {
     course.data.newExercises = [10, 11]
     await refreshEverything(actionContext, { silent: true })
     expect(dialog.notification).toHaveBeenCalledTimes(2)
-    expect(vi.mocked(dialog.notification).mock.calls[1]?.[0]).toBe(
-      "Course 1 has 2 new exercises. Download them now?",
-    )
+    expect(vi.mocked(dialog.notification).mock.calls[1]?.[0]).toBe("Course 1 has 2 new exercises.")
   })
 
   test("holds the offer back for a refresh that asks it to, until a later one", async function () {
@@ -318,93 +325,6 @@ suite("refreshEverything's new-exercises prompt", function () {
 
     await refreshEverything(actionContext, { silent: true })
     expect(dialog.notification).toHaveBeenCalledOnce()
-  })
-
-  test("downloads the course's new exercises from the Download button", async function () {
-    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
-    await refreshEverything(actionContext, { silent: true })
-
-    press(dialog, "Download")
-
-    await vi.waitFor(() =>
-      expect(downloadNewExercisesForCourse).toHaveBeenCalledExactlyOnceWith(
-        actionContext,
-        idOfTmcCourse(1),
-      ),
-    )
-    expect(dialog.reportError).not.toHaveBeenCalled()
-  })
-
-  test("reports a failed download from the Download button once", async function () {
-    vi.mocked(downloadNewExercisesForCourse).mockResolvedValue(Err(new Error("disk full")))
-    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
-    await refreshEverything(actionContext, { silent: true })
-
-    press(dialog, "Download")
-
-    await vi.waitFor(() =>
-      expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-        "Failed to download the new exercises of Course 1.",
-        expect.objectContaining({ message: "disk full" }),
-      ),
-    )
-  })
-
-  test("Download All carries on past a course that fails, and reports it once", async function () {
-    vi.mocked(downloadNewExercisesForCourse).mockImplementation(async (_context, courseId) =>
-      CourseIdentifier.equals(courseId, idOfTmcCourse(1))
-        ? Err(new Error("disk full"))
-        : Ok({ warnings: [] }),
-    )
-    const [actionContext, dialog] = contextWithCourses([
-      tmcCourse(1, 0, [10]),
-      tmcCourse(2, 0, [20]),
-    ])
-    await refreshEverything(actionContext, { silent: true })
-
-    press(dialog, "Download All")
-
-    await vi.waitFor(() =>
-      expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-        "Failed to download the new exercises of Course 1.",
-        expect.objectContaining({ message: "disk full" }),
-      ),
-    )
-    expect(downloadNewExercisesForCourse).toHaveBeenCalledTimes(2)
-  })
-
-  test("postpones or dismisses the reminder from the other two buttons", async function () {
-    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
-    const { userData } = actionContext.startup
-    await refreshEverything(actionContext, { silent: true })
-
-    press(dialog, "Remind Me Later")
-    press(dialog, "Don't Remind Again")
-
-    await vi.waitFor(() => {
-      expect(userData.postponeNewExercises).toHaveBeenCalledExactlyOnceWith(
-        idOfTmcCourse(1),
-        expect.any(Number),
-      )
-      expect(userData.clearFromNewExercises).toHaveBeenCalledExactlyOnceWith(idOfTmcCourse(1))
-    })
-  })
-
-  test("reports a reminder that could not be postponed once", async function () {
-    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
-    vi.mocked(actionContext.startup.userData.postponeNewExercises).mockResolvedValue(
-      Err(new Error("storage full")),
-    )
-    await refreshEverything(actionContext, { silent: true })
-
-    press(dialog, "Remind Me Later")
-
-    await vi.waitFor(() =>
-      expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-        "Failed to postpone the reminder for Course 1.",
-        expect.objectContaining({ message: "storage full" }),
-      ),
-    )
   })
 })
 

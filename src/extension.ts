@@ -4,7 +4,6 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import type { CourseIdentifier } from "../shared/lib"
 import { backendName, LocalCourseData } from "../shared/lib"
 import { onDidFinishSubmission, refreshLocalExercises, scanLocalExercises } from "./actions"
 import type {
@@ -64,6 +63,7 @@ import {
   trackHasCourses,
   trackHasDownloadedExercises,
 } from "./ui/contextKeys"
+import { openCourseId } from "./ui/courseHome"
 import { exerciseOperations } from "./ui/exerciseOperations"
 import { failedUpdates } from "./ui/failedUpdates"
 import { AccountStatusBarItem } from "./ui/statusBarAccount"
@@ -71,7 +71,7 @@ import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
 import { FailedUpdatesStatusBarItem } from "./ui/statusBarFailedUpdates"
 import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
-import { showNextWalkthroughStep } from "./window/walkthrough"
+import { showNextWalkthroughStep, trackWalkthroughActive } from "./window/walkthrough"
 
 interface InitializationErrorReporter {
   /** Logs a failed step; the user hears about it from {@link notify}. */
@@ -187,16 +187,6 @@ function refreshInBackground(
   )
 }
 
-/** The course of the course workspace the window has open, if it is one of the stored courses. */
-function openCourseId({ startup }: ReadyActionContext): CourseIdentifier | undefined {
-  const { activeCourse, activeCourseBackend } = startup.workspaceManager
-  if (activeCourse === undefined || activeCourseBackend === undefined) {
-    return undefined
-  }
-  const course = startup.userData.getCourseBySlug(activeCourseBackend, activeCourse)
-  return course.ok ? LocalCourseData.getCourseId(course.val) : undefined
-}
-
 async function activateInner(
   context: vscode.ExtensionContext,
   startupContext: StartupContext,
@@ -247,6 +237,7 @@ async function activateInner(
 
   const authState = createAuthState(langs)
   authState.subscribe((loggedIn) => coursesTree.setLoggedIn(loggedIn))
+  context.subscriptions.push(trackWalkthroughActive())
   // Awaited only after the migration: it can refresh a token over the network, and nothing
   // before needs its answer.
   const initialAuthCheck = authState.refresh({ timeout: 15000 })
@@ -613,11 +604,23 @@ async function activateInner(
     void Promise.resolve(vscode.commands.executeCommand(`${COURSES_VIEW_ID}.focus`)).catch((e) =>
       Logger.warn("Could not show the Courses view", e),
     )
+    // The course home lists what to do next in the course just opened, so it goes in front of
+    // the walkthrough, which still moves on to its next step behind it; but not over code the
+    // student has opened meanwhile.
+    const courseId = openCourseId(readyContext)
     void showNextWalkthroughStep({
       isLoggedIn: authState.loggedIn,
       hasCourses: ready.userData.getCourses().length > 0,
       hasDownloadedExercises: ready.workspaceManager.getExercises().length > 0,
-    }).catch((e) => Logger.warn("Could not show the next walkthrough step", e))
+    })
+      .catch((e) => Logger.warn("Could not show the next walkthrough step", e))
+      .then(
+        () =>
+          courseId &&
+          !vscode.window.activeTextEditor &&
+          vscode.commands.executeCommand("tmc.courseDetails", courseId),
+      )
+      .then(undefined, (e) => Logger.warn("Could not show the course home", e))
   }
 
   // `tmc.showWelcome` is registered only in the ready case, and VS Code rejects a command

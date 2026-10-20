@@ -23,11 +23,19 @@ suite("PanelHeader component", () => {
     expect(screen.getByRole("heading", { level: 1 })).not.toHaveFocus()
   })
 
-  test("renders trailing actions", () => {
+  test("shows the subtitle outside the heading", () => {
+    render(PanelHeader, {
+      props: { title: "Sum of numbers", subtitle: "Python Programming · University of Helsinki" },
+    })
+    expect(screen.getByRole("heading", { level: 1 })).toHaveAccessibleName("Sum of numbers")
+    expect(screen.getByText("Python Programming · University of Helsinki")).toBeInTheDocument()
+  })
+
+  test("renders its toolbar", () => {
     render(PanelHeader, {
       props: {
         title: "Python Course",
-        actions: createRawSnippet(() => ({ render: () => "<button>Refresh</button>" })),
+        toolbar: createRawSnippet(() => ({ render: () => "<button>Refresh</button>" })),
       },
     })
     expect(screen.getByRole("button", { name: "Refresh" })).toBeInTheDocument()

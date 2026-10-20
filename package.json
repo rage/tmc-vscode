@@ -859,7 +859,8 @@
               "markdown": "media/walkthrough/log-in.md"
             },
             "completionEvents": [
-              "onContext:test-my-code:LoggedIn"
+              "onContext:test-my-code:LoggedIn",
+              "onContext:test-my-code:LoggedIn && test-my-code:WalkthroughActive"
             ]
           },
           {
@@ -870,7 +871,8 @@
               "markdown": "media/walkthrough/add-course.md"
             },
             "completionEvents": [
-              "onContext:test-my-code:HasCourses"
+              "onContext:test-my-code:HasCourses",
+              "onContext:test-my-code:HasCourses && test-my-code:WalkthroughActive"
             ]
           },
           {
@@ -881,7 +883,8 @@
               "markdown": "media/walkthrough/open-exercises.md"
             },
             "completionEvents": [
-              "onContext:test-my-code:WorkspaceActive && test-my-code:HasDownloadedExercises"
+              "onContext:test-my-code:WorkspaceActive && test-my-code:HasDownloadedExercises",
+              "onContext:test-my-code:WorkspaceActive && test-my-code:HasDownloadedExercises && test-my-code:WalkthroughActive"
             ]
           },
           {

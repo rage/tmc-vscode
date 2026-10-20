@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 
 import type { CourseIdentifier } from "../../shared/lib"
-import { toError } from "../../shared/lib"
+import { LocalCourseData, toError } from "../../shared/lib"
 import type { ActionContext, ReadyActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type Dialog from "../api/dialog"
@@ -12,6 +12,7 @@ import { SHOW_AI_USE_PROBLEM_COMMAND, TRUST_COURSE_WORKSPACE_COMMAND } from "../
 import { initializationErrorHelpPanel, nextPanelId } from "../panels/routes"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseTestController } from "../testing/exerciseTestController"
+import { openCourseId } from "../ui/courseHome"
 import { showAccountMenu } from "../ui/statusBarAccount"
 import { showExerciseActions } from "../ui/statusBarExercise"
 import * as treeCommands from "../ui/treeview/treeCommands"
@@ -151,6 +152,13 @@ export function registerCommands(
     commands.closeExercise(readyContext, resource),
   )
 
+  const showCourseHome = (courseId: CourseIdentifier): void =>
+    TmcPanel.renderMain(context, readyContext, {
+      id: nextPanelId(),
+      type: "CourseDetails",
+      courseId,
+    })
+
   register("tmc.courseDetails", async (target?: CourseTarget) => {
     const courseId =
       courseIdOf(target) ??
@@ -159,11 +167,10 @@ export function registerCommands(
         placeHolder: "Which course page do you want to open?",
       }))
     if (courseId) {
-      TmcPanel.renderMain(context, readyContext, {
-        id: nextPanelId(),
-        type: "CourseDetails",
-        courseId,
-      })
+      showCourseHome(courseId)
+    }
+    if (target instanceof CourseTreeItem) {
+      await readyContext.coursesTree.expandCourse(target.courseId)
     }
   })
 
@@ -213,8 +220,20 @@ export function registerCommands(
 
   register("tmc.logout", async () => commands.logout(readyContext))
 
+  // The course home of the course at hand: the open workspace's, or the only one. With several
+  // and none open, the Courses view lists them to pick from.
   register("tmc.myCourses", async () => {
+    const courses = readyContext.startup.userData.getCourses()
+    const [onlyCourse, ...otherCourses] = courses
+    const courseId =
+      openCourseId(readyContext) ??
+      (onlyCourse && otherCourses.length === 0
+        ? LocalCourseData.getCourseId(onlyCourse)
+        : undefined)
     await vscode.commands.executeCommand(`${COURSES_VIEW_ID}.focus`)
+    if (courseId) {
+      showCourseHome(courseId)
+    }
   })
 
   register("tmc.openCourseWorkspace", async (target?: CourseTarget) =>

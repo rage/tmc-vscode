@@ -11,3 +11,11 @@ vsCodeTest("a fresh install opens the walkthrough", async ({ page, webview }) =>
 
   await expect(page.getByText("Get Started with TestMyCode").first()).toBeVisible()
 })
+
+// The fixture's stored session exists before VS Code first shows the walkthrough.
+vsCodeTest("a session from before the walkthrough ticks off Log in", async ({ page, webview }) => {
+  await new TmcPage(page, webview).openMenu()
+
+  const logIn = page.locator(".getting-started-step").filter({ hasText: "Log in" }).first()
+  await expect(logIn.locator(".codicon-getting-started-step-checked")).toBeVisible()
+})

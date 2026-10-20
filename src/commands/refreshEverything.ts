@@ -3,14 +3,14 @@ import { Err, Ok } from "ts-results"
 
 import { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../../shared/lib"
 import type { CourseUpdateOptions } from "../actions"
-import { checkForCourseUpdates, downloadNewExercisesForCourse } from "../actions"
+import { checkForCourseUpdates } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import type { Warned } from "../api/withOperation"
-import { failure, reportWarnings, withOperation } from "../api/withOperation"
-import { NOTIFICATION_DELAY } from "../config/constants"
+import { reportWarnings, withOperation } from "../api/withOperation"
 import { BottleneckError } from "../errors"
+import { shownCourseHome } from "../ui/shownCourseHome"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
 import { countOf, Logger } from "../utilities"
+import { showCourseHomeButton } from "./showCourseHome"
 import { updateExercises } from "./updateExercises"
 
 const REFRESH_FAILED = "Failed to check for course updates."
@@ -146,8 +146,8 @@ async function runRefresh(
 }
 
 /**
- * Offers, in one notification, the new exercises of every course whose reminder is due; each
- * button acts on all of those courses, one failing course not stopping the rest.
+ * Offers, in one notification, to show the new exercises of every course whose reminder is
+ * due; a course whose home is on screen gets none, as its banner says it.
  */
 function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCourseData[]): void {
   const { dialog } = actionContext
@@ -163,9 +163,6 @@ function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCour
       !LocalCourseData.isDisabled(course) &&
       course.data.notifyAfter <= now,
   )
-  if (offered.length === 0) {
-    return
-  }
   for (const course of offered) {
     void userData.setNewExercisesOffered(LocalCourseData.getCourseId(course)).then((recorded) => {
       if (recorded.err) {
@@ -173,62 +170,16 @@ function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCour
       }
     })
   }
-
-  const forEachCourse =
-    (
-      headline: (title: string) => string,
-      step: (course: LocalCourseData) => Promise<Result<Warned | void, Error>>,
-    ) =>
-    (): void =>
-      void withOperation(dialog, { failure: headline("a course") }, async () => {
-        const failed: [title: string, error: Error][] = []
-        for (const course of offered) {
-          const result = await step(course)
-          if (result.err) {
-            failed.push([LocalCourseData.getCourseTitle(course), result.val])
-          } else if (result.val) {
-            reportWarnings(dialog, result.val.warnings)
-          }
-        }
-        const [first, ...others] = failed
-        if (!first) {
-          return Ok.EMPTY
-        }
-        for (const [title, error] of others) {
-          Logger.error(headline(title), error)
-        }
-        return failure(headline(failed.map(([title]) => title).join(", ")), first[1])
-      })
-
-  void dialog.notification(
-    newExercisesMessage(offered),
-    [
-      offered.length === 1 ? "Download" : "Download All",
-      forEachCourse(
-        (title) => `Failed to download the new exercises of ${title}.`,
-        (course) =>
-          downloadNewExercisesForCourse(actionContext, LocalCourseData.getCourseId(course)),
-      ),
-    ],
-    [
-      "Remind Me Later",
-      forEachCourse(
-        (title) => `Failed to postpone the reminder for ${title}.`,
-        (course) =>
-          userData.postponeNewExercises(
-            LocalCourseData.getCourseId(course),
-            Date.now() + NOTIFICATION_DELAY,
-          ),
-      ),
-    ],
-    [
-      "Don't Remind Again",
-      forEachCourse(
-        (title) => `Failed to dismiss the new exercises of ${title}.`,
-        (course) => userData.clearFromNewExercises(LocalCourseData.getCourseId(course)),
-      ),
-    ],
+  const unseen = offered.filter(
+    (course) => !shownCourseHome.isShowing(LocalCourseData.getCourseId(course)),
   )
+  const [first] = unseen
+  if (first) {
+    void dialog.notification(
+      newExercisesMessage(unseen),
+      showCourseHomeButton(LocalCourseData.getCourseId(first)),
+    )
+  }
 }
 
 /** Whether the course has new exercises no notification has offered yet. */
@@ -246,8 +197,8 @@ function newExercisesMessage(courses: LocalCourseData[]): string {
   }))
   const [only] = counted
   if (only && counted.length === 1) {
-    return `${only.title} has ${countOf(only.count, "new exercise")}. Download ${only.count === 1 ? "it" : "them"} now?`
+    return `${only.title} has ${countOf(only.count, "new exercise")}.`
   }
   const list = counted.map(({ title, count }) => `${title} (${count})`).join(", ")
-  return `New exercises in ${counted.length} courses: ${list}. Download them now?`
+  return `New exercises in ${counted.length} courses: ${list}.`
 }

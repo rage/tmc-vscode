@@ -140,7 +140,8 @@
   }
 
   .container {
-    /* side margins of at most 20vw, shrinking to zero as the viewport narrows */
-    margin: 0 min(20vw, max(0px, calc(40vw - 320px)));
+    max-width: var(--tmc-content-max-width);
+    margin: 0 auto;
+    padding-bottom: var(--tmc-space-6);
   }
 </style>

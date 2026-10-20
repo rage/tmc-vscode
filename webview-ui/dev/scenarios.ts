@@ -1,6 +1,9 @@
 import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../../shared/langsSchema"
 import type {
   CourseDetailsPanel,
+  CourseHomeExercise,
+  CourseHomeView,
+  DeadlineText,
   ExtensionToWebview,
   Panel,
   WebviewToExtension,
@@ -13,12 +16,12 @@ import {
   tmcResultView,
 } from "../../src/panels/submissionView"
 import {
+  courseHomeExercise,
+  courseHomeView,
   MOOC_INSTANCE_ID,
   moocGrading as baseMoocGrading,
-  moocLocalCourse,
   submissionFinished as baseSubmissionFinished,
   submissionViewMessage,
-  tmcLocalCourse,
 } from "../src/test/fixtures"
 
 /** One screen in one state, reproduced by answering the panel the way the extension host would. */
@@ -32,35 +35,161 @@ export interface Scenario {
   pushes?: ExtensionToWebview[]
 }
 
-const tmcCourse = tmcLocalCourse({
+function deadline(at: string, absolute: string, relative: string): DeadlineText {
+  return { at, absolute, relative }
+}
+
+const DUE_SOON = deadline("2026-10-23T20:59:00Z", "Oct 23, 2026, 11:59 PM", "in 3 days")
+const DUE_LATER = deadline("2026-11-06T21:59:00Z", "Nov 6, 2026, 11:59 PM", "in 17 days")
+const PAST = deadline("2026-10-09T20:59:00Z", "Oct 9, 2026, 11:59 PM", "11 days ago")
+
+const tmcCourse = courseHomeView({
   title: "Python Programming 2026",
-  exercises: Array.from({ length: 6 }, (_, index) => ({
-    id: 101 + index,
-    availablePoints: 2,
-    awardedPoints: index < 2 ? 2 : 0,
-    name: `part01-0${index + 1}_exercise`,
-    deadline: index === 3 ? "2026-12-31T21:59:00Z" : null,
-    passed: index < 2,
-    softDeadline: index === 3 ? "2026-12-24T21:59:00Z" : null,
-  })),
-  availablePoints: 12,
-  awardedPoints: 4,
+  organization: "mooc",
+  description: "An introduction to programming in Python.",
   materialUrl: "https://example.com/python-programming-2026",
+  awardedPoints: 9,
+  availablePoints: 16,
+  nextDeadline: DUE_SOON,
+  hasSoftDeadlines: true,
+  isWorkspaceOpen: true,
+  updates: [{ id: makeTmcKind({ tmcExerciseId: 103 }), name: "03_sum_of_numbers" }],
+  parts: [
+    {
+      key: "part01",
+      name: "Part 1",
+      isDefaultOpen: false,
+      exercises: [
+        courseHomeExercise(101, "01_hello_world", {
+          status: "closed",
+          passed: true,
+          awardedPoints: 1,
+          deadline: PAST,
+        }),
+        courseHomeExercise(102, "02_greeting", {
+          status: "closed",
+          passed: true,
+          awardedPoints: 2,
+          availablePoints: 2,
+          deadline: PAST,
+        }),
+      ],
+    },
+    {
+      key: "part02",
+      name: "Part 2",
+      isDefaultOpen: true,
+      exercises: [
+        courseHomeExercise(103, "03_sum_of_numbers", {
+          status: "opened",
+          passed: true,
+          awardedPoints: 2,
+          availablePoints: 2,
+          isUpdateable: true,
+          deadline: DUE_SOON,
+        }),
+        courseHomeExercise(104, "04_loops", {
+          status: "opened",
+          passed: true,
+          awardedPoints: 4,
+          availablePoints: 4,
+          deadline: DUE_SOON,
+        }),
+        courseHomeExercise(105, "05_fizz_buzz", {
+          status: "opened",
+          availablePoints: 2,
+          deadline: DUE_SOON,
+          isSoftDeadline: true,
+        }),
+        courseHomeExercise(106, "06_prime_numbers", {
+          availablePoints: 3,
+          deadline: DUE_LATER,
+        }),
+        courseHomeExercise(107, "07_matrix", { status: "new", availablePoints: 2 }),
+      ],
+    },
+  ],
+  newExercises: [{ id: makeTmcKind({ tmcExerciseId: 107 }), name: "07_matrix" }],
 })
-const moocCourse = moocLocalCourse({ newExercises: [] })
+
+function moocExercise(id: number, name: string, overrides: Partial<CourseHomeExercise> = {}) {
+  return courseHomeExercise(id, name, {
+    id: makeMoocKind({ moocExerciseId: `cccccccc-cccc-4ccc-accc-${String(id).padStart(12, "0")}` }),
+    ...overrides,
+  })
+}
+
+const moocParts = (downloading: boolean): CourseHomeView["parts"] => [
+  {
+    key: "chapter:1",
+    name: "Getting started",
+    isDefaultOpen: true,
+    exercises: [
+      moocExercise(1, "Hello, world!", {
+        status: downloading ? "opened" : "missing",
+        deadline: DUE_SOON,
+      }),
+      moocExercise(2, "Reading input", {
+        status: downloading ? "downloading" : "missing",
+        deadline: DUE_SOON,
+      }),
+      moocExercise(3, "Arithmetic", {
+        status: downloading ? "downloading" : "missing",
+        availablePoints: 2,
+        deadline: DUE_SOON,
+      }),
+    ],
+  },
+  {
+    key: "chapter:2",
+    name: "Conditionals and loops",
+    isDefaultOpen: true,
+    exercises: [
+      moocExercise(4, "Is it even?", {
+        status: downloading ? "downloading" : "missing",
+        deadline: DUE_LATER,
+      }),
+      moocExercise(5, "Counting down", { deadline: DUE_LATER }),
+    ],
+  },
+]
+
+const moocCourse = courseHomeView({
+  backend: "mooc",
+  title: "Introduction to Programming",
+  organization: "University of Helsinki",
+  description: null,
+  availablePoints: 6,
+  nextDeadline: DUE_SOON,
+  parts: moocParts(false),
+})
+
+const restrictedCourse = courseHomeView({
+  ...tmcCourse,
+  // The updates were just applied, which is what the notice says.
+  parts: tmcCourse.parts.map((part) => ({
+    ...part,
+    exercises: part.exercises.map((ex) => ({ ...ex, isUpdateable: false })),
+  })),
+  isRestricted: true,
+  isOffline: true,
+  newExercises: [],
+  updates: [],
+  recentlyUpdated: ["03_sum_of_numbers", "04_loops"],
+})
 
 function courseDetailsPanel(id: number, courseId: CourseDetailsPanel["courseId"]): Panel {
   return { id, type: "CourseDetails", courseId }
 }
 
-function answerCourseDetails(panel: { id: number }, course: typeof tmcCourse) {
+function answerCourseDetails(panel: { id: number }, view: CourseHomeView) {
   return (message: WebviewToExtension): ExtensionToWebview[] => {
     if (message.type !== "requestCourseDetailsData") {
       return []
     }
     const target = { type: "CourseDetails" as const, id: panel.id }
     return [
-      { type: "reply", target, requestId: message.requestId, outcome: { ok: true, value: course } },
+      { type: "reply", target, requestId: message.requestId, outcome: { ok: true, value: view } },
     ]
   }
 }
@@ -70,8 +199,8 @@ const submissionPanel = {
   type: "ExerciseSubmission" as const,
   exerciseId: makeTmcKind({ tmcExerciseId: 3 }),
   backend: "tmc" as const,
-  courseSlug: "python-course",
-  exerciseSlug: "part01-03_exercise",
+  exerciseName: "part01-03_exercise",
+  courseTitle: "Python Programming 2026",
 }
 
 function submissionFinished(overrides: Partial<SubmissionFinished>): SubmissionFinished {
@@ -91,8 +220,9 @@ const moocSubmissionPanel = {
   type: "ExerciseSubmission" as const,
   exerciseId: makeMoocKind({ moocExerciseId: "mooc-exercise-uuid" }),
   backend: "mooc" as const,
-  courseSlug: "mooc-course",
-  exerciseSlug: "mooc-exercise",
+  exerciseName: "Sum of three numbers",
+  courseTitle: "Introduction to Programming",
+  organization: "University of Helsinki",
 }
 
 function moocGrading(
@@ -119,6 +249,19 @@ export const SCENARIOS: Scenario[] = [
     panel: courseDetailsPanel(4, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
     reply: answerCourseDetails({ id: 4 }, moocCourse),
   },
+  {
+    id: "course-details/mooc-downloading",
+    panel: courseDetailsPanel(6, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
+    reply: answerCourseDetails(
+      { id: 6 },
+      { ...moocCourse, isWorkspaceOpen: true, parts: moocParts(true) },
+    ),
+  },
+  {
+    id: "course-details/restricted",
+    panel: courseDetailsPanel(7, makeTmcKind({ courseId: 42 })),
+    reply: answerCourseDetails({ id: 7 }, restrictedCourse),
+  },
   // Never answered, so the panel shows its loading state until the request times out.
   { id: "course-details/loading", panel: courseDetailsPanel(5, makeTmcKind({ courseId: 42 })) },
   {
@@ -139,10 +282,10 @@ export const SCENARIOS: Scenario[] = [
     id: "exercise-submission/tmc-passed",
     panel: submissionPanel,
     pushes: [
-      submissionViewMessage(
-        submissionPanel.id,
-        tmcResultView(
+      submissionViewMessage(submissionPanel.id, {
+        ...tmcResultView(
           submissionFinished({
+            points: ["1.3", "1.4"],
             feedback_answer_url: "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback",
           }),
           [
@@ -151,16 +294,17 @@ export const SCENARIOS: Scenario[] = [
           ],
           2,
         ),
-      ),
+        isExercisePassed: true,
+      }),
     ],
   },
   {
     id: "exercise-submission/tmc-failed",
     panel: submissionPanel,
     pushes: [
-      submissionViewMessage(
-        submissionPanel.id,
-        tmcResultView(
+      submissionViewMessage(submissionPanel.id, {
+        isExercisePassed: false,
+        ...tmcResultView(
           submissionFinished({
             all_tests_passed: false,
             status: "fail",
@@ -178,7 +322,100 @@ export const SCENARIOS: Scenario[] = [
           [],
           2,
         ),
-      ),
+      }),
+    ],
+  },
+  {
+    id: "exercise-submission/tmc-failed-tests",
+    panel: submissionPanel,
+    pushes: [
+      submissionViewMessage(submissionPanel.id, {
+        ...tmcResultView(
+          submissionFinished({
+            all_tests_passed: false,
+            status: "fail",
+            points: ["1.3"],
+            test_cases: [
+              {
+                name: "SumTest: test_sum_of_positives",
+                successful: true,
+                message: null,
+                detailed_message: null,
+                exception: [],
+              },
+              {
+                name: "SumTest: test_sum_of_negatives",
+                successful: false,
+                message:
+                  "With the input -1, -2 your program printed\n-1\nbut the expected output was\n-3",
+                detailed_message: null,
+                exception: [
+                  "Traceback (most recent call last):",
+                  '  File "test/test_sum.py", line 21, in test_sum_of_negatives',
+                  "AssertionError: '-1' != '-3'",
+                ],
+              },
+              {
+                name: "SumTest: test_empty_input",
+                successful: false,
+                message:
+                  "Your program crashed: ValueError: invalid literal for int() with base 10: ''",
+                detailed_message: null,
+                exception: [],
+              },
+            ],
+          }),
+          [],
+          2,
+        ),
+        isExercisePassed: false,
+      }),
+    ],
+  },
+  {
+    id: "exercise-submission/tmc-passed-next",
+    panel: submissionPanel,
+    pushes: [
+      submissionViewMessage(submissionPanel.id, {
+        ...tmcResultView(submissionFinished({ points: ["1.3", "1.4"] }), [], 2),
+        isExercisePassed: true,
+        nextExercise: { name: "part01-04_exercise" },
+      }),
+    ],
+  },
+  {
+    id: "exercise-submission/mooc-passed",
+    panel: moocSubmissionPanel,
+    pushes: [
+      submissionViewMessage(moocSubmissionPanel.id, {
+        ...moocGradingView(
+          moocGrading({
+            score_given: 3,
+            feedback_text: "Tests passed",
+            exercise_progress: {
+              exercise_id: "mooc-exercise-uuid",
+              score_given: 3,
+              score_maximum: 3,
+              completed: true,
+              attempted: true,
+              standing: "Passed",
+            },
+          }),
+          3,
+        ),
+        isExercisePassed: true,
+        nextExercise: { name: "Average of three numbers" },
+      }),
+    ],
+  },
+  {
+    id: "exercise-submission/mooc-failed",
+    panel: moocSubmissionPanel,
+    pushes: [
+      submissionViewMessage(moocSubmissionPanel.id, {
+        ...moocGradingView(moocGrading({ score_given: 0, feedback_text: "Tests failed" }), 3),
+        isExercisePassed: false,
+      }),
     ],
   },
   {
@@ -196,7 +433,12 @@ export const SCENARIOS: Scenario[] = [
   {
     id: "exercise-submission/mooc-graded",
     panel: moocSubmissionPanel,
-    pushes: [submissionViewMessage(moocSubmissionPanel.id, moocGradingView(moocGrading({}), 3))],
+    pushes: [
+      submissionViewMessage(moocSubmissionPanel.id, {
+        ...moocGradingView(moocGrading({}), 3),
+        isExercisePassed: false,
+      }),
+    ],
   },
   {
     id: "exercise-submission/mooc-timed-out",

@@ -64,8 +64,8 @@ onMount(() => {
 
 addMessageListener(panel, (message) => {
   switch (message.type) {
-    case "setCourseData": {
-      panel = { ...panel, course: message.courseData }
+    case "setCourseHomeView": {
+      view = message.view
       break
     }
     default:
@@ -121,6 +121,18 @@ Styles use the `--tmc-*` tokens in `src/styles/tokens.css` rather than raw
 `--vscode-*` names or literals; element defaults and utilities (`.muted`,
 `.actions`, `.visually-hidden`, reduced motion) live in `src/styles/base.css`.
 
+Every screen is composed the same way:
+
+- `PanelHeader` holds the one `h1`: the display name, never a slug, a muted subtitle (course ·
+  organization) and icon controls at the right, including the `ActionMenu` "⋯".
+- `StatusBanner` states the screen's current outcome under it, such as a submission's result.
+- `ActionBar` holds the buttons of a state: at most one primary and two secondary. Further
+  actions go into the header's `ActionMenu`. Close is never a button: the tab and the header
+  close a panel.
+- `Section` heads each further part in VS Code's section-header style; `h2` is styled that way
+  everywhere. Content is at most `--tmc-content-max-width` wide.
+- `Meter` shows a score and renders nothing when there are no points to give.
+
 ## Developing in a browser
 
 `pnpm run harness` serves the app at <http://localhost:5199/> outside VS Code, with hot reload.
@@ -154,5 +166,12 @@ Chromium's accessibility tree: every control has a name, each panel has one leve
 spinner raises an alert or live regions nest, and each disclosure's `aria-expanded` matches what
 it shows. Install the browser once with `pnpm exec playwright install chromium`.
 
-Both suites list the checks that fail today in `KNOWN_FAILURES`, each a bug still to fix. Such a
+`pnpm run test:visual` builds the harness too and compares a screenshot of every scenario in Light
+Modern, Dark Modern and Default High Contrast against its baseline in
+`visual/screens.spec.ts-snapshots/`. The fonts are pinned to DejaVu and the clock to a fixed date,
+so a run on Linux is repeatable; other platforms render text differently and have no baselines.
+After a deliberate visual change, rerun it with `--update-snapshots` and look at every changed
+image before committing it. CI does not run it.
+
+The contrast and accessibility suites list the checks that fail today in `KNOWN_FAILURES`, each a bug still to fix. Such a
 check is expected to fail, so fixing the bug fails the suite until its entry is deleted.

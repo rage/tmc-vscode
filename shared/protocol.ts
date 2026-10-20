@@ -1,6 +1,11 @@
 import { z } from "zod"
 
-import { FeedbackQuestionSchema, LocalCourseDataSchema } from "./course"
+import { FeedbackQuestionSchema } from "./course"
+import {
+  CourseHomeActionSchema,
+  CourseHomeExerciseActionSchema,
+  CourseHomeViewSchema,
+} from "./courseHome"
 import type { BackendKind } from "./enum"
 import { CourseIdentifierSchema, ExerciseIdentifierSchema } from "./enum"
 import { TestCase, TmcStyleValidationResult } from "./langsSchema"
@@ -34,8 +39,11 @@ export const ExerciseSubmissionPanelSchema = z.object({
   type: z.literal("ExerciseSubmission"),
   exerciseId: ExerciseIdentifierSchema,
   backend: BackendKindSchema,
-  courseSlug: z.string(),
-  exerciseSlug: z.string(),
+  /** The exercise's display name: a mooc exercise's title, a tmc exercise's slug. */
+  exerciseName: z.string(),
+  courseTitle: z.string(),
+  /** The organization's display name; absent for a tmc course, which stores only its slug. */
+  organization: z.string().optional(),
 })
 
 export type ExerciseSubmissionPanel = z.infer<typeof ExerciseSubmissionPanelSchema>
@@ -153,6 +161,8 @@ const SubmissionPhaseSchema = z.enum([
 export const SubmissionViewSchema = z.object({
   phase: SubmissionPhaseSchema,
   headline: z.string(),
+  /** How the headline reads at a glance; `warning` is a partial score or an unchecked grading. */
+  tone: z.enum(["progress", "passed", "warning", "failed", "info"]),
   /** What the phase means for the student, where the headline does not say it. */
   explanation: z.string().optional(),
   /** The backend's completion estimate, 0..1; absent while it has none, as for mooc grading. */
@@ -201,11 +211,11 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     type: z.literal("setPanel"),
     panel: PanelSchema,
   }),
-  // The course a CourseDetails panel shows, whenever the stored copy changes.
+  // The course a CourseDetails panel shows, whenever anything it shows changes.
   z.object({
-    type: z.literal("setCourseData"),
+    type: z.literal("setCourseHomeView"),
     target: targetPanelSchema("CourseDetails"),
-    courseData: LocalCourseDataSchema,
+    view: CourseHomeViewSchema,
   }),
   // The whole view each time: the latest one is what a reloaded panel is sent again.
   z.object({
@@ -258,7 +268,14 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("courseAction"),
     sourcePanel: targetPanelSchema("CourseDetails"),
-    action: z.enum(["downloadAllExercises", "revealInCoursesView"]),
+    action: CourseHomeActionSchema,
+  }),
+  // Acts on one exercise of the course the named panel shows.
+  z.object({
+    type: z.literal("courseExerciseAction"),
+    sourcePanel: targetPanelSchema("CourseDetails"),
+    exerciseId: ExerciseIdentifierSchema,
+    action: CourseHomeExerciseActionSchema,
   }),
   // Refreshes the course the named panel shows.
   z.object({
@@ -337,8 +354,8 @@ export type RequestType = RequestMessage["type"]
 
 /** What a successful `reply` carries, per request type. */
 export const ReplyValueSchemas = {
-  requestCourseDetailsData: LocalCourseDataSchema,
-  refreshCourseDetails: LocalCourseDataSchema,
+  requestCourseDetailsData: CourseHomeViewSchema,
+  refreshCourseDetails: CourseHomeViewSchema,
   // the paste link
   pasteExercise: z.string(),
   keepWaitingForGrading: z.undefined(),

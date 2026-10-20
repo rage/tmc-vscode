@@ -3,7 +3,7 @@ import { tick } from "svelte"
 
 import { makeTmcKind } from "../../shared/lib"
 import App from "./App.svelte"
-import { tmcLocalCourse } from "./test/fixtures"
+import { courseHomeView } from "./test/fixtures"
 import { dispatchToWebview, postedMessages } from "./test/setup"
 
 suite("App global error handling", () => {
@@ -120,7 +120,7 @@ suite("App reload handshake", () => {
     // synchronous, so the `tick` below stands in for that gap -- without it this test
     // would pass for the wrong reason, or fail for one.
     render(App)
-    const course = tmcLocalCourse({ title: "Ordering Course" })
+    const view = courseHomeView({ title: "Ordering Course" })
 
     dispatchToWebview({
       type: "setPanel",
@@ -129,9 +129,9 @@ suite("App reload handshake", () => {
     await tick()
 
     dispatchToWebview({
-      type: "setCourseData",
+      type: "setCourseHomeView",
       target: { id: 7, type: "CourseDetails" },
-      courseData: course,
+      view,
     })
 
     expect(await screen.findByText("Ordering Course")).toBeInTheDocument()

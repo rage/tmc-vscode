@@ -10,7 +10,14 @@ h3 {
 h1 {
   font-size: var(--tmc-font-size-heading);
 }
-h2,
+/* Section headers, as VS Code draws them in the side bar and the Settings editor. */
+h2 {
+  font-size: var(--tmc-font-size-section);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tmc-section-header-foreground);
+  margin-top: var(--tmc-space-6);
+}
 h3 {
   font-size: var(--tmc-font-size-body);
 }

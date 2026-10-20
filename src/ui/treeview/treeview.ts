@@ -129,6 +129,7 @@ export class CourseTreeItem extends vscode.TreeItem {
       newCount > 0 && { spoken: newExercises, tooltip: newExercises },
       updateCount > 0 && { spoken: updates, tooltip: updates },
     ])
+    this.command = { command: "tmc.courseDetails", title: "Show Course", arguments: [this] }
     this._buildChildren = () =>
       parts.length === 1 && parts[0]?.isUngrouped
         ? exercises.map((ex) => new ExerciseTreeItem(this, this.courseId, ex, context))
@@ -339,6 +340,12 @@ interface CourseView {
 export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewRow> {
   private readonly _changed = new vscode.EventEmitter<undefined>()
   public readonly onDidChangeTreeData = this._changed.event
+  private readonly _rendered = new vscode.EventEmitter<void>()
+  /**
+   * Fires once per burst of changes to anything the view shows, whether or not it is visible,
+   * so a screen showing the same courses can follow it.
+   */
+  public readonly onDidRender = this._rendered.event
   private readonly _view: vscode.TreeView<CoursesViewRow>
   private readonly _disposables: vscode.Disposable[]
   private _source: CoursesTreeSource | undefined
@@ -364,6 +371,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
     this._disposables = [
       this._view,
       this._changed,
+      this._rendered,
       downloadFailures.onDidChange(() => this.refresh()),
       exerciseOperations.onDidChange(() => this.refresh()),
       updateablesRegistry.onDidChange(() => this.refresh()),
@@ -407,6 +415,11 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
       this._isRestricted = isRestricted
       this.refresh()
     }
+  }
+
+  /** Whether `backend` answered the last course refresh, as far as this window knows. */
+  public isBackendReachable(backend: BackendKind): boolean {
+    return !this._unreachableBackends.has(backend)
   }
 
   /** Records whether `backend` answered the last course refresh. */
@@ -472,6 +485,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
     } else {
       this._isShownStale = true
     }
+    this._rendered.fire()
   }
 
   private _onDidChangeVisibility(): void {
@@ -550,6 +564,19 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
     return true
   }
 
+  /**
+   * Expands the course's row without taking focus: a click on a course runs its command instead
+   * of expanding it, and the student still expects to see its exercises.
+   */
+  public async expandCourse(courseId: CourseIdentifier): Promise<void> {
+    const item = this._currentRoots().find((root) =>
+      CourseIdentifier.equals(root.courseId, courseId),
+    )
+    if (item && this._view.visible) {
+      await this._view.reveal(item, { select: true, focus: false, expand: true })
+    }
+  }
+
   /** Opens the view with the course's row selected, focused and expanded. */
   public async revealCourse(courseId: CourseIdentifier): Promise<void> {
     const item = this._currentRoots().find((root) =>
@@ -621,7 +648,10 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
   }
 }
 
-function downloadStatusOf(id: ExerciseIdentifier): "downloading" | "downloadFailed" | undefined {
+/** Whether the exercise is downloading or failed to, as the Courses view and course home show it. */
+export function downloadStatusOf(
+  id: ExerciseIdentifier,
+): "downloading" | "downloadFailed" | undefined {
   if (exerciseOperations.isRunning(id, "downloading")) {
     return "downloading"
   }
@@ -694,7 +724,7 @@ function exerciseIcon(exercise: ExerciseView): vscode.ThemeIcon {
 }
 
 /** A tmc part's slug prefix as a student reads it: `part01` is "Part 1". */
-function partLabel(name: string): string {
+export function partLabel(name: string): string {
   const number = name.match(/^part0*(\d+)$/i)?.[1]
   return number ? `Part ${number}` : name
 }

@@ -3,6 +3,7 @@
   import { uiState } from "../utilities/uiState.svelte"
   import Button from "./Button.svelte"
   import ErrorNotice from "./ErrorNotice.svelte"
+  import Section from "./Section.svelte"
 
   interface Props {
     /** The questions the course's teachers ask after a TMC submission. */
@@ -41,8 +42,7 @@
   }
 </script>
 
-<section class="feedback" aria-labelledby="{formId}-heading">
-  <h2 id="{formId}-heading">Give feedback</h2>
+<Section title="Give feedback">
   {#if status === "sent"}
     <p>Thank you for your feedback.</p>
   {:else}
@@ -93,12 +93,9 @@
       </Button>
     </div>
   {/if}
-</section>
+</Section>
 
 <style>
-  .feedback {
-    margin: var(--tmc-space-4) 0;
-  }
   .question p {
     margin: var(--tmc-space-3) 0 var(--tmc-space-1);
   }

@@ -10,6 +10,7 @@ import { logWarnings } from "../api/withOperation"
 import { ExerciseStatus } from "../api/workspaceManager"
 import { Logger } from "../utilities"
 import { downloadCourseExercises } from "./downloadCourseExercises"
+import type { DownloadProgressPlace } from "./downloadOrUpdateExercises"
 import type { ReadyActionContext } from "./types"
 
 /**
@@ -80,6 +81,7 @@ export async function downloadAndOpenExercises(
   actionContext: ReadyActionContext,
   exerciseIdsToOpen: ExerciseIdentifier[],
   courseId: CourseIdentifier,
+  progressPlace?: DownloadProgressPlace,
 ): Promise<Result<OpenedExercises & Warned, Error>> {
   const { userData, workspaceManager } = actionContext.startup
 
@@ -97,7 +99,12 @@ export async function downloadAndOpenExercises(
     (id) => courseExerciseKeys.has(ExerciseIdentifier.key(id)) && !workspaceManager.getExercise(id),
   )
   if (exercisesToDownload.length > 0) {
-    const downloaded = await downloadCourseExercises(actionContext, courseId, exercisesToDownload)
+    const downloaded = await downloadCourseExercises(
+      actionContext,
+      courseId,
+      exercisesToDownload,
+      progressPlace,
+    )
     if (downloaded.err) {
       return downloaded
     }

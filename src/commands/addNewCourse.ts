@@ -15,7 +15,6 @@ import { separator } from "../api/dialog"
 import { withOperation } from "../api/withOperation"
 import { MOOC_BACKEND_URL } from "../config/constants"
 import { Logger, openWebLink } from "../utilities"
-import { downloadExercisesOfCourse } from "./downloadExercisesOfCourse"
 
 const TITLE = "Add Course"
 
@@ -54,7 +53,7 @@ function courseItem(
 }
 
 /**
- * Lets the user pick a course from either backend and adds it.
+ * Lets the user pick a course from either backend, adds it and opens its course home.
  *
  * courses.mooc.fi lists only the courses the user is enrolled in, so they come first and add in
  * one step. tmc.mooc.fi hides thousands of courses behind its organizations, so picking one of
@@ -98,27 +97,8 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
     () => actions.addNewCourse(actionContext, chosen.organizationSlug, chosen.courseId),
   )
   if (added.ok) {
-    void dialog.notification(
-      `Added ${chosen.name}.`,
-      [
-        "Download and Open Course",
-        (): void => void downloadAndOpenCourse(actionContext, chosen.courseId),
-      ],
-      [
-        "Course Details",
-        (): void => void vscode.commands.executeCommand("tmc.courseDetails", chosen.courseId),
-      ],
-    )
+    await vscode.commands.executeCommand("tmc.courseDetails", chosen.courseId)
   }
-}
-
-/** Downloads the exercises a new course starts with, then opens its workspace. */
-async function downloadAndOpenCourse(
-  actionContext: ReadyActionContext,
-  courseId: CourseIdentifier,
-): Promise<void> {
-  await downloadExercisesOfCourse(actionContext, courseId, "startingParts")
-  await vscode.commands.executeCommand("tmc.openCourseWorkspace", courseId)
 }
 
 /** Runs the pick to a course, a login request, or `undefined` when dismissed. */

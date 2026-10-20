@@ -203,6 +203,19 @@ vscode.authentication = {
 // jest-mock-vscode has no `extensions` namespace; this one sees no extension installed.
 vscode.extensions = { all: [], getExtension: vi.fn(), onDidChange: vi.fn() }
 
+// jest-mock-vscode's tabGroups has no active group; this one shows no tab.
+Object.defineProperty(vscode.window, "tabGroups", {
+  value: {
+    all: [],
+    activeTabGroup: { activeTab: undefined, tabs: [] },
+    onDidChangeTabs: new vscode.EventEmitter().event,
+    onDidChangeTabGroups: new vscode.EventEmitter().event,
+    close: vi.fn(),
+  },
+  configurable: true,
+  writable: true,
+})
+
 // jest-mock-vscode returns `undefined` where the real API returns a `Disposable`, and
 // the extension pushes what these return into `context.subscriptions`. Without a real
 // disposable, a test that shuts a context down the way VS Code does walks an array of

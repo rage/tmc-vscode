@@ -215,7 +215,7 @@ suite("CoursesTree", function () {
   })
 
   // A click expands the course, so Course Details is left to the context menu.
-  test("a course item carries its points, backend and id, and no click command", function () {
+  test("a course item carries its points, backend and id, and opens its course home on click", function () {
     const item = first(show(tmcCourse())) as CourseTreeItem
 
     expect(item.description).toBe("12/40 · tmc.mooc.fi")
@@ -224,7 +224,7 @@ suite("CoursesTree", function () {
     )
     expect(item.contextValue).toBe("course.tmc")
     expect(item.courseId).toEqual(idOfTmcCourse(1))
-    expect(item.command).toBeUndefined()
+    expect(item.command).toMatchObject({ command: "tmc.courseDetails", arguments: [item] })
     expect((item.iconPath as vscode.ThemeIcon).id).toBe("book")
   })
 

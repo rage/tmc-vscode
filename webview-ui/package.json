@@ -10,7 +10,8 @@
     "check:tsc": "svelte-check --tsconfig ./tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "harness": "vite --config dev/vite.config.ts",
     "harness:build": "vite build --config dev/vite.config.ts",
-    "test:a11y": "vite build --config dev/vite.config.ts && playwright test",
+    "test:a11y": "vite build --config dev/vite.config.ts && playwright test --project=a11y",
+    "test:visual": "vite build --config dev/vite.config.ts && playwright test --project=visual",
     "themes:refresh": "xvfb-maybe -a -- node dev/refreshThemes.mjs"
   },
   "dependencies": {

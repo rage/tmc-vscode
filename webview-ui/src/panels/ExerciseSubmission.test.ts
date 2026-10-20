@@ -22,8 +22,8 @@ const panel: ExerciseSubmissionPanel = {
   type: "ExerciseSubmission",
   exerciseId: makeTmcKind({ tmcExerciseId: 1 }),
   backend: "tmc",
-  courseSlug: "python-course",
-  exerciseSlug: "part01-01_hello",
+  exerciseName: "part01-01_hello",
+  courseTitle: "Python Course",
 }
 
 const moocPanel: ExerciseSubmissionPanel = {
@@ -31,8 +31,9 @@ const moocPanel: ExerciseSubmissionPanel = {
   type: "ExerciseSubmission",
   exerciseId: makeMoocKind({ moocExerciseId: "mooc-ex-uuid" }),
   backend: "mooc",
-  courseSlug: "mooc-course",
-  exerciseSlug: "mooc-exercise",
+  exerciseName: "Sum of three numbers",
+  courseTitle: "Introduction to Programming",
+  organization: "University of Helsinki",
 }
 
 const FEEDBACK_URL = "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback"
@@ -68,6 +69,27 @@ async function clickToolbarButton(label: string): Promise<void> {
   await fireEvent.click((await withinShadowRoot(host)).getByRole("button"))
 }
 
+/** The overflow menu's item names, leaving the menu closed. */
+async function menuItems(): Promise<string[]> {
+  const trigger = screen.queryByRole("button", { name: "More Actions" })
+  if (!trigger) {
+    return []
+  }
+  await fireEvent.click(trigger)
+  const names = (await screen.findAllByRole("menuitem")).map((item) => item.textContent?.trim())
+  await fireEvent.keyDown(screen.getAllByRole("menuitem")[0]!, { key: "Escape" })
+  return names.filter((name) => name !== undefined)
+}
+
+async function chooseMenuItem(name: string): Promise<void> {
+  await fireEvent.click(await screen.findByRole("button", { name: "More Actions" }))
+  await fireEvent.click(await screen.findByRole("menuitem", { name }))
+}
+
+function isSecondary(button: HTMLElement): boolean {
+  return (button as HTMLElement & { secondary: boolean }).secondary
+}
+
 async function progressBar(): Promise<HTMLElement> {
   const host = document.querySelector("vscode-progress-bar")!
   return (await withinShadowRoot(host)).getByRole("progressbar", {
@@ -79,7 +101,18 @@ suite("ExerciseSubmission panel (in progress)", () => {
   test("names the exercise and shows activity before the host's first view", () => {
     render(ExerciseSubmission, { props: { panel } })
     expect(screen.getByRole("heading", { level: 1, name: "part01-01_hello" })).toBeInTheDocument()
+    expect(screen.getByText("Python Course")).toBeInTheDocument()
     expect(document.querySelector("vscode-progress-bar")).not.toBeNull()
+  })
+
+  test("names a mooc exercise by its title, under its course and organization", () => {
+    render(ExerciseSubmission, { props: { panel: moocPanel } })
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Sum of three numbers" }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText("Introduction to Programming · University of Helsinki"),
+    ).toBeInTheDocument()
   })
 
   test("lists the progress steps, marking the earlier ones done", async () => {
@@ -118,9 +151,9 @@ suite("ExerciseSubmission panel (in progress)", () => {
     )
 
     const background = await screen.findByRole("button", { name: "Run in Background" })
-    expect(background).not.toHaveAttribute("secondary")
+    expect(isSecondary(background)).toBe(true)
     postedMessages.mockClear()
-    screen.getByRole("button", { name: "Show Submission in Browser" }).click()
+    await chooseMenuItem("Show Submission in Browser")
     expect(postedMessages).toHaveBeenCalledWith({
       type: "openLinkInBrowser",
       url: "https://tmc.mooc.fi/submissions/1",
@@ -155,7 +188,7 @@ suite("ExerciseSubmission panel (in progress)", () => {
 })
 
 suite("ExerciseSubmission panel (failures)", () => {
-  test("replaces the progress with the failure and offers Close", async () => {
+  test("replaces the progress with the failure and offers to submit again", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showView(
       panel.id,
@@ -167,7 +200,9 @@ suite("ExerciseSubmission panel (failures)", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("ECONNRESET")
     expect(document.querySelector("vscode-progress-bar")).toBeNull()
     expect(screen.queryByText("Run in Background")).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument()
+    expect(isSecondary(screen.getByRole("button", { name: "Submit Again" }))).toBe(false)
+    expect(isSecondary(screen.getByRole("button", { name: "Run Tests" }))).toBe(true)
+    expect(screen.queryByText("Close", { selector: "vscode-button" })).not.toBeInTheDocument()
   })
 
   test("offers the failure's remedy", async () => {
@@ -243,10 +278,10 @@ suite("ExerciseSubmission panel (tmc results)", () => {
     render(ExerciseSubmission, { props: { panel } })
     showTmcResult(submissionFinished({ solution_url: "https://tmc.mooc.fi/solutions/1" }))
 
-    const show = await screen.findByRole("button", { name: "Show Submission in Browser" })
+    await screen.findByRole("heading", { name: "All tests passed on the server" })
     postedMessages.mockClear()
-    show.click()
-    screen.getByRole("button", { name: "Show Model Solution in Browser" }).click()
+    await chooseMenuItem("Show Submission in Browser")
+    await chooseMenuItem("Show Model Solution in Browser")
     expect(postedMessages.mock.calls).toEqual([
       [{ type: "openLinkInBrowser", url: "https://tmc.mooc.fi/submissions/1" }],
       [{ type: "openLinkInBrowser", url: "https://tmc.mooc.fi/solutions/1" }],
@@ -276,7 +311,18 @@ suite("ExerciseSubmission panel (tmc results)", () => {
       await screen.findByRole("heading", { name: "Some tests failed on the server" }),
     ).toBeInTheDocument()
     expect(screen.getByText("0 of 1 tests passed")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Need help?" })).toBeInTheDocument()
+    expect(await menuItems()).toContain("Ask for Help…")
+  })
+
+  test("asking for help opens the Get help section and moves focus to it", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showTmcResult(submissionFinished({ status: "fail", all_tests_passed: false, points: [] }))
+    await screen.findByRole("heading", { name: "Some tests failed on the server" })
+    expect(screen.queryByRole("region", { name: "Get help" })).not.toBeInTheDocument()
+
+    await chooseMenuItem("Ask for Help…")
+
+    expect(await screen.findByRole("heading", { name: "Get help" })).toHaveFocus()
   })
 
   test("a passed submission offers no paste help", async () => {
@@ -284,7 +330,7 @@ suite("ExerciseSubmission panel (tmc results)", () => {
     showTmcResult(submissionFinished())
 
     await screen.findByRole("heading", { name: "All tests passed on the server" })
-    expect(screen.queryByRole("button", { name: "Need help?" })).not.toBeInTheDocument()
+    expect(await menuItems()).not.toContain("Ask for Help…")
   })
 
   test("valgrind output is available behind a disclosure", async () => {
@@ -409,18 +455,20 @@ suite("ExerciseSubmission panel (mooc results)", () => {
       "aria-valuetext",
       "2.67 / 3 points",
     )
-    expect(screen.getByText("Great work")).toBeInTheDocument()
+    expect(screen.getByText("Grader feedback:").parentElement).toHaveTextContent(
+      "Grader feedback: Great work",
+    )
     expect(
       screen.queryByText(/tests? (passed|failed)/i, { ignore: "h1, h2, h3, script, style" }),
     ).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument()
     expect(screen.queryByText("Run in Background")).not.toBeInTheDocument()
   })
 
   test("a partial score offers paste help, a full one does not", async () => {
     const { unmount } = render(ExerciseSubmission, { props: { panel: moocPanel } })
     showMoocGrading(moocGrading({ score_given: 1 }))
-    expect(await screen.findByRole("button", { name: "Need help?" })).toBeInTheDocument()
+    await screen.findByRole("heading", { name: "Some tests failed on the server" })
+    expect(await menuItems()).toContain("Ask for Help…")
     unmount()
 
     render(ExerciseSubmission, { props: { panel: moocPanel } })
@@ -438,7 +486,7 @@ suite("ExerciseSubmission panel (mooc results)", () => {
       }),
     )
     await screen.findByRole("heading", { name: "Exercise passed" })
-    expect(screen.queryByRole("button", { name: "Need help?" })).not.toBeInTheDocument()
+    expect(await menuItems()).not.toContain("Ask for Help…")
   })
 
   test("the last try below full points says the score is final", async () => {
@@ -462,7 +510,7 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     ).toBeInTheDocument()
   })
 
-  test("a pass leads on to the next exercise, with Close beside it", async () => {
+  test("a pass leads on to the next exercise as the only button", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showView(panel.id, {
       ...tmcResultView(submissionFinished({ all_tests_passed: true }), [], 2),
@@ -472,9 +520,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     postedMessages.mockClear()
 
     const next = await screen.findByRole("button", { name: "Next: part01-02_world" })
-    expect(next).not.toHaveAttribute("secondary")
-    expect(screen.getByRole("button", { name: "Close" })).toHaveAttribute("secondary")
-    expect(screen.queryByRole("button", { name: "Submit Again" })).not.toBeInTheDocument()
+    expect(isSecondary(next)).toBe(false)
+    expect(document.querySelectorAll("vscode-button")).toHaveLength(1)
     next.click()
 
     expect(postedMessages).toHaveBeenCalledWith({
@@ -492,8 +539,12 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     })
     postedMessages.mockClear()
 
-    ;(await screen.findByRole("button", { name: "Run Tests" })).click()
-    screen.getByRole("button", { name: "Submit Again" }).click()
+    const runTests = await screen.findByRole("button", { name: "Run Tests" })
+    const submitAgain = screen.getByRole("button", { name: "Submit Again" })
+    expect(isSecondary(runTests)).toBe(false)
+    expect(isSecondary(submitAgain)).toBe(true)
+    runTests.click()
+    submitAgain.click()
 
     expect(postedMessages.mock.calls.map(([message]) => message.action)).toEqual([
       "runTests",
@@ -502,14 +553,14 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     expect(screen.queryByRole("button", { name: /^Next:/ })).not.toBeInTheDocument()
   })
 
-  test("awaiting manual grading explains itself and offers Close", async () => {
+  test("awaiting manual grading explains itself and asks nothing of the student", async () => {
     render(ExerciseSubmission, { props: { panel: moocPanel } })
     showMoocGrading(moocGrading({ grading_progress: "PendingManual" }))
 
     expect(await screen.findByText(/A teacher will grade this submission/)).toBeInTheDocument()
     expect(screen.queryByText("Run in Background")).not.toBeInTheDocument()
     expect(screen.queryByText("Keep Waiting")).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument()
+    expect(document.querySelectorAll("vscode-button")).toHaveLength(0)
   })
 
   for (const [name, status] of [
@@ -517,14 +568,13 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     ["grading not ready", moocGrading({ grading_progress: "NotReady" })],
     ["no grading yet", { status: "no-grading-yet" }],
   ] as const) {
-    test(`${name}: offers Keep Waiting first, and Close`, async () => {
+    test(`${name}: offers Keep Waiting`, async () => {
       render(ExerciseSubmission, { props: { panel: moocPanel } })
       showMoocGrading(status)
 
       expect(await screen.findByText(/VS Code stopped waiting/)).toBeInTheDocument()
       const keepWaiting = screen.getByRole("button", { name: "Keep Waiting" })
-      expect(keepWaiting).not.toHaveAttribute("secondary")
-      expect(screen.getByRole("button", { name: "Close" })).toHaveAttribute("secondary")
+      expect(isSecondary(keepWaiting)).toBe(false)
       expect(screen.queryByText("Run in Background")).not.toBeInTheDocument()
     })
   }
@@ -616,8 +666,8 @@ suite("ExerciseSubmission panel shown again after being hidden", () => {
 
   test("still shows the paste link the host answered with", async () => {
     showPanel()
-    await fireEvent.click(await screen.findByRole("button", { name: "Need help?" }))
-    ;(await screen.findByRole("button", { name: /^Submit to .* paste$/ })).click()
+    await chooseMenuItem("Ask for Help…")
+    ;(await screen.findByRole("button", { name: /^Send to .* paste$/ })).click()
     replyToRequest("pasteExercise", { ok: true, value: "https://tmc.mooc.fi/paste/abc" })
     await screen.findByText(/https:\/\/tmc\.mooc\.fi\/paste\/abc/)
 

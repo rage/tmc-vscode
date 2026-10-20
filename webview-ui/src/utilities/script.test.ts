@@ -1,7 +1,7 @@
 import { render } from "@testing-library/svelte"
 
 import { makeTmcKind } from "../../../shared/lib"
-import { tmcLocalCourse } from "../test/fixtures"
+import { courseHomeView } from "../test/fixtures"
 import MessageListenerProbe from "../test/MessageListenerProbe.svelte"
 import RequesterProbe from "../test/RequesterProbe.svelte"
 import { dispatchToWebview, postedMessages, replyToRequest } from "../test/setup"
@@ -13,9 +13,9 @@ const courseDetails = {
   courseId: makeTmcKind({ courseId: 42 }),
 }
 const setCourseData = {
-  type: "setCourseData",
+  type: "setCourseHomeView",
   target: { id: 5, type: "CourseDetails" },
-  courseData: tmcLocalCourse(),
+  view: courseHomeView(),
 } as const
 
 afterEach(() => {

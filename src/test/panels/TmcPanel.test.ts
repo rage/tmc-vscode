@@ -6,6 +6,7 @@ import * as vscode from "vscode"
 
 import type {
   BackendKind,
+  CourseHomeView,
   ExerciseSubmissionPanel,
   ExtensionToWebview,
   LocalCourseData,
@@ -21,7 +22,9 @@ import { BottleneckError, InitializationError, presentationFor } from "../../err
 import type { PanelMessage } from "../../panels/router"
 import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
 import { MAIN_PANEL_VIEW_TYPE, SIDE_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
+import { shownCourseHome } from "../../ui/shownCourseHome"
 import { submissionViews } from "../../ui/submissionViews"
+import type CoursesTree from "../../ui/treeview/treeview"
 import { Logger } from "../../utilities"
 import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
 import { idOfMoocExercise, idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
@@ -156,7 +159,7 @@ suite("TmcPanel initialization guards", () => {
       type: "reply",
       target: { id: sourcePanel.id, type: sourcePanel.type },
       requestId: 7,
-      outcome: { ok: true, value: courseWith(0) },
+      outcome: { ok: true, value: courseHomeOf(courseWith(0)) },
     })
   })
 
@@ -217,6 +220,17 @@ suite("initializationErrorHelpPanel", () => {
     expect(panel.failures[0]).toMatchObject({ error: "langs offline: network unreachable" })
   })
 })
+
+// The view's own content is `buildCourseHomeView`'s to test; these tests follow where it goes.
+vi.mock("../../ui/courseHome", () => ({
+  buildCourseHomeView: (
+    actionContext: { startup: { userData: UserData } },
+    courseId: CourseIdentifier,
+  ) => {
+    const course = actionContext.startup.userData.getCourse(courseId)
+    return course.ok ? Ok(courseHomeOf(course.val)) : course
+  },
+}))
 
 vi.mock("../../actions", () => ({
   keepWaitingForGrading: vi.fn(),
@@ -296,7 +310,7 @@ suite("TmcPanel handler dispatch", () => {
     await listener({
       type: "courseAction",
       sourcePanel: { id: shown.id, type: shown.type },
-      action: "downloadAllExercises",
+      action: "switchCourseWorkspace",
     })
     await listener({
       type: "courseAction",
@@ -306,12 +320,10 @@ suite("TmcPanel handler dispatch", () => {
     await listener({
       type: "courseAction",
       sourcePanel: { id: 9999, type: "CourseDetails" },
-      action: "downloadAllExercises",
+      action: "switchCourseWorkspace",
     })
 
-    expect(handlers.openWorkspace.mock.calls).toEqual([
-      ["tmc.downloadAllExercises", idOfTmcCourse(42)],
-    ])
+    expect(handlers.openWorkspace.mock.calls).toEqual([["tmc.switchWorkspace"]])
     expect(actionContext.coursesTree.revealCourse).toHaveBeenCalledExactlyOnceWith(
       idOfTmcCourse(42),
     )
@@ -326,8 +338,7 @@ suite("TmcPanel handler dispatch", () => {
       ...exerciseSubmissionPanel(),
       exerciseId: backend === "tmc" ? idOfTmcExercise(7) : idOfMoocExercise("loops-uuid"),
       backend,
-      courseSlug: "python-course",
-      exerciseSlug: "loops",
+      exerciseName: "loops",
     }
     const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
     await listener({ type: "pasteExercise", requestId: 1, sourcePanel: targetOf(shown) })
@@ -695,7 +706,7 @@ suite("TmcPanel ready handshake", () => {
     const types = vi
       .mocked(panel.webview.postMessage)
       .mock.calls.map(([message]) => (message as { type: string }).type)
-    expect(types).toEqual(["setPanel", "setCourseData"])
+    expect(types).toEqual(["setPanel", "setCourseHomeView"])
   })
 
   test("does not replay a message aimed at a panel that is no longer shown", async () => {
@@ -753,7 +764,7 @@ suite("TmcPanel ready handshake", () => {
     const types = vi
       .mocked(panel.webview.postMessage)
       .mock.calls.map(([message]) => (message as { type: string }).type)
-    expect(types).toEqual(["setPanel", "setCourseData"])
+    expect(types).toEqual(["setPanel", "setCourseHomeView"])
   })
 
   test("a webview that has rendered nothing gets nothing resent", async () => {
@@ -795,6 +806,7 @@ function submissionViewFor(
     view: {
       phase: "grading",
       headline,
+      tone: "progress",
       progressSteps: [],
       testCases: [],
       canKeepWaiting: false,
@@ -893,12 +905,12 @@ suite("TmcPanel hidden webviews", () => {
   })
 })
 
-/** A `setCourseData` addressed to `panel`. */
+/** A `setCourseHomeView` addressed to `panel`. */
 function courseDataFor(panel: { id: number }): PanelMessage {
   return {
-    type: "setCourseData",
+    type: "setCourseHomeView",
     target: { id: panel.id, type: "CourseDetails" },
-    courseData: courseWith(0),
+    view: courseHomeOf(courseWith(0)),
   }
 }
 
@@ -956,7 +968,7 @@ suite("TmcPanel refreshCourseDetails", () => {
         type: "reply",
         target: targetOf(shown),
         requestId: 1,
-        outcome: { ok: true, value: courseWith(2) },
+        outcome: { ok: true, value: courseHomeOf(courseWith(2)) },
       },
     ])
   })
@@ -1235,6 +1247,28 @@ suite("TmcPanel main panel lifecycle", () => {
     )
   })
 
+  test("records the course its main panel shows on screen, for notifications to defer to", async () => {
+    const fake = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(fake.panel)
+    const extensionContext = createMockContext()
+    const actionContext = createMockActionContext()
+
+    TmcPanel.renderMain(extensionContext, actionContext, {
+      id: nextPanelId(),
+      type: "CourseDetails",
+      courseId: idOfTmcCourse(42),
+    })
+    await fake.sendReady()
+    expect(shownCourseHome.isShowing(idOfTmcCourse(42))).toBe(true)
+
+    fake.hide()
+    expect(shownCourseHome.isShowing(idOfTmcCourse(42))).toBe(false)
+
+    await fake.reveal()
+    TmcPanel.renderMain(extensionContext, actionContext, helpPanel())
+    expect(shownCourseHome.isShowing(idOfTmcCourse(42))).toBe(false)
+  })
+
   test("navigating the main panel leaves the side panel standing", async () => {
     const extensionContext = createMockContext()
     const actionContext = createMockActionContext()
@@ -1372,7 +1406,7 @@ suite("TmcPanel side panel placement", () => {
     submissionViews.open(shown)
 
     expect(TmcPanel.sidePanel).toBeDefined()
-    expect(panel.title).toBe(`Submission: ${shown.exerciseSlug}`)
+    expect(panel.title).toBe(`Submission: ${shown.exerciseName}`)
   })
 
   test("reopens a closed side panel for a submission's outcome, not for its progress", async () => {
@@ -1410,7 +1444,7 @@ suite("TmcPanel side panel placement", () => {
     )
     onTestFinished(() => subscription.dispose())
     const shown = exerciseSubmissionPanel()
-    const background = { ...exerciseSubmissionPanel(), exerciseSlug: "part01-02_other" }
+    const background = { ...exerciseSubmissionPanel(), exerciseName: "part01-02_other" }
     submissionViews.open(shown)
     await sendReady()
     const offered = Promise.withResolvers<string | undefined>()
@@ -1623,8 +1657,32 @@ function exerciseSubmissionPanel(): Extract<Panel, { type: "ExerciseSubmission" 
     type: "ExerciseSubmission",
     exerciseId: idOfTmcExercise(1),
     backend: "tmc",
-    courseSlug: "python-course",
-    exerciseSlug: "part01-01_hello",
+    exerciseName: "part01-01_hello",
+    courseTitle: "Python Course",
+  }
+}
+
+/** A minimal course home view of `course`, standing in for what the host builds of it. */
+function courseHomeOf(course: LocalCourseData): CourseHomeView {
+  return {
+    backend: course.kind,
+    title: course.data.title,
+    organization: course.data.organization,
+    description: null,
+    materialUrl: null,
+    awardedPoints: course.data.awardedPoints,
+    availablePoints: course.data.availablePoints,
+    hasSoftDeadlines: false,
+    isExamMode: false,
+    isDisabled: false,
+    isOffline: false,
+    isLoggedIn: true,
+    isWorkspaceOpen: false,
+    isRestricted: false,
+    newExercises: [],
+    updates: [],
+    recentlyUpdated: [],
+    parts: [],
   }
 }
 
@@ -1653,7 +1711,7 @@ suite("TmcPanel requestCourseDetailsData", () => {
         type: "reply",
         target: targetOf(shown),
         requestId: 1,
-        outcome: { ok: true, value: courseWith(2) },
+        outcome: { ok: true, value: courseHomeOf(courseWith(2)) },
       },
     ])
   })
@@ -1697,8 +1755,43 @@ suite("TmcPanel keeps Course Details on the stored course", () => {
     changed.fire(undefined)
 
     expect(postedMessages(panel)).toEqual([
-      { type: "setCourseData", target: targetOf(shown), courseData: courseWith(3) },
+      { type: "setCourseHomeView", target: targetOf(shown), view: courseHomeOf(courseWith(3)) },
     ])
+  })
+
+  test("sends the view again whenever the Courses view re-renders", async () => {
+    const { actionContext } = contextWithChangingCourse()
+    const rendered = new vscode.EventEmitter<void>()
+    const withTree = {
+      ...actionContext,
+      coursesTree: { onDidRender: rendered.event } as unknown as CoursesTree,
+    }
+    const { panel, shown } = await mountCourseDetails(withTree)
+
+    rendered.fire()
+
+    expect(postedMessages(panel)).toEqual([
+      { type: "setCourseHomeView", target: targetOf(shown), view: courseHomeOf(courseWith(2)) },
+    ])
+  })
+
+  test("sends nothing while hidden: the document loaded on reveal asks itself", async () => {
+    resetPanels()
+    const { actionContext, changed } = contextWithChangingCourse()
+    const fake = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(fake.panel)
+    TmcPanel.renderSide(createMockContext(), actionContext, {
+      id: nextPanelId(),
+      type: "CourseDetails",
+      courseId: idOfTmcCourse(42),
+    })
+    await fake.sendReady()
+    fake.hide()
+    vi.mocked(fake.panel.webview.postMessage).mockClear()
+
+    changed.fire(undefined)
+
+    expect(fake.panel.webview.postMessage).not.toHaveBeenCalled()
   })
 
   test("sends nothing when another course changed", async () => {

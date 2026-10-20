@@ -12,6 +12,7 @@ import {
   downloadAndOpenExercises,
   downloadCourseExercises,
 } from "../../actions"
+import type { DownloadProgressPlace } from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import { withOperation } from "../../api/withOperation"
 import { ExerciseStatus } from "../../api/workspaceManager"
@@ -74,27 +75,42 @@ export async function openExercises(
   actionContext: ReadyActionContext,
   rows: CoursesTreeItem[],
 ): Promise<void> {
-  const { dialog } = actionContext
   const selected = byCourse(
     rows,
     (item) => item.status !== "opened" && item.status !== "downloading",
   )
   for (const { courseId, ids } of selected) {
-    const opened = await withOperation(dialog, { failure: "Failed to open the exercises." }, () =>
-      downloadAndOpenExercises(actionContext, ids, courseId),
-    )
-    const openLimit = opened.ok ? opened.val.exceededOpenLimit : undefined
-    if (openLimit !== undefined) {
-      void dialog.warningNotification(
-        `You have over ${openLimit} exercises open, which can slow VS Code down. Close the ones you have finished.`,
-        [
-          "Close Completed Exercises",
-          (): void => void closeCompletedExercises(actionContext, courseId),
-        ],
-      )
-    }
+    await openCourseExercises(actionContext, courseId, ids)
   }
   await showSourceFileOfOnlyExercise(actionContext, rows)
+}
+
+/**
+ * Opens exercises of one course, downloading any that are not on disk, and warns when the
+ * course then has too many open.
+ *
+ * @param progressPlace See `DownloadProgressPlace`.
+ */
+export async function openCourseExercises(
+  actionContext: ReadyActionContext,
+  courseId: CourseIdentifier,
+  ids: ExerciseIdentifier[],
+  progressPlace?: DownloadProgressPlace,
+): Promise<void> {
+  const { dialog } = actionContext
+  const opened = await withOperation(dialog, { failure: "Failed to open the exercises." }, () =>
+    downloadAndOpenExercises(actionContext, ids, courseId, progressPlace),
+  )
+  const openLimit = opened.ok ? opened.val.exceededOpenLimit : undefined
+  if (openLimit !== undefined) {
+    void dialog.warningNotification(
+      `You have over ${openLimit} exercises open, which can slow VS Code down. Close the ones you have finished.`,
+      [
+        "Close Completed Exercises",
+        (): void => void closeCompletedExercises(actionContext, courseId),
+      ],
+    )
+  }
 }
 
 /** Shows the main source file of the exercise when `rows` is one exercise row now on disk. */
