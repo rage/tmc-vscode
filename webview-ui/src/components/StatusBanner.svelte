@@ -73,6 +73,9 @@
     width: 16px;
     height: 20px;
     align-items: center;
+  }
+  /* vscode-icon sets its own colour, so the inherited one never reaches it. */
+  vscode-icon {
     color: var(--banner-accent);
   }
   vscode-progress-ring {
@@ -91,7 +94,8 @@
     letter-spacing: normal;
     color: inherit;
   }
-  .body > :global(:not(.title)) {
-    margin: var(--tmc-space-1) 0 0;
+  .body > :global(:not(.title)),
+  .body :global(p) {
+    margin: var(--tmc-space-2) 0 0;
   }
 </style>

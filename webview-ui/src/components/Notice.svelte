@@ -44,7 +44,7 @@
     padding: var(--tmc-space-2) var(--tmc-space-3);
     margin: var(--tmc-space-2) 0;
     border: 1px solid var(--tmc-hc-outline);
-    border-left: 2px solid var(--notice-accent);
+    border-left: 3px solid var(--notice-accent);
     border-radius: var(--tmc-radius);
     background: var(--notice-background);
   }

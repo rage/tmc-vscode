@@ -6,18 +6,19 @@
     title: string
     /** Small controls at the header's right end, e.g. a `Checkbox` filter or a `ToolbarButton`. */
     actions?: Snippet | undefined
+    /** The heading's id, for moving focus to the section when an action reveals it. */
+    headingId?: string | undefined
     children: Snippet
   }
 
   /** A titled part of a panel, spaced and headed the same way on every screen. */
-  let { title, actions, children }: Props = $props()
-
-  const headingId = $props.id()
+  const generatedId = $props.id()
+  let { title, actions, headingId = generatedId, children }: Props = $props()
 </script>
 
 <section class="section" aria-labelledby={headingId}>
   <div class="header">
-    <h2 id={headingId}>{title}</h2>
+    <h2 id={headingId} tabindex="-1">{title}</h2>
     {#if actions}<div class="actions">{@render actions()}</div>{/if}
   </div>
   {@render children()}

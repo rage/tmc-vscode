@@ -15,7 +15,6 @@
 
   --tmc-font-size-body: var(--vscode-font-size, 13px);
   --tmc-font-size-heading: 1.4em;
-  /* VS Code's own section headers (Explorer, Settings groups) are 11px uppercase. */
   --tmc-font-size-section: 11px;
   --tmc-content-max-width: 720px;
   /* The tree's row height, for lists that sit beside it. */
@@ -70,9 +69,10 @@
   /* The banner states an outcome; its tone is the accent alone, so one background serves all. */
   --tmc-banner-background: var(--vscode-textBlockQuote-background, transparent);
 
-  --tmc-notice-error-background: var(--vscode-inputValidation-errorBackground, transparent);
-  --tmc-notice-warning-background: var(--vscode-inputValidation-warningBackground, transparent);
-  --tmc-notice-info-background: var(--vscode-inputValidation-infoBackground, transparent);
+  /* The accent alone carries the kind; inputValidation's fills are heavier than VS Code's own. */
+  --tmc-notice-error-background: var(--tmc-banner-background);
+  --tmc-notice-warning-background: var(--tmc-banner-background);
+  --tmc-notice-info-background: var(--tmc-banner-background);
   /* errorForeground and editorWarning.foreground are under 3:1 on their tints in light themes. */
   --tmc-notice-error-accent: var(--tmc-status-failed);
   --tmc-notice-warning-accent: var(
@@ -81,7 +81,6 @@
   );
   --tmc-notice-info-accent: var(--vscode-editorInfo-foreground, var(--vscode-foreground));
 
-  --tmc-section-header-background: var(--vscode-sideBarSectionHeader-background, transparent);
   --tmc-section-header-foreground: var(--vscode-sideBarSectionHeader-foreground, inherit);
   --tmc-section-header-border: var(
     --vscode-sideBarSectionHeader-border,

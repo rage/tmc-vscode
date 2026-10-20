@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- The help panel for a failed start and the error notices in every panel have a lighter style, with one suggested action and the rest in a "⋯" menu.
 - A window TestMyCode opens in a course workspace shows the Courses view instead of the Explorer.
 - A window TestMyCode reopens in a course workspace shows the walkthrough on your next step instead of the one it last showed.
 - A submission result left open behind another editor no longer comes back after a restart as a tab with nothing in it.

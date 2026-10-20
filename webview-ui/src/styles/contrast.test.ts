@@ -32,13 +32,6 @@ const PAIRINGS: Pairing[] = [
   {
     name: "section header text",
     foreground: "var(--tmc-section-header-foreground)",
-    background: "var(--tmc-section-header-background)",
-    minimum: TEXT,
-  },
-  {
-    name: "section header description",
-    foreground: "var(--tmc-fg-muted)",
-    background: "var(--tmc-section-header-background)",
     minimum: TEXT,
   },
   ...(["error", "warning", "info"] as const).flatMap((kind) => [

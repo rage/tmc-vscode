@@ -66,11 +66,20 @@ suite("InitializationErrorHelp panel", () => {
   test.each([
     ["Restart Extension Host", "workbench.action.restartExtensionHost"],
     ["Show Logs", "tmc.logs"],
-    ["Open Log Level Setting", "workbench.action.openSettings"],
     ["Report an Issue", "workbench.action.openIssueReporter"],
   ])("%s runs %s in the extension host", async (name, command) => {
     render(InitializationErrorHelp, { props: { panel: initializationErrorHelpPanel() } })
     ;(await screen.findByRole("button", { name })).click()
     expect(postedMessages).toHaveBeenCalledWith({ type: "runCommand", command })
+  })
+
+  test("offers the log level setting in the overflow menu", async () => {
+    render(InitializationErrorHelp, { props: { panel: initializationErrorHelpPanel() } })
+    await fireEvent.click(screen.getByRole("button", { name: "More Actions" }))
+    await fireEvent.click(await screen.findByRole("menuitem", { name: "Open Log Level Setting" }))
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "runCommand",
+      command: "workbench.action.openSettings",
+    })
   })
 })
