@@ -8,9 +8,9 @@ import {
   WALKTHROUGH,
 } from "../../window/walkthrough"
 
-function activeTab(tab: { label: string; input: unknown } | undefined): void {
+function openTabs(...tabs: { label: string; input: unknown }[]): void {
   Object.defineProperty(vscode.window, "tabGroups", {
-    value: { activeTabGroup: { activeTab: tab } },
+    value: { all: [{ tabs }] },
     configurable: true,
   })
 }
@@ -39,8 +39,8 @@ suite("walkthrough", function () {
     expect(nextWalkthroughStep(done)).toBe("runTests")
   })
 
-  test("moves a restored walkthrough tab onto the next step", async function () {
-    activeTab({ label: "Welcome", input: undefined })
+  test("moves a restored walkthrough tab onto the next step, even behind another", async function () {
+    openTabs({ label: "Welcome", input: undefined }, { label: "Python Course", input: {} })
 
     await showNextWalkthroughStep(done)
 
@@ -51,8 +51,8 @@ suite("walkthrough", function () {
     )
   })
 
-  test("opens nothing over another editor", async function () {
-    activeTab({ label: "main.py", input: { uri: vscode.Uri.file("/main.py") } })
+  test("opens nothing when the walkthrough is not open", async function () {
+    openTabs({ label: "main.py", input: { uri: vscode.Uri.file("/main.py") } })
 
     await showNextWalkthroughStep(done)
 

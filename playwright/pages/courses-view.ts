@@ -27,7 +27,10 @@ export class CoursesViewPage extends TmcPage {
     return this.tree().getByRole("treeitem", { name: startingWith(label) })
   }
 
-  /** Expands `row` unless it already is; a click on a course or part only toggles it. */
+  /**
+   * Expands `row` unless it already is. A click on a part toggles it; on a course it opens the
+   * course's Course Details and expands the row.
+   */
   public async expand(row: Locator): Promise<void> {
     await expect(row).toHaveAttribute("aria-expanded", /true|false/)
     if ((await row.getAttribute("aria-expanded")) === "false") {

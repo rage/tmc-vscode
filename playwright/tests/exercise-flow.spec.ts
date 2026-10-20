@@ -1,47 +1,61 @@
 import { expect } from "@playwright/test"
 
-import { VSCODE_TEST_VERSION } from "../../config"
 import { vsCodeTest } from "../fixtures"
+import { CourseHomePage } from "../pages/course-home"
 import { CoursesViewPage } from "../pages/courses-view"
 import { TmcPage } from "../pages/tmc"
-
-const isBefore1137 =
-  VSCODE_TEST_VERSION !== "stable" &&
-  VSCODE_TEST_VERSION.localeCompare("1.137.0", undefined, { numeric: true }) < 0
 
 // The way from a course just added to the code of its exercises, and from a passed exercise
 // to the next one, without the Explorer: backend/mooc/fixtures.ts serves the courses.
 
 vsCodeTest(
-  "a course just added downloads its exercises and opens its workspace",
+  "a course just added opens in Course Details, which downloads it and opens its workspace",
   async ({ page, webview }) => {
     const coursesView = new CoursesViewPage(page, webview)
+    const courseHome = new CourseHomePage(page, webview)
+    const courseTitle = "MOOC Python Course"
 
-    await coursesView.goto()
-    await coursesView.addNewMoocCourse("MOOC Python Course")
-    await coursesView
-      .notificationToast("Added MOOC Python Course.")
-      .locator("xpath=ancestor::*[contains(@class, 'notification-toast')]")
-      .getByRole("button", { name: "Download and Open Course" })
-      .click()
+    await vsCodeTest.step(
+      "adding the course opens it in Course Details, not a notification",
+      async () => {
+        await coursesView.goto()
+        await coursesView.addNewMoocCourse(courseTitle)
+        await courseHome.expectShown(courseTitle)
+        await courseHome.expectState("passing_exercise", "Not downloaded")
+        await expect(coursesView.notificationToast(`Added ${courseTitle}.`)).toBeHidden()
+      },
+    )
 
-    // The window reloads into the course workspace, on the Courses view rather than the Explorer.
-    await expect(page).toHaveTitle(/\(mooc\) \(Workspace\)/, { timeout: 30_000 })
-    await expect(coursesView.row("passing_exercise")).toHaveAccessibleName(/, open,/)
-    await expect(page.locator(".explorer-folders-view")).toBeHidden()
-    // The fresh install opened the walkthrough, which the reload restores on the next step. Before
-    // 1.137 VS Code shows its own walkthrough in a new workspace instead.
-    if (!isBefore1137) {
-      await expect(page.locator(".getting-started-step.expanded")).toContainText("Run the tests")
-    }
-    // The workspace's roots are its open exercises.
-    await page
-      .locator('[id="workbench\\.parts\\.activitybar"]')
-      .getByRole("tab", { name: /^Explorer/ })
-      .click()
-    await expect(
-      page.locator(".explorer-folders-view").getByText("passing_exercise", { exact: true }),
-    ).toBeVisible()
+    await vsCodeTest.step(
+      "Download downloads every exercise, as the Courses view agrees",
+      async () => {
+        await courseHome.downloadAll()
+        await courseHome.expectState("passing_exercise", "Open")
+        await coursesView.expand(coursesView.row(courseTitle))
+        await expect(coursesView.row("passing_exercise")).toHaveAccessibleName(/, open,/)
+        await expect(coursesView.notificationToast("Downloading exercises…")).toBeHidden()
+      },
+    )
+
+    await vsCodeTest.step("open the course workspace from Course Details", async () => {
+      await courseHome.openCourseWorkspace()
+      // The window reloads into the course workspace, on the Courses view rather than the
+      // Explorer, with Course Details in front.
+      await expect(page).toHaveTitle(/\(mooc\) \(Workspace\)/, { timeout: 30_000 })
+      await courseHome.expectShown(courseTitle)
+      await expect(coursesView.row("passing_exercise")).toHaveAccessibleName(/, open,/)
+      await expect(page.locator(".explorer-folders-view")).toBeHidden()
+    })
+
+    await vsCodeTest.step("the workspace's roots are its open exercises", async () => {
+      await page
+        .locator('[id="workbench\\.parts\\.activitybar"]')
+        .getByRole("tab", { name: /^Explorer/ })
+        .click()
+      await expect(
+        page.locator(".explorer-folders-view").getByText("passing_exercise", { exact: true }),
+      ).toBeVisible()
+    })
   },
 )
 

@@ -54,12 +54,14 @@ export function nextWalkthroughStep(progress: WalkthroughProgress): string {
 }
 
 /**
- * Moves the walkthrough a window reload restored onto the student's next step, if it is the
- * active tab. VS Code restores it on the step it last showed, which in a window TestMyCode reloaded
- * into a course workspace is usually one already done.
+ * Moves the walkthrough a window reload restored onto the student's next step, if it is open.
+ * VS Code restores it on the step it last showed, which in a window TestMyCode reloaded into a
+ * course workspace is usually one already done. This brings it to the front of its group.
  */
 export async function showNextWalkthroughStep(progress: WalkthroughProgress): Promise<void> {
-  if (!isWalkthroughTab(vscode.window.tabGroups.activeTabGroup.activeTab)) {
+  if (
+    !vscode.window.tabGroups.all.some((group) => group.tabs.some((tab) => isWalkthroughTab(tab)))
+  ) {
     return
   }
   await vscode.commands.executeCommand(

@@ -129,6 +129,7 @@ export class CourseTreeItem extends vscode.TreeItem {
       newCount > 0 && { spoken: newExercises, tooltip: newExercises },
       updateCount > 0 && { spoken: updates, tooltip: updates },
     ])
+    this.command = { command: "tmc.courseDetails", title: "Show Course", arguments: [this] }
     this._buildChildren = () =>
       parts.length === 1 && parts[0]?.isUngrouped
         ? exercises.map((ex) => new ExerciseTreeItem(this, this.courseId, ex, context))
@@ -561,6 +562,19 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
     }
     await this._view.reveal(item, { select: true, focus: true })
     return true
+  }
+
+  /**
+   * Expands the course's row without taking focus: a click on a course runs its command instead
+   * of expanding it, and the student still expects to see its exercises.
+   */
+  public async expandCourse(courseId: CourseIdentifier): Promise<void> {
+    const item = this._currentRoots().find((root) =>
+      CourseIdentifier.equals(root.courseId, courseId),
+    )
+    if (item && this._view.visible) {
+      await this._view.reveal(item, { select: true, focus: false, expand: true })
+    }
   }
 
   /** Opens the view with the course's row selected, focused and expanded. */

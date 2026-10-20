@@ -604,11 +604,23 @@ async function activateInner(
     void Promise.resolve(vscode.commands.executeCommand(`${COURSES_VIEW_ID}.focus`)).catch((e) =>
       Logger.warn("Could not show the Courses view", e),
     )
+    // The course home lists what to do next in the course just opened, so it goes in front of
+    // the walkthrough, which still moves on to its next step behind it; but not over code the
+    // student has opened meanwhile.
+    const courseId = openCourseId(readyContext)
     void showNextWalkthroughStep({
       isLoggedIn: authState.loggedIn,
       hasCourses: ready.userData.getCourses().length > 0,
       hasDownloadedExercises: ready.workspaceManager.getExercises().length > 0,
-    }).catch((e) => Logger.warn("Could not show the next walkthrough step", e))
+    })
+      .catch((e) => Logger.warn("Could not show the next walkthrough step", e))
+      .then(
+        () =>
+          courseId &&
+          !vscode.window.activeTextEditor &&
+          vscode.commands.executeCommand("tmc.courseDetails", courseId),
+      )
+      .then(undefined, (e) => Logger.warn("Could not show the course home", e))
   }
 
   // `tmc.showWelcome` is registered only in the ready case, and VS Code rejects a command

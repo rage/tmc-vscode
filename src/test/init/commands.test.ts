@@ -5,12 +5,14 @@ import { Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import type { LocalCourseData } from "../../../shared/lib"
 import type { ActionContext } from "../../actions/types"
 import { isReady } from "../../actions/types"
 import type WorkspaceManager from "../../api/workspaceManager"
 import * as commands from "../../commands"
 import { EXTENSION_ID, EXTENSION_VERSION } from "../../config/constants"
 import type Resources from "../../config/resources"
+import type { UserData } from "../../config/userdata"
 import { registerCommands, registerServiceFreeCommands } from "../../init/commands"
 import { registerTesting } from "../../init/testing"
 import { TmcPanel } from "../../panels/TmcPanel"
@@ -18,6 +20,7 @@ import { ExerciseTestController } from "../../testing/exerciseTestController"
 import * as treeCommands from "../../ui/treeview/treeCommands"
 import { CourseTreeItem, ExerciseTreeItem } from "../../ui/treeview/treeview"
 import { Logger } from "../../utilities"
+import { tmcLocalCourse } from "../fixtures/courses"
 import { idOfMoocCourse, idOfTmcCourse } from "../fixtures/identifiers"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 
@@ -86,6 +89,16 @@ const expectedServiceFreeCommands = [
   "tmc.debug",
   "tmc.trustCourseWorkspace",
 ]
+
+/** A ready context outside any course workspace, holding `courses`. */
+function contextWithCourses(courses: LocalCourseData[]): ActionContext {
+  return createMockActionContext({
+    startup: {
+      userData: { getCourses: () => courses } as unknown as UserData,
+      workspaceManager: { activeCourse: undefined } as unknown as WorkspaceManager,
+    },
+  })
+}
 
 function registerAndCollect(actionContext: ActionContext = createMockActionContext()): {
   ids: string[]
@@ -756,15 +769,31 @@ suite("registered command handlers", function () {
     expect(wipe).toHaveBeenCalledWith(actionContext, context)
   })
 
-  test("tmc.myCourses focuses the Courses view instead of opening a panel", async function () {
+  test("tmc.myCourses focuses the Courses view, which lists several courses to pick from", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
-    const { handlers } = registerAndCollect()
+    const { handlers } = registerAndCollect(
+      contextWithCourses([tmcLocalCourse({ id: 1 }), tmcLocalCourse({ id: 2 })]),
+    )
 
     await handlers.get("tmc.myCourses")?.()
 
     expect(executeCommand).toHaveBeenCalledWith("tmcView.focus")
     expect(renderMain).not.toHaveBeenCalled()
+  })
+
+  test("tmc.myCourses opens the course home of the only course", async function () {
+    vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
+    const { handlers } = registerAndCollect(contextWithCourses([tmcLocalCourse({ id: 7 })]))
+
+    await handlers.get("tmc.myCourses")?.()
+
+    expect(renderMain).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ type: "CourseDetails", courseId: idOfTmcCourse(7) }),
+    )
   })
 
   test("tmc.revealInCoursesView reveals the exercise it ran on, else says it is not listed", async function () {
@@ -817,6 +846,18 @@ suite("registered command handlers", function () {
       actionContext,
       expect.objectContaining({ type: "CourseDetails", courseId }),
     )
+  })
+
+  test("tmc.courseDetails from a course's row also expands the row", async function () {
+    vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
+    const { handlers, actionContext } = registerAndCollect()
+    const row = Object.assign(Object.create(CourseTreeItem.prototype) as CourseTreeItem, {
+      courseId: idOfTmcCourse(7),
+    })
+
+    await handlers.get("tmc.courseDetails")?.(row)
+
+    expect(actionContext.coursesTree.expandCourse).toHaveBeenCalledWith(idOfTmcCourse(7))
   })
 
   test("tmc.courseDetails asks the user to pick a course when none is given", async function () {
