@@ -140,7 +140,12 @@ suite("downloadAndOpenExercises action", function () {
   test("downloads an exercise that is not on disk", async function () {
     await downloadAndOpenExercises(contextFor(), [MOOC_ID], COURSE_ID)
 
-    expect(downloadCourseExercises).toHaveBeenCalledWith(expect.anything(), COURSE_ID, [MOOC_ID])
+    expect(downloadCourseExercises).toHaveBeenCalledWith(
+      expect.anything(),
+      COURSE_ID,
+      [MOOC_ID],
+      undefined,
+    )
   })
 
   test("passes on the warnings of the download", async function () {

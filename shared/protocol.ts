@@ -1,6 +1,11 @@
 import { z } from "zod"
 
-import { FeedbackQuestionSchema, LocalCourseDataSchema } from "./course"
+import { FeedbackQuestionSchema } from "./course"
+import {
+  CourseHomeActionSchema,
+  CourseHomeExerciseActionSchema,
+  CourseHomeViewSchema,
+} from "./courseHome"
 import type { BackendKind } from "./enum"
 import { CourseIdentifierSchema, ExerciseIdentifierSchema } from "./enum"
 import { TestCase, TmcStyleValidationResult } from "./langsSchema"
@@ -206,11 +211,11 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     type: z.literal("setPanel"),
     panel: PanelSchema,
   }),
-  // The course a CourseDetails panel shows, whenever the stored copy changes.
+  // The course a CourseDetails panel shows, whenever anything it shows changes.
   z.object({
-    type: z.literal("setCourseData"),
+    type: z.literal("setCourseHomeView"),
     target: targetPanelSchema("CourseDetails"),
-    courseData: LocalCourseDataSchema,
+    view: CourseHomeViewSchema,
   }),
   // The whole view each time: the latest one is what a reloaded panel is sent again.
   z.object({
@@ -263,7 +268,14 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("courseAction"),
     sourcePanel: targetPanelSchema("CourseDetails"),
-    action: z.enum(["downloadAllExercises", "revealInCoursesView"]),
+    action: CourseHomeActionSchema,
+  }),
+  // Acts on one exercise of the course the named panel shows.
+  z.object({
+    type: z.literal("courseExerciseAction"),
+    sourcePanel: targetPanelSchema("CourseDetails"),
+    exerciseId: ExerciseIdentifierSchema,
+    action: CourseHomeExerciseActionSchema,
   }),
   // Refreshes the course the named panel shows.
   z.object({
@@ -342,8 +354,8 @@ export type RequestType = RequestMessage["type"]
 
 /** What a successful `reply` carries, per request type. */
 export const ReplyValueSchemas = {
-  requestCourseDetailsData: LocalCourseDataSchema,
-  refreshCourseDetails: LocalCourseDataSchema,
+  requestCourseDetailsData: CourseHomeViewSchema,
+  refreshCourseDetails: CourseHomeViewSchema,
   // the paste link
   pasteExercise: z.string(),
   keepWaitingForGrading: z.undefined(),

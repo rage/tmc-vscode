@@ -183,7 +183,11 @@ async function harness(
       } as Partial<ReadyStartup>,
     }),
     dialog,
-    coursesTree: { setBackendReachable: vi.fn() } as unknown as CoursesTree,
+    coursesTree: {
+      setBackendReachable: vi.fn(),
+      isBackendReachable: () => true,
+      onDidRender: () => ({ dispose: vi.fn() }),
+    } as unknown as CoursesTree,
   }
 
   const commandHandlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()

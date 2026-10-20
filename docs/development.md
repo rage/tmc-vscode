@@ -172,8 +172,11 @@ Most of the UI is VS Code's own, and webviews are left for what native UI cannot
   and a quick pick of its actions.
 - **Login** is a modal and a progress notification (see [One login](#one-login)).
 
-The webview panels are Course Details (a read-only course overview), the submission
-result and the initialization error help.
+The webview panels are the course home (`CourseDetails`), the submission result and the
+initialization error help. The course home lists the course's exercises, news and actions; it is
+built by `src/ui/courseHome.ts` from the same view model and registries as the Courses view, and
+pushed again whenever that view re-renders, so the two always agree. While it is on screen, news
+about its course goes into it instead of a notification (`src/ui/shownCourseHome.ts`).
 
 ## Webview panels
 

@@ -57,18 +57,24 @@ export function formatDeadline(date: Date, now: Date, locale: string | undefined
   if (Math.abs(untilMs) > RELATIVE_HINT_LIMIT_MS) {
     return absolute
   }
+  return `${absolute} (${formatRelativeTime(date, now, locale)})`
+}
+
+/** How far `date` is from `now`, e.g. "in 3 days" or "2 hours ago", in days at most. */
+export function formatRelativeTime(date: Date, now: Date, locale: string | undefined): string {
   let relative = relativeTimeFormats.get(locale)
   if (!relative) {
     relative = new Intl.RelativeTimeFormat(locale, { numeric: "auto" })
     relativeTimeFormats.set(locale, relative)
   }
-  const hint =
-    Math.abs(untilMs) >= DAY_MS
-      ? relative.format(Math.round(untilMs / DAY_MS), "day")
-      : Math.abs(untilMs) >= HOUR_MS
-        ? relative.format(Math.round(untilMs / HOUR_MS), "hour")
-        : relative.format(Math.round(untilMs / MINUTE_MS), "minute")
-  return `${absolute} (${hint})`
+  const untilMs = date.getTime() - now.getTime()
+  if (Math.abs(untilMs) >= DAY_MS) {
+    return relative.format(Math.round(untilMs / DAY_MS), "day")
+  }
+  if (Math.abs(untilMs) >= HOUR_MS) {
+    return relative.format(Math.round(untilMs / HOUR_MS), "hour")
+  }
+  return relative.format(Math.round(untilMs / MINUTE_MS), "minute")
 }
 
 /**

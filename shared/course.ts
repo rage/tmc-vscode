@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 import type { CourseIdentifier, Enum, ExerciseIdentifier } from "./enum"
-import { EnumSchema, makeMoocKind, makeTmcKind, match, unwrap } from "./enum"
+import { makeMoocKind, makeTmcKind, match, unwrap } from "./enum"
 import { CourseAiPolicy } from "./generated/langs"
 
 // The live course schemas. Storage v3 persists exactly these (see `data_v3.ts`), so a change
@@ -123,11 +123,6 @@ export namespace LocalCourseExercise {
     return lce.kind === "tmc" ? lce.data.softDeadline : null
   }
 }
-
-export const LocalCourseDataSchema = EnumSchema(
-  SharedTmcCourseDataSchema,
-  SharedMoocCourseDataSchema,
-)
 
 export type LocalCourseData = Enum<SharedTmcCourseData, SharedMoocCourseData>
 

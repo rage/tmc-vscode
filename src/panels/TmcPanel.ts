@@ -6,6 +6,9 @@ import type { ExerciseSubmissionPanel, Panel, SubmissionView } from "../../share
 import { assertUnreachable, CourseIdentifier, WebviewStateSchema } from "../../shared/lib"
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
+import { buildCourseHomeView } from "../ui/courseHome"
+import { recentUpdates } from "../ui/recentUpdates"
+import { shownCourseHome } from "../ui/shownCourseHome"
 import { submissionViews } from "../ui/submissionViews"
 import { Logger } from "../utilities"
 import { getNonce } from "./getNonce"
@@ -257,6 +260,7 @@ export class TmcPanel {
         if (!webviewPanel.visible) {
           this._isWebviewReady = false
         }
+        this._recordShownCourseHome()
       },
       null,
       this._disposables,
@@ -269,6 +273,9 @@ export class TmcPanel {
         actionContext.startup.userData.onDidChangeCourses((changed) =>
           this._onDidChangeCourses(changed),
         ),
+        // Every other source of the Courses view, gathered into one change per burst.
+        actionContext.coursesTree.onDidRender(() => this._onDidChangeCourses(undefined)),
+        recentUpdates.onDidChange(() => this._onDidChangeCourses(undefined)),
       )
     }
 
@@ -293,6 +300,7 @@ export class TmcPanel {
 
     if (this._isMain) {
       TmcPanel.mainPanel = undefined
+      shownCourseHome.set(undefined)
     } else {
       TmcPanel.sidePanel = undefined
     }
@@ -318,8 +326,10 @@ export class TmcPanel {
   }
 
   /**
-   * Keeps a CourseDetails screen and its tab title on the stored course. Not buffered: the
-   * screen asks for its course whenever its document loads.
+   * Keeps a CourseDetails screen and its tab title on the course's current state. Not
+   * buffered: the screen asks for it whenever its document loads.
+   *
+   * @param changed The one course that changed; `undefined` when any may have.
    */
   private _onDidChangeCourses(changed: CourseIdentifier | undefined): void {
     const route = this._route
@@ -329,21 +339,37 @@ export class TmcPanel {
     if (changed && !CourseIdentifier.equals(changed, route.courseId)) {
       return
     }
-    const course = this._actionContext.startup.userData.getCourse(route.courseId)
-    if (course.err) {
+    // Hidden, the document is gone, and the one loaded on reveal asks for the view itself.
+    if (!this._isWebviewReady) {
+      return
+    }
+    const view = buildCourseHomeView(this._actionContext, route.courseId)
+    if (view.err) {
       return
     }
     this._panel.title = panelTitle(route, this._actionContext)
     this._postTransient({
-      type: "setCourseData",
+      type: "setCourseHomeView",
       target: { id: route.id, type: route.type },
-      courseData: course.val,
+      view: view.val,
     })
+  }
+
+  /** Tells {@link shownCourseHome} which course this main panel shows on screen, if any. */
+  private _recordShownCourseHome(): void {
+    if (!this._isMain || this._isDisposed) {
+      return
+    }
+    const route = this._route
+    shownCourseHome.set(
+      route?.type === "CourseDetails" && this._panel.visible ? route.courseId : undefined,
+    )
   }
 
   // remembers `route` so "ready" can (re)send it
   private _render(route: Panel): void {
     this._route = route
+    this._recordShownCourseHome()
     this._messageBuffer.clear()
     this._panel.title = panelTitle(route, this._actionContext)
     if (this._isWebviewReady && !this._isDisposed) {

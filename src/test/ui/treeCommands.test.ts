@@ -183,6 +183,7 @@ suite("Courses view commands", function () {
         actionContext,
         [makeTmcKind({ tmcExerciseId: 1 }), makeTmcKind({ tmcExerciseId: 3 })],
         tmcCourse,
+        undefined,
       ],
     ])
   })

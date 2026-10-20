@@ -9,99 +9,16 @@ import type {
   TestCase,
 } from "../../../shared/langsSchema"
 import type {
+  CourseHomeExercise,
+  CourseHomeView,
   ExtensionToWebview,
   InitializationErrorHelpPanel,
-  LocalCourseData,
-  SharedMoocCourseData,
-  SharedTmcCourseData,
-  SharedTmcCourseExercise,
   SubmissionView,
 } from "../../../shared/lib"
-import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
+import { makeTmcKind } from "../../../shared/lib"
 
 // valid v4 UUIDs (version nibble 4, variant nibble 8-b); mooc ids validate as `z.uuid()`
 export const MOOC_INSTANCE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
-const MOOC_EXERCISE_ID = "cccccccc-cccc-4ccc-accc-cccccccccccc"
-
-export function tmcCourseData(overrides: Partial<SharedTmcCourseData> = {}): SharedTmcCourseData {
-  return {
-    id: 42,
-    name: "python-course",
-    title: "Python Course",
-    description: "A course about Python.",
-    organization: "mooc",
-    exercises: [
-      {
-        id: 101,
-        availablePoints: 2,
-        awardedPoints: 1,
-        name: "part01-01_hello",
-        deadline: null,
-        passed: true,
-        softDeadline: null,
-      },
-    ],
-    availablePoints: 2,
-    awardedPoints: 1,
-    perhapsExamMode: false,
-    newExercises: [],
-    notifyAfter: 0,
-    disabled: false,
-    materialUrl: null,
-    ...overrides,
-  }
-}
-
-export function moocCourseData(
-  overrides: Partial<SharedMoocCourseData> = {},
-): SharedMoocCourseData {
-  return {
-    id: MOOC_INSTANCE_ID,
-    name: "mooc-python",
-    title: "MOOC Python",
-    description: "A mooc.fi course about Python.",
-    organization: "mooc",
-    aiPolicy: "not_set",
-    exercises: [
-      {
-        id: MOOC_EXERCISE_ID,
-        availablePoints: 3,
-        awardedPoints: 0,
-        name: "loops",
-        deadline: null,
-        passed: false,
-      },
-    ],
-    availablePoints: 3,
-    awardedPoints: 0,
-    newExercises: [],
-    notifyAfter: 0,
-    ...overrides,
-  }
-}
-
-export function tmcLocalCourse(overrides: Partial<SharedTmcCourseData> = {}): LocalCourseData {
-  return makeTmcKind(tmcCourseData(overrides))
-}
-
-export function moocLocalCourse(overrides: Partial<SharedMoocCourseData> = {}): LocalCourseData {
-  return makeMoocKind(moocCourseData(overrides))
-}
-
-export function tmcExercise(
-  overrides: Partial<SharedTmcCourseExercise> = {},
-): SharedTmcCourseExercise {
-  return {
-    id: 101,
-    availablePoints: 2,
-    awardedPoints: 1,
-    name: "part01-01_hello",
-    deadline: null,
-    passed: true,
-    softDeadline: null,
-    ...overrides,
-  }
-}
 
 export function testCase(overrides: Partial<TestCase> = {}): TestCase {
   return {
@@ -172,4 +89,56 @@ export function moocGrading(overrides: Partial<MoocGrading> = {}): ExerciseTaskS
 
 export function submissionViewMessage(panelId: number, view: SubmissionView): ExtensionToWebview {
   return { type: "submissionView", target: { type: "ExerciseSubmission", id: panelId }, view }
+}
+
+/** A not-downloaded, unpassed one-point exercise row of the course home. */
+export function courseHomeExercise(
+  id: number,
+  name: string,
+  overrides: Partial<CourseHomeExercise> = {},
+): CourseHomeExercise {
+  return {
+    id: makeTmcKind({ tmcExerciseId: id }),
+    name,
+    status: "missing",
+    passed: false,
+    isOutOfTries: false,
+    awardedPoints: 0,
+    availablePoints: 1,
+    isSoftDeadline: false,
+    isUpdateable: false,
+    ...overrides,
+  }
+}
+
+/** The course home of a tmc course just added: one part, nothing downloaded, nothing to say. */
+export function courseHomeView(overrides: Partial<CourseHomeView> = {}): CourseHomeView {
+  return {
+    backend: "tmc",
+    title: "Python Programming 2026",
+    organization: "mooc",
+    description: null,
+    materialUrl: null,
+    awardedPoints: 0,
+    availablePoints: 2,
+    hasSoftDeadlines: false,
+    isExamMode: false,
+    isDisabled: false,
+    isOffline: false,
+    isLoggedIn: true,
+    isWorkspaceOpen: false,
+    isRestricted: false,
+    newExercises: [],
+    updates: [],
+    recentlyUpdated: [],
+    parts: [
+      {
+        key: "part01",
+        name: "Part 1",
+        isDefaultOpen: true,
+        exercises: [courseHomeExercise(1, "01_hello"), courseHomeExercise(2, "02_loops")],
+      },
+    ],
+    ...overrides,
+  }
 }

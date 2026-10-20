@@ -4,7 +4,6 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import type { CourseIdentifier } from "../shared/lib"
 import { backendName, LocalCourseData } from "../shared/lib"
 import { onDidFinishSubmission, refreshLocalExercises, scanLocalExercises } from "./actions"
 import type {
@@ -64,6 +63,7 @@ import {
   trackHasCourses,
   trackHasDownloadedExercises,
 } from "./ui/contextKeys"
+import { openCourseId } from "./ui/courseHome"
 import { exerciseOperations } from "./ui/exerciseOperations"
 import { failedUpdates } from "./ui/failedUpdates"
 import { AccountStatusBarItem } from "./ui/statusBarAccount"
@@ -185,16 +185,6 @@ function refreshInBackground(
   void refreshEverything(ready, { silent: true, isPromptless }).catch((e) =>
     Logger.error("Background refresh failed", e),
   )
-}
-
-/** The course of the course workspace the window has open, if it is one of the stored courses. */
-function openCourseId({ startup }: ReadyActionContext): CourseIdentifier | undefined {
-  const { activeCourse, activeCourseBackend } = startup.workspaceManager
-  if (activeCourse === undefined || activeCourseBackend === undefined) {
-    return undefined
-  }
-  const course = startup.userData.getCourseBySlug(activeCourseBackend, activeCourse)
-  return course.ok ? LocalCourseData.getCourseId(course.val) : undefined
 }
 
 async function activateInner(

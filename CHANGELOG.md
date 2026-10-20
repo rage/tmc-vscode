@@ -7,6 +7,7 @@
 - Failing server tests are listed first with their messages, the passed ones behind Show passed tests, and the grader's feedback on a courses.mooc.fi submission is labelled as such.
 - An error with a remedy, such as Log In, offers it as the result's first button.
 - The help panel for a failed start and the error notices in every panel have a lighter style, with one suggested action and the rest in a "⋯" menu.
+- Course Details is now the course's home page: its exercises by part, each with its status, points, deadline and whether it is downloaded, open or closed, with Open, Download, Reset and Download Old Submission on each; Download and Close Completed for the course; and notices for new exercises, updates, Restricted Mode, an unreachable site, an exam or a disabled course, each with its action. It shows what the Courses view shows, as it changes, including downloads in progress.
 - A window TestMyCode opens in a course workspace shows the Courses view instead of the Explorer.
 - A window TestMyCode reopens in a course workspace shows the walkthrough on your next step instead of the one it last showed.
 - A submission result left open behind another editor no longer comes back after a restart as a tab with nothing in it.

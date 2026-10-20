@@ -6,6 +6,7 @@ import type { OperationWarning, Warned } from "../api/withOperation"
 import { isSessionLost, presentationFor } from "../errors"
 import { failedUpdates } from "../ui/failedUpdates"
 import { updateablesRegistry } from "../ui/updateablesRegistry"
+import type { DownloadProgressPlace } from "./downloadOrUpdateExercises"
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises"
 import { exerciseName } from "./exerciseNames"
 import { refreshLocalExercises } from "./refreshLocalExercises"
@@ -39,6 +40,7 @@ export async function downloadExerciseUpdates(
   actionContext: ReadyActionContext,
   updates: readonly ExerciseUpdate[],
   isUnrequested = false,
+  progressPlace?: DownloadProgressPlace,
 ): Promise<Result<ExerciseUpdates, Error>> {
   // Each `courseId` is a fresh object, so only a key tells two of them are one course.
   const courseIds = new Map(updates.map((x) => [CourseIdentifier.key(x.courseId), x.courseId]))
@@ -69,7 +71,7 @@ export async function downloadExerciseUpdates(
       actionContext,
       updates.map((x) => x.exerciseId),
       otherCourses.length === 0 ? onlyCourse : undefined,
-      { isUpdate: true, isUnrequested },
+      { isUpdate: true, isUnrequested, progressPlace },
     )
     if (downloaded.err) {
       return downloaded

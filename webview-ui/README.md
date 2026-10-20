@@ -64,8 +64,8 @@ onMount(() => {
 
 addMessageListener(panel, (message) => {
   switch (message.type) {
-    case "setCourseData": {
-      panel = { ...panel, course: message.courseData }
+    case "setCourseHomeView": {
+      view = message.view
       break
     }
     default:

@@ -2,6 +2,7 @@ import { Ok, Result } from "ts-results"
 
 import type { CourseIdentifier, ExerciseIdentifier } from "../../shared/lib"
 import type { Warned } from "../api/withOperation"
+import type { DownloadProgressPlace } from "./downloadOrUpdateExercises"
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
@@ -17,9 +18,12 @@ export async function downloadCourseExercises(
   actionContext: ReadyActionContext,
   courseId: CourseIdentifier,
   exerciseIds: ExerciseIdentifier[],
+  progressPlace?: DownloadProgressPlace,
 ): Promise<Result<Warned, Error>> {
   const { userData } = actionContext.startup
-  const downloaded = await downloadOrUpdateExercises(actionContext, exerciseIds, courseId)
+  const downloaded = await downloadOrUpdateExercises(actionContext, exerciseIds, courseId, {
+    progressPlace,
+  })
   if (downloaded.err) {
     return downloaded
   }

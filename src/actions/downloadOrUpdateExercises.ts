@@ -11,6 +11,7 @@ import { ExerciseUpdateError, presentationFor } from "../errors"
 import { downloadFailures } from "../ui/downloadFailures"
 import type { ExerciseClaim } from "../ui/exerciseOperations"
 import { exerciseOperations } from "../ui/exerciseOperations"
+import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
 import { Logger } from "../utilities"
 import { describeExercises, exerciseName } from "./exerciseNames"
 import type { ReadyActionContext } from "./types"
@@ -21,9 +22,17 @@ interface DownloadLeg {
   result: Result<ExerciseDownloads, Error>
 }
 
+/**
+ * Where a requested download shows its progress: in a cancellable notification, or only on the
+ * Courses view's progress bar, for one started from a screen that shows each exercise's
+ * progress itself.
+ */
+export type DownloadProgressPlace = "notification" | "coursesView"
+
 interface DownloadOptions {
   isUpdate?: boolean
   isUnrequested?: boolean
+  progressPlace?: DownloadProgressPlace | undefined
 }
 
 interface DownloadResults {
@@ -48,7 +57,8 @@ interface DownloadResults {
  *   not updated; `isUnrequested` for a download the user did not ask for, such as an
  *   automatic update, whose progress shows in the status bar, not in a cancellable
  *   notification, and whose failed exercises get no warning: the caller reports
- *   `failureCause` where it can be withdrawn once the cause is gone.
+ *   `failureCause` where it can be withdrawn once the cause is gone; `progressPlace` for a
+ *   requested one.
  */
 export async function downloadOrUpdateExercises(
   actionContext: ReadyActionContext,
@@ -160,9 +170,7 @@ async function download(
       })
       return finished
     },
-    options.isUnrequested
-      ? { location: vscode.ProgressLocation.Window }
-      : { cancellable: true, location: vscode.ProgressLocation.Notification },
+    progressOptions(options),
   )
   const failedLegs: Error[] = []
   const exerciseReasons: string[][] = []
@@ -215,6 +223,18 @@ async function download(
     })
   }
   return { ...results, failureCause: cause, warnings }
+}
+
+function progressOptions(options: DownloadOptions): {
+  cancellable?: boolean
+  location: vscode.ProgressLocation | { viewId: string }
+} {
+  if (options.isUnrequested) {
+    return { location: vscode.ProgressLocation.Window }
+  }
+  return options.progressPlace === "coursesView"
+    ? { location: { viewId: COURSES_VIEW_ID } }
+    : { cancellable: true, location: vscode.ProgressLocation.Notification }
 }
 
 /**
