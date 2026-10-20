@@ -169,8 +169,8 @@ suite("the screen a window reload reopens", () => {
       type: "ExerciseSubmission",
       exerciseId: makeTmcKind({ tmcExerciseId: 1 }),
       backend: "tmc",
-      courseSlug: "python-course",
-      exerciseSlug: "part01-01_hello",
+      exerciseName: "part01-01_hello",
+      courseTitle: "Python Course",
     })
 
     expect(savedWebviewState()).not.toHaveProperty("route")

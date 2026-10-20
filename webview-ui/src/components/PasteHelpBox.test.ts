@@ -1,23 +1,28 @@
-import { render, screen } from "@testing-library/svelte"
+import { fireEvent, render, screen } from "@testing-library/svelte"
 import { vi } from "vitest"
 
 import { postedMessages, replyToRequest } from "../test/setup"
+import { withinShadowRoot } from "../test/shadow"
 import PasteHelpBox from "./PasteHelpBox.svelte"
 
 const sourcePanel = { id: 1, type: "ExerciseSubmission" } as const
 const oncopy = vi.fn()
-const tmcProps = { backend: "tmc", sourcePanel, oncopy } as const
+const onhide = vi.fn()
+const tmcProps = { backend: "tmc", sourcePanel, oncopy, onhide } as const
 const moocProps = { ...tmcProps, backend: "mooc" } as const
 
-/** Opens the help and starts a paste. */
 async function paste(): Promise<HTMLElement> {
-  ;(await screen.findByRole("button", { name: "Need help?" })).click()
-  const submit = await screen.findByRole("button", { name: "Submit to tmc.mooc.fi paste" })
-  submit.click()
-  return submit
+  const send = await screen.findByRole("button", { name: "Send to tmc.mooc.fi paste" })
+  send.click()
+  return send
 }
 
 suite("PasteHelpBox component", () => {
+  test("is a Get help section", () => {
+    render(PasteHelpBox, { props: tmcProps })
+    expect(screen.getByRole("region", { name: "Get help" })).toBeInTheDocument()
+  })
+
   test("asks the host to paste the exercise the panel shows", async () => {
     render(PasteHelpBox, { props: tmcProps })
 
@@ -36,7 +41,7 @@ suite("PasteHelpBox component", () => {
 
     replyToRequest("pasteExercise", { ok: true, value: "https://paste.example/abc" })
 
-    expect(await screen.findByText(/https:\/\/paste\.example\/abc/)).toBeVisible()
+    expect(await screen.findByText("https://paste.example/abc")).toBeVisible()
   })
 
   test("has the host open the paste link, which it checks first", async () => {
@@ -44,7 +49,7 @@ suite("PasteHelpBox component", () => {
     await paste()
     replyToRequest("pasteExercise", { ok: true, value: "https://paste.example/abc" })
 
-    ;(await screen.findByRole("button", { name: "Open link" })).click()
+    ;(await screen.findByRole("button", { name: "Open Link" })).click()
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "openLinkInBrowser",
@@ -64,31 +69,22 @@ suite("PasteHelpBox component", () => {
 
   test("names the backend the code is sent to", async () => {
     render(PasteHelpBox, { props: moocProps })
-
-    ;(await screen.findByRole("button", { name: "Need help?" })).click()
     expect(
-      await screen.findByRole("button", { name: "Submit to courses.mooc.fi paste" }),
+      await screen.findByRole("button", { name: "Send to courses.mooc.fi paste" }),
     ).toBeInTheDocument()
-  })
-
-  test("the toggle says whether the help is open", async () => {
-    render(PasteHelpBox, { props: tmcProps })
-
-    const toggle = await screen.findByRole("button", { name: "Need help?" })
-    expect(toggle).toHaveAttribute("aria-expanded", "false")
-    toggle.click()
-    await vi.waitFor(() => expect(toggle).toHaveAttribute("aria-expanded", "true"))
   })
 
   test("a paste in flight cannot be started again", async () => {
     render(PasteHelpBox, { props: tmcProps })
 
-    const submit = await paste()
-    await vi.waitFor(() => expect(submit).toHaveAttribute("disabled"))
+    const send = await paste()
+    await vi.waitFor(() => expect(send).toHaveAttribute("disabled"))
     expect(screen.getByText("Sending to tmc.mooc.fi paste…")).toBeInTheDocument()
 
     replyToRequest("pasteExercise", { ok: true, value: "https://paste.example/abc" })
-    await vi.waitFor(() => expect(submit).not.toHaveAttribute("disabled"))
+    expect(await screen.findByRole("button", { name: "Send Again" })).not.toHaveAttribute(
+      "disabled",
+    )
   })
 
   test("hands the paste link to the panel's copy action", async () => {
@@ -102,8 +98,13 @@ suite("PasteHelpBox component", () => {
 
   test("warns that a courses.mooc.fi paste is also a graded submission", async () => {
     render(PasteHelpBox, { props: moocProps })
-    ;(await screen.findByRole("button", { name: "Need help?" })).click()
-
     expect(await screen.findByText(/also submits your answer for grading/)).toBeInTheDocument()
+  })
+
+  test("can be hidden again", async () => {
+    render(PasteHelpBox, { props: tmcProps })
+    const hide = await withinShadowRoot(screen.getByTitle("Hide Get Help"))
+    await fireEvent.click(hide.getByRole("button"))
+    expect(onhide).toHaveBeenCalledOnce()
   })
 })

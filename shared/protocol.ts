@@ -34,8 +34,11 @@ export const ExerciseSubmissionPanelSchema = z.object({
   type: z.literal("ExerciseSubmission"),
   exerciseId: ExerciseIdentifierSchema,
   backend: BackendKindSchema,
-  courseSlug: z.string(),
-  exerciseSlug: z.string(),
+  /** The exercise's display name: a mooc exercise's title, a tmc exercise's slug. */
+  exerciseName: z.string(),
+  courseTitle: z.string(),
+  /** The organization's display name; absent for a tmc course, which stores only its slug. */
+  organization: z.string().optional(),
 })
 
 export type ExerciseSubmissionPanel = z.infer<typeof ExerciseSubmissionPanelSchema>
@@ -153,6 +156,8 @@ const SubmissionPhaseSchema = z.enum([
 export const SubmissionViewSchema = z.object({
   phase: SubmissionPhaseSchema,
   headline: z.string(),
+  /** How the headline reads at a glance; `warning` is a partial score or an unchecked grading. */
+  tone: z.enum(["progress", "passed", "warning", "failed", "info"]),
   /** What the phase means for the student, where the headline does not say it. */
   explanation: z.string().optional(),
   /** The backend's completion estimate, 0..1; absent while it has none, as for mooc grading. */

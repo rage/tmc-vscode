@@ -16,7 +16,7 @@ export function panelTitle(route: Panel, actionContext: ActionContext): string {
       return course?.ok ? LocalCourseData.getCourseTitle(course.val) : "Course Details"
     }
     case "ExerciseSubmission":
-      return `Submission: ${route.exerciseSlug}`
+      return `Submission: ${route.exerciseName}`
     case "InitializationErrorHelp":
       return "TestMyCode Help"
     default:

@@ -282,8 +282,8 @@ function showSubmission(actionContext: ReadyActionContext): void {
     type: "ExerciseSubmission",
     exerciseId: idOfMoocExercise(EXERCISE_ID),
     backend: "mooc",
-    courseSlug: storedCourse().name,
-    exerciseSlug: storedExercise.name,
+    exerciseName: storedExercise.name,
+    courseTitle: storedCourse().title,
   })
 }
 

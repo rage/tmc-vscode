@@ -380,7 +380,7 @@ async function offerSubmissionOutcome(
   show: (panel: ExerciseSubmissionPanel) => void,
 ): Promise<void> {
   const choice = await window.showInformationMessage(
-    `Submission of ${panel.exerciseSlug}: ${view.headline}`,
+    `Submission of ${panel.exerciseName}: ${view.headline}`,
     SHOW_SUBMISSION,
   )
   // A later submission of the exercise supersedes this one.

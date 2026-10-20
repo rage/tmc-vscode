@@ -202,3 +202,18 @@ test("a disclosure reports the state it toggles to", async ({ context, page }) =
   )
   expect(axToggle && property(axToggle, "expanded")).toBe(true)
 })
+
+test("the overflow menu is reachable and operable from the keyboard", async ({ context, page }) => {
+  await serveHarness(context)
+  await page.goto(`${ORIGIN}/frame.html?scenario=exercise-submission%2Ftmc-failed`)
+  const trigger = page.getByRole("button", { name: "More Actions" })
+  await trigger.focus()
+  await page.keyboard.press("ArrowDown")
+  const menu = page.getByRole("menu", { name: "More Actions" })
+  await expect(menu).toBeVisible()
+  await expect(trigger).toHaveAttribute("aria-expanded", "true")
+  await expect(menu.getByRole("menuitem").first()).toBeFocused()
+  await page.keyboard.press("Escape")
+  await expect(menu).toBeHidden()
+  await expect(trigger).toBeFocused()
+})

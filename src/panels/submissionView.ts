@@ -48,6 +48,7 @@ export function inProgressView(
     ...emptyView,
     phase,
     headline: phase === "uploading" ? "Sending submission…" : "Processing submission…",
+    tone: "progress",
     progressFraction: progress.fraction,
     progressSteps: [...progress.steps],
     submissionUrl: progress.submissionUrl,
@@ -56,7 +57,7 @@ export function inProgressView(
 
 /** A submission that never reached the backend, or whose result could not be fetched. */
 export function submitFailedView(error: WebviewError): SubmissionView {
-  return { ...emptyView, phase: "failed", headline: "Submission failed", error }
+  return { ...emptyView, phase: "failed", headline: "Submission failed", tone: "failed", error }
 }
 
 /**
@@ -69,6 +70,7 @@ export function gradingUnavailableView(error: WebviewError): SubmissionView {
     ...emptyView,
     phase: "failed",
     headline: "Could not check the grading",
+    tone: "warning",
     explanation: "Your submission was received, but its grading could not be fetched.",
     error,
     canKeepWaiting: true,
@@ -102,21 +104,22 @@ export function tmcResultView(
   const points = { given: result.points.length, max: maxPoints }
   switch (result.status) {
     case "ok":
-    case "fail":
+    case "fail": {
+      const isPassed = result.status === "ok" && result.all_tests_passed === true
       return {
         ...shared,
         phase: "finished",
-        headline:
-          result.status === "ok" && result.all_tests_passed
-            ? "All tests passed on the server"
-            : "Some tests failed on the server",
+        headline: isPassed ? "All tests passed on the server" : "Some tests failed on the server",
+        tone: isPassed ? "passed" : scoreTone(points.given),
         points,
       }
+    }
     case "hidden":
       return {
         ...shared,
         phase: "finished",
         headline: "Submission processed",
+        tone: "info",
         explanation: "The server does not show the test results of this exercise.",
       }
     case "error":
@@ -124,6 +127,7 @@ export function tmcResultView(
         ...shared,
         phase: "failed",
         headline: "The server could not process the submission",
+        tone: "failed",
         error: {
           message: "Try submitting again.",
           ...(result.error ? { details: result.error } : {}),
@@ -134,6 +138,7 @@ export function tmcResultView(
         ...shared,
         phase: "timedOut",
         headline: "Still processing on the server",
+        tone: "info",
         explanation: "Open the submission in the browser to see its result.",
       }
     default:
@@ -152,6 +157,7 @@ export function moocGradingView(
 ): SubmissionView {
   const stillGrading = {
     phase: "timedOut",
+    tone: "info",
     explanation:
       "VS Code stopped waiting before the grading finished. Your submission was received, " +
       "and its score will appear in the course progress once it has been graded.",
@@ -177,16 +183,24 @@ export function moocGradingView(
         ...graded,
         phase: "finished",
         headline: isBelowMax ? "Some tests failed on the server" : fullyGradedHeadline(standing),
+        tone: isBelowMax ? scoreTone(given) : fullyGradedTone(standing),
         ...fullyGradedExplanation(standing, isBelowMax),
         canPaste: standing !== "Passed" || isBelowMax,
       }
     case "Failed":
-      return { ...graded, phase: "failed", headline: "Grading failed", canPaste: true }
+      return {
+        ...graded,
+        phase: "failed",
+        headline: "Grading failed",
+        tone: "failed",
+        canPaste: true,
+      }
     case "PendingManual":
       return {
         ...graded,
         phase: "manualReview",
         headline: "Awaiting manual grading",
+        tone: "info",
         explanation:
           "A teacher will grade this submission. The score will appear in the course " +
           "progress once it has been graded.",
@@ -210,6 +224,24 @@ function fullyGradedExplanation(
     return { explanation: "You have already passed this exercise with an earlier submission." }
   }
   return {}
+}
+
+/** A score short of the maximum: some points read as partial success, none as a failure. */
+function scoreTone(given: number): SubmissionView["tone"] {
+  return given > 0 ? "warning" : "failed"
+}
+
+/** The tone of {@link fullyGradedHeadline}. */
+function fullyGradedTone(standing: ExerciseStanding | null | undefined): SubmissionView["tone"] {
+  switch (standing) {
+    case "Passed":
+      return "passed"
+    case "Attempted":
+    case "OutOfTries":
+      return "failed"
+    default:
+      return "info"
+  }
 }
 
 /** The outcome the backend's standing tells, for a submission scored in full or not at all. */

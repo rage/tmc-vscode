@@ -105,6 +105,7 @@ suite("tmcResultView", () => {
     expect(tmcResultView(tmcResult(), [], 3)).toMatchObject({
       phase: "finished",
       headline: "All tests passed on the server",
+      tone: "passed",
       points: { given: 2, max: 3 },
       solutionUrl: "https://tmc.mooc.fi/solutions/1",
       submissionUrl: "https://tmc.mooc.fi/submissions/1",
@@ -118,13 +119,24 @@ suite("tmcResultView", () => {
     expect(view).toMatchObject({ headline: "Some tests failed on the server", canPaste: true })
   })
 
+  test("a failed run reads as partial success while it earned points, as a failure without", () => {
+    const failed = (points: string[]) =>
+      tmcResultView(tmcResult({ status: "fail", all_tests_passed: false, points }), [], 3).tone
+    expect(failed(["1.1"])).toBe("warning")
+    expect(failed([])).toBe("failed")
+  })
+
   test("a processing error carries the server's explanation", () => {
     const view = tmcResultView(
       tmcResult({ status: "error", all_tests_passed: null, error: "Out of memory" }),
       [],
       3,
     )
-    expect(view).toMatchObject({ phase: "failed", error: { details: "Out of memory" } })
+    expect(view).toMatchObject({
+      phase: "failed",
+      tone: "failed",
+      error: { details: "Out of memory" },
+    })
     expect(view.points).toBeUndefined()
   })
 
@@ -153,6 +165,7 @@ suite("moocGradingView", () => {
     expect(moocGradingView(moocGrading("FullyGraded", 2.999, "Passed"), 3)).toMatchObject({
       phase: "finished",
       headline: "Exercise passed",
+      tone: "passed",
       points: { given: 3, max: 3 },
       feedbackText: "Feedback",
       canPaste: false,
@@ -163,6 +176,7 @@ suite("moocGradingView", () => {
   test("a partial grade says tests failed and offers paste help", () => {
     expect(moocGradingView(moocGrading("FullyGraded", 1, "Attempted"), 3)).toMatchObject({
       headline: "Some tests failed on the server",
+      tone: "warning",
       canPaste: true,
     })
   })
@@ -189,6 +203,7 @@ suite("moocGradingView", () => {
   test("without a standing from the backend, no score is called passed", () => {
     expect(moocGradingView(moocGrading("FullyGraded", 3), 3)).toMatchObject({
       headline: "Exercise graded",
+      tone: "info",
       canPaste: true,
     })
   })

@@ -326,8 +326,7 @@ suite("TmcPanel handler dispatch", () => {
       ...exerciseSubmissionPanel(),
       exerciseId: backend === "tmc" ? idOfTmcExercise(7) : idOfMoocExercise("loops-uuid"),
       backend,
-      courseSlug: "python-course",
-      exerciseSlug: "loops",
+      exerciseName: "loops",
     }
     const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
     await listener({ type: "pasteExercise", requestId: 1, sourcePanel: targetOf(shown) })
@@ -795,6 +794,7 @@ function submissionViewFor(
     view: {
       phase: "grading",
       headline,
+      tone: "progress",
       progressSteps: [],
       testCases: [],
       canKeepWaiting: false,
@@ -1372,7 +1372,7 @@ suite("TmcPanel side panel placement", () => {
     submissionViews.open(shown)
 
     expect(TmcPanel.sidePanel).toBeDefined()
-    expect(panel.title).toBe(`Submission: ${shown.exerciseSlug}`)
+    expect(panel.title).toBe(`Submission: ${shown.exerciseName}`)
   })
 
   test("reopens a closed side panel for a submission's outcome, not for its progress", async () => {
@@ -1410,7 +1410,7 @@ suite("TmcPanel side panel placement", () => {
     )
     onTestFinished(() => subscription.dispose())
     const shown = exerciseSubmissionPanel()
-    const background = { ...exerciseSubmissionPanel(), exerciseSlug: "part01-02_other" }
+    const background = { ...exerciseSubmissionPanel(), exerciseName: "part01-02_other" }
     submissionViews.open(shown)
     await sendReady()
     const offered = Promise.withResolvers<string | undefined>()
@@ -1623,8 +1623,8 @@ function exerciseSubmissionPanel(): Extract<Panel, { type: "ExerciseSubmission" 
     type: "ExerciseSubmission",
     exerciseId: idOfTmcExercise(1),
     backend: "tmc",
-    courseSlug: "python-course",
-    exerciseSlug: "part01-01_hello",
+    exerciseName: "part01-01_hello",
+    courseTitle: "Python Course",
   }
 }
 

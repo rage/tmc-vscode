@@ -70,8 +70,8 @@ const submissionPanel = {
   type: "ExerciseSubmission" as const,
   exerciseId: makeTmcKind({ tmcExerciseId: 3 }),
   backend: "tmc" as const,
-  courseSlug: "python-course",
-  exerciseSlug: "part01-03_exercise",
+  exerciseName: "part01-03_exercise",
+  courseTitle: "Python Programming 2026",
 }
 
 function submissionFinished(overrides: Partial<SubmissionFinished>): SubmissionFinished {
@@ -91,8 +91,9 @@ const moocSubmissionPanel = {
   type: "ExerciseSubmission" as const,
   exerciseId: makeMoocKind({ moocExerciseId: "mooc-exercise-uuid" }),
   backend: "mooc" as const,
-  courseSlug: "mooc-course",
-  exerciseSlug: "mooc-exercise",
+  exerciseName: "Sum of three numbers",
+  courseTitle: "Introduction to Programming",
+  organization: "University of Helsinki",
 }
 
 function moocGrading(
@@ -139,10 +140,10 @@ export const SCENARIOS: Scenario[] = [
     id: "exercise-submission/tmc-passed",
     panel: submissionPanel,
     pushes: [
-      submissionViewMessage(
-        submissionPanel.id,
-        tmcResultView(
+      submissionViewMessage(submissionPanel.id, {
+        ...tmcResultView(
           submissionFinished({
+            points: ["1.3", "1.4"],
             feedback_answer_url: "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback",
           }),
           [
@@ -151,16 +152,17 @@ export const SCENARIOS: Scenario[] = [
           ],
           2,
         ),
-      ),
+        isExercisePassed: true,
+      }),
     ],
   },
   {
     id: "exercise-submission/tmc-failed",
     panel: submissionPanel,
     pushes: [
-      submissionViewMessage(
-        submissionPanel.id,
-        tmcResultView(
+      submissionViewMessage(submissionPanel.id, {
+        isExercisePassed: false,
+        ...tmcResultView(
           submissionFinished({
             all_tests_passed: false,
             status: "fail",
@@ -178,7 +180,100 @@ export const SCENARIOS: Scenario[] = [
           [],
           2,
         ),
-      ),
+      }),
+    ],
+  },
+  {
+    id: "exercise-submission/tmc-failed-tests",
+    panel: submissionPanel,
+    pushes: [
+      submissionViewMessage(submissionPanel.id, {
+        ...tmcResultView(
+          submissionFinished({
+            all_tests_passed: false,
+            status: "fail",
+            points: ["1.3"],
+            test_cases: [
+              {
+                name: "SumTest: test_sum_of_positives",
+                successful: true,
+                message: null,
+                detailed_message: null,
+                exception: [],
+              },
+              {
+                name: "SumTest: test_sum_of_negatives",
+                successful: false,
+                message:
+                  "With the input -1, -2 your program printed\n-1\nbut the expected output was\n-3",
+                detailed_message: null,
+                exception: [
+                  "Traceback (most recent call last):",
+                  '  File "test/test_sum.py", line 21, in test_sum_of_negatives',
+                  "AssertionError: '-1' != '-3'",
+                ],
+              },
+              {
+                name: "SumTest: test_empty_input",
+                successful: false,
+                message:
+                  "Your program crashed: ValueError: invalid literal for int() with base 10: ''",
+                detailed_message: null,
+                exception: [],
+              },
+            ],
+          }),
+          [],
+          2,
+        ),
+        isExercisePassed: false,
+      }),
+    ],
+  },
+  {
+    id: "exercise-submission/tmc-passed-next",
+    panel: submissionPanel,
+    pushes: [
+      submissionViewMessage(submissionPanel.id, {
+        ...tmcResultView(submissionFinished({ points: ["1.3", "1.4"] }), [], 2),
+        isExercisePassed: true,
+        nextExercise: { name: "part01-04_exercise" },
+      }),
+    ],
+  },
+  {
+    id: "exercise-submission/mooc-passed",
+    panel: moocSubmissionPanel,
+    pushes: [
+      submissionViewMessage(moocSubmissionPanel.id, {
+        ...moocGradingView(
+          moocGrading({
+            score_given: 3,
+            feedback_text: "Tests passed",
+            exercise_progress: {
+              exercise_id: "mooc-exercise-uuid",
+              score_given: 3,
+              score_maximum: 3,
+              completed: true,
+              attempted: true,
+              standing: "Passed",
+            },
+          }),
+          3,
+        ),
+        isExercisePassed: true,
+        nextExercise: { name: "Average of three numbers" },
+      }),
+    ],
+  },
+  {
+    id: "exercise-submission/mooc-failed",
+    panel: moocSubmissionPanel,
+    pushes: [
+      submissionViewMessage(moocSubmissionPanel.id, {
+        ...moocGradingView(moocGrading({ score_given: 0, feedback_text: "Tests failed" }), 3),
+        isExercisePassed: false,
+      }),
     ],
   },
   {
@@ -196,7 +291,12 @@ export const SCENARIOS: Scenario[] = [
   {
     id: "exercise-submission/mooc-graded",
     panel: moocSubmissionPanel,
-    pushes: [submissionViewMessage(moocSubmissionPanel.id, moocGradingView(moocGrading({}), 3))],
+    pushes: [
+      submissionViewMessage(moocSubmissionPanel.id, {
+        ...moocGradingView(moocGrading({}), 3),
+        isExercisePassed: false,
+      }),
+    ],
   },
   {
     id: "exercise-submission/mooc-timed-out",
