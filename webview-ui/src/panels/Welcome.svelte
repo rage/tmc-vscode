@@ -72,6 +72,17 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
+            <h3>3.5.5 - 2026-10-30</h3>
+            <h4>Fixed exercise configuration missing on Windows</h4>
+            <p>
+                Exercises downloaded on Windows were missing their configuration file, so files that
+                an exercise marks for submission, such as HTML templates, were left out.
+            </p>
+            <h4>Fixed submissions failing and the exercise panel getting stuck</h4>
+            <p>
+                Submitting an exercise again on Windows no longer fails with "Access is denied", and
+                the exercise panel no longer gets stuck on "Loading TestMyCode...".
+            </p>
             <h3>3.5.4 - 2026-10-01</h3>
             <h4>Course workspaces now turn off VS Code's AI features</h4>
             <h3>3.5.3 - 2026-06-12</h3>
