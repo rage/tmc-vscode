@@ -1,6 +1,6 @@
 # Changelog
 
-## [3.5.4] - 2026-09-15
+## [3.5.5] - 2026-10-30
 
 - Fixed the exercise panel getting stuck on "Loading TestMyCode..." when it had been hidden and reopened before its contents arrived.
 - Fixed submissions failing with "Access is denied (os error 5)" on Windows once an exercise had been submitted before, by updating TMC-langs to 0.39.6.
@@ -9,6 +9,10 @@
 - Fixed exercise commands acting on an unrelated exercise when the active file was on a different drive than the exercises.
 - Fixed opening the course workspace that is already open asking to close it and reloading the window.
 - Fixed cleaning a file or folder from the explorer not cleaning the exercise it belongs to.
+
+## [3.5.4] - 2026-10-01
+
+- Course workspaces now turn off VS Code's AI features.
 
 ## [3.5.3] - 2026-06-12
 
