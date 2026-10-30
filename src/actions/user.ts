@@ -26,6 +26,7 @@ import { ActionContext } from "./types";
 import { updateCourse } from "./updateCourse";
 import * as fs from "fs-extra";
 import * as _ from "lodash";
+import * as path from "path";
 import { Err, Ok, Result } from "ts-results";
 import * as vscode from "vscode";
 
@@ -425,7 +426,10 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
     Logger.info(`Current workspace: ${currentWorkspaceFile?.fsPath}`);
     Logger.info(`TMC workspace: ${tmcWorkspaceFile}`);
 
-    if (!(currentWorkspaceFile?.toString() === tmcWorkspaceFile.toString())) {
+    const isTmcWorkspaceOpen =
+        currentWorkspaceFile !== undefined &&
+        path.relative(currentWorkspaceFile.fsPath, tmcWorkspaceFile) === "";
+    if (!isTmcWorkspaceOpen) {
         if (
             !currentWorkspaceFile ||
             (await dialog.confirmation(
@@ -452,7 +456,7 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
                 ],
             );
         }
-    } else if (currentWorkspaceFile?.fsPath === tmcWorkspaceFile) {
+    } else {
         Logger.info("Workspace already open, changing focus to this workspace.");
         await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri);
         await vscode.commands.executeCommand("workbench.files.action.focusFilesExplorer");

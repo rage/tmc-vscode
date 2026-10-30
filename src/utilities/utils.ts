@@ -12,6 +12,25 @@ import { fetch, Response } from "undici";
 import { ExtensionContext } from "vscode";
 
 /**
+ * Whether `child` is `parent` itself or somewhere inside it.
+ *
+ * `pathModule` is only for testing Windows paths on other platforms.
+ */
+export function isPathInside(
+    parent: string,
+    child: string,
+    pathModule: path.PlatformPath = path,
+): boolean {
+    const relative = pathModule.relative(parent, child);
+    // on Windows, paths on different drives have no relative path and come back absolute
+    return (
+        !pathModule.isAbsolute(relative) &&
+        relative !== ".." &&
+        !relative.startsWith(".." + pathModule.sep)
+    );
+}
+
+/**
  * Downloads data from given url to the specified file. If file exists, its content will be
  * overwritten.
  *

@@ -1,5 +1,6 @@
-import { formatSizeInBytes } from "../../utilities/utils";
+import { formatSizeInBytes, isPathInside } from "../../utilities/utils";
 import * as assert from "assert";
+import * as path from "path";
 
 suite("Number formatting utils", () => {
     test("formatSizeInBytes", () => {
@@ -20,6 +21,39 @@ suite("Number formatting utils", () => {
         ];
         for (const testCase of testCases) {
             assert.equal(formatSizeInBytes(testCase.in, testCase.p), testCase.out);
+        }
+    });
+});
+
+suite("Path utils", () => {
+    test("isPathInside on Windows", () => {
+        const exercise = "C:\\Users\\student\\tmc\\course\\part1-01";
+        const testCases = [
+            { child: exercise, out: true },
+            { child: exercise + "\\src\\main.py", out: true },
+            { child: "c:\\users\\STUDENT\\tmc\\course\\part1-01\\src", out: true },
+            { child: "C:/Users/student/tmc/course/part1-01/src", out: true },
+            { child: "C:\\Users\\student\\tmc\\course\\part1-02", out: false },
+            { child: "C:\\Users\\student\\tmc\\course\\part1-01-extra", out: false },
+            { child: "D:\\Users\\student\\tmc\\course\\part1-01\\src", out: false },
+            { child: "\\\\server\\share\\part1-01", out: false },
+        ];
+        for (const testCase of testCases) {
+            assert.equal(isPathInside(exercise, testCase.child, path.win32), testCase.out);
+        }
+    });
+
+    test("isPathInside on POSIX", () => {
+        const exercise = "/home/student/tmc/course/part1-01";
+        const testCases = [
+            { child: exercise, out: true },
+            { child: exercise + "/src/main.py", out: true },
+            { child: exercise + "/..hidden", out: true },
+            { child: "/home/student/tmc/course/part1-02", out: false },
+            { child: "/home/student/tmc/course", out: false },
+        ];
+        for (const testCase of testCases) {
+            assert.equal(isPathInside(exercise, testCase.child, path.posix), testCase.out);
         }
     });
 });

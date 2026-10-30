@@ -17,6 +17,12 @@ suite("Clean exercise command", function () {
 
     const stubContext = createMockActionContext();
     const uri = vscode.Uri.file(PASSING_EXERCISE_PATH);
+    const exercise = {
+        courseSlug: "test-python-course",
+        exerciseSlug: "part01-01_passing_exercise",
+        status: ExerciseStatus.Open,
+        uri,
+    };
 
     let tmcMock: IMock<TMC>;
     let workspaceManagerMock: IMock<WorkspaceManager>;
@@ -36,12 +42,7 @@ suite("Clean exercise command", function () {
     });
 
     test("should clean active exercise by default", async function () {
-        workspaceManagerMockValues.activeExercise = {
-            courseSlug: "test-python-course",
-            exerciseSlug: "part01-01_passing_exercise",
-            status: ExerciseStatus.Open,
-            uri,
-        };
+        workspaceManagerMockValues.activeExercise = exercise;
         await cleanExercise(actionContext(), undefined);
         tmcMock.verify((x) => x.clean(It.isValue(uri.fsPath)), Times.once());
     });
@@ -52,12 +53,18 @@ suite("Clean exercise command", function () {
     });
 
     test("should clean provided exercise", async function () {
+        workspaceManagerMockValues.getExerciseByPath = exercise;
         await cleanExercise(actionContext(), uri);
         tmcMock.verify((x) => x.clean(It.isValue(uri.fsPath)), Times.once());
     });
 
+    test("should clean the exercise containing a provided file", async function () {
+        workspaceManagerMockValues.getExerciseByPath = exercise;
+        await cleanExercise(actionContext(), vscode.Uri.joinPath(uri, "src", "hello_world.py"));
+        tmcMock.verify((x) => x.clean(It.isValue(uri.fsPath)), Times.once());
+    });
+
     test("should not clean provided non-exercise", async function () {
-        workspaceManagerMockValues.uriIsExercise = false;
         await cleanExercise(actionContext(), uri);
         tmcMock.verify((x) => x.clean(It.isAny()), Times.never());
     });

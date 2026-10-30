@@ -10,7 +10,6 @@ export interface WorkspaceManagerMockValues {
     getExerciseByPath: Readonly<WorkspaceExercise> | undefined;
     getExercisesByCoursePythonCourse: ReadonlyArray<WorkspaceExercise>;
     setExercises: Result<void, Error>;
-    uriIsExercise: boolean;
 }
 
 export function createWorkspaceMangerMock(): [IMock<WorkspaceManager>, WorkspaceManagerMockValues] {
@@ -21,7 +20,6 @@ export function createWorkspaceMangerMock(): [IMock<WorkspaceManager>, Workspace
         getExerciseByPath: undefined,
         getExercisesByCoursePythonCourse: workspaceExercises,
         setExercises: Ok.EMPTY,
-        uriIsExercise: true,
     };
     const mock = setupMockValues(values);
 
@@ -45,7 +43,6 @@ function setupMockValues(values: WorkspaceManagerMockValues): IMock<WorkspaceMan
     );
 
     mock.setup((x) => x.setExercises(It.isAny())).returns(async () => values.setExercises);
-    mock.setup((x) => x.uriIsExercise(It.isAny())).returns(() => values.uriIsExercise);
 
     return mock;
 }

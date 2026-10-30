@@ -5,6 +5,10 @@
 - Fixed the exercise panel getting stuck on "Loading TestMyCode..." when it had been hidden and reopened before its contents arrived.
 - Fixed submissions failing with "Access is denied (os error 5)" on Windows once an exercise had been submitted before, by updating TMC-langs to 0.39.6.
 - Fixed overlapping test runs and submissions for the same exercise racing each other against the same directory; duplicate attempts are now rejected with a notification.
+- Fixed exercises downloaded on Windows missing their `.tmcproject.yml`, which left files the exercise lists as student files out of submissions, by updating TMC-langs to 0.39.9.
+- Fixed exercise commands acting on an unrelated exercise when the active file was on a different drive than the exercises.
+- Fixed opening the course workspace that is already open asking to close it and reloading the window.
+- Fixed cleaning a file or folder from the explorer not cleaning the exercise it belongs to.
 
 ## [3.5.3] - 2026-06-12
 
