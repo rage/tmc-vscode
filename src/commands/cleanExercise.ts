@@ -24,13 +24,12 @@ export async function cleanExercise(
         return;
     }
 
-    const exerciseToClean = exercise?.uri;
-    if (!exerciseToClean) {
+    if (!exercise) {
         Logger.warn("Attempted to clean an exercise without target.");
         return;
     }
 
-    const cleanResult = await tmc.val.clean(exerciseToClean.fsPath);
+    const cleanResult = await tmc.val.clean(exercise.uri.fsPath);
     if (cleanResult.err) {
         dialog.errorNotification("Failed to clean exercise.", cleanResult.val);
     }

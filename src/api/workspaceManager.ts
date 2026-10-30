@@ -62,11 +62,7 @@ export default class WorkspaceManager implements vscode.Disposable {
      * Currently active course based on active workspace, or `undefined` otherwise.
      */
     public get activeCourse(): string | undefined {
-        const workspaceFile = vscode.workspace.workspaceFile;
-        if (
-            !workspaceFile ||
-            path.relative(workspaceFile.fsPath, this._resources.workspaceFileFolder) !== ".."
-        ) {
+        if (!this.workspaceFileUri) {
             return undefined;
         }
 
@@ -89,7 +85,7 @@ export default class WorkspaceManager implements vscode.Disposable {
         const workspaceFile = vscode.workspace.workspaceFile;
         if (
             !workspaceFile ||
-            path.relative(workspaceFile.fsPath, this._resources.workspaceFileFolder) !== ".."
+            !isSamePath(path.dirname(workspaceFile.fsPath), this._resources.workspaceFileFolder)
         ) {
             return undefined;
         }

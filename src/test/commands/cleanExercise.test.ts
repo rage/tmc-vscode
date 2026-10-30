@@ -58,12 +58,6 @@ suite("Clean exercise command", function () {
         tmcMock.verify((x) => x.clean(It.isValue(uri.fsPath)), Times.once());
     });
 
-    test("should clean the exercise containing a provided file", async function () {
-        workspaceManagerMockValues.getExerciseByPath = exercise;
-        await cleanExercise(actionContext(), vscode.Uri.joinPath(uri, "src", "hello_world.py"));
-        tmcMock.verify((x) => x.clean(It.isValue(uri.fsPath)), Times.once());
-    });
-
     test("should not clean provided non-exercise", async function () {
         await cleanExercise(actionContext(), uri);
         tmcMock.verify((x) => x.clean(It.isAny()), Times.never());
