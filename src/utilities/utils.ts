@@ -31,6 +31,15 @@ export function isPathInside(
 }
 
 /**
+ * Whether `a` and `b` refer to the same path, by the platform's rules for case and separators.
+ *
+ * `pathModule` is only for testing Windows paths on other platforms.
+ */
+export function isSamePath(a: string, b: string, pathModule: path.PlatformPath = path): boolean {
+    return pathModule.relative(a, b) === "";
+}
+
+/**
  * Downloads data from given url to the specified file. If file exists, its content will be
  * overwritten.
  *

@@ -1,4 +1,4 @@
-import { formatSizeInBytes, isPathInside } from "../../utilities/utils";
+import { formatSizeInBytes, isPathInside, isSamePath } from "../../utilities/utils";
 import * as assert from "assert";
 import * as path from "path";
 
@@ -55,5 +55,11 @@ suite("Path utils", () => {
         for (const testCase of testCases) {
             assert.equal(isPathInside(exercise, testCase.child, path.posix), testCase.out);
         }
+    });
+
+    test("isSamePath on Windows", () => {
+        const file = "C:\\Users\\student\\course.code-workspace";
+        assert.ok(isSamePath(file, "c:/users/STUDENT/course.code-workspace", path.win32));
+        assert.ok(!isSamePath(file, "D:\\Users\\student\\course.code-workspace", path.win32));
     });
 });

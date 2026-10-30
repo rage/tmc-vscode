@@ -6,7 +6,7 @@ import {
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import Resources, { EditorKind } from "../config/resources";
-import { isPathInside, Logger } from "../utilities";
+import { isPathInside, isSamePath, Logger } from "../utilities";
 import * as fs from "fs-extra";
 import * as _ from "lodash";
 import * as path from "path";
@@ -300,7 +300,7 @@ export default class WorkspaceManager implements vscode.Disposable {
         const correctStructure = [{ uri: rootFolder }, ...openExercises];
         if (
             _.zip(correctStructure, workspaceFolders).every(
-                ([a, b]) => a?.uri.fsPath === b?.uri.fsPath,
+                ([a, b]) => a && b && isSamePath(a.uri.fsPath, b.uri.fsPath),
             )
         ) {
             Logger.debug("Workspace refresh was a no-op.");
@@ -332,7 +332,9 @@ export default class WorkspaceManager implements vscode.Disposable {
 
         let incorrectFolderAdded = false;
         e.added.forEach((added) => {
-            const exercise = this._exercises.find((x) => x.uri.fsPath === added.uri.fsPath);
+            const exercise = this._exercises.find((x) =>
+                isSamePath(x.uri.fsPath, added.uri.fsPath),
+            );
             if (!exercise) {
                 incorrectFolderAdded = true;
             } else if (exercise.courseSlug === activeCourse) {
@@ -341,7 +343,9 @@ export default class WorkspaceManager implements vscode.Disposable {
         });
 
         e.removed.forEach((removed) => {
-            const exercise = this._exercises.find((x) => x.uri.fsPath === removed.uri.fsPath);
+            const exercise = this._exercises.find((x) =>
+                isSamePath(x.uri.fsPath, removed.uri.fsPath),
+            );
             if (exercise) {
                 exercise.status = ExerciseStatus.Closed;
             }

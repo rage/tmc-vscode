@@ -20,7 +20,7 @@ export async function cleanExercise(
         ? workspaceManager.val.getExerciseByPath(resource)
         : workspaceManager.val.activeExercise;
     if (resource && !exercise) {
-        dialog.errorNotification("Currently open editor is not part of a TMC exercise.");
+        dialog.errorNotification("The selected file or folder is not part of a TMC exercise.");
         return;
     }
 
