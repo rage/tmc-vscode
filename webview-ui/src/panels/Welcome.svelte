@@ -73,18 +73,27 @@
 
         <div class="content_section">
             <h3>3.5.5 - 2026-10-30</h3>
-            <h4>Fixed exercise configuration missing on Windows</h4>
+            <h4>Fixed files missing from submissions on Windows</h4>
             <p>
-                Exercises downloaded on Windows were missing their configuration file, so files that
-                an exercise marks for submission, such as HTML templates, were left out.
+                Some exercises left files such as HTML templates out of the submission, so a correct
+                solution could fail on the server.
             </p>
-            <h4>Fixed submissions failing and the exercise panel getting stuck</h4>
+            <h4>Fixed repeated submissions failing on Windows</h4>
+            <p>Submitting the same exercise again could fail with "Access is denied".</p>
+            <h4>Fixed the exercise panel getting stuck on loading</h4>
+            <h4>One test run or submission per exercise at a time</h4>
+            <p>Starting another while one is still running now shows a notification instead.</p>
+            <h4>Smaller fixes</h4>
             <p>
-                Submitting an exercise again on Windows no longer fails with "Access is denied", and
-                the exercise panel no longer gets stuck on "Loading TestMyCode...".
+                Exercise commands now always act on the right exercise, and opening a course
+                workspace that is already open no longer reloads the window.
             </p>
             <h3>3.5.4 - 2026-10-01</h3>
-            <h4>Course workspaces now turn off VS Code's AI features</h4>
+            <h4>AI features are turned off in course workspaces</h4>
+            <p>
+                VS Code's chat, inline suggestions and AI extensions such as GitHub Copilot are
+                turned off while a course workspace is open.
+            </p>
             <h3>3.5.3 - 2026-06-12</h3>
             <h4>Fixed the extension failing to start when downloading the CLI</h4>
             <p>

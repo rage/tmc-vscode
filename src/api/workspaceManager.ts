@@ -362,7 +362,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     ): vscode.Uri[] {
         return workspaceFolders
             .map((folder) => folder.uri)
-            .filter((uri) => this._exercises.some((x) => x.uri.fsPath === uri.fsPath));
+            .filter((uri) => this._getExerciseByFolder(uri) !== undefined);
     }
 
     /**
@@ -456,14 +456,16 @@ export default class WorkspaceManager implements vscode.Disposable {
         return success ? Ok.EMPTY : Err(new Error("Failed to refresh active workspace."));
     }
 
+    private _getExerciseByFolder(folder: vscode.Uri): WorkspaceExercise | undefined {
+        return this._exercises.find((x) => isSamePath(x.uri.fsPath, folder.fsPath));
+    }
+
     private _onDidChangeWorkspaceFolders(e: vscode.WorkspaceFoldersChangeEvent): void {
         const activeCourse = this.activeCourse;
 
         let incorrectFolderAdded = false;
         e.added.forEach((added) => {
-            const exercise = this._exercises.find((x) =>
-                isSamePath(x.uri.fsPath, added.uri.fsPath),
-            );
+            const exercise = this._getExerciseByFolder(added.uri);
             if (!exercise) {
                 incorrectFolderAdded = true;
             } else if (exercise.courseSlug === activeCourse) {
@@ -472,9 +474,7 @@ export default class WorkspaceManager implements vscode.Disposable {
         });
 
         e.removed.forEach((removed) => {
-            const exercise = this._exercises.find((x) =>
-                isSamePath(x.uri.fsPath, removed.uri.fsPath),
-            );
+            const exercise = this._getExerciseByFolder(removed.uri);
             if (exercise) {
                 exercise.status = ExerciseStatus.Closed;
             }

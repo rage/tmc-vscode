@@ -1,5 +1,5 @@
 import { AI_OFF_SETTINGS, COURSE_LANGUAGE_IDS } from "../config/constants";
-import { Logger } from "../utilities";
+import { isSamePath, Logger } from "../utilities";
 import type WorkspaceManager from "./workspaceManager";
 import * as _ from "lodash";
 import * as path from "path";
@@ -427,7 +427,7 @@ export default class AiRestriction implements vscode.Disposable {
             onDidChangeWorkspaceFile: anyEvent(
                 (listener: (document: vscode.TextDocument) => void) =>
                     vscode.workspace.onDidSaveTextDocument((document) => {
-                        if (document.uri.fsPath === file?.fsPath) {
+                        if (file && isSamePath(document.uri.fsPath, file.fsPath)) {
                             listener(document);
                         }
                     }),
