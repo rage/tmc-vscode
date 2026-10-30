@@ -16,6 +16,7 @@ import { ExerciseSubmissionPanel, ExerciseTestsPanel, TestResultData } from "../
 import { v2 as storage } from "../storage/data";
 import {
     acquireSingleFlight,
+    isSamePath,
     Logger,
     parseFeedbackQuestion,
     releaseSingleFlight,
@@ -425,37 +426,29 @@ export async function openWorkspace(actionContext: ActionContext, name: string):
     Logger.info(`Current workspace: ${currentWorkspaceFile?.fsPath}`);
     Logger.info(`TMC workspace: ${tmcWorkspaceFile}`);
 
-    if (!(currentWorkspaceFile?.toString() === tmcWorkspaceFile.toString())) {
-        if (
-            !currentWorkspaceFile ||
-            (await dialog.confirmation(
-                "Do you want to open TMC workspace and close the current one?",
-            ))
-        ) {
-            if (!fs.existsSync(tmcWorkspaceFile)) {
-                workspaceManager.val.createWorkspaceFile(name);
-            }
-            await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri);
-            // Restarts VSCode
-        } else {
-            const choice = "Close current & open Course Workspace";
-            await dialog.warningNotification(
-                "Please close the current workspace before opening a course workspace.",
-                [
-                    choice,
-                    async (): Promise<Thenable<unknown>> => {
-                        if (!fs.existsSync(tmcWorkspaceFile)) {
-                            workspaceManager.val.createWorkspaceFile(name);
-                        }
-                        return vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri);
-                    },
-                ],
-            );
-        }
-    } else if (currentWorkspaceFile?.fsPath === tmcWorkspaceFile) {
+    if (currentWorkspaceFile && isSamePath(currentWorkspaceFile.fsPath, tmcWorkspaceFile)) {
         Logger.info("Workspace already open, changing focus to this workspace.");
-        await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri);
         await vscode.commands.executeCommand("workbench.files.action.focusFilesExplorer");
+        return;
+    }
+
+    // restarts VS Code
+    const open = (): Thenable<unknown> => {
+        if (!fs.existsSync(tmcWorkspaceFile)) {
+            workspaceManager.val.createWorkspaceFile(name);
+        }
+        return vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri);
+    };
+    if (
+        !currentWorkspaceFile ||
+        (await dialog.confirmation("Do you want to open TMC workspace and close the current one?"))
+    ) {
+        await open();
+    } else {
+        await dialog.warningNotification(
+            "Please close the current workspace before opening a course workspace.",
+            ["Close current & open Course Workspace", open],
+        );
     }
 }
 

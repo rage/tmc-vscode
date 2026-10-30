@@ -2,13 +2,11 @@ import {
     HIDE_META_FILES,
     SHOW_META_FILES,
     WATCHER_EXCLUDE,
-    WORKSPACE_ROOT_FILE_NAME,
-    WORKSPACE_ROOT_FILE_TEXT,
     WORKSPACE_ROOT_FOLDER_NAME,
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import Resources, { EditorKind } from "../config/resources";
-import { Logger } from "../utilities";
+import { isPathInside, isSamePath, Logger } from "../utilities";
 import * as fs from "fs-extra";
 import * as _ from "lodash";
 import * as path from "path";
@@ -43,7 +41,6 @@ interface ConfigurationProperties {
 export default class WorkspaceManager implements vscode.Disposable {
     private _exercises: WorkspaceExercise[];
     private readonly _resources: Resources;
-    private readonly _watcher: vscode.FileSystemWatcher | undefined;
     private readonly _disposables: vscode.Disposable[];
 
     /**
@@ -53,16 +50,6 @@ export default class WorkspaceManager implements vscode.Disposable {
     constructor(resources: Resources, exercises?: WorkspaceExercise[]) {
         this._exercises = exercises ?? [];
         this._resources = resources;
-        const projectsDirectory = this._resources.projectsDirectory;
-        if (projectsDirectory) {
-            this._watcher = vscode.workspace.createFileSystemWatcher(
-                projectsDirectory + "/**",
-                true,
-                true,
-                false,
-            );
-            this._watcher.onDidDelete((x) => this._fileDeleteAction(x.fsPath, projectsDirectory));
-        }
         this._disposables = [
             vscode.workspace.onDidChangeWorkspaceFolders((e) =>
                 this._onDidChangeWorkspaceFolders(e),
@@ -75,11 +62,7 @@ export default class WorkspaceManager implements vscode.Disposable {
      * Currently active course based on active workspace, or `undefined` otherwise.
      */
     public get activeCourse(): string | undefined {
-        const workspaceFile = vscode.workspace.workspaceFile;
-        if (
-            !workspaceFile ||
-            path.relative(workspaceFile.fsPath, this._resources.workspaceFileFolder) !== ".."
-        ) {
+        if (!this.workspaceFileUri) {
             return undefined;
         }
 
@@ -102,7 +85,7 @@ export default class WorkspaceManager implements vscode.Disposable {
         const workspaceFile = vscode.workspace.workspaceFile;
         if (
             !workspaceFile ||
-            path.relative(workspaceFile.fsPath, this._resources.workspaceFileFolder) !== ".."
+            !isSamePath(path.dirname(workspaceFile.fsPath), this._resources.workspaceFileFolder)
         ) {
             return undefined;
         }
@@ -115,10 +98,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     public getExerciseByPath(exercise: vscode.Uri): Readonly<WorkspaceExercise> | undefined {
-        // File is part of exercise if and only if it belongs to an exercise's subfolder
-        return this._exercises.find(
-            (x) => !path.relative(x.uri.fsPath, exercise.fsPath).startsWith(".."),
-        );
+        return this._exercises.find((x) => isPathInside(x.uri.fsPath, exercise.fsPath));
     }
 
     public getExerciseBySlug(
@@ -136,20 +116,6 @@ export default class WorkspaceManager implements vscode.Disposable {
 
     public getExercisesByCourseSlug(courseSlug: string): ReadonlyArray<WorkspaceExercise> {
         return this._exercises.filter((x) => x.courseSlug === courseSlug);
-    }
-
-    /**
-     * Checks whether or not the given `Uri` is an exercise or not.
-     */
-    public uriIsExercise(uri: vscode.Uri): boolean {
-        const exerciseFolderPath = this._resources.projectsDirectory;
-        if (exerciseFolderPath) {
-            const relation = path.relative(exerciseFolderPath, uri.fsPath);
-            return !relation.startsWith("..");
-        } else {
-            Logger.error("Extension was not initialized properly");
-            return false;
-        }
     }
 
     public addExercise(exercise: WorkspaceExercise): void {
@@ -219,9 +185,6 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     public dispose(): void {
-        if (this._watcher) {
-            this._watcher.dispose();
-        }
         this._disposables.forEach((x) => x.dispose());
     }
 
@@ -305,25 +268,6 @@ export default class WorkspaceManager implements vscode.Disposable {
     }
 
     /**
-     * Event listener function for workspace watcher delete.
-     * @param targetPath Path to deleted item
-     */
-    private _fileDeleteAction(targetPath: string, projectsDirectory: string): void {
-        const basedir = projectsDirectory;
-        const rootFilePath = this._resources.workspaceRootFolder.fsPath;
-        Logger.debug("Target path deleted", targetPath);
-        if (path.relative(rootFilePath, targetPath) === "") {
-            Logger.info(`Root file deleted ${targetPath}, fixing issue.`);
-            if (!fs.existsSync(path.join(basedir, WORKSPACE_ROOT_FILE_NAME))) {
-                fs.mkdirSync(path.join(basedir, WORKSPACE_ROOT_FILE_NAME), { recursive: true });
-            }
-
-            fs.writeFileSync(targetPath, WORKSPACE_ROOT_FILE_TEXT, { encoding: "utf-8" });
-            return;
-        }
-    }
-
-    /**
      * Force some settings for TMC multi-root workspaces that we want.
      */
     private async _forceTMCWorkspaceSettings(): Promise<void> {
@@ -352,7 +296,7 @@ export default class WorkspaceManager implements vscode.Disposable {
         const correctStructure = [{ uri: rootFolder }, ...openExercises];
         if (
             _.zip(correctStructure, workspaceFolders).every(
-                ([a, b]) => a?.uri.fsPath === b?.uri.fsPath,
+                ([a, b]) => a && b && isSamePath(a.uri.fsPath, b.uri.fsPath),
             )
         ) {
             Logger.debug("Workspace refresh was a no-op.");
@@ -384,7 +328,9 @@ export default class WorkspaceManager implements vscode.Disposable {
 
         let incorrectFolderAdded = false;
         e.added.forEach((added) => {
-            const exercise = this._exercises.find((x) => x.uri.fsPath === added.uri.fsPath);
+            const exercise = this._exercises.find((x) =>
+                isSamePath(x.uri.fsPath, added.uri.fsPath),
+            );
             if (!exercise) {
                 incorrectFolderAdded = true;
             } else if (exercise.courseSlug === activeCourse) {
@@ -393,7 +339,9 @@ export default class WorkspaceManager implements vscode.Disposable {
         });
 
         e.removed.forEach((removed) => {
-            const exercise = this._exercises.find((x) => x.uri.fsPath === removed.uri.fsPath);
+            const exercise = this._exercises.find((x) =>
+                isSamePath(x.uri.fsPath, removed.uri.fsPath),
+            );
             if (exercise) {
                 exercise.status = ExerciseStatus.Closed;
             }

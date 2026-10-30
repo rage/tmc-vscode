@@ -16,18 +16,20 @@ export async function cleanExercise(
         return;
     }
 
-    if (resource && !workspaceManager.val.uriIsExercise(resource)) {
-        dialog.errorNotification("Currently open editor is not part of a TMC exercise.");
+    const exercise = resource
+        ? workspaceManager.val.getExerciseByPath(resource)
+        : workspaceManager.val.activeExercise;
+    if (resource && !exercise) {
+        dialog.errorNotification("The selected file or folder is not part of a TMC exercise.");
         return;
     }
 
-    const exerciseToClean = resource ?? workspaceManager.val.activeExercise?.uri;
-    if (!exerciseToClean) {
+    if (!exercise) {
         Logger.warn("Attempted to clean an exercise without target.");
         return;
     }
 
-    const cleanResult = await tmc.val.clean(exerciseToClean.fsPath);
+    const cleanResult = await tmc.val.clean(exercise.uri.fsPath);
     if (cleanResult.err) {
         dialog.errorNotification("Failed to clean exercise.", cleanResult.val);
     }

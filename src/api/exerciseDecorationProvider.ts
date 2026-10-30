@@ -1,5 +1,6 @@
 import WorkspaceManager, { WorkspaceExercise } from "../api/workspaceManager";
 import { UserData } from "../config/userdata";
+import { isSamePath } from "../utilities";
 import * as vscode from "vscode";
 
 /**
@@ -49,7 +50,7 @@ export default class ExerciseDecorationProvider
 
     public provideFileDecoration(uri: vscode.Uri): vscode.ProviderResult<vscode.FileDecoration> {
         const exercise = this.workspaceManager.getExerciseByPath(uri);
-        if (!exercise || exercise.uri.fsPath !== uri.fsPath) {
+        if (!exercise || !isSamePath(exercise.uri.fsPath, uri.fsPath)) {
             return;
         }
 
