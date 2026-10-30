@@ -1,4 +1,4 @@
-import { vsCodeTest } from "../fixtures";
+import { userDataDir, vsCodeTest } from "../fixtures";
 import { CoursePage } from "../pages/course";
 import { ExplorerPage } from "../pages/explorer";
 import { LoginPage } from "../pages/login";
@@ -6,6 +6,8 @@ import { MyCoursesPage } from "../pages/my-courses";
 import { TestResultsPage } from "../pages/test-results";
 import { TestSubmissionPage } from "../pages/test-submission";
 import { expect } from "@playwright/test";
+import * as fs from "fs";
+import { join } from "node:path";
 
 type Exercise = {
     course: string;
@@ -56,6 +58,19 @@ for (const exercise of exercises) {
             await coursePage.openWorkspace();
         });
 
+        await vsCodeTest.step("the course workspace turns AI assistance off", async () => {
+            await expect
+                .poll(() => courseWorkspaceSettings())
+                .toMatchObject({
+                    "chat.agent.enabled": false,
+                    "chat.disableAIFeatures": true,
+                    "chat.extensionTools.enabled": false,
+                    "chat.mcp.access": "none",
+                    "editor.inlineSuggest.enabled": false,
+                });
+            expect(userSettingsText()).not.toMatch(/chat\.|inlineSuggest/);
+        });
+
         await vsCodeTest.step("open exercise file", async () => {
             const contents = page.getByText(exercise.file_contents);
             await expect(contents).not.toBeVisible();
@@ -103,4 +118,29 @@ function expectedResultInSubmissionView(expectedResult: "pass" | "fail"): string
     } else {
         return "Some tests failed on the server";
     }
+}
+
+/** The `settings` of the one course workspace file, or `undefined` while there is none to read. */
+function courseWorkspaceSettings(): Record<string, unknown> | undefined {
+    const workspaceFile = fs
+        .readdirSync(join(userDataDir, "User"), { recursive: true, encoding: "utf-8" })
+        .find((f) => f.includes("moocfi.test-my-code") && f.endsWith(".code-workspace"));
+    if (!workspaceFile) {
+        return undefined;
+    }
+    try {
+        return JSON.parse(fs.readFileSync(join(userDataDir, "User", workspaceFile), "utf-8"))
+            .settings;
+    } catch {
+        return undefined;
+    }
+}
+
+/** Every user-scope `settings.json` VS Code keeps, the temporary profile's included. */
+function userSettingsText(): string {
+    return fs
+        .readdirSync(join(userDataDir, "User"), { recursive: true, encoding: "utf-8" })
+        .filter((f) => f.endsWith("settings.json"))
+        .map((f) => fs.readFileSync(join(userDataDir, "User", f), "utf-8"))
+        .join("\n");
 }
