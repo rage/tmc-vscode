@@ -30,7 +30,7 @@ vsCodeTest(
       "Download downloads every exercise, as the Courses view agrees",
       async () => {
         await courseHome.downloadAll()
-        await courseHome.expectState("passing_exercise", "Open")
+        await courseHome.expectState("passing_exercise", "In workspace")
         await coursesView.expand(coursesView.row(courseTitle))
         await expect(coursesView.row("passing_exercise")).toHaveAccessibleName(/, open,/)
         await expect(coursesView.notificationToast("Downloading exercises…")).toBeHidden()
@@ -46,6 +46,14 @@ vsCodeTest(
       await expect(coursesView.row("passing_exercise")).toHaveAccessibleName(/, open,/)
       await expect(page.locator(".explorer-folders-view")).toBeHidden()
     })
+
+    await vsCodeTest.step(
+      "in its workspace, Course Details continues with the exercise left to do",
+      async () => {
+        await courseHome.webview.getByRole("button", { name: "Continue: passing_exercise" }).click()
+        await expect(page.getByRole("tab", { name: /passing_exercise\.py/ })).toBeVisible()
+      },
+    )
 
     await vsCodeTest.step("the workspace's roots are its open exercises", async () => {
       await page

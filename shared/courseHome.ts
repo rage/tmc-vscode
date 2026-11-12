@@ -40,6 +40,8 @@ export const CourseHomeExerciseSchema = z.object({
   deadline: DeadlineTextSchema.optional(),
   isSoftDeadline: z.boolean(),
   isUpdateable: z.boolean(),
+  /** The course material page the exercise is on. */
+  materialUrl: z.string().optional(),
 })
 
 export type CourseHomeExercise = z.infer<typeof CourseHomeExerciseSchema>
@@ -72,6 +74,8 @@ export const CourseHomeViewSchema = z.object({
   hasSoftDeadlines: z.boolean(),
   isExamMode: z.boolean(),
   isDisabled: z.boolean(),
+  /** courses.mooc.fi last refused the student as not enrolled on the course. */
+  isNotEnrolled: z.boolean(),
   /** The backend did not answer the last refresh, so deadlines and points may be stale. */
   isOffline: z.boolean(),
   isLoggedIn: z.boolean(),
@@ -79,6 +83,8 @@ export const CourseHomeViewSchema = z.object({
   isWorkspaceOpen: z.boolean(),
   /** This window is the course's workspace and in Restricted Mode. */
   isRestricted: z.boolean(),
+  /** The first exercise, in course order, still left to do. */
+  nextExercise: z.object({ id: ExerciseIdentifierSchema, name: z.string() }).optional(),
   /** Announced as new and not dismissed; downloadable ones only. */
   newExercises: z.array(z.object({ id: ExerciseIdentifierSchema, name: z.string() })),
   /** Exercises on disk whose template changed on the backend. */

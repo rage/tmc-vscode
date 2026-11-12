@@ -1675,6 +1675,7 @@ function courseHomeOf(course: LocalCourseData): CourseHomeView {
     hasSoftDeadlines: false,
     isExamMode: false,
     isDisabled: false,
+    isNotEnrolled: false,
     isOffline: false,
     isLoggedIn: true,
     isWorkspaceOpen: false,

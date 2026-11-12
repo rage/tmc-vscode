@@ -125,6 +125,7 @@ export interface MoocExerciseFixture {
 }
 
 const ORG = "Test Organization"
+const ORG_SLUG = "test-organization"
 
 // ---- courses ----
 
@@ -186,7 +187,7 @@ const makeExercise = (params: {
   baseUrl: string
   exerciseId: string
   slideId: string
-  courseId: string
+  course: Course
   tasks: TaskFixture[]
   name: string
   order: number
@@ -217,11 +218,12 @@ const makeExercise = (params: {
     slide: {
       slide_id: params.slideId,
       exercise_id: params.exerciseId,
-      course_id: params.courseId,
+      course_id: params.course.id,
       exercise_name: params.name,
       exercise_order_number: params.order,
       deadline: params.deadline ?? null,
-      page_url: `${params.baseUrl}/mooc-pages/${params.archiveSlug}`,
+      // Laid out as the host's `course_page_url` lays it out.
+      page_url: `${params.baseUrl}/org/${ORG_SLUG}/courses/${params.course.slug}/${params.archiveSlug}`,
       chapter: null,
       tasks: params.tasks.map((task, orderNumber) => ({
         task_id: task.taskId,
@@ -302,7 +304,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     baseUrl,
     exerciseId: "a1a1a1a1-0000-4000-8000-000000000001",
     slideId: "a1a1a1a1-0000-4000-8000-000000000101",
-    courseId: pythonCourse.id,
+    course: pythonCourse,
     tasks: [{ taskId: "a1a1a1a1-0000-4000-8000-000000000201", type: "editor" }],
     name: "passing_exercise",
     order: 0,
@@ -316,7 +318,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     baseUrl,
     exerciseId: "b2b2b2b2-0000-4000-8000-000000000001",
     slideId: "b2b2b2b2-0000-4000-8000-000000000101",
-    courseId: extraCourse.id,
+    course: extraCourse,
     tasks: [{ taskId: "b2b2b2b2-0000-4000-8000-000000000201", type: "editor" }],
     name: "failing_exercise",
     order: 0,
@@ -334,7 +336,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     baseUrl,
     exerciseId: "c3c3c3c3-0000-4000-8000-000000000001",
     slideId: "c3c3c3c3-0000-4000-8000-000000000101",
-    courseId: extraCourse.id,
+    course: extraCourse,
     tasks: [{ taskId: "c3c3c3c3-0000-4000-8000-000000000201", type: "editor" }],
     name: "pending_manual_exercise",
     order: 1,
@@ -352,7 +354,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     baseUrl,
     exerciseId: "d4d4d4d4-0000-4000-8000-000000000001",
     slideId: "d4d4d4d4-0000-4000-8000-000000000101",
-    courseId: variantsCourse.id,
+    course: variantsCourse,
     tasks: [{ taskId: "d4d4d4d4-0000-4000-8000-000000000201", type: "browser" }],
     name: "browser_exercise",
     order: 0,
@@ -368,7 +370,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     baseUrl,
     exerciseId: "e5e5e5e5-0000-4000-8000-000000000001",
     slideId: "e5e5e5e5-0000-4000-8000-000000000101",
-    courseId: variantsCourse.id,
+    course: variantsCourse,
     tasks: [
       { taskId: "e5e5e5e5-0000-4000-8000-000000000201", type: "browser" },
       { taskId: "e5e5e5e5-0000-4000-8000-000000000202", type: "editor" },
@@ -385,7 +387,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     baseUrl,
     exerciseId: "f6f6f6f6-0000-4000-8000-000000000001",
     slideId: "f6f6f6f6-0000-4000-8000-000000000101",
-    courseId: variantsCourse.id,
+    course: variantsCourse,
     tasks: [{ taskId: "f6f6f6f6-0000-4000-8000-000000000201", type: "editor" }],
     name: "past_deadline_exercise",
     order: 2,
@@ -402,7 +404,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     baseUrl,
     exerciseId: "a7a7a7a7-0000-4000-8000-000000000001",
     slideId: "a7a7a7a7-0000-4000-8000-000000000101",
-    courseId: variantsCourse.id,
+    course: variantsCourse,
     tasks: [{ taskId: "a7a7a7a7-0000-4000-8000-000000000201", type: "editor" }],
     name: "future_deadline_exercise",
     order: 3,
@@ -421,7 +423,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     baseUrl,
     exerciseId: "b8b8b8b8-0000-4000-8000-000000000001",
     slideId: "b8b8b8b8-0000-4000-8000-000000000101",
-    courseId: variantsCourse.id,
+    course: variantsCourse,
     tasks: [{ taskId: "b8b8b8b8-0000-4000-8000-000000000201", type: "editor" }],
     name: "limited_tries_exercise",
     order: 4,
@@ -439,7 +441,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     baseUrl,
     exerciseId: "c9c9c9c9-0000-4000-8000-000000000001",
     slideId: "c9c9c9c9-0000-4000-8000-000000000101",
-    courseId: variantsCourse.id,
+    course: variantsCourse,
     tasks: [
       { taskId: "c9c9c9c9-0000-4000-8000-000000000201", type: "editor", serviceSlug: "quizzes" },
     ],
@@ -458,7 +460,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     baseUrl,
     exerciseId: "dadadada-0000-4000-8000-000000000001",
     slideId: "dadadada-0000-4000-8000-000000000101",
-    courseId: variantsCourse.id,
+    course: variantsCourse,
     tasks: [{ taskId: "dadadada-0000-4000-8000-000000000201", type: "editor" }],
     name: "Exercise 1",
     order: 6,
@@ -472,7 +474,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     baseUrl,
     exerciseId: notEnrolledExerciseId,
     slideId: "eeeeeeee-0000-4000-8000-000000000101",
-    courseId: notEnrolledCourse.id,
+    course: notEnrolledCourse,
     tasks: [{ taskId: "eeeeeeee-0000-4000-8000-000000000201", type: "editor" }],
     name: "unenrolled_exercise",
     order: 0,

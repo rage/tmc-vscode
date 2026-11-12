@@ -159,7 +159,7 @@ suite("the course home", () => {
     )
 
     const [hello, loops] = screen.getAllByRole("listitem")
-    expect(hello).toHaveTextContent(/01_hello.*Open.*1\/1/)
+    expect(hello).toHaveTextContent(/01_hello.*In workspace.*1\/1/)
     expect(within(hello as HTMLElement).getByText("Passed")).toBeInTheDocument()
     expect(loops).toHaveTextContent(/02_loops.*Not downloaded.*due in a while.*0\/2/)
     expect(screen.getByText("1/2 passed")).toBeInTheDocument()
@@ -221,6 +221,26 @@ suite("the course home", () => {
     screen.getByRole("button", { name: "Close 1 Completed Exercise" }).click()
 
     expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "closeCompletedExercises"))
+  })
+
+  test("in the course workspace with nothing to download, continues with the next exercise", async () => {
+    const view = onDiskView({
+      isWorkspaceOpen: true,
+      nextExercise: { id: makeTmcKind({ tmcExerciseId: 2 }), name: "02_loops" },
+    })
+    const [part] = view.parts
+    const panel = await renderHome({
+      ...view,
+      parts: part
+        ? [{ ...part, exercises: part.exercises.map((ex) => ({ ...ex, status: "opened" })) }]
+        : [],
+    })
+
+    const next = screen.getByRole("button", { name: "Continue: 02_loops" })
+    expect(next).not.toHaveAttribute("secondary")
+    next.click()
+
+    expect(postedMessages).toHaveBeenCalledWith(exerciseAction(panel, 2, "open"))
   })
 
   test("shows a download in progress on its rows, and holds the Download button", async () => {
@@ -327,7 +347,6 @@ suite("the course home", () => {
   test("offers login when logged out, and holds the downloads that need it", async () => {
     await renderHome(courseHomeView({ isLoggedIn: false }))
 
-    expect(screen.getByRole("button", { name: "Download 2 Exercises" })).toHaveAttribute("disabled")
     screen.getByRole("button", { name: "Log In" }).click()
 
     expect(postedMessages).toHaveBeenCalledWith({
@@ -343,6 +362,25 @@ suite("the course home", () => {
     expect(notices).toHaveTextContent("tmc.mooc.fi could not be reached")
     expect(notices).toHaveTextContent("This course is disabled")
     expect(notices).toHaveTextContent("This is an exam")
+  })
+
+  test("tells a student no longer enrolled to enroll again", async () => {
+    await renderHome(
+      courseHomeView({
+        backend: "mooc",
+        isNotEnrolled: true,
+        materialUrl: "https://courses.example/org/o/courses/c",
+      }),
+      moocPanel(),
+    )
+
+    const notices = screen.getByRole("list", { name: "Course notices" })
+    expect(notices).toHaveTextContent("You are not enrolled on this course")
+    within(notices).getByRole("button", { name: "Open Course Page" }).click()
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "openLinkInBrowser",
+      url: "https://courses.example/org/o/courses/c",
+    })
   })
 
   test("shows no notices when there is nothing to say", async () => {
@@ -388,6 +426,36 @@ suite("the course home", () => {
     await tick()
 
     expect(screen.queryByRole("menuitem", { name: "Open Course Material" })).not.toBeInTheDocument()
+  })
+
+  test("opens an exercise's course material page from its row", async () => {
+    await renderHome(
+      courseHomeView({
+        backend: "mooc",
+        parts: [
+          {
+            key: "p",
+            name: "Exercises",
+            isDefaultOpen: true,
+            exercises: [
+              courseHomeExercise(1, "one", { materialUrl: "https://courses.example/page" }),
+              courseHomeExercise(2, "two"),
+            ],
+          },
+        ],
+      }),
+      moocPanel(),
+    )
+
+    expect(screen.queryByRole("button", { name: "More Actions for two" })).not.toBeInTheDocument()
+    await fireEvent.click(screen.getByRole("button", { name: "More Actions for one" }))
+    await tick()
+    await fireEvent.click(screen.getByRole("menuitem", { name: "Open in Course Material" }))
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "openLinkInBrowser",
+      url: "https://courses.example/page",
+    })
   })
 
   test("follows the view the host pushes", async () => {

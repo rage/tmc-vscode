@@ -37,6 +37,7 @@ import { moocStoredStanding } from "../utilities/apiData"
 import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import { checkAiUse } from "./checkAiUse"
 import { checkWorkspaceTrust } from "./checkWorkspaceTrust"
+import { recordMoocEnrollment } from "./courseAccess"
 import { fingerprintStudentFiles, recordSubmittedFingerprint } from "./submittedState"
 import type { ReadyActionContext } from "./types"
 
@@ -389,6 +390,14 @@ export async function submitExercise(
 
     const outcome = await submit(submission)
     recordSubmittedFingerprint(exerciseId, outcome.ok ? fingerprint : undefined)
+    const enrollment = await recordMoocEnrollment(
+      actionContext,
+      courseId,
+      outcome.err ? outcome.val : undefined,
+    )
+    if (enrollment.err) {
+      Logger.warn("Failed to record the enrollment on the course.", enrollment.val)
+    }
     if (outcome.err) {
       Logger.error("Exercise submission failed", outcome.val)
       const error = toWebviewError(outcome.val)

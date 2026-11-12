@@ -148,7 +148,7 @@ jobs:
         run: bash bin/runMockBackendTests.sh
 
   webview_a11y_tests:
-    name: Webview accessibility tests
+    name: Webview accessibility and screenshot tests
     permissions:
       contents: read
     env:
@@ -173,10 +173,17 @@ jobs:
       - name: Webview accessibility tests (Playwright)
         run: pnpm --dir webview-ui run test:a11y
 
+      # The baselines are rendered with DejaVu, which the screenshot spec pins as the font.
+      - name: Install the baseline fonts
+        run: sudo apt-get install -y --no-install-recommends fonts-dejavu-core
+
+      - name: Webview screenshot tests (Playwright)
+        run: pnpm --dir webview-ui exec playwright test --project=visual
+
       - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         if: failure()
         with:
-          name: webview-a11y-results
+          name: webview-harness-results
           path: ./test-results/webview-harness/
           if-no-files-found: ignore
 

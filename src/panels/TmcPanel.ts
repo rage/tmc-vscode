@@ -499,12 +499,14 @@ function webviewContent(webview: Webview, extensionUri: Uri): string {
                 />
                 <meta property="csp-nonce" content="${nonce}" />
                 <link nonce="${nonce}" rel="stylesheet" type="text/css" href="${stylesUri}" />
-                <!-- id required: vscode-icon clones this stylesheet into each icon's shadow root. -->
+                <!-- id required: vscode-icon clones this stylesheet into each icon's shadow root.
+                     crossorigin: serveCodiconsFromMemory reads its rules. -->
                 <link
                     nonce="${nonce}"
                     id="vscode-codicon-stylesheet"
                     rel="stylesheet"
                     type="text/css"
+                    crossorigin="anonymous"
                     href="${codiconCssUri}"
                 />
                 <script defer nonce="${nonce}" src="${scriptUri}"></script>

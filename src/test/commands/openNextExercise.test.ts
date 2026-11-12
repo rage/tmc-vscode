@@ -39,7 +39,7 @@ function harness(): ReturnType<typeof createMockActionContext> {
   const workspaceManager = {
     getExercise: () => nextOnDisk,
     getExerciseContaining: (uri: vscode.Uri) =>
-      uri.fsPath.startsWith("/exercises/hello/") ? { id: idOfTmcExercise(1) } : undefined,
+      uri.path.startsWith("/exercises/hello/") ? { id: idOfTmcExercise(1) } : undefined,
   } as unknown as WorkspaceManager
   return {
     ...createMockActionContext({ startup: { userData, workspaceManager } }),

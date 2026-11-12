@@ -3,6 +3,7 @@ import * as vscode from "vscode"
 import { LocalCourseData } from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
 import type { CourseWorkspaceKey } from "../api/workspaceManager"
+import { shownCourseHome } from "../ui/shownCourseHome"
 import { Logger } from "../utilities"
 
 /**
@@ -26,8 +27,8 @@ function courseKey({ backend, courseSlug }: CourseWorkspaceKey): string {
 /**
  * Tells the student that exercises they just opened show only in their course's workspace,
  * which this window does not show, and offers to open it. Asks once for as long as the
- * notification for that course is up, and not at all once the student has gone to open that
- * workspace; see {@link withholdCourseWorkspaceOffer}.
+ * notification for that course is up, and not at all while the course's home is on screen or
+ * once the student has gone to open that workspace; see {@link withholdCourseWorkspaceOffer}.
  */
 export function createCourseWorkspaceOffer(
   actionContext: ReadyActionContext,
@@ -45,7 +46,8 @@ export function createCourseWorkspaceOffer(
     Logger.info(`Exercises of ${courseSlug} opened outside its course workspace`)
     const courseId = LocalCourseData.getCourseId(course)
     setTimeout(() => {
-      if (openingCourseWorkspaces.has(key)) {
+      // The course home offers the same workspace as its main action.
+      if (openingCourseWorkspaces.has(key) || shownCourseHome.isShowing(courseId)) {
         shown.delete(key)
         return
       }

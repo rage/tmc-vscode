@@ -5,7 +5,7 @@ import type {
   MoocOldSubmissionRestore,
 } from "../../shared/langsSchema"
 import type { ExerciseIdentifier } from "../../shared/lib"
-import { assertUnreachable, makeMoocKind, makeTmcKind, match } from "../../shared/lib"
+import { assertUnreachable, makeMoocKind, makeTmcKind, match, unwrap } from "../../shared/lib"
 import type { RestoreTarget } from "../api/langs"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { exerciseOperations } from "../ui/exerciseOperations"
@@ -20,17 +20,27 @@ export interface PickableSubmission {
   target: RestoreTarget
   createdAt: string
   status: string
+  /** Passed all tests on tmc; graded to full points on mooc. */
+  isPassed: boolean
 }
 
-/** Human-readable grading status for a mooc submission (score + progress). */
-function moocSubmissionStatus(submission: ExerciseSlideSubmissionListItem): string {
+/**
+ * Human-readable grading status for a mooc submission (score + progress).
+ *
+ * @param maxPoints The exercise's points available; 0 when unknown.
+ */
+function moocSubmissionStatus(
+  submission: ExerciseSlideSubmissionListItem,
+  maxPoints: number,
+): string {
   const progress = submission.grading_progress
   if (progress === null) {
     return "Not graded"
   }
-  const score = submission.score_given !== null ? ` (score ${submission.score_given})` : ""
+  const given = submission.score_given
+  const score =
+    given === null ? "" : maxPoints > 0 ? ` (${given}/${maxPoints} points)` : ` (score ${given})`
   switch (progress) {
-    // The backend judges passing per exercise, not per submission.
     case "FullyGraded":
       return `Graded${score}`
     case "Failed":
@@ -53,7 +63,11 @@ export async function listOldSubmissions(
   actionContext: ReadyActionContext,
   id: ExerciseIdentifier,
 ): Promise<Result<PickableSubmission[], Error>> {
-  const listed = await actionContext.startup.langs.getOldSubmissions(id)
+  const { langs, userData } = actionContext.startup
+  const stored = userData.getExercise(id)
+  // The list does not carry the maximum, which the course's progress does.
+  const maxPoints = stored.ok ? unwrap(stored.val.exercise).availablePoints : 0
+  const listed = await langs.getOldSubmissions(id)
   return listed.map((old) =>
     match(
       old,
@@ -62,12 +76,17 @@ export async function listOldSubmissions(
           target: makeTmcKind({ exerciseId, submissionId: submission.id }),
           createdAt: submission.created_at,
           status: submission.all_tests_passed ? "Passed" : "Not passed",
+          isPassed: submission.all_tests_passed,
         })),
       ({ exerciseId, submissions }) =>
         submissions.map<PickableSubmission>((submission) => ({
           target: makeMoocKind({ exerciseId, submissionId: submission.id }),
           createdAt: submission.created_at,
-          status: moocSubmissionStatus(submission),
+          status: moocSubmissionStatus(submission, maxPoints),
+          isPassed:
+            submission.grading_progress === "FullyGraded" &&
+            maxPoints > 0 &&
+            (submission.score_given ?? 0) >= maxPoints,
         })),
     ),
   )

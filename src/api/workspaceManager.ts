@@ -22,7 +22,7 @@ import {
 import type Resources from "../config/resources"
 import { EditorKind } from "../config/resources"
 import { FileSystemError } from "../errors"
-import { Logger } from "../utilities"
+import { isSamePath, Logger } from "../utilities"
 
 /** What keeps VS Code from writing a course's `.code-workspace`. */
 export type WorkspaceFileProblem = "unsaved" | "readOnly"
@@ -152,8 +152,8 @@ export async function ensureWorkspaceRootFile(workspaceFileFolder: string): Prom
  */
 export default class WorkspaceManager implements vscode.Disposable {
   private _exercises: WorkspaceExercise[]
-  // The same objects as `_exercises`, keyed by `uri.fsPath` and by `ExerciseIdentifier.key`.
-  // Replace all three together.
+  // The same objects as `_exercises`, keyed by `_pathKey(uri.fsPath)` and by
+  // `ExerciseIdentifier.key`. Replace all three together.
   private _exercisesByPath: Map<string, WorkspaceExercise>
   private _exercisesById: Map<string, WorkspaceExercise>
   private readonly _resources: Resources
@@ -217,7 +217,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     const workspaceFile = vscode.workspace.workspaceFile
     if (
       !workspaceFile ||
-      path.relative(workspaceFile.fsPath, this._resources.workspaceFileFolder) !== ".."
+      !isSamePath(path.dirname(workspaceFile.fsPath), this._resources.workspaceFileFolder)
     ) {
       return undefined
     }
@@ -269,7 +269,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     const workspaceFile = vscode.workspace.workspaceFile
     if (
       !workspaceFile ||
-      path.relative(workspaceFile.fsPath, this._resources.workspaceFileFolder) !== ".."
+      !isSamePath(path.dirname(workspaceFile.fsPath), this._resources.workspaceFileFolder)
     ) {
       return undefined
     }
@@ -353,7 +353,7 @@ export default class WorkspaceManager implements vscode.Disposable {
    * be a file within the exercise.
    */
   public getExerciseByPath(uri: vscode.Uri): WorkspaceExercise | undefined {
-    return this._exercisesByPath.get(uri.fsPath)
+    return this._exercisesByPath.get(WorkspaceManager._pathKey(uri.fsPath))
   }
 
   /**
@@ -366,7 +366,7 @@ export default class WorkspaceManager implements vscode.Disposable {
   public getExerciseContaining(uri: vscode.Uri): WorkspaceExercise | undefined {
     let candidate = uri.fsPath
     for (;;) {
-      const exercise = this._exercisesByPath.get(candidate)
+      const exercise = this._exercisesByPath.get(WorkspaceManager._pathKey(candidate))
       if (exercise) {
         return exercise
       }
@@ -387,7 +387,7 @@ export default class WorkspaceManager implements vscode.Disposable {
   public exerciseFolders(): vscode.Uri[] {
     return (vscode.workspace.workspaceFolders ?? [])
       .map((folder) => folder.uri)
-      .filter((uri) => this._exercisesByPath.has(uri.fsPath))
+      .filter((uri) => this._exercisesByPath.has(WorkspaceManager._pathKey(uri.fsPath)))
   }
 
   public getExercises(): WorkspaceExercise[] {
@@ -680,7 +680,9 @@ export default class WorkspaceManager implements vscode.Disposable {
       }
     }
     // VS Code refuses every extension write to a settings file with unsaved changes.
-    if (vscode.workspace.textDocuments.some((d) => d.isDirty && d.uri.fsPath === uri.fsPath)) {
+    if (
+      vscode.workspace.textDocuments.some((d) => d.isDirty && isSamePath(d.uri.fsPath, uri.fsPath))
+    ) {
       return "unsaved"
     }
     return undefined
@@ -777,7 +779,9 @@ export default class WorkspaceManager implements vscode.Disposable {
     ).map((uri) => ({ uri }))
     const correctStructure = [{ uri: rootFolder }, ...openExercises]
     if (
-      _.zip(correctStructure, workspaceFolders).every(([a, b]) => a?.uri.fsPath === b?.uri.fsPath)
+      _.zip(correctStructure, workspaceFolders).every(
+        ([a, b]) => a !== undefined && b !== undefined && isSamePath(a.uri.fsPath, b.uri.fsPath),
+      )
     ) {
       Logger.debug("Workspace refresh was a no-op.")
       return Ok.EMPTY
@@ -939,7 +943,12 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   private static _indexByPath(exercises: WorkspaceExercise[]): Map<string, WorkspaceExercise> {
-    return new Map(exercises.map((x) => [x.uri.fsPath, x]))
+    return new Map(exercises.map((x) => [WorkspaceManager._pathKey(x.uri.fsPath), x]))
+  }
+
+  /** `fsPath` as a map key that matches the way the platform compares paths. */
+  private static _pathKey(fsPath: string): string {
+    return process.platform === "win32" ? path.win32.normalize(fsPath).toLowerCase() : fsPath
   }
 
   private static _indexById(exercises: WorkspaceExercise[]): Map<string, WorkspaceExercise> {
@@ -956,7 +965,7 @@ export default class WorkspaceManager implements vscode.Disposable {
       exercise.status = status
     }
     e.added.forEach((added) => {
-      const exercise = this._exercisesByPath.get(added.uri.fsPath)
+      const exercise = this._exercisesByPath.get(WorkspaceManager._pathKey(added.uri.fsPath))
       if (!exercise) {
         incorrectFolderAdded = true
       } else if (
@@ -968,7 +977,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     })
 
     e.removed.forEach((removed) => {
-      const exercise = this._exercisesByPath.get(removed.uri.fsPath)
+      const exercise = this._exercisesByPath.get(WorkspaceManager._pathKey(removed.uri.fsPath))
       if (exercise) {
         setStatus(exercise, ExerciseStatus.Closed)
       }

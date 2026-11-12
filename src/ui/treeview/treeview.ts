@@ -98,12 +98,14 @@ export class CourseTreeItem extends vscode.TreeItem {
     const hasCompleted = exercises.some((ex) => ex.passed && ex.status === "opened")
     const hasMissing = exercises.some((ex) => ex.status === "missing" || ex.status === "new")
     const disabled = LocalCourseData.isDisabled(course)
+    const notEnrolled = LocalCourseData.isNotEnrolled(course)
     const points = pointsText(course.data.awardedPoints, course.data.availablePoints)
     const backend = backendName(course.kind)
 
-    this.iconPath = disabled
-      ? new vscode.ThemeIcon("book", new vscode.ThemeColor("disabledForeground"))
-      : new vscode.ThemeIcon("book")
+    this.iconPath =
+      disabled || notEnrolled
+        ? new vscode.ThemeIcon("book", new vscode.ThemeColor("disabledForeground"))
+        : new vscode.ThemeIcon("book")
     this.contextValue = [
       `course.${course.kind}`,
       ...(newCount > 0 ? ["hasNew"] : []),
@@ -125,6 +127,11 @@ export class CourseTreeItem extends vscode.TreeItem {
         description: "disabled",
         spoken: "disabled",
         tooltip: "This course is disabled: its exercises cannot be downloaded or submitted.",
+      },
+      notEnrolled && {
+        description: "not enrolled",
+        spoken: "not enrolled",
+        tooltip: "You are not enrolled on this course: its exercises cannot be submitted.",
       },
       newCount > 0 && { spoken: newExercises, tooltip: newExercises },
       updateCount > 0 && { spoken: updates, tooltip: updates },

@@ -221,6 +221,22 @@ suite("combineMoocApiExerciseData", function () {
     expect(unchaptered).not.toHaveProperty("chapter")
   })
 
+  test("keeps the course material page an exercise is on, and none where the host sent none", function () {
+    const [slide] = moocExerciseSlides
+    if (slide === undefined) {
+      throw new Error("the fixture has a slide")
+    }
+    const onPage = { ...slide, page_url: "https://courses.mooc.fi/org/o/courses/c/page" }
+
+    const [stored, pageless] = combineMoocApiExerciseData(
+      [onPage, { ...slide, page_url: null }],
+      NO_PROGRESS,
+    )
+
+    expect(stored?.pageUrl).toBe("https://courses.mooc.fi/org/o/courses/c/page")
+    expect(pageless).not.toHaveProperty("pageUrl")
+  })
+
   const [slide] = moocExerciseSlides
   /** The fixture slide's progress, completed with the given standing and points of 3. */
   function progressOf(standing: ExerciseProgress["standing"], scoreGiven: number): CourseProgress {

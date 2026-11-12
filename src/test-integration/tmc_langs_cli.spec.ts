@@ -34,6 +34,7 @@ import {
   DeviceLoginExpiredError,
   ExerciseNotFoundError,
   InvalidTokenError,
+  NotEnrolledError,
   NotFoundError,
   RuntimeError,
 } from "../errors"
@@ -548,6 +549,7 @@ suite("tmc langs cli spec", function () {
     const PASSING_EXERCISE_ID = "a1a1a1a1-0000-4000-8000-000000000001"
     const FAILING_EXERCISE_ID = "b2b2b2b2-0000-4000-8000-000000000001"
     const NONEXISTENT_EXERCISE_ID = "ffffffff-0000-4000-8000-000000000000"
+    const NOT_ENROLLED_EXERCISE_ID = "eeeeeeee-0000-4000-8000-000000000000"
 
     let configDir: string
     let tmc: Langs
@@ -676,6 +678,29 @@ suite("tmc langs cli spec", function () {
       const dir = writeSubmittableProject("mooc-submit-nonexistent")
       const result = await tmc.submitMoocExercise(NONEXISTENT_EXERCISE_ID, dir)
       expect(result.val).to.be.instanceOf(ExerciseNotFoundError)
+    })
+
+    // The refusal the course home reports, and the list that clears it.
+    test("should report submitting to a course the student is not enrolled on as not enrolled", async function () {
+      const dir = writeSubmittableProject("mooc-submit-not-enrolled")
+      const result = await tmc.submitMoocExercise(NOT_ENROLLED_EXERCISE_ID, dir)
+      expect(result.val).to.be.instanceOf(NotEnrolledError)
+    })
+
+    test("should leave a course the student was withdrawn from out of the enrolled courses", async function () {
+      const setEnrolled = (enrolled: boolean): Promise<Response> =>
+        fetch(`${MOCK_BACKEND_URL}/mooc-mock/set-enrolled`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ course_id: PYTHON_COURSE_ID, enrolled }),
+        })
+      expect((await setEnrolled(false)).status).to.equal(204)
+      try {
+        const courses = (await tmc.getEnrolledMoocCourses()).unwrap()
+        expect(courses.some((c) => c.id === PYTHON_COURSE_ID)).to.be.false
+      } finally {
+        await setEnrolled(true)
+      }
     })
 
     test("should submit a mooc exercise to paste and return a share URL", async function () {

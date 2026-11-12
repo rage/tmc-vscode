@@ -171,7 +171,7 @@ Modern, Dark Modern and Default High Contrast against its baseline in
 `visual/screens.spec.ts-snapshots/`. The fonts are pinned to DejaVu and the clock to a fixed date,
 so a run on Linux is repeatable; other platforms render text differently and have no baselines.
 After a deliberate visual change, rerun it with `--update-snapshots` and look at every changed
-image before committing it. CI does not run it.
+image before committing it. CI runs it on Linux next to the accessibility suite.
 
 The contrast and accessibility suites list the checks that fail today in `KNOWN_FAILURES`, each a bug still to fix. Such a
 check is expected to fail, so fixing the bug fails the suite until its entry is deleted.

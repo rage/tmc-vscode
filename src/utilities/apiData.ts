@@ -78,6 +78,7 @@ export function combineMoocApiExerciseData(
       ...(slide.chapter
         ? { chapter: { name: slide.chapter.name, number: slide.chapter.chapter_number } }
         : {}),
+      ...(slide.page_url ? { pageUrl: slide.page_url } : {}),
     }
   })
 }

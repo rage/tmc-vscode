@@ -22,12 +22,11 @@ function submissionItems(submissions: PickableSubmission[]): Item<PickableSubmis
     .map((submission) => ({ submission, createdAt: parseDate(submission.createdAt) }))
     .toSorted((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
     .map(({ submission, createdAt }, index) => {
-      const passed = submission.status.startsWith("Passed")
       const item: Item<PickableSubmission> = {
         label: createdAt ? formatDateTime(createdAt, vscode.env.language) : "Unknown date",
         value: submission,
         description: submission.status,
-        iconPath: passed
+        iconPath: submission.isPassed
           ? new vscode.ThemeIcon("pass", new vscode.ThemeColor("testing.iconPassed"))
           : new vscode.ThemeIcon("circle-large-outline"),
       }

@@ -4,7 +4,7 @@ import * as vscode from "vscode"
 import { LocalCourseData } from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
-import { Logger } from "../utilities"
+import { isSamePath, Logger } from "../utilities"
 import { withholdCourseWorkspaceOffer } from "./offerCourseWorkspace"
 
 /**
@@ -31,7 +31,7 @@ export async function openWorkspace(
 
   // `vscode.openFolder` reloads the window even for the workspace already open,
   // discarding unsaved editors, so only focus the explorer in that case.
-  if (currentWorkspaceFile?.fsPath === workspaceAsUri.fsPath) {
+  if (currentWorkspaceFile && isSamePath(currentWorkspaceFile.fsPath, workspaceAsUri.fsPath)) {
     Logger.info("Workspace already open, changing focus to this workspace.")
     await vscode.commands.executeCommand("workbench.files.action.focusFilesExplorer")
     return

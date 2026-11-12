@@ -60,6 +60,8 @@ export const SharedMoocCourseExerciseSchema = z.object({
   outOfTries: z.boolean().optional(),
   /** The chapter the course material puts the exercise in; absent outside any chapter. */
   chapter: MoocExerciseChapterSchema.optional(),
+  /** The course material page the exercise is on; absent when the backend sent none. */
+  pageUrl: z.string().optional(),
 })
 
 export type SharedMoocCourseExercise = z.infer<typeof SharedMoocCourseExerciseSchema>
@@ -81,6 +83,8 @@ export const SharedMoocCourseDataSchema = z.object({
   /** The new exercises a notification has offered; they are not offered again unprompted. */
   offeredNewExercises: z.array(z.string()).optional(),
   notifyAfter: z.number(),
+  /** courses.mooc.fi last refused the student as not enrolled on the course; absent means no. */
+  notEnrolled: z.boolean().optional(),
 })
 
 export type SharedMoocCourseData = z.infer<typeof SharedMoocCourseDataSchema>
@@ -153,6 +157,23 @@ export namespace LocalCourseData {
     return lcd.kind === "tmc" && lcd.data.disabled
   }
 
+  /** Whether courses.mooc.fi last refused the student as not enrolled; never for tmc. */
+  export function isNotEnrolled(lcd: LocalCourseData): boolean {
+    return lcd.kind === "mooc" && lcd.data.notEnrolled === true
+  }
+
+  /** The course material's front page, if the backend names it. */
+  export function getMaterialUrl(lcd: LocalCourseData): string | undefined {
+    return match(
+      lcd,
+      (tmc) => tmc.materialUrl ?? undefined,
+      (mooc) => {
+        const pageUrl = mooc.exercises.find((exercise) => exercise.pageUrl)?.pageUrl
+        return pageUrl === undefined ? undefined : moocCourseUrlOf(pageUrl)
+      },
+    )
+  }
+
   /** Whether the course hides submission results, as an exam does; never for mooc. */
   export function isExamMode(lcd: LocalCourseData): boolean {
     return lcd.kind === "tmc" && lcd.data.perhapsExamMode
@@ -173,6 +194,22 @@ export namespace LocalCourseData {
       (mooc) => mooc.exercises.map(makeMoocKind),
     )
   }
+}
+
+/**
+ * The front page of the course a courses.mooc.fi material page belongs to. Coupled to
+ * secret-project-331's `course_page_url`, which builds page URLs as
+ * `<base>/org/<organization>/courses/<course>/<page path>`.
+ */
+export function moocCourseUrlOf(pageUrl: string): string | undefined {
+  let url: URL
+  try {
+    url = new URL(pageUrl)
+  } catch {
+    return undefined
+  }
+  const coursePath = /^\/org\/[^/]+\/courses\/[^/]+/.exec(url.pathname)?.[0]
+  return coursePath === undefined ? undefined : `${url.origin}${coursePath}`
 }
 
 /**

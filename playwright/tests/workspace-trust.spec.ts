@@ -4,6 +4,7 @@ import type { Locator, Page } from "@playwright/test"
 import { VSCODE_TEST_VERSION } from "../../config"
 import { vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
+import { ExplorerPage } from "../pages/explorer"
 
 const COURSE = "Python Course"
 const FIRST_EXERCISE = "01_passing_exercise"
@@ -102,10 +103,14 @@ vsCodeTest(
       await coursesView.runInlineAction(coursesView.row(SECOND_EXERCISE), "Download")
       await answer(page, FOLDER_QUESTION, "Yes")
       await expect(coursesView.row(SECOND_EXERCISE)).toHaveAccessibleName(/, open,/)
-      await page.keyboard.press("Control+Shift+E")
-      await expect(
-        page.locator(".explorer-folders-view").getByText(new RegExp(`${SECOND_EXERCISE}$`)),
-      ).toBeVisible()
+      const explorer = new ExplorerPage(page)
+      const folder = page
+        .locator(".explorer-folders-view")
+        .getByText(new RegExp(`${SECOND_EXERCISE}$`))
+      await expect(async () => {
+        await explorer.show()
+        await expect(folder).toBeVisible({ timeout: 2000 })
+      }).toPass()
       await expect(restrictedModeIndicator(page)).toBeHidden()
     })
 

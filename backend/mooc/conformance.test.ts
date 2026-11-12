@@ -97,6 +97,28 @@ describe("mooc mock conformance", () => {
     assert.ok(!body.some((c) => c.id === notEnrolledCourse.id))
   })
 
+  test("withdrawing the student drops the course from GET courses until a reset", async () => {
+    try {
+      assert.equal(mock.setEnrolled(pythonCourse.id, false), true)
+      const withdrawn = (await (await authFetch(api("/courses"))).json()) as { id: string }[]
+      assert.ok(!withdrawn.some((c) => c.id === pythonCourse.id))
+    } finally {
+      mock.reset()
+    }
+    const restored = (await (await authFetch(api("/courses"))).json()) as { id: string }[]
+    assert.ok(restored.some((c) => c.id === pythonCourse.id))
+    assert.equal(mock.setEnrolled("no-such-course", true), false)
+  })
+
+  test("a course's exercises name their material pages as the host lays them out", async () => {
+    const res = await authFetch(api(`/courses/${pythonCourse.id}/exercises`))
+    const [slide] = (await res.json()) as { page_url: string }[]
+    assert.match(
+      slide?.page_url ?? "",
+      new RegExp(`^${base}/org/[^/]+/courses/${pythonCourse.slug}/[^/]+$`),
+    )
+  })
+
   test("GET courses/{id} returns a single course", async () => {
     const res = await authFetch(api(`/courses/${pythonCourse.id}`))
     assert.equal(res.status, 200)

@@ -7,7 +7,7 @@ import type { LocalCourseData } from "../../shared/lib"
 import { match } from "../../shared/lib"
 import { AI_OFF_SETTINGS, COURSE_LANGUAGE_IDS } from "../config/constants"
 import type { UserData } from "../config/userdata"
-import { Logger } from "../utilities"
+import { isSamePath, Logger } from "../utilities"
 import type WorkspaceManager from "./workspaceManager"
 import type { SettingInspection, WorkspaceFileProblem } from "./workspaceManager"
 
@@ -653,7 +653,7 @@ export default class AiRestriction implements vscode.Disposable {
     }
     const onDidSaveWorkspaceFile: vscode.Event<unknown> = (listener) =>
       vscode.workspace.onDidSaveTextDocument((document) => {
-        if (document.uri.fsPath === file?.fsPath) {
+        if (file && isSamePath(document.uri.fsPath, file.fsPath)) {
           listener(document)
         }
       })
