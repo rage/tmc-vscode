@@ -31,8 +31,12 @@ import {
     zExerciseTaskSubmissionResult,
     zExerciseTaskSubmissionStatus,
     zExerciseType,
+    zExerciseUpdates,
     zGrading,
     zGradingProgress,
+    zGradingTestResult,
+    zGradingTestRun,
+    zGradingTestRunStatus,
     zKind,
     zLocalExercise,
     zLocalMoocExercise,
@@ -42,7 +46,7 @@ import {
     zMoocCourse,
     zMoocDeviceLogin,
     zMoocExerciseDownload,
-    zMoocUpdatedExercise,
+    zMoocExerciseUpdates,
     zNewSubmission,
     zNotification,
     zNotificationKind,
@@ -67,6 +71,7 @@ import {
     zSubmissionFeedbackQuestion,
     zSubmissionFeedbackResponse,
     zSubmissionFinished,
+    zSubmissionKind,
     zSubmissionStatus,
     zTestCase,
     zTestDesc,
@@ -79,7 +84,6 @@ import {
     zTmcStyleValidationError,
     zTmcStyleValidationResult,
     zTmcStyleValidationStrategy,
-    zUpdatedExercise,
     zUpdateResult,
 } from './zod.gen';
 
@@ -204,8 +208,8 @@ export const ExerciseProgress = zExerciseProgress;
 export type ExerciseProgress = z.infer<typeof ExerciseProgress>;
 
 /**
- * A single past submission of the current user to an exercise. `id` is the
- * exercise-slide-submission id used to download or share the submission.
+ * A past submission or snapshot of the current user to an exercise. `id` is what
+ * [`MoocClient::download_submission_files`] and [`MoocClient::share_submission`] take.
  */
 export const ExerciseSlideSubmissionListItem = zExerciseSlideSubmissionListItem;
 export type ExerciseSlideSubmissionListItem = z.infer<typeof ExerciseSlideSubmissionListItem>;
@@ -232,6 +236,12 @@ export const ExerciseType = zExerciseType;
 export type ExerciseType = z.infer<typeof ExerciseType>;
 
 /**
+ * What [`check_tmc_exercise_updates`] found among the local TMC exercises.
+ */
+export const ExerciseUpdates = zExerciseUpdates;
+export type ExerciseUpdates = z.infer<typeof ExerciseUpdates>;
+
+/**
  * A task submission's grading record.
  */
 export const Grading = zGrading;
@@ -239,6 +249,24 @@ export type Grading = z.infer<typeof Grading>;
 
 export const GradingProgress = zGradingProgress;
 export type GradingProgress = z.infer<typeof GradingProgress>;
+
+/**
+ * The result of a single test case.
+ */
+export const GradingTestResult = zGradingTestResult;
+export type GradingTestResult = z.infer<typeof GradingTestResult>;
+
+/**
+ * The test run a grading was based on.
+ */
+export const GradingTestRun = zGradingTestRun;
+export type GradingTestRun = z.infer<typeof GradingTestRun>;
+
+/**
+ * The overall status of a test run.
+ */
+export const GradingTestRunStatus = zGradingTestRunStatus;
+export type GradingTestRunStatus = z.infer<typeof GradingTestRunStatus>;
 
 export const Kind = zKind;
 export type Kind = z.infer<typeof Kind>;
@@ -292,11 +320,11 @@ export const MoocExerciseDownload = zMoocExerciseDownload;
 export type MoocExerciseDownload = z.infer<typeof MoocExerciseDownload>;
 
 /**
- * A local mooc exercise whose server-side version has changed; like
- * [`UpdatedExercise`] but keyed by UUID.
+ * What [`check_mooc_exercise_updates`] found among the local mooc exercises; like
+ * [`ExerciseUpdates`] but keyed by exercise id.
  */
-export const MoocUpdatedExercise = zMoocUpdatedExercise;
-export type MoocUpdatedExercise = z.infer<typeof MoocUpdatedExercise>;
+export const MoocExerciseUpdates = zMoocExerciseUpdates;
+export type MoocExerciseUpdates = z.infer<typeof MoocExerciseUpdates>;
 
 /**
  * post /api/v8/core/exercises/{exercise_id}/submissions
@@ -324,7 +352,7 @@ export const OutputResult = zOutputResult;
 export type OutputResult = z.infer<typeof OutputResult>;
 
 /**
- * A shareable URL for a submission.
+ * A shareable URL for a submission or snapshot.
  */
 export const PasteResult = zPasteResult;
 export type PasteResult = z.infer<typeof PasteResult>;
@@ -422,6 +450,12 @@ export type SubmissionFeedbackResponse = z.infer<typeof SubmissionFeedbackRespon
 export const SubmissionFinished = zSubmissionFinished;
 export type SubmissionFinished = z.infer<typeof SubmissionFinished>;
 
+/**
+ * What an entry in a submissions list is.
+ */
+export const SubmissionKind = zSubmissionKind;
+export type SubmissionKind = z.infer<typeof SubmissionKind>;
+
 export const SubmissionStatus = zSubmissionStatus;
 export type SubmissionStatus = z.infer<typeof SubmissionStatus>;
 
@@ -478,12 +512,6 @@ export type TmcStyleValidationResult = z.infer<typeof TmcStyleValidationResult>;
  */
 export const TmcStyleValidationStrategy = zTmcStyleValidationStrategy;
 export type TmcStyleValidationStrategy = z.infer<typeof TmcStyleValidationStrategy>;
-
-/**
- * A local TMC exercise whose server-side version has changed.
- */
-export const UpdatedExercise = zUpdatedExercise;
-export type UpdatedExercise = z.infer<typeof UpdatedExercise>;
 
 /**
  * Updated exercises.

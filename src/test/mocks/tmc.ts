@@ -3,9 +3,9 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 
 import type { CombinedMoocCourseData, LocalExercise, MoocCourse } from "../../../shared/langsSchema"
-import type { BackendKind, ExerciseIdentifier } from "../../../shared/lib"
+import type { BackendKind } from "../../../shared/lib"
 import type Langs from "../../api/langs"
-import type { ExerciseDownloads } from "../../api/langs"
+import type { ExerciseDownloads, LocalExerciseUpdates } from "../../api/langs"
 import {
   closedExercisesPythonCourse,
   localExercises,
@@ -30,8 +30,8 @@ export interface TMCMockValues {
   migrateExercise: Result<void, Error>
   moveProjectsDirectory: Result<void, Error>
   setSettingClosedExercises: Result<void, Error>
-  tmcExerciseUpdates: Result<ExerciseIdentifier[], Error>
-  moocExerciseUpdates: Result<ExerciseIdentifier[], Error>
+  tmcExerciseUpdates: Result<LocalExerciseUpdates, Error>
+  moocExerciseUpdates: Result<LocalExerciseUpdates, Error>
   getMoocCourseData: Result<CombinedMoocCourseData, Error>
   getEnrolledMoocCourses: Result<MoocCourse[], Error>
 }

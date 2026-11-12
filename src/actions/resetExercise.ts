@@ -7,7 +7,8 @@ import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import type { ReadyActionContext } from "./types"
 
 /**
- * Resets an exercise to its initial state on disk, optionally submitting it first.
+ * Resets an exercise to its initial state on disk, optionally keeping its current state on the
+ * backend first.
  *
  * Rejects as a `BottleneckError` while another operation on the exercise is in flight.
  */

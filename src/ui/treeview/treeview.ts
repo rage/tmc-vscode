@@ -222,6 +222,7 @@ const STATUS_LABELS: Record<ExerciseView["status"], string> = {
   downloading: "downloading…",
   downloadFailed: "download failed",
   expired: "expired, not downloaded",
+  removed: "removed from the course",
 }
 
 /**
@@ -622,6 +623,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
           onDisk: onDiskOf(course),
           downloadStatusOf,
           updateable: updateablesRegistry.get(courseId),
+          isRemoved: (id) => updateablesRegistry.isRemoved(id),
           now,
         })
         return { course, parts }

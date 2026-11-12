@@ -57,7 +57,7 @@ vsCodeTest(
       await page.getByText("def hello()").click()
       await coursesView.runExercisePaletteCommand("TestMyCode: Reset Exercise")
       const dialog = page.locator(".monaco-dialog-box")
-      await expect(dialog.getByRole("button", { name: "Submit and Reset" })).toHaveCount(0)
+      await expect(dialog.getByRole("button", { name: "Back Up and Reset" })).toHaveCount(0)
       await dialog.getByRole("button", { name: "Reset", exact: true }).click()
       await expect(statusBarText(page, "Reset exercise-1.")).toBeVisible()
       await expect(editor.getByText(edit)).toBeHidden()
@@ -70,20 +70,15 @@ vsCodeTest(
       await quickPick.expectClosed()
       await page
         .locator(".monaco-dialog-box")
-        .getByRole("button", { name: "Restore Without Submitting" })
+        .getByRole("button", { name: "Restore Without Backup" })
         .click()
       await expect(editor.getByText(edit)).toBeVisible()
     })
 
     await vsCodeTest.step("share it via paste", async () => {
-      // The extension spaces submissions, pastes among them, 5 s apart.
-      await expect(async () => {
-        await page.getByText("def hello()").click()
-        await coursesView.runExercisePaletteCommand("TestMyCode: Share Exercise via Paste")
-        await expect(coursesView.notificationToast("Copied the paste link")).toBeVisible({
-          timeout: 2_000,
-        })
-      }).toPass()
+      await page.getByText("def hello()").click()
+      await coursesView.runExercisePaletteCommand("TestMyCode: Share Exercise via Paste")
+      await expect(coursesView.notificationToast("Copied the paste link")).toBeVisible()
     })
   },
 )

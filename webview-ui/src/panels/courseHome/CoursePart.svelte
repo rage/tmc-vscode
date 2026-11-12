@@ -32,6 +32,7 @@
     downloading: "Downloading…",
     downloadFailed: "Download failed",
     expired: "Expired",
+    removed: "Removed from course",
   }
 
   function isOnDisk(exercise: CourseHomeExercise): boolean {

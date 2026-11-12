@@ -50,9 +50,12 @@ export class CoursesViewPage extends TmcPage {
 
   /** Runs `command` from `row`'s context menu, on the rows selected with it. */
   public async runContextMenuCommand(row: Locator, command: string): Promise<void> {
-    await row.click({ button: "right" })
     const item = this.page.locator(".monaco-menu").getByRole("menuitem", { name: command })
-    await expect(item).toBeVisible()
+    // A right-click landing while the row's hover tooltip opens is sometimes swallowed.
+    await expect(async () => {
+      await row.click({ button: "right" })
+      await expect(item).toBeVisible({ timeout: 2_000 })
+    }).toPass()
     // A synthetic click on a monaco menu item does not activate it; Enter on the
     // hovered item does.
     await item.hover()

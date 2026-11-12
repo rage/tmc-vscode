@@ -20,6 +20,7 @@ import {
   NotEnrolledError,
   NotFoundError,
   ObsoleteClientError,
+  RateLimitedError,
   RuntimeError,
   ServerError,
   TmcLoginNotAcceptedError,
@@ -334,6 +335,7 @@ suite("Langs class arg building", function () {
         grading_completed_at: "2026-07-21T00:00:01Z",
         feedback_text: "All tests passed",
         exercise_progress: null,
+        test_results: null,
       },
     }
     stubSpawn(langs, () => Ok(dataOutput("mooc-submission-status", grading)))
@@ -389,6 +391,8 @@ suite("Langs class arg building", function () {
             created_at: "2026-07-21T12:00:00Z",
             score_given: 1,
             grading_progress: "FullyGraded",
+            kind: "submission",
+            is_shared: false,
           },
           {
             id: uuid(1),
@@ -396,6 +400,8 @@ suite("Langs class arg building", function () {
             created_at: "2026-07-21T10:00:00Z",
             score_given: 0,
             grading_progress: "Failed",
+            kind: "submission",
+            is_shared: false,
           },
         ]),
       ),
@@ -805,6 +811,29 @@ suite("Langs cross-backend independence", function () {
     }
   })
 
+  test("a mooc paste or backup right after a submission waits for nothing", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, (_i, args) =>
+      args.includes("submit")
+        ? Ok(dataOutput("mooc-submission-finished", moocSubmitted))
+        : args.includes("paste")
+          ? Ok(dataOutput("mooc-paste", { paste_url: "https://courses.example/paste" }))
+          : Ok(dataOutput("mooc-old-submission-restore", "restored")),
+    )
+    expect((await langs.submitMoocExercise("ex-uuid", "/path/to/ex")).ok).toBe(true)
+
+    vi.useFakeTimers()
+    try {
+      expect((await langs.paste(idOfMoocExercise("ex-uuid"), "/path/to/ex")).ok).toBe(true)
+      expect((await langs.resetExercise(idOfMoocExercise("ex-uuid"), "/path/to/ex", true)).ok).toBe(
+        true,
+      )
+      expect(calls).toHaveLength(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test("a submission right after another waits out the interval, then goes through", async function () {
     vi.useFakeTimers()
     try {
@@ -839,6 +868,7 @@ suite("Langs error-kind mapping", function () {
     ["not-enrolled", NotEnrolledError],
     ["upload-expired", UploadExpiredError],
     ["unknown-upload", UnknownUploadError],
+    ["rate-limited", RateLimitedError],
     ["device-login-denied", DeviceLoginDeniedError],
     ["device-login-expired", DeviceLoginExpiredError],
     ["not-found", NotFoundError],
@@ -1089,13 +1119,13 @@ suite("Langs response cache", function () {
     let callCount = 0
     stubSpawn(langs, () => {
       callCount += 1
-      return Ok(dataOutput("mooc-updated-exercises", [{ id: uuid(callCount) }]))
+      return Ok(dataOutput("mooc-exercise-updates", { updated: [uuid(callCount)], removed: [] }))
     })
     const first = await langs.checkExerciseUpdates("mooc")
     const second = await langs.checkExerciseUpdates("mooc")
     expect(callCount).toBe(1)
-    expect(first.val).toEqual([idOfMoocExercise(uuid(1))])
-    expect(second.val).toEqual([idOfMoocExercise(uuid(1))])
+    expect(first.val).toEqual({ updated: [idOfMoocExercise(uuid(1))], removed: [] })
+    expect(second.val).toEqual({ updated: [idOfMoocExercise(uuid(1))], removed: [] })
   })
 
   test("forceRefresh bypasses the cache", async function () {
@@ -1103,12 +1133,12 @@ suite("Langs response cache", function () {
     let callCount = 0
     stubSpawn(langs, () => {
       callCount += 1
-      return Ok(dataOutput("mooc-updated-exercises", [{ id: uuid(callCount) }]))
+      return Ok(dataOutput("mooc-exercise-updates", { updated: [uuid(callCount)], removed: [] }))
     })
     await langs.checkExerciseUpdates("mooc")
     const refreshed = await langs.checkExerciseUpdates("mooc", { forceRefresh: true })
     expect(callCount).toBe(2)
-    expect(refreshed.val).toEqual([idOfMoocExercise(uuid(2))])
+    expect(refreshed.val).toEqual({ updated: [idOfMoocExercise(uuid(2))], removed: [] })
   })
 
   test("getMoocCourseData serves a repeat view from cache until a refresh is forced", async function () {
@@ -1189,7 +1219,7 @@ suite("Langs exercise-update cache invalidation", function () {
     stubSpawn(langs, (_i, args) => {
       if (args.includes("check-exercise-updates")) {
         updateCheckCalls += 1
-        return Ok(dataOutput("mooc-updated-exercises", [{ id: uuid(1) }]))
+        return Ok(dataOutput("mooc-exercise-updates", { updated: [uuid(1)], removed: [] }))
       }
       return Ok(
         dataOutput("mooc-exercise-download", {
@@ -1218,7 +1248,7 @@ suite("Langs exercise-update cache invalidation", function () {
     stubSpawn(langs, (_i, args) => {
       if (args.includes("check-exercise-updates")) {
         tmcUpdateCheckCalls += 1
-        return Ok(dataOutput("updated-exercises", [{ id: 1 }]))
+        return Ok(dataOutput("exercise-updates", { updated: [1], removed: [] }))
       }
       return Ok(
         dataOutput("mooc-exercise-download", {

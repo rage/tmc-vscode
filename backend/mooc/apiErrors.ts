@@ -38,6 +38,7 @@ export const API_ERRORS = {
   chapter_not_open_yet: { type: "unauthorized", status: 401 },
   authentication_required_for_exam_exercise: { type: "unauthorized", status: 401 },
   forbidden: { type: "forbidden", status: 403 },
+  rate_limited: { type: "rate_limit", status: 429 },
   invalid_course_code: { type: "sisu_error", status: 400 },
   generic_sisu_error: { type: "sisu_error", status: 502 },
   sisu_resource_not_found: { type: "sisu_error", status: 404 },

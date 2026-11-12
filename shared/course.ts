@@ -214,8 +214,9 @@ export function moocCourseUrlOf(pageUrl: string): string | undefined {
 
 /**
  * An exercise's state as the Courses view shows it: on disk (`opened`, `closed`), on its way
- * (`downloading`, `downloadFailed`), or not downloaded (`missing`, `new` when the course
- * announced it, `expired` past its hard deadline).
+ * (`downloading`, `downloadFailed`), not downloaded (`missing`, `new` when the course
+ * announced it, `expired` past its hard deadline), or on disk but gone from the course
+ * (`removed`).
  */
 export type ExerciseStatus =
   | "closed"
@@ -225,6 +226,7 @@ export type ExerciseStatus =
   | "missing"
   | "new"
   | "opened"
+  | "removed"
 
 export const FeedbackQuestionSchema = z.object({
   id: z.number(),

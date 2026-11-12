@@ -19,7 +19,7 @@ import {
   tmcCourseExercise,
   tmcLocalCourse,
 } from "../fixtures/courses"
-import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
+import { idOfMoocExercise, idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
 const NOW = new Date("2026-06-01T12:00:00Z")
@@ -270,9 +270,11 @@ suite("buildCourseHomeView", function () {
         moocCourseExercise({ id: "a", name: "done", passed: true }),
         moocCourseExercise({ id: "b", name: "spent", outOfTries: true }),
         moocCourseExercise({ id: "c", name: "closed", deadline: "2026-05-01T00:00:00Z" }),
+        moocCourseExercise({ id: "r", name: "removed" }),
         moocCourseExercise({ id: "d", name: "todo" }),
       ],
     })
+    updateablesRegistry.setRemoved("mooc", [idOfMoocExercise("r")])
 
     const view = buildCourseHomeView(
       contextFor(course),

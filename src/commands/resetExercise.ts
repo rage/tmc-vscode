@@ -1,16 +1,19 @@
 import { Ok } from "ts-results"
 import type * as vscode from "vscode"
 
-import { backendName } from "../../shared/lib"
 import { checkAiUse, resetExercise as resetExerciseAction } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure } from "../api/withOperation"
 import { revertExerciseDocuments } from "../window/exerciseDocuments"
-import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
+import {
+  confirmSubmitBeforeDestructiveAction,
+  keepingVerb,
+} from "./confirmSubmitBeforeDestructiveAction"
 import { checkTrustRetrying, runForExercise } from "./runForExercise"
 
 /**
- * Resets an exercise to its initial state, optionally submitting it beforehand.
+ * Resets an exercise to its initial state, optionally keeping its current state on the backend
+ * beforehand.
  *
  * @param resource An exercise file or folder; the active editor's exercise when omitted.
  */
@@ -31,7 +34,7 @@ export async function resetExercise(
       message: `Reset ${exercise.exerciseSlug}?`,
       replacement: "the exercise template",
       verb: "Reset",
-      serverName: backendName(id.kind),
+      backend: id.kind,
     })
     if (submitFirst === undefined) {
       return Ok.EMPTY
@@ -49,7 +52,7 @@ export async function resetExercise(
 
     const resetResult = await dialog.progressNotification(
       submitFirst
-        ? `Submitting and resetting ${exercise.exerciseSlug}…`
+        ? `${keepingVerb(id.kind)} and resetting ${exercise.exerciseSlug}…`
         : `Resetting ${exercise.exerciseSlug}…`,
       () => resetExerciseAction(actionContext, id, exercise, submitFirst),
     )

@@ -751,14 +751,11 @@
           "type": "object",
           "properties": {
             "output-data": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/UpdatedExercise"
-              }
+              "$ref": "#/$defs/ExerciseUpdates"
             },
             "output-data-kind": {
               "type": "string",
-              "const": "updated-exercises"
+              "const": "exercise-updates"
             }
           },
           "required": [
@@ -1157,14 +1154,11 @@
           "type": "object",
           "properties": {
             "output-data": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/MoocUpdatedExercise"
-              }
+              "$ref": "#/$defs/MoocExerciseUpdates"
             },
             "output-data-kind": {
               "type": "string",
-              "const": "mooc-updated-exercises"
+              "const": "mooc-exercise-updates"
             }
           },
           "required": [
@@ -1809,7 +1803,7 @@
       ]
     },
     "ExerciseSlideSubmissionListItem": {
-      "description": "A single past submission of the current user to an exercise. `id` is the\nexercise-slide-submission id used to download or share the submission.",
+      "description": "A past submission or snapshot of the current user to an exercise. `id` is what\n[`MoocClient::download_submission_files`] and [`MoocClient::share_submission`] take.",
       "type": "object",
       "properties": {
         "created_at": {
@@ -1821,6 +1815,7 @@
           "format": "uuid"
         },
         "grading_progress": {
+          "description": "Always `None` for a snapshot.",
           "anyOf": [
             {
               "$ref": "#/$defs/GradingProgress"
@@ -1834,7 +1829,16 @@
           "type": "string",
           "format": "uuid"
         },
+        "is_shared": {
+          "description": "Whether the entry has a live share link, whatever its kind. `false` from a host that\npredates the field.",
+          "type": "boolean"
+        },
+        "kind": {
+          "description": "`submission` from a host that predates the field, which lists only submissions.",
+          "$ref": "#/$defs/SubmissionKind"
+        },
         "score_given": {
+          "description": "Always `None` for a snapshot.",
           "type": [
             "number",
             "null"
@@ -1847,7 +1851,9 @@
         "exercise_id",
         "created_at",
         "score_given",
-        "grading_progress"
+        "grading_progress",
+        "kind",
+        "is_shared"
       ]
     },
     "ExerciseStanding": {
@@ -2019,6 +2025,34 @@
         "editor"
       ]
     },
+    "ExerciseUpdates": {
+      "description": "What [`check_tmc_exercise_updates`] found among the local TMC exercises.",
+      "type": "object",
+      "properties": {
+        "removed": {
+          "description": "Exercises the server no longer has. Their local copies are left in place and are never updated.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "updated": {
+          "description": "Exercises whose server version differs from the local copy.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        }
+      },
+      "required": [
+        "updated",
+        "removed"
+      ]
+    },
     "Grading": {
       "description": "A task submission's grading record.",
       "type": "object",
@@ -2065,6 +2099,17 @@
             "null"
           ],
           "format": "float"
+        },
+        "test_results": {
+          "description": "The test run the grading was based on. `None` until grading has produced one, or when the\nexercise service reported something else.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GradingTestRun"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -2073,7 +2118,8 @@
         "grading_started_at",
         "grading_completed_at",
         "feedback_text",
-        "exercise_progress"
+        "exercise_progress",
+        "test_results"
       ]
     },
     "GradingProgress": {
@@ -2103,6 +2149,84 @@
           "type": "string",
           "const": "FullyGraded"
         }
+      ]
+    },
+    "GradingTestResult": {
+      "description": "The result of a single test case.",
+      "type": "object",
+      "properties": {
+        "exception": {
+          "description": "Stack trace lines of a failure.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "message": {
+          "type": "string",
+          "default": ""
+        },
+        "name": {
+          "type": "string"
+        },
+        "points": {
+          "description": "The points the test earned; empty when it failed.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "successful": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "successful",
+        "points",
+        "message",
+        "exception"
+      ]
+    },
+    "GradingTestRun": {
+      "description": "The test run a grading was based on.",
+      "type": "object",
+      "properties": {
+        "logs": {
+          "description": "The run's output keyed by log type (e.g. `stdout`, `stderr`). Empty unless `status` is\n`COMPILE_FAILED` or `GENERIC_ERROR`, where it holds the compiler or error output.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/GradingTestRunStatus"
+        },
+        "test_results": {
+          "description": "Empty when the tests did not run, e.g. on a compile failure.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GradingTestResult"
+          }
+        }
+      },
+      "required": [
+        "status",
+        "test_results",
+        "logs"
+      ]
+    },
+    "GradingTestRunStatus": {
+      "description": "The overall status of a test run.",
+      "type": "string",
+      "enum": [
+        "PASSED",
+        "TESTS_FAILED",
+        "COMPILE_FAILED",
+        "TESTRUN_INTERRUPTED",
+        "GENERIC_ERROR"
       ]
     },
     "Kind": {
@@ -2181,6 +2305,11 @@
           "description": "The server answered 404 to a request addressing one exercise: the exercise does not\nexist, or not for this user.",
           "type": "string",
           "const": "exercise-not-found"
+        },
+        {
+          "description": "courses.mooc.fi answered 429 (backend `message_key: \"rate_limited\"`): the user made too\nmany pastes of the exercise recently and should try again later.",
+          "type": "string",
+          "const": "rate-limited"
         }
       ]
     },
@@ -2420,6 +2549,32 @@
         "path"
       ]
     },
+    "MoocExerciseUpdates": {
+      "description": "What [`check_mooc_exercise_updates`] found among the local mooc exercises; like\n[`ExerciseUpdates`] but keyed by exercise id.",
+      "type": "object",
+      "properties": {
+        "removed": {
+          "description": "Exercises their course no longer has. Their local copies are left in place and are never updated.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "updated": {
+          "description": "Exercises whose server version differs from the local copy.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "required": [
+        "updated",
+        "removed"
+      ]
+    },
     "MoocOldSubmissionRestore": {
       "description": "Outcome of restoring a past mooc submission.",
       "oneOf": [
@@ -2433,19 +2588,6 @@
           "type": "string",
           "const": "nothing-to-download"
         }
-      ]
-    },
-    "MoocUpdatedExercise": {
-      "description": "A local mooc exercise whose server-side version has changed; like\n[`UpdatedExercise`] but keyed by UUID.",
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "format": "uuid"
-        }
-      },
-      "required": [
-        "id"
       ]
     },
     "NewSubmission": {
@@ -2562,7 +2704,7 @@
       ]
     },
     "PasteResult": {
-      "description": "A shareable URL for a submission.",
+      "description": "A shareable URL for a submission or snapshot.",
       "type": "object",
       "properties": {
         "paste_url": {
@@ -3490,6 +3632,26 @@
         "validations"
       ]
     },
+    "SubmissionKind": {
+      "description": "What an entry in a submissions list is.",
+      "oneOf": [
+        {
+          "description": "A graded submission.",
+          "type": "string",
+          "const": "submission"
+        },
+        {
+          "description": "An ungraded snapshot stored to be shared, by `mooc paste`.",
+          "type": "string",
+          "const": "paste"
+        },
+        {
+          "description": "An ungraded snapshot stored before local changes were discarded, by `--save-old-state`.",
+          "type": "string",
+          "const": "backup"
+        }
+      ]
+    },
     "SubmissionStatus": {
       "type": "string",
       "enum": [
@@ -3900,20 +4062,6 @@
       "required": [
         "created",
         "updated"
-      ]
-    },
-    "UpdatedExercise": {
-      "description": "A local TMC exercise whose server-side version has changed.",
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        }
-      },
-      "required": [
-        "id"
       ]
     }
   }

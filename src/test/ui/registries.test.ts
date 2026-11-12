@@ -89,6 +89,30 @@ suite("updateables registry", () => {
   })
 })
 
+suite("removed exercises", () => {
+  test("a backend's later report replaces its earlier one and leaves the other backend's", () => {
+    updateablesRegistry.setRemoved("tmc", [idOfTmcExercise(1)])
+    updateablesRegistry.setRemoved("mooc", [idOfMoocExercise("1")])
+    updateablesRegistry.setRemoved("tmc", [idOfTmcExercise(2)])
+
+    expect(updateablesRegistry.isRemoved(idOfTmcExercise(1))).toBe(false)
+    expect(updateablesRegistry.isRemoved(idOfTmcExercise(2))).toBe(true)
+    expect(updateablesRegistry.isRemoved(idOfMoocExercise("1"))).toBe(true)
+  })
+
+  test("are forgotten on clear, which announces it", () => {
+    updateablesRegistry.setRemoved("tmc", [idOfTmcExercise(1)])
+    const changed = vi.fn()
+    const subscription = updateablesRegistry.onDidChange(changed)
+
+    updateablesRegistry.clear()
+    subscription.dispose()
+
+    expect(changed).toHaveBeenCalledOnce()
+    expect(updateablesRegistry.isRemoved(idOfTmcExercise(1))).toBe(false)
+  })
+})
+
 suite("download failures", () => {
   const first = idOfTmcExercise(101)
   const second = idOfTmcExercise(102)

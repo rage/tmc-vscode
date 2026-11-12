@@ -77,10 +77,10 @@ suite("Reset exercise command", function () {
   }
 
   test("asks once, naming the exercise, whether to submit before resetting", async function () {
-    await resetExercise(actionContext("Reset Without Submitting"), uri)
+    await resetExercise(actionContext("Reset Without Backup"), uri)
 
     expect(prompts).toEqual([
-      { message: "Reset ex-1?", labels: ["Submit and Reset", "Reset Without Submitting"] },
+      { message: "Reset ex-1?", labels: ["Back Up and Reset", "Reset Without Backup"] },
     ])
     expect(reset).toHaveBeenCalledExactlyOnceWith(
       { kind: "mooc", data: { moocExerciseId: "mooc-ex-uuid" } },
@@ -90,21 +90,21 @@ suite("Reset exercise command", function () {
   })
 
   test("submits first when asked to, saving the exercise's editors before", async function () {
-    await resetExercise(actionContext("Submit and Reset"), uri)
+    await resetExercise(actionContext("Back Up and Reset"), uri)
 
     expect(reset).toHaveBeenCalledExactlyOnceWith(expect.anything(), uri.fsPath, true)
     expect(saveExerciseDocuments).toHaveBeenCalledExactlyOnceWith(exercise)
   })
 
   test("reverts the reset exercise's editors, not the active one's", async function () {
-    await resetExercise(actionContext("Reset Without Submitting"), uri)
+    await resetExercise(actionContext("Reset Without Backup"), uri)
 
     expect(saveExerciseDocuments).not.toHaveBeenCalled()
     expect(revertExerciseDocuments).toHaveBeenCalledExactlyOnceWith(exercise)
   })
 
   test("reverts no editor when the reset fails", async function () {
-    const context = actionContext("Reset Without Submitting")
+    const context = actionContext("Reset Without Backup")
     reset.mockResolvedValue(Err(new Error("disk full")))
 
     await resetExercise(context, uri)
@@ -113,7 +113,7 @@ suite("Reset exercise command", function () {
   })
 
   test("resets nothing when submitting first is refused while AI may be on", async function () {
-    const context = actionContext("Submit and Reset", new AiUseRefusedError("AI must be off."))
+    const context = actionContext("Back Up and Reset", new AiUseRefusedError("AI must be off."))
 
     await resetExercise(context, uri)
 
@@ -123,7 +123,7 @@ suite("Reset exercise command", function () {
 
   test("resets without submitting while AI may be on", async function () {
     await resetExercise(
-      actionContext("Reset Without Submitting", new AiUseRefusedError("AI must be off.")),
+      actionContext("Reset Without Backup", new AiUseRefusedError("AI must be off.")),
       uri,
     )
 
@@ -131,7 +131,7 @@ suite("Reset exercise command", function () {
   })
 
   test("shows progress while resetting and says in the status bar when done", async function () {
-    const context = actionContext("Reset Without Submitting")
+    const context = actionContext("Reset Without Backup")
 
     await resetExercise(context, uri)
 
@@ -153,7 +153,7 @@ suite("Reset exercise command", function () {
       .claim([idOfMoocExercise("mooc-ex-uuid")], "submitting")
       .unwrap()
     try {
-      await resetExercise(actionContext("Submit and Reset"), uri)
+      await resetExercise(actionContext("Back Up and Reset"), uri)
     } finally {
       submission.releaseAll()
     }

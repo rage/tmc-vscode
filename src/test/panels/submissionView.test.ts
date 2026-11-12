@@ -190,13 +190,14 @@ suite("moocGradingView", () => {
     })
   })
 
-  test("the last try below full points says the score is final", () => {
+  test("the last try below full points says the score is final, and help is still offered", () => {
     const view = moocGradingView(moocGrading("FullyGraded", 2, "OutOfTries"), 3)
     expect(view).toMatchObject({
       phase: "finished",
       headline: "Some tests failed on the server",
       explanation: "You have no tries left on this exercise, so this score is final.",
       points: { given: 2, max: 3 },
+      canPaste: true,
     })
   })
 
@@ -213,6 +214,68 @@ suite("moocGradingView", () => {
       phase: "failed",
       canPaste: true,
       canKeepWaiting: false,
+    })
+  })
+
+  test("lists the server's per-test results as the TMC result's test cases", () => {
+    const view = moocGradingView(
+      gradingOf({
+        score_given: 0,
+        test_results: {
+          status: "TESTS_FAILED",
+          test_results: [
+            { name: "passes", successful: true, points: ["1"], message: "", exception: [] },
+            {
+              name: "fails",
+              successful: false,
+              points: [],
+              message: "expected 2",
+              exception: ["at Test.fails"],
+            },
+          ],
+          logs: {},
+        },
+      }),
+      1,
+    )
+
+    expect(view.testCases).toEqual([
+      { name: "passes", successful: true, message: "", exception: [], detailed_message: null },
+      {
+        name: "fails",
+        successful: false,
+        message: "expected 2",
+        exception: ["at Test.fails"],
+        detailed_message: null,
+      },
+    ])
+    expect(view.error).toBeUndefined()
+  })
+
+  test("a run that did not compile says so, with the compiler's output", () => {
+    const view = moocGradingView(
+      gradingOf({
+        score_given: 0,
+        test_results: {
+          status: "COMPILE_FAILED",
+          test_results: [],
+          logs: { stdout: "Main.java:3: error", stderr: "" },
+        },
+      }),
+      1,
+    )
+
+    expect(view.testCases).toEqual([])
+    expect(view.error).toEqual({
+      message: "Your code did not compile on the server.",
+      details: "Main.java:3: error",
+    })
+  })
+
+  test("a grading without a test run has no test cases", () => {
+    expect(moocGradingView(moocGrading("FullyGraded", 1, "Passed"), 1)).toMatchObject({
+      testCases: [],
+      error: undefined,
     })
   })
 

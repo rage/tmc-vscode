@@ -18,7 +18,12 @@ import * as actions from "../../actions"
 import type { ActionContext } from "../../actions/types"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
-import { BottleneckError, InitializationError, presentationFor } from "../../errors"
+import {
+  BottleneckError,
+  InitializationError,
+  presentationFor,
+  RateLimitedError,
+} from "../../errors"
 import type { PanelMessage } from "../../panels/router"
 import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
 import { MAIN_PANEL_VIEW_TYPE, SIDE_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
@@ -356,6 +361,22 @@ suite("TmcPanel handler dispatch", () => {
       target: targetOf(shown),
       requestId: 1,
       outcome: { ok: true, value: "link" },
+    })
+  })
+
+  test("a paste refused for pasting too often tells the panel why", async () => {
+    const handlers = stubHandlers()
+    handlers.pasteExercise.mockResolvedValue(
+      Err(new RateLimitedError("You have sent this exercise for help too many times recently.")),
+    )
+
+    const { panel } = await paste(createMockActionContext())
+
+    expect(replyTo(panel, 1)).toMatchObject({
+      outcome: {
+        ok: false,
+        error: { message: "You have sent this exercise for help too many times recently." },
+      },
     })
   })
 

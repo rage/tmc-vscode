@@ -52,6 +52,8 @@ suite("Download old submission command (mooc branch)", function () {
       created_at: "2026-07-21T12:00:00Z",
       score_given: 1,
       grading_progress: "FullyGraded",
+      kind: "submission",
+      is_shared: false,
     },
     {
       id: "sub-older",
@@ -59,6 +61,8 @@ suite("Download old submission command (mooc branch)", function () {
       created_at: "2026-07-21T10:00:00Z",
       score_given: 0,
       grading_progress: "Failed",
+      kind: "submission",
+      is_shared: false,
     },
   ] as ExerciseSlideSubmissionListItem[]
 
@@ -77,7 +81,7 @@ suite("Download old submission command (mooc branch)", function () {
     } = {},
   ): ReadyActionContext {
     const base = createMockActionContext()
-    const answer = "answer" in options ? options.answer : "Restore Without Submitting"
+    const answer = "answer" in options ? options.answer : "Restore Without Backup"
 
     getOldSubmissions = vi.fn(async () =>
       Ok(
@@ -196,6 +200,32 @@ suite("Download old submission command (mooc branch)", function () {
     ])
   })
 
+  test("labels the ungraded pastes and backups apart from the submissions, and what is shared", async function () {
+    const listed = [
+      { ...moocSubmissions[0], kind: "paste", is_shared: true, score_given: null },
+      {
+        ...moocSubmissions[0],
+        created_at: "2026-07-21T11:00:00Z",
+        kind: "backup",
+        score_given: null,
+        grading_progress: null,
+      },
+      { ...moocSubmissions[1], is_shared: true },
+    ] as ExerciseSlideSubmissionListItem[]
+    await downloadOldSubmission(actionContext({ submissions: listed }), uri)
+
+    expect(offered.map(({ description }) => description)).toEqual([
+      "Sent for help, not graded · Shared",
+      "Backup, not graded",
+      "Failed (0/1 points) · Shared",
+    ])
+    expect(offered.map(({ iconPath }) => (iconPath as vscode.ThemeIcon).id)).toEqual([
+      "comment-discussion",
+      "archive",
+      "circle-large-outline",
+    ])
+  })
+
   test("reads a submission the server has not started grading as pending", async function () {
     const pending = [
       { ...moocSubmissions[0], grading_progress: "NotReady", score_given: null },
@@ -220,7 +250,7 @@ suite("Download old submission command (mooc branch)", function () {
   })
 
   test("submits the current state first when the user asks for it", async function () {
-    await downloadOldSubmission(actionContext({ answer: "Submit and Restore" }), uri)
+    await downloadOldSubmission(actionContext({ answer: "Back Up and Restore" }), uri)
 
     expect(saveExerciseDocuments).toHaveBeenCalledExactlyOnceWith(moocExercise)
     expect(restoreSubmission).toHaveBeenCalledExactlyOnceWith(
@@ -257,7 +287,7 @@ suite("Download old submission command (mooc branch)", function () {
       .claim([idOfMoocExercise("mooc-ex-uuid")], "submitting")
       .unwrap()
     try {
-      await downloadOldSubmission(actionContext({ answer: "Submit and Restore" }), uri)
+      await downloadOldSubmission(actionContext({ answer: "Back Up and Restore" }), uri)
     } finally {
       submission.releaseAll()
     }

@@ -53,18 +53,27 @@ export interface CourseViewState {
   /** Whether the exercise is downloading or failed to, which the disk cannot tell. */
   downloadStatusOf: (id: ExerciseIdentifier) => "downloading" | "downloadFailed" | undefined
   updateable: ExerciseIdentifier[]
+  /** Whether the exercise's backend last reported it gone. */
+  isRemoved: (id: ExerciseIdentifier) => boolean
   /** The instant deadlines are judged expired against. */
   now: Date
 }
 
 const MAX_PARTS_ALL_OPEN = 3
 
+const REMOVED_PART: PartPlace = {
+  key: ":removed",
+  name: "Removed from the course",
+  isUngrouped: false,
+}
+
 /**
  * Groups a course's exercises into parts and derives each exercise's status.
  *
  * A tmc course is sorted by part and exercise number. A mooc course is grouped by chapter in
  * chapter order and keeps the order its material presents the exercises in; exercises outside
- * any chapter come last, under a part named after the course.
+ * any chapter come last, under a part named after the course. Exercises on disk that the
+ * backend no longer has, or that the course no longer lists, come after everything else.
  */
 export function buildCourseView(course: LocalCourseData, state: CourseViewState): PartView[] {
   const courseTitle = LocalCourseData.getCourseTitle(course)
@@ -77,12 +86,15 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
   )
 
   const parts = new Map<string, PartPlace & { exercises: ExerciseView[] }>()
+  const removed: ExerciseView[] = []
   for (const ex of LocalCourseData.getExercises(course)) {
     const slug = LocalCourseExercise.getSlug(ex)
     const { part, name } = placeExercise(ex, slug, courseTitle)
     const id = LocalCourseExercise.getId(ex)
     const key = ExerciseIdentifier.key(id)
     const onDisk = onDiskById.get(key)
+    onDiskById.delete(key)
+    const isRemoved = state.isRemoved(id)
     const softDeadlineText = LocalCourseExercise.getSoftDeadline(ex)
     const softDeadline = softDeadlineText ? parseDate(softDeadlineText) : null
     const hardDeadline = ex.data.deadline ? parseDate(ex.data.deadline) : null
@@ -90,12 +102,14 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       id,
       name,
       slug,
-      status: resolveStatus(
-        onDisk?.status,
-        state.downloadStatusOf(id),
-        hardDeadline !== null && state.now >= hardDeadline,
-        newKeys.has(key),
-      ),
+      status: isRemoved
+        ? "removed"
+        : resolveStatus(
+            onDisk?.status,
+            state.downloadStatusOf(id),
+            hardDeadline !== null && state.now >= hardDeadline,
+            newKeys.has(key),
+          ),
       passed: ex.data.passed,
       isOutOfTries: ex.kind === "mooc" && ex.data.outOfTries === true,
       awardedPoints: ex.data.awardedPoints,
@@ -103,8 +117,12 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       softDeadline,
       hardDeadline,
       isHard: !isSoftDeadlineBinding(ex.data),
-      isUpdateable: updateableKeys.has(key),
+      isUpdateable: !isRemoved && updateableKeys.has(key),
       onDisk,
+    }
+    if (isRemoved) {
+      removed.push(view)
+      continue
     }
     const existing = parts.get(part.key)
     if (existing) {
@@ -127,11 +145,37 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
     ),
   })).toSorted((a, b) => compareParts(a, b, isAnyNumbered))
 
+  // The loop above took out every exercise the course lists.
+  removed.push(...Array.from(onDiskById.values(), (onDisk) => removedFromCourse(onDisk)))
+  const withRemoved =
+    removed.length > 0
+      ? [...sorted, { ...REMOVED_PART, exercises: removed, nextDeadline: null }]
+      : sorted
+
   const openPartKey = pickOpenPart(sorted)
-  return sorted.map(({ number: _number, ...part }) => ({
+  return withRemoved.map(({ number: _number, ...part }) => ({
     ...part,
-    isDefaultOpen: sorted.length <= MAX_PARTS_ALL_OPEN || part.key === openPartKey,
+    isDefaultOpen: withRemoved.length <= MAX_PARTS_ALL_OPEN || part.key === openPartKey,
   }))
+}
+
+/** A row for an exercise on disk that its course no longer lists. */
+function removedFromCourse(onDisk: WorkspaceExercise): ExerciseView {
+  return {
+    id: onDisk.id,
+    name: onDisk.exerciseSlug,
+    slug: onDisk.exerciseSlug,
+    status: "removed",
+    passed: false,
+    isOutOfTries: false,
+    awardedPoints: 0,
+    availablePoints: 0,
+    softDeadline: null,
+    hardDeadline: null,
+    isHard: true,
+    isUpdateable: false,
+    onDisk,
+  }
 }
 
 /** The part an exercise belongs in. */
@@ -275,6 +319,7 @@ export function nextExerciseAfter(
     onDisk: [],
     downloadStatusOf: () => undefined,
     updateable: [],
+    isRemoved: () => false,
     now,
   }).flatMap((part) => part.exercises)
   const currentKey = ExerciseIdentifier.key(current)
@@ -287,9 +332,13 @@ export function nextExerciseAfter(
   return next?.id
 }
 
-/** Whether the student can still earn the exercise: not passed, tries left, hard deadline ahead. */
+/**
+ * Whether the student can still earn the exercise: still in the course, not passed, tries left,
+ * hard deadline ahead.
+ */
 export function isLeftToDo(exercise: ExerciseView, now: Date): boolean {
   return (
+    exercise.status !== "removed" &&
     !exercise.passed &&
     !exercise.isOutOfTries &&
     !(exercise.hardDeadline !== null && exercise.hardDeadline <= now)
@@ -313,6 +362,7 @@ export function exercisesToDownload(
     onDisk,
     downloadStatusOf: () => undefined,
     updateable: [],
+    isRemoved: () => false,
     now,
   })
     .filter((part) => scope === "all" || part.isDefaultOpen)

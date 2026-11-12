@@ -64,7 +64,7 @@ vsCodeTest(
 
       await page
         .locator(".monaco-dialog-box")
-        .getByRole("button", { name: "Restore Without Submitting" })
+        .getByRole("button", { name: "Restore Without Backup" })
         .click()
     })
 
