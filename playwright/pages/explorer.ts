@@ -60,7 +60,7 @@ export class ExplorerPage {
   }
 
   /** Shows the Explorer unless it is up, as a click on its activity bar entry would hide it. */
-  private async show(): Promise<void> {
+  public async show(): Promise<void> {
     if (await this.page.locator(".explorer-folders-view").isVisible()) {
       return
     }
