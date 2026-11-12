@@ -26,12 +26,23 @@ function submissionItems(submissions: PickableSubmission[]): Item<PickableSubmis
         label: createdAt ? formatDateTime(createdAt, vscode.env.language) : "Unknown date",
         value: submission,
         description: submission.status,
-        iconPath: submission.isPassed
-          ? new vscode.ThemeIcon("pass", new vscode.ThemeColor("testing.iconPassed"))
-          : new vscode.ThemeIcon("circle-large-outline"),
+        iconPath: submissionIcon(submission),
       }
       return index === 0 ? { ...item, detail: "Latest" } : item
     })
+}
+
+function submissionIcon(submission: PickableSubmission): vscode.ThemeIcon {
+  switch (submission.kind) {
+    case "paste":
+      return new vscode.ThemeIcon("comment-discussion")
+    case "backup":
+      return new vscode.ThemeIcon("archive")
+    case "submission":
+      return submission.isPassed
+        ? new vscode.ThemeIcon("pass", new vscode.ThemeColor("testing.iconPassed"))
+        : new vscode.ThemeIcon("circle-large-outline")
+  }
 }
 
 /**

@@ -52,6 +52,8 @@ suite("Download old submission command (mooc branch)", function () {
       created_at: "2026-07-21T12:00:00Z",
       score_given: 1,
       grading_progress: "FullyGraded",
+      kind: "submission",
+      is_shared: false,
     },
     {
       id: "sub-older",
@@ -59,6 +61,8 @@ suite("Download old submission command (mooc branch)", function () {
       created_at: "2026-07-21T10:00:00Z",
       score_given: 0,
       grading_progress: "Failed",
+      kind: "submission",
+      is_shared: false,
     },
   ] as ExerciseSlideSubmissionListItem[]
 
@@ -192,6 +196,32 @@ suite("Download old submission command (mooc branch)", function () {
 
     expect(offered[0]?.description).toBe("Graded (0.5/1 points)")
     expect(offered.map(({ iconPath }) => (iconPath as vscode.ThemeIcon).id)).toEqual([
+      "circle-large-outline",
+    ])
+  })
+
+  test("labels the ungraded pastes and backups apart from the submissions, and what is shared", async function () {
+    const listed = [
+      { ...moocSubmissions[0], kind: "paste", is_shared: true, score_given: null },
+      {
+        ...moocSubmissions[0],
+        created_at: "2026-07-21T11:00:00Z",
+        kind: "backup",
+        score_given: null,
+        grading_progress: null,
+      },
+      { ...moocSubmissions[1], is_shared: true },
+    ] as ExerciseSlideSubmissionListItem[]
+    await downloadOldSubmission(actionContext({ submissions: listed }), uri)
+
+    expect(offered.map(({ description }) => description)).toEqual([
+      "Sent for help, not graded · Shared",
+      "Backup, not graded",
+      "Failed (0/1 points) · Shared",
+    ])
+    expect(offered.map(({ iconPath }) => (iconPath as vscode.ThemeIcon).id)).toEqual([
+      "comment-discussion",
+      "archive",
       "circle-large-outline",
     ])
   })

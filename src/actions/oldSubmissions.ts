@@ -3,6 +3,7 @@ import type { Result } from "ts-results"
 import type {
   ExerciseSlideSubmissionListItem,
   MoocOldSubmissionRestore,
+  SubmissionKind,
 } from "../../shared/langsSchema"
 import type { ExerciseIdentifier } from "../../shared/lib"
 import { assertUnreachable, makeMoocKind, makeTmcKind, match, unwrap } from "../../shared/lib"
@@ -22,10 +23,13 @@ export interface PickableSubmission {
   status: string
   /** Passed all tests on tmc; graded to full points on mooc. */
   isPassed: boolean
+  /** Only courses.mooc.fi keeps ungraded pastes and backups beside the submissions. */
+  kind: SubmissionKind
 }
 
 /**
- * Human-readable grading status for a mooc submission (score + progress).
+ * Human-readable status for a mooc submission (score + progress) or snapshot, and whether it
+ * has a share link.
  *
  * @param maxPoints The exercise's points available; 0 when unknown.
  */
@@ -33,6 +37,21 @@ function moocSubmissionStatus(
   submission: ExerciseSlideSubmissionListItem,
   maxPoints: number,
 ): string {
+  const status = moocGradingStatus(submission, maxPoints)
+  return submission.is_shared ? `${status} · Shared` : status
+}
+
+function moocGradingStatus(submission: ExerciseSlideSubmissionListItem, maxPoints: number): string {
+  switch (submission.kind) {
+    case "paste":
+      return "Sent for help, not graded"
+    case "backup":
+      return "Backup, not graded"
+    case "submission":
+      break
+    default:
+      return assertUnreachable(submission.kind)
+  }
   const progress = submission.grading_progress
   if (progress === null) {
     return "Not graded"
@@ -77,6 +96,7 @@ export async function listOldSubmissions(
           createdAt: submission.created_at,
           status: submission.all_tests_passed ? "Passed" : "Not passed",
           isPassed: submission.all_tests_passed,
+          kind: "submission",
         })),
       ({ exerciseId, submissions }) =>
         submissions.map<PickableSubmission>((submission) => ({
@@ -87,6 +107,7 @@ export async function listOldSubmissions(
             submission.grading_progress === "FullyGraded" &&
             maxPoints > 0 &&
             (submission.score_given ?? 0) >= maxPoints,
+          kind: submission.kind,
         })),
     ),
   )
