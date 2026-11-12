@@ -11,7 +11,7 @@
 # still fails.
 set -euo pipefail
 
-MINIMUM_PASSING=226
+MINIMUM_PASSING=227
 
 cd "$(dirname "$0")/../backend"
 

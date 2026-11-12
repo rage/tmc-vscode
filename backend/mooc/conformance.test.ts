@@ -1058,6 +1058,32 @@ describe("mooc mock enrollment, answerability and ownership", () => {
     )
   })
 
+  test("an exercise a teacher deleted is gone from every listing until it is restored", async () => {
+    const exerciseId = passingExercise.slide.exercise_id
+    const listed = async (): Promise<string[]> => {
+      const slides = (await (
+        await authFetch(api(`/courses/${pythonCourse.id}/exercises`))
+      ).json()) as { exercise_id: string }[]
+      const progress = (await (
+        await authFetch(api(`/courses/${pythonCourse.id}/progress`))
+      ).json()) as { exercises: { exercise_id: string }[] }
+      return [...slides, ...progress.exercises].map((entry) => entry.exercise_id)
+    }
+
+    const removed = await fetch(`${base}/mooc-mock/set-exercise-removed`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ exercise_id: exerciseId, removed: true }),
+    })
+    assert.equal(removed.status, 204)
+    assert.deepEqual(await listed(), [])
+    assert.equal((await authFetch(api(`/exercises/${exerciseId}`))).status, 404)
+    assert.equal((await postUpload(exerciseId)).status, 404)
+
+    mock.reset()
+    assert.deepEqual(await listed(), [exerciseId, exerciseId])
+  })
+
   test("a task belonging to a service this client cannot be served is invisible", async () => {
     const slides = (await (
       await authFetch(api(`/courses/${variantsCourse.id}/exercises`))

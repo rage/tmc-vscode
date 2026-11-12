@@ -147,6 +147,8 @@ interface MoocMockState {
   submissionsByExercise: Map<string, SubmissionRecord[]>
   /** When each paste of an exercise was stored, for the host's paste rate limit. */
   pasteTimesByExercise: Map<string, number[]>
+  /** Exercises a teacher has deleted since the student downloaded them. */
+  removedExerciseIds: Set<string>
   uploadsById: Map<string, UploadRecord>
   /** Uploaded bytes keyed by stored path segment, served by the file-store route. */
   uploadBytesByStoredName: Map<string, Buffer>
@@ -211,6 +213,7 @@ const createMoocMockState = (baseUrl: string): MoocMockState => ({
   submissionsBySlideId: new Map(),
   submissionsByExercise: new Map(),
   pasteTimesByExercise: new Map(),
+  removedExerciseIds: new Set(),
   uploadsById: new Map(),
   uploadBytesByStoredName: new Map(),
   expireNextUpload: false,
@@ -291,6 +294,12 @@ export interface MoocMockControls {
    * can on the host. Returns false for an unknown course.
    */
   setEnrolled: (courseId: string, enrolled: boolean) => boolean
+  /**
+   * Deletes a fixture exercise from its course, as a teacher can, or brings it back: every
+   * client operation then treats it as an exercise that never existed. Returns false for an
+   * unknown exercise.
+   */
+  setExerciseRemoved: (exerciseId: string, removed: boolean) => boolean
   /** Points every URL this mock hands out at `baseUrl`. */
   rebase: (baseUrl: string) => void
   /**
@@ -389,6 +398,7 @@ const createMoocMockControls = (
     state.submissionsBySlideId.clear()
     state.submissionsByExercise.clear()
     state.pasteTimesByExercise.clear()
+    state.removedExerciseIds.clear()
     state.uploadsById.clear()
     state.uploadBytesByStoredName.clear()
     state.expireNextUpload = false
@@ -450,6 +460,17 @@ const createMoocMockControls = (
       return false
     }
     course.enrolled = enrolled
+    return true
+  },
+  setExerciseRemoved: (exerciseId, removed) => {
+    if (!state.fixtures.exerciseById.has(exerciseId)) {
+      return false
+    }
+    if (removed) {
+      state.removedExerciseIds.add(exerciseId)
+    } else {
+      state.removedExerciseIds.delete(exerciseId)
+    }
     return true
   },
   rebase: (baseUrl) => void Object.assign(state, indexFixtures(baseUrl)),
@@ -578,6 +599,14 @@ const obsoleteClientError = (
 
 const findCourse = (state: MoocMockState, id: string) =>
   state.fixtures.courses.find((c) => c.course.id === id)
+
+/** The exercise the host still has, unless a teacher deleted it. */
+const findExercise = (state: MoocMockState, id: string): MoocExerciseFixture | undefined =>
+  state.removedExerciseIds.has(id) ? undefined : state.fixtures.exerciseById.get(id)
+
+/** A course's exercises the host still has, in course order. */
+const remainingExercises = (state: MoocMockState, course: CourseWithExercises) =>
+  course.exercises.filter((e) => !state.removedExerciseIds.has(e.slide.exercise_id))
 
 const scoreMaximumFor = (state: MoocMockState, exerciseId: string): number =>
   state.scoreMaximumByExerciseId.get(exerciseId) ?? 1
@@ -981,7 +1010,7 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       // A slide left with no servable task drops out of the listing entirely, as
       // the host's `if !tasks.is_empty()` does.
       return ok(
-        found.exercises
+        remainingExercises(state, found)
           .map((e) => clientServableSlide(e.slide))
           .filter((slide) => slide.tasks.length > 0),
       )
@@ -997,14 +1026,16 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       // One entry per exercise, zeroed when untouched, like the real backend.
       return ok({
         course_id: found.course.id,
-        exercises: found.exercises.map((e) => exerciseProgress(state, e.slide.exercise_id)),
+        exercises: remainingExercises(state, found).map((e) =>
+          exerciseProgress(state, e.slide.exercise_id),
+        ),
       })
     },
 
     // GET /api/v0/exercise-services/client/exercises/{id}
     getClientExercise: (c: Context): MockResponse => {
       const id = String(c.request.params.id)
-      const exercise = state.fixtures.exerciseById.get(id)
+      const exercise = findExercise(state, id)
       if (!exercise) {
         // An entirely unknown exercise id: the backend's get_by_id yields
         // RecordNotFound -> 404 (the spec documents 404 on this path). Distinct
@@ -1029,7 +1060,7 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
     // POST /api/v0/exercise-services/client/exercises/{id}/files  (multipart)
     uploadClientExerciseFiles: (c: Context, req: Request): MockResponse => {
       const exerciseId = String(c.request.params.id)
-      const exercise = state.fixtures.exerciseById.get(exerciseId)
+      const exercise = findExercise(state, exerciseId)
       if (!exercise) {
         return apiError("not_found", `no such exercise: ${exerciseId}`)
       }
@@ -1100,7 +1131,7 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
     // POST /api/v0/exercise-services/client/exercises/{id}/submit  (JSON)
     submitClientExercise: (c: Context): MockResponse => {
       const exerciseId = String(c.request.params.id)
-      const exercise = state.fixtures.exerciseById.get(exerciseId)
+      const exercise = findExercise(state, exerciseId)
       if (!exercise) {
         return apiError("not_found", `no such exercise: ${exerciseId}`)
       }
@@ -1171,7 +1202,7 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
     // POST /api/v0/exercise-services/client/exercises/{id}/snapshots  (JSON)
     createClientAnswerSnapshot: (c: Context): MockResponse => {
       const exerciseId = String(c.request.params.id)
-      if (!state.fixtures.exerciseById.has(exerciseId)) {
+      if (!findExercise(state, exerciseId)) {
         return apiError("not_found", `no such exercise: ${exerciseId}`)
       }
       if (!isEnrolled(state, exerciseId)) {
@@ -1659,6 +1690,22 @@ export const registerMoocRoutes = (
     }
     if (!controls.setEnrolled(courseId, enrolled)) {
       res.status(404).json({ error: `no such course: ${courseId}` })
+      return
+    }
+    res.status(204).end()
+  })
+
+  app.post("/mooc-mock/set-exercise-removed", json, (req, res) => {
+    const { exercise_id: exerciseId, removed } = (req.body ?? {}) as {
+      exercise_id?: unknown
+      removed?: unknown
+    }
+    if (typeof exerciseId !== "string" || typeof removed !== "boolean") {
+      res.status(400).json({ error: "exercise_id must be a string and removed a boolean" })
+      return
+    }
+    if (!controls.setExerciseRemoved(exerciseId, removed)) {
+      res.status(404).json({ error: `no such exercise: ${exerciseId}` })
       return
     }
     res.status(204).end()

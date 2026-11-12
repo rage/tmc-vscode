@@ -36,6 +36,7 @@ import {
   InvalidTokenError,
   NotEnrolledError,
   NotFoundError,
+  RateLimitedError,
   RuntimeError,
 } from "../errors"
 import { idOfMoocExercise, idOfTmcExercise } from "../test/fixtures/identifiers"
@@ -548,6 +549,7 @@ suite("tmc langs cli spec", function () {
     const EXTRA_COURSE_ID = "22222222-2222-4222-8222-222222222222"
     const PASSING_EXERCISE_ID = "a1a1a1a1-0000-4000-8000-000000000001"
     const FAILING_EXERCISE_ID = "b2b2b2b2-0000-4000-8000-000000000001"
+    const LIMITED_TRIES_EXERCISE_ID = "b8b8b8b8-0000-4000-8000-000000000001"
     const NONEXISTENT_EXERCISE_ID = "ffffffff-0000-4000-8000-000000000000"
     const NOT_ENROLLED_EXERCISE_ID = "eeeeeeee-0000-4000-8000-000000000000"
 
@@ -653,6 +655,15 @@ suite("tmc langs cli spec", function () {
       expect(status.grading.grading_progress).to.equal("FullyGraded")
       expect(status.grading.score_given).to.equal(0)
       expect(status.grading.exercise_progress?.standing).to.equal("Attempted")
+      // The tmc service's RunResult, read out of feedback_json by the CLI.
+      expect(status.grading.test_results?.status).to.equal("TESTS_FAILED")
+      expect(
+        status.grading.test_results?.test_results.map((result) => [result.name, result.successful]),
+      ).to.deep.equal([
+        ["HelloTest.greets", true],
+        ["HelloTest.counts", false],
+      ])
+      expect(status.grading.test_results?.logs).to.deep.equal({})
     })
 
     test("should transparently re-upload when the first upload is reaped before submit", async function () {
@@ -703,12 +714,77 @@ suite("tmc langs cli spec", function () {
       }
     })
 
-    test("should submit a mooc exercise to paste and return a share URL", async function () {
+    test("should paste a mooc exercise as a shared, ungraded snapshot", async function () {
       const dir = writeSubmittableProject("mooc-paste")
-      // `mooc paste` submits (non-blocking) then shares the resulting submission,
-      // resolving the slide-submission id from the exercise's submissions list.
       const pasteUrl = (await tmc.paste(idOfMoocExercise(PASSING_EXERCISE_ID), dir)).unwrap()
       expect(pasteUrl).to.match(/\/shared-submissions\/[0-9a-f-]+$/)
+
+      const newest = first((await moocSubmissions(tmc, PASSING_EXERCISE_ID)).unwrap())
+      expect(newest?.kind).to.equal("paste")
+      expect(newest?.is_shared).to.equal(true)
+      expect(newest?.grading_progress).to.equal(null)
+    })
+
+    test("should paste an exercise with no tries left, using none", async function () {
+      const dir = writeSubmittableProject("mooc-paste-out-of-tries")
+      const graded = (
+        await submitMoocAndWaitForGrading(tmc, LIMITED_TRIES_EXERCISE_ID, dir)
+      ).unwrap()
+      if (graded.status !== "grading") {
+        throw new Error(`expected a grading record, got ${graded.status}`)
+      }
+      expect(graded.grading.exercise_progress?.standing).to.equal("OutOfTries")
+
+      ;(await tmc.paste(idOfMoocExercise(LIMITED_TRIES_EXERCISE_ID), dir)).unwrap()
+
+      const listed = (await moocSubmissions(tmc, LIMITED_TRIES_EXERCISE_ID)).unwrap()
+      expect(listed.map((item) => item.kind)).to.deep.equal(["paste", "submission"])
+    })
+
+    test("should refuse pasting one exercise too often as rate limited", async function () {
+      const dir = writeSubmittableProject("mooc-paste-rate-limited")
+      const exerciseId = idOfMoocExercise(FAILING_EXERCISE_ID)
+      for (let i = 0; i < 3; i++) {
+        ;(await tmc.paste(exerciseId, dir)).unwrap()
+      }
+      const refused = await tmc.paste(exerciseId, dir)
+      expect(refused.val).to.be.instanceOf(RateLimitedError)
+    })
+
+    test("should back up, not submit, the current state before a reset", async function () {
+      await tmc.downloadMoocExercises([PASSING_EXERCISE_ID], PYTHON_COURSE_ID, () => {})
+      const entry = (await tmc.listLocalExercises())
+        .unwrap()
+        .find((x) => x.backend === "mooc" && x["exercise-id"] === PASSING_EXERCISE_ID)
+      const exercisePath = (entry as { "exercise-path": string })["exercise-path"]
+      const before = (await moocSubmissions(tmc, PASSING_EXERCISE_ID)).unwrap()
+
+      ;(await tmc.resetExercise(idOfMoocExercise(PASSING_EXERCISE_ID), exercisePath, true)).unwrap()
+
+      const after = (await moocSubmissions(tmc, PASSING_EXERCISE_ID)).unwrap()
+      expect(after.length).to.equal(before.length + 1)
+      expect(after[0]?.kind).to.equal("backup")
+      expect(after[0]?.score_given).to.equal(null)
+    })
+
+    test("should report a downloaded exercise its course no longer has as removed", async function () {
+      await tmc.downloadMoocExercises([PASSING_EXERCISE_ID], PYTHON_COURSE_ID, () => {})
+      const setRemoved = (removed: boolean): Promise<Response> =>
+        fetch(`${MOCK_BACKEND_URL}/mooc-mock/set-exercise-removed`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ exercise_id: PASSING_EXERCISE_ID, removed }),
+        })
+      expect((await setRemoved(true)).status).to.equal(204)
+      try {
+        const updates = (await tmc.checkExerciseUpdates("mooc", { forceRefresh: true })).unwrap()
+        expect(updates).to.deep.equal({
+          updated: [],
+          removed: [idOfMoocExercise(PASSING_EXERCISE_ID)],
+        })
+      } finally {
+        await setRemoved(false)
+      }
     })
 
     test("should download mooc exercises then skip them by checksum", async function () {
