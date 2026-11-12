@@ -5,12 +5,15 @@ import type {
   CourseProgress,
   TmcExerciseSlide,
 } from "../../../shared/langsSchema"
-import type { ExerciseIdentifier } from "../../../shared/lib"
 import { makeTmcKind } from "../../../shared/lib"
+import type { LocalExerciseUpdates } from "../../api/langs"
 
-const tmcExerciseUpdates: ExerciseIdentifier[] = [makeTmcKind({ tmcExerciseId: 2 })]
+const tmcExerciseUpdates: LocalExerciseUpdates = {
+  updated: [makeTmcKind({ tmcExerciseId: 2 })],
+  removed: [],
+}
 
-const moocExerciseUpdates: ExerciseIdentifier[] = []
+const moocExerciseUpdates: LocalExerciseUpdates = { updated: [], removed: [] }
 
 const closedExercisesPythonCourse: string[] = ["other_world"]
 

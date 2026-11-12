@@ -79,18 +79,30 @@ export const toCliStdoutSlide = (wire: ExerciseSlide): unknown => ({
 // The CLI does not relay the wire grading status verbatim either: its
 // `From<api::ExerciseTaskSubmissionStatus> for ExerciseTaskSubmissionStatus`
 // (tmc-langs-rust/crates/tmc-mooc-client/src/lib.rs) re-tags the enum
-// internally and drops `feedback_json`, which only the exercise service that
-// produced it can interpret. This function IS that reconciliation for the
-// grading shape; if the wire drifts so the conversion can no longer produce a
-// valid ExerciseTaskSubmissionStatus, the assertion below fails.
+// internally and reads `feedback_json` as the tmc service's camelCase RunResult
+// into `test_results`, keeping logs only for a run that failed to run its tests
+// (`GradingTestRun::from_feedback_json`, crates/tmc-mooc-client/src/grading.rs).
+// This function IS that reconciliation for the grading shape, a hand-written
+// replica of that Rust; if the wire drifts so the conversion can no longer
+// produce a valid ExerciseTaskSubmissionStatus, the assertion below fails.
 const toCliStdoutGradingStatus = (wire: unknown): unknown => {
   if (wire === "NoGradingYet") {
     return { status: "no-grading-yet" }
   }
-  const { feedback_json: _pluginPrivate, ...grading } = (
-    wire as { Grading: Record<string, unknown> }
-  ).Grading
-  return { status: "grading", grading }
+  const { feedback_json, ...grading } = (wire as { Grading: Record<string, unknown> }).Grading
+  const run = feedback_json as {
+    status: string
+    testResults?: unknown[]
+    logs?: Record<string, string>
+  } | null
+  const test_results = run
+    ? {
+        status: run.status,
+        test_results: run.testResults ?? [],
+        logs: ["COMPILE_FAILED", "GENERIC_ERROR"].includes(run.status) ? (run.logs ?? {}) : {},
+      }
+    : null
+  return { status: "grading", grading: { ...grading, test_results } }
 }
 
 // Properties the CLI contract leaves entirely unconstrained -- `true` or `{}` in
@@ -303,13 +315,25 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     ).json()) as { Grading: Record<string, unknown> }
     expectValid(ExerciseTaskSubmissionStatus, toCliStdoutGradingStatus(second), "grading (grading)")
 
-    // The wire carries plugin-private structured feedback that only the exercise
-    // service producing it can interpret; the CLI drops it rather than relaying an
-    // opaque blob. The mock emits a distinctive sentinel so a schema that started
-    // accepting the field again is visible here.
-    expect(second.Grading.feedback_json).toEqual({ mock_feedback: "reconciliation sentinel" })
     const parsed = ExerciseTaskSubmissionStatus.parse(toCliStdoutGradingStatus(second))
-    expect(JSON.stringify(parsed)).not.toContain("reconciliation sentinel")
+    expect(parsed.status === "grading" && parsed.grading.test_results?.status).toBe("PASSED")
+  })
+
+  test("a failed test run's results validate as the grading's test_results", async function () {
+    const { taskSubmissionId } = await submit(failingExercise)
+    await fetch(api(`/submissions/${taskSubmissionId}/grading`))
+    const graded = await (await fetch(api(`/submissions/${taskSubmissionId}/grading`))).json()
+
+    const parsed = ExerciseTaskSubmissionStatus.parse(toCliStdoutGradingStatus(graded))
+    if (parsed.status !== "grading") {
+      throw new Error("expected a grading")
+    }
+    expect(parsed.grading.test_results?.test_results.map((test) => test.successful)).toEqual([
+      true,
+      false,
+    ])
+    // A normal run's logs are the program's output, which the CLI does not relay.
+    expect(parsed.grading.test_results?.logs).toEqual({})
   })
 
   test("old-submissions list items validate as ExerciseSlideSubmissionListItem", async function () {
@@ -358,6 +382,40 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     expect(
       CourseProgress.parse(graded).exercises.some((e) => e.completed && e.score_given > 0),
     ).toBe(true)
+  })
+
+  test("snapshot list items validate as ExerciseSlideSubmissionListItem", async function () {
+    const exercise = passingExercise
+    const form = new FormData()
+    form.append(
+      crypto.randomUUID(),
+      new Blob([new Uint8Array([1, 2, 3])], { type: TMC_ARCHIVE_MIME }),
+      "submission.tar.zst",
+    )
+    const uploaded = (await (
+      await fetch(api(`/exercises/${exercise.slide.exercise_id}/files?for=snapshot`), {
+        method: "POST",
+        body: form,
+      })
+    ).json()) as { data_files: { id: string }[] }
+    const stored = await fetch(api(`/exercises/${exercise.slide.exercise_id}/snapshots`), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        purpose: "paste",
+        exercise_slide_id: exercise.slide.slide_id,
+        exercise_task_id: exercise.slide.tasks[0]!.task_id,
+        data_files: uploaded.data_files.map((file) => file.id),
+      }),
+    })
+    expect(stored.status).toBe(200)
+
+    const items = (await (
+      await fetch(api(`/exercises/${exercise.slide.exercise_id}/submissions`))
+    ).json()) as unknown[]
+    expect(items).toHaveLength(1)
+    expectValid(ExerciseSlideSubmissionListItem, items[0], "snapshot list item")
+    expect(ExerciseSlideSubmissionListItem.parse(items[0]).kind).toBe("paste")
   })
 
   test("share result validates as PasteResult", async function () {

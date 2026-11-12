@@ -262,7 +262,7 @@ suite("tmc langs cli spec", function () {
 
       test("should be able to check for exercise updates", async function () {
         const result = await unwrapResult(tmc.checkExerciseUpdates("tmc"))
-        expect(result.length).to.be.equal(0)
+        expect(result).to.deep.equal({ updated: [], removed: [] })
       })
 
       test("should be able to save the exercise state and revert it to an old submission", async function () {

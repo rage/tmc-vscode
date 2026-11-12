@@ -213,6 +213,14 @@ export interface ExerciseDownloads {
   failed: [ExerciseDownload, string[]][]
 }
 
+/** How a backend's copies of the locally downloaded exercises differ from the local ones. */
+export interface LocalExerciseUpdates {
+  /** Changed on the server since download. */
+  updated: ExerciseIdentifier[]
+  /** No longer on the server; their local copies stay and are never updated. */
+  removed: ExerciseIdentifier[]
+}
+
 /** A backend's download result, with each exercise as `toDownload` identifies it. */
 function toExerciseDownloads<T>(
   {
@@ -686,7 +694,8 @@ export default class Langs {
   // ---------------------------------------------------------------------------------------------
 
   /**
-   * Lists the locally downloaded exercises of `backend` that have a newer version on the server.
+   * Compares the locally downloaded exercises of `backend` with the server: those with a newer
+   * version there, and those the server no longer has.
    *
    * The result is cached per backend; `forceRefresh` bypasses that cache. A caller
    * wanting both backends calls this twice, so one server being unreachable does not
@@ -695,22 +704,24 @@ export default class Langs {
   public async checkExerciseUpdates(
     backend: BackendKind,
     options?: CacheOptions,
-  ): Promise<Result<ExerciseIdentifier[], Error>> {
+  ): Promise<Result<LocalExerciseUpdates, Error>> {
     const command = { backend, args: this._backendCmd(backend, "check-exercise-updates") }
     const cacheConfig = {
       forceRefresh: options?.forceRefresh,
       key: cacheKey(backend, "exercise-updates"),
     }
     if (backend === "mooc") {
-      const res = await this._fetch(command, "mooc-updated-exercises", cacheConfig)
-      return res.map((exercises) =>
-        exercises.map((exercise) => makeMoocKind({ moocExerciseId: exercise.id })),
-      )
+      const res = await this._fetch(command, "mooc-exercise-updates", cacheConfig)
+      return res.map(({ updated, removed }) => ({
+        updated: updated.map((id) => makeMoocKind({ moocExerciseId: id })),
+        removed: removed.map((id) => makeMoocKind({ moocExerciseId: id })),
+      }))
     }
-    const res = await this._fetch(command, "updated-exercises", cacheConfig)
-    return res.map((exercises) =>
-      exercises.map((exercise) => makeTmcKind({ tmcExerciseId: exercise.id })),
-    )
+    const res = await this._fetch(command, "exercise-updates", cacheConfig)
+    return res.map(({ updated, removed }) => ({
+      updated: updated.map((id) => makeTmcKind({ tmcExerciseId: id })),
+      removed: removed.map((id) => makeTmcKind({ tmcExerciseId: id })),
+    }))
   }
 
   /**

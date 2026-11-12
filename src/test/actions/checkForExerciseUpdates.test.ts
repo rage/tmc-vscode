@@ -80,13 +80,16 @@ suite("checkForExerciseUpdates action", function () {
   })
 
   test("should return empty array when there are no updates", async function () {
-    tmcMockValues.tmcExerciseUpdates = Ok([])
+    tmcMockValues.tmcExerciseUpdates = Ok({ updated: [], removed: [] })
     const result = await checkForExerciseUpdates(actionContext())
     expect(result.outdated).toEqual([])
   })
 
   test("should filter out unknown exercise ids", async function () {
-    tmcMockValues.tmcExerciseUpdates = Ok([idOfTmcExercise(2), idOfTmcExercise(404)])
+    tmcMockValues.tmcExerciseUpdates = Ok({
+      updated: [idOfTmcExercise(2), idOfTmcExercise(404)],
+      removed: [],
+    })
     const result = await checkForExerciseUpdates(actionContext())
     expect(result.outdated).toEqual([tmcOutdated])
   })
@@ -96,7 +99,10 @@ suite("checkForExerciseUpdates action", function () {
       ...userDataMockValues.getCourses,
       makeMoocKind(moocCourse) as LocalCourseData,
     ]
-    tmcMockValues.moocExerciseUpdates = Ok([idOfMoocExercise("mooc-ex-1")])
+    tmcMockValues.moocExerciseUpdates = Ok({
+      updated: [idOfMoocExercise("mooc-ex-1")],
+      removed: [],
+    })
     const result = await checkForExerciseUpdates(actionContext())
     expect(result.outdated).toEqual([tmcOutdated, moocOutdated])
   })
@@ -108,7 +114,10 @@ suite("checkForExerciseUpdates action", function () {
     ]
     const error = new Error("tmc down")
     tmcMockValues.tmcExerciseUpdates = Err(error)
-    tmcMockValues.moocExerciseUpdates = Ok([idOfMoocExercise("mooc-ex-1")])
+    tmcMockValues.moocExerciseUpdates = Ok({
+      updated: [idOfMoocExercise("mooc-ex-1")],
+      removed: [],
+    })
     const result = await checkForExerciseUpdates(actionContext())
     expect(result.outdated).toEqual([moocOutdated])
     expect(result.failures).toEqual([{ backend: "tmc", error }])
@@ -129,7 +138,19 @@ suite("checkForExerciseUpdates action", function () {
   test("does not name a failed backend the user has no courses on", async function () {
     tmcMockValues.moocExerciseUpdates = Err(new Error("mooc down"))
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result).toEqual({ outdated: [tmcOutdated], failures: [] })
+    expect(result).toEqual({ outdated: [tmcOutdated], removed: [], failures: [] })
+  })
+
+  test("reports the exercises each backend no longer has", async function () {
+    userDataMockValues.getCourses = [
+      ...userDataMockValues.getCourses,
+      makeMoocKind(moocCourse) as LocalCourseData,
+    ]
+    tmcMockValues.tmcExerciseUpdates = Ok({ updated: [], removed: [idOfTmcExercise(1)] })
+    tmcMockValues.moocExerciseUpdates = Ok({ updated: [], removed: [idOfMoocExercise("gone")] })
+    const result = await checkForExerciseUpdates(actionContext())
+    expect(result.outdated).toEqual([])
+    expect(result.removed).toEqual([idOfTmcExercise(1), idOfMoocExercise("gone")])
   })
 
   test("asks only the backends that hold some of the user's courses", async function () {
@@ -148,7 +169,7 @@ suite("checkForExerciseUpdates action", function () {
       started.push(backend)
       await Promise.resolve()
       started.push(`${backend} done`)
-      return Ok([])
+      return Ok({ updated: [], removed: [] })
     })
     await checkForExerciseUpdates(actionContext())
     expect(started.slice(0, 2)).toEqual(["tmc", "mooc"])

@@ -51,7 +51,7 @@ const moocCourse = { kind: "mooc", data: { id: "mooc-course" } } as LocalCourseD
 
 /** A check that reached every backend. */
 function checked(exercises: ExerciseUpdateCheck["outdated"]): ExerciseUpdateCheck {
-  return { outdated: exercises, failures: [] }
+  return { outdated: exercises, removed: [], failures: [] }
 }
 
 function contextWith(
@@ -101,6 +101,7 @@ suite("updateExercises command", function () {
     updateablesRegistry.setMany([[idOfMoocCourse("mooc-course"), staleMooc]])
     checkForExerciseUpdates.mockResolvedValue({
       outdated: [outdated(1, 10), outdated(1, 11)],
+      removed: [idOfTmcExercise(12)],
       failures: [{ backend: "mooc", error: new Error("offline") }],
     })
     const [actionContext] = contextWith(true)
@@ -278,6 +279,7 @@ suite("updateExercises command", function () {
     const error = new Error("offline")
     checkForExerciseUpdates.mockResolvedValue({
       outdated: [],
+      removed: [],
       failures: [{ backend: "mooc", error }],
     })
     const [loudContext, loudDialog] = contextWith(false)
@@ -299,6 +301,7 @@ suite("updateExercises command", function () {
     const tmcError = new Error("tmc offline")
     checkForExerciseUpdates.mockResolvedValue({
       outdated: [],
+      removed: [],
       failures: [
         { backend: "tmc", error: tmcError },
         { backend: "mooc", error: new Error("mooc offline") },

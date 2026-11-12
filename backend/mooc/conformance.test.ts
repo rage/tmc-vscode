@@ -459,6 +459,11 @@ describe("mooc mock conformance", () => {
     grading_progress: string
     score_given: number | null
     feedback_text: string
+    feedback_json: {
+      status: string
+      testResults: { name: string; successful: boolean }[]
+      logs: Record<string, string>
+    } | null
     exercise_progress: { completed: boolean; standing: string }
   }
 
@@ -518,6 +523,17 @@ describe("mooc mock conformance", () => {
     assert.equal(grading.score_given, 0)
     assert.equal(grading.exercise_progress.completed, true)
     assert.equal(grading.exercise_progress.standing, "Attempted")
+  })
+
+  test("a tmc grading's feedback_json is the test run, as the tmc service stores it", async () => {
+    const failed = await submitAndGrade(failingExercise)
+    assert.equal(failed.feedback_json?.status, "TESTS_FAILED")
+    assert.deepEqual(
+      failed.feedback_json?.testResults.map((result) => result.successful),
+      [true, false],
+    )
+    const passed = await submitAndGrade(passingExercise)
+    assert.equal(passed.feedback_json?.status, "PASSED")
   })
 
   test("submit -> poll grading: a pending-manual exercise grades to PendingManual", async () => {
@@ -1246,6 +1262,188 @@ describe("mooc mock enrollment, answerability and ownership", () => {
   })
 })
 
+describe("mooc mock answer snapshots", () => {
+  let server: Server
+  let base: string
+  let mock: MoocMockControls
+
+  before(async () => {
+    ;({ server, base, mock } = await listen(createMoocApp()))
+  })
+
+  after(() => {
+    server.close()
+  })
+
+  beforeEach(() => {
+    mock.reset()
+  })
+
+  const api = (p: string): string => `${base}/api/v0/exercise-services/client${p}`
+
+  interface ListItem {
+    id: string
+    kind: string
+    is_shared: boolean
+    score_given: number | null
+    grading_progress: string | null
+  }
+
+  const upload = async (exerciseId: string, query = "", bytes = [1, 2, 3]): Promise<Response> => {
+    const form = new FormData()
+    form.append(
+      randomUUID(),
+      new Blob([new Uint8Array(bytes)], { type: TMC_ARCHIVE_MIME }),
+      "submission.tar.zst",
+    )
+    return authFetch(api(`/exercises/${exerciseId}/files${query}`), { method: "POST", body: form })
+  }
+
+  const postSnapshot = async (
+    exercise: MoocExerciseFixture,
+    purpose: "paste" | "backup",
+    bytes = [1, 2, 3],
+  ): Promise<Response> => {
+    const uploaded = await upload(exercise.slide.exercise_id, "?for=snapshot", bytes)
+    assert.equal(uploaded.status, 200)
+    const { data_files } = (await uploaded.json()) as { data_files: { id: string }[] }
+    return authFetch(api(`/exercises/${exercise.slide.exercise_id}/snapshots`), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        purpose,
+        exercise_slide_id: exercise.slide.slide_id,
+        exercise_task_id: exercise.slide.tasks[0]!.task_id,
+        data_files: data_files.map((file) => file.id),
+      }),
+    })
+  }
+
+  const snapshot = async (
+    exercise: MoocExerciseFixture,
+    purpose: "paste" | "backup",
+    bytes?: number[],
+  ): Promise<string> => {
+    const res = await postSnapshot(exercise, purpose, bytes)
+    assert.equal(res.status, 200)
+    return ((await res.json()) as { snapshot_id: string }).snapshot_id
+  }
+
+  const list = async (exercise: MoocExerciseFixture): Promise<ListItem[]> =>
+    (await (
+      await authFetch(api(`/exercises/${exercise.slide.exercise_id}/submissions`))
+    ).json()) as ListItem[]
+
+  const share = (id: string): Promise<Response> =>
+    authFetch(api(`/submissions/${id}/share`), { method: "POST" })
+
+  test("a snapshot is listed ungraded beside the submissions, newest first", async () => {
+    const paste = await snapshot(passingExercise, "paste")
+    const backup = await snapshot(passingExercise, "backup")
+
+    assert.deepEqual(
+      (await list(passingExercise)).map((item) => [
+        item.id,
+        item.kind,
+        item.is_shared,
+        item.score_given,
+        item.grading_progress,
+      ]),
+      [
+        [backup, "backup", false, null, null],
+        [paste, "paste", false, null, null],
+      ],
+    )
+  })
+
+  test("a snapshot uses no try and is stored past the deadline and out of tries", async () => {
+    await snapshot(pastDeadlineExercise, "paste")
+    const fileId = (
+      (await (await upload(limitedTriesExercise.slide.exercise_id)).json()) as {
+        data_files: { id: string }[]
+      }
+    ).data_files[0]!.id
+    const submitted = await authFetch(
+      api(`/exercises/${limitedTriesExercise.slide.exercise_id}/submit`),
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          exercise_slide_id: limitedTriesExercise.slide.slide_id,
+          exercise_task_id: limitedTriesExercise.slide.tasks[0]!.task_id,
+          answer_kind: "file",
+          data_files: [fileId],
+        }),
+      },
+    )
+    assert.equal(submitted.status, 200)
+
+    await snapshot(limitedTriesExercise, "backup")
+
+    // A plain upload is still refused, which only a snapshot's may skip.
+    assert.equal((await upload(limitedTriesExercise.slide.exercise_id)).status, 422)
+    const progress = (await (
+      await authFetch(api(`/courses/${variantsCourse.id}/progress`))
+    ).json()) as { exercises: { exercise_id: string; attempted: boolean }[] }
+    assert.equal(
+      progress.exercises.find((e) => e.exercise_id === pastDeadlineExercise.slide.exercise_id)
+        ?.attempted,
+      false,
+    )
+  })
+
+  test("a snapshot downloads its own files", async () => {
+    const id = await snapshot(failingExercise, "backup", [7, 8, 9])
+    const { data_files } = (await (await authFetch(api(`/submissions/${id}/download`))).json()) as {
+      data_files: { url: string }[]
+    }
+    const bytes = new Uint8Array(await (await fetch(data_files[0]!.url)).arrayBuffer())
+    assert.deepEqual([...bytes], [7, 8, 9])
+  })
+
+  test("a paste is shared and then listed as shared; a backup cannot be shared", async () => {
+    const paste = await snapshot(passingExercise, "paste")
+    const backup = await snapshot(passingExercise, "backup")
+
+    assert.equal((await share(paste)).status, 200)
+    await assertRefused(
+      await share(backup),
+      "validation_error",
+      "Only a paste can be shared, not a backup.",
+    )
+    const items = await list(passingExercise)
+    assert.equal(items.find((item) => item.id === paste)?.is_shared, true)
+    assert.equal(items.find((item) => item.id === backup)?.is_shared, false)
+  })
+
+  test("pastes past the per-minute limit are refused with a Retry-After; backups are not", async () => {
+    for (let i = 0; i < 3; i++) {
+      await snapshot(passingExercise, "paste")
+    }
+    const refused = await postSnapshot(passingExercise, "paste")
+    assert.ok(Number(refused.headers.get("retry-after")) > 0)
+    await assertRefused(
+      refused,
+      "rate_limited",
+      "Too many pastes of this exercise; try again later.",
+    )
+    // Per exercise, and only for pastes.
+    await snapshot(failingExercise, "paste")
+    await snapshot(passingExercise, "backup")
+  })
+
+  test("storing a backup past the cap drops the oldest one", async () => {
+    const first = await snapshot(failingExercise, "backup")
+    for (let i = 0; i < 20; i++) {
+      await snapshot(failingExercise, "backup")
+    }
+    const items = await list(failingExercise)
+    assert.equal(items.length, 20)
+    assert.ok(items.every((item) => item.id !== first))
+    assert.equal((await authFetch(api(`/submissions/${first}/download`))).status, 404)
+  })
+})
+
 interface ErrorResponse {
   status: number
   body: Record<string, unknown>
@@ -1370,6 +1568,28 @@ describe("mooc mock error envelopes", () => {
         const fileId = await uploadFor(passingExercise.slide.exercise_id)
         mock.expireUpload(fileId)
         return read(await submitNaming([fileId]))
+      },
+    },
+    {
+      name: "a paste past the per-minute limit",
+      messageKey: "rate_limited",
+      run: async () => {
+        const exercise = futureDeadlineExercise
+        const pasteOnce = async (): Promise<Response> =>
+          authFetch(api(`/exercises/${exercise.slide.exercise_id}/snapshots`), {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              purpose: "paste",
+              exercise_slide_id: exercise.slide.slide_id,
+              exercise_task_id: exercise.slide.tasks[0]!.task_id,
+              data_files: [await uploadFor(exercise.slide.exercise_id)],
+            }),
+          })
+        for (let i = 0; i < 3; i++) {
+          await pasteOnce()
+        }
+        return read(await pasteOnce())
       },
     },
     {

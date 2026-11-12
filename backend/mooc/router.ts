@@ -15,6 +15,7 @@ import {
   DEFAULT_MOOC_MOCK_BASE_URL,
   type CourseWithExercises,
   type ExerciseSlide,
+  type ExerciseTask,
   type MoocExerciseFixture,
   type MoocFixtures,
 } from "./fixtures"
@@ -75,17 +76,27 @@ const SPEC_PATH = path.join(__dirname, "exercise-services-client.openapi.generat
  */
 type SubmissionOwner = "caller" | "another-user"
 
+/**
+ * A graded submission, or an ungraded snapshot stored by `POST snapshots`. A
+ * snapshot has no task-submission id: it is never graded, uses no try and earns
+ * nothing, so it is invisible to everything but the list, `/download` and `/share`.
+ */
+type SubmissionKind = "submission" | "paste" | "backup"
+
 interface SubmissionRecord {
+  kind: SubmissionKind
   exerciseId: string
-  /** Returned by submit; the id `/grading` is polled with. */
+  /** Returned by submit; the id `/grading` is polled with. Unused for a snapshot. */
   taskSubmissionId: string
-  /** The id the submissions list, `/download` and `/share` use. */
+  /** The id the submissions list, `/download` and `/share` use; a snapshot's `snapshot_id`. */
   slideSubmissionId: string
   owner: SubmissionOwner
   polls: number
   createdAt: string
   /** Host file ids the submit named, in request order; what `/download` returns. */
   fileIds: string[]
+  /** `/share` has minted a link to it. */
+  isShared: boolean
 }
 
 // `POST exercises/{id}/files` stores files the client names in a later submit.
@@ -130,8 +141,12 @@ interface MoocMockState {
    */
   scoreMaximumByExerciseId: Map<string, number>
   submissionsByTaskId: Map<string, SubmissionRecord>
+  /** Submissions and snapshots, by the id the list reports. */
   submissionsBySlideId: Map<string, SubmissionRecord>
+  /** Submissions and snapshots, oldest first. */
   submissionsByExercise: Map<string, SubmissionRecord[]>
+  /** When each paste of an exercise was stored, for the host's paste rate limit. */
+  pasteTimesByExercise: Map<string, number[]>
   uploadsById: Map<string, UploadRecord>
   /** Uploaded bytes keyed by stored path segment, served by the file-store route. */
   uploadBytesByStoredName: Map<string, Buffer>
@@ -195,6 +210,7 @@ const createMoocMockState = (baseUrl: string): MoocMockState => ({
   submissionsByTaskId: new Map(),
   submissionsBySlideId: new Map(),
   submissionsByExercise: new Map(),
+  pasteTimesByExercise: new Map(),
   uploadsById: new Map(),
   uploadBytesByStoredName: new Map(),
   expireNextUpload: false,
@@ -216,6 +232,7 @@ const FAULT_ERRORS: Record<number, ApiErrorMessageKey> = {
   404: "not_found",
   422: "validation_error",
   426: "obsolete_client",
+  429: "rate_limited",
   500: "internal_error",
 }
 
@@ -289,14 +306,19 @@ export interface MoocMockControls {
   introspect: (token: string) => string[] | undefined
 }
 
-/** Records one submission under both of its id spaces and against its exercise. */
+/**
+ * Records one submission, or with `kind` a snapshot, under its id spaces and
+ * against its exercise.
+ */
 const retainSubmission = (
   state: MoocMockState,
   exerciseId: string,
   fileIds: string[],
   owner: SubmissionOwner = "caller",
+  kind: SubmissionKind = "submission",
 ): SubmissionRecord => {
   const record: SubmissionRecord = {
+    kind,
     exerciseId,
     taskSubmissionId: randomUUID(),
     slideSubmissionId: randomUUID(),
@@ -304,13 +326,58 @@ const retainSubmission = (
     polls: 0,
     createdAt: new Date().toISOString(),
     fileIds: [...fileIds],
+    isShared: false,
   }
-  state.submissionsByTaskId.set(record.taskSubmissionId, record)
+  if (kind === "submission") {
+    state.submissionsByTaskId.set(record.taskSubmissionId, record)
+  }
   state.submissionsBySlideId.set(record.slideSubmissionId, record)
   const list = state.submissionsByExercise.get(exerciseId) ?? []
   list.push(record)
   state.submissionsByExercise.set(exerciseId, list)
   return record
+}
+
+/** Backups the host keeps per student and exercise; storing one more drops the oldest. */
+const MAX_BACKUPS_PER_EXERCISE = 20
+
+const dropBackupsOverCap = (state: MoocMockState, exerciseId: string): void => {
+  const list = state.submissionsByExercise.get(exerciseId) ?? []
+  const backups = list.filter((record) => record.owner === "caller" && record.kind === "backup")
+  const dropped = new Set(backups.slice(0, Math.max(0, backups.length - MAX_BACKUPS_PER_EXERCISE)))
+  for (const record of dropped) {
+    state.submissionsBySlideId.delete(record.slideSubmissionId)
+  }
+  state.submissionsByExercise.set(
+    exerciseId,
+    list.filter((record) => !dropped.has(record)),
+  )
+}
+
+// The host's paste limits per student and exercise.
+const PASTES_PER_MINUTE = 3
+const PASTES_PER_HOUR = 20
+
+/**
+ * Seconds until the student may paste the exercise again, or undefined when a paste is
+ * allowed now. Counts only pastes that were stored, as the host checks the quota last.
+ */
+const pasteRetryAfterSeconds = (state: MoocMockState, exerciseId: string): number | undefined => {
+  const now = Date.now()
+  const inLastHour = (state.pasteTimesByExercise.get(exerciseId) ?? []).filter(
+    (at) => now - at < 60 * 60 * 1000,
+  )
+  state.pasteTimesByExercise.set(exerciseId, inLastHour)
+  const inLastMinute = inLastHour.filter((at) => now - at < 60 * 1000)
+  const waitFor = (oldest: number | undefined, windowMs: number): number =>
+    oldest === undefined ? 1 : Math.max(1, Math.ceil((oldest + windowMs - now) / 1000))
+  if (inLastMinute.length >= PASTES_PER_MINUTE) {
+    return waitFor(inLastMinute[inLastMinute.length - PASTES_PER_MINUTE], 60 * 1000)
+  }
+  if (inLastHour.length >= PASTES_PER_HOUR) {
+    return waitFor(inLastHour[inLastHour.length - PASTES_PER_HOUR], 60 * 60 * 1000)
+  }
+  return undefined
 }
 
 const createMoocMockControls = (
@@ -321,6 +388,7 @@ const createMoocMockControls = (
     state.submissionsByTaskId.clear()
     state.submissionsBySlideId.clear()
     state.submissionsByExercise.clear()
+    state.pasteTimesByExercise.clear()
     state.uploadsById.clear()
     state.uploadBytesByStoredName.clear()
     state.expireNextUpload = false
@@ -394,6 +462,7 @@ const createMoocMockControls = (
 interface MockResponse {
   status: number
   body: unknown
+  headers?: Record<string, string>
 }
 
 const ok = (body: unknown): MockResponse => ({ status: 200, body })
@@ -543,12 +612,19 @@ const notEnrolledError = (): MockResponse =>
 const isGraded = (record: SubmissionRecord): boolean => record.polls > 1
 
 /**
- * The caller's own submissions to an exercise. Progress, the reveal rule and the
- * submissions list are all per-user on the host, so a seeded foreign submission
- * must be invisible to every one of them.
+ * The caller's own submissions and snapshots of an exercise, oldest first. The
+ * submissions list is per-user on the host, so a seeded foreign submission must be
+ * invisible to it.
+ */
+const callerEntriesFor = (state: MoocMockState, exerciseId: string): SubmissionRecord[] =>
+  (state.submissionsByExercise.get(exerciseId) ?? []).filter((record) => record.owner === "caller")
+
+/**
+ * The caller's own graded submissions to an exercise: what progress, the try limit and
+ * the reveal rule count. Snapshots count for none of them.
  */
 const callerSubmissionsFor = (state: MoocMockState, exerciseId: string): SubmissionRecord[] =>
-  (state.submissionsByExercise.get(exerciseId) ?? []).filter((record) => record.owner === "caller")
+  callerEntriesFor(state, exerciseId).filter((record) => record.kind === "submission")
 
 /**
  * The host's `verify_user_can_answer_exercise`: a passed deadline, then an
@@ -633,16 +709,39 @@ const GRADING_OUTCOMES = {
     grading_progress: "FullyGraded",
     score_given: 1,
     feedback_text: "All tests passed",
+    // What the tmc service stores: tmc-langs' own RunResult, camelCase.
+    feedback_json: {
+      status: "PASSED",
+      testResults: [
+        { name: "HelloTest.greets", successful: true, points: ["1.1"], message: "", exception: [] },
+      ],
+      logs: {},
+    },
   },
   failing: {
     grading_progress: "FullyGraded",
     score_given: 0,
     feedback_text: "Some tests failed",
+    feedback_json: {
+      status: "TESTS_FAILED",
+      testResults: [
+        { name: "HelloTest.greets", successful: true, points: [], message: "", exception: [] },
+        {
+          name: "HelloTest.counts",
+          successful: false,
+          points: [],
+          message: "expected 2 but was 1",
+          exception: ["at HelloTest.counts(HelloTest.java:12)"],
+        },
+      ],
+      logs: { stdout: "test output" },
+    },
   },
   pendingManual: {
     grading_progress: "PendingManual",
     score_given: 0.5,
     feedback_text: "Awaiting manual grading",
+    feedback_json: null,
   },
 } as const
 
@@ -698,14 +797,93 @@ const gradingStatus = (state: MoocMockState, record: SubmissionRecord): unknown 
       score_given: grading.score_given,
       grading_started_at: now,
       grading_completed_at: outcome === "pendingManual" ? null : now,
-      // Plugin-private structured feedback the CLI deliberately drops. A
-      // distinctive non-null value, so the reconciliation test can assert it
-      // never reaches the CLI-stdout schema.
-      feedback_json: { mock_feedback: "reconciliation sentinel" },
+      feedback_json: grading.feedback_json,
       feedback_text: grading.feedback_text,
       exercise_progress: exerciseProgress(state, record.exerciseId),
     },
   }
+}
+
+/**
+ * The host's checks on the slide and task an answer names: both must exist,
+ * belong to the exercise in the URL, and be servable to this client. Answers
+ * with the task, or with the refusal.
+ */
+const answerTarget = (
+  state: MoocMockState,
+  exerciseId: string,
+  body: { exercise_slide_id: string; exercise_task_id: string },
+): { task: ExerciseTask | undefined } | MockResponse => {
+  // The URL authorizes only the exercise; the slide and task ids come from the
+  // body, so an unrelated exercise's slide/task must be rejected here or a
+  // client could submit into it (host: verify_slide_and_task_belong).
+  const slide = state.slideById.get(body.exercise_slide_id)
+  if (!slide) {
+    return apiError("not_found", `no such exercise slide: ${body.exercise_slide_id}`)
+  }
+  const taskSlideId = state.slideIdByTaskId.get(body.exercise_task_id)
+  if (!taskSlideId) {
+    return apiError("not_found", `no such exercise task: ${body.exercise_task_id}`)
+  }
+  if (slide.exercise_id !== exerciseId) {
+    return apiError(
+      "validation_error",
+      `Exercise slide ${slide.slide_id} does not belong to exercise ${exerciseId}`,
+    )
+  }
+  if (taskSlideId !== slide.slide_id) {
+    return apiError(
+      "validation_error",
+      `Exercise task ${body.exercise_task_id} does not belong to exercise slide ${slide.slide_id}`,
+    )
+  }
+  const task = slide.tasks.find((candidate) => candidate.task_id === body.exercise_task_id)
+  // Every listing hides a task this client cannot be served, so naming one
+  // means holding an id from somewhere else; persisting the answer would leave
+  // it to fail deep inside a service that cannot read it (host:
+  // verify_task_is_client_capable).
+  if (task && !isClientCapable(task.exercise_service_slug)) {
+    return apiError(
+      "validation_error",
+      `Exercise task ${task.task_id} belongs to the exercise service '${task.exercise_service_slug}', which cannot be served to this client`,
+    )
+  }
+  return { task }
+}
+
+/** The host's checks on the uploads an answer names, or undefined when they pass. */
+const namedUploadsError = (
+  state: MoocMockState,
+  exerciseId: string,
+  fileIds: readonly string[],
+): MockResponse | undefined => {
+  // Deduplicating instead would record one file twice and list it twice in a
+  // download, hiding the client defect (host: verify_uploads_are_distinct).
+  const namedOnce = new Set<string>()
+  for (const fileId of fileIds) {
+    if (namedOnce.has(fileId)) {
+      return apiError("duplicate_upload", `Uploaded file ${fileId} was named more than once`)
+    }
+    namedOnce.add(fileId)
+  }
+  for (const fileId of fileIds) {
+    const upload = state.uploadsById.get(fileId)
+    // A file bound to another exercise is indistinguishable from one that was
+    // never uploaded, exactly as in the host: both are `unknown_upload`.
+    if (!upload || upload.exerciseId !== exerciseId) {
+      return apiError(
+        "unknown_upload",
+        `Uploaded file ${fileId} was not uploaded for this exercise by this user`,
+      )
+    }
+    if (upload.expired) {
+      return apiError(
+        "upload_expired",
+        `Uploaded file ${fileId} is no longer available; upload it again`,
+      )
+    }
+  }
+  return undefined
 }
 
 /**
@@ -858,11 +1036,13 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       // The host runs both checks BEFORE reading the multipart stream, so an upload
       // is refused for the reason a submit would be refused rather than for a
       // multipart rule below. Stored objects outlive the request, which is why the
-      // gate is here at all and not only on submit.
+      // gate is here at all and not only on submit. A snapshot is accepted past the
+      // deadline and out of tries, so its files are too.
       if (!isEnrolled(state, exerciseId)) {
         return notEnrolledError()
       }
-      const refusal = answerRefusal(state, exercise)
+      const refusal =
+        c.request.query.for === "snapshot" ? undefined : answerRefusal(state, exercise)
       if (refusal) {
         return refusal
       }
@@ -939,40 +1119,11 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
         data_json?: unknown
         data_files?: string[] | null
       }
-      // The URL authorizes only the exercise; the slide and task ids come from the
-      // body, so an unrelated exercise's slide/task must be rejected here or a
-      // client could submit into it (host: verify_slide_and_task_belong).
-      const slide = state.slideById.get(body.exercise_slide_id)
-      if (!slide) {
-        return apiError("not_found", `no such exercise slide: ${body.exercise_slide_id}`)
+      const target = answerTarget(state, exerciseId, body)
+      if ("status" in target) {
+        return target
       }
-      const taskSlideId = state.slideIdByTaskId.get(body.exercise_task_id)
-      if (!taskSlideId) {
-        return apiError("not_found", `no such exercise task: ${body.exercise_task_id}`)
-      }
-      if (slide.exercise_id !== exerciseId) {
-        return apiError(
-          "validation_error",
-          `Exercise slide ${slide.slide_id} does not belong to exercise ${exerciseId}`,
-        )
-      }
-      if (taskSlideId !== slide.slide_id) {
-        return apiError(
-          "validation_error",
-          `Exercise task ${body.exercise_task_id} does not belong to exercise slide ${slide.slide_id}`,
-        )
-      }
-      const task = slide.tasks.find((candidate) => candidate.task_id === body.exercise_task_id)
-      // Every listing hides a task this client cannot be served, so naming one
-      // means holding an id from somewhere else; persisting the answer would leave
-      // it to fail deep inside a service that cannot read it (host:
-      // verify_task_is_client_capable).
-      if (task && !isClientCapable(task.exercise_service_slug)) {
-        return apiError(
-          "validation_error",
-          `Exercise task ${task.task_id} belongs to the exercise service '${task.exercise_service_slug}', which cannot be served to this client`,
-        )
-      }
+      const { task } = target
       // The two answer shapes the flat body allows but the answer model does not.
       // Checked here, after the slide/task ownership checks and before the per-upload
       // ones, in the host's own order (domain/exercises.rs: verify_named_uploads).
@@ -1000,31 +1151,9 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
           "The tmc exercise service cannot grade an answer that names no files.",
         )
       }
-      // Deduplicating instead would record one file twice and list it twice in a
-      // download, hiding the client defect (host: verify_uploads_are_distinct).
-      const namedOnce = new Set<string>()
-      for (const fileId of namedFiles) {
-        if (namedOnce.has(fileId)) {
-          return apiError("duplicate_upload", `Uploaded file ${fileId} was named more than once`)
-        }
-        namedOnce.add(fileId)
-      }
-      for (const fileId of namedFiles) {
-        const upload = state.uploadsById.get(fileId)
-        // A file bound to another exercise is indistinguishable from one that was
-        // never uploaded, exactly as in the host: both are `unknown_upload`.
-        if (!upload || upload.exerciseId !== exerciseId) {
-          return apiError(
-            "unknown_upload",
-            `Uploaded file ${fileId} was not uploaded for this exercise by this user`,
-          )
-        }
-        if (upload.expired) {
-          return apiError(
-            "upload_expired",
-            `Uploaded file ${fileId} is no longer available; upload it again`,
-          )
-        }
+      const uploadError = namedUploadsError(state, exerciseId, namedFiles)
+      if (uploadError) {
+        return uploadError
       }
       // Last, as on the host, where grading is what enforces the deadline and the
       // try limit: everything about the answer itself is settled first.
@@ -1037,6 +1166,45 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
         task_submission_id: record.taskSubmissionId,
         slide_submission_id: record.slideSubmissionId,
       })
+    },
+
+    // POST /api/v0/exercise-services/client/exercises/{id}/snapshots  (JSON)
+    createClientAnswerSnapshot: (c: Context): MockResponse => {
+      const exerciseId = String(c.request.params.id)
+      if (!state.fixtures.exerciseById.has(exerciseId)) {
+        return apiError("not_found", `no such exercise: ${exerciseId}`)
+      }
+      if (!isEnrolled(state, exerciseId)) {
+        return notEnrolledError()
+      }
+      const body = c.request.requestBody as {
+        purpose: "paste" | "backup"
+        exercise_slide_id: string
+        exercise_task_id: string
+        data_files: string[]
+      }
+      const target = answerTarget(state, exerciseId, body)
+      if ("status" in target) {
+        return target
+      }
+      const uploadError = namedUploadsError(state, exerciseId, body.data_files)
+      if (uploadError) {
+        return uploadError
+      }
+      // Last, as on the host, so a request refused for another reason uses no quota.
+      if (body.purpose === "paste") {
+        const retryAfter = pasteRetryAfterSeconds(state, exerciseId)
+        if (retryAfter !== undefined) {
+          return {
+            ...apiError("rate_limited", "Too many pastes of this exercise; try again later."),
+            headers: { "Retry-After": String(retryAfter) },
+          }
+        }
+        state.pasteTimesByExercise.get(exerciseId)?.push(Date.now())
+      }
+      const record = retainSubmission(state, exerciseId, body.data_files, "caller", body.purpose)
+      dropBackupsOverCap(state, exerciseId)
+      return ok({ snapshot_id: record.slideSubmissionId })
     },
 
     // GET /api/v0/exercise-services/client/submissions/{id}/grading
@@ -1064,12 +1232,12 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
     // GET /api/v0/exercise-services/client/exercises/{id}/submissions
     getClientExerciseSubmissions: (c: Context): MockResponse => {
       const exerciseId = String(c.request.params.id)
-      const records = callerSubmissionsFor(state, exerciseId)
-      // newest first -- each item's `id` is the slide-submission id. A graded
-      // submission reports the exercise's actual grading outcome (score +
-      // progress); an as-yet-ungraded one reports nulls.
+      const records = callerEntriesFor(state, exerciseId)
+      // newest first -- each item's `id` is the slide-submission or snapshot id. A
+      // graded submission reports the exercise's actual grading outcome (score +
+      // progress); an as-yet-ungraded one and every snapshot report nulls.
       const items = [...records].toReversed().map((record) => {
-        const graded = isGraded(record)
+        const graded = record.kind === "submission" && isGraded(record)
         const outcome = outcomeOf(state, record)
         return {
           id: record.slideSubmissionId,
@@ -1077,6 +1245,8 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
           created_at: record.createdAt,
           score_given: graded ? outcome.score_given : null,
           grading_progress: graded ? outcome.grading_progress : null,
+          kind: record.kind,
+          is_shared: record.isShared,
         }
       })
       return ok(items)
@@ -1127,6 +1297,11 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       if (foreign) {
         return foreign
       }
+      // A backup past the cap is deleted, which would break its link.
+      if (record.kind === "backup") {
+        return apiError("validation_error", "Only a paste can be shared, not a backup.")
+      }
+      record.isShared = true
       const token = randomUUID()
       return ok({ paste_url: `${state.baseUrl}/shared-submissions/${token}` })
     },
@@ -1178,6 +1353,9 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
           details: validation.errors,
         })
       }
+    }
+    for (const [name, value] of Object.entries((c.response as MockResponse).headers ?? {})) {
+      res.setHeader(name, value)
     }
     if (body === undefined) {
       return res.status(status).end()
@@ -1314,10 +1492,10 @@ const retainUpload = (
   return record
 }
 
-/** Ids named by some submission, which retention must not evict. */
+/** Ids named by some submission or snapshot, which retention must not evict. */
 const submittedUploadIds = (state: MoocMockState): Set<string> => {
   const ids = new Set<string>()
-  for (const submission of state.submissionsByTaskId.values()) {
+  for (const submission of state.submissionsBySlideId.values()) {
     for (const fileId of submission.fileIds) {
       ids.add(fileId)
     }

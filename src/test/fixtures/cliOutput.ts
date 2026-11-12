@@ -456,7 +456,10 @@ const validCliOutputFixtures: CliOutputFixture[] = [
       tests: [{ name: "SandboxTest test", points: ["01-01"] }],
     }),
   },
-  { name: "updated-exercises", value: outputData("updated-exercises", [{ id: 83114 }]) },
+  {
+    name: "exercise-updates",
+    value: outputData("exercise-updates", { updated: [83114], removed: [83115] }),
+  },
   {
     name: "combined-course-data",
     value: outputData("combined-course-data", {
@@ -542,8 +545,8 @@ const validCliOutputFixtures: CliOutputFixture[] = [
   },
   { name: "tmc-config", value: outputData("tmc-config", { projects_dir: "/projects" }) },
   {
-    name: "mooc-updated-exercises",
-    value: outputData("mooc-updated-exercises", [{ id: UUID_B }, { id: UUID_C }]),
+    name: "mooc-exercise-updates",
+    value: outputData("mooc-exercise-updates", { updated: [UUID_B], removed: [UUID_C] }),
   },
   {
     name: "mooc-submission-status: no-grading-yet",
@@ -566,6 +569,32 @@ const validCliOutputFixtures: CliOutputFixture[] = [
           completed: true,
           attempted: true,
           standing: "Passed",
+        },
+        test_results: {
+          status: "PASSED",
+          test_results: [
+            { name: "Test passes", successful: true, points: ["1.1"], message: "", exception: [] },
+          ],
+          logs: {},
+        },
+      },
+    }),
+  },
+  {
+    name: "mooc-submission-status: grading of a compile failure",
+    value: outputData("mooc-submission-status", {
+      status: "grading",
+      grading: {
+        grading_progress: "FullyGraded",
+        score_given: 0,
+        grading_started_at: null,
+        grading_completed_at: null,
+        feedback_text: null,
+        exercise_progress: null,
+        test_results: {
+          status: "COMPILE_FAILED",
+          test_results: [],
+          logs: { stdout: "error: cannot find symbol" },
         },
       },
     }),
@@ -614,6 +643,8 @@ const validCliOutputFixtures: CliOutputFixture[] = [
         created_at: "2026-07-21T12:00:00Z",
         score_given: 1,
         grading_progress: "FullyGraded",
+        kind: "submission",
+        is_shared: false,
       },
       // not yet graded: the host reports both nullable members as null
       {
@@ -622,6 +653,18 @@ const validCliOutputFixtures: CliOutputFixture[] = [
         created_at: "2026-07-21T10:00:00Z",
         score_given: null,
         grading_progress: null,
+        kind: "submission",
+        is_shared: true,
+      },
+      // a snapshot is never graded
+      {
+        id: UUID_A,
+        exercise_id: UUID_A,
+        created_at: "2026-07-21T09:00:00Z",
+        score_given: null,
+        grading_progress: null,
+        kind: "paste",
+        is_shared: true,
       },
     ]),
   },
@@ -737,10 +780,9 @@ const invalidCliOutputFixtures: CliOutputFixture[] = [
     }),
   },
   {
-    // Bare UUIDs were the mooc shape before both backends settled on `{id}`;
-    // accepting them again would mean the extension reads a pre-0.40.0 CLI.
-    name: "mooc-updated-exercises as bare uuid strings",
-    value: outputData("mooc-updated-exercises", [UUID_B]),
+    // The pre-0.42.0 shape, which listed only the updated exercises.
+    name: "mooc-exercise-updates as a list of ids",
+    value: outputData("mooc-exercise-updates", [{ id: UUID_B }]),
   },
   {
     // the caller sums the per-exercise points into the course totals

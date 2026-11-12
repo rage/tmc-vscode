@@ -151,7 +151,7 @@ async function harness(
   const langs = fakeService<Langs>(services.langs ?? {}, {
     listLocalExercises: async () => Ok([]),
     listSettings: async () => Ok({}),
-    checkExerciseUpdates: async () => Ok([]),
+    checkExerciseUpdates: async () => Ok({ updated: [], removed: [] }),
     getStudentFilePaths: async () => Ok([]),
     unsetSetting: async () => Ok.EMPTY,
   })
@@ -641,7 +641,8 @@ suite("reported once: the Courses view and course details", function () {
     const { actionContext, run, shown } = await harness({
       langs: {
         ...moocDownloadFails,
-        checkExerciseUpdates: async () => Ok([idOfMoocExercise(EXERCISE_ID)]),
+        checkExerciseUpdates: async () =>
+          Ok({ updated: [idOfMoocExercise(EXERCISE_ID)], removed: [] }),
       },
     })
     vi.mocked(actionContext.settings.getAutomaticallyUpdateExercises).mockReturnValue(true)
@@ -652,7 +653,10 @@ suite("reported once: the Courses view and course details", function () {
   })
 
   test("a failed automatic update shows in the status bar only, until an update succeeds", async function () {
-    const updateable = { checkExerciseUpdates: async () => Ok([idOfMoocExercise(EXERCISE_ID)]) }
+    const updateable = {
+      checkExerciseUpdates: async () =>
+        Ok({ updated: [idOfMoocExercise(EXERCISE_ID)], removed: [] }),
+    }
     const failing = await harness({ langs: { ...moocDownloadFails, ...updateable } })
     vi.mocked(failing.actionContext.settings.getAutomaticallyUpdateExercises).mockReturnValue(true)
 
@@ -701,7 +705,7 @@ suite("reported once: the Courses view and course details", function () {
   test("an update check a backend with courses fails is one notification, and no all-clear", async function () {
     const moocFails = {
       checkExerciseUpdates: async (backend: string) =>
-        backend === "mooc" ? Err(offline()) : Ok([]),
+        backend === "mooc" ? Err(offline()) : Ok({ updated: [], removed: [] }),
     }
     const loud = await harness({ langs: moocFails })
     const silent = await harness({ langs: moocFails })
@@ -717,7 +721,7 @@ suite("reported once: the Courses view and course details", function () {
     const { run, shown } = await harness({
       langs: {
         checkExerciseUpdates: async (backend: string) =>
-          backend === "tmc" ? Err(offline()) : Ok([]),
+          backend === "tmc" ? Err(offline()) : Ok({ updated: [], removed: [] }),
       },
     })
 

@@ -21,6 +21,8 @@ interface OutdatedExercise {
 /** What {@link checkForExerciseUpdates} found. */
 export interface ExerciseUpdateCheck {
   outdated: OutdatedExercise[]
+  /** Downloaded exercises their backend no longer has. */
+  removed: ExerciseIdentifier[]
   /**
    * The backends holding the user's courses whose check failed. `outdated` says nothing
    * about their exercises.
@@ -29,9 +31,9 @@ export interface ExerciseUpdateCheck {
 }
 
 /**
- * Lists the exercises in the user's courses that have updates. Only backends holding some of
- * the user's courses are asked, and one whose check fails is named in `failures` rather than
- * failing the whole check.
+ * Lists the exercises in the user's courses that have updates or were removed. Only backends
+ * holding some of the user's courses are asked, and one whose check fails is named in
+ * `failures` rather than failing the whole check.
  */
 export async function checkForExerciseUpdates(
   actionContext: ReadyActionContext,
@@ -50,10 +52,12 @@ export async function checkForExerciseUpdates(
     })),
   )
   const updateable = new Set<string>()
+  const removed: ExerciseIdentifier[] = []
   const failures: ExerciseUpdateCheck["failures"] = []
   for (const { backend, result } of checks) {
     if (result.ok) {
-      result.val.forEach((id) => updateable.add(ExerciseIdentifier.key(id)))
+      result.val.updated.forEach((id) => updateable.add(ExerciseIdentifier.key(id)))
+      removed.push(...result.val.removed)
     } else {
       Logger.warn(
         `Skipping the ${backendName(backend)} exercise update check; it failed:`,
@@ -73,6 +77,8 @@ export async function checkForExerciseUpdates(
         exerciseName: LocalCourseExercise.getSlug(x),
       }))
   })
-  Logger.info(`Update check found ${outdated.length} outdated exercises`)
-  return { outdated, failures }
+  Logger.info(
+    `Update check found ${outdated.length} outdated and ${removed.length} removed exercises`,
+  )
+  return { outdated, removed, failures }
 }
