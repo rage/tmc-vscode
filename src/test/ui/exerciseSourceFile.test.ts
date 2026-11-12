@@ -44,7 +44,9 @@ suite("showExerciseSourceFile", function () {
 
     expect(shown).toBe(true)
     expect(vscode.window.showTextDocument).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ fsPath: path.join(root, "lib/solution.py") }),
+      expect.objectContaining({
+        fsPath: vscode.Uri.file(path.join(root, "lib/solution.py")).fsPath,
+      }),
       { preview: false },
     )
   })
@@ -60,7 +62,7 @@ suite("showExerciseSourceFile", function () {
 
     expect(shown).toBe(true)
     expect(vscode.window.showTextDocument).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ fsPath: path.join(root, "src/main.py") }),
+      expect.objectContaining({ fsPath: vscode.Uri.file(path.join(root, "src/main.py")).fsPath }),
       { preview: false },
     )
   })
@@ -81,7 +83,7 @@ suite("showExerciseSourceFile", function () {
     await showExerciseSourceFile(context, { uri: vscode.Uri.file(root), exerciseSlug: "main" })
 
     expect(vscode.window.showTextDocument).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ fsPath: path.join(root, "src/main.py") }),
+      expect.objectContaining({ fsPath: vscode.Uri.file(path.join(root, "src/main.py")).fsPath }),
       { preview: false, viewColumn: 1 },
     )
   })
