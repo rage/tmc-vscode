@@ -279,15 +279,21 @@ export function nextExerciseAfter(
   }).flatMap((part) => part.exercises)
   const currentKey = ExerciseIdentifier.key(current)
   const index = ordered.findIndex((exercise) => ExerciseIdentifier.key(exercise.id) === currentKey)
-  const isLeftToDo = (exercise: ExerciseView): boolean =>
-    ExerciseIdentifier.key(exercise.id) !== currentKey &&
+  const isNext = (exercise: ExerciseView): boolean =>
+    ExerciseIdentifier.key(exercise.id) !== currentKey && isLeftToDo(exercise, now)
+  const next =
+    ordered.slice(index + 1).find((exercise) => isNext(exercise)) ??
+    ordered.slice(0, Math.max(index, 0)).find((exercise) => isNext(exercise))
+  return next?.id
+}
+
+/** Whether the student can still earn the exercise: not passed, tries left, hard deadline ahead. */
+export function isLeftToDo(exercise: ExerciseView, now: Date): boolean {
+  return (
     !exercise.passed &&
     !exercise.isOutOfTries &&
     !(exercise.hardDeadline !== null && exercise.hardDeadline <= now)
-  const next =
-    ordered.slice(index + 1).find((exercise) => isLeftToDo(exercise)) ??
-    ordered.slice(0, Math.max(index, 0)).find((exercise) => isLeftToDo(exercise))
-  return next?.id
+  )
 }
 
 /**

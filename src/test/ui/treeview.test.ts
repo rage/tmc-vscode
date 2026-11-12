@@ -240,6 +240,13 @@ suite("CoursesTree", function () {
     expect(tooltipOf(item)).toContain("disabled")
   })
 
+  test("a mooc course the student is not enrolled on says so", function () {
+    const item = first(show(moocCourse({ notEnrolled: true })))
+
+    expect(item.description).toBe("courses.mooc.fi · not enrolled")
+    expect(tooltipOf(item)).toContain("You are not enrolled on this course")
+  })
+
   test("a course with new exercises is marked for the inline download action", function () {
     const item = first(show(moocCourse({ newExercises: ["a", "b"] })))
 

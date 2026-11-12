@@ -26,6 +26,7 @@ import {
   BottleneckError,
   ExerciseNotFoundError,
   InsufficientScopeError,
+  NotEnrolledError,
   OutOfTriesError,
   WorkspaceUntrustedError,
 } from "../../errors"
@@ -147,6 +148,7 @@ function contextFor(
         getCourse: () => Ok(course),
         setExerciseAsPassed: setPassed,
         setMoocExerciseStanding: setStanding,
+        replaceCourse: vi.fn(async () => Ok.EMPTY),
       } as unknown as ReadyStartup["userData"],
       exerciseDecorationProvider: {
         updateDecorationsForExercises: vi.fn(),
@@ -664,6 +666,16 @@ suite("submitExercise action, mooc", () => {
 
     const delivered = JSON.parse(JSON.stringify(lastView())) as SubmissionView
     expect(delivered.error?.message).toBe("Connection reset by peer.")
+  })
+
+  test("a submission refused as not enrolled marks the course for the course home", async () => {
+    const { actionContext } = moocContextWithErr(new NotEnrolledError("not enrolled"))
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect(actionContext.startup.userData.replaceCourse).toHaveBeenCalledExactlyOnceWith(
+      makeMoocKind({ ...moocCourse, notEnrolled: true }),
+    )
   })
 })
 

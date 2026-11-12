@@ -182,6 +182,25 @@ suite("updateCourse action (mooc)", function () {
     },
   )
 
+  // The course's data is served to anyone who may view it, enrolled or not.
+  test("keeps a course marked not enrolled until the student's courses list it", async function () {
+    await storeCourse({ ...storedMoocCourse, notEnrolled: true })
+    tmcMockValues.getEnrolledMoocCourses = Ok([])
+
+    await updateCourse(actionContext(), courseId)
+    expect(userData.getMoocCourses()[0]?.notEnrolled).toBe(true)
+
+    tmcMockValues.getEnrolledMoocCourses = Ok([moocCourse])
+    await updateCourse(actionContext(), courseId)
+    expect(userData.getMoocCourses()[0]?.notEnrolled).toBeUndefined()
+  })
+
+  test("asks for the student's courses only while a course is marked not enrolled", async function () {
+    await updateCourse(actionContext(), courseId)
+
+    expect(tmcMock.getEnrolledMoocCourses).not.toHaveBeenCalled()
+  })
+
   test("tells the Courses view whether the backend answered", async function () {
     vi.spyOn(Logger, "warn").mockImplementation(() => {})
     const context = actionContext()

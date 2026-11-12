@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- In its course workspace, Course Details offers Continue with the next exercise to do once nothing is left to download. Its exercise rows say "In workspace" instead of "Open", and their open button has a clearer icon.
+- The notification offering a course's workspace is not shown while that course's Course Details, which offers the same, is on screen.
+- A courses.mooc.fi course links to its course material: the course from Course Details' menu, and each exercise from its row's menu.
+- A courses.mooc.fi course that refuses a submission because you are not enrolled on it says so in Course Details, with Open Course Page, and is marked "not enrolled" in the Courses view. Refreshing the course after enrolling again clears it.
+- Download Old Submission marks a courses.mooc.fi submission graded to full points as passed, and shows each score out of the exercise's points.
 - The walkthrough ticks off logging in, adding a course and downloading exercises when they were done before it was first shown, such as a login that carried over from an earlier install.
 - The submission result is redesigned: it is titled with the exercise's name and its course, states the result in one banner with the points beside a thin bar, and offers one suggested next step: Run Tests after failing tests, Submit Again after a failed submission, Next after a pass. Showing the submission or the model solution in the browser and asking for help via paste are in its "⋯" menu, and the Close button is gone; the tab and the header still close it.
 - Failing server tests are listed first with their messages, the passed ones behind Show passed tests, and the grader's feedback on a courses.mooc.fi submission is labelled as such.

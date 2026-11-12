@@ -4,9 +4,9 @@
   import type {
     CourseDetailsPanel,
     CourseHomeAction,
-    CourseHomeExercise,
     CourseHomeExerciseAction,
     CourseHomeView,
+    ExerciseIdentifier,
     RunnableCommand,
     WebviewError,
   } from "../../../shared/lib"
@@ -111,11 +111,11 @@
     })
   }
 
-  function runExerciseAction(exercise: CourseHomeExercise, action: CourseHomeExerciseAction) {
+  function runExerciseAction(exerciseId: ExerciseIdentifier, action: CourseHomeExerciseAction) {
     vscode.postMessage({
       type: "courseExerciseAction",
       sourcePanel: { id: panel.id, type: panel.type },
-      exerciseId: exercise.id,
+      exerciseId,
       action,
     })
   }
@@ -169,6 +169,13 @@
     icon: "folder-opened",
     onclick: openWorkspace,
   })
+  const continueWithNext: BarAction | undefined = $derived(
+    view?.nextExercise && {
+      label: `Continue: ${view.nextExercise.name}`,
+      icon: "arrow-right",
+      onclick: () => view?.nextExercise && runExerciseAction(view.nextExercise.id, "open"),
+    },
+  )
   const closeCompleted: BarAction = $derived({
     label: `Close ${plural(completedOpenCount, "Completed Exercise")}`,
     icon: "close-all",
@@ -180,6 +187,7 @@
       return []
     }
     const site = backendName(view.backend)
+    const materialUrl = view.materialUrl
     const candidates: (CourseNotice | false)[] = [
       view.isRestricted && {
         key: "restricted",
@@ -202,6 +210,15 @@
           title: `${site} could not be reached`,
           detail: "Showing the exercises on this computer; deadlines may be out of date.",
         },
+      view.isNotEnrolled && {
+        key: "notEnrolled",
+        tone: "warning",
+        title: "You are not enrolled on this course",
+        detail: `Enroll on the course on ${site} to submit its exercises, then refresh it here.`,
+        action: materialUrl
+          ? { label: "Open Course Page", onclick: () => openInBrowser(materialUrl) }
+          : undefined,
+      },
       view.isDisabled && {
         key: "disabled",
         tone: "warning",
@@ -251,7 +268,7 @@
   })
 
   // One primary per state: download first, then open the workspace, then work in it.
-  const bar = $derived.by((): { primary?: BarAction; secondary: [] | [BarAction] } => {
+  const bar = $derived.by((): { primary?: BarAction | undefined; secondary: [] | [BarAction] } => {
     const hasDownloads = downloadableCount > 0 || downloadingCount > 0
     if (!view) {
       return { secondary: [] }
@@ -262,7 +279,7 @@
         : { primary: openCourseWorkspace, secondary: hasDownloads ? [downloadAll] : [] }
     }
     const secondary: [] | [BarAction] = completedOpenCount > 0 ? [closeCompleted] : []
-    return hasDownloads ? { primary: downloadAll, secondary } : { secondary }
+    return { primary: hasDownloads ? downloadAll : continueWithNext, secondary }
   })
 
   const menuActions = $derived([
@@ -345,7 +362,8 @@
         {part}
         isExpanded={isPartExpanded(part.key, part.isDefaultOpen)}
         ontoggle={() => togglePart(part.key)}
-        onaction={runExerciseAction}
+        onaction={(exercise, action) => runExerciseAction(exercise.id, action)}
+        onopenmaterial={openInBrowser}
       />
     {/each}
     {#if view.hasSoftDeadlines}

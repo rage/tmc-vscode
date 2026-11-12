@@ -112,11 +112,18 @@ const tmcCourse = courseHomeView({
   newExercises: [{ id: makeTmcKind({ tmcExerciseId: 107 }), name: "07_matrix" }],
 })
 
+const MOOC_COURSE_URL = "https://courses.mooc.fi/org/uh-cs/courses/introduction-to-programming"
+
 function moocExercise(id: number, name: string, overrides: Partial<CourseHomeExercise> = {}) {
   return courseHomeExercise(id, name, {
-    id: makeMoocKind({ moocExerciseId: `cccccccc-cccc-4ccc-accc-${String(id).padStart(12, "0")}` }),
+    id: makeMoocKind({ moocExerciseId: moocExerciseUuid(id) }),
+    materialUrl: `${MOOC_COURSE_URL}/chapter-1/exercise-${id}`,
     ...overrides,
   })
+}
+
+function moocExerciseUuid(id: number): string {
+  return `cccccccc-cccc-4ccc-accc-${String(id).padStart(12, "0")}`
 }
 
 const moocParts = (downloading: boolean): CourseHomeView["parts"] => [
@@ -159,9 +166,27 @@ const moocCourse = courseHomeView({
   title: "Introduction to Programming",
   organization: "University of Helsinki",
   description: null,
+  materialUrl: MOOC_COURSE_URL,
   availablePoints: 6,
   nextDeadline: DUE_SOON,
   parts: moocParts(false),
+})
+
+const moocCourseInWorkspace = courseHomeView({
+  ...moocCourse,
+  isWorkspaceOpen: true,
+  nextExercise: {
+    id: makeMoocKind({ moocExerciseId: moocExerciseUuid(2) }),
+    name: "Reading input",
+  },
+  parts: moocParts(false).map((part) => ({
+    ...part,
+    exercises: part.exercises.map((ex, index) => ({
+      ...ex,
+      status: "opened",
+      ...(part.key === "chapter:1" && index === 0 ? { passed: true, awardedPoints: 1 } : {}),
+    })),
+  })),
 })
 
 const restrictedCourse = courseHomeView({
@@ -248,6 +273,16 @@ export const SCENARIOS: Scenario[] = [
     id: "course-details/mooc",
     panel: courseDetailsPanel(4, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
     reply: answerCourseDetails({ id: 4 }, moocCourse),
+  },
+  {
+    id: "course-details/mooc-in-workspace",
+    panel: courseDetailsPanel(60, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
+    reply: answerCourseDetails({ id: 60 }, moocCourseInWorkspace),
+  },
+  {
+    id: "course-details/mooc-not-enrolled",
+    panel: courseDetailsPanel(61, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
+    reply: answerCourseDetails({ id: 61 }, { ...moocCourse, isNotEnrolled: true }),
   },
   {
     id: "course-details/mooc-downloading",

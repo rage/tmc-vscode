@@ -228,8 +228,9 @@ type FailNextRejection = "unknown-operation" | "unsupported-status"
  */
 export interface MoocMockControls {
   /**
-   * Discards submissions, uploads, the auth observation and every OAuth token
-   * this instance has minted or seeded; fixtures and base URL survive.
+   * Discards submissions, uploads, the auth observation, enrollment changes and
+   * every OAuth token this instance has minted or seeded; fixtures and base URL
+   * survive.
    */
   reset: () => void
   /**
@@ -268,6 +269,11 @@ export interface MoocMockControls {
   seedForeignSubmission: (
     exerciseId: string,
   ) => { taskSubmissionId: string; slideSubmissionId: string } | undefined
+  /**
+   * Enrolls the student on a fixture course or withdraws them from it, as they or a teacher
+   * can on the host. Returns false for an unknown course.
+   */
+  setEnrolled: (courseId: string, enrolled: boolean) => boolean
   /** Points every URL this mock hands out at `baseUrl`. */
   rebase: (baseUrl: string) => void
   /**
@@ -322,6 +328,12 @@ const createMoocMockControls = (
     state.lastAuthorization = undefined
     state.authenticatedRequestCount = 0
     state.oauth.reset()
+    const enrolledByDefault = new Map(
+      createMoocFixtures(state.baseUrl).courses.map((c) => [c.course.id, c.enrolled]),
+    )
+    for (const course of state.fixtures.courses) {
+      course.enrolled = enrolledByDefault.get(course.course.id) ?? course.enrolled
+    }
   },
   expireUpload: (fileId) => {
     const upload = state.uploadsById.get(fileId)
@@ -363,6 +375,14 @@ const createMoocMockControls = (
       "another-user",
     )
     return { taskSubmissionId, slideSubmissionId }
+  },
+  setEnrolled: (courseId, enrolled) => {
+    const course = state.fixtures.courses.find((c) => c.course.id === courseId)
+    if (!course) {
+      return false
+    }
+    course.enrolled = enrolled
+    return true
   },
   rebase: (baseUrl) => void Object.assign(state, indexFixtures(baseUrl)),
   setOAuthClock: (clock) => setDeviceFlowClock(state.oauth, clock),
@@ -1446,6 +1466,24 @@ export const registerMoocRoutes = (
       task_submission_id: seeded.taskSubmissionId,
       slide_submission_id: seeded.slideSubmissionId,
     })
+  })
+
+  // Spec-exempt enrollment switch for out-of-process consumers; see
+  // {@link MoocMockControls.setEnrolled}.
+  app.post("/mooc-mock/set-enrolled", json, (req, res) => {
+    const { course_id: courseId, enrolled } = (req.body ?? {}) as {
+      course_id?: unknown
+      enrolled?: unknown
+    }
+    if (typeof courseId !== "string" || typeof enrolled !== "boolean") {
+      res.status(400).json({ error: "course_id must be a string and enrolled a boolean" })
+      return
+    }
+    if (!controls.setEnrolled(courseId, enrolled)) {
+      res.status(404).json({ error: `no such course: ${courseId}` })
+      return
+    }
+    res.status(204).end()
   })
 
   // Spec-exempt reaper simulation for out-of-process consumers: arms the reaper

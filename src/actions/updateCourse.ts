@@ -140,6 +140,14 @@ export async function updateCourse(
   actionContext.authState.sessionRefusalsReported.delete(courseId.kind)
 
   const course = updateResult.val
+  if (
+    course.kind === "mooc" &&
+    courseData.kind === "mooc" &&
+    courseData.data.notEnrolled === true &&
+    !(await isEnrolledOn(langs, course.data.id))
+  ) {
+    course.data.notEnrolled = true
+  }
   const stored = await userData.replaceCourse(course)
   if (stored.err) {
     return stored
@@ -155,4 +163,18 @@ export async function updateCourse(
   }
 
   return Ok({ isUpdated: true, warnings: [] })
+}
+
+/**
+ * Whether the student is enrolled on mooc course `courseId`, which only the list of their
+ * courses tells: the course's own data is served to anyone who may view it. `false` when the
+ * list could not be fetched.
+ */
+async function isEnrolledOn(langs: Langs, courseId: string): Promise<boolean> {
+  const enrolled = await langs.getEnrolledMoocCourses()
+  if (enrolled.err) {
+    Logger.warn("Failed to check enrollment, assuming none.", enrolled.val)
+    return false
+  }
+  return enrolled.val.some((course) => course.id === courseId)
 }

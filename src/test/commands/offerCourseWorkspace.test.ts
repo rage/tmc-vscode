@@ -7,7 +7,9 @@ import {
   createCourseWorkspaceOffer,
   withholdCourseWorkspaceOffer,
 } from "../../commands/offerCourseWorkspace"
+import { shownCourseHome } from "../../ui/shownCourseHome"
 import { moocLocalCourse } from "../fixtures/courses"
+import { idOfMoocCourse } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
 const course = moocLocalCourse({ id: "course-uuid", name: "python-course", title: "Python Course" })
@@ -35,6 +37,7 @@ suite("createCourseWorkspaceOffer", function () {
   })
 
   afterEach(function () {
+    shownCourseHome.set(undefined)
     vi.useRealTimers()
     vi.restoreAllMocks()
   })
@@ -88,6 +91,16 @@ suite("createCourseWorkspaceOffer", function () {
 
     offer({ backend: "mooc", courseSlug: "python-course" })
     withholdCourseWorkspaceOffer({ backend: "mooc", courseSlug: "python-course" })
+    vi.runAllTimers()
+
+    expect(shown).toEqual([])
+  })
+
+  test("says nothing while the course's home, which offers the workspace itself, is on screen", function () {
+    const { offer, shown } = setup()
+
+    offer({ backend: "mooc", courseSlug: "python-course" })
+    shownCourseHome.set(idOfMoocCourse("course-uuid"))
     vi.runAllTimers()
 
     expect(shown).toEqual([])

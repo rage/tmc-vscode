@@ -14,16 +14,18 @@
     isExpanded: boolean
     ontoggle: () => void
     onaction: (exercise: CourseHomeExercise, action: CourseHomeExerciseAction) => void
+    /** Opens an exercise's course material page in the browser. */
+    onopenmaterial: (url: string) => void
   }
 
   /** One part of the course: a header with its progress, and a row per exercise. */
-  let { part, isExpanded, ontoggle, onaction }: Props = $props()
+  let { part, isExpanded, ontoggle, onaction, onopenmaterial }: Props = $props()
 
   const headingId = $props.id()
   const passedCount = $derived(part.exercises.filter((ex) => ex.passed).length)
 
   const STATE_LABELS: Record<CourseHomeExercise["status"], string> = {
-    opened: "Open",
+    opened: "In workspace",
     closed: "Closed",
     missing: "Not downloaded",
     new: "New",
@@ -76,15 +78,20 @@
   }
 
   function menuActions(exercise: CourseHomeExercise) {
-    if (!isOnDisk(exercise)) {
-      return []
-    }
+    const { materialUrl } = exercise
     return [
-      { label: "Reset Exercise…", onselect: () => onaction(exercise, "reset") },
-      {
-        label: "Download Old Submission…",
-        onselect: () => onaction(exercise, "downloadOldSubmission"),
-      },
+      ...(isOnDisk(exercise)
+        ? [
+            { label: "Reset Exercise…", onselect: () => onaction(exercise, "reset") },
+            {
+              label: "Download Old Submission…",
+              onselect: () => onaction(exercise, "downloadOldSubmission"),
+            },
+          ]
+        : []),
+      ...(materialUrl
+        ? [{ label: "Open in Course Material", onselect: () => onopenmaterial(materialUrl) }]
+        : []),
     ]
   }
 </script>
@@ -109,6 +116,7 @@
     <ul class="rows" id="{headingId}-rows">
       {#each part.exercises as exercise (ExerciseIdentifier.key(exercise.id))}
         {@const icon = statusIcon(exercise)}
+        {@const actions = menuActions(exercise)}
         <li class="row" class:is-passive={!isOnDisk(exercise)}>
           <span class="icon" title={icon.label}>
             <vscode-icon
@@ -156,16 +164,13 @@
               />
             {:else if isOnDisk(exercise)}
               <ToolbarButton
-                icon="go-to-file"
+                icon="edit"
                 label="Open {exercise.name}"
                 onclick={() => onaction(exercise, "open")}
               />
             {/if}
-            {#if isOnDisk(exercise)}
-              <ActionMenu
-                label="More Actions for {exercise.name}"
-                actions={menuActions(exercise)}
-              />
+            {#if actions.length > 0}
+              <ActionMenu label="More Actions for {exercise.name}" {actions} />
             {/if}
           </span>
         </li>

@@ -54,7 +54,18 @@ export class CourseHomePage {
     await this.webview.getByRole("button", { name, exact: true }).click()
   }
 
-  /** Waits for the exercise's row to say it is `state`, e.g. "Open" or "Not downloaded". */
+  /** Asks the backend for the course afresh, as its Refresh button does. */
+  public async refresh(): Promise<void> {
+    await this.webview.getByRole("button", { name: "Refresh", exact: true }).click()
+  }
+
+  /** Opens the "⋯" menu labelled `label`: the course's, or an exercise row's. */
+  public async openMenu(label = "More Actions"): Promise<Locator> {
+    await this.webview.getByRole("button", { name: label, exact: true }).click()
+    return this.webview.getByRole("menu")
+  }
+
+  /** Waits for the exercise's row to say it is `state`, e.g. "In workspace" or "Not downloaded". */
   public async expectState(name: string, state: string): Promise<void> {
     await expect(this.row(name)).toContainText(state, { timeout: 30_000 })
   }

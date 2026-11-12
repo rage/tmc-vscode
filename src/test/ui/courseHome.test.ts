@@ -239,12 +239,60 @@ suite("buildCourseHomeView", function () {
       organization: "University of Helsinki",
       isExamMode: false,
       isDisabled: false,
+      isNotEnrolled: false,
       materialUrl: null,
     })
     expect(view.parts.map((part) => [part.name, part.exercises.map((ex) => ex.name)])).toEqual([
       ["Basics", ["Hello world"]],
       ["Other exercises", ["Bonus round"]],
     ])
+  })
+
+  test("links a mooc course and its exercises to their course material pages", function () {
+    const pageUrl = "https://courses.mooc.fi/org/uh-cs/courses/python/chapter-1/loops"
+    const course = moocLocalCourse({
+      exercises: [moocCourseExercise({ id: "a", pageUrl }), moocCourseExercise({ id: "b" })],
+    })
+
+    const view = buildCourseHomeView(
+      contextFor(course),
+      LocalCourseDataNs.getCourseId(course),
+      NOW,
+    ).unwrap()
+
+    expect(view.materialUrl).toBe("https://courses.mooc.fi/org/uh-cs/courses/python")
+    expect(view.parts[0]?.exercises.map((ex) => ex.materialUrl)).toEqual([pageUrl, undefined])
+  })
+
+  test("names the first exercise still left to do as the next one", function () {
+    const course = moocLocalCourse({
+      exercises: [
+        moocCourseExercise({ id: "a", name: "done", passed: true }),
+        moocCourseExercise({ id: "b", name: "spent", outOfTries: true }),
+        moocCourseExercise({ id: "c", name: "closed", deadline: "2026-05-01T00:00:00Z" }),
+        moocCourseExercise({ id: "d", name: "todo" }),
+      ],
+    })
+
+    const view = buildCourseHomeView(
+      contextFor(course),
+      LocalCourseDataNs.getCourseId(course),
+      NOW,
+    ).unwrap()
+
+    expect(view.nextExercise?.name).toBe("todo")
+  })
+
+  test("carries that courses.mooc.fi refused the student as not enrolled", function () {
+    const course = moocLocalCourse({ notEnrolled: true })
+
+    const view = buildCourseHomeView(
+      contextFor(course),
+      LocalCourseDataNs.getCourseId(course),
+      NOW,
+    ).unwrap()
+
+    expect(view.isNotEnrolled).toBe(true)
   })
 
   test("calls a course whose exercises name no part just Exercises", function () {

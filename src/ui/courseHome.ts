@@ -7,7 +7,12 @@ import { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../../sha
 import type { ReadyActionContext } from "../actions/types"
 import { findNextDateAfter, formatDateTime, formatRelativeTime } from "../utilities"
 import { recentUpdates } from "./recentUpdates"
-import { buildCourseView, onDiskByCourse, shownDeadline } from "./treeview/courseViewModel"
+import {
+  buildCourseView,
+  isLeftToDo,
+  onDiskByCourse,
+  shownDeadline,
+} from "./treeview/courseViewModel"
 import { downloadStatusOf, partLabel } from "./treeview/treeview"
 import { updateablesRegistry } from "./updateablesRegistry"
 
@@ -56,6 +61,12 @@ export function buildCourseHomeView(
   const newKeys = new Set(
     LocalCourseData.getNewExercises(course).map((id) => ExerciseIdentifier.key(id)),
   )
+  const nextExercise = exercises.find((ex) => isLeftToDo(ex, now))
+  const pageUrls = new Map(
+    course.kind === "mooc"
+      ? course.data.exercises.flatMap((ex) => (ex.pageUrl ? [[ex.id, ex.pageUrl] as const] : []))
+      : [],
+  )
   const openCourse = openCourseId(actionContext)
   const isWorkspaceOpen = openCourse !== undefined && CourseIdentifier.equals(openCourse, courseId)
 
@@ -64,7 +75,7 @@ export function buildCourseHomeView(
     title: course.data.title,
     organization: course.data.organization,
     description: course.data.description || null,
-    materialUrl: course.kind === "tmc" ? course.data.materialUrl : null,
+    materialUrl: LocalCourseData.getMaterialUrl(course) ?? null,
     awardedPoints: course.data.awardedPoints,
     availablePoints: course.data.availablePoints,
     nextDeadline: deadlineText(
@@ -76,10 +87,12 @@ export function buildCourseHomeView(
     hasSoftDeadlines: exercises.some((ex) => !ex.isHard),
     isExamMode: LocalCourseData.isExamMode(course),
     isDisabled: LocalCourseData.isDisabled(course),
+    isNotEnrolled: LocalCourseData.isNotEnrolled(course),
     isOffline: !actionContext.coursesTree.isBackendReachable(course.kind),
     isLoggedIn: actionContext.authState.loggedIn,
     isWorkspaceOpen,
     isRestricted: isWorkspaceOpen && !vscode.workspace.isTrusted,
+    ...(nextExercise ? { nextExercise: { id: nextExercise.id, name: nextExercise.name } } : {}),
     newExercises: exercises
       .filter((ex) => ex.status === "new" && newKeys.has(ExerciseIdentifier.key(ex.id)))
       .map(({ id, name }) => ({ id, name })),
@@ -95,6 +108,8 @@ export function buildCourseHomeView(
       isDefaultOpen: part.isDefaultOpen,
       exercises: part.exercises.map((ex) => {
         const deadline = deadlineText(shownDeadline(ex))
+        const materialUrl =
+          ex.id.kind === "mooc" ? pageUrls.get(ex.id.data.moocExerciseId) : undefined
         return {
           id: ex.id,
           name: ex.name,
@@ -106,6 +121,7 @@ export function buildCourseHomeView(
           ...(deadline ? { deadline } : {}),
           isSoftDeadline: !ex.isHard,
           isUpdateable: ex.isUpdateable,
+          ...(materialUrl ? { materialUrl } : {}),
         }
       }),
     })),
