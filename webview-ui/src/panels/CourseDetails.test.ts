@@ -292,6 +292,29 @@ suite("the course home", () => {
     expect(screen.queryByRole("button", { name: /More Actions for/ })).not.toBeInTheDocument()
   })
 
+  test("offers only opening an exercise removed from the course", async () => {
+    const panel = await renderHome(
+      courseHomeView({
+        parts: [
+          {
+            key: ":removed",
+            name: "Removed from the course",
+            isDefaultOpen: true,
+            exercises: [courseHomeExercise(9, "gone", { status: "removed" })],
+          },
+        ],
+      }),
+    )
+
+    expect(screen.getByRole("listitem")).toHaveTextContent(/gone.*Removed from course/)
+    expect(screen.queryByRole("button", { name: /Download gone/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /More Actions for/ })).not.toBeInTheDocument()
+    screen.getByRole("button", { name: "gone" }).click()
+    expect(postedMessages.mock.calls.map(([message]) => message)).toContainEqual(
+      exerciseAction(panel, 9, "open"),
+    )
+  })
+
   test("announces new exercises, with Download and a dismiss", async () => {
     const panel = await renderHome(
       courseHomeView({

@@ -43,7 +43,7 @@ export async function updateExercises(
     return
   }
 
-  const { outdated, failures } = updateablesResult.val
+  const { outdated, removed, failures } = updateablesResult.val
   const knownBefore = new Set(
     userData
       .getCourses()
@@ -65,6 +65,14 @@ export async function updateExercises(
         ]
       }),
   )
+  for (const backend of ["tmc", "mooc"] as const) {
+    if (failures.every((failure) => failure.backend !== backend)) {
+      updateablesRegistry.setRemoved(
+        backend,
+        removed.filter((id) => id.kind === backend),
+      )
+    }
+  }
   const [firstFailure] = failures
   if (!silent && firstFailure) {
     // One notification however many sites failed; the log has each one's error.

@@ -25,6 +25,7 @@ const ExerciseStatusSchema = z.enum([
   "missing",
   "new",
   "opened",
+  "removed",
 ])
 
 /** One exercise row of the course home. */

@@ -81,6 +81,7 @@ function build(
     onDisk: onDiskByCourse(workspaceExercises)(courseData),
     downloadStatusOf: () => undefined,
     updateable: [],
+    isRemoved: () => false,
     now: NOW,
     ...state,
   })
@@ -176,6 +177,32 @@ suite("buildCourseView", () => {
     )
 
     expect(parts[0]?.exercises.map((ex) => ex.isUpdateable)).toEqual([false, true])
+  })
+
+  test("lists a removed exercise apart, after the course's parts, never as an update", () => {
+    const parts = build(
+      course([exercise({ id: 1, name: "part01-01_a" }), exercise({ id: 2, name: "part01-02_b" })]),
+      [onDisk(2, "part01-02_b", ExerciseStatus.Open)],
+      {
+        updateable: [idOfTmcExercise(2)],
+        isRemoved: (id) => ExerciseIdentifier.toString(id) === "2",
+      },
+    )
+
+    expect(parts.map((part) => part.name)).toEqual(["part01", "Removed from the course"])
+    expect(parts[1]?.exercises.map((ex) => [ex.slug, ex.status, ex.isUpdateable])).toEqual([
+      ["part01-02_b", "removed", false],
+    ])
+  })
+
+  test("lists an exercise on disk that the course no longer has as removed", () => {
+    const parts = build(course([exercise({ id: 1, name: "part01-01_a" })]), [
+      onDisk(9, "part01-09_gone", ExerciseStatus.Closed),
+    ])
+
+    expect(parts.at(-1)?.exercises.map((ex) => [ex.name, ex.status, ex.passed])).toEqual([
+      ["part01-09_gone", "removed", false],
+    ])
   })
 
   test("sorts part and exercise numbers numerically", () => {

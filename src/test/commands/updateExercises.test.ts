@@ -99,6 +99,7 @@ suite("updateExercises command", function () {
     const staleMooc = [idOfMoocExercise("mooc-exercise")]
     updateablesRegistry.setMany([[idOfTmcCourse(2), [idOfTmcExercise(99)]]])
     updateablesRegistry.setMany([[idOfMoocCourse("mooc-course"), staleMooc]])
+    updateablesRegistry.setRemoved("mooc", [idOfMoocExercise("mooc-removed")])
     checkForExerciseUpdates.mockResolvedValue({
       outdated: [outdated(1, 10), outdated(1, 11)],
       removed: [idOfTmcExercise(12)],
@@ -107,6 +108,9 @@ suite("updateExercises command", function () {
     const [actionContext] = contextWith(true)
 
     await updateExercises(actionContext, "silent")
+
+    expect(updateablesRegistry.isRemoved(idOfTmcExercise(12))).toBe(true)
+    expect(updateablesRegistry.isRemoved(idOfMoocExercise("mooc-removed"))).toBe(true)
 
     expect(updateablesRegistry.get(idOfTmcCourse(1))).toEqual([
       idOfTmcExercise(10),

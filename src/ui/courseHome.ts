@@ -47,6 +47,7 @@ export function buildCourseHomeView(
     onDisk: onDiskByCourse(workspaceManager.getExercises())(course),
     downloadStatusOf,
     updateable: updateablesRegistry.get(courseId),
+    isRemoved: (id) => updateablesRegistry.isRemoved(id),
     now,
   })
   const exercises = parts.flatMap((part) => part.exercises)
