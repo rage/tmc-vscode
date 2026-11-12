@@ -440,6 +440,58 @@ suite("submitExercise action, mooc", () => {
     ])
   })
 
+  test.each([
+    ["Passed", EXERCISE_PAGE_URL],
+    ["OutOfTries", EXERCISE_PAGE_URL],
+    ["Attempted", undefined],
+  ] as const)(
+    "a grading leaving the exercise %s links the model solution on its page: %s",
+    async (standing, solutionUrl) => {
+      const { actionContext } = moocContextWith(
+        grading({ score_given: 1, exercise_progress: progress(standing, 1) }),
+      )
+
+      await submitExercise(actionContext, moocExercise)
+
+      expect(lastView()?.solutionUrl).toBe(solutionUrl)
+    },
+  )
+
+  test("links the stored material page when the backend names none", async () => {
+    const storedPage = "https://courses.mooc.fi/org/uh-cs/courses/python/stored-page"
+    const { actionContext } = contextFor(
+      makeMoocKind({
+        ...moocCourse,
+        exercises: [
+          moocCourseExercise({
+            id: MOOC_EXERCISE_ID,
+            name: EXERCISE_SLUG,
+            availablePoints: 3,
+            pageUrl: storedPage,
+          }),
+        ],
+      }),
+      {
+        submitMoocExercise: vi.fn().mockResolvedValue(
+          Ok({
+            task_submission_id: TASK_SUBMISSION_ID,
+            slide_submission_id: "slide-submission-1",
+            exercise_page_url: null,
+          }),
+        ),
+        waitForMoocGrading: vi
+          .fn()
+          .mockResolvedValue(
+            Ok(grading({ score_given: 3, exercise_progress: progress("Passed", 3) })),
+          ),
+      },
+    )
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect(lastView()).toMatchObject({ submissionUrl: storedPage, solutionUrl: storedPage })
+  })
+
   test("a completed grading below full points is recorded as not passed", async () => {
     const { actionContext, setStanding } = moocContextWith(
       grading({ score_given: 2, exercise_progress: progress("Attempted", 2) }),

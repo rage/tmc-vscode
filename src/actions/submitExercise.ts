@@ -63,6 +63,8 @@ interface Submission {
   exerciseId: ExerciseIdentifier
   courseId: CourseIdentifier
   availablePoints: number
+  /** A mooc exercise's course material page, as the stored course last named it. */
+  materialPageUrl?: string | undefined
 }
 
 /** Collects what a backend reports while it works on a submission, and shows it in the panel. */
@@ -185,7 +187,7 @@ function moocSubmitter(langs: Langs, exerciseId: string): ExerciseSubmitter {
     if (submitted.err) {
       return submitted
     }
-    const exercisePageUrl = submitted.val.exercise_page_url ?? undefined
+    const exercisePageUrl = submitted.val.exercise_page_url ?? submission.materialPageUrl
     reporter.received(exercisePageUrl)
     const grading = {
       ...submission,
@@ -217,14 +219,17 @@ async function waitForMoocGrading(
     }
   }
   const status = waited.val
+  const progress = status.status === "grading" ? status.grading.exercise_progress : null
+  // The material page shows the model solution once the host reveals it.
+  const isSolutionRevealed = progress?.standing === "Passed" || progress?.standing === "OutOfTries"
   const view = {
     ...moocGradingView(status, grading.availablePoints),
     submissionUrl: grading.exercisePageUrl,
+    solutionUrl: isSolutionRevealed ? grading.exercisePageUrl : undefined,
   }
   if (view.canKeepWaiting) {
     unfinishedGradings.set(panel.id, grading)
   }
-  const progress = status.status === "grading" ? status.grading.exercise_progress : null
   return {
     recorded: progress?.standing
       ? {
@@ -384,6 +389,7 @@ export async function submitExercise(
       exerciseId,
       courseId,
       availablePoints: unwrap(courseExercise).availablePoints,
+      materialPageUrl: courseExercise.kind === "mooc" ? courseExercise.data.pageUrl : undefined,
     }
     forgetEarlierSubmissions(submission.panel)
     submissionViews.open(submission.panel)
