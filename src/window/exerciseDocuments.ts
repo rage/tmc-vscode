@@ -5,6 +5,7 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { WorkspaceExercise } from "../api/workspaceManager"
+import { isPathInside } from "../utilities"
 
 type ExerciseFolder = Pick<WorkspaceExercise, "uri">
 
@@ -12,8 +13,7 @@ function isInside(exercise: ExerciseFolder, uri: vscode.Uri): boolean {
   if (uri.scheme !== "file") {
     return false
   }
-  const relative = path.relative(exercise.uri.fsPath, uri.fsPath)
-  return !relative.startsWith("..") && !path.isAbsolute(relative)
+  return isPathInside(exercise.uri.fsPath, uri.fsPath)
 }
 
 /** The open text documents of files inside `exercise`'s folder. */

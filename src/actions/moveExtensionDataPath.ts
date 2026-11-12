@@ -7,7 +7,7 @@ import type * as vscode from "vscode"
 
 import type { FractionProgress } from "../api/dialog"
 import { FileSystemError } from "../errors"
-import { Logger } from "../utilities"
+import { isPathInside, Logger } from "../utilities"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
 
@@ -49,15 +49,12 @@ export async function moveExtensionDataPath(
   }
 
   const current = resources.projectsDirectory
-  if (current !== undefined) {
-    const relative = path.relative(current, newFsPath)
-    if (!relative.startsWith("..") && !path.isAbsolute(relative)) {
-      return Err(
-        new Error(
-          `The exercises folder cannot be moved into itself: ${newFsPath} is inside ${current}.`,
-        ),
-      )
-    }
+  if (current !== undefined && isPathInside(current, newFsPath)) {
+    return Err(
+      new Error(
+        `The exercises folder cannot be moved into itself: ${newFsPath} is inside ${current}.`,
+      ),
+    )
   }
 
   const moveResult = await langs.moveProjectsDirectory(newFsPath, onUpdate)

@@ -293,6 +293,22 @@ suite("WorkspaceManager class", function () {
       expect(manager.getExerciseContaining(vscode.Uri.file("/elsewhere/notes.txt"))).toBeUndefined()
     })
 
+    test("matches a path spelled in another letter case on Windows", function () {
+      const platform = Object.getOwnPropertyDescriptor(process, "platform")
+      Object.defineProperty(process, "platform", { value: "win32" })
+      try {
+        const windowsManager = new WorkspaceManager(resources, persistForCourse, [helloWorld])
+        const upper = helloWorld.uri.fsPath.toUpperCase()
+        expect(windowsManager.getExerciseByPath(vscode.Uri.file(upper))).toBe(helloWorld)
+        const file = vscode.Uri.file(path.join(upper, "SRC", "hello.py"))
+        expect(windowsManager.getExerciseContaining(file)).toBe(helloWorld)
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, "platform", platform)
+        }
+      }
+    })
+
     test("forgets an exercise dropped from a later exercise list", async function () {
       await manager.setExercises([])
       expect(manager.getExerciseByPath(helloWorld.uri)).toBeUndefined()
