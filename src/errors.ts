@@ -86,6 +86,11 @@ export class NotEnrolledError extends BaseError {
   public override readonly name = "Not Enrolled Error"
 }
 
+/** courses.mooc.fi refused a paste because the exercise was pasted too often recently. */
+export class RateLimitedError extends BaseError {
+  public override readonly name = "Rate Limited Error"
+}
+
 /** A submission named an uploaded file whose retention window had elapsed. */
 export class UploadExpiredError extends BaseError {
   public override readonly name = "Upload Expired Error"

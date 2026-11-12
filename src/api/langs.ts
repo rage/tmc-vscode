@@ -65,6 +65,7 @@ import {
   NotEnrolledError,
   NotFoundError,
   ObsoleteClientError,
+  RateLimitedError,
   RuntimeError,
   ServerError,
   SpawnError,
@@ -1415,6 +1416,13 @@ export default class Langs {
         return Err(new NotEnrolledError(message, details))
       case "upload-expired":
         return Err(new UploadExpiredError(message, details))
+      case "rate-limited":
+        return Err(
+          new RateLimitedError(
+            "You have sent this exercise for help too many times recently. Try again in a few minutes.",
+            details,
+          ),
+        )
       case "unknown-upload":
         // Never a race: the backend has no record of a file the CLI named for this
         // exercise, so a retry cannot help.
