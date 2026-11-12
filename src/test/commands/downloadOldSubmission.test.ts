@@ -91,7 +91,7 @@ suite("Download old submission command (mooc branch)", function () {
     const langs = { getOldSubmissions, restoreSubmission } as unknown as Langs
 
     const userData = {
-      getExercise: () => Ok({}),
+      getExercise: () => Ok({ exercise: makeMoocKind({ availablePoints: 1 }) }),
       getCourse: () => Ok({}),
     } as unknown as UserData
 
@@ -126,7 +126,7 @@ suite("Download old submission command (mooc branch)", function () {
     }
   }
 
-  test("lists submissions newest first, dated in the UI language, with the status beside", async function () {
+  test("lists submissions newest first, dated in the UI language, with the score out of the maximum", async function () {
     await downloadOldSubmission(actionContext({ submissions: moocSubmissions.toReversed() }), uri)
 
     expect(getOldSubmissions).toHaveBeenCalledExactlyOnceWith(idOfMoocExercise("mooc-ex-uuid"))
@@ -140,17 +140,18 @@ suite("Download old submission command (mooc branch)", function () {
     ).toEqual([
       {
         label: format.format(new Date("2026-07-21T12:00:00Z")),
-        description: "Graded (score 1)",
+        description: "Graded (1/1 points)",
         detail: "Latest",
       },
       {
         label: format.format(new Date("2026-07-21T10:00:00Z")),
-        description: "Failed (score 0)",
+        description: "Failed (0/1 points)",
         detail: undefined,
       },
     ])
+    // A submission graded to full points passed the exercise.
     expect(offered.map(({ iconPath }) => (iconPath as vscode.ThemeIcon).id)).toEqual([
-      "circle-large-outline",
+      "pass",
       "circle-large-outline",
     ])
 
@@ -181,6 +182,18 @@ suite("Download old submission command (mooc branch)", function () {
     expect(notification).toHaveBeenCalledOnce()
     expect(String(notification.mock.calls[0]?.[0])).toContain("ex-1")
     expect(restoreSubmission).not.toHaveBeenCalled()
+  })
+
+  test("marks a fully graded submission below full points as not passed", async function () {
+    const partial = [
+      { ...moocSubmissions[0], score_given: 0.5 },
+    ] as ExerciseSlideSubmissionListItem[]
+    await downloadOldSubmission(actionContext({ submissions: partial }), uri)
+
+    expect(offered[0]?.description).toBe("Graded (0.5/1 points)")
+    expect(offered.map(({ iconPath }) => (iconPath as vscode.ThemeIcon).id)).toEqual([
+      "circle-large-outline",
+    ])
   })
 
   test("reads a submission the server has not started grading as pending", async function () {
