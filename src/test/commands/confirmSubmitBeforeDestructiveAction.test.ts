@@ -16,7 +16,7 @@ const prompt = {
   message: "Reset hello?",
   replacement: "the exercise template",
   verb: "Reset",
-  serverName: "courses.mooc.fi",
+  backend: "tmc" as const,
 }
 
 function context(): ReturnType<typeof createMockActionContext> {
@@ -31,6 +31,33 @@ suite("confirmSubmitBeforeDestructiveAction", function () {
     expect(actionContext.dialog.choose).toHaveBeenCalledOnce()
   })
 
+  test("offers a tmc exercise to submit first, and a mooc one to back up first", async function () {
+    const actionContext = context()
+
+    await confirmSubmitBeforeDestructiveAction(actionContext, exercise, prompt)
+    await confirmSubmitBeforeDestructiveAction(actionContext, exercise, {
+      ...prompt,
+      backend: "mooc",
+    })
+
+    const choices = vi
+      .mocked(actionContext.dialog.choose)
+      .mock.calls.map(([, options, ...offered]) => [
+        (options as { detail: string }).detail,
+        offered.map(([label]) => label),
+      ])
+    expect(choices).toEqual([
+      [
+        "Your current code will be replaced by the exercise template. Submit it to tmc.mooc.fi first to keep a copy you can download later.",
+        ["Submit and Reset", "Reset Without Submitting"],
+      ],
+      [
+        "Your current code will be replaced by the exercise template. Back it up to courses.mooc.fi first to keep a copy you can download later. A backup is not graded.",
+        ["Back Up and Reset", "Reset Without Backup"],
+      ],
+    ])
+  })
+
   test("asks only to go ahead when the code is what was last submitted", async function () {
     vi.mocked(isUnchangedSinceSubmission).mockResolvedValue(true)
     const actionContext = context()
@@ -40,7 +67,7 @@ suite("confirmSubmitBeforeDestructiveAction", function () {
     expect(actionContext.dialog.confirm).toHaveBeenCalledExactlyOnceWith("Reset hello?", {
       confirmLabel: "Reset",
       detail:
-        "Your current code, already submitted to courses.mooc.fi, will be replaced by the exercise template.",
+        "Your current code, already submitted to tmc.mooc.fi, will be replaced by the exercise template.",
     })
 
     vi.mocked(actionContext.dialog.confirm).mockResolvedValue(false)

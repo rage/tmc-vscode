@@ -81,7 +81,7 @@ suite("Download old submission command (mooc branch)", function () {
     } = {},
   ): ReadyActionContext {
     const base = createMockActionContext()
-    const answer = "answer" in options ? options.answer : "Restore Without Submitting"
+    const answer = "answer" in options ? options.answer : "Restore Without Backup"
 
     getOldSubmissions = vi.fn(async () =>
       Ok(
@@ -250,7 +250,7 @@ suite("Download old submission command (mooc branch)", function () {
   })
 
   test("submits the current state first when the user asks for it", async function () {
-    await downloadOldSubmission(actionContext({ answer: "Submit and Restore" }), uri)
+    await downloadOldSubmission(actionContext({ answer: "Back Up and Restore" }), uri)
 
     expect(saveExerciseDocuments).toHaveBeenCalledExactlyOnceWith(moocExercise)
     expect(restoreSubmission).toHaveBeenCalledExactlyOnceWith(
@@ -287,7 +287,7 @@ suite("Download old submission command (mooc branch)", function () {
       .claim([idOfMoocExercise("mooc-ex-uuid")], "submitting")
       .unwrap()
     try {
-      await downloadOldSubmission(actionContext({ answer: "Submit and Restore" }), uri)
+      await downloadOldSubmission(actionContext({ answer: "Back Up and Restore" }), uri)
     } finally {
       submission.releaseAll()
     }

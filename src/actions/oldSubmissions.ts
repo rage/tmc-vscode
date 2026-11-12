@@ -114,8 +114,8 @@ export async function listOldSubmissions(
 }
 
 /**
- * Restores one earlier submission over an exercise's current state, optionally submitting
- * that state first.
+ * Restores one earlier submission over an exercise's current state, optionally keeping that
+ * state on the backend first.
  *
  * Rejects as a `BottleneckError` while another operation on the exercise is in flight.
  */

@@ -811,6 +811,29 @@ suite("Langs cross-backend independence", function () {
     }
   })
 
+  test("a mooc paste or backup right after a submission waits for nothing", async function () {
+    const langs = newLangs()
+    const calls = stubSpawn(langs, (_i, args) =>
+      args.includes("submit")
+        ? Ok(dataOutput("mooc-submission-finished", moocSubmitted))
+        : args.includes("paste")
+          ? Ok(dataOutput("mooc-paste", { paste_url: "https://courses.example/paste" }))
+          : Ok(dataOutput("mooc-old-submission-restore", "restored")),
+    )
+    expect((await langs.submitMoocExercise("ex-uuid", "/path/to/ex")).ok).toBe(true)
+
+    vi.useFakeTimers()
+    try {
+      expect((await langs.paste(idOfMoocExercise("ex-uuid"), "/path/to/ex")).ok).toBe(true)
+      expect((await langs.resetExercise(idOfMoocExercise("ex-uuid"), "/path/to/ex", true)).ok).toBe(
+        true,
+      )
+      expect(calls).toHaveLength(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test("a submission right after another waits out the interval, then goes through", async function () {
     vi.useFakeTimers()
     try {

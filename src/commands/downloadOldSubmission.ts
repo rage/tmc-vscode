@@ -3,7 +3,6 @@ import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { MoocOldSubmissionRestore } from "../../shared/langsSchema"
-import { backendName } from "../../shared/lib"
 import type { PickableSubmission } from "../actions"
 import { checkAiUse, listOldSubmissions, restoreOldSubmission } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
@@ -11,7 +10,10 @@ import type { Item } from "../api/dialog"
 import { failure } from "../api/withOperation"
 import { formatDateTime, parseDate } from "../utilities"
 import { revertExerciseDocuments } from "../window/exerciseDocuments"
-import { confirmSubmitBeforeDestructiveAction } from "./confirmSubmitBeforeDestructiveAction"
+import {
+  confirmSubmitBeforeDestructiveAction,
+  keepingVerb,
+} from "./confirmSubmitBeforeDestructiveAction"
 import { checkTrustRetrying, runForExercise } from "./runForExercise"
 
 const TITLE = "Download Old Submission"
@@ -47,7 +49,7 @@ function submissionIcon(submission: PickableSubmission): vscode.ThemeIcon {
 
 /**
  * Lets the user pick one of an exercise's earlier submissions and restores it
- * over the exercise's current state, optionally submitting that state first.
+ * over the exercise's current state, optionally keeping that state on the backend first.
  *
  * @param resource An exercise file or folder; the active editor's exercise when omitted.
  */
@@ -96,7 +98,7 @@ export async function downloadOldSubmission(
         message: `Restore this submission of ${exercise.exerciseSlug}?`,
         replacement: "the submission",
         verb: "Restore",
-        serverName: backendName(id.kind),
+        backend: id.kind,
       })
       if (submitFirst === undefined) {
         return Ok.EMPTY
@@ -115,7 +117,7 @@ export async function downloadOldSubmission(
       const restoreResult: Result<MoocOldSubmissionRestore, Error> =
         await dialog.progressNotification(
           submitFirst
-            ? `Submitting ${exercise.exerciseSlug} and restoring the old submission…`
+            ? `${keepingVerb(id.kind)} ${exercise.exerciseSlug} and restoring the old submission…`
             : `Restoring the old submission of ${exercise.exerciseSlug}…`,
           () => restoreOldSubmission(actionContext, exercise, submission.target, submitFirst),
         )

@@ -871,8 +871,8 @@ export default class Langs {
    * an exercise type with no files at all can be. Nothing on disk or on the server is touched
    * then, `saveOldState` included.
    *
-   * @param saveOldState Submits the exercise's current state first, through the backend's
-   * submission throttle, so it may wait for up to `MINIMUM_SUBMISSION_INTERVAL` before that.
+   * @param saveOldState Keeps the exercise's current state on the server first: a submission on
+   * tmc, which goes through the submission throttle, and an ungraded backup on courses.mooc.fi.
    */
   public async restoreSubmission(
     target: RestoreTarget,
@@ -901,7 +901,7 @@ export default class Langs {
         async () => (await this._run(command)).map(() => "restored" as const),
         () => this._fetch(command, "mooc-old-submission-restore"),
       )
-    return saveOldState ? this._submitting(target.kind, restore) : restore()
+    return saveOldState && target.kind === "tmc" ? this._submitting("tmc", restore) : restore()
   }
 
   /**
@@ -975,8 +975,8 @@ export default class Langs {
    * Reverts an exercise to its template, via `reset-exercise`. The CLI downloads the template
    * before clearing the directory, so a failed download leaves the student's work in place.
    *
-   * @param saveOldState Submits the exercise's current state first, through the backend's
-   * submission throttle, so it may wait for up to `MINIMUM_SUBMISSION_INTERVAL` before that.
+   * @param saveOldState Keeps the exercise's current state on the server first: a submission on
+   * tmc, which goes through the submission throttle, and an ungraded backup on courses.mooc.fi.
    */
   public async resetExercise(
     exerciseId: ExerciseIdentifier,
@@ -997,7 +997,7 @@ export default class Langs {
         ),
         processTimeout: DOWNLOAD_PROCESS_TIMEOUT,
       })
-    return saveOldState ? this._submitting(exerciseId.kind, reset) : reset()
+    return saveOldState && exerciseId.kind === "tmc" ? this._submitting("tmc", reset) : reset()
   }
 
   /**
@@ -1051,9 +1051,9 @@ export default class Langs {
    * Submits a mooc exercise without waiting for its grading; follow with
    * {@link waitForMoocGrading}. The CLI resolves the slide and task ids from the exercise id.
    *
-   * Shares its `MINIMUM_SUBMISSION_INTERVAL` throttle with every other mooc call that
-   * submits; per-backend, so the tmc path is unaffected. Errs with an `ExerciseNotFoundError`
-   * when the exercise is gone from courses.mooc.fi.
+   * Throttled to one call per `MINIMUM_SUBMISSION_INTERVAL`, per backend, so the tmc path is
+   * unaffected. Errs with an `ExerciseNotFoundError` when the exercise is gone from
+   * courses.mooc.fi.
    *
    * @param exerciseId Mooc exercise id (a UUID string).
    * @param exercisePath Path to the local exercise directory.
@@ -1114,12 +1114,13 @@ export default class Langs {
   }
 
   /**
-   * Submits an exercise to its backend's paste service and returns the link to it. On
-   * courses.mooc.fi that is a submission the CLI then shares.
+   * Sends an exercise to its backend's paste service and returns the link to it. On
+   * courses.mooc.fi that is an ungraded paste snapshot the CLI then shares, which uses no try
+   * and is accepted past the deadline.
    *
-   * Takes a slot in the backend's submission throttle, shared with every call that submits,
-   * waiting its turn. Errs with an
-   * `ExerciseNotFoundError` when the exercise is gone from its backend.
+   * A tmc paste is a submission, so it takes a slot in the submission throttle, waiting its
+   * turn. Errs with an `ExerciseNotFoundError` when the exercise is gone from its backend, and
+   * on courses.mooc.fi with a `RateLimitedError` after too many pastes of the exercise.
    */
   public async paste(
     exerciseId: ExerciseIdentifier,
@@ -1138,12 +1139,10 @@ export default class Langs {
       processTimeout: SUBMIT_PROCESS_TIMEOUT,
       interruptOnDeactivate: true,
     }
-    const res = await this._submitting(exerciseId.kind, () =>
-      match(
-        exerciseId,
-        () => this._fetch(command, "new-submission"),
-        () => this._fetch(command, "mooc-paste"),
-      ),
+    const res = await match(
+      exerciseId,
+      () => this._submitting("tmc", () => this._fetch(command, "new-submission")),
+      () => this._fetch(command, "mooc-paste"),
     )
     return res.map((pasted) => pasted.paste_url)
   }
@@ -1181,9 +1180,9 @@ export default class Langs {
    * Runs `submit`, a call that makes the CLI submit to `backend`, at least
    * `MINIMUM_SUBMISSION_INTERVAL` after the previous one, waiting out the rest of it first.
    *
-   * Every call that submits goes through here — the submit and paste commands, and
-   * `--save-old-state` on reset and old-submission restore — so they throttle each other
-   * rather than only their own kind. A call that never reached the backend frees its slot.
+   * Every call that submits goes through here — the submit commands, and on tmc the paste
+   * command and `--save-old-state` on reset and old-submission restore — so they throttle each
+   * other rather than only their own kind. A call that never reached the backend frees its slot.
    */
   private async _submitting<T>(
     backend: BackendKind,

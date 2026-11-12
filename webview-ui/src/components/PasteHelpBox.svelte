@@ -58,7 +58,6 @@
   <p>
     Send your code to {pasteService} and share the link on the course's discussion channel to ask for
     help.
-    {#if backend === "mooc"}This also submits your answer for grading.{/if}
   </p>
   {#if pasteUrl.current !== null}
     {@const url = pasteUrl.current}

@@ -96,9 +96,9 @@ suite("PasteHelpBox component", () => {
     expect(oncopy).toHaveBeenCalledWith("https://paste.example/abc")
   })
 
-  test("warns that a courses.mooc.fi paste is also a graded submission", async () => {
+  test("does not call a courses.mooc.fi paste a submission", async () => {
     render(PasteHelpBox, { props: moocProps })
-    expect(await screen.findByText(/also submits your answer for grading/)).toBeInTheDocument()
+    expect(await screen.findByText(/Send your code to/)).not.toHaveTextContent(/submit|grad/i)
   })
 
   test("can be hidden again", async () => {

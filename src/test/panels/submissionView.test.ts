@@ -190,13 +190,14 @@ suite("moocGradingView", () => {
     })
   })
 
-  test("the last try below full points says the score is final", () => {
+  test("the last try below full points says the score is final, and help is still offered", () => {
     const view = moocGradingView(moocGrading("FullyGraded", 2, "OutOfTries"), 3)
     expect(view).toMatchObject({
       phase: "finished",
       headline: "Some tests failed on the server",
       explanation: "You have no tries left on this exercise, so this score is final.",
       points: { given: 2, max: 3 },
+      canPaste: true,
     })
   })
 

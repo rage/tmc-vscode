@@ -30,7 +30,6 @@ export async function pasteExercise(
   if (trusted.err) {
     return trusted
   }
-  // Refused like a submit, which a mooc paste also is.
   const allowed = await checkAiUse(actionContext, exercise)
   if (allowed.err) {
     return allowed
