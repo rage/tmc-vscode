@@ -1,7 +1,9 @@
 import type {
   ExerciseStanding,
   ExerciseTaskSubmissionStatus,
+  GradingTestRun,
   SubmissionFinished,
+  TestCase,
 } from "../../shared/langsSchema"
 import type { FeedbackQuestion, SubmissionView, WebviewError } from "../../shared/lib"
 import { assertUnreachable } from "../../shared/lib"
@@ -173,6 +175,8 @@ export function moocGradingView(
     ...emptyView,
     points: given === undefined ? undefined : { given, max: maxPoints },
     feedbackText: grading.feedback_text ?? undefined,
+    testCases: grading.test_results?.test_results.map((result) => toTestCase(result)) ?? [],
+    error: testRunError(grading.test_results),
   }
   const standing = grading.exercise_progress?.standing
   // A pass may come from an earlier submission; a short score is about this one.
@@ -211,6 +215,33 @@ export function moocGradingView(
     default:
       return assertUnreachable(grading.grading_progress)
   }
+}
+
+/** A mooc test result as the TMC result's test case the panel renders. */
+function toTestCase({
+  name,
+  successful,
+  message,
+  exception,
+}: GradingTestRun["test_results"][number]): TestCase {
+  return { name, successful, message, exception, detailed_message: null }
+}
+
+/** Why the server's test run produced no test results, with the output that tells. */
+function testRunError(run: GradingTestRun | null): SubmissionView["error"] {
+  const message =
+    run?.status === "COMPILE_FAILED"
+      ? "Your code did not compile on the server."
+      : run?.status === "GENERIC_ERROR"
+        ? "The tests could not be run on the server."
+        : undefined
+  if (message === undefined) {
+    return undefined
+  }
+  const output = Object.values(run?.logs ?? {})
+    .filter((log) => log.trim() !== "")
+    .join("\n\n")
+  return output === "" ? { message } : { message, details: output }
 }
 
 function fullyGradedExplanation(
