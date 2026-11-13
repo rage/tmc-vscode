@@ -41,3 +41,31 @@ export async function moveExercisesAside(
   }
   return Ok(target)
 }
+
+/**
+ * Moves exercises moved aside by {@link moveExercisesAside} back into the exercises folder.
+ *
+ * @returns `false`, moving nothing, when the exercises folder is not empty: merging two sets of
+ *   exercises could overwrite one with the other.
+ */
+export async function bringBackMovedExercises(
+  actionContext: ReadyActionContext,
+  folder: string,
+): Promise<Result<boolean, Error>> {
+  const projectsDirectory = actionContext.startup.resources.projectsDirectory
+  if (!projectsDirectory) {
+    return Err(new Error("The exercises folder is not known."))
+  }
+  try {
+    const entries = await fs.readdir(projectsDirectory).catch(() => [])
+    if (entries.length > 0) {
+      return Ok(false)
+    }
+    await fs.remove(projectsDirectory)
+    await fs.move(folder, projectsDirectory)
+  } catch (e) {
+    return Err(new FileSystemError(e, `Failed to move ${folder} back to ${projectsDirectory}.`))
+  }
+  const refreshed = await refreshLocalExercises(actionContext)
+  return refreshed.err ? refreshed : Ok(true)
+}
