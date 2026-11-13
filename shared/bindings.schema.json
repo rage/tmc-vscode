@@ -76,6 +76,26 @@
         "error"
       ]
     },
+    "ChapterLockingStatus": {
+      "description": "Where the user is in a course's chapter locking, which opens chapters one at a time as the\nprevious ones are completed.",
+      "oneOf": [
+        {
+          "description": "The chapter's exercises can be submitted to.",
+          "type": "string",
+          "const": "Unlocked"
+        },
+        {
+          "description": "The user has completed the chapter and locked it; its exercises take no more submissions.",
+          "type": "string",
+          "const": "CompletedAndLocked"
+        },
+        {
+          "description": "The previous chapters must be completed first.",
+          "type": "string",
+          "const": "NotUnlockedYet"
+        }
+      ]
+    },
     "ClientUpdateData": {
       "description": "The update data type for the progress reporter.",
       "oneOf": [
@@ -114,6 +134,41 @@
             "client-update-data-kind"
           ]
         }
+      ]
+    },
+    "ClosedChapter": {
+      "description": "A chapter of the course that opens later, with the user's progress on its exercises.",
+      "type": "object",
+      "properties": {
+        "chapter_number": {
+          "description": "The chapter's position in the course, from 1.",
+          "type": "integer",
+          "format": "int32"
+        },
+        "exercises": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExerciseProgress"
+          }
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string"
+        },
+        "opens_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "chapter_number",
+        "opens_at",
+        "exercises"
       ]
     },
     "CombinedCourseData": {
@@ -562,6 +617,14 @@
       "description": "The current user's progress across every exercise they can see in a course.\nCourse-level totals (awarded/available points, passed count, percentage) are\nnot sent separately; derive them by summing over `exercises`, guarding the\npercentage against a zero total.",
       "type": "object",
       "properties": {
+        "closed_chapters": {
+          "description": "Chapters that have not opened yet. Their exercises are missing from `exercises` and\nfrom the course's exercise list until then; they are closed, not removed.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ClosedChapter"
+          }
+        },
         "course_id": {
           "type": "string",
           "format": "uuid"
@@ -575,7 +638,8 @@
       },
       "required": [
         "course_id",
-        "exercises"
+        "exercises",
+        "closed_chapters"
       ]
     },
     "DataKind": {
@@ -1189,6 +1253,22 @@
           "type": "object",
           "properties": {
             "output-data": {
+              "$ref": "#/$defs/MoocCurrentUser"
+            },
+            "output-data-kind": {
+              "type": "string",
+              "const": "mooc-current-user"
+            }
+          },
+          "required": [
+            "output-data-kind",
+            "output-data"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "output-data": {
               "$ref": "#/$defs/MoocCourse"
             },
             "output-data-kind": {
@@ -1614,6 +1694,18 @@
           "type": "string",
           "format": "uuid"
         },
+        "locking_status": {
+          "description": "The user's status in the course's chapter locking; submissions are refused unless it is\n`Unlocked`. `None` when the course does not lock chapters, or the host does not report it.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChapterLockingStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "name": {
           "type": "string"
         }
@@ -1621,7 +1713,8 @@
       "required": [
         "id",
         "name",
-        "chapter_number"
+        "chapter_number",
+        "locking_status"
       ]
     },
     "ExerciseDesc": {
@@ -1771,6 +1864,15 @@
           "type": "string",
           "format": "uuid"
         },
+        "max_tries": {
+          "description": "How many graded submissions the exercise accepts per slide; `None` when unlimited.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32",
+          "default": null
+        },
         "score_given": {
           "description": "Points awarded to the user; `0.0` when the user has no state for the\nexercise. Can be fractional (partial credit).",
           "type": "number",
@@ -1791,6 +1893,15 @@
               "type": "null"
             }
           ]
+        },
+        "tries_left": {
+          "description": "How many of `max_tries` are left on the slide the user answers; `None` when unlimited.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32",
+          "default": null
         }
       },
       "required": [
@@ -1799,7 +1910,9 @@
         "score_maximum",
         "completed",
         "attempted",
-        "standing"
+        "standing",
+        "max_tries",
+        "tries_left"
       ]
     },
     "ExerciseSlideSubmissionListItem": {
@@ -2287,7 +2400,7 @@
           "const": "device-login-expired"
         },
         {
-          "description": "The server answered 404: what was asked for does not exist, or not for this user.\nA 404 for a request addressing one exercise is `ExerciseNotFound` instead.",
+          "description": "The server answered 404: what was asked for does not exist, or not for this user. Also\na file courses.mooc.fi handed out a download URL for (an exercise's or submission's\nfiles) that is missing from its file store.\nA 404 for a request addressing one exercise is `ExerciseNotFound` instead.",
           "type": "string",
           "const": "not-found"
         },
@@ -2310,6 +2423,31 @@
           "description": "courses.mooc.fi answered 429 (backend `message_key: \"rate_limited\"`): the user made too\nmany pastes of the exercise recently and should try again later.",
           "type": "string",
           "const": "rate-limited"
+        },
+        {
+          "description": "A submission came after the exercise's deadline (its own, else its chapter's)\n(backend `message_key: \"deadline_passed\"`, HTTP 422).",
+          "type": "string",
+          "const": "deadline-passed"
+        },
+        {
+          "description": "A submission came when the exercise had no tries left\n(backend `message_key: \"out_of_tries\"`, HTTP 422).",
+          "type": "string",
+          "const": "out-of-tries"
+        },
+        {
+          "description": "The exercise's chapter has not opened yet\n(backend `message_key: \"chapter_not_open_yet\"`, HTTP 403).",
+          "type": "string",
+          "const": "chapter-not-open-yet"
+        },
+        {
+          "description": "Chapter locking keeps the exercise's chapter closed until the previous chapters are\ncompleted (backend `message_key: \"chapter_not_unlocked_yet\"`, HTTP 403).",
+          "type": "string",
+          "const": "chapter-not-unlocked-yet"
+        },
+        {
+          "description": "The user completed and locked the exercise's chapter, which takes no more submissions\n(backend `message_key: \"chapter_completed_and_locked\"`, HTTP 403).",
+          "type": "string",
+          "const": "chapter-completed-and-locked"
         }
       ]
     },
@@ -2490,6 +2628,19 @@
         "description",
         "organization_name",
         "ai_policy"
+      ]
+    },
+    "MoocCurrentUser": {
+      "description": "The courses.mooc.fi account a token acts for; a changed `id` after login means the\nstudent switched accounts.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "id"
       ]
     },
     "MoocDeviceLogin": {
@@ -2942,6 +3093,15 @@
           "items": {
             "$ref": "#/$defs/TestResult"
           }
+        },
+        "timedOutAfterMs": {
+          "description": "Set when the tests were stopped for running longer than this many milliseconds: the\nexercise's `tests_timeout_ms`, else 60000. The status is then `TESTS_FAILED`, with one\nfailing test named \"Timeout test\" whose message says so; an infinite loop is the usual\ncause.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
         }
       },
       "required": [
@@ -3815,6 +3975,7 @@
           "format": "uuid"
         },
         "deadline": {
+          "description": "The effective deadline: the exercise's own, else its chapter's. Submissions are refused\nfrom this moment on.",
           "type": [
             "string",
             "null"

@@ -40,6 +40,8 @@ function moocGrading(
           completed: true,
           attempted: true,
           standing,
+          max_tries: null,
+          tries_left: null,
         }
       : null,
   })

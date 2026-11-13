@@ -444,6 +444,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
           completed: true,
           attempted: true,
           standing: "Attempted",
+          max_tries: null,
+          tries_left: null,
         },
       }),
     )
@@ -482,6 +484,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
           completed: true,
           attempted: true,
           standing: "Passed",
+          max_tries: null,
+          tries_left: null,
         },
       }),
     )
@@ -501,6 +505,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
           completed: true,
           attempted: true,
           standing: "OutOfTries",
+          max_tries: null,
+          tries_left: null,
         },
       }),
     )

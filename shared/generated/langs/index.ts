@@ -5,7 +5,9 @@ import * as z from 'zod';
 import {
     zBrowserTestRuntime,
     zBrowserTestSpec,
+    zChapterLockingStatus,
     zClientUpdateData,
+    zClosedChapter,
     zCombinedCourseData,
     zCombinedMoocCourseData,
     zConfigValue,
@@ -44,6 +46,7 @@ import {
     zModelSolutionSpec,
     zMoocClientUpdateData,
     zMoocCourse,
+    zMoocCurrentUser,
     zMoocDeviceLogin,
     zMoocExerciseDownload,
     zMoocExerciseUpdates,
@@ -98,10 +101,23 @@ export const BrowserTestSpec = zBrowserTestSpec;
 export type BrowserTestSpec = z.infer<typeof BrowserTestSpec>;
 
 /**
+ * Where the user is in a course's chapter locking, which opens chapters one at a time as the
+ * previous ones are completed.
+ */
+export const ChapterLockingStatus = zChapterLockingStatus;
+export type ChapterLockingStatus = z.infer<typeof ChapterLockingStatus>;
+
+/**
  * The update data type for the progress reporter.
  */
 export const ClientUpdateData = zClientUpdateData;
 export type ClientUpdateData = z.infer<typeof ClientUpdateData>;
+
+/**
+ * A chapter of the course that opens later, with the user's progress on its exercises.
+ */
+export const ClosedChapter = zClosedChapter;
+export type ClosedChapter = z.infer<typeof ClosedChapter>;
 
 export const CombinedCourseData = zCombinedCourseData;
 export type CombinedCourseData = z.infer<typeof CombinedCourseData>;
@@ -308,6 +324,13 @@ export type MoocClientUpdateData = z.infer<typeof MoocClientUpdateData>;
 
 export const MoocCourse = zMoocCourse;
 export type MoocCourse = z.infer<typeof MoocCourse>;
+
+/**
+ * The courses.mooc.fi account a token acts for; a changed `id` after login means the
+ * student switched accounts.
+ */
+export const MoocCurrentUser = zMoocCurrentUser;
+export type MoocCurrentUser = z.infer<typeof MoocCurrentUser>;
 
 /**
  * Payload of a `mooc-device-login` status update; a subset of the RFC 8628

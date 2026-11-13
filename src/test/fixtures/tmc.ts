@@ -92,8 +92,11 @@ const moocCourseProgress: CourseProgress = {
       completed: true,
       attempted: true,
       standing: "Passed",
+      max_tries: null,
+      tries_left: null,
     },
   ],
+  closed_chapters: [],
 }
 
 export {
