@@ -201,11 +201,11 @@ function commandPalette(): MenuEntry[] {
 // command needs when it is reached from the palette instead.
 const resourceMenus = ["explorer/context", "editor/title", "tmc.exercise"]
 
-// A `when` is a conjunction; comparing term sets rather than strings lets the
-// palette and the menus spell the same gate in a different order.
+// Comparing term sets rather than strings lets the palette and the menus spell the
+// same gate in a different order.
 function whenTerms(when: string | undefined): string[] {
   return (when ?? "")
-    .split("&&")
+    .split(/&&|\|\|/)
     .map((x) => x.trim())
     .filter((x) => x.length > 0)
 }

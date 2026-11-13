@@ -391,7 +391,7 @@
       "commandPalette": [
         {
           "command": "tmc.addNewCourse",
-          "when": "test-my-code:Initialized && test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:LoggedIn || test-my-code:Light"
         },
         {
           "command": "tmc.courseDetails",
@@ -415,7 +415,7 @@
         },
         {
           "command": "tmc.myCourses",
-          "when": "test-my-code:Initialized"
+          "when": "test-my-code:Initialized || test-my-code:Light"
         },
         {
           "command": "tmc.pasteExercise",
@@ -427,7 +427,7 @@
         },
         {
           "command": "tmc.showMoocLogin",
-          "when": "test-my-code:Initialized && test-my-code:LoggedIn == false"
+          "when": "test-my-code:Initialized && test-my-code:LoggedIn == false || test-my-code:Light"
         },
         {
           "command": "tmc.submitExercise",

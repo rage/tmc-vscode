@@ -141,3 +141,20 @@ suite("the Courses view's context menu", function () {
     )
   })
 })
+
+suite("the command palette in a light window", function () {
+  test("offers the entry commands, which start the full activation, and nothing else", function () {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),
+    ) as { contributes: { menus: Record<string, MenuEntry[]> } }
+    const palette = manifest.contributes.menus["commandPalette"] ?? []
+    const shown = palette
+      .filter(
+        (entry) =>
+          entry.when === undefined || evaluateWhen(entry.when, { "test-my-code:Light": true }),
+      )
+      .map((entry) => entry.command)
+
+    expect(shown.toSorted()).toEqual(["tmc.addNewCourse", "tmc.myCourses", "tmc.showMoocLogin"])
+  })
+})

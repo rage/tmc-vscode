@@ -1170,7 +1170,16 @@ suite("activation in a window TestMyCode has no part in yet", function () {
 
     await activate(createContext())
 
-    expect(executeCommand).not.toHaveBeenCalled()
+    expect(executeCommand.mock.calls.filter(([command]) => command !== "setContext")).toEqual([])
+  })
+
+  test("marks the window light, for the palette's entry commands, until it activates fully", async function () {
+    await activate(createContext())
+    expect(recorded.contextKeys.get("test-my-code:Light")).toBe(true)
+
+    await recorded.commandHandlers.get("tmc.showMoocLogin")?.()
+
+    expect(recorded.contextKeys.get("test-my-code:Light")).toBe(false)
   })
 
   test("running one of its commands activates fully, then runs it", async function () {
