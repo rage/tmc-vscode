@@ -33,6 +33,15 @@ async function confirmLastTry(
   )
 }
 
+function refusedOrFailed(actionContext: ReadyActionContext, error: Error): Result<Warned, Error> {
+  if (isSubmitRefusal(error)) {
+    // The course's rules, not a failure.
+    void actionContext.dialog.notification(error.message)
+    return Ok({ warnings: [] })
+  }
+  return failure("Exercise submission failed.", error)
+}
+
 export async function submitExercise(
   actionContext: ReadyActionContext,
   resource: vscode.Uri | undefined,
@@ -42,16 +51,15 @@ export async function submitExercise(
     resource,
     "Submitting the exercise",
     async (exercise) => {
+      const allowed = await actions.checkCanSubmit(actionContext, exercise)
+      if (allowed.err) {
+        return refusedOrFailed(actionContext, allowed.val)
+      }
       if (!(await confirmLastTry(actionContext, exercise))) {
         return Ok({ warnings: [] })
       }
       const result = await actions.submitExercise(actionContext, exercise)
-      if (result.err && isSubmitRefusal(result.val)) {
-        // The course's rules, not a failure.
-        void actionContext.dialog.notification(result.val.message)
-        return Ok({ warnings: [] })
-      }
-      return result.err ? failure("Exercise submission failed.", result.val) : result
+      return result.err ? refusedOrFailed(actionContext, result.val) : result
     },
     { trustedCommand: "tmc.submitExercise" },
   )

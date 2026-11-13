@@ -331,31 +331,37 @@ function withNextExercise(
   }
 }
 
+/** What {@link checkCanSubmit} found an exercise to be submitted with. */
+interface SubmitReady {
+  submit: ExerciseSubmitter
+  course: LocalCourseData
+  courseExercise: LocalCourseExercise
+}
+
 /**
- * Submits an exercise to the backend it belongs to and shows the grading in a side panel.
+ * Whether `exercise` can be submitted now, without submitting it: lets a caller ask the
+ * student something first without asking about a submission that would be refused anyway.
  *
- * Records what the backend says about the exercise after the grading, and fires
- * {@link onDidFinishSubmission} once the outcome is shown. A failed submission is `Ok`, as the
- * panel shows why. Errs for a failure before the panel opens: another operation in flight on
- * the exercise is a `BottleneckError`, AI assistance that may be on is an
- * `AiUseRefusedError`, and Restricted Mode is a `WorkspaceUntrustedError`. An exercise the
- * stored data says the backend would refuse is the error {@link refusalError} names, and one
- * hidden until its chapter opens a `ChapterNotOpenError`.
+ * Errs as {@link submitExercise} does before its panel opens.
  */
-export async function submitExercise(
+export async function checkCanSubmit(
   actionContext: ReadyActionContext,
   exercise: WorkspaceExercise,
-): Promise<Result<Warned, Error>> {
-  const { langs } = actionContext.startup
-  Logger.info(`Submitting exercise ${exercise.exerciseSlug} to ${backendName(exercise.backend)}`)
+): Promise<Result<void, Error>> {
+  const ready = await readyToSubmit(actionContext, exercise)
+  return ready.err ? ready : Ok.EMPTY
+}
 
+async function readyToSubmit(
+  actionContext: ReadyActionContext,
+  exercise: WorkspaceExercise,
+): Promise<Result<SubmitReady, Error>> {
   const stored = storedExerciseOf(actionContext, exercise)
   if (stored.err) {
     return stored
   }
   const { course, exercise: courseExercise } = stored.val
-  const exerciseId = exercise.id
-  const submit = submitterFor(langs, exercise.backend, exerciseId)
+  const submit = submitterFor(actionContext.startup.langs, exercise.backend, exercise.id)
   if (!submit) {
     return Err(
       new Error(`${exercise.exerciseSlug} is not a ${backendName(exercise.backend)} exercise.`),
@@ -373,6 +379,32 @@ export async function submitExercise(
   if (refused) {
     return Err(refused)
   }
+  return Ok({ submit, course, courseExercise })
+}
+
+/**
+ * Submits an exercise to the backend it belongs to and shows the grading in a side panel.
+ *
+ * Records what the backend says about the exercise after the grading, and fires
+ * {@link onDidFinishSubmission} once the outcome is shown. A failed submission is `Ok`, as the
+ * panel shows why. Errs for a failure before the panel opens: another operation in flight on
+ * the exercise is a `BottleneckError`, AI assistance that may be on is an
+ * `AiUseRefusedError`, and Restricted Mode is a `WorkspaceUntrustedError`. An exercise the
+ * stored data says the backend would refuse is the error {@link refusalError} names, and one
+ * hidden until its chapter opens a `ChapterNotOpenError`.
+ */
+export async function submitExercise(
+  actionContext: ReadyActionContext,
+  exercise: WorkspaceExercise,
+): Promise<Result<Warned, Error>> {
+  Logger.info(`Submitting exercise ${exercise.exerciseSlug} to ${backendName(exercise.backend)}`)
+
+  const ready = await readyToSubmit(actionContext, exercise)
+  if (ready.err) {
+    return ready
+  }
+  const { submit, course, courseExercise } = ready.val
+  const exerciseId = exercise.id
   const courseId = LocalCourseData.getCourseId(course)
 
   // Held only until the result is posted: the panel offers Paste from that point on, and

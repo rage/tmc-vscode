@@ -12,6 +12,7 @@ import {
   makeTmcKind,
 } from "../../../shared/lib"
 import {
+  checkCanSubmit,
   keepWaitingForGrading,
   onDidFinishSubmission,
   sendSubmissionFeedback,
@@ -23,6 +24,7 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
 import {
+  AiUseRefusedError,
   BottleneckError,
   ChapterLockedError,
   DeadlinePassedError,
@@ -595,6 +597,30 @@ suite("submitExercise action, mooc", () => {
 
     expect(result.val).toBeInstanceOf(WorkspaceUntrustedError)
     expect(submit).not.toHaveBeenCalled()
+  })
+
+  test("checking whether it can submit refuses as the submit would, and submits nothing", async () => {
+    const pastDeadline = {
+      ...moocCourse,
+      exercises: [{ ...moocCourse.exercises[0]!, deadline: "2000-01-01T00:00:00Z" }],
+    }
+    const submit = vi.fn()
+    const late = contextFor(makeMoocKind(pastDeadline), { submitMoocExercise: submit })
+    expect((await checkCanSubmit(late.actionContext, moocExercise)).val).toBeInstanceOf(
+      DeadlinePassedError,
+    )
+
+    const aiOn = contextFor(makeMoocKind(moocCourse), { submitMoocExercise: submit })
+    const refused = new AiUseRefusedError("AI assistance is on.")
+    aiOn.actionContext.startup.aiUseGate = {
+      refusal: async () => refused,
+    } as unknown as ReadyStartup["aiUseGate"]
+    expect((await checkCanSubmit(aiOn.actionContext, moocExercise)).val).toBe(refused)
+
+    const allowed = contextFor(makeMoocKind(moocCourse), { submitMoocExercise: submit })
+    expect((await checkCanSubmit(allowed.actionContext, moocExercise)).ok).toBe(true)
+    expect(submit).not.toHaveBeenCalled()
+    expect(openedPanels).toEqual([])
   })
 
   test("grading progress keeps changed messages only, on an indeterminate bar", async () => {

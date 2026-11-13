@@ -10,7 +10,12 @@ import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { submitExercise } from "../../commands/submitExercise"
 import type { UserData } from "../../config/userdata"
-import { OutOfTriesError, WorkspaceUntrustedError } from "../../errors"
+import {
+  AiUseRefusedError,
+  DeadlinePassedError,
+  OutOfTriesError,
+  WorkspaceUntrustedError,
+} from "../../errors"
 import { moocCourseExercise } from "../fixtures/courses"
 import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
@@ -18,6 +23,7 @@ import { createDialogMock } from "../mocks/dialog"
 import { restrictedTrustGate } from "../support/trustGate"
 
 vi.mock("../../actions", () => ({
+  checkCanSubmit: vi.fn(async () => Ok.EMPTY),
   submitExercise: vi.fn(async () => Ok.EMPTY),
 }))
 
@@ -55,6 +61,7 @@ function contextWith(
 
 suite("Submit exercise command", function () {
   beforeEach(function () {
+    vi.mocked(actions.checkCanSubmit).mockResolvedValue(Ok.EMPTY)
     vi.mocked(actions.submitExercise).mockResolvedValue(Ok({ warnings: [] }))
   })
 
@@ -89,6 +96,35 @@ suite("Submit exercise command", function () {
     const moreLeft = contextWith(exercise, 2)
     await submitExercise(moreLeft, uri)
     expect(moreLeft.dialog.confirm).not.toHaveBeenCalled()
+  })
+
+  test("refuses for AI assistance before asking about the last try", async function () {
+    const refused = new AiUseRefusedError("Turn off AI assistance before you submit.")
+    vi.mocked(actions.checkCanSubmit).mockResolvedValue(Err(refused))
+    const context = contextWith(exercise, 1)
+
+    const result = await submitExercise(context, uri)
+
+    expect(context.dialog.confirm).not.toHaveBeenCalled()
+    expect(actions.submitExercise).not.toHaveBeenCalled()
+    expect(result.err).toBe(true)
+    expect(context.dialog.warningNotification).toHaveBeenCalledWith(refused.message)
+  })
+
+  test("tells of a passed deadline before asking about the last try", async function () {
+    vi.mocked(actions.checkCanSubmit).mockResolvedValue(
+      Err(new DeadlinePassedError("The deadline of ex-1 has passed.")),
+    )
+    const context = contextWith(exercise, 1)
+
+    const result = await submitExercise(context, uri)
+
+    expect(result.ok).toBe(true)
+    expect(context.dialog.confirm).not.toHaveBeenCalled()
+    expect(actions.submitExercise).not.toHaveBeenCalled()
+    expect(context.dialog.notification).toHaveBeenCalledExactlyOnceWith(
+      "The deadline of ex-1 has passed.",
+    )
   })
 
   test("tells of no tries left as the final score it is, not as a failure", async function () {
