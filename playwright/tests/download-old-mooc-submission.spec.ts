@@ -62,9 +62,10 @@ vsCodeTest(
       await quickPick.selectOnlyItem()
       await quickPick.expectClosed()
 
+      // The exercise is as downloaded, so there is nothing to back up first.
       await page
         .locator(".monaco-dialog-box")
-        .getByRole("button", { name: "Restore Without Backup" })
+        .getByRole("button", { name: "Restore", exact: true })
         .click()
     })
 
