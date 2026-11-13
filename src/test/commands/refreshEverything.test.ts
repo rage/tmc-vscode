@@ -252,7 +252,7 @@ suite("refreshEverything's new-exercises prompt", function () {
     const course = moocLocalCourse({ title: "Mooc Course", aiPolicy: "full_use" })
     const [actionContext, dialog] = contextWithCourses([course])
     vi.mocked(updateCourse).mockResolvedValue(
-      Ok({ isUpdated: true, warnings: [], aiPolicyChange: { course, wasAiAllowed: false } }),
+      Ok({ isUpdated: true, warnings: [], aiPolicyChange: { course } }),
     )
 
     await refreshEverything(actionContext, { silent: true })
@@ -264,17 +264,18 @@ suite("refreshEverything's new-exercises prompt", function () {
     )
   })
 
-  test("announces a changed AI policy that leaves AI assistance as it was without saying so", async function () {
+  test("announces a changed AI policy that leaves AI assistance as it was in the same words", async function () {
     const course = moocLocalCourse({ title: "Mooc Course", aiPolicy: "no_ai" })
     const [actionContext, dialog] = contextWithCourses([course])
     vi.mocked(updateCourse).mockResolvedValue(
-      Ok({ isUpdated: true, warnings: [], aiPolicyChange: { course, wasAiAllowed: false } }),
+      Ok({ isUpdated: true, warnings: [], aiPolicyChange: { course } }),
     )
 
     await refreshEverything(actionContext, { silent: true })
 
     expect(dialog.notification).toHaveBeenCalledExactlyOnceWith(
-      "Mooc Course changed its AI policy: AI may not be used at any point.",
+      "Mooc Course changed its AI policy: AI may not be used at any point." +
+        " TestMyCode turns AI assistance off in the course workspace.",
       expect.anything(),
     )
   })

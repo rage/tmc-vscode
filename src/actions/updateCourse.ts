@@ -3,7 +3,6 @@ import { Ok } from "ts-results"
 
 import type { BackendKind, CourseIdentifier, Enum } from "../../shared/lib"
 import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../../shared/lib"
-import { isAiAllowed } from "../api/aiRestriction"
 import type Langs from "../api/langs"
 import type { OperationWarning, Warned } from "../api/withOperation"
 import {
@@ -70,7 +69,6 @@ function sessionRefusalWarnings(
 export interface AiPolicyChange {
   /** The course as stored now, with its new policy. */
   course: LocalCourseData
-  wasAiAllowed: boolean
 }
 
 /** What {@link updateCourse} did. */
@@ -187,9 +185,7 @@ export async function updateCourse(
   return Ok({
     isUpdated: true,
     warnings: [],
-    ...(isAiPolicyChanged
-      ? { aiPolicyChange: { course, wasAiAllowed: isAiAllowed(courseData) } }
-      : {}),
+    ...(isAiPolicyChanged ? { aiPolicyChange: { course } } : {}),
   })
 }
 

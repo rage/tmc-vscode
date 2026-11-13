@@ -162,15 +162,13 @@ function announceAiPolicyChanges(
   { dialog }: ReadyActionContext,
   changes: readonly AiPolicyChange[],
 ): void {
-  for (const { course, wasAiAllowed } of changes) {
+  for (const { course } of changes) {
     if (course.kind !== "mooc") {
       continue
     }
-    const isNowAiAllowed = isAiAllowed(course)
-    const message = [
-      `${course.data.title} changed its AI policy: ${aiPolicyRule(course.data.aiPolicy)}`,
-      ...(wasAiAllowed === isNowAiAllowed ? [] : [aiAssistanceSentence(isNowAiAllowed)]),
-    ].join(" ")
+    const message =
+      `${course.data.title} changed its AI policy: ${aiPolicyRule(course.data.aiPolicy)} ` +
+      aiAssistanceSentence(isAiAllowed(course))
     void dialog.notification(message, showCourseHomeButton(LocalCourseData.getCourseId(course)))
   }
 }

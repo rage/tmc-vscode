@@ -156,7 +156,7 @@ suite("updateCourse action (mooc)", function () {
     expect(stored?.name).toBe("mooc-python-course")
   })
 
-  test("reports a changed AI policy with whether the old one allowed AI", async function () {
+  test("reports a changed AI policy with the course as stored now", async function () {
     await storeCourse({ ...storedMoocCourse, aiPolicy: "full_use" })
     tmcMockValues.getMoocCourseData = Ok({
       ...tmcMockValues.getMoocCourseData.unwrap(),
@@ -165,7 +165,6 @@ suite("updateCourse action (mooc)", function () {
 
     const update = (await updateCourse(actionContext(), courseId)).unwrap()
 
-    expect(update.aiPolicyChange?.wasAiAllowed).toBe(true)
     expect(
       update.aiPolicyChange?.course.kind === "mooc" && update.aiPolicyChange.course.data.aiPolicy,
     ).toBe("no_ai")
