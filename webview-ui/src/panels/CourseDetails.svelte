@@ -177,8 +177,10 @@
   })
   const continueWithNext: BarAction | undefined = $derived(
     view?.nextExercise && {
-      label: `Continue: ${view.nextExercise.name}`,
-      icon: "arrow-right",
+      label: view.nextExercise.isOnDisk
+        ? `Continue: ${view.nextExercise.name}`
+        : `Download and Open: ${view.nextExercise.name}`,
+      icon: view.nextExercise.isOnDisk ? "arrow-right" : "cloud-download",
       onclick: () => view?.nextExercise && runExerciseAction(view.nextExercise.id, "open"),
     },
   )

@@ -378,7 +378,24 @@ suite("buildCourseHomeView", function () {
       NOW,
     ).unwrap()
 
-    expect(view.nextExercise?.name).toBe("todo")
+    expect(view.nextExercise).toMatchObject({ name: "todo", isOnDisk: false })
+  })
+
+  test("goes on with an exercise on disk before an earlier one not downloaded", function () {
+    const course = tmcLocalCourse({
+      exercises: [
+        tmcCourseExercise({ id: 1, name: "part01-01_hello" }),
+        tmcCourseExercise({ id: 2, name: "part01-02_world" }),
+      ],
+    })
+
+    const view = buildCourseHomeView(
+      contextFor(course, { onDisk: [onDisk(2, "part01-02_world", ExerciseStatus.Closed)] }),
+      LocalCourseDataNs.getCourseId(course),
+      NOW,
+    ).unwrap()
+
+    expect(view.nextExercise).toMatchObject({ id: idOfTmcExercise(2), isOnDisk: true })
   })
 
   test("carries that courses.mooc.fi refused the student as not enrolled", function () {

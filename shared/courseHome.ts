@@ -102,8 +102,13 @@ export const CourseHomeViewSchema = z.object({
   isWorkspaceOpen: z.boolean(),
   /** This window is the course's workspace and in Restricted Mode. */
   isRestricted: z.boolean(),
-  /** The first exercise, in course order, still left to do. */
-  nextExercise: z.object({ id: ExerciseIdentifierSchema, name: z.string() }).optional(),
+  /**
+   * The exercise to go on with: the first, in course order, still left to do among those on
+   * disk, else among all.
+   */
+  nextExercise: z
+    .object({ id: ExerciseIdentifierSchema, name: z.string(), isOnDisk: z.boolean() })
+    .optional(),
   /** Announced as new and not dismissed; downloadable ones only. */
   newExercises: z.array(z.object({ id: ExerciseIdentifierSchema, name: z.string() })),
   /** Exercises on disk whose template changed on the backend. */

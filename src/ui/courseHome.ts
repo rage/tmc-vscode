@@ -20,6 +20,7 @@ import {
   formatNearRelativeTime,
 } from "../utilities"
 import { recentUpdates } from "./recentUpdates"
+import type { ExerciseView } from "./treeview/courseViewModel"
 import {
   buildCourseView,
   isLeftToDo,
@@ -37,6 +38,10 @@ export function openCourseId({ startup }: ReadyActionContext): CourseIdentifier 
   }
   const course = startup.userData.getCourseBySlug(activeCourseBackend, activeCourse)
   return course.ok ? LocalCourseData.getCourseId(course.val) : undefined
+}
+
+function isOnDisk(exercise: ExerciseView): boolean {
+  return exercise.status === "opened" || exercise.status === "closed"
 }
 
 /**
@@ -76,7 +81,8 @@ export function buildCourseHomeView(
   const newKeys = new Set(
     LocalCourseData.getNewExercises(course).map((id) => ExerciseIdentifier.key(id)),
   )
-  const nextExercise = exercises.find((ex) => isLeftToDo(ex))
+  const leftToDo = exercises.filter((ex) => isLeftToDo(ex))
+  const nextExercise = leftToDo.find((ex) => isOnDisk(ex)) ?? leftToDo[0]
   const openCourse = openCourseId(actionContext)
   const isWorkspaceOpen = openCourse !== undefined && CourseIdentifier.equals(openCourse, courseId)
 
@@ -107,7 +113,15 @@ export function buildCourseHomeView(
     isSessionExpired: actionContext.authState.isSessionExpired,
     isWorkspaceOpen,
     isRestricted: isWorkspaceOpen && !vscode.workspace.isTrusted,
-    ...(nextExercise ? { nextExercise: { id: nextExercise.id, name: nextExercise.name } } : {}),
+    ...(nextExercise
+      ? {
+          nextExercise: {
+            id: nextExercise.id,
+            name: nextExercise.name,
+            isOnDisk: isOnDisk(nextExercise),
+          },
+        }
+      : {}),
     newExercises: exercises
       .filter((ex) => ex.status === "new" && newKeys.has(ExerciseIdentifier.key(ex.id)))
       .map(({ id, name }) => ({ id, name })),

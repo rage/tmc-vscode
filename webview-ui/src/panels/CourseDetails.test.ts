@@ -362,7 +362,7 @@ suite("the course home", () => {
     const panel = await renderHome(
       onDiskView({
         isWorkspaceOpen: true,
-        nextExercise: { id: makeTmcKind({ tmcExerciseId: 1 }), name: "01_hello" },
+        nextExercise: { id: makeTmcKind({ tmcExerciseId: 1 }), name: "01_hello", isOnDisk: true },
       }),
     )
 
@@ -380,7 +380,7 @@ suite("the course home", () => {
     await renderHome(
       onDiskView({
         isWorkspaceOpen: true,
-        nextExercise: { id: makeTmcKind({ tmcExerciseId: 1 }), name: "01_hello" },
+        nextExercise: { id: makeTmcKind({ tmcExerciseId: 1 }), name: "01_hello", isOnDisk: true },
         newExercises: [{ id: makeTmcKind({ tmcExerciseId: 2 }), name: "02_loops" }],
       }),
     )
@@ -394,7 +394,7 @@ suite("the course home", () => {
   test("in the course workspace with nothing to download, continues with the next exercise", async () => {
     const view = onDiskView({
       isWorkspaceOpen: true,
-      nextExercise: { id: makeTmcKind({ tmcExerciseId: 2 }), name: "02_loops" },
+      nextExercise: { id: makeTmcKind({ tmcExerciseId: 2 }), name: "02_loops", isOnDisk: true },
     })
     const [part] = view.parts
     const panel = await renderHome({
@@ -407,6 +407,19 @@ suite("the course home", () => {
     const next = screen.getByRole("button", { name: "Continue: 02_loops" })
     expect(next).not.toHaveAttribute("secondary")
     next.click()
+
+    expect(postedMessages).toHaveBeenCalledWith(exerciseAction(panel, 2, "open"))
+  })
+
+  test("offers to download and open a next exercise not on disk", async () => {
+    const panel = await renderHome(
+      onDiskView({
+        isWorkspaceOpen: true,
+        nextExercise: { id: makeTmcKind({ tmcExerciseId: 2 }), name: "02_loops", isOnDisk: false },
+      }),
+    )
+
+    screen.getByRole("button", { name: "Download and Open: 02_loops" }).click()
 
     expect(postedMessages).toHaveBeenCalledWith(exerciseAction(panel, 2, "open"))
   })

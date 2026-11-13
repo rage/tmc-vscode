@@ -189,6 +189,7 @@ const moocCourseInWorkspace = courseHomeView({
   nextExercise: {
     id: makeMoocKind({ moocExerciseId: moocExerciseUuid(2) }),
     name: "Reading input",
+    isOnDisk: true,
   },
   parts: moocParts(false).map((part) => ({
     ...part,
