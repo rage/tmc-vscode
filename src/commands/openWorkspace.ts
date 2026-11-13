@@ -5,6 +5,7 @@ import { LocalCourseData } from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
 import { isSamePath, Logger } from "../utilities"
+import { isWalkthroughOpen } from "../window/walkthrough"
 import { withholdCourseWorkspaceOffer } from "./offerCourseWorkspace"
 
 /**
@@ -54,7 +55,10 @@ export async function openWorkspace(
 
   await withOperation(dialog, { failure: "Failed to open the course workspace." }, async () => {
     await workspaceManager.prepareWorkspaceFileToOpen(courseSlug, course.kind)
-    await courseWorkspaceSwitches.record(workspaceAsUri.fsPath)
+    // A new window leaves the walkthrough open in this one.
+    await courseWorkspaceSwitches.record(workspaceAsUri.fsPath, {
+      isWalkthroughOpen: where === "here" && isWalkthroughOpen(),
+    })
     await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri, {
       forceNewWindow: where === "newWindow",
     })

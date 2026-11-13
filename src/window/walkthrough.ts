@@ -1,5 +1,6 @@
 import * as vscode from "vscode"
 
+import type { ReadyActionContext } from "../actions/types"
 import { EXTENSION_ID } from "../config/constants"
 import { trackContextKey } from "../ui/contextKeys"
 
@@ -53,21 +54,44 @@ export function nextWalkthroughStep(progress: WalkthroughProgress): string {
   return progress.hasDownloadedExercises ? "runTests" : "openExercises"
 }
 
+/** Whether the walkthrough is open in any tab of this window, shown or not. */
+export function isWalkthroughOpen(): boolean {
+  return vscode.window.tabGroups.all.some((group) =>
+    group.tabs.some((tab) => isWalkthroughTab(tab)),
+  )
+}
+
+/** The student's progress as this activation sees it. */
+export function walkthroughProgressOf({
+  authState,
+  startup,
+}: Pick<ReadyActionContext, "authState" | "startup">): WalkthroughProgress {
+  return {
+    isLoggedIn: authState.loggedIn,
+    hasCourses: startup.userData.getCourses().length > 0,
+    hasDownloadedExercises: startup.workspaceManager.getExercises().length > 0,
+  }
+}
+
 /**
- * Moves the walkthrough a window reload restored onto the student's next step, if it is open.
- * VS Code restores it on the step it last showed, which in a window TestMyCode reloaded into a
- * course workspace is usually one already done. This brings it to the front of its group.
+ * Moves the walkthrough onto the student's next step, if it is open. VS Code leaves it on the
+ * step it last showed, which after a step done outside it, or in a window TestMyCode reloaded
+ * into a course workspace, is usually one already done. This brings it to the front of its group.
+ *
+ * @param progress Read only when the walkthrough is to be shown.
+ * @param isOpenedIfClosed Opens it even when closed, for a window that replaced one showing it.
  */
-export async function showNextWalkthroughStep(progress: WalkthroughProgress): Promise<void> {
-  if (
-    !vscode.window.tabGroups.all.some((group) => group.tabs.some((tab) => isWalkthroughTab(tab)))
-  ) {
+export async function showNextWalkthroughStep(
+  progress: () => WalkthroughProgress,
+  { isOpenedIfClosed = false }: { isOpenedIfClosed?: boolean } = {},
+): Promise<void> {
+  if (!isOpenedIfClosed && !isWalkthroughOpen()) {
     return
   }
   await vscode.commands.executeCommand(
     "workbench.action.openWalkthrough",
     // VS Code prefixes the step with the walkthrough itself.
-    { category: WALKTHROUGH, step: nextWalkthroughStep(progress) },
+    { category: WALKTHROUGH, step: nextWalkthroughStep(progress()) },
     false,
   )
 }

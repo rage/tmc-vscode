@@ -527,6 +527,14 @@ suite("walkthrough", function () {
     expect(text).toMatch(/exercise you download.*\*\*Yes\*\*/s)
     expect(text).not.toMatch(/covers all your courses/)
   })
+
+  test("the submit step does not promise unlimited tries", function () {
+    const root = path.join(__dirname, "..", "..", "..")
+    const step = packageJson().contributes.walkthroughs?.[0]?.steps.find((x) => x.id === "submit")
+    const text = fs.readFileSync(path.join(root, step?.media.markdown ?? ""), "utf8")
+    expect(text).not.toMatch(/as many times as you like/)
+    expect(text).toMatch(/limits how many tries/)
+  })
 })
 
 suite("registered command handlers", function () {

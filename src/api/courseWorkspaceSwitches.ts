@@ -5,9 +5,15 @@ const SWITCH_KEY = "courseWorkspaceSwitch"
 /** How long after a switch the window it opened still counts as opened by it. */
 const SWITCH_TTL_MS = 2 * 60 * 1000
 
-interface RecordedSwitch {
+interface RecordedSwitch extends CourseWorkspaceSwitch {
   workspaceFile: string
   switchedAt: number
+}
+
+/** What the window that switched leaves to the window it opens. */
+export interface CourseWorkspaceSwitch {
+  /** The switching window showed the walkthrough, which the switch closed. */
+  isWalkthroughOpen: boolean
 }
 
 /**
@@ -20,19 +26,23 @@ export class CourseWorkspaceSwitches {
     private readonly _now: () => number = Date.now,
   ) {}
 
-  public async record(workspaceFile: string): Promise<void> {
-    const recorded: RecordedSwitch = { workspaceFile, switchedAt: this._now() }
+  public async record(workspaceFile: string, state: CourseWorkspaceSwitch): Promise<void> {
+    const recorded: RecordedSwitch = {
+      workspaceFile,
+      switchedAt: this._now(),
+      isWalkthroughOpen: state.isWalkthroughOpen,
+    }
     await this._memento.update(SWITCH_KEY, recorded)
   }
 
   /**
-   * Whether a switch opened `workspaceFile` moments ago. Forgets that switch, and one too old to
-   * count; a switch to another file stays for the window that opens it.
+   * The switch that opened `workspaceFile` moments ago, if one did. Forgets that switch, and one
+   * too old to count; a switch to another file stays for the window that opens it.
    */
-  public async take(workspaceFile: string | undefined): Promise<boolean> {
+  public async take(workspaceFile: string | undefined): Promise<CourseWorkspaceSwitch | undefined> {
     const recorded = this._memento.get<RecordedSwitch>(SWITCH_KEY)
     if (!recorded) {
-      return false
+      return undefined
     }
     const isExpired = this._now() - recorded.switchedAt > SWITCH_TTL_MS
     const isThisWindow = recorded.workspaceFile === workspaceFile
@@ -40,5 +50,7 @@ export class CourseWorkspaceSwitches {
       await this._memento.update(SWITCH_KEY, undefined)
     }
     return isThisWindow && !isExpired
+      ? { isWalkthroughOpen: recorded.isWalkthroughOpen === true }
+      : undefined
   }
 }

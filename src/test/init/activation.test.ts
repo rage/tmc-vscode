@@ -18,6 +18,7 @@ import { CorruptStoredDataError } from "../../errors"
 import { activate } from "../../extension"
 import { COURSES_VIEW_ID } from "../../ui/treeview/treeview"
 import { Logger, LogLevel } from "../../utilities"
+import { WALKTHROUGH } from "../../window/walkthrough"
 import { createMockMemento } from "../mocks/vscode"
 
 const recorded = vi.hoisted(() => ({
@@ -751,7 +752,9 @@ suite("the startup course refresh", function () {
   test("offers nothing in a window another one has just switched to", async function () {
     const context = createContext()
     const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
-    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo)
+    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
+      isWalkthroughOpen: false,
+    })
     Object.defineProperty(vscode.workspace, "workspaceFile", {
       value: vscode.Uri.file(switchedTo),
       configurable: true,
@@ -783,7 +786,9 @@ suite("the Courses view on startup", function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     const context = createContext()
     const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
-    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo)
+    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
+      isWalkthroughOpen: false,
+    })
     Object.defineProperty(vscode.workspace, "workspaceFile", {
       value: vscode.Uri.file(switchedTo),
       configurable: true,
@@ -798,6 +803,35 @@ suite("the Courses view on startup", function () {
     }
 
     expect(executeCommand).toHaveBeenCalledWith(`${COURSES_VIEW_ID}.focus`)
+  })
+
+  test("reopens the walkthrough the switching window showed", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const context = createContext()
+    const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
+    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
+      isWalkthroughOpen: true,
+    })
+    Object.defineProperty(vscode.workspace, "workspaceFile", {
+      value: vscode.Uri.file(switchedTo),
+      configurable: true,
+    })
+    try {
+      await activate(context)
+    } finally {
+      Object.defineProperty(vscode.workspace, "workspaceFile", {
+        value: undefined,
+        configurable: true,
+      })
+    }
+
+    await vi.waitFor(() =>
+      expect(executeCommand).toHaveBeenCalledWith(
+        "workbench.action.openWalkthrough",
+        expect.objectContaining({ category: WALKTHROUGH }),
+        false,
+      ),
+    )
   })
 
   test("is left to VS Code in any other window", async function () {

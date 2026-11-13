@@ -12,6 +12,7 @@ import {
   ServerError,
 } from "../errors"
 import { Logger, openWebLink } from "../utilities"
+import { showNextWalkthroughStep, walkthroughProgressOf } from "../window/walkthrough"
 import { refreshEverything } from "./refreshEverything"
 
 const SITE = backendName("mooc")
@@ -98,6 +99,11 @@ export async function login(actionContext: ReadyActionContext): Promise<LoginOut
   }
 
   dialog.statusMessage(`Logged in to ${SITE}.`)
+  // Before the course pick, which an editor opening after it would close.
+  await showNextWalkthroughStep(() => ({
+    ...walkthroughProgressOf(actionContext),
+    isLoggedIn: true,
+  })).catch((e) => Logger.warn("Could not show the next walkthrough step", e))
   // A login that restores an expired session finds the user's courses still added.
   if (actionContext.startup.userData.getCourses().length === 0) {
     void vscode.commands.executeCommand("tmc.addNewCourse")

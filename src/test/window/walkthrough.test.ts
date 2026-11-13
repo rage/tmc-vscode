@@ -42,7 +42,7 @@ suite("walkthrough", function () {
   test("moves a restored walkthrough tab onto the next step, even behind another", async function () {
     openTabs({ label: "Welcome", input: undefined }, { label: "Python Course", input: {} })
 
-    await showNextWalkthroughStep(done)
+    await showNextWalkthroughStep(() => done)
 
     expect(executeCommand).toHaveBeenCalledExactlyOnceWith(
       "workbench.action.openWalkthrough",
@@ -54,9 +54,23 @@ suite("walkthrough", function () {
   test("opens nothing when the walkthrough is not open", async function () {
     openTabs({ label: "main.py", input: { uri: vscode.Uri.file("/main.py") } })
 
-    await showNextWalkthroughStep(done)
+    await showNextWalkthroughStep(() => done)
 
     expect(executeCommand).not.toHaveBeenCalled()
+  })
+
+  test("opens a closed walkthrough on the next step when asked to", async function () {
+    openTabs({ label: "main.py", input: { uri: vscode.Uri.file("/main.py") } })
+
+    await showNextWalkthroughStep(() => ({ ...done, hasDownloadedExercises: false }), {
+      isOpenedIfClosed: true,
+    })
+
+    expect(executeCommand).toHaveBeenCalledExactlyOnceWith(
+      "workbench.action.openWalkthrough",
+      { category: WALKTHROUGH, step: "openExercises" },
+      false,
+    )
   })
 
   test("says whether the walkthrough is the active tab, as the tabs change", function () {
