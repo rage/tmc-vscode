@@ -16,6 +16,7 @@ import {
   DeviceLoginExpiredError,
   ServerError,
 } from "../../errors"
+import { Logger } from "../../utilities"
 import { tmcLocalCourse } from "../fixtures/courses"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -208,6 +209,17 @@ suite("login command", function () {
     expect(h.logins[0]?.interrupt).not.toHaveBeenCalled()
     h.logins[0]?.finish(Ok(undefined))
     expect(await outcome).toBe("loggedIn")
+  })
+
+  test("a browser that does not open logs the page without its user code", async function () {
+    const warn = vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    onTestFinished(() => warn.mockRestore())
+    const h = harness()
+    h.openExternal.mockResolvedValue(false)
+    await runToCode(h)
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
+
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("WXYZ-1234")
   })
 
   test("never opens a verification page that is not http(s)", async function () {

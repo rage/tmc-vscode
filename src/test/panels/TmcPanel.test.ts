@@ -20,6 +20,7 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
 import {
   BottleneckError,
+  CliVerificationError,
   InitializationError,
   presentationFor,
   RateLimitedError,
@@ -186,7 +187,7 @@ suite("TmcPanel initialization guards", () => {
 })
 
 suite("initializationErrorHelpPanel", () => {
-  test("lists each failed service, named for the student, with the CLI hint on tmc-langs", () => {
+  test("lists each failed service, named for the student, with the CLI hint on the tools", () => {
     const actionContext = createDegradedContext({
       failures: {
         userData: new Error("corrupt user data"),
@@ -199,7 +200,7 @@ suite("initializationErrorHelpPanel", () => {
 
     expect(panel.failures).toEqual([
       {
-        service: "tmc-langs",
+        service: "the TestMyCode tools",
         error: "langs offline",
         stack: expect.any(String),
         hint: expect.stringContaining(`${path.sep}cli'`),
@@ -213,6 +214,23 @@ suite("initializationErrorHelpPanel", () => {
     const panel = initializationErrorHelpPanel(createMockActionContext(), createMockContext())
 
     expect(panel.failures).toEqual([])
+  })
+
+  test("leads the hint for a damaged CLI with the file, then the network advice", () => {
+    const actionContext = createDegradedContext({
+      failures: {
+        langs: new CliVerificationError(
+          "/storage/cli/tmc-langs-cli",
+          new Error("fetch failed"),
+          "",
+        ),
+      },
+    })
+
+    const [failure] = initializationErrorHelpPanel(actionContext, createMockContext()).failures
+
+    expect(failure?.hint).toMatch(/^The file '\/storage\/cli\/tmc-langs-cli' may be damaged/)
+    expect(failure?.hint).toContain("proxy, firewall or antivirus")
   })
 
   test("folds a failure's cause into the message", () => {

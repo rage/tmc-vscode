@@ -6,7 +6,7 @@ import * as fs from "fs-extra"
 import * as tmp from "tmp"
 
 import type Dialog from "../../api/dialog"
-import { InitializationError } from "../../errors"
+import { CliVerificationError, InitializationError } from "../../errors"
 import {
   ensureLangsUpdated,
   parseSha256Sum,
@@ -386,6 +386,29 @@ suite("ensureLangsUpdated end-to-end", function () {
     })
 
     expect(result.err).toBe(true)
+  })
+
+  test("a damaged CLI on disk that cannot be downloaded again names the file", async function () {
+    const folder = path.join(tmpDir.name, "cli")
+    const cliPath = path.join(folder, executable)
+    fs.outputFileSync(cliPath, "overwritten bytes")
+    fs.outputFileSync(cliPath + ".sha256", sha256(Buffer.from("original bytes")))
+    const dead = await startLangsServer({
+      cli: Buffer.alloc(0),
+      shaFor: () => "",
+      hits: { cli: 0, sha: 0 },
+    })
+    const deadUrl = serverUrl(dead)
+    await new Promise<void>((resolve) => {
+      dead.close(() => resolve())
+    })
+    const [dialog] = createDialogMock()
+
+    const result = await ensureLangsUpdated(folder, dialog, { downloadUrl: deadUrl, version })
+
+    expect(result.val).toBeInstanceOf(CliVerificationError)
+    expect(result.val).toMatchObject({ cliPath })
+    expect((result.val as Error).message).toMatch(/^The TestMyCode tools on this computer failed/)
   })
 
   test("a valid cache with an uppercase checksum is accepted without any download", async function () {

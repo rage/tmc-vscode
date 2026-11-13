@@ -125,15 +125,21 @@ export class BaseError extends Error {
     if (this.path) {
       errorMessage += `@${this.path} `
     }
-    errorMessage += `${this.name}: ${this.message}.`
+    errorMessage += `${this.name}: ${asSentence(this.message)}`
     if (this.details) {
-      errorMessage += ` ${this.details}.`
+      errorMessage += ` ${asSentence(this.details)}`
     }
     if (this.cause) {
-      errorMessage += ` Caused by: ${this.cause}.`
+      errorMessage += ` Caused by: ${asSentence(String(this.cause))}`
     }
     return errorMessage
   }
+}
+
+/** `text`, trimmed, ending in a full stop unless it already ends in punctuation. */
+export function asSentence(text: string): string {
+  const trimmed = text.trim()
+  return trimmed === "" || /[.!?…]$/.test(trimmed) ? trimmed : `${trimmed}.`
 }
 
 /** `thrown` as an `Error`: itself if it is one, else an `Error` with it as the message. */

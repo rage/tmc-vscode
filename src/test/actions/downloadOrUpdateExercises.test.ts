@@ -229,7 +229,7 @@ suite("downloadOrUpdateExercises action", function () {
       {
         headline: "Failed to download 2 exercises: hello_world, other_world.",
         error: expect.objectContaining({
-          message: "Show Logs has the details.",
+          message: "The download did not complete.",
           details: "checksum mismatch",
         }),
       },

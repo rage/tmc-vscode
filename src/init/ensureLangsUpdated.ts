@@ -6,7 +6,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 
 import type Dialog from "../api/dialog"
-import { FileSystemError, InitializationError } from "../errors"
+import { CliVerificationError, FileSystemError, InitializationError } from "../errors"
 import { downloadFile, getLangsCLIForPlatform, getPlatform, Logger, sleep } from "../utilities"
 
 /** Extra attempts after the first, for the one download too large to redo cheaply. */
@@ -174,7 +174,8 @@ async function ensureLangsUpdated(
     )
     if (result.err) {
       return Err(
-        new InitializationError(
+        new CliVerificationError(
+          cliPath,
           result.val,
           `Mismatch found between ${checksumMismatchDetails(initial, cliPath, cliUrl, shaPath, shaUrl)}, failed during retry`,
         ),

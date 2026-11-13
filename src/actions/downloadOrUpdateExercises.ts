@@ -366,7 +366,7 @@ function failureCause(failedLegs: Error[], exerciseReasons: string[][]): Error {
       details,
     )
   }
-  return new ExerciseUpdateError("Show Logs has the details.", details)
+  return new ExerciseUpdateError("The download did not complete.", details)
 }
 
 function sortResults(exerciseIds: ExerciseIdentifier[], succeeded: Set<string>): DownloadResults {

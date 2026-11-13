@@ -16,6 +16,7 @@ import { ExerciseStatus } from "../../api/workspaceManager"
 import {
   AiUseRefusedError,
   BottleneckError,
+  RuntimeError,
   SHOW_AI_USE_PROBLEM_COMMAND,
   TRUST_COURSE_WORKSPACE_COMMAND,
   WorkspaceUntrustedError,
@@ -385,6 +386,48 @@ suite("ExerciseTestController", function () {
     expect(reported?.[0]).toBe("errored")
     expect(messagesOf(reported)[0]?.message).toBe(
       "The tests could not be run: No Python found\n\npython3: not found",
+    )
+  })
+
+  test("a broken exercise leads with the CLI's deepest cause and suggests a reset", async function () {
+    const trace = [
+      "Caused by: Failed to run tests for exercise at /ex",
+      "Caused by: Failed to deserialize YAML from file at /ex/.tmcproject.yml",
+      "Caused by: mapping values are not allowed in this context at line 1 column 9",
+    ].join("\n")
+    const s = setup({
+      run: Err(new RuntimeError("Failed to run tests for exercise at /ex", trace)),
+    })
+
+    await s.controller.runExercise(exerciseAt(s))
+
+    const reported = finalStates(lastRun(s)).get(itemOf(s, exerciseAt(s)).id)
+    expect(messagesOf(reported)[0]?.message).toBe(
+      [
+        "The tests could not be run: mapping values are not allowed in this context at line 1 column 9.",
+        "Failed to deserialize YAML from file at /ex/.tmcproject.yml.",
+        "Failed to run tests for exercise at /ex.",
+        "If the exercise's files are damaged or incomplete, Reset Exercise restores its template.",
+        "",
+        trace,
+      ].join("\n"),
+    )
+  })
+
+  test("an exercise missing its tests is said to be missing files", async function () {
+    const trace = [
+      "Caused by: Failed to run tests for exercise at /ex",
+      "Caused by: No matching plugin found for /ex",
+    ].join("\n")
+    const s = setup({
+      run: Err(new RuntimeError("Failed to run tests for exercise at /ex", trace)),
+    })
+
+    await s.controller.runExercise(exerciseAt(s))
+
+    const reported = finalStates(lastRun(s)).get(itemOf(s, exerciseAt(s)).id)
+    expect(messagesOf(reported)[0]?.message).toMatch(
+      /^The tests could not be run: TestMyCode cannot tell what kind of exercise this is: files it needs, such as the test folder, are missing\.\nFailed to run tests for exercise at \/ex\.\nIf the exercise's files are damaged/,
     )
   })
 

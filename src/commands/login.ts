@@ -11,7 +11,7 @@ import {
   presentationFor,
   ServerError,
 } from "../errors"
-import { Logger, openWebLink } from "../utilities"
+import { Logger, openWebLink, redactUrlQuery } from "../utilities"
 import { refreshEverything } from "./refreshEverything"
 
 const SITE = backendName("mooc")
@@ -144,7 +144,7 @@ async function offerCode(info: MoocDeviceLogin, ended: Promise<unknown>): Promis
  */
 async function openInBrowser(url: string): Promise<void> {
   if (!(await openWebLink(url))) {
-    Logger.warn(`Could not open ${url} in a browser`)
+    Logger.warn(`Could not open ${redactUrlQuery(url)} in a browser`)
   }
 }
 
