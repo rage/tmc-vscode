@@ -240,7 +240,7 @@ async function activateInner(
   }
 
   const authState = createAuthState(langs)
-  authState.subscribe((loggedIn) => coursesTree.setLoggedIn(loggedIn))
+  authState.subscribe(() => coursesTree.setAccount(authState))
   context.subscriptions.push(trackWalkthroughActive())
   // Awaited only after the migration: it can refresh a token over the network, and nothing
   // before needs its answer.
@@ -311,13 +311,11 @@ async function activateInner(
   context.subscriptions.push({ dispose: () => setMaintenancePollArmed(false) })
   authState.subscribe(setMaintenancePollArmed)
 
-  // Created once the commands it runs are registered, which is after the listeners below.
-  let accountStatus: AccountStatusBarItem | undefined
   // `tmc.showMoocLogin` exists only once a ready activation has registered it.
   let canOfferLogin = false
 
   const sessionExpiredWarning = (): void => {
-    accountStatus?.markSessionExpired()
+    authState.markSessionExpired()
     const logIn: NotificationButton = [
       "Log In",
       (): void => void vscode.commands.executeCommand("tmc.showMoocLogin"),
@@ -489,9 +487,8 @@ async function activateInner(
   )
   if (readyContext) {
     init.registerSettingsCallbacks(readyContext)
-    const account = new AccountStatusBarItem(authState.loggedIn)
-    authState.subscribe((loggedIn) => account.setLoggedIn(loggedIn))
-    accountStatus = account
+    const account = new AccountStatusBarItem(authState)
+    authState.subscribe(() => account.update(authState))
     const moocAccount = new MoocAuthenticationProvider({
       isLoggedIn: () => authState.loggedIn,
       login: async () => (await login(readyContext)) === "loggedIn",

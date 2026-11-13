@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/svelte"
 import { tick } from "svelte"
 
 import type { CourseDetailsPanel, CourseHomeView } from "../../../shared/lib"
-import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind, SESSION_EXPIRED_DETAIL } from "../../../shared/lib"
 import { courseHomeExercise, courseHomeView, MOOC_INSTANCE_ID } from "../test/fixtures"
 import {
   dispatchToWebview as dispatch,
@@ -403,6 +403,19 @@ suite("the course home", () => {
     expect(postedMessages).toHaveBeenCalledWith({
       type: "openLinkInBrowser",
       url: "https://courses.example/org/o/courses/c",
+    })
+  })
+
+  test("names an expired session as the account status bar item does, with Log In", async () => {
+    await renderHome(courseHomeView({ isLoggedIn: false, isSessionExpired: true }))
+
+    const notices = screen.getByRole("list", { name: "Course notices" })
+    expect(notices).toHaveTextContent(`Session expired ${SESSION_EXPIRED_DETAIL}`)
+    expect(notices).not.toHaveTextContent("Not logged in")
+    within(notices).getByRole("button", { name: "Log In" }).click()
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "runCommand",
+      command: "tmc.showMoocLogin",
     })
   })
 

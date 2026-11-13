@@ -24,7 +24,14 @@ export interface AuthState {
   refresh: (options?: { timeout: number }) => Promise<Result<boolean, Error>>
   /** Records what a login or logout just did to the session. */
   set: (loggedIn: boolean) => Promise<void>
-  /** Called whenever {@link loggedIn} changes, after the change is applied. */
+  /**
+   * A session this run had ended without a logout. Stays set until the next login: a later
+   * check finding no session is the same expiry, not a logout.
+   */
+  readonly isSessionExpired: boolean
+  /** Records that the session ended without the user logging out. */
+  markSessionExpired: () => void
+  /** Called whenever {@link loggedIn} or {@link isSessionExpired} changes, once applied. */
   subscribe: (listener: (loggedIn: boolean) => void) => void
   /**
    * The backends whose refusal of the session the user has been told about: courses.mooc.fi
@@ -41,17 +48,29 @@ export interface AuthState {
  */
 export function createAuthState(langs: Result<Langs, Error>): AuthState {
   let loggedIn = false
+  let isSessionExpired = false
   let applied: boolean | undefined
+  let appliedExpiry = false
   let checking: Promise<Result<boolean, Error>> | undefined
   const listeners: ((loggedIn: boolean) => void)[] = []
 
+  const notify = (): void => {
+    appliedExpiry = isSessionExpired
+    for (const listener of listeners) {
+      listener(loggedIn)
+    }
+  }
+
   const apply = async (): Promise<void> => {
+    if (loggedIn) {
+      isSessionExpired = false
+    }
     if (loggedIn !== applied) {
       applied = loggedIn
       await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", loggedIn)
-      for (const listener of listeners) {
-        listener(loggedIn)
-      }
+      notify()
+    } else if (isSessionExpired !== appliedExpiry) {
+      notify()
     }
   }
 
@@ -82,6 +101,15 @@ export function createAuthState(langs: Result<Langs, Error>): AuthState {
     async set(value): Promise<void> {
       loggedIn = value
       await apply()
+    },
+    get isSessionExpired(): boolean {
+      return isSessionExpired
+    },
+    markSessionExpired(): void {
+      if (!isSessionExpired) {
+        isSessionExpired = true
+        notify()
+      }
     },
     subscribe(listener): void {
       listeners.push(listener)

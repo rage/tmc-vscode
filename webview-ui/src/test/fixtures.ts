@@ -128,6 +128,7 @@ export function courseHomeView(overrides: Partial<CourseHomeView> = {}): CourseH
     isNotEnrolled: false,
     isOffline: false,
     isLoggedIn: true,
+    isSessionExpired: false,
     isWorkspaceOpen: false,
     isRestricted: false,
     newExercises: [],

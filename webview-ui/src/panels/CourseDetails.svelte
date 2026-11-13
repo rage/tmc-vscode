@@ -10,7 +10,7 @@
     RunnableCommand,
     WebviewError,
   } from "../../../shared/lib"
-  import { backendName, SOFT_DEADLINE_PENALTY } from "../../../shared/lib"
+  import { backendName, SESSION_EXPIRED_DETAIL, SOFT_DEADLINE_PENALTY } from "../../../shared/lib"
   import type { BarAction } from "../components/ActionBar.svelte"
   import ActionBar from "../components/ActionBar.svelte"
   import ActionMenu from "../components/ActionMenu.svelte"
@@ -196,13 +196,21 @@
         detail: "Trust this course workspace to run tests, submit and share exercises.",
         action: { label: "Trust", onclick: () => runCommand("tmc.trustCourseWorkspace") },
       },
-      !view.isLoggedIn && {
-        key: "loggedOut",
-        tone: "info",
-        title: "Not logged in",
-        detail: `Log in to ${backendName("mooc")} to download and submit exercises.`,
+      view.isSessionExpired && {
+        key: "sessionExpired",
+        tone: "warning",
+        title: "Session expired",
+        detail: SESSION_EXPIRED_DETAIL,
         action: { label: "Log In", onclick: () => runCommand("tmc.showMoocLogin") },
       },
+      !view.isLoggedIn &&
+        !view.isSessionExpired && {
+          key: "loggedOut",
+          tone: "info",
+          title: "Not logged in",
+          detail: `Log in to ${backendName("mooc")} to download and submit exercises.`,
+          action: { label: "Log In", onclick: () => runCommand("tmc.showMoocLogin") },
+        },
       view.isLoggedIn &&
         view.isOffline && {
           key: "offline",

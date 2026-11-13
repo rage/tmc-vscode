@@ -335,7 +335,18 @@ suite("buildCourseHomeView", function () {
       NOW,
     ).unwrap()
 
-    expect([view.isOffline, view.isLoggedIn]).toEqual([true, false])
+    expect([view.isOffline, view.isLoggedIn, view.isSessionExpired]).toEqual([true, false, false])
+  })
+
+  test("carries that the session expired", function () {
+    const context = contextFor(tmcLocalCourse(), { isLoggedIn: false })
+    const view = buildCourseHomeView(
+      { ...context, authState: { ...context.authState, isSessionExpired: true } },
+      idOfTmcCourse(42),
+      NOW,
+    ).unwrap()
+
+    expect(view.isSessionExpired).toBe(true)
   })
 
   test("fails for a course that is not stored", function () {

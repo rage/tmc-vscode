@@ -91,6 +91,7 @@ export function buildCourseHomeView(
     isNotEnrolled: LocalCourseData.isNotEnrolled(course),
     isOffline: !actionContext.coursesTree.isBackendReachable(course.kind),
     isLoggedIn: actionContext.authState.loggedIn,
+    isSessionExpired: actionContext.authState.isSessionExpired,
     isWorkspaceOpen,
     isRestricted: isWorkspaceOpen && !vscode.workspace.isTrusted,
     ...(nextExercise ? { nextExercise: { id: nextExercise.id, name: nextExercise.name } } : {}),

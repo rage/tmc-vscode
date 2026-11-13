@@ -129,7 +129,7 @@ vi.mock("../../ui/treeview/treeview", async (importOriginal) => ({
     public setSource = (): void => {
       recorded.isCourseViewFilled = true
     }
-    public setLoggedIn = (loggedIn: boolean): void => {
+    public setAccount = ({ loggedIn }: { loggedIn: boolean }): void => {
       recorded.treeLoggedIn.push(loggedIn)
     }
     public setRestricted = (): void => {}

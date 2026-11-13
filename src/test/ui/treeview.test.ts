@@ -7,7 +7,7 @@ import type {
   SharedTmcCourseData,
   SharedTmcCourseExercise,
 } from "../../../shared/lib"
-import { makeTmcKind } from "../../../shared/lib"
+import { makeTmcKind, SESSION_EXPIRED_DETAIL } from "../../../shared/lib"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { downloadFailures } from "../../ui/downloadFailures"
@@ -135,7 +135,7 @@ suite("CoursesTree", function () {
 
   function show(...shown: LocalCourseData[]): CoursesTreeItem[] {
     courses = shown
-    tree.setLoggedIn(true)
+    tree.setAccount({ loggedIn: true, isSessionExpired: false })
     tree.setSource(source())
     settle()
     return tree
@@ -190,7 +190,7 @@ suite("CoursesTree", function () {
   test("keeps listing the courses logged out, and says what logging in adds", function () {
     courses = [tmcCourse()]
     tree.setSource(source())
-    tree.setLoggedIn(false)
+    tree.setAccount({ loggedIn: false, isSessionExpired: false })
     settle()
 
     expect(tree.getChildren()).toHaveLength(1)
@@ -198,9 +198,20 @@ suite("CoursesTree", function () {
       "Log in to courses.mooc.fi to download and submit exercises. The exercises on this computer still open and run their tests.",
     )
 
-    tree.setLoggedIn(true)
+    tree.setAccount({ loggedIn: true, isSessionExpired: false })
     settle()
     expect(view.message).toBe("")
+  })
+
+  test("says a session expired in the account status bar item's words", function () {
+    courses = [tmcCourse()]
+    tree.setSource(source())
+    tree.setAccount({ loggedIn: false, isSessionExpired: true })
+    settle()
+
+    expect(view.message).toBe(
+      `${SESSION_EXPIRED_DETAIL} The exercises on this computer still open and run their tests.`,
+    )
   })
 
   test("lists the courses as roots, read afresh on every refresh", function () {
@@ -614,7 +625,7 @@ suite("CoursesTree", function () {
 
   test("does not redraw the rows VS Code has already fetched", function () {
     courses = [tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] })]
-    tree.setLoggedIn(true)
+    tree.setAccount({ loggedIn: true, isSessionExpired: false })
     const refreshed: unknown[] = []
     tree.onDidChangeTreeData((node) => refreshed.push(node))
 
