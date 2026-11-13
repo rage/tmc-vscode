@@ -182,11 +182,10 @@ export default class Dialog {
    *
    * Everything else confirms with {@link confirm}: typing is friction only data loss earns.
    *
-   * @returns Whether the user typed `word`, ignoring case. Escape says no.
+   * @returns Whether the user typed `word`, in its case. Escape says no.
    */
   public async explicitConfirmation(prompt: string, word = "Yes"): Promise<boolean> {
-    const matches = (value: string): boolean =>
-      value.trim().toLocaleLowerCase() === word.toLocaleLowerCase()
+    const matches = (value: string): boolean => value.trim() === word
     const typed = await vscode.window.showInputBox({
       prompt,
       placeHolder: `Type ${word} to confirm, or press Escape to cancel`,

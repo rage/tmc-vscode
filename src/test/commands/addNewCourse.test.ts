@@ -11,6 +11,7 @@ import { addNewCourse } from "../../commands/addNewCourse"
 import { MOOC_BACKEND_URL } from "../../config/constants"
 import type { UserData } from "../../config/userdata"
 import { openWebLink } from "../../utilities/webLink"
+import { tmcLocalCourse } from "../fixtures/courses"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -229,6 +230,37 @@ suite("Add New Course command", function () {
     expect(context.dialog.notification).not.toHaveBeenCalled()
     expect(executeCommand).toHaveBeenCalledWith("tmc.courseDetails", courseId)
     expect(quickPick.isDisposed).toBe(true)
+  })
+
+  test("moves an open walkthrough on, behind the course home it opens", async function () {
+    const initialTabGroups = vscode.window.tabGroups
+    Object.defineProperty(vscode.window, "tabGroups", {
+      value: { all: [{ tabs: [{ label: "Welcome", input: undefined }] }] },
+      configurable: true,
+    })
+    try {
+      const { context, quickPick, done } = harness({ addedCourses: [tmcLocalCourse()] })
+      vi.mocked(context.startup.workspaceManager.getExercises).mockReturnValue([])
+      await flush()
+
+      quickPick.accept("Shared Slug Course")
+      await done
+    } finally {
+      Object.defineProperty(vscode.window, "tabGroups", {
+        value: initialTabGroups,
+        configurable: true,
+      })
+    }
+
+    const commands = executeCommand.mock.calls.map((call: unknown[]) => call[0])
+    expect(executeCommand).toHaveBeenCalledWith(
+      "workbench.action.openWalkthrough",
+      expect.objectContaining({ step: "openExercises" }),
+      false,
+    )
+    expect(commands.indexOf("workbench.action.openWalkthrough")).toBeLessThan(
+      commands.indexOf("tmc.courseDetails"),
+    )
   })
 
   test("adds a tmc course from its organization's step, which Back leaves", async function () {

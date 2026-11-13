@@ -427,18 +427,22 @@ suite("Dialog.explicitConfirmation", function () {
     vi.restoreAllMocks()
   })
 
-  test("accepts the word in any case and explains a wrong entry instead of cancelling", async function () {
+  test("accepts only the word as written and explains a wrong entry instead of cancelling", async function () {
     let validate: ((value: string) => unknown) | undefined
+    let typed = "DELETE"
     vi.spyOn(vscode.window, "showInputBox").mockImplementation((async (
       options: vscode.InputBoxOptions,
     ) => {
       validate = options.validateInput as (value: string) => unknown
-      return "delete"
+      return typed
     }) as never)
 
     expect(await new Dialog().explicitConfirmation("Type DELETE", "DELETE")).toBe(true)
-    expect(validate?.("delet")).toBe("Type DELETE to confirm.")
+    expect(validate?.("delete")).toBe("Type DELETE to confirm.")
     expect(validate?.("DELETE")).toBeUndefined()
+
+    typed = "delete"
+    expect(await new Dialog().explicitConfirmation("Type DELETE", "DELETE")).toBe(false)
   })
 
   test("reads Escape as no", async function () {

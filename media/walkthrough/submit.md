@@ -4,4 +4,4 @@
 
 The result opens beside your code, and your points update in the Courses view and the status bar.
 
-You can submit as many times as you like. **Download Old Submission** brings back any earlier one.
+You can submit again after improving your code, unless the exercise limits how many tries you have; the Courses view shows when you have none left. **Download Old Submission** brings back any earlier submission.

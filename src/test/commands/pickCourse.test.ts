@@ -23,6 +23,7 @@ const courses = [
 function contextWith(
   courseList: LocalCourseData[],
   openCourse?: { slug: string; backend: string },
+  loggedIn = true,
 ): [ReadyActionContext, ReturnType<typeof createDialogMock>[0]] {
   const [dialog] = createDialogMock()
   const workspaceManager = {
@@ -32,6 +33,7 @@ function contextWith(
   return [
     {
       ...createMockActionContext({
+        loggedIn,
         startup: { userData: { getCourses: () => courseList } as UserData, workspaceManager },
       }),
       dialog,
@@ -61,6 +63,23 @@ suite("pickCourse", function () {
     expect(message).toBe("No courses added yet.")
     await button?.[1]()
     expect(executeCommand).toHaveBeenCalledWith("tmc.addNewCourse")
+  })
+
+  test("offers a login rather than a course pick that needs one, logged out", async function () {
+    const [context, dialog] = contextWith([], undefined, false)
+    const notification = vi.fn(
+      async (_message: string, ..._items: NotificationButton[]) => undefined,
+    )
+    dialog.notification = notification
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await pickCourse(context, { title: "Title", placeHolder: "Pick one" })
+
+    const [message, button] = notification.mock.calls[0] ?? []
+    expect(message).toBe("No courses added yet.")
+    expect(button?.[0]).toBe("Log In")
+    await button?.[1]()
+    expect(executeCommand).toHaveBeenCalledWith("tmc.showMoocLogin")
   })
 
   test("prompts among the user's courses, labelled by title and backend", async function () {

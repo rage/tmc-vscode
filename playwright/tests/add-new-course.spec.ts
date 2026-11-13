@@ -36,7 +36,7 @@ vsCodeTest("can add new course", async ({ page, webview }) => {
       await courseHome.openExercise("01_passing_exercise")
       await expect(page.getByRole("tab", { name: /passing_exercise\.py/ })).toBeVisible()
       await courseHome.reveal("Python Course")
-      await courseHome.expectState("01_passing_exercise", "In workspace")
+      await courseHome.expectState("01_passing_exercise", "Downloaded")
       await expect(courseHome.row("02_failing_exercise")).toContainText("Not downloaded")
     },
   )

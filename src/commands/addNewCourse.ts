@@ -15,6 +15,7 @@ import { separator } from "../api/dialog"
 import { withOperation } from "../api/withOperation"
 import { MOOC_BACKEND_URL } from "../config/constants"
 import { Logger, openWebLink } from "../utilities"
+import { showNextWalkthroughStep, walkthroughProgressOf } from "../window/walkthrough"
 
 const TITLE = "Add Course"
 
@@ -97,6 +98,10 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
     () => actions.addNewCourse(actionContext, chosen.organizationSlug, chosen.courseId),
   )
   if (added.ok) {
+    // Behind the course home, which opens next.
+    await showNextWalkthroughStep(() => walkthroughProgressOf(actionContext)).catch((e) =>
+      Logger.warn("Could not show the next walkthrough step", e),
+    )
     await vscode.commands.executeCommand("tmc.courseDetails", chosen.courseId)
   }
 }

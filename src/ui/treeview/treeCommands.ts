@@ -17,7 +17,7 @@ import type { ReadyActionContext } from "../../actions/types"
 import { withOperation } from "../../api/withOperation"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { downloadUpdates } from "../../commands/updateExercises"
-import { countOf } from "../../utilities"
+import { countOf, openWebLink } from "../../utilities"
 import { showExerciseSourceFile } from "../exerciseSourceFile"
 import { updateablesRegistry } from "../updateablesRegistry"
 import type { CoursesTreeItem, CoursesViewRow } from "./treeview"
@@ -68,16 +68,18 @@ export async function downloadExercises(
 }
 
 /**
- * Opens the exercises among `rows`, and under them, downloading any that are not on disk. A
- * single exercise row also gets its main source file shown, which is what clicking one does.
+ * Opens the exercises among `rows`, and under them, downloading any that are not on disk; a
+ * removed exercise opens only from disk. A single exercise row also gets its main source file
+ * shown, which is what clicking one does.
  */
 export async function openExercises(
   actionContext: ReadyActionContext,
   rows: CoursesTreeItem[],
 ): Promise<void> {
-  const selected = byCourse(
-    rows,
-    (item) => item.status !== "opened" && item.status !== "downloading",
+  const selected = byCourse(rows, (item) =>
+    item.status === "removed"
+      ? item.onDiskStatus === ExerciseStatus.Closed
+      : item.status !== "opened" && item.status !== "downloading",
   )
   for (const { courseId, ids } of selected) {
     await openCourseExercises(actionContext, courseId, ids)
@@ -127,16 +129,23 @@ async function showSourceFileOfOnlyExercise(
   }
 }
 
-/** Closes the open exercises among `rows`, and under them. */
+/** Closes the open exercises among `rows`, and under them, removed ones included. */
 export async function closeExercises(
   actionContext: ReadyActionContext,
   rows: CoursesTreeItem[],
 ): Promise<void> {
-  for (const { courseId, ids } of byCourse(rows, (item) => item.status === "opened")) {
+  for (const { courseId, ids } of byCourse(rows, isOpenRow)) {
     await withOperation(actionContext.dialog, { failure: "Failed to close the exercises." }, () =>
       closeExercisesAction(actionContext, ids, courseId),
     )
   }
+}
+
+function isOpenRow(item: ExerciseTreeItem): boolean {
+  return (
+    item.status === "opened" ||
+    (item.status === "removed" && item.onDiskStatus === ExerciseStatus.Open)
+  )
 }
 
 /** Closes every open exercise of the course that has been passed. */
@@ -224,4 +233,11 @@ function byCourse(
     courses.set(courseKey, course)
   }
   return [...courses.values()].map(({ courseId, ids }) => ({ courseId, ids: [...ids.values()] }))
+}
+
+/** Opens the course material page an exercise row's exercise is on. */
+export async function openExerciseMaterial(row: CoursesTreeItem | undefined): Promise<void> {
+  if (row instanceof ExerciseTreeItem && row.materialUrl) {
+    await openWebLink(row.materialUrl)
+  }
 }
