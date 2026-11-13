@@ -57,6 +57,7 @@ import {
     zOutputData,
     zOutputResult,
     zPasteResult,
+    zPendingTeacherReview,
     zPublicSpec,
     zPythonVer,
     zRefreshData,
@@ -379,6 +380,13 @@ export type OutputResult = z.infer<typeof OutputResult>;
  */
 export const PasteResult = zPasteResult;
 export type PasteResult = z.infer<typeof PasteResult>;
+
+/**
+ * What a user's points on an exercise wait for when a teacher reviews answers before awarding
+ * points.
+ */
+export const PendingTeacherReview = zPendingTeacherReview;
+export type PendingTeacherReview = z.infer<typeof PendingTeacherReview>;
 
 export const PublicSpec = zPublicSpec;
 export type PublicSpec = z.infer<typeof PublicSpec>;

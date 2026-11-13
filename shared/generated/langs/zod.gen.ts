@@ -191,44 +191,6 @@ export const zExerciseStanding = z.union([
     z.literal('OutOfTries')
 ]);
 
-/**
- * The current user's progress on a single exercise. `standing` is the "passed" signal;
- * `completed` is only the activity stage, which any graded submission can reach.
- */
-export const zExerciseProgress = z.object({
-    attempted: z.boolean(),
-    completed: z.boolean(),
-    exercise_id: z.uuid(),
-    max_tries: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable().default(null),
-    score_given: z.number(),
-    score_maximum: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    standing: zExerciseStanding.nullable(),
-    tries_left: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable().default(null)
-});
-
-/**
- * A chapter of the course that opens later, with the user's progress on its exercises.
- */
-export const zClosedChapter = z.object({
-    chapter_number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    exercises: z.array(zExerciseProgress),
-    id: z.uuid(),
-    name: z.string(),
-    opens_at: z.string()
-});
-
-/**
- * The current user's progress across every exercise they can see in a course.
- * Course-level totals (awarded/available points, passed count, percentage) are
- * not sent separately; derive them by summing over `exercises`, guarding the
- * percentage against a zero total.
- */
-export const zCourseProgress = z.object({
-    closed_chapters: z.array(zClosedChapter).default([]),
-    course_id: z.uuid(),
-    exercises: z.array(zExerciseProgress)
-});
-
 export const zExerciseSubmission = z.object({
     all_tests_passed: z.boolean(),
     course_id: z.int().gte(0).max(4294967295, { error: 'Invalid value: Expected uint32 to be <= 4294967295' }),
@@ -314,32 +276,6 @@ export const zGradingTestRun = z.object({
     test_results: z.array(zGradingTestResult)
 });
 
-/**
- * A task submission's grading record.
- */
-export const zGrading = z.object({
-    exercise_progress: zExerciseProgress.nullable(),
-    feedback_text: z.string().nullable(),
-    grading_completed_at: z.string().nullable(),
-    grading_progress: zGradingProgress,
-    grading_started_at: z.string().nullable(),
-    score_given: z.number().nullable(),
-    test_results: zGradingTestRun.nullable()
-});
-
-/**
- * The grading status of a task submission, as polled after `submit`.
- */
-export const zExerciseTaskSubmissionStatus = z.union([
-    z.object({
-        status: z.literal('no-grading-yet')
-    }),
-    z.object({
-        grading: zGrading,
-        status: z.literal('grading')
-    })
-]);
-
 export const zKind = z.union([
     z.literal('generic'),
     z.literal('forbidden'),
@@ -361,7 +297,8 @@ export const zKind = z.union([
     z.literal('out-of-tries'),
     z.literal('chapter-not-open-yet'),
     z.literal('chapter-not-unlocked-yet'),
-    z.literal('chapter-completed-and-locked')
+    z.literal('chapter-completed-and-locked'),
+    z.literal('exercise-locked')
 ]);
 
 /**
@@ -533,6 +470,82 @@ export const zOutputResult = z.enum([
 export const zPasteResult = z.object({
     paste_url: z.string()
 });
+
+/**
+ * What a user's points on an exercise wait for when a teacher reviews answers before awarding
+ * points.
+ */
+export const zPendingTeacherReview = z.union([
+    z.literal('awaits_chapter_lock'),
+    z.literal('awaits_teacher'),
+    z.literal('unrecognized')
+]);
+
+/**
+ * The current user's progress on a single exercise. `standing` is the "passed" signal;
+ * `completed` is only the activity stage, which any graded submission can reach.
+ */
+export const zExerciseProgress = z.object({
+    attempted: z.boolean(),
+    completed: z.boolean(),
+    exercise_id: z.uuid(),
+    exercise_locked: z.boolean().default(false),
+    max_tries: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable().default(null),
+    pending_teacher_review: zPendingTeacherReview.nullable().default(null),
+    score_given: z.number(),
+    score_maximum: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    standing: zExerciseStanding.nullable(),
+    tries_left: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable().default(null)
+});
+
+/**
+ * A chapter of the course that opens later, with the user's progress on its exercises.
+ */
+export const zClosedChapter = z.object({
+    chapter_number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    exercises: z.array(zExerciseProgress),
+    id: z.uuid(),
+    name: z.string(),
+    opens_at: z.string()
+});
+
+/**
+ * The current user's progress across every exercise they can see in a course.
+ * Course-level totals (awarded/available points, passed count, percentage) are
+ * not sent separately; derive them by summing over `exercises`, guarding the
+ * percentage against a zero total.
+ */
+export const zCourseProgress = z.object({
+    closed_chapters: z.array(zClosedChapter).default([]),
+    course_id: z.uuid(),
+    exercises: z.array(zExerciseProgress)
+});
+
+/**
+ * A task submission's grading record.
+ */
+export const zGrading = z.object({
+    exercise_progress: zExerciseProgress.nullable(),
+    feedback_text: z.string().nullable(),
+    grading_completed_at: z.string().nullable(),
+    grading_progress: zGradingProgress,
+    grading_started_at: z.string().nullable(),
+    score_given: z.number().nullable(),
+    test_results: zGradingTestRun.nullable()
+});
+
+/**
+ * The grading status of a task submission, as polled after `submit`.
+ */
+export const zExerciseTaskSubmissionStatus = z.union([
+    z.object({
+        status: z.literal('no-grading-yet')
+    }),
+    z.object({
+        grading: zGrading,
+        status: z.literal('grading')
+    })
+]);
 
 export const zPublicSpec = z.object({
     archive_name: z.string(),

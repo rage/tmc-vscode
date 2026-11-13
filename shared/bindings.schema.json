@@ -1864,6 +1864,11 @@
           "type": "string",
           "format": "uuid"
         },
+        "exercise_locked": {
+          "description": "`true` once the exercise takes no more submissions from the user, whatever its chapter's\nlocking status says; a submit fails with the `exercise-locked` error kind.",
+          "type": "boolean",
+          "default": false
+        },
         "max_tries": {
           "description": "How many graded submissions the exercise accepts per slide; `None` when unlimited.",
           "type": [
@@ -1871,6 +1876,18 @@
             "null"
           ],
           "format": "int32",
+          "default": null
+        },
+        "pending_teacher_review": {
+          "description": "What the user's points wait for when a teacher must review their answer first. While set,\n`score_given` is `0.0` and `standing` is `Attempted`, even after a fully passing grading.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PendingTeacherReview"
+            },
+            {
+              "type": "null"
+            }
+          ],
           "default": null
         },
         "score_given": {
@@ -1912,7 +1929,9 @@
         "attempted",
         "standing",
         "max_tries",
-        "tries_left"
+        "tries_left",
+        "pending_teacher_review",
+        "exercise_locked"
       ]
     },
     "ExerciseSlideSubmissionListItem": {
@@ -1978,7 +1997,7 @@
           "const": "NotAttempted"
         },
         {
-          "description": "Below full points with tries left, or still being graded.",
+          "description": "Below full points with tries left, still being graded, or waiting for a teacher's review\n(`pending_teacher_review`).",
           "type": "string",
           "const": "Attempted"
         },
@@ -1988,7 +2007,7 @@
           "const": "Passed"
         },
         {
-          "description": "Below full points (0 included) with the try limit used up, so the score is final.",
+          "description": "Below full points (0 included), the try limit used up and no teacher review pending, so\nthe score is final.",
           "type": "string",
           "const": "OutOfTries"
         }
@@ -2448,6 +2467,11 @@
           "description": "The user completed and locked the exercise's chapter, which takes no more submissions\n(backend `message_key: \"chapter_completed_and_locked\"`, HTTP 403).",
           "type": "string",
           "const": "chapter-completed-and-locked"
+        },
+        {
+          "description": "The exercise takes no more submissions from the user, whatever its chapter's locking\nstatus says (backend `message_key: \"exercise_locked\"`, HTTP 403).",
+          "type": "string",
+          "const": "exercise-locked"
         }
       ]
     },
@@ -2864,6 +2888,26 @@
       },
       "required": [
         "paste_url"
+      ]
+    },
+    "PendingTeacherReview": {
+      "description": "What a user's points on an exercise wait for when a teacher reviews answers before awarding\npoints.",
+      "oneOf": [
+        {
+          "description": "The answer is graded, but its points come only after the user completes and locks the\nexercise's chapter and a teacher reviews the answer. Submitting stays possible until then.",
+          "type": "string",
+          "const": "awaits_chapter_lock"
+        },
+        {
+          "description": "The answer waits for a teacher's review, and the exercise is locked.",
+          "type": "string",
+          "const": "awaits_teacher"
+        },
+        {
+          "description": "A value newer than this client.",
+          "type": "string",
+          "const": "unrecognized"
+        }
       ]
     },
     "PublicSpec": {
