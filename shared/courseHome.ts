@@ -2,6 +2,7 @@ import { z } from "zod"
 
 import type { BackendKind } from "./enum"
 import { backendName, ExerciseIdentifierSchema } from "./enum"
+import { CourseAiPolicy } from "./generated/langs"
 
 /** What the account status bar item and the course home say of an expired session. */
 export const SESSION_EXPIRED_DETAIL = `Your ${backendName("mooc")} session has expired. Log in again to download and submit exercises.`
@@ -82,6 +83,8 @@ export const CourseHomeViewSchema = z.object({
   isNotEnrolled: z.boolean(),
   /** The backend did not answer the last refresh, so deadlines and points may be stale. */
   isOffline: z.boolean(),
+  /** courses.mooc.fi's AI-use policy and whether it allows AI; null on tmc.mooc.fi, which has none. */
+  aiPolicy: z.object({ policy: CourseAiPolicy, isAiAllowed: z.boolean() }).nullable(),
   isLoggedIn: z.boolean(),
   /** The session ended without a logout; see `AuthState.isSessionExpired`. */
   isSessionExpired: z.boolean(),

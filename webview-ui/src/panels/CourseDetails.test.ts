@@ -440,6 +440,19 @@ suite("the course home", () => {
     })
   })
 
+  test("states the course's AI policy and what it does to AI assistance", async () => {
+    await renderHome(courseHomeView({ aiPolicy: { policy: "no_ai", isAiAllowed: false } }))
+
+    expect(
+      screen.getByText(
+        (_, node) =>
+          node?.classList.contains("ai-policy") === true &&
+          node.textContent?.replaceAll(/\s+/g, " ").trim() ===
+            "AI use: AI may not be used at any point. TestMyCode turns AI assistance off in the course workspace.",
+      ),
+    ).toBeInTheDocument()
+  })
+
   test("shows no notices when there is nothing to say", async () => {
     await renderHome()
 

@@ -5,6 +5,7 @@ import * as vscode from "vscode"
 import type { CourseHomeView, DeadlineText } from "../../shared/lib"
 import { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
+import { isAiAllowed } from "../api/aiRestriction"
 import { findNextDateAfter, formatDateTime, formatRelativeTime } from "../utilities"
 import { recentUpdates } from "./recentUpdates"
 import {
@@ -90,6 +91,10 @@ export function buildCourseHomeView(
     isDisabled: LocalCourseData.isDisabled(course),
     isNotEnrolled: LocalCourseData.isNotEnrolled(course),
     isOffline: !actionContext.coursesTree.isBackendReachable(course.kind),
+    aiPolicy:
+      course.kind === "mooc"
+        ? { policy: course.data.aiPolicy, isAiAllowed: isAiAllowed(course) }
+        : null,
     isLoggedIn: actionContext.authState.loggedIn,
     isSessionExpired: actionContext.authState.isSessionExpired,
     isWorkspaceOpen,

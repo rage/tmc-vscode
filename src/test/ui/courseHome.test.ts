@@ -338,6 +338,19 @@ suite("buildCourseHomeView", function () {
     expect([view.isOffline, view.isLoggedIn, view.isSessionExpired]).toEqual([true, false, false])
   })
 
+  test("carries a mooc course's AI policy, and none for a tmc course", function () {
+    const course = moocLocalCourse({ aiPolicy: "full_use" })
+    const mooc = buildCourseHomeView(
+      contextFor(course),
+      LocalCourseDataNs.getCourseId(course),
+      NOW,
+    ).unwrap()
+    const tmc = buildCourseHomeView(contextFor(tmcLocalCourse()), idOfTmcCourse(42), NOW).unwrap()
+
+    expect(mooc.aiPolicy).toEqual({ policy: "full_use", isAiAllowed: true })
+    expect(tmc.aiPolicy).toBeNull()
+  })
+
   test("carries that the session expired", function () {
     const context = contextFor(tmcLocalCourse(), { isLoggedIn: false })
     const view = buildCourseHomeView(

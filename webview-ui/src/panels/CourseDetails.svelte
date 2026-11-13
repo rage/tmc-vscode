@@ -10,7 +10,13 @@
     RunnableCommand,
     WebviewError,
   } from "../../../shared/lib"
-  import { backendName, SESSION_EXPIRED_DETAIL, SOFT_DEADLINE_PENALTY } from "../../../shared/lib"
+  import {
+    aiAssistanceSentence,
+    aiPolicyRule,
+    backendName,
+    SESSION_EXPIRED_DETAIL,
+    SOFT_DEADLINE_PENALTY,
+  } from "../../../shared/lib"
   import type { BarAction } from "../components/ActionBar.svelte"
   import ActionBar from "../components/ActionBar.svelte"
   import ActionMenu from "../components/ActionMenu.svelte"
@@ -342,6 +348,14 @@
       {/if}
     </div>
 
+    {#if view.aiPolicy}
+      <p class="ai-policy">
+        <span class="muted">AI use:</span>
+        {aiPolicyRule(view.aiPolicy.policy)}
+        <span class="muted">{aiAssistanceSentence(view.aiPolicy.isAiAllowed)}</span>
+      </p>
+    {/if}
+
     <ActionBar primary={bar.primary} secondary={bar.secondary} />
 
     <CourseNotices {notices} />
@@ -410,6 +424,9 @@
   }
   .description {
     margin: 0 0 var(--tmc-space-3);
+  }
+  .ai-policy {
+    margin: var(--tmc-space-2) 0 0;
   }
   .downloading {
     display: block;

@@ -1698,6 +1698,7 @@ function courseHomeOf(course: LocalCourseData): CourseHomeView {
     isDisabled: false,
     isNotEnrolled: false,
     isOffline: false,
+    aiPolicy: null,
     isLoggedIn: true,
     isSessionExpired: false,
     isWorkspaceOpen: false,
