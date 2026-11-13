@@ -109,6 +109,7 @@ suite("withOperation", function () {
 
   test("logs rather than shows a failure or a busy rejection when silent", async function () {
     const warn = vi.spyOn(Logger, "warn")
+    const info = vi.spyOn(Logger, "info")
 
     await withOperation(dialog, { failure: "Failed.", silent: true }, async () =>
       Err(new Error("offline")),
@@ -118,7 +119,20 @@ suite("withOperation", function () {
     )
 
     expect(notificationCount()).toBe(0)
-    expect(warn).toHaveBeenCalledTimes(2)
+    expect(warn).toHaveBeenCalledOnce()
+    expect(info).toHaveBeenCalledExactlyOnceWith("Not started: busy")
+    warn.mockRestore()
+    info.mockRestore()
+  })
+
+  test("logs a busy rejection as information, not as the operation failing", async function () {
+    const warn = vi.spyOn(Logger, "warn")
+
+    await withOperation(dialog, { failure: "Failed." }, async () =>
+      failure("Exercise submission failed.", new BottleneckError("Already submitting.")),
+    )
+
+    expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
   })
 

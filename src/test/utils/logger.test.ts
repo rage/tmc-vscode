@@ -71,6 +71,9 @@ suite("Logger redaction", function () {
 
   test("free-form output keeps what reads like an identifier, not a credential", function () {
     const output = [
+      "not authenticating with http://localhost:4999/ using the courses.mooc.fi access token: host is not trusted with it",
+      "expected ABCD-EFGH but got ABCD-EFGJ",
+      "see https://example.com/search?q=python for more",
       "exercise 3f1a2b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b",
       "sha256 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
       "at 2026-11-13 in /home/student/mooc/part-01/src/Main.java",

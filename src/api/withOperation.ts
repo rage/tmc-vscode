@@ -132,9 +132,10 @@ function reportFailure(dialog: Dialog, options: OperationOptions, error: Error):
     return
   }
 
+  // Held back on purpose, so neither the failure headline nor a warning fits it.
   const busy = [detail, error].find((e) => e instanceof BottleneckError)
   if (busy) {
-    Logger.warn(headline, busy)
+    Logger.info(`Not started: ${busy.message}`)
     if (!options.silent) {
       void dialog.notification(busy.message)
     }

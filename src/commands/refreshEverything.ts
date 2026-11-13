@@ -113,7 +113,7 @@ function refresh(
       }
       return Promise.resolve(Ok.EMPTY)
     }
-    Logger.warn("Rejected a refresh, one is already in flight")
+    Logger.info("Rejected a refresh, one is already in flight")
     return Promise.resolve(Err(new BottleneckError("A refresh is already in progress.")))
   }
   const result = runRefresh(actionContext, { ...options, offersNewExercises })
