@@ -7,20 +7,22 @@ import { vi } from "vitest"
 import type { ReadyActionContext } from "../../actions/types"
 import { handOverExercises } from "../../commands/handOverExercises"
 import type Resources from "../../config/resources"
+import { submissionViews } from "../../ui/submissionViews"
 import { idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 import { makeTmpDirs } from "../utils"
 
-function setUp(answer: boolean | undefined): {
-  context: ReadyActionContext
-  projectsDirectory: string
-} {
+function setUp(
+  loggedInAs: string | undefined,
+  answer: boolean | undefined,
+): { context: ReadyActionContext; projectsDirectory: string } {
   const root = makeTmpDirs({ "vscode/mooc/course/exercise/src/main.py": "student A's work" })
   const projectsDirectory = path.join(root, "vscode")
   const base = createMockActionContext({
     startup: {
       langs: {
+        getMoocAccountId: async () => Ok(loggedInAs),
         listLocalExercises: async () => Ok([]),
         listSettings: async () => Ok({}),
       } as never,
@@ -38,24 +40,38 @@ function setUp(answer: boolean | undefined): {
 }
 
 suite("handOverExercises", function () {
-  test("asks nothing of a login that follows no logout", async function () {
-    const { context } = setUp(true)
+  test("the first login records its account as the exercises' owner, asking nothing", async function () {
+    const { context } = setUp("user-a", true)
+
+    await handOverExercises(context)
+
+    expect(context.dialog.choose).not.toHaveBeenCalled()
+    expect(context.startup.accountHandover.exercisesAccountId).toBe("user-a")
+  })
+
+  test("the same account logging in again is asked nothing", async function () {
+    const { context } = setUp("user-a", true)
+    await context.startup.accountHandover.setExercisesAccountId("user-a")
 
     await handOverExercises(context)
 
     expect(context.dialog.choose).not.toHaveBeenCalled()
   })
 
-  test("after a logout, moves the exercises aside for a student who says they are not theirs", async function () {
-    const { context, projectsDirectory } = setUp(true)
-    await context.startup.accountHandover.recordLogout()
+  test("another account can move the previous one's exercises aside, and its panels close", async function () {
+    const { context, projectsDirectory } = setUp("user-b", true)
+    await context.startup.accountHandover.setExercisesAccountId("user-a")
     await context.startup.keptCopies.recordPaste(idOfMoocExercise("e1"), {
       fingerprint: "abc",
       link: "https://paste/1",
     })
+    const cleared = vi.fn()
+    const subscription = submissionViews.onDidClear(cleared)
+    onTestFinished(() => subscription.dispose())
 
     await handOverExercises(context)
 
+    expect(cleared).toHaveBeenCalledOnce()
     expect(fs.readdirSync(projectsDirectory)).toEqual([])
     const [moved] = fs
       .readdirSync(path.dirname(projectsDirectory))
@@ -67,17 +83,35 @@ suite("handOverExercises", function () {
       ),
     ).toBe("student A's work")
     expect(context.startup.keptCopies.pasteLink(idOfMoocExercise("e1"), "abc")).toBeUndefined()
-    // Asked once per logout.
-    await handOverExercises(context)
-    expect(context.dialog.choose).toHaveBeenCalledOnce()
+    expect(context.startup.accountHandover.exercisesAccountId).toBe("user-b")
   })
 
-  test("leaves the exercises in place for a student who says they are theirs", async function () {
-    const { context, projectsDirectory } = setUp(false)
-    await context.startup.accountHandover.recordLogout()
+  test("another account may keep the exercises, which are then its own", async function () {
+    const { context, projectsDirectory } = setUp("user-b", false)
+    await context.startup.accountHandover.setExercisesAccountId("user-a")
 
     await handOverExercises(context)
 
     expect(fs.readdirSync(projectsDirectory)).toEqual(["mooc"])
+    expect(context.startup.accountHandover.exercisesAccountId).toBe("user-b")
+  })
+
+  test("a dismissed question is asked again at the next login", async function () {
+    const { context } = setUp("user-b", undefined)
+    await context.startup.accountHandover.setExercisesAccountId("user-a")
+
+    await handOverExercises(context)
+
+    expect(context.startup.accountHandover.exercisesAccountId).toBe("user-a")
+  })
+
+  test("a CLI that does not name the account changes nothing", async function () {
+    const { context } = setUp(undefined, true)
+    await context.startup.accountHandover.setExercisesAccountId("user-a")
+
+    await handOverExercises(context)
+
+    expect(context.dialog.choose).not.toHaveBeenCalled()
+    expect(context.startup.accountHandover.exercisesAccountId).toBe("user-a")
   })
 })

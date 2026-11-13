@@ -1,3 +1,4 @@
+export * from "./accountSwitch"
 export * from "./addNewCourse"
 export * from "./checkAiUse"
 export * from "./checkForCourseUpdates"

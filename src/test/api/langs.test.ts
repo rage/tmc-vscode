@@ -1075,6 +1075,20 @@ suite("Langs error-kind mapping", function () {
     ])
   })
 
+  test("getMoocAccountId reads the account mooc logged-in reports, if it does", async function () {
+    const langs = newLangs()
+    const withAccount = {
+      ...nullOutput("currently logged in", "logged-in"),
+      data: { "output-data-kind": "mooc-account", "output-data": { user_id: uuid(7) } },
+    } as unknown as OutputData
+    stubSpawn(langs, (i) =>
+      Ok(i === 0 ? withAccount : nullOutput("currently logged in", "logged-in")),
+    )
+
+    expect((await langs.getMoocAccountId()).val).toBe(uuid(7))
+    expect((await langs.getMoocAccountId()).val).toBeUndefined()
+  })
+
   test("isAuthenticated falls back to a stored tmc token", async function () {
     const langs = newLangs()
     const calls = stubSpawn(langs, (i) =>

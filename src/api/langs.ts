@@ -247,6 +247,9 @@ export type RestoreTarget = Enum<
   { exerciseId: string; submissionId: string }
 >
 
+// The account `mooc logged-in` is to report; replace with the vendored type once the CLI does.
+const MoocAccountSchema = z.object({ user_id: z.string() })
+
 /** Ample for the failure diagnostics stderr feeds; a test run can write orders of magnitude more. */
 const MAX_RETAINED_STDERR_BYTES = 64 * 1024
 
@@ -433,6 +436,18 @@ export default class Langs {
           return Err(new Error(`Unexpected langs result: ${x.result}`))
       }
     })
+  }
+
+  /**
+   * The id of the courses.mooc.fi account logged in, from `mooc logged-in`; `undefined` when
+   * none is, or when this CLI does not report it.
+   */
+  public async getMoocAccountId(): Promise<Result<string | undefined, Error>> {
+    const res = await this._executeLangsCommand(
+      { backend: "mooc", args: this._moocCmd("logged-in") },
+      null,
+    )
+    return res.map((x) => MoocAccountSchema.safeParse(x.data?.["output-data"]).data?.user_id)
   }
 
   /**

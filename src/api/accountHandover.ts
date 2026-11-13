@@ -1,25 +1,20 @@
 import type * as vscode from "vscode"
 
-const LOGGED_OUT_KEY = "loggedOutWithExercises"
+const EXERCISES_ACCOUNT_KEY = "exercisesAccountId"
 
 /**
- * Remembers, across windows and restarts, that the account whose exercises are on disk logged
- * out, so the next login can ask whether they belong to whoever logs in. The backend does not
- * tell the extension which account is logged in, so a logout is the only sign of a handover.
+ * Remembers, across windows and restarts, which courses.mooc.fi account the exercises on disk
+ * belong to, so a login by another account on the same computer can be told apart.
  */
 export class AccountHandover {
   public constructor(private readonly _memento: vscode.Memento) {}
 
-  public async recordLogout(): Promise<void> {
-    await this._memento.update(LOGGED_OUT_KEY, true)
+  /** The account the exercises on disk belong to; `undefined` before any login recorded one. */
+  public get exercisesAccountId(): string | undefined {
+    return this._memento.get<string>(EXERCISES_ACCOUNT_KEY)
   }
 
-  /** Whether a logout was recorded since the last call, forgetting it. */
-  public async takeLogout(): Promise<boolean> {
-    const isRecorded = this._memento.get<boolean>(LOGGED_OUT_KEY) === true
-    if (isRecorded) {
-      await this._memento.update(LOGGED_OUT_KEY, undefined)
-    }
-    return isRecorded
+  public async setExercisesAccountId(accountId: string): Promise<void> {
+    await this._memento.update(EXERCISES_ACCOUNT_KEY, accountId)
   }
 }

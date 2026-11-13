@@ -8,8 +8,8 @@ import type { ReadyActionContext } from "./types"
 
 /**
  * Moves every exercise on disk out of the exercises folder into a sibling folder, so whoever
- * is logged in now starts from the course templates and cannot submit another student's work
- * as their own. Nothing is deleted.
+ * is logged in now downloads their own and cannot submit another student's work as theirs.
+ * Nothing is deleted.
  *
  * @returns The folder the exercises are now in.
  */
