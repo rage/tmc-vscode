@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/svelte"
 import { tick } from "svelte"
 
 import type { CourseDetailsPanel, CourseHomeView } from "../../../shared/lib"
-import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind, SESSION_EXPIRED_DETAIL } from "../../../shared/lib"
 import { courseHomeExercise, courseHomeView, MOOC_INSTANCE_ID } from "../test/fixtures"
 import {
   dispatchToWebview as dispatch,
@@ -133,6 +133,7 @@ suite("the course home", () => {
   test("lists each part's exercises with their state, points and deadline", async () => {
     await renderHome(
       courseHomeView({
+        isWorkspaceOpen: true,
         parts: [
           {
             key: "part01",
@@ -163,6 +164,26 @@ suite("the course home", () => {
     expect(within(hello as HTMLElement).getByText("Passed")).toBeInTheDocument()
     expect(loops).toHaveTextContent(/02_loops.*Not downloaded.*due in a while.*0\/2/)
     expect(screen.getByText("1/2 passed")).toBeInTheDocument()
+  })
+
+  test("calls an exercise on disk Downloaded until the course workspace is open", async () => {
+    await renderHome(
+      courseHomeView({
+        isWorkspaceOpen: false,
+        parts: [
+          {
+            key: "part01",
+            name: "Part 1",
+            isDefaultOpen: true,
+            exercises: [courseHomeExercise(1, "01_hello", { status: "opened" })],
+          },
+        ],
+      }),
+    )
+
+    const [hello] = screen.getAllByRole("listitem")
+    expect(hello).toHaveTextContent(/01_hello.*Downloaded/)
+    expect(hello).not.toHaveTextContent("In workspace")
   })
 
   test("folds a part away and back, remembering the student's choice", async () => {
@@ -404,6 +425,32 @@ suite("the course home", () => {
       type: "openLinkInBrowser",
       url: "https://courses.example/org/o/courses/c",
     })
+  })
+
+  test("names an expired session as the account status bar item does, with Log In", async () => {
+    await renderHome(courseHomeView({ isLoggedIn: false, isSessionExpired: true }))
+
+    const notices = screen.getByRole("list", { name: "Course notices" })
+    expect(notices).toHaveTextContent(`Session expired ${SESSION_EXPIRED_DETAIL}`)
+    expect(notices).not.toHaveTextContent("Not logged in")
+    within(notices).getByRole("button", { name: "Log In" }).click()
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "runCommand",
+      command: "tmc.showMoocLogin",
+    })
+  })
+
+  test("states the course's AI policy and what it does to AI assistance", async () => {
+    await renderHome(courseHomeView({ aiPolicy: { policy: "no_ai", isAiAllowed: false } }))
+
+    expect(
+      screen.getByText(
+        (_, node) =>
+          node?.classList.contains("ai-policy") === true &&
+          node.textContent?.replaceAll(/\s+/g, " ").trim() ===
+            "AI use: AI may not be used at any point. TestMyCode turns AI assistance off in the course workspace.",
+      ),
+    ).toBeInTheDocument()
   })
 
   test("shows no notices when there is nothing to say", async () => {

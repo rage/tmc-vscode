@@ -1,6 +1,7 @@
 import * as vscode from "vscode"
 
-import { backendName } from "../../shared/lib"
+import { backendName, SESSION_EXPIRED_DETAIL } from "../../shared/lib"
+import type { AuthState } from "../api/authState"
 import type Dialog from "../api/dialog"
 
 const SITE = backendName("mooc")
@@ -13,6 +14,16 @@ interface AccountPresentation {
   tooltip: string
   accessibilityLabel: string
   command: string
+}
+
+/** What the item shows of `AuthState`. */
+type AccountState = Pick<AuthState, "loggedIn" | "isSessionExpired">
+
+function statusOf({ loggedIn, isSessionExpired }: AccountState): AccountStatus {
+  if (isSessionExpired) {
+    return "sessionExpired"
+  }
+  return loggedIn ? "loggedIn" : "loggedOut"
 }
 
 const presentations: Record<AccountStatus, AccountPresentation> = {
@@ -30,43 +41,31 @@ const presentations: Record<AccountStatus, AccountPresentation> = {
   },
   sessionExpired: {
     text: "$(warning) TestMyCode: Session Expired",
-    tooltip: `**TestMyCode**\n\nYour ${SITE} session has expired. Log in again to download and submit exercises.`,
+    tooltip: `**TestMyCode**\n\n${SESSION_EXPIRED_DETAIL}`,
     accessibilityLabel: "TestMyCode: session expired. Log in again",
     command: "tmc.showMoocLogin",
   },
 }
 
 /**
- * The status bar item that shows whether the user is logged in, and logs them in or offers
- * the account actions when clicked.
- *
- * An expiry stays shown until a login: a later "logged out" answer from a check is the
- * same expired session, not a sign-out.
+ * The status bar item that shows whether the user is logged in, and logs them in or offers the
+ * account actions when clicked.
  */
 export class AccountStatusBarItem implements vscode.Disposable {
   private readonly _item: vscode.StatusBarItem
   private _status: AccountStatus
 
-  public constructor(isLoggedIn: boolean) {
+  public constructor(account: AccountState) {
     this._item = vscode.window.createStatusBarItem("tmc.account", vscode.StatusBarAlignment.Left, 0)
     this._item.name = "TestMyCode Account"
-    this._status = isLoggedIn ? "loggedIn" : "loggedOut"
+    this._status = statusOf(account)
     this._render()
     this._item.show()
   }
 
-  /** Follows `AuthState.loggedIn`. */
-  public setLoggedIn(isLoggedIn: boolean): void {
-    if (isLoggedIn) {
-      this._setStatus("loggedIn")
-    } else if (this._status !== "sessionExpired") {
-      this._setStatus("loggedOut")
-    }
-  }
-
-  /** Call when a session the user had ends without them logging out. */
-  public markSessionExpired(): void {
-    this._setStatus("sessionExpired")
+  /** Follows `AuthState`. */
+  public update(account: AccountState): void {
+    this._setStatus(statusOf(account))
   }
 
   public dispose(): void {

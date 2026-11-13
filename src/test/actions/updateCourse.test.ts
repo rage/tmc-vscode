@@ -125,6 +125,22 @@ suite("updateCourse action (mooc)", function () {
     expect(stored?.name).toBe("mooc-python-course")
   })
 
+  test("reports a changed AI policy with whether the old one allowed AI", async function () {
+    await storeCourse({ ...storedMoocCourse, aiPolicy: "full_use" })
+    tmcMockValues.getMoocCourseData = Ok({
+      ...tmcMockValues.getMoocCourseData.unwrap(),
+      course: { ...moocCourse, ai_policy: "no_ai" },
+    })
+
+    const update = (await updateCourse(actionContext(), courseId)).unwrap()
+
+    expect(update.aiPolicyChange?.wasAiAllowed).toBe(true)
+    expect(
+      update.aiPolicyChange?.course.kind === "mooc" && update.aiPolicyChange.course.data.aiPolicy,
+    ).toBe("no_ai")
+    expect((await updateCourse(actionContext(), courseId)).unwrap().aiPolicyChange).toBeUndefined()
+  })
+
   test("a failed fetch leaves previously known progress alone", async function () {
     await updateCourse(actionContext(), courseId)
     expect(userData.getMoocCourses()[0]?.exercises[0]?.passed).toBe(true)

@@ -10,7 +10,13 @@
     RunnableCommand,
     WebviewError,
   } from "../../../shared/lib"
-  import { backendName, SOFT_DEADLINE_PENALTY } from "../../../shared/lib"
+  import {
+    aiAssistanceSentence,
+    aiPolicyRule,
+    backendName,
+    SESSION_EXPIRED_DETAIL,
+    SOFT_DEADLINE_PENALTY,
+  } from "../../../shared/lib"
   import type { BarAction } from "../components/ActionBar.svelte"
   import ActionBar from "../components/ActionBar.svelte"
   import ActionMenu from "../components/ActionMenu.svelte"
@@ -196,13 +202,21 @@
         detail: "Trust this course workspace to run tests, submit and share exercises.",
         action: { label: "Trust", onclick: () => runCommand("tmc.trustCourseWorkspace") },
       },
-      !view.isLoggedIn && {
-        key: "loggedOut",
-        tone: "info",
-        title: "Not logged in",
-        detail: `Log in to ${backendName("mooc")} to download and submit exercises.`,
+      view.isSessionExpired && {
+        key: "sessionExpired",
+        tone: "warning",
+        title: "Session expired",
+        detail: SESSION_EXPIRED_DETAIL,
         action: { label: "Log In", onclick: () => runCommand("tmc.showMoocLogin") },
       },
+      !view.isLoggedIn &&
+        !view.isSessionExpired && {
+          key: "loggedOut",
+          tone: "info",
+          title: "Not logged in",
+          detail: `Log in to ${backendName("mooc")} to download and submit exercises.`,
+          action: { label: "Log In", onclick: () => runCommand("tmc.showMoocLogin") },
+        },
       view.isLoggedIn &&
         view.isOffline && {
           key: "offline",
@@ -334,6 +348,14 @@
       {/if}
     </div>
 
+    {#if view.aiPolicy}
+      <p class="ai-policy">
+        <span class="muted">AI use:</span>
+        {aiPolicyRule(view.aiPolicy.policy)}
+        <span class="muted">{aiAssistanceSentence(view.aiPolicy.isAiAllowed)}</span>
+      </p>
+    {/if}
+
     <ActionBar primary={bar.primary} secondary={bar.secondary} />
 
     <CourseNotices {notices} />
@@ -360,6 +382,7 @@
     {#each view.parts as part (part.key)}
       <CoursePart
         {part}
+        isWorkspaceOpen={view.isWorkspaceOpen}
         isExpanded={isPartExpanded(part.key, part.isDefaultOpen)}
         ontoggle={() => togglePart(part.key)}
         onaction={(exercise, action) => runExerciseAction(exercise.id, action)}
@@ -401,6 +424,9 @@
   }
   .description {
     margin: 0 0 var(--tmc-space-3);
+  }
+  .ai-policy {
+    margin: var(--tmc-space-2) 0 0;
   }
   .downloading {
     display: block;

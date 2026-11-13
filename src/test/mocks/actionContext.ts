@@ -33,6 +33,8 @@ export function createMockAuthState(loggedIn = true): AuthState {
     loggedIn,
     refresh: vi.fn(async () => Ok(loggedIn)),
     set: vi.fn(async () => {}),
+    isSessionExpired: false,
+    markSessionExpired: vi.fn(),
     subscribe: vi.fn(),
     sessionRefusalsReported: new Set(),
   }

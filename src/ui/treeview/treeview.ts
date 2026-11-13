@@ -6,9 +6,13 @@ import {
   CourseIdentifier,
   ExerciseIdentifier,
   LocalCourseData,
+  SESSION_EXPIRED_DETAIL,
   SOFT_DEADLINE_PENALTY,
 } from "../../../shared/lib"
+import type { AuthState } from "../../api/authState"
 import type WorkspaceManager from "../../api/workspaceManager"
+import type { WorkspaceExercise } from "../../api/workspaceManager"
+import { ExerciseStatus as WorkspaceExerciseStatus } from "../../api/workspaceManager"
 import { TRUST_COURSE_WORKSPACE_COMMAND } from "../../errors"
 import { countOf, formatDeadline } from "../../utilities"
 import { downloadFailures } from "../downloadFailures"
@@ -226,14 +230,18 @@ const STATUS_LABELS: Record<ExerciseView["status"], string> = {
 }
 
 /**
- * One exercise. `contextValue` is `exercise.<status>` (see `ExerciseStatus`), followed by
- * `.passed` and `.updateable` when they apply.
+ * One exercise. `contextValue` is `exercise.<status>` (see `ExerciseStatus`), then for a removed
+ * exercise still on disk `.opened` or `.closed`, then `.passed`, `.updateable` and `.hasMaterial`
+ * when they apply.
  */
 export class ExerciseTreeItem extends vscode.TreeItem {
   public readonly exerciseId: ExerciseIdentifier
   /** The exercise's folder, while it is on disk. */
   public readonly exerciseUri: vscode.Uri | undefined
   public readonly status: ExerciseView["status"]
+  public readonly materialUrl: string | undefined
+  /** Whether the exercise is open or closed in its course workspace; `undefined` off disk. */
+  public readonly onDiskStatus: WorkspaceExerciseStatus | undefined
   private readonly _tooltipLines: string[]
 
   public constructor(
@@ -249,10 +257,14 @@ export class ExerciseTreeItem extends vscode.TreeItem {
     this.exerciseUri = exercise.onDisk?.uri
     this.status = exercise.status
     this.iconPath = exerciseIcon(exercise)
+    this.materialUrl = exercise.materialUrl
+    this.onDiskStatus = exercise.onDisk?.status
     this.contextValue = [
       `exercise.${exercise.status}`,
+      ...(exercise.status === "removed" ? removedOnDiskFlags(exercise.onDisk) : []),
       ...(exercise.passed ? ["passed"] : []),
       ...(exercise.isUpdateable ? ["updateable"] : []),
+      ...(exercise.materialUrl ? ["hasMaterial"] : []),
     ].join(".")
     this.command = { command: "tmc.openExercises", title: "Open", arguments: [this] }
 
@@ -303,6 +315,18 @@ export class ExerciseTreeItem extends vscode.TreeItem {
   }
 }
 
+/** Whether a removed exercise is in its course workspace, when it is on disk at all. */
+function removedOnDiskFlags(onDisk: WorkspaceExercise | undefined): string[] {
+  switch (onDisk?.status) {
+    case WorkspaceExerciseStatus.Open:
+      return ["opened"]
+    case WorkspaceExerciseStatus.Closed:
+      return ["closed"]
+    default:
+      return []
+  }
+}
+
 /**
  * One fact about a row, worded for each place the row shows it: its description, its
  * accessible name and its hover. A fact without a wording for a place is left out there.
@@ -330,6 +354,8 @@ function showFacts(
   }
   return [label, ...shown.flatMap((fact) => fact.tooltip ?? [])]
 }
+
+const LOCAL_EXERCISES_STILL_WORK = "The exercises on this computer still open and run their tests."
 
 /** How long a burst of changes, such as one per downloaded exercise, is gathered into one render. */
 const RENDER_DELAY_MS = 50
@@ -359,6 +385,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
   private _source: CoursesTreeSource | undefined
   private _sourceSubscriptions: vscode.Disposable[] = []
   private _isLoggedIn = false
+  private _isSessionExpired = false
   private _isRestricted = false
   private readonly _unreachableBackends = new Set<BackendKind>()
   private _views: CourseView[] | undefined
@@ -410,9 +437,14 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
     void this.revealActiveExercise()
   }
 
-  public setLoggedIn(isLoggedIn: boolean): void {
-    if (isLoggedIn !== this._isLoggedIn) {
-      this._isLoggedIn = isLoggedIn
+  /** Follows `AuthState`. */
+  public setAccount({
+    loggedIn,
+    isSessionExpired,
+  }: Pick<AuthState, "loggedIn" | "isSessionExpired">): void {
+    if (loggedIn !== this._isLoggedIn || isSessionExpired !== this._isSessionExpired) {
+      this._isLoggedIn = loggedIn
+      this._isSessionExpired = isSessionExpired
       this.refresh()
     }
   }
@@ -481,8 +513,10 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
     let status: string | undefined
     if (views.length === 0) {
       // Nothing to say about courses there are none of.
+    } else if (this._isSessionExpired) {
+      status = `${SESSION_EXPIRED_DETAIL} ${LOCAL_EXERCISES_STILL_WORK}`
     } else if (!this._isLoggedIn) {
-      status = `Log in to ${backendName("mooc")} to download and submit exercises. The exercises on this computer still open and run their tests.`
+      status = `Log in to ${backendName("mooc")} to download and submit exercises. ${LOCAL_EXERCISES_STILL_WORK}`
     } else if (unreachable.length > 0) {
       status = `${unreachable.join(" and ")} could not be reached. Showing the exercises saved on this computer; deadlines may be out of date.`
     }

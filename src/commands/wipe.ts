@@ -11,7 +11,6 @@ export async function wipe(
 ): Promise<void> {
   const { authState, dialog } = actionContext
   const { resources, workspaceManager } = actionContext.startup
-  Logger.info("Wiping")
   const projectsDirectory = resources.projectsDirectory
   if (!projectsDirectory) {
     void dialog.errorNotification(
@@ -36,14 +35,16 @@ Please close the workspace and any related files before running this command aga
   }
 
   const typed = await dialog.explicitConfirmation(
-    "Type DELETE to delete your downloaded exercises, log out and clear every course and" +
-      " setting TestMyCode has stored. This cannot be undone.",
+    `Type DELETE to delete the exercises TestMyCode downloaded to ${projectsDirectory}, log` +
+      " out and clear every course and setting TestMyCode has stored. Other files in that" +
+      " folder are kept. This cannot be undone.",
     "DELETE",
   )
   if (!typed) {
     return
   }
 
+  Logger.info("Wiping the extension data")
   // Change to Explorer view to avoid instant restart
   await vscode.commands.executeCommand("workbench.files.action.focusFilesExplorer")
 

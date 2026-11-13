@@ -1,6 +1,7 @@
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import { SESSION_EXPIRED_DETAIL } from "../../../shared/lib"
 import Dialog from "../../api/dialog"
 import { AccountStatusBarItem, showAccountMenu } from "../../ui/statusBarAccount"
 import { fakeStatusBarItems, tooltipText } from "../mocks/statusBar"
@@ -10,7 +11,7 @@ function create(isLoggedIn: boolean): {
   item: ReturnType<typeof fakeStatusBarItems>[number]
 } {
   const items = fakeStatusBarItems()
-  const account = new AccountStatusBarItem(isLoggedIn)
+  const account = new AccountStatusBarItem({ loggedIn: isLoggedIn, isSessionExpired: false })
   const [item] = items
   if (!item) {
     throw new Error("no status bar item was created")
@@ -61,28 +62,21 @@ suite("AccountStatusBarItem", function () {
   test("follows logins and logouts", function () {
     const { account, item } = create(false)
 
-    account.setLoggedIn(true)
+    account.update({ loggedIn: true, isSessionExpired: false })
     expect(item.text).toBe(shown.loggedIn)
-    account.setLoggedIn(false)
+    account.update({ loggedIn: false, isSessionExpired: false })
     expect(item.text).toBe(shown.loggedOut)
     expect(item.command).toBe("tmc.showMoocLogin")
   })
 
-  test("an expiry shows until the next login, not until the next check", function () {
+  test("an expired session says so, in the words the course home uses", function () {
     const { account, item } = create(true)
 
-    account.setLoggedIn(false)
-    account.markSessionExpired()
+    account.update({ loggedIn: false, isSessionExpired: true })
     expect(item.text).toBe(shown.sessionExpired)
     expect(item.text).toBe("$(warning) TestMyCode: Session Expired")
     expect(item.command).toBe("tmc.showMoocLogin")
-    expect(tooltipText(item)).toContain("expired")
-
-    account.setLoggedIn(false)
-    expect(item.text).toBe(shown.sessionExpired)
-
-    account.setLoggedIn(true)
-    expect(item.text).toBe(shown.loggedIn)
+    expect(tooltipText(item)).toContain(SESSION_EXPIRED_DETAIL)
   })
 
   test("disposes its item", function () {

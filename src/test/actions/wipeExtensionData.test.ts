@@ -1,4 +1,7 @@
+import * as path from "path"
+
 import * as fs from "fs-extra"
+import * as tmp from "tmp"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
@@ -13,18 +16,29 @@ import { updateablesRegistry } from "../../ui/updateablesRegistry"
 import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
-vi.mock("fs-extra", () => ({ remove: vi.fn() }))
-
-const PROJECTS_DIRECTORY = "/tmp/tmcdata/projects"
+let projectsDirectory: string
+let projectsRoot: tmp.DirResult
 
 /** Names of the wipe steps that ran, in the order they ran. */
 const stepsRun: string[] = []
 
 function step<T>(name: string, outcome: () => T): () => Promise<T> {
   return async () => {
-    stepsRun.push(name)
+    stepsRun.push(isOnDisk("mooc") ? name : `${name} without the exercises`)
     return outcome()
   }
+}
+
+function isOnDisk(entry: string): boolean {
+  return fs.existsSync(path.join(projectsDirectory, entry))
+}
+
+/** What tmc-langs keeps in the projects directory, current and legacy layouts alike. */
+function writeManagedEntries(): void {
+  fs.outputFileSync(path.join(projectsDirectory, "mooc", "course", "ex", "main.py"), "")
+  fs.outputFileSync(path.join(projectsDirectory, "tmc", "course", "ex", "Main.java"), "")
+  fs.outputFileSync(path.join(projectsDirectory, "old-course", "course_config.toml"), "")
+  fs.outputFileSync(path.join(projectsDirectory, ".tmc.lock"), "")
 }
 
 function context(
@@ -57,26 +71,46 @@ function context(
 suite("wipeExtensionData action", function () {
   beforeEach(function () {
     stepsRun.length = 0
-    vi.mocked(fs.remove).mockReset()
-    vi.mocked(fs.remove).mockImplementation(() => {
-      stepsRun.push("remove")
-    })
+    projectsRoot = tmp.dirSync({ unsafeCleanup: true })
+    projectsDirectory = path.join(projectsRoot.name, "projects")
+    writeManagedEntries()
   })
 
-  test("removes the projects directory it was given", async function () {
-    await wipeExtensionData(context(), PROJECTS_DIRECTORY)
-    expect(fs.remove).toHaveBeenCalledWith(PROJECTS_DIRECTORY)
+  afterEach(function () {
+    projectsRoot.removeCallback()
+  })
+
+  test("removes the projects directory once nothing but the exercises was in it", async function () {
+    const result = await wipeExtensionData(context(), projectsDirectory)
+
+    expect(result.ok).toBe(true)
+    expect(fs.existsSync(projectsDirectory)).toBe(false)
+  })
+
+  test("keeps files of the student's own in the projects directory, and the directory", async function () {
+    fs.outputFileSync(path.join(projectsDirectory, "notes", "todo.txt"), "mine")
+
+    await wipeExtensionData(context(), projectsDirectory)
+
+    expect(fs.readdirSync(projectsDirectory)).toEqual(["notes"])
+    expect(fs.readFileSync(path.join(projectsDirectory, "notes", "todo.txt"), "utf8")).toBe("mine")
+  })
+
+  test("succeeds when the projects directory is already gone", async function () {
+    fs.removeSync(projectsDirectory)
+
+    expect((await wipeExtensionData(context(), projectsDirectory)).ok).toBe(true)
   })
 
   test("deletes the exercises only after every recoverable step has succeeded", async function () {
-    await wipeExtensionData(context(), PROJECTS_DIRECTORY)
+    await wipeExtensionData(context(), projectsDirectory)
     expect(stepsRun).toEqual([
       "resetSettings",
       "deauthenticate",
       "wipeDataFromStorage",
       "deleteAllWorkspaceFiles",
-      "remove",
     ])
+    expect(isOnDisk("mooc")).toBe(false)
   })
 
   // Deleting the exercises with their records still stored would show courses whose work is gone.
@@ -85,11 +119,11 @@ suite("wipeExtensionData action", function () {
 
     const result = await wipeExtensionData(
       context({ wipeDataFromStorage: Err(error) }),
-      PROJECTS_DIRECTORY,
+      projectsDirectory,
     )
 
     expect(result.val).toBe(error)
-    expect(fs.remove).not.toHaveBeenCalled()
+    expect(isOnDisk("mooc")).toBe(true)
   })
 
   test("forgets the updates and failed downloads of the courses it wiped", async function () {
@@ -98,7 +132,7 @@ suite("wipeExtensionData action", function () {
     updateablesRegistry.setMany([[course, [exercise]]])
     downloadFailures.record([exercise], [])
 
-    await wipeExtensionData(context(), PROJECTS_DIRECTORY)
+    await wipeExtensionData(context(), projectsDirectory)
 
     expect(updateablesRegistry.get(course)).toEqual([])
     expect(downloadFailures.has(exercise)).toBe(false)
@@ -107,24 +141,24 @@ suite("wipeExtensionData action", function () {
   test("leaves the exercises on disk when an earlier step fails", async function () {
     const result = await wipeExtensionData(
       context({ resetSettings: Err(new Error("settings are read-only")) }),
-      PROJECTS_DIRECTORY,
+      projectsDirectory,
     )
-    expect(fs.remove).not.toHaveBeenCalled()
+    expect(isOnDisk("mooc")).toBe(true)
     expect(result.err).toBe(true)
   })
 
   test("leaves the exercises on disk when the workspace files cannot be removed", async function () {
     const result = await wipeExtensionData(
       context({ deleteAllWorkspaceFiles: Err(new Error("workspace folder is read-only")) }),
-      PROJECTS_DIRECTORY,
+      projectsDirectory,
     )
-    expect(fs.remove).not.toHaveBeenCalled()
+    expect(isOnDisk("mooc")).toBe(true)
     expect(result.err).toBe(true)
   })
 
   test("reports the removal fraction at each step, ending at 1", async function () {
     const report = vi.fn()
-    await wipeExtensionData(context(), PROJECTS_DIRECTORY, report)
+    await wipeExtensionData(context(), projectsDirectory, report)
     expect(report.mock.calls.map(([progress]) => progress.fraction)).toEqual([
       0.2, 0.4, 0.6, 0.8, 1,
     ])

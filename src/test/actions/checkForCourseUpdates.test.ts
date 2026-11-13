@@ -126,6 +126,7 @@ suite("checkForCourseUpdates action", function () {
 
     expect(result.ok && result.val).toEqual({
       courses: [tmcCourse(1, 0, [10])],
+      aiPolicyChanges: [],
       failure: undefined,
       warnings: [],
     })

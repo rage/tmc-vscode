@@ -18,6 +18,7 @@ import {
   closeExercises,
   dismissNewExercises,
   downloadExercises,
+  openExerciseMaterial,
   openExercises,
   targetRows,
   updateCourseExercises,
@@ -29,6 +30,7 @@ import {
   TrustCourseWorkspaceTreeItem,
 } from "../../ui/treeview/treeview"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
+import { openWebLink } from "../../utilities/webLink"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -45,6 +47,7 @@ vi.mock("../../actions/openExercises", () => ({
 vi.mock("../../actions/closeExercises", () => ({
   closeExercises: vi.fn(async (_context: unknown, ids: unknown[]) => Ok(ids)),
 }))
+vi.mock("../../utilities/webLink", () => ({ openWebLink: vi.fn(async () => true) }))
 vi.mock("../../ui/exerciseSourceFile", () => ({
   showExerciseSourceFile: vi.fn(async () => true),
 }))
@@ -54,7 +57,12 @@ const BUSY = "Some of these exercises are already downloading."
 const tmcCourse = makeTmcKind({ courseId: 1 })
 const moocCourse = makeMoocKind({ moocCourseId: "course-uuid" })
 
-function row(courseId: CourseIdentifier, id: number | string, status: RowStatus): ExerciseTreeItem {
+function row(
+  courseId: CourseIdentifier,
+  id: number | string,
+  status: RowStatus,
+  fields: Partial<Pick<ExerciseTreeItem, "onDiskStatus" | "materialUrl">> = {},
+): ExerciseTreeItem {
   return Object.assign(Object.create(ExerciseTreeItem.prototype) as ExerciseTreeItem, {
     id: `${courseId.kind}/${id}`,
     courseId,
@@ -63,6 +71,7 @@ function row(courseId: CourseIdentifier, id: number | string, status: RowStatus)
         ? makeTmcKind({ tmcExerciseId: id })
         : makeMoocKind({ moocExerciseId: id }),
     status,
+    ...fields,
   })
 }
 
@@ -244,6 +253,42 @@ suite("Courses view commands", function () {
       expect.stringMatching(/^You have over 50 exercises open/),
       ["Close Completed Exercises", expect.any(Function)],
     )
+  })
+
+  test("open opens a removed exercise only from disk, never downloading it", async function () {
+    const actionContext = context()
+
+    await openExercises(actionContext, [
+      row(tmcCourse, 1, "removed", { onDiskStatus: ExerciseStatus.Closed }),
+      row(tmcCourse, 2, "removed", { onDiskStatus: ExerciseStatus.Open }),
+      row(tmcCourse, 3, "removed"),
+    ])
+
+    expect(vi.mocked(downloadAndOpenExercises).mock.calls).toEqual([
+      [actionContext, [makeTmcKind({ tmcExerciseId: 1 })], tmcCourse, undefined],
+    ])
+  })
+
+  test("close closes a removed exercise that is open", async function () {
+    const actionContext = context()
+
+    await closeExercises(actionContext, [
+      row(tmcCourse, 1, "removed", { onDiskStatus: ExerciseStatus.Open }),
+      row(tmcCourse, 2, "removed", { onDiskStatus: ExerciseStatus.Closed }),
+    ])
+
+    expect(vi.mocked(closeExercisesAction).mock.calls).toEqual([
+      [actionContext, [makeTmcKind({ tmcExerciseId: 1 })], tmcCourse],
+    ])
+  })
+
+  test("opens an exercise row's course material page", async function () {
+    const url = "https://courses.example/org/o/courses/c/chapter-1/page"
+
+    await openExerciseMaterial(row(moocCourse, "ex", "missing", { materialUrl: url }))
+    await openExerciseMaterial(row(moocCourse, "other", "missing"))
+
+    expect(vi.mocked(openWebLink).mock.calls).toEqual([[url]])
   })
 
   test("close closes only the open exercises", async function () {

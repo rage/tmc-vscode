@@ -26,8 +26,7 @@ export class MoocLoginPage extends TmcPage {
   public waitingNotification(attempt = 1): Locator {
     return this.page
       .locator(".notification-toast")
-      .filter({ hasText: "Waiting for you to approve in the browser" })
-      .filter({ hasText: `Code ${mockUserCode(attempt)}` })
+      .filter({ hasText: `Code ${mockUserCode(attempt)}: approve it at` })
   }
 
   public async cancelWaiting(attempt = 1): Promise<void> {

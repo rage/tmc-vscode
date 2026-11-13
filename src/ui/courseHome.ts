@@ -5,6 +5,7 @@ import * as vscode from "vscode"
 import type { CourseHomeView, DeadlineText } from "../../shared/lib"
 import { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
+import { isAiAllowed } from "../api/aiRestriction"
 import { findNextDateAfter, formatDateTime, formatRelativeTime } from "../utilities"
 import { recentUpdates } from "./recentUpdates"
 import {
@@ -63,11 +64,6 @@ export function buildCourseHomeView(
     LocalCourseData.getNewExercises(course).map((id) => ExerciseIdentifier.key(id)),
   )
   const nextExercise = exercises.find((ex) => isLeftToDo(ex, now))
-  const pageUrls = new Map(
-    course.kind === "mooc"
-      ? course.data.exercises.flatMap((ex) => (ex.pageUrl ? [[ex.id, ex.pageUrl] as const] : []))
-      : [],
-  )
   const openCourse = openCourseId(actionContext)
   const isWorkspaceOpen = openCourse !== undefined && CourseIdentifier.equals(openCourse, courseId)
 
@@ -90,7 +86,12 @@ export function buildCourseHomeView(
     isDisabled: LocalCourseData.isDisabled(course),
     isNotEnrolled: LocalCourseData.isNotEnrolled(course),
     isOffline: !actionContext.coursesTree.isBackendReachable(course.kind),
+    aiPolicy:
+      course.kind === "mooc"
+        ? { policy: course.data.aiPolicy, isAiAllowed: isAiAllowed(course) }
+        : null,
     isLoggedIn: actionContext.authState.loggedIn,
+    isSessionExpired: actionContext.authState.isSessionExpired,
     isWorkspaceOpen,
     isRestricted: isWorkspaceOpen && !vscode.workspace.isTrusted,
     ...(nextExercise ? { nextExercise: { id: nextExercise.id, name: nextExercise.name } } : {}),
@@ -109,8 +110,7 @@ export function buildCourseHomeView(
       isDefaultOpen: part.isDefaultOpen,
       exercises: part.exercises.map((ex) => {
         const deadline = deadlineText(shownDeadline(ex))
-        const materialUrl =
-          ex.id.kind === "mooc" ? pageUrls.get(ex.id.data.moocExerciseId) : undefined
+        const { materialUrl } = ex
         return {
           id: ex.id,
           name: ex.name,

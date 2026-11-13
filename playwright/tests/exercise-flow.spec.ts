@@ -30,7 +30,7 @@ vsCodeTest(
       "Download downloads every exercise, as the Courses view agrees",
       async () => {
         await courseHome.downloadAll()
-        await courseHome.expectState("passing_exercise", "In workspace")
+        await courseHome.expectState("passing_exercise", "Downloaded")
         await coursesView.expand(coursesView.row(courseTitle))
         await expect(coursesView.row("passing_exercise")).toHaveAccessibleName(/, open,/)
         await expect(coursesView.notificationToast("Downloading exercises…")).toBeHidden()

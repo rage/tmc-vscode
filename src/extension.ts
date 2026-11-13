@@ -74,7 +74,11 @@ import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
 import { FailedUpdatesStatusBarItem } from "./ui/statusBarFailedUpdates"
 import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
-import { showNextWalkthroughStep, trackWalkthroughActive } from "./window/walkthrough"
+import {
+  showNextWalkthroughStep,
+  trackWalkthroughActive,
+  walkthroughProgressOf,
+} from "./window/walkthrough"
 
 interface InitializationErrorReporter {
   /** Logs a failed step; the user hears about it from {@link notify}. */
@@ -155,6 +159,15 @@ interface StartupContext {
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  // `onStartupFinished` activates in every window; one TestMyCode has no part in yet stays light.
+  if (await init.canDeferActivation(context)) {
+    await init.deferActivation(context, () => activateFully(context))
+  } else {
+    await activateFully(context)
+  }
+}
+
+async function activateFully(context: vscode.ExtensionContext): Promise<void> {
   const startupContext: StartupContext = { isApplied: false }
   try {
     // The Courses view shows "Starting TestMyCode…" until activation settles; this gives it
@@ -239,13 +252,13 @@ async function activateInner(
   }
 
   const authState = createAuthState(langs)
-  authState.subscribe((loggedIn) => coursesTree.setLoggedIn(loggedIn))
+  authState.subscribe(() => coursesTree.setAccount(authState))
   context.subscriptions.push(trackWalkthroughActive())
   // Awaited only after the migration: it can refresh a token over the network, and nothing
   // before needs its answer.
   const initialAuthCheck = authState.refresh({ timeout: 15000 })
 
-  const workspaceFileFolder = path.join(context.globalStorageUri.fsPath, "workspaces")
+  const workspaceFileFolder = init.workspaceFileFolderOf(context)
 
   // migrate data between versions
   if (langs.ok) {
@@ -310,13 +323,11 @@ async function activateInner(
   context.subscriptions.push({ dispose: () => setMaintenancePollArmed(false) })
   authState.subscribe(setMaintenancePollArmed)
 
-  // Created once the commands it runs are registered, which is after the listeners below.
-  let accountStatus: AccountStatusBarItem | undefined
   // `tmc.showMoocLogin` exists only once a ready activation has registered it.
   let canOfferLogin = false
 
   const sessionExpiredWarning = (): void => {
-    accountStatus?.markSessionExpired()
+    authState.markSessionExpired()
     const logIn: NotificationButton = [
       "Log In",
       (): void => void vscode.commands.executeCommand("tmc.showMoocLogin"),
@@ -425,9 +436,8 @@ async function activateInner(
 
   const courseWorkspaceSwitches = new CourseWorkspaceSwitches(context.globalState)
   // The window that switched here has just offered whatever the startup refresh would.
-  const isOpenedBySwitch = await courseWorkspaceSwitches.take(
-    vscode.workspace.workspaceFile?.fsPath,
-  )
+  const openingSwitch = await courseWorkspaceSwitches.take(vscode.workspace.workspaceFile?.fsPath)
+  const isOpenedBySwitch = openingSwitch !== undefined
   const trustGate = new WorkspaceTrustGate()
   context.subscriptions.push(trustGate)
   const startup: Startup =
@@ -491,9 +501,8 @@ async function activateInner(
   )
   if (readyContext) {
     init.registerSettingsCallbacks(readyContext)
-    const account = new AccountStatusBarItem(authState.loggedIn)
-    authState.subscribe((loggedIn) => account.setLoggedIn(loggedIn))
-    accountStatus = account
+    const account = new AccountStatusBarItem(authState)
+    authState.subscribe(() => account.update(authState))
     const moocAccount = new MoocAuthenticationProvider({
       isLoggedIn: () => authState.loggedIn,
       login: async () => (await login(readyContext)) === "loggedIn",
@@ -606,8 +615,7 @@ async function activateInner(
     context.subscriptions.push(openCourseRefresh)
   }
 
-  if (readyContext && isOpenedBySwitch) {
-    const { startup: ready } = readyContext
+  if (readyContext && openingSwitch) {
     // Outside a window reload, a released VS Code opens the Explorer in place of the extension
     // view a workspace last showed in its sidebar.
     void Promise.resolve(vscode.commands.executeCommand(`${COURSES_VIEW_ID}.focus`)).catch((e) =>
@@ -617,10 +625,8 @@ async function activateInner(
     // the walkthrough, which still moves on to its next step behind it; but not over code the
     // student has opened meanwhile.
     const courseId = openCourseId(readyContext)
-    void showNextWalkthroughStep({
-      isLoggedIn: authState.loggedIn,
-      hasCourses: ready.userData.getCourses().length > 0,
-      hasDownloadedExercises: ready.workspaceManager.getExercises().length > 0,
+    void showNextWalkthroughStep(() => walkthroughProgressOf(readyContext), {
+      isOpenedIfClosed: openingSwitch.isWalkthroughOpen,
     })
       .catch((e) => Logger.warn("Could not show the next walkthrough step", e))
       .then(

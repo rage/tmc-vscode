@@ -43,7 +43,8 @@ const DEVICE_WITHOUT_COMPLETE_URI: MoocDeviceLogin = { ...DEVICE, verification_u
 
 const COPY_AND_OPEN = "Copy & Open courses.mooc.fi"
 
-const WAITING = `Waiting for you to approve in the browser… Code WXYZ-1234 at ${DEVICE.verification_uri}`
+// The code leads: the status bar cuts a hidden progress notification's message short.
+const WAITING = `Code WXYZ-1234: approve it at ${DEVICE.verification_uri}`
 
 /** One `mooc login` process the test drives: it emits the code and ends when told to. */
 interface FakeLogin {
@@ -81,6 +82,7 @@ function harness(): Harness {
     dialog,
   }
   vi.mocked(context.startup.userData.getCourses).mockReturnValue([])
+  vi.mocked(context.startup.workspaceManager.getExercises).mockReturnValue([])
 
   const progressMessages: string[] = []
   const progressCancellation = new vscode.CancellationTokenSource()
@@ -172,6 +174,34 @@ suite("login command", function () {
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith("tmc.addNewCourse")
     expect(refreshEverything).toHaveBeenCalledWith(h.context, { silent: true })
     expect(handOverExercises).toHaveBeenCalledWith(h.context)
+  })
+
+  test("moves an open walkthrough past Log In before the course pick opens", async function () {
+    const h = harness()
+    const initialTabGroups = vscode.window.tabGroups
+    Object.defineProperty(vscode.window, "tabGroups", {
+      value: { all: [{ tabs: [{ label: "Welcome", input: undefined }] }] },
+      configurable: true,
+    })
+    try {
+      const { outcome } = await runToCode(h)
+      h.logins[0]?.finish(Ok(undefined))
+      expect(await outcome).toBe("loggedIn")
+    } finally {
+      Object.defineProperty(vscode.window, "tabGroups", {
+        value: initialTabGroups,
+        configurable: true,
+      })
+    }
+
+    const commands = vi.mocked(vscode.commands.executeCommand).mock.calls
+    const walkthroughAt = commands.findIndex(
+      ([command, step]) =>
+        command === "workbench.action.openWalkthrough" &&
+        (step as { step: string }).step === "addCourse",
+    )
+    expect(walkthroughAt).toBeGreaterThanOrEqual(0)
+    expect(walkthroughAt).toBeLessThan(commands.findIndex(([c]) => c === "tmc.addNewCourse"))
   })
 
   test("a login that finds courses already added goes to no course pick", async function () {

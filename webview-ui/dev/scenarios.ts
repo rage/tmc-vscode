@@ -169,6 +169,7 @@ const moocCourse = courseHomeView({
   materialUrl: MOOC_COURSE_URL,
   availablePoints: 6,
   nextDeadline: DUE_SOON,
+  aiPolicy: { policy: "no_ai", isAiAllowed: false },
   parts: moocParts(false),
 })
 

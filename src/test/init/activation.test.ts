@@ -18,6 +18,7 @@ import { CorruptStoredDataError } from "../../errors"
 import { activate } from "../../extension"
 import { COURSES_VIEW_ID } from "../../ui/treeview/treeview"
 import { Logger, LogLevel } from "../../utilities"
+import { WALKTHROUGH } from "../../window/walkthrough"
 import { createMockMemento } from "../mocks/vscode"
 
 const recorded = vi.hoisted(() => ({
@@ -26,6 +27,10 @@ const recorded = vi.hoisted(() => ({
   /** The last value activation gave each context key it set. */
   contextKeys: new Map<string, unknown>(),
   registeredCommandIds: [] as string[],
+  /** The handler each command id was last registered with. */
+  commandHandlers: new Map<string, (...args: unknown[]) => unknown>(),
+  /** The data providers of the tree views created with `createTreeView`. */
+  treeDataProviders: [] as vscode.TreeDataProvider<unknown>[],
   /** A snapshot of `registeredCommandIds`, taken when the CLI download step starts. */
   commandsRegisteredBeforeCliDownload: undefined as string[] | undefined,
   treeLoggedIn: [] as boolean[],
@@ -79,6 +84,9 @@ const trustPrompts = vi.hoisted(() => [] as string[])
 /** When set, `ensureLangsUpdated` fails with it. */
 const langsDownload = vi.hoisted(() => ({ failure: undefined as Error | undefined }))
 
+/** Whether the window counts as one TestMyCode has no part in yet. */
+const deferral = vi.hoisted(() => ({ isAllowed: false }))
+
 // jest-mock-vscode ships neither the `env` nor the `extensions` namespace, and activation
 // reads the editor name and the extension version from them. Its registration functions
 // also return nothing where the real API returns a `Disposable`, and activation puts what
@@ -97,14 +105,22 @@ vi.mock("vscode", async (importOriginal) => {
         }
         return undefined
       },
-      registerCommand: (id: string) => {
+      registerCommand: (id: string, handler: (...args: unknown[]) => unknown) => {
         recorded.registeredCommandIds.push(id)
+        recorded.commandHandlers.set(id, handler)
         return registration
       },
     },
     window: {
       ...(original["window"] as Record<string, unknown>),
       registerFileDecorationProvider: () => registration,
+      createTreeView: (
+        _id: string,
+        options: { treeDataProvider: vscode.TreeDataProvider<unknown> },
+      ) => {
+        recorded.treeDataProviders.push(options.treeDataProvider)
+        return registration
+      },
       onDidChangeWindowState: (listener: (state: { focused: boolean }) => void) => {
         recorded.windowStateListeners.push(listener)
         return registration
@@ -128,7 +144,7 @@ vi.mock("../../ui/treeview/treeview", async (importOriginal) => ({
     public setSource = (): void => {
       recorded.isCourseViewFilled = true
     }
-    public setLoggedIn = (loggedIn: boolean): void => {
+    public setAccount = ({ loggedIn }: { loggedIn: boolean }): void => {
       recorded.treeLoggedIn.push(loggedIn)
     }
     public setRestricted = (): void => {}
@@ -227,6 +243,11 @@ vi.mock("../../init/ensureLangsUpdated", () => ({
   },
 }))
 
+vi.mock("../../init/deferredActivation", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  canDeferActivation: async (): Promise<boolean> => deferral.isAllowed,
+}))
+
 vi.mock("../../init/verifyCliSchema", () => ({
   verifyCliSchema: async (): Promise<void> => {},
 }))
@@ -294,6 +315,11 @@ function createContext(): vscode.ExtensionContext {
     globalState: createMockMemento(),
     workspaceState: createMockMemento(),
     asAbsolutePath: (relative: string) => path.join(globalStorage, relative),
+    extension: {
+      packageJSON: {
+        contributes: { commands: [{ command: "tmc.showMoocLogin" }, { command: "tmc.logs" }] },
+      },
+    },
   } as unknown as vscode.ExtensionContext
   activatedContexts.push(context)
   return context
@@ -314,6 +340,9 @@ function resetActivationRecording(): void {
   recorded.isCourseViewFilled = false
   recorded.contextKeys.clear()
   recorded.registeredCommandIds.length = 0
+  recorded.commandHandlers.clear()
+  recorded.treeDataProviders.length = 0
+  deferral.isAllowed = false
   recorded.commandsRegisteredBeforeCliDownload = undefined
   recorded.treeLoggedIn.length = 0
   recorded.panelTypes.length = 0
@@ -751,7 +780,9 @@ suite("the startup course refresh", function () {
   test("offers nothing in a window another one has just switched to", async function () {
     const context = createContext()
     const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
-    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo)
+    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
+      isWalkthroughOpen: false,
+    })
     Object.defineProperty(vscode.workspace, "workspaceFile", {
       value: vscode.Uri.file(switchedTo),
       configurable: true,
@@ -783,7 +814,9 @@ suite("the Courses view on startup", function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     const context = createContext()
     const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
-    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo)
+    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
+      isWalkthroughOpen: false,
+    })
     Object.defineProperty(vscode.workspace, "workspaceFile", {
       value: vscode.Uri.file(switchedTo),
       configurable: true,
@@ -798,6 +831,35 @@ suite("the Courses view on startup", function () {
     }
 
     expect(executeCommand).toHaveBeenCalledWith(`${COURSES_VIEW_ID}.focus`)
+  })
+
+  test("reopens the walkthrough the switching window showed", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const context = createContext()
+    const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
+    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
+      isWalkthroughOpen: true,
+    })
+    Object.defineProperty(vscode.workspace, "workspaceFile", {
+      value: vscode.Uri.file(switchedTo),
+      configurable: true,
+    })
+    try {
+      await activate(context)
+    } finally {
+      Object.defineProperty(vscode.workspace, "workspaceFile", {
+        value: undefined,
+        configurable: true,
+      })
+    }
+
+    await vi.waitFor(() =>
+      expect(executeCommand).toHaveBeenCalledWith(
+        "workbench.action.openWalkthrough",
+        expect.objectContaining({ category: WALKTHROUGH }),
+        false,
+      ),
+    )
   })
 
   test("is left to VS Code in any other window", async function () {
@@ -1067,5 +1129,70 @@ suite("status bar", function () {
     expect(showWarningMessage).toHaveBeenCalledExactlyOnceWith(
       "Your courses.mooc.fi session has ended. Log in again to continue.",
     )
+  })
+})
+
+suite("activation in a window TestMyCode has no part in yet", function () {
+  beforeEach(function () {
+    resetActivationRecording()
+    deferral.isAllowed = true
+  })
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    vi.restoreAllMocks()
+  })
+
+  test("stays light: no CLI, no login check, only stand-ins for its commands", async function () {
+    await activate(createContext())
+
+    expect(recorded.commandsRegisteredBeforeCliDownload).toBeUndefined()
+    expect(langsStub.authChecks).toBe(0)
+    expect(recorded.registeredCommandIds).toEqual(["tmc.showMoocLogin", "tmc.logs"])
+    expect(recorded.contextKeys.has("test-my-code:Initialized")).toBe(false)
+  })
+
+  test("a fresh install still opens the walkthrough", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await activate(createContext())
+
+    expect(executeCommand).toHaveBeenCalledWith(
+      "workbench.action.openWalkthrough",
+      WALKTHROUGH,
+      false,
+    )
+  })
+
+  test("an update opens nothing", async function () {
+    sessionState.previousVersion = "1.0.0"
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await activate(createContext())
+
+    expect(executeCommand).not.toHaveBeenCalled()
+  })
+
+  test("running one of its commands activates fully, then runs it", async function () {
+    await activate(createContext())
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await recorded.commandHandlers.get("tmc.showMoocLogin")?.("argument")
+
+    expect(recorded.commandsRegisteredBeforeCliDownload).toBeDefined()
+    expect(langsStub.authChecks).toBeGreaterThan(0)
+    expect(executeCommand).toHaveBeenCalledWith("setContext", "test-my-code:Initialized", true)
+    expect(executeCommand).toHaveBeenLastCalledWith("tmc.showMoocLogin", "argument")
+  })
+
+  test("showing the Courses view activates fully, once", async function () {
+    await activate(createContext())
+    const [view] = recorded.treeDataProviders
+
+    void view?.getChildren?.()
+    void view?.getChildren?.()
+
+    await vi.waitFor(() => expect(recorded.contextKeys.get("test-my-code:Initialized")).toBe(true))
+    expect(recorded.serializerRegistrations).toBe(1)
   })
 })

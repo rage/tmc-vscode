@@ -1,4 +1,5 @@
 export * from "./commands"
+export * from "./deferredActivation"
 export * from "./resources"
 export * from "./ensureLangsUpdated"
 export * from "./settings"

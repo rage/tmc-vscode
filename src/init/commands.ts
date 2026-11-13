@@ -96,9 +96,12 @@ export function registerServiceFreeCommands(
   register(TRUST_COURSE_WORKSPACE_COMMAND, () => requestWorkspaceTrust())
 
   register("tmc.debug", async () => {
-    await vscode.commands.executeCommand("workbench.output.action.clearOutput")
+    // With logging off, the channel `show` creates holds only how to turn it on.
+    const isLogging = Logger.output !== undefined
     Logger.show()
-    await vscode.commands.executeCommand("workbench.action.openActiveLogOutputFile")
+    if (isLogging) {
+      await vscode.commands.executeCommand("workbench.action.openActiveLogOutputFile")
+    }
   })
 }
 
@@ -200,6 +203,10 @@ export function registerCommands(
 
   register("tmc.closeExercises", async (row?: CoursesTreeItem, rows?: CoursesTreeItem[]) =>
     treeCommands.closeExercises(readyContext, treeCommands.targetRows(row, rows)),
+  )
+
+  register("tmc.openExerciseMaterial", async (row?: CoursesTreeItem) =>
+    treeCommands.openExerciseMaterial(row),
   )
 
   register("tmc.updateCourseExercises", async (row: CoursesTreeItem) =>
