@@ -401,6 +401,7 @@
       <CoursePart
         {part}
         isWorkspaceOpen={view.isWorkspaceOpen}
+        canDownload={canDownload && !view.isOffline}
         isExpanded={isPartExpanded(part.key, part.isDefaultOpen)}
         ontoggle={() => togglePart(part.key)}
         onaction={(exercise, action) => runExerciseAction(exercise.id, action)}

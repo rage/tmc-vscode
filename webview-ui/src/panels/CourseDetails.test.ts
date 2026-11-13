@@ -487,6 +487,7 @@ suite("the course home", () => {
     )
 
     expect(screen.queryByRole("button", { name: /^Download/ })).not.toBeInTheDocument()
+    expect(document.querySelector(`vscode-toolbar-button[title="Download 02_loops"]`)).toBeNull()
     screen.getByRole("button", { name: "Log In" }).click()
 
     expect(postedMessages).toHaveBeenCalledWith({

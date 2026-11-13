@@ -13,6 +13,8 @@
     part: CourseHomePart
     /** This window is the course's workspace, where an opened exercise is a folder of it. */
     isWorkspaceOpen: boolean
+    /** Whether a download can succeed now: logged in, and the backend reachable. */
+    canDownload: boolean
     isExpanded: boolean
     ontoggle: () => void
     onaction: (exercise: CourseHomeExercise, action: CourseHomeExerciseAction) => void
@@ -21,7 +23,15 @@
   }
 
   /** One part of the course: a header with its progress, and a row per exercise. */
-  let { part, isWorkspaceOpen, isExpanded, ontoggle, onaction, onopenmaterial }: Props = $props()
+  let {
+    part,
+    isWorkspaceOpen,
+    canDownload,
+    isExpanded,
+    ontoggle,
+    onaction,
+    onopenmaterial,
+  }: Props = $props()
 
   const headingId = $props.id()
   const passedCount = $derived(part.exercises.filter((ex) => ex.passed).length)
@@ -202,7 +212,7 @@
             >{points(exercise)}</span
           >
           <span class="row-actions">
-            {#if isDownloadable(exercise)}
+            {#if isDownloadable(exercise) && canDownload}
               <ToolbarButton
                 icon="cloud-download"
                 label="Download {exercise.name}"
