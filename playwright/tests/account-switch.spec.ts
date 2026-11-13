@@ -33,6 +33,7 @@ vsCodeTest.describe(() => {
       const moocLoginPage = new MoocLoginPage(page, webview)
       const courseTitle = "MOOC Python Course"
       const exerciseName = "passing_exercise"
+      const sourceTab = page.getByRole("tab", { name: /passing_exercise\.py/ })
 
       await vsCodeTest.step("the first student logs in and downloads an exercise", async () => {
         await moocLoginPage.gotoFromCoursesView()
@@ -46,6 +47,7 @@ vsCodeTest.describe(() => {
         const row = coursesView.row(exerciseName)
         await coursesView.runContextMenuCommand(row, "Open")
         await expect(row).toHaveAccessibleName(/, (downloaded|in workspace),/)
+        await expect(sourceTab).toBeVisible()
       })
 
       await vsCodeTest.step("they log out and another student logs in", async () => {
@@ -66,6 +68,7 @@ vsCodeTest.describe(() => {
           coursesView.notificationToast("Moved the other account's exercises to"),
         ).toBeVisible()
         await expect(coursesView.row(exerciseName)).toHaveAccessibleName(/, not downloaded,/)
+        await expect(sourceTab).toBeHidden()
       })
 
       await vsCodeTest.step("the first student logging in again gets them back", async () => {

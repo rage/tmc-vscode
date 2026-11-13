@@ -3,6 +3,7 @@ import * as path from "path"
 
 import { Ok } from "ts-results"
 import { vi } from "vitest"
+import * as vscode from "vscode"
 
 import type { ReadyActionContext } from "../../actions/types"
 import { handOverExercises } from "../../commands/handOverExercises"
@@ -38,6 +39,40 @@ function setUp(
   vi.mocked(dialog.choose).mockResolvedValue(answer as never)
   return { context: { ...base, dialog }, projectsDirectory }
 }
+
+/** Opens one editor tab per path, each document saved unless listed in `unsaved`. */
+function openEditors(
+  paths: string[],
+  { unsaved = [], isClosed = true }: { unsaved?: string[]; isClosed?: boolean } = {},
+): { close: ReturnType<typeof vi.fn>; saved: string[] } {
+  const saved: string[] = []
+  const documents = paths.map((fsPath) => ({
+    uri: vscode.Uri.file(fsPath),
+    isDirty: unsaved.includes(fsPath),
+    save: vi.fn(async () => {
+      fs.writeFileSync(fsPath, "unsaved edit")
+      saved.push(fsPath)
+      return true
+    }),
+  }))
+  Object.defineProperty(vscode.workspace, "textDocuments", {
+    value: documents,
+    configurable: true,
+  })
+  const close = vi.fn(async () => isClosed)
+  Object.defineProperty(vscode.window, "tabGroups", {
+    value: {
+      all: [{ viewColumn: 1, tabs: documents.map(({ uri }) => ({ input: { uri } })) }],
+      close,
+    },
+    configurable: true,
+  })
+  return { close, saved }
+}
+
+afterEach(function () {
+  openEditors([])
+})
 
 suite("handOverExercises", function () {
   test("the first login records its account as the exercises' owner, asking nothing", async function () {
@@ -84,6 +119,38 @@ suite("handOverExercises", function () {
     ).toBe("student A's work")
     expect(context.startup.keptCopies.pasteLink(idOfMoocExercise("e1"), "abc")).toBeUndefined()
     expect(context.startup.accountHandover.exercisesAccountIds).toEqual(["user-b"])
+  })
+
+  test("moving the exercises aside saves and closes their editors first", async function () {
+    const { context, projectsDirectory } = setUp("user-b", true)
+    await context.startup.accountHandover.setExercisesAccountIds(["user-a"])
+    const source = path.join(projectsDirectory, "mooc/course/exercise/src/main.py")
+    const outside = path.join(path.dirname(projectsDirectory), "notes.py")
+    const { close, saved } = openEditors([source, outside], { unsaved: [source, outside] })
+
+    await handOverExercises(context)
+
+    expect(saved).toEqual([source])
+    const closed = (close.mock.lastCall?.[0] ?? []) as { input: { uri: vscode.Uri } }[]
+    expect(closed.map(({ input }) => input.uri.fsPath)).toEqual([source])
+    const [moved] = context.startup.accountHandover.movedAside
+    expect(
+      fs.readFileSync(path.join(moved?.folder ?? "", "mooc/course/exercise/src/main.py"), "utf8"),
+    ).toBe("unsaved edit")
+  })
+
+  test("an editor left open keeps the exercises where they are", async function () {
+    const { context, projectsDirectory } = setUp("user-b", true)
+    await context.startup.accountHandover.setExercisesAccountIds(["user-a"])
+    openEditors([path.join(projectsDirectory, "mooc/course/exercise/src/main.py")], {
+      isClosed: false,
+    })
+
+    await handOverExercises(context)
+
+    expect(fs.readdirSync(projectsDirectory)).toEqual(["mooc"])
+    expect(context.startup.accountHandover.movedAside).toEqual([])
+    expect(context.startup.accountHandover.exercisesAccountIds).toEqual(["user-a"])
   })
 
   test("another account may keep the exercises, which stay the first one's too", async function () {
