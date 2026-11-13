@@ -188,6 +188,23 @@ suite("downloadOrUpdateExercises action", function () {
     expect(warning?.error).toMatchObject({ details: reason })
   })
 
+  test("says when the chapter of an exercise not open yet opens", async function () {
+    // jest-mock-vscode ships no `env` namespace.
+    const vscodeModule: object = vscode
+    Object.defineProperty(vscodeModule, "env", { value: { language: "en" }, configurable: true })
+    const reason = 'Exercise 1 is in chapter 2 "Loops", which opens at 2030-01-01 00:00:00 UTC'
+    tmcMockValues.downloadTmcExercises = createDownloadResult([], [], [[helloWorld, [reason]]])
+
+    const result = await downloadResults(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
+
+    const [warning] = result.warnings
+    expect(warning?.error).toBeInstanceOf(errors.ChapterNotOpenError)
+    expect(warning?.error?.message).toMatch(
+      /^The chapter "Loops" has not opened yet\. Its exercises can be downloaded once it opens on .*2030/,
+    )
+    expect(warning?.error).toMatchObject({ details: reason })
+  })
+
   test("should not call TMC-langs if no exercises are given", async function () {
     await downloadOrUpdateExercises(actionContext(), [], TEST_COURSE_ID)
     expect(tmcMock.downloadTmcExercises).not.toHaveBeenCalled()
