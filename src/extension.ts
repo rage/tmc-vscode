@@ -156,6 +156,15 @@ interface StartupContext {
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  // `onStartupFinished` activates in every window; one TestMyCode has no part in yet stays light.
+  if (await init.canDeferActivation(context)) {
+    await init.deferActivation(context, () => activateFully(context))
+  } else {
+    await activateFully(context)
+  }
+}
+
+async function activateFully(context: vscode.ExtensionContext): Promise<void> {
   const startupContext: StartupContext = { isApplied: false }
   try {
     // The Courses view shows "Starting TestMyCode…" until activation settles; this gives it
@@ -246,7 +255,7 @@ async function activateInner(
   // before needs its answer.
   const initialAuthCheck = authState.refresh({ timeout: 15000 })
 
-  const workspaceFileFolder = path.join(context.globalStorageUri.fsPath, "workspaces")
+  const workspaceFileFolder = init.workspaceFileFolderOf(context)
 
   // migrate data between versions
   if (langs.ok) {
