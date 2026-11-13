@@ -526,7 +526,7 @@ suite("submitExercise action, mooc", () => {
     )
     expect(lastView()).toMatchObject({
       headline: "Some tests failed on the server",
-      explanation: "You have no tries left on this exercise, so this score is final.",
+      explanation: "That was your last try, so this score is final.",
     })
   })
 

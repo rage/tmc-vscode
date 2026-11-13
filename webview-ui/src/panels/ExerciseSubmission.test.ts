@@ -511,9 +511,7 @@ suite("ExerciseSubmission panel (mooc results)", () => {
       }),
     )
     await screen.findByRole("heading", { name: "Some tests failed on the server" })
-    expect(
-      screen.getByText("You have no tries left on this exercise, so this score is final."),
-    ).toBeInTheDocument()
+    expect(screen.getByText("That was your last try, so this score is final.")).toBeInTheDocument()
   })
 
   test("a pass leads on to the next exercise as the only button", async () => {
@@ -535,6 +533,36 @@ suite("ExerciseSubmission panel (mooc results)", () => {
       sourcePanel: { id: panel.id, type: panel.type },
       action: "openNextExercise",
     })
+  })
+
+  test("a failing submission after a pass keeps the points out of it, and offers a retry", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...moocGradingView(
+        moocGrading({
+          score_given: 0,
+          exercise_progress: {
+            exercise_id: "exercise",
+            score_given: 1,
+            score_maximum: 1,
+            completed: true,
+            attempted: true,
+            standing: "Passed",
+            max_tries: null,
+            tries_left: null,
+          },
+        }),
+        1,
+      ),
+      isExercisePassed: true,
+      nextExercise: { name: "part01-02_world" },
+    })
+
+    await screen.findByRole("heading", { name: "This submission failed some tests" })
+    expect(screen.queryByRole("meter", { name: "Points" })).not.toBeInTheDocument()
+    expect(isSecondary(screen.getByRole("button", { name: "Next: part01-02_world" }))).toBe(false)
+    expect(isSecondary(screen.getByRole("button", { name: "Run Tests" }))).toBe(true)
+    expect(isSecondary(screen.getByRole("button", { name: "Submit Again" }))).toBe(true)
   })
 
   test("a result short of a pass offers to test and submit again", async () => {

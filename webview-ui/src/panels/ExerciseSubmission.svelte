@@ -120,8 +120,15 @@
     }
     if (view?.isExercisePassed && view.nextExercise) {
       const next = view.nextExercise.name
+      // A failing submission after the pass: the student may want to fix what they broke.
+      const isThisOneFailed = view.tone !== "passed" && !view.exerciseState
       return {
         primary: { label: `Next: ${next}`, onclick: () => runExerciseAction("openNextExercise") },
+        secondary: isThisOneFailed
+          ? view.submitRefusal
+            ? [runTests]
+            : [runTests, submitAgain]
+          : [],
       }
     }
     if (view?.exerciseState === "notOnDisk") {

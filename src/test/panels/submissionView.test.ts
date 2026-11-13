@@ -183,13 +183,16 @@ suite("moocGradingView", () => {
     })
   })
 
-  test("a submission below full points to an exercise passed earlier says its tests failed", () => {
-    expect(moocGradingView(moocGrading("FullyGraded", 0, "Passed"), 1)).toMatchObject({
+  test("a submission below full points to an exercise passed earlier keeps its points in view", () => {
+    const view = moocGradingView(moocGrading("FullyGraded", 0, "Passed"), 1)
+    expect(view).toMatchObject({
       phase: "finished",
-      headline: "Some tests failed on the server",
-      explanation: "You have already passed this exercise with an earlier submission.",
-      points: { given: 0, max: 1 },
+      headline: "This submission failed some tests",
+      tone: "info",
+      explanation:
+        "You have already passed this exercise with an earlier submission, so you keep its points.",
     })
+    expect(view.points).toBeUndefined()
   })
 
   test("the last try below full points says the score is final, and help is still offered", () => {
@@ -197,7 +200,7 @@ suite("moocGradingView", () => {
     expect(view).toMatchObject({
       phase: "finished",
       headline: "Some tests failed on the server",
-      explanation: "You have no tries left on this exercise, so this score is final.",
+      explanation: "That was your last try, so this score is final.",
       points: { given: 2, max: 3 },
       canPaste: true,
     })

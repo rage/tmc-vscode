@@ -181,13 +181,20 @@ export function moocGradingView(
   const standing = grading.exercise_progress?.standing
   // A pass may come from an earlier submission; a short score is about this one.
   const isBelowMax = given !== undefined && given < maxPoints
+  const isPassedEarlier = standing === "Passed" && isBelowMax
   switch (grading.grading_progress) {
     case "FullyGraded":
       return {
         ...graded,
         phase: "finished",
-        headline: isBelowMax ? "Some tests failed on the server" : fullyGradedHeadline(standing),
-        tone: isBelowMax ? scoreTone(given) : fullyGradedTone(standing),
+        headline: isPassedEarlier
+          ? "This submission failed some tests"
+          : isBelowMax
+            ? "Some tests failed on the server"
+            : fullyGradedHeadline(standing),
+        // This score does not count, so it is no failure, and a meter of it would read as lost points.
+        tone: isPassedEarlier ? "info" : isBelowMax ? scoreTone(given) : fullyGradedTone(standing),
+        ...(isPassedEarlier ? { points: undefined } : {}),
         ...fullyGradedExplanation(standing, isBelowMax),
         canPaste: standing !== "Passed" || isBelowMax,
       }
@@ -249,10 +256,13 @@ function fullyGradedExplanation(
   isBelowMax: boolean,
 ): { explanation?: string } {
   if (standing === "OutOfTries") {
-    return { explanation: "You have no tries left on this exercise, so this score is final." }
+    return { explanation: "That was your last try, so this score is final." }
   }
   if (standing === "Passed" && isBelowMax) {
-    return { explanation: "You have already passed this exercise with an earlier submission." }
+    return {
+      explanation:
+        "You have already passed this exercise with an earlier submission, so you keep its points.",
+    }
   }
   return {}
 }
