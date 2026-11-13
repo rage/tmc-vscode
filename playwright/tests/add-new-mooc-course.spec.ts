@@ -156,6 +156,6 @@ vsCodeTest("submitting an exercise gone from the server says so", async ({ page,
     ).toBeVisible()
     await expect(sidePanel.getByRole("button", { name: "Refresh Courses" })).toBeVisible()
     const details = await sidePanel.getByRole("group", { name: "Error details" }).textContent()
-    expect(details?.split("Caused by: HTTP error 404")).toHaveLength(2)
+    expect(details?.split("Caused by: 404 Not Found from")).toHaveLength(2)
   })
 })
