@@ -6,7 +6,7 @@ import * as vscode from "vscode"
 
 import type { ExerciseStatus } from "../../../shared/lib"
 import { ExerciseIdentifier } from "../../../shared/lib"
-import { downloadOrUpdateExercises } from "../../actions"
+import { downloadOrUpdateExercises, findKeptCopy } from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
@@ -26,6 +26,7 @@ import { createSettingsMock } from "../mocks/settings"
 import type { TMCMockValues } from "../mocks/tmc"
 import { createTMCMock } from "../mocks/tmc"
 import { exerciseLookupOver } from "../mocks/userdata"
+import { makeTmpDirs } from "../utils"
 
 const helloWorld: ExerciseDownload = {
   id: idOfTmcExercise(1),
@@ -459,6 +460,21 @@ suite("downloadOrUpdateExercises action", function () {
     )
   })
 
+  test("remembers a new exercise's downloaded files as kept, but not an update's", async function () {
+    const root = makeTmpDirs({ "src/main.py": "template" })
+    const download: ExerciseDownload = { id: idOfTmcExercise(99), path: root }
+    tmcMockValues.downloadTmcExercises = createDownloadResult([download], [])
+    tmcMock.getStudentFilePaths = vi.fn<Langs["getStudentFilePaths"]>(async () => Ok(["src"]))
+    const context = actionContext()
+    const exercise = { id: download.id, uri: vscode.Uri.file(root) }
+
+    await downloadOrUpdateExercises(context, [download.id], TEST_COURSE_ID, { isUpdate: true })
+    expect(await findKeptCopy(context, exercise)).toBeUndefined()
+
+    await downloadOrUpdateExercises(context, [download.id], TEST_COURSE_ID)
+    expect(await findKeptCopy(context, exercise)).toBe("download")
+  })
+
   suite("with downloadOldSubmission on, a mooc exercise", function () {
     const freshId = "11111111-1111-4111-8111-111111111111"
     const fresh: ExerciseDownload = { id: idOfMoocExercise(freshId), path: "/mooc/fresh" }
@@ -471,7 +487,10 @@ suite("downloadOrUpdateExercises action", function () {
           kind: "mooc",
           data: {
             exerciseId: freshId,
-            submissions: [{ id: "latest" }, { id: "older" }] as never,
+            submissions: [
+              { id: "latest", kind: "submission" },
+              { id: "older", kind: "submission" },
+            ] as never,
           },
         }),
       )
@@ -487,6 +506,43 @@ suite("downloadOrUpdateExercises action", function () {
         false,
       )
       expect(result.warnings).toEqual([])
+    })
+
+    test("gets its newest graded submission, not a newer backup or paste", async function () {
+      tmcMock.getOldSubmissions = vi.fn<Langs["getOldSubmissions"]>(async () =>
+        Ok({
+          kind: "mooc",
+          data: {
+            exerciseId: freshId,
+            submissions: [
+              { id: "backup", kind: "backup" },
+              { id: "paste", kind: "paste" },
+              { id: "graded", kind: "submission" },
+            ] as never,
+          },
+        }),
+      )
+
+      await downloadOrUpdateExercises(actionContext(), [fresh.id], TEST_COURSE_ID)
+
+      expect(tmcMock.restoreSubmission).toHaveBeenCalledExactlyOnceWith(
+        { kind: "mooc", data: { exerciseId: freshId, submissionId: "graded" } },
+        "/mooc/fresh",
+        false,
+      )
+    })
+
+    test("with only backups and pastes stays a template", async function () {
+      tmcMock.getOldSubmissions = vi.fn<Langs["getOldSubmissions"]>(async () =>
+        Ok({
+          kind: "mooc",
+          data: { exerciseId: freshId, submissions: [{ id: "backup", kind: "backup" }] as never },
+        }),
+      )
+
+      await downloadOrUpdateExercises(actionContext(), [fresh.id], TEST_COURSE_ID)
+
+      expect(tmcMock.restoreSubmission).not.toHaveBeenCalled()
     })
 
     test("already on disk keeps its files", async function () {
@@ -543,7 +599,7 @@ suite("downloadOrUpdateExercises action", function () {
 
       await downloadOrUpdateExercises(actionContext(), [fresh.id], TEST_COURSE_ID)
 
-      expect(tmcMock.listLocalExercises).not.toHaveBeenCalled()
+      expect(tmcMock.getOldSubmissions).not.toHaveBeenCalled()
       expect(tmcMock.restoreSubmission).not.toHaveBeenCalled()
     })
   })

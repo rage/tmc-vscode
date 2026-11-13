@@ -262,7 +262,10 @@ function stubHandlers(): {
       .mockReset()
       .mockResolvedValue(Ok({ warnings: [] })),
     openWorkspace,
-    pasteExercise: vi.mocked(actions.pasteExercise).mockReset().mockResolvedValue(Ok("link")),
+    pasteExercise: vi
+      .mocked(actions.pasteExercise)
+      .mockReset()
+      .mockResolvedValue(Ok({ link: "link", isReused: false })),
     refreshLocalExercises: vi
       .mocked(actions.refreshLocalExercises)
       .mockReset()

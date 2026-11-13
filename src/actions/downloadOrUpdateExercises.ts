@@ -3,7 +3,14 @@ import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { BackendKind, CourseIdentifier } from "../../shared/lib"
-import { backendName, ExerciseIdentifier, makeMoocKind, match, partition } from "../../shared/lib"
+import {
+  backendName,
+  ExerciseIdentifier,
+  makeMoocKind,
+  makeTmcKind,
+  match,
+  partition,
+} from "../../shared/lib"
 import type Langs from "../api/langs"
 import type { ExerciseDownload, ExerciseDownloadProgress, ExerciseDownloads } from "../api/langs"
 import type { OperationWarning, Warned } from "../api/withOperation"
@@ -12,8 +19,9 @@ import { downloadFailures } from "../ui/downloadFailures"
 import type { ExerciseClaim } from "../ui/exerciseOperations"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
-import { Logger } from "../utilities"
+import { Logger, mapConcurrently } from "../utilities"
 import { describeExercises, exerciseName } from "./exerciseNames"
+import { recordKeptCopy } from "./keptCopies"
 import type { ReadyActionContext } from "./types"
 
 /** What one backend's download came back with. */
@@ -106,6 +114,7 @@ async function download(
 
   let cancelled = false
   const unrestored: ExerciseIdentifier[] = []
+  const fresh: ExerciseDownload[] = []
   const legs = await dialog.progressNotification(
     "Downloading exercises…",
     async (progress, token) => {
@@ -149,25 +158,40 @@ async function download(
           interruptDownload = undefined
         }
       }
-      await runLeg("tmc", tmcIds.length, () =>
-        langs.downloadTmcExercises(tmcIds, downloadTemplate, onDownloaded, registerInterrupt),
-      )
+      const alreadyLocal = await localExerciseKeys(langs)
+      const freshDownloads = (downloads: Result<ExerciseDownloads, Error>): ExerciseDownload[] =>
+        alreadyLocal && downloads.ok
+          ? downloads.val.downloaded.filter(
+              ({ id }) => !alreadyLocal.has(ExerciseIdentifier.key(id)),
+            )
+          : []
+      await runLeg("tmc", tmcIds.length, async () => {
+        const downloads = await langs.downloadTmcExercises(
+          tmcIds,
+          downloadTemplate,
+          onDownloaded,
+          registerInterrupt,
+        )
+        fresh.push(...freshDownloads(downloads))
+        return downloads
+      })
       await runLeg("mooc", moocIds.length, async () => {
-        const alreadyLocal = downloadTemplate ? undefined : await localMoocExerciseIds(langs)
         const downloads = await langs.downloadMoocExercises(
           moocIds,
           moocCourseId,
           onDownloaded,
           registerInterrupt,
         )
-        if (alreadyLocal && downloads.ok && !cancelled) {
-          const fresh = downloads.val.downloaded.filter(
-            ({ id }) => !alreadyLocal.has(ExerciseIdentifier.toString(id)),
-          )
-          unrestored.push(...(await restoreLatestSubmissions(langs, fresh)))
+        const freshMooc = freshDownloads(downloads)
+        if (!downloadTemplate && !cancelled) {
+          unrestored.push(...(await restoreLatestSubmissions(langs, freshMooc)))
         }
+        fresh.push(...freshMooc)
         return downloads
       })
+      if (!options.isUpdate) {
+        await recordDownloadedCopies(actionContext, fresh)
+      }
       return finished
     },
     progressOptions(options),
@@ -238,23 +262,43 @@ function progressOptions(options: DownloadOptions): {
 }
 
 /**
- * The mooc exercises already in the projects directory, by id, or `undefined` when they cannot
- * be listed: a download then must not put a submission over what may be the student's work.
+ * The exercises already in the projects directory, by `ExerciseIdentifier.key`, or `undefined`
+ * when they cannot be listed: a download then must not put a submission over what may be the
+ * student's work.
  */
-async function localMoocExerciseIds(langs: Langs): Promise<Set<string> | undefined> {
+async function localExerciseKeys(langs: Langs): Promise<Set<string> | undefined> {
   const local = await langs.listLocalExercises()
   if (local.err) {
     Logger.error("Could not list local exercises; downloading templates only", local.val)
     return undefined
   }
   return new Set(
-    local.val.flatMap((exercise) => (exercise.backend === "mooc" ? [exercise["exercise-id"]] : [])),
+    local.val.map((exercise) =>
+      ExerciseIdentifier.key(
+        exercise.backend === "mooc"
+          ? makeMoocKind({ moocExerciseId: exercise["exercise-id"] })
+          : makeTmcKind({ tmcExerciseId: exercise["exercise-id"] }),
+      ),
+    ),
+  )
+}
+
+/** How many exercises' student files are fingerprinted at once after a download. */
+const FINGERPRINT_CONCURRENCY = 8
+
+/** Records the files of exercises that were not on disk before as their downloaded copies. */
+async function recordDownloadedCopies(
+  actionContext: ReadyActionContext,
+  downloads: ExerciseDownload[],
+): Promise<void> {
+  await mapConcurrently(downloads, FINGERPRINT_CONCURRENCY, ({ id, path }) =>
+    recordKeptCopy(actionContext, { id, uri: vscode.Uri.file(path) }, "download"),
   )
 }
 
 /**
- * Puts each newly downloaded mooc exercise's latest submission over its template, as the tmc
- * download does itself for `testMyCode.downloadOldSubmission`.
+ * Puts each newly downloaded mooc exercise's latest graded submission over its template, as
+ * the tmc download does itself for `testMyCode.downloadOldSubmission`.
  *
  * @returns The exercises left at their template because the restore failed.
  */
@@ -273,12 +317,15 @@ async function restoreLatestSubmissions(
       unrestored.push(id)
       continue
     }
-    // `get-exercise-submissions` lists newest first.
+    // `get-exercise-submissions` lists newest first. A backup or paste is not restored: a
+    // backup may be code the student chose to discard by resetting.
     const latest = match(
       listed.val,
       () => undefined,
-      ({ exerciseId, submissions }) =>
-        submissions[0] && makeMoocKind({ exerciseId, submissionId: submissions[0].id }),
+      ({ exerciseId, submissions }) => {
+        const graded = submissions.find(({ kind }) => kind === "submission")
+        return graded && makeMoocKind({ exerciseId, submissionId: graded.id })
+      },
     )
     if (!latest) {
       continue

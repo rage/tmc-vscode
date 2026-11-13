@@ -21,6 +21,7 @@ import { CourseWorkspaceSwitches } from "./api/courseWorkspaceSwitches"
 import type { NotificationButton } from "./api/dialog"
 import Dialog from "./api/dialog"
 import ExerciseDecorationProvider from "./api/exerciseDecorationProvider"
+import { KeptCopies } from "./api/keptCopies"
 import Langs from "./api/langs"
 import {
   MOOC_AUTHENTICATION_PROVIDER_ID,
@@ -439,6 +440,7 @@ async function activateInner(
           workspaceManager,
           userData: userData.val,
           exerciseDecorationProvider,
+          keptCopies: new KeptCopies(context.globalState),
         }
       : { kind: "degraded", failures: startupFailures({ langs, resources, userData }) }
   if (startup.kind === "degraded") {

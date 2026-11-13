@@ -25,11 +25,12 @@ export const exerciseHandlers = {
         return Err(new Error("This exercise is no longer shown."))
       }
       // Silent: the panel that asked shows the failure, remedies included.
-      return withOperation(
+      const pasted = await withOperation(
         actionContext.dialog,
         { failure: "Failed to paste the exercise.", silent: true },
         () => actions.pasteExercise(actionContext, shown.exerciseId),
       )
+      return pasted.map(({ link }) => link)
     },
   },
   keepWaitingForGrading: {

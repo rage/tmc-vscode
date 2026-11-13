@@ -3,6 +3,7 @@ import type { AuthState } from "../api/authState"
 import type { CourseWorkspaceSwitches } from "../api/courseWorkspaceSwitches"
 import type Dialog from "../api/dialog"
 import type ExerciseDecorationProvider from "../api/exerciseDecorationProvider"
+import type { KeptCopies } from "../api/keptCopies"
 import type Langs from "../api/langs"
 import type WorkspaceManager from "../api/workspaceManager"
 import type { WorkspaceTrustGate } from "../api/workspaceTrustGate"
@@ -17,6 +18,7 @@ export interface ReadyStartup {
   aiUseGate: AiUseGate
   courseWorkspaceSwitches: CourseWorkspaceSwitches
   exerciseDecorationProvider: ExerciseDecorationProvider
+  keptCopies: KeptCopies
   langs: Langs
   resources: Resources
   trustGate: WorkspaceTrustGate

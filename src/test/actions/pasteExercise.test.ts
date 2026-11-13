@@ -1,6 +1,9 @@
+import * as fs from "fs"
+import * as path from "path"
+
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
-import type * as vscode from "vscode"
+import * as vscode from "vscode"
 
 import type { ExerciseIdentifier } from "../../../shared/lib"
 import { pasteServiceName } from "../../../shared/lib"
@@ -14,6 +17,7 @@ import { BottleneckError, WorkspaceUntrustedError } from "../../errors"
 import { idOfMoocCourse, idOfMoocExercise, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { restrictedTrustGate } from "../support/trustGate"
+import { makeTmpDirs } from "../utils"
 
 const COURSE_SLUG = "mooc-python-course"
 const EXERCISE_SLUG = "loops"
@@ -85,7 +89,7 @@ suite("paste action", () => {
     const result = await pasteExercise(actionContext, TMC_ID)
 
     expect(submit).toHaveBeenCalledWith(TMC_ID, EXERCISE_PATH)
-    expect(result.val).toBe("https://tmc.mooc.fi/paste/abc123")
+    expect(result.val).toEqual({ link: "https://tmc.mooc.fi/paste/abc123", isReused: false })
   })
 
   test("a mooc exercise goes to the mooc paste service with its uuid", async () => {
@@ -95,7 +99,7 @@ suite("paste action", () => {
 
     expect(submit).toHaveBeenCalledWith(MOOC_ID, EXERCISE_PATH)
     expect(result.ok).toBe(true)
-    expect(result.val).toBe("https://paste.example/abc123")
+    expect(result.val).toEqual({ link: "https://paste.example/abc123", isReused: false })
   })
 
   test("a paste is rejected while a submit of the same exercise is in flight", async () => {
@@ -121,7 +125,41 @@ suite("paste action", () => {
     expect(notification).not.toHaveBeenCalled()
 
     finish()
-    expect((await first).val).toBe("link")
+    expect((await first).val).toEqual({ link: "link", isReused: false })
+  })
+
+  test("unchanged code gets the last paste's link without a new paste", async () => {
+    const root = makeTmpDirs({ "src/main.py": "print(1)" })
+    const paste = vi.fn().mockResolvedValue(Ok("https://paste.example/first"))
+    const actionContext = createMockActionContext({
+      startup: {
+        langs: {
+          paste,
+          getStudentFilePaths: async () => Ok(["src"]),
+        } as unknown as ReadyStartup["langs"],
+        userData: { getCourse: () => Ok({}) } as unknown as ReadyStartup["userData"],
+        workspaceManager: {
+          getExercise: () => ({ ...moocExercise, uri: vscode.Uri.file(root) }),
+        } as unknown as ReadyStartup["workspaceManager"],
+      },
+    })
+
+    expect((await pasteExercise(actionContext, MOOC_ID)).val).toEqual({
+      link: "https://paste.example/first",
+      isReused: false,
+    })
+    expect((await pasteExercise(actionContext, MOOC_ID)).val).toEqual({
+      link: "https://paste.example/first",
+      isReused: true,
+    })
+    expect(paste).toHaveBeenCalledOnce()
+
+    fs.writeFileSync(path.join(root, "src/main.py"), "print(2)")
+    paste.mockResolvedValue(Ok("https://paste.example/second"))
+    expect((await pasteExercise(actionContext, MOOC_ID)).val).toEqual({
+      link: "https://paste.example/second",
+      isReused: false,
+    })
   })
 
   test("a CLI or backend failure is returned unreported", async () => {

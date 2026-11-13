@@ -7,6 +7,7 @@ import type { AuthState } from "../../api/authState"
 import type { CourseWorkspaceSwitches } from "../../api/courseWorkspaceSwitches"
 import type Dialog from "../../api/dialog"
 import type ExerciseDecorationProvider from "../../api/exerciseDecorationProvider"
+import { KeptCopies } from "../../api/keptCopies"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceTrustGate } from "../../api/workspaceTrustGate"
@@ -16,6 +17,7 @@ import type { UserData } from "../../config/userdata"
 import type CoursesTree from "../../ui/treeview/treeview"
 import { autoMock } from "../support/mock"
 import { createDialogMock } from "./dialog"
+import { createMockMemento } from "./vscode"
 
 export interface MockActionContextOptions {
   /** Whether the user has a session; they do unless said otherwise. */
@@ -66,6 +68,7 @@ export function createMockActionContext(
       aiUseGate: autoMock<AiUseGate>(),
       courseWorkspaceSwitches: autoMock<CourseWorkspaceSwitches>(),
       exerciseDecorationProvider: autoMock<ExerciseDecorationProvider>(),
+      keptCopies: new KeptCopies(createMockMemento()),
       langs: autoMock<Langs>(),
       resources: autoMock<Resources>(),
       // Refuses nothing: `refusal` returns `undefined`.

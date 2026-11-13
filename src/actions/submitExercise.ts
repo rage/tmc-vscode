@@ -38,7 +38,7 @@ import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import { checkAiUse } from "./checkAiUse"
 import { checkWorkspaceTrust } from "./checkWorkspaceTrust"
 import { recordMoocEnrollment } from "./courseAccess"
-import { fingerprintStudentFiles, recordSubmittedFingerprint } from "./submittedState"
+import { fingerprintStudentFiles } from "./keptCopies"
 import type { ReadyActionContext } from "./types"
 
 /** What a backend answered a submission with, reduced to what the shared flow acts on. */
@@ -395,7 +395,9 @@ export async function submitExercise(
     submissionViews.open(submission.panel)
 
     const outcome = await submit(submission)
-    recordSubmittedFingerprint(exerciseId, outcome.ok ? fingerprint : undefined)
+    if (outcome.ok) {
+      await actionContext.startup.keptCopies.record(exerciseId, "submission", fingerprint)
+    }
     const enrollment = await recordMoocEnrollment(
       actionContext,
       courseId,

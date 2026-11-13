@@ -8,7 +8,7 @@ import { checkAiUse, listOldSubmissions, restoreOldSubmission } from "../actions
 import type { ReadyActionContext } from "../actions/types"
 import type { Item } from "../api/dialog"
 import { failure } from "../api/withOperation"
-import { formatDateTime, parseDate } from "../utilities"
+import { formatTimestamp, parseDate } from "../utilities"
 import { revertExerciseDocuments } from "../window/exerciseDocuments"
 import {
   confirmSubmitBeforeDestructiveAction,
@@ -18,20 +18,25 @@ import { checkTrustRetrying, runForExercise } from "./runForExercise"
 
 const TITLE = "Download Old Submission"
 
-/** Picker rows for `submissions`, newest first, which is the one a student almost always wants. */
+/**
+ * Picker rows for `submissions`, newest first. The newest graded submission, the one a student
+ * almost always wants, is marked; a newer backup or paste is not.
+ */
 function submissionItems(submissions: PickableSubmission[]): Item<PickableSubmission>[] {
-  return submissions
+  const now = new Date()
+  const sorted = submissions
     .map((submission) => ({ submission, createdAt: parseDate(submission.createdAt) }))
     .toSorted((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
-    .map(({ submission, createdAt }, index) => {
-      const item: Item<PickableSubmission> = {
-        label: createdAt ? formatDateTime(createdAt, vscode.env.language) : "Unknown date",
-        value: submission,
-        description: submission.status,
-        iconPath: submissionIcon(submission),
-      }
-      return index === 0 ? { ...item, detail: "Latest" } : item
-    })
+  const latest = sorted.find(({ submission }) => submission.kind === "submission")?.submission
+  return sorted.map(({ submission, createdAt }) => {
+    const item: Item<PickableSubmission> = {
+      label: createdAt ? formatTimestamp(createdAt, now, vscode.env.language) : "Unknown date",
+      value: submission,
+      description: submission.status,
+      iconPath: submissionIcon(submission),
+    }
+    return submission === latest ? { ...item, detail: "Latest submission" } : item
+  })
 }
 
 function submissionIcon(submission: PickableSubmission): vscode.ThemeIcon {
@@ -86,7 +91,7 @@ export async function downloadOldSubmission(
       const submission = await dialog.selectItem(
         {
           title: `${TITLE} — ${exercise.exerciseSlug}`,
-          placeHolder: "Pick a submission to restore",
+          placeHolder: "Pick a submission, help request or backup to restore",
         },
         ...submissionItems(submissionsResult.val),
       )

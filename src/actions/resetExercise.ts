@@ -4,6 +4,7 @@ import type { ExerciseIdentifier } from "../../shared/lib"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { saveExerciseDocuments } from "../window/exerciseDocuments"
+import { fingerprintStudentFiles, recordKeptCopy } from "./keptCopies"
 import type { ReadyActionContext } from "./types"
 
 /**
@@ -18,14 +19,21 @@ export async function resetExercise(
   exercise: WorkspaceExercise,
   submitFirst: boolean,
 ): Promise<Result<void, Error>> {
-  const { langs } = actionContext.startup
+  const { langs, keptCopies } = actionContext.startup
   return exerciseOperations.run(id, "resetting", async () => {
+    let keptFingerprint: string | undefined
     if (submitFirst) {
       const saved = await saveExerciseDocuments(exercise)
       if (saved.err) {
         return saved
       }
+      keptFingerprint = await fingerprintStudentFiles(actionContext, exercise)
     }
-    return langs.resetExercise(id, exercise.uri.fsPath, submitFirst)
+    const reset = await langs.resetExercise(id, exercise.uri.fsPath, submitFirst)
+    if (reset.ok) {
+      await keptCopies.record(id, id.kind === "mooc" ? "backup" : "submission", keptFingerprint)
+      await recordKeptCopy(actionContext, exercise, "reset")
+    }
+    return reset
   })
 }
