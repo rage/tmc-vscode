@@ -1156,7 +1156,7 @@ describe("mooc mock enrollment, answerability and ownership", () => {
   test("an upload to an exercise past its deadline is refused", async () => {
     await assertRefused(
       await postUpload(pastDeadlineExercise.slide.exercise_id),
-      "validation_error",
+      "deadline_passed",
       "Exercise deadline passed.",
     )
   })
@@ -1197,7 +1197,7 @@ describe("mooc mock enrollment, answerability and ownership", () => {
     assert.equal((await postSubmit(limitedTriesExercise, [first])).status, 200)
     await assertRefused(
       await postSubmit(limitedTriesExercise, [second]),
-      "validation_error",
+      "out_of_tries",
       "You've ran out of tries.",
     )
   })
@@ -1244,9 +1244,119 @@ describe("mooc mock enrollment, answerability and ownership", () => {
     assert.equal((await postSubmit(limitedTriesExercise, [fileId])).status, 200)
     await assertRefused(
       await postUpload(limitedTriesExercise.slide.exercise_id),
-      "validation_error",
+      "out_of_tries",
       "You've ran out of tries.",
     )
+  })
+
+  test("progress counts the tries left on a limited exercise and none on an unlimited one", async () => {
+    const progressOf = async (exerciseId: string) => {
+      const progress = (await (
+        await authFetch(api(`/courses/${variantsCourse.id}/progress`))
+      ).json()) as {
+        exercises: { exercise_id: string; max_tries: number | null; tries_left: number | null }[]
+      }
+      return progress.exercises.find((e) => e.exercise_id === exerciseId)
+    }
+    const exerciseId = limitedTriesExercise.slide.exercise_id
+    assert.deepEqual(
+      {
+        max: (await progressOf(exerciseId))?.max_tries,
+        left: (await progressOf(exerciseId))?.tries_left,
+      },
+      { max: 1, left: 1 },
+    )
+    assert.equal(
+      (await postSubmit(limitedTriesExercise, [await uploadFor(exerciseId)])).status,
+      200,
+    )
+    assert.equal((await progressOf(exerciseId))?.tries_left, 0)
+    const unlimited = await progressOf(futureDeadlineExercise.slide.exercise_id)
+    assert.equal(unlimited?.max_tries, null)
+    assert.equal(unlimited?.tries_left, null)
+  })
+
+  const chapter = {
+    id: "c0c0c0c0-0000-4000-8000-000000000001",
+    name: "Loops",
+    chapter_number: 2,
+    deadline: null,
+    opens_at: null,
+    locking_status: null,
+  } as const
+
+  test("an exercise without a deadline of its own is served its chapter's", async () => {
+    const exerciseId = futureDeadlineExercise.slide.exercise_id
+    const own = futureDeadlineExercise.slide.deadline
+    mock.setExerciseChapter(exerciseId, { ...chapter, deadline: "2000-01-01T00:00:00.000Z" })
+    const slide = (await (await authFetch(api(`/exercises/${exerciseId}`))).json()) as {
+      deadline: string | null
+      chapter: { name: string; locking_status: string | null }
+    }
+    assert.equal(slide.deadline, own)
+    assert.deepEqual(slide.chapter, {
+      id: chapter.id,
+      name: "Loops",
+      chapter_number: 2,
+      locking_status: null,
+    })
+
+    const passingId = passingExercise.slide.exercise_id
+    mock.setExerciseChapter(passingId, { ...chapter, deadline: "2000-01-01T00:00:00.000Z" })
+    const inherited = (await (await authFetch(api(`/exercises/${passingId}`))).json()) as {
+      deadline: string | null
+    }
+    assert.equal(inherited.deadline, "2000-01-01T00:00:00.000Z")
+    await assertRefused(await postUpload(passingId), "deadline_passed", "Exercise deadline passed.")
+  })
+
+  test("a chapter that opens later hides its exercises without removing them", async () => {
+    const exerciseId = passingExercise.slide.exercise_id
+    mock.setExerciseChapter(exerciseId, { ...chapter, opens_at: "2100-01-01T00:00:00.000Z" })
+    const slides = (await (
+      await authFetch(api(`/courses/${pythonCourse.id}/exercises`))
+    ).json()) as { exercise_id: string }[]
+    assert.equal(slides.length, 0)
+    const progress = (await (
+      await authFetch(api(`/courses/${pythonCourse.id}/progress`))
+    ).json()) as {
+      exercises: unknown[]
+      closed_chapters: { id: string; opens_at: string; exercises: { exercise_id: string }[] }[]
+    }
+    assert.deepEqual(progress.exercises, [])
+    assert.equal(progress.closed_chapters.length, 1)
+    assert.equal(progress.closed_chapters[0]!.opens_at, "2100-01-01T00:00:00.000Z")
+    assert.deepEqual(
+      progress.closed_chapters[0]!.exercises.map((e) => e.exercise_id),
+      [exerciseId],
+    )
+    const message = "This exercise's chapter is not open yet."
+    await assertRefused(
+      await authFetch(api(`/exercises/${exerciseId}`)),
+      "chapter_not_open_yet",
+      message,
+    )
+    await assertRefused(await postUpload(exerciseId), "chapter_not_open_yet", message)
+  })
+
+  test("chapter locking refuses answers, each lock with its own key", async () => {
+    const exerciseId = passingExercise.slide.exercise_id
+    mock.setExerciseChapter(exerciseId, { ...chapter, locking_status: "not_unlocked_yet" })
+    await assertRefused(
+      await postUpload(exerciseId),
+      "chapter_not_unlocked_yet",
+      "Complete and lock the previous chapter to unlock exercises in this chapter.",
+    )
+    mock.setExerciseChapter(exerciseId, { ...chapter, locking_status: "completed_and_locked" })
+    await assertRefused(
+      await postUpload(exerciseId),
+      "chapter_completed_and_locked",
+      "The current chapter is locked, and you can no longer submit exercises.",
+    )
+    const slide = (await (await authFetch(api(`/exercises/${exerciseId}`))).json()) as {
+      chapter: { locking_status: string }
+    }
+    assert.equal(slide.chapter.locking_status, "completed_and_locked")
   })
 
   test("another student's submission is refused on grading, download and share", async () => {
@@ -1581,6 +1691,74 @@ describe("mooc mock error envelopes", () => {
       messageKey: "not_enrolled",
       run: async () => read(await authFetch(api(`/exercises/${notEnrolledExerciseId}`))),
     },
+    {
+      name: "an upload past the deadline",
+      messageKey: "deadline_passed",
+      run: async () =>
+        read(
+          await authFetch(api(`/exercises/${pastDeadlineExercise.slide.exercise_id}/files`), {
+            method: "POST",
+            body: new FormData(),
+          }),
+        ),
+    },
+    {
+      name: "a submit with no tries left",
+      messageKey: "out_of_tries",
+      run: async () => {
+        mock.reset()
+        const exercise = limitedTriesExercise
+        const [first, second] = [
+          await uploadFor(exercise.slide.exercise_id),
+          await uploadFor(exercise.slide.exercise_id),
+        ]
+        const submit = (fileId: string): Promise<Response> =>
+          authFetch(api(`/exercises/${exercise.slide.exercise_id}/submit`), {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              exercise_slide_id: exercise.slide.slide_id,
+              exercise_task_id: exercise.slide.tasks[0]!.task_id,
+              answer_kind: "file",
+              data_files: [fileId],
+            }),
+          })
+        await submit(first)
+        return read(await submit(second))
+      },
+    },
+    ...(
+      [
+        ["chapter_not_open_yet", { opens_at: "2100-01-01T00:00:00.000Z" }],
+        ["chapter_not_unlocked_yet", { locking_status: "not_unlocked_yet" }],
+        ["chapter_completed_and_locked", { locking_status: "completed_and_locked" }],
+      ] as const
+    ).map(([messageKey, setting]) => ({
+      name: `an upload to an exercise whose chapter refuses it (${messageKey})`,
+      messageKey,
+      run: async (): Promise<ErrorResponse> => {
+        const exerciseId = futureDeadlineExercise.slide.exercise_id
+        mock.setExerciseChapter(exerciseId, {
+          id: "c0c0c0c0-0000-4000-8000-000000000002",
+          name: "Locked",
+          chapter_number: 3,
+          deadline: null,
+          opens_at: null,
+          locking_status: null,
+          ...setting,
+        })
+        try {
+          return await read(
+            await authFetch(api(`/exercises/${exerciseId}/files`), {
+              method: "POST",
+              body: new FormData(),
+            }),
+          )
+        } finally {
+          mock.setExerciseChapter(exerciseId, undefined)
+        }
+      },
+    })),
     {
       name: "an upload naming no files",
       messageKey: "validation_error",

@@ -2,9 +2,11 @@
 // `server/src/domain/error.rs`.
 //
 // Every `ControllerErrorType` variant fixes three things at once: the envelope's
-// `type`, its `message_key` and the HTTP status. The message keys are unique
-// across variants, so naming the key determines the other two -- which is why
-// this table is keyed by it and why a handler here names only a key.
+// `type`, its `message_key` and the HTTP status. Within the client API the message
+// keys are unique, so naming the key determines the other two -- which is why
+// this table is keyed by it and why a handler here names only a key. The host also
+// sends `chapter_not_open_yet` as a 401 from the course-material API; the client
+// API's 403 is the one here.
 //
 // Transcribed rather than validated against, because the vendored spec cannot
 // stand in for it: `components.schemas.ApiErrorResponse` declares no `required`
@@ -29,13 +31,17 @@ export const API_ERRORS = {
   course_slug_already_taken: { type: "validation_error", status: 422 },
   foreign_key_violation: { type: "validation_error", status: 422 },
   not_enrolled: { type: "validation_error", status: 422 },
+  deadline_passed: { type: "validation_error", status: 422 },
+  out_of_tries: { type: "validation_error", status: 422 },
   upload_expired: { type: "validation_error", status: 422 },
   unknown_upload: { type: "validation_error", status: 422 },
   duplicate_upload: { type: "validation_error", status: 422 },
   obsolete_client: { type: "obsolete_client", status: 426 },
   not_found: { type: "not_found", status: 404 },
   unauthorized: { type: "unauthorized", status: 401 },
-  chapter_not_open_yet: { type: "unauthorized", status: 401 },
+  chapter_not_open_yet: { type: "forbidden", status: 403 },
+  chapter_not_unlocked_yet: { type: "forbidden", status: 403 },
+  chapter_completed_and_locked: { type: "forbidden", status: 403 },
   authentication_required_for_exam_exercise: { type: "unauthorized", status: 401 },
   forbidden: { type: "forbidden", status: 403 },
   rate_limited: { type: "rate_limit", status: 429 },

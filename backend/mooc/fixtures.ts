@@ -84,7 +84,12 @@ export interface ExerciseSlide {
   deadline: string | null
   tasks: ExerciseTask[]
   page_url: string | null
-  chapter: { id: string; name: string; chapter_number: number } | null
+  chapter: {
+    id: string
+    name: string
+    chapter_number: number
+    locking_status: "unlocked" | "completed_and_locked" | "not_unlocked_yet" | null
+  } | null
 }
 
 export interface Course {
