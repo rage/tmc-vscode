@@ -3,7 +3,12 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { RunResult, TestResult } from "../../shared/langsSchema"
-import { BaseError, withDistinctKeys } from "../../shared/lib"
+import {
+  BaseError,
+  submitRefusalOf,
+  submitRefusalSentence,
+  withDistinctKeys,
+} from "../../shared/lib"
 import { checkAiUse } from "../actions/checkAiUse"
 import type { ExerciseTestOutcome } from "../actions/testExercise"
 import { testExercise } from "../actions/testExercise"
@@ -20,9 +25,17 @@ import {
   WorkspaceUntrustedError,
 } from "../errors"
 import { countOf } from "../utilities"
+import { reachWalkthroughMilestone } from "../window/walkthrough"
 import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
 import { createSourceFileFinder } from "./sourceFiles"
-import { failureMessage, runFailureText } from "./testMessages"
+import {
+  BROKEN_JAVA_HEADLINE,
+  BROKEN_JAVA_REMEDY,
+  failureMessage,
+  isBrokenJava,
+  runFailureText,
+  timeoutText,
+} from "./testMessages"
 
 /** The `controllerId` that package.json's `testing/*` menus match on. */
 export const TEST_CONTROLLER_ID = "tmc"
@@ -187,6 +200,7 @@ export class ExerciseTestController implements vscode.Disposable {
           }
           this._reportError(run, item, outcome.val)
         } else {
+          reachWalkthroughMilestone("test-my-code:HasRunTests")
           const isAllPassed = await this._reportOutcome(run, item, exercise, outcome.val)
           if (requested.length === 1) {
             this._offerSubmit(exercise, outcome.val, isAllPassed)
@@ -222,6 +236,19 @@ export class ExerciseTestController implements vscode.Disposable {
     const text = runFailureText(error, details, error instanceof RuntimeError)
     run.appendOutput(toTerminalText(`${text}\n`), undefined, item)
     run.errored(item, new vscode.TestMessage(text))
+    if (isBrokenJava(`${error.message}\n${details}`)) {
+      void this._actionContext.dialog.warningNotification(
+        `${BROKEN_JAVA_HEADLINE} ${BROKEN_JAVA_REMEDY}`,
+        [
+          "Open Settings",
+          (): void =>
+            void vscode.commands.executeCommand(
+              "workbench.action.openSettings",
+              "testMyCode.javaHome",
+            ),
+        ],
+      )
+    }
   }
 
   /** @returns Whether every test passed with nothing for the code quality checks to fault. */
@@ -260,6 +287,15 @@ export class ExerciseTestController implements vscode.Disposable {
       )
     }
 
+    if (runResult.timedOutAfterMs !== undefined && runResult.timedOutAfterMs !== null) {
+      const text = timeoutText(Number(runResult.timedOutAfterMs))
+      clearTests(item)
+      run.appendOutput(toTerminalText(`${text}\n`), undefined, item)
+      run.failed(item, new vscode.TestMessage(text))
+      // After a run this long, Test Results may well be out of view.
+      void this._actionContext.dialog.warningNotification(`${exercise.exerciseSlug}: ${text}`)
+      return false
+    }
     const failure = runFailure(runResult)
     if (failure !== undefined) {
       clearTests(item)
@@ -283,6 +319,14 @@ export class ExerciseTestController implements vscode.Disposable {
           `${results.length - passedCount} of ${results.length} tests failed.`,
         ),
       )
+    }
+    // The Python runner's own failure for a test folder that is gone or emptied.
+    if (
+      results.some((result) => !result.successful && result.message.startsWith("No tests found"))
+    ) {
+      const hint = "If the exercise's tests are missing, Reset Exercise restores its template."
+      run.appendOutput(toTerminalText(`${hint}\n`), undefined, item)
+      messages.push(new vscode.TestMessage(hint))
     }
     if (styleProblemCount > 0) {
       messages.push(
@@ -343,6 +387,20 @@ export class ExerciseTestController implements vscode.Disposable {
     } else if (isAllPassed && !outcome.isCourseDisabled) {
       message = `All tests of ${exercise.exerciseSlug} passed.`
     } else {
+      return
+    }
+    const stored = this._actionContext.startup.userData.getExercise(exercise.id)
+    if (stored.err) {
+      return
+    }
+    const storedExercise = stored.val.exercise
+    const refusal = submitRefusalOf(storedExercise, new Date())
+    if (refusal) {
+      const chapterName =
+        storedExercise.kind === "mooc" ? storedExercise.data.chapter?.name : undefined
+      void this._actionContext.dialog.notification(
+        `${message} ${submitRefusalSentence(refusal, exercise.exerciseSlug, chapterName)}`,
+      )
       return
     }
     const submit = (): void =>

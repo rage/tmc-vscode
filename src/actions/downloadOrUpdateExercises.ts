@@ -14,12 +14,12 @@ import {
 import type Langs from "../api/langs"
 import type { ExerciseDownload, ExerciseDownloadProgress, ExerciseDownloads } from "../api/langs"
 import type { OperationWarning, Warned } from "../api/withOperation"
-import { ExerciseUpdateError, presentationFor } from "../errors"
+import { ChapterNotOpenError, ExerciseUpdateError, presentationFor } from "../errors"
 import { downloadFailures } from "../ui/downloadFailures"
 import type { ExerciseClaim } from "../ui/exerciseOperations"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
-import { Logger, mapConcurrently } from "../utilities"
+import { formatDateTime, Logger, mapConcurrently, parseDate } from "../utilities"
 import { describeExercises, exerciseName } from "./exerciseNames"
 import { recordKeptCopy } from "./keptCopies"
 import type { ReadyActionContext } from "./types"
@@ -342,6 +342,9 @@ async function restoreLatestSubmissions(
   return unrestored
 }
 
+/** tmc-langs' reason for a mooc exercise of a chapter not open yet: its name and opening time. */
+const CLOSED_CHAPTER_REASON = /is in chapter \d+ "(.*)", which opens at (.+)$/
+
 /** tmc-langs' reasons for an exercise whose package on the server cannot be unpacked. */
 const BROKEN_PACKAGE_REASON = /archive|\bzip\b|project directory/i
 
@@ -360,6 +363,16 @@ function failureCause(failedLegs: Error[], exerciseReasons: string[][]): Error {
   const reasons = [...new Set(exerciseReasons.flat().filter((reason) => reason !== ""))]
   const details =
     reasons.length > 0 ? reasons.join("; ") : "tmc-langs did not report them as downloaded"
+  const closedChapter = reasons.map((reason) => CLOSED_CHAPTER_REASON.exec(reason)).find(Boolean)
+  if (closedChapter && reasons.every((reason) => CLOSED_CHAPTER_REASON.test(reason))) {
+    const [, name = "", opensAtText = ""] = closedChapter
+    const opensAt = parseDate(opensAtText)
+    const when = opensAt ? ` on ${formatDateTime(opensAt, vscode.env.language)}` : " later"
+    return new ChapterNotOpenError(
+      `The chapter "${name}" has not opened yet. Its exercises can be downloaded once it opens${when}.`,
+      details,
+    )
+  }
   if (reasons.length > 0 && reasons.every((reason) => BROKEN_PACKAGE_REASON.test(reason))) {
     return new ExerciseUpdateError(
       "The exercise on the server is not a valid exercise package; the course staff need to fix it.",

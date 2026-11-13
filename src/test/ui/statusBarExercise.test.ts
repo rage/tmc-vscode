@@ -103,7 +103,10 @@ suite("ExerciseStatusBarItem", function () {
     expect(item.id).toBe("tmc.activeExercise")
     expect(item.alignment).toBe(vscode.StatusBarAlignment.Right)
     expect(item.name).toBe("TestMyCode Exercise")
-    expect(item.command).toBe("tmc.showExerciseActions")
+    expect(item.command).toMatchObject({
+      command: "tmc.showExerciseActions",
+      arguments: [onDiskExercise.uri],
+    })
     expect(item.isShown).toBe(true)
     expect(item.text).toBe(`$(beaker) ${exerciseHelloWorld.exerciseSlug} · 1/2`)
     expect(item.accessibilityInformation?.label).toContain("1 of 2 points")
@@ -141,6 +144,21 @@ suite("ExerciseStatusBarItem", function () {
     h.workspace.activeExercise = onDiskExercise
     h.editorChanged.fire()
     expect(itemOf().isShown).toBe(true)
+  })
+
+  test("stays while a panel beside the exercise's editor has the focus", function () {
+    const h = harness()
+    track(new ExerciseStatusBarItem(h.sources))
+    const visible = vi.spyOn(vscode.window, "visibleTextEditors", "get")
+
+    h.workspace.activeExercise = undefined
+    visible.mockReturnValue([{ document: { uri: onDiskExercise.uri } } as vscode.TextEditor])
+    h.editorChanged.fire()
+    expect(itemOf().isShown).toBe(true)
+
+    visible.mockReturnValue([])
+    h.editorChanged.fire()
+    expect(itemOf().isShown).toBe(false)
   })
 
   test("spins while the exercise is tested, then shows the points again", async function () {
@@ -181,6 +199,39 @@ suite("ExerciseStatusBarItem", function () {
     expect(tooltipText(itemOf())).toContain("passed")
   })
 
+  test("says the points wait for teacher review instead of showing them", function () {
+    const h = harness()
+    h.stored.exercise = makeMoocKind(
+      moocCourseExercise({
+        id: "exercise-uuid",
+        name: exerciseHelloWorld.exerciseSlug,
+        availablePoints: 2,
+        pendingReview: "awaits_chapter_lock",
+      }),
+    )
+    track(new ExerciseStatusBarItem(h.sources))
+
+    expect(itemOf().text).toContain("waiting for teacher review")
+    expect(itemOf().text).not.toContain("0/2")
+  })
+
+  test("shows points already given while a review is pending", function () {
+    const h = harness()
+    h.stored.exercise = makeMoocKind(
+      moocCourseExercise({
+        id: "exercise-uuid",
+        name: exerciseHelloWorld.exerciseSlug,
+        awardedPoints: 1,
+        availablePoints: 2,
+        pendingReview: "awaits_teacher",
+      }),
+    )
+    track(new ExerciseStatusBarItem(h.sources))
+
+    expect(itemOf().text).toContain("1/2")
+    expect(itemOf().text).toContain("waiting for teacher review")
+  })
+
   test("says when the backend reports no tries left", function () {
     const h = harness()
     h.stored.exercise = makeMoocKind(
@@ -195,6 +246,27 @@ suite("ExerciseStatusBarItem", function () {
     track(new ExerciseStatusBarItem(h.sources))
 
     expect(tooltipText(itemOf())).toContain("1/2 points · no tries left")
+  })
+
+  test.each([
+    [{ maxTries: 3, triesLeft: 1 }, "1 try left"],
+    [{ deadline: "2000-01-01T00:00:00Z" }, "deadline passed"],
+    [{ outOfTries: true }, "no tries left"],
+  ])("shows where the exercise stands in its text: %o", function (data, standing) {
+    const h = harness()
+    h.stored.exercise = makeMoocKind(
+      moocCourseExercise({
+        id: "exercise-uuid",
+        name: exerciseHelloWorld.exerciseSlug,
+        awardedPoints: 1,
+        availablePoints: 2,
+        ...data,
+      }),
+    )
+    track(new ExerciseStatusBarItem(h.sources))
+
+    expect(itemOf().text).toBe(`$(beaker) ${exerciseHelloWorld.exerciseSlug} · 1/2 · ${standing}`)
+    expect(itemOf().accessibilityInformation?.label).toContain(standing)
   })
 
   test("stops listening when disposed", function () {
@@ -274,6 +346,70 @@ suite("showExerciseActions", function () {
     expect(offered()).toEqual(["Run Tests", "Open Next Exercise", "Reveal in Courses View"])
     expect(showQuickPick.mock.calls[0]?.[1]).toMatchObject({
       placeHolder: expect.stringMatching(/^Removed from the course/),
+    })
+  })
+
+  test("leaves Submit out, and says why, when the backend would refuse it", async function () {
+    const showQuickPick = vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)
+    const h = harness()
+    h.stored.exercise = makeMoocKind(
+      moocCourseExercise({ id: "exercise-uuid", name: "hello", triesLeft: 0, maxTries: 2 }),
+    )
+
+    await showExerciseActions(new Dialog(), h.sources, true)
+
+    expect(offered()).not.toContain("Submit Solution")
+    expect(offered()).toContain("Share Exercise via Paste")
+    expect(showQuickPick.mock.calls[0]?.[1]).toMatchObject({
+      placeHolder: "Can't be submitted: no tries left",
+    })
+  })
+
+  test("offers the model solution once it is revealed", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    vi.spyOn(vscode.window, "showQuickPick").mockImplementation((async (
+      items: readonly { label: string }[],
+    ) => items.find((x) => x.label.includes("Model Solution"))) as never)
+    const h = harness()
+    h.stored.exercise = makeMoocKind(
+      moocCourseExercise({
+        id: "exercise-uuid",
+        name: "hello",
+        triesLeft: 0,
+        maxTries: 2,
+        outOfTries: true,
+        pageUrl: "https://courses.example/page",
+      }),
+    )
+
+    await showExerciseActions(new Dialog(), h.sources, true)
+
+    expect(offered()).toContain("Show Model Solution")
+    expect(executeCommand).toHaveBeenCalledWith("tmc.showModelSolution", exerciseHelloWorld.uri)
+  })
+
+  test("for an exercise whose chapter has not opened, names the chapter", async function () {
+    const showQuickPick = vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)
+    const h = harness()
+    h.stored.exercise = undefined
+    const closed = moocLocalCourse({
+      id: "course-uuid",
+      closedChapters: [
+        {
+          name: "Recursion",
+          number: 3,
+          opensAt: "2100-01-01T00:00:00Z",
+          exercises: [moocCourseExercise({ id: "exercise-uuid", name: "hello" })],
+        },
+      ],
+    })
+    h.sources.userData.getCourse = () => Ok(closed)
+
+    await showExerciseActions(new Dialog(), h.sources, true)
+
+    expect(offered()).toEqual(["Run Tests", "Open Next Exercise", "Reveal in Courses View"])
+    expect(showQuickPick.mock.calls[0]?.[1]).toMatchObject({
+      placeHolder: expect.stringContaining('chapter "Recursion" has not opened yet'),
     })
   })
 

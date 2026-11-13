@@ -63,6 +63,7 @@ import Storage from "./storage"
 import {
   trackActiveEditorExercise,
   trackActiveExerciseRemoved,
+  trackActiveExerciseSubmitRefused,
   trackHasCourses,
   trackHasDownloadedExercises,
 } from "./ui/contextKeys"
@@ -75,6 +76,7 @@ import { FailedUpdatesStatusBarItem } from "./ui/statusBarFailedUpdates"
 import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
 import {
+  reachWalkthroughMilestone,
   showNextWalkthroughStep,
   trackWalkthroughActive,
   walkthroughProgressOf,
@@ -528,10 +530,15 @@ async function activateInner(
         readyContext.startup.workspaceManager,
         readyContext.startup.userData,
       ),
+      trackActiveExerciseSubmitRefused(
+        readyContext.startup.workspaceManager,
+        readyContext.startup.userData,
+      ),
       trackHasDownloadedExercises(readyContext.startup.workspaceManager),
       // Point totals come from the backend, so without this the Courses view and Course
       // Details totals stay stale until the user refreshes by hand.
       onDidFinishSubmission((courseId) => {
+        reachWalkthroughMilestone("test-my-code:HasSubmitted")
         void refreshEverything(readyContext, {
           silent: true,
           isQueuedWhenBusy: true,
@@ -622,19 +629,26 @@ async function activateInner(
       Logger.warn("Could not show the Courses view", e),
     )
     // The course home lists what to do next in the course just opened, so it goes in front of
-    // the walkthrough, which still moves on to its next step behind it; but not over code the
-    // student has opened meanwhile.
+    // the walkthrough, which still moves on to its next step behind it. Code the student opens
+    // meanwhile goes in front instead: the walkthrough, once open, is the active editor, so
+    // whether the student has one must be watched for rather than read afterwards.
     const courseId = openCourseId(readyContext)
+    let studentEditor = vscode.window.activeTextEditor
+    const studentEditorWatch = vscode.window.onDidChangeActiveTextEditor((editor) => {
+      studentEditor = editor ?? studentEditor
+    })
     void showNextWalkthroughStep(() => walkthroughProgressOf(readyContext), {
       isOpenedIfClosed: openingSwitch.isWalkthroughOpen,
     })
       .catch((e) => Logger.warn("Could not show the next walkthrough step", e))
-      .then(
-        () =>
-          courseId &&
-          !vscode.window.activeTextEditor &&
-          vscode.commands.executeCommand("tmc.courseDetails", courseId),
-      )
+      .then(async () => {
+        studentEditorWatch.dispose()
+        if (studentEditor) {
+          await vscode.window.showTextDocument(studentEditor.document, studentEditor.viewColumn)
+        } else if (courseId) {
+          await vscode.commands.executeCommand("tmc.courseDetails", courseId)
+        }
+      })
       .then(undefined, (e) => Logger.warn("Could not show the course home", e))
   }
 

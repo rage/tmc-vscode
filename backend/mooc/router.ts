@@ -150,6 +150,10 @@ interface MoocMockState {
   pasteTimesByExercise: Map<string, number[]>
   /** Exercises a teacher has deleted since the student downloaded them. */
   removedExerciseIds: Set<string>
+  /** The chapter a teacher has put an exercise in; fixtures are in none. */
+  chapterByExerciseId: Map<string, MockChapter>
+  /** Where chapter locking's teacher review has an exercise; fixtures have none. */
+  reviewByExerciseId: Map<string, MockReview>
   uploadsById: Map<string, UploadRecord>
   /** Uploaded bytes keyed by stored path segment, served by the file-store route. */
   uploadBytesByStoredName: Map<string, Buffer>
@@ -217,6 +221,8 @@ const createMoocMockState = (baseUrl: string): MoocMockState => ({
   submissionsByExercise: new Map(),
   pasteTimesByExercise: new Map(),
   removedExerciseIds: new Set(),
+  reviewByExerciseId: new Map(),
+  chapterByExerciseId: new Map(),
   uploadsById: new Map(),
   uploadBytesByStoredName: new Map(),
   expireNextUpload: false,
@@ -304,6 +310,16 @@ export interface MoocMockControls {
    * unknown exercise.
    */
   setExerciseRemoved: (exerciseId: string, removed: boolean) => boolean
+  /**
+   * Puts a fixture exercise in a chapter, as a teacher can, or takes it out of every chapter
+   * with `undefined`. Returns false for an unknown exercise.
+   */
+  setExerciseChapter: (exerciseId: string, chapter: MockChapter | undefined) => boolean
+  /**
+   * Puts a fixture exercise where chapter locking's teacher review has it, or takes it out of
+   * review with `undefined`. Returns false for an unknown exercise.
+   */
+  setExerciseReview: (exerciseId: string, review: MockReview | undefined) => boolean
   /**
    * Makes every token act for another account, as when a second student logs in on the
    * same computer.
@@ -408,6 +424,8 @@ const createMoocMockControls = (
     state.submissionsByExercise.clear()
     state.pasteTimesByExercise.clear()
     state.removedExerciseIds.clear()
+    state.chapterByExerciseId.clear()
+    state.reviewByExerciseId.clear()
     state.uploadsById.clear()
     state.uploadBytesByStoredName.clear()
     state.expireNextUpload = false
@@ -483,6 +501,28 @@ const createMoocMockControls = (
       state.removedExerciseIds.add(exerciseId)
     } else {
       state.removedExerciseIds.delete(exerciseId)
+    }
+    return true
+  },
+  setExerciseChapter: (exerciseId, chapter) => {
+    if (!state.fixtures.exerciseById.has(exerciseId)) {
+      return false
+    }
+    if (chapter) {
+      state.chapterByExerciseId.set(exerciseId, chapter)
+    } else {
+      state.chapterByExerciseId.delete(exerciseId)
+    }
+    return true
+  },
+  setExerciseReview: (exerciseId, review) => {
+    if (!state.fixtures.exerciseById.has(exerciseId)) {
+      return false
+    }
+    if (review) {
+      state.reviewByExerciseId.set(exerciseId, review)
+    } else {
+      state.reviewByExerciseId.delete(exerciseId)
     }
     return true
   },
@@ -644,6 +684,88 @@ const clientServableSlide = (slide: ExerciseSlide): ExerciseSlide => ({
   tasks: slide.tasks.filter((task) => isClientCapable(task.exercise_service_slug)),
 })
 
+/** A chapter as the host's client API reports it, with what decides its refusals. */
+export interface MockChapter {
+  id: string
+  name: string
+  chapter_number: number
+  /** The chapter's own deadline, which an exercise without one inherits. */
+  deadline: string | null
+  /** When the chapter opens; a future one hides its exercises until then. */
+  opens_at: string | null
+  locking_status: "unlocked" | "completed_and_locked" | "not_unlocked_yet" | null
+}
+
+/** Whether the exercise's chapter opens later, which hides the exercise from the student. */
+const isInClosedChapter = (state: MoocMockState, exerciseId: string): boolean => {
+  const opensAt = state.chapterByExerciseId.get(exerciseId)?.opens_at
+  return opensAt !== null && opensAt !== undefined && Date.parse(opensAt) > Date.now()
+}
+
+/**
+ * The slide with its chapter and effective deadline, as the host's client API serves both:
+ * the exercise's own deadline, else its chapter's.
+ */
+const slideInChapter = (state: MoocMockState, slide: ExerciseSlide): ExerciseSlide => {
+  const chapter = state.chapterByExerciseId.get(slide.exercise_id)
+  if (!chapter) {
+    return slide
+  }
+  const { id, name, chapter_number, locking_status } = chapter
+  return {
+    ...slide,
+    deadline: slide.deadline ?? chapter.deadline,
+    chapter: { id, name, chapter_number, locking_status },
+  }
+}
+
+/**
+ * The host's chapter gates: a chapter that has not opened refuses everything about its
+ * exercises; chapter locking, and an exercise it has locked, refuse only answers (`isAnswer`),
+ * and never a snapshot.
+ */
+const chapterRefusal = (
+  state: MoocMockState,
+  exerciseId: string,
+  isAnswer: boolean,
+): MockResponse | undefined => {
+  if (isInClosedChapter(state, exerciseId)) {
+    return apiError("chapter_not_open_yet", "This exercise's chapter is not open yet.")
+  }
+  if (!isAnswer) {
+    return undefined
+  }
+  switch (state.chapterByExerciseId.get(exerciseId)?.locking_status) {
+    case "not_unlocked_yet":
+      return apiError(
+        "chapter_not_unlocked_yet",
+        "Complete and lock the previous chapter to unlock exercises in this chapter.",
+      )
+    case "completed_and_locked":
+      return apiError(
+        "chapter_completed_and_locked",
+        "The current chapter is locked, and you can no longer submit exercises.",
+      )
+    default:
+      break
+  }
+  return isExerciseLocked(state, exerciseId)
+    ? apiError("exercise_locked", "This exercise is locked, and you can no longer submit it.")
+    : undefined
+}
+
+/**
+ * Where the host's chapter locking has an exercise when a teacher reviews answers before
+ * awarding points: graded but waiting for the student to lock the chapter, locked and waiting
+ * for the teacher, or locked with no review pending (reviewed, or locked unanswered).
+ */
+export type MockReview = "awaits_chapter_lock" | "awaits_teacher" | "locked"
+
+const isExerciseLocked = (state: MoocMockState, exerciseId: string): boolean => {
+  const review = state.reviewByExerciseId.get(exerciseId)
+  return review === "awaits_teacher" || review === "locked"
+}
+
 const isEnrolled = (state: MoocMockState, exerciseId: string): boolean =>
   state.courseByExerciseId.get(exerciseId)?.enrolled === true
 
@@ -669,7 +791,7 @@ const callerSubmissionsFor = (state: MoocMockState, exerciseId: string): Submiss
   callerEntriesFor(state, exerciseId).filter((record) => record.kind === "submission")
 
 /**
- * The host's `verify_user_can_answer_exercise`: a passed deadline, then an
+ * The host's `verify_user_can_answer_exercise`: a passed effective deadline, then an
  * exhausted per-slide try limit. Answers with the refusal, or undefined when the
  * student may still answer.
  */
@@ -677,17 +799,17 @@ const answerRefusal = (
   state: MoocMockState,
   exercise: MoocExerciseFixture,
 ): MockResponse | undefined => {
-  const { deadline } = exercise.slide
+  const { deadline } = slideInChapter(state, exercise.slide)
   // The host allows a second of slack, so a deadline one tick away is already past.
   if (deadline !== null && Date.now() + 1000 >= Date.parse(deadline)) {
-    return apiError("validation_error", "Exercise deadline passed.")
+    return apiError("deadline_passed", "Exercise deadline passed.")
   }
   const limit = exercise.maxTriesPerSlide
   if (
     limit !== undefined &&
     callerSubmissionsFor(state, exercise.slide.exercise_id).length >= limit
   ) {
-    return apiError("validation_error", "You've ran out of tries.")
+    return apiError("out_of_tries", "You've ran out of tries.")
   }
   return undefined
 }
@@ -797,7 +919,8 @@ const outcomeOf = (
  * The caller's progress on an exercise, derived from this run's submissions: attempted once
  * submitted, completed/scored once a submission has been polled to its terminal (FullyGraded)
  * outcome. `standing` follows the host's `derive_exercise_progress`: passed at full points,
- * else out of tries once the limit is used up, whatever the tries scored.
+ * else out of tries once the limit is used up, whatever the tries scored. The try counts are
+ * per slide, and every fixture exercise has one slide.
  */
 const exerciseProgress = (state: MoocMockState, exerciseId: string): unknown => {
   const records = callerSubmissionsFor(state, exerciseId)
@@ -805,21 +928,28 @@ const exerciseProgress = (state: MoocMockState, exerciseId: string): unknown => 
   const scores = graded.map((r) => outcomeOf(state, r).score_given)
   const scoreMaximum = scoreMaximumFor(state, exerciseId)
   const limit = state.fixtures.exerciseById.get(exerciseId)?.maxTriesPerSlide
-  const isPassed = scores.some((score) => score >= scoreMaximum)
+  const review = state.reviewByExerciseId.get(exerciseId)
+  // The host holds the points back at 0 until the review, whatever the grading gave.
+  const pendingReview = review === "locked" ? null : (review ?? null)
+  const isPassed = pendingReview === null && scores.some((score) => score >= scoreMaximum)
   const standing = isPassed
     ? "Passed"
-    : limit !== undefined && records.length >= limit
+    : limit !== undefined && records.length >= limit && pendingReview === null
       ? "OutOfTries"
       : records.length > 0
         ? "Attempted"
         : "NotAttempted"
   return {
     exercise_id: exerciseId,
-    score_given: scores.length > 0 ? Math.max(...scores) : 0,
+    score_given: scores.length > 0 && pendingReview === null ? Math.max(...scores) : 0,
     score_maximum: scoreMaximum,
     completed: graded.some((r) => outcomeOf(state, r).grading_progress === "FullyGraded"),
     attempted: records.length > 0,
     standing,
+    max_tries: limit ?? null,
+    tries_left: limit === undefined ? null : Math.max(limit - records.length, 0),
+    pending_teacher_review: pendingReview,
+    exercise_locked: isExerciseLocked(state, exerciseId),
   }
 }
 
@@ -1027,7 +1157,8 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       // the host's `if !tasks.is_empty()` does.
       return ok(
         remainingExercises(state, found)
-          .map((e) => clientServableSlide(e.slide))
+          .filter((e) => !isInClosedChapter(state, e.slide.exercise_id))
+          .map((e) => clientServableSlide(slideInChapter(state, e.slide)))
           .filter((slide) => slide.tasks.length > 0),
       )
     },
@@ -1039,12 +1170,33 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       if (!found) {
         return apiError("not_found", `no such course: ${id}`)
       }
-      // One entry per exercise, zeroed when untouched, like the real backend.
+      // One entry per exercise, zeroed when untouched, like the real backend; those of a
+      // chapter that opens later are under it in `closed_chapters`.
+      const exercises = remainingExercises(state, found)
+      const isClosed = (e: MoocExerciseFixture): boolean =>
+        isInClosedChapter(state, e.slide.exercise_id)
+      const open = exercises.filter((e) => !isClosed(e))
+      const closed = exercises.filter((e) => isClosed(e))
+      const closedChapters = new Map<string, { chapter: MockChapter; exerciseIds: string[] }>()
+      for (const e of closed) {
+        const chapter = state.chapterByExerciseId.get(e.slide.exercise_id)
+        if (!chapter) {
+          continue
+        }
+        const entry = closedChapters.get(chapter.id) ?? { chapter, exerciseIds: [] }
+        entry.exerciseIds.push(e.slide.exercise_id)
+        closedChapters.set(chapter.id, entry)
+      }
       return ok({
         course_id: found.course.id,
-        exercises: remainingExercises(state, found).map((e) =>
-          exerciseProgress(state, e.slide.exercise_id),
-        ),
+        exercises: open.map((e) => exerciseProgress(state, e.slide.exercise_id)),
+        closed_chapters: [...closedChapters.values()].map(({ chapter, exerciseIds }) => ({
+          id: chapter.id,
+          name: chapter.name,
+          chapter_number: chapter.chapter_number,
+          opens_at: chapter.opens_at,
+          exercises: exerciseIds.map((exerciseId) => exerciseProgress(state, exerciseId)),
+        })),
       })
     },
 
@@ -1064,7 +1216,13 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
         // (domain/error.rs). The spec documents this 422 (ApiErrorResponse).
         return notEnrolledError()
       }
-      const slide = clientServableSlide(revealModelSolutions(state, exercise))
+      const closed = chapterRefusal(state, id, false)
+      if (closed) {
+        return closed
+      }
+      const slide = clientServableSlide(
+        slideInChapter(state, revealModelSolutions(state, exercise)),
+      )
       if (slide.tasks.length === 0) {
         // The exercise exists and the student is on its course, but nothing in it
         // can be rendered here -- which the host reports as a 404, not a 422.
@@ -1088,8 +1246,10 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       if (!isEnrolled(state, exerciseId)) {
         return notEnrolledError()
       }
+      const isSnapshot = c.request.query.for === "snapshot"
       const refusal =
-        c.request.query.for === "snapshot" ? undefined : answerRefusal(state, exercise)
+        chapterRefusal(state, exerciseId, !isSnapshot) ??
+        (isSnapshot ? undefined : answerRefusal(state, exercise))
       if (refusal) {
         return refusal
       }
@@ -1155,6 +1315,10 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
         // Consistent with getClientExercise's 422 above; the spec documents
         // this 422 on submit too.
         return notEnrolledError()
+      }
+      const chapterClosed = chapterRefusal(state, exerciseId, true)
+      if (chapterClosed) {
+        return chapterClosed
       }
       // Request validation enforced the body shape. Only the slide and task are
       // required: all three answer members are optional, and omitting them all is a
@@ -1223,6 +1387,10 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       }
       if (!isEnrolled(state, exerciseId)) {
         return notEnrolledError()
+      }
+      const chapterClosed = chapterRefusal(state, exerciseId, false)
+      if (chapterClosed) {
+        return chapterClosed
       }
       const body = c.request.requestBody as {
         purpose: "paste" | "backup"
@@ -1346,7 +1514,7 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       }
       // A backup past the cap is deleted, which would break its link.
       if (record.kind === "backup") {
-        return apiError("validation_error", "Only a paste can be shared, not a backup.")
+        return apiError("backup_not_shareable", "Only a paste can be shared, not a backup.")
       }
       record.isShared = true
       const token = randomUUID()
@@ -1731,6 +1899,59 @@ export const registerMoocRoutes = (
       return
     }
     if (!controls.setExerciseRemoved(exerciseId, removed)) {
+      res.status(404).json({ error: `no such exercise: ${exerciseId}` })
+      return
+    }
+    res.status(204).end()
+  })
+
+  app.post("/mooc-mock/set-exercise-chapter", json, (req, res) => {
+    const { exercise_id: exerciseId, chapter } = (req.body ?? {}) as {
+      exercise_id?: unknown
+      chapter?: Partial<MockChapter> | null
+    }
+    if (
+      typeof exerciseId !== "string" ||
+      (chapter !== null &&
+        (typeof chapter?.id !== "string" ||
+          typeof chapter.name !== "string" ||
+          typeof chapter.chapter_number !== "number"))
+    ) {
+      res.status(400).json({
+        error: "exercise_id must be a string and chapter null or {id, name, chapter_number, …}",
+      })
+      return
+    }
+    const set = chapter
+      ? {
+          id: chapter.id,
+          name: chapter.name,
+          chapter_number: chapter.chapter_number,
+          deadline: chapter.deadline ?? null,
+          opens_at: chapter.opens_at ?? null,
+          locking_status: chapter.locking_status ?? null,
+        }
+      : undefined
+    if (!controls.setExerciseChapter(exerciseId, set as MockChapter | undefined)) {
+      res.status(404).json({ error: `no such exercise: ${exerciseId}` })
+      return
+    }
+    res.status(204).end()
+  })
+
+  app.post("/mooc-mock/set-exercise-review", json, (req, res) => {
+    const { exercise_id: exerciseId, review } = (req.body ?? {}) as {
+      exercise_id?: unknown
+      review?: unknown
+    }
+    const reviews: unknown[] = ["awaits_chapter_lock", "awaits_teacher", "locked", null]
+    if (typeof exerciseId !== "string" || !reviews.includes(review)) {
+      res.status(400).json({
+        error: "exercise_id must be a string and review one of " + JSON.stringify(reviews),
+      })
+      return
+    }
+    if (!controls.setExerciseReview(exerciseId, (review as MockReview | null) ?? undefined)) {
       res.status(404).json({ error: `no such exercise: ${exerciseId}` })
       return
     }

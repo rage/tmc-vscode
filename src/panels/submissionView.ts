@@ -6,7 +6,7 @@ import type {
   TestCase,
 } from "../../shared/langsSchema"
 import type { FeedbackQuestion, SubmissionView, WebviewError } from "../../shared/lib"
-import { assertUnreachable } from "../../shared/lib"
+import { arePointsHeldForReview, assertUnreachable, pendingReviewSentence } from "../../shared/lib"
 
 /** The phases in which the backend is still working on the submission. */
 export type InProgressPhase = "uploading" | "grading"
@@ -181,13 +181,39 @@ export function moocGradingView(
   const standing = grading.exercise_progress?.standing
   // A pass may come from an earlier submission; a short score is about this one.
   const isBelowMax = given !== undefined && given < maxPoints
+  const isPassedEarlier = standing === "Passed" && isBelowMax
+  const pendingReview = grading.exercise_progress?.pending_teacher_review ?? null
+  const progressPoints = grading.exercise_progress?.score_given ?? 0
+  const reviewNote =
+    pendingReview === null
+      ? {}
+      : { pendingReview: pendingReviewSentence(pendingReview, progressPoints) }
   switch (grading.grading_progress) {
     case "FullyGraded":
+      if (arePointsHeldForReview(pendingReview, progressPoints)) {
+        // Only the grading's own score tells how the tests went.
+        return {
+          ...graded,
+          phase: "finished",
+          headline: isBelowMax ? "Some tests failed on the server" : "All tests passed",
+          tone: isBelowMax ? scoreTone(given) : "passed",
+          points: undefined,
+          ...reviewNote,
+          canPaste: true,
+        }
+      }
       return {
         ...graded,
+        ...reviewNote,
         phase: "finished",
-        headline: isBelowMax ? "Some tests failed on the server" : fullyGradedHeadline(standing),
-        tone: isBelowMax ? scoreTone(given) : fullyGradedTone(standing),
+        headline: isPassedEarlier
+          ? "This submission failed some tests"
+          : isBelowMax
+            ? "Some tests failed on the server"
+            : fullyGradedHeadline(standing),
+        // This score does not count, so it is no failure, and a meter of it would read as lost points.
+        tone: isPassedEarlier ? "info" : isBelowMax ? scoreTone(given) : fullyGradedTone(standing),
+        ...(isPassedEarlier ? { points: undefined } : {}),
         ...fullyGradedExplanation(standing, isBelowMax),
         canPaste: standing !== "Passed" || isBelowMax,
       }
@@ -249,10 +275,13 @@ function fullyGradedExplanation(
   isBelowMax: boolean,
 ): { explanation?: string } {
   if (standing === "OutOfTries") {
-    return { explanation: "You have no tries left on this exercise, so this score is final." }
+    return { explanation: "That was your last try, so this score is final." }
   }
   if (standing === "Passed" && isBelowMax) {
-    return { explanation: "You have already passed this exercise with an earlier submission." }
+    return {
+      explanation:
+        "You have already passed this exercise with an earlier submission, so you keep its points.",
+    }
   }
   return {}
 }
@@ -289,16 +318,40 @@ function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): str
 }
 
 /**
- * `view` with its `exerciseState` as the exercise now stands, which the submit action that
- * built the view cannot know: the files or the exercise may go away while it is shown.
+ * `view` with the exercise as it now stands, which the submit action that built the view cannot
+ * know: the files or the exercise may go away while it is shown, and a grading or a deadline
+ * changes what the backend accepts.
+ *
+ * @param exercise.submitRefusal See {@link SubmissionView.submitRefusal}.
+ * @param exercise.pendingReview See {@link SubmissionView.pendingReview}; replaces the one a
+ *   finished grading was shown with.
  */
 export function withExerciseState(
   view: SubmissionView,
-  exercise: { isOnDisk: boolean; isInCourse: boolean },
+  exercise: {
+    isOnDisk: boolean
+    isInCourse: boolean
+    submitRefusal?: string | undefined
+    triesLeft?: number | undefined
+    pendingReview?: string | undefined
+  },
 ): SubmissionView {
-  const { exerciseState: _previous, ...rest } = view
+  const {
+    exerciseState: _exerciseState,
+    submitRefusal: _submitRefusal,
+    triesLeft: _triesLeft,
+    pendingReview: gradedPendingReview,
+    ...rest
+  } = view
   if (!exercise.isInCourse) {
     return { ...rest, exerciseState: "removed" }
   }
-  return exercise.isOnDisk ? rest : { ...rest, exerciseState: "notOnDisk" }
+  const pendingReview = view.phase === "finished" ? exercise.pendingReview : gradedPendingReview
+  const standing = {
+    ...rest,
+    ...(pendingReview === undefined ? {} : { pendingReview }),
+    ...(exercise.submitRefusal === undefined ? {} : { submitRefusal: exercise.submitRefusal }),
+    ...(exercise.triesLeft === undefined ? {} : { triesLeft: exercise.triesLeft }),
+  }
+  return exercise.isOnDisk ? standing : { ...standing, exerciseState: "notOnDisk" }
 }

@@ -10,7 +10,11 @@ import Langs, { decodeLangsStdout } from "../../api/langs"
 import { LOGIN_PROCESS_TIMEOUT, MINIMUM_SUBMISSION_INTERVAL } from "../../config/constants"
 import {
   AuthorizationError,
+  ChapterLockedError,
+  ExerciseLockedError,
+  ChapterNotOpenError,
   ConnectionError,
+  DeadlinePassedError,
   DeviceLoginDeniedError,
   DeviceLoginExpiredError,
   ExerciseNotFoundError,
@@ -19,7 +23,9 @@ import {
   InvalidTokenError,
   NotEnrolledError,
   NotFoundError,
+  isSessionLost,
   ObsoleteClientError,
+  OutOfTriesError,
   RateLimitedError,
   RuntimeError,
   ServerError,
@@ -869,6 +875,12 @@ suite("Langs error-kind mapping", function () {
     ["upload-expired", UploadExpiredError],
     ["unknown-upload", UnknownUploadError],
     ["rate-limited", RateLimitedError],
+    ["deadline-passed", DeadlinePassedError],
+    ["out-of-tries", OutOfTriesError],
+    ["chapter-not-open-yet", ChapterNotOpenError],
+    ["chapter-not-unlocked-yet", ChapterLockedError],
+    ["chapter-completed-and-locked", ChapterLockedError],
+    ["exercise-locked", ExerciseLockedError],
     ["device-login-denied", DeviceLoginDeniedError],
     ["device-login-expired", DeviceLoginExpiredError],
     ["not-found", NotFoundError],
@@ -897,6 +909,24 @@ suite("Langs error-kind mapping", function () {
       })
     }
   }
+
+  test.each([
+    ["deadline-passed", "The deadline of this exercise has passed"],
+    ["out-of-tries", "You have no tries left on this exercise"],
+    ["chapter-not-open-yet", "This exercise's chapter has not opened yet"],
+    ["chapter-not-unlocked-yet", "locked until you have completed the chapters before it"],
+    ["chapter-completed-and-locked", "You have completed and locked this exercise's chapter"],
+    ["exercise-locked", "This exercise is locked for you, so it can no longer be submitted"],
+  ])("a %s refusal says so plainly, never as a lost login", async function (kind, message) {
+    const onLogout = vi.fn()
+    const langs = newLangs()
+    langs.on("logout", onLogout)
+    stubSpawn(langs, () => Ok(errorOutput(kind, "422 from https://courses.mooc.fi/…")))
+    const result = await langs.getEnrolledMoocCourses()
+    expect((result.val as Error).message).toContain(message)
+    expect(isSessionLost(result.val as Error)).toBe(false)
+    expect(onLogout).not.toHaveBeenCalled()
+  })
 
   test("an underscoped session is not a course the user may not see", async function () {
     // `updateCourse` persists a `ForbiddenError` as a disabled course.

@@ -131,4 +131,30 @@ suite("the Courses view's context menu", function () {
       ]),
     )
   })
+
+  test("leaves Submit out of an exercise whose submission the backend would refuse", function () {
+    const menu = menuFor("exercise.opened.passed.submitRefused", { isLoggedIn: true })
+    expect(menu).not.toContain("tmc.submitExercise")
+    expect(menu).toEqual(expect.arrayContaining(["tmc.testExercise", "tmc.pasteExercise"]))
+    expect(menuFor("exercise.opened.updateable", { isLoggedIn: true })).toContain(
+      "tmc.submitExercise",
+    )
+  })
+})
+
+suite("the command palette in a light window", function () {
+  test("offers the entry commands, which start the full activation, and nothing else", function () {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),
+    ) as { contributes: { menus: Record<string, MenuEntry[]> } }
+    const palette = manifest.contributes.menus["commandPalette"] ?? []
+    const shown = palette
+      .filter(
+        (entry) =>
+          entry.when === undefined || evaluateWhen(entry.when, { "test-my-code:Light": true }),
+      )
+      .map((entry) => entry.command)
+
+    expect(shown.toSorted()).toEqual(["tmc.addNewCourse", "tmc.myCourses", "tmc.showMoocLogin"])
+  })
 })

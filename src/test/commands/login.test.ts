@@ -151,6 +151,23 @@ function errorNotificationCall(context: ReadyActionContext): unknown[] | undefin
   return vi.mocked(context.dialog.errorNotification).mock.calls[0]
 }
 
+/** Puts `tabs` in the one editor group, `activeTab` shown; returns what undoes it. */
+function showTabs(
+  tabs: { label: string; input: unknown }[],
+  activeTab: { label: string; input: unknown } | undefined = tabs[0],
+): () => void {
+  const initialTabGroups = vscode.window.tabGroups
+  Object.defineProperty(vscode.window, "tabGroups", {
+    value: { all: [{ tabs, activeTab }] },
+    configurable: true,
+  })
+  return () =>
+    Object.defineProperty(vscode.window, "tabGroups", {
+      value: initialTabGroups,
+      configurable: true,
+    })
+}
+
 suite("login command", function () {
   afterEach(function () {
     vi.restoreAllMocks()
@@ -176,32 +193,47 @@ suite("login command", function () {
     expect(handOverExercises).toHaveBeenCalledWith(h.context)
   })
 
-  test("moves an open walkthrough past Log In before the course pick opens", async function () {
+  test("leaves the walkthrough alone when the course pick opens, so the pick has focus", async function () {
     const h = harness()
-    const initialTabGroups = vscode.window.tabGroups
-    Object.defineProperty(vscode.window, "tabGroups", {
-      value: { all: [{ tabs: [{ label: "Welcome", input: undefined }] }] },
-      configurable: true,
-    })
+    const restore = showTabs([{ label: "Welcome", input: undefined }])
     try {
       const { outcome } = await runToCode(h)
       h.logins[0]?.finish(Ok(undefined))
       expect(await outcome).toBe("loggedIn")
     } finally {
-      Object.defineProperty(vscode.window, "tabGroups", {
-        value: initialTabGroups,
-        configurable: true,
-      })
+      restore()
     }
 
-    const commands = vi.mocked(vscode.commands.executeCommand).mock.calls
-    const walkthroughAt = commands.findIndex(
-      ([command, step]) =>
-        command === "workbench.action.openWalkthrough" &&
-        (step as { step: string }).step === "addCourse",
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith("tmc.addNewCourse")
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
+      "workbench.action.openWalkthrough",
+      expect.anything(),
+      expect.anything(),
     )
-    expect(walkthroughAt).toBeGreaterThanOrEqual(0)
-    expect(walkthroughAt).toBeLessThan(commands.findIndex(([c]) => c === "tmc.addNewCourse"))
+  })
+
+  test("a login with courses moves a shown walkthrough on, but not one behind code", async function () {
+    for (const [activeTab, isMoved] of [
+      [{ label: "Welcome", input: undefined }, true],
+      [{ label: "main.py", input: {} }, false],
+    ] as const) {
+      vi.mocked(vscode.commands.executeCommand).mockClear()
+      const h = harness()
+      vi.mocked(h.context.startup.userData.getCourses).mockReturnValue([tmcLocalCourse()])
+      const restore = showTabs([{ label: "Welcome", input: undefined }, activeTab], activeTab)
+      try {
+        const { outcome } = await runToCode(h)
+        h.logins[0]?.finish(Ok(undefined))
+        expect(await outcome).toBe("loggedIn")
+      } finally {
+        restore()
+      }
+
+      const moves = vi
+        .mocked(vscode.commands.executeCommand)
+        .mock.calls.filter(([command]) => command === "workbench.action.openWalkthrough")
+      expect(moves).toHaveLength(isMoved ? 1 : 0)
+    }
   })
 
   test("a login that finds courses already added goes to no course pick", async function () {

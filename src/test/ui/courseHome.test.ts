@@ -14,12 +14,18 @@ import { recentUpdates } from "../../ui/recentUpdates"
 import type CoursesTree from "../../ui/treeview/treeview"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
 import {
+  MOOC_COURSE_ID,
   moocCourseExercise,
   moocLocalCourse,
   tmcCourseExercise,
   tmcLocalCourse,
 } from "../fixtures/courses"
-import { idOfMoocExercise, idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
+import {
+  idOfMoocCourse,
+  idOfMoocExercise,
+  idOfTmcCourse,
+  idOfTmcExercise,
+} from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
 const NOW = new Date("2026-06-01T12:00:00Z")
@@ -85,6 +91,95 @@ function onDisk(id: number, exerciseSlug: string, status: ExerciseStatus): Works
 }
 
 suite("buildCourseHomeView", function () {
+  test("gives each mooc row its tries and why a submission would be refused, and a locked chapter its lock", function () {
+    const course = moocLocalCourse({
+      exercises: [
+        moocCourseExercise({
+          id: "a",
+          name: "loops",
+          maxTries: 3,
+          triesLeft: 2,
+          chapter: { name: "Basics", number: 1 },
+        }),
+        moocCourseExercise({
+          id: "b",
+          name: "recursion",
+          chapter: { name: "Advanced", number: 2, lockingStatus: "CompletedAndLocked" },
+        }),
+      ],
+    })
+
+    const view = buildCourseHomeView(
+      contextFor(course),
+      idOfMoocCourse(MOOC_COURSE_ID),
+      NOW,
+    ).unwrap()
+
+    const [basics, advanced] = view.parts
+    expect(basics?.lockedReason).toBeUndefined()
+    expect(basics?.exercises[0]).toMatchObject({ triesLeft: 2 })
+    expect(basics?.exercises[0]).not.toHaveProperty("submitRefusal")
+    expect(advanced?.lockedReason).toBe("You have completed and locked this chapter.")
+    expect(advanced?.exercises[0]?.submitRefusal).toEqual({
+      label: "chapter locked",
+      sentence:
+        'You have completed and locked the chapter "Advanced", so recursion can no longer be submitted.',
+    })
+  })
+
+  test("says a review can change points already given, without calling them held back", function () {
+    const course = moocLocalCourse({
+      exercises: [
+        moocCourseExercise({
+          id: "a",
+          name: "loops",
+          awardedPoints: 1,
+          pendingReview: "awaits_chapter_lock",
+        }),
+      ],
+    })
+
+    const view = buildCourseHomeView(
+      contextFor(course),
+      idOfMoocCourse(MOOC_COURSE_ID),
+      NOW,
+    ).unwrap()
+
+    expect(view.parts[0]?.exercises[0]).toMatchObject({
+      awardedPoints: 1,
+      pendingReview:
+        "A teacher reviews this answer once you complete and lock the chapter, which can change the points.",
+    })
+  })
+
+  test("says what the points of an exercise under review wait for, and why it is locked", function () {
+    const course = moocLocalCourse({
+      exercises: [
+        moocCourseExercise({
+          id: "a",
+          name: "loops",
+          pendingReview: "awaits_teacher",
+          exerciseLocked: true,
+        }),
+      ],
+    })
+
+    const view = buildCourseHomeView(
+      contextFor(course),
+      idOfMoocCourse(MOOC_COURSE_ID),
+      NOW,
+    ).unwrap()
+
+    expect(view.parts[0]?.exercises[0]).toMatchObject({
+      pendingReview: "The points wait for a teacher's review.",
+      submitRefusal: {
+        label: "locked",
+        sentence:
+          "loops is locked for you, so it can no longer be submitted. Only a teacher can unlock it.",
+      },
+    })
+  })
+
   test("groups a tmc course by part, with each exercise's state on this computer", function () {
     const course = tmcLocalCourse({
       title: "Python Course",
@@ -175,6 +270,7 @@ suite("buildCourseHomeView", function () {
     expect(view.nextDeadline).toMatchObject({
       at: "2026-06-04T12:00:00.000Z",
       relative: "in 3 days",
+      brief: "in 3 days",
     })
     expect(view.parts[0]?.exercises[1]?.deadline?.relative).toBe("tomorrow")
   })
@@ -282,7 +378,24 @@ suite("buildCourseHomeView", function () {
       NOW,
     ).unwrap()
 
-    expect(view.nextExercise?.name).toBe("todo")
+    expect(view.nextExercise).toMatchObject({ name: "todo", isOnDisk: false })
+  })
+
+  test("goes on with an exercise on disk before an earlier one not downloaded", function () {
+    const course = tmcLocalCourse({
+      exercises: [
+        tmcCourseExercise({ id: 1, name: "part01-01_hello" }),
+        tmcCourseExercise({ id: 2, name: "part01-02_world" }),
+      ],
+    })
+
+    const view = buildCourseHomeView(
+      contextFor(course, { onDisk: [onDisk(2, "part01-02_world", ExerciseStatus.Closed)] }),
+      LocalCourseDataNs.getCourseId(course),
+      NOW,
+    ).unwrap()
+
+    expect(view.nextExercise).toMatchObject({ id: idOfTmcExercise(2), isOnDisk: true })
   })
 
   test("carries that courses.mooc.fi refused the student as not enrolled", function () {
@@ -366,5 +479,39 @@ suite("buildCourseHomeView", function () {
     const result = buildCourseHomeView(contextFor(moocLocalCourse()), idOfTmcCourse(42), NOW)
 
     expect(result.err).toBe(true)
+  })
+
+  test("lists an exercise on disk whose chapter has not opened, saying when it opens", function () {
+    const course = moocLocalCourse({
+      closedChapters: [
+        {
+          name: "Recursion",
+          number: 3,
+          opensAt: "2026-06-03T12:00:00Z",
+          exercises: [moocCourseExercise({ id: "b", name: "fib" })],
+        },
+      ],
+    })
+    const fib: WorkspaceExercise = {
+      id: idOfMoocExercise("b"),
+      courseId: idOfMoocCourse(MOOC_COURSE_ID),
+      backend: "mooc",
+      courseSlug: "mooc-course",
+      exerciseSlug: "fib",
+      status: ExerciseStatus.Open,
+      uri: vscode.Uri.file("/exercises/mooc/fib"),
+    }
+
+    const view = buildCourseHomeView(
+      contextFor(course, { onDisk: [fib] }),
+      idOfMoocCourse(MOOC_COURSE_ID),
+      NOW,
+    ).unwrap()
+
+    const [recursion] = view.parts
+    expect(recursion?.lockedReason).toMatch(
+      /^Opens on .+\. Until then its exercises can be tested but not submitted\.$/,
+    )
+    expect(recursion?.exercises[0]?.submitRefusal?.label).toBe("chapter not open yet")
   })
 })

@@ -3,14 +3,17 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { LocalCourseData } from "../../../shared/lib"
+import { makeMoocKind } from "../../../shared/lib"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import {
   trackActiveEditorExercise,
   trackActiveExerciseRemoved,
+  trackActiveExerciseSubmitRefused,
   trackHasCourses,
   trackHasDownloadedExercises,
 } from "../../ui/contextKeys"
+import { moocCourseExercise, moocLocalCourse } from "../fixtures/courses"
 import { idOfMoocExercise } from "../fixtures/identifiers"
 import type { WorkspaceManagerMockValues } from "../mocks/workspaceManager"
 import { createWorkspaceMangerMock } from "../mocks/workspaceManager"
@@ -155,6 +158,42 @@ suite("trackActiveExerciseRemoved", function () {
       .filter(
         ([command, key]) =>
           command === "setContext" && key === "test-my-code:ActiveExerciseRemoved",
+      )
+      .map(([, , value]) => value)
+    expect(updates).toEqual([false, true])
+  })
+})
+
+suite("trackActiveExerciseSubmitRefused", function () {
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("is set while the backend would refuse a submission of the active exercise", function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    vi.spyOn(vscode.window, "onDidChangeActiveTextEditor").mockImplementation(
+      (() => new vscode.Disposable(() => {})) as never,
+    )
+    const [workspaceManager, workspace] = createWorkspaceMangerMock()
+    workspace.activeExercise = { id: idOfMoocExercise("e1") } as WorkspaceExercise
+    let triesLeft = 1
+    const changed = new vscode.EventEmitter<undefined>()
+
+    trackActiveExerciseSubmitRefused(workspaceManager, {
+      getExercise: () =>
+        Ok({
+          course: moocLocalCourse(),
+          exercise: makeMoocKind(moocCourseExercise({ id: "e1", triesLeft, maxTries: 2 })),
+        }),
+      onDidChangeCourses: changed.event,
+    })
+    triesLeft = 0
+    changed.fire(undefined)
+
+    const updates = executeCommand.mock.calls
+      .filter(
+        ([command, key]) =>
+          command === "setContext" && key === "test-my-code:ActiveExerciseSubmitRefused",
       )
       .map(([, , value]) => value)
     expect(updates).toEqual([false, true])

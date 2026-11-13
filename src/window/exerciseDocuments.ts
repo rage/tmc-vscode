@@ -46,8 +46,9 @@ export async function saveExerciseDocuments(
 function exerciseTabs(exercise: ExerciseFolder): { tab: vscode.Tab; uri: vscode.Uri }[] {
   return vscode.window.tabGroups.all.flatMap((group) =>
     group.tabs.flatMap((tab) => {
-      // Every tab input that shows one resource names it `uri`.
-      const uri = (tab.input as { uri?: vscode.Uri } | undefined)?.uri
+      // Every tab input that shows one resource names it `uri`; a diff edits its `modified`.
+      const input = tab.input as { uri?: vscode.Uri; modified?: vscode.Uri } | undefined
+      const uri = input?.uri ?? input?.modified
       return uri !== undefined && isInside(exercise, uri) ? [{ tab, uri }] : []
     }),
   )
@@ -78,10 +79,13 @@ export async function revertExerciseDocuments(exercise: ExerciseFolder): Promise
   }
 }
 
-/** Closes every editor tab showing a file inside `exercise`'s folder. */
-export async function closeExerciseEditors(exercise: ExerciseFolder): Promise<void> {
+/**
+ * Closes every editor tab showing a file inside `exercise`'s folder. VS Code asks about each
+ * one with unsaved changes.
+ *
+ * @returns `false` when a tab stayed open, as when the user cancelled that question.
+ */
+export async function closeExerciseEditors(exercise: ExerciseFolder): Promise<boolean> {
   const tabs = exerciseTabs(exercise).map(({ tab }) => tab)
-  if (tabs.length > 0) {
-    await vscode.window.tabGroups.close(tabs)
-  }
+  return tabs.length === 0 || (await vscode.window.tabGroups.close(tabs))
 }

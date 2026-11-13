@@ -862,6 +862,49 @@ suite("the Courses view on startup", function () {
     )
   })
 
+  test("puts code the student opened back in front of the reopened walkthrough", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const showTextDocument = vi
+      .spyOn(vscode.window, "showTextDocument")
+      .mockResolvedValue(undefined as never)
+    const studentEditor = {
+      document: { uri: vscode.Uri.file("/exercise/src/main.py") },
+      viewColumn: vscode.ViewColumn.One,
+    } as unknown as vscode.TextEditor
+    Object.defineProperty(vscode.window, "activeTextEditor", {
+      value: studentEditor,
+      configurable: true,
+    })
+    const context = createContext()
+    const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
+    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
+      isWalkthroughOpen: true,
+    })
+    Object.defineProperty(vscode.workspace, "workspaceFile", {
+      value: vscode.Uri.file(switchedTo),
+      configurable: true,
+    })
+    try {
+      await activate(context)
+      await vi.waitFor(() =>
+        expect(showTextDocument).toHaveBeenCalledWith(
+          studentEditor.document,
+          vscode.ViewColumn.One,
+        ),
+      )
+    } finally {
+      Object.defineProperty(vscode.workspace, "workspaceFile", {
+        value: undefined,
+        configurable: true,
+      })
+      Object.defineProperty(vscode.window, "activeTextEditor", {
+        value: undefined,
+        configurable: true,
+      })
+    }
+    expect(executeCommand).not.toHaveBeenCalledWith("tmc.courseDetails", expect.anything())
+  })
+
   test("is left to VS Code in any other window", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
 
@@ -1170,7 +1213,16 @@ suite("activation in a window TestMyCode has no part in yet", function () {
 
     await activate(createContext())
 
-    expect(executeCommand).not.toHaveBeenCalled()
+    expect(executeCommand.mock.calls.filter(([command]) => command !== "setContext")).toEqual([])
+  })
+
+  test("marks the window light, for the palette's entry commands, until it activates fully", async function () {
+    await activate(createContext())
+    expect(recorded.contextKeys.get("test-my-code:Light")).toBe(true)
+
+    await recorded.commandHandlers.get("tmc.showMoocLogin")?.()
+
+    expect(recorded.contextKeys.get("test-my-code:Light")).toBe(false)
   })
 
   test("running one of its commands activates fully, then runs it", async function () {

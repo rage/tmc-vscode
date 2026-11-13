@@ -78,8 +78,23 @@
       ? "This exercise is no longer on this computer. Open it to download it again."
       : view?.exerciseState === "removed"
         ? "This exercise was removed from the course, so it can no longer be submitted."
-        : undefined,
+        : view?.submitRefusal,
   )
+  const triesNote = $derived(
+    view?.triesLeft === undefined || view.submitRefusal || isInProgress
+      ? undefined
+      : `${view.triesLeft} ${view.triesLeft === 1 ? "try" : "tries"} left on this exercise.`,
+  )
+  const showSolution = $derived.by((): BarAction | undefined => {
+    const solutionUrl = view?.solutionUrl
+    return solutionUrl
+      ? {
+          label: "Show Model Solution",
+          icon: "lightbulb",
+          onclick: () => showInBrowser(solutionUrl),
+        }
+      : undefined
+  })
 
   // The error's own remedies, such as Log In, come before trying again.
   const remedies = $derived(
@@ -105,8 +120,15 @@
     }
     if (view?.isExercisePassed && view.nextExercise) {
       const next = view.nextExercise.name
+      // A failing submission after the pass: the student may want to fix what they broke.
+      const isThisOneFailed = view.tone !== "passed" && !view.exerciseState
       return {
         primary: { label: `Next: ${next}`, onclick: () => runExerciseAction("openNextExercise") },
+        secondary: isThisOneFailed
+          ? view.submitRefusal
+            ? [runTests]
+            : [runTests, submitAgain]
+          : [],
       }
     }
     if (view?.exerciseState === "notOnDisk") {
@@ -114,6 +136,11 @@
     }
     if (view?.exerciseState === "removed") {
       return { secondary: [runTests] }
+    }
+    if (view?.submitRefusal) {
+      return showSolution
+        ? { primary: showSolution, secondary: [runTests] }
+        : { secondary: [runTests] }
     }
     if (canRetry) {
       if (remedy) {
@@ -134,7 +161,7 @@
       ...(submissionUrl
         ? [{ label: "Show Submission in Browser", onselect: () => showInBrowser(submissionUrl) }]
         : []),
-      ...(solutionUrl
+      ...(solutionUrl && !view?.submitRefusal
         ? [{ label: "Show Model Solution in Browser", onselect: () => showInBrowser(solutionUrl) }]
         : []),
       ...(view?.canPaste && !view.exerciseState
@@ -239,6 +266,9 @@
   {#if view?.explanation}
     <p>{view.explanation}</p>
   {/if}
+  {#if view?.pendingReview}
+    <p>{view.pendingReview}</p>
+  {/if}
   {#if view?.feedbackText}
     <p class="feedback-text"><span class="muted">Grader feedback:</span> {view.feedbackText}</p>
   {/if}
@@ -255,6 +285,8 @@
 {#if view !== undefined}
   {#if exerciseStateNote}
     <p class="muted">{exerciseStateNote}</p>
+  {:else if triesNote}
+    <p class="muted">{triesNote}</p>
   {/if}
   <ActionBar {...barActions} />
   {#if keepWaitingError}

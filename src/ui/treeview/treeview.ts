@@ -8,13 +8,19 @@ import {
   LocalCourseData,
   SESSION_EXPIRED_DETAIL,
   SOFT_DEADLINE_PENALTY,
+  SUBMIT_REFUSAL_LABELS,
+  submitRefusalSentence,
+  arePointsHeldForReview,
+  pendingReviewSentence,
+  PENDING_REVIEW_LABEL,
+  triesLeftText,
 } from "../../../shared/lib"
 import type { AuthState } from "../../api/authState"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus as WorkspaceExerciseStatus } from "../../api/workspaceManager"
 import { TRUST_COURSE_WORKSPACE_COMMAND } from "../../errors"
-import { countOf, formatDeadline } from "../../utilities"
+import { countOf, formatDeadline, formatDeadlineBriefly } from "../../utilities"
 import { downloadFailures } from "../downloadFailures"
 import { exerciseOperations } from "../exerciseOperations"
 import { pointsText } from "../points"
@@ -41,6 +47,11 @@ export interface CoursesTreeSource {
 }
 
 /** How the items render, fixed for one render of the view. */
+const MINUTE_MS = 60_000
+const HOUR_MS = 60 * MINUTE_MS
+/** How long after a deadline to re-render, so the render sees it as passed. */
+const DEADLINE_TICK_SLACK_MS = 500
+
 interface RenderContext {
   now: Date
   locale: string | undefined
@@ -48,6 +59,8 @@ interface RenderContext {
   isOffline: boolean
   /** The course whose workspace is open, which starts expanded. */
   activeCourse: { slug: string; backend: BackendKind } | undefined
+  /** This window is the workspace of the course being rendered. */
+  isCourseWorkspace?: boolean
 }
 
 /** A course, part or exercise row of the Courses view; the view's row commands receive these. */
@@ -141,10 +154,11 @@ export class CourseTreeItem extends vscode.TreeItem {
       updateCount > 0 && { spoken: updates, tooltip: updates },
     ])
     this.command = { command: "tmc.courseDetails", title: "Show Course", arguments: [this] }
+    const courseContext = { ...context, isCourseWorkspace: isActive }
     this._buildChildren = () =>
       parts.length === 1 && parts[0]?.isUngrouped
-        ? exercises.map((ex) => new ExerciseTreeItem(this, this.courseId, ex, context))
-        : parts.map((part) => new PartTreeItem(this, part, context))
+        ? exercises.map((ex) => new ExerciseTreeItem(this, this.courseId, ex, courseContext))
+        : parts.map((part) => new PartTreeItem(this, part, courseContext))
   }
 
   /** The course's parts, or its exercises directly when none of them names a part. */
@@ -164,6 +178,8 @@ export class CourseTreeItem extends vscode.TreeItem {
  */
 export class PartTreeItem extends vscode.TreeItem {
   public readonly courseId: CourseIdentifier
+  /** The mooc chapter the part is; `undefined` for a tmc part or the ungrouped exercises. */
+  public readonly chapterName: string | undefined
   public readonly children: ExerciseTreeItem[]
   private readonly _tooltipLines: string[]
 
@@ -180,22 +196,40 @@ export class PartTreeItem extends vscode.TreeItem {
         : vscode.TreeItemCollapsibleState.Collapsed,
     )
     this.courseId = parent.courseId
+    this.chapterName = part.number === undefined ? undefined : part.name
     this.id = `${parent.id}/${part.key}`
     const passed = part.exercises.filter((ex) => ex.passed).length
-    const nextDeadline =
-      part.nextDeadline && !context.isOffline
-        ? formatDeadline(part.nextDeadline, context.now, context.locale)
-        : undefined
+    const shownNextDeadline = part.nextDeadline && !context.isOffline ? part.nextDeadline : null
+    const nextDeadline = shownNextDeadline
+      ? formatDeadline(shownNextDeadline, context.now, context.locale)
+      : undefined
     this._tooltipLines = showFacts(this, label, [
       {
         description: `${passed}/${part.exercises.length} passed`,
         spoken: `${passed} of ${part.exercises.length} passed`,
         tooltip: `${passed} of ${part.exercises.length} exercises passed`,
       },
-      nextDeadline !== undefined && {
-        description: `next deadline ${nextDeadline}`,
+      shownNextDeadline && {
+        description: `next deadline ${formatDeadlineBriefly(shownNextDeadline, context.now, context.locale)}`,
         spoken: `next deadline ${nextDeadline}`,
         tooltip: `Next deadline: ${nextDeadline}`,
+      },
+      part.opensAt && {
+        description: `opens ${formatDeadlineBriefly(part.opensAt, context.now, context.locale)}`,
+        spoken: `opens ${formatDeadline(part.opensAt, context.now, context.locale)}`,
+        tooltip:
+          `Opens on ${formatDeadline(part.opensAt, context.now, context.locale)}. Until then ` +
+          "its exercises on this computer can be tested but not submitted.",
+      },
+      part.lockingStatus === "NotUnlockedYet" && {
+        description: "locked",
+        spoken: "locked until the chapters before it are completed",
+        tooltip: "Locked until you have completed the chapters before it.",
+      },
+      part.lockingStatus === "CompletedAndLocked" && {
+        description: "completed and locked",
+        spoken: "completed and locked",
+        tooltip: "You have completed and locked this chapter.",
       },
     ])
     this.iconPath = new vscode.ThemeIcon(
@@ -218,21 +252,21 @@ export class PartTreeItem extends vscode.TreeItem {
   }
 }
 
-const STATUS_LABELS: Record<ExerciseView["status"], string> = {
-  opened: "open",
+// The course home's words, so the two views name a state alike.
+const STATUS_LABELS: Record<Exclude<ExerciseView["status"], "opened">, string> = {
   closed: "closed",
   missing: "not downloaded",
   new: "new, not downloaded",
   downloading: "downloading…",
   downloadFailed: "download failed",
-  expired: "expired, not downloaded",
+  expired: "deadline passed, not downloaded",
   removed: "removed from the course",
 }
 
 /**
  * One exercise. `contextValue` is `exercise.<status>` (see `ExerciseStatus`), then for a removed
- * exercise still on disk `.opened` or `.closed`, then `.passed`, `.updateable` and `.hasMaterial`
- * when they apply.
+ * exercise still on disk `.opened` or `.closed`, then `.passed`, `.updateable`, `.hasMaterial`
+ * and, on disk, `.submitRefused` (see `submitRefusalOf`) when they apply.
  */
 export class ExerciseTreeItem extends vscode.TreeItem {
   public readonly exerciseId: ExerciseIdentifier
@@ -265,15 +299,29 @@ export class ExerciseTreeItem extends vscode.TreeItem {
       ...(exercise.passed ? ["passed"] : []),
       ...(exercise.isUpdateable ? ["updateable"] : []),
       ...(exercise.materialUrl ? ["hasMaterial"] : []),
+      ...(exercise.onDisk && exercise.submitRefusal ? ["submitRefused"] : []),
     ].join(".")
     this.command = { command: "tmc.openExercises", title: "Open", arguments: [this] }
 
     const { now, locale } = context
+    const partName = parent instanceof PartTreeItem ? parent.chapterName : undefined
     const deadline = shownDeadline(exercise)
-    const isDue = !exercise.passed && !exercise.isOutOfTries && deadline !== null && deadline > now
+    const isDue = !exercise.passed && !exercise.submitRefusal && deadline !== null && deadline > now
+    const refusal =
+      exercise.submitRefusal && !exercise.passed && exercise.status !== "expired"
+        ? exercise.submitRefusal
+        : undefined
+    const tries =
+      !exercise.submitRefusal && !exercise.passed ? triesLeftText(exercise.triesLeft) : undefined
     const points = pointsText(exercise.awardedPoints, exercise.availablePoints)
-    const status = STATUS_LABELS[exercise.status]
+    const status =
+      exercise.status === "opened"
+        ? context.isCourseWorkspace
+          ? "in workspace"
+          : "downloaded"
+        : STATUS_LABELS[exercise.status]
     const due = isDue && `due ${formatDeadline(deadline, now, locale)}`
+    const briefDue = isDue && `due ${formatDeadlineBriefly(deadline, now, locale)}`
     this._tooltipLines = showFacts(this, exercise.name, [
       {
         spoken: exercise.passed ? "passed" : "not passed",
@@ -289,17 +337,36 @@ export class ExerciseTreeItem extends vscode.TreeItem {
         spoken: "update available",
         tooltip: "An update is available.",
       },
-      points && {
-        description: `${points.short} points`,
-        spoken: points.spoken,
-        tooltip: `${points.short} points`,
+      !arePointsHeldForReview(exercise.pendingReview, exercise.awardedPoints) &&
+        points && {
+          description: `${points.short} points`,
+          spoken: points.spoken,
+          tooltip: `${points.short} points`,
+        },
+      exercise.pendingReview && {
+        description: PENDING_REVIEW_LABEL,
+        spoken: PENDING_REVIEW_LABEL,
+        tooltip: pendingReviewSentence(exercise.pendingReview, exercise.awardedPoints),
       },
       exercise.isOutOfTries && {
-        description: "no tries left",
-        spoken: "no tries left",
         tooltip: "No tries left, so this score is final.",
       },
-      due && { description: due, spoken: due },
+      refusal && {
+        // On a locked exercise under review, the review label tells more than the lock's.
+        ...(exercise.pendingReview
+          ? {}
+          : {
+              description: SUBMIT_REFUSAL_LABELS[refusal],
+              spoken: SUBMIT_REFUSAL_LABELS[refusal],
+            }),
+        tooltip: submitRefusalSentence(refusal, exercise.slug, partName),
+      },
+      tries && {
+        description: tries,
+        spoken: tries,
+        tooltip: `Tries left: ${exercise.triesLeft} of ${exercise.maxTries ?? exercise.triesLeft}`,
+      },
+      due && briefDue && { description: briefDue, spoken: due },
       exercise.softDeadline &&
         !exercise.isHard && {
           tooltip: `Soft deadline: ${formatDeadline(exercise.softDeadline, now, locale)}. ${SOFT_DEADLINE_PENALTY}`,
@@ -391,6 +458,8 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
   private _views: CourseView[] | undefined
   private _roots: CourseTreeItem[] | undefined
   private _pendingRender: ReturnType<typeof setTimeout> | undefined
+  /** Renders again when the soonest deadline passes, or a relative time shown goes stale. */
+  private _deadlineTick: ReturnType<typeof setTimeout> | undefined
   /** A render happened while the view was hidden, so VS Code still shows the one before. */
   private _isShownStale = false
   /** {@link drawnRows} of the rows VS Code last fetched or was last told to draw. */
@@ -419,6 +488,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
     this._isDisposed = true
     clearTimeout(this._pendingRender)
     this._pendingRender = undefined
+    clearTimeout(this._deadlineTick)
     this._sourceSubscriptions.forEach((subscription) => subscription.dispose())
     for (const disposable of this._disposables) {
       disposable.dispose()
@@ -527,7 +597,29 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
     } else {
       this._isShownStale = true
     }
+    this._scheduleDeadlineTick(views)
     this._rendered.fire()
+  }
+
+  private _scheduleDeadlineTick(views: CourseView[]): void {
+    clearTimeout(this._deadlineTick)
+    this._deadlineTick = undefined
+    const now = Date.now()
+    const untilSoonest = Math.min(
+      ...views
+        .flatMap(({ parts }) => parts.flatMap((part) => part.exercises))
+        .map((exercise) => (shownDeadline(exercise)?.getTime() ?? 0) - now)
+        .filter((until) => until > 0),
+    )
+    if (!Number.isFinite(untilSoonest)) {
+      return
+    }
+    // Within the hour the hint counts minutes; further off, hours or days.
+    const staleAfter = untilSoonest < HOUR_MS ? MINUTE_MS : HOUR_MS
+    this._deadlineTick = setTimeout(
+      () => this.refresh(),
+      Math.min(untilSoonest + DEADLINE_TICK_SLACK_MS, staleAfter),
+    )
   }
 
   private _onDidChangeVisibility(): void {

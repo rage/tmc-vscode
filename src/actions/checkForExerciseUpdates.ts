@@ -21,7 +21,7 @@ interface OutdatedExercise {
 /** What {@link checkForExerciseUpdates} found. */
 export interface ExerciseUpdateCheck {
   outdated: OutdatedExercise[]
-  /** Downloaded exercises their backend no longer has. */
+  /** Downloaded exercises their backend no longer has; one in a chapter not open yet is not. */
   removed: ExerciseIdentifier[]
   /**
    * The backends holding the user's courses whose check failed. `outdated` says nothing
@@ -52,12 +52,15 @@ export async function checkForExerciseUpdates(
     })),
   )
   const updateable = new Set<string>()
+  // The CLI cannot tell an exercise hidden until its chapter opens from a removed one.
+  const isClosed = (id: ExerciseIdentifier): boolean =>
+    courses.some((course) => LocalCourseData.getClosedChapterOf(course, id) !== undefined)
   const removed: ExerciseIdentifier[] = []
   const failures: ExerciseUpdateCheck["failures"] = []
   for (const { backend, result } of checks) {
     if (result.ok) {
       result.val.updated.forEach((id) => updateable.add(ExerciseIdentifier.key(id)))
-      removed.push(...result.val.removed)
+      removed.push(...result.val.removed.filter((id) => !isClosed(id)))
     } else {
       Logger.warn(
         `Skipping the ${backendName(backend)} exercise update check; it failed:`,

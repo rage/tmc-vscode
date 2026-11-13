@@ -51,6 +51,45 @@ export function redactUrlQuery(url: string): string {
   return url.replace(/[?#].*$/s, "?<redacted>")
 }
 
+const SECRET_KEY_PATTERN = [...SECRET_KEYS]
+  .map((key) => key.replaceAll(/token|code|secret|uri|complete/g, "[-_\\s]?$&"))
+  .join("|")
+// A secret key, its separator in JSON, YAML, a header or a query, and the value after it.
+const KEYED_SECRET = new RegExp(`\\b(${SECRET_KEY_PATTERN})("?\\s*[:=]\\s*"?)([^\\s",&;}]+)`, "gi")
+// A plain word after "token: " is prose, as in "the access token: host is not trusted".
+const PROSE_WORD = /^[A-Za-z]{1,19}$/
+const BEARER = /\bBearer\s+[^\s",;]+/gi
+const URL_WITH_QUERY = /\b(https?:\/\/[^\s?#"'<>]+)([?#][^\s"'<>]*)/gi
+// Student output prints URLs too; only a query that may carry a credential goes.
+const SECRET_QUERY = new RegExp(`${SECRET_KEY_PATTERN}|code|state|key`, "i")
+// courses.mooc.fi tokens are 64 alphanumerics; mixed case and a digit keep hex digests,
+// UUIDs and ordinary words out.
+const BARE_TOKEN =
+  /\b(?=[A-Za-z0-9_-]*[a-z])(?=[A-Za-z0-9_-]*[A-Z])(?=[A-Za-z0-9_-]*\d)[A-Za-z0-9_-]{32,}\b/g
+// A device-flow user code: two groups of four Crockford base32 characters, after the word
+// "code"; elsewhere the shape is as likely an identifier in a student's output.
+const USER_CODE = /(?<=\b[Cc]ode\W{1,3})[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}(?![\w-])/g
+
+/**
+ * `text` with the credentials free-form output may carry replaced: OAuth tokens, bearer
+ * headers, device-flow codes and URL queries. For output nobody structured, such as a CLI's
+ * stderr; structured values are redacted by key in {@link Logger.toLoggable}.
+ */
+export function redactSecrets(text: string): string {
+  return text
+    .replaceAll(URL_WITH_QUERY, (url, base: string, query: string) =>
+      SECRET_QUERY.test(query) ? `${base}?<redacted>` : url,
+    )
+    .replaceAll(BEARER, "Bearer <redacted>")
+    .replaceAll(KEYED_SECRET, (keyed, key: string, separator: string, value: string) =>
+      /\s/.test(separator) && !separator.includes('"') && PROSE_WORD.test(value)
+        ? keyed
+        : `${key}${separator}<redacted>`,
+    )
+    .replaceAll(BARE_TOKEN, "<redacted>")
+    .replaceAll(USER_CODE, "<redacted>")
+}
+
 export class Logger {
   public static output: OutputChannel | undefined
   public static testmode = !!env["TMC_VSCODE_TESTMODE"]

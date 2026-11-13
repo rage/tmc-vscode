@@ -13,7 +13,7 @@ import type {
   Panel,
   CourseIdentifier,
 } from "../../../shared/lib"
-import { makeTmcKind } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import * as actions from "../../actions"
 import type { ActionContext } from "../../actions/types"
 import type WorkspaceManager from "../../api/workspaceManager"
@@ -32,7 +32,7 @@ import { shownCourseHome } from "../../ui/shownCourseHome"
 import { submissionViews } from "../../ui/submissionViews"
 import type CoursesTree from "../../ui/treeview/treeview"
 import { Logger } from "../../utilities"
-import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
+import { moocCourseExercise, tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
 import { idOfMoocExercise, idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 import { createMockContext } from "../mocks/vscode"
@@ -1579,6 +1579,48 @@ suite("TmcPanel side panel placement", () => {
       message.type === "submissionView" ? [message.view.exerciseState] : [],
     )
     expect(views).toEqual([undefined, "notOnDisk"])
+  })
+
+  test("tells the shown submission the tries left, and why the backend would refuse another", async () => {
+    const { panel, sendReady } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    let exercise = moocCourseExercise({ name: "loops", maxTries: 2, triesLeft: 1 })
+    const changed = new vscode.EventEmitter<undefined>()
+    const context = createMockActionContext({
+      startup: {
+        workspaceManager: {
+          getExercise: () => ({}),
+          onDidChangeExercises: changed.event,
+        } as unknown as WorkspaceManager,
+        userData: {
+          getExercise: () => Ok({ exercise: makeMoocKind(exercise) }),
+          onDidChangeCourses: changed.event,
+        } as unknown as UserData,
+      },
+    })
+    const subscription = TmcPanel.showSubmissionViews(createMockContext(), context)
+    onTestFinished(() => subscription.dispose())
+    const shown = exerciseSubmissionPanel()
+    submissionViews.open(shown)
+    await sendReady()
+    submissionViews.update({
+      panel: shown,
+      view: submissionViewFor(shown, "Some tests failed").view,
+      shouldReopen: false,
+    })
+
+    exercise = { ...exercise, triesLeft: 0 }
+    changed.fire(undefined)
+
+    const views = (postedMessages(panel) as PanelMessage[]).flatMap((message) =>
+      message.type === "submissionView"
+        ? [[message.view.triesLeft, message.view.submitRefusal]]
+        : [],
+    )
+    expect(views).toEqual([
+      [1, undefined],
+      [0, "You have no tries left on loops, so it can no longer be submitted."],
+    ])
   })
 
   test("closes the shown submission once the submissions are cleared, as at logout", async () => {

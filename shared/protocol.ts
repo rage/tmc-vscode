@@ -110,6 +110,7 @@ export type WebviewState = z.infer<typeof WebviewStateSchema>
  * openIssueReporter.
  */
 export const RunnableCommandSchema = z.enum([
+  "tmc.enrollOnCourse",
   "tmc.logs",
   "tmc.myCourses",
   "tmc.showAiUseProblem",
@@ -165,6 +166,8 @@ export const SubmissionViewSchema = z.object({
   tone: z.enum(["progress", "passed", "warning", "failed", "info"]),
   /** What the phase means for the student, where the headline does not say it. */
   explanation: z.string().optional(),
+  /** The teacher review the exercise awaits, as a sentence; for a finished grading only. */
+  pendingReview: z.string().optional(),
   /** The backend's completion estimate, 0..1; absent while it has none, as for mooc grading. */
   progressFraction: z.number().optional(),
   /** The backend's progress messages, oldest first; only while uploading or grading. */
@@ -198,6 +201,10 @@ export const SubmissionViewSchema = z.object({
    * files are gone, `removed` once its course no longer lists it. Absent means on disk.
    */
   exerciseState: z.enum(["notOnDisk", "removed"]).optional(),
+  /** Why the backend would refuse another submission now, as a sentence; Submit is then not offered. */
+  submitRefusal: z.string().optional(),
+  /** The tries left on the exercise as it stands now; absent when unlimited. */
+  triesLeft: z.number().optional(),
 })
 
 export type SubmissionView = z.infer<typeof SubmissionViewSchema>

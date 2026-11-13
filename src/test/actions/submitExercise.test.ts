@@ -12,18 +12,23 @@ import {
   makeTmcKind,
 } from "../../../shared/lib"
 import {
+  checkCanSubmit,
   keepWaitingForGrading,
   onDidFinishSubmission,
   sendSubmissionFeedback,
   submitExercise,
 } from "../../actions/submitExercise"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
+import { updateCourse } from "../../actions/updateCourse"
 import { failure } from "../../api/withOperation"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
 import {
+  AiUseRefusedError,
   BottleneckError,
+  ChapterLockedError,
+  DeadlinePassedError,
   ExerciseNotFoundError,
   InsufficientScopeError,
   NotEnrolledError,
@@ -51,6 +56,9 @@ import { restrictedTrustGate } from "../support/trustGate"
 
 vi.mock("../../window/exerciseDocuments", () => ({
   saveExerciseDocuments: vi.fn(async () => Ok.EMPTY),
+}))
+vi.mock("../../actions/updateCourse", () => ({
+  updateCourse: vi.fn(async () => Ok({ isUpdated: false, warnings: [] })),
 }))
 
 const openedPanels: ExerciseSubmissionPanel[] = []
@@ -522,7 +530,7 @@ suite("submitExercise action, mooc", () => {
     )
     expect(lastView()).toMatchObject({
       headline: "Some tests failed on the server",
-      explanation: "You have no tries left on this exercise, so this score is final.",
+      explanation: "That was your last try, so this score is final.",
     })
   })
 
@@ -550,6 +558,40 @@ suite("submitExercise action, mooc", () => {
     expect(submit).not.toHaveBeenCalled()
   })
 
+  test.each([
+    [
+      "past its deadline",
+      { deadline: "2000-01-01T00:00:00Z" },
+      DeadlinePassedError,
+      `The deadline of ${EXERCISE_SLUG} has passed, so it can no longer be submitted.`,
+    ],
+    [
+      "in a chapter not unlocked yet",
+      { chapter: { name: "Loops", number: 2, lockingStatus: "NotUnlockedYet" as const } },
+      ChapterLockedError,
+      `${EXERCISE_SLUG} can be submitted once you have completed the chapters before the chapter "Loops".`,
+    ],
+  ])("refuses up front an exercise %s", async (_case, data, errorClass, message) => {
+    const refused = { ...moocCourse, exercises: [{ ...moocCourse.exercises[0]!, ...data }] }
+    const submit = vi.fn()
+    const { actionContext } = contextFor(makeMoocKind(refused), { submitMoocExercise: submit })
+
+    const result = await submitExercise(actionContext, moocExercise)
+
+    expect(result.val).toBeInstanceOf(errorClass)
+    expect((result.val as Error).message).toBe(message)
+    expect(submit).not.toHaveBeenCalled()
+  })
+
+  test("a refusal the stored data did not foresee shows in the panel and refreshes the course", async () => {
+    const { actionContext } = moocContextWithErr(new DeadlinePassedError("deadline passed"))
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect(lastView()?.error?.message).toBe("Deadline passed.")
+    expect(finishedCourses).toEqual([idOfMoocCourse(moocCourse.id)])
+  })
+
   test("submits nothing in Restricted Mode", async () => {
     const submit = vi.fn()
     const { actionContext } = contextFor(makeMoocKind(moocCourse), { submitMoocExercise: submit })
@@ -559,6 +601,45 @@ suite("submitExercise action, mooc", () => {
 
     expect(result.val).toBeInstanceOf(WorkspaceUntrustedError)
     expect(submit).not.toHaveBeenCalled()
+  })
+
+  test("checking whether it can submit refuses as the submit would, and submits nothing", async () => {
+    const pastDeadline = {
+      ...moocCourse,
+      exercises: [{ ...moocCourse.exercises[0]!, deadline: "2000-01-01T00:00:00Z" }],
+    }
+    const submit = vi.fn()
+    const late = contextFor(makeMoocKind(pastDeadline), { submitMoocExercise: submit })
+    expect((await checkCanSubmit(late.actionContext, moocExercise)).val).toBeInstanceOf(
+      DeadlinePassedError,
+    )
+
+    const aiOn = contextFor(makeMoocKind(moocCourse), { submitMoocExercise: submit })
+    const refused = new AiUseRefusedError("AI assistance is on.")
+    aiOn.actionContext.startup.aiUseGate = {
+      refusal: async () => refused,
+    } as unknown as ReadyStartup["aiUseGate"]
+    expect((await checkCanSubmit(aiOn.actionContext, moocExercise)).val).toBe(refused)
+
+    const allowed = contextFor(makeMoocKind(moocCourse), { submitMoocExercise: submit })
+    expect((await checkCanSubmit(allowed.actionContext, moocExercise)).ok).toBe(true)
+    expect(submit).not.toHaveBeenCalled()
+    expect(openedPanels).toEqual([])
+  })
+
+  test("refreshes the course before refusing for AI, as the teacher may have allowed it since", async () => {
+    const submit = vi.fn()
+    const stale = contextFor(makeMoocKind(moocCourse), { submitMoocExercise: submit })
+    const refusal = vi
+      .fn()
+      .mockResolvedValueOnce(new AiUseRefusedError("AI assistance is on."))
+      .mockResolvedValueOnce(undefined)
+    stale.actionContext.startup.aiUseGate = { refusal } as unknown as ReadyStartup["aiUseGate"]
+    vi.mocked(updateCourse).mockResolvedValueOnce(Ok({ isUpdated: true, warnings: [] }))
+
+    expect((await checkCanSubmit(stale.actionContext, moocExercise)).ok).toBe(true)
+    expect(updateCourse).toHaveBeenCalledOnce()
+    expect(refusal).toHaveBeenCalledTimes(2)
   })
 
   test("grading progress keeps changed messages only, on an indeterminate bar", async () => {

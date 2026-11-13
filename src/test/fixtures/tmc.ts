@@ -94,6 +94,8 @@ const moocCourseProgress: CourseProgress = {
       standing: "Passed",
       max_tries: null,
       tries_left: null,
+      pending_teacher_review: null,
+      exercise_locked: false,
     },
   ],
   closed_chapters: [],

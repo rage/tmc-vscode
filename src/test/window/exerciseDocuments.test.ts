@@ -127,4 +127,21 @@ suite("closeExerciseEditors", function () {
       expect.objectContaining({ input: { uri: insideUri } }),
     ])
   })
+
+  test("closes a diff editing one of the exercise's files", async function () {
+    const diff = { input: { original: outsideUri, modified: insideUri } }
+    const close = openTabs([diff])
+
+    const isClosed = await closeExerciseEditors(exercise)
+
+    expect(isClosed).toBe(true)
+    expect(close).toHaveBeenCalledExactlyOnceWith([expect.objectContaining(diff)])
+  })
+
+  test("tells when a tab stayed open", async function () {
+    const close = openTabs([{ input: { uri: insideUri } }])
+    close.mockResolvedValue(false)
+
+    expect(await closeExerciseEditors(exercise)).toBe(false)
+  })
 })

@@ -20,6 +20,7 @@ import { ExerciseTestController } from "../../testing/exerciseTestController"
 import * as treeCommands from "../../ui/treeview/treeCommands"
 import { CourseTreeItem, ExerciseTreeItem } from "../../ui/treeview/treeview"
 import { Logger } from "../../utilities"
+import type { WalkthroughMilestone } from "../../window/walkthrough"
 import { tmcLocalCourse } from "../fixtures/courses"
 import { idOfMoocCourse, idOfTmcCourse } from "../fixtures/identifiers"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
@@ -40,6 +41,7 @@ const expectedCommands = [
   "tmc.openExercises",
   "tmc.closeExercises",
   "tmc.openExerciseMaterial",
+  "tmc.enrollOnCourse",
   "tmc.updateCourseExercises",
   "tmc.downloadNewExercises",
   "tmc.downloadAllExercises",
@@ -59,6 +61,7 @@ const expectedCommands = [
   "tmc.showExerciseActions",
   "tmc.showWelcome",
   "tmc.showMoocLogin",
+  "tmc.showModelSolution",
   "tmc.submitExercise",
   "tmc.switchWorkspace",
   "tmc.testExercise",
@@ -200,11 +203,11 @@ function commandPalette(): MenuEntry[] {
 // command needs when it is reached from the palette instead.
 const resourceMenus = ["explorer/context", "editor/title", "tmc.exercise"]
 
-// A `when` is a conjunction; comparing term sets rather than strings lets the
-// palette and the menus spell the same gate in a different order.
+// Comparing term sets rather than strings lets the palette and the menus spell the
+// same gate in a different order.
 function whenTerms(when: string | undefined): string[] {
   return (when ?? "")
-    .split("&&")
+    .split(/&&|\|\|/)
     .map((x) => x.trim())
     .filter((x) => x.length > 0)
 }
@@ -340,6 +343,20 @@ suite("registerCommands", function () {
     ].filter((command) => !command.startsWith("workbench."))
     const declared = new Set(declaredCommands())
     expect([...new Set(referenced)].filter((x) => !declared.has(x))).toEqual([])
+  })
+
+  // `onCommand` misses a step done from a notification button or the Testing view.
+  test("the run and submit steps also complete on the milestones the extension sets", function () {
+    const { walkthroughs = [] } = packageJson().contributes
+    const steps = walkthroughs.flatMap((x) => x.steps)
+    for (const [id, milestone] of [
+      ["runTests", "test-my-code:HasRunTests"],
+      ["submit", "test-my-code:HasSubmitted"],
+    ] satisfies [string, WalkthroughMilestone][]) {
+      const events = steps.find((x) => x.id === id)?.completionEvents ?? []
+      expect(events).toContain(`onContext:${milestone}`)
+      expect(events).toContain(`onContext:${milestone} && test-my-code:WalkthroughActive`)
+    }
   })
 
   test("every submenu a menu points at is declared", function () {

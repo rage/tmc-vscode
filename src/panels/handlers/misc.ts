@@ -41,6 +41,7 @@ function runCommandArguments(command: RunnableCommand): unknown[] {
       return ["testMyCode.logLevel"]
     case "workbench.action.openIssueReporter":
       return [{ extensionId: EXTENSION_ID }]
+    case "tmc.enrollOnCourse":
     case "tmc.logs":
     case "tmc.myCourses":
     case "tmc.showAiUseProblem":

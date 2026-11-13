@@ -26,12 +26,15 @@ interface StoredCourse<Id> {
   newExercises: Id[]
   offeredNewExercises?: Id[] | undefined
   notifyAfter: number
+  /** An exercise's `name` is empty while it has never been seen open. */
+  closedChapters?: { exercises: { id: Id; name: string }[] }[] | undefined
 }
 
 /**
  * Puts `refreshed` in `courses` in place of the course stored under `id`, carrying over which
  * exercises are new and which of those were offered. An exercise that arrives with it ends a
- * postponed reminder. Returns whether a course was stored there.
+ * postponed reminder; one whose chapter has just opened arrives only if it was never seen open.
+ * Returns whether a course was stored there.
  */
 function replaceIn<Id, Course extends StoredCourse<Id>>(
   courses: Map<Id, Course>,
@@ -43,7 +46,16 @@ function replaceIn<Id, Course extends StoredCourse<Id>>(
     return false
   }
   const refreshedIds = new Set(refreshed.exercises.map((exercise) => exercise.id))
-  const storedIds = new Set(stored.exercises.map((exercise) => exercise.id))
+  const storedIds = new Set(
+    [
+      stored.exercises,
+      ...(stored.closedChapters ?? []).map((chapter) =>
+        chapter.exercises.filter((exercise) => exercise.name !== ""),
+      ),
+    ]
+      .flat()
+      .map((exercise) => exercise.id),
+  )
   const arrived = [...refreshedIds].filter((exerciseId) => !storedIds.has(exerciseId))
   refreshed.newExercises = _.uniq([
     ...stored.newExercises.filter((exerciseId) => refreshedIds.has(exerciseId)),
@@ -249,9 +261,12 @@ export class UserData {
     if (exercise.kind !== "mooc") {
       return Err(new Error(`Exercise ${ExerciseIdentifier.toString(id)} is not a mooc exercise.`))
     }
-    exercise.data.passed = standing.passed
-    exercise.data.outOfTries = standing.outOfTries
-    exercise.data.awardedPoints = awardedPoints
+    // In place: `exercise.data` is the catalogue's own object.
+    delete exercise.data.maxTries
+    delete exercise.data.triesLeft
+    delete exercise.data.pendingReview
+    delete exercise.data.exerciseLocked
+    Object.assign(exercise.data, standing, { awardedPoints })
     this._setPassed(id, standing.passed)
     return this._updatePersistentData()
   }

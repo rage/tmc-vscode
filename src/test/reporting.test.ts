@@ -432,12 +432,19 @@ suite("reported once: exercise commands", function () {
 
   test("a panel paste that finds a submission in flight shows in the panel only", async function () {
     const submission = pending<Err<Error>>()
+    const uploading = pending<void>()
     const { actionContext, run, post, shown, panelFailures, shownPanel } = await harness({
-      langs: { submitMoocExercise: () => submission.promise },
+      langs: {
+        submitMoocExercise: () => {
+          uploading.resolve()
+          return submission.promise
+        },
+      },
     })
     showSubmission(actionContext)
 
     const submitting = run("tmc.submitExercise")
+    await uploading.promise
     await post({ type: "pasteExercise", requestId: 1, sourcePanel: shownPanel() })
     submission.resolve(Err(new ConnectionError("reset")))
     await submitting

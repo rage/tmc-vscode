@@ -97,6 +97,9 @@ export async function canDeferActivation(context: vscode.ExtensionContext): Prom
   ))
 }
 
+/** True while the window runs TestMyCode light, which shows the entry commands in the palette. */
+export const LIGHT_CONTEXT_KEY = "test-my-code:Light"
+
 /**
  * Starts TestMyCode light: opens the walkthrough on a first install and leaves the rest to
  * `activateFully`, which runs once the Courses view is shown or one of TestMyCode's commands runs.
@@ -111,6 +114,7 @@ export async function deferActivation(
     if (!fullActivation) {
       // The full activation registers the real commands and view under the same ids.
       vscode.Disposable.from(...standIns).dispose()
+      void vscode.commands.executeCommand("setContext", LIGHT_CONTEXT_KEY, false)
       fullActivation = activateFully()
     }
     return fullActivation
@@ -142,6 +146,7 @@ export async function deferActivation(
     }),
   )
   context.subscriptions.push({ dispose: () => vscode.Disposable.from(...standIns).dispose() })
+  void vscode.commands.executeCommand("setContext", LIGHT_CONTEXT_KEY, true)
 
   try {
     const storage = new Storage(context)

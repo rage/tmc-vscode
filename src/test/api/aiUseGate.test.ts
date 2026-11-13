@@ -13,6 +13,7 @@ import { idOfMoocCourse } from "../fixtures/identifiers"
 const COURSE = makeMoocKind({
   id: "instance-1",
   name: "python-course",
+  title: "Python Course",
 }) as unknown as LocalCourseData
 const EXERCISE_FOLDER = vscode.Uri.file("/tmc/projects/python-course/loops")
 const WORKSPACE_FILE = vscode.Uri.file("/tmc/workspaces/python-course.code-workspace")
@@ -76,6 +77,18 @@ suite("AiUseGate", function () {
     expect(enforce).not.toHaveBeenCalled()
   })
 
+  test("outside the course workspace, leads with where to run the exercise", async function () {
+    const { gate } = gateWith({ kind: "outsideCourseWorkspace" })
+
+    const refusal = await refusalOf(gate)
+
+    expect(refusal?.message).toBe(
+      "The exercises of Python Course are tested and submitted in its course workspace," +
+        " which keeps AI assistance off. Open the course workspace and try again.",
+    )
+    expect(refusal?.remedyLabel).toBe("Open Course Workspace")
+  })
+
   test("goes ahead while the restriction is in force and no AI extension runs", async function () {
     const { gate, enforce } = gateWith(undefined)
 
@@ -108,7 +121,7 @@ suite("AiUseGate", function () {
     const refusal = await refusalOf(gate)
     await gate.showProblem()
 
-    expect(refusal?.message).toContain("Open the exercise in the course workspace")
+    expect(refusal?.message).toContain("Open the course workspace")
     expect(vscode.commands.executeCommand).toHaveBeenCalledExactlyOnceWith(
       "tmc.openCourseWorkspace",
       idOfMoocCourse("instance-1"),

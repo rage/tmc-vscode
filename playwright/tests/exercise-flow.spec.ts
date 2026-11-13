@@ -32,7 +32,7 @@ vsCodeTest(
         await courseHome.downloadAll()
         await courseHome.expectState("passing_exercise", "Downloaded")
         await coursesView.expand(coursesView.row(courseTitle))
-        await expect(coursesView.row("passing_exercise")).toHaveAccessibleName(/, open,/)
+        await expect(coursesView.row("passing_exercise")).toHaveAccessibleName(/, downloaded,/)
         await expect(coursesView.notificationToast("Downloading exercises…")).toBeHidden()
       },
     )
@@ -43,7 +43,7 @@ vsCodeTest(
       // Explorer, with Course Details in front.
       await expect(page).toHaveTitle(/\(mooc\) \(Workspace\)/, { timeout: 30_000 })
       await courseHome.expectShown(courseTitle)
-      await expect(coursesView.row("passing_exercise")).toHaveAccessibleName(/, open,/)
+      await expect(coursesView.row("passing_exercise")).toHaveAccessibleName(/, in workspace,/)
       await expect(page.locator(".explorer-folders-view")).toBeHidden()
     })
 
@@ -85,7 +85,7 @@ vsCodeTest(
         await coursesView.expand(coursesView.row(courseTitle))
         await expect(passed).toHaveAccessibleName(/, not downloaded,/)
         await passed.click()
-        await expect(passed).toHaveAccessibleName(/, open,/)
+        await expect(passed).toHaveAccessibleName(/, (downloaded|in workspace),/)
         await expect(code).toBeVisible()
       },
     )
@@ -114,7 +114,7 @@ vsCodeTest(
       // The deadline of the exercise between them has passed, so it is skipped.
       await sidePanel.getByRole("button", { name: "Next: future_deadline_exercise" }).click()
 
-      await expect(next).toHaveAccessibleName(/, open,/)
+      await expect(next).toHaveAccessibleName(/, (downloaded|in workspace),/)
       await expect(page.getByRole("tab", { name: /passing_exercise\.py/ }).last()).toBeVisible()
     })
   },

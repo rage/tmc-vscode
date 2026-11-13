@@ -58,7 +58,7 @@ vsCodeTest(
       await coursesView.addNewMoocCourse(courseTitle)
       await coursesView.expand(coursesView.row(courseTitle))
       await exercise.click()
-      await expect(exercise).toHaveAccessibleName(/, open,/)
+      await expect(exercise).toHaveAccessibleName(/, (downloaded|in workspace),/)
       await coursesView.runInlineAction(coursesView.row(courseTitle), "Open Course Workspace")
       await expect(page).toHaveTitle(/\(mooc\)/, { timeout: 30_000 })
       await coursesView.goto()

@@ -239,6 +239,26 @@ suite("CoursesTree", function () {
     expect((item.iconPath as vscode.ThemeIcon).id).toBe("book")
   })
 
+  test("an exercise on disk is downloaded outside its course workspace, and in workspace inside", function () {
+    const course = tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] })
+    workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Open)]
+    const [outside] = exercisesOf(first(show(course)))
+    expect(outside?.accessibilityInformation?.label).toMatch(/, downloaded,/)
+
+    const plain = source()
+    tree.setSource({
+      ...plain,
+      workspaceManager: {
+        ...plain.workspaceManager,
+        activeCourse: "tmc-slug",
+        activeCourseBackend: "tmc",
+      },
+    })
+    settle()
+    const [inWorkspace] = exercisesOf(first(tree.getChildren() as CoursesTreeItem[]))
+    expect(inWorkspace?.accessibilityInformation?.label).toMatch(/, in workspace,/)
+  })
+
   // Same-titled courses exist on both backends; the backend tells them apart.
   test("a course without points still names its backend", function () {
     expect(show(moocCourse())[0]?.description).toBe("courses.mooc.fi")
@@ -500,6 +520,95 @@ suite("CoursesTree", function () {
       expect(tooltipOf(item)).toContain("No tries left, so this score is final.")
     })
 
+    test("a downloaded exercise past its deadline says so, and is marked so Submit is hidden", function () {
+      workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Open)]
+      const item = onlyExercise({ deadline: "2000-01-01T00:00:00Z" })
+
+      expect(item.contextValue).toBe("exercise.opened.submitRefused")
+      expect(item.description).toBe("0/1 points · deadline passed")
+      expect(tooltipOf(item)).toContain(
+        "The deadline of part01-01_hello has passed, so it can no longer be submitted.",
+      )
+    })
+
+    test("a mooc exercise whose points wait for review says so instead of 0 points", function () {
+      const [course] = show(
+        moocCourse({
+          exercises: [
+            moocCourseExercise({ name: "loops", pendingReview: "awaits_chapter_lock" }),
+            moocCourseExercise({
+              id: "locked-one",
+              name: "recursion",
+              pendingReview: "awaits_teacher",
+              exerciseLocked: true,
+            }),
+          ],
+        }),
+      )
+      const loops = exercisesOf(course).find((item) => item.label === "loops")
+      const recursion = exercisesOf(course).find((item) => item.label === "recursion")
+
+      expect(loops?.description).toBe("not downloaded · waiting for teacher review")
+      expect(tooltipOf(loops!)).toContain(
+        "The points wait for a teacher's review, which starts once you complete and lock the chapter.",
+      )
+      expect(recursion?.description).toBe("not downloaded · waiting for teacher review")
+      expect(tooltipOf(recursion!)).toContain(
+        "recursion is locked for you, so it can no longer be submitted. Only a teacher can unlock it.",
+      )
+    })
+
+    test("a mooc exercise under review keeps showing points already given", function () {
+      const [course] = show(
+        moocCourse({
+          exercises: [
+            moocCourseExercise({
+              name: "loops",
+              passed: true,
+              awardedPoints: 1,
+              pendingReview: "awaits_teacher",
+            }),
+          ],
+        }),
+      )
+      const [loops] = exercisesOf(course)
+
+      expect(loops?.description).toBe("not downloaded · 1/1 points · waiting for teacher review")
+      expect(tooltipOf(loops!)).toContain(
+        "A teacher reviews this answer, which can change the points.",
+      )
+    })
+
+    test("a mooc exercise counts its tries left, and its locked chapter names the lock", function () {
+      const [course] = show(
+        moocCourse({
+          exercises: [
+            moocCourseExercise({ name: "loops", maxTries: 3, triesLeft: 2 }),
+            moocCourseExercise({
+              id: "locked-one",
+              name: "recursion",
+              chapter: { name: "Recursion", number: 2, lockingStatus: "NotUnlockedYet" },
+            }),
+          ],
+        }),
+      )
+      const loops = exercisesOf(course).find((item) => item.label === "loops")
+      const recursion = exercisesOf(course).find((item) => item.label === "recursion")
+
+      expect(loops?.description).toBe("not downloaded · 0/1 points · 2 tries left")
+      expect(recursion?.description).toBe("not downloaded · 0/1 points · chapter not unlocked yet")
+      expect(tooltipOf(recursion!)).toContain(
+        'recursion can be submitted once you have completed the chapters before the chapter "Recursion".',
+      )
+      const part = tree
+        .getChildren(course)
+        .find(
+          (child): child is PartTreeItem =>
+            child instanceof PartTreeItem && child.label === "Recursion",
+        )
+      expect(part?.description).toContain("locked")
+    })
+
     test("downloading spins, and a failed download says so", function () {
       const exerciseId = makeTmcKind({ tmcExerciseId: 1 })
       const claim = exerciseOperations.claim([exerciseId], "downloading").unwrap()
@@ -510,6 +619,18 @@ suite("CoursesTree", function () {
       const failed = onlyExercise()
       expect(icon(failed)).toEqual(["error", "testing.iconErrored"])
       expect(failed.contextValue).toBe("exercise.downloadFailed")
+    })
+
+    test("re-renders once its deadline passes, so the row stops saying it is due", function () {
+      const item = onlyExercise({ deadline: new Date(NOW.getTime() + 90_000).toISOString() })
+      expect(item.description).toMatch(/· due in /)
+
+      vi.advanceTimersByTime(91_000)
+      settle()
+
+      const [after] = exercisesOf(first(tree.getChildren() as CoursesTreeItem[]))
+      expect(after?.description).not.toMatch(/due/)
+      expect(after?.description).toMatch(/deadline passed/)
     })
 
     test("past its hard deadline and not downloaded is expired", function () {

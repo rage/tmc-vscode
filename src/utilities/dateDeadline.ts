@@ -68,6 +68,32 @@ export function formatTimestamp(date: Date, now: Date, locale: string | undefine
   return format.format(date)
 }
 
+const dateFormats = new Map<string | undefined, Intl.DateTimeFormat>()
+
+/** Renders the day of a date alone, e.g. "Oct 2, 2026". */
+function formatDate(date: Date, locale: string | undefined): string {
+  let format = dateFormats.get(locale)
+  if (!format) {
+    format = new Intl.DateTimeFormat(locale, { dateStyle: "medium" })
+    dateFormats.set(locale, format)
+  }
+  return format.format(date)
+}
+
+/**
+ * How far `date` is from `now` as {@link formatRelativeTime} says it, but only within a week:
+ * further off, a count of days reads worse than the date.
+ */
+export function formatNearRelativeTime(
+  date: Date,
+  now: Date,
+  locale: string | undefined,
+): string | undefined {
+  return Math.abs(date.getTime() - now.getTime()) > RELATIVE_HINT_LIMIT_MS
+    ? undefined
+    : formatRelativeTime(date, now, locale)
+}
+
 /**
  * Renders a deadline as {@link formatDateTime} does, plus a hint such as "(in 3 days)" when it
  * is within a week of `now`.
@@ -77,15 +103,23 @@ export function formatDeadline(date: Date, now: Date, locale: string | undefined
     return ""
   }
   const absolute = formatDateTime(date, locale)
-  const untilMs = date.getTime() - now.getTime()
-  if (Math.abs(untilMs) > RELATIVE_HINT_LIMIT_MS) {
-    return absolute
+  const near = formatNearRelativeTime(date, now, locale)
+  return near === undefined ? absolute : `${absolute} (${near})`
+}
+
+/**
+ * A deadline in few words, for where space is short: "in 3 days" within a week of `now`, its
+ * date otherwise. {@link formatDeadline} has the time too.
+ */
+export function formatDeadlineBriefly(date: Date, now: Date, locale: string | undefined): string {
+  if (!isRealDate(date)) {
+    return ""
   }
-  return `${absolute} (${formatRelativeTime(date, now, locale)})`
+  return formatNearRelativeTime(date, now, locale) ?? formatDate(date, locale)
 }
 
 /** How far `date` is from `now`, e.g. "in 3 days" or "2 hours ago", in days at most. */
-export function formatRelativeTime(date: Date, now: Date, locale: string | undefined): string {
+function formatRelativeTime(date: Date, now: Date, locale: string | undefined): string {
   let relative = relativeTimeFormats.get(locale)
   if (!relative) {
     relative = new Intl.RelativeTimeFormat(locale, { numeric: "auto" })

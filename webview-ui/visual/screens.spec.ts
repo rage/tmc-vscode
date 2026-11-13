@@ -45,7 +45,10 @@ test.use({
 
 /** The course home's widths in an editor group of a narrow window, where columns give way. */
 const NARROW_WIDTHS = [215, 330]
-const NARROW_SCENARIO_ID = "course-details/mooc-in-workspace"
+const NARROW_SCENARIO_IDS = [
+  "course-details/mooc-in-workspace",
+  "course-details/mooc-submission-rules",
+]
 
 for (const scenarioId of SCENARIO_IDS) {
   for (const [themeKey, themeId] of Object.entries(THEMES)) {
@@ -66,25 +69,27 @@ for (const scenarioId of SCENARIO_IDS) {
   }
 }
 
-for (const width of NARROW_WIDTHS) {
-  for (const [themeKey, themeId] of Object.entries(THEMES)) {
-    test(`${NARROW_SCENARIO_ID} at ${width}px in ${themeId}`, async ({ context, page }) => {
-      await page.setViewportSize({ width, height: 600 })
-      await page.clock.setFixedTime(new Date("2026-10-01T09:00:00Z"))
-      await serveHarness(context)
-      const query = new URLSearchParams({
-        scenario: NARROW_SCENARIO_ID,
-        theme: themeId,
-        reduceMotion: "1",
+for (const scenarioId of NARROW_SCENARIO_IDS) {
+  for (const width of NARROW_WIDTHS) {
+    for (const [themeKey, themeId] of Object.entries(THEMES)) {
+      test(`${scenarioId} at ${width}px in ${themeId}`, async ({ context, page }) => {
+        await page.setViewportSize({ width, height: 600 })
+        await page.clock.setFixedTime(new Date("2026-10-01T09:00:00Z"))
+        await serveHarness(context)
+        const query = new URLSearchParams({
+          scenario: scenarioId,
+          theme: themeId,
+          reduceMotion: "1",
+        })
+        await page.goto(`${ORIGIN}/frame.html?${query}`)
+        await page.addStyleTag({ content: PINNED_FONTS })
+        await expect(page.getByRole("heading", { level: 1 })).toBeVisible()
+        await page.evaluate(() => document.fonts.ready)
+        await expect(page).toHaveScreenshot(
+          `${scenarioId.replace("/", "--")}-${width}px-${themeKey}.png`,
+          { fullPage: true, animations: "disabled", caret: "hide" },
+        )
       })
-      await page.goto(`${ORIGIN}/frame.html?${query}`)
-      await page.addStyleTag({ content: PINNED_FONTS })
-      await expect(page.getByRole("heading", { level: 1 })).toBeVisible()
-      await page.evaluate(() => document.fonts.ready)
-      await expect(page).toHaveScreenshot(
-        `${NARROW_SCENARIO_ID.replace("/", "--")}-${width}px-${themeKey}.png`,
-        { fullPage: true, animations: "disabled", caret: "hide" },
-      )
-    })
+    }
   }
 }

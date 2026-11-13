@@ -56,7 +56,7 @@ vsCodeTest(
     await vsCodeTest.step("open an exercise, downloading it on the way", async () => {
       const row = coursesView.row(exerciseName)
       await coursesView.runContextMenuCommand(row, "Open")
-      await expect(row).toHaveAccessibleName(/, open,/)
+      await expect(row).toHaveAccessibleName(/, (downloaded|in workspace),/)
     })
 
     await vsCodeTest.step("open workspace", async () => {
@@ -128,7 +128,7 @@ vsCodeTest("submitting an exercise gone from the server says so", async ({ page,
     await coursesView.expand(coursesView.row("MOOC Python Course"))
     const row = coursesView.row("passing_exercise")
     await coursesView.runContextMenuCommand(row, "Open")
-    await expect(row).toHaveAccessibleName(/, open,/)
+    await expect(row).toHaveAccessibleName(/, (downloaded|in workspace),/)
     await coursesView.runInlineAction(
       coursesView.row("MOOC Python Course"),
       "Open Course Workspace",
@@ -156,6 +156,6 @@ vsCodeTest("submitting an exercise gone from the server says so", async ({ page,
     ).toBeVisible()
     await expect(sidePanel.getByRole("button", { name: "Refresh Courses" })).toBeVisible()
     const details = await sidePanel.getByRole("group", { name: "Error details" }).textContent()
-    expect(details?.split("Caused by: HTTP error 404")).toHaveLength(2)
+    expect(details?.split("Caused by: 404 Not Found from")).toHaveLength(2)
   })
 })

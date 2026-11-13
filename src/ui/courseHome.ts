@@ -3,11 +3,24 @@ import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { CourseHomeView, DeadlineText } from "../../shared/lib"
-import { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../../shared/lib"
+import {
+  CourseIdentifier,
+  ExerciseIdentifier,
+  LocalCourseData,
+  SUBMIT_REFUSAL_LABELS,
+  pendingReviewSentence,
+  submitRefusalSentence,
+} from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
 import { isAiAllowed } from "../api/aiRestriction"
-import { findNextDateAfter, formatDateTime, formatRelativeTime } from "../utilities"
+import {
+  findNextDateAfter,
+  formatDateTime,
+  formatDeadlineBriefly,
+  formatNearRelativeTime,
+} from "../utilities"
 import { recentUpdates } from "./recentUpdates"
+import type { ExerciseView } from "./treeview/courseViewModel"
 import {
   buildCourseView,
   isLeftToDo,
@@ -25,6 +38,10 @@ export function openCourseId({ startup }: ReadyActionContext): CourseIdentifier 
   }
   const course = startup.userData.getCourseBySlug(activeCourseBackend, activeCourse)
   return course.ok ? LocalCourseData.getCourseId(course.val) : undefined
+}
+
+function isOnDisk(exercise: ExerciseView): boolean {
+  return exercise.status === "opened" || exercise.status === "closed"
 }
 
 /**
@@ -57,13 +74,15 @@ export function buildCourseHomeView(
       ? {
           at: date.toISOString(),
           absolute: formatDateTime(date, locale),
-          relative: formatRelativeTime(date, now, locale),
+          relative: formatNearRelativeTime(date, now, locale) ?? null,
+          brief: formatDeadlineBriefly(date, now, locale),
         }
       : undefined
   const newKeys = new Set(
     LocalCourseData.getNewExercises(course).map((id) => ExerciseIdentifier.key(id)),
   )
-  const nextExercise = exercises.find((ex) => isLeftToDo(ex, now))
+  const leftToDo = exercises.filter((ex) => isLeftToDo(ex))
+  const nextExercise = leftToDo.find((ex) => isOnDisk(ex)) ?? leftToDo[0]
   const openCourse = openCourseId(actionContext)
   const isWorkspaceOpen = openCourse !== undefined && CourseIdentifier.equals(openCourse, courseId)
 
@@ -94,7 +113,15 @@ export function buildCourseHomeView(
     isSessionExpired: actionContext.authState.isSessionExpired,
     isWorkspaceOpen,
     isRestricted: isWorkspaceOpen && !vscode.workspace.isTrusted,
-    ...(nextExercise ? { nextExercise: { id: nextExercise.id, name: nextExercise.name } } : {}),
+    ...(nextExercise
+      ? {
+          nextExercise: {
+            id: nextExercise.id,
+            name: nextExercise.name,
+            isOnDisk: isOnDisk(nextExercise),
+          },
+        }
+      : {}),
     newExercises: exercises
       .filter((ex) => ex.status === "new" && newKeys.has(ExerciseIdentifier.key(ex.id)))
       .map(({ id, name }) => ({ id, name })),
@@ -108,17 +135,40 @@ export function buildCourseHomeView(
           : "Other exercises"
         : partLabel(part.name),
       isDefaultOpen: part.isDefaultOpen,
+      ...(part.opensAt
+        ? {
+            lockedReason:
+              `Opens on ${formatDateTime(part.opensAt, locale)}. Until then its exercises` +
+              " can be tested but not submitted.",
+          }
+        : part.lockingStatus === "NotUnlockedYet"
+          ? { lockedReason: "Locked until you have completed the chapters before it." }
+          : part.lockingStatus === "CompletedAndLocked"
+            ? { lockedReason: "You have completed and locked this chapter." }
+            : {}),
       exercises: part.exercises.map((ex) => {
         const deadline = deadlineText(shownDeadline(ex))
-        const { materialUrl } = ex
+        const { materialUrl, pendingReview, submitRefusal, triesLeft } = ex
         return {
           id: ex.id,
           name: ex.name,
           status: ex.status,
           passed: ex.passed,
           isOutOfTries: ex.isOutOfTries,
+          ...(triesLeft === undefined ? {} : { triesLeft }),
+          ...(submitRefusal
+            ? {
+                submitRefusal: {
+                  label: SUBMIT_REFUSAL_LABELS[submitRefusal],
+                  sentence: submitRefusalSentence(submitRefusal, ex.slug, part.name),
+                },
+              }
+            : {}),
           awardedPoints: ex.awardedPoints,
           availablePoints: ex.availablePoints,
+          ...(pendingReview
+            ? { pendingReview: pendingReviewSentence(pendingReview, ex.awardedPoints) }
+            : {}),
           ...(deadline ? { deadline } : {}),
           isSoftDeadline: !ex.isHard,
           isUpdateable: ex.isUpdateable,

@@ -3,7 +3,6 @@ import { Ok } from "ts-results"
 
 import type { BackendKind, CourseIdentifier, Enum } from "../../shared/lib"
 import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../../shared/lib"
-import { isAiAllowed } from "../api/aiRestriction"
 import type Langs from "../api/langs"
 import type { OperationWarning, Warned } from "../api/withOperation"
 import {
@@ -14,6 +13,7 @@ import {
   TmcLoginNotAcceptedError,
 } from "../errors"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
+import { downloadFailures } from "../ui/downloadFailures"
 import { Logger } from "../utilities"
 import { toStoredMoocCourse, toStoredTmcCourse } from "../utilities/apiData"
 import type { ReadyActionContext } from "./types"
@@ -69,7 +69,6 @@ function sessionRefusalWarnings(
 export interface AiPolicyChange {
   /** The course as stored now, with its new policy. */
   course: LocalCourseData
-  wasAiAllowed: boolean
 }
 
 /** What {@link updateCourse} did. */
@@ -161,6 +160,14 @@ export async function updateCourse(
   if (stored.err) {
     return stored
   }
+  // A download refused while their chapter was closed would succeed now.
+  downloadFailures.forget(
+    courseData.kind === "mooc"
+      ? (courseData.data.closedChapters ?? [])
+          .flatMap((chapter) => chapter.exercises)
+          .map((exercise) => makeMoocKind({ moocExerciseId: exercise.id }))
+      : [],
+  )
   const isAiPolicyChanged =
     course.kind === "mooc" &&
     courseData.kind === "mooc" &&
@@ -178,9 +185,7 @@ export async function updateCourse(
   return Ok({
     isUpdated: true,
     warnings: [],
-    ...(isAiPolicyChanged
-      ? { aiPolicyChange: { course, wasAiAllowed: isAiAllowed(courseData) } }
-      : {}),
+    ...(isAiPolicyChanged ? { aiPolicyChange: { course } } : {}),
   })
 }
 

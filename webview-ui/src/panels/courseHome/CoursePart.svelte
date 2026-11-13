@@ -4,7 +4,7 @@
     CourseHomeExerciseAction,
     CourseHomePart,
   } from "../../../../shared/lib"
-  import { ExerciseIdentifier } from "../../../../shared/lib"
+  import { ExerciseIdentifier, PENDING_REVIEW_LABEL } from "../../../../shared/lib"
   import ActionMenu from "../../components/ActionMenu.svelte"
   import ToolbarButton from "../../components/ToolbarButton.svelte"
   import { reducedMotion } from "../../utilities/a11y.svelte"
@@ -13,6 +13,8 @@
     part: CourseHomePart
     /** This window is the course's workspace, where an opened exercise is a folder of it. */
     isWorkspaceOpen: boolean
+    /** Whether a download can succeed now: logged in, and the backend reachable. */
+    canDownload: boolean
     isExpanded: boolean
     ontoggle: () => void
     onaction: (exercise: CourseHomeExercise, action: CourseHomeExerciseAction) => void
@@ -21,7 +23,15 @@
   }
 
   /** One part of the course: a header with its progress, and a row per exercise. */
-  let { part, isWorkspaceOpen, isExpanded, ontoggle, onaction, onopenmaterial }: Props = $props()
+  let {
+    part,
+    isWorkspaceOpen,
+    canDownload,
+    isExpanded,
+    ontoggle,
+    onaction,
+    onopenmaterial,
+  }: Props = $props()
 
   const headingId = $props.id()
   const passedCount = $derived(part.exercises.filter((ex) => ex.passed).length)
@@ -32,8 +42,8 @@
     new: "New",
     downloading: "Downloading…",
     downloadFailed: "Download failed",
-    expired: "Expired",
-    removed: "Removed from course",
+    expired: "Deadline passed",
+    removed: "Removed",
   }
 
   function stateLabel(exercise: CourseHomeExercise): string {
@@ -65,13 +75,17 @@
       return { name: "circle-slash", tone: "muted", label: "No tries left" }
     }
     if (exercise.status === "expired") {
-      return { name: "lock", tone: "muted", label: "Expired" }
+      return { name: "lock", tone: "muted", label: "Deadline passed" }
+    }
+    if (exercise.submitRefusal) {
+      return { name: "lock", tone: "muted", label: exercise.submitRefusal.sentence }
     }
     return { name: "circle-large-outline", tone: "muted", label: "Not passed" }
   }
 
   function points(exercise: CourseHomeExercise): string {
-    return exercise.availablePoints > 0
+    // Held at 0 until the review; the deadline column says so instead.
+    return exercise.availablePoints > 0 && (!exercise.pendingReview || exercise.awardedPoints > 0)
       ? `${exercise.awardedPoints}/${exercise.availablePoints}`
       : ""
   }
@@ -81,9 +95,18 @@
     return (
       exercise.deadline !== undefined &&
       !exercise.passed &&
-      !exercise.isOutOfTries &&
+      !exercise.submitRefusal &&
       Date.parse(exercise.deadline.at) > Date.now()
     )
+  }
+
+  /** Why an unpassed exercise cannot be submitted, unless its state already says so. */
+  function shownRefusal(exercise: CourseHomeExercise) {
+    return exercise.passed || exercise.status === "expired" ? undefined : exercise.submitRefusal
+  }
+
+  function triesLeftText(triesLeft: number): string {
+    return `${triesLeft} ${triesLeft === 1 ? "try" : "tries"} left`
   }
 
   function menuActions(exercise: CourseHomeExercise) {
@@ -99,7 +122,16 @@
           ]
         : []),
       ...(materialUrl
-        ? [{ label: "Open in Course Material", onselect: () => onopenmaterial(materialUrl) }]
+        ? [
+            {
+              // The material page shows the model solution once courses.mooc.fi reveals it.
+              label:
+                exercise.passed || exercise.isOutOfTries
+                  ? "Show Model Solution"
+                  : "Open in Course Material",
+              onselect: () => onopenmaterial(materialUrl),
+            },
+          ]
         : []),
     ]
   }
@@ -120,12 +152,23 @@
       </button>
     </h2>
     <span class="muted part-progress">{passedCount}/{part.exercises.length} passed</span>
+    {#if part.lockedReason}
+      <span class="muted part-locked">
+        <vscode-icon name="lock" aria-hidden="true"></vscode-icon>
+        {part.lockedReason}
+      </span>
+    {/if}
   </div>
   {#if isExpanded}
     <ul class="rows" id="{headingId}-rows">
       {#each part.exercises as exercise (ExerciseIdentifier.key(exercise.id))}
         {@const icon = statusIcon(exercise)}
         {@const actions = menuActions(exercise)}
+        {@const refusal = shownRefusal(exercise)}
+        {@const tries =
+          !refusal && !exercise.passed && exercise.triesLeft !== undefined
+            ? triesLeftText(exercise.triesLeft)
+            : undefined}
         <li class="row" class:is-passive={!isOnDisk(exercise)}>
           <span class="icon" title={icon.label}>
             <vscode-icon
@@ -148,15 +191,22 @@
           </span>
           <span class="state muted">{stateLabel(exercise)}</span>
           <span class="deadline muted">
-            {#if exercise.deadline && isDue(exercise)}
+            {#if exercise.pendingReview}
+              <span title={exercise.pendingReview}>{PENDING_REVIEW_LABEL}</span>
+            {:else if refusal}
+              <span title={refusal.sentence}>{refusal.label}</span>
+            {:else if exercise.deadline && isDue(exercise)}
               <time
                 datetime={exercise.deadline.at}
                 title="{exercise.isSoftDeadline ? 'Soft deadline' : 'Deadline'}: {exercise.deadline
                   .absolute}"
               >
                 {exercise.isSoftDeadline ? "soft deadline" : "due"}
-                {exercise.deadline.relative}
+                {exercise.deadline.brief}
               </time>
+            {/if}
+            {#if tries}
+              <span>{tries}</span>
             {/if}
           </span>
           <span
@@ -165,7 +215,7 @@
             >{points(exercise)}</span
           >
           <span class="row-actions">
-            {#if isDownloadable(exercise)}
+            {#if isDownloadable(exercise) && canDownload}
               <ToolbarButton
                 icon="cloud-download"
                 label="Download {exercise.name}"
@@ -225,6 +275,11 @@
   .part-progress {
     flex: none;
     font-variant-numeric: tabular-nums;
+  }
+  .part-locked {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tmc-space-1);
   }
   .rows {
     list-style: none;
@@ -290,11 +345,17 @@
     color: var(--tmc-badge-foreground);
     outline: 1px solid var(--tmc-hc-outline);
   }
-  .state,
-  .deadline {
+  .state {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  /* Wraps instead of truncating: what a student may still submit must stay readable. */
+  .deadline {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow-wrap: break-word;
   }
   .points {
     text-align: end;
@@ -311,11 +372,12 @@
   .row:not(:hover, :focus-within) .row-actions :global(.action-menu) {
     opacity: 0;
   }
+  /* The state goes first: the icons and the muted names of exercises not on disk tell most of it. */
   @media (max-width: 640px) {
     .row {
-      grid-template-columns: 16px minmax(8ch, 1fr) 9em 3em 48px;
+      grid-template-columns: 16px minmax(8ch, 1fr) 10em 3em 48px;
     }
-    .deadline {
+    .state {
       display: none;
     }
   }
@@ -323,8 +385,21 @@
     .row {
       grid-template-columns: 16px minmax(8ch, 1fr) 3em 48px;
     }
-    .state {
-      display: none;
+    /* Under the name, as the row has no room for a column of its own. */
+    .deadline {
+      grid-row: 2;
+      grid-column: 2 / -1;
+      flex-direction: row;
+      flex-wrap: wrap;
+      column-gap: var(--tmc-space-1);
+    }
+    .deadline > * + *::before {
+      content: "· ";
+    }
+    /* Names that differ only at the end must not be cut to the same prefix. */
+    .name-button {
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
   }
   @media (max-width: 300px) {

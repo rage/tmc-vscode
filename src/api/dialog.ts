@@ -245,13 +245,17 @@ export default class Dialog {
    * description tells them apart.
    */
   public async selectItem<T>(
-    prompt: string | { title: string; placeHolder: string },
+    prompt: string | { title: string; placeHolder: string; matchOnDescription?: boolean },
     ...items: (Item<T> | Separator)[]
   ): Promise<T | undefined> {
-    const options =
+    const options: vscode.QuickPickOptions =
       typeof prompt === "string"
         ? { placeHolder: prompt }
-        : { title: prompt.title, placeHolder: prompt.placeHolder }
+        : {
+            title: prompt.title,
+            placeHolder: prompt.placeHolder,
+            ...(prompt.matchOnDescription ? { matchOnDescription: true } : {}),
+          }
     const picked = await vscode.window.showQuickPick(items, options)
     return picked && "value" in picked ? picked.value : undefined
   }

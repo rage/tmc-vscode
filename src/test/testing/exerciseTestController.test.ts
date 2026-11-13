@@ -16,6 +16,7 @@ import { ExerciseStatus } from "../../api/workspaceManager"
 import {
   AiUseRefusedError,
   BottleneckError,
+  EmptyLangsResponseError,
   RuntimeError,
   SHOW_AI_USE_PROBLEM_COMMAND,
   TRUST_COURSE_WORKSPACE_COMMAND,
@@ -59,11 +60,14 @@ interface FakeTestController {
 function course(options: {
   examMode?: boolean | undefined
   disabled?: boolean | undefined
+  deadline?: string | undefined
   slugs: string[]
 }) {
   return tmcLocalCourse({
     name: COURSE_SLUG,
-    exercises: options.slugs.map((name, index) => tmcCourseExercise({ id: index + 1, name })),
+    exercises: options.slugs.map((name, index) =>
+      tmcCourseExercise({ id: index + 1, name, deadline: options.deadline ?? null }),
+    ),
     availablePoints: 1,
     perhapsExamMode: options.examMode ?? false,
     disabled: options.disabled ?? false,
@@ -117,6 +121,7 @@ function setup(
     checkstyle?: StyleValidationResult | Error
     examMode?: boolean
     disabled?: boolean
+    deadline?: string
     loggedIn?: boolean
     slugs?: string[]
     closedSlugs?: string[]
@@ -124,7 +129,12 @@ function setup(
   } = {},
 ): Setup {
   const slugs = options.slugs ?? ["part01-01_hello"]
-  const storedCourse = course({ examMode: options.examMode, disabled: options.disabled, slugs })
+  const storedCourse = course({
+    examMode: options.examMode,
+    disabled: options.disabled,
+    deadline: options.deadline,
+    slugs,
+  })
   const exercises: WorkspaceExercise[] = [...slugs, ...(options.closedSlugs ?? [])].map(
     (slug, index) => ({
       id: idOfTmcExercise(index + 1),
@@ -261,6 +271,11 @@ suite("ExerciseTestController", function () {
     item.children.forEach((child) => expect(states.get(child.id)?.[0]).toBe("passed"))
     expect(item.description).toBe("2/2 tests passed")
     expect(run.output).toEqual([{ output: "stdout:\r\nHello\r\nWorld\r\n\r\n", test: item }])
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      "setContext",
+      "test-my-code:HasRunTests",
+      true,
+    )
 
     expect(s.actionContext.dialog.notification).toHaveBeenCalledOnce()
     const [message, [label, onSubmit]] = vi.mocked(s.actionContext.dialog.notification).mock
@@ -271,6 +286,95 @@ suite("ExerciseTestController", function () {
     onSubmit()
     expect(executeCommand).toHaveBeenCalledWith("tmc.submitExercise", exercise.uri)
     executeCommand.mockRestore()
+  })
+
+  test("a passing run past the deadline says why it cannot be submitted instead of offering Submit", async function () {
+    const s = setup({ deadline: "2000-01-01T00:00:00Z" })
+
+    await s.controller.runExercise(exerciseAt(s))
+
+    expect(s.actionContext.dialog.notification).toHaveBeenCalledExactlyOnceWith(
+      "All tests of part01-01_hello passed. The deadline of part01-01_hello has passed, so it can no longer be submitted.",
+    )
+  })
+
+  test("a run langs stopped for taking too long says so, not as failed tests", async function () {
+    const s = setup({
+      run: Ok({
+        status: "TESTS_FAILED",
+        logs: {},
+        timedOutAfterMs: 60000n,
+        testResults: [
+          {
+            name: "Timeout test",
+            successful: false,
+            points: [],
+            message: "timed out",
+            exception: [],
+          },
+        ],
+      }),
+    })
+    const exercise = exerciseAt(s)
+
+    await s.controller.runExercise(exercise)
+
+    const item = itemOf(s, exercise)
+    const reported = finalStates(lastRun(s)).get(item.id)
+    expect(reported?.[0]).toBe("failed")
+    expect(messagesOf(reported).map((message) => message.message)).toEqual([
+      "The tests did not finish within 60 s, so they were stopped. An infinite loop is the usual cause.",
+    ])
+    expect(item.children.size).toBe(0)
+    expect(s.actionContext.dialog.warningNotification).toHaveBeenCalledExactlyOnceWith(
+      "part01-01_hello: The tests did not finish within 60 s, so they were stopped. An infinite loop is the usual cause.",
+    )
+  })
+
+  test("a JDK that does not start says how to point at a working one, not to reset", async function () {
+    const s = setup({
+      run: Err(
+        new RuntimeError(
+          "Java at /usr/lib/jvm/broken does not start; point JAVA_HOME at a working JDK.",
+          "Error occurred during initialization of VM",
+        ),
+      ),
+    })
+    const exercise = exerciseAt(s)
+
+    await s.controller.runExercise(exercise)
+
+    const reported = finalStates(lastRun(s)).get(itemOf(s, exercise).id)
+    const text = String(messagesOf(reported)[0]?.message)
+    expect(text).toContain("Set testMyCode.javaHome")
+    expect(text).not.toContain("Reset Exercise")
+    expect(s.actionContext.dialog.warningNotification).toHaveBeenCalledWith(
+      expect.stringContaining("Java does not start"),
+      ["Open Settings", expect.any(Function)],
+    )
+  })
+
+  test("a JVM that dies inside the CLI is headed as Java not starting, with its own lines", async function () {
+    const s = setup({
+      run: Err(
+        new EmptyLangsResponseError(
+          "Langs process ended without result data.",
+          "Error occurred during initialization of VM\nUnable to load zip library: /usr/lib/jvm/x/lib/libzip.so",
+        ),
+      ),
+    })
+    const exercise = exerciseAt(s)
+
+    await s.controller.runExercise(exercise)
+
+    const reported = finalStates(lastRun(s)).get(itemOf(s, exercise).id)
+    const text = String(messagesOf(reported)[0]?.message)
+    expect(text.split("\n").slice(0, 2)).toEqual([
+      "The tests could not be run: Java does not start.",
+      "Set testMyCode.javaHome (Settings › TestMyCode › Java Home) to a working JDK.",
+    ])
+    expect(text).toContain("Unable to load zip library")
+    expect(text).not.toContain("without result data")
   })
 
   test("a failing test is reported at its stack frame, and Submit is not offered", async function () {
@@ -428,6 +532,32 @@ suite("ExerciseTestController", function () {
     const reported = finalStates(lastRun(s)).get(itemOf(s, exerciseAt(s)).id)
     expect(messagesOf(reported)[0]?.message).toMatch(
       /^The tests could not be run: TestMyCode cannot tell what kind of exercise this is: files it needs, such as the test folder, are missing\.\nFailed to run tests for exercise at \/ex\.\nIf the exercise's files are damaged/,
+    )
+  })
+
+  test("a run that found no tests suggests a reset", async function () {
+    const s = setup({
+      run: Ok({
+        status: "TESTS_FAILED",
+        logs: {},
+        testResults: [
+          {
+            name: "Tests",
+            successful: false,
+            points: [],
+            message: "No tests found. Did you terminate your program with an exit() command?",
+            exception: [],
+          },
+        ],
+      }),
+    })
+    const exercise = exerciseAt(s)
+
+    await s.controller.runExercise(exercise)
+
+    const reported = finalStates(lastRun(s)).get(itemOf(s, exercise).id)
+    expect(messagesOf(reported).map((message) => message.message)).toContain(
+      "If the exercise's tests are missing, Reset Exercise restores its template.",
     )
   })
 

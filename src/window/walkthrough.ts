@@ -3,6 +3,7 @@ import * as vscode from "vscode"
 import type { ReadyActionContext } from "../actions/types"
 import { EXTENSION_ID } from "../config/constants"
 import { trackContextKey } from "../ui/contextKeys"
+import { Logger } from "../utilities"
 
 /** The Get Started walkthrough; its last part must match the `walkthroughs` entry in package.json. */
 export const WALKTHROUGH = `${EXTENSION_ID}#gettingStarted`
@@ -38,6 +39,20 @@ export function trackWalkthroughActive(): vscode.Disposable {
   )
 }
 
+/**
+ * A walkthrough step done by an action with ways in that VS Code's `onCommand` completion does
+ * not see, such as a notification button or the Testing view; package.json completes the step
+ * on its key.
+ */
+export type WalkthroughMilestone = "test-my-code:HasRunTests" | "test-my-code:HasSubmitted"
+
+/** Completes the walkthrough step that `milestone` stands for. */
+export function reachWalkthroughMilestone(milestone: WalkthroughMilestone): void {
+  void Promise.resolve(vscode.commands.executeCommand("setContext", milestone, true)).catch((e) =>
+    Logger.warn(`Could not set ${milestone}`, e),
+  )
+}
+
 /** What TestMyCode knows of the student's progress through the walkthrough. */
 export interface WalkthroughProgress {
   isLoggedIn: boolean
@@ -66,6 +81,11 @@ export function isWalkthroughOpen(): boolean {
   )
 }
 
+/** Whether the walkthrough is the shown tab of some editor group. */
+export function isWalkthroughVisible(): boolean {
+  return vscode.window.tabGroups.all.some((group) => isWalkthroughTab(group.activeTab))
+}
+
 /** The student's progress as this activation sees it. */
 export function walkthroughProgressOf({
   authState,
@@ -85,12 +105,17 @@ export function walkthroughProgressOf({
  *
  * @param progress Read only when the walkthrough is to be shown.
  * @param isOpenedIfClosed Opens it even when closed, for a window that replaced one showing it.
+ * @param isVisibleOnly Moves it only when it is already shown, so it never covers what the
+ * student has in front of it.
  */
 export async function showNextWalkthroughStep(
   progress: () => WalkthroughProgress,
-  { isOpenedIfClosed = false }: { isOpenedIfClosed?: boolean } = {},
+  {
+    isOpenedIfClosed = false,
+    isVisibleOnly = false,
+  }: { isOpenedIfClosed?: boolean; isVisibleOnly?: boolean } = {},
 ): Promise<void> {
-  if (!isOpenedIfClosed && !isWalkthroughOpen()) {
+  if (isVisibleOnly ? !isWalkthroughVisible() : !isOpenedIfClosed && !isWalkthroughOpen()) {
     return
   }
   await vscode.commands.executeCommand(

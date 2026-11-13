@@ -95,7 +95,7 @@ export class ExerciseOperations {
     const conflicting = keys.find((key) => this._running.has(key))
     if (conflicting !== undefined) {
       const running = this._running.get(conflicting)?.kind ?? kind
-      Logger.warn(`Rejected ${kind} of exercise ${conflicting}, already ${running}`)
+      Logger.info(`Rejected ${kind} of exercise ${conflicting}, already ${running}`)
       return Err(new BottleneckError(BUSY_MESSAGES[running]))
     }
     const held = new Map<string, Claim>()

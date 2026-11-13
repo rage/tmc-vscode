@@ -260,6 +260,20 @@ suite("ExerciseSubmission panel (failures)", () => {
   })
 })
 
+suite("ExerciseSubmission panel (teacher review)", () => {
+  test("says what the review waits for beside the explanation", async () => {
+    render(ExerciseSubmission, { props: { panel: moocPanel } })
+    showView(moocPanel.id, {
+      ...moocGradingView(moocGrading({ score_given: 3 }), 3),
+      pendingReview: "A teacher reviews this answer, which can change the points.",
+    })
+
+    expect(
+      await screen.findByText("A teacher reviews this answer, which can change the points."),
+    ).toBeInTheDocument()
+  })
+})
+
 suite("ExerciseSubmission panel (tmc results)", () => {
   test("shows the points against the exercise's available points", async () => {
     render(ExerciseSubmission, { props: { panel } })
@@ -446,6 +460,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
           standing: "Attempted",
           max_tries: null,
           tries_left: null,
+          pending_teacher_review: null,
+          exercise_locked: false,
         },
       }),
     )
@@ -486,6 +502,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
           standing: "Passed",
           max_tries: null,
           tries_left: null,
+          pending_teacher_review: null,
+          exercise_locked: false,
         },
       }),
     )
@@ -507,13 +525,13 @@ suite("ExerciseSubmission panel (mooc results)", () => {
           standing: "OutOfTries",
           max_tries: null,
           tries_left: null,
+          pending_teacher_review: null,
+          exercise_locked: false,
         },
       }),
     )
     await screen.findByRole("heading", { name: "Some tests failed on the server" })
-    expect(
-      screen.getByText("You have no tries left on this exercise, so this score is final."),
-    ).toBeInTheDocument()
+    expect(screen.getByText("That was your last try, so this score is final.")).toBeInTheDocument()
   })
 
   test("a pass leads on to the next exercise as the only button", async () => {
@@ -535,6 +553,38 @@ suite("ExerciseSubmission panel (mooc results)", () => {
       sourcePanel: { id: panel.id, type: panel.type },
       action: "openNextExercise",
     })
+  })
+
+  test("a failing submission after a pass keeps the points out of it, and offers a retry", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...moocGradingView(
+        moocGrading({
+          score_given: 0,
+          exercise_progress: {
+            exercise_id: "exercise",
+            score_given: 1,
+            score_maximum: 1,
+            completed: true,
+            attempted: true,
+            standing: "Passed",
+            max_tries: null,
+            tries_left: null,
+            pending_teacher_review: null,
+            exercise_locked: false,
+          },
+        }),
+        1,
+      ),
+      isExercisePassed: true,
+      nextExercise: { name: "part01-02_world" },
+    })
+
+    await screen.findByRole("heading", { name: "This submission failed some tests" })
+    expect(screen.queryByRole("meter", { name: "Points" })).not.toBeInTheDocument()
+    expect(isSecondary(screen.getByRole("button", { name: "Next: part01-02_world" }))).toBe(false)
+    expect(isSecondary(screen.getByRole("button", { name: "Run Tests" }))).toBe(true)
+    expect(isSecondary(screen.getByRole("button", { name: "Submit Again" }))).toBe(true)
   })
 
   test("a result short of a pass offers to test and submit again", async () => {
@@ -592,6 +642,42 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     expect(await screen.findByRole("button", { name: "Run Tests" })).toBeInTheDocument()
     expect(screen.getByText(/removed from the course/)).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Submit Again" })).not.toBeInTheDocument()
+  })
+
+  test("an exercise the backend would refuse says why, and leads to the model solution instead", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...tmcResultView(submissionFinished({ all_tests_passed: false }), [], 2),
+      isExercisePassed: false,
+      solutionUrl: "https://courses.example/solution",
+      submitRefusal: "You have no tries left on loops, so it can no longer be submitted.",
+      triesLeft: 0,
+    })
+    postedMessages.mockClear()
+
+    const solution = await screen.findByRole("button", { name: "Show Model Solution" })
+    expect(isSecondary(solution)).toBe(false)
+    expect(screen.getByText(/no tries left on loops/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Run Tests" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Submit Again" })).not.toBeInTheDocument()
+    solution.click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "openLinkInBrowser",
+      url: "https://courses.example/solution",
+    })
+  })
+
+  test("counts the tries left while another submission is accepted", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...tmcResultView(submissionFinished({ all_tests_passed: false }), [], 2),
+      isExercisePassed: false,
+      triesLeft: 1,
+    })
+
+    expect(await screen.findByText("1 try left on this exercise.")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Submit Again" })).toBeInTheDocument()
   })
 
   test("awaiting manual grading explains itself and asks nothing of the student", async () => {

@@ -15,8 +15,10 @@ const DeadlineTextSchema = z.object({
   at: z.string(),
   /** E.g. "Oct 2, 2026, 3:00 PM". */
   absolute: z.string(),
-  /** E.g. "in 3 days" or "2 hours ago". */
-  relative: z.string(),
+  /** E.g. "in 3 days" or "2 hours ago"; null further than a week off. */
+  relative: z.string().nullable(),
+  /** `relative`, or else the date alone, e.g. "Oct 2, 2026": for where space is short. */
+  brief: z.string(),
 })
 
 export type DeadlineText = z.infer<typeof DeadlineTextSchema>
@@ -39,8 +41,14 @@ export const CourseHomeExerciseSchema = z.object({
   status: ExerciseStatusSchema,
   passed: z.boolean(),
   isOutOfTries: z.boolean(),
+  /** Absent when tries are unlimited. */
+  triesLeft: z.number().optional(),
+  /** Why the backend would refuse a submission now: a few words and a sentence. */
+  submitRefusal: z.object({ label: z.string(), sentence: z.string() }).optional(),
   awardedPoints: z.number(),
   availablePoints: z.number(),
+  /** What the points wait for, as a sentence; `awardedPoints` is 0 until then. */
+  pendingReview: z.string().optional(),
   /** The deadline the exercise is judged by; a binding soft one sets `isSoftDeadline`. */
   deadline: DeadlineTextSchema.optional(),
   isSoftDeadline: z.boolean(),
@@ -56,6 +64,8 @@ export const CourseHomePartSchema = z.object({
   key: z.string(),
   name: z.string(),
   isDefaultOpen: z.boolean(),
+  /** Why chapter locking refuses submissions to the part's exercises, as a sentence. */
+  lockedReason: z.string().optional(),
   exercises: z.array(CourseHomeExerciseSchema),
 })
 
@@ -92,8 +102,13 @@ export const CourseHomeViewSchema = z.object({
   isWorkspaceOpen: z.boolean(),
   /** This window is the course's workspace and in Restricted Mode. */
   isRestricted: z.boolean(),
-  /** The first exercise, in course order, still left to do. */
-  nextExercise: z.object({ id: ExerciseIdentifierSchema, name: z.string() }).optional(),
+  /**
+   * The exercise to go on with: the first, in course order, still left to do among those on
+   * disk, else among all.
+   */
+  nextExercise: z
+    .object({ id: ExerciseIdentifierSchema, name: z.string(), isOnDisk: z.boolean() })
+    .optional(),
   /** Announced as new and not dismissed; downloadable ones only. */
   newExercises: z.array(z.object({ id: ExerciseIdentifierSchema, name: z.string() })),
   /** Exercises on disk whose template changed on the backend. */

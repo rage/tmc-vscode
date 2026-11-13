@@ -116,8 +116,9 @@ suite("the course home", () => {
         availablePoints: 8,
         nextDeadline: {
           at: "2026-10-23T20:59:00Z",
-          absolute: "Oct 23, 2026",
+          absolute: "Oct 23, 2026, 11:59 PM",
           relative: "in 3 days",
+          brief: "in 3 days",
         },
       }),
     )
@@ -128,6 +129,26 @@ suite("the course home", () => {
       "3 / 8 points",
     )
     expect(screen.getByText("in 3 days")).toHaveAttribute("datetime", "2026-10-23T20:59:00Z")
+    expect(screen.getByText("· Oct 23, 2026, 11:59 PM")).toBeInTheDocument()
+  })
+
+  test("names a next deadline more than a week off by its date, once", async () => {
+    await renderHome(
+      courseHomeView({
+        nextDeadline: {
+          at: "2225-01-01T23:59:00Z",
+          absolute: "Jan 2, 2225, 1:59 AM",
+          relative: null,
+          brief: "Jan 2, 2225",
+        },
+      }),
+    )
+
+    expect(screen.getByText("Jan 2, 2225, 1:59 AM")).toHaveAttribute(
+      "datetime",
+      "2225-01-01T23:59:00Z",
+    )
+    expect(screen.queryByText(/days/)).not.toBeInTheDocument()
   })
 
   test("lists each part's exercises with their state, points and deadline", async () => {
@@ -149,8 +170,9 @@ suite("the course home", () => {
                 availablePoints: 2,
                 deadline: {
                   at: "2099-01-01T00:00:00Z",
-                  absolute: "Jan 1, 2099",
-                  relative: "in a while",
+                  absolute: "Jan 1, 2099, 12:00 AM",
+                  relative: null,
+                  brief: "Jan 1, 2099",
                 },
               }),
             ],
@@ -162,8 +184,100 @@ suite("the course home", () => {
     const [hello, loops] = screen.getAllByRole("listitem")
     expect(hello).toHaveTextContent(/01_hello.*In workspace.*1\/1/)
     expect(within(hello as HTMLElement).getByText("Passed")).toBeInTheDocument()
-    expect(loops).toHaveTextContent(/02_loops.*Not downloaded.*due in a while.*0\/2/)
+    expect(loops).toHaveTextContent(/02_loops.*Not downloaded.*due Jan 1, 2099.*0\/2/)
     expect(screen.getByText("1/2 passed")).toBeInTheDocument()
+  })
+
+  test("counts tries left, says why an exercise cannot be submitted, and shows a chapter's lock", async () => {
+    await renderHome(
+      courseHomeView({
+        isWorkspaceOpen: true,
+        parts: [
+          {
+            key: "chapter:2",
+            name: "Loops",
+            isDefaultOpen: true,
+            lockedReason: "You have completed and locked this chapter.",
+            exercises: [
+              courseHomeExercise(1, "while", { status: "opened", triesLeft: 2 }),
+              courseHomeExercise(2, "for", {
+                status: "opened",
+                submitRefusal: {
+                  label: "deadline passed",
+                  sentence: "The deadline of for has passed.",
+                },
+              }),
+            ],
+          },
+        ],
+      }),
+    )
+
+    const [whileRow, forRow] = screen.getAllByRole("listitem")
+    expect(whileRow).toHaveTextContent(/while.*2 tries left/)
+    expect(forRow).toHaveTextContent(/for.*deadline passed/)
+    expect(within(forRow as HTMLElement).getByText("deadline passed")).toHaveAttribute(
+      "title",
+      "The deadline of for has passed.",
+    )
+    expect(screen.getByText(/You have completed and locked this chapter\./)).toBeInTheDocument()
+  })
+
+  test("says an exercise waits for teacher review instead of showing its held-back points", async () => {
+    await renderHome(
+      courseHomeView({
+        parts: [
+          {
+            key: "chapter:1",
+            name: "Basics",
+            isDefaultOpen: true,
+            exercises: [
+              courseHomeExercise(1, "loops", {
+                status: "opened",
+                availablePoints: 2,
+                pendingReview: "The points wait for a teacher's review.",
+                submitRefusal: { label: "locked", sentence: "loops is locked for you." },
+              }),
+            ],
+          },
+        ],
+      }),
+    )
+
+    const [row] = screen.getAllByRole("listitem")
+    expect(within(row as HTMLElement).getByText("waiting for teacher review")).toHaveAttribute(
+      "title",
+      "The points wait for a teacher's review.",
+    )
+    expect(row).not.toHaveTextContent("0/2")
+    expect(within(row as HTMLElement).queryByText("locked")).not.toBeInTheDocument()
+  })
+
+  test("shows points already given alongside a pending review", async () => {
+    await renderHome(
+      courseHomeView({
+        parts: [
+          {
+            key: "chapter:1",
+            name: "Basics",
+            isDefaultOpen: true,
+            exercises: [
+              courseHomeExercise(1, "loops", {
+                status: "opened",
+                passed: true,
+                awardedPoints: 2,
+                availablePoints: 2,
+                pendingReview: "A teacher reviews this answer, which can change the points.",
+              }),
+            ],
+          },
+        ],
+      }),
+    )
+
+    const [row] = screen.getAllByRole("listitem")
+    expect(row).toHaveTextContent("2/2")
+    expect(within(row as HTMLElement).getByText("waiting for teacher review")).toBeInTheDocument()
   })
 
   test("calls an exercise on disk Downloaded until the course workspace is open", async () => {
@@ -244,10 +358,43 @@ suite("the course home", () => {
     expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "closeCompletedExercises"))
   })
 
+  test("in the course workspace, continuing stays first while there is more to download", async () => {
+    const panel = await renderHome(
+      onDiskView({
+        isWorkspaceOpen: true,
+        nextExercise: { id: makeTmcKind({ tmcExerciseId: 1 }), name: "01_hello", isOnDisk: true },
+      }),
+    )
+
+    expect(screen.getByRole("button", { name: "Continue: 01_hello" })).not.toHaveAttribute(
+      "secondary",
+    )
+    const download = screen.getByRole("button", { name: "Download 1 Exercise" })
+    expect(download).toHaveAttribute("secondary")
+    download.click()
+
+    expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "downloadAllExercises"))
+  })
+
+  test("in the course workspace, leaves downloading new exercises to their notice", async () => {
+    await renderHome(
+      onDiskView({
+        isWorkspaceOpen: true,
+        nextExercise: { id: makeTmcKind({ tmcExerciseId: 1 }), name: "01_hello", isOnDisk: true },
+        newExercises: [{ id: makeTmcKind({ tmcExerciseId: 2 }), name: "02_loops" }],
+      }),
+    )
+
+    expect(screen.getByRole("button", { name: "Continue: 01_hello" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /^Download \d/ })).not.toBeInTheDocument()
+    const notices = screen.getByRole("list", { name: "Course notices" })
+    expect(within(notices).getByRole("button", { name: "Download" })).toBeInTheDocument()
+  })
+
   test("in the course workspace with nothing to download, continues with the next exercise", async () => {
     const view = onDiskView({
       isWorkspaceOpen: true,
-      nextExercise: { id: makeTmcKind({ tmcExerciseId: 2 }), name: "02_loops" },
+      nextExercise: { id: makeTmcKind({ tmcExerciseId: 2 }), name: "02_loops", isOnDisk: true },
     })
     const [part] = view.parts
     const panel = await renderHome({
@@ -260,6 +407,19 @@ suite("the course home", () => {
     const next = screen.getByRole("button", { name: "Continue: 02_loops" })
     expect(next).not.toHaveAttribute("secondary")
     next.click()
+
+    expect(postedMessages).toHaveBeenCalledWith(exerciseAction(panel, 2, "open"))
+  })
+
+  test("offers to download and open a next exercise not on disk", async () => {
+    const panel = await renderHome(
+      onDiskView({
+        isWorkspaceOpen: true,
+        nextExercise: { id: makeTmcKind({ tmcExerciseId: 2 }), name: "02_loops", isOnDisk: false },
+      }),
+    )
+
+    screen.getByRole("button", { name: "Download and Open: 02_loops" }).click()
 
     expect(postedMessages).toHaveBeenCalledWith(exerciseAction(panel, 2, "open"))
   })
@@ -327,7 +487,7 @@ suite("the course home", () => {
       }),
     )
 
-    expect(screen.getByRole("listitem")).toHaveTextContent(/gone.*Removed from course/)
+    expect(screen.getByRole("listitem")).toHaveTextContent(/gone.*Removed/)
     expect(screen.queryByRole("button", { name: /Download gone/ })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /More Actions for/ })).not.toBeInTheDocument()
     screen.getByRole("button", { name: "gone" }).click()
@@ -388,15 +548,34 @@ suite("the course home", () => {
     })
   })
 
-  test("offers login when logged out, and holds the downloads that need it", async () => {
-    await renderHome(courseHomeView({ isLoggedIn: false }))
+  test("offers login when logged out, and no downloads, which need it", async () => {
+    await renderHome(
+      onDiskView({
+        isLoggedIn: false,
+        newExercises: [{ id: makeTmcKind({ tmcExerciseId: 2 }), name: "02_loops" }],
+      }),
+    )
 
+    expect(screen.queryByRole("button", { name: /^Download/ })).not.toBeInTheDocument()
+    expect(document.querySelector(`vscode-toolbar-button[title="Download 02_loops"]`)).toBeNull()
     screen.getByRole("button", { name: "Log In" }).click()
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "runCommand",
       command: "tmc.showMoocLogin",
     })
+  })
+
+  test("offers no downloads while the backend is unreachable", async () => {
+    await renderHome(
+      onDiskView({
+        isOffline: true,
+        newExercises: [{ id: makeTmcKind({ tmcExerciseId: 2 }), name: "02_loops" }],
+      }),
+    )
+
+    expect(screen.getByRole("button", { name: "Open Course Workspace" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /^Download/ })).not.toBeInTheDocument()
   })
 
   test("says when the backend is unreachable, the course disabled or an exam", async () => {
@@ -521,6 +700,37 @@ suite("the course home", () => {
     await fireEvent.click(screen.getByRole("button", { name: "More Actions for one" }))
     await tick()
     await fireEvent.click(screen.getByRole("menuitem", { name: "Open in Course Material" }))
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "openLinkInBrowser",
+      url: "https://courses.example/page",
+    })
+  })
+
+  test("calls the material page the model solution once it is revealed", async () => {
+    await renderHome(
+      courseHomeView({
+        backend: "mooc",
+        parts: [
+          {
+            key: "p",
+            name: "Exercises",
+            isDefaultOpen: true,
+            exercises: [
+              courseHomeExercise(1, "one", {
+                materialUrl: "https://courses.example/page",
+                isOutOfTries: true,
+              }),
+            ],
+          },
+        ],
+      }),
+      moocPanel(),
+    )
+
+    await fireEvent.click(screen.getByRole("button", { name: "More Actions for one" }))
+    await tick()
+    await fireEvent.click(screen.getByRole("menuitem", { name: "Show Model Solution" }))
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "openLinkInBrowser",

@@ -113,7 +113,7 @@ function refresh(
       }
       return Promise.resolve(Ok.EMPTY)
     }
-    Logger.warn("Rejected a refresh, one is already in flight")
+    Logger.info("Rejected a refresh, one is already in flight")
     return Promise.resolve(Err(new BottleneckError("A refresh is already in progress.")))
   }
   const result = runRefresh(actionContext, { ...options, offersNewExercises })
@@ -162,15 +162,13 @@ function announceAiPolicyChanges(
   { dialog }: ReadyActionContext,
   changes: readonly AiPolicyChange[],
 ): void {
-  for (const { course, wasAiAllowed } of changes) {
+  for (const { course } of changes) {
     if (course.kind !== "mooc") {
       continue
     }
-    const isNowAiAllowed = isAiAllowed(course)
-    const message = [
-      `${course.data.title} changed its AI policy: ${aiPolicyRule(course.data.aiPolicy)}`,
-      ...(wasAiAllowed === isNowAiAllowed ? [] : [aiAssistanceSentence(isNowAiAllowed)]),
-    ].join(" ")
+    const message =
+      `${course.data.title} changed its AI policy: ${aiPolicyRule(course.data.aiPolicy)} ` +
+      aiAssistanceSentence(isAiAllowed(course))
     void dialog.notification(message, showCourseHomeButton(LocalCourseData.getCourseId(course)))
   }
 }

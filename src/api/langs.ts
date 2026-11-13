@@ -48,12 +48,17 @@ import {
   MINIMUM_SUBMISSION_INTERVAL,
   MOOC_BACKEND_URL,
   SUBMIT_PROCESS_TIMEOUT,
+  TEST_PROCESS_TIMEOUT,
   TMC_BACKEND_URL,
 } from "../config/constants"
 import type { InitializationError } from "../errors"
 import {
   AuthorizationError,
+  ChapterLockedError,
+  ExerciseLockedError,
+  ChapterNotOpenError,
   ConnectionError,
+  DeadlinePassedError,
   DeviceLoginDeniedError,
   DeviceLoginExpiredError,
   EmptyLangsResponseError,
@@ -65,6 +70,7 @@ import {
   NotEnrolledError,
   NotFoundError,
   ObsoleteClientError,
+  OutOfTriesError,
   RateLimitedError,
   RuntimeError,
   ServerError,
@@ -74,7 +80,7 @@ import {
   UnknownUploadError,
   UploadExpiredError,
 } from "../errors"
-import { Logger, LogLevel } from "../utilities/logger"
+import { Logger, LogLevel, redactSecrets } from "../utilities/logger"
 import { sleep } from "../utilities/utils"
 import type { FractionProgress } from "./dialog"
 
@@ -279,7 +285,8 @@ function killProcessTree(cprocess: cp.ChildProcess): void {
 }
 
 /**
- * The tail of a CLI process's stderr, kept for the error details a failure attaches.
+ * The tail of a CLI process's stderr, and of the stdout lines that are not its JSON, kept for
+ * the error details a failure attaches; redacted, as those details reach the output channel.
  *
  * A long-running `run-tests` can write more stderr than the extension host should hold, so
  * older output is dropped once {@link MAX_RETAINED_STDERR_BYTES} is exceeded and `text()`
@@ -305,7 +312,7 @@ class BoundedStderr {
 
   public text(): string {
     if (this._text === undefined) {
-      const tail = this._chunks.join("")
+      const tail = redactSecrets(this._chunks.join(""))
       this._text =
         this._droppedBytes === 0
           ? tail
@@ -569,6 +576,7 @@ export default class Langs {
         env,
         onNotification: (notification) => this._showNotification(notification),
         interruptOnDeactivate: true,
+        processTimeout: TEST_PROCESS_TIMEOUT,
       },
       "test-result",
     )
@@ -1432,6 +1440,50 @@ export default class Langs {
         return Err(new InsufficientScopeError(message, details))
       case "not-enrolled":
         return Err(new NotEnrolledError(message, details))
+      case "deadline-passed":
+        return Err(
+          new DeadlinePassedError(
+            "The deadline of this exercise has passed, so it can no longer be submitted.",
+            details,
+          ),
+        )
+      case "out-of-tries":
+        return Err(
+          new OutOfTriesError(
+            "You have no tries left on this exercise, so it can no longer be submitted.",
+            details,
+          ),
+        )
+      case "chapter-not-open-yet":
+        return Err(
+          new ChapterNotOpenError(
+            "This exercise's chapter has not opened yet. Try again once it opens.",
+            details,
+          ),
+        )
+      case "chapter-not-unlocked-yet":
+        return Err(
+          new ChapterLockedError(
+            "This exercise's chapter is locked until you have completed the chapters before it.",
+            details,
+          ),
+        )
+      case "chapter-completed-and-locked":
+        return Err(
+          new ChapterLockedError(
+            "You have completed and locked this exercise's chapter, so its exercises can no" +
+              " longer be submitted.",
+            details,
+          ),
+        )
+      case "exercise-locked":
+        return Err(
+          new ExerciseLockedError(
+            "This exercise is locked for you, so it can no longer be submitted. Only a teacher" +
+              " can unlock it.",
+            details,
+          ),
+        )
       case "upload-expired":
         return Err(new UploadExpiredError(message, details))
       case "rate-limited":
@@ -1580,7 +1632,9 @@ export default class Langs {
         setTimeout(() => {
           killProcessTree(cprocess)
           reject(
-            new TimeoutError("Process didn't seem to finish or was taking a really long time."),
+            new TimeoutError(
+              `The TestMyCode tools did not finish within ${Math.round(timeoutMs / 1000)} s and were stopped.`,
+            ),
           )
         }, timeoutMs)
 
@@ -1599,9 +1653,6 @@ ${error.message}`
         reject(error)
       })
       cprocess.stderr.on("data", (data: string) => {
-        // per-line at debug to keep j4rs/JNI spam out of the log; the failure paths
-        // below attach the collected stderr to the error they return
-        Logger.debug("stderr", data)
         stderr.push(data)
       })
       cprocess.stdout.on("end", () => {
@@ -1657,9 +1708,11 @@ ${error.message}`
               Logger.debug("Rejected output shape:", JSON.stringify(event.failure.shape))
               break
             case "unparseable":
+              // A tool the CLI runs, such as a JVM failing to start, can write here directly.
               Logger.warn(
-                `Discarded a ${event.lineLength}-character TMC-langs output line that is not JSON`,
+                `Kept a ${event.line.length}-character TMC-langs output line that is not JSON for the error details`,
               )
+              stderr.push(`${event.line}\n`)
               break
           }
         }
@@ -1713,6 +1766,13 @@ ${error.message}`
         killProcessTree(cprocess)
       }
     }
+    // Once, redacted as a whole: a chunk can end mid-token.
+    void result.finally(() => {
+      const output = stderr.text()
+      if (output !== "") {
+        Logger.debug("stderr", output)
+      }
+    })
     if (interruptOnDeactivate) {
       this._activeInterrupts.add(interrupt)
       void result.finally(() => this._activeInterrupts.delete(interrupt))
@@ -1737,7 +1797,7 @@ export type LangsStdoutEvent =
   | { kind: "status-update"; update: StatusUpdateData }
   | { kind: "notification"; notification: Notification }
   | { kind: "schema-mismatch"; failure: LangsSchemaFailure }
-  | { kind: "unparseable"; lineLength: number }
+  | { kind: "unparseable"; line: string }
 
 export interface LangsStdoutDecoding {
   /** The chunk's unterminated tail; pass it back as `carry` with the next chunk. */
@@ -1773,8 +1833,7 @@ export function decodeLangsStdout(carry: string, chunk: string): LangsStdoutDeco
     try {
       parsed = JSON.parse(trimmed)
     } catch {
-      // Node's parse errors quote the input, so only the size of the rejected line escapes.
-      events.push({ kind: "unparseable", lineLength: trimmed.length })
+      events.push({ kind: "unparseable", line: trimmed })
       continue
     }
     events.push(classifyCliOutputLine(parsed))

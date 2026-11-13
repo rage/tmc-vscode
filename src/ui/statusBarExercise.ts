@@ -1,10 +1,21 @@
 import * as vscode from "vscode"
 
 import type { LocalCourseExercise } from "../../shared/lib"
+import {
+  arePointsHeldForReview,
+  ExerciseIdentifier,
+  LocalCourseData,
+  modelSolutionUrlOf,
+  SUBMIT_REFUSAL_LABELS,
+  submitRefusalOf,
+  PENDING_REVIEW_LABEL,
+  triesLeftText,
+} from "../../shared/lib"
 import type Dialog from "../api/dialog"
 import type { Item } from "../api/dialog"
 import { separator } from "../api/dialog"
 import type WorkspaceManager from "../api/workspaceManager"
+import type { WorkspaceExercise } from "../api/workspaceManager"
 import { exerciseFor } from "../api/workspaceManager"
 import type { UserData } from "../config/userdata"
 import type { ExerciseOperationKind, ExerciseOperations } from "./exerciseOperations"
@@ -34,6 +45,7 @@ const activityLabels: Partial<Record<ExerciseOperationKind, string>> = {
 export class ExerciseStatusBarItem implements vscode.Disposable {
   private readonly _item: vscode.StatusBarItem
   private readonly _subscriptions: vscode.Disposable[]
+  private _lastShown: WorkspaceExercise | undefined
 
   public constructor(private readonly _sources: ExerciseStatusSources) {
     this._item = vscode.window.createStatusBarItem(
@@ -42,10 +54,10 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
       100,
     )
     this._item.name = "TestMyCode Exercise"
-    this._item.command = "tmc.showExerciseActions"
     const render = (): void => this.render()
     this._subscriptions = [
       vscode.window.onDidChangeActiveTextEditor(render),
+      vscode.window.onDidChangeVisibleTextEditors(render),
       _sources.workspaceManager.onDidChangeExercises(render),
       _sources.operations.onDidChange(render),
       _sources.userData.onDidChangeCourses(render),
@@ -55,17 +67,35 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
 
   /** Shows the item for the active editor's exercise, or hides it. */
   public render(): void {
-    const exercise = this._sources.workspaceManager.activeExercise
+    const exercise = this._shownExercise()
     if (!exercise) {
       this._item.hide()
       return
+    }
+    this._item.command = {
+      title: "Show Exercise Actions",
+      command: "tmc.showExerciseActions",
+      arguments: [exercise.uri],
     }
     const slug = exercise.exerciseSlug
     const storedResult = this._sources.userData.getExercise(exercise.id)
     const stored = storedResult.ok ? storedResult.val.exercise : undefined
     const running = this._sources.operations.current(exercise.id)
     const activity = running && activityLabels[running]
-    const points = stored && pointsText(stored.data.awardedPoints, stored.data.availablePoints)
+    const arePointsHeld =
+      stored?.kind === "mooc" &&
+      arePointsHeldForReview(stored.data.pendingReview, stored.data.awardedPoints)
+    const points =
+      stored && !arePointsHeld
+        ? pointsText(stored.data.awardedPoints, stored.data.availablePoints)
+        : undefined
+    const course = this._sources.userData.getCourse(exercise.courseId)
+    const isChapterClosed =
+      course.ok && LocalCourseData.getClosedChapterOf(course.val, exercise.id) !== undefined
+    const standing = isChapterClosed
+      ? SUBMIT_REFUSAL_LABELS.chapterNotOpenYet
+      : standingText(stored, course.ok ? course.val : undefined)
+    const shownStanding = standing === "passed" ? undefined : standing
 
     if (activity) {
       this._item.text = `$(sync~spin) ${activity} ${slug}…`
@@ -73,18 +103,21 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
         label: `TestMyCode: ${activity.toLowerCase()} ${slug}`,
       }
     } else {
-      this._item.text = points ? `$(beaker) ${slug} · ${points.short}` : `$(beaker) ${slug}`
+      this._item.text = [`$(beaker) ${slug}`, points?.short, shownStanding]
+        .filter(Boolean)
+        .join(" · ")
       this._item.accessibilityInformation = {
         label:
           `TestMyCode exercise ${slug}` +
           (points ? `, ${points.spoken}` : "") +
+          (shownStanding ? `, ${shownStanding}` : "") +
           ". Show exercise actions",
       }
     }
     this._item.tooltip = tooltipOf([
       slug,
       exercise.courseSlug,
-      ...(points ? [`${points.short} points${standingSuffix(stored)}`] : []),
+      ...(points ? [`${points.short} points${standing ? ` · ${standing}` : ""}`] : []),
       "Click for exercise actions.",
     ])
     this._item.show()
@@ -94,14 +127,53 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
     vscode.Disposable.from(...this._subscriptions).dispose()
     this._item.dispose()
   }
+
+  /**
+   * The active editor's exercise; while a panel such as the submission result has the focus,
+   * which leaves no active text editor, the one last shown if its editor is still visible.
+   */
+  private _shownExercise(): WorkspaceExercise | undefined {
+    const { workspaceManager } = this._sources
+    const active = workspaceManager.activeExercise
+    const last = this._lastShown
+    this._lastShown = active
+    if (active || vscode.window.activeTextEditor || !last) {
+      return active
+    }
+    const isStillVisible = vscode.window.visibleTextEditors.some((editor) => {
+      const visible = workspaceManager.getExerciseContaining(editor.document.uri)
+      return (
+        visible !== undefined &&
+        ExerciseIdentifier.key(visible.id) === ExerciseIdentifier.key(last.id)
+      )
+    })
+    this._lastShown = isStillVisible ? last : undefined
+    return this._lastShown
+  }
 }
 
-/** What the stored exercise's points line adds: whether it passed, or ran out of tries. */
-function standingSuffix(stored: Readonly<LocalCourseExercise> | undefined): string {
-  if (stored?.data.passed) {
-    return " · passed"
+/**
+ * Where the stored exercise stands, e.g. "passed", "1 try left" or "deadline passed"; `undefined`
+ * when there is nothing to tell.
+ */
+function standingText(
+  stored: Readonly<LocalCourseExercise> | undefined,
+  course: Readonly<LocalCourseData> | undefined,
+): string | undefined {
+  if (!stored) {
+    return undefined
   }
-  return stored?.kind === "mooc" && stored.data.outOfTries ? " · no tries left" : ""
+  if (stored.data.passed) {
+    return "passed"
+  }
+  if (stored.kind === "mooc" && stored.data.pendingReview !== undefined) {
+    return PENDING_REVIEW_LABEL
+  }
+  const refusal = submitRefusalOf(stored, new Date(), course)
+  if (refusal) {
+    return SUBMIT_REFUSAL_LABELS[refusal]
+  }
+  return stored.kind === "mooc" ? triesLeftText(stored.data.triesLeft) : undefined
 }
 
 interface ExerciseAction {
@@ -131,18 +203,27 @@ export async function showExerciseActions(
     value: { command, arguments: target },
   })
   const course = sources.userData.getCourse(exercise.courseId)
-  const isRemoved = course.ok && sources.userData.getExercise(exercise.id).err
+  const stored = sources.userData.getExercise(exercise.id)
+  const isUnlisted = course.ok && stored.err
+  const closedChapter = course.ok
+    ? LocalCourseData.getClosedChapterOf(course.val, exercise.id)
+    : undefined
+  const refusal = stored.ok
+    ? submitRefusalOf(stored.val.exercise, new Date(), stored.val.course)
+    : undefined
+  const placeHolder = closedChapter
+    ? `Its chapter "${closedChapter.name}" has not opened yet: it can't be submitted, but its tests run here`
+    : isUnlisted
+      ? "Removed from the course: it can no longer be submitted, but its tests still run here"
+      : refusal
+        ? `Can't be submitted: ${SUBMIT_REFUSAL_LABELS[refusal]}`
+        : "What do you want to do with this exercise?"
   const picked = await dialog.selectItem(
-    {
-      title: exercise.exerciseSlug,
-      placeHolder: isRemoved
-        ? "Removed from the course: it can no longer be submitted, but its tests still run here"
-        : "What do you want to do with this exercise?",
-    },
+    { title: exercise.exerciseSlug, placeHolder },
     action("$(beaker) Run Tests", "tmc.testExercise"),
-    ...(isLoggedIn && !isRemoved
+    ...(isLoggedIn && !isUnlisted
       ? [
-          action("$(cloud-upload) Submit Solution", "tmc.submitExercise"),
+          ...(refusal ? [] : [action("$(cloud-upload) Submit Solution", "tmc.submitExercise")]),
           action("$(link) Share Exercise via Paste", "tmc.pasteExercise"),
           separator("Restore"),
           action("$(history) Download Old Submission…", "tmc.downloadOldSubmission"),
@@ -151,6 +232,9 @@ export async function showExerciseActions(
       : []),
     separator("Course"),
     action("$(arrow-right) Open Next Exercise", "tmc.openNextExercise"),
+    ...(stored.ok && modelSolutionUrlOf(stored.val.exercise)
+      ? [action("$(lightbulb) Show Model Solution", "tmc.showModelSolution")]
+      : []),
     ...(course.ok
       ? [action("$(list-tree) Reveal in Courses View", "tmc.revealInCoursesView")]
       : []),

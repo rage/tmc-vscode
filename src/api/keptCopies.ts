@@ -20,6 +20,8 @@ interface ExerciseCopies {
   /** The newest fingerprint of each kind of copy. */
   copies: Partial<Record<KeptCopy, string>>
   paste?: KeptPaste
+  /** The student files, relative to the exercise, as the last download, reset or restore left them. */
+  files?: string[]
 }
 
 type CopiesByExercise = Record<string, ExerciseCopies>
@@ -47,6 +49,16 @@ export class KeptCopies {
       ...exercise,
       copies: { ...exercise.copies, [copy]: fingerprint },
     }))
+  }
+
+  /** Records the student files the exercise was given, which a submission is expected to keep. */
+  public async recordFiles(id: ExerciseIdentifier, files: string[]): Promise<void> {
+    await this._update(id, (exercise) => ({ ...exercise, files }))
+  }
+
+  /** The student files recorded by {@link recordFiles}; `undefined` when none were. */
+  public files(id: ExerciseIdentifier): string[] | undefined {
+    return this._exercise(id).files
   }
 
   public async recordPaste(id: ExerciseIdentifier, paste: KeptPaste): Promise<void> {

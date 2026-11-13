@@ -17,6 +17,7 @@ import {
   onDiskByCourse,
 } from "../../ui/treeview/courseViewModel"
 import {
+  MOOC_COURSE_ID,
   moocCourseExercise,
   moocLocalCourse,
   tmcCourseExercise,
@@ -203,6 +204,68 @@ suite("buildCourseView", () => {
     expect(parts.at(-1)?.exercises.map((ex) => [ex.name, ex.status, ex.passed])).toEqual([
       ["part01-09_gone", "removed", false],
     ])
+  })
+
+  test("lists an exercise on disk whose chapter has not opened under that chapter, unsubmittable", () => {
+    const courseData = moocLocalCourse({
+      exercises: [moocExercise("a", "open_one")],
+      closedChapters: [
+        {
+          name: "Recursion",
+          number: 3,
+          opensAt: "2100-01-01T00:00:00Z",
+          exercises: [moocExercise("b", "on_disk"), moocExercise("c", "not_downloaded")],
+        },
+      ],
+    })
+    const parts = build(courseData, [
+      onDisk(0, "on_disk", ExerciseStatus.Closed, {
+        id: idOfMoocExercise("b"),
+        courseId: idOfMoocCourse(MOOC_COURSE_ID),
+        backend: "mooc",
+      }),
+    ])
+
+    const closed = parts.find((part) => part.name === "Recursion")
+    expect(closed?.opensAt).toEqual(new Date("2100-01-01T00:00:00Z"))
+    expect(closed?.exercises.map((ex) => [ex.name, ex.status, ex.submitRefusal])).toEqual([
+      ["on_disk", "closed", "chapterNotOpenYet"],
+    ])
+    // The unchaptered exercises come after every chapter.
+    expect(parts.flatMap((part) => part.exercises.map((ex) => ex.name))).toEqual([
+      "on_disk",
+      "open_one",
+    ])
+  })
+
+  test("refuses submissions on a course the student is no longer enrolled on", () => {
+    const parts = build(
+      moocLocalCourse({ exercises: [moocExercise("a", "loops")], notEnrolled: true }),
+    )
+
+    expect(parts.flatMap((part) => part.exercises.map((ex) => ex.submitRefusal))).toEqual([
+      "notEnrolled",
+    ])
+  })
+
+  test("says why the backend would refuse a submission, and carries the tries left", () => {
+    const parts = build(
+      moocCourse([
+        moocExercise("a", "late", { deadline: "2026-05-01T00:00:00Z" }),
+        moocExercise("b", "last_try", { maxTries: 3, triesLeft: 1 }),
+        moocExercise("c", "locked", {
+          chapter: { name: "Loops", number: 2, lockingStatus: "NotUnlockedYet" },
+        }),
+      ]),
+    )
+    const views = parts.flatMap((part) => part.exercises)
+
+    expect(views.map((ex) => [ex.name, ex.submitRefusal, ex.triesLeft])).toEqual([
+      ["locked", "chapterNotUnlockedYet", undefined],
+      ["late", "deadlinePassed", undefined],
+      ["last_try", undefined, 1],
+    ])
+    expect(parts.find((part) => part.name === "Loops")?.lockingStatus).toBe("NotUnlockedYet")
   })
 
   test("sorts part and exercise numbers numerically", () => {
@@ -402,6 +465,18 @@ suite("nextExerciseAfter", () => {
     const courseData = moocCourse([
       moocExercise("a", "first", { passed: true }),
       moocExercise("b", "second", { outOfTries: true }),
+      moocExercise("c", "third"),
+    ])
+
+    expect(nextExerciseAfter(courseData, idOfMoocExercise("a"), NOW)).toEqual(idOfMoocExercise("c"))
+  })
+
+  test("skips an exercise whose chapter locking refuses submissions", () => {
+    const courseData = moocCourse([
+      moocExercise("a", "first", { passed: true }),
+      moocExercise("b", "second", {
+        chapter: { name: "Later", number: 2, lockingStatus: "NotUnlockedYet" },
+      }),
       moocExercise("c", "third"),
     ])
 

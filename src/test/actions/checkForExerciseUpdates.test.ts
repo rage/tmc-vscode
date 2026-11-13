@@ -107,6 +107,27 @@ suite("checkForExerciseUpdates action", function () {
     expect(result.outdated).toEqual([tmcOutdated, moocOutdated])
   })
 
+  test("does not call an exercise hidden until its chapter opens removed", async function () {
+    const closed = moocCourseData({
+      ...moocCourse,
+      closedChapters: [
+        {
+          name: "Recursion",
+          number: 3,
+          opensAt: "2100-01-01T00:00:00Z",
+          exercises: [moocCourseExercise({ id: "mooc-ex-2", name: "mooc_later" })],
+        },
+      ],
+    })
+    userDataMockValues.getCourses = [makeMoocKind(closed) as LocalCourseData]
+    tmcMockValues.moocExerciseUpdates = Ok({
+      updated: [],
+      removed: [idOfMoocExercise("mooc-ex-2"), idOfMoocExercise("mooc-ex-3")],
+    })
+    const result = await checkForExerciseUpdates(actionContext())
+    expect(result.removed).toEqual([idOfMoocExercise("mooc-ex-3")])
+  })
+
   test("should NOT discard mooc results when the tmc check fails", async function () {
     userDataMockValues.getCourses = [
       ...userDataMockValues.getCourses,

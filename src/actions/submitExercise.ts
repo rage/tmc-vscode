@@ -9,13 +9,31 @@ import type {
   ExerciseSubmissionPanel,
   FeedbackAnswer,
   SubmissionView,
+  SubmitRefusal,
 } from "../../shared/lib"
-import { backendName, LocalCourseData, LocalCourseExercise, match, unwrap } from "../../shared/lib"
+import {
+  backendName,
+  LocalCourseData,
+  LocalCourseExercise,
+  match,
+  submitRefusalOf,
+  submitRefusalSentence,
+  toError,
+  unwrap,
+} from "../../shared/lib"
 import type Langs from "../api/langs"
 import type { OperationWarning, Warned } from "../api/withOperation"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import type { UserData } from "../config/userdata"
-import { OutOfTriesError } from "../errors"
+import {
+  ChapterLockedError,
+  ExerciseLockedError,
+  ChapterNotOpenError,
+  NotEnrolledError,
+  DeadlinePassedError,
+  isSubmitRefusal,
+  OutOfTriesError,
+} from "../errors"
 import { nextPanelId } from "../panels/routes"
 import type { InProgressPhase, SubmissionProgress } from "../panels/submissionView"
 import {
@@ -41,6 +59,7 @@ import { recordMoocEnrollment } from "./courseAccess"
 import { fingerprintStudentFiles } from "./keptCopies"
 import { storedExerciseOf } from "./storedExercise"
 import type { ReadyActionContext } from "./types"
+import { updateCourse } from "./updateCourse"
 
 /** What a backend answered a submission with, reduced to what the shared flow acts on. */
 interface SubmissionOutcome {
@@ -317,6 +336,72 @@ function withNextExercise(
   }
 }
 
+/** What {@link checkCanSubmit} found an exercise to be submitted with. */
+interface SubmitReady {
+  submit: ExerciseSubmitter
+  course: LocalCourseData
+  courseExercise: LocalCourseExercise
+}
+
+/**
+ * Whether `exercise` can be submitted now, without submitting it: lets a caller ask the
+ * student something first without asking about a submission that would be refused anyway.
+ *
+ * Errs as {@link submitExercise} does before its panel opens.
+ */
+export async function checkCanSubmit(
+  actionContext: ReadyActionContext,
+  exercise: WorkspaceExercise,
+): Promise<Result<void, Error>> {
+  const ready = await readyToSubmit(actionContext, exercise)
+  return ready.err ? ready : Ok.EMPTY
+}
+
+async function readyToSubmit(
+  actionContext: ReadyActionContext,
+  exercise: WorkspaceExercise,
+): Promise<Result<SubmitReady, Error>> {
+  const stored = storedExerciseOf(actionContext, exercise)
+  if (stored.err) {
+    return stored
+  }
+  const { course, exercise: courseExercise } = stored.val
+  const submit = submitterFor(actionContext.startup.langs, exercise.backend, exercise.id)
+  if (!submit) {
+    return Err(
+      new Error(`${exercise.exerciseSlug} is not a ${backendName(exercise.backend)} exercise.`),
+    )
+  }
+  const refusal = submitRefusalOf(courseExercise, new Date())
+  if (refusal) {
+    return Err(refusalError(refusal, courseExercise))
+  }
+  const trusted = checkWorkspaceTrust(actionContext)
+  if (trusted.err) {
+    return trusted
+  }
+  const { aiUseGate, userData } = actionContext.startup
+  let current = course
+  let refused = await aiUseGate.refusal(current, exercise.uri)
+  if (refused && current.kind === "mooc") {
+    // The teacher may have allowed AI since the course was last fetched.
+    const courseId = LocalCourseData.getCourseId(current)
+    // A refresh that fails leaves the refusal as it was.
+    const updated = await updateCourse(actionContext, courseId).catch((e: unknown) =>
+      Err(toError(e)),
+    )
+    const fetched = userData.getCourse(courseId)
+    if (updated.ok && updated.val.isUpdated && fetched.ok) {
+      current = fetched.val
+      refused = await aiUseGate.refusal(current, exercise.uri)
+    }
+  }
+  if (refused) {
+    return Err(refused)
+  }
+  return Ok({ submit, course: current, courseExercise })
+}
+
 /**
  * Submits an exercise to the backend it belongs to and shows the grading in a side panel.
  *
@@ -324,48 +409,22 @@ function withNextExercise(
  * {@link onDidFinishSubmission} once the outcome is shown. A failed submission is `Ok`, as the
  * panel shows why. Errs for a failure before the panel opens: another operation in flight on
  * the exercise is a `BottleneckError`, AI assistance that may be on is an
- * `AiUseRefusedError`, Restricted Mode is a `WorkspaceUntrustedError`, and an exercise the
- * backend last reported out of tries is an `OutOfTriesError`.
+ * `AiUseRefusedError`, and Restricted Mode is a `WorkspaceUntrustedError`. An exercise the
+ * stored data says the backend would refuse is the error {@link refusalError} names, and one
+ * hidden until its chapter opens a `ChapterNotOpenError`.
  */
 export async function submitExercise(
   actionContext: ReadyActionContext,
   exercise: WorkspaceExercise,
 ): Promise<Result<Warned, Error>> {
-  const { langs } = actionContext.startup
   Logger.info(`Submitting exercise ${exercise.exerciseSlug} to ${backendName(exercise.backend)}`)
 
-  const stored = storedExerciseOf(actionContext, exercise)
-  if (stored.err) {
-    return stored
+  const ready = await readyToSubmit(actionContext, exercise)
+  if (ready.err) {
+    return ready
   }
-  const { course, exercise: courseExercise } = stored.val
+  const { submit, course, courseExercise } = ready.val
   const exerciseId = exercise.id
-  const submit = submitterFor(langs, exercise.backend, exerciseId)
-  if (!submit) {
-    return Err(
-      new Error(`${exercise.exerciseSlug} is not a ${backendName(exercise.backend)} exercise.`),
-    )
-  }
-  if (courseExercise.kind === "mooc" && courseExercise.data.outOfTries) {
-    const points = pointsText(
-      courseExercise.data.awardedPoints,
-      courseExercise.data.availablePoints,
-    )
-    return Err(
-      new OutOfTriesError(
-        `You have no tries left on ${exercise.exerciseSlug}` +
-          (points ? `, so its ${points.short} points are final.` : "."),
-      ),
-    )
-  }
-  const trusted = checkWorkspaceTrust(actionContext)
-  if (trusted.err) {
-    return trusted
-  }
-  const refused = await actionContext.startup.aiUseGate.refusal(course, exercise.uri)
-  if (refused) {
-    return Err(refused)
-  }
   const courseId = LocalCourseData.getCourseId(course)
 
   // Held only until the result is posted: the panel offers Paste from that point on, and
@@ -411,10 +470,42 @@ export async function submitExercise(
       Logger.error("Exercise submission failed", outcome.val)
       const error = toWebviewError(outcome.val)
       showSubmissionView(submission.panel, submitFailedView(error))
+      if (isSubmitRefusal(outcome.val)) {
+        // The stored data did not foresee the refusal, so it is out of date.
+        submissionFinished.fire(courseId)
+      }
       return Ok({ warnings: [] })
     }
     return Ok(await showOutcome(actionContext, submission, outcome.val))
   })
+}
+
+/** The error a submission refused for `refusal` is, named after `exercise`. */
+function refusalError(refusal: SubmitRefusal, exercise: LocalCourseExercise): Error {
+  const { name } = exercise.data
+  const chapterName = exercise.kind === "mooc" ? exercise.data.chapter?.name : undefined
+  const sentence = submitRefusalSentence(refusal, name, chapterName)
+  switch (refusal) {
+    case "chapterNotUnlockedYet":
+    case "chapterCompletedAndLocked":
+      return new ChapterLockedError(sentence)
+    case "chapterNotOpenYet":
+      return new ChapterNotOpenError(sentence)
+    case "exerciseLocked":
+      return new ExerciseLockedError(sentence)
+    case "deadlinePassed":
+      return new DeadlinePassedError(sentence)
+    case "notEnrolled":
+      return new NotEnrolledError(sentence)
+    case "outOfTries": {
+      const points = pointsText(exercise.data.awardedPoints, exercise.data.availablePoints)
+      return new OutOfTriesError(
+        points
+          ? `You have no tries left on ${name}, so its ${points.short} points are final.`
+          : sentence,
+      )
+    }
+  }
 }
 
 /**

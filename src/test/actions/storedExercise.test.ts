@@ -1,8 +1,10 @@
 import { Err, Ok } from "ts-results"
+import * as vscode from "vscode"
 
 import { storedExerciseOf } from "../../actions/storedExercise"
 import type { UserData } from "../../config/userdata"
-import { ExerciseRemovedError, presentationFor } from "../../errors"
+import { ChapterNotOpenError, ExerciseRemovedError, presentationFor } from "../../errors"
+import { moocCourseExercise, moocLocalCourse } from "../fixtures/courses"
 import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
@@ -24,6 +26,12 @@ function contextWith(userData: Partial<UserData>): ReturnType<typeof createMockA
 }
 
 suite("storedExerciseOf", function () {
+  // jest-mock-vscode ships no `env` namespace.
+  beforeAll(function () {
+    const vscodeModule: object = vscode
+    Object.defineProperty(vscodeModule, "env", { value: { language: "en" }, configurable: true })
+  })
+
   test("says plainly that an exercise its course no longer lists was removed", function () {
     const stored = storedExerciseOf(contextWith({ getCourse: () => Ok({} as never) }), exercise)
 
@@ -34,6 +42,25 @@ suite("storedExerciseOf", function () {
       actions: [],
       isHeldBack: true,
     })
+  })
+
+  test("says an exercise hidden until its chapter opens is not removed, and names the chapter", function () {
+    const course = moocLocalCourse({
+      closedChapters: [
+        {
+          name: "Recursion",
+          number: 3,
+          opensAt: "2100-01-01T00:00:00Z",
+          exercises: [moocCourseExercise({ id: "e1", name: "c_beta" })],
+        },
+      ],
+    })
+    const stored = storedExerciseOf(contextWith({ getCourse: () => Ok(course) }), exercise)
+
+    expect(stored.val).toBeInstanceOf(ChapterNotOpenError)
+    expect((stored.val as Error).message).toMatch(
+      /^c_beta is in the chapter "Recursion", which opens on .+\. Until then it can't be submitted\./,
+    )
   })
 
   test("keeps the lookup's own error when the course itself is gone", function () {

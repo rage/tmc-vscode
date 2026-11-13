@@ -32,6 +32,12 @@ export const API_CACHE_LIFETIME = 5 * 60 * 1000
 export const CLI_PROCESS_TIMEOUT = 2 * 60 * 1000
 
 /**
+ * The limit on `run-tests`: well above tmc-langs' own limit on the tests (60 s unless the exercise
+ * sets more) plus a build, so the CLI reports a timeout itself rather than being killed.
+ */
+export const TEST_PROCESS_TIMEOUT = 10 * 60 * 1000
+
+/**
  * The limit on a command that writes exercises to disk. Killing one mid-write can leave an
  * exercise half-written, so this is set to outlast a slow connection, not to catch it.
  */

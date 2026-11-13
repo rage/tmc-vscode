@@ -1,7 +1,7 @@
 import { vi } from "vitest"
 
 import Langs from "../../api/langs"
-import { CLI_PROCESS_TIMEOUT } from "../../config/constants"
+import { CLI_PROCESS_TIMEOUT, TEST_PROCESS_TIMEOUT } from "../../config/constants"
 import {
   EmptyLangsResponseError,
   LangsResponseSchemaError,
@@ -350,6 +350,38 @@ suite("Langs CLI process output", function () {
     expect(result.val).toBeInstanceOf(EmptyLangsResponseError)
   })
 
+  test("what a tool wrote to stdout outside the CLI's JSON reaches the error details", async function () {
+    const langs = newLangs()
+    const pending = langs.isAuthenticated()
+    const langsProcess = lastProcess()
+    writeStdout(langsProcess, "Error occurred during initialization of VM")
+    endProcess(langsProcess)
+
+    const result = await pending
+    expect(result.val).toBeInstanceOf(EmptyLangsResponseError)
+    expect((result.val as EmptyLangsResponseError).details).toContain(
+      "Error occurred during initialization of VM",
+    )
+  })
+
+  test("a credential in stdout outside the CLI's JSON is redacted from details and log", async function () {
+    const accessToken = "Qx7mZ2pL9vR4tY8wK3nB6cF1hJ5dS0aGeUoIiPlMkNjHbVgCfXdZsAqWeRtYuIo1"
+    const captured = captureLogs()
+    const langs = newLangs()
+    const pending = langs.isAuthenticated()
+    const langsProcess = lastProcess()
+    writeStdout(langsProcess, `debug: sending Authorization: Bearer ${accessToken}`)
+    langsProcess.stderr.emit("data", `refresh_token=${accessToken.slice(0, 20)}`)
+    langsProcess.stderr.emit("data", `${accessToken.slice(20)}\n`)
+    endProcess(langsProcess)
+
+    const details = ((await pending).val as EmptyLangsResponseError).details ?? ""
+    expect(details).toContain("debug: sending Authorization:")
+    expect(details).not.toContain(accessToken.slice(20))
+    expect(loggedText(captured)).not.toContain(accessToken.slice(20))
+    expect(loggedText(captured)).toContain("<redacted>")
+  })
+
   test("output the CLI contract rejects reports the schema mismatch", async function () {
     const langs = newLangs()
     const pending = langs.isAuthenticated()
@@ -523,6 +555,23 @@ suite("Langs CLI process cancellation", function () {
     }
   })
 
+  test("a test run outlasts tmc-langs' own limit on the tests", async function () {
+    vi.useFakeTimers()
+    try {
+      const langs = newLangs()
+      const { process: pending } = langs.runTests("/exercise")
+      const langsProcess = lastProcess()
+      vi.advanceTimersByTime(5 * 60 * 1000)
+      expect(killedProcessTrees()).toEqual([])
+
+      vi.advanceTimersByTime(TEST_PROCESS_TIMEOUT)
+      expect((await pending).val).toBeInstanceOf(TimeoutError)
+      expect(killedProcessTrees()).toContain(langsProcess.pid)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test("moving the projects directory is never killed for taking long", async function () {
     vi.useFakeTimers()
     try {
@@ -549,7 +598,9 @@ suite("Langs CLI process cancellation", function () {
 
       const result = await pending
       expect(result.val).toBeInstanceOf(TimeoutError)
-      expect((result.val as Error).message).toContain("really long time")
+      expect((result.val as Error).message).toBe(
+        "The TestMyCode tools did not finish within 5 s and were stopped.",
+      )
       expect(killedProcessTrees()).toContain(langsProcess.pid)
     } finally {
       vi.useRealTimers()

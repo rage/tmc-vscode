@@ -28,8 +28,10 @@
   .section {
     margin-top: var(--tmc-space-6);
   }
+  /* Narrow, the actions wrap under the heading instead of running into it. */
   .header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--tmc-space-2);
     padding-bottom: var(--tmc-space-1);
@@ -37,8 +39,7 @@
     border-bottom: 1px solid var(--tmc-section-header-border);
   }
   h2 {
-    flex: 1;
-    min-width: 0;
+    flex: 1 0 auto;
     margin: 0;
   }
 </style>

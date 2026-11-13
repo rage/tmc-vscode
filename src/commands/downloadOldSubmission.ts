@@ -6,7 +6,8 @@ import type { MoocOldSubmissionRestore } from "../../shared/langsSchema"
 import type { PickableSubmission } from "../actions"
 import { checkAiUse, listOldSubmissions, restoreOldSubmission, storedExerciseOf } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import type { Item } from "../api/dialog"
+import type { Item, Separator } from "../api/dialog"
+import { separator } from "../api/dialog"
 import { failure } from "../api/withOperation"
 import { formatTimestamp, parseDate } from "../utilities"
 import { revertExerciseDocuments } from "../window/exerciseDocuments"
@@ -19,16 +20,21 @@ import { checkTrustRetrying, runForExercise } from "./runForExercise"
 const TITLE = "Download Old Submission"
 
 /**
- * Picker rows for `submissions`, newest first. The newest graded submission, the one a student
- * almost always wants, is marked; a newer backup or paste is not.
+ * Picker rows for `submissions`: graded submissions first, then backups and help requests, each
+ * newest first, so the ones a student almost always wants are not buried under backups. The
+ * newest graded submission is marked.
  */
-function submissionItems(submissions: PickableSubmission[]): Item<PickableSubmission>[] {
+function submissionItems(
+  submissions: PickableSubmission[],
+): (Item<PickableSubmission> | Separator)[] {
   const now = new Date()
   const sorted = submissions
     .map((submission) => ({ submission, createdAt: parseDate(submission.createdAt) }))
     .toSorted((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
-  const latest = sorted.find(({ submission }) => submission.kind === "submission")?.submission
-  return sorted.map(({ submission, createdAt }) => {
+  const graded = sorted.filter(({ submission }) => submission.kind === "submission")
+  const ungraded = sorted.filter(({ submission }) => submission.kind !== "submission")
+  const latest = graded[0]?.submission
+  const toItem = ({ submission, createdAt }: (typeof sorted)[number]): Item<PickableSubmission> => {
     const item: Item<PickableSubmission> = {
       label: createdAt ? formatTimestamp(createdAt, now, vscode.env.language) : "Unknown date",
       value: submission,
@@ -36,7 +42,16 @@ function submissionItems(submissions: PickableSubmission[]): Item<PickableSubmis
       iconPath: submissionIcon(submission),
     }
     return submission === latest ? { ...item, detail: "Latest submission" } : item
-  })
+  }
+  if (graded.length === 0 || ungraded.length === 0) {
+    return sorted.map((entry) => toItem(entry))
+  }
+  return [
+    separator("Submissions"),
+    ...graded.map((entry) => toItem(entry)),
+    separator("Backups and help requests"),
+    ...ungraded.map((entry) => toItem(entry)),
+  ]
 }
 
 function submissionIcon(submission: PickableSubmission): vscode.ThemeIcon {
@@ -91,6 +106,8 @@ export async function downloadOldSubmission(
         {
           title: `${TITLE} — ${exercise.exerciseSlug}`,
           placeHolder: "Pick a submission, help request or backup to restore",
+          // The outcome, e.g. "Passed", is in the description.
+          matchOnDescription: true,
         },
         ...submissionItems(submissionsResult.val),
       )
