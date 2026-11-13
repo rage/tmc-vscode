@@ -61,4 +61,13 @@
     gap: var(--tmc-space-2);
     margin: var(--tmc-space-3) 0;
   }
+
+  /* A label wider than a narrow editor wraps inside its button instead of running past it. */
+  .action-bar > :global(vscode-button) {
+    max-width: 100%;
+  }
+
+  .action-bar > :global(vscode-button)::part(base) {
+    white-space: normal;
+  }
 </style>

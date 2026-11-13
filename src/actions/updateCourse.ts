@@ -3,6 +3,7 @@ import { Ok } from "ts-results"
 
 import type { BackendKind, CourseIdentifier, Enum } from "../../shared/lib"
 import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../../shared/lib"
+import { isAiAllowed } from "../api/aiRestriction"
 import type Langs from "../api/langs"
 import type { OperationWarning, Warned } from "../api/withOperation"
 import {
@@ -64,10 +65,18 @@ function sessionRefusalWarnings(
   return [{ headline: "Failed to update course data.", error }]
 }
 
+/** A course whose AI-use policy a refresh found changed. */
+export interface AiPolicyChange {
+  /** The course as stored now, with its new policy. */
+  course: LocalCourseData
+  wasAiAllowed: boolean
+}
+
 /** What {@link updateCourse} did. */
 export interface CourseUpdate extends Warned {
   /** Whether the backend's data was received and stored. */
   isUpdated: boolean
+  aiPolicyChange?: AiPolicyChange
 }
 
 /**
@@ -152,6 +161,10 @@ export async function updateCourse(
   if (stored.err) {
     return stored
   }
+  const isAiPolicyChanged =
+    course.kind === "mooc" &&
+    courseData.kind === "mooc" &&
+    course.data.aiPolicy !== courseData.data.aiPolicy
   const courseName = LocalCourseData.getCourseName(course)
   if (
     courseName === workspaceManager.activeCourse &&
@@ -162,7 +175,13 @@ export async function updateCourse(
     )
   }
 
-  return Ok({ isUpdated: true, warnings: [] })
+  return Ok({
+    isUpdated: true,
+    warnings: [],
+    ...(isAiPolicyChanged
+      ? { aiPolicyChange: { course, wasAiAllowed: isAiAllowed(courseData) } }
+      : {}),
+  })
 }
 
 /**

@@ -1,3 +1,5 @@
+import * as path from "path"
+
 import * as fs from "fs-extra"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
@@ -10,10 +12,16 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import { wipe } from "../../commands/wipe"
 import type Resources from "../../config/resources"
 import type { UserData } from "../../config/userdata"
+import { Logger } from "../../utilities"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
-vi.mock("fs-extra", () => ({ remove: vi.fn() }))
+vi.mock("fs-extra", () => ({
+  remove: vi.fn(),
+  readdir: vi.fn(),
+  pathExists: vi.fn(async () => false),
+  rmdir: vi.fn(),
+}))
 
 const PROJECTS_DIRECTORY = "/tmp/tmcdata/projects"
 
@@ -70,20 +78,29 @@ function wipeContext(
 }
 
 suite("Wipe command", function () {
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
   beforeEach(function () {
     stepsRun.length = 0
     vi.mocked(fs.remove).mockReset()
     vi.mocked(fs.remove).mockImplementation(() => {
       stepsRun.push("remove")
     })
+    vi.mocked(fs.readdir).mockReset()
+    vi.mocked(fs.readdir as (dir: string) => Promise<string[]>)
+      .mockResolvedValueOnce(["mooc"])
+      .mockResolvedValue([])
   })
 
-  test("removes the projects directory tmc-langs reported", async function () {
+  test("removes the exercises from the projects directory tmc-langs reported", async function () {
     const context = wipeContext()
 
     await wipe(context, extensionContext)
 
-    expect(fs.remove).toHaveBeenCalledWith(PROJECTS_DIRECTORY)
+    expect(fs.remove).toHaveBeenCalledWith(path.join(PROJECTS_DIRECTORY, "mooc"))
+    expect(fs.rmdir).toHaveBeenCalledWith(PROJECTS_DIRECTORY)
   })
 
   test("deletes the exercises only after every recoverable step has succeeded", async function () {
@@ -141,5 +158,25 @@ suite("Wipe command", function () {
     expect(context.dialog.confirm).not.toHaveBeenCalled()
     expect(context.dialog.explicitConfirmation).toHaveBeenCalledWith(expect.any(String), "DELETE")
     expect(fs.remove).not.toHaveBeenCalled()
+  })
+
+  test("names the folder whose exercises it deletes", async function () {
+    const context = wipeContext({ isConfirmed: false })
+
+    await wipe(context, extensionContext)
+
+    expect(context.dialog.explicitConfirmation).toHaveBeenCalledWith(
+      expect.stringContaining(`downloaded to ${PROJECTS_DIRECTORY},`),
+      "DELETE",
+    )
+  })
+
+  test("logs no wipe the user did not confirm", async function () {
+    const info = vi.spyOn(Logger, "info")
+    const context = wipeContext({ isConfirmed: false })
+
+    await wipe(context, extensionContext)
+
+    expect(info.mock.calls.flat().join(" ")).not.toMatch(/wip/i)
   })
 })

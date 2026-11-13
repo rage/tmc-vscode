@@ -39,6 +39,7 @@ const expectedCommands = [
   "tmc.downloadExercises",
   "tmc.openExercises",
   "tmc.closeExercises",
+  "tmc.openExerciseMaterial",
   "tmc.updateCourseExercises",
   "tmc.downloadNewExercises",
   "tmc.downloadAllExercises",
@@ -409,6 +410,18 @@ suite("registerCommands", function () {
     }
   })
 
+  test("the palette offers the commands that pick an added course only once one is added", function () {
+    for (const command of [
+      "tmc.courseDetails",
+      "tmc.removeCourse",
+      "tmc.closeCompletedExercises",
+    ]) {
+      expect(commandPalette().find((x) => x.command === command)?.when).toBe(
+        "test-my-code:Initialized && test-my-code:HasCourses",
+      )
+    }
+  })
+
   test("every context key the manifest gates on is one the extension sets", function () {
     const sourceRoot = path.join(__dirname, "..", "..")
     const settable = new Set(
@@ -527,6 +540,21 @@ suite("walkthrough", function () {
     expect(text).toMatch(/exercise you download.*\*\*Yes\*\*/s)
     expect(text).not.toMatch(/covers all your courses/)
   })
+
+  // VS Code opens no walkthrough of a newly installed extension itself, so the extension's own
+  // first activation has to, without waiting for the student to find its view.
+  test("a fresh install activates the extension, which opens the walkthrough", function () {
+    const manifest = packageJson() as unknown as { activationEvents: string[] }
+    expect(manifest.activationEvents).toContain("onStartupFinished")
+  })
+
+  test("the submit step does not promise unlimited tries", function () {
+    const root = path.join(__dirname, "..", "..", "..")
+    const step = packageJson().contributes.walkthroughs?.[0]?.steps.find((x) => x.id === "submit")
+    const text = fs.readFileSync(path.join(root, step?.media.markdown ?? ""), "utf8")
+    expect(text).not.toMatch(/as many times as you like/)
+    expect(text).toMatch(/limits how many tries/)
+  })
 })
 
 suite("registered command handlers", function () {
@@ -560,16 +588,38 @@ suite("registered command handlers", function () {
     expect(show).toHaveBeenCalledOnce()
   })
 
-  test("tmc.debug clears the output, shows it, then opens the active log file", async function () {
+  test("tmc.debug shows the output as it is, then opens its log file", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     const show = vi.spyOn(Logger, "show").mockImplementation(() => {})
+    const initialOutput = Logger.output
+    Logger.output = {} as vscode.OutputChannel
     const { handlers } = registerAndCollect()
 
-    await handlers.get("tmc.debug")?.()
+    try {
+      await handlers.get("tmc.debug")?.()
+    } finally {
+      Logger.output = initialOutput
+    }
 
-    expect(executeCommand).toHaveBeenNthCalledWith(1, "workbench.output.action.clearOutput")
     expect(show).toHaveBeenCalledOnce()
-    expect(executeCommand).toHaveBeenNthCalledWith(2, "workbench.action.openActiveLogOutputFile")
+    expect(executeCommand.mock.calls).toEqual([["workbench.action.openActiveLogOutputFile"]])
+  })
+
+  test("tmc.debug opens no log file while nothing is logged", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const show = vi.spyOn(Logger, "show").mockImplementation(() => {})
+    const initialOutput = Logger.output
+    Logger.output = undefined
+    const { handlers } = registerAndCollect()
+
+    try {
+      await handlers.get("tmc.debug")?.()
+    } finally {
+      Logger.output = initialOutput
+    }
+
+    expect(show).toHaveBeenCalledOnce()
+    expect(executeCommand).not.toHaveBeenCalled()
   })
 
   test("tmc.viewInitializationErrorHelp opens the recovery panel even when degraded", async function () {

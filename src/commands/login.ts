@@ -12,6 +12,7 @@ import {
   ServerError,
 } from "../errors"
 import { Logger, openWebLink, redactUrlQuery } from "../utilities"
+import { showNextWalkthroughStep, walkthroughProgressOf } from "../window/walkthrough"
 import { handOverExercises } from "./handOverExercises"
 import { refreshEverything } from "./refreshEverything"
 
@@ -72,7 +73,7 @@ export async function login(actionContext: ReadyActionContext): Promise<LoginOut
       }
       const { info } = first
       progress.report({
-        message: `Waiting for you to approve in the browser… Code ${info.user_code} at ${info.verification_uri}`,
+        message: `Code ${info.user_code}: approve it at ${info.verification_uri}`,
       })
       const ended = Promise.race([finished, cancelled])
       if (info.verification_uri_complete) {
@@ -102,6 +103,11 @@ export async function login(actionContext: ReadyActionContext): Promise<LoginOut
   void handOverExercises(actionContext).catch((e) =>
     Logger.error("Checking whose the exercises are after login failed", e),
   )
+  // Before the course pick, which an editor opening after it would close.
+  await showNextWalkthroughStep(() => ({
+    ...walkthroughProgressOf(actionContext),
+    isLoggedIn: true,
+  })).catch((e) => Logger.warn("Could not show the next walkthrough step", e))
   // A login that restores an expired session finds the user's courses still added.
   if (actionContext.startup.userData.getCourses().length === 0) {
     void vscode.commands.executeCommand("tmc.addNewCourse")

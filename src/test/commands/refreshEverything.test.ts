@@ -11,7 +11,7 @@ import { refreshCourses, refreshEverything } from "../../commands/refreshEveryth
 import { updateExercises } from "../../commands/updateExercises"
 import { shownCourseHome } from "../../ui/shownCourseHome"
 import { Logger } from "../../utilities"
-import { tmcLocalCourse } from "../fixtures/courses"
+import { moocLocalCourse, tmcLocalCourse } from "../fixtures/courses"
 import { idOfTmcCourse } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -246,6 +246,37 @@ suite("refreshEverything's new-exercises prompt", function () {
       expect.anything(),
     )
     expect(buttons(dialog).map(([label]) => label)).toEqual(["Show"])
+  })
+
+  test("announces a changed AI policy, and what it does to AI assistance", async function () {
+    const course = moocLocalCourse({ title: "Mooc Course", aiPolicy: "full_use" })
+    const [actionContext, dialog] = contextWithCourses([course])
+    vi.mocked(updateCourse).mockResolvedValue(
+      Ok({ isUpdated: true, warnings: [], aiPolicyChange: { course, wasAiAllowed: false } }),
+    )
+
+    await refreshEverything(actionContext, { silent: true })
+
+    expect(dialog.notification).toHaveBeenCalledExactlyOnceWith(
+      "Mooc Course changed its AI policy: AI may be used freely, with disclosure." +
+        " TestMyCode leaves AI assistance on in the course workspace.",
+      expect.anything(),
+    )
+  })
+
+  test("announces a changed AI policy that leaves AI assistance as it was without saying so", async function () {
+    const course = moocLocalCourse({ title: "Mooc Course", aiPolicy: "no_ai" })
+    const [actionContext, dialog] = contextWithCourses([course])
+    vi.mocked(updateCourse).mockResolvedValue(
+      Ok({ isUpdated: true, warnings: [], aiPolicyChange: { course, wasAiAllowed: false } }),
+    )
+
+    await refreshEverything(actionContext, { silent: true })
+
+    expect(dialog.notification).toHaveBeenCalledExactlyOnceWith(
+      "Mooc Course changed its AI policy: AI may not be used at any point.",
+      expect.anything(),
+    )
   })
 
   test("Show opens the course home of the course with new exercises", async function () {

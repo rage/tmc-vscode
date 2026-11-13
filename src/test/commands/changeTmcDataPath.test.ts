@@ -6,6 +6,7 @@ import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import { changeTmcDataPath } from "../../commands/changeTmcDataPath"
 import type Resources from "../../config/resources"
+import { Logger } from "../../utilities"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -57,6 +58,16 @@ suite("Change TMC data path command", function () {
 
   afterEach(function () {
     vi.restoreAllMocks()
+  })
+
+  test("logs no move the user cancelled", async function () {
+    vi.spyOn(vscode.window, "showOpenDialog").mockResolvedValue(undefined)
+    const info = vi.spyOn(Logger, "info")
+
+    await changeTmcDataPath(harness().context)
+
+    expect(info.mock.calls.flat().join(" ")).not.toMatch(/moving/i)
+    expect(actions.moveExtensionDataPath).not.toHaveBeenCalled()
   })
 
   test("names the folder the user chose when that folder was used", async function () {

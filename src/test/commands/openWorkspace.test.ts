@@ -113,7 +113,33 @@ suite("openWorkspace command", function () {
   test("remembers the switch for the window it opens", async function () {
     await openWorkspace(actionContext(), course)
 
-    expect(recordSwitch).toHaveBeenCalledWith(vscode.Uri.file(courseWorkspaceFile).fsPath)
+    expect(recordSwitch).toHaveBeenCalledWith(vscode.Uri.file(courseWorkspaceFile).fsPath, {
+      isWalkthroughOpen: false,
+    })
+  })
+
+  test("remembers the walkthrough a switch in this window closes, not one a new window leaves", async function () {
+    const initialTabGroups = vscode.window.tabGroups
+    Object.defineProperty(vscode.window, "tabGroups", {
+      value: { all: [{ tabs: [{ label: "Welcome", input: undefined }] }] },
+      configurable: true,
+    })
+    try {
+      await openWorkspace(actionContext(), course)
+      stubWorkspace("workspaceFolders", [{ uri: vscode.Uri.file("/home/me/project"), index: 0 }])
+      vi.mocked(dialogMock.choose).mockResolvedValue("newWindow")
+      await openWorkspace(actionContext(), course)
+    } finally {
+      Object.defineProperty(vscode.window, "tabGroups", {
+        value: initialTabGroups,
+        configurable: true,
+      })
+    }
+
+    expect(recordSwitch.mock.calls.map(([, state]) => state)).toEqual([
+      { isWalkthroughOpen: true },
+      { isWalkthroughOpen: false },
+    ])
   })
 
   test("asks, naming the course and the folder, before closing the student's own folder", async function () {

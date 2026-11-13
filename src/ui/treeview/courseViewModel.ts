@@ -30,6 +30,8 @@ export interface ExerciseView {
   isUpdateable: boolean
   /** The exercise on disk; `undefined` while it is not downloaded. */
   onDisk: WorkspaceExercise | undefined
+  /** The course material page the exercise is on; mooc only, when the backend sent one. */
+  materialUrl: string | undefined
 }
 
 /** A part of a course: a tmc course's exercises sharing a `partNN-` slug prefix, or a mooc chapter. */
@@ -119,6 +121,7 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       isHard: !isSoftDeadlineBinding(ex.data),
       isUpdateable: !isRemoved && updateableKeys.has(key),
       onDisk,
+      materialUrl: ex.kind === "mooc" ? ex.data.pageUrl : undefined,
     }
     if (isRemoved) {
       removed.push(view)
@@ -175,6 +178,7 @@ function removedFromCourse(onDisk: WorkspaceExercise): ExerciseView {
     isHard: true,
     isUpdateable: false,
     onDisk,
+    materialUrl: undefined,
   }
 }
 

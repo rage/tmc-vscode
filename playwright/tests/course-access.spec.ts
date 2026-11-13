@@ -45,7 +45,7 @@ vsCodeTest(
       await coursesView.addNewMoocCourse(COURSE_TITLE)
       await courseHome.expectShown(COURSE_TITLE)
       await courseHome.downloadAll()
-      await courseHome.expectState("passing_exercise", "In workspace")
+      await courseHome.expectState("passing_exercise", "Downloaded")
       await courseHome.openCourseWorkspace()
       await expect(page).toHaveTitle(/\(mooc\) \(Workspace\)/, { timeout: 30_000 })
       await courseHome.openExercise("passing_exercise")

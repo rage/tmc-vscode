@@ -1802,7 +1802,9 @@ function courseHomeOf(course: LocalCourseData): CourseHomeView {
     isDisabled: false,
     isNotEnrolled: false,
     isOffline: false,
+    aiPolicy: null,
     isLoggedIn: true,
+    isSessionExpired: false,
     isWorkspaceOpen: false,
     isRestricted: false,
     newExercises: [],
@@ -2037,6 +2039,50 @@ suite("TmcPanel main panel restore after a window reload", () => {
     }
 
     expect(close).toHaveBeenCalledExactlyOnceWith([submission])
+  })
+
+  // VS Code revives a background tab only once shown, so opening the course home again
+  // would otherwise leave two course-home tabs.
+  test("replaces a main panel tab restored in the background, in its editor group", async () => {
+    TmcPanel.mainPanel?.dispose()
+    const restored = {
+      input: { viewType: `mainThreadWebview-${MAIN_PANEL_VIEW_TYPE}` },
+      group: { viewColumn: vscode.ViewColumn.Two },
+    }
+    const code = {
+      input: { uri: vscode.Uri.file("/exercise/main.py") },
+      group: { viewColumn: vscode.ViewColumn.One },
+    }
+    const close = vi.fn(async () => true)
+    const initialTabGroups = vscode.window.tabGroups
+    Object.defineProperty(vscode.window, "tabGroups", {
+      value: { all: [{ tabs: [code] }, { tabs: [restored] }], close },
+      configurable: true,
+    })
+    const fake = createFakeWebviewPanel()
+    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
+    createWebviewPanel.mockClear()
+    createWebviewPanel.mockReturnValue(fake.panel)
+    try {
+      TmcPanel.renderMain(createMockContext(), createMockActionContext(), {
+        id: 70,
+        type: "CourseDetails",
+        courseId: idOfTmcCourse(42),
+      })
+      await vi.waitFor(() => expect(close).toHaveBeenCalled())
+    } finally {
+      Object.defineProperty(vscode.window, "tabGroups", {
+        value: initialTabGroups,
+        configurable: true,
+      })
+      TmcPanel.mainPanel?.dispose()
+    }
+
+    expect(createWebviewPanel).toHaveBeenCalledOnce()
+    expect(createWebviewPanel.mock.calls[0]?.[2]).toMatchObject({
+      viewColumn: vscode.ViewColumn.Two,
+    })
+    expect(close).toHaveBeenCalledExactlyOnceWith([restored])
   })
 
   test("reopens the saved Course Details as the main panel, with a fresh id", async () => {

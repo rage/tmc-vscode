@@ -65,7 +65,7 @@ export class CourseHomePage {
     return this.webview.getByRole("menu")
   }
 
-  /** Waits for the exercise's row to say it is `state`, e.g. "In workspace" or "Not downloaded". */
+  /** Waits for the exercise's row to say it is `state`, e.g. "Downloaded" or "Not downloaded". */
   public async expectState(name: string, state: string): Promise<void> {
     await expect(this.row(name)).toContainText(state, { timeout: 30_000 })
   }

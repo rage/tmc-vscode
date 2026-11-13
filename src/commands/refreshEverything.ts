@@ -1,10 +1,17 @@
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 
-import { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../../shared/lib"
-import type { CourseUpdateOptions } from "../actions"
+import {
+  aiAssistanceSentence,
+  aiPolicyRule,
+  CourseIdentifier,
+  ExerciseIdentifier,
+  LocalCourseData,
+} from "../../shared/lib"
+import type { AiPolicyChange, CourseUpdateOptions } from "../actions"
 import { checkForCourseUpdates } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
+import { isAiAllowed } from "../api/aiRestriction"
 import { reportWarnings, withOperation } from "../api/withOperation"
 import { BottleneckError } from "../errors"
 import { shownCourseHome } from "../ui/shownCourseHome"
@@ -133,6 +140,7 @@ async function runRefresh(
   const refreshed = await checkForCourseUpdates(actionContext, { courseId, onProgress })
   if (refreshed.ok) {
     reportWarnings(actionContext.dialog, refreshed.val.warnings)
+    announceAiPolicyChanges(actionContext, refreshed.val.aiPolicyChanges)
     if (offersNewExercises) {
       offerNewExercises(actionContext, refreshed.val.courses)
     }
@@ -143,6 +151,28 @@ async function runRefresh(
     isPromptless ? "promptless" : silent || refreshFailure ? "silent" : "loud",
   )
   return refreshFailure ? Err(refreshFailure) : Ok.EMPTY
+}
+
+/**
+ * Tells the student of each course whose AI policy changed, and what that does to AI assistance:
+ * the workspace follows the policy silently, and a refused submit would otherwise be the first
+ * sign.
+ */
+function announceAiPolicyChanges(
+  { dialog }: ReadyActionContext,
+  changes: readonly AiPolicyChange[],
+): void {
+  for (const { course, wasAiAllowed } of changes) {
+    if (course.kind !== "mooc") {
+      continue
+    }
+    const isNowAiAllowed = isAiAllowed(course)
+    const message = [
+      `${course.data.title} changed its AI policy: ${aiPolicyRule(course.data.aiPolicy)}`,
+      ...(wasAiAllowed === isNowAiAllowed ? [] : [aiAssistanceSentence(isNowAiAllowed)]),
+    ].join(" ")
+    void dialog.notification(message, showCourseHomeButton(LocalCourseData.getCourseId(course)))
+  }
 }
 
 /**

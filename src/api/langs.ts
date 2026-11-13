@@ -1613,14 +1613,13 @@ ${error.message}`
           resolve(resultCode)
         }
       })
-      cprocess.on("exit", (code) => {
+      cprocess.on("exit", (code, signal) => {
         // The pid is free for the OS to reuse from here on, so a retained `interrupt`
         // closure must not signal it.
         active = false
         resultCode = code ?? 0
-        Logger.info(
-          `Process exited with code ${resultCode} after ${Date.now() - startTime}ms: ${loggableCommand}`,
-        )
+        const ending = signal ? `was killed by ${signal}` : `exited with code ${resultCode}`
+        Logger.info(`Process ${ending} after ${Date.now() - startTime}ms: ${loggableCommand}`)
         if (stdoutEnded) {
           if (timeout) {
             clearTimeout(timeout)

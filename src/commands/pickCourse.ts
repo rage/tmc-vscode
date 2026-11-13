@@ -17,8 +17,8 @@ interface PickCourseOptions {
 /**
  * Prompts the user to pick one of their courses, the one whose workspace is open first.
  *
- * On an empty course list, offers to add one instead of showing an empty quick pick; with a
- * single course, picks it without asking unless `alwaysAsk` is set.
+ * On an empty course list, offers to add one, or to log in first, instead of showing an empty
+ * quick pick; with a single course, picks it without asking unless `alwaysAsk` is set.
  *
  * @returns The picked course, or `undefined` if there are no courses or the pick was
  * dismissed.
@@ -31,10 +31,13 @@ export async function pickCourse(
   const { userData, workspaceManager } = actionContext.startup
   const courses = userData.getCourses()
   if (courses.length === 0) {
-    await dialog.notification("No courses added yet.", [
-      "Add Course",
-      (): void => void vscode.commands.executeCommand("tmc.addNewCourse"),
-    ])
+    // Adding a course takes a login first, which the course pick would only offer.
+    await dialog.notification(
+      "No courses added yet.",
+      actionContext.authState.loggedIn
+        ? ["Add Course", (): void => void vscode.commands.executeCommand("tmc.addNewCourse")]
+        : ["Log In", (): void => void vscode.commands.executeCommand("tmc.showMoocLogin")],
+    )
     return undefined
   }
   const { title, placeHolder, decorate, alwaysAsk } = options

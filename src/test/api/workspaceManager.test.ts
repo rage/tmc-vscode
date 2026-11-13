@@ -234,6 +234,19 @@ suite("WorkspaceManager class", function () {
       expect(updateWorkspaceFolders).not.toHaveBeenCalled()
     })
 
+    test("warns of nothing when a rescan runs outside a course workspace", async function () {
+      const warn = vi.spyOn(Logger, "warn")
+      const manager = new WorkspaceManager(resources, persistForCourse)
+
+      const result = await manager.setExercises([
+        exercise("mooc", "course", "hello_world", ExerciseStatus.Open),
+      ])
+
+      expect(result.ok).toBe(true)
+      expect(warn).not.toHaveBeenCalled()
+      warn.mockRestore()
+    })
+
     test("announces a replacement that changes the known exercises", async function () {
       const open = exercise("mooc", "my python course", "hello_world", ExerciseStatus.Open)
       const manager = new WorkspaceManager(resources, persistForCourse)

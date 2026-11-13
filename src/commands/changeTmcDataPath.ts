@@ -11,7 +11,6 @@ import { Logger } from "../utilities"
 export async function changeTmcDataPath(actionContext: ReadyActionContext): Promise<void> {
   const { dialog } = actionContext
   const { resources } = actionContext.startup
-  Logger.info("Moving the exercises folder")
   if (!resources.projectsDirectory) {
     await dialog.errorNotification(
       "Moving the exercises folder is unavailable: the TestMyCode tools did not report where the exercises folder is.",
@@ -34,6 +33,7 @@ export async function changeTmcDataPath(actionContext: ReadyActionContext): Prom
     return
   }
 
+  Logger.info(`Moving the exercises folder to ${newPath.fsPath}`)
   const res = await withOperation(
     dialog,
     {

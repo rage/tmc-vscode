@@ -8,6 +8,7 @@ import { failure } from "../api/withOperation"
 import { Logger, mapConcurrently } from "../utilities"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
+import type { AiPolicyChange } from "./updateCourse"
 import { updateCourse } from "./updateCourse"
 
 const COURSE_REFRESH_CONCURRENCY = 4
@@ -23,6 +24,8 @@ export interface CourseUpdateOptions {
 export interface CourseUpdates extends Warned {
   /** Every course read back after the pass, whether or not its own refresh succeeded. */
   courses: LocalCourseData[]
+  /** The courses whose AI-use policy changed since they were last stored. */
+  aiPolicyChanges: AiPolicyChange[]
   /**
    * Names every course that could not be refreshed, the others having been; else why the local
    * exercises could not be rescanned after them.
@@ -68,6 +71,7 @@ export async function checkForCourseUpdates(
       error: updateResult.err ? updateResult.val : reread.err ? reread.val : undefined,
       updated: reread.ok ? reread.val : undefined,
       warnings: updateResult.ok ? updateResult.val.warnings : [],
+      aiPolicyChange: updateResult.ok ? updateResult.val.aiPolicyChange : undefined,
     }
   })
   // Once for the whole pass, not once per course: a course update can drop exercises the
@@ -88,6 +92,7 @@ export async function checkForCourseUpdates(
   return Ok({
     courses: updatedCourses,
     warnings: refreshed.flatMap((x) => x.warnings),
+    aiPolicyChanges: refreshed.flatMap((x) => (x.aiPolicyChange ? [x.aiPolicyChange] : [])),
     failure:
       failures.length > 0
         ? failure(`Failed to fetch updates for ${names}.`, failures[0]?.error).val

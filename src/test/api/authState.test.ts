@@ -98,4 +98,20 @@ suite("AuthState", function () {
     expect(loggedInContext()).toEqual([true, false])
     expect(setLoggedIn.mock.calls).toEqual([[true], [false]])
   })
+
+  test("an expiry lasts through later checks until a login, telling the subscribers", async function () {
+    const { authState, setLoggedIn } = harness([true, false, false, true])
+    await authState.refresh()
+
+    await authState.refresh()
+    authState.markSessionExpired()
+    authState.markSessionExpired()
+    expect(authState.isSessionExpired).toBe(true)
+    await authState.refresh()
+    expect(authState.isSessionExpired).toBe(true)
+    await authState.refresh()
+
+    expect(authState.isSessionExpired).toBe(false)
+    expect(setLoggedIn.mock.calls).toEqual([[true], [false], [false], [true]])
+  })
 })
