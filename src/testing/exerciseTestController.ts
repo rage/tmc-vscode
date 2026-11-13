@@ -3,7 +3,12 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { RunResult, TestResult } from "../../shared/langsSchema"
-import { BaseError, withDistinctKeys } from "../../shared/lib"
+import {
+  BaseError,
+  submitRefusalOf,
+  submitRefusalSentence,
+  withDistinctKeys,
+} from "../../shared/lib"
 import { checkAiUse } from "../actions/checkAiUse"
 import type { ExerciseTestOutcome } from "../actions/testExercise"
 import { testExercise } from "../actions/testExercise"
@@ -343,6 +348,20 @@ export class ExerciseTestController implements vscode.Disposable {
     } else if (isAllPassed && !outcome.isCourseDisabled) {
       message = `All tests of ${exercise.exerciseSlug} passed.`
     } else {
+      return
+    }
+    const stored = this._actionContext.startup.userData.getExercise(exercise.id)
+    if (stored.err) {
+      return
+    }
+    const storedExercise = stored.val.exercise
+    const refusal = submitRefusalOf(storedExercise, new Date())
+    if (refusal) {
+      const chapterName =
+        storedExercise.kind === "mooc" ? storedExercise.data.chapter?.name : undefined
+      void this._actionContext.dialog.notification(
+        `${message} ${submitRefusalSentence(refusal, exercise.exerciseSlug, chapterName)}`,
+      )
       return
     }
     const submit = (): void =>

@@ -197,6 +197,27 @@ suite("ExerciseStatusBarItem", function () {
     expect(tooltipText(itemOf())).toContain("1/2 points · no tries left")
   })
 
+  test.each([
+    [{ maxTries: 3, triesLeft: 1 }, "1 try left"],
+    [{ deadline: "2000-01-01T00:00:00Z" }, "deadline passed"],
+    [{ outOfTries: true }, "no tries left"],
+  ])("shows where the exercise stands in its text: %o", function (data, standing) {
+    const h = harness()
+    h.stored.exercise = makeMoocKind(
+      moocCourseExercise({
+        id: "exercise-uuid",
+        name: exerciseHelloWorld.exerciseSlug,
+        awardedPoints: 1,
+        availablePoints: 2,
+        ...data,
+      }),
+    )
+    track(new ExerciseStatusBarItem(h.sources))
+
+    expect(itemOf().text).toBe(`$(beaker) ${exerciseHelloWorld.exerciseSlug} · 1/2 · ${standing}`)
+    expect(itemOf().accessibilityInformation?.label).toContain(standing)
+  })
+
   test("stops listening when disposed", function () {
     const h = harness()
     const exerciseItem = new ExerciseStatusBarItem(h.sources)
@@ -274,6 +295,47 @@ suite("showExerciseActions", function () {
     expect(offered()).toEqual(["Run Tests", "Open Next Exercise", "Reveal in Courses View"])
     expect(showQuickPick.mock.calls[0]?.[1]).toMatchObject({
       placeHolder: expect.stringMatching(/^Removed from the course/),
+    })
+  })
+
+  test("leaves Submit out, and says why, when the backend would refuse it", async function () {
+    const showQuickPick = vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)
+    const h = harness()
+    h.stored.exercise = makeMoocKind(
+      moocCourseExercise({ id: "exercise-uuid", name: "hello", triesLeft: 0, maxTries: 2 }),
+    )
+
+    await showExerciseActions(new Dialog(), h.sources, true)
+
+    expect(offered()).not.toContain("Submit Solution")
+    expect(offered()).toContain("Share Exercise via Paste")
+    expect(showQuickPick.mock.calls[0]?.[1]).toMatchObject({
+      placeHolder: "Can't be submitted: no tries left",
+    })
+  })
+
+  test("for an exercise whose chapter has not opened, names the chapter", async function () {
+    const showQuickPick = vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)
+    const h = harness()
+    h.stored.exercise = undefined
+    const closed = moocLocalCourse({
+      id: "course-uuid",
+      closedChapters: [
+        {
+          name: "Recursion",
+          number: 3,
+          opensAt: "2100-01-01T00:00:00Z",
+          exercises: [moocCourseExercise({ id: "exercise-uuid", name: "hello" })],
+        },
+      ],
+    })
+    h.sources.userData.getCourse = () => Ok(closed)
+
+    await showExerciseActions(new Dialog(), h.sources, true)
+
+    expect(offered()).toEqual(["Run Tests", "Open Next Exercise", "Reveal in Courses View"])
+    expect(showQuickPick.mock.calls[0]?.[1]).toMatchObject({
+      placeHolder: expect.stringContaining('chapter "Recursion" has not opened yet'),
     })
   })
 

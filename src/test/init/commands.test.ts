@@ -40,6 +40,7 @@ const expectedCommands = [
   "tmc.openExercises",
   "tmc.closeExercises",
   "tmc.openExerciseMaterial",
+  "tmc.enrollOnCourse",
   "tmc.updateCourseExercises",
   "tmc.downloadNewExercises",
   "tmc.downloadAllExercises",

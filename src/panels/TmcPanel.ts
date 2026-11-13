@@ -3,7 +3,13 @@ import { Disposable, Uri, ViewColumn, window } from "vscode"
 import type * as vscode from "vscode"
 
 import type { ExerciseSubmissionPanel, Panel, SubmissionView } from "../../shared/lib"
-import { assertUnreachable, CourseIdentifier, WebviewStateSchema } from "../../shared/lib"
+import {
+  assertUnreachable,
+  CourseIdentifier,
+  submitRefusalOf,
+  submitRefusalSentence,
+  WebviewStateSchema,
+} from "../../shared/lib"
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import { buildCourseHomeView } from "../ui/courseHome"
@@ -424,13 +430,25 @@ function submissionViewMessage(
   panel: ExerciseSubmissionPanel,
   view: SubmissionView,
 ): PanelMessage {
-  const shown = isReady(actionContext)
-    ? withExerciseState(view, {
-        isOnDisk:
-          actionContext.startup.workspaceManager.getExercise(panel.exerciseId) !== undefined,
-        isInCourse: actionContext.startup.userData.getExercise(panel.exerciseId).ok,
-      })
-    : view
+  if (!isReady(actionContext)) {
+    return { type: "submissionView", target: { id: panel.id, type: panel.type }, view }
+  }
+  const stored = actionContext.startup.userData.getExercise(panel.exerciseId)
+  const exercise = stored.ok ? stored.val.exercise : undefined
+  const refusal = exercise && submitRefusalOf(exercise, new Date())
+  const shown = withExerciseState(view, {
+    isOnDisk: actionContext.startup.workspaceManager.getExercise(panel.exerciseId) !== undefined,
+    isInCourse: stored.ok,
+    submitRefusal:
+      exercise && refusal
+        ? submitRefusalSentence(
+            refusal,
+            exercise.data.name,
+            exercise.kind === "mooc" ? exercise.data.chapter?.name : undefined,
+          )
+        : undefined,
+    triesLeft: exercise?.kind === "mooc" ? exercise.data.triesLeft : undefined,
+  })
   return { type: "submissionView", target: { id: panel.id, type: panel.type }, view: shown }
 }
 

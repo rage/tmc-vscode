@@ -2,13 +2,16 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import { makeMoocKind } from "../../../shared/lib"
 import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { submitExercise } from "../../commands/submitExercise"
+import type { UserData } from "../../config/userdata"
 import { OutOfTriesError, WorkspaceUntrustedError } from "../../errors"
+import { moocCourseExercise } from "../fixtures/courses"
 import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -29,7 +32,10 @@ const exercise: WorkspaceExercise = {
   uri,
 }
 
-function contextWith(resolved: WorkspaceExercise | undefined): ReadyActionContext {
+function contextWith(
+  resolved: WorkspaceExercise | undefined,
+  triesLeft?: number,
+): ReadyActionContext {
   const [dialog] = createDialogMock()
   const workspaceManager = {
     get activeExercise() {
@@ -37,7 +43,14 @@ function contextWith(resolved: WorkspaceExercise | undefined): ReadyActionContex
     },
     getExerciseContaining: () => resolved,
   } as unknown as WorkspaceManager
-  return { ...createMockActionContext({ startup: { workspaceManager } }), dialog }
+  const stored = makeMoocKind(
+    moocCourseExercise({ id: "mooc-ex-uuid", name: "ex-1", maxTries: 3, triesLeft }),
+  )
+  const userData = {
+    getExercise: () =>
+      triesLeft === undefined ? Err(new Error("none")) : Ok({ exercise: stored }),
+  } as unknown as UserData
+  return { ...createMockActionContext({ startup: { workspaceManager, userData } }), dialog }
 }
 
 suite("Submit exercise command", function () {
@@ -52,6 +65,30 @@ suite("Submit exercise command", function () {
 
     expect(actions.submitExercise).toHaveBeenCalledExactlyOnceWith(context, exercise)
     expect(result.ok).toBe(true)
+  })
+
+  test("asks before the last try, and submits nothing when declined", async function () {
+    const context = contextWith(exercise, 1)
+    vi.mocked(context.dialog.confirm).mockResolvedValue(false)
+
+    const result = await submitExercise(context, uri)
+
+    expect(result.ok).toBe(true)
+    expect(context.dialog.confirm).toHaveBeenCalledWith(
+      "This is your last try on ex-1. Submit?",
+      expect.objectContaining({ confirmLabel: "Submit" }),
+    )
+    expect(actions.submitExercise).not.toHaveBeenCalled()
+  })
+
+  test("submits on the last try once the student agrees, and does not ask with more left", async function () {
+    const lastTry = contextWith(exercise, 1)
+    await submitExercise(lastTry, uri)
+    expect(actions.submitExercise).toHaveBeenCalledExactlyOnceWith(lastTry, exercise)
+
+    const moreLeft = contextWith(exercise, 2)
+    await submitExercise(moreLeft, uri)
+    expect(moreLeft.dialog.confirm).not.toHaveBeenCalled()
   })
 
   test("tells of no tries left as the final score it is, not as a failure", async function () {

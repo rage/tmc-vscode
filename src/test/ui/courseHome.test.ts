@@ -14,12 +14,18 @@ import { recentUpdates } from "../../ui/recentUpdates"
 import type CoursesTree from "../../ui/treeview/treeview"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
 import {
+  MOOC_COURSE_ID,
   moocCourseExercise,
   moocLocalCourse,
   tmcCourseExercise,
   tmcLocalCourse,
 } from "../fixtures/courses"
-import { idOfMoocExercise, idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
+import {
+  idOfMoocCourse,
+  idOfMoocExercise,
+  idOfTmcCourse,
+  idOfTmcExercise,
+} from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
 const NOW = new Date("2026-06-01T12:00:00Z")
@@ -85,6 +91,42 @@ function onDisk(id: number, exerciseSlug: string, status: ExerciseStatus): Works
 }
 
 suite("buildCourseHomeView", function () {
+  test("gives each mooc row its tries and why a submission would be refused, and a locked chapter its lock", function () {
+    const course = moocLocalCourse({
+      exercises: [
+        moocCourseExercise({
+          id: "a",
+          name: "loops",
+          maxTries: 3,
+          triesLeft: 2,
+          chapter: { name: "Basics", number: 1 },
+        }),
+        moocCourseExercise({
+          id: "b",
+          name: "recursion",
+          chapter: { name: "Advanced", number: 2, lockingStatus: "CompletedAndLocked" },
+        }),
+      ],
+    })
+
+    const view = buildCourseHomeView(
+      contextFor(course),
+      idOfMoocCourse(MOOC_COURSE_ID),
+      NOW,
+    ).unwrap()
+
+    const [basics, advanced] = view.parts
+    expect(basics?.lockedReason).toBeUndefined()
+    expect(basics?.exercises[0]).toMatchObject({ triesLeft: 2 })
+    expect(basics?.exercises[0]).not.toHaveProperty("submitRefusal")
+    expect(advanced?.lockedReason).toBe("You have completed and locked this chapter.")
+    expect(advanced?.exercises[0]?.submitRefusal).toEqual({
+      label: "chapter locked",
+      sentence:
+        'You have completed and locked the chapter "Advanced", so recursion can no longer be submitted.',
+    })
+  })
+
   test("groups a tmc course by part, with each exercise's state on this computer", function () {
     const course = tmcLocalCourse({
       title: "Python Course",

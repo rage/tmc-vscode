@@ -7,6 +7,7 @@ import type {
   CourseProgress,
   TmcExerciseSlide,
 } from "../../shared/langsSchema"
+import type { MoocClosedChapter } from "../../shared/lib"
 import {
   LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
   LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
@@ -68,41 +69,101 @@ export function combineMoocApiExerciseData(
   return slides.map<MoocLocalCourseExercise>((slide) => {
     const exerciseProgress = progressById.get(slide.exercise_id)
     const previous = previousById.get(slide.exercise_id)
+    const lockingStatus = slide.chapter?.locking_status
     return {
       id: slide.exercise_id,
       name: slide.exercise_name,
       deadline: slide.deadline,
       ...moocStoredStanding(exerciseProgress, previous),
-      availablePoints: exerciseProgress?.score_maximum ?? previous?.availablePoints ?? 0,
-      awardedPoints: exerciseProgress?.score_given ?? previous?.awardedPoints ?? 0,
+      ...storedPoints(exerciseProgress, previous),
       ...(slide.chapter
-        ? { chapter: { name: slide.chapter.name, number: slide.chapter.chapter_number } }
+        ? {
+            chapter: {
+              name: slide.chapter.name,
+              number: slide.chapter.chapter_number,
+              ...(lockingStatus ? { lockingStatus } : {}),
+            },
+          }
         : {}),
       ...(slide.page_url ? { pageUrl: slide.page_url } : {}),
     }
   })
 }
 
-/** A mooc exercise's stored `passed` and `outOfTries`, as the backend decides them. */
-export interface MoocStoredStanding {
-  passed: boolean
-  outOfTries: boolean
+function storedPoints(
+  progress: ExerciseProgress | undefined,
+  previous: Pick<MoocLocalCourseExercise, "availablePoints" | "awardedPoints"> | undefined,
+): Pick<MoocLocalCourseExercise, "availablePoints" | "awardedPoints"> {
+  return {
+    availablePoints: progress?.score_maximum ?? previous?.availablePoints ?? 0,
+    awardedPoints: progress?.score_given ?? previous?.awardedPoints ?? 0,
+  }
 }
 
 /**
- * The stored flags `progress` sets. Keeps `previous`'s, else neither, when the backend sent no
- * standing: a host that predates it, or no progress at all.
+ * The course's chapters that have not opened yet, each exercise as `previousExercises` last
+ * stored it with the points `progress` reports now.
+ */
+export function combineMoocClosedChapters(
+  progress: CourseProgress,
+  previousExercises: MoocLocalCourseExercise[] = [],
+): MoocClosedChapter[] {
+  const previousById = new Map(previousExercises.map((x) => [x.id, x]))
+  return progress.closed_chapters.map((chapter) => ({
+    name: chapter.name,
+    number: chapter.chapter_number,
+    opensAt: chapter.opens_at,
+    exercises: chapter.exercises.map((exerciseProgress) => {
+      const previous = previousById.get(exerciseProgress.exercise_id)
+      return {
+        ...(previous ?? { name: "", deadline: null }),
+        id: exerciseProgress.exercise_id,
+        ...moocStoredStanding(exerciseProgress, previous),
+        ...storedPoints(exerciseProgress, previous),
+      }
+    }),
+  }))
+}
+
+/** A mooc exercise's stored standing and tries, as the backend decides them. */
+export interface MoocStoredStanding {
+  passed: boolean
+  outOfTries: boolean
+  /** Absent means unlimited. */
+  maxTries?: number
+  /** Absent means unlimited. */
+  triesLeft?: number
+}
+
+/**
+ * The stored standing and tries `progress` sets. Keeps `previous`'s, else none, when the backend
+ * sent no progress; keeps its `passed` and `outOfTries` when it sent no standing, as a host that
+ * predates it does.
  */
 export function moocStoredStanding(
   progress: ExerciseProgress | undefined,
-  previous?: Pick<MoocLocalCourseExercise, "passed" | "outOfTries">,
+  previous?: Pick<MoocLocalCourseExercise, "passed" | "outOfTries" | "maxTries" | "triesLeft">,
 ): MoocStoredStanding {
+  const tries = progress
+    ? {
+        ...(progress.max_tries === null ? {} : { maxTries: progress.max_tries }),
+        ...(progress.tries_left === null ? {} : { triesLeft: progress.tries_left }),
+      }
+    : {
+        ...(previous?.maxTries === undefined ? {} : { maxTries: previous.maxTries }),
+        ...(previous?.triesLeft === undefined ? {} : { triesLeft: previous.triesLeft }),
+      }
   if (!progress?.standing) {
-    return { passed: previous?.passed ?? false, outOfTries: previous?.outOfTries ?? false }
+    return {
+      passed: previous?.passed ?? false,
+      outOfTries: previous?.outOfTries ?? false,
+      ...tries,
+    }
   }
   return {
     passed: progress.standing === "Passed",
     outOfTries: progress.standing === "OutOfTries",
+    ...tries,
   }
 }
 
@@ -180,7 +241,12 @@ export function toStoredMoocCourse(
   { course, slides, progress }: CombinedMoocCourseData,
   previous?: MoocLocalCourseData,
 ): MoocLocalCourseData {
-  const exercises = combineMoocApiExerciseData(slides, progress, previous?.exercises)
+  const previousExercises = [
+    ...(previous?.exercises ?? []),
+    ...(previous?.closedChapters ?? []).flatMap((chapter) => chapter.exercises),
+  ]
+  const exercises = combineMoocApiExerciseData(slides, progress, previousExercises)
+  const closedChapters = combineMoocClosedChapters(progress, previousExercises)
   return {
     id: course.id,
     // See `toStoredTmcCourse`: the slug is the on-disk key.
@@ -190,8 +256,9 @@ export function toStoredMoocCourse(
     organization: course.organization_name,
     aiPolicy: course.ai_policy,
     exercises,
-    ...sumCoursePoints(exercises),
+    ...sumCoursePoints([...exercises, ...closedChapters.flatMap((chapter) => chapter.exercises)]),
     newExercises: previous?.newExercises ?? [],
     notifyAfter: previous?.notifyAfter ?? 0,
+    ...(closedChapters.length > 0 ? { closedChapters } : {}),
   }
 }

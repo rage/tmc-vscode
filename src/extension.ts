@@ -63,6 +63,7 @@ import Storage from "./storage"
 import {
   trackActiveEditorExercise,
   trackActiveExerciseRemoved,
+  trackActiveExerciseSubmitRefused,
   trackHasCourses,
   trackHasDownloadedExercises,
 } from "./ui/contextKeys"
@@ -525,6 +526,10 @@ async function activateInner(
       new FailedUpdatesStatusBarItem(failedUpdates),
       trackHasCourses(readyContext.startup.userData),
       trackActiveExerciseRemoved(
+        readyContext.startup.workspaceManager,
+        readyContext.startup.userData,
+      ),
+      trackActiveExerciseSubmitRefused(
         readyContext.startup.workspaceManager,
         readyContext.startup.userData,
       ),

@@ -289,16 +289,34 @@ function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): str
 }
 
 /**
- * `view` with its `exerciseState` as the exercise now stands, which the submit action that
- * built the view cannot know: the files or the exercise may go away while it is shown.
+ * `view` with the exercise as it now stands, which the submit action that built the view cannot
+ * know: the files or the exercise may go away while it is shown, and a grading or a deadline
+ * changes what the backend accepts.
+ *
+ * @param exercise.submitRefusal See {@link SubmissionView.submitRefusal}.
  */
 export function withExerciseState(
   view: SubmissionView,
-  exercise: { isOnDisk: boolean; isInCourse: boolean },
+  exercise: {
+    isOnDisk: boolean
+    isInCourse: boolean
+    submitRefusal?: string | undefined
+    triesLeft?: number | undefined
+  },
 ): SubmissionView {
-  const { exerciseState: _previous, ...rest } = view
+  const {
+    exerciseState: _exerciseState,
+    submitRefusal: _submitRefusal,
+    triesLeft: _triesLeft,
+    ...rest
+  } = view
   if (!exercise.isInCourse) {
     return { ...rest, exerciseState: "removed" }
   }
-  return exercise.isOnDisk ? rest : { ...rest, exerciseState: "notOnDisk" }
+  const standing = {
+    ...rest,
+    ...(exercise.submitRefusal === undefined ? {} : { submitRefusal: exercise.submitRefusal }),
+    ...(exercise.triesLeft === undefined ? {} : { triesLeft: exercise.triesLeft }),
+  }
+  return exercise.isOnDisk ? standing : { ...standing, exerciseState: "notOnDisk" }
 }

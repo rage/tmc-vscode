@@ -285,3 +285,117 @@ suite("combineMoocApiExerciseData", function () {
     expect(stored).toMatchObject({ passed: false, outOfTries: true, awardedPoints: 3 })
   })
 })
+
+function progressEntry(
+  exerciseId: string,
+  overrides: Partial<ExerciseProgress> = {},
+): ExerciseProgress {
+  return {
+    exercise_id: exerciseId,
+    score_given: 1,
+    score_maximum: 2,
+    completed: true,
+    attempted: true,
+    standing: "Attempted",
+    max_tries: null,
+    tries_left: null,
+    ...overrides,
+  }
+}
+
+suite("mooc tries, chapter locking and closed chapters", function () {
+  const [slide] = moocExerciseSlides
+
+  test("stores the tries the backend counts, and none for unlimited tries", function () {
+    const limited = combineMoocApiExerciseData([slide!], {
+      ...NO_PROGRESS,
+      exercises: [progressEntry(slide!.exercise_id, { max_tries: 3, tries_left: 1 })],
+    })[0]
+    expect(limited).toMatchObject({ maxTries: 3, triesLeft: 1 })
+
+    const unlimited = combineMoocApiExerciseData([slide!], {
+      ...NO_PROGRESS,
+      exercises: [progressEntry(slide!.exercise_id)],
+    })[0]
+    expect(unlimited).not.toHaveProperty("maxTries")
+    expect(unlimited).not.toHaveProperty("triesLeft")
+  })
+
+  test("keeps a chapter's locking status, and none without locking", function () {
+    const locked = combineMoocApiExerciseData(
+      [
+        {
+          ...slide!,
+          chapter: {
+            id: "chapter-2",
+            name: "Loops",
+            chapter_number: 2,
+            locking_status: "NotUnlockedYet",
+          },
+        },
+      ],
+      NO_PROGRESS,
+    )[0]
+    expect(locked?.chapter).toEqual({ name: "Loops", number: 2, lockingStatus: "NotUnlockedYet" })
+  })
+
+  const closedProgress = (exerciseId: string): CourseProgress => ({
+    ...NO_PROGRESS,
+    closed_chapters: [
+      {
+        id: "chapter-3",
+        name: "Recursion",
+        chapter_number: 3,
+        opens_at: "2100-01-01T00:00:00Z",
+        exercises: [progressEntry(exerciseId, { score_given: 2, standing: "Passed" })],
+      },
+    ],
+  })
+
+  test("keeps a closed chapter's exercises apart with their points, as last seen open", function () {
+    const previous = toStoredMoocCourse({
+      course: moocCourse,
+      slides: moocExerciseSlides,
+      progress: moocCourseProgress,
+    })
+    const stored = toStoredMoocCourse(
+      { course: moocCourse, slides: [], progress: closedProgress(slide!.exercise_id) },
+      previous,
+    )
+
+    expect(stored.exercises).toEqual([])
+    expect(stored.closedChapters).toEqual([
+      {
+        name: "Recursion",
+        number: 3,
+        opensAt: "2100-01-01T00:00:00Z",
+        exercises: [
+          expect.objectContaining({
+            id: slide!.exercise_id,
+            name: previous.exercises[0]!.name,
+            passed: true,
+            awardedPoints: 2,
+            availablePoints: 2,
+          }),
+        ],
+      },
+    ])
+    expect(stored).toMatchObject({ awardedPoints: 2, availablePoints: 2 })
+  })
+
+  test("an exercise whose chapter reopens comes back with what it had", function () {
+    const added = toStoredMoocCourse({
+      course: moocCourse,
+      slides: [],
+      progress: closedProgress(slide!.exercise_id),
+    })
+    expect(added.closedChapters?.[0]?.exercises[0]).toMatchObject({ name: "", passed: true })
+
+    const reopened = toStoredMoocCourse(
+      { course: moocCourse, slides: moocExerciseSlides, progress: NO_PROGRESS },
+      added,
+    )
+    expect(reopened).not.toHaveProperty("closedChapters")
+    expect(reopened.exercises[0]).toMatchObject({ id: slide!.exercise_id, passed: true })
+  })
+})

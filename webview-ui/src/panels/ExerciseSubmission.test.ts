@@ -594,6 +594,42 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     expect(screen.queryByRole("button", { name: "Submit Again" })).not.toBeInTheDocument()
   })
 
+  test("an exercise the backend would refuse says why, and leads to the model solution instead", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...tmcResultView(submissionFinished({ all_tests_passed: false }), [], 2),
+      isExercisePassed: false,
+      solutionUrl: "https://courses.example/solution",
+      submitRefusal: "You have no tries left on loops, so it can no longer be submitted.",
+      triesLeft: 0,
+    })
+    postedMessages.mockClear()
+
+    const solution = await screen.findByRole("button", { name: "Show Model Solution" })
+    expect(isSecondary(solution)).toBe(false)
+    expect(screen.getByText(/no tries left on loops/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Run Tests" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Submit Again" })).not.toBeInTheDocument()
+    solution.click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "openLinkInBrowser",
+      url: "https://courses.example/solution",
+    })
+  })
+
+  test("counts the tries left while another submission is accepted", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...tmcResultView(submissionFinished({ all_tests_passed: false }), [], 2),
+      isExercisePassed: false,
+      triesLeft: 1,
+    })
+
+    expect(await screen.findByText("1 try left on this exercise.")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Submit Again" })).toBeInTheDocument()
+  })
+
   test("awaiting manual grading explains itself and asks nothing of the student", async () => {
     render(ExerciseSubmission, { props: { panel: moocPanel } })
     showMoocGrading(moocGrading({ grading_progress: "PendingManual" }))

@@ -148,6 +148,11 @@
         "category": "TestMyCode"
       },
       {
+        "command": "tmc.enrollOnCourse",
+        "title": "Enroll on Course...",
+        "category": "TestMyCode"
+      },
+      {
         "command": "tmc.courseDetails",
         "title": "Show Course Details...",
         "category": "TestMyCode"
@@ -426,7 +431,7 @@
         },
         {
           "command": "tmc.submitExercise",
-          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn && !test-my-code:ActiveExerciseRemoved"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn && !test-my-code:ActiveExerciseRemoved && !test-my-code:ActiveExerciseSubmitRefused"
         },
         {
           "command": "tmc.updateExercises",
@@ -525,6 +530,10 @@
           "when": "false"
         },
         {
+          "command": "tmc.enrollOnCourse",
+          "when": "false"
+        },
+        {
           "command": "tmc.dismissNewExercises",
           "when": "false"
         },
@@ -554,7 +563,7 @@
         {
           "command": "tmc.submitExercise",
           "group": "navigation@1",
-          "when": "test-my-code:Initialized && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn && !test-my-code:ActiveExerciseRemoved"
+          "when": "test-my-code:Initialized && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn && !test-my-code:ActiveExerciseRemoved && !test-my-code:ActiveExerciseSubmitRefused"
         }
       ],
       "explorer/context": [
@@ -757,7 +766,7 @@
         {
           "command": "tmc.submitExercise",
           "group": "inline@4",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\.opened(\\.|$)/"
+          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\.opened(?!.*\\.submitRefused(\\.|$))(\\.|$)/"
         },
         {
           "command": "tmc.showMoocLogin",
@@ -787,7 +796,7 @@
         {
           "command": "tmc.submitExercise",
           "group": "2_check@2",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\.opened(\\.|$)/ && !listMultiSelection"
+          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\.opened(?!.*\\.submitRefused(\\.|$))(\\.|$)/ && !listMultiSelection"
         },
         {
           "command": "tmc.pasteExercise",

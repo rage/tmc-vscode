@@ -1,6 +1,12 @@
 import * as vscode from "vscode"
 
 import type { LocalCourseExercise } from "../../shared/lib"
+import {
+  LocalCourseData,
+  SUBMIT_REFUSAL_LABELS,
+  submitRefusalOf,
+  triesLeftText,
+} from "../../shared/lib"
 import type Dialog from "../api/dialog"
 import type { Item } from "../api/dialog"
 import { separator } from "../api/dialog"
@@ -66,6 +72,8 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
     const running = this._sources.operations.current(exercise.id)
     const activity = running && activityLabels[running]
     const points = stored && pointsText(stored.data.awardedPoints, stored.data.availablePoints)
+    const standing = standingText(stored)
+    const shownStanding = standing === "passed" ? undefined : standing
 
     if (activity) {
       this._item.text = `$(sync~spin) ${activity} ${slug}…`
@@ -73,18 +81,21 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
         label: `TestMyCode: ${activity.toLowerCase()} ${slug}`,
       }
     } else {
-      this._item.text = points ? `$(beaker) ${slug} · ${points.short}` : `$(beaker) ${slug}`
+      this._item.text = [`$(beaker) ${slug}`, points?.short, shownStanding]
+        .filter(Boolean)
+        .join(" · ")
       this._item.accessibilityInformation = {
         label:
           `TestMyCode exercise ${slug}` +
           (points ? `, ${points.spoken}` : "") +
+          (shownStanding ? `, ${shownStanding}` : "") +
           ". Show exercise actions",
       }
     }
     this._item.tooltip = tooltipOf([
       slug,
       exercise.courseSlug,
-      ...(points ? [`${points.short} points${standingSuffix(stored)}`] : []),
+      ...(points ? [`${points.short} points${standing ? ` · ${standing}` : ""}`] : []),
       "Click for exercise actions.",
     ])
     this._item.show()
@@ -96,12 +107,22 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
   }
 }
 
-/** What the stored exercise's points line adds: whether it passed, or ran out of tries. */
-function standingSuffix(stored: Readonly<LocalCourseExercise> | undefined): string {
-  if (stored?.data.passed) {
-    return " · passed"
+/**
+ * Where the stored exercise stands, e.g. "passed", "1 try left" or "deadline passed"; `undefined`
+ * when there is nothing to tell.
+ */
+function standingText(stored: Readonly<LocalCourseExercise> | undefined): string | undefined {
+  if (!stored) {
+    return undefined
   }
-  return stored?.kind === "mooc" && stored.data.outOfTries ? " · no tries left" : ""
+  if (stored.data.passed) {
+    return "passed"
+  }
+  const refusal = submitRefusalOf(stored, new Date())
+  if (refusal) {
+    return SUBMIT_REFUSAL_LABELS[refusal]
+  }
+  return stored.kind === "mooc" ? triesLeftText(stored.data.triesLeft) : undefined
 }
 
 interface ExerciseAction {
@@ -131,18 +152,25 @@ export async function showExerciseActions(
     value: { command, arguments: target },
   })
   const course = sources.userData.getCourse(exercise.courseId)
-  const isRemoved = course.ok && sources.userData.getExercise(exercise.id).err
+  const stored = sources.userData.getExercise(exercise.id)
+  const isUnlisted = course.ok && stored.err
+  const closedChapter = course.ok
+    ? LocalCourseData.getClosedChapterOf(course.val, exercise.id)
+    : undefined
+  const refusal = stored.ok ? submitRefusalOf(stored.val.exercise, new Date()) : undefined
+  const placeHolder = closedChapter
+    ? `Its chapter "${closedChapter.name}" has not opened yet: it can't be submitted, but its tests run here`
+    : isUnlisted
+      ? "Removed from the course: it can no longer be submitted, but its tests still run here"
+      : refusal
+        ? `Can't be submitted: ${SUBMIT_REFUSAL_LABELS[refusal]}`
+        : "What do you want to do with this exercise?"
   const picked = await dialog.selectItem(
-    {
-      title: exercise.exerciseSlug,
-      placeHolder: isRemoved
-        ? "Removed from the course: it can no longer be submitted, but its tests still run here"
-        : "What do you want to do with this exercise?",
-    },
+    { title: exercise.exerciseSlug, placeHolder },
     action("$(beaker) Run Tests", "tmc.testExercise"),
-    ...(isLoggedIn && !isRemoved
+    ...(isLoggedIn && !isUnlisted
       ? [
-          action("$(cloud-upload) Submit Solution", "tmc.submitExercise"),
+          ...(refusal ? [] : [action("$(cloud-upload) Submit Solution", "tmc.submitExercise")]),
           action("$(link) Share Exercise via Paste", "tmc.pasteExercise"),
           separator("Restore"),
           action("$(history) Download Old Submission…", "tmc.downloadOldSubmission"),

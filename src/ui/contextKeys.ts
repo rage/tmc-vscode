@@ -1,5 +1,6 @@
 import * as vscode from "vscode"
 
+import { submitRefusalOf } from "../../shared/lib"
 import type WorkspaceManager from "../api/workspaceManager"
 import type { UserData } from "../config/userdata"
 
@@ -67,7 +68,8 @@ export function trackHasDownloadedExercises(
 
 /**
  * Keeps `test-my-code:ActiveExerciseRemoved` true exactly while the active editor's exercise is
- * on disk but no longer in its course, which hides the actions that need the backend.
+ * on disk but not among its course's exercises: removed, or hidden until its chapter opens. That
+ * hides the actions that need the backend.
  */
 export function trackActiveExerciseRemoved(
   workspaceManager: Pick<WorkspaceManager, "activeExercise" | "onDidChangeExercises">,
@@ -82,6 +84,31 @@ export function trackActiveExerciseRemoved(
         userData.getExercise(exercise.id).err &&
         userData.getCourse(exercise.courseId).ok
       )
+    },
+    [
+      vscode.window.onDidChangeActiveTextEditor,
+      workspaceManager.onDidChangeExercises,
+      userData.onDidChangeCourses,
+    ],
+  )
+}
+
+/**
+ * Keeps `test-my-code:ActiveExerciseSubmitRefused` true exactly while the backend would refuse a
+ * submission of the active editor's exercise (see `submitRefusalOf`), which hides Submit. Judged
+ * when the editor, the exercises or the courses change, so a deadline passing in between shows
+ * only then; the submit action checks again.
+ */
+export function trackActiveExerciseSubmitRefused(
+  workspaceManager: Pick<WorkspaceManager, "activeExercise" | "onDidChangeExercises">,
+  userData: Pick<UserData, "getExercise" | "onDidChangeCourses">,
+): vscode.Disposable {
+  return trackContextKey(
+    "test-my-code:ActiveExerciseSubmitRefused",
+    () => {
+      const exercise = workspaceManager.activeExercise
+      const stored = exercise && userData.getExercise(exercise.id)
+      return stored?.ok === true && submitRefusalOf(stored.val.exercise, new Date()) !== undefined
     },
     [
       vscode.window.onDidChangeActiveTextEditor,

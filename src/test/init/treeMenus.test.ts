@@ -131,4 +131,13 @@ suite("the Courses view's context menu", function () {
       ]),
     )
   })
+
+  test("leaves Submit out of an exercise whose submission the backend would refuse", function () {
+    const menu = menuFor("exercise.opened.passed.submitRefused", { isLoggedIn: true })
+    expect(menu).not.toContain("tmc.submitExercise")
+    expect(menu).toEqual(expect.arrayContaining(["tmc.testExercise", "tmc.pasteExercise"]))
+    expect(menuFor("exercise.opened.updateable", { isLoggedIn: true })).toContain(
+      "tmc.submitExercise",
+    )
+  })
 })

@@ -59,11 +59,14 @@ interface FakeTestController {
 function course(options: {
   examMode?: boolean | undefined
   disabled?: boolean | undefined
+  deadline?: string | undefined
   slugs: string[]
 }) {
   return tmcLocalCourse({
     name: COURSE_SLUG,
-    exercises: options.slugs.map((name, index) => tmcCourseExercise({ id: index + 1, name })),
+    exercises: options.slugs.map((name, index) =>
+      tmcCourseExercise({ id: index + 1, name, deadline: options.deadline ?? null }),
+    ),
     availablePoints: 1,
     perhapsExamMode: options.examMode ?? false,
     disabled: options.disabled ?? false,
@@ -117,6 +120,7 @@ function setup(
     checkstyle?: StyleValidationResult | Error
     examMode?: boolean
     disabled?: boolean
+    deadline?: string
     loggedIn?: boolean
     slugs?: string[]
     closedSlugs?: string[]
@@ -124,7 +128,12 @@ function setup(
   } = {},
 ): Setup {
   const slugs = options.slugs ?? ["part01-01_hello"]
-  const storedCourse = course({ examMode: options.examMode, disabled: options.disabled, slugs })
+  const storedCourse = course({
+    examMode: options.examMode,
+    disabled: options.disabled,
+    deadline: options.deadline,
+    slugs,
+  })
   const exercises: WorkspaceExercise[] = [...slugs, ...(options.closedSlugs ?? [])].map(
     (slug, index) => ({
       id: idOfTmcExercise(index + 1),
@@ -271,6 +280,16 @@ suite("ExerciseTestController", function () {
     onSubmit()
     expect(executeCommand).toHaveBeenCalledWith("tmc.submitExercise", exercise.uri)
     executeCommand.mockRestore()
+  })
+
+  test("a passing run past the deadline says why it cannot be submitted instead of offering Submit", async function () {
+    const s = setup({ deadline: "2000-01-01T00:00:00Z" })
+
+    await s.controller.runExercise(exerciseAt(s))
+
+    expect(s.actionContext.dialog.notification).toHaveBeenCalledExactlyOnceWith(
+      "All tests of part01-01_hello passed. The deadline of part01-01_hello has passed, so it can no longer be submitted.",
+    )
   })
 
   test("a failing test is reported at its stack frame, and Submit is not offered", async function () {

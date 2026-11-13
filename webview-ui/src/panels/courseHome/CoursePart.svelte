@@ -67,6 +67,9 @@
     if (exercise.status === "expired") {
       return { name: "lock", tone: "muted", label: "Expired" }
     }
+    if (exercise.submitRefusal) {
+      return { name: "lock", tone: "muted", label: exercise.submitRefusal.sentence }
+    }
     return { name: "circle-large-outline", tone: "muted", label: "Not passed" }
   }
 
@@ -81,9 +84,18 @@
     return (
       exercise.deadline !== undefined &&
       !exercise.passed &&
-      !exercise.isOutOfTries &&
+      !exercise.submitRefusal &&
       Date.parse(exercise.deadline.at) > Date.now()
     )
+  }
+
+  /** Why an unpassed exercise cannot be submitted, unless its state already says so. */
+  function shownRefusal(exercise: CourseHomeExercise) {
+    return exercise.passed || exercise.status === "expired" ? undefined : exercise.submitRefusal
+  }
+
+  function triesLeftText(triesLeft: number): string {
+    return `${triesLeft} ${triesLeft === 1 ? "try" : "tries"} left`
   }
 
   function menuActions(exercise: CourseHomeExercise) {
@@ -120,12 +132,23 @@
       </button>
     </h2>
     <span class="muted part-progress">{passedCount}/{part.exercises.length} passed</span>
+    {#if part.lockedReason}
+      <span class="muted part-locked">
+        <vscode-icon name="lock" aria-hidden="true"></vscode-icon>
+        {part.lockedReason}
+      </span>
+    {/if}
   </div>
   {#if isExpanded}
     <ul class="rows" id="{headingId}-rows">
       {#each part.exercises as exercise (ExerciseIdentifier.key(exercise.id))}
         {@const icon = statusIcon(exercise)}
         {@const actions = menuActions(exercise)}
+        {@const refusal = shownRefusal(exercise)}
+        {@const tries =
+          !refusal && !exercise.passed && exercise.triesLeft !== undefined
+            ? triesLeftText(exercise.triesLeft)
+            : undefined}
         <li class="row" class:is-passive={!isOnDisk(exercise)}>
           <span class="icon" title={icon.label}>
             <vscode-icon
@@ -148,7 +171,9 @@
           </span>
           <span class="state muted">{stateLabel(exercise)}</span>
           <span class="deadline muted">
-            {#if exercise.deadline && isDue(exercise)}
+            {#if refusal}
+              <span title={refusal.sentence}>{refusal.label}</span>
+            {:else if exercise.deadline && isDue(exercise)}
               <time
                 datetime={exercise.deadline.at}
                 title="{exercise.isSoftDeadline ? 'Soft deadline' : 'Deadline'}: {exercise.deadline
@@ -157,6 +182,9 @@
                 {exercise.isSoftDeadline ? "soft deadline" : "due"}
                 {exercise.deadline.relative}
               </time>
+            {/if}
+            {#if tries}
+              <span>{exercise.deadline && isDue(exercise) ? `· ${tries}` : tries}</span>
             {/if}
           </span>
           <span
@@ -225,6 +253,11 @@
   .part-progress {
     flex: none;
     font-variant-numeric: tabular-nums;
+  }
+  .part-locked {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tmc-space-1);
   }
   .rows {
     list-style: none;

@@ -1,4 +1,5 @@
-import type { ExerciseStatus } from "../../../shared/lib"
+import type { ChapterLockingStatus } from "../../../shared/langsSchema"
+import type { ExerciseStatus, SubmitRefusal } from "../../../shared/lib"
 import {
   CourseIdentifier,
   ExerciseIdentifier,
@@ -6,6 +7,7 @@ import {
   LocalCourseData,
   LocalCourseExercise,
   match,
+  submitRefusalOf,
 } from "../../../shared/lib"
 import { ExerciseStatus as WorkspaceStatus } from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
@@ -21,6 +23,11 @@ export interface ExerciseView {
   passed: boolean
   /** Below full points with the try limit used up, so the score is final. Only mooc has a limit. */
   isOutOfTries: boolean
+  /** Only mooc has a limit; `undefined` means unlimited. */
+  maxTries: number | undefined
+  triesLeft: number | undefined
+  /** Why the backend would refuse a submission now; `undefined` for a removed exercise. */
+  submitRefusal: SubmitRefusal | undefined
   awardedPoints: number
   availablePoints: number
   softDeadline: Date | null
@@ -46,6 +53,10 @@ export interface PartView {
   isDefaultOpen: boolean
   /** Holds the exercises whose slug names no part, under the course's title. */
   isUngrouped: boolean
+  /** A mooc chapter's number; absent for any other part. */
+  number?: number
+  /** A mooc chapter's place in the course's chapter locking; `undefined` without locking. */
+  lockingStatus: ChapterLockingStatus | undefined
 }
 
 /** What the host knows about a course's exercises beyond its stored data and the disk. */
@@ -67,6 +78,7 @@ const REMOVED_PART: PartPlace = {
   key: ":removed",
   name: "Removed from the course",
   isUngrouped: false,
+  lockingStatus: undefined,
 }
 
 /**
@@ -76,6 +88,7 @@ const REMOVED_PART: PartPlace = {
  * chapter order and keeps the order its material presents the exercises in; exercises outside
  * any chapter come last, under a part named after the course. Exercises on disk that the
  * backend no longer has, or that the course no longer lists, come after everything else.
+ * Exercises in a chapter that has not opened yet are left out, on disk or not.
  */
 export function buildCourseView(course: LocalCourseData, state: CourseViewState): PartView[] {
   const courseTitle = LocalCourseData.getCourseTitle(course)
@@ -84,7 +97,9 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
   )
   const updateableKeys = new Set(state.updateable.map((id) => ExerciseIdentifier.key(id)))
   const onDiskById = new Map(
-    state.onDisk.map((exercise) => [ExerciseIdentifier.key(exercise.id), exercise]),
+    state.onDisk
+      .filter((exercise) => !LocalCourseData.getClosedChapterOf(course, exercise.id))
+      .map((exercise) => [ExerciseIdentifier.key(exercise.id), exercise]),
   )
 
   const parts = new Map<string, PartPlace & { exercises: ExerciseView[] }>()
@@ -114,6 +129,9 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
           ),
       passed: ex.data.passed,
       isOutOfTries: ex.kind === "mooc" && ex.data.outOfTries === true,
+      maxTries: ex.kind === "mooc" ? ex.data.maxTries : undefined,
+      triesLeft: ex.kind === "mooc" ? ex.data.triesLeft : undefined,
+      submitRefusal: isRemoved ? undefined : submitRefusalOf(ex, state.now),
       awardedPoints: ex.data.awardedPoints,
       availablePoints: ex.data.availablePoints,
       softDeadline,
@@ -144,7 +162,9 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       : exercises,
     nextDeadline: findNextDateAfter(
       state.now,
-      exercises.filter((ex) => !ex.passed && !ex.isOutOfTries).map((ex) => shownDeadline(ex)),
+      exercises
+        .filter((ex) => !ex.passed && ex.submitRefusal === undefined)
+        .map((ex) => shownDeadline(ex)),
     ),
   })).toSorted((a, b) => compareParts(a, b, isAnyNumbered))
 
@@ -156,7 +176,7 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       : sorted
 
   const openPartKey = pickOpenPart(sorted)
-  return withRemoved.map(({ number: _number, ...part }) => ({
+  return withRemoved.map((part) => ({
     ...part,
     isDefaultOpen: withRemoved.length <= MAX_PARTS_ALL_OPEN || part.key === openPartKey,
   }))
@@ -171,6 +191,9 @@ function removedFromCourse(onDisk: WorkspaceExercise): ExerciseView {
     status: "removed",
     passed: false,
     isOutOfTries: false,
+    maxTries: undefined,
+    triesLeft: undefined,
+    submitRefusal: undefined,
     awardedPoints: 0,
     availablePoints: 0,
     softDeadline: null,
@@ -189,6 +212,7 @@ interface PartPlace {
   /** A mooc chapter's number, which orders the chapters. */
   number?: number
   isUngrouped: boolean
+  lockingStatus: ChapterLockingStatus | undefined
 }
 
 /**
@@ -268,7 +292,7 @@ function placeExercise(
   courseTitle: string,
 ): { part: PartPlace; name: string } {
   const ungrouped = {
-    part: { key: ":ungrouped", name: courseTitle, isUngrouped: true },
+    part: { key: ":ungrouped", name: courseTitle, isUngrouped: true, lockingStatus: undefined },
     name: slug,
   }
   return match(
@@ -276,7 +300,10 @@ function placeExercise(
     () => {
       const [, partName, name] = slug.match(/^(\w+)-(.+)$/) ?? []
       return partName && name
-        ? { part: { key: partName, name: partName, isUngrouped: false }, name }
+        ? {
+            part: { key: partName, name: partName, isUngrouped: false, lockingStatus: undefined },
+            name,
+          }
         : ungrouped
     },
     ({ chapter }) =>
@@ -287,6 +314,7 @@ function placeExercise(
               name: chapter.name,
               number: chapter.number,
               isUngrouped: false,
+              lockingStatus: chapter.lockingStatus,
             },
             name: slug,
           }
@@ -311,8 +339,8 @@ function compareNames(a: string, b: string): number {
 
 /**
  * The exercise a student goes on to after `current`: the first one after it, in the order the
- * Courses view lists them, that is not passed, has tries left and is not past its hard deadline;
- * failing that, the first such one before it. `undefined` when none is left.
+ * Courses view lists them, that is left to do (see {@link isLeftToDo}); failing that, the first
+ * such one before it. `undefined` when none is left.
  */
 export function nextExerciseAfter(
   course: LocalCourseData,
@@ -329,7 +357,7 @@ export function nextExerciseAfter(
   const currentKey = ExerciseIdentifier.key(current)
   const index = ordered.findIndex((exercise) => ExerciseIdentifier.key(exercise.id) === currentKey)
   const isNext = (exercise: ExerciseView): boolean =>
-    ExerciseIdentifier.key(exercise.id) !== currentKey && isLeftToDo(exercise, now)
+    ExerciseIdentifier.key(exercise.id) !== currentKey && isLeftToDo(exercise)
   const next =
     ordered.slice(index + 1).find((exercise) => isNext(exercise)) ??
     ordered.slice(0, Math.max(index, 0)).find((exercise) => isNext(exercise))
@@ -337,16 +365,11 @@ export function nextExerciseAfter(
 }
 
 /**
- * Whether the student can still earn the exercise: still in the course, not passed, tries left,
- * hard deadline ahead.
+ * Whether the student can still earn the exercise: still in the course, not passed, and nothing
+ * stops a submission (see `submitRefusalOf`) at the view's `now`.
  */
-export function isLeftToDo(exercise: ExerciseView, now: Date): boolean {
-  return (
-    exercise.status !== "removed" &&
-    !exercise.passed &&
-    !exercise.isOutOfTries &&
-    !(exercise.hardDeadline !== null && exercise.hardDeadline <= now)
-  )
+export function isLeftToDo(exercise: ExerciseView): boolean {
+  return exercise.status !== "removed" && !exercise.passed && exercise.submitRefusal === undefined
 }
 
 /**

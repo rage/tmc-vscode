@@ -110,6 +110,7 @@ export type WebviewState = z.infer<typeof WebviewStateSchema>
  * openIssueReporter.
  */
 export const RunnableCommandSchema = z.enum([
+  "tmc.enrollOnCourse",
   "tmc.logs",
   "tmc.myCourses",
   "tmc.showAiUseProblem",
@@ -198,6 +199,10 @@ export const SubmissionViewSchema = z.object({
    * files are gone, `removed` once its course no longer lists it. Absent means on disk.
    */
   exerciseState: z.enum(["notOnDisk", "removed"]).optional(),
+  /** Why the backend would refuse another submission now, as a sentence; Submit is then not offered. */
+  submitRefusal: z.string().optional(),
+  /** The tries left on the exercise as it stands now; absent when unlimited. */
+  triesLeft: z.number().optional(),
 })
 
 export type SubmissionView = z.infer<typeof SubmissionViewSchema>

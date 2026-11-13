@@ -500,6 +500,47 @@ suite("CoursesTree", function () {
       expect(tooltipOf(item)).toContain("No tries left, so this score is final.")
     })
 
+    test("a downloaded exercise past its deadline says so, and is marked so Submit is hidden", function () {
+      workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Open)]
+      const item = onlyExercise({ deadline: "2000-01-01T00:00:00Z" })
+
+      expect(item.contextValue).toBe("exercise.opened.submitRefused")
+      expect(item.description).toBe("0/1 points · deadline passed")
+      expect(tooltipOf(item)).toContain(
+        "The deadline of part01-01_hello has passed, so it can no longer be submitted.",
+      )
+    })
+
+    test("a mooc exercise counts its tries left, and its locked chapter names the lock", function () {
+      const [course] = show(
+        moocCourse({
+          exercises: [
+            moocCourseExercise({ name: "loops", maxTries: 3, triesLeft: 2 }),
+            moocCourseExercise({
+              id: "locked-one",
+              name: "recursion",
+              chapter: { name: "Recursion", number: 2, lockingStatus: "NotUnlockedYet" },
+            }),
+          ],
+        }),
+      )
+      const loops = exercisesOf(course).find((item) => item.label === "loops")
+      const recursion = exercisesOf(course).find((item) => item.label === "recursion")
+
+      expect(loops?.description).toBe("not downloaded · 0/1 points · 2 tries left")
+      expect(recursion?.description).toBe("not downloaded · 0/1 points · chapter not unlocked yet")
+      expect(tooltipOf(recursion!)).toContain(
+        'recursion can be submitted once you have completed the chapters before the chapter "Recursion".',
+      )
+      const part = tree
+        .getChildren(course)
+        .find(
+          (child): child is PartTreeItem =>
+            child instanceof PartTreeItem && child.label === "Recursion",
+        )
+      expect(part?.description).toContain("locked")
+    })
+
     test("downloading spins, and a failed download says so", function () {
       const exerciseId = makeTmcKind({ tmcExerciseId: 1 })
       const claim = exerciseOperations.claim([exerciseId], "downloading").unwrap()

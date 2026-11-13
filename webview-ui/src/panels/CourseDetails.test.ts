@@ -166,6 +166,41 @@ suite("the course home", () => {
     expect(screen.getByText("1/2 passed")).toBeInTheDocument()
   })
 
+  test("counts tries left, says why an exercise cannot be submitted, and shows a chapter's lock", async () => {
+    await renderHome(
+      courseHomeView({
+        isWorkspaceOpen: true,
+        parts: [
+          {
+            key: "chapter:2",
+            name: "Loops",
+            isDefaultOpen: true,
+            lockedReason: "You have completed and locked this chapter.",
+            exercises: [
+              courseHomeExercise(1, "while", { status: "opened", triesLeft: 2 }),
+              courseHomeExercise(2, "for", {
+                status: "opened",
+                submitRefusal: {
+                  label: "deadline passed",
+                  sentence: "The deadline of for has passed.",
+                },
+              }),
+            ],
+          },
+        ],
+      }),
+    )
+
+    const [whileRow, forRow] = screen.getAllByRole("listitem")
+    expect(whileRow).toHaveTextContent(/while.*2 tries left/)
+    expect(forRow).toHaveTextContent(/for.*deadline passed/)
+    expect(within(forRow as HTMLElement).getByText("deadline passed")).toHaveAttribute(
+      "title",
+      "The deadline of for has passed.",
+    )
+    expect(screen.getByText(/You have completed and locked this chapter\./)).toBeInTheDocument()
+  })
+
   test("calls an exercise on disk Downloaded until the course workspace is open", async () => {
     await renderHome(
       courseHomeView({

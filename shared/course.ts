@@ -2,7 +2,7 @@ import { z } from "zod"
 
 import type { CourseIdentifier, Enum, ExerciseIdentifier } from "./enum"
 import { makeMoocKind, makeTmcKind, match, unwrap } from "./enum"
-import { CourseAiPolicy } from "./generated/langs"
+import { ChapterLockingStatus, CourseAiPolicy } from "./generated/langs"
 
 // The live course schemas. Storage v3 persists exactly these (see `data_v3.ts`), so a change
 // here is a storage format change.
@@ -46,6 +46,8 @@ const MoocExerciseChapterSchema = z.object({
   name: z.string(),
   /** The chapter's position in the course, from 1. */
   number: z.number(),
+  /** The student's place in the course's chapter locking; absent when the course has none. */
+  lockingStatus: ChapterLockingStatus.optional(),
 })
 
 export const SharedMoocCourseExerciseSchema = z.object({
@@ -58,6 +60,10 @@ export const SharedMoocCourseExerciseSchema = z.object({
   passed: z.boolean(),
   /** Below full points with the try limit used up, so the score is final; absent means no. */
   outOfTries: z.boolean().optional(),
+  /** The submissions the exercise accepts; absent means unlimited. */
+  maxTries: z.number().optional(),
+  /** How many of `maxTries` are left; absent means unlimited. */
+  triesLeft: z.number().optional(),
   /** The chapter the course material puts the exercise in; absent outside any chapter. */
   chapter: MoocExerciseChapterSchema.optional(),
   /** The course material page the exercise is on; absent when the backend sent none. */
@@ -65,6 +71,24 @@ export const SharedMoocCourseExerciseSchema = z.object({
 })
 
 export type SharedMoocCourseExercise = z.infer<typeof SharedMoocCourseExerciseSchema>
+
+/**
+ * A chapter that has not opened yet. Its exercises are hidden until it opens, but they are
+ * neither removed nor new: their files stay on disk and their points count.
+ */
+const MoocClosedChapterSchema = z.object({
+  name: z.string(),
+  number: z.number(),
+  /** ISO timestamp. */
+  opensAt: z.string(),
+  /**
+   * As last stored while the chapter was open, with the points the backend reports now. One
+   * never seen open has an empty `name`.
+   */
+  exercises: z.array(SharedMoocCourseExerciseSchema),
+})
+
+export type MoocClosedChapter = z.infer<typeof MoocClosedChapterSchema>
 
 export const SharedMoocCourseDataSchema = z.object({
   /** The courses.mooc.fi course id, which is the course's only client-side key. */
@@ -85,6 +109,8 @@ export const SharedMoocCourseDataSchema = z.object({
   notifyAfter: z.number(),
   /** courses.mooc.fi last refused the student as not enrolled on the course; absent means no. */
   notEnrolled: z.boolean().optional(),
+  /** Absent means none. */
+  closedChapters: z.array(MoocClosedChapterSchema).optional(),
 })
 
 export type SharedMoocCourseData = z.infer<typeof SharedMoocCourseDataSchema>
@@ -108,6 +134,82 @@ export function isSoftDeadlineBinding({
 /** What missing a binding soft deadline costs, as one sentence for the student. */
 export const SOFT_DEADLINE_PENALTY =
   "An exercise submitted after its soft deadline still counts, but awards only 75% of its points."
+
+/**
+ * Why the backend would refuse a submission of an exercise, as far as its stored data tells:
+ * its chapter is locked (`chapterNotUnlockedYet`, `chapterCompletedAndLocked`), its hard
+ * deadline has passed, or its tries are used up. Checked in the backend's own order.
+ */
+export type SubmitRefusal =
+  | "chapterNotUnlockedYet"
+  | "chapterCompletedAndLocked"
+  | "deadlinePassed"
+  | "outOfTries"
+
+/** Why the backend would refuse a submission of `exercise` at `now`; `undefined` if it would not. */
+export function submitRefusalOf(
+  exercise: LocalCourseExercise,
+  now: Date,
+): SubmitRefusal | undefined {
+  if (exercise.kind === "mooc") {
+    switch (exercise.data.chapter?.lockingStatus) {
+      case "NotUnlockedYet":
+        return "chapterNotUnlockedYet"
+      case "CompletedAndLocked":
+        return "chapterCompletedAndLocked"
+    }
+  }
+  const { deadline } = exercise.data
+  if (deadline !== null && Date.parse(deadline) <= now.getTime()) {
+    return "deadlinePassed"
+  }
+  if (exercise.kind === "mooc" && (exercise.data.outOfTries || exercise.data.triesLeft === 0)) {
+    return "outOfTries"
+  }
+  return undefined
+}
+
+/** A few words for a row that cannot be submitted, e.g. "deadline passed". */
+export const SUBMIT_REFUSAL_LABELS: Record<SubmitRefusal, string> = {
+  chapterNotUnlockedYet: "chapter not unlocked yet",
+  chapterCompletedAndLocked: "chapter locked",
+  deadlinePassed: "deadline passed",
+  outOfTries: "no tries left",
+}
+
+/**
+ * Why `exerciseName` cannot be submitted, as a sentence for the student.
+ *
+ * @param chapterName The exercise's chapter, which the chapter refusals name when known.
+ */
+export function submitRefusalSentence(
+  refusal: SubmitRefusal,
+  exerciseName: string,
+  chapterName?: string,
+): string {
+  const chapter = chapterName === undefined ? "its chapter" : `the chapter "${chapterName}"`
+  switch (refusal) {
+    case "chapterNotUnlockedYet":
+      return `${exerciseName} can be submitted once you have completed the chapters before ${chapter}.`
+    case "chapterCompletedAndLocked":
+      return `You have completed and locked ${chapter}, so ${exerciseName} can no longer be submitted.`
+    case "deadlinePassed":
+      return `The deadline of ${exerciseName} has passed, so it can no longer be submitted.`
+    case "outOfTries":
+      return `You have no tries left on ${exerciseName}, so it can no longer be submitted.`
+  }
+}
+
+/** How many tries are left, e.g. "1 try left"; `undefined` when tries are unlimited. */
+export function triesLeftText(triesLeft: number | undefined): string | undefined {
+  if (triesLeft === undefined) {
+    return undefined
+  }
+  if (triesLeft === 0) {
+    return "no tries left"
+  }
+  return `${triesLeft} ${triesLeft === 1 ? "try" : "tries"} left`
+}
 
 export namespace LocalCourseExercise {
   export function getSlug(lce: LocalCourseExercise): string {
@@ -184,6 +286,23 @@ export namespace LocalCourseData {
       lcd,
       (tmc) => tmc.newExercises.map((neid) => makeTmcKind({ tmcExerciseId: neid })),
       (mooc) => mooc.newExercises.map((neid) => makeMoocKind({ moocExerciseId: neid })),
+    )
+  }
+
+  /**
+   * The not yet opened chapter holding exercise `exerciseId`, if the course has one. Such an
+   * exercise is not among {@link getExercises}.
+   */
+  export function getClosedChapterOf(
+    lcd: LocalCourseData,
+    exerciseId: ExerciseIdentifier,
+  ): MoocClosedChapter | undefined {
+    if (lcd.kind !== "mooc" || exerciseId.kind !== "mooc") {
+      return undefined
+    }
+    const id = exerciseId.data.moocExerciseId
+    return lcd.data.closedChapters?.find((chapter) =>
+      chapter.exercises.some((exercise) => exercise.id === id),
     )
   }
 

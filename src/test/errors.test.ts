@@ -1,12 +1,17 @@
 import {
   AuthorizationError,
+  ChapterLockedError,
+  ChapterNotOpenError,
   ConnectionError,
+  DeadlinePassedError,
   ExerciseNotFoundError,
   InitializationError,
   InsufficientScopeError,
   InvalidTokenError,
+  isSubmitRefusal,
   NotEnrolledError,
   NotFoundError,
+  OutOfTriesError,
   ObsoleteClientError,
   presentationFor,
   RuntimeError,
@@ -127,6 +132,30 @@ suite("presentationFor", function () {
     expect(presentation.actions).toEqual([
       { label: "Show Help", command: "tmc.viewInitializationErrorHelp" },
     ])
+  })
+
+  test("a dropped enrollment offers the course page, and says old submissions stay", function () {
+    const presentation = presentationFor(new NotEnrolledError("422 from https://…"))
+    expect(presentation.message).toContain("You're no longer enrolled on this course")
+    expect(presentation.message).toContain("earlier submissions can still be downloaded")
+    expect(presentation.message).not.toContain("422")
+    expect(presentation.actions).toEqual([
+      { label: "Open Course Page", command: "tmc.enrollOnCourse" },
+    ])
+  })
+
+  test.each([
+    new OutOfTriesError("You have no tries left on loops."),
+    new DeadlinePassedError("The deadline of loops has passed."),
+    new ChapterNotOpenError("Its chapter has not opened yet."),
+    new ChapterLockedError("Its chapter is locked."),
+  ])("a refusal by the course's rules stands alone: %s", function (error) {
+    expect(presentationFor(error)).toEqual({
+      message: error.message,
+      actions: [],
+      isHeldBack: true,
+    })
+    expect(isSubmitRefusal(error)).toBe(true)
   })
 
   test("a dropped enrollment names the backend to re-enroll on when the error does", function () {

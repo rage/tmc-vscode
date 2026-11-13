@@ -37,6 +37,37 @@ export class OutOfTriesError extends BaseError {
   public override readonly name = "Out Of Tries Error"
 }
 
+/** The exercise's hard deadline, or its chapter's, has passed: no further submission counts. */
+export class DeadlinePassedError extends BaseError {
+  public override readonly name = "Deadline Passed Error"
+}
+
+/**
+ * The exercise's chapter has not opened yet. Like {@link ExerciseRemovedError}, raised also
+ * before asking the backend, for an exercise on disk whose chapter has closed since.
+ */
+export class ChapterNotOpenError extends BaseError {
+  public override readonly name = "Chapter Not Open Error"
+}
+
+/**
+ * Chapter locking refuses submissions to the exercise's chapter: it is not unlocked yet, or the
+ * student has completed and locked it.
+ */
+export class ChapterLockedError extends BaseError {
+  public override readonly name = "Chapter Locked Error"
+}
+
+/** Whether `error` is the backend's standing refusal of the exercise, which no retry changes. */
+export function isSubmitRefusal(error: Error): boolean {
+  return (
+    error instanceof OutOfTriesError ||
+    error instanceof DeadlinePassedError ||
+    error instanceof ChapterNotOpenError ||
+    error instanceof ChapterLockedError
+  )
+}
+
 /** The user denied a courses.mooc.fi device login in the browser. */
 export class DeviceLoginDeniedError extends BaseError {
   public override readonly name = "Device Login Denied Error"
@@ -85,6 +116,9 @@ export class InvalidTokenError extends BaseError {
 export class NotEnrolledError extends BaseError {
   public override readonly name = "Not Enrolled Error"
 }
+
+/** Runs `tmc.enrollOnCourse`, which opens the page of a course the student is not enrolled on. */
+export const ENROLL_ON_COURSE_COMMAND = "tmc.enrollOnCourse"
 
 /** courses.mooc.fi refused a paste because the exercise was pasted too often recently. */
 export class RateLimitedError extends BaseError {
@@ -270,7 +304,7 @@ export function presentationFor(error: Error): ErrorPresentation {
         : [],
     }
   }
-  if (error instanceof ExerciseRemovedError) {
+  if (error instanceof ExerciseRemovedError || isSubmitRefusal(error)) {
     return { message: reported, actions: [], isHeldBack: true }
   }
   if (error instanceof WorkspaceUntrustedError) {
@@ -306,9 +340,10 @@ export function presentationFor(error: Error): ErrorPresentation {
     const site = backend === undefined ? "" : ` on ${backendName(backend)}`
     return {
       message:
-        `${reported} You are no longer enrolled on this course${site}, so its exercises` +
-        ` can't be fetched. Enroll on the course again${site}, then reload it here.`,
-      actions: [],
+        `You're no longer enrolled on this course${site}, so its exercises can't be fetched or` +
+        ` submitted. Your earlier submissions can still be downloaded. Enroll on the course` +
+        ` again${site}, then refresh it here.`,
+      actions: [{ label: "Open Course Page", command: ENROLL_ON_COURSE_COMMAND }],
     }
   }
   if (error instanceof UploadExpiredError) {

@@ -39,6 +39,10 @@ export const CourseHomeExerciseSchema = z.object({
   status: ExerciseStatusSchema,
   passed: z.boolean(),
   isOutOfTries: z.boolean(),
+  /** Absent when tries are unlimited. */
+  triesLeft: z.number().optional(),
+  /** Why the backend would refuse a submission now: a few words and a sentence. */
+  submitRefusal: z.object({ label: z.string(), sentence: z.string() }).optional(),
   awardedPoints: z.number(),
   availablePoints: z.number(),
   /** The deadline the exercise is judged by; a binding soft one sets `isSoftDeadline`. */
@@ -56,6 +60,8 @@ export const CourseHomePartSchema = z.object({
   key: z.string(),
   name: z.string(),
   isDefaultOpen: z.boolean(),
+  /** Why chapter locking refuses submissions to the part's exercises, as a sentence. */
+  lockedReason: z.string().optional(),
   exercises: z.array(CourseHomeExerciseSchema),
 })
 

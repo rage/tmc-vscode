@@ -24,6 +24,8 @@ import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
 import {
   BottleneckError,
+  ChapterLockedError,
+  DeadlinePassedError,
   ExerciseNotFoundError,
   InsufficientScopeError,
   NotEnrolledError,
@@ -548,6 +550,40 @@ suite("submitExercise action, mooc", () => {
       `You have no tries left on ${EXERCISE_SLUG}, so its 2/3 points are final.`,
     )
     expect(submit).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    [
+      "past its deadline",
+      { deadline: "2000-01-01T00:00:00Z" },
+      DeadlinePassedError,
+      `The deadline of ${EXERCISE_SLUG} has passed, so it can no longer be submitted.`,
+    ],
+    [
+      "in a chapter not unlocked yet",
+      { chapter: { name: "Loops", number: 2, lockingStatus: "NotUnlockedYet" as const } },
+      ChapterLockedError,
+      `${EXERCISE_SLUG} can be submitted once you have completed the chapters before the chapter "Loops".`,
+    ],
+  ])("refuses up front an exercise %s", async (_case, data, errorClass, message) => {
+    const refused = { ...moocCourse, exercises: [{ ...moocCourse.exercises[0]!, ...data }] }
+    const submit = vi.fn()
+    const { actionContext } = contextFor(makeMoocKind(refused), { submitMoocExercise: submit })
+
+    const result = await submitExercise(actionContext, moocExercise)
+
+    expect(result.val).toBeInstanceOf(errorClass)
+    expect((result.val as Error).message).toBe(message)
+    expect(submit).not.toHaveBeenCalled()
+  })
+
+  test("a refusal the stored data did not foresee shows in the panel and refreshes the course", async () => {
+    const { actionContext } = moocContextWithErr(new DeadlinePassedError("deadline passed"))
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect(lastView()?.error?.message).toBe("Deadline passed.")
+    expect(finishedCourses).toEqual([idOfMoocCourse(moocCourse.id)])
   })
 
   test("submits nothing in Restricted Mode", async () => {

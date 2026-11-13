@@ -8,7 +8,11 @@ import type Dialog from "../api/dialog"
 import { requestWorkspaceTrust } from "../api/workspaceTrustPrompt"
 import * as commands from "../commands"
 import { EXTENSION_ID } from "../config/constants"
-import { SHOW_AI_USE_PROBLEM_COMMAND, TRUST_COURSE_WORKSPACE_COMMAND } from "../errors"
+import {
+  ENROLL_ON_COURSE_COMMAND,
+  SHOW_AI_USE_PROBLEM_COMMAND,
+  TRUST_COURSE_WORKSPACE_COMMAND,
+} from "../errors"
 import { initializationErrorHelpPanel, nextPanelId } from "../panels/routes"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseTestController } from "../testing/exerciseTestController"
@@ -203,6 +207,10 @@ export function registerCommands(
 
   register("tmc.closeExercises", async (row?: CoursesTreeItem, rows?: CoursesTreeItem[]) =>
     treeCommands.closeExercises(readyContext, treeCommands.targetRows(row, rows)),
+  )
+
+  register(ENROLL_ON_COURSE_COMMAND, async (target?: CourseTarget) =>
+    commands.enrollOnCourse(readyContext, courseIdOf(target)),
   )
 
   register("tmc.openExerciseMaterial", async (row?: CoursesTreeItem) =>

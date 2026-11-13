@@ -9,13 +9,27 @@ import type {
   ExerciseSubmissionPanel,
   FeedbackAnswer,
   SubmissionView,
+  SubmitRefusal,
 } from "../../shared/lib"
-import { backendName, LocalCourseData, LocalCourseExercise, match, unwrap } from "../../shared/lib"
+import {
+  backendName,
+  LocalCourseData,
+  LocalCourseExercise,
+  match,
+  submitRefusalOf,
+  submitRefusalSentence,
+  unwrap,
+} from "../../shared/lib"
 import type Langs from "../api/langs"
 import type { OperationWarning, Warned } from "../api/withOperation"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import type { UserData } from "../config/userdata"
-import { OutOfTriesError } from "../errors"
+import {
+  ChapterLockedError,
+  DeadlinePassedError,
+  isSubmitRefusal,
+  OutOfTriesError,
+} from "../errors"
 import { nextPanelId } from "../panels/routes"
 import type { InProgressPhase, SubmissionProgress } from "../panels/submissionView"
 import {
@@ -324,8 +338,9 @@ function withNextExercise(
  * {@link onDidFinishSubmission} once the outcome is shown. A failed submission is `Ok`, as the
  * panel shows why. Errs for a failure before the panel opens: another operation in flight on
  * the exercise is a `BottleneckError`, AI assistance that may be on is an
- * `AiUseRefusedError`, Restricted Mode is a `WorkspaceUntrustedError`, and an exercise the
- * backend last reported out of tries is an `OutOfTriesError`.
+ * `AiUseRefusedError`, and Restricted Mode is a `WorkspaceUntrustedError`. An exercise the
+ * stored data says the backend would refuse is the error {@link refusalError} names, and one
+ * hidden until its chapter opens a `ChapterNotOpenError`.
  */
 export async function submitExercise(
   actionContext: ReadyActionContext,
@@ -346,17 +361,9 @@ export async function submitExercise(
       new Error(`${exercise.exerciseSlug} is not a ${backendName(exercise.backend)} exercise.`),
     )
   }
-  if (courseExercise.kind === "mooc" && courseExercise.data.outOfTries) {
-    const points = pointsText(
-      courseExercise.data.awardedPoints,
-      courseExercise.data.availablePoints,
-    )
-    return Err(
-      new OutOfTriesError(
-        `You have no tries left on ${exercise.exerciseSlug}` +
-          (points ? `, so its ${points.short} points are final.` : "."),
-      ),
-    )
+  const refusal = submitRefusalOf(courseExercise, new Date())
+  if (refusal) {
+    return Err(refusalError(refusal, courseExercise))
   }
   const trusted = checkWorkspaceTrust(actionContext)
   if (trusted.err) {
@@ -411,10 +418,36 @@ export async function submitExercise(
       Logger.error("Exercise submission failed", outcome.val)
       const error = toWebviewError(outcome.val)
       showSubmissionView(submission.panel, submitFailedView(error))
+      if (isSubmitRefusal(outcome.val)) {
+        // The stored data did not foresee the refusal, so it is out of date.
+        submissionFinished.fire(courseId)
+      }
       return Ok({ warnings: [] })
     }
     return Ok(await showOutcome(actionContext, submission, outcome.val))
   })
+}
+
+/** The error a submission refused for `refusal` is, named after `exercise`. */
+function refusalError(refusal: SubmitRefusal, exercise: LocalCourseExercise): Error {
+  const { name } = exercise.data
+  const chapterName = exercise.kind === "mooc" ? exercise.data.chapter?.name : undefined
+  const sentence = submitRefusalSentence(refusal, name, chapterName)
+  switch (refusal) {
+    case "chapterNotUnlockedYet":
+    case "chapterCompletedAndLocked":
+      return new ChapterLockedError(sentence)
+    case "deadlinePassed":
+      return new DeadlinePassedError(sentence)
+    case "outOfTries": {
+      const points = pointsText(exercise.data.awardedPoints, exercise.data.availablePoints)
+      return new OutOfTriesError(
+        points
+          ? `You have no tries left on ${name}, so its ${points.short} points are final.`
+          : sentence,
+      )
+    }
+  }
 }
 
 /**

@@ -8,6 +8,9 @@ import {
   LocalCourseData,
   SESSION_EXPIRED_DETAIL,
   SOFT_DEADLINE_PENALTY,
+  SUBMIT_REFUSAL_LABELS,
+  submitRefusalSentence,
+  triesLeftText,
 } from "../../../shared/lib"
 import type { AuthState } from "../../api/authState"
 import type WorkspaceManager from "../../api/workspaceManager"
@@ -164,6 +167,8 @@ export class CourseTreeItem extends vscode.TreeItem {
  */
 export class PartTreeItem extends vscode.TreeItem {
   public readonly courseId: CourseIdentifier
+  /** The mooc chapter the part is; `undefined` for a tmc part or the ungrouped exercises. */
+  public readonly chapterName: string | undefined
   public readonly children: ExerciseTreeItem[]
   private readonly _tooltipLines: string[]
 
@@ -180,6 +185,7 @@ export class PartTreeItem extends vscode.TreeItem {
         : vscode.TreeItemCollapsibleState.Collapsed,
     )
     this.courseId = parent.courseId
+    this.chapterName = part.number === undefined ? undefined : part.name
     this.id = `${parent.id}/${part.key}`
     const passed = part.exercises.filter((ex) => ex.passed).length
     const nextDeadline =
@@ -196,6 +202,16 @@ export class PartTreeItem extends vscode.TreeItem {
         description: `next deadline ${nextDeadline}`,
         spoken: `next deadline ${nextDeadline}`,
         tooltip: `Next deadline: ${nextDeadline}`,
+      },
+      part.lockingStatus === "NotUnlockedYet" && {
+        description: "locked",
+        spoken: "locked until the chapters before it are completed",
+        tooltip: "Locked until you have completed the chapters before it.",
+      },
+      part.lockingStatus === "CompletedAndLocked" && {
+        description: "completed and locked",
+        spoken: "completed and locked",
+        tooltip: "You have completed and locked this chapter.",
       },
     ])
     this.iconPath = new vscode.ThemeIcon(
@@ -231,8 +247,8 @@ const STATUS_LABELS: Record<ExerciseView["status"], string> = {
 
 /**
  * One exercise. `contextValue` is `exercise.<status>` (see `ExerciseStatus`), then for a removed
- * exercise still on disk `.opened` or `.closed`, then `.passed`, `.updateable` and `.hasMaterial`
- * when they apply.
+ * exercise still on disk `.opened` or `.closed`, then `.passed`, `.updateable`, `.hasMaterial`
+ * and, on disk, `.submitRefused` (see `submitRefusalOf`) when they apply.
  */
 export class ExerciseTreeItem extends vscode.TreeItem {
   public readonly exerciseId: ExerciseIdentifier
@@ -265,12 +281,20 @@ export class ExerciseTreeItem extends vscode.TreeItem {
       ...(exercise.passed ? ["passed"] : []),
       ...(exercise.isUpdateable ? ["updateable"] : []),
       ...(exercise.materialUrl ? ["hasMaterial"] : []),
+      ...(exercise.onDisk && exercise.submitRefusal ? ["submitRefused"] : []),
     ].join(".")
     this.command = { command: "tmc.openExercises", title: "Open", arguments: [this] }
 
     const { now, locale } = context
+    const partName = parent instanceof PartTreeItem ? parent.chapterName : undefined
     const deadline = shownDeadline(exercise)
-    const isDue = !exercise.passed && !exercise.isOutOfTries && deadline !== null && deadline > now
+    const isDue = !exercise.passed && !exercise.submitRefusal && deadline !== null && deadline > now
+    const refusal =
+      exercise.submitRefusal && !exercise.passed && exercise.status !== "expired"
+        ? exercise.submitRefusal
+        : undefined
+    const tries =
+      !exercise.submitRefusal && !exercise.passed ? triesLeftText(exercise.triesLeft) : undefined
     const points = pointsText(exercise.awardedPoints, exercise.availablePoints)
     const status = STATUS_LABELS[exercise.status]
     const due = isDue && `due ${formatDeadline(deadline, now, locale)}`
@@ -295,9 +319,17 @@ export class ExerciseTreeItem extends vscode.TreeItem {
         tooltip: `${points.short} points`,
       },
       exercise.isOutOfTries && {
-        description: "no tries left",
-        spoken: "no tries left",
         tooltip: "No tries left, so this score is final.",
+      },
+      refusal && {
+        description: SUBMIT_REFUSAL_LABELS[refusal],
+        spoken: SUBMIT_REFUSAL_LABELS[refusal],
+        tooltip: submitRefusalSentence(refusal, exercise.slug, partName),
+      },
+      tries && {
+        description: tries,
+        spoken: tries,
+        tooltip: `Tries left: ${exercise.triesLeft} of ${exercise.maxTries ?? exercise.triesLeft}`,
       },
       due && { description: due, spoken: due },
       exercise.softDeadline &&

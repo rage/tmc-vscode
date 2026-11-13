@@ -3,7 +3,13 @@ import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { CourseHomeView, DeadlineText } from "../../shared/lib"
-import { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../../shared/lib"
+import {
+  CourseIdentifier,
+  ExerciseIdentifier,
+  LocalCourseData,
+  SUBMIT_REFUSAL_LABELS,
+  submitRefusalSentence,
+} from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
 import { isAiAllowed } from "../api/aiRestriction"
 import { findNextDateAfter, formatDateTime, formatRelativeTime } from "../utilities"
@@ -63,7 +69,7 @@ export function buildCourseHomeView(
   const newKeys = new Set(
     LocalCourseData.getNewExercises(course).map((id) => ExerciseIdentifier.key(id)),
   )
-  const nextExercise = exercises.find((ex) => isLeftToDo(ex, now))
+  const nextExercise = exercises.find((ex) => isLeftToDo(ex))
   const openCourse = openCourseId(actionContext)
   const isWorkspaceOpen = openCourse !== undefined && CourseIdentifier.equals(openCourse, courseId)
 
@@ -108,15 +114,29 @@ export function buildCourseHomeView(
           : "Other exercises"
         : partLabel(part.name),
       isDefaultOpen: part.isDefaultOpen,
+      ...(part.lockingStatus === "NotUnlockedYet"
+        ? { lockedReason: "Locked until you have completed the chapters before it." }
+        : part.lockingStatus === "CompletedAndLocked"
+          ? { lockedReason: "You have completed and locked this chapter." }
+          : {}),
       exercises: part.exercises.map((ex) => {
         const deadline = deadlineText(shownDeadline(ex))
-        const { materialUrl } = ex
+        const { materialUrl, submitRefusal, triesLeft } = ex
         return {
           id: ex.id,
           name: ex.name,
           status: ex.status,
           passed: ex.passed,
           isOutOfTries: ex.isOutOfTries,
+          ...(triesLeft === undefined ? {} : { triesLeft }),
+          ...(submitRefusal
+            ? {
+                submitRefusal: {
+                  label: SUBMIT_REFUSAL_LABELS[submitRefusal],
+                  sentence: submitRefusalSentence(submitRefusal, ex.slug, part.name),
+                },
+              }
+            : {}),
           awardedPoints: ex.awardedPoints,
           availablePoints: ex.availablePoints,
           ...(deadline ? { deadline } : {}),

@@ -439,6 +439,35 @@ suite("UserData replaceCourse", function () {
     expect(storedTmcCourse(userData, 0).newExercises).toEqual([2])
   })
 
+  test("an exercise whose chapter opens is not new", async function () {
+    const [userData] = await makeUserData({
+      courses: [],
+      mooc_courses: [
+        moocCourse({
+          id: "instance-uuid-1",
+          exercises: [moocExercise({ id: "a" })],
+          closedChapters: [
+            {
+              name: "Recursion",
+              number: 3,
+              opensAt: "2100-01-01T00:00:00Z",
+              exercises: [moocExercise({ id: "b", name: "" })],
+            },
+          ],
+        }),
+      ],
+    })
+    await userData.replaceCourse(
+      makeMoocKind(
+        moocCourse({
+          id: "instance-uuid-1",
+          exercises: [moocExercise({ id: "a" }), moocExercise({ id: "b", name: "recursion" })],
+        }),
+      ),
+    )
+    expect(userData.getMoocCourses()[0]?.newExercises).toEqual([])
+  })
+
   test("lists an exercise once when it was already new but not yet stored", async function () {
     const [userData] = await makeUserData({
       courses: [tmcCourse({ id: 0, newExercises: [3], exercises: [tmcExercise({ id: 1 })] })],
@@ -678,6 +707,22 @@ suite("UserData setMoocExerciseStanding", function () {
       outOfTries: true,
       awardedPoints: 2,
     })
+  })
+
+  test("records the tries a grading reports, and forgets a limit the backend dropped", async function () {
+    const [userData, store] = await withPassedExercise()
+    const id = idOfMoocExercise("exercise-uuid-1")
+    await userData.setMoocExerciseStanding(
+      id,
+      { passed: false, outOfTries: false, maxTries: 3, triesLeft: 1 },
+      0,
+    )
+    expect(store.getUserData()?.mooc_courses[0]?.exercises[0]).toMatchObject({
+      maxTries: 3,
+      triesLeft: 1,
+    })
+    await userData.setMoocExerciseStanding(id, { passed: false, outOfTries: false }, 0)
+    expect(store.getUserData()?.mooc_courses[0]?.exercises[0]).not.toHaveProperty("triesLeft")
   })
 
   test("errs when the exercise is not in the catalogue", async function () {

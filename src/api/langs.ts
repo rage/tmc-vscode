@@ -53,7 +53,10 @@ import {
 import type { InitializationError } from "../errors"
 import {
   AuthorizationError,
+  ChapterLockedError,
+  ChapterNotOpenError,
   ConnectionError,
+  DeadlinePassedError,
   DeviceLoginDeniedError,
   DeviceLoginExpiredError,
   EmptyLangsResponseError,
@@ -65,6 +68,7 @@ import {
   NotEnrolledError,
   NotFoundError,
   ObsoleteClientError,
+  OutOfTriesError,
   RateLimitedError,
   RuntimeError,
   ServerError,
@@ -1432,6 +1436,42 @@ export default class Langs {
         return Err(new InsufficientScopeError(message, details))
       case "not-enrolled":
         return Err(new NotEnrolledError(message, details))
+      case "deadline-passed":
+        return Err(
+          new DeadlinePassedError(
+            "The deadline of this exercise has passed, so it can no longer be submitted.",
+            details,
+          ),
+        )
+      case "out-of-tries":
+        return Err(
+          new OutOfTriesError(
+            "You have no tries left on this exercise, so it can no longer be submitted.",
+            details,
+          ),
+        )
+      case "chapter-not-open-yet":
+        return Err(
+          new ChapterNotOpenError(
+            "This exercise's chapter has not opened yet. Try again once it opens.",
+            details,
+          ),
+        )
+      case "chapter-not-unlocked-yet":
+        return Err(
+          new ChapterLockedError(
+            "This exercise's chapter is locked until you have completed the chapters before it.",
+            details,
+          ),
+        )
+      case "chapter-completed-and-locked":
+        return Err(
+          new ChapterLockedError(
+            "You have completed and locked this exercise's chapter, so its exercises can no" +
+              " longer be submitted.",
+            details,
+          ),
+        )
       case "upload-expired":
         return Err(new UploadExpiredError(message, details))
       case "rate-limited":
