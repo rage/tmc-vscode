@@ -3,7 +3,7 @@ import type { OutputChannel } from "vscode"
 import { window } from "vscode"
 
 import { BaseError } from "../../../shared/lib"
-import { Logger, LogLevel, redactUrlQuery } from "../../utilities/logger"
+import { Logger, LogLevel, redactSecrets, redactUrlQuery } from "../../utilities/logger"
 
 const TOKEN = "super-secret-refresh-token"
 
@@ -42,6 +42,42 @@ suite("Logger redaction", function () {
     expect(redactUrlQuery("https://courses.mooc.fi/oauth_device")).toBe(
       "https://courses.mooc.fi/oauth_device",
     )
+  })
+
+  test("free-form output loses its tokens, device codes and url queries", function () {
+    const accessToken = "Qx7mZ2pL9vR4tY8wK3nB6cF1hJ5dS0aGeUoIiPlMkNjHbVgCfXdZsAqWeRtYuIo1"
+    const output = [
+      `refreshing with token ${accessToken}`,
+      "Authorization: Bearer abc.def-ghi",
+      '{"access_token":"short1","refresh-token": "short2"}',
+      "user_code=2X9D-VPMW device code 7KQM-PRZT",
+      "GET http://project-331.local/oauth_device?user_code=2X9D-VPMW failed",
+    ].join("\n")
+
+    const redacted = redactSecrets(output)
+
+    for (const secret of [
+      accessToken,
+      "abc.def-ghi",
+      "short1",
+      "short2",
+      "2X9D-VPMW",
+      "7KQM-PRZT",
+    ]) {
+      expect(redacted).not.toContain(secret)
+    }
+    expect(redacted).toContain("http://project-331.local/oauth_device?<redacted>")
+  })
+
+  test("free-form output keeps what reads like an identifier, not a credential", function () {
+    const output = [
+      "exercise 3f1a2b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b",
+      "sha256 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "at 2026-11-13 in /home/student/mooc/part-01/src/Main.java",
+      "Error occurred during initialization of VM",
+    ].join("\n")
+
+    expect(redactSecrets(output)).toBe(output)
   })
 
   test("a logged error reads as sentences, with no doubled full stop", function () {

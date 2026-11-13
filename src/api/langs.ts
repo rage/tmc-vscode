@@ -79,7 +79,7 @@ import {
   UnknownUploadError,
   UploadExpiredError,
 } from "../errors"
-import { Logger, LogLevel } from "../utilities/logger"
+import { Logger, LogLevel, redactSecrets } from "../utilities/logger"
 import { sleep } from "../utilities/utils"
 import type { FractionProgress } from "./dialog"
 
@@ -285,7 +285,7 @@ function killProcessTree(cprocess: cp.ChildProcess): void {
 
 /**
  * The tail of a CLI process's stderr, and of the stdout lines that are not its JSON, kept for
- * the error details a failure attaches.
+ * the error details a failure attaches; redacted, as those details reach the output channel.
  *
  * A long-running `run-tests` can write more stderr than the extension host should hold, so
  * older output is dropped once {@link MAX_RETAINED_STDERR_BYTES} is exceeded and `text()`
@@ -311,7 +311,7 @@ class BoundedStderr {
 
   public text(): string {
     if (this._text === undefined) {
-      const tail = this._chunks.join("")
+      const tail = redactSecrets(this._chunks.join(""))
       this._text =
         this._droppedBytes === 0
           ? tail
@@ -1644,9 +1644,6 @@ ${error.message}`
         reject(error)
       })
       cprocess.stderr.on("data", (data: string) => {
-        // per-line at debug to keep j4rs/JNI spam out of the log; the failure paths
-        // below attach the collected stderr to the error they return
-        Logger.debug("stderr", data)
         stderr.push(data)
       })
       cprocess.stdout.on("end", () => {
@@ -1760,6 +1757,13 @@ ${error.message}`
         killProcessTree(cprocess)
       }
     }
+    // Once, redacted as a whole: a chunk can end mid-token.
+    void result.finally(() => {
+      const output = stderr.text()
+      if (output !== "") {
+        Logger.debug("stderr", output)
+      }
+    })
     if (interruptOnDeactivate) {
       this._activeInterrupts.add(interrupt)
       void result.finally(() => this._activeInterrupts.delete(interrupt))

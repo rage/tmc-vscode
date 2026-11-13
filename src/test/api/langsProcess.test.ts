@@ -364,6 +364,24 @@ suite("Langs CLI process output", function () {
     )
   })
 
+  test("a credential in stdout outside the CLI's JSON is redacted from details and log", async function () {
+    const accessToken = "Qx7mZ2pL9vR4tY8wK3nB6cF1hJ5dS0aGeUoIiPlMkNjHbVgCfXdZsAqWeRtYuIo1"
+    const captured = captureLogs()
+    const langs = newLangs()
+    const pending = langs.isAuthenticated()
+    const langsProcess = lastProcess()
+    writeStdout(langsProcess, `debug: sending Authorization: Bearer ${accessToken}`)
+    langsProcess.stderr.emit("data", `refresh_token=${accessToken.slice(0, 20)}`)
+    langsProcess.stderr.emit("data", `${accessToken.slice(20)}\n`)
+    endProcess(langsProcess)
+
+    const details = ((await pending).val as EmptyLangsResponseError).details ?? ""
+    expect(details).toContain("debug: sending Authorization:")
+    expect(details).not.toContain(accessToken.slice(20))
+    expect(loggedText(captured)).not.toContain(accessToken.slice(20))
+    expect(loggedText(captured)).toContain("<redacted>")
+  })
+
   test("output the CLI contract rejects reports the schema mismatch", async function () {
     const langs = newLangs()
     const pending = langs.isAuthenticated()
