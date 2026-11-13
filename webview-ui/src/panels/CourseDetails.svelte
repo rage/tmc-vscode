@@ -250,11 +250,10 @@
         tone: "info",
         title: plural(view.newExercises.length, "new exercise"),
         detail: listNames(view.newExercises.map((ex) => ex.name)),
-        action: {
-          label: "Download",
-          disabled: !canDownload,
-          onclick: () => runCourseAction("downloadNewExercises"),
-        },
+        action:
+          canDownload && !view.isOffline
+            ? { label: "Download", onclick: () => runCourseAction("downloadNewExercises") }
+            : undefined,
         ondismiss: () => runCourseAction("dismissNewExercises"),
         dismissLabel: "Dismiss the new exercises",
       },
@@ -263,11 +262,10 @@
         tone: "info",
         title: view.updates.length === 1 ? "1 update" : `${view.updates.length} updates`,
         detail: `${listNames(view.updates.map((ex) => ex.name))}. Your own code is kept.`,
-        action: {
-          label: "Update",
-          disabled: !canDownload,
-          onclick: () => runCourseAction("updateExercises"),
-        },
+        action:
+          canDownload && !view.isOffline
+            ? { label: "Update", onclick: () => runCourseAction("updateExercises") }
+            : undefined,
       },
       view.recentlyUpdated.length > 0 && {
         key: "updated",
@@ -282,19 +280,37 @@
   })
 
   // One primary per state: download first, then open the workspace, then work in it.
-  const bar = $derived.by((): { primary?: BarAction | undefined; secondary: [] | [BarAction] } => {
-    const hasDownloads = downloadableCount > 0 || downloadingCount > 0
-    if (!view) {
-      return { secondary: [] }
-    }
-    if (!view.isWorkspaceOpen) {
-      return onDiskCount === 0 && hasDownloads
-        ? { primary: downloadAll, secondary: [] }
-        : { primary: openCourseWorkspace, secondary: hasDownloads ? [downloadAll] : [] }
-    }
-    const secondary: [] | [BarAction] = completedOpenCount > 0 ? [closeCompleted] : []
-    return { primary: hasDownloads ? downloadAll : continueWithNext, secondary }
-  })
+  const bar = $derived.by(
+    (): {
+      primary?: BarAction | undefined
+      secondary: [] | [BarAction] | [BarAction, BarAction]
+    } => {
+      if (!view) {
+        return { secondary: [] }
+      }
+      // Logged out or offline the download could only fail; the notices say why.
+      const offersDownload =
+        canDownload && !view.isOffline && (downloadableCount > 0 || downloadingCount > 0)
+      if (!view.isWorkspaceOpen) {
+        if (onDiskCount === 0) {
+          return { primary: offersDownload ? downloadAll : undefined, secondary: [] }
+        }
+        return { primary: openCourseWorkspace, secondary: offersDownload ? [downloadAll] : [] }
+      }
+      // The new-exercises notice already offers the download when that is all there is to it.
+      const isDownloadInNotice =
+        downloadingCount === 0 && view.newExercises.length >= downloadableCount
+      const download = offersDownload && !isDownloadInNotice ? downloadAll : undefined
+      const close = completedOpenCount > 0 ? closeCompleted : undefined
+      const primary = continueWithNext ?? download
+      const extra = primary === download ? undefined : download
+      if (extra && close) {
+        return { primary, secondary: [extra, close] }
+      }
+      const only = extra ?? close
+      return { primary, secondary: only ? [only] : [] }
+    },
+  )
 
   const menuActions = $derived([
     { label: "Switch Course Workspace…", onselect: () => runCourseAction("switchCourseWorkspace") },
@@ -341,9 +357,11 @@
         <p class="summary-deadline">
           <span class="muted">Next deadline</span>
           <time datetime={view.nextDeadline.at} title={view.nextDeadline.absolute}>
-            {view.nextDeadline.relative}
+            {view.nextDeadline.relative ?? view.nextDeadline.absolute}
           </time>
-          <span class="muted">· {view.nextDeadline.absolute}</span>
+          {#if view.nextDeadline.relative}
+            <span class="muted">· {view.nextDeadline.absolute}</span>
+          {/if}
         </p>
       {/if}
     </div>

@@ -33,7 +33,7 @@
     downloading: "Downloading…",
     downloadFailed: "Download failed",
     expired: "Expired",
-    removed: "Removed from course",
+    removed: "Removed",
   }
 
   function stateLabel(exercise: CourseHomeExercise): string {
@@ -180,7 +180,7 @@
                   .absolute}"
               >
                 {exercise.isSoftDeadline ? "soft deadline" : "due"}
-                {exercise.deadline.relative}
+                {exercise.deadline.brief}
               </time>
             {/if}
             {#if tries}
@@ -350,9 +350,18 @@
   .row:not(:hover, :focus-within) .row-actions :global(.action-menu) {
     opacity: 0;
   }
+  /* The state goes first: the icons and the muted names of exercises not on disk tell most of it. */
   @media (max-width: 640px) {
     .row {
-      grid-template-columns: 16px minmax(8ch, 1fr) 9em 3em 48px;
+      grid-template-columns: 16px minmax(8ch, 1fr) 10em 3em 48px;
+    }
+    .state {
+      display: none;
+    }
+  }
+  @media (max-width: 420px) {
+    .row {
+      grid-template-columns: 16px minmax(8ch, 1fr) 3em 48px;
     }
     /* Under the name, as the row has no room for a column of its own. */
     .deadline {
@@ -365,13 +374,10 @@
     .deadline > * + *::before {
       content: "· ";
     }
-  }
-  @media (max-width: 420px) {
-    .row {
-      grid-template-columns: 16px minmax(8ch, 1fr) 3em 48px;
-    }
-    .state {
-      display: none;
+    /* Names that differ only at the end must not be cut to the same prefix. */
+    .name-button {
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
   }
   @media (max-width: 300px) {

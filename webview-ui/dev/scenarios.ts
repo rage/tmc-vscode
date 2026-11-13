@@ -35,13 +35,23 @@ export interface Scenario {
   pushes?: ExtensionToWebview[]
 }
 
-function deadline(at: string, absolute: string, relative: string): DeadlineText {
-  return { at, absolute, relative }
+function deadline(
+  at: string,
+  absolute: string,
+  relative: string | null,
+  brief: string,
+): DeadlineText {
+  return { at, absolute, relative, brief }
 }
 
-const DUE_SOON = deadline("2026-10-23T20:59:00Z", "Oct 23, 2026, 11:59 PM", "in 3 days")
-const DUE_LATER = deadline("2026-11-06T21:59:00Z", "Nov 6, 2026, 11:59 PM", "in 17 days")
-const PAST = deadline("2026-10-09T20:59:00Z", "Oct 9, 2026, 11:59 PM", "11 days ago")
+const DUE_SOON = deadline(
+  "2026-10-23T20:59:00Z",
+  "Oct 23, 2026, 11:59 PM",
+  "in 3 days",
+  "in 3 days",
+)
+const DUE_LATER = deadline("2026-11-06T21:59:00Z", "Nov 6, 2026, 11:59 PM", null, "Nov 6, 2026")
+const PAST = deadline("2026-10-09T20:59:00Z", "Oct 9, 2026, 11:59 PM", null, "Oct 9, 2026")
 
 const tmcCourse = courseHomeView({
   title: "Python Programming 2026",

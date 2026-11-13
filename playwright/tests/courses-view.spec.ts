@@ -21,8 +21,8 @@ vsCodeTest(
 
     await vsCodeTest.step("download every exercise of the part at once", async () => {
       await coursesView.runInlineAction(coursesView.row("Part 1"), "Download")
-      await expect(passing).toHaveAccessibleName(/, open,/)
-      await expect(failing).toHaveAccessibleName(/, open,/)
+      await expect(passing).toHaveAccessibleName(/, (downloaded|in workspace),/)
+      await expect(failing).toHaveAccessibleName(/, (downloaded|in workspace),/)
     })
 
     await vsCodeTest.step("close both from one selection", async () => {
@@ -35,7 +35,7 @@ vsCodeTest(
 
     await vsCodeTest.step("selecting a closed exercise opens it alone, and its code", async () => {
       await passing.click()
-      await expect(passing).toHaveAccessibleName(/, open,/)
+      await expect(passing).toHaveAccessibleName(/, (downloaded|in workspace),/)
       await expect(failing).toHaveAccessibleName(/, closed,/)
       await expect(page.getByRole("tab", { name: /passing_exercise\.py/ })).toBeVisible()
     })

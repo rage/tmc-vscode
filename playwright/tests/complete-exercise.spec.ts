@@ -74,7 +74,7 @@ for (const exercise of exercises) {
       const row = coursesView.row(exercise.name)
       await expect(row).toHaveAccessibleName(/, not downloaded,/)
       await coursesView.runInlineAction(row, "Download")
-      await expect(row).toHaveAccessibleName(/, open,/)
+      await expect(row).toHaveAccessibleName(/, (downloaded|in workspace),/)
     })
 
     await vsCodeTest.step("open workspace", async () => {

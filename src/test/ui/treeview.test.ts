@@ -239,6 +239,26 @@ suite("CoursesTree", function () {
     expect((item.iconPath as vscode.ThemeIcon).id).toBe("book")
   })
 
+  test("an exercise on disk is downloaded outside its course workspace, and in workspace inside", function () {
+    const course = tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] })
+    workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Open)]
+    const [outside] = exercisesOf(first(show(course)))
+    expect(outside?.accessibilityInformation?.label).toMatch(/, downloaded,/)
+
+    const plain = source()
+    tree.setSource({
+      ...plain,
+      workspaceManager: {
+        ...plain.workspaceManager,
+        activeCourse: "tmc-slug",
+        activeCourseBackend: "tmc",
+      },
+    })
+    settle()
+    const [inWorkspace] = exercisesOf(first(tree.getChildren() as CoursesTreeItem[]))
+    expect(inWorkspace?.accessibilityInformation?.label).toMatch(/, in workspace,/)
+  })
+
   // Same-titled courses exist on both backends; the backend tells them apart.
   test("a course without points still names its backend", function () {
     expect(show(moocCourse())[0]?.description).toBe("courses.mooc.fi")

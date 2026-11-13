@@ -68,8 +68,10 @@
     border-radius: var(--tmc-radius);
     background: var(--tmc-banner-background);
   }
+  /* At sidebar widths the action wraps under the text instead of squeezing it to a word a line. */
   .notice {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--tmc-space-2);
     padding: var(--tmc-space-2) var(--tmc-space-3);
@@ -87,9 +89,10 @@
     color: var(--tmc-notice-warning-accent);
   }
   .text {
-    flex: 1;
+    flex: 1 1 14ch;
     min-width: 0;
     margin: 0;
+    overflow-wrap: anywhere;
   }
   .title {
     font-weight: 600;

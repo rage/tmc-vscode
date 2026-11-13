@@ -15,8 +15,10 @@ const DeadlineTextSchema = z.object({
   at: z.string(),
   /** E.g. "Oct 2, 2026, 3:00 PM". */
   absolute: z.string(),
-  /** E.g. "in 3 days" or "2 hours ago". */
-  relative: z.string(),
+  /** E.g. "in 3 days" or "2 hours ago"; null further than a week off. */
+  relative: z.string().nullable(),
+  /** `relative`, or else the date alone, e.g. "Oct 2, 2026": for where space is short. */
+  brief: z.string(),
 })
 
 export type DeadlineText = z.infer<typeof DeadlineTextSchema>

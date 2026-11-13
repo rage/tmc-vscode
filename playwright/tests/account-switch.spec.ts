@@ -45,7 +45,7 @@ vsCodeTest.describe(() => {
         await coursesView.expand(coursesView.row(courseTitle))
         const row = coursesView.row(exerciseName)
         await coursesView.runContextMenuCommand(row, "Open")
-        await expect(row).toHaveAccessibleName(/, open,/)
+        await expect(row).toHaveAccessibleName(/, (downloaded|in workspace),/)
       })
 
       await vsCodeTest.step("they log out and another student logs in", async () => {

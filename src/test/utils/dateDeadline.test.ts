@@ -2,6 +2,8 @@ import {
   findNextDateAfter,
   formatDateTime,
   formatDeadline,
+  formatDeadlineBriefly,
+  formatNearRelativeTime,
   formatTimestamp,
   parseDate,
 } from "../../utilities/dateDeadline"
@@ -63,6 +65,16 @@ suite("Date utils", () => {
       expect(formatDeadline(hoursAgo, NOW, "en-US")).toBe(
         `${absolute(hoursAgo, "en-US")} (5 hours ago)`,
       )
+    })
+
+    test("briefly, is relative within a week and the date alone further off", () => {
+      expect(formatDeadlineBriefly(new Date("2026-06-04T12:00:00Z"), NOW, "en-US")).toBe(
+        "in 3 days",
+      )
+      expect(formatDeadlineBriefly(new Date("2225-01-02T12:00:00Z"), NOW, "en-US")).toBe(
+        "Jan 2, 2225",
+      )
+      expect(formatNearRelativeTime(new Date("2225-01-02T12:00:00Z"), NOW, "en-US")).toBeUndefined()
     })
 
     test("renders nothing for a date that cannot be rendered", () => {

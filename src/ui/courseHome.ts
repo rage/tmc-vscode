@@ -12,7 +12,12 @@ import {
 } from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
 import { isAiAllowed } from "../api/aiRestriction"
-import { findNextDateAfter, formatDateTime, formatRelativeTime } from "../utilities"
+import {
+  findNextDateAfter,
+  formatDateTime,
+  formatDeadlineBriefly,
+  formatNearRelativeTime,
+} from "../utilities"
 import { recentUpdates } from "./recentUpdates"
 import {
   buildCourseView,
@@ -63,7 +68,8 @@ export function buildCourseHomeView(
       ? {
           at: date.toISOString(),
           absolute: formatDateTime(date, locale),
-          relative: formatRelativeTime(date, now, locale),
+          relative: formatNearRelativeTime(date, now, locale) ?? null,
+          brief: formatDeadlineBriefly(date, now, locale),
         }
       : undefined
   const newKeys = new Set(

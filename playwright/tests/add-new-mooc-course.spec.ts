@@ -56,7 +56,7 @@ vsCodeTest(
     await vsCodeTest.step("open an exercise, downloading it on the way", async () => {
       const row = coursesView.row(exerciseName)
       await coursesView.runContextMenuCommand(row, "Open")
-      await expect(row).toHaveAccessibleName(/, open,/)
+      await expect(row).toHaveAccessibleName(/, (downloaded|in workspace),/)
     })
 
     await vsCodeTest.step("open workspace", async () => {
@@ -128,7 +128,7 @@ vsCodeTest("submitting an exercise gone from the server says so", async ({ page,
     await coursesView.expand(coursesView.row("MOOC Python Course"))
     const row = coursesView.row("passing_exercise")
     await coursesView.runContextMenuCommand(row, "Open")
-    await expect(row).toHaveAccessibleName(/, open,/)
+    await expect(row).toHaveAccessibleName(/, (downloaded|in workspace),/)
     await coursesView.runInlineAction(
       coursesView.row("MOOC Python Course"),
       "Open Course Workspace",

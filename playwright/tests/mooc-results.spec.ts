@@ -22,7 +22,7 @@ vsCodeTest("a failing submission lists the server's tests", async ({ page, webvi
     await coursesView.addNewMoocCourse(courseTitle)
     await coursesView.expand(coursesView.row(courseTitle))
     await exercise.click()
-    await expect(exercise).toHaveAccessibleName(/, open,/)
+    await expect(exercise).toHaveAccessibleName(/, (downloaded|in workspace),/)
   })
 
   await vsCodeTest.step("submit it and see which test failed, and why", async () => {
@@ -52,7 +52,7 @@ vsCodeTest(
       await coursesView.addNewMoocCourse(courseTitle)
       await coursesView.expand(coursesView.row(courseTitle))
       await exercise.click()
-      await expect(exercise).toHaveAccessibleName(/, open,/)
+      await expect(exercise).toHaveAccessibleName(/, (downloaded|in workspace),/)
     })
 
     await vsCodeTest.step("a check for updates finds it removed, without failing", async () => {
@@ -87,7 +87,7 @@ vsCodeTest(
       await coursesView.addNewMoocCourse(courseTitle)
       await coursesView.expand(coursesView.row(courseTitle))
       await exercise.click()
-      await expect(exercise).toHaveAccessibleName(/, open,.*1 try left/)
+      await expect(exercise).toHaveAccessibleName(/, (downloaded|in workspace),.*1 try left/)
       await coursesView.runInlineAction(coursesView.row(courseTitle), "Open Course Workspace")
       await new ExplorerPage(page).openPath(["src", "passing_exercise.py"])
       await expect(page.getByText("def hello()")).toBeVisible()

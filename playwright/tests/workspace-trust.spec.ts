@@ -103,7 +103,9 @@ vsCodeTest(
       await coursesView.expand(coursesView.row(COURSE))
       await coursesView.runInlineAction(coursesView.row(SECOND_EXERCISE), "Download")
       await answer(page, FOLDER_QUESTION, "Yes")
-      await expect(coursesView.row(SECOND_EXERCISE)).toHaveAccessibleName(/, open,/)
+      await expect(coursesView.row(SECOND_EXERCISE)).toHaveAccessibleName(
+        /, (downloaded|in workspace),/,
+      )
       const explorer = new ExplorerPage(page)
       const folder = page
         .locator(".explorer-folders-view")
@@ -162,7 +164,9 @@ vsCodeTest(
         coursesView.tree().getByRole("treeitem", { name: /^Trust Course Workspace/ }),
       ).toBeVisible()
       await coursesView.expand(coursesView.row(COURSE))
-      await expect(coursesView.row(FIRST_EXERCISE)).toHaveAccessibleName(/, open,/)
+      await expect(coursesView.row(FIRST_EXERCISE)).toHaveAccessibleName(
+        /, (downloaded|in workspace),/,
+      )
     })
 
     await vsCodeTest.step("Run Tests asks for trust, and runs once trusted", async () => {

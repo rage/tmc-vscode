@@ -17,7 +17,7 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus as WorkspaceExerciseStatus } from "../../api/workspaceManager"
 import { TRUST_COURSE_WORKSPACE_COMMAND } from "../../errors"
-import { countOf, formatDeadline } from "../../utilities"
+import { countOf, formatDeadline, formatDeadlineBriefly } from "../../utilities"
 import { downloadFailures } from "../downloadFailures"
 import { exerciseOperations } from "../exerciseOperations"
 import { pointsText } from "../points"
@@ -51,6 +51,8 @@ interface RenderContext {
   isOffline: boolean
   /** The course whose workspace is open, which starts expanded. */
   activeCourse: { slug: string; backend: BackendKind } | undefined
+  /** This window is the workspace of the course being rendered. */
+  isCourseWorkspace?: boolean
 }
 
 /** A course, part or exercise row of the Courses view; the view's row commands receive these. */
@@ -144,10 +146,11 @@ export class CourseTreeItem extends vscode.TreeItem {
       updateCount > 0 && { spoken: updates, tooltip: updates },
     ])
     this.command = { command: "tmc.courseDetails", title: "Show Course", arguments: [this] }
+    const courseContext = { ...context, isCourseWorkspace: isActive }
     this._buildChildren = () =>
       parts.length === 1 && parts[0]?.isUngrouped
-        ? exercises.map((ex) => new ExerciseTreeItem(this, this.courseId, ex, context))
-        : parts.map((part) => new PartTreeItem(this, part, context))
+        ? exercises.map((ex) => new ExerciseTreeItem(this, this.courseId, ex, courseContext))
+        : parts.map((part) => new PartTreeItem(this, part, courseContext))
   }
 
   /** The course's parts, or its exercises directly when none of them names a part. */
@@ -188,18 +191,18 @@ export class PartTreeItem extends vscode.TreeItem {
     this.chapterName = part.number === undefined ? undefined : part.name
     this.id = `${parent.id}/${part.key}`
     const passed = part.exercises.filter((ex) => ex.passed).length
-    const nextDeadline =
-      part.nextDeadline && !context.isOffline
-        ? formatDeadline(part.nextDeadline, context.now, context.locale)
-        : undefined
+    const shownNextDeadline = part.nextDeadline && !context.isOffline ? part.nextDeadline : null
+    const nextDeadline = shownNextDeadline
+      ? formatDeadline(shownNextDeadline, context.now, context.locale)
+      : undefined
     this._tooltipLines = showFacts(this, label, [
       {
         description: `${passed}/${part.exercises.length} passed`,
         spoken: `${passed} of ${part.exercises.length} passed`,
         tooltip: `${passed} of ${part.exercises.length} exercises passed`,
       },
-      nextDeadline !== undefined && {
-        description: `next deadline ${nextDeadline}`,
+      shownNextDeadline && {
+        description: `next deadline ${formatDeadlineBriefly(shownNextDeadline, context.now, context.locale)}`,
         spoken: `next deadline ${nextDeadline}`,
         tooltip: `Next deadline: ${nextDeadline}`,
       },
@@ -234,8 +237,8 @@ export class PartTreeItem extends vscode.TreeItem {
   }
 }
 
-const STATUS_LABELS: Record<ExerciseView["status"], string> = {
-  opened: "open",
+// The course home's words, so the two views name a state alike.
+const STATUS_LABELS: Record<Exclude<ExerciseView["status"], "opened">, string> = {
   closed: "closed",
   missing: "not downloaded",
   new: "new, not downloaded",
@@ -296,8 +299,14 @@ export class ExerciseTreeItem extends vscode.TreeItem {
     const tries =
       !exercise.submitRefusal && !exercise.passed ? triesLeftText(exercise.triesLeft) : undefined
     const points = pointsText(exercise.awardedPoints, exercise.availablePoints)
-    const status = STATUS_LABELS[exercise.status]
+    const status =
+      exercise.status === "opened"
+        ? context.isCourseWorkspace
+          ? "in workspace"
+          : "downloaded"
+        : STATUS_LABELS[exercise.status]
     const due = isDue && `due ${formatDeadline(deadline, now, locale)}`
+    const briefDue = isDue && `due ${formatDeadlineBriefly(deadline, now, locale)}`
     this._tooltipLines = showFacts(this, exercise.name, [
       {
         spoken: exercise.passed ? "passed" : "not passed",
@@ -331,7 +340,7 @@ export class ExerciseTreeItem extends vscode.TreeItem {
         spoken: tries,
         tooltip: `Tries left: ${exercise.triesLeft} of ${exercise.maxTries ?? exercise.triesLeft}`,
       },
-      due && { description: due, spoken: due },
+      due && briefDue && { description: briefDue, spoken: due },
       exercise.softDeadline &&
         !exercise.isHard && {
           tooltip: `Soft deadline: ${formatDeadline(exercise.softDeadline, now, locale)}. ${SOFT_DEADLINE_PENALTY}`,

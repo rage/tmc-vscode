@@ -34,7 +34,7 @@ vsCodeTest(
       const row = coursesView.row(exerciseName)
       await expect(row).toHaveAccessibleName(/, not downloaded,/)
       await coursesView.runContextMenuCommand(row, "Open")
-      await expect(row).toHaveAccessibleName(/, open,/)
+      await expect(row).toHaveAccessibleName(/, (downloaded|in workspace),/)
       await coursesView.runInlineAction(coursesView.row(courseTitle), "Open Course Workspace")
     })
 

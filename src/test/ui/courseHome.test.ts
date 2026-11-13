@@ -217,6 +217,7 @@ suite("buildCourseHomeView", function () {
     expect(view.nextDeadline).toMatchObject({
       at: "2026-06-04T12:00:00.000Z",
       relative: "in 3 days",
+      brief: "in 3 days",
     })
     expect(view.parts[0]?.exercises[1]?.deadline?.relative).toBe("tomorrow")
   })
