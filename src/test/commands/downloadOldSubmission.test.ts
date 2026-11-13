@@ -9,7 +9,7 @@ import type {
 import { makeMoocKind } from "../../../shared/lib"
 import type { PickableSubmission } from "../../actions"
 import type { ActionContext, ReadyActionContext } from "../../actions/types"
-import type { Item } from "../../api/dialog"
+import type { Item, Separator } from "../../api/dialog"
 import type Langs from "../../api/langs"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
@@ -71,6 +71,7 @@ suite("Download old submission command (mooc branch)", function () {
   let notification: ReturnType<typeof vi.fn>
   let offered: Item<PickableSubmission>[]
   let pickPrompt: unknown
+  let separators: string[]
 
   function actionContext(
     options: {
@@ -110,11 +111,14 @@ suite("Download old submission command (mooc branch)", function () {
     notification = vi.fn()
     const dialog = Object.assign(createDialogMock()[0], {
       // The submission picker: takes the first item.
-      selectItem: vi.fn(async (prompt: unknown, ...items: Item<PickableSubmission>[]) => {
-        pickPrompt = prompt
-        offered = items
-        return items[0]?.value
-      }),
+      selectItem: vi.fn(
+        async (prompt: unknown, ...items: (Item<PickableSubmission> | Separator)[]) => {
+          pickPrompt = prompt
+          separators = items.filter((item) => !("value" in item)).map((item) => item.label)
+          offered = items.filter((item): item is Item<PickableSubmission> => "value" in item)
+          return offered[0]?.value
+        },
+      ),
       choose: vi.fn(
         async (_message: string, _options: unknown, ...choices: [string, unknown][]) =>
           choices.find(([label]) => label === answer)?.[1],
@@ -137,6 +141,7 @@ suite("Download old submission command (mooc branch)", function () {
     expect(pickPrompt).toEqual({
       title: "Download Old Submission — ex-1",
       placeHolder: "Pick a submission, help request or backup to restore",
+      matchOnDescription: true,
     })
     const format = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "medium" })
     expect(
@@ -214,15 +219,16 @@ suite("Download old submission command (mooc branch)", function () {
     ] as ExerciseSlideSubmissionListItem[]
     await downloadOldSubmission(actionContext({ submissions: listed }), uri)
 
+    expect(separators).toEqual(["Submissions", "Backups and help requests"])
     expect(offered.map(({ description }) => description)).toEqual([
+      "Failed (0/1 points) · Shared",
       "Sent for help, not graded · Shared",
       "Backup, not graded",
-      "Failed (0/1 points) · Shared",
     ])
     expect(offered.map(({ iconPath }) => (iconPath as vscode.ThemeIcon).id)).toEqual([
+      "circle-large-outline",
       "comment-discussion",
       "archive",
-      "circle-large-outline",
     ])
   })
 
@@ -240,8 +246,8 @@ suite("Download old submission command (mooc branch)", function () {
     await downloadOldSubmission(actionContext({ submissions: listed }), uri)
 
     expect(offered.map(({ description, detail }) => [description, detail])).toEqual([
-      ["Backup, not graded", undefined],
       ["Tests failed (0/1 points)", "Latest submission"],
+      ["Backup, not graded", undefined],
     ])
     // A second apart, so the labels must tell them apart.
     expect(offered[0]?.label).not.toBe(offered[1]?.label)
