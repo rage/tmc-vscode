@@ -169,3 +169,56 @@ function expectedResultInSubmissionView(expectedResult: "pass" | "fail"): string
   }
   return "Some tests failed on the server"
 }
+
+/** The folder of the exercise whose slug ends in `name` under `root`, wherever the CLI put it. */
+function exerciseFolder(root: string, name: string): string | undefined {
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) {
+      continue
+    }
+    const entryPath = join(root, entry.name)
+    if (entry.name.endsWith(name)) {
+      return entryPath
+    }
+    const found = exerciseFolder(entryPath, name)
+    if (found) {
+      return found
+    }
+  }
+  return undefined
+}
+
+vsCodeTest(
+  "submitting an exercise whose source file is gone asks first",
+  async ({ page, webview, projectsDir }) => {
+    const coursesView = new CoursesViewPage(page, webview)
+    const course = "Python Course"
+    const exercise = "01_passing_exercise"
+
+    await vsCodeTest.step("download it into the course workspace", async () => {
+      await coursesView.goto()
+      await coursesView.addNewCourse(course)
+      await coursesView.expand(coursesView.row(course))
+      await coursesView.runInlineAction(coursesView.row(exercise), "Download")
+      await coursesView.runInlineAction(coursesView.row(course), "Open Course Workspace")
+    })
+
+    await vsCodeTest.step("delete its source file and submit", async () => {
+      const folder = exerciseFolder(projectsDir, exercise)
+      expect(folder).toBeDefined()
+      fs.rmSync(join(folder ?? "", "src", "passing_exercise.py"))
+      await coursesView.goto()
+      await coursesView.expand(coursesView.row(course))
+      await coursesView.runInlineAction(coursesView.row(exercise), "Submit Solution")
+      const question = page
+        .locator(".monaco-dialog-box")
+        .filter({ hasText: new RegExp(`is missing from \\S*${exercise}\\. Submit anyway\\?`) })
+      await expect(question).toBeVisible()
+      await question.getByRole("button", { name: "Cancel" }).click()
+      await expect(question).toBeHidden()
+      await expect(
+        new TmcPage(page, webview).getSidePanel().getByRole("heading", { name: /tests/ }),
+      ).toBeHidden()
+    })
+  },
+)
