@@ -143,6 +143,11 @@
         "icon": "$(close)"
       },
       {
+        "command": "tmc.openExerciseMaterial",
+        "title": "Open in Course Material",
+        "category": "TestMyCode"
+      },
+      {
         "command": "tmc.courseDetails",
         "title": "Show Course Details...",
         "category": "TestMyCode"
@@ -516,6 +521,10 @@
           "when": "false"
         },
         {
+          "command": "tmc.openExerciseMaterial",
+          "when": "false"
+        },
+        {
           "command": "tmc.dismissNewExercises",
           "when": "false"
         },
@@ -738,17 +747,22 @@
         {
           "command": "tmc.openExercises",
           "group": "inline@2",
-          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\.closed(\\.|$)/"
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\.(removed\\.)?closed(\\.|$)/"
         },
         {
           "command": "tmc.testExercise",
           "group": "inline@3",
-          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\.opened(\\.|$)/"
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\.(removed\\.)?opened(\\.|$)/"
         },
         {
           "command": "tmc.submitExercise",
           "group": "inline@4",
           "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\.opened(\\.|$)/"
+        },
+        {
+          "command": "tmc.showMoocLogin",
+          "group": "1_exercises@0",
+          "when": "view == tmcView && test-my-code:Initialized && !test-my-code:LoggedIn && viewItem =~ /^exercise\\.(missing|new|expired|downloadFailed)(\\.|$)/"
         },
         {
           "command": "tmc.downloadExercises",
@@ -758,17 +772,17 @@
         {
           "command": "tmc.openExercises",
           "group": "1_exercises@2",
-          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && (viewItem =~ /^exercise\\.closed(\\.|$)/ || viewItem =~ /^exercise\\.(missing|new|expired|downloadFailed)(\\.|$)/ || viewItem =~ /^exercise\\./ && listMultiSelection)"
+          "when": "view == tmcView && test-my-code:Initialized && (viewItem =~ /^exercise\\.(removed\\.)?closed(\\.|$)/ || test-my-code:LoggedIn && (viewItem =~ /^exercise\\.(missing|new|expired|downloadFailed)(\\.|$)/ || viewItem =~ /^exercise\\./ && listMultiSelection))"
         },
         {
           "command": "tmc.closeExercises",
           "group": "1_exercises@3",
-          "when": "view == tmcView && test-my-code:Initialized && (viewItem =~ /^exercise\\.opened(\\.|$)/ || viewItem =~ /^exercise\\./ && listMultiSelection)"
+          "when": "view == tmcView && test-my-code:Initialized && (viewItem =~ /^exercise\\.(removed\\.)?opened(\\.|$)/ || viewItem =~ /^exercise\\./ && listMultiSelection)"
         },
         {
           "command": "tmc.testExercise",
           "group": "2_check@1",
-          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\.opened(\\.|$)/ && !listMultiSelection"
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\.(removed\\.)?opened(\\.|$)/ && !listMultiSelection"
         },
         {
           "command": "tmc.submitExercise",
@@ -793,7 +807,12 @@
         {
           "command": "tmc.cleanExercise",
           "group": "4_clean@1",
-          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\.opened(\\.|$)/ && !listMultiSelection"
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\.(removed\\.)?opened(\\.|$)/ && !listMultiSelection"
+        },
+        {
+          "command": "tmc.openExerciseMaterial",
+          "group": "5_material@1",
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\..*\\.hasMaterial(\\.|$)/ && !listMultiSelection"
         }
       ],
       "testing/item/context": [

@@ -205,6 +205,10 @@ export function registerCommands(
     treeCommands.closeExercises(readyContext, treeCommands.targetRows(row, rows)),
   )
 
+  register("tmc.openExerciseMaterial", async (row?: CoursesTreeItem) =>
+    treeCommands.openExerciseMaterial(row),
+  )
+
   register("tmc.updateCourseExercises", async (row: CoursesTreeItem) =>
     treeCommands.updateCourseExercises(readyContext, row),
   )

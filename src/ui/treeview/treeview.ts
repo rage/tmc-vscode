@@ -11,6 +11,8 @@ import {
 } from "../../../shared/lib"
 import type { AuthState } from "../../api/authState"
 import type WorkspaceManager from "../../api/workspaceManager"
+import type { WorkspaceExercise } from "../../api/workspaceManager"
+import { ExerciseStatus as WorkspaceExerciseStatus } from "../../api/workspaceManager"
 import { TRUST_COURSE_WORKSPACE_COMMAND } from "../../errors"
 import { countOf, formatDeadline } from "../../utilities"
 import { downloadFailures } from "../downloadFailures"
@@ -228,14 +230,18 @@ const STATUS_LABELS: Record<ExerciseView["status"], string> = {
 }
 
 /**
- * One exercise. `contextValue` is `exercise.<status>` (see `ExerciseStatus`), followed by
- * `.passed` and `.updateable` when they apply.
+ * One exercise. `contextValue` is `exercise.<status>` (see `ExerciseStatus`), then for a removed
+ * exercise still on disk `.opened` or `.closed`, then `.passed`, `.updateable` and `.hasMaterial`
+ * when they apply.
  */
 export class ExerciseTreeItem extends vscode.TreeItem {
   public readonly exerciseId: ExerciseIdentifier
   /** The exercise's folder, while it is on disk. */
   public readonly exerciseUri: vscode.Uri | undefined
   public readonly status: ExerciseView["status"]
+  public readonly materialUrl: string | undefined
+  /** Whether the exercise is open or closed in its course workspace; `undefined` off disk. */
+  public readonly onDiskStatus: WorkspaceExerciseStatus | undefined
   private readonly _tooltipLines: string[]
 
   public constructor(
@@ -251,10 +257,14 @@ export class ExerciseTreeItem extends vscode.TreeItem {
     this.exerciseUri = exercise.onDisk?.uri
     this.status = exercise.status
     this.iconPath = exerciseIcon(exercise)
+    this.materialUrl = exercise.materialUrl
+    this.onDiskStatus = exercise.onDisk?.status
     this.contextValue = [
       `exercise.${exercise.status}`,
+      ...(exercise.status === "removed" ? removedOnDiskFlags(exercise.onDisk) : []),
       ...(exercise.passed ? ["passed"] : []),
       ...(exercise.isUpdateable ? ["updateable"] : []),
+      ...(exercise.materialUrl ? ["hasMaterial"] : []),
     ].join(".")
     this.command = { command: "tmc.openExercises", title: "Open", arguments: [this] }
 
@@ -302,6 +312,18 @@ export class ExerciseTreeItem extends vscode.TreeItem {
 
   public buildTooltip(): vscode.MarkdownString {
     return tooltipOf(this._tooltipLines)
+  }
+}
+
+/** Whether a removed exercise is in its course workspace, when it is on disk at all. */
+function removedOnDiskFlags(onDisk: WorkspaceExercise | undefined): string[] {
+  switch (onDisk?.status) {
+    case WorkspaceExerciseStatus.Open:
+      return ["opened"]
+    case WorkspaceExerciseStatus.Closed:
+      return ["closed"]
+    default:
+      return []
   }
 }
 

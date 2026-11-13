@@ -447,6 +447,31 @@ suite("CoursesTree", function () {
       expect(item.description).toBe("closed · 1/1 points")
     })
 
+    test("a mooc exercise with a material page says so, for its Open in Course Material", function () {
+      const [course] = show(
+        moocCourse({
+          exercises: [moocCourseExercise({ name: "loops", pageUrl: "https://courses.example/p" })],
+        }),
+      )
+
+      expect(exercisesOf(course)[0]?.contextValue).toBe("exercise.missing.hasMaterial")
+      expect(exercisesOf(course)[0]?.materialUrl).toBe("https://courses.example/p")
+    })
+
+    test("a removed exercise on disk says whether it is open, for the commands that run locally", function () {
+      workspaceExercises = [
+        { ...onDisk("part01-02_gone", ExerciseStatus.Open), id: idOfTmcExercise(2) },
+        { ...onDisk("part01-03_gone", ExerciseStatus.Closed), id: idOfTmcExercise(3) },
+      ]
+      const [course] = show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))
+
+      const removed = exercisesOf(course).filter((item) => item.status === "removed")
+      expect(removed.map((item) => item.contextValue)).toEqual([
+        "exercise.removed.opened",
+        "exercise.removed.closed",
+      ])
+    })
+
     test("out of tries below full points is final, not due", function () {
       const [course] = show(
         moocCourse({
