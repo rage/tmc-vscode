@@ -131,10 +131,16 @@ export async function showExerciseActions(
     value: { command, arguments: target },
   })
   const course = sources.userData.getCourse(exercise.courseId)
+  const isRemoved = course.ok && sources.userData.getExercise(exercise.id).err
   const picked = await dialog.selectItem(
-    { title: exercise.exerciseSlug, placeHolder: "What do you want to do with this exercise?" },
+    {
+      title: exercise.exerciseSlug,
+      placeHolder: isRemoved
+        ? "Removed from the course: it can no longer be submitted, but its tests still run here"
+        : "What do you want to do with this exercise?",
+    },
     action("$(beaker) Run Tests", "tmc.testExercise"),
-    ...(isLoggedIn
+    ...(isLoggedIn && !isRemoved
       ? [
           action("$(cloud-upload) Submit Solution", "tmc.submitExercise"),
           action("$(link) Share Exercise via Paste", "tmc.pasteExercise"),

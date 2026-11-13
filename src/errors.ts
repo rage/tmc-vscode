@@ -144,6 +144,14 @@ export class CliVerificationError extends InitializationError {
   }
 }
 
+/**
+ * The exercise is on disk, but its course no longer lists it, so nothing on the backend can be
+ * done with it. The message names the exercise and is the whole story.
+ */
+export class ExerciseRemovedError extends BaseError {
+  public override readonly name = "Exercise Removed Error"
+}
+
 /** The exercise is gone from its backend, such as one removed from the course since download. */
 export class ExerciseNotFoundError extends BaseError {
   public override readonly name = "Exercise Not Found Error"
@@ -261,6 +269,9 @@ export function presentationFor(error: Error): ErrorPresentation {
         ? [{ label: error.remedyLabel, command: SHOW_AI_USE_PROBLEM_COMMAND }]
         : [],
     }
+  }
+  if (error instanceof ExerciseRemovedError) {
+    return { message: reported, actions: [], isHeldBack: true }
   }
   if (error instanceof WorkspaceUntrustedError) {
     return {

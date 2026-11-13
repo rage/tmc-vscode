@@ -397,7 +397,7 @@
         },
         {
           "command": "tmc.downloadOldSubmission",
-          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn && !test-my-code:ActiveExerciseRemoved"
         },
         {
           "command": "tmc.logout",
@@ -421,7 +421,7 @@
         },
         {
           "command": "tmc.submitExercise",
-          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn && !test-my-code:ActiveExerciseRemoved"
         },
         {
           "command": "tmc.updateExercises",
@@ -545,7 +545,7 @@
         {
           "command": "tmc.submitExercise",
           "group": "navigation@1",
-          "when": "test-my-code:Initialized && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn"
+          "when": "test-my-code:Initialized && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn && !test-my-code:ActiveExerciseRemoved"
         }
       ],
       "explorer/context": [

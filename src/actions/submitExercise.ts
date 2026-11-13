@@ -39,6 +39,7 @@ import { checkAiUse } from "./checkAiUse"
 import { checkWorkspaceTrust } from "./checkWorkspaceTrust"
 import { recordMoocEnrollment } from "./courseAccess"
 import { fingerprintStudentFiles } from "./keptCopies"
+import { storedExerciseOf } from "./storedExercise"
 import type { ReadyActionContext } from "./types"
 
 /** What a backend answered a submission with, reduced to what the shared flow acts on. */
@@ -330,10 +331,10 @@ export async function submitExercise(
   actionContext: ReadyActionContext,
   exercise: WorkspaceExercise,
 ): Promise<Result<Warned, Error>> {
-  const { langs, userData } = actionContext.startup
+  const { langs } = actionContext.startup
   Logger.info(`Submitting exercise ${exercise.exerciseSlug} to ${backendName(exercise.backend)}`)
 
-  const stored = userData.getExercise(exercise.id)
+  const stored = storedExerciseOf(actionContext, exercise)
   if (stored.err) {
     return stored
   }

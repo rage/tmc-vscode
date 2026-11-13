@@ -264,6 +264,19 @@ suite("showExerciseActions", function () {
     expect(offered()).toEqual(["Run Tests", "Open Next Exercise", "Reveal in Courses View"])
   })
 
+  test("for an exercise removed from its course, offers only what runs locally and says why", async function () {
+    const showQuickPick = vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)
+    const h = harness()
+    h.stored.exercise = undefined
+
+    await showExerciseActions(new Dialog(), h.sources, true)
+
+    expect(offered()).toEqual(["Run Tests", "Open Next Exercise", "Reveal in Courses View"])
+    expect(showQuickPick.mock.calls[0]?.[1]).toMatchObject({
+      placeHolder: expect.stringMatching(/^Removed from the course/),
+    })
+  })
+
   test("leaves the reveal out for a course that is not stored", async function () {
     vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)
     const { sources } = harness()

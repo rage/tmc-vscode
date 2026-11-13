@@ -356,7 +356,9 @@ suite("reported once: exercise commands", function () {
   })
 
   test("a test run that cannot start shows in Test Results, and nothing else", async function () {
-    const { run, shown } = await harness({ course: storedCourse({ exercises: [] }) })
+    const { run, shown } = await harness({
+      course: storedCourse({ id: "another-instance", exercises: [] }),
+    })
 
     await run("tmc.testExercise")
 

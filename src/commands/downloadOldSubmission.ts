@@ -4,7 +4,7 @@ import * as vscode from "vscode"
 
 import type { MoocOldSubmissionRestore } from "../../shared/langsSchema"
 import type { PickableSubmission } from "../actions"
-import { checkAiUse, listOldSubmissions, restoreOldSubmission } from "../actions"
+import { checkAiUse, listOldSubmissions, restoreOldSubmission, storedExerciseOf } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import type { Item } from "../api/dialog"
 import { failure } from "../api/withOperation"
@@ -63,13 +63,12 @@ export async function downloadOldSubmission(
   resource: vscode.Uri | undefined,
 ): Promise<void> {
   const { dialog } = actionContext
-  const { userData } = actionContext.startup
   await runForExercise(
     actionContext,
     resource,
     "Downloading the old submission",
     async (exercise) => {
-      const stored = userData.getExercise(exercise.id)
+      const stored = storedExerciseOf(actionContext, exercise)
       if (stored.err) {
         return failure("Failed to resolve exercise id.", stored.val)
       }

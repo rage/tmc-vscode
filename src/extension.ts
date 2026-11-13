@@ -61,6 +61,7 @@ import { createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
 import {
   trackActiveEditorExercise,
+  trackActiveExerciseRemoved,
   trackHasCourses,
   trackHasDownloadedExercises,
 } from "./ui/contextKeys"
@@ -512,6 +513,10 @@ async function activateInner(
       }),
       new FailedUpdatesStatusBarItem(failedUpdates),
       trackHasCourses(readyContext.startup.userData),
+      trackActiveExerciseRemoved(
+        readyContext.startup.workspaceManager,
+        readyContext.startup.userData,
+      ),
       trackHasDownloadedExercises(readyContext.startup.workspaceManager),
       // Point totals come from the backend, so without this the Courses view and Course
       // Details totals stay stale until the user refreshes by hand.

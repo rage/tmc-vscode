@@ -1,3 +1,4 @@
+import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
@@ -6,9 +7,11 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import {
   trackActiveEditorExercise,
+  trackActiveExerciseRemoved,
   trackHasCourses,
   trackHasDownloadedExercises,
 } from "../../ui/contextKeys"
+import { idOfMoocExercise } from "../fixtures/identifiers"
 import type { WorkspaceManagerMockValues } from "../mocks/workspaceManager"
 import { createWorkspaceMangerMock } from "../mocks/workspaceManager"
 
@@ -119,6 +122,39 @@ suite("trackHasDownloadedExercises", function () {
       .filter(
         ([command, key]) =>
           command === "setContext" && key === "test-my-code:HasDownloadedExercises",
+      )
+      .map(([, , value]) => value)
+    expect(updates).toEqual([false, true])
+  })
+})
+
+suite("trackActiveExerciseRemoved", function () {
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("is set while the active exercise's course is stored but no longer lists it", function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    vi.spyOn(vscode.window, "onDidChangeActiveTextEditor").mockImplementation(
+      (() => new vscode.Disposable(() => {})) as never,
+    )
+    const [workspaceManager, workspace] = createWorkspaceMangerMock()
+    workspace.activeExercise = { id: idOfMoocExercise("e1") } as WorkspaceExercise
+    let isListed = true
+    const changed = new vscode.EventEmitter<undefined>()
+
+    trackActiveExerciseRemoved(workspaceManager, {
+      getExercise: () => (isListed ? Ok({} as never) : Err(new Error("No stored exercise"))),
+      getCourse: () => Ok({} as never),
+      onDidChangeCourses: changed.event,
+    })
+    isListed = false
+    changed.fire(undefined)
+
+    const updates = executeCommand.mock.calls
+      .filter(
+        ([command, key]) =>
+          command === "setContext" && key === "test-my-code:ActiveExerciseRemoved",
       )
       .map(([, , value]) => value)
     expect(updates).toEqual([false, true])
