@@ -24,6 +24,7 @@ import { restrictedTrustGate } from "../support/trustGate"
 
 vi.mock("../../actions", () => ({
   checkCanSubmit: vi.fn(async () => Ok.EMPTY),
+  findMissingStudentFiles: vi.fn(async () => []),
   submitExercise: vi.fn(async () => Ok.EMPTY),
 }))
 
@@ -61,6 +62,7 @@ function contextWith(
 
 suite("Submit exercise command", function () {
   beforeEach(function () {
+    vi.mocked(actions.findMissingStudentFiles).mockResolvedValue([])
     vi.mocked(actions.checkCanSubmit).mockResolvedValue(Ok.EMPTY)
     vi.mocked(actions.submitExercise).mockResolvedValue(Ok({ warnings: [] }))
   })
@@ -158,6 +160,31 @@ suite("Submit exercise command", function () {
     })
     retries.at(-1)?.()
     expect(executeCommand).toHaveBeenCalledWith("tmc.submitExercise", uri)
+  })
+
+  test("asks before submitting without a file the exercise was given, and can reset instead", async function () {
+    vi.mocked(actions.findMissingStudentFiles).mockResolvedValue(["src/arithfuncs.py"])
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    for (const [answer, isSubmitted] of [
+      [undefined, false],
+      ["reset", false],
+      ["submit", true],
+    ] as const) {
+      vi.mocked(actions.submitExercise).mockClear()
+      const context = contextWith(exercise)
+      vi.mocked(context.dialog.choose).mockResolvedValue(answer)
+
+      await submitExercise(context, uri)
+
+      expect(context.dialog.choose).toHaveBeenCalledWith(
+        "src/arithfuncs.py is missing from ex-1. Submit anyway?",
+        expect.anything(),
+        ["Reset Exercise…", "reset"],
+        ["Submit Anyway", "submit"],
+      )
+      expect(actions.submitExercise).toHaveBeenCalledTimes(isSubmitted ? 1 : 0)
+    }
+    expect(executeCommand).toHaveBeenCalledExactlyOnceWith("tmc.resetExercise", uri)
   })
 
   test("reports a failed submission under its own headline", async function () {

@@ -4,7 +4,12 @@ import * as path from "path"
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { fingerprintStudentFiles, findKeptCopy, recordKeptCopy } from "../../actions/keptCopies"
+import {
+  findKeptCopy,
+  findMissingStudentFiles,
+  fingerprintStudentFiles,
+  recordKeptCopy,
+} from "../../actions/keptCopies"
 import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import { idOfTmcExercise } from "../fixtures/identifiers"
@@ -65,5 +70,19 @@ suite("the kept copies of an exercise", function () {
     expect(await findKeptCopy(context, exercise)).toBe("download")
     write("backed up")
     expect(await findKeptCopy(context, exercise)).toBe("backup")
+  })
+
+  test("names the student files a download gave that are gone now", async function () {
+    const root = makeTmpDirs({ "src/main.py": "template", "src/helper.py": "help" })
+    const context = contextFor(["src"])
+    const exercise = { id: idOfTmcExercise(79), uri: vscode.Uri.file(root) }
+    expect(await findMissingStudentFiles(context, exercise)).toEqual([])
+
+    await recordKeptCopy(context, exercise, "download")
+    fs.writeFileSync(path.join(root, "src/new.py"), "added")
+    expect(await findMissingStudentFiles(context, exercise)).toEqual([])
+
+    fs.rmSync(path.join(root, "src/main.py"))
+    expect(await findMissingStudentFiles(context, exercise)).toEqual([path.join("src", "main.py")])
   })
 })
