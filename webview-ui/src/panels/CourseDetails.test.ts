@@ -133,6 +133,7 @@ suite("the course home", () => {
   test("lists each part's exercises with their state, points and deadline", async () => {
     await renderHome(
       courseHomeView({
+        isWorkspaceOpen: true,
         parts: [
           {
             key: "part01",
@@ -163,6 +164,26 @@ suite("the course home", () => {
     expect(within(hello as HTMLElement).getByText("Passed")).toBeInTheDocument()
     expect(loops).toHaveTextContent(/02_loops.*Not downloaded.*due in a while.*0\/2/)
     expect(screen.getByText("1/2 passed")).toBeInTheDocument()
+  })
+
+  test("calls an exercise on disk Downloaded until the course workspace is open", async () => {
+    await renderHome(
+      courseHomeView({
+        isWorkspaceOpen: false,
+        parts: [
+          {
+            key: "part01",
+            name: "Part 1",
+            isDefaultOpen: true,
+            exercises: [courseHomeExercise(1, "01_hello", { status: "opened" })],
+          },
+        ],
+      }),
+    )
+
+    const [hello] = screen.getAllByRole("listitem")
+    expect(hello).toHaveTextContent(/01_hello.*Downloaded/)
+    expect(hello).not.toHaveTextContent("In workspace")
   })
 
   test("folds a part away and back, remembering the student's choice", async () => {

@@ -368,6 +368,7 @@
     {#each view.parts as part (part.key)}
       <CoursePart
         {part}
+        isWorkspaceOpen={view.isWorkspaceOpen}
         isExpanded={isPartExpanded(part.key, part.isDefaultOpen)}
         ontoggle={() => togglePart(part.key)}
         onaction={(exercise, action) => runExerciseAction(exercise.id, action)}

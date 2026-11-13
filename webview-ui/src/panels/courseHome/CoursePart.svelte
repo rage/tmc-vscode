@@ -11,6 +11,8 @@
 
   interface Props {
     part: CourseHomePart
+    /** This window is the course's workspace, where an opened exercise is a folder of it. */
+    isWorkspaceOpen: boolean
     isExpanded: boolean
     ontoggle: () => void
     onaction: (exercise: CourseHomeExercise, action: CourseHomeExerciseAction) => void
@@ -19,13 +21,12 @@
   }
 
   /** One part of the course: a header with its progress, and a row per exercise. */
-  let { part, isExpanded, ontoggle, onaction, onopenmaterial }: Props = $props()
+  let { part, isWorkspaceOpen, isExpanded, ontoggle, onaction, onopenmaterial }: Props = $props()
 
   const headingId = $props.id()
   const passedCount = $derived(part.exercises.filter((ex) => ex.passed).length)
 
-  const STATE_LABELS: Record<CourseHomeExercise["status"], string> = {
-    opened: "In workspace",
+  const STATE_LABELS: Record<Exclude<CourseHomeExercise["status"], "opened">, string> = {
     closed: "Closed",
     missing: "Not downloaded",
     new: "New",
@@ -33,6 +34,13 @@
     downloadFailed: "Download failed",
     expired: "Expired",
     removed: "Removed from course",
+  }
+
+  function stateLabel(exercise: CourseHomeExercise): string {
+    if (exercise.status === "opened") {
+      return isWorkspaceOpen ? "In workspace" : "Downloaded"
+    }
+    return STATE_LABELS[exercise.status]
   }
 
   function isOnDisk(exercise: CourseHomeExercise): boolean {
@@ -138,7 +146,7 @@
             </button>
             {#if exercise.isUpdateable}<span class="badge">update</span>{/if}
           </span>
-          <span class="state muted">{STATE_LABELS[exercise.status]}</span>
+          <span class="state muted">{stateLabel(exercise)}</span>
           <span class="deadline muted">
             {#if exercise.deadline && isDue(exercise)}
               <time
