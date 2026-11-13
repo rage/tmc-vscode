@@ -18,6 +18,7 @@ import {
   match,
   submitRefusalOf,
   submitRefusalSentence,
+  toError,
   unwrap,
 } from "../../shared/lib"
 import type Langs from "../api/langs"
@@ -57,6 +58,7 @@ import { recordMoocEnrollment } from "./courseAccess"
 import { fingerprintStudentFiles } from "./keptCopies"
 import { storedExerciseOf } from "./storedExercise"
 import type { ReadyActionContext } from "./types"
+import { updateCourse } from "./updateCourse"
 
 /** What a backend answered a submission with, reduced to what the shared flow acts on. */
 interface SubmissionOutcome {
@@ -377,11 +379,26 @@ async function readyToSubmit(
   if (trusted.err) {
     return trusted
   }
-  const refused = await actionContext.startup.aiUseGate.refusal(course, exercise.uri)
+  const { aiUseGate, userData } = actionContext.startup
+  let current = course
+  let refused = await aiUseGate.refusal(current, exercise.uri)
+  if (refused && current.kind === "mooc") {
+    // The teacher may have allowed AI since the course was last fetched.
+    const courseId = LocalCourseData.getCourseId(current)
+    // A refresh that fails leaves the refusal as it was.
+    const updated = await updateCourse(actionContext, courseId).catch((e: unknown) =>
+      Err(toError(e)),
+    )
+    const fetched = userData.getCourse(courseId)
+    if (updated.ok && updated.val.isUpdated && fetched.ok) {
+      current = fetched.val
+      refused = await aiUseGate.refusal(current, exercise.uri)
+    }
+  }
   if (refused) {
     return Err(refused)
   }
-  return Ok({ submit, course, courseExercise })
+  return Ok({ submit, course: current, courseExercise })
 }
 
 /**

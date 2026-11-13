@@ -19,6 +19,7 @@ import {
   submitExercise,
 } from "../../actions/submitExercise"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
+import { updateCourse } from "../../actions/updateCourse"
 import { failure } from "../../api/withOperation"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
@@ -55,6 +56,9 @@ import { restrictedTrustGate } from "../support/trustGate"
 
 vi.mock("../../window/exerciseDocuments", () => ({
   saveExerciseDocuments: vi.fn(async () => Ok.EMPTY),
+}))
+vi.mock("../../actions/updateCourse", () => ({
+  updateCourse: vi.fn(async () => Ok({ isUpdated: false, warnings: [] })),
 }))
 
 const openedPanels: ExerciseSubmissionPanel[] = []
@@ -621,6 +625,21 @@ suite("submitExercise action, mooc", () => {
     expect((await checkCanSubmit(allowed.actionContext, moocExercise)).ok).toBe(true)
     expect(submit).not.toHaveBeenCalled()
     expect(openedPanels).toEqual([])
+  })
+
+  test("refreshes the course before refusing for AI, as the teacher may have allowed it since", async () => {
+    const submit = vi.fn()
+    const stale = contextFor(makeMoocKind(moocCourse), { submitMoocExercise: submit })
+    const refusal = vi
+      .fn()
+      .mockResolvedValueOnce(new AiUseRefusedError("AI assistance is on."))
+      .mockResolvedValueOnce(undefined)
+    stale.actionContext.startup.aiUseGate = { refusal } as unknown as ReadyStartup["aiUseGate"]
+    vi.mocked(updateCourse).mockResolvedValueOnce(Ok({ isUpdated: true, warnings: [] }))
+
+    expect((await checkCanSubmit(stale.actionContext, moocExercise)).ok).toBe(true)
+    expect(updateCourse).toHaveBeenCalledOnce()
+    expect(refusal).toHaveBeenCalledTimes(2)
   })
 
   test("grading progress keeps changed messages only, on an indeterminate bar", async () => {
