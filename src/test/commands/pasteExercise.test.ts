@@ -17,6 +17,7 @@ import {
 } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
+import { restrictedTrustGate } from "../support/trustGate"
 
 vi.mock("../../actions", () => ({
   pasteExercise: vi.fn(async (_context: unknown, backend: BackendKind) =>
@@ -178,5 +179,16 @@ suite("Paste exercise command", function () {
       expect.objectContaining({ message: "submission rejected" }),
     )
     expect(notifications).toEqual([])
+  })
+
+  test("in Restricted Mode shares nothing, and once trusted asks before sharing", async function () {
+    const { context } = harness("mooc")
+    const { trustGate } = restrictedTrustGate()
+    context.startup.trustGate = trustGate
+
+    await pasteExercise(context, undefined)
+
+    expect(actions.pasteExercise).not.toHaveBeenCalled()
+    expect(vi.mocked(trustGate.refusal).mock.lastCall?.[1]).toMatchObject({ action: "Share" })
   })
 })

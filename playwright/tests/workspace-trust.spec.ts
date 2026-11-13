@@ -5,6 +5,7 @@ import { VSCODE_TEST_VERSION } from "../../config"
 import { vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
+import { TmcPage } from "../pages/tmc"
 
 const COURSE = "Python Course"
 const FIRST_EXERCISE = "01_passing_exercise"
@@ -171,6 +172,41 @@ vsCodeTest(
       await answer(page, WORKSPACE_QUESTION, "Trust Workspace & Continue")
       await expect(toast(page, /All tests of \S*01_passing_exercise passed\./)).toBeVisible()
       await expect(restrictedModeIndicator(page)).toBeHidden()
+    })
+  },
+)
+
+vsCodeTest(
+  "a submit refused in Restricted Mode is sent only when asked again once trusted",
+  async ({ page, webview }) => {
+    const coursesView = new CoursesViewPage(page, webview)
+
+    await vsCodeTest.step("open the course workspace and decline to trust it", async () => {
+      await coursesView.goto()
+      await coursesView.addNewCourse(COURSE)
+      await coursesView.expand(coursesView.row(COURSE))
+      await coursesView.runInlineAction(coursesView.row(FIRST_EXERCISE), "Download")
+      await openCourseWorkspace(page, COURSE, false)
+    })
+
+    await vsCodeTest.step("trusting after a refused submit asks before submitting", async () => {
+      await coursesView.goto()
+      await coursesView.expand(coursesView.row(COURSE))
+      await coursesView.runInlineAction(coursesView.row(FIRST_EXERCISE), "Submit Solution")
+      const refusal = toast(page, RESTRICTED_MESSAGE)
+      await refusal.getByRole("button", { name: "Trust Course Workspace" }).click()
+      await answer(page, WORKSPACE_QUESTION, "Trust Workspace & Continue")
+      const offer = toast(
+        page,
+        new RegExp(`The course workspace is trusted now\\. Submit \\S*${FIRST_EXERCISE}\\?`),
+      )
+      const result = new TmcPage(page, webview)
+        .getSidePanel()
+        .getByRole("heading", { name: "All tests passed on the server" })
+      await expect(offer).toBeVisible()
+      await expect(result).toBeHidden()
+      await offer.getByRole("button", { name: "Submit", exact: true }).click()
+      await expect(result).toBeVisible({ timeout: 30_000 })
     })
   },
 )

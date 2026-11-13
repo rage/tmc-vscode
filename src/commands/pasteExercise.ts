@@ -30,7 +30,15 @@ export async function pasteExercise(
         result.val,
       )
     },
-    { trustedCommand: "tmc.pasteExercise" },
+    {
+      trustedCommand: "tmc.pasteExercise",
+      retryOffer: (exercise) => ({
+        message:
+          `The course workspace is trusted now. Share ${exercise.exerciseSlug} via ` +
+          `${pasteServiceName(exercise.backend)}?`,
+        action: "Share",
+      }),
+    },
   )
   if (pasteResult.err) {
     return

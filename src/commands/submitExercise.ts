@@ -61,6 +61,12 @@ export async function submitExercise(
       const result = await actions.submitExercise(actionContext, exercise)
       return result.err ? refusedOrFailed(actionContext, result.val) : result
     },
-    { trustedCommand: "tmc.submitExercise" },
+    {
+      trustedCommand: "tmc.submitExercise",
+      retryOffer: (exercise) => ({
+        message: `The course workspace is trusted now. Submit ${exercise.exerciseSlug}?`,
+        action: "Submit",
+      }),
+    },
   )
 }

@@ -142,7 +142,7 @@ suite("Submit exercise command", function () {
     expect(context.dialog.errorNotification).not.toHaveBeenCalled()
   })
 
-  test("in Restricted Mode submits nothing, and submits once the workspace is trusted", async function () {
+  test("in Restricted Mode submits nothing, and once trusted asks before submitting", async function () {
     const context = contextWith(exercise)
     const { trustGate, retries } = restrictedTrustGate()
     context.startup.trustGate = trustGate
@@ -152,6 +152,10 @@ suite("Submit exercise command", function () {
 
     expect(result.val).toBeInstanceOf(WorkspaceUntrustedError)
     expect(actions.submitExercise).not.toHaveBeenCalled()
+    expect(vi.mocked(trustGate.refusal).mock.lastCall?.[1]).toEqual({
+      message: "The course workspace is trusted now. Submit ex-1?",
+      action: "Submit",
+    })
     retries.at(-1)?.()
     expect(executeCommand).toHaveBeenCalledWith("tmc.submitExercise", uri)
   })
