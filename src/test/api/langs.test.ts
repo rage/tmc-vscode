@@ -245,7 +245,7 @@ suite("Langs class arg building", function () {
     const combined = {
       course: { ...moocCourse, id: uuid(1) },
       slides: [],
-      progress: { course_id: uuid(1), exercises: [] },
+      progress: { course_id: uuid(1), exercises: [], closed_chapters: [] },
     }
     const calls = stubSpawn(langs, () => Ok(dataOutput("mooc-combined-course-data", combined)))
     const result = await langs.getMoocCourseData(uuid(1))
@@ -1103,8 +1103,8 @@ suite("Langs error-kind mapping", function () {
     const langs = newLangs()
     const withAccount = {
       ...nullOutput("currently logged in", "logged-in"),
-      data: { "output-data-kind": "mooc-account", "output-data": { user_id: uuid(7) } },
-    } as unknown as OutputData
+      data: { "output-data-kind": "mooc-current-user", "output-data": { id: uuid(7) } },
+    } satisfies OutputData
     stubSpawn(langs, (i) =>
       Ok(i === 0 ? withAccount : nullOutput("currently logged in", "logged-in")),
     )

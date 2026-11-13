@@ -547,3 +547,6 @@ export const {
   spacedNameExercise,
   notEnrolledExercise,
 } = createMoocFixtures(DEFAULT_MOOC_MOCK_BASE_URL)
+
+/** The account a fresh or reset mock's tokens act for. */
+export const MOCK_DEFAULT_USER_ID = "5c1b6f0e-6b52-4d0a-9a43-2f0c3e6a7d11"

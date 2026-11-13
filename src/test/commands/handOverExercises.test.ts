@@ -105,7 +105,7 @@ suite("handOverExercises", function () {
     expect(context.startup.accountHandover.exercisesAccountId).toBe("user-a")
   })
 
-  test("a CLI that does not name the account changes nothing", async function () {
+  test("an account courses.mooc.fi could not name changes nothing", async function () {
     const { context } = setUp(undefined, true)
     await context.startup.accountHandover.setExercisesAccountId("user-a")
 
