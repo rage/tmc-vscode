@@ -3,7 +3,10 @@ import * as vscode from "vscode"
 import { WorkspaceUntrustedError } from "../errors"
 import { Logger } from "../utilities"
 
-/** How long after a refusal granting trust still runs the refused operation. */
+/**
+ * How long after a refusal granting trust still runs the refused operation, and how long the
+ * offer to run it stays good once asked.
+ */
 const RETRY_WINDOW_MS = 5 * 60 * 1000
 
 /** A question to ask before retrying an operation that sends something to a backend. */
@@ -11,6 +14,8 @@ export interface RetryOffer {
   message: string
   /** The button that retries the operation. */
   action: string
+  /** Says the button came too late to retry, and how to run the operation again. */
+  expiredMessage: string
 }
 
 async function askInNotification({ message, action }: RetryOffer): Promise<boolean> {
@@ -31,6 +36,8 @@ export class WorkspaceTrustGate implements vscode.Disposable {
     private readonly _isTrusted: () => boolean = () => vscode.workspace.isTrusted,
     private readonly _now: () => number = Date.now,
     private readonly _ask: (offer: RetryOffer) => Promise<boolean> = askInNotification,
+    private readonly _tell: (message: string) => void = (message) =>
+      void vscode.window.showInformationMessage(message),
   ) {
     this._grantListener = vscode.workspace.onDidGrantWorkspaceTrust(() => this._onGrant())
   }
@@ -72,11 +79,19 @@ export class WorkspaceTrustGate implements vscode.Disposable {
       retry()
       return
     }
+    const askedAt = this._now()
+    // VS Code cannot withdraw a notification, so its button stays clickable in the center.
     void this._ask(offer).then((isAccepted) => {
-      if (isAccepted) {
-        Logger.info("Workspace trusted, retrying the operation it held back as asked.")
-        retry()
+      if (!isAccepted) {
+        return
       }
+      if (this._now() - askedAt > RETRY_WINDOW_MS) {
+        Logger.info("Workspace trusted, but the offer to retry was accepted after it expired.")
+        this._tell(offer.expiredMessage)
+        return
+      }
+      Logger.info("Workspace trusted, retrying the operation it held back as asked.")
+      retry()
     })
   }
 }

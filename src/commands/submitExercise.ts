@@ -100,6 +100,9 @@ export async function submitExercise(
       retryOffer: (exercise) => ({
         message: `The course workspace is trusted now. Submit ${exercise.exerciseSlug}?`,
         action: "Submit",
+        expiredMessage:
+          `That offer to submit ${exercise.exerciseSlug} has expired, so nothing was sent. ` +
+          "Submit it again to send your code as it is now.",
       }),
     },
   )

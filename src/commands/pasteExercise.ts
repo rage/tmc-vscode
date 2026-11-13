@@ -37,6 +37,9 @@ export async function pasteExercise(
           `The course workspace is trusted now. Share ${exercise.exerciseSlug} via ` +
           `${pasteServiceName(exercise.backend)}?`,
         action: "Share",
+        expiredMessage:
+          `That offer to share ${exercise.exerciseSlug} has expired, so nothing was sent. ` +
+          "Share it again to send your code as it is now.",
       }),
     },
   )

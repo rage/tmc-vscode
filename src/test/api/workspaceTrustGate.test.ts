@@ -15,16 +15,19 @@ suite("WorkspaceTrustGate", function () {
   let isTrusted: boolean
   let now: number
   let ask: Mock<(offer: RetryOffer) => Promise<boolean>>
+  let tell: Mock<(message: string) => void>
   let gate: WorkspaceTrustGate
 
   beforeEach(function () {
     isTrusted = false
     now = 0
     ask = vi.fn(async () => true)
+    tell = vi.fn()
     gate = new WorkspaceTrustGate(
       () => isTrusted,
       () => now,
       ask,
+      tell,
     )
   })
 
@@ -77,7 +80,7 @@ suite("WorkspaceTrustGate", function () {
 
   test("asks before retrying an operation refused with an offer", async function () {
     const retry = vi.fn()
-    const offer = { message: "Submit hello?", action: "Submit" }
+    const offer = { message: "Submit hello?", action: "Submit", expiredMessage: "Expired." }
     gate.refusal(retry, offer)
 
     grantTrust()
@@ -89,12 +92,27 @@ suite("WorkspaceTrustGate", function () {
   test("does not retry an offered operation the user does not accept", async function () {
     ask.mockResolvedValue(false)
     const retry = vi.fn()
-    gate.refusal(retry, { message: "Submit hello?", action: "Submit" })
+    gate.refusal(retry, { message: "Submit hello?", action: "Submit", expiredMessage: "Expired." })
 
     grantTrust()
 
     await vi.waitFor(() => expect(ask).toHaveBeenCalledOnce())
     await Promise.resolve()
+    expect(retry).not.toHaveBeenCalled()
+  })
+
+  test("an offer accepted minutes after it was asked retries nothing, and says so", async function () {
+    const answer = Promise.withResolvers<boolean>()
+    ask.mockReturnValue(answer.promise)
+    const retry = vi.fn()
+    gate.refusal(retry, { message: "Submit hello?", action: "Submit", expiredMessage: "Expired." })
+    now = 60 * 1000
+
+    grantTrust()
+    now += 6 * 60 * 1000
+    answer.resolve(true)
+
+    await vi.waitFor(() => expect(tell).toHaveBeenCalledExactlyOnceWith("Expired."))
     expect(retry).not.toHaveBeenCalled()
   })
 })

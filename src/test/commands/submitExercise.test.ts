@@ -157,6 +157,8 @@ suite("Submit exercise command", function () {
     expect(vi.mocked(trustGate.refusal).mock.lastCall?.[1]).toEqual({
       message: "The course workspace is trusted now. Submit ex-1?",
       action: "Submit",
+      expiredMessage:
+        "That offer to submit ex-1 has expired, so nothing was sent. Submit it again to send your code as it is now.",
     })
     retries.at(-1)?.()
     expect(executeCommand).toHaveBeenCalledWith("tmc.submitExercise", uri)
