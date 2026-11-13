@@ -190,6 +190,51 @@ const moocCourseInWorkspace = courseHomeView({
   })),
 })
 
+const moocCourseWithRules = courseHomeView({
+  ...moocCourse,
+  isWorkspaceOpen: true,
+  parts: [
+    {
+      key: "chapter:1",
+      name: "Getting started",
+      isDefaultOpen: true,
+      exercises: [
+        moocExercise(1, "Hello, world!", { status: "opened", triesLeft: 2, deadline: DUE_SOON }),
+        moocExercise(2, "Reading input", {
+          status: "opened",
+          submitRefusal: {
+            label: "deadline passed",
+            sentence: "The deadline of Reading input has passed, so it can no longer be submitted.",
+          },
+        }),
+        moocExercise(3, "Arithmetic", {
+          status: "opened",
+          isOutOfTries: true,
+          submitRefusal: {
+            label: "no tries left",
+            sentence: "You have no tries left on Arithmetic, so it can no longer be submitted.",
+          },
+        }),
+      ],
+    },
+    {
+      key: "chapter:2",
+      name: "Conditionals and loops",
+      isDefaultOpen: true,
+      lockedReason: "Locked until you have completed the chapters before it.",
+      exercises: [
+        moocExercise(4, "Is it even?", {
+          submitRefusal: {
+            label: "chapter not unlocked yet",
+            sentence:
+              'Is it even? can be submitted once you have completed the chapters before the chapter "Conditionals and loops".',
+          },
+        }),
+      ],
+    },
+  ],
+})
+
 const restrictedCourse = courseHomeView({
   ...tmcCourse,
   // The updates were just applied, which is what the notice says.
@@ -292,6 +337,11 @@ export const SCENARIOS: Scenario[] = [
       { id: 6 },
       { ...moocCourse, isWorkspaceOpen: true, parts: moocParts(true) },
     ),
+  },
+  {
+    id: "course-details/mooc-submission-rules",
+    panel: courseDetailsPanel(62, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
+    reply: answerCourseDetails({ id: 62 }, moocCourseWithRules),
   },
   {
     id: "course-details/restricted",
@@ -453,6 +503,20 @@ export const SCENARIOS: Scenario[] = [
       submissionViewMessage(moocSubmissionPanel.id, {
         ...moocGradingView(moocGrading({ score_given: 0, feedback_text: "Tests failed" }), 3),
         isExercisePassed: false,
+      }),
+    ],
+  },
+  {
+    id: "exercise-submission/mooc-out-of-tries",
+    panel: moocSubmissionPanel,
+    pushes: [
+      submissionViewMessage(moocSubmissionPanel.id, {
+        ...moocGradingView(moocGrading({ score_given: 0, feedback_text: "Tests failed" }), 3),
+        isExercisePassed: false,
+        solutionUrl: `${MOOC_COURSE_URL}/chapter-1/exercise-3`,
+        submitRefusal:
+          "You have no tries left on Sum of three numbers, so it can no longer be submitted.",
+        triesLeft: 0,
       }),
     ],
   },

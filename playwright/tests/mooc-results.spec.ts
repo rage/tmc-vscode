@@ -4,6 +4,7 @@ import { MOCK_BACKEND_URL } from "../../backend/mockSession"
 import { passingExercise } from "../../backend/mooc/fixtures"
 import { vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
+import { ExplorerPage } from "../pages/explorer"
 import { TmcPage } from "../pages/tmc"
 
 // What courses.mooc.fi tells about an exercise after it leaves the student's hands: the
@@ -66,6 +67,53 @@ vsCodeTest(
       await expect(coursesView.row("Removed from the course")).toBeVisible()
       await expect(exercise).toHaveAccessibleName(/removed from the course/)
       await expect(coursesView.notificationToast("Failed to check")).toBeHidden()
+    })
+  },
+)
+
+vsCodeTest(
+  "the last try asks first, and an exercise out of tries offers no Submit",
+  async ({ page, webview }) => {
+    const coursesView = new CoursesViewPage(page, webview)
+    const sidePanel = new TmcPage(page, webview).getSidePanel()
+    const courseTitle = "MOOC Variants Course"
+    const exercise = coursesView.row("limited_tries_exercise")
+    const submitButton = page
+      .getByRole("toolbar", { name: "Editor actions" })
+      .getByLabel("Submit Solution", { exact: true })
+
+    await vsCodeTest.step("open the exercise, which has one try, in its workspace", async () => {
+      await coursesView.goto()
+      await coursesView.addNewMoocCourse(courseTitle)
+      await coursesView.expand(coursesView.row(courseTitle))
+      await exercise.click()
+      await expect(exercise).toHaveAccessibleName(/, open,.*1 try left/)
+      await coursesView.runInlineAction(coursesView.row(courseTitle), "Open Course Workspace")
+      await new ExplorerPage(page).openPath(["src", "passing_exercise.py"])
+      await expect(page.getByText("def hello()")).toBeVisible()
+    })
+
+    await vsCodeTest.step("submitting asks first, as it is the last try", async () => {
+      await page.getByText("def hello()").click()
+      await submitButton.click()
+      const dialog = page.locator(".monaco-dialog-box")
+      await expect(dialog).toContainText("This is your last try on limited_tries_exercise. Submit?")
+      await dialog.getByRole("button", { name: "Submit", exact: true }).click()
+      await expect(
+        sidePanel.getByRole("heading", { name: "Some tests failed on the server" }),
+      ).toBeVisible()
+    })
+
+    await vsCodeTest.step("Submit is gone everywhere, and the reason is given", async () => {
+      await expect(
+        sidePanel.getByText("You have no tries left on limited_tries_exercise", { exact: false }),
+      ).toBeVisible()
+      await expect(sidePanel.getByRole("button", { name: "Submit Again" })).toHaveCount(0)
+      await coursesView.goto()
+      await coursesView.expand(coursesView.row(courseTitle))
+      await expect(exercise).toHaveAccessibleName(/no tries left/)
+      await page.getByText("def hello()").click()
+      await expect(submitButton).toHaveCount(0)
     })
   },
 )
