@@ -96,9 +96,12 @@ export function registerServiceFreeCommands(
   register(TRUST_COURSE_WORKSPACE_COMMAND, () => requestWorkspaceTrust())
 
   register("tmc.debug", async () => {
-    await vscode.commands.executeCommand("workbench.output.action.clearOutput")
+    // With logging off, the channel `show` creates holds only how to turn it on.
+    const isLogging = Logger.output !== undefined
     Logger.show()
-    await vscode.commands.executeCommand("workbench.action.openActiveLogOutputFile")
+    if (isLogging) {
+      await vscode.commands.executeCommand("workbench.action.openActiveLogOutputFile")
+    }
   })
 }
 

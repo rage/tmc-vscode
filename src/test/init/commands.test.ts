@@ -568,16 +568,38 @@ suite("registered command handlers", function () {
     expect(show).toHaveBeenCalledOnce()
   })
 
-  test("tmc.debug clears the output, shows it, then opens the active log file", async function () {
+  test("tmc.debug shows the output as it is, then opens its log file", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     const show = vi.spyOn(Logger, "show").mockImplementation(() => {})
+    const initialOutput = Logger.output
+    Logger.output = {} as vscode.OutputChannel
     const { handlers } = registerAndCollect()
 
-    await handlers.get("tmc.debug")?.()
+    try {
+      await handlers.get("tmc.debug")?.()
+    } finally {
+      Logger.output = initialOutput
+    }
 
-    expect(executeCommand).toHaveBeenNthCalledWith(1, "workbench.output.action.clearOutput")
     expect(show).toHaveBeenCalledOnce()
-    expect(executeCommand).toHaveBeenNthCalledWith(2, "workbench.action.openActiveLogOutputFile")
+    expect(executeCommand.mock.calls).toEqual([["workbench.action.openActiveLogOutputFile"]])
+  })
+
+  test("tmc.debug opens no log file while nothing is logged", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const show = vi.spyOn(Logger, "show").mockImplementation(() => {})
+    const initialOutput = Logger.output
+    Logger.output = undefined
+    const { handlers } = registerAndCollect()
+
+    try {
+      await handlers.get("tmc.debug")?.()
+    } finally {
+      Logger.output = initialOutput
+    }
+
+    expect(show).toHaveBeenCalledOnce()
+    expect(executeCommand).not.toHaveBeenCalled()
   })
 
   test("tmc.viewInitializationErrorHelp opens the recovery panel even when degraded", async function () {

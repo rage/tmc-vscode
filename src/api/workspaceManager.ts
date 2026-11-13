@@ -768,7 +768,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     const activeCourseWorkspace = this._activeCourseWorkspace
     const workspaceFolders = vscode.workspace.workspaceFolders
     if (!activeCourseWorkspace || !workspaceFolders) {
-      Logger.warn("Attempted refresh for a non-course workspace.")
+      Logger.debug("No course workspace to refresh the folders of.")
       return Ok.EMPTY
     }
 

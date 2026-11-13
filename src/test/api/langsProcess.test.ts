@@ -471,6 +471,20 @@ suite("Langs CLI process cancellation", function () {
     expect(killedProcessTrees()).toContain(langsProcess.pid)
   })
 
+  test("a killed process is logged as killed, not as exiting cleanly", async function () {
+    const captured = captureLogs()
+    const langs = newLangs()
+    const pending = langs.isAuthenticated()
+    const langsProcess = lastProcess()
+    langsProcess.emit("exit", null, "SIGTERM")
+    langsProcess.stdout.emit("end")
+    await pending
+
+    const text = loggedText(captured)
+    expect(text).toContain("Process was killed by SIGTERM after")
+    expect(text).not.toContain("exited with code")
+  })
+
   test("interrupting a process that already exited signals nothing", async function () {
     const langs = newLangs()
     const login = langs.authenticate(() => {})
