@@ -5,6 +5,7 @@ import { defineConfig, devices } from "@playwright/test"
  */
 export default defineConfig({
   testDir: "./playwright",
+  globalSetup: "./playwright/mockBackendLock.ts",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   // The retry exists to record a trace (see `use.trace`); a test that passes only
