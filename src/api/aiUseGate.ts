@@ -130,8 +130,9 @@ function refusalForLapse(lapse: AiRestrictionLapse, course: LocalCourseData): Re
     case "outsideCourseWorkspace":
       return {
         error: new AiUseRefusedError(
-          "AI assistance must be off in this course, and only its course workspace turns it" +
-            " off. Open the exercise in the course workspace and try again.",
+          `The exercises of ${LocalCourseData.getCourseTitle(course)} are tested and submitted` +
+            " in its course workspace, which keeps AI assistance off. Open the course" +
+            " workspace and try again.",
           "Open Course Workspace",
         ),
         showProblem: () =>
