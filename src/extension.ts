@@ -76,6 +76,7 @@ import { FailedUpdatesStatusBarItem } from "./ui/statusBarFailedUpdates"
 import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
 import {
+  reachWalkthroughMilestone,
   showNextWalkthroughStep,
   trackWalkthroughActive,
   walkthroughProgressOf,
@@ -537,6 +538,7 @@ async function activateInner(
       // Point totals come from the backend, so without this the Courses view and Course
       // Details totals stay stale until the user refreshes by hand.
       onDidFinishSubmission((courseId) => {
+        reachWalkthroughMilestone("test-my-code:HasSubmitted")
         void refreshEverything(readyContext, {
           silent: true,
           isQueuedWhenBusy: true,

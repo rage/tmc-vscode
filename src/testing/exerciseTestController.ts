@@ -25,6 +25,7 @@ import {
   WorkspaceUntrustedError,
 } from "../errors"
 import { countOf } from "../utilities"
+import { reachWalkthroughMilestone } from "../window/walkthrough"
 import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
 import { createSourceFileFinder } from "./sourceFiles"
 import {
@@ -198,6 +199,7 @@ export class ExerciseTestController implements vscode.Disposable {
           }
           this._reportError(run, item, outcome.val)
         } else {
+          reachWalkthroughMilestone("test-my-code:HasRunTests")
           const isAllPassed = await this._reportOutcome(run, item, exercise, outcome.val)
           if (requested.length === 1) {
             this._offerSubmit(exercise, outcome.val, isAllPassed)

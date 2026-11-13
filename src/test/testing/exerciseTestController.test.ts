@@ -270,6 +270,11 @@ suite("ExerciseTestController", function () {
     item.children.forEach((child) => expect(states.get(child.id)?.[0]).toBe("passed"))
     expect(item.description).toBe("2/2 tests passed")
     expect(run.output).toEqual([{ output: "stdout:\r\nHello\r\nWorld\r\n\r\n", test: item }])
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      "setContext",
+      "test-my-code:HasRunTests",
+      true,
+    )
 
     expect(s.actionContext.dialog.notification).toHaveBeenCalledOnce()
     const [message, [label, onSubmit]] = vi.mocked(s.actionContext.dialog.notification).mock

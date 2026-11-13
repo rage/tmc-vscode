@@ -103,14 +103,16 @@ export async function login(actionContext: ReadyActionContext): Promise<LoginOut
   void handOverExercises(actionContext).catch((e) =>
     Logger.error("Checking whose the exercises are after login failed", e),
   )
-  // Before the course pick, which an editor opening after it would close.
-  await showNextWalkthroughStep(() => ({
-    ...walkthroughProgressOf(actionContext),
-    isLoggedIn: true,
-  })).catch((e) => Logger.warn("Could not show the next walkthrough step", e))
   // A login that restores an expired session finds the user's courses still added.
   if (actionContext.startup.userData.getCourses().length === 0) {
+    // The walkthrough moves on once the course is added: moving it now would take the focus
+    // the course pick needs.
     void vscode.commands.executeCommand("tmc.addNewCourse")
+  } else {
+    await showNextWalkthroughStep(
+      () => ({ ...walkthroughProgressOf(actionContext), isLoggedIn: true }),
+      { isVisibleOnly: true },
+    ).catch((e) => Logger.warn("Could not show the next walkthrough step", e))
   }
   void refreshEverything(actionContext, { silent: true }).catch((e) =>
     Logger.error("Refresh after login failed", e),

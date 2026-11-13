@@ -20,6 +20,7 @@ import { ExerciseTestController } from "../../testing/exerciseTestController"
 import * as treeCommands from "../../ui/treeview/treeCommands"
 import { CourseTreeItem, ExerciseTreeItem } from "../../ui/treeview/treeview"
 import { Logger } from "../../utilities"
+import type { WalkthroughMilestone } from "../../window/walkthrough"
 import { tmcLocalCourse } from "../fixtures/courses"
 import { idOfMoocCourse, idOfTmcCourse } from "../fixtures/identifiers"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
@@ -341,6 +342,20 @@ suite("registerCommands", function () {
     ].filter((command) => !command.startsWith("workbench."))
     const declared = new Set(declaredCommands())
     expect([...new Set(referenced)].filter((x) => !declared.has(x))).toEqual([])
+  })
+
+  // `onCommand` misses a step done from a notification button or the Testing view.
+  test("the run and submit steps also complete on the milestones the extension sets", function () {
+    const { walkthroughs = [] } = packageJson().contributes
+    const steps = walkthroughs.flatMap((x) => x.steps)
+    for (const [id, milestone] of [
+      ["runTests", "test-my-code:HasRunTests"],
+      ["submit", "test-my-code:HasSubmitted"],
+    ] satisfies [string, WalkthroughMilestone][]) {
+      const events = steps.find((x) => x.id === id)?.completionEvents ?? []
+      expect(events).toContain(`onContext:${milestone}`)
+      expect(events).toContain(`onContext:${milestone} && test-my-code:WalkthroughActive`)
+    }
   })
 
   test("every submenu a menu points at is declared", function () {

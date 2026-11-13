@@ -923,7 +923,9 @@
               "markdown": "media/walkthrough/run-tests.md"
             },
             "completionEvents": [
-              "onCommand:tmc.testExercise"
+              "onCommand:tmc.testExercise",
+              "onContext:test-my-code:HasRunTests",
+              "onContext:test-my-code:HasRunTests && test-my-code:WalkthroughActive"
             ]
           },
           {
@@ -934,7 +936,9 @@
               "markdown": "media/walkthrough/submit.md"
             },
             "completionEvents": [
-              "onCommand:tmc.submitExercise"
+              "onCommand:tmc.submitExercise",
+              "onContext:test-my-code:HasSubmitted",
+              "onContext:test-my-code:HasSubmitted && test-my-code:WalkthroughActive"
             ]
           },
           {
