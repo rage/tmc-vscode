@@ -636,6 +636,37 @@ suite("the course home", () => {
     })
   })
 
+  test("calls the material page the model solution once it is revealed", async () => {
+    await renderHome(
+      courseHomeView({
+        backend: "mooc",
+        parts: [
+          {
+            key: "p",
+            name: "Exercises",
+            isDefaultOpen: true,
+            exercises: [
+              courseHomeExercise(1, "one", {
+                materialUrl: "https://courses.example/page",
+                isOutOfTries: true,
+              }),
+            ],
+          },
+        ],
+      }),
+      moocPanel(),
+    )
+
+    await fireEvent.click(screen.getByRole("button", { name: "More Actions for one" }))
+    await tick()
+    await fireEvent.click(screen.getByRole("menuitem", { name: "Show Model Solution" }))
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "openLinkInBrowser",
+      url: "https://courses.example/page",
+    })
+  })
+
   test("follows the view the host pushes", async () => {
     const panel = await renderHome()
 

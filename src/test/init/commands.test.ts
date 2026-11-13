@@ -61,6 +61,7 @@ const expectedCommands = [
   "tmc.showExerciseActions",
   "tmc.showWelcome",
   "tmc.showMoocLogin",
+  "tmc.showModelSolution",
   "tmc.submitExercise",
   "tmc.switchWorkspace",
   "tmc.testExercise",

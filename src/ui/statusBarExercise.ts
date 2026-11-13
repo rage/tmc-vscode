@@ -3,6 +3,7 @@ import * as vscode from "vscode"
 import type { LocalCourseExercise } from "../../shared/lib"
 import {
   LocalCourseData,
+  modelSolutionUrlOf,
   SUBMIT_REFUSAL_LABELS,
   submitRefusalOf,
   triesLeftText,
@@ -179,6 +180,9 @@ export async function showExerciseActions(
       : []),
     separator("Course"),
     action("$(arrow-right) Open Next Exercise", "tmc.openNextExercise"),
+    ...(stored.ok && modelSolutionUrlOf(stored.val.exercise)
+      ? [action("$(lightbulb) Show Model Solution", "tmc.showModelSolution")]
+      : []),
     ...(course.ok
       ? [action("$(list-tree) Reveal in Courses View", "tmc.revealInCoursesView")]
       : []),

@@ -314,6 +314,29 @@ suite("showExerciseActions", function () {
     })
   })
 
+  test("offers the model solution once it is revealed", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    vi.spyOn(vscode.window, "showQuickPick").mockImplementation((async (
+      items: readonly { label: string }[],
+    ) => items.find((x) => x.label.includes("Model Solution"))) as never)
+    const h = harness()
+    h.stored.exercise = makeMoocKind(
+      moocCourseExercise({
+        id: "exercise-uuid",
+        name: "hello",
+        triesLeft: 0,
+        maxTries: 2,
+        outOfTries: true,
+        pageUrl: "https://courses.example/page",
+      }),
+    )
+
+    await showExerciseActions(new Dialog(), h.sources, true)
+
+    expect(offered()).toContain("Show Model Solution")
+    expect(executeCommand).toHaveBeenCalledWith("tmc.showModelSolution", exerciseHelloWorld.uri)
+  })
+
   test("for an exercise whose chapter has not opened, names the chapter", async function () {
     const showQuickPick = vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)
     const h = harness()

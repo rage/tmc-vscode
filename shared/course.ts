@@ -169,6 +169,17 @@ export function submitRefusalOf(
   return undefined
 }
 
+/**
+ * The course material page that shows a mooc exercise's model solution, which courses.mooc.fi
+ * reveals once the exercise is passed or out of tries; `undefined` before that, and for tmc.
+ */
+export function modelSolutionUrlOf(exercise: LocalCourseExercise): string | undefined {
+  if (exercise.kind !== "mooc" || !(exercise.data.passed || exercise.data.outOfTries)) {
+    return undefined
+  }
+  return exercise.data.pageUrl
+}
+
 /** A few words for a row that cannot be submitted, e.g. "deadline passed". */
 export const SUBMIT_REFUSAL_LABELS: Record<SubmitRefusal, string> = {
   chapterNotUnlockedYet: "chapter not unlocked yet",

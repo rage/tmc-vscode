@@ -212,6 +212,11 @@
         "category": "TestMyCode"
       },
       {
+        "command": "tmc.showModelSolution",
+        "title": "Show Model Solution",
+        "category": "TestMyCode"
+      },
+      {
         "command": "tmc.removeCourse",
         "title": "Remove Course...",
         "category": "TestMyCode"
@@ -420,6 +425,10 @@
         {
           "command": "tmc.pasteExercise",
           "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.showModelSolution",
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise"
         },
         {
           "command": "tmc.resetExercise",

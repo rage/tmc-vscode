@@ -111,7 +111,16 @@
           ]
         : []),
       ...(materialUrl
-        ? [{ label: "Open in Course Material", onselect: () => onopenmaterial(materialUrl) }]
+        ? [
+            {
+              // The material page shows the model solution once courses.mooc.fi reveals it.
+              label:
+                exercise.passed || exercise.isOutOfTries
+                  ? "Show Model Solution"
+                  : "Open in Course Material",
+              onselect: () => onopenmaterial(materialUrl),
+            },
+          ]
         : []),
     ]
   }

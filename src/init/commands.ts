@@ -297,6 +297,10 @@ export function registerCommands(
 
   register("tmc.showMoocLogin", async () => commands.login(readyContext))
 
+  register("tmc.showModelSolution", async (target: ExerciseTarget | undefined) =>
+    commands.showModelSolution(readyContext, resourceOf(target)),
+  )
+
   register(SHOW_AI_USE_PROBLEM_COMMAND, async () => readyContext.startup.aiUseGate.showProblem())
 
   register("tmc.submitExercise", async (target: ExerciseTarget | undefined) =>
