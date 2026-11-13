@@ -48,7 +48,24 @@
   }
   h1 {
     margin: 0;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+    hyphens: auto;
+  }
+  /* Too narrow to share a line: the toolbar goes above the title, which gets the full width. */
+  @media (max-width: 300px) {
+    .panel-header {
+      flex-wrap: wrap;
+    }
+    .titles {
+      flex-basis: 100%;
+    }
+    .toolbar {
+      order: -1;
+      margin-inline-start: auto;
+    }
+    h1 {
+      font-size: 1.2em;
+    }
   }
   .subtitle {
     margin: var(--tmc-space-1) 0 0;
