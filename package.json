@@ -385,7 +385,7 @@
         },
         {
           "command": "tmc.courseDetails",
-          "when": "test-my-code:Initialized"
+          "when": "test-my-code:Initialized && test-my-code:HasCourses"
         },
         {
           "command": "tmc.downloadNewExercises",
@@ -485,7 +485,7 @@
         },
         {
           "command": "tmc.removeCourse",
-          "when": "test-my-code:Initialized"
+          "when": "test-my-code:Initialized && test-my-code:HasCourses"
         },
         {
           "command": "tmc.revealInCoursesView",
@@ -509,7 +509,7 @@
         },
         {
           "command": "tmc.closeCompletedExercises",
-          "when": "test-my-code:Initialized"
+          "when": "test-my-code:Initialized && test-my-code:HasCourses"
         },
         {
           "command": "tmc.closeExercises",

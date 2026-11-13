@@ -409,6 +409,18 @@ suite("registerCommands", function () {
     }
   })
 
+  test("the palette offers the commands that pick an added course only once one is added", function () {
+    for (const command of [
+      "tmc.courseDetails",
+      "tmc.removeCourse",
+      "tmc.closeCompletedExercises",
+    ]) {
+      expect(commandPalette().find((x) => x.command === command)?.when).toBe(
+        "test-my-code:Initialized && test-my-code:HasCourses",
+      )
+    }
+  })
+
   test("every context key the manifest gates on is one the extension sets", function () {
     const sourceRoot = path.join(__dirname, "..", "..")
     const settable = new Set(
