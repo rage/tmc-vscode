@@ -260,6 +260,20 @@ suite("ExerciseSubmission panel (failures)", () => {
   })
 })
 
+suite("ExerciseSubmission panel (teacher review)", () => {
+  test("says what the review waits for beside the explanation", async () => {
+    render(ExerciseSubmission, { props: { panel: moocPanel } })
+    showView(moocPanel.id, {
+      ...moocGradingView(moocGrading({ score_given: 3 }), 3),
+      pendingReview: "A teacher reviews this answer, which can change the points.",
+    })
+
+    expect(
+      await screen.findByText("A teacher reviews this answer, which can change the points."),
+    ).toBeInTheDocument()
+  })
+})
+
 suite("ExerciseSubmission panel (tmc results)", () => {
   test("shows the points against the exercise's available points", async () => {
     render(ExerciseSubmission, { props: { panel } })

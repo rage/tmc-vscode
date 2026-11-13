@@ -85,7 +85,7 @@
 
   function points(exercise: CourseHomeExercise): string {
     // Held at 0 until the review; the deadline column says so instead.
-    return exercise.availablePoints > 0 && !exercise.pendingReview
+    return exercise.availablePoints > 0 && (!exercise.pendingReview || exercise.awardedPoints > 0)
       ? `${exercise.awardedPoints}/${exercise.availablePoints}`
       : ""
   }

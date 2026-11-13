@@ -266,6 +266,9 @@
   {#if view?.explanation}
     <p>{view.explanation}</p>
   {/if}
+  {#if view?.pendingReview}
+    <p>{view.pendingReview}</p>
+  {/if}
   {#if view?.feedbackText}
     <p class="feedback-text"><span class="muted">Grader feedback:</span> {view.feedbackText}</p>
   {/if}

@@ -253,6 +253,33 @@ suite("the course home", () => {
     expect(within(row as HTMLElement).queryByText("locked")).not.toBeInTheDocument()
   })
 
+  test("shows points already given alongside a pending review", async () => {
+    await renderHome(
+      courseHomeView({
+        parts: [
+          {
+            key: "chapter:1",
+            name: "Basics",
+            isDefaultOpen: true,
+            exercises: [
+              courseHomeExercise(1, "loops", {
+                status: "opened",
+                passed: true,
+                awardedPoints: 2,
+                availablePoints: 2,
+                pendingReview: "A teacher reviews this answer, which can change the points.",
+              }),
+            ],
+          },
+        ],
+      }),
+    )
+
+    const [row] = screen.getAllByRole("listitem")
+    expect(row).toHaveTextContent("2/2")
+    expect(within(row as HTMLElement).getByText("waiting for teacher review")).toBeInTheDocument()
+  })
+
   test("calls an exercise on disk Downloaded until the course workspace is open", async () => {
     await renderHome(
       courseHomeView({

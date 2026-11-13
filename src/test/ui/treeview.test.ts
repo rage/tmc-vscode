@@ -558,6 +558,27 @@ suite("CoursesTree", function () {
       )
     })
 
+    test("a mooc exercise under review keeps showing points already given", function () {
+      const [course] = show(
+        moocCourse({
+          exercises: [
+            moocCourseExercise({
+              name: "loops",
+              passed: true,
+              awardedPoints: 1,
+              pendingReview: "awaits_teacher",
+            }),
+          ],
+        }),
+      )
+      const [loops] = exercisesOf(course)
+
+      expect(loops?.description).toBe("not downloaded · 1/1 points · waiting for teacher review")
+      expect(tooltipOf(loops!)).toContain(
+        "A teacher reviews this answer, which can change the points.",
+      )
+    })
+
     test("a mooc exercise counts its tries left, and its locked chapter names the lock", function () {
       const [course] = show(
         moocCourse({

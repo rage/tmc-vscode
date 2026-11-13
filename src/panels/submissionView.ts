@@ -6,7 +6,7 @@ import type {
   TestCase,
 } from "../../shared/langsSchema"
 import type { FeedbackQuestion, SubmissionView, WebviewError } from "../../shared/lib"
-import { assertUnreachable, pendingReviewSentence } from "../../shared/lib"
+import { arePointsHeldForReview, assertUnreachable, pendingReviewSentence } from "../../shared/lib"
 
 /** The phases in which the backend is still working on the submission. */
 export type InProgressPhase = "uploading" | "grading"
@@ -183,23 +183,28 @@ export function moocGradingView(
   const isBelowMax = given !== undefined && given < maxPoints
   const isPassedEarlier = standing === "Passed" && isBelowMax
   const pendingReview = grading.exercise_progress?.pending_teacher_review ?? null
+  const progressPoints = grading.exercise_progress?.score_given ?? 0
+  const reviewNote =
+    pendingReview === null
+      ? {}
+      : { pendingReview: pendingReviewSentence(pendingReview, progressPoints) }
   switch (grading.grading_progress) {
     case "FullyGraded":
-      if (pendingReview !== null) {
-        // The progress holds the points back at 0 for the review, so only the grading's own
-        // score tells how the tests went.
+      if (arePointsHeldForReview(pendingReview, progressPoints)) {
+        // Only the grading's own score tells how the tests went.
         return {
           ...graded,
           phase: "finished",
           headline: isBelowMax ? "Some tests failed on the server" : "All tests passed",
           tone: isBelowMax ? scoreTone(given) : "passed",
           points: undefined,
-          explanation: pendingReviewSentence(pendingReview),
+          ...reviewNote,
           canPaste: true,
         }
       }
       return {
         ...graded,
+        ...reviewNote,
         phase: "finished",
         headline: isPassedEarlier
           ? "This submission failed some tests"
@@ -318,6 +323,8 @@ function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): str
  * changes what the backend accepts.
  *
  * @param exercise.submitRefusal See {@link SubmissionView.submitRefusal}.
+ * @param exercise.pendingReview See {@link SubmissionView.pendingReview}; replaces the one a
+ *   finished grading was shown with.
  */
 export function withExerciseState(
   view: SubmissionView,
@@ -326,19 +333,23 @@ export function withExerciseState(
     isInCourse: boolean
     submitRefusal?: string | undefined
     triesLeft?: number | undefined
+    pendingReview?: string | undefined
   },
 ): SubmissionView {
   const {
     exerciseState: _exerciseState,
     submitRefusal: _submitRefusal,
     triesLeft: _triesLeft,
+    pendingReview: gradedPendingReview,
     ...rest
   } = view
   if (!exercise.isInCourse) {
     return { ...rest, exerciseState: "removed" }
   }
+  const pendingReview = view.phase === "finished" ? exercise.pendingReview : gradedPendingReview
   const standing = {
     ...rest,
+    ...(pendingReview === undefined ? {} : { pendingReview }),
     ...(exercise.submitRefusal === undefined ? {} : { submitRefusal: exercise.submitRefusal }),
     ...(exercise.triesLeft === undefined ? {} : { triesLeft: exercise.triesLeft }),
   }

@@ -8,6 +8,7 @@ import {
   CourseIdentifier,
   submitRefusalOf,
   submitRefusalSentence,
+  pendingReviewSentence,
   WebviewStateSchema,
 } from "../../shared/lib"
 import type { ActionContext } from "../actions/types"
@@ -449,6 +450,10 @@ function submissionViewMessage(
           )
         : undefined,
     triesLeft: exercise?.kind === "mooc" ? exercise.data.triesLeft : undefined,
+    pendingReview:
+      exercise?.kind === "mooc" && exercise.data.pendingReview
+        ? pendingReviewSentence(exercise.data.pendingReview, exercise.data.awardedPoints)
+        : undefined,
   })
   return { type: "submissionView", target: { id: panel.id, type: panel.type }, view: shown }
 }

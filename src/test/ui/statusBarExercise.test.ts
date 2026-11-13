@@ -215,6 +215,23 @@ suite("ExerciseStatusBarItem", function () {
     expect(itemOf().text).not.toContain("0/2")
   })
 
+  test("shows points already given while a review is pending", function () {
+    const h = harness()
+    h.stored.exercise = makeMoocKind(
+      moocCourseExercise({
+        id: "exercise-uuid",
+        name: exerciseHelloWorld.exerciseSlug,
+        awardedPoints: 1,
+        availablePoints: 2,
+        pendingReview: "awaits_teacher",
+      }),
+    )
+    track(new ExerciseStatusBarItem(h.sources))
+
+    expect(itemOf().text).toContain("1/2")
+    expect(itemOf().text).toContain("waiting for teacher review")
+  })
+
   test("says when the backend reports no tries left", function () {
     const h = harness()
     h.stored.exercise = makeMoocKind(

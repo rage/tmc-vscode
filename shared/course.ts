@@ -247,13 +247,35 @@ export function submitRefusalSentence(
 /** A few words for a row whose points wait for a teacher's review. */
 export const PENDING_REVIEW_LABEL = "waiting for teacher review"
 
-/** What a pending teacher review means for the points, as a sentence for the student. */
+/**
+ * Whether an exercise's points are held back for a pending teacher review. The backend holds them
+ * at 0, but may also report a review on points already given, which stay shown.
+ */
+export function arePointsHeldForReview(
+  pendingReview: SharedMoocCourseExercise["pendingReview"] | null,
+  awardedPoints: number,
+): boolean {
+  return pendingReview !== undefined && pendingReview !== null && awardedPoints === 0
+}
+
+/**
+ * What a pending teacher review means for the points, as a sentence for the student.
+ *
+ * @param awardedPoints The exercise's points now; see {@link arePointsHeldForReview}.
+ */
 export function pendingReviewSentence(
   pendingReview: NonNullable<SharedMoocCourseExercise["pendingReview"]>,
+  awardedPoints: number,
 ): string {
-  return pendingReview === "awaits_chapter_lock"
-    ? "The points wait for a teacher's review, which starts once you complete and lock the chapter."
-    : "The points wait for a teacher's review."
+  const startsOnLock = pendingReview === "awaits_chapter_lock"
+  if (arePointsHeldForReview(pendingReview, awardedPoints)) {
+    return startsOnLock
+      ? "The points wait for a teacher's review, which starts once you complete and lock the chapter."
+      : "The points wait for a teacher's review."
+  }
+  return startsOnLock
+    ? "A teacher reviews this answer once you complete and lock the chapter, which can change the points."
+    : "A teacher reviews this answer, which can change the points."
 }
 
 /** How many tries are left, e.g. "1 try left"; `undefined` when tries are unlimited. */

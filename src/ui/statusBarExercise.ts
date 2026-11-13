@@ -2,6 +2,7 @@ import * as vscode from "vscode"
 
 import type { LocalCourseExercise } from "../../shared/lib"
 import {
+  arePointsHeldForReview,
   ExerciseIdentifier,
   LocalCourseData,
   modelSolutionUrlOf,
@@ -81,9 +82,11 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
     const stored = storedResult.ok ? storedResult.val.exercise : undefined
     const running = this._sources.operations.current(exercise.id)
     const activity = running && activityLabels[running]
-    const isReviewPending = stored?.kind === "mooc" && stored.data.pendingReview !== undefined
+    const arePointsHeld =
+      stored?.kind === "mooc" &&
+      arePointsHeldForReview(stored.data.pendingReview, stored.data.awardedPoints)
     const points =
-      stored && !isReviewPending
+      stored && !arePointsHeld
         ? pointsText(stored.data.awardedPoints, stored.data.availablePoints)
         : undefined
     const course = this._sources.userData.getCourse(exercise.courseId)

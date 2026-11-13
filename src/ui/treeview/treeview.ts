@@ -10,6 +10,7 @@ import {
   SOFT_DEADLINE_PENALTY,
   SUBMIT_REFUSAL_LABELS,
   submitRefusalSentence,
+  arePointsHeldForReview,
   pendingReviewSentence,
   PENDING_REVIEW_LABEL,
   triesLeftText,
@@ -336,17 +337,17 @@ export class ExerciseTreeItem extends vscode.TreeItem {
         spoken: "update available",
         tooltip: "An update is available.",
       },
-      exercise.pendingReview
-        ? {
-            description: PENDING_REVIEW_LABEL,
-            spoken: PENDING_REVIEW_LABEL,
-            tooltip: pendingReviewSentence(exercise.pendingReview),
-          }
-        : points && {
-            description: `${points.short} points`,
-            spoken: points.spoken,
-            tooltip: `${points.short} points`,
-          },
+      !arePointsHeldForReview(exercise.pendingReview, exercise.awardedPoints) &&
+        points && {
+          description: `${points.short} points`,
+          spoken: points.spoken,
+          tooltip: `${points.short} points`,
+        },
+      exercise.pendingReview && {
+        description: PENDING_REVIEW_LABEL,
+        spoken: PENDING_REVIEW_LABEL,
+        tooltip: pendingReviewSentence(exercise.pendingReview, exercise.awardedPoints),
+      },
       exercise.isOutOfTries && {
         tooltip: "No tries left, so this score is final.",
       },

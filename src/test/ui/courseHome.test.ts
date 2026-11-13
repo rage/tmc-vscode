@@ -127,6 +127,31 @@ suite("buildCourseHomeView", function () {
     })
   })
 
+  test("says a review can change points already given, without calling them held back", function () {
+    const course = moocLocalCourse({
+      exercises: [
+        moocCourseExercise({
+          id: "a",
+          name: "loops",
+          awardedPoints: 1,
+          pendingReview: "awaits_chapter_lock",
+        }),
+      ],
+    })
+
+    const view = buildCourseHomeView(
+      contextFor(course),
+      idOfMoocCourse(MOOC_COURSE_ID),
+      NOW,
+    ).unwrap()
+
+    expect(view.parts[0]?.exercises[0]).toMatchObject({
+      awardedPoints: 1,
+      pendingReview:
+        "A teacher reviews this answer once you complete and lock the chapter, which can change the points.",
+    })
+  })
+
   test("says what the points of an exercise under review wait for, and why it is locked", function () {
     const course = moocLocalCourse({
       exercises: [

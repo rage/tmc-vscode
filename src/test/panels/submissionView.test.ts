@@ -12,6 +12,7 @@ import {
   moocGradingView,
   submitFailedView,
   tmcResultView,
+  withExerciseState,
   withProgressStep,
 } from "../../panels/submissionView"
 
@@ -185,7 +186,7 @@ suite("moocGradingView", () => {
     expect(view).toMatchObject({
       headline: "All tests passed",
       tone: "passed",
-      explanation:
+      pendingReview:
         "The points wait for a teacher's review, which starts once you complete and lock the chapter.",
     })
     expect(view.points).toBeUndefined()
@@ -194,7 +195,23 @@ suite("moocGradingView", () => {
   test("a grading held for review is judged by its own score, never the held-back 0", () => {
     expect(moocGradingView(underReview(1, "awaits_teacher"), 3)).toMatchObject({
       headline: "Some tests failed on the server",
-      explanation: "The points wait for a teacher's review.",
+      pendingReview: "The points wait for a teacher's review.",
+    })
+  })
+
+  test("a grading whose points were given while a review is pending shows them", () => {
+    const status = moocGrading("FullyGraded", 3, "Passed")
+    if (status.status === "grading" && status.grading.exercise_progress) {
+      Object.assign(status.grading.exercise_progress, {
+        score_given: 3,
+        pending_teacher_review: "awaits_teacher",
+      })
+    }
+
+    expect(moocGradingView(status, 3)).toMatchObject({
+      headline: "Exercise passed",
+      points: { given: 3, max: 3 },
+      pendingReview: "A teacher reviews this answer, which can change the points.",
     })
   })
 
@@ -336,5 +353,42 @@ suite("moocGradingView", () => {
       canKeepWaiting: true,
       canPaste: false,
     })
+  })
+})
+
+suite("withExerciseState", () => {
+  const heldForLock =
+    "The points wait for a teacher's review, which starts once you complete and lock the chapter."
+  const onDisk = { isOnDisk: true, isInCourse: true }
+
+  test("a finished grading says what the review waits for now, not at grading time", () => {
+    const view = {
+      ...moocGradingView(moocGrading("FullyGraded", 3, "Attempted"), 3),
+      pendingReview: heldForLock,
+    }
+
+    const shown = withExerciseState(view, {
+      ...onDisk,
+      pendingReview: "The points wait for a teacher's review.",
+    })
+
+    expect(shown.pendingReview).toBe("The points wait for a teacher's review.")
+  })
+
+  test("a finished grading drops a review no longer pending", () => {
+    const view = {
+      ...moocGradingView(moocGrading("FullyGraded", 3, "Attempted"), 3),
+      pendingReview: heldForLock,
+    }
+
+    expect(withExerciseState(view, onDisk).pendingReview).toBeUndefined()
+  })
+
+  test("a grading still in progress gets no review sentence", () => {
+    const view = inProgressView("grading", { steps: [] })
+
+    expect(
+      withExerciseState(view, { ...onDisk, pendingReview: heldForLock }).pendingReview,
+    ).toBeUndefined()
   })
 })

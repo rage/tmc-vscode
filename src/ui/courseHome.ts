@@ -152,7 +152,9 @@ export function buildCourseHomeView(
             : {}),
           awardedPoints: ex.awardedPoints,
           availablePoints: ex.availablePoints,
-          ...(pendingReview ? { pendingReview: pendingReviewSentence(pendingReview) } : {}),
+          ...(pendingReview
+            ? { pendingReview: pendingReviewSentence(pendingReview, ex.awardedPoints) }
+            : {}),
           ...(deadline ? { deadline } : {}),
           isSoftDeadline: !ex.isHard,
           isUpdateable: ex.isUpdateable,

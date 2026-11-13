@@ -36,7 +36,7 @@ export interface ExerciseView {
   submitRefusal: SubmitRefusal | undefined
   awardedPoints: number
   availablePoints: number
-  /** What the points wait for, which `awardedPoints` leaves at 0 until then; mooc only. */
+  /** The teacher review the answer awaits; see `arePointsHeldForReview`. Mooc only. */
   pendingReview: SharedMoocCourseExercise["pendingReview"]
   softDeadline: Date | null
   hardDeadline: Date | null
