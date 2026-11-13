@@ -2,6 +2,7 @@ import {
   findNextDateAfter,
   formatDateTime,
   formatDeadline,
+  formatTimestamp,
   parseDate,
 } from "../../utilities/dateDeadline"
 
@@ -74,6 +75,19 @@ suite("Date utils", () => {
       expect(formatDateTime(date, "fi")).toBe(absolute(date, "fi"))
       expect(formatDateTime(date, "en-US")).toBe(absolute(date, "en-US"))
       expect(formatDateTime(date, "fi")).toBe(absolute(date, "fi"))
+    })
+  })
+
+  suite("formatTimestamp", () => {
+    test("tells apart moments a second apart, with the date only when not today", () => {
+      const now = new Date(2026, 10, 12, 21, 40, 0)
+      const first = new Date(2026, 10, 12, 21, 37, 1)
+      const second = new Date(2026, 10, 12, 21, 37, 2)
+      expect(formatTimestamp(first, now, "en-US")).toBe("9:37:01 PM")
+      expect(formatTimestamp(second, now, "en-US")).toBe("9:37:02 PM")
+      expect(formatTimestamp(new Date(2026, 10, 11, 21, 37, 1), now, "en-US")).toBe(
+        "Nov 11, 2026, 9:37:01 PM",
+      )
     })
   })
 })

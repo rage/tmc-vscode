@@ -78,7 +78,7 @@ function harness(backend: BackendKind): Harness {
 suite("Paste exercise command", function () {
   beforeEach(function () {
     vi.mocked(actions.pasteExercise).mockImplementation(async (_context, id) =>
-      Ok(`https://pastebin.example/${id.kind}`),
+      Ok({ link: `https://pastebin.example/${id.kind}`, isReused: false }),
     )
     vscodeMock.env = { openExternal: vi.fn(), clipboard: { writeText: vi.fn(async () => {}) } }
   })
@@ -119,6 +119,19 @@ suite("Paste exercise command", function () {
     )
   })
 
+  test("says when it copied the last paste's link for unchanged code", async function () {
+    vi.mocked(actions.pasteExercise).mockResolvedValue(
+      Ok({ link: "https://pastebin.example/old", isReused: true }),
+    )
+    const { context, notifications } = harness("mooc")
+
+    await pasteExercise(context, undefined)
+
+    expect(notifications[0]?.[0]).toBe(
+      "Your code is unchanged since the last paste. Copied its link to the clipboard: https://pastebin.example/old",
+    )
+  })
+
   test("still shows the link when it could not be copied", async function () {
     vi.mocked(vscodeMock.env.clipboard.writeText).mockRejectedValue(new Error("no clipboard"))
     const { context, notifications } = harness("mooc")
@@ -142,7 +155,9 @@ suite("Paste exercise command", function () {
   })
 
   test("never opens a paste link that is not http(s)", async function () {
-    vi.mocked(actions.pasteExercise).mockResolvedValue(Ok("file:///etc/passwd"))
+    vi.mocked(actions.pasteExercise).mockResolvedValue(
+      Ok({ link: "file:///etc/passwd", isReused: false }),
+    )
     const { context, notifications } = harness("mooc")
 
     await pasteExercise(context, undefined)

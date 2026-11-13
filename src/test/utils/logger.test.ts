@@ -3,7 +3,7 @@ import type { OutputChannel } from "vscode"
 import { window } from "vscode"
 
 import { BaseError } from "../../../shared/lib"
-import { Logger, LogLevel } from "../../utilities/logger"
+import { Logger, LogLevel, redactUrlQuery } from "../../utilities/logger"
 
 const TOKEN = "super-secret-refresh-token"
 
@@ -33,6 +33,24 @@ suite("Logger redaction", function () {
     expect(loggable).not.toContain(TOKEN)
     // The bare verification URL is what the user is told to open, and carries no code.
     expect(loggable).toContain("https://courses.mooc.fi/oauth_device")
+  })
+
+  test("a url logged inside a message loses its query, user code included", function () {
+    expect(redactUrlQuery("http://project-331.local/oauth_device?user_code=2X9D-VPMW")).toBe(
+      "http://project-331.local/oauth_device?<redacted>",
+    )
+    expect(redactUrlQuery("https://courses.mooc.fi/oauth_device")).toBe(
+      "https://courses.mooc.fi/oauth_device",
+    )
+  })
+
+  test("a logged error reads as sentences, with no doubled full stop", function () {
+    const loggable = Logger.toLoggable(
+      new BaseError("Show the logs.", "HTTP error 404 Not Found for http://x/files."),
+    )
+
+    expect(loggable).toContain("Show the logs. HTTP error 404 Not Found for http://x/files.")
+    expect(loggable).not.toContain("..")
   })
 
   test("a secret nested in an array or a child object is still redacted", function () {

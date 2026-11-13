@@ -14,6 +14,7 @@ import type {
   StartupStep,
 } from "./actions/types"
 import { isReady } from "./actions/types"
+import { AccountHandover } from "./api/accountHandover"
 import AiRestriction, { isActiveCourseAiAllowed } from "./api/aiRestriction"
 import { AiUseGate, warnOfUnwritableWorkspaceFile } from "./api/aiUseGate"
 import { createAuthState } from "./api/authState"
@@ -21,6 +22,7 @@ import { CourseWorkspaceSwitches } from "./api/courseWorkspaceSwitches"
 import type { NotificationButton } from "./api/dialog"
 import Dialog from "./api/dialog"
 import ExerciseDecorationProvider from "./api/exerciseDecorationProvider"
+import { KeptCopies } from "./api/keptCopies"
 import Langs from "./api/langs"
 import {
   MOOC_AUTHENTICATION_PROVIDER_ID,
@@ -60,6 +62,7 @@ import { createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
 import {
   trackActiveEditorExercise,
+  trackActiveExerciseRemoved,
   trackHasCourses,
   trackHasDownloadedExercises,
 } from "./ui/contextKeys"
@@ -431,6 +434,7 @@ async function activateInner(
     langs.ok && resources.ok && workspaceManager && userData?.ok && exerciseDecorationProvider
       ? {
           kind: "ready",
+          accountHandover: new AccountHandover(context.globalState),
           aiUseGate: new AiUseGate(aiRestriction),
           courseWorkspaceSwitches,
           langs: langs.val,
@@ -439,6 +443,7 @@ async function activateInner(
           workspaceManager,
           userData: userData.val,
           exerciseDecorationProvider,
+          keptCopies: new KeptCopies(context.globalState),
         }
       : { kind: "degraded", failures: startupFailures({ langs, resources, userData }) }
   if (startup.kind === "degraded") {
@@ -510,6 +515,10 @@ async function activateInner(
       }),
       new FailedUpdatesStatusBarItem(failedUpdates),
       trackHasCourses(readyContext.startup.userData),
+      trackActiveExerciseRemoved(
+        readyContext.startup.workspaceManager,
+        readyContext.startup.userData,
+      ),
       trackHasDownloadedExercises(readyContext.startup.workspaceManager),
       // Point totals come from the backend, so without this the Courses view and Course
       // Details totals stay stale until the user refreshes by hand.

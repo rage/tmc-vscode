@@ -19,7 +19,7 @@ import {
   mockUserCode,
   tmcCredentials,
 } from "../../backend/mockSession"
-import { TMC_ARCHIVE_MIME } from "../../backend/mooc/fixtures"
+import { MOCK_DEFAULT_USER_ID, TMC_ARCHIVE_MIME } from "../../backend/mooc/fixtures"
 import type {
   ExerciseSlideSubmissionListItem,
   ExerciseTaskSubmissionStatus,
@@ -53,6 +53,14 @@ const CLI_FILE = path.join(CLI_PATH, getLangsCLIForPlatform(getPlatform(), TMC_L
 const FEEDBACK_URL = `${MOCK_BACKEND_URL}/feedback`
 
 const isString = (object: unknown): object is string => typeof object === "string"
+
+/** Makes the mooc mock's tokens act for the account `id`. */
+const setCurrentUser = (id: string): Promise<Response> =>
+  fetch(`${MOCK_BACKEND_URL}/mooc-mock/set-current-user`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id }),
+  })
 
 suite("tmc langs cli spec", function () {
   let server: cp.ChildProcess | undefined
@@ -422,7 +430,7 @@ suite("tmc langs cli spec", function () {
     // What a new user has: the only login left issues a mooc credential, and
     // tmc-server accepts it (ACCEPT_COURSES_MOOC_FI_TOKENS), as the mock does.
     test("a stored mooc credential alone drives tmc commands", async function () {
-      writeMoocCredentials(configDir, { accessToken: MOCK_SEEDED_ACCESS_TOKEN })
+      writeMoocCredentials(configDir)
 
       const courses = await unwrapResult(tmc.getCourses("test"))
       expect(courses.some((x) => x.name === "python-course")).to.be.true
@@ -563,7 +571,7 @@ suite("tmc langs cli spec", function () {
       // because suiteSetup trusts it -- so every case here goes through the same
       // authenticated path a real session does.
       clearMoocCredentials(configDir)
-      writeMoocCredentials(configDir, { accessToken: MOCK_SEEDED_ACCESS_TOKEN })
+      writeMoocCredentials(configDir)
       const projectsDir = path.join(testDir, "tmcdata")
       deleteSync(projectsDir, { force: true })
       setupProjectsDir(configDir, projectsDir)
@@ -962,6 +970,18 @@ suite("tmc langs cli spec", function () {
       expect((await tmc.isAuthenticated()).unwrap()).to.be.true
     })
 
+    test("names the account the stored mooc credentials act for, and another once switched", async function () {
+      writeMoocCredentials(configDir)
+      expect((await tmc.getMoocAccountId()).unwrap()).to.equal(MOCK_DEFAULT_USER_ID)
+      const otherUserId = "0d6a3a7e-1f0b-4c8e-8f3d-6b2a9c4e5f70"
+      expect((await setCurrentUser(otherUserId)).status).to.equal(204)
+      try {
+        expect((await tmc.getMoocAccountId()).unwrap()).to.equal(otherUserId)
+      } finally {
+        await setCurrentUser(MOCK_DEFAULT_USER_ID)
+      }
+    })
+
     test("deauthenticate removes the stored mooc credentials", async function () {
       writeMoocCredentials(configDir)
       ;(await tmc.deauthenticate()).unwrap()
@@ -1079,7 +1099,7 @@ suite("tmc langs cli spec", function () {
     })
 
     test("attaches the bearer to a resource call and succeeds; the mock records it", async function () {
-      writeMoocCredentials(configDir, { accessToken: MOCK_SEEDED_ACCESS_TOKEN })
+      writeMoocCredentials(configDir)
       const courses = (await tmc.getEnrolledMoocCourses()).unwrap()
       expect(courses.length).to.be.greaterThan(0)
       // Cross-process proof the CLI attached the bearer; without
@@ -1206,7 +1226,7 @@ function writeMoocCredentials(
     fs.mkdirSync(configDir, { recursive: true })
   }
   const token: Record<string, unknown> = {
-    access_token: options?.accessToken ?? "mooc-access-token",
+    access_token: options?.accessToken ?? MOCK_SEEDED_ACCESS_TOKEN,
     token_type: "bearer",
     scope: "exercise-services",
   }

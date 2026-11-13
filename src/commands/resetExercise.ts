@@ -1,7 +1,7 @@
 import { Ok } from "ts-results"
 import type * as vscode from "vscode"
 
-import { checkAiUse, resetExercise as resetExerciseAction } from "../actions"
+import { checkAiUse, resetExercise as resetExerciseAction, storedExerciseOf } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure } from "../api/withOperation"
 import { revertExerciseDocuments } from "../window/exerciseDocuments"
@@ -22,9 +22,8 @@ export async function resetExercise(
   resource: vscode.Uri | undefined,
 ): Promise<void> {
   const { dialog } = actionContext
-  const { userData } = actionContext.startup
   await runForExercise(actionContext, resource, "Resetting the exercise", async (exercise) => {
-    const stored = userData.getExercise(exercise.id)
+    const stored = storedExerciseOf(actionContext, exercise)
     if (stored.err) {
       return failure(`Missing exercise data for ${exercise.exerciseSlug}.`, stored.val)
     }

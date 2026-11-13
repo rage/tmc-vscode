@@ -4,11 +4,7 @@ import * as path from "path"
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import {
-  fingerprintStudentFiles,
-  isUnchangedSinceSubmission,
-  recordSubmittedFingerprint,
-} from "../../actions/submittedState"
+import { fingerprintStudentFiles, findKeptCopy, recordKeptCopy } from "../../actions/keptCopies"
 import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import { idOfTmcExercise } from "../fixtures/identifiers"
@@ -23,7 +19,7 @@ function contextFor(studentPaths: string[]): ReadyActionContext {
   })
 }
 
-suite("the submitted state of an exercise", function () {
+suite("the kept copies of an exercise", function () {
   test("a fingerprint covers the student files, not the tests or tool output", async function () {
     const root = makeTmpDirs({ "src/main.py": "print(1)", "test/test_main.py": "x" })
     const context = contextFor(["src"])
@@ -39,17 +35,35 @@ suite("the submitted state of an exercise", function () {
     expect(await fingerprintStudentFiles(context, exercise)).not.toBe(before)
   })
 
-  test("is unchanged only while the files match what the last submission sent", async function () {
+  test("is kept only while the files match a recorded copy", async function () {
     const root = makeTmpDirs({ "src/main.py": "print(1)" })
     const context = contextFor(["src"])
     const exercise = { id: idOfTmcExercise(77), uri: vscode.Uri.file(root) }
 
-    expect(await isUnchangedSinceSubmission(context, exercise)).toBe(false)
+    expect(await findKeptCopy(context, exercise)).toBeUndefined()
 
-    recordSubmittedFingerprint(exercise.id, await fingerprintStudentFiles(context, exercise))
-    expect(await isUnchangedSinceSubmission(context, exercise)).toBe(true)
+    await recordKeptCopy(context, exercise, "submission")
+    expect(await findKeptCopy(context, exercise)).toBe("submission")
 
     fs.writeFileSync(path.join(root, "src/main.py"), "print(2)")
-    expect(await isUnchangedSinceSubmission(context, exercise)).toBe(false)
+    expect(await findKeptCopy(context, exercise)).toBeUndefined()
+  })
+
+  test("remembers the template and the last backup apart from the last submission", async function () {
+    const root = makeTmpDirs({ "src/main.py": "template" })
+    const context = contextFor(["src"])
+    const exercise = { id: idOfTmcExercise(78), uri: vscode.Uri.file(root) }
+    const write = (code: string): void => fs.writeFileSync(path.join(root, "src/main.py"), code)
+
+    await recordKeptCopy(context, exercise, "download")
+    write("backed up")
+    await recordKeptCopy(context, exercise, "backup")
+    write("submitted")
+    await recordKeptCopy(context, exercise, "submission")
+
+    write("template")
+    expect(await findKeptCopy(context, exercise)).toBe("download")
+    write("backed up")
+    expect(await findKeptCopy(context, exercise)).toBe("backup")
   })
 })

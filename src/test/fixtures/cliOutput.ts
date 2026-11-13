@@ -621,6 +621,7 @@ const validCliOutputFixtures: CliOutputFixture[] = [
   },
   { name: "mooc-course", value: outputData("mooc-course", moocCourse) },
   { name: "mooc-courses", value: outputData("mooc-courses", [moocCourse]) },
+  { name: "mooc-current-user", value: outputData("mooc-current-user", { id: UUID_A }) },
   {
     name: "mooc-exercise-slides",
     value: outputData("mooc-exercise-slides", [moocExerciseSlide]),

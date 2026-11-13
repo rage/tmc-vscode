@@ -3,6 +3,7 @@ import * as path from "path"
 import * as vscode from "vscode"
 
 import type { TestResult } from "../../shared/langsSchema"
+import { asSentence } from "../../shared/lib"
 import type { SourceFileFinder } from "./sourceFiles"
 import type { StackFrame } from "./stackTrace"
 import { parseStackTrace } from "./stackTrace"
@@ -58,4 +59,49 @@ function isInExercise(frame: StackFrame, exercisePath: string): boolean {
     !path.isAbsolute(relative) &&
     relative.split(path.sep)[0] !== "tmc"
   )
+}
+
+// The CLI reports each error of a chain as a line, outermost first.
+const TRACE_LINE = /^Caused by: (?<cause>.+)$/
+
+/** CLI causes reworded for a student, where the CLI's own words name its internals. */
+const CAUSE_WORDINGS: [RegExp, string][] = [
+  [
+    /^No matching plugin found for /,
+    "TestMyCode cannot tell what kind of exercise this is: files it needs, such as the test folder, are missing.",
+  ],
+]
+
+/**
+ * The text a local test run that failed before running any test is reported with: the deepest
+ * cause first, then where it arose, then `error`'s details.
+ *
+ * @param suggestsReset Whether the failure can come from the exercise's own files, which a
+ *   reset restores; an environment failure such as a missing Python cannot.
+ */
+export function runFailureText(error: Error, details: string, suggestsReset: boolean): string {
+  const causes = details
+    .split("\n\n", 1)[0]
+    ?.split("\n")
+    .flatMap((line) => TRACE_LINE.exec(line)?.groups?.cause ?? [])
+  const deepest = causes?.at(-1)
+  const context = causes?.at(-2)
+  const lines =
+    deepest === undefined || deepest === error.message
+      ? [`The tests could not be run: ${error.message}`]
+      : [
+          `The tests could not be run: ${asSentence(reworded(deepest))}`,
+          ...(context !== undefined && context !== error.message ? [asSentence(context)] : []),
+          asSentence(error.message),
+        ]
+  if (suggestsReset) {
+    lines.push(
+      "If the exercise's files are damaged or incomplete, Reset Exercise restores its template.",
+    )
+  }
+  return [lines.join("\n"), details].filter(Boolean).join("\n\n")
+}
+
+function reworded(cause: string): string {
+  return CAUSE_WORDINGS.find(([pattern]) => pattern.test(cause))?.[1] ?? cause
 }

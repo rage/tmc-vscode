@@ -45,10 +45,14 @@ export async function testExercise(
   const { langs, userData } = actionContext.startup
 
   const stored = userData.getExercise(exercise.id)
-  if (stored.err) {
-    return stored
+  // An exercise removed from its course is still on disk, and its tests still run.
+  const storedCourse = stored.ok
+    ? Ok(stored.val.course)
+    : userData.getCourse(exercise.courseId).mapErr(() => stored.val)
+  if (storedCourse.err) {
+    return storedCourse
   }
-  const { course } = stored.val
+  const course = storedCourse.val
   if (LocalCourseData.isExamMode(course)) {
     return Ok({ kind: "examMode" })
   }

@@ -202,7 +202,11 @@ suite("toStoredMoocCourse", function () {
   })
 })
 
-const NO_PROGRESS: CourseProgress = { course_id: MOOC_COURSE_UUID, exercises: [] }
+const NO_PROGRESS: CourseProgress = {
+  course_id: MOOC_COURSE_UUID,
+  exercises: [],
+  closed_chapters: [],
+}
 
 suite("combineMoocApiExerciseData", function () {
   test("keeps each exercise's chapter, and none for an exercise outside one", function () {
@@ -212,7 +216,7 @@ suite("combineMoocApiExerciseData", function () {
     }
     const chaptered = {
       ...slide,
-      chapter: { id: "chapter-1", name: "Basics", chapter_number: 1 },
+      chapter: { id: "chapter-1", name: "Basics", chapter_number: 1, locking_status: null },
     }
 
     const [stored, unchaptered] = combineMoocApiExerciseData([chaptered, slide], NO_PROGRESS)
@@ -250,8 +254,11 @@ suite("combineMoocApiExerciseData", function () {
           completed: true,
           attempted: true,
           standing,
+          max_tries: null,
+          tries_left: null,
         },
       ],
+      closed_chapters: [],
     }
   }
 

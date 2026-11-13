@@ -2,13 +2,10 @@ import { createHash } from "crypto"
 import { promises as fs } from "fs"
 import * as path from "path"
 
-import { ExerciseIdentifier } from "../../shared/lib"
+import type { KeptCopy } from "../api/keptCopies"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { Logger } from "../utilities"
 import type { ReadyActionContext } from "./types"
-
-/** Per exercise key, the fingerprint of the student files the last submission sent. */
-const submittedFingerprints = new Map<string, string>()
 
 /**
  * A digest of the exercise's student files, paths and contents, or `undefined` when they
@@ -56,30 +53,29 @@ async function filesUnder(entry: string): Promise<string[]> {
   return (await Promise.all(children.map((child) => filesUnder(path.join(entry, child))))).flat()
 }
 
-/** Remembers `fingerprint` as what the exercise's last submission sent. */
-export function recordSubmittedFingerprint(
-  exerciseId: ExerciseIdentifier,
-  fingerprint: string | undefined,
-): void {
-  const key = ExerciseIdentifier.key(exerciseId)
-  if (fingerprint === undefined) {
-    submittedFingerprints.delete(key)
-  } else {
-    submittedFingerprints.set(key, fingerprint)
-  }
+/**
+ * Fingerprints the exercise's student files and records them as the newest copy of kind `copy`.
+ * Never rejects; files that cannot be read record nothing.
+ */
+export async function recordKeptCopy(
+  actionContext: ReadyActionContext,
+  exercise: Pick<WorkspaceExercise, "id" | "uri">,
+  copy: KeptCopy,
+): Promise<void> {
+  const fingerprint = await fingerprintStudentFiles(actionContext, exercise)
+  await actionContext.startup.keptCopies.record(exercise.id, copy, fingerprint)
 }
 
 /**
- * Whether the exercise's student files are what a submission made from this window last sent,
- * so submitting them again keeps no copy that is not already kept. `false` when unknown.
+ * Where a copy of the exercise's current student files already exists, so keeping them again
+ * would add nothing; `undefined` when none is known or the files cannot be read.
  */
-export async function isUnchangedSinceSubmission(
+export async function findKeptCopy(
   actionContext: ReadyActionContext,
   exercise: Pick<WorkspaceExercise, "id" | "uri">,
-): Promise<boolean> {
-  const submitted = submittedFingerprints.get(ExerciseIdentifier.key(exercise.id))
-  return (
-    submitted !== undefined &&
-    submitted === (await fingerprintStudentFiles(actionContext, exercise))
+): Promise<KeptCopy | undefined> {
+  return actionContext.startup.keptCopies.copyOf(
+    exercise.id,
+    await fingerprintStudentFiles(actionContext, exercise),
   )
 }

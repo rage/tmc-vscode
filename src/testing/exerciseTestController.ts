@@ -14,6 +14,7 @@ import { ExerciseStatus } from "../api/workspaceManager"
 import {
   AiUseRefusedError,
   BottleneckError,
+  RuntimeError,
   SHOW_AI_USE_PROBLEM_COMMAND,
   TRUST_COURSE_WORKSPACE_COMMAND,
   WorkspaceUntrustedError,
@@ -21,7 +22,7 @@ import {
 import { countOf } from "../utilities"
 import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
 import { createSourceFileFinder } from "./sourceFiles"
-import { failureMessage } from "./testMessages"
+import { failureMessage, runFailureText } from "./testMessages"
 
 /** The `controllerId` that package.json's `testing/*` menus match on. */
 export const TEST_CONTROLLER_ID = "tmc"
@@ -217,11 +218,10 @@ export class ExerciseTestController implements vscode.Disposable {
       run.skipped(item)
       return
     }
-    const details = error instanceof BaseError && error.details ? `\n\n${error.details}` : ""
-    run.errored(
-      item,
-      new vscode.TestMessage(`The tests could not be run: ${error.message}${details}`),
-    )
+    const details = error instanceof BaseError ? (error.details ?? "") : ""
+    const text = runFailureText(error, details, error instanceof RuntimeError)
+    run.appendOutput(toTerminalText(`${text}\n`), undefined, item)
+    run.errored(item, new vscode.TestMessage(text))
   }
 
   /** @returns Whether every test passed with nothing for the code quality checks to fault. */

@@ -63,22 +63,29 @@ vsCodeTest(
       await expect(editor.getByText(edit)).toBeHidden()
     })
 
-    await vsCodeTest.step("restore the submission", async () => {
-      await explorerPage.runContextMenuCommand(fileName, "Download Old Submission")
-      await quickPick.waitForTitle(/^Download Old Submission — /)
-      await quickPick.selectOnlyItem()
-      await quickPick.expectClosed()
-      await page
-        .locator(".monaco-dialog-box")
-        .getByRole("button", { name: "Restore Without Backup" })
-        .click()
-      await expect(editor.getByText(edit)).toBeVisible()
-    })
+    await vsCodeTest.step(
+      "restore the submission, with no offer to back up the template",
+      async () => {
+        await explorerPage.runContextMenuCommand(fileName, "Download Old Submission")
+        await quickPick.waitForTitle(/^Download Old Submission — /)
+        await quickPick.selectOnlyItem()
+        await quickPick.expectClosed()
+        const dialog = page.locator(".monaco-dialog-box")
+        await expect(dialog.getByRole("button", { name: "Back Up and Restore" })).toHaveCount(0)
+        await dialog.getByRole("button", { name: "Restore", exact: true }).click()
+        await expect(editor.getByText(edit)).toBeVisible()
+      },
+    )
 
-    await vsCodeTest.step("share it via paste", async () => {
+    await vsCodeTest.step("share it via paste, twice, getting one link", async () => {
       await page.getByText("def hello()").click()
       await coursesView.runExercisePaletteCommand("TestMyCode: Share Exercise via Paste")
       await expect(coursesView.notificationToast("Copied the paste link")).toBeVisible()
+      await coursesView.runExercisePaletteCommand("TestMyCode: Share Exercise via Paste")
+      // VS Code announces each notification, though it may not toast one beside another.
+      await expect(
+        page.getByRole("alert").filter({ hasText: "Your code is unchanged since the last paste." }),
+      ).toHaveCount(1)
     })
   },
 )

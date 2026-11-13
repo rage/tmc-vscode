@@ -4,6 +4,7 @@ import type { InitializationErrorHelpPanel, Panel } from "../../shared/lib"
 import { assertUnreachable, LocalCourseData } from "../../shared/lib"
 import type { ActionContext, StartupStep } from "../actions/types"
 import { isReady } from "../actions/types"
+import { CliVerificationError } from "../errors"
 import { cliFolder } from "../utilities"
 
 /** The editor tab label for `route`, so tabs can be told apart in Open Editors and Ctrl+Tab. */
@@ -41,9 +42,16 @@ export function initializationErrorHelpPanel(
   extensionContext: vscode.ExtensionContext,
 ): InitializationErrorHelpPanel {
   const failures = actionContext.startup.kind === "degraded" ? actionContext.startup.failures : {}
-  const cliHint =
+  const networkHint =
     "A proxy, firewall or antivirus program blocking network requests can cause this. " +
     `Try adding an exception for the directory '${cliFolder(extensionContext)}'.`
+  const langsFailure = failures.langs
+  const cliHint =
+    langsFailure instanceof CliVerificationError
+      ? `The file '${langsFailure.cliPath}' may be damaged, or changed by another program ` +
+        "such as an antivirus. Restarting downloads it again. If the download keeps failing: " +
+        networkHint
+      : networkHint
   return {
     id: nextPanelId(),
     type: "InitializationErrorHelp",
@@ -65,7 +73,7 @@ export function initializationErrorHelpPanel(
 
 /** `DegradedStartup.failures` keys, named for the student. */
 const SERVICE_NAMES: Record<StartupStep, string> = {
-  langs: "tmc-langs",
+  langs: "the TestMyCode tools",
   resources: "extension files",
   userData: "user data",
 }

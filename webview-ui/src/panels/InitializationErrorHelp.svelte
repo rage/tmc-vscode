@@ -90,4 +90,8 @@
   .failures > li + li {
     margin-top: var(--tmc-space-4);
   }
+  /* Errors carry long unbroken paths. */
+  .failures p {
+    overflow-wrap: anywhere;
+  }
 </style>

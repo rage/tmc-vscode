@@ -11,6 +11,7 @@ import type { RestoreTarget } from "../api/langs"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { saveExerciseDocuments } from "../window/exerciseDocuments"
+import { fingerprintStudentFiles, recordKeptCopy } from "./keptCopies"
 import type { ReadyActionContext } from "./types"
 
 /**
@@ -61,7 +62,14 @@ function moocGradingStatus(submission: ExerciseSlideSubmissionListItem, maxPoint
     given === null ? "" : maxPoints > 0 ? ` (${given}/${maxPoints} points)` : ` (score ${given})`
   switch (progress) {
     case "FullyGraded":
-      return `Graded${score}`
+      if (given === null || maxPoints <= 0) {
+        return `Graded${score}`
+      }
+      return given >= maxPoints
+        ? `Passed${score}`
+        : given > 0
+          ? `Some tests failed${score}`
+          : `Tests failed${score}`
     case "Failed":
       return `Failed${score}`
     case "PendingManual":
@@ -125,13 +133,22 @@ export async function restoreOldSubmission(
   target: RestoreTarget,
   submitFirst: boolean,
 ): Promise<Result<MoocOldSubmissionRestore, Error>> {
+  const { langs, keptCopies } = actionContext.startup
   return exerciseOperations.run(exercise.id, "restoring", async () => {
+    let keptFingerprint: string | undefined
     if (submitFirst) {
       const saved = await saveExerciseDocuments(exercise)
       if (saved.err) {
         return saved
       }
+      keptFingerprint = await fingerprintStudentFiles(actionContext, exercise)
     }
-    return actionContext.startup.langs.restoreSubmission(target, exercise.uri.fsPath, submitFirst)
+    const restored = await langs.restoreSubmission(target, exercise.uri.fsPath, submitFirst)
+    if (restored.ok && restored.val !== "nothing-to-download") {
+      const { id } = exercise
+      await keptCopies.record(id, id.kind === "mooc" ? "backup" : "submission", keptFingerprint)
+      await recordKeptCopy(actionContext, exercise, "restore")
+    }
+    return restored
   })
 }

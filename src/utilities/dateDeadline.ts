@@ -44,6 +44,30 @@ export function formatDateTime(date: Date, locale: string | undefined): string {
   return format.format(date)
 }
 
+const timestampFormats = new Map<string, Intl.DateTimeFormat>()
+
+/**
+ * Renders a moment to the second, as when two saves minutes apart must be told apart: the time
+ * alone on `now`'s day, with the date otherwise. Unlike {@link formatDateTime}, which is for
+ * deadlines.
+ */
+export function formatTimestamp(date: Date, now: Date, locale: string | undefined): string {
+  if (!isRealDate(date)) {
+    return ""
+  }
+  const isToday = date.toDateString() === now.toDateString()
+  const key = `${locale ?? ""}|${isToday}`
+  let format = timestampFormats.get(key)
+  if (!format) {
+    format = new Intl.DateTimeFormat(
+      locale,
+      isToday ? { timeStyle: "medium" } : { dateStyle: "medium", timeStyle: "medium" },
+    )
+    timestampFormats.set(key, format)
+  }
+  return format.format(date)
+}
+
 /**
  * Renders a deadline as {@link formatDateTime} does, plus a hint such as "(in 3 days)" when it
  * is within a week of `now`.

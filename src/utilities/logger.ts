@@ -3,7 +3,7 @@ import { env } from "process"
 import type { OutputChannel } from "vscode"
 import { Uri, window } from "vscode"
 
-import { BaseError } from "../../shared/lib"
+import { asSentence, BaseError } from "../../shared/lib"
 import { DEBUG_MODE, OUTPUT_CHANNEL_NAME } from "../config/constants"
 
 export enum LogLevel {
@@ -41,6 +41,14 @@ const SECRET_KEYS = new Set([
 
 function isSecretKey(key: string): boolean {
   return SECRET_KEYS.has(key.replaceAll(/[-_\s]/g, "").toLowerCase())
+}
+
+/**
+ * `url` with its query and fragment replaced, for logging a URL that may carry a credential
+ * such as the device-flow user code: redaction by key cannot see inside a message string.
+ */
+export function redactUrlQuery(url: string): string {
+  return url.replace(/[?#].*$/s, "?<redacted>")
 }
 
 export class Logger {
@@ -240,13 +248,13 @@ function formatError(error: Error, withStack: boolean, depth = 0): string {
     if (error.path) {
       errorMessage += `@${error.path} `
     }
-    errorMessage += `${error.name}: ${error.message}.`
+    errorMessage += `${error.name}: ${asSentence(error.message)}`
     if (error.details) {
-      errorMessage += ` ${error.details}.`
+      errorMessage += ` ${asSentence(error.details)}`
     }
     if (error.cause) {
       if (typeof error.cause === "string") {
-        errorMessage += ` ${error.cause}.`
+        errorMessage += ` ${asSentence(error.cause)}`
       } else if (depth >= MAX_CAUSE_DEPTH) {
         errorMessage += " Caused by: {...}."
       } else {

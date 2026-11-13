@@ -17,6 +17,7 @@ import {
   failingExercise,
   futureDeadlineExercise,
   limitedTriesExercise,
+  MOCK_DEFAULT_USER_ID,
   mixedTaskExercise,
   nonexistentExerciseId,
   notClientCapableExercise,
@@ -117,6 +118,23 @@ describe("mooc mock conformance", () => {
       slide?.page_url ?? "",
       new RegExp(`^${base}/org/[^/]+/courses/${pythonCourse.slug}/[^/]+$`),
     )
+  })
+
+  test("GET me names the account the token acts for, which a switch changes", async () => {
+    const currentUser = async (): Promise<unknown> => (await authFetch(api("/me"))).json()
+    assert.deepEqual(await currentUser(), { id: MOCK_DEFAULT_USER_ID })
+
+    const otherUserId = "0d6a3a7e-1f0b-4c8e-8f3d-6b2a9c4e5f70"
+    const switched = await fetch(`${base}/mooc-mock/set-current-user`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: otherUserId }),
+    })
+    assert.equal(switched.status, 204)
+    assert.deepEqual(await currentUser(), { id: otherUserId })
+
+    mock.reset()
+    assert.deepEqual(await currentUser(), { id: MOCK_DEFAULT_USER_ID })
   })
 
   test("GET courses/{id} returns a single course", async () => {

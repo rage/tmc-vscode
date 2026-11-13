@@ -436,6 +436,22 @@ export default class Langs {
   }
 
   /**
+   * The id of the courses.mooc.fi account logged in, from `mooc logged-in`; `undefined` when
+   * none is, or when courses.mooc.fi could not be asked which one. Makes a request, so keep it
+   * off hot paths.
+   */
+  public async getMoocAccountId(): Promise<Result<string | undefined, Error>> {
+    const res = await this._executeLangsCommand(
+      { backend: "mooc", args: this._moocCmd("logged-in") },
+      null,
+    )
+    return res.map((x) => {
+      const data = (x as OutputData).data
+      return data?.["output-data-kind"] === "mooc-current-user" ? data["output-data"].id : undefined
+    })
+  }
+
+  /**
    * Logs in to courses.mooc.fi with the OAuth2 device authorization flow (RFC 8628), via
    * `mooc login`, and fires `login` once approved.
    *
@@ -479,11 +495,14 @@ export default class Langs {
    * `logout` with `expected: true` once both are gone.
    */
   public async deauthenticate(): Promise<Result<void, Error>> {
-    const results = await Promise.all(
-      (["tmc", "mooc"] as const).map((backend) =>
-        this._run({ args: this._backendCmd(backend, "logout"), suppressAuthEvents: true }),
-      ),
-    )
+    const results: Result<void, Error>[] = []
+    // In turn: `tmc logout` reads the mooc credentials, and fails if `mooc logout` removes them
+    // under it.
+    for (const backend of ["tmc", "mooc"] as const) {
+      results.push(
+        await this._run({ args: this._backendCmd(backend, "logout"), suppressAuthEvents: true }),
+      )
+    }
     this._responseCache.clear()
     const failed = results.find((res) => res.err)
     if (failed) {

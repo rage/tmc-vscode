@@ -1,8 +1,10 @@
+import type { AccountHandover } from "../api/accountHandover"
 import type { AiUseGate } from "../api/aiUseGate"
 import type { AuthState } from "../api/authState"
 import type { CourseWorkspaceSwitches } from "../api/courseWorkspaceSwitches"
 import type Dialog from "../api/dialog"
 import type ExerciseDecorationProvider from "../api/exerciseDecorationProvider"
+import type { KeptCopies } from "../api/keptCopies"
 import type Langs from "../api/langs"
 import type WorkspaceManager from "../api/workspaceManager"
 import type { WorkspaceTrustGate } from "../api/workspaceTrustGate"
@@ -14,9 +16,11 @@ import type CoursesTree from "../ui/treeview/treeview"
 /** The services an activation builds, once all of them have succeeded. */
 export interface ReadyStartup {
   kind: "ready"
+  accountHandover: AccountHandover
   aiUseGate: AiUseGate
   courseWorkspaceSwitches: CourseWorkspaceSwitches
   exerciseDecorationProvider: ExerciseDecorationProvider
+  keptCopies: KeptCopies
   langs: Langs
   resources: Resources
   trustGate: WorkspaceTrustGate

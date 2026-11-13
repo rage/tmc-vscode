@@ -136,16 +136,16 @@ suite("Download old submission command (mooc branch)", function () {
     expect(getOldSubmissions).toHaveBeenCalledExactlyOnceWith(idOfMoocExercise("mooc-ex-uuid"))
     expect(pickPrompt).toEqual({
       title: "Download Old Submission — ex-1",
-      placeHolder: "Pick a submission to restore",
+      placeHolder: "Pick a submission, help request or backup to restore",
     })
-    const format = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" })
+    const format = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "medium" })
     expect(
       offered.map(({ label, description, detail }) => ({ label, description, detail })),
     ).toEqual([
       {
         label: format.format(new Date("2026-07-21T12:00:00Z")),
-        description: "Graded (1/1 points)",
-        detail: "Latest",
+        description: "Passed (1/1 points)",
+        detail: "Latest submission",
       },
       {
         label: format.format(new Date("2026-07-21T10:00:00Z")),
@@ -194,7 +194,7 @@ suite("Download old submission command (mooc branch)", function () {
     ] as ExerciseSlideSubmissionListItem[]
     await downloadOldSubmission(actionContext({ submissions: partial }), uri)
 
-    expect(offered[0]?.description).toBe("Graded (0.5/1 points)")
+    expect(offered[0]?.description).toBe("Some tests failed (0.5/1 points)")
     expect(offered.map(({ iconPath }) => (iconPath as vscode.ThemeIcon).id)).toEqual([
       "circle-large-outline",
     ])
@@ -224,6 +224,27 @@ suite("Download old submission command (mooc branch)", function () {
       "archive",
       "circle-large-outline",
     ])
+  })
+
+  test("calls a zero score a test failure, and marks the newest submission, not a newer backup, as latest", async function () {
+    const listed = [
+      {
+        ...moocSubmissions[0],
+        created_at: "2026-07-21T12:00:01Z",
+        kind: "backup",
+        score_given: null,
+        grading_progress: null,
+      },
+      { ...moocSubmissions[0], score_given: 0 },
+    ] as ExerciseSlideSubmissionListItem[]
+    await downloadOldSubmission(actionContext({ submissions: listed }), uri)
+
+    expect(offered.map(({ description, detail }) => [description, detail])).toEqual([
+      ["Backup, not graded", undefined],
+      ["Tests failed (0/1 points)", "Latest submission"],
+    ])
+    // A second apart, so the labels must tell them apart.
+    expect(offered[0]?.label).not.toBe(offered[1]?.label)
   })
 
   test("reads a submission the server has not started grading as pending", async function () {

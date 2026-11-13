@@ -15,6 +15,16 @@ export const zBrowserTestSpec = z.object({
 });
 
 /**
+ * Where the user is in a course's chapter locking, which opens chapters one at a time as the
+ * previous ones are completed.
+ */
+export const zChapterLockingStatus = z.union([
+    z.literal('Unlocked'),
+    z.literal('CompletedAndLocked'),
+    z.literal('NotUnlockedYet')
+]);
+
+/**
  * A setting in a TmcConfig file.
  */
 export const zConfigValue = z.union([
@@ -130,6 +140,7 @@ export const zCourseDetails = z.object({
 export const zExerciseChapter = z.object({
     chapter_number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     id: z.uuid(),
+    locking_status: zChapterLockingStatus.nullable().default(null),
     name: z.string()
 });
 
@@ -188,9 +199,22 @@ export const zExerciseProgress = z.object({
     attempted: z.boolean(),
     completed: z.boolean(),
     exercise_id: z.uuid(),
+    max_tries: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable().default(null),
     score_given: z.number(),
     score_maximum: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    standing: zExerciseStanding.nullable()
+    standing: zExerciseStanding.nullable(),
+    tries_left: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable().default(null)
+});
+
+/**
+ * A chapter of the course that opens later, with the user's progress on its exercises.
+ */
+export const zClosedChapter = z.object({
+    chapter_number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    exercises: z.array(zExerciseProgress),
+    id: z.uuid(),
+    name: z.string(),
+    opens_at: z.string()
 });
 
 /**
@@ -200,6 +224,7 @@ export const zExerciseProgress = z.object({
  * percentage against a zero total.
  */
 export const zCourseProgress = z.object({
+    closed_chapters: z.array(zClosedChapter).default([]),
     course_id: z.uuid(),
     exercises: z.array(zExerciseProgress)
 });
@@ -331,7 +356,12 @@ export const zKind = z.union([
     z.literal('server-error'),
     z.literal('insufficient-scope'),
     z.literal('exercise-not-found'),
-    z.literal('rate-limited')
+    z.literal('rate-limited'),
+    z.literal('deadline-passed'),
+    z.literal('out-of-tries'),
+    z.literal('chapter-not-open-yet'),
+    z.literal('chapter-not-unlocked-yet'),
+    z.literal('chapter-completed-and-locked')
 ]);
 
 /**
@@ -397,6 +427,14 @@ export const zMoocCourse = z.object({
     name: z.string(),
     organization_name: z.string(),
     slug: z.string()
+});
+
+/**
+ * The courses.mooc.fi account a token acts for; a changed `id` after login means the
+ * student switched accounts.
+ */
+export const zMoocCurrentUser = z.object({
+    id: z.uuid()
 });
 
 /**
@@ -769,7 +807,8 @@ export const zTestResult = z.object({
 export const zRunResult = z.object({
     logs: z.record(z.string(), z.string()),
     status: zRunStatus,
-    testResults: z.array(zTestResult)
+    testResults: z.array(zTestResult),
+    timedOutAfterMs: z.coerce.bigint().gte(BigInt(0)).max(BigInt('18446744073709551615'), { error: 'Invalid value: Expected uint64 to be <= 18446744073709551615' }).nullish()
 });
 
 /**
@@ -1058,6 +1097,10 @@ export const zDataKind = z.union([
     z.object({
         'output-data': z.array(zLocalMoocExercise),
         'output-data-kind': z.literal('local-mooc-exercises')
+    }),
+    z.object({
+        'output-data': zMoocCurrentUser,
+        'output-data-kind': z.literal('mooc-current-user')
     }),
     z.object({
         'output-data': zMoocCourse,

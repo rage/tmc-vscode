@@ -64,3 +64,29 @@ export function trackHasDownloadedExercises(
     [workspaceManager.onDidChangeExercises],
   )
 }
+
+/**
+ * Keeps `test-my-code:ActiveExerciseRemoved` true exactly while the active editor's exercise is
+ * on disk but no longer in its course, which hides the actions that need the backend.
+ */
+export function trackActiveExerciseRemoved(
+  workspaceManager: Pick<WorkspaceManager, "activeExercise" | "onDidChangeExercises">,
+  userData: Pick<UserData, "getCourse" | "getExercise" | "onDidChangeCourses">,
+): vscode.Disposable {
+  return trackContextKey(
+    "test-my-code:ActiveExerciseRemoved",
+    () => {
+      const exercise = workspaceManager.activeExercise
+      return (
+        exercise !== undefined &&
+        userData.getExercise(exercise.id).err &&
+        userData.getCourse(exercise.courseId).ok
+      )
+    },
+    [
+      vscode.window.onDidChangeActiveTextEditor,
+      workspaceManager.onDidChangeExercises,
+      userData.onDidChangeCourses,
+    ],
+  )
+}

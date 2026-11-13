@@ -1,5 +1,5 @@
 import type { RunnableCommand } from "../shared/lib"
-import { backendName, BaseError } from "../shared/lib"
+import { asSentence, backendName, BaseError } from "../shared/lib"
 
 export class AuthorizationError extends BaseError {
   public override readonly name: string = "Authorization Error"
@@ -116,7 +116,40 @@ export class TimeoutError extends BaseError {
 }
 
 export class InitializationError extends BaseError {
-  public override readonly name = "Initialization Error"
+  public override readonly name: string = "Initialization Error"
+}
+
+/**
+ * The TestMyCode tools on disk failed their checksum, so they may be damaged or tampered with,
+ * and downloading them again failed. Unlike a plain download failure, the file is there.
+ */
+export class CliVerificationError extends InitializationError {
+  public override readonly name = "CLI Verification Error"
+
+  /**
+   * @param cliPath The file that failed verification.
+   * @param downloadFailure Why downloading it again failed.
+   * @param details The digests and sources that did not match.
+   */
+  public constructor(
+    public readonly cliPath: string,
+    downloadFailure: Error,
+    details: string,
+  ) {
+    super(
+      "The TestMyCode tools on this computer failed their integrity check, and downloading " +
+        `them again failed: ${downloadFailure.message}`,
+      details,
+    )
+  }
+}
+
+/**
+ * The exercise is on disk, but its course no longer lists it, so nothing on the backend can be
+ * done with it. The message names the exercise and is the whole story.
+ */
+export class ExerciseRemovedError extends BaseError {
+  public override readonly name = "Exercise Removed Error"
 }
 
 /** The exercise is gone from its backend, such as one removed from the course since download. */
@@ -203,7 +236,7 @@ function userSentence(error: Error): string {
   const message = /^[a-z]+(\s|$)/.test(trimmed)
     ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
     : trimmed
-  return /[.!?…]$/.test(message) ? message : `${message}.`
+  return asSentence(message)
 }
 
 /**
@@ -236,6 +269,9 @@ export function presentationFor(error: Error): ErrorPresentation {
         ? [{ label: error.remedyLabel, command: SHOW_AI_USE_PROBLEM_COMMAND }]
         : [],
     }
+  }
+  if (error instanceof ExerciseRemovedError) {
+    return { message: reported, actions: [], isHeldBack: true }
   }
   if (error instanceof WorkspaceUntrustedError) {
     return {

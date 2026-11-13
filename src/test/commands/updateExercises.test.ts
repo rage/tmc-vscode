@@ -244,6 +244,25 @@ suite("updateExercises command", function () {
     )
   })
 
+  test("a refresh the student asked for announces an automatic update as a background one does", async function () {
+    checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10)]))
+    downloadExerciseUpdates.mockResolvedValue(Ok({ updated: [idOfTmcExercise(10)], warnings: [] }))
+    const [actionContext, dialog] = contextWith(true)
+    Object.assign(actionContext.startup.userData, {
+      getExercise: () => Ok({ exercise: { kind: "tmc", data: { name: "loops" } } }),
+    })
+    onTestFinished(() => recentUpdates.dismiss(idOfTmcCourse(1)))
+
+    await updateExercises(actionContext, "loud")
+
+    expect(downloadExerciseUpdates).toHaveBeenCalledWith(actionContext, expect.anything(), false)
+    expect(recentUpdates.get(idOfTmcCourse(1))).toEqual(["loops"])
+    expect(dialog.notification).toHaveBeenCalledExactlyOnceWith(
+      "Updated the exercise loops to the latest version.",
+      ["Show", expect.any(Function)],
+    )
+  })
+
   test("an automatic update of the course on screen leaves only the trace", async function () {
     checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10)]))
     downloadExerciseUpdates.mockResolvedValue(Ok({ updated: [idOfTmcExercise(10)], warnings: [] }))

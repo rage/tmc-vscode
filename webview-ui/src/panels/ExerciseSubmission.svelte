@@ -68,6 +68,19 @@
     onclick: () => runExerciseAction("submit"),
   }
 
+  const openExercise: BarAction = {
+    label: "Open Exercise",
+    icon: "go-to-file",
+    onclick: () => runExerciseAction("openExercise"),
+  }
+  const exerciseStateNote = $derived(
+    view?.exerciseState === "notOnDisk"
+      ? "This exercise is no longer on this computer. Open it to download it again."
+      : view?.exerciseState === "removed"
+        ? "This exercise was removed from the course, so it can no longer be submitted."
+        : undefined,
+  )
+
   // The error's own remedies, such as Log In, come before trying again.
   const remedies = $derived(
     (view?.error?.actions ?? []).map(
@@ -96,6 +109,12 @@
         primary: { label: `Next: ${next}`, onclick: () => runExerciseAction("openNextExercise") },
       }
     }
+    if (view?.exerciseState === "notOnDisk") {
+      return { primary: openExercise }
+    }
+    if (view?.exerciseState === "removed") {
+      return { secondary: [runTests] }
+    }
     if (canRetry) {
       if (remedy) {
         return { primary: remedy, secondary: [submitAgain] }
@@ -118,7 +137,9 @@
       ...(solutionUrl
         ? [{ label: "Show Model Solution in Browser", onselect: () => showInBrowser(solutionUrl) }]
         : []),
-      ...(view?.canPaste ? [{ label: "Ask for Help…", onselect: openPasteHelp }] : []),
+      ...(view?.canPaste && !view.exerciseState
+        ? [{ label: "Ask for Help…", onselect: openPasteHelp }]
+        : []),
     ]
   })
 
@@ -141,7 +162,7 @@
   function closePanel() {
     vscode.postMessage({ type: "closeSidePanel" })
   }
-  function runExerciseAction(action: "runTests" | "submit" | "openNextExercise") {
+  function runExerciseAction(action: "runTests" | "submit" | "openNextExercise" | "openExercise") {
     vscode.postMessage({ type: "exerciseAction", sourcePanel, action })
   }
   function showInBrowser(url: string) {
@@ -232,6 +253,9 @@
 </StatusBanner>
 
 {#if view !== undefined}
+  {#if exerciseStateNote}
+    <p class="muted">{exerciseStateNote}</p>
+  {/if}
   <ActionBar {...barActions} />
   {#if keepWaitingError}
     <ErrorNotice error={keepWaitingError} title="Could not keep waiting" />

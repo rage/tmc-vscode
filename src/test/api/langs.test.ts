@@ -245,7 +245,7 @@ suite("Langs class arg building", function () {
     const combined = {
       course: { ...moocCourse, id: uuid(1) },
       slides: [],
-      progress: { course_id: uuid(1), exercises: [] },
+      progress: { course_id: uuid(1), exercises: [], closed_chapters: [] },
     }
     const calls = stubSpawn(langs, () => Ok(dataOutput("mooc-combined-course-data", combined)))
     const result = await langs.getMoocCourseData(uuid(1))
@@ -1053,6 +1053,30 @@ suite("Langs error-kind mapping", function () {
     expect(onLogout).toHaveBeenCalledExactlyOnceWith(true)
   })
 
+  test("deauthenticate removes the mooc credentials only once tmc's logout has read them", async function () {
+    const langs = newLangs()
+    let isTmcLogoutDone = false
+    let wasTmcLogoutDoneAtMoocLogout: boolean | undefined
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
+      const isTmc = (commandArgs as { args: string[] }).args[0] === "tmc"
+      if (!isTmc) {
+        wasTmcLogoutDoneAtMoocLogout = isTmcLogoutDone
+      }
+      return Ok({
+        interrupt: (): void => {},
+        result: Promise.resolve().then(() => {
+          isTmcLogoutDone ||= isTmc
+          return Ok(nullOutput("logged out", "logged-out"))
+        }),
+        getStderr: (): string => "",
+      })
+    })
+
+    expect((await langs.deauthenticate()).ok).toBe(true)
+    expect(wasTmcLogoutDoneAtMoocLogout).toBe(true)
+  })
+
   test("a failed deauthenticate fires no logout event, expected or not", async function () {
     const langs = newLangs()
     const onLogout = vi.fn()
@@ -1073,6 +1097,20 @@ suite("Langs error-kind mapping", function () {
     expect(calls.map((c) => c.args)).toEqual([
       ["mooc", "--client-name", "test-client", "logged-in"],
     ])
+  })
+
+  test("getMoocAccountId reads the account mooc logged-in reports, if it does", async function () {
+    const langs = newLangs()
+    const withAccount = {
+      ...nullOutput("currently logged in", "logged-in"),
+      data: { "output-data-kind": "mooc-current-user", "output-data": { id: uuid(7) } },
+    } satisfies OutputData
+    stubSpawn(langs, (i) =>
+      Ok(i === 0 ? withAccount : nullOutput("currently logged in", "logged-in")),
+    )
+
+    expect((await langs.getMoocAccountId()).val).toBe(uuid(7))
+    expect((await langs.getMoocAccountId()).val).toBeUndefined()
   })
 
   test("isAuthenticated falls back to a stored tmc token", async function () {

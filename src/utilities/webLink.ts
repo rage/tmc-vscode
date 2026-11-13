@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 
-import { Logger } from "./logger"
+import { Logger, redactUrlQuery } from "./logger"
 
 /**
  * Opens an http(s) `url` in the user's browser; any other link is refused and logged.
@@ -30,7 +30,7 @@ function parseWebLink(url: string): vscode.Uri | undefined {
     return undefined
   }
   if (link.scheme !== "http" && link.scheme !== "https") {
-    Logger.error(`Refusing a "${link.scheme}" link`, url)
+    Logger.error(`Refusing a "${link.scheme}" link`, redactUrlQuery(url))
     return undefined
   }
   return link

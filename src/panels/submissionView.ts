@@ -287,3 +287,18 @@ function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): str
       return "Exercise graded"
   }
 }
+
+/**
+ * `view` with its `exerciseState` as the exercise now stands, which the submit action that
+ * built the view cannot know: the files or the exercise may go away while it is shown.
+ */
+export function withExerciseState(
+  view: SubmissionView,
+  exercise: { isOnDisk: boolean; isInCourse: boolean },
+): SubmissionView {
+  const { exerciseState: _previous, ...rest } = view
+  if (!exercise.isInCourse) {
+    return { ...rest, exerciseState: "removed" }
+  }
+  return exercise.isOnDisk ? rest : { ...rest, exerciseState: "notOnDisk" }
+}

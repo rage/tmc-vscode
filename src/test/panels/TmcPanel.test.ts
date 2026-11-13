@@ -20,6 +20,7 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
 import {
   BottleneckError,
+  CliVerificationError,
   InitializationError,
   presentationFor,
   RateLimitedError,
@@ -186,7 +187,7 @@ suite("TmcPanel initialization guards", () => {
 })
 
 suite("initializationErrorHelpPanel", () => {
-  test("lists each failed service, named for the student, with the CLI hint on tmc-langs", () => {
+  test("lists each failed service, named for the student, with the CLI hint on the tools", () => {
     const actionContext = createDegradedContext({
       failures: {
         userData: new Error("corrupt user data"),
@@ -199,7 +200,7 @@ suite("initializationErrorHelpPanel", () => {
 
     expect(panel.failures).toEqual([
       {
-        service: "tmc-langs",
+        service: "the TestMyCode tools",
         error: "langs offline",
         stack: expect.any(String),
         hint: expect.stringContaining(`${path.sep}cli'`),
@@ -213,6 +214,23 @@ suite("initializationErrorHelpPanel", () => {
     const panel = initializationErrorHelpPanel(createMockActionContext(), createMockContext())
 
     expect(panel.failures).toEqual([])
+  })
+
+  test("leads the hint for a damaged CLI with the file, then the network advice", () => {
+    const actionContext = createDegradedContext({
+      failures: {
+        langs: new CliVerificationError(
+          "/storage/cli/tmc-langs-cli",
+          new Error("fetch failed"),
+          "",
+        ),
+      },
+    })
+
+    const [failure] = initializationErrorHelpPanel(actionContext, createMockContext()).failures
+
+    expect(failure?.hint).toMatch(/^The file '\/storage\/cli\/tmc-langs-cli' may be damaged/)
+    expect(failure?.hint).toContain("proxy, firewall or antivirus")
   })
 
   test("folds a failure's cause into the message", () => {
@@ -238,6 +256,7 @@ vi.mock("../../ui/courseHome", () => ({
 }))
 
 vi.mock("../../actions", () => ({
+  downloadAndOpenExercises: vi.fn(),
   keepWaitingForGrading: vi.fn(),
   pasteExercise: vi.fn(),
   refreshLocalExercises: vi.fn(),
@@ -262,7 +281,10 @@ function stubHandlers(): {
       .mockReset()
       .mockResolvedValue(Ok({ warnings: [] })),
     openWorkspace,
-    pasteExercise: vi.mocked(actions.pasteExercise).mockReset().mockResolvedValue(Ok("link")),
+    pasteExercise: vi
+      .mocked(actions.pasteExercise)
+      .mockReset()
+      .mockResolvedValue(Ok({ link: "link", isReused: false })),
     refreshLocalExercises: vi
       .mocked(actions.refreshLocalExercises)
       .mockReset()
@@ -433,6 +455,33 @@ suite("TmcPanel handler dispatch", () => {
     ])
     expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
       "This exercise is no longer downloaded.",
+    )
+  })
+
+  test("Open Exercise downloads the shown exercise into its course", async () => {
+    stubHandlers()
+    const download = vi
+      .mocked(actions.downloadAndOpenExercises)
+      .mockReset()
+      .mockResolvedValue(Ok({ ids: [], exceededOpenLimit: undefined, warnings: [] }))
+    const shown = { ...exerciseSubmissionPanel(), exerciseId: idOfTmcExercise(7) }
+    const course = tmcLocalCourse({ id: 3 })
+    const actionContext = createMockActionContext({
+      startup: {
+        userData: {
+          getExercise: () => Ok({ course }),
+          onDidChangeCourses: () => new vscode.Disposable(() => {}),
+        } as unknown as UserData,
+      },
+    })
+    const { listener } = await mountSidePanel(actionContext, createMockContext(), shown)
+
+    await listener({ type: "exerciseAction", sourcePanel: targetOf(shown), action: "openExercise" })
+
+    expect(download).toHaveBeenCalledExactlyOnceWith(
+      actionContext,
+      [idOfTmcExercise(7)],
+      idOfTmcCourse(3),
     )
   })
 
@@ -799,6 +848,29 @@ suite("TmcPanel ready handshake", () => {
   })
 })
 
+/**
+ * A context whose submitted exercise is on disk and in its course, so the submission views
+ * reach the panel as they were built; `changed` fires the host's exercise and course events.
+ */
+function submissionContext(
+  exercise?: { isOnDisk: boolean; isInCourse: boolean },
+  changed = new vscode.EventEmitter<undefined>(),
+): ActionContext {
+  const state = exercise ?? { isOnDisk: true, isInCourse: true }
+  return createMockActionContext({
+    startup: {
+      workspaceManager: {
+        getExercise: () => (state.isOnDisk ? {} : undefined),
+        onDidChangeExercises: changed.event,
+      } as unknown as WorkspaceManager,
+      userData: {
+        getExercise: () => (state.isInCourse ? Ok({}) : Err(new Error("No stored exercise"))),
+        onDidChangeCourses: changed.event,
+      } as unknown as UserData,
+    },
+  })
+}
+
 /** Posts `message` to the side panel the way the host's handlers do. */
 function postToSidePanel(message: PanelMessage): void {
   const sidePanel = TmcPanel.sidePanel as unknown as { _postMessage: (m: PanelMessage) => void }
@@ -807,7 +879,7 @@ function postToSidePanel(message: PanelMessage): void {
 
 /** Shows `panel` a submission view headed `headline`, as a submit action does. */
 function showSubmissionView(panel: ExerciseSubmissionPanel, headline: string): void {
-  const subscription = TmcPanel.showSubmissionViews(createMockContext(), createMockActionContext())
+  const subscription = TmcPanel.showSubmissionViews(createMockContext(), submissionContext())
   submissionViews.update({
     panel,
     view: submissionViewFor(panel, headline).view,
@@ -1417,10 +1489,7 @@ suite("TmcPanel side panel placement", () => {
   test("opens a new submission in the side panel", () => {
     const { panel } = createFakeWebviewPanel()
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
-    const subscription = TmcPanel.showSubmissionViews(
-      createMockContext(),
-      createMockActionContext(),
-    )
+    const subscription = TmcPanel.showSubmissionViews(createMockContext(), submissionContext())
     onTestFinished(() => subscription.dispose())
     const shown = exerciseSubmissionPanel()
 
@@ -1435,10 +1504,7 @@ suite("TmcPanel side panel placement", () => {
     const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
     createWebviewPanel.mockClear()
     createWebviewPanel.mockReturnValue(panel)
-    const subscription = TmcPanel.showSubmissionViews(
-      createMockContext(),
-      createMockActionContext(),
-    )
+    const subscription = TmcPanel.showSubmissionViews(createMockContext(), submissionContext())
     onTestFinished(() => subscription.dispose())
     const shown = exerciseSubmissionPanel()
     const graded = submissionViewFor(shown, "Exercise graded")
@@ -1459,10 +1525,7 @@ suite("TmcPanel side panel placement", () => {
   test("offers a background submission's outcome instead of leaving the shown one", async () => {
     const { panel, sendReady } = createFakeWebviewPanel()
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
-    const subscription = TmcPanel.showSubmissionViews(
-      createMockContext(),
-      createMockActionContext(),
-    )
+    const subscription = TmcPanel.showSubmissionViews(createMockContext(), submissionContext())
     onTestFinished(() => subscription.dispose())
     const shown = exerciseSubmissionPanel()
     const background = { ...exerciseSubmissionPanel(), exerciseName: "part01-02_other" }
@@ -1488,6 +1551,47 @@ suite("TmcPanel side panel placement", () => {
         graded,
       ]),
     )
+  })
+
+  test("tells the shown submission when its exercise leaves the disk", async () => {
+    const { panel, sendReady } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    const exercise = { isOnDisk: true, isInCourse: true }
+    const changed = new vscode.EventEmitter<undefined>()
+    const subscription = TmcPanel.showSubmissionViews(
+      createMockContext(),
+      submissionContext(exercise, changed),
+    )
+    onTestFinished(() => subscription.dispose())
+    const shown = exerciseSubmissionPanel()
+    submissionViews.open(shown)
+    await sendReady()
+    submissionViews.update({
+      panel: shown,
+      view: submissionViewFor(shown, "Exercise graded").view,
+      shouldReopen: false,
+    })
+
+    exercise.isOnDisk = false
+    changed.fire(undefined)
+
+    const views = (postedMessages(panel) as PanelMessage[]).flatMap((message) =>
+      message.type === "submissionView" ? [message.view.exerciseState] : [],
+    )
+    expect(views).toEqual([undefined, "notOnDisk"])
+  })
+
+  test("closes the shown submission once the submissions are cleared, as at logout", async () => {
+    const { panel, sendReady } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    const subscription = TmcPanel.showSubmissionViews(createMockContext(), submissionContext())
+    onTestFinished(() => subscription.dispose())
+    submissionViews.open(exerciseSubmissionPanel())
+    await sendReady()
+
+    submissionViews.clear()
+
+    expect(panel.dispose).toHaveBeenCalled()
   })
 
   test("a later submission of the same exercise forgets the earlier one's view", () => {

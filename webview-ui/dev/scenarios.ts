@@ -434,6 +434,8 @@ export const SCENARIOS: Scenario[] = [
               completed: true,
               attempted: true,
               standing: "Passed",
+              max_tries: null,
+              tries_left: null,
             },
           }),
           3,

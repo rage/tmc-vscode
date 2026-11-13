@@ -243,7 +243,7 @@ suite("failed updates", () => {
     courseId: tmcCourse,
     exerciseId: idOfTmcExercise(exerciseId),
     exerciseName: `exercise_${exerciseId}`,
-    reason: "Show Logs has the details.",
+    reason: "The download did not complete.",
   })
 
   test("forgets an exercise once it updates", () => {

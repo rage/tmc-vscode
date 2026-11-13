@@ -150,6 +150,18 @@ suite("testExercise action", () => {
     expect(actionContext.startup.langs.runTests).not.toHaveBeenCalled()
   })
 
+  test("runs the tests of an exercise removed from its still-added course", async () => {
+    const actionContext = contextWithTestRun(Ok(passingRun))
+    actionContext.startup.userData = {
+      getExercise: () => Err(new Error("No stored tmc exercise")),
+      getCourse: () => Ok(course(false)),
+    } as unknown as ReadyStartup["userData"]
+
+    const outcome = await testExercise(actionContext, workspaceExercise(), noToken)
+
+    expect(outcome.ok && outcome.val).toMatchObject({ kind: "ran", runResult: passingRun })
+  })
+
   test("runs nothing in Restricted Mode", async () => {
     const actionContext = contextWithTestRun(Ok(passingRun))
     actionContext.startup.trustGate = restrictedTrustGate().trustGate

@@ -13,6 +13,7 @@ import { buildTarZst } from "./archive"
 import {
   createMoocFixtures,
   DEFAULT_MOOC_MOCK_BASE_URL,
+  MOCK_DEFAULT_USER_ID,
   type CourseWithExercises,
   type ExerciseSlide,
   type ExerciseTask,
@@ -164,6 +165,8 @@ interface MoocMockState {
   authenticatedRequestCount: number
   /** This instance's isolated device-flow + issued-token state; see oauth.ts. */
   oauth: MoocOAuthState
+  /** The account every token acts for, as `GET me` reports it. */
+  currentUserId: string
 }
 
 /** The half of a mock's state that is derived from its base URL. */
@@ -221,6 +224,7 @@ const createMoocMockState = (baseUrl: string): MoocMockState => ({
   lastAuthorization: undefined,
   authenticatedRequestCount: 0,
   oauth: createMoocOAuthState(),
+  currentUserId: MOCK_DEFAULT_USER_ID,
 })
 
 /**
@@ -300,6 +304,11 @@ export interface MoocMockControls {
    * unknown exercise.
    */
   setExerciseRemoved: (exerciseId: string, removed: boolean) => boolean
+  /**
+   * Makes every token act for another account, as when a second student logs in on the
+   * same computer.
+   */
+  setCurrentUser: (userId: string) => void
   /** Points every URL this mock hands out at `baseUrl`. */
   rebase: (baseUrl: string) => void
   /**
@@ -406,6 +415,7 @@ const createMoocMockControls = (
     state.lastAuthorization = undefined
     state.authenticatedRequestCount = 0
     state.oauth.reset()
+    state.currentUserId = MOCK_DEFAULT_USER_ID
     const enrolledByDefault = new Map(
       createMoocFixtures(state.baseUrl).courses.map((c) => [c.course.id, c.enrolled]),
     )
@@ -461,6 +471,9 @@ const createMoocMockControls = (
     }
     course.enrolled = enrolled
     return true
+  },
+  setCurrentUser: (userId) => {
+    state.currentUserId = userId
   },
   setExerciseRemoved: (exerciseId, removed) => {
     if (!state.fixtures.exerciseById.has(exerciseId)) {
@@ -981,6 +994,9 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
     }
 
   const operations: Record<string, (c: Context, req: Request) => MockResponse> = {
+    // GET /api/v0/exercise-services/client/me
+    getClientCurrentUser: (): MockResponse => ok({ id: state.currentUserId }),
+
     // GET /api/v0/exercise-services/client/courses
     getClientCourses: (): MockResponse => {
       if (fault === "getClientCourses") {
@@ -1692,6 +1708,16 @@ export const registerMoocRoutes = (
       res.status(404).json({ error: `no such course: ${courseId}` })
       return
     }
+    res.status(204).end()
+  })
+
+  app.post("/mooc-mock/set-current-user", json, (req, res) => {
+    const { id } = (req.body ?? {}) as { id?: unknown }
+    if (typeof id !== "string") {
+      res.status(400).json({ error: "id must be a string" })
+      return
+    }
+    controls.setCurrentUser(id)
     res.status(204).end()
   })
 

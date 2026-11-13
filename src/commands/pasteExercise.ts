@@ -36,7 +36,7 @@ export async function pasteExercise(
     return
   }
 
-  const link = pasteResult.val
+  const { link, isReused } = pasteResult.val
   const isCopied = await Promise.resolve(vscode.env.clipboard.writeText(link)).then(
     () => true,
     (error: unknown) => {
@@ -44,8 +44,11 @@ export async function pasteExercise(
       return false
     },
   )
+  const unchanged = isReused ? "Your code is unchanged since the last paste. " : ""
   void dialog.notification(
-    isCopied ? `Copied the paste link to the clipboard: ${link}` : `Paste link: ${link}`,
+    isCopied
+      ? `${unchanged}Copied ${isReused ? "its" : "the paste"} link to the clipboard: ${link}`
+      : `${unchanged}${isReused ? "Its" : "Paste"} link: ${link}`,
     ["Open in Browser", (): void => void openWebLink(link)],
   )
 }
