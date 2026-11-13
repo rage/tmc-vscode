@@ -4,7 +4,7 @@
     CourseHomeExerciseAction,
     CourseHomePart,
   } from "../../../../shared/lib"
-  import { ExerciseIdentifier } from "../../../../shared/lib"
+  import { ExerciseIdentifier, PENDING_REVIEW_LABEL } from "../../../../shared/lib"
   import ActionMenu from "../../components/ActionMenu.svelte"
   import ToolbarButton from "../../components/ToolbarButton.svelte"
   import { reducedMotion } from "../../utilities/a11y.svelte"
@@ -84,7 +84,8 @@
   }
 
   function points(exercise: CourseHomeExercise): string {
-    return exercise.availablePoints > 0
+    // Held at 0 until the review; the deadline column says so instead.
+    return exercise.availablePoints > 0 && !exercise.pendingReview
       ? `${exercise.awardedPoints}/${exercise.availablePoints}`
       : ""
   }
@@ -190,7 +191,9 @@
           </span>
           <span class="state muted">{stateLabel(exercise)}</span>
           <span class="deadline muted">
-            {#if refusal}
+            {#if exercise.pendingReview}
+              <span title={exercise.pendingReview}>{PENDING_REVIEW_LABEL}</span>
+            {:else if refusal}
               <span title={refusal.sentence}>{refusal.label}</span>
             {:else if exercise.deadline && isDue(exercise)}
               <time

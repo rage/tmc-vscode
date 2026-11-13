@@ -531,6 +531,33 @@ suite("CoursesTree", function () {
       )
     })
 
+    test("a mooc exercise whose points wait for review says so instead of 0 points", function () {
+      const [course] = show(
+        moocCourse({
+          exercises: [
+            moocCourseExercise({ name: "loops", pendingReview: "awaits_chapter_lock" }),
+            moocCourseExercise({
+              id: "locked-one",
+              name: "recursion",
+              pendingReview: "awaits_teacher",
+              exerciseLocked: true,
+            }),
+          ],
+        }),
+      )
+      const loops = exercisesOf(course).find((item) => item.label === "loops")
+      const recursion = exercisesOf(course).find((item) => item.label === "recursion")
+
+      expect(loops?.description).toBe("not downloaded · waiting for teacher review")
+      expect(tooltipOf(loops!)).toContain(
+        "The points wait for a teacher's review, which starts once you complete and lock the chapter.",
+      )
+      expect(recursion?.description).toBe("not downloaded · waiting for teacher review")
+      expect(tooltipOf(recursion!)).toContain(
+        "recursion is locked for you, so it can no longer be submitted. Only a teacher can unlock it.",
+      )
+    })
+
     test("a mooc exercise counts its tries left, and its locked chapter names the lock", function () {
       const [course] = show(
         moocCourse({

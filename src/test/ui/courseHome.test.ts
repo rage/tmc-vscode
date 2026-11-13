@@ -127,6 +127,34 @@ suite("buildCourseHomeView", function () {
     })
   })
 
+  test("says what the points of an exercise under review wait for, and why it is locked", function () {
+    const course = moocLocalCourse({
+      exercises: [
+        moocCourseExercise({
+          id: "a",
+          name: "loops",
+          pendingReview: "awaits_teacher",
+          exerciseLocked: true,
+        }),
+      ],
+    })
+
+    const view = buildCourseHomeView(
+      contextFor(course),
+      idOfMoocCourse(MOOC_COURSE_ID),
+      NOW,
+    ).unwrap()
+
+    expect(view.parts[0]?.exercises[0]).toMatchObject({
+      pendingReview: "The points wait for a teacher's review.",
+      submitRefusal: {
+        label: "locked",
+        sentence:
+          "loops is locked for you, so it can no longer be submitted. Only a teacher can unlock it.",
+      },
+    })
+  })
+
   test("groups a tmc course by part, with each exercise's state on this computer", function () {
     const course = tmcLocalCourse({
       title: "Python Course",

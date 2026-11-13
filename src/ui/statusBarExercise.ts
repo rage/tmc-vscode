@@ -7,6 +7,7 @@ import {
   modelSolutionUrlOf,
   SUBMIT_REFUSAL_LABELS,
   submitRefusalOf,
+  PENDING_REVIEW_LABEL,
   triesLeftText,
 } from "../../shared/lib"
 import type Dialog from "../api/dialog"
@@ -80,7 +81,11 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
     const stored = storedResult.ok ? storedResult.val.exercise : undefined
     const running = this._sources.operations.current(exercise.id)
     const activity = running && activityLabels[running]
-    const points = stored && pointsText(stored.data.awardedPoints, stored.data.availablePoints)
+    const isReviewPending = stored?.kind === "mooc" && stored.data.pendingReview !== undefined
+    const points =
+      stored && !isReviewPending
+        ? pointsText(stored.data.awardedPoints, stored.data.availablePoints)
+        : undefined
     const course = this._sources.userData.getCourse(exercise.courseId)
     const isChapterClosed =
       course.ok && LocalCourseData.getClosedChapterOf(course.val, exercise.id) !== undefined
@@ -157,6 +162,9 @@ function standingText(
   }
   if (stored.data.passed) {
     return "passed"
+  }
+  if (stored.kind === "mooc" && stored.data.pendingReview !== undefined) {
+    return PENDING_REVIEW_LABEL
   }
   const refusal = submitRefusalOf(stored, new Date(), course)
   if (refusal) {

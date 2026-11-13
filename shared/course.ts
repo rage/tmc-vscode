@@ -64,6 +64,13 @@ export const SharedMoocCourseExerciseSchema = z.object({
   maxTries: z.number().optional(),
   /** How many of `maxTries` are left; absent means unlimited. */
   triesLeft: z.number().optional(),
+  /**
+   * What the exercise's points wait for when a teacher reviews answers before awarding them;
+   * `awardedPoints` stays 0 until then. Absent when no review is pending.
+   */
+  pendingReview: z.enum(["awaits_chapter_lock", "awaits_teacher", "unrecognized"]).optional(),
+  /** courses.mooc.fi takes no more submissions of it from the student; absent means no. */
+  exerciseLocked: z.boolean().optional(),
   /** The chapter the course material puts the exercise in; absent outside any chapter. */
   chapter: MoocExerciseChapterSchema.optional(),
   /** The course material page the exercise is on; absent when the backend sent none. */
@@ -138,13 +145,15 @@ export const SOFT_DEADLINE_PENALTY =
 /**
  * Why the backend would refuse a submission of an exercise, as far as its stored data tells:
  * its chapter is locked (`chapterNotUnlockedYet`, `chapterCompletedAndLocked`) or has not
- * opened yet (`chapterNotOpenYet`, which only the course's closed chapters tell), its hard
- * deadline has passed, or its tries are used up; or the student is not enrolled on its course.
+ * opened yet (`chapterNotOpenYet`, which only the course's closed chapters tell), the exercise
+ * itself is locked for review, its hard deadline has passed, or its tries are used up; or the
+ * student is not enrolled on its course.
  */
 export type SubmitRefusal =
   | "chapterNotUnlockedYet"
   | "chapterCompletedAndLocked"
   | "chapterNotOpenYet"
+  | "exerciseLocked"
   | "deadlinePassed"
   | "outOfTries"
   | "notEnrolled"
@@ -169,6 +178,9 @@ export function submitRefusalOf(
         return "chapterNotUnlockedYet"
       case "CompletedAndLocked":
         return "chapterCompletedAndLocked"
+    }
+    if (exercise.data.exerciseLocked) {
+      return "exerciseLocked"
     }
   }
   const { deadline } = exercise.data
@@ -197,6 +209,7 @@ export const SUBMIT_REFUSAL_LABELS: Record<SubmitRefusal, string> = {
   chapterNotUnlockedYet: "chapter not unlocked yet",
   chapterCompletedAndLocked: "chapter locked",
   chapterNotOpenYet: "chapter not open yet",
+  exerciseLocked: "locked",
   deadlinePassed: "deadline passed",
   outOfTries: "no tries left",
   notEnrolled: "not enrolled",
@@ -220,6 +233,8 @@ export function submitRefusalSentence(
       return `You have completed and locked ${chapter}, so ${exerciseName} can no longer be submitted.`
     case "chapterNotOpenYet":
       return `${exerciseName} can be submitted once ${chapter} opens.`
+    case "exerciseLocked":
+      return `${exerciseName} is locked for you, so it can no longer be submitted. Only a teacher can unlock it.`
     case "deadlinePassed":
       return `The deadline of ${exerciseName} has passed, so it can no longer be submitted.`
     case "outOfTries":
@@ -227,6 +242,18 @@ export function submitRefusalSentence(
     case "notEnrolled":
       return `You are not enrolled on this course, so ${exerciseName} can be submitted once you enroll again.`
   }
+}
+
+/** A few words for a row whose points wait for a teacher's review. */
+export const PENDING_REVIEW_LABEL = "waiting for teacher review"
+
+/** What a pending teacher review means for the points, as a sentence for the student. */
+export function pendingReviewSentence(
+  pendingReview: NonNullable<SharedMoocCourseExercise["pendingReview"]>,
+): string {
+  return pendingReview === "awaits_chapter_lock"
+    ? "The points wait for a teacher's review, which starts once you complete and lock the chapter."
+    : "The points wait for a teacher's review."
 }
 
 /** How many tries are left, e.g. "1 try left"; `undefined` when tries are unlimited. */

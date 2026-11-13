@@ -325,6 +325,27 @@ suite("mooc tries, chapter locking and closed chapters", function () {
     expect(unlimited).not.toHaveProperty("triesLeft")
   })
 
+  test("stores a pending teacher review and a locked exercise, and neither once gone", function () {
+    const reviewed = combineMoocApiExerciseData([slide!], {
+      ...NO_PROGRESS,
+      exercises: [
+        progressEntry(slide!.exercise_id, {
+          pending_teacher_review: "awaits_teacher",
+          exercise_locked: true,
+        }),
+      ],
+    })[0]
+    expect(reviewed).toMatchObject({ pendingReview: "awaits_teacher", exerciseLocked: true })
+
+    const cleared = combineMoocApiExerciseData(
+      [slide!],
+      { ...NO_PROGRESS, exercises: [progressEntry(slide!.exercise_id)] },
+      [reviewed!],
+    )[0]
+    expect(cleared).not.toHaveProperty("pendingReview")
+    expect(cleared).not.toHaveProperty("exerciseLocked")
+  })
+
   test("keeps a chapter's locking status, and none without locking", function () {
     const locked = combineMoocApiExerciseData(
       [

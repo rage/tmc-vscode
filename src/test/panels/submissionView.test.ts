@@ -165,6 +165,39 @@ suite("tmcResultView", () => {
 })
 
 suite("moocGradingView", () => {
+  /** A grading of `scoreGiven` whose points the progress holds back for a teacher's review. */
+  function underReview(
+    scoreGiven: number,
+    review: "awaits_chapter_lock" | "awaits_teacher",
+  ): ExerciseTaskSubmissionStatus {
+    const status = moocGrading("FullyGraded", scoreGiven, "Attempted")
+    if (status.status === "grading" && status.grading.exercise_progress) {
+      Object.assign(status.grading.exercise_progress, {
+        score_given: 0,
+        pending_teacher_review: review,
+      })
+    }
+    return status
+  }
+
+  test("a passing grading held for review says the tests passed and the points wait", () => {
+    const view = moocGradingView(underReview(3, "awaits_chapter_lock"), 3)
+    expect(view).toMatchObject({
+      headline: "All tests passed",
+      tone: "passed",
+      explanation:
+        "The points wait for a teacher's review, which starts once you complete and lock the chapter.",
+    })
+    expect(view.points).toBeUndefined()
+  })
+
+  test("a grading held for review is judged by its own score, never the held-back 0", () => {
+    expect(moocGradingView(underReview(1, "awaits_teacher"), 3)).toMatchObject({
+      headline: "Some tests failed on the server",
+      explanation: "The points wait for a teacher's review.",
+    })
+  })
+
   test("a grading the backend counts passed is finished, rounded, and asks for no help", () => {
     expect(moocGradingView(moocGrading("FullyGraded", 2.999, "Passed"), 3)).toMatchObject({
       phase: "finished",

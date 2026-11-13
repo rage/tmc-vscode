@@ -199,6 +199,22 @@ suite("ExerciseStatusBarItem", function () {
     expect(tooltipText(itemOf())).toContain("passed")
   })
 
+  test("says the points wait for teacher review instead of showing them", function () {
+    const h = harness()
+    h.stored.exercise = makeMoocKind(
+      moocCourseExercise({
+        id: "exercise-uuid",
+        name: exerciseHelloWorld.exerciseSlug,
+        availablePoints: 2,
+        pendingReview: "awaits_chapter_lock",
+      }),
+    )
+    track(new ExerciseStatusBarItem(h.sources))
+
+    expect(itemOf().text).toContain("waiting for teacher review")
+    expect(itemOf().text).not.toContain("0/2")
+  })
+
   test("says when the backend reports no tries left", function () {
     const h = harness()
     h.stored.exercise = makeMoocKind(

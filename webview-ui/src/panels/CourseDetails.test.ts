@@ -223,6 +223,36 @@ suite("the course home", () => {
     expect(screen.getByText(/You have completed and locked this chapter\./)).toBeInTheDocument()
   })
 
+  test("says an exercise waits for teacher review instead of showing its held-back points", async () => {
+    await renderHome(
+      courseHomeView({
+        parts: [
+          {
+            key: "chapter:1",
+            name: "Basics",
+            isDefaultOpen: true,
+            exercises: [
+              courseHomeExercise(1, "loops", {
+                status: "opened",
+                availablePoints: 2,
+                pendingReview: "The points wait for a teacher's review.",
+                submitRefusal: { label: "locked", sentence: "loops is locked for you." },
+              }),
+            ],
+          },
+        ],
+      }),
+    )
+
+    const [row] = screen.getAllByRole("listitem")
+    expect(within(row as HTMLElement).getByText("waiting for teacher review")).toHaveAttribute(
+      "title",
+      "The points wait for a teacher's review.",
+    )
+    expect(row).not.toHaveTextContent("0/2")
+    expect(within(row as HTMLElement).queryByText("locked")).not.toBeInTheDocument()
+  })
+
   test("calls an exercise on disk Downloaded until the course workspace is open", async () => {
     await renderHome(
       courseHomeView({

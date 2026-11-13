@@ -90,6 +90,15 @@ suite("submitRefusalOf", () => {
     ).toBeUndefined()
   })
 
+  test("refuses an exercise locked for review, with who can lift it", () => {
+    expect(
+      submitRefusalOf(mooc({ exerciseLocked: true, deadline: "2026-11-01T00:00:00Z" }), now),
+    ).toBe("exerciseLocked")
+    expect(submitRefusalSentence("exerciseLocked", "loops")).toBe(
+      "loops is locked for you, so it can no longer be submitted. Only a teacher can unlock it.",
+    )
+  })
+
   test("refuses a tmc exercise past its hard deadline", () => {
     const tmc = makeTmcKind({
       id: 1,

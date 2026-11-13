@@ -39,6 +39,7 @@ import {
   NotEnrolledError,
   NotFoundError,
   OutOfTriesError,
+  ExerciseLockedError,
   RateLimitedError,
   RuntimeError,
 } from "../errors"
@@ -826,6 +827,31 @@ suite("tmc langs cli spec", function () {
       ).unwrap()
       const limited = progress.exercises.find((e) => e.exercise_id === LIMITED_TRIES_EXERCISE_ID)
       expect([limited?.max_tries, limited?.tries_left]).to.deep.equal([1, 0])
+    })
+
+    test("should report a review holding the points back, and refuse a locked exercise", async function () {
+      const dir = writeSubmittableProject("mooc-under-review")
+      const setReview = (review: string | null): Promise<Response> =>
+        fetch(`${MOCK_BACKEND_URL}/mooc-mock/set-exercise-review`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ exercise_id: PASSING_EXERCISE_ID, review }),
+        })
+      expect((await setReview("awaits_teacher")).status).to.equal(204)
+      try {
+        const { progress } = (
+          await tmc.getMoocCourseData(PYTHON_COURSE_ID, { forceRefresh: true })
+        ).unwrap()
+        const held = progress.exercises.find((e) => e.exercise_id === PASSING_EXERCISE_ID)
+        expect([held?.pending_teacher_review, held?.exercise_locked]).to.deep.equal([
+          "awaits_teacher",
+          true,
+        ])
+        const refused = await tmc.submitMoocExercise(PASSING_EXERCISE_ID, dir)
+        expect(refused.val).to.be.instanceOf(ExerciseLockedError)
+      } finally {
+        await setReview(null)
+      }
     })
 
     test("should refuse pasting one exercise too often as rate limited", async function () {

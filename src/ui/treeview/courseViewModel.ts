@@ -1,5 +1,10 @@
 import type { ChapterLockingStatus } from "../../../shared/langsSchema"
-import type { ExerciseStatus, MoocClosedChapter, SubmitRefusal } from "../../../shared/lib"
+import type {
+  ExerciseStatus,
+  MoocClosedChapter,
+  SharedMoocCourseExercise,
+  SubmitRefusal,
+} from "../../../shared/lib"
 import {
   CourseIdentifier,
   ExerciseIdentifier,
@@ -31,6 +36,8 @@ export interface ExerciseView {
   submitRefusal: SubmitRefusal | undefined
   awardedPoints: number
   availablePoints: number
+  /** What the points wait for, which `awardedPoints` leaves at 0 until then; mooc only. */
+  pendingReview: SharedMoocCourseExercise["pendingReview"]
   softDeadline: Date | null
   hardDeadline: Date | null
   /** The hard deadline is the one that binds: there is no earlier soft one. */
@@ -160,6 +167,7 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
           : submitRefusalOf(ex, state.now, course),
       awardedPoints: ex.data.awardedPoints,
       availablePoints: ex.data.availablePoints,
+      pendingReview: ex.kind === "mooc" ? ex.data.pendingReview : undefined,
       softDeadline,
       hardDeadline,
       isHard: !isSoftDeadlineBinding(ex.data),
@@ -234,6 +242,7 @@ function removedFromCourse(onDisk: WorkspaceExercise): ExerciseView {
     submitRefusal: undefined,
     awardedPoints: 0,
     availablePoints: 0,
+    pendingReview: undefined,
     softDeadline: null,
     hardDeadline: null,
     isHard: true,

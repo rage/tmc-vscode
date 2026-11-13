@@ -125,7 +125,7 @@ export function combineMoocClosedChapters(
   }))
 }
 
-/** A mooc exercise's stored standing and tries, as the backend decides them. */
+/** A mooc exercise's stored standing, tries and review state, as the backend decides them. */
 export interface MoocStoredStanding {
   passed: boolean
   outOfTries: boolean
@@ -133,37 +133,50 @@ export interface MoocStoredStanding {
   maxTries?: number
   /** Absent means unlimited. */
   triesLeft?: number
+  /** Absent when no review is pending. */
+  pendingReview?: NonNullable<ExerciseProgress["pending_teacher_review"]>
+  /** Absent means no. */
+  exerciseLocked?: boolean
 }
 
 /**
- * The stored standing and tries `progress` sets. Keeps `previous`'s, else none, when the backend
- * sent no progress; keeps its `passed` and `outOfTries` when it sent no standing, as a host that
- * predates it does.
+ * The stored standing, tries and review state `progress` sets. Keeps `previous`'s, else none,
+ * when the backend sent no progress; keeps its `passed` and `outOfTries` when it sent no
+ * standing, as a host that predates it does.
  */
 export function moocStoredStanding(
   progress: ExerciseProgress | undefined,
-  previous?: Pick<MoocLocalCourseExercise, "passed" | "outOfTries" | "maxTries" | "triesLeft">,
+  previous?: Pick<
+    MoocLocalCourseExercise,
+    "passed" | "outOfTries" | "maxTries" | "triesLeft" | "pendingReview" | "exerciseLocked"
+  >,
 ): MoocStoredStanding {
-  const tries = progress
+  const triesAndReview = progress
     ? {
         ...(progress.max_tries === null ? {} : { maxTries: progress.max_tries }),
         ...(progress.tries_left === null ? {} : { triesLeft: progress.tries_left }),
+        ...(progress.pending_teacher_review === null
+          ? {}
+          : { pendingReview: progress.pending_teacher_review }),
+        ...(progress.exercise_locked ? { exerciseLocked: true } : {}),
       }
     : {
         ...(previous?.maxTries === undefined ? {} : { maxTries: previous.maxTries }),
         ...(previous?.triesLeft === undefined ? {} : { triesLeft: previous.triesLeft }),
+        ...(previous?.pendingReview === undefined ? {} : { pendingReview: previous.pendingReview }),
+        ...(previous?.exerciseLocked ? { exerciseLocked: true } : {}),
       }
   if (!progress?.standing) {
     return {
       passed: previous?.passed ?? false,
       outOfTries: previous?.outOfTries ?? false,
-      ...tries,
+      ...triesAndReview,
     }
   }
   return {
     passed: progress.standing === "Passed",
     outOfTries: progress.standing === "OutOfTries",
-    ...tries,
+    ...triesAndReview,
   }
 }
 

@@ -11,6 +11,7 @@ import { LOGIN_PROCESS_TIMEOUT, MINIMUM_SUBMISSION_INTERVAL } from "../../config
 import {
   AuthorizationError,
   ChapterLockedError,
+  ExerciseLockedError,
   ChapterNotOpenError,
   ConnectionError,
   DeadlinePassedError,
@@ -879,6 +880,7 @@ suite("Langs error-kind mapping", function () {
     ["chapter-not-open-yet", ChapterNotOpenError],
     ["chapter-not-unlocked-yet", ChapterLockedError],
     ["chapter-completed-and-locked", ChapterLockedError],
+    ["exercise-locked", ExerciseLockedError],
     ["device-login-denied", DeviceLoginDeniedError],
     ["device-login-expired", DeviceLoginExpiredError],
     ["not-found", NotFoundError],
@@ -914,6 +916,7 @@ suite("Langs error-kind mapping", function () {
     ["chapter-not-open-yet", "This exercise's chapter has not opened yet"],
     ["chapter-not-unlocked-yet", "locked until you have completed the chapters before it"],
     ["chapter-completed-and-locked", "You have completed and locked this exercise's chapter"],
+    ["exercise-locked", "This exercise is locked for you, so it can no longer be submitted"],
   ])("a %s refusal says so plainly, never as a lost login", async function (kind, message) {
     const onLogout = vi.fn()
     const langs = newLangs()

@@ -6,7 +6,7 @@ import type {
   TestCase,
 } from "../../shared/langsSchema"
 import type { FeedbackQuestion, SubmissionView, WebviewError } from "../../shared/lib"
-import { assertUnreachable } from "../../shared/lib"
+import { assertUnreachable, pendingReviewSentence } from "../../shared/lib"
 
 /** The phases in which the backend is still working on the submission. */
 export type InProgressPhase = "uploading" | "grading"
@@ -182,8 +182,22 @@ export function moocGradingView(
   // A pass may come from an earlier submission; a short score is about this one.
   const isBelowMax = given !== undefined && given < maxPoints
   const isPassedEarlier = standing === "Passed" && isBelowMax
+  const pendingReview = grading.exercise_progress?.pending_teacher_review ?? null
   switch (grading.grading_progress) {
     case "FullyGraded":
+      if (pendingReview !== null) {
+        // The progress holds the points back at 0 for the review, so only the grading's own
+        // score tells how the tests went.
+        return {
+          ...graded,
+          phase: "finished",
+          headline: isBelowMax ? "Some tests failed on the server" : "All tests passed",
+          tone: isBelowMax ? scoreTone(given) : "passed",
+          points: undefined,
+          explanation: pendingReviewSentence(pendingReview),
+          canPaste: true,
+        }
+      }
       return {
         ...graded,
         phase: "finished",

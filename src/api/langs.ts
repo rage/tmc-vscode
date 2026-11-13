@@ -55,6 +55,7 @@ import type { InitializationError } from "../errors"
 import {
   AuthorizationError,
   ChapterLockedError,
+  ExerciseLockedError,
   ChapterNotOpenError,
   ConnectionError,
   DeadlinePassedError,
@@ -1472,6 +1473,14 @@ export default class Langs {
           new ChapterLockedError(
             "You have completed and locked this exercise's chapter, so its exercises can no" +
               " longer be submitted.",
+            details,
+          ),
+        )
+      case "exercise-locked":
+        return Err(
+          new ExerciseLockedError(
+            "This exercise is locked for you, so it can no longer be submitted. Only a teacher" +
+              " can unlock it.",
             details,
           ),
         )

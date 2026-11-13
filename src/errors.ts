@@ -58,13 +58,19 @@ export class ChapterLockedError extends BaseError {
   public override readonly name = "Chapter Locked Error"
 }
 
+/** The exercise takes no more submissions from the student until a teacher resets it. */
+export class ExerciseLockedError extends BaseError {
+  public override readonly name = "Exercise Locked Error"
+}
+
 /** Whether `error` is the backend's standing refusal of the exercise, which no retry changes. */
 export function isSubmitRefusal(error: Error): boolean {
   return (
     error instanceof OutOfTriesError ||
     error instanceof DeadlinePassedError ||
     error instanceof ChapterNotOpenError ||
-    error instanceof ChapterLockedError
+    error instanceof ChapterLockedError ||
+    error instanceof ExerciseLockedError
   )
 }
 

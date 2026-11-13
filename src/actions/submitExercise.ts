@@ -27,6 +27,7 @@ import type { WorkspaceExercise } from "../api/workspaceManager"
 import type { UserData } from "../config/userdata"
 import {
   ChapterLockedError,
+  ExerciseLockedError,
   ChapterNotOpenError,
   NotEnrolledError,
   DeadlinePassedError,
@@ -490,6 +491,8 @@ function refusalError(refusal: SubmitRefusal, exercise: LocalCourseExercise): Er
       return new ChapterLockedError(sentence)
     case "chapterNotOpenYet":
       return new ChapterNotOpenError(sentence)
+    case "exerciseLocked":
+      return new ExerciseLockedError(sentence)
     case "deadlinePassed":
       return new DeadlinePassedError(sentence)
     case "notEnrolled":

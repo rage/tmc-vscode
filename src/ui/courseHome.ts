@@ -8,6 +8,7 @@ import {
   ExerciseIdentifier,
   LocalCourseData,
   SUBMIT_REFUSAL_LABELS,
+  pendingReviewSentence,
   submitRefusalSentence,
 } from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
@@ -133,7 +134,7 @@ export function buildCourseHomeView(
             : {}),
       exercises: part.exercises.map((ex) => {
         const deadline = deadlineText(shownDeadline(ex))
-        const { materialUrl, submitRefusal, triesLeft } = ex
+        const { materialUrl, pendingReview, submitRefusal, triesLeft } = ex
         return {
           id: ex.id,
           name: ex.name,
@@ -151,6 +152,7 @@ export function buildCourseHomeView(
             : {}),
           awardedPoints: ex.awardedPoints,
           availablePoints: ex.availablePoints,
+          ...(pendingReview ? { pendingReview: pendingReviewSentence(pendingReview) } : {}),
           ...(deadline ? { deadline } : {}),
           isSoftDeadline: !ex.isHard,
           isUpdateable: ex.isUpdateable,

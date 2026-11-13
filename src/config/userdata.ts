@@ -264,6 +264,8 @@ export class UserData {
     // In place: `exercise.data` is the catalogue's own object.
     delete exercise.data.maxTries
     delete exercise.data.triesLeft
+    delete exercise.data.pendingReview
+    delete exercise.data.exerciseLocked
     Object.assign(exercise.data, standing, { awardedPoints })
     this._setPassed(id, standing.passed)
     return this._updatePersistentData()
