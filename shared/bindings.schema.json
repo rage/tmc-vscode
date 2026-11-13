@@ -2705,7 +2705,7 @@
       "type": "object",
       "properties": {
         "removed": {
-          "description": "Exercises their course no longer has. Their local copies are left in place and are never updated.",
+          "description": "Exercises their course no longer has. Their local copies are left in place and are never updated.\nExercises of a chapter that has not opened yet are absent from the course but not removed.",
           "type": "array",
           "items": {
             "type": "string",
