@@ -161,8 +161,12 @@ export class TmcPanel {
       existing._panel.reveal(undefined, !isMain)
       return
     }
+    // VS Code restores a background webview without asking the serializer until it is shown,
+    // so the main panel a reload brought back may sit there unadopted.
+    const restoredMainTabs = isMain ? panelTabs(MAIN_PANEL_VIEW_TYPE) : []
+    const restoredColumn = restoredMainTabs[0]?.group.viewColumn
     const showOptions = isMain
-      ? { viewColumn: ViewColumn.One, preserveFocus: false }
+      ? { viewColumn: restoredColumn ?? ViewColumn.One, preserveFocus: false }
       : { viewColumn: ViewColumn.Beside, preserveFocus: true }
     const panelViewType = isMain ? MAIN_PANEL_VIEW_TYPE : SIDE_PANEL_VIEW_TYPE
     const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", showOptions, {
@@ -172,6 +176,7 @@ export class TmcPanel {
     const created = TmcPanel._adopt(webviewPanel, extensionContext, actionContext, route, isMain)
     if (isMain) {
       TmcPanel.mainPanel = created
+      void closeTabs(restoredMainTabs, "restored main panel tab(s), replaced by a new one")
     } else {
       TmcPanel.sidePanel = created
     }
@@ -426,21 +431,33 @@ function webviewOptions(extensionUri: Uri): WebviewOptions {
 
 /** Closes every side panel tab, which at activation can only be one restored from before. */
 async function closeSidePanelTabs(): Promise<void> {
-  const tabs = window.tabGroups.all.flatMap((group) =>
+  await closeTabs(
+    panelTabs(SIDE_PANEL_VIEW_TYPE),
+    "restored side panel tab(s), whose submission is gone",
+  )
+}
+
+/** The tabs of every panel of `viewType`, in this window's tab groups. */
+function panelTabs(viewType: string): vscode.Tab[] {
+  return window.tabGroups.all.flatMap((group) =>
     group.tabs.filter((tab) => {
-      const viewType = (tab.input as { viewType?: unknown } | undefined)?.viewType
+      const tabViewType = (tab.input as { viewType?: unknown } | undefined)?.viewType
       // VS Code prefixes the type a webview was created with, e.g. "mainThreadWebview-".
-      return typeof viewType === "string" && viewType.endsWith(SIDE_PANEL_VIEW_TYPE)
+      return typeof tabViewType === "string" && tabViewType.endsWith(viewType)
     }),
   )
+}
+
+/** @param what Completes "Closing <n> ..." in the log. */
+async function closeTabs(tabs: vscode.Tab[], what: string): Promise<void> {
   if (tabs.length === 0) {
     return
   }
-  Logger.info(`Closing ${tabs.length} restored side panel tab(s), whose submission is gone`)
+  Logger.info(`Closing ${tabs.length} ${what}`)
   try {
     await window.tabGroups.close(tabs)
   } catch (error) {
-    Logger.warn("Could not close a restored side panel tab", error)
+    Logger.warn(`Could not close ${what}`, error)
   }
 }
 
