@@ -88,7 +88,8 @@ export async function updateExercises(
     return course.ok && !LocalCourseData.isDisabled(course.val)
   })
   if (updateable.length > 0 && settings.getAutomaticallyUpdateExercises()) {
-    await downloadUpdates(actionContext, updateable, silent)
+    // The student did not pick these exercises to update, even when they asked for a refresh.
+    await downloadUpdates(actionContext, updateable, { isUnrequested: silent, isAnnounced: true })
     return
   }
 
@@ -147,17 +148,20 @@ interface ExerciseUpdate {
 }
 
 /**
- * Downloads `updates`. A requested update says in the status bar which exercises it updated. An
- * automatic one leaves its trace in the course home, and offers to show it when it is not on
- * screen.
+ * Downloads `updates`. An update the student picked says in the status bar which exercises it
+ * updated. An automatic one leaves its trace in the course home, and offers to show it when it
+ * is not on screen.
  *
- * @param isUnrequested See `downloadExerciseUpdates`.
+ * @param options.isUnrequested See `downloadExerciseUpdates`.
+ * @param options.isAnnounced Whether to announce the update as an automatic one, which the
+ *   student did not pick; implied by `isUnrequested`.
  */
 export async function downloadUpdates(
   actionContext: ReadyActionContext,
   updates: readonly ExerciseUpdate[],
-  isUnrequested = false,
+  options: { isUnrequested?: boolean; isAnnounced?: boolean } = {},
 ): Promise<void> {
+  const isUnrequested = options.isUnrequested ?? false
   const result = await withOperation(
     actionContext.dialog,
     { failure: "Failed to update exercises." },
@@ -167,7 +171,7 @@ export async function downloadUpdates(
     return
   }
   const { updated } = result.val
-  if (!isUnrequested) {
+  if (!isUnrequested && !options.isAnnounced) {
     const names = updated.map((id) => exerciseName(actionContext, id))
     actionContext.dialog.statusMessage(`Updated ${describeExercises(names)}.`)
     return
