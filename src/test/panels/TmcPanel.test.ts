@@ -1581,6 +1581,19 @@ suite("TmcPanel side panel placement", () => {
     expect(views).toEqual([undefined, "notOnDisk"])
   })
 
+  test("closes the shown submission once the submissions are cleared, as at logout", async () => {
+    const { panel, sendReady } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    const subscription = TmcPanel.showSubmissionViews(createMockContext(), submissionContext())
+    onTestFinished(() => subscription.dispose())
+    submissionViews.open(exerciseSubmissionPanel())
+    await sendReady()
+
+    submissionViews.clear()
+
+    expect(panel.dispose).toHaveBeenCalled()
+  })
+
   test("a later submission of the same exercise forgets the earlier one's view", () => {
     const earlier = exerciseSubmissionPanel()
     submissionViews.update({

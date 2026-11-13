@@ -14,6 +14,7 @@ import type {
   StartupStep,
 } from "./actions/types"
 import { isReady } from "./actions/types"
+import { AccountHandover } from "./api/accountHandover"
 import AiRestriction, { isActiveCourseAiAllowed } from "./api/aiRestriction"
 import { AiUseGate, warnOfUnwritableWorkspaceFile } from "./api/aiUseGate"
 import { createAuthState } from "./api/authState"
@@ -433,6 +434,7 @@ async function activateInner(
     langs.ok && resources.ok && workspaceManager && userData?.ok && exerciseDecorationProvider
       ? {
           kind: "ready",
+          accountHandover: new AccountHandover(context.globalState),
           aiUseGate: new AiUseGate(aiRestriction),
           courseWorkspaceSwitches,
           langs: langs.val,

@@ -7,6 +7,7 @@ import type { MoocDeviceLogin } from "../../../shared/langsSchema"
 import type { BaseError } from "../../../shared/lib"
 import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
+import { handOverExercises } from "../../commands/handOverExercises"
 import { login } from "../../commands/login"
 import { refreshEverything } from "../../commands/refreshEverything"
 import {
@@ -20,6 +21,10 @@ import { Logger } from "../../utilities"
 import { tmcLocalCourse } from "../fixtures/courses"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
+
+vi.mock("../../commands/handOverExercises", () => ({
+  handOverExercises: vi.fn(async () => {}),
+}))
 
 vi.mock("../../commands/refreshEverything", () => ({
   refreshEverything: vi.fn(async () => Ok.EMPTY),
@@ -166,6 +171,7 @@ suite("login command", function () {
     expect(h.context.dialog.notification).not.toHaveBeenCalled()
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith("tmc.addNewCourse")
     expect(refreshEverything).toHaveBeenCalledWith(h.context, { silent: true })
+    expect(handOverExercises).toHaveBeenCalledWith(h.context)
   })
 
   test("a login that finds courses already added goes to no course pick", async function () {

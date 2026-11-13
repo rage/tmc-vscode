@@ -2,6 +2,7 @@ import { Ok } from "ts-results"
 import { vi } from "vitest"
 
 import type { ActionContext, ReadyActionContext, ReadyStartup } from "../../actions/types"
+import { AccountHandover } from "../../api/accountHandover"
 import type { AiUseGate } from "../../api/aiUseGate"
 import type { AuthState } from "../../api/authState"
 import type { CourseWorkspaceSwitches } from "../../api/courseWorkspaceSwitches"
@@ -64,6 +65,7 @@ export function createMockActionContext(
     coursesTree: autoMock<CoursesTree>(),
     startup: {
       kind: "ready",
+      accountHandover: new AccountHandover(createMockMemento()),
       // Refuses nothing: `refusal` resolves to `undefined`.
       aiUseGate: autoMock<AiUseGate>(),
       courseWorkspaceSwitches: autoMock<CourseWorkspaceSwitches>(),

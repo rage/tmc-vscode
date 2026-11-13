@@ -87,6 +87,11 @@ export class TmcPanel {
     }
     return Disposable.from(
       submissionViews.onDidOpen(show),
+      submissionViews.onDidClear(() => {
+        if (TmcPanel.sidePanel?._route?.type === "ExerciseSubmission") {
+          TmcPanel.sidePanel.dispose()
+        }
+      }),
       submissionViews.onDidUpdate(({ panel, view, shouldReopen }) => {
         const { sidePanel } = TmcPanel
         if (sidePanel?._route?.id === panel.id) {

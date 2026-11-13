@@ -12,6 +12,7 @@ import {
   ServerError,
 } from "../errors"
 import { Logger, openWebLink, redactUrlQuery } from "../utilities"
+import { handOverExercises } from "./handOverExercises"
 import { refreshEverything } from "./refreshEverything"
 
 const SITE = backendName("mooc")
@@ -98,6 +99,9 @@ export async function login(actionContext: ReadyActionContext): Promise<LoginOut
   }
 
   dialog.statusMessage(`Logged in to ${SITE}.`)
+  void handOverExercises(actionContext).catch((e) =>
+    Logger.error("Handing the exercises over after login failed", e),
+  )
   // A login that restores an expired session finds the user's courses still added.
   if (actionContext.startup.userData.getCourses().length === 0) {
     void vscode.commands.executeCommand("tmc.addNewCourse")

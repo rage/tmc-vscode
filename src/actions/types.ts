@@ -1,3 +1,4 @@
+import type { AccountHandover } from "../api/accountHandover"
 import type { AiUseGate } from "../api/aiUseGate"
 import type { AuthState } from "../api/authState"
 import type { CourseWorkspaceSwitches } from "../api/courseWorkspaceSwitches"
@@ -15,6 +16,7 @@ import type CoursesTree from "../ui/treeview/treeview"
 /** The services an activation builds, once all of them have succeeded. */
 export interface ReadyStartup {
   kind: "ready"
+  accountHandover: AccountHandover
   aiUseGate: AiUseGate
   courseWorkspaceSwitches: CourseWorkspaceSwitches
   exerciseDecorationProvider: ExerciseDecorationProvider

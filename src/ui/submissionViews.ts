@@ -21,11 +21,15 @@ class SubmissionViews {
   private readonly _opened = new vscode.EventEmitter<ExerciseSubmissionPanel>()
   private readonly _updated = new vscode.EventEmitter<SubmissionViewUpdate>()
   private readonly _latest = new Map<number, SubmissionViewUpdate>()
+  private readonly _cleared = new vscode.EventEmitter<void>()
 
   /** Fires with a new submission's panel, which the side panel then shows. */
   public readonly onDidOpen = this._opened.event
 
   public readonly onDidUpdate = this._updated.event
+
+  /** Fires after {@link clear}; whatever shows a submission should close. */
+  public readonly onDidClear = this._cleared.event
 
   /** Announces a new submission, forgetting earlier submissions of the same exercise. */
   public open(panel: ExerciseSubmissionPanel): void {
@@ -40,6 +44,12 @@ class SubmissionViews {
   public update(update: SubmissionViewUpdate): void {
     this._latest.set(update.panel.id, update)
     this._updated.fire(update)
+  }
+
+  /** Forgets every submission, as when the account that made them logs out. */
+  public clear(): void {
+    this._latest.clear()
+    this._cleared.fire()
   }
 
   /** The view submission panel `panelId` was last updated with, unless it has been superseded. */
