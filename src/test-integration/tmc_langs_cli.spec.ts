@@ -31,11 +31,14 @@ import Langs from "../api/langs"
 import { CLIENT_NAME, MINIMUM_SUBMISSION_INTERVAL, TMC_LANGS_VERSION } from "../config/constants"
 import {
   AuthorizationError,
+  ChapterLockedError,
+  DeadlinePassedError,
   DeviceLoginExpiredError,
   ExerciseNotFoundError,
   InvalidTokenError,
   NotEnrolledError,
   NotFoundError,
+  OutOfTriesError,
   RateLimitedError,
   RuntimeError,
 } from "../errors"
@@ -61,6 +64,32 @@ const setCurrentUser = (id: string): Promise<Response> =>
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ id }),
   })
+
+/** Puts the exercise in a chapter for `run`, as a teacher can, and takes it out after. */
+const inChapter = async <T>(
+  exerciseId: string,
+  chapter: { opens_at?: string; locking_status?: string; deadline?: string },
+  run: () => Promise<T>,
+): Promise<T> => {
+  const setChapter = (value: unknown): Promise<Response> =>
+    fetch(`${MOCK_BACKEND_URL}/mooc-mock/set-exercise-chapter`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ exercise_id: exerciseId, chapter: value }),
+    })
+  const set = await setChapter({
+    id: "c0c0c0c0-0000-4000-8000-000000000009",
+    name: "Recursion",
+    chapter_number: 3,
+    ...chapter,
+  })
+  expect(set.status).to.equal(204)
+  try {
+    return await run()
+  } finally {
+    await setChapter(null)
+  }
+}
 
 suite("tmc langs cli spec", function () {
   let server: cp.ChildProcess | undefined
@@ -560,6 +589,8 @@ suite("tmc langs cli spec", function () {
     const LIMITED_TRIES_EXERCISE_ID = "b8b8b8b8-0000-4000-8000-000000000001"
     const NONEXISTENT_EXERCISE_ID = "ffffffff-0000-4000-8000-000000000000"
     const NOT_ENROLLED_EXERCISE_ID = "eeeeeeee-0000-4000-8000-000000000000"
+    const PAST_DEADLINE_EXERCISE_ID = "f6f6f6f6-0000-4000-8000-000000000001"
+    const VARIANTS_COURSE_ID = "33333333-3333-4333-8333-333333333333"
 
     let configDir: string
     let tmc: Langs
@@ -706,6 +737,46 @@ suite("tmc langs cli spec", function () {
       expect(result.val).to.be.instanceOf(NotEnrolledError)
     })
 
+    test("should report a submit past the deadline as the deadline having passed", async function () {
+      const dir = writeSubmittableProject("mooc-submit-past-deadline")
+      const result = await tmc.submitMoocExercise(PAST_DEADLINE_EXERCISE_ID, dir)
+      expect(result.val).to.be.instanceOf(DeadlinePassedError)
+    })
+
+    test("should report a submit to a locked chapter as the lock, not as a lost login", async function () {
+      const dir = writeSubmittableProject("mooc-submit-locked")
+      const result = await inChapter(
+        FAILING_EXERCISE_ID,
+        { locking_status: "not_unlocked_yet" },
+        () => tmc.submitMoocExercise(FAILING_EXERCISE_ID, dir),
+      )
+      expect(result.val).to.be.instanceOf(ChapterLockedError)
+    })
+
+    test("should hide a closed chapter's exercises from course data, listing them as closed", async function () {
+      const { slides, progress } = await inChapter(
+        PASSING_EXERCISE_ID,
+        { opens_at: "2100-01-01T00:00:00Z" },
+        async () =>
+          (await tmc.getMoocCourseData(PYTHON_COURSE_ID, { forceRefresh: true })).unwrap(),
+      )
+      expect(slides).to.deep.equal([])
+      expect(
+        progress.closed_chapters.map((c) => c.exercises.map((e) => e.exercise_id)),
+      ).to.deep.equal([[PASSING_EXERCISE_ID]])
+    })
+
+    test("should serve an exercise its chapter's deadline and locking status", async function () {
+      const { slides } = await inChapter(
+        PASSING_EXERCISE_ID,
+        { deadline: "2099-01-01T00:00:00Z", locking_status: "completed_and_locked" },
+        async () =>
+          (await tmc.getMoocCourseData(PYTHON_COURSE_ID, { forceRefresh: true })).unwrap(),
+      )
+      expect(Date.parse(slides[0]?.deadline ?? "")).to.equal(Date.parse("2099-01-01T00:00:00Z"))
+      expect(slides[0]?.chapter?.locking_status).to.equal("CompletedAndLocked")
+    })
+
     test("should leave a course the student was withdrawn from out of the enrolled courses", async function () {
       const setEnrolled = (enrolled: boolean): Promise<Response> =>
         fetch(`${MOCK_BACKEND_URL}/mooc-mock/set-enrolled`, {
@@ -733,7 +804,7 @@ suite("tmc langs cli spec", function () {
       expect(newest?.grading_progress).to.equal(null)
     })
 
-    test("should paste an exercise with no tries left, using none", async function () {
+    test("should paste an exercise with no tries left, using none, and refuse a submit", async function () {
       const dir = writeSubmittableProject("mooc-paste-out-of-tries")
       const graded = (
         await submitMoocAndWaitForGrading(tmc, LIMITED_TRIES_EXERCISE_ID, dir)
@@ -747,6 +818,14 @@ suite("tmc langs cli spec", function () {
 
       const listed = (await moocSubmissions(tmc, LIMITED_TRIES_EXERCISE_ID)).unwrap()
       expect(listed.map((item) => item.kind)).to.deep.equal(["paste", "submission"])
+
+      const refused = await tmc.submitMoocExercise(LIMITED_TRIES_EXERCISE_ID, dir)
+      expect(refused.val).to.be.instanceOf(OutOfTriesError)
+      const { progress } = (
+        await tmc.getMoocCourseData(VARIANTS_COURSE_ID, { forceRefresh: true })
+      ).unwrap()
+      const limited = progress.exercises.find((e) => e.exercise_id === LIMITED_TRIES_EXERCISE_ID)
+      expect([limited?.max_tries, limited?.tries_left]).to.deep.equal([1, 0])
     })
 
     test("should refuse pasting one exercise too often as rate limited", async function () {
