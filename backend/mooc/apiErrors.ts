@@ -43,6 +43,7 @@ export const API_ERRORS = {
   chapter_not_open_yet: { type: "forbidden", status: 403 },
   chapter_not_unlocked_yet: { type: "forbidden", status: 403 },
   chapter_completed_and_locked: { type: "forbidden", status: 403 },
+  exercise_locked: { type: "forbidden", status: 403 },
   authentication_required_for_exam_exercise: { type: "unauthorized", status: 401 },
   forbidden: { type: "forbidden", status: 403 },
   rate_limited: { type: "rate_limit", status: 429 },

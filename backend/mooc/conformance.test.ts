@@ -1359,6 +1359,69 @@ describe("mooc mock enrollment, answerability and ownership", () => {
     assert.equal(slide.chapter.locking_status, "completed_and_locked")
   })
 
+  test("a pending teacher review holds the points back, and a locked exercise refuses answers", async () => {
+    const exerciseId = passingExercise.slide.exercise_id
+    const res = await postSubmit(passingExercise, [await uploadFor(exerciseId)])
+    const { task_submission_id: taskSubmissionId } = (await res.json()) as {
+      task_submission_id: string
+    }
+    for (let poll = 0; poll < 2; poll++) {
+      await authFetch(api(`/submissions/${taskSubmissionId}/grading`))
+    }
+    const progressOf = async () => {
+      const progress = (await (
+        await authFetch(api(`/courses/${pythonCourse.id}/progress`))
+      ).json()) as {
+        exercises: {
+          exercise_id: string
+          score_given: number
+          standing: string
+          pending_teacher_review: string | null
+          exercise_locked: boolean
+        }[]
+      }
+      const { score_given, standing, pending_teacher_review, exercise_locked } =
+        progress.exercises.find((e) => e.exercise_id === exerciseId)!
+      return { score_given, standing, pending_teacher_review, exercise_locked }
+    }
+    assert.deepEqual(await progressOf(), {
+      score_given: 1,
+      standing: "Passed",
+      pending_teacher_review: null,
+      exercise_locked: false,
+    })
+
+    mock.setExerciseReview(exerciseId, "awaits_chapter_lock")
+    assert.deepEqual(await progressOf(), {
+      score_given: 0,
+      standing: "Attempted",
+      pending_teacher_review: "awaits_chapter_lock",
+      exercise_locked: false,
+    })
+    assert.equal((await postUpload(exerciseId)).status, 200)
+
+    mock.setExerciseReview(exerciseId, "awaits_teacher")
+    assert.deepEqual(await progressOf(), {
+      score_given: 0,
+      standing: "Attempted",
+      pending_teacher_review: "awaits_teacher",
+      exercise_locked: true,
+    })
+    await assertRefused(
+      await postUpload(exerciseId),
+      "exercise_locked",
+      "This exercise is locked, and you can no longer submit it.",
+    )
+
+    mock.setExerciseReview(exerciseId, "locked")
+    assert.equal((await progressOf()).pending_teacher_review, null)
+    await assertRefused(
+      await postSubmit(passingExercise, []),
+      "exercise_locked",
+      "This exercise is locked, and you can no longer submit it.",
+    )
+  })
+
   test("another student's submission is refused on grading, download and share", async () => {
     const exerciseId = passingExercise.slide.exercise_id
     const seeded = mock.seedForeignSubmission(exerciseId)
@@ -1759,6 +1822,24 @@ describe("mooc mock error envelopes", () => {
         }
       },
     })),
+    {
+      name: "an upload to an exercise locked for review",
+      messageKey: "exercise_locked",
+      run: async (): Promise<ErrorResponse> => {
+        const exerciseId = futureDeadlineExercise.slide.exercise_id
+        mock.setExerciseReview(exerciseId, "awaits_teacher")
+        try {
+          return await read(
+            await authFetch(api(`/exercises/${exerciseId}/files`), {
+              method: "POST",
+              body: new FormData(),
+            }),
+          )
+        } finally {
+          mock.setExerciseReview(exerciseId, undefined)
+        }
+      },
+    },
     {
       name: "an upload naming no files",
       messageKey: "validation_error",

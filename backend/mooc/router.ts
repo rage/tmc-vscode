@@ -152,6 +152,8 @@ interface MoocMockState {
   removedExerciseIds: Set<string>
   /** The chapter a teacher has put an exercise in; fixtures are in none. */
   chapterByExerciseId: Map<string, MockChapter>
+  /** Where chapter locking's teacher review has an exercise; fixtures have none. */
+  reviewByExerciseId: Map<string, MockReview>
   uploadsById: Map<string, UploadRecord>
   /** Uploaded bytes keyed by stored path segment, served by the file-store route. */
   uploadBytesByStoredName: Map<string, Buffer>
@@ -219,6 +221,7 @@ const createMoocMockState = (baseUrl: string): MoocMockState => ({
   submissionsByExercise: new Map(),
   pasteTimesByExercise: new Map(),
   removedExerciseIds: new Set(),
+  reviewByExerciseId: new Map(),
   chapterByExerciseId: new Map(),
   uploadsById: new Map(),
   uploadBytesByStoredName: new Map(),
@@ -312,6 +315,11 @@ export interface MoocMockControls {
    * with `undefined`. Returns false for an unknown exercise.
    */
   setExerciseChapter: (exerciseId: string, chapter: MockChapter | undefined) => boolean
+  /**
+   * Puts a fixture exercise where chapter locking's teacher review has it, or takes it out of
+   * review with `undefined`. Returns false for an unknown exercise.
+   */
+  setExerciseReview: (exerciseId: string, review: MockReview | undefined) => boolean
   /**
    * Makes every token act for another account, as when a second student logs in on the
    * same computer.
@@ -417,6 +425,7 @@ const createMoocMockControls = (
     state.pasteTimesByExercise.clear()
     state.removedExerciseIds.clear()
     state.chapterByExerciseId.clear()
+    state.reviewByExerciseId.clear()
     state.uploadsById.clear()
     state.uploadBytesByStoredName.clear()
     state.expireNextUpload = false
@@ -503,6 +512,17 @@ const createMoocMockControls = (
       state.chapterByExerciseId.set(exerciseId, chapter)
     } else {
       state.chapterByExerciseId.delete(exerciseId)
+    }
+    return true
+  },
+  setExerciseReview: (exerciseId, review) => {
+    if (!state.fixtures.exerciseById.has(exerciseId)) {
+      return false
+    }
+    if (review) {
+      state.reviewByExerciseId.set(exerciseId, review)
+    } else {
+      state.reviewByExerciseId.delete(exerciseId)
     }
     return true
   },
@@ -701,7 +721,8 @@ const slideInChapter = (state: MoocMockState, slide: ExerciseSlide): ExerciseSli
 
 /**
  * The host's chapter gates: a chapter that has not opened refuses everything about its
- * exercises; chapter locking refuses only answers (`isAnswer`), and never a snapshot.
+ * exercises; chapter locking, and an exercise it has locked, refuse only answers (`isAnswer`),
+ * and never a snapshot.
  */
 const chapterRefusal = (
   state: MoocMockState,
@@ -726,8 +747,23 @@ const chapterRefusal = (
         "The current chapter is locked, and you can no longer submit exercises.",
       )
     default:
-      return undefined
+      break
   }
+  return isExerciseLocked(state, exerciseId)
+    ? apiError("exercise_locked", "This exercise is locked, and you can no longer submit it.")
+    : undefined
+}
+
+/**
+ * Where the host's chapter locking has an exercise when a teacher reviews answers before
+ * awarding points: graded but waiting for the student to lock the chapter, locked and waiting
+ * for the teacher, or locked with no review pending (reviewed, or locked unanswered).
+ */
+export type MockReview = "awaits_chapter_lock" | "awaits_teacher" | "locked"
+
+const isExerciseLocked = (state: MoocMockState, exerciseId: string): boolean => {
+  const review = state.reviewByExerciseId.get(exerciseId)
+  return review === "awaits_teacher" || review === "locked"
 }
 
 const isEnrolled = (state: MoocMockState, exerciseId: string): boolean =>
@@ -892,23 +928,28 @@ const exerciseProgress = (state: MoocMockState, exerciseId: string): unknown => 
   const scores = graded.map((r) => outcomeOf(state, r).score_given)
   const scoreMaximum = scoreMaximumFor(state, exerciseId)
   const limit = state.fixtures.exerciseById.get(exerciseId)?.maxTriesPerSlide
-  const isPassed = scores.some((score) => score >= scoreMaximum)
+  const review = state.reviewByExerciseId.get(exerciseId)
+  // The host holds the points back at 0 until the review, whatever the grading gave.
+  const pendingReview = review === "locked" ? null : (review ?? null)
+  const isPassed = pendingReview === null && scores.some((score) => score >= scoreMaximum)
   const standing = isPassed
     ? "Passed"
-    : limit !== undefined && records.length >= limit
+    : limit !== undefined && records.length >= limit && pendingReview === null
       ? "OutOfTries"
       : records.length > 0
         ? "Attempted"
         : "NotAttempted"
   return {
     exercise_id: exerciseId,
-    score_given: scores.length > 0 ? Math.max(...scores) : 0,
+    score_given: scores.length > 0 && pendingReview === null ? Math.max(...scores) : 0,
     score_maximum: scoreMaximum,
     completed: graded.some((r) => outcomeOf(state, r).grading_progress === "FullyGraded"),
     attempted: records.length > 0,
     standing,
     max_tries: limit ?? null,
     tries_left: limit === undefined ? null : Math.max(limit - records.length, 0),
+    pending_teacher_review: pendingReview,
+    exercise_locked: isExerciseLocked(state, exerciseId),
   }
 }
 
@@ -1892,6 +1933,25 @@ export const registerMoocRoutes = (
         }
       : undefined
     if (!controls.setExerciseChapter(exerciseId, set as MockChapter | undefined)) {
+      res.status(404).json({ error: `no such exercise: ${exerciseId}` })
+      return
+    }
+    res.status(204).end()
+  })
+
+  app.post("/mooc-mock/set-exercise-review", json, (req, res) => {
+    const { exercise_id: exerciseId, review } = (req.body ?? {}) as {
+      exercise_id?: unknown
+      review?: unknown
+    }
+    const reviews: unknown[] = ["awaits_chapter_lock", "awaits_teacher", "locked", null]
+    if (typeof exerciseId !== "string" || !reviews.includes(review)) {
+      res.status(400).json({
+        error: "exercise_id must be a string and review one of " + JSON.stringify(reviews),
+      })
+      return
+    }
+    if (!controls.setExerciseReview(exerciseId, (review as MockReview | null) ?? undefined)) {
       res.status(404).json({ error: `no such exercise: ${exerciseId}` })
       return
     }
