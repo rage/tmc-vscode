@@ -1562,7 +1562,7 @@ describe("mooc mock answer snapshots", () => {
     assert.equal((await share(paste)).status, 200)
     await assertRefused(
       await share(backup),
-      "validation_error",
+      "backup_not_shareable",
       "Only a paste can be shared, not a backup.",
     )
     const items = await list(passingExercise)
@@ -1812,6 +1812,25 @@ describe("mooc mock error envelopes", () => {
           await pasteOnce()
         }
         return read(await pasteOnce())
+      },
+    },
+    {
+      name: "sharing a backup",
+      messageKey: "backup_not_shareable",
+      run: async () => {
+        const exercise = futureDeadlineExercise
+        const stored = await authFetch(api(`/exercises/${exercise.slide.exercise_id}/snapshots`), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            purpose: "backup",
+            exercise_slide_id: exercise.slide.slide_id,
+            exercise_task_id: exercise.slide.tasks[0]!.task_id,
+            data_files: [await uploadFor(exercise.slide.exercise_id)],
+          }),
+        })
+        const { snapshot_id } = (await stored.json()) as { snapshot_id: string }
+        return read(await authFetch(api(`/submissions/${snapshot_id}/share`), { method: "POST" }))
       },
     },
     {

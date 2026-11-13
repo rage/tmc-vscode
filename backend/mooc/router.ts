@@ -1473,7 +1473,7 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       }
       // A backup past the cap is deleted, which would break its link.
       if (record.kind === "backup") {
-        return apiError("validation_error", "Only a paste can be shared, not a backup.")
+        return apiError("backup_not_shareable", "Only a paste can be shared, not a backup.")
       }
       record.isShared = true
       const token = randomUUID()

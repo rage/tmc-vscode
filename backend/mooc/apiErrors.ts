@@ -36,6 +36,7 @@ export const API_ERRORS = {
   upload_expired: { type: "validation_error", status: 422 },
   unknown_upload: { type: "validation_error", status: 422 },
   duplicate_upload: { type: "validation_error", status: 422 },
+  backup_not_shareable: { type: "validation_error", status: 422 },
   obsolete_client: { type: "obsolete_client", status: 426 },
   not_found: { type: "not_found", status: 404 },
   unauthorized: { type: "unauthorized", status: 401 },
