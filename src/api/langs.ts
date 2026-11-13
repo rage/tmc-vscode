@@ -494,11 +494,14 @@ export default class Langs {
    * `logout` with `expected: true` once both are gone.
    */
   public async deauthenticate(): Promise<Result<void, Error>> {
-    const results = await Promise.all(
-      (["tmc", "mooc"] as const).map((backend) =>
-        this._run({ args: this._backendCmd(backend, "logout"), suppressAuthEvents: true }),
-      ),
-    )
+    const results: Result<void, Error>[] = []
+    // In turn: `tmc logout` reads the mooc credentials, and fails if `mooc logout` removes them
+    // under it.
+    for (const backend of ["tmc", "mooc"] as const) {
+      results.push(
+        await this._run({ args: this._backendCmd(backend, "logout"), suppressAuthEvents: true }),
+      )
+    }
     this._responseCache.clear()
     const failed = results.find((res) => res.err)
     if (failed) {

@@ -1053,6 +1053,30 @@ suite("Langs error-kind mapping", function () {
     expect(onLogout).toHaveBeenCalledExactlyOnceWith(true)
   })
 
+  test("deauthenticate removes the mooc credentials only once tmc's logout has read them", async function () {
+    const langs = newLangs()
+    let isTmcLogoutDone = false
+    let wasTmcLogoutDoneAtMoocLogout: boolean | undefined
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.spyOn(langs as any, "_spawnLangsProcess").mockImplementation((commandArgs: unknown) => {
+      const isTmc = (commandArgs as { args: string[] }).args[0] === "tmc"
+      if (!isTmc) {
+        wasTmcLogoutDoneAtMoocLogout = isTmcLogoutDone
+      }
+      return Ok({
+        interrupt: (): void => {},
+        result: Promise.resolve().then(() => {
+          isTmcLogoutDone ||= isTmc
+          return Ok(nullOutput("logged out", "logged-out"))
+        }),
+        getStderr: (): string => "",
+      })
+    })
+
+    expect((await langs.deauthenticate()).ok).toBe(true)
+    expect(wasTmcLogoutDoneAtMoocLogout).toBe(true)
+  })
+
   test("a failed deauthenticate fires no logout event, expected or not", async function () {
     const langs = newLangs()
     const onLogout = vi.fn()
