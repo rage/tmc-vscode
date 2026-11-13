@@ -184,7 +184,7 @@
               </time>
             {/if}
             {#if tries}
-              <span>{exercise.deadline && isDue(exercise) ? `· ${tries}` : tries}</span>
+              <span>{tries}</span>
             {/if}
           </span>
           <span
@@ -323,11 +323,17 @@
     color: var(--tmc-badge-foreground);
     outline: 1px solid var(--tmc-hc-outline);
   }
-  .state,
-  .deadline {
+  .state {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  /* Wraps instead of truncating: what a student may still submit must stay readable. */
+  .deadline {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow-wrap: break-word;
   }
   .points {
     text-align: end;
@@ -348,8 +354,16 @@
     .row {
       grid-template-columns: 16px minmax(8ch, 1fr) 9em 3em 48px;
     }
+    /* Under the name, as the row has no room for a column of its own. */
     .deadline {
-      display: none;
+      grid-row: 2;
+      grid-column: 2 / -1;
+      flex-direction: row;
+      flex-wrap: wrap;
+      column-gap: var(--tmc-space-1);
+    }
+    .deadline > * + *::before {
+      content: "· ";
     }
   }
   @media (max-width: 420px) {
