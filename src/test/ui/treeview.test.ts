@@ -573,6 +573,18 @@ suite("CoursesTree", function () {
       expect(failed.contextValue).toBe("exercise.downloadFailed")
     })
 
+    test("re-renders once its deadline passes, so the row stops saying it is due", function () {
+      const item = onlyExercise({ deadline: new Date(NOW.getTime() + 90_000).toISOString() })
+      expect(item.description).toMatch(/· due in /)
+
+      vi.advanceTimersByTime(91_000)
+      settle()
+
+      const [after] = exercisesOf(first(tree.getChildren() as CoursesTreeItem[]))
+      expect(after?.description).not.toMatch(/due/)
+      expect(after?.description).toMatch(/deadline passed/)
+    })
+
     test("past its hard deadline and not downloaded is expired", function () {
       const item = onlyExercise({ deadline: "2026-05-01T00:00:00Z" })
 

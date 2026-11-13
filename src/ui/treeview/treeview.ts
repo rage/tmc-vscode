@@ -44,6 +44,11 @@ export interface CoursesTreeSource {
 }
 
 /** How the items render, fixed for one render of the view. */
+const MINUTE_MS = 60_000
+const HOUR_MS = 60 * MINUTE_MS
+/** How long after a deadline to re-render, so the render sees it as passed. */
+const DEADLINE_TICK_SLACK_MS = 500
+
 interface RenderContext {
   now: Date
   locale: string | undefined
@@ -251,7 +256,7 @@ const STATUS_LABELS: Record<Exclude<ExerciseView["status"], "opened">, string> =
   new: "new, not downloaded",
   downloading: "downloading…",
   downloadFailed: "download failed",
-  expired: "expired, not downloaded",
+  expired: "deadline passed, not downloaded",
   removed: "removed from the course",
 }
 
@@ -439,6 +444,8 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
   private _views: CourseView[] | undefined
   private _roots: CourseTreeItem[] | undefined
   private _pendingRender: ReturnType<typeof setTimeout> | undefined
+  /** Renders again when the soonest deadline passes, or a relative time shown goes stale. */
+  private _deadlineTick: ReturnType<typeof setTimeout> | undefined
   /** A render happened while the view was hidden, so VS Code still shows the one before. */
   private _isShownStale = false
   /** {@link drawnRows} of the rows VS Code last fetched or was last told to draw. */
@@ -467,6 +474,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
     this._isDisposed = true
     clearTimeout(this._pendingRender)
     this._pendingRender = undefined
+    clearTimeout(this._deadlineTick)
     this._sourceSubscriptions.forEach((subscription) => subscription.dispose())
     for (const disposable of this._disposables) {
       disposable.dispose()
@@ -575,7 +583,29 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
     } else {
       this._isShownStale = true
     }
+    this._scheduleDeadlineTick(views)
     this._rendered.fire()
+  }
+
+  private _scheduleDeadlineTick(views: CourseView[]): void {
+    clearTimeout(this._deadlineTick)
+    this._deadlineTick = undefined
+    const now = Date.now()
+    const untilSoonest = Math.min(
+      ...views
+        .flatMap(({ parts }) => parts.flatMap((part) => part.exercises))
+        .map((exercise) => (shownDeadline(exercise)?.getTime() ?? 0) - now)
+        .filter((until) => until > 0),
+    )
+    if (!Number.isFinite(untilSoonest)) {
+      return
+    }
+    // Within the hour the hint counts minutes; further off, hours or days.
+    const staleAfter = untilSoonest < HOUR_MS ? MINUTE_MS : HOUR_MS
+    this._deadlineTick = setTimeout(
+      () => this.refresh(),
+      Math.min(untilSoonest + DEADLINE_TICK_SLACK_MS, staleAfter),
+    )
   }
 
   private _onDidChangeVisibility(): void {

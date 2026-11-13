@@ -42,7 +42,7 @@
     new: "New",
     downloading: "Downloading…",
     downloadFailed: "Download failed",
-    expired: "Expired",
+    expired: "Deadline passed",
     removed: "Removed",
   }
 
@@ -75,7 +75,7 @@
       return { name: "circle-slash", tone: "muted", label: "No tries left" }
     }
     if (exercise.status === "expired") {
-      return { name: "lock", tone: "muted", label: "Expired" }
+      return { name: "lock", tone: "muted", label: "Deadline passed" }
     }
     if (exercise.submitRefusal) {
       return { name: "lock", tone: "muted", label: exercise.submitRefusal.sentence }
