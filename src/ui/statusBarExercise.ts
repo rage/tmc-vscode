@@ -2,6 +2,7 @@ import * as vscode from "vscode"
 
 import type { LocalCourseExercise } from "../../shared/lib"
 import {
+  ExerciseIdentifier,
   LocalCourseData,
   modelSolutionUrlOf,
   SUBMIT_REFUSAL_LABELS,
@@ -12,6 +13,7 @@ import type Dialog from "../api/dialog"
 import type { Item } from "../api/dialog"
 import { separator } from "../api/dialog"
 import type WorkspaceManager from "../api/workspaceManager"
+import type { WorkspaceExercise } from "../api/workspaceManager"
 import { exerciseFor } from "../api/workspaceManager"
 import type { UserData } from "../config/userdata"
 import type { ExerciseOperationKind, ExerciseOperations } from "./exerciseOperations"
@@ -41,6 +43,7 @@ const activityLabels: Partial<Record<ExerciseOperationKind, string>> = {
 export class ExerciseStatusBarItem implements vscode.Disposable {
   private readonly _item: vscode.StatusBarItem
   private readonly _subscriptions: vscode.Disposable[]
+  private _lastShown: WorkspaceExercise | undefined
 
   public constructor(private readonly _sources: ExerciseStatusSources) {
     this._item = vscode.window.createStatusBarItem(
@@ -49,10 +52,10 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
       100,
     )
     this._item.name = "TestMyCode Exercise"
-    this._item.command = "tmc.showExerciseActions"
     const render = (): void => this.render()
     this._subscriptions = [
       vscode.window.onDidChangeActiveTextEditor(render),
+      vscode.window.onDidChangeVisibleTextEditors(render),
       _sources.workspaceManager.onDidChangeExercises(render),
       _sources.operations.onDidChange(render),
       _sources.userData.onDidChangeCourses(render),
@@ -62,10 +65,15 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
 
   /** Shows the item for the active editor's exercise, or hides it. */
   public render(): void {
-    const exercise = this._sources.workspaceManager.activeExercise
+    const exercise = this._shownExercise()
     if (!exercise) {
       this._item.hide()
       return
+    }
+    this._item.command = {
+      title: "Show Exercise Actions",
+      command: "tmc.showExerciseActions",
+      arguments: [exercise.uri],
     }
     const slug = exercise.exerciseSlug
     const storedResult = this._sources.userData.getExercise(exercise.id)
@@ -105,6 +113,29 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
   public dispose(): void {
     vscode.Disposable.from(...this._subscriptions).dispose()
     this._item.dispose()
+  }
+
+  /**
+   * The active editor's exercise; while a panel such as the submission result has the focus,
+   * which leaves no active text editor, the one last shown if its editor is still visible.
+   */
+  private _shownExercise(): WorkspaceExercise | undefined {
+    const { workspaceManager } = this._sources
+    const active = workspaceManager.activeExercise
+    const last = this._lastShown
+    this._lastShown = active
+    if (active || vscode.window.activeTextEditor || !last) {
+      return active
+    }
+    const isStillVisible = vscode.window.visibleTextEditors.some((editor) => {
+      const visible = workspaceManager.getExerciseContaining(editor.document.uri)
+      return (
+        visible !== undefined &&
+        ExerciseIdentifier.key(visible.id) === ExerciseIdentifier.key(last.id)
+      )
+    })
+    this._lastShown = isStillVisible ? last : undefined
+    return this._lastShown
   }
 }
 

@@ -103,7 +103,10 @@ suite("ExerciseStatusBarItem", function () {
     expect(item.id).toBe("tmc.activeExercise")
     expect(item.alignment).toBe(vscode.StatusBarAlignment.Right)
     expect(item.name).toBe("TestMyCode Exercise")
-    expect(item.command).toBe("tmc.showExerciseActions")
+    expect(item.command).toMatchObject({
+      command: "tmc.showExerciseActions",
+      arguments: [onDiskExercise.uri],
+    })
     expect(item.isShown).toBe(true)
     expect(item.text).toBe(`$(beaker) ${exerciseHelloWorld.exerciseSlug} · 1/2`)
     expect(item.accessibilityInformation?.label).toContain("1 of 2 points")
@@ -141,6 +144,21 @@ suite("ExerciseStatusBarItem", function () {
     h.workspace.activeExercise = onDiskExercise
     h.editorChanged.fire()
     expect(itemOf().isShown).toBe(true)
+  })
+
+  test("stays while a panel beside the exercise's editor has the focus", function () {
+    const h = harness()
+    track(new ExerciseStatusBarItem(h.sources))
+    const visible = vi.spyOn(vscode.window, "visibleTextEditors", "get")
+
+    h.workspace.activeExercise = undefined
+    visible.mockReturnValue([{ document: { uri: onDiskExercise.uri } } as vscode.TextEditor])
+    h.editorChanged.fire()
+    expect(itemOf().isShown).toBe(true)
+
+    visible.mockReturnValue([])
+    h.editorChanged.fire()
+    expect(itemOf().isShown).toBe(false)
   })
 
   test("spins while the exercise is tested, then shows the points again", async function () {
