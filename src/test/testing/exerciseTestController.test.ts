@@ -16,6 +16,7 @@ import { ExerciseStatus } from "../../api/workspaceManager"
 import {
   AiUseRefusedError,
   BottleneckError,
+  EmptyLangsResponseError,
   RuntimeError,
   SHOW_AI_USE_PROBLEM_COMMAND,
   TRUST_COURSE_WORKSPACE_COMMAND,
@@ -325,6 +326,9 @@ suite("ExerciseTestController", function () {
       "The tests did not finish within 60 s, so they were stopped. An infinite loop is the usual cause.",
     ])
     expect(item.children.size).toBe(0)
+    expect(s.actionContext.dialog.warningNotification).toHaveBeenCalledExactlyOnceWith(
+      "part01-01_hello: The tests did not finish within 60 s, so they were stopped. An infinite loop is the usual cause.",
+    )
   })
 
   test("a JDK that does not start says how to point at a working one, not to reset", async function () {
@@ -344,10 +348,33 @@ suite("ExerciseTestController", function () {
     const text = String(messagesOf(reported)[0]?.message)
     expect(text).toContain("Set testMyCode.javaHome")
     expect(text).not.toContain("Reset Exercise")
-    expect(s.actionContext.dialog.notification).toHaveBeenCalledWith(
+    expect(s.actionContext.dialog.warningNotification).toHaveBeenCalledWith(
       expect.stringContaining("Java does not start"),
       ["Open Settings", expect.any(Function)],
     )
+  })
+
+  test("a JVM that dies inside the CLI is headed as Java not starting, with its own lines", async function () {
+    const s = setup({
+      run: Err(
+        new EmptyLangsResponseError(
+          "Langs process ended without result data.",
+          "Error occurred during initialization of VM\nUnable to load zip library: /usr/lib/jvm/x/lib/libzip.so",
+        ),
+      ),
+    })
+    const exercise = exerciseAt(s)
+
+    await s.controller.runExercise(exercise)
+
+    const reported = finalStates(lastRun(s)).get(itemOf(s, exercise).id)
+    const text = String(messagesOf(reported)[0]?.message)
+    expect(text.split("\n").slice(0, 2)).toEqual([
+      "The tests could not be run: Java does not start.",
+      "Set testMyCode.javaHome (Settings › TestMyCode › Java Home) to a working JDK.",
+    ])
+    expect(text).toContain("Unable to load zip library")
+    expect(text).not.toContain("without result data")
   })
 
   test("a failing test is reported at its stack frame, and Submit is not offered", async function () {
@@ -505,6 +532,32 @@ suite("ExerciseTestController", function () {
     const reported = finalStates(lastRun(s)).get(itemOf(s, exerciseAt(s)).id)
     expect(messagesOf(reported)[0]?.message).toMatch(
       /^The tests could not be run: TestMyCode cannot tell what kind of exercise this is: files it needs, such as the test folder, are missing\.\nFailed to run tests for exercise at \/ex\.\nIf the exercise's files are damaged/,
+    )
+  })
+
+  test("a run that found no tests suggests a reset", async function () {
+    const s = setup({
+      run: Ok({
+        status: "TESTS_FAILED",
+        logs: {},
+        testResults: [
+          {
+            name: "Tests",
+            successful: false,
+            points: [],
+            message: "No tests found. Did you terminate your program with an exit() command?",
+            exception: [],
+          },
+        ],
+      }),
+    })
+    const exercise = exerciseAt(s)
+
+    await s.controller.runExercise(exercise)
+
+    const reported = finalStates(lastRun(s)).get(itemOf(s, exercise).id)
+    expect(messagesOf(reported).map((message) => message.message)).toContain(
+      "If the exercise's tests are missing, Reset Exercise restores its template.",
     )
   })
 

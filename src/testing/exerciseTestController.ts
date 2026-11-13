@@ -29,6 +29,7 @@ import { reachWalkthroughMilestone } from "../window/walkthrough"
 import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
 import { createSourceFileFinder } from "./sourceFiles"
 import {
+  BROKEN_JAVA_HEADLINE,
   BROKEN_JAVA_REMEDY,
   failureMessage,
   isBrokenJava,
@@ -236,8 +237,8 @@ export class ExerciseTestController implements vscode.Disposable {
     run.appendOutput(toTerminalText(`${text}\n`), undefined, item)
     run.errored(item, new vscode.TestMessage(text))
     if (isBrokenJava(`${error.message}\n${details}`)) {
-      void this._actionContext.dialog.notification(
-        `The tests could not be run: Java does not start. ${BROKEN_JAVA_REMEDY}`,
+      void this._actionContext.dialog.warningNotification(
+        `${BROKEN_JAVA_HEADLINE} ${BROKEN_JAVA_REMEDY}`,
         [
           "Open Settings",
           (): void =>
@@ -291,6 +292,8 @@ export class ExerciseTestController implements vscode.Disposable {
       clearTests(item)
       run.appendOutput(toTerminalText(`${text}\n`), undefined, item)
       run.failed(item, new vscode.TestMessage(text))
+      // After a run this long, Test Results may well be out of view.
+      void this._actionContext.dialog.warningNotification(`${exercise.exerciseSlug}: ${text}`)
       return false
     }
     const failure = runFailure(runResult)
@@ -316,6 +319,14 @@ export class ExerciseTestController implements vscode.Disposable {
           `${results.length - passedCount} of ${results.length} tests failed.`,
         ),
       )
+    }
+    // The Python runner's own failure for a test folder that is gone or emptied.
+    if (
+      results.some((result) => !result.successful && result.message.startsWith("No tests found"))
+    ) {
+      const hint = "If the exercise's tests are missing, Reset Exercise restores its template."
+      run.appendOutput(toTerminalText(`${hint}\n`), undefined, item)
+      messages.push(new vscode.TestMessage(hint))
     }
     if (styleProblemCount > 0) {
       messages.push(

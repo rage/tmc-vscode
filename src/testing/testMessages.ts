@@ -81,7 +81,10 @@ const CAUSE_WORDINGS: [RegExp, string][] = [
  *   start is recognised here and gets its own remedy instead.
  */
 export function runFailureText(error: Error, details: string, suggestsReset: boolean): string {
-  const isJavaBroken = isBrokenJava(`${error.message}\n${details}`)
+  if (isBrokenJava(`${error.message}\n${details}`)) {
+    // The CLI's own words then only say that it stopped; the JVM's lines in `details` say why.
+    return [`${BROKEN_JAVA_HEADLINE}\n${BROKEN_JAVA_REMEDY}`, details].filter(Boolean).join("\n\n")
+  }
   const causes = details
     .split("\n\n", 1)[0]
     ?.split("\n")
@@ -96,9 +99,7 @@ export function runFailureText(error: Error, details: string, suggestsReset: boo
           ...(context !== undefined && context !== error.message ? [asSentence(context)] : []),
           asSentence(error.message),
         ]
-  if (isJavaBroken) {
-    lines.push(BROKEN_JAVA_REMEDY)
-  } else if (suggestsReset) {
+  if (suggestsReset) {
     lines.push(
       "If the exercise's files are damaged or incomplete, Reset Exercise restores its template.",
     )
@@ -111,7 +112,11 @@ function reworded(cause: string): string {
 }
 
 // The CLI's own words for a JDK that cannot start, and what a JVM prints when it fails to.
-const BROKEN_JAVA = /Java at .+ does not start|Error occurred during initialization of VM/
+const BROKEN_JAVA =
+  /Java at .+ does not start|Error occurred during initialization of VM|Unable to load (?:zip|native) library/
+
+/** How a local test run that a JDK not starting stopped is headed. */
+export const BROKEN_JAVA_HEADLINE = "The tests could not be run: Java does not start."
 
 /** What fixes a JDK that does not start, as the extension configures it. */
 export const BROKEN_JAVA_REMEDY =
