@@ -48,6 +48,7 @@ import {
   MINIMUM_SUBMISSION_INTERVAL,
   MOOC_BACKEND_URL,
   SUBMIT_PROCESS_TIMEOUT,
+  TEST_PROCESS_TIMEOUT,
   TMC_BACKEND_URL,
 } from "../config/constants"
 import type { InitializationError } from "../errors"
@@ -283,7 +284,8 @@ function killProcessTree(cprocess: cp.ChildProcess): void {
 }
 
 /**
- * The tail of a CLI process's stderr, kept for the error details a failure attaches.
+ * The tail of a CLI process's stderr, and of the stdout lines that are not its JSON, kept for
+ * the error details a failure attaches.
  *
  * A long-running `run-tests` can write more stderr than the extension host should hold, so
  * older output is dropped once {@link MAX_RETAINED_STDERR_BYTES} is exceeded and `text()`
@@ -573,6 +575,7 @@ export default class Langs {
         env,
         onNotification: (notification) => this._showNotification(notification),
         interruptOnDeactivate: true,
+        processTimeout: TEST_PROCESS_TIMEOUT,
       },
       "test-result",
     )
@@ -1620,7 +1623,9 @@ export default class Langs {
         setTimeout(() => {
           killProcessTree(cprocess)
           reject(
-            new TimeoutError("Process didn't seem to finish or was taking a really long time."),
+            new TimeoutError(
+              `The TestMyCode tools did not finish within ${Math.round(timeoutMs / 1000)} s and were stopped.`,
+            ),
           )
         }, timeoutMs)
 
@@ -1697,9 +1702,11 @@ ${error.message}`
               Logger.debug("Rejected output shape:", JSON.stringify(event.failure.shape))
               break
             case "unparseable":
+              // A tool the CLI runs, such as a JVM failing to start, can write here directly.
               Logger.warn(
-                `Discarded a ${event.lineLength}-character TMC-langs output line that is not JSON`,
+                `Kept a ${event.line.length}-character TMC-langs output line that is not JSON for the error details`,
               )
+              stderr.push(`${event.line}\n`)
               break
           }
         }
@@ -1777,7 +1784,7 @@ export type LangsStdoutEvent =
   | { kind: "status-update"; update: StatusUpdateData }
   | { kind: "notification"; notification: Notification }
   | { kind: "schema-mismatch"; failure: LangsSchemaFailure }
-  | { kind: "unparseable"; lineLength: number }
+  | { kind: "unparseable"; line: string }
 
 export interface LangsStdoutDecoding {
   /** The chunk's unterminated tail; pass it back as `carry` with the next chunk. */
@@ -1813,8 +1820,7 @@ export function decodeLangsStdout(carry: string, chunk: string): LangsStdoutDeco
     try {
       parsed = JSON.parse(trimmed)
     } catch {
-      // Node's parse errors quote the input, so only the size of the rejected line escapes.
-      events.push({ kind: "unparseable", lineLength: trimmed.length })
+      events.push({ kind: "unparseable", line: trimmed })
       continue
     }
     events.push(classifyCliOutputLine(parsed))

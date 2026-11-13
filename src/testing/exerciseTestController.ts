@@ -27,7 +27,13 @@ import {
 import { countOf } from "../utilities"
 import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
 import { createSourceFileFinder } from "./sourceFiles"
-import { failureMessage, runFailureText } from "./testMessages"
+import {
+  BROKEN_JAVA_REMEDY,
+  failureMessage,
+  isBrokenJava,
+  runFailureText,
+  timeoutText,
+} from "./testMessages"
 
 /** The `controllerId` that package.json's `testing/*` menus match on. */
 export const TEST_CONTROLLER_ID = "tmc"
@@ -227,6 +233,19 @@ export class ExerciseTestController implements vscode.Disposable {
     const text = runFailureText(error, details, error instanceof RuntimeError)
     run.appendOutput(toTerminalText(`${text}\n`), undefined, item)
     run.errored(item, new vscode.TestMessage(text))
+    if (isBrokenJava(`${error.message}\n${details}`)) {
+      void this._actionContext.dialog.notification(
+        `The tests could not be run: Java does not start. ${BROKEN_JAVA_REMEDY}`,
+        [
+          "Open Settings",
+          (): void =>
+            void vscode.commands.executeCommand(
+              "workbench.action.openSettings",
+              "testMyCode.javaHome",
+            ),
+        ],
+      )
+    }
   }
 
   /** @returns Whether every test passed with nothing for the code quality checks to fault. */
@@ -265,6 +284,13 @@ export class ExerciseTestController implements vscode.Disposable {
       )
     }
 
+    if (runResult.timedOutAfterMs !== undefined && runResult.timedOutAfterMs !== null) {
+      const text = timeoutText(Number(runResult.timedOutAfterMs))
+      clearTests(item)
+      run.appendOutput(toTerminalText(`${text}\n`), undefined, item)
+      run.failed(item, new vscode.TestMessage(text))
+      return false
+    }
     const failure = runFailure(runResult)
     if (failure !== undefined) {
       clearTests(item)

@@ -99,9 +99,9 @@ suite("Langs stdout decoding", function () {
     expect(events.map((event) => event.kind)).toEqual(["notification"])
   })
 
-  test("a line that is not JSON reports only its length", function () {
+  test("a line that is not JSON is kept whole, for the error details", function () {
     const { events } = decodeAll(`thread 'main' panicked at ${TOKEN}\n`)
-    expect(events).toEqual([{ kind: "unparseable", lineLength: 26 + TOKEN.length }])
+    expect(events).toEqual([{ kind: "unparseable", line: `thread 'main' panicked at ${TOKEN}` }])
   })
 
   test("a line the CLI contract rejects is reported as a schema mismatch", function () {

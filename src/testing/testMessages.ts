@@ -77,9 +77,11 @@ const CAUSE_WORDINGS: [RegExp, string][] = [
  * cause first, then where it arose, then `error`'s details.
  *
  * @param suggestsReset Whether the failure can come from the exercise's own files, which a
- *   reset restores; an environment failure such as a missing Python cannot.
+ *   reset restores; an environment failure such as a missing Python cannot. A JDK that does not
+ *   start is recognised here and gets its own remedy instead.
  */
 export function runFailureText(error: Error, details: string, suggestsReset: boolean): string {
+  const isJavaBroken = isBrokenJava(`${error.message}\n${details}`)
   const causes = details
     .split("\n\n", 1)[0]
     ?.split("\n")
@@ -94,7 +96,9 @@ export function runFailureText(error: Error, details: string, suggestsReset: boo
           ...(context !== undefined && context !== error.message ? [asSentence(context)] : []),
           asSentence(error.message),
         ]
-  if (suggestsReset) {
+  if (isJavaBroken) {
+    lines.push(BROKEN_JAVA_REMEDY)
+  } else if (suggestsReset) {
     lines.push(
       "If the exercise's files are damaged or incomplete, Reset Exercise restores its template.",
     )
@@ -104,4 +108,29 @@ export function runFailureText(error: Error, details: string, suggestsReset: boo
 
 function reworded(cause: string): string {
   return CAUSE_WORDINGS.find(([pattern]) => pattern.test(cause))?.[1] ?? cause
+}
+
+// The CLI's own words for a JDK that cannot start, and what a JVM prints when it fails to.
+const BROKEN_JAVA = /Java at .+ does not start|Error occurred during initialization of VM/
+
+/** What fixes a JDK that does not start, as the extension configures it. */
+export const BROKEN_JAVA_REMEDY =
+  "Set testMyCode.javaHome (Settings › TestMyCode › Java Home) to a working JDK."
+
+/** Whether a failed run's message or details say the JDK it ran with does not start. */
+export function isBrokenJava(text: string): boolean {
+  return BROKEN_JAVA.test(text)
+}
+
+/**
+ * What a run langs stopped for taking too long is reported with.
+ *
+ * @param timedOutAfterMs The limit the tests ran into.
+ */
+export function timeoutText(timedOutAfterMs: number): string {
+  const seconds = Math.round(timedOutAfterMs / 1000)
+  return (
+    `The tests did not finish within ${seconds} s, so they were stopped.` +
+    " An infinite loop is the usual cause."
+  )
 }

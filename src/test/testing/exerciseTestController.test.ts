@@ -292,6 +292,59 @@ suite("ExerciseTestController", function () {
     )
   })
 
+  test("a run langs stopped for taking too long says so, not as failed tests", async function () {
+    const s = setup({
+      run: Ok({
+        status: "TESTS_FAILED",
+        logs: {},
+        timedOutAfterMs: 60000n,
+        testResults: [
+          {
+            name: "Timeout test",
+            successful: false,
+            points: [],
+            message: "timed out",
+            exception: [],
+          },
+        ],
+      }),
+    })
+    const exercise = exerciseAt(s)
+
+    await s.controller.runExercise(exercise)
+
+    const item = itemOf(s, exercise)
+    const reported = finalStates(lastRun(s)).get(item.id)
+    expect(reported?.[0]).toBe("failed")
+    expect(messagesOf(reported).map((message) => message.message)).toEqual([
+      "The tests did not finish within 60 s, so they were stopped. An infinite loop is the usual cause.",
+    ])
+    expect(item.children.size).toBe(0)
+  })
+
+  test("a JDK that does not start says how to point at a working one, not to reset", async function () {
+    const s = setup({
+      run: Err(
+        new RuntimeError(
+          "Java at /usr/lib/jvm/broken does not start; point JAVA_HOME at a working JDK.",
+          "Error occurred during initialization of VM",
+        ),
+      ),
+    })
+    const exercise = exerciseAt(s)
+
+    await s.controller.runExercise(exercise)
+
+    const reported = finalStates(lastRun(s)).get(itemOf(s, exercise).id)
+    const text = String(messagesOf(reported)[0]?.message)
+    expect(text).toContain("Set testMyCode.javaHome")
+    expect(text).not.toContain("Reset Exercise")
+    expect(s.actionContext.dialog.notification).toHaveBeenCalledWith(
+      expect.stringContaining("Java does not start"),
+      ["Open Settings", expect.any(Function)],
+    )
+  })
+
   test("a failing test is reported at its stack frame, and Submit is not offered", async function () {
     const testFile = path.join(tempDir, "part01-01_hello", "test", "test_hello.py")
     const s = setup({
