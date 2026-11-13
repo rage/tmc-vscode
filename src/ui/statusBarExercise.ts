@@ -86,7 +86,7 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
       course.ok && LocalCourseData.getClosedChapterOf(course.val, exercise.id) !== undefined
     const standing = isChapterClosed
       ? SUBMIT_REFUSAL_LABELS.chapterNotOpenYet
-      : standingText(stored)
+      : standingText(stored, course.ok ? course.val : undefined)
     const shownStanding = standing === "passed" ? undefined : standing
 
     if (activity) {
@@ -148,14 +148,17 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
  * Where the stored exercise stands, e.g. "passed", "1 try left" or "deadline passed"; `undefined`
  * when there is nothing to tell.
  */
-function standingText(stored: Readonly<LocalCourseExercise> | undefined): string | undefined {
+function standingText(
+  stored: Readonly<LocalCourseExercise> | undefined,
+  course: Readonly<LocalCourseData> | undefined,
+): string | undefined {
   if (!stored) {
     return undefined
   }
   if (stored.data.passed) {
     return "passed"
   }
-  const refusal = submitRefusalOf(stored, new Date())
+  const refusal = submitRefusalOf(stored, new Date(), course)
   if (refusal) {
     return SUBMIT_REFUSAL_LABELS[refusal]
   }
@@ -194,7 +197,9 @@ export async function showExerciseActions(
   const closedChapter = course.ok
     ? LocalCourseData.getClosedChapterOf(course.val, exercise.id)
     : undefined
-  const refusal = stored.ok ? submitRefusalOf(stored.val.exercise, new Date()) : undefined
+  const refusal = stored.ok
+    ? submitRefusalOf(stored.val.exercise, new Date(), stored.val.course)
+    : undefined
   const placeHolder = closedChapter
     ? `Its chapter "${closedChapter.name}" has not opened yet: it can't be submitted, but its tests run here`
     : isUnlisted

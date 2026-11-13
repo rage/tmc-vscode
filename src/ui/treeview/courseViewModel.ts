@@ -157,7 +157,7 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
         ? undefined
         : closed
           ? "chapterNotOpenYet"
-          : submitRefusalOf(ex, state.now),
+          : submitRefusalOf(ex, state.now, course),
       awardedPoints: ex.data.awardedPoints,
       availablePoints: ex.data.availablePoints,
       softDeadline,

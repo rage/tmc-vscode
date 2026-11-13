@@ -238,6 +238,16 @@ suite("buildCourseView", () => {
     ])
   })
 
+  test("refuses submissions on a course the student is no longer enrolled on", () => {
+    const parts = build(
+      moocLocalCourse({ exercises: [moocExercise("a", "loops")], notEnrolled: true }),
+    )
+
+    expect(parts.flatMap((part) => part.exercises.map((ex) => ex.submitRefusal))).toEqual([
+      "notEnrolled",
+    ])
+  })
+
   test("says why the backend would refuse a submission, and carries the tries left", () => {
     const parts = build(
       moocCourse([

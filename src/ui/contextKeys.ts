@@ -108,7 +108,10 @@ export function trackActiveExerciseSubmitRefused(
     () => {
       const exercise = workspaceManager.activeExercise
       const stored = exercise && userData.getExercise(exercise.id)
-      return stored?.ok === true && submitRefusalOf(stored.val.exercise, new Date()) !== undefined
+      return (
+        stored?.ok === true &&
+        submitRefusalOf(stored.val.exercise, new Date(), stored.val.course) !== undefined
+      )
     },
     [
       vscode.window.onDidChangeActiveTextEditor,

@@ -27,6 +27,7 @@ import type { UserData } from "../config/userdata"
 import {
   ChapterLockedError,
   ChapterNotOpenError,
+  NotEnrolledError,
   DeadlinePassedError,
   isSubmitRefusal,
   OutOfTriesError,
@@ -474,6 +475,8 @@ function refusalError(refusal: SubmitRefusal, exercise: LocalCourseExercise): Er
       return new ChapterNotOpenError(sentence)
     case "deadlinePassed":
       return new DeadlinePassedError(sentence)
+    case "notEnrolled":
+      return new NotEnrolledError(sentence)
     case "outOfTries": {
       const points = pointsText(exercise.data.awardedPoints, exercise.data.availablePoints)
       return new OutOfTriesError(

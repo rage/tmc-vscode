@@ -139,7 +139,7 @@ export const SOFT_DEADLINE_PENALTY =
  * Why the backend would refuse a submission of an exercise, as far as its stored data tells:
  * its chapter is locked (`chapterNotUnlockedYet`, `chapterCompletedAndLocked`) or has not
  * opened yet (`chapterNotOpenYet`, which only the course's closed chapters tell), its hard
- * deadline has passed, or its tries are used up. Checked in the backend's own order.
+ * deadline has passed, or its tries are used up; or the student is not enrolled on its course.
  */
 export type SubmitRefusal =
   | "chapterNotUnlockedYet"
@@ -147,12 +147,22 @@ export type SubmitRefusal =
   | "chapterNotOpenYet"
   | "deadlinePassed"
   | "outOfTries"
+  | "notEnrolled"
 
-/** Why the backend would refuse a submission of `exercise` at `now`; `undefined` if it would not. */
+/**
+ * Why the backend would refuse a submission of `exercise` at `now`; `undefined` if it would not.
+ *
+ * @param course The exercise's course, for its enrollment: `notEnrolled` only comes from it. A
+ * submit itself leaves that to the backend, as the student may have enrolled again since.
+ */
 export function submitRefusalOf(
   exercise: LocalCourseExercise,
   now: Date,
+  course?: Readonly<LocalCourseData>,
 ): SubmitRefusal | undefined {
+  if (course?.kind === "mooc" && course.data.notEnrolled === true) {
+    return "notEnrolled"
+  }
   if (exercise.kind === "mooc") {
     switch (exercise.data.chapter?.lockingStatus) {
       case "NotUnlockedYet":
@@ -189,6 +199,7 @@ export const SUBMIT_REFUSAL_LABELS: Record<SubmitRefusal, string> = {
   chapterNotOpenYet: "chapter not open yet",
   deadlinePassed: "deadline passed",
   outOfTries: "no tries left",
+  notEnrolled: "not enrolled",
 }
 
 /**
@@ -213,6 +224,8 @@ export function submitRefusalSentence(
       return `The deadline of ${exerciseName} has passed, so it can no longer be submitted.`
     case "outOfTries":
       return `You have no tries left on ${exerciseName}, so it can no longer be submitted.`
+    case "notEnrolled":
+      return `You are not enrolled on this course, so ${exerciseName} can be submitted once you enroll again.`
   }
 }
 

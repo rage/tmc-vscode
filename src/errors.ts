@@ -340,8 +340,8 @@ export function presentationFor(error: Error): ErrorPresentation {
     const site = backend === undefined ? "" : ` on ${backendName(backend)}`
     return {
       message:
-        `You're no longer enrolled on this course${site}, so its exercises can't be fetched or` +
-        ` submitted. Your earlier submissions can still be downloaded. Enroll on the course` +
+        `You're no longer enrolled on this course${site}, so its exercises can't be submitted.` +
+        ` You can still download them and your earlier submissions. Enroll on the course` +
         ` again${site}, then refresh it here.`,
       actions: [{ label: "Open Course Page", command: ENROLL_ON_COURSE_COMMAND }],
     }

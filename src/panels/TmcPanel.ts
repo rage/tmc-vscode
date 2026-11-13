@@ -435,7 +435,8 @@ function submissionViewMessage(
   }
   const stored = actionContext.startup.userData.getExercise(panel.exerciseId)
   const exercise = stored.ok ? stored.val.exercise : undefined
-  const refusal = exercise && submitRefusalOf(exercise, new Date())
+  const refusal =
+    exercise && submitRefusalOf(exercise, new Date(), stored.ok ? stored.val.course : undefined)
   const shown = withExerciseState(view, {
     isOnDisk: actionContext.startup.workspaceManager.getExercise(panel.exerciseId) !== undefined,
     isInCourse: stored.ok,

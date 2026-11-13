@@ -134,10 +134,14 @@ suite("presentationFor", function () {
     ])
   })
 
-  test("a dropped enrollment offers the course page, and says old submissions stay", function () {
+  test("a dropped enrollment offers the course page, and says downloads still work", function () {
     const presentation = presentationFor(new NotEnrolledError("422 from https://…"))
     expect(presentation.message).toContain("You're no longer enrolled on this course")
-    expect(presentation.message).toContain("earlier submissions can still be downloaded")
+    expect(presentation.message).toContain("can't be submitted")
+    expect(presentation.message).toContain(
+      "You can still download them and your earlier submissions",
+    )
+    expect(presentation.message).not.toContain("fetched")
     expect(presentation.message).not.toContain("422")
     expect(presentation.actions).toEqual([
       { label: "Open Course Page", command: "tmc.enrollOnCourse" },
