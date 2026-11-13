@@ -72,7 +72,7 @@ export async function login(actionContext: ReadyActionContext): Promise<LoginOut
       }
       const { info } = first
       progress.report({
-        message: `Waiting for you to approve in the browser… Code ${info.user_code} at ${info.verification_uri}`,
+        message: `Code ${info.user_code}: approve it at ${info.verification_uri}`,
       })
       const ended = Promise.race([finished, cancelled])
       if (info.verification_uri_complete) {

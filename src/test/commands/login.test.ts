@@ -37,7 +37,8 @@ const DEVICE_WITHOUT_COMPLETE_URI: MoocDeviceLogin = { ...DEVICE, verification_u
 
 const COPY_AND_OPEN = "Copy & Open courses.mooc.fi"
 
-const WAITING = `Waiting for you to approve in the browser… Code WXYZ-1234 at ${DEVICE.verification_uri}`
+// The code leads: the status bar cuts a hidden progress notification's message short.
+const WAITING = `Code WXYZ-1234: approve it at ${DEVICE.verification_uri}`
 
 /** One `mooc login` process the test drives: it emits the code and ends when told to. */
 interface FakeLogin {

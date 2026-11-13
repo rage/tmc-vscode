@@ -113,7 +113,7 @@ vsCodeTest.describe(() => {
       await expect(moocLoginPage.waitingNotification(2)).toBeVisible()
       // By now the killed attempt has long ended, so any toast it caused was shown.
       const errors = (await shownToasts()).filter(
-        (text) => !text.includes("Waiting for you to approve") && /login|failed/i.test(text),
+        (text) => !text.includes("approve it at") && /login|failed/i.test(text),
       )
       expect(errors).toStrictEqual([])
     })
