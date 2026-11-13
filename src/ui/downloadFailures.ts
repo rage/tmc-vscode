@@ -13,7 +13,7 @@ class DownloadFailures {
   private readonly _failed = new Set<string>()
   private readonly _changed = new vscode.EventEmitter<void>()
 
-  /** Fires after {@link record} or {@link clear}. */
+  /** Fires after {@link record}, {@link forget} or {@link clear}. */
   public readonly onDidChange = this._changed.event
 
   public has(exerciseId: ExerciseIdentifier): boolean {
@@ -31,6 +31,13 @@ class DownloadFailures {
       this._failed.add(ExerciseIdentifier.key(id))
     }
     this._changed.fire()
+  }
+
+  /** Forgets the failures of `ids`, whose earlier refusal no longer holds. */
+  public forget(ids: readonly ExerciseIdentifier[]): void {
+    if (ids.some((id) => this._failed.delete(ExerciseIdentifier.key(id)))) {
+      this._changed.fire()
+    }
   }
 
   public clear(): void {

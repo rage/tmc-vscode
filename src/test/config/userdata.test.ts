@@ -439,7 +439,7 @@ suite("UserData replaceCourse", function () {
     expect(storedTmcCourse(userData, 0).newExercises).toEqual([2])
   })
 
-  test("an exercise whose chapter opens is not new", async function () {
+  test("when a chapter opens, only its exercises never seen open are new", async function () {
     const [userData] = await makeUserData({
       courses: [],
       mooc_courses: [
@@ -451,7 +451,10 @@ suite("UserData replaceCourse", function () {
               name: "Recursion",
               number: 3,
               opensAt: "2100-01-01T00:00:00Z",
-              exercises: [moocExercise({ id: "b", name: "" })],
+              exercises: [
+                moocExercise({ id: "seen", name: "recursion" }),
+                moocExercise({ id: "unseen", name: "" }),
+              ],
             },
           ],
         }),
@@ -461,11 +464,15 @@ suite("UserData replaceCourse", function () {
       makeMoocKind(
         moocCourse({
           id: "instance-uuid-1",
-          exercises: [moocExercise({ id: "a" }), moocExercise({ id: "b", name: "recursion" })],
+          exercises: [
+            moocExercise({ id: "a" }),
+            moocExercise({ id: "seen", name: "recursion" }),
+            moocExercise({ id: "unseen", name: "added_while_closed" }),
+          ],
         }),
       ),
     )
-    expect(userData.getMoocCourses()[0]?.newExercises).toEqual([])
+    expect(userData.getMoocCourses()[0]?.newExercises).toEqual(["unseen"])
   })
 
   test("lists an exercise once when it was already new but not yet stored", async function () {

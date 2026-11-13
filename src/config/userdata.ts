@@ -26,14 +26,15 @@ interface StoredCourse<Id> {
   newExercises: Id[]
   offeredNewExercises?: Id[] | undefined
   notifyAfter: number
-  closedChapters?: { exercises: { id: Id }[] }[] | undefined
+  /** An exercise's `name` is empty while it has never been seen open. */
+  closedChapters?: { exercises: { id: Id; name: string }[] }[] | undefined
 }
 
 /**
  * Puts `refreshed` in `courses` in place of the course stored under `id`, carrying over which
  * exercises are new and which of those were offered. An exercise that arrives with it ends a
- * postponed reminder; one whose chapter has just opened did not arrive. Returns whether a course
- * was stored there.
+ * postponed reminder; one whose chapter has just opened arrives only if it was never seen open.
+ * Returns whether a course was stored there.
  */
 function replaceIn<Id, Course extends StoredCourse<Id>>(
   courses: Map<Id, Course>,
@@ -46,7 +47,12 @@ function replaceIn<Id, Course extends StoredCourse<Id>>(
   }
   const refreshedIds = new Set(refreshed.exercises.map((exercise) => exercise.id))
   const storedIds = new Set(
-    [stored.exercises, ...(stored.closedChapters ?? []).map((chapter) => chapter.exercises)]
+    [
+      stored.exercises,
+      ...(stored.closedChapters ?? []).map((chapter) =>
+        chapter.exercises.filter((exercise) => exercise.name !== ""),
+      ),
+    ]
       .flat()
       .map((exercise) => exercise.id),
   )

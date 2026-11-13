@@ -6,6 +6,7 @@ import type {
   CourseExercise,
   Exercise,
 } from "../../../shared/langsSchema"
+import { makeMoocKind } from "../../../shared/lib"
 import { addNewCourse } from "../../actions/addNewCourse"
 import type { ReadyActionContext } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
@@ -22,6 +23,7 @@ import {
 } from "../../errors"
 import Storage from "../../storage"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
+import { downloadFailures } from "../../ui/downloadFailures"
 import type CoursesTree from "../../ui/treeview/treeview"
 import { Logger } from "../../utilities"
 import { combineTmcApiExerciseData } from "../../utilities/apiData"
@@ -109,6 +111,35 @@ suite("updateCourse action (mooc)", function () {
     expect(stored?.exercises[0]?.availablePoints).toBe(1)
     expect(stored?.awardedPoints).toBe(1)
     expect(stored?.availablePoints).toBe(1)
+  })
+
+  test("forgets a download refused while its chapter was closed", async function () {
+    const closedId = makeMoocKind({ moocExerciseId: MOOC_EXERCISE_UUID })
+    await storeCourse({
+      ...storedMoocCourse,
+      closedChapters: [
+        {
+          name: "Basics",
+          number: 1,
+          opensAt: "2026-01-01T00:00:00Z",
+          exercises: [
+            {
+              id: MOOC_EXERCISE_UUID,
+              name: "mooc_hello",
+              deadline: null,
+              passed: false,
+              availablePoints: 1,
+              awardedPoints: 0,
+            },
+          ],
+        },
+      ],
+    })
+    downloadFailures.record([closedId], [])
+
+    await updateCourse(actionContext(), courseId)
+
+    expect(downloadFailures.has(closedId)).toBe(false)
   })
 
   test("refreshes the course metadata that the backend can change", async function () {

@@ -14,6 +14,7 @@ import {
   TmcLoginNotAcceptedError,
 } from "../errors"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
+import { downloadFailures } from "../ui/downloadFailures"
 import { Logger } from "../utilities"
 import { toStoredMoocCourse, toStoredTmcCourse } from "../utilities/apiData"
 import type { ReadyActionContext } from "./types"
@@ -161,6 +162,14 @@ export async function updateCourse(
   if (stored.err) {
     return stored
   }
+  // A download refused while their chapter was closed would succeed now.
+  downloadFailures.forget(
+    courseData.kind === "mooc"
+      ? (courseData.data.closedChapters ?? [])
+          .flatMap((chapter) => chapter.exercises)
+          .map((exercise) => makeMoocKind({ moocExerciseId: exercise.id }))
+      : [],
+  )
   const isAiPolicyChanged =
     course.kind === "mooc" &&
     courseData.kind === "mooc" &&
