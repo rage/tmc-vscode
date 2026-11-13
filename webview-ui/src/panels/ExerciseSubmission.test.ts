@@ -553,6 +553,41 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     expect(screen.queryByRole("button", { name: /^Next:/ })).not.toBeInTheDocument()
   })
 
+  test("an exercise gone from disk offers to open it again, not to test or submit it", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...tmcResultView(submissionFinished({ all_tests_passed: false }), [], 2),
+      isExercisePassed: false,
+      exerciseState: "notOnDisk",
+    })
+    postedMessages.mockClear()
+
+    const open = await screen.findByRole("button", { name: "Open Exercise" })
+    expect(screen.getByText(/no longer on this computer/)).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Run Tests" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Submit Again" })).not.toBeInTheDocument()
+    open.click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "exerciseAction",
+      sourcePanel: { id: panel.id, type: panel.type },
+      action: "openExercise",
+    })
+  })
+
+  test("an exercise removed from its course can be tested but not submitted again", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...tmcResultView(submissionFinished({ all_tests_passed: false }), [], 2),
+      isExercisePassed: false,
+      exerciseState: "removed",
+    })
+
+    expect(await screen.findByRole("button", { name: "Run Tests" })).toBeInTheDocument()
+    expect(screen.getByText(/removed from the course/)).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Submit Again" })).not.toBeInTheDocument()
+  })
+
   test("awaiting manual grading explains itself and asks nothing of the student", async () => {
     render(ExerciseSubmission, { props: { panel: moocPanel } })
     showMoocGrading(moocGrading({ grading_progress: "PendingManual" }))

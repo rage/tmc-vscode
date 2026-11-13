@@ -193,6 +193,11 @@ export const SubmissionViewSchema = z.object({
   isExercisePassed: z.boolean().optional(),
   /** The exercise to go on to, offered once this one is passed. */
   nextExercise: z.object({ name: z.string() }).optional(),
+  /**
+   * Where the exercise is now, which can change while the view is shown: `notOnDisk` once its
+   * files are gone, `removed` once its course no longer lists it. Absent means on disk.
+   */
+  exerciseState: z.enum(["notOnDisk", "removed"]).optional(),
 })
 
 export type SubmissionView = z.infer<typeof SubmissionViewSchema>
@@ -304,7 +309,7 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("exerciseAction"),
     sourcePanel: targetPanelSchema("ExerciseSubmission"),
-    action: z.enum(["runTests", "submit", "openNextExercise"]),
+    action: z.enum(["runTests", "submit", "openNextExercise", "openExercise"]),
   }),
   z.object({
     type: z.literal("sendFeedback"),

@@ -3,6 +3,7 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { ExerciseSubmissionPanel } from "../../../shared/lib"
+import { LocalCourseData } from "../../../shared/lib"
 import * as actions from "../../actions"
 import { reportWarnings, withOperation } from "../../api/withOperation"
 import { Logger } from "../../utilities"
@@ -69,8 +70,20 @@ export const exerciseHandlers = {
     requiresReady: true,
     async handle(message, { host, actionContext }): Promise<void> {
       const shown = shownExercisePanel(host, message.sourcePanel.id)
+      if (shown && message.action === "openExercise") {
+        const stored = actionContext.startup.userData.getExercise(shown.exerciseId)
+        if (stored.err) {
+          void actionContext.dialog.errorNotification("This exercise is no longer in its course.")
+          return
+        }
+        const courseId = LocalCourseData.getCourseId(stored.val.course)
+        await withOperation(actionContext.dialog, { failure: "Failed to open the exercise." }, () =>
+          actions.downloadAndOpenExercises(actionContext, [shown.exerciseId], courseId),
+        )
+        return
+      }
       const exercise = shown && actionContext.startup.workspaceManager.getExercise(shown.exerciseId)
-      if (!exercise) {
+      if (!exercise || message.action === "openExercise") {
         void actionContext.dialog.errorNotification("This exercise is no longer downloaded.")
         return
       }

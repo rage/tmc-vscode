@@ -18,6 +18,7 @@ import { postMessageToWebview, renderPanel } from "./panel"
 import type { HandlerContext, PanelHost, PanelMessage } from "./router"
 import { dispatch } from "./router"
 import { initializationErrorHelpPanel, nextPanelId, panelTitle } from "./routes"
+import { withExerciseState } from "./submissionView"
 
 /**
  * The main panel's webview type, which its serializer is registered for.
@@ -77,18 +78,31 @@ export class TmcPanel {
   ): Disposable {
     const show = (panel: ExerciseSubmissionPanel): void =>
       TmcPanel._showSubmission(extensionContext, actionContext, panel)
+    const repostShown = (): void => {
+      const route = TmcPanel.sidePanel?._route
+      const view = route?.type === "ExerciseSubmission" && submissionViews.latestView(route.id)
+      if (route?.type === "ExerciseSubmission" && view) {
+        TmcPanel.sidePanel?._postMessage(submissionViewMessage(actionContext, route, view))
+      }
+    }
     return Disposable.from(
       submissionViews.onDidOpen(show),
       submissionViews.onDidUpdate(({ panel, view, shouldReopen }) => {
         const { sidePanel } = TmcPanel
         if (sidePanel?._route?.id === panel.id) {
-          sidePanel._postMessage(submissionViewMessage(panel, view))
+          sidePanel._postMessage(submissionViewMessage(actionContext, panel, view))
         } else if (shouldReopen && sidePanel === undefined) {
           show(panel)
         } else if (shouldReopen) {
           void offerSubmissionOutcome(panel, view, show)
         }
       }),
+      ...(isReady(actionContext)
+        ? [
+            actionContext.startup.workspaceManager.onDidChangeExercises(repostShown),
+            actionContext.startup.userData.onDidChangeCourses(repostShown),
+          ]
+        : []),
     )
   }
 
@@ -101,7 +115,7 @@ export class TmcPanel {
     TmcPanel.renderSide(extensionContext, actionContext, panel)
     const view = submissionViews.latestView(panel.id)
     if (view !== undefined) {
-      TmcPanel.sidePanel?._postMessage(submissionViewMessage(panel, view))
+      TmcPanel.sidePanel?._postMessage(submissionViewMessage(actionContext, panel, view))
     }
   }
 
@@ -395,8 +409,19 @@ export class TmcPanel {
   }
 }
 
-function submissionViewMessage(panel: ExerciseSubmissionPanel, view: SubmissionView): PanelMessage {
-  return { type: "submissionView", target: { id: panel.id, type: panel.type }, view }
+function submissionViewMessage(
+  actionContext: ActionContext,
+  panel: ExerciseSubmissionPanel,
+  view: SubmissionView,
+): PanelMessage {
+  const shown = isReady(actionContext)
+    ? withExerciseState(view, {
+        isOnDisk:
+          actionContext.startup.workspaceManager.getExercise(panel.exerciseId) !== undefined,
+        isInCourse: actionContext.startup.userData.getExercise(panel.exerciseId).ok,
+      })
+    : view
+  return { type: "submissionView", target: { id: panel.id, type: panel.type }, view: shown }
 }
 
 /** Offers to show the outcome of a submission the side panel is not showing. */
