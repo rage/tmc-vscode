@@ -2,6 +2,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import {
+  isWalkthroughOpen,
   nextWalkthroughStep,
   showNextWalkthroughStep,
   trackWalkthroughActive,
@@ -49,6 +50,12 @@ suite("walkthrough", function () {
       { category: WALKTHROUGH, step: "runTests" },
       false,
     )
+  })
+
+  test("knows the walkthrough by the tab label VS Code 1.100 gives it", function () {
+    openTabs({ label: "Walkthrough: TestMyCode", input: undefined })
+
+    expect(isWalkthroughOpen()).toBe(true)
   })
 
   test("opens nothing when the walkthrough is not open", async function () {

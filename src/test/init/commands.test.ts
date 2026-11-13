@@ -541,6 +541,13 @@ suite("walkthrough", function () {
     expect(text).not.toMatch(/covers all your courses/)
   })
 
+  // VS Code opens no walkthrough of a newly installed extension itself, so the extension's own
+  // first activation has to, without waiting for the student to find its view.
+  test("a fresh install activates the extension, which opens the walkthrough", function () {
+    const manifest = packageJson() as unknown as { activationEvents: string[] }
+    expect(manifest.activationEvents).toContain("onStartupFinished")
+  })
+
   test("the submit step does not promise unlimited tries", function () {
     const root = path.join(__dirname, "..", "..", "..")
     const step = packageJson().contributes.walkthroughs?.[0]?.steps.find((x) => x.id === "submit")

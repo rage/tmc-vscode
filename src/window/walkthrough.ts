@@ -8,10 +8,15 @@ import { trackContextKey } from "../ui/contextKeys"
 export const WALKTHROUGH = `${EXTENSION_ID}#gettingStarted`
 
 /**
- * The labels VS Code gives the tab of this walkthrough, before 1.137 and since; in another display
- * language they are not matched. The latter is also the Welcome page's, which may be replaced.
+ * The labels VS Code gives the tab of this walkthrough across versions, 1.100 naming the
+ * extension; in another display language they are not matched. "Welcome" is also the Welcome
+ * page's, which may be replaced.
  */
-const WALKTHROUGH_TAB_LABELS = ["Walkthrough: Get Started with TestMyCode", "Welcome"]
+const WALKTHROUGH_TAB_LABELS = [
+  "Walkthrough: TestMyCode",
+  "Walkthrough: Get Started with TestMyCode",
+  "Welcome",
+]
 
 /** Whether `tab` may be this walkthrough: VS Code gives extensions no input for it. */
 function isWalkthroughTab(tab: vscode.Tab | undefined): boolean {
