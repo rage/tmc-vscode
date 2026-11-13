@@ -206,6 +206,13 @@ export class PartTreeItem extends vscode.TreeItem {
         spoken: `next deadline ${nextDeadline}`,
         tooltip: `Next deadline: ${nextDeadline}`,
       },
+      part.opensAt && {
+        description: `opens ${formatDeadlineBriefly(part.opensAt, context.now, context.locale)}`,
+        spoken: `opens ${formatDeadline(part.opensAt, context.now, context.locale)}`,
+        tooltip:
+          `Opens on ${formatDeadline(part.opensAt, context.now, context.locale)}. Until then ` +
+          "its exercises on this computer can be tested but not submitted.",
+      },
       part.lockingStatus === "NotUnlockedYet" && {
         description: "locked",
         spoken: "locked until the chapters before it are completed",

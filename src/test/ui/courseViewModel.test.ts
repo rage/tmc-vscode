@@ -206,7 +206,7 @@ suite("buildCourseView", () => {
     ])
   })
 
-  test("hides an exercise whose chapter has not opened, even on disk, without calling it removed", () => {
+  test("lists an exercise on disk whose chapter has not opened under that chapter, unsubmittable", () => {
     const courseData = moocLocalCourse({
       exercises: [moocExercise("a", "open_one")],
       closedChapters: [
@@ -214,19 +214,28 @@ suite("buildCourseView", () => {
           name: "Recursion",
           number: 3,
           opensAt: "2100-01-01T00:00:00Z",
-          exercises: [moocExercise("b", "hidden_one")],
+          exercises: [moocExercise("b", "on_disk"), moocExercise("c", "not_downloaded")],
         },
       ],
     })
     const parts = build(courseData, [
-      onDisk(0, "hidden_one", ExerciseStatus.Closed, {
+      onDisk(0, "on_disk", ExerciseStatus.Closed, {
         id: idOfMoocExercise("b"),
         courseId: idOfMoocCourse(MOOC_COURSE_ID),
         backend: "mooc",
       }),
     ])
 
-    expect(parts.flatMap((part) => part.exercises.map((ex) => ex.name))).toEqual(["open_one"])
+    const closed = parts.find((part) => part.name === "Recursion")
+    expect(closed?.opensAt).toEqual(new Date("2100-01-01T00:00:00Z"))
+    expect(closed?.exercises.map((ex) => [ex.name, ex.status, ex.submitRefusal])).toEqual([
+      ["on_disk", "closed", "chapterNotOpenYet"],
+    ])
+    // The unchaptered exercises come after every chapter.
+    expect(parts.flatMap((part) => part.exercises.map((ex) => ex.name))).toEqual([
+      "on_disk",
+      "open_one",
+    ])
   })
 
   test("says why the backend would refuse a submission, and carries the tries left", () => {

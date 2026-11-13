@@ -1,11 +1,12 @@
 import type { ChapterLockingStatus } from "../../../shared/langsSchema"
-import type { ExerciseStatus, SubmitRefusal } from "../../../shared/lib"
+import type { ExerciseStatus, MoocClosedChapter, SubmitRefusal } from "../../../shared/lib"
 import {
   CourseIdentifier,
   ExerciseIdentifier,
   isSoftDeadlineBinding,
   LocalCourseData,
   LocalCourseExercise,
+  makeMoocKind,
   match,
   submitRefusalOf,
 } from "../../../shared/lib"
@@ -57,6 +58,11 @@ export interface PartView {
   number?: number
   /** A mooc chapter's place in the course's chapter locking; `undefined` without locking. */
   lockingStatus: ChapterLockingStatus | undefined
+  /**
+   * When the chapter opens, for one that has not yet: it lists only the exercises already on
+   * disk, which cannot be submitted before then.
+   */
+  opensAt?: Date | undefined
 }
 
 /** What the host knows about a course's exercises beyond its stored data and the disk. */
@@ -88,7 +94,7 @@ const REMOVED_PART: PartPlace = {
  * chapter order and keeps the order its material presents the exercises in; exercises outside
  * any chapter come last, under a part named after the course. Exercises on disk that the
  * backend no longer has, or that the course no longer lists, come after everything else.
- * Exercises in a chapter that has not opened yet are left out, on disk or not.
+ * Exercises in a chapter that has not opened yet are left out unless they are on disk.
  */
 export function buildCourseView(course: LocalCourseData, state: CourseViewState): PartView[] {
   const courseTitle = LocalCourseData.getCourseTitle(course)
@@ -97,16 +103,32 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
   )
   const updateableKeys = new Set(state.updateable.map((id) => ExerciseIdentifier.key(id)))
   const onDiskById = new Map(
-    state.onDisk
-      .filter((exercise) => !LocalCourseData.getClosedChapterOf(course, exercise.id))
-      .map((exercise) => [ExerciseIdentifier.key(exercise.id), exercise]),
+    state.onDisk.map((exercise) => [ExerciseIdentifier.key(exercise.id), exercise]),
+  )
+  // A closed chapter's exercises stay hidden, except the ones the student already has.
+  const closedOnDisk = (course.kind === "mooc" ? (course.data.closedChapters ?? []) : []).flatMap(
+    (chapter) =>
+      chapter.exercises
+        .filter((exercise) =>
+          onDiskById.has(ExerciseIdentifier.key(makeMoocKind({ moocExerciseId: exercise.id }))),
+        )
+        .map((exercise) => ({
+          ex: makeMoocKind(exercise) as LocalCourseExercise,
+          closed: chapter,
+        })),
   )
 
   const parts = new Map<string, PartPlace & { exercises: ExerciseView[] }>()
   const removed: ExerciseView[] = []
-  for (const ex of LocalCourseData.getExercises(course)) {
+  const entries: { ex: LocalCourseExercise; closed?: MoocClosedChapter }[] = [
+    ...LocalCourseData.getExercises(course).map((ex) => ({ ex })),
+    ...closedOnDisk,
+  ]
+  for (const { ex, closed } of entries) {
     const slug = LocalCourseExercise.getSlug(ex)
-    const { part, name } = placeExercise(ex, slug, courseTitle)
+    const { part, name } = closed
+      ? { part: closedChapterPlace(closed), name: slug }
+      : placeExercise(ex, slug, courseTitle)
     const id = LocalCourseExercise.getId(ex)
     const key = ExerciseIdentifier.key(id)
     const onDisk = onDiskById.get(key)
@@ -131,7 +153,11 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       isOutOfTries: ex.kind === "mooc" && ex.data.outOfTries === true,
       maxTries: ex.kind === "mooc" ? ex.data.maxTries : undefined,
       triesLeft: ex.kind === "mooc" ? ex.data.triesLeft : undefined,
-      submitRefusal: isRemoved ? undefined : submitRefusalOf(ex, state.now),
+      submitRefusal: isRemoved
+        ? undefined
+        : closed
+          ? "chapterNotOpenYet"
+          : submitRefusalOf(ex, state.now),
       awardedPoints: ex.data.awardedPoints,
       availablePoints: ex.data.availablePoints,
       softDeadline,
@@ -182,6 +208,18 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
   }))
 }
 
+/** The part of a chapter that has not opened yet, named by number if it was never seen open. */
+function closedChapterPlace(chapter: MoocClosedChapter): PartPlace {
+  return {
+    key: `chapter:${chapter.number}`,
+    name: chapter.name || `Chapter ${chapter.number}`,
+    number: chapter.number,
+    isUngrouped: false,
+    lockingStatus: undefined,
+    opensAt: parseDate(chapter.opensAt) ?? undefined,
+  }
+}
+
 /** A row for an exercise on disk that its course no longer lists. */
 function removedFromCourse(onDisk: WorkspaceExercise): ExerciseView {
   return {
@@ -213,6 +251,8 @@ interface PartPlace {
   number?: number
   isUngrouped: boolean
   lockingStatus: ChapterLockingStatus | undefined
+  /** When a chapter that has not opened yet opens; absent for an open part. */
+  opensAt?: Date | undefined
 }
 
 /**

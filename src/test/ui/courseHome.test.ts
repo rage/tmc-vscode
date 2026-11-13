@@ -410,4 +410,38 @@ suite("buildCourseHomeView", function () {
 
     expect(result.err).toBe(true)
   })
+
+  test("lists an exercise on disk whose chapter has not opened, saying when it opens", function () {
+    const course = moocLocalCourse({
+      closedChapters: [
+        {
+          name: "Recursion",
+          number: 3,
+          opensAt: "2026-06-03T12:00:00Z",
+          exercises: [moocCourseExercise({ id: "b", name: "fib" })],
+        },
+      ],
+    })
+    const fib: WorkspaceExercise = {
+      id: idOfMoocExercise("b"),
+      courseId: idOfMoocCourse(MOOC_COURSE_ID),
+      backend: "mooc",
+      courseSlug: "mooc-course",
+      exerciseSlug: "fib",
+      status: ExerciseStatus.Open,
+      uri: vscode.Uri.file("/exercises/mooc/fib"),
+    }
+
+    const view = buildCourseHomeView(
+      contextFor(course, { onDisk: [fib] }),
+      idOfMoocCourse(MOOC_COURSE_ID),
+      NOW,
+    ).unwrap()
+
+    const [recursion] = view.parts
+    expect(recursion?.lockedReason).toMatch(
+      /^Opens on .+\. Until then its exercises can be tested but not submitted\.$/,
+    )
+    expect(recursion?.exercises[0]?.submitRefusal?.label).toBe("chapter not open yet")
+  })
 })

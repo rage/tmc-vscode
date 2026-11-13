@@ -137,12 +137,14 @@ export const SOFT_DEADLINE_PENALTY =
 
 /**
  * Why the backend would refuse a submission of an exercise, as far as its stored data tells:
- * its chapter is locked (`chapterNotUnlockedYet`, `chapterCompletedAndLocked`), its hard
+ * its chapter is locked (`chapterNotUnlockedYet`, `chapterCompletedAndLocked`) or has not
+ * opened yet (`chapterNotOpenYet`, which only the course's closed chapters tell), its hard
  * deadline has passed, or its tries are used up. Checked in the backend's own order.
  */
 export type SubmitRefusal =
   | "chapterNotUnlockedYet"
   | "chapterCompletedAndLocked"
+  | "chapterNotOpenYet"
   | "deadlinePassed"
   | "outOfTries"
 
@@ -184,6 +186,7 @@ export function modelSolutionUrlOf(exercise: LocalCourseExercise): string | unde
 export const SUBMIT_REFUSAL_LABELS: Record<SubmitRefusal, string> = {
   chapterNotUnlockedYet: "chapter not unlocked yet",
   chapterCompletedAndLocked: "chapter locked",
+  chapterNotOpenYet: "chapter not open yet",
   deadlinePassed: "deadline passed",
   outOfTries: "no tries left",
 }
@@ -204,6 +207,8 @@ export function submitRefusalSentence(
       return `${exerciseName} can be submitted once you have completed the chapters before ${chapter}.`
     case "chapterCompletedAndLocked":
       return `You have completed and locked ${chapter}, so ${exerciseName} can no longer be submitted.`
+    case "chapterNotOpenYet":
+      return `${exerciseName} can be submitted once ${chapter} opens.`
     case "deadlinePassed":
       return `The deadline of ${exerciseName} has passed, so it can no longer be submitted.`
     case "outOfTries":

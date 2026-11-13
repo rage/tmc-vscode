@@ -81,7 +81,12 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
     const running = this._sources.operations.current(exercise.id)
     const activity = running && activityLabels[running]
     const points = stored && pointsText(stored.data.awardedPoints, stored.data.availablePoints)
-    const standing = standingText(stored)
+    const course = this._sources.userData.getCourse(exercise.courseId)
+    const isChapterClosed =
+      course.ok && LocalCourseData.getClosedChapterOf(course.val, exercise.id) !== undefined
+    const standing = isChapterClosed
+      ? SUBMIT_REFUSAL_LABELS.chapterNotOpenYet
+      : standingText(stored)
     const shownStanding = standing === "passed" ? undefined : standing
 
     if (activity) {

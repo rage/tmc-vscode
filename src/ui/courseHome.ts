@@ -120,11 +120,17 @@ export function buildCourseHomeView(
           : "Other exercises"
         : partLabel(part.name),
       isDefaultOpen: part.isDefaultOpen,
-      ...(part.lockingStatus === "NotUnlockedYet"
-        ? { lockedReason: "Locked until you have completed the chapters before it." }
-        : part.lockingStatus === "CompletedAndLocked"
-          ? { lockedReason: "You have completed and locked this chapter." }
-          : {}),
+      ...(part.opensAt
+        ? {
+            lockedReason:
+              `Opens on ${formatDateTime(part.opensAt, locale)}. Until then its exercises` +
+              " can be tested but not submitted.",
+          }
+        : part.lockingStatus === "NotUnlockedYet"
+          ? { lockedReason: "Locked until you have completed the chapters before it." }
+          : part.lockingStatus === "CompletedAndLocked"
+            ? { lockedReason: "You have completed and locked this chapter." }
+            : {}),
       exercises: part.exercises.map((ex) => {
         const deadline = deadlineText(shownDeadline(ex))
         const { materialUrl, submitRefusal, triesLeft } = ex
