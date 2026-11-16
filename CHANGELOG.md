@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- The submission result is now the exercise's results screen. Show Results, in the exercise's status bar actions, the Command Palette and the exercise menus, opens it for the exercise at hand, showing where the exercise stands when nothing was submitted in this session. Tests passing locally while it is on screen make Submit its main action instead of a notification.
+- The results screen's History lists an exercise's earlier submissions, help requests and backups with their date, score and outcome, marks the latest submission, and restores one after asking. Download Old Submission opens it instead of a list to pick from.
+- The results screen's Get help sends the code via paste and shows the link with Copy Link and Open Link instead of a notification, saying when the code is unchanged since the last paste. Share Exercise via Paste opens it.
+- A passed tmc.mooc.fi exercise offers its model solution in the results screen and the exercise's actions, not only after a submission.
 - In its course workspace, Course Details offers Continue with the next exercise to do once nothing is left to download. Its exercise rows say "In workspace" instead of "Open", and their open button has a clearer icon.
 - The notification offering a course's workspace is not shown while that course's Course Details, which offers the same, is on screen.
 - A courses.mooc.fi course links to its course material: the course from Course Details' menu, and each exercise from its row's menu.
