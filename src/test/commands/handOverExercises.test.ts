@@ -194,6 +194,23 @@ suite("handOverExercises", function () {
     )
   })
 
+  test("bringing exercises back keeps the exercises folder itself, which tmc-langs may recreate meanwhile", async function () {
+    const { context, projectsDirectory } = setUp("user-b", true)
+    await context.startup.accountHandover.setExercisesAccountIds(["user-a"])
+    await handOverExercises(context)
+    const folderBefore = fs.statSync(projectsDirectory).ino
+    vi.mocked(context.startup.langs.getMoocAccountId).mockResolvedValue(Ok("user-a"))
+    context.startup.workspaceManager.getExercises = () => []
+
+    await handOverExercises(context)
+
+    expect(fs.statSync(projectsDirectory).ino).toBe(folderBefore)
+    expect(fs.readdirSync(projectsDirectory)).toEqual(["mooc"])
+    expect(
+      fs.readdirSync(path.dirname(projectsDirectory)).filter((entry) => entry.includes("-moved-")),
+    ).toEqual([])
+  })
+
   test("exercises moved aside stay where they are while the exercises folder has files", async function () {
     const { context, projectsDirectory } = setUp("user-b", true)
     await context.startup.accountHandover.setExercisesAccountIds(["user-a"])
