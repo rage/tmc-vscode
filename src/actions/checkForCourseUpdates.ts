@@ -5,11 +5,12 @@ import type { CourseIdentifier } from "../../shared/lib"
 import { LocalCourseData } from "../../shared/lib"
 import type { Warned } from "../api/withOperation"
 import { failure } from "../api/withOperation"
+import { LOST_COURSE_RECHECK_INTERVAL } from "../config/constants"
 import { Logger, mapConcurrently } from "../utilities"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
 import type { AiPolicyChange } from "./updateCourse"
-import { updateCourse } from "./updateCourse"
+import { fetchMoocEnrollments, updateCourse } from "./updateCourse"
 
 const COURSE_REFRESH_CONCURRENCY = 4
 
@@ -18,6 +19,11 @@ export interface CourseUpdateOptions {
   courseId?: CourseIdentifier | undefined
   /** Called as each course finishes, for a progress indicator. */
   onProgress?: ((done: number, total: number) => void) | undefined
+  /**
+   * Leaves out a course its backend refused less than `LOST_COURSE_RECHECK_INTERVAL` ago, for an
+   * unprompted refresh: access rarely comes back within hours, and the student can refresh it.
+   */
+  skipsRecentlyLostCourses?: boolean | undefined
 }
 
 /** What a pass of {@link checkForCourseUpdates} left behind. */
@@ -43,8 +49,8 @@ export async function checkForCourseUpdates(
   actionContext: ReadyActionContext,
   options: CourseUpdateOptions = {},
 ): Promise<Result<CourseUpdates, Error>> {
-  const { userData } = actionContext.startup
-  const { courseId, onProgress } = options
+  const { langs, userData } = actionContext.startup
+  const { courseId, onProgress, skipsRecentlyLostCourses } = options
   let courses: LocalCourseData[]
   if (courseId) {
     const courseResult = userData.getCourse(courseId)
@@ -55,15 +61,25 @@ export async function checkForCourseUpdates(
   } else {
     courses = userData.getCourses()
   }
+  if (skipsRecentlyLostCourses) {
+    const now = Date.now()
+    courses = courses.filter((course) => {
+      const loss = course.data.accessLoss
+      return loss === undefined || now - loss.checkedAt >= LOST_COURSE_RECHECK_INTERVAL
+    })
+  }
 
   Logger.info(`Checking for course updates for courses`)
+  const moocEnrollments = courses.some((course) => course.kind === "mooc")
+    ? await fetchMoocEnrollments(langs)
+    : undefined
   let done = 0
   onProgress?.(done, courses.length)
   // Courses hold disjoint records and `UserData` serializes its own writes, so these
   // overlap; capped, since each is a CLI process contending for the credential lock.
   const refreshed = await mapConcurrently(courses, COURSE_REFRESH_CONCURRENCY, async (course) => {
     const id = LocalCourseData.getCourseId(course)
-    const updateResult = await updateCourse(actionContext, id)
+    const updateResult = await updateCourse(actionContext, id, moocEnrollments)
     onProgress?.(++done, courses.length)
     const reread = userData.getCourse(id)
     return {

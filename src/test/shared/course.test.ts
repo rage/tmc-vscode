@@ -54,6 +54,23 @@ function mooc(data: Partial<SharedMoocCourseExercise>): LocalCourseExercise {
   })
 }
 
+const courseWithAccess = (accessLoss?: "forbidden" | "notFound"): LocalCourseData =>
+  makeMoocKind({
+    id: "course",
+    name: "course",
+    title: "Course",
+    description: null,
+    organization: "org",
+    aiPolicy: "not_set" as const,
+    exercises: [],
+    availablePoints: 0,
+    awardedPoints: 0,
+    newExercises: [],
+    notifyAfter: 0,
+    notEnrolled: true,
+    ...(accessLoss ? { accessLoss: { reason: accessLoss, checkedAt: 0 } } : {}),
+  })
+
 suite("submitRefusalOf", () => {
   const now = new Date("2026-11-13T12:00:00Z")
 
@@ -110,6 +127,17 @@ suite("submitRefusalOf", () => {
       softDeadline: null,
     })
     expect(submitRefusalOf(tmc, now)).toBe("deadlinePassed")
+  })
+
+  test("refuses every exercise of a course its backend refuses, before anything else", () => {
+    const passedOut = mooc({ outOfTries: true })
+
+    expect(submitRefusalOf(passedOut, now, courseWithAccess("forbidden"))).toBe("courseForbidden")
+    expect(submitRefusalOf(passedOut, now, courseWithAccess("notFound"))).toBe("courseNotFound")
+    expect(submitRefusalOf(passedOut, now, courseWithAccess())).toBe("notEnrolled")
+    expect(submitRefusalSentence("courseNotFound", "loops")).toBe(
+      "This course no longer exists, so loops cannot be submitted.",
+    )
   })
 
   test("names the exercise and its chapter in the sentence", () => {

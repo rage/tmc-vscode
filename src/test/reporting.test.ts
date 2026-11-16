@@ -153,6 +153,8 @@ async function harness(
     listLocalExercises: async () => Ok([]),
     listSettings: async () => Ok({}),
     checkExerciseUpdates: async () => Ok({ updated: [], removed: [] }),
+    getEnrolledMoocCourses: async () =>
+      Ok([{ id: "instance-1", name: "Mooc Course", organization_name: "mooc" }]),
     getStudentFilePaths: async () => Ok([]),
     unsetSetting: async () => Ok.EMPTY,
   })
@@ -832,6 +834,7 @@ suite("reported once: the Courses view and course details", function () {
     const { post, shown, shownPanel } = await harness({
       langs: {
         getMoocCourseData: async () => Err(new InsufficientScopeError("exercise-services")),
+        getEnrolledMoocCourses: async () => Err(new InsufficientScopeError("exercise-services")),
       },
     })
     const sourcePanel = shownPanel()
@@ -858,6 +861,7 @@ suite("reported once: the refresh", function () {
     const { run, shown } = await harness({
       langs: {
         getMoocCourseData: async () => Err(new InsufficientScopeError("exercise-services")),
+        getEnrolledMoocCourses: async () => Err(new InsufficientScopeError("exercise-services")),
       },
     })
 

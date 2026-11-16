@@ -6,15 +6,17 @@ import { CourseIdentifier } from "../../../shared/lib"
 import { checkForCourseUpdates } from "../../actions/checkForCourseUpdates"
 import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
-import { updateCourse } from "../../actions/updateCourse"
+import { fetchMoocEnrollments, updateCourse } from "../../actions/updateCourse"
 import type Dialog from "../../api/dialog"
-import { tmcLocalCourse } from "../fixtures/courses"
+import { LOST_COURSE_RECHECK_INTERVAL } from "../../config/constants"
+import { moocLocalCourse, tmcLocalCourse } from "../fixtures/courses"
 import { idOfTmcCourse } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions/updateCourse", () => ({
   updateCourse: vi.fn(async () => Ok({ isUpdated: true, warnings: [] })),
+  fetchMoocEnrollments: vi.fn(async () => Ok(new Set(["listed"]))),
 }))
 
 // The course-update pass ends by rescanning the exercises on disk, which would otherwise
@@ -32,6 +34,11 @@ const tmcCourse = (id: number, notifyAfter: number, newExercises: number[]): Loc
     newExercises,
     notifyAfter,
   })
+
+const lostTmcCourse = (id: number, checkedAt: number): LocalCourseData =>
+  tmcLocalCourse({ id, name: `course-${id}`, accessLoss: { reason: "forbidden", checkedAt } })
+
+const moocCourseWithId = (id: string): LocalCourseData => moocLocalCourse({ id, name: id })
 
 function contextWithCourses(courses: LocalCourseData[]): [ReadyActionContext, Dialog] {
   const [dialog] = createDialogMock()
@@ -64,7 +71,38 @@ suite("checkForCourseUpdates action", function () {
     await checkForCourseUpdates(actionContext)
 
     expect(updateCourse).toHaveBeenCalledTimes(1)
-    expect(updateCourse).toHaveBeenCalledWith(actionContext, idOfTmcCourse(1))
+    expect(updateCourse).toHaveBeenCalledWith(actionContext, idOfTmcCourse(1), undefined)
+  })
+
+  test("leaves out a course refused recently only when asked to", async function () {
+    const [actionContext] = contextWithCourses([
+      lostTmcCourse(1, Date.now()),
+      lostTmcCourse(2, Date.now() - LOST_COURSE_RECHECK_INTERVAL),
+      tmcCourse(3, 0, []),
+    ])
+
+    await checkForCourseUpdates(actionContext, { skipsRecentlyLostCourses: true })
+    expect(vi.mocked(updateCourse).mock.calls.map(([, id]) => id)).toEqual([
+      idOfTmcCourse(2),
+      idOfTmcCourse(3),
+    ])
+
+    vi.mocked(updateCourse).mockClear()
+    await checkForCourseUpdates(actionContext)
+    expect(updateCourse).toHaveBeenCalledTimes(3)
+  })
+
+  test("lists the mooc enrollments once for every mooc course", async function () {
+    vi.mocked(fetchMoocEnrollments).mockClear()
+    const [actionContext] = contextWithCourses([moocCourseWithId("a"), moocCourseWithId("b")])
+
+    await checkForCourseUpdates(actionContext)
+
+    expect(fetchMoocEnrollments).toHaveBeenCalledTimes(1)
+    const enrollments = vi.mocked(updateCourse).mock.calls.map(([, , given]) => given)
+    expect(enrollments).toHaveLength(2)
+    expect(enrollments[0]?.unwrap()).toEqual(new Set(["listed"]))
+    expect(enrollments[1]).toBe(enrollments[0])
   })
 
   test("rescans the exercises on disk once, however many courses were refreshed", async function () {

@@ -35,6 +35,7 @@ import {
   DeadlinePassedError,
   DeviceLoginExpiredError,
   ExerciseNotFoundError,
+  InsufficientScopeError,
   InvalidTokenError,
   NotEnrolledError,
   NotFoundError,
@@ -794,6 +795,39 @@ suite("tmc langs cli spec", function () {
       }
     })
 
+    suite("a course students can no longer reach", function () {
+      const setCourseAccess = (access: string): Promise<Response> =>
+        fetch(`${MOCK_BACKEND_URL}/mooc-mock/set-course-access`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ course_id: PYTHON_COURSE_ID, access }),
+        })
+
+      teardown(async function () {
+        expect((await setCourseAccess("open")).status).to.equal(204)
+      })
+
+      // The extension tells this apart from a session without the scope by the course list,
+      // which the same session still loads.
+      test("should report a closed course as an insufficient scope", async function () {
+        expect((await setCourseAccess("forbidden")).status).to.equal(204)
+
+        const data = await tmc.getMoocCourseData(PYTHON_COURSE_ID, { forceRefresh: true })
+
+        expect(data.val).to.be.instanceOf(InsufficientScopeError)
+        expect((await tmc.getEnrolledMoocCourses()).ok).to.be.true
+      })
+
+      test("should report a deleted course as not found", async function () {
+        expect((await setCourseAccess("deleted")).status).to.equal(204)
+
+        const data = await tmc.getMoocCourseData(PYTHON_COURSE_ID, { forceRefresh: true })
+
+        expect(data.val).to.be.instanceOf(NotFoundError)
+        expect((data.val as NotFoundError).httpStatus).to.equal(404)
+      })
+    })
+
     test("should paste a mooc exercise as a shared, ungraded snapshot", async function () {
       const dir = writeSubmittableProject("mooc-paste")
       const pasteUrl = (await tmc.paste(idOfMoocExercise(PASSING_EXERCISE_ID), dir)).unwrap()
@@ -1271,6 +1305,21 @@ suite("tmc langs cli spec", function () {
       const courses = (await tmc.getEnrolledMoocCourses()).unwrap()
       expect(courses.length).to.be.greaterThan(0)
       expect(hasMoocCredentials(configDir)).to.be.true
+    })
+
+    test("reports a revoked grant as an invalid token, deleting the credentials", async function () {
+      writeMoocCredentials(configDir, {
+        accessToken: MOCK_SEEDED_ACCESS_TOKEN,
+        refreshToken: MOCK_SEEDED_REFRESH_TOKEN,
+        expiresIn: 3600,
+      })
+      const revoked = await fetch(`${AUTH_BASE}/mooc-mock/revoke-grant`, { method: "POST" })
+      expect(revoked.status).to.equal(204)
+
+      const courses = await tmc.getEnrolledMoocCourses()
+
+      expect(courses.val).to.be.instanceOf(InvalidTokenError)
+      expect(hasMoocCredentials(configDir)).to.be.false
     })
 
     test("deletes credentials when the refresh after a rejection also fails", async function () {

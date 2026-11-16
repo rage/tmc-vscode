@@ -797,7 +797,9 @@ suite("the startup course refresh", function () {
     }
 
     await vi.waitFor(() =>
-      expect(courseRefresh.options).toEqual([{ silent: true, isPromptless: true }]),
+      expect(courseRefresh.options).toEqual([
+        { silent: true, isPromptless: true, skipsRecentlyLostCourses: true },
+      ]),
     )
   })
 })

@@ -7,6 +7,18 @@ import { ChapterLockingStatus, CourseAiPolicy } from "./generated/langs"
 // The live course schemas. Storage v3 persists exactly these (see `data_v3.ts`), so a change
 // here is a storage format change.
 
+/**
+ * Why a backend last refused a course itself: `forbidden` when the student may no longer see it
+ * (hidden, closed or made private), `notFound` when it no longer exists there.
+ */
+const CourseAccessLossSchema = z.object({
+  reason: z.enum(["forbidden", "notFound"]),
+  /** ms timestamp of the last refresh that found it so; background refreshes retry it rarely. */
+  checkedAt: z.number(),
+})
+
+export type CourseAccessLoss = z.infer<typeof CourseAccessLossSchema>
+
 export const SharedTmcCourseExerciseSchema = z.object({
   id: z.number(),
   availablePoints: z.number(),
@@ -37,6 +49,8 @@ export const SharedTmcCourseDataSchema = z.object({
   notifyAfter: z.number(),
   disabled: z.boolean(),
   materialUrl: z.string().nullable(),
+  /** Absent while the backend serves the course. */
+  accessLoss: CourseAccessLossSchema.optional(),
 })
 
 export type SharedTmcCourseData = z.infer<typeof SharedTmcCourseDataSchema>
@@ -116,6 +130,8 @@ export const SharedMoocCourseDataSchema = z.object({
   notifyAfter: z.number(),
   /** courses.mooc.fi last refused the student as not enrolled on the course; absent means no. */
   notEnrolled: z.boolean().optional(),
+  /** Absent while the backend serves the course. */
+  accessLoss: CourseAccessLossSchema.optional(),
   /** Absent means none. */
   closedChapters: z.array(MoocClosedChapterSchema).optional(),
 })
@@ -147,7 +163,7 @@ export const SOFT_DEADLINE_PENALTY =
  * its chapter is locked (`chapterNotUnlockedYet`, `chapterCompletedAndLocked`) or has not
  * opened yet (`chapterNotOpenYet`, which only the course's closed chapters tell), the exercise
  * itself is locked for review, its hard deadline has passed, or its tries are used up; or the
- * student is not enrolled on its course.
+ * student is not enrolled on its course, or the backend no longer serves the course at all.
  */
 export type SubmitRefusal =
   | "chapterNotUnlockedYet"
@@ -157,18 +173,27 @@ export type SubmitRefusal =
   | "deadlinePassed"
   | "outOfTries"
   | "notEnrolled"
+  | "courseForbidden"
+  | "courseNotFound"
 
 /**
  * Why the backend would refuse a submission of `exercise` at `now`; `undefined` if it would not.
  *
- * @param course The exercise's course, for its enrollment: `notEnrolled` only comes from it. A
- * submit itself leaves that to the backend, as the student may have enrolled again since.
+ * @param course The exercise's course, for its enrollment and access: `notEnrolled`,
+ * `courseForbidden` and `courseNotFound` only come from it. A submit itself leaves those to the
+ * backend, as they may have changed since the course was last refreshed.
  */
 export function submitRefusalOf(
   exercise: LocalCourseExercise,
   now: Date,
   course?: Readonly<LocalCourseData>,
 ): SubmitRefusal | undefined {
+  switch (course && LocalCourseData.getAccessLoss(course)) {
+    case "forbidden":
+      return "courseForbidden"
+    case "notFound":
+      return "courseNotFound"
+  }
   if (course?.kind === "mooc" && course.data.notEnrolled === true) {
     return "notEnrolled"
   }
@@ -213,6 +238,8 @@ export const SUBMIT_REFUSAL_LABELS: Record<SubmitRefusal, string> = {
   deadlinePassed: "deadline passed",
   outOfTries: "no tries left",
   notEnrolled: "not enrolled",
+  courseForbidden: "no access",
+  courseNotFound: "course removed",
 }
 
 /**
@@ -241,6 +268,10 @@ export function submitRefusalSentence(
       return `You have no tries left on ${exerciseName}, so it can no longer be submitted.`
     case "notEnrolled":
       return `You are not enrolled on this course, so ${exerciseName} can be submitted once you enroll again.`
+    case "courseForbidden":
+      return `You no longer have access to this course, so ${exerciseName} cannot be submitted.`
+    case "courseNotFound":
+      return `This course no longer exists, so ${exerciseName} cannot be submitted.`
   }
 }
 
@@ -340,6 +371,11 @@ export namespace LocalCourseData {
   /** Whether courses.mooc.fi last refused the student as not enrolled; never for tmc. */
   export function isNotEnrolled(lcd: LocalCourseData): boolean {
     return lcd.kind === "mooc" && lcd.data.notEnrolled === true
+  }
+
+  /** Why the backend last refused the course itself; `undefined` while it serves it. */
+  export function getAccessLoss(lcd: LocalCourseData): CourseAccessLoss["reason"] | undefined {
+    return lcd.data.accessLoss?.reason
   }
 
   /** The course material's front page, if the backend names it. */

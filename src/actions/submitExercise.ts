@@ -24,9 +24,10 @@ import {
 import type Langs from "../api/langs"
 import type { OperationWarning, Warned } from "../api/withOperation"
 import type { WorkspaceExercise } from "../api/workspaceManager"
-import type { UserData } from "../config/userdata"
+import type { StoredExercise, UserData } from "../config/userdata"
 import {
   ChapterLockedError,
+  CourseAccessLostError,
   ExerciseLockedError,
   ChapterNotOpenError,
   NotEnrolledError,
@@ -354,7 +355,7 @@ async function readyToSubmit(
   actionContext: ReadyActionContext,
   exercise: WorkspaceExercise,
 ): Promise<Result<SubmitReady, Error>> {
-  const stored = storedExerciseOf(actionContext, exercise)
+  const stored = await storedExerciseWithAccess(actionContext, exercise)
   if (stored.err) {
     return stored
   }
@@ -393,6 +394,36 @@ async function readyToSubmit(
     return Err(refused)
   }
   return Ok({ submit, course: current, courseExercise })
+}
+
+/**
+ * The exercise as stored, after refreshing its course if its backend last refused the course:
+ * that may have been hours ago. Errs with a `CourseAccessLostError` while the refusal stands.
+ */
+async function storedExerciseWithAccess(
+  actionContext: ReadyActionContext,
+  exercise: WorkspaceExercise,
+): Promise<Result<StoredExercise, Error>> {
+  const stored = storedExerciseOf(actionContext, exercise)
+  if (stored.err || LocalCourseData.getAccessLoss(stored.val.course) === undefined) {
+    return stored
+  }
+  const courseId = LocalCourseData.getCourseId(stored.val.course)
+  const updated = await updateCourse(actionContext, courseId).catch((e: unknown) => Err(toError(e)))
+  if (updated.err) {
+    Logger.warn("Failed to recheck access to the course.", updated.val)
+  }
+  const current = storedExerciseOf(actionContext, exercise)
+  if (current.err) {
+    return current
+  }
+  switch (LocalCourseData.getAccessLoss(current.val.course)) {
+    case "forbidden":
+      return Err(refusalError("courseForbidden", current.val.exercise))
+    case "notFound":
+      return Err(refusalError("courseNotFound", current.val.exercise))
+  }
+  return current
 }
 
 /**
@@ -482,6 +513,9 @@ function refusalError(refusal: SubmitRefusal, exercise: LocalCourseExercise): Er
       return new DeadlinePassedError(sentence)
     case "notEnrolled":
       return new NotEnrolledError(sentence)
+    case "courseForbidden":
+    case "courseNotFound":
+      return new CourseAccessLostError(sentence)
     case "outOfTries": {
       const points = pointsText(exercise.data.awardedPoints, exercise.data.availablePoints)
       return new OutOfTriesError(

@@ -63,6 +63,9 @@ export const FOCUS_REFRESH_INTERVAL = 10 * 60 * 1000
  */
 export const OPEN_COURSE_FOCUS_REFRESH_INTERVAL = 60 * 1000
 
+/** How long an unprompted refresh leaves alone a course whose backend refused it. */
+export const LOST_COURSE_RECHECK_INTERVAL = 12 * 60 * 60 * 1000
+
 /** How often the open course is checked while the window has focus. */
 export const OPEN_COURSE_POLL_INTERVAL = 5 * 60 * 1000
 

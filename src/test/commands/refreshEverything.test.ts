@@ -18,6 +18,7 @@ import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions/updateCourse", () => ({
   updateCourse: vi.fn(async () => Ok({ isUpdated: true, warnings: [] })),
+  fetchMoocEnrollments: vi.fn(async () => Ok(new Set())),
 }))
 
 // The course-update pass ends by rescanning the exercises on disk, which would otherwise

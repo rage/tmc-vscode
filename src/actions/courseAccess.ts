@@ -1,7 +1,8 @@
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
-import type { CourseIdentifier } from "../../shared/lib"
+import type { CourseAccessLoss, CourseIdentifier } from "../../shared/lib"
+import { LocalCourseData } from "../../shared/lib"
 import { NotEnrolledError } from "../errors"
 import { Logger } from "../utilities"
 import type { ReadyActionContext } from "./types"
@@ -41,4 +42,24 @@ export async function recordMoocEnrollment(
     kind: "mooc",
     data: isNotEnrolled ? { ...rest, notEnrolled: true } : rest,
   })
+}
+
+/**
+ * Marks a stored course as refused by its backend for `reason`, as of now. Its exercises stay
+ * on disk and in the course; a refresh the backend answers clears the mark.
+ */
+export async function recordCourseAccessLoss(
+  { startup }: ReadyActionContext,
+  course: LocalCourseData,
+  reason: CourseAccessLoss["reason"],
+): Promise<Result<void, Error>> {
+  if (LocalCourseData.getAccessLoss(course) !== reason) {
+    Logger.warn(`${LocalCourseData.getCourseName(course)}: access lost (${reason})`)
+  }
+  const accessLoss = { reason, checkedAt: Date.now() }
+  return startup.userData.replaceCourse(
+    course.kind === "tmc"
+      ? { kind: "tmc", data: { ...course.data, accessLoss } }
+      : { kind: "mooc", data: { ...course.data, accessLoss } },
+  )
 }

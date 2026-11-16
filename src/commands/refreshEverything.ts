@@ -137,7 +137,11 @@ async function runRefresh(
   options: RefreshOptions,
 ): Promise<Result<void, Error>> {
   const { silent, courseId, onProgress, offersNewExercises, isPromptless } = options
-  const refreshed = await checkForCourseUpdates(actionContext, { courseId, onProgress })
+  const refreshed = await checkForCourseUpdates(actionContext, {
+    courseId,
+    onProgress,
+    skipsRecentlyLostCourses: options.skipsRecentlyLostCourses,
+  })
   if (refreshed.ok) {
     reportWarnings(actionContext.dialog, refreshed.val.warnings)
     announceAiPolicyChanges(actionContext, refreshed.val.aiPolicyChanges)
@@ -189,6 +193,7 @@ function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCour
     (course) =>
       hasUnofferedNewExercises(course) &&
       !LocalCourseData.isDisabled(course) &&
+      LocalCourseData.getAccessLoss(course) === undefined &&
       course.data.notifyAfter <= now,
   )
   for (const course of offered) {

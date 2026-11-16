@@ -28,6 +28,7 @@ import {
   AiUseRefusedError,
   BottleneckError,
   ChapterLockedError,
+  CourseAccessLostError,
   DeadlinePassedError,
   ExerciseNotFoundError,
   InsufficientScopeError,
@@ -581,6 +582,47 @@ suite("submitExercise action, mooc", () => {
     expect(result.val).toBeInstanceOf(errorClass)
     expect((result.val as Error).message).toBe(message)
     expect(submit).not.toHaveBeenCalled()
+  })
+
+  test("refuses a course its backend refused once a refresh finds it still refused", async () => {
+    const lost = { ...moocCourse, accessLoss: { reason: "forbidden" as const, checkedAt: 0 } }
+    const submit = vi.fn()
+    const { actionContext } = contextFor(makeMoocKind(lost), { submitMoocExercise: submit })
+
+    const result = await submitExercise(actionContext, moocExercise)
+
+    expect(updateCourse).toHaveBeenCalledOnce()
+    expect(result.val).toBeInstanceOf(CourseAccessLostError)
+    expect((result.val as Error).message).toBe(
+      `You no longer have access to this course, so ${EXERCISE_SLUG} cannot be submitted.`,
+    )
+    expect(submit).not.toHaveBeenCalled()
+  })
+
+  test("submits once the refresh finds the course served again", async () => {
+    const lost: MoocLocalCourseData = {
+      ...moocCourse,
+      accessLoss: { reason: "notFound", checkedAt: 0 },
+    }
+    const { actionContext } = contextFor(makeMoocKind(lost), {
+      submitMoocExercise: vi.fn(async () =>
+        Ok({
+          task_submission_id: TASK_SUBMISSION_ID,
+          slide_submission_id: "slide-submission-1",
+          exercise_page_url: EXERCISE_PAGE_URL,
+        }),
+      ),
+      waitForMoocGrading: vi.fn(async () => Ok(grading({}))),
+    })
+    vi.mocked(updateCourse).mockImplementationOnce(async () => {
+      delete lost.accessLoss
+      return Ok({ isUpdated: true, warnings: [] })
+    })
+
+    const result = await submitExercise(actionContext, moocExercise)
+
+    expect(result.ok).toBe(true)
+    expect(actionContext.startup.langs.submitMoocExercise).toHaveBeenCalledOnce()
   })
 
   test("a refusal the stored data did not foresee shows in the panel and refreshes the course", async () => {

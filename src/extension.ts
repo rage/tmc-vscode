@@ -200,9 +200,11 @@ function refreshInBackground(
 ): void {
   lastBackgroundRefreshAt = Date.now()
   openCourseRefresh?.noteRefreshed()
-  void refreshEverything(ready, { silent: true, isPromptless }).catch((e) =>
-    Logger.error("Background refresh failed", e),
-  )
+  void refreshEverything(ready, {
+    silent: true,
+    isPromptless,
+    skipsRecentlyLostCourses: true,
+  }).catch((e) => Logger.error("Background refresh failed", e))
 }
 
 async function activateInner(
@@ -615,9 +617,11 @@ async function activateInner(
     openCourseRefresh = new OpenCourseRefresh({
       openCourse: () => (authState.loggedIn ? openCourseId(readyContext) : undefined),
       refresh: (courseId) =>
-        void refreshEverything(readyContext, { silent: true, courseId }).catch((e) =>
-          Logger.error("Open course refresh failed", e),
-        ),
+        void refreshEverything(readyContext, {
+          silent: true,
+          courseId,
+          skipsRecentlyLostCourses: true,
+        }).catch((e) => Logger.error("Open course refresh failed", e)),
     })
     context.subscriptions.push(openCourseRefresh)
   }
