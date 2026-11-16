@@ -990,6 +990,28 @@ describe("mooc mock conformance", () => {
     assert.ok(tar.includes("ustar"))
   })
 
+  test("an armed archive fault fails the next download alone, no sooner than asked", async () => {
+    const archiveUrl = `${base}/mooc-archives/${passingExercise.archiveSlug}.tar.zst`
+    mock.failNextArchive(150)
+    const started = Date.now()
+    assert.equal((await fetch(archiveUrl)).status, 500)
+    assert.ok(Date.now() - started >= 140)
+    assert.equal((await fetch(archiveUrl)).status, 200)
+  })
+
+  test("an archive fault arms from outside the process too", async () => {
+    const armed = await fetch(`${base}/mooc-mock/fail-next-archive`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    assert.equal(armed.status, 204)
+    assert.equal(
+      (await fetch(`${base}/mooc-archives/${passingExercise.archiveSlug}.tar.zst`)).status,
+      500,
+    )
+  })
+
   test("unknown endpoint 404s", async () => {
     const res = await authFetch(api("/does-not-exist"))
     assert.equal(res.status, 404)

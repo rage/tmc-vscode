@@ -53,6 +53,7 @@ function host(route: Panel | undefined): PanelHost {
   return {
     name: "Main webview",
     route,
+    isVisible: true,
     post: vi.fn(),
     closeSidePanel: vi.fn(),
     showBeside: vi.fn(),

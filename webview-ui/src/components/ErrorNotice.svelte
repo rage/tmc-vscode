@@ -8,6 +8,8 @@
 
   interface Props {
     error: WebviewError
+    /** `warning` for an action held back rather than failed. */
+    kind?: "error" | "warning"
     title?: string | undefined
     ondismiss?: (() => void) | undefined
     dismissLabel?: string | undefined
@@ -15,7 +17,7 @@
     actions?: Snippet | undefined
   }
 
-  let { error, title, ondismiss, dismissLabel, actions }: Props = $props()
+  let { error, kind = "error", title, ondismiss, dismissLabel, actions }: Props = $props()
 
   const remedies = $derived(error.actions ?? [])
 </script>
@@ -36,7 +38,7 @@
 {/snippet}
 
 <Notice
-  kind="error"
+  {kind}
   {title}
   {ondismiss}
   {dismissLabel}

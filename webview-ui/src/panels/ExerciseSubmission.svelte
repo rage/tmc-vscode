@@ -20,11 +20,13 @@
   import Meter from "../components/Meter.svelte"
   import PanelHeader from "../components/PanelHeader.svelte"
   import PasteHelpBox from "../components/PasteHelpBox.svelte"
+  import ScreenFailures from "../components/ScreenFailures.svelte"
   import StatusBanner from "../components/StatusBanner.svelte"
   import SubmissionFeedbackForm from "../components/SubmissionFeedbackForm.svelte"
   import TestResults from "../components/TestResults.svelte"
   import ToolbarButton from "../components/ToolbarButton.svelte"
   import { announce } from "../utilities/a11y.svelte"
+  import { listenForFailures } from "../utilities/screenFailures.svelte"
   import { addMessageListener, createRequester } from "../utilities/script"
   import { restoreScroll, uiState } from "../utilities/uiState.svelte"
   import { vscode } from "../utilities/vscode"
@@ -214,12 +216,17 @@
 
   // svelte-ignore state_referenced_locally -- the panel identity (id/type)
   // is fixed for the lifetime of the component, capturing the initial value is intended
+  const screenFailures = listenForFailures(panel)
+  // svelte-ignore state_referenced_locally -- as above
   addMessageListener(panel, (message) => {
     if (message.type === "openExerciseSection") {
       if (message.serial > handledSectionSerial.current) {
         handledSectionSerial.current = message.serial
         void openSection(message.section, message.shouldPaste)
       }
+      return
+    }
+    if (message.type !== "submissionView") {
       return
     }
     const previous = view
@@ -356,6 +363,7 @@
     <p class="muted">{triesNote}</p>
   {/if}
   <ActionBar {...barActions} />
+  <ScreenFailures failures={screenFailures} />
   {#if keepWaitingError}
     <ErrorNotice error={keepWaitingError} title="Could not keep waiting" />
   {/if}

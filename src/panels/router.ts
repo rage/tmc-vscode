@@ -13,8 +13,11 @@ import type {
 import { toError, WebviewToExtensionSchema } from "../../shared/lib"
 import type { ActionContext, ReadyActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
+import { reportFailureIn } from "../api/withOperation"
 import { InitializationError } from "../errors"
 import { Logger } from "../utilities"
+import type { FailureScreen } from "./screenFailures"
+import { screenFailureSink } from "./screenFailures"
 import { toWebviewError } from "./webviewError"
 
 /** A message addressed to one panel; `setPanel` is the transport's own. */
@@ -26,6 +29,8 @@ export interface PanelHost {
   readonly name: string
   /** The screen this webview shows, if any. */
   readonly route: Panel | undefined
+  /** Whether the student can see this webview now. */
+  readonly isVisible: boolean
   /** Sends `message` to this webview alone, kept for a reload if it targets `route`. */
   post: (message: PanelMessage) => void
   closeSidePanel: () => void
@@ -70,10 +75,10 @@ export type HandlerMap = { [K in MessageType]: Handler<K> }
 /**
  * Validates one message from a webview and runs its handler.
  *
- * Every request gets exactly one reply: a not-ready or failed one inline, since its panel is
- * waiting and shows why. A fire-and-forget message that cannot run is notified instead, as
- * nothing on screen would say so. A throw is also notified: it is a bug, not an outcome.
- * Never rejects: the webview host discards whatever a listener rejects with.
+ * Every request gets exactly one reply: a not-ready, failed or thrown one says why, since its
+ * panel is waiting to show it. A fire-and-forget message that cannot run or throws is shown on
+ * the screen that sent it when that lists failures, and otherwise notified, as nothing on screen
+ * would say so. Never rejects: the webview host discards whatever a listener rejects with.
  */
 export async function dispatch(
   handlers: HandlerMap,
@@ -88,24 +93,34 @@ export async function dispatch(
   // zod strips unknown fields, so the original message is used instead of the parse result
   const message = untrustedMessage as WebviewToExtension
   const request = "requestId" in message ? message : undefined
-  const { actionContext } = context
+  const { actionContext, host } = context
   const handler = handlers[message.type] as Handler<MessageType>
+  const fail = (headline: string, error: Error): void => {
+    if (request) {
+      Logger.error(headline, error)
+      reply(host, request, { ok: false, error: toWebviewError(error) })
+      return
+    }
+    const screen = failureScreenOf(host.route)
+    if (screen) {
+      reportFailureIn(actionContext.dialog, screenFailureSink(host, screen), headline, error)
+    } else {
+      void actionContext.dialog.reportError(headline, error)
+    }
+  }
   try {
     if (handler.requiresReady && !isReady(actionContext)) {
-      const error = new InitializationError("The extension did not initialize properly")
-      if (request) {
-        Logger.error("This action is unavailable.", error)
-        reply(context.host, request, { ok: false, error: toWebviewError(error) })
-      } else {
-        void actionContext.dialog.reportError("This action is unavailable.", error)
-      }
+      fail(
+        "This action is unavailable.",
+        new InitializationError("The extension did not initialize properly"),
+      )
       return
     }
     const outcome = await (handler.handle as Handle<MessageType, ActionContext>)(message, context)
     if (request) {
       const result = outcome as Result<unknown, unknown>
       reply(
-        context.host,
+        host,
         request,
         result.ok
           ? { ok: true, value: result.val }
@@ -114,17 +129,15 @@ export async function dispatch(
     }
   } catch (error) {
     Logger.error(`Failed to handle "${message.type}" from the webview`, error)
-    void actionContext.dialog.reportError(
-      "Something went wrong while handling that action.",
-      toError(error),
-    )
-    if (request) {
-      reply(context.host, request, {
-        ok: false,
-        error: toWebviewError(error),
-      })
-    }
+    fail("Something went wrong while handling that action.", toError(error))
   }
+}
+
+/** `route`, if it is a screen that lists the failures of what it started. */
+function failureScreenOf(route: Panel | undefined): FailureScreen | undefined {
+  return route?.type === "CourseDetails" || route?.type === "ExerciseSubmission"
+    ? { id: route.id, type: route.type }
+    : undefined
 }
 
 function reply(

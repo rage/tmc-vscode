@@ -163,6 +163,8 @@ interface MoocMockState {
   expireNextUpload: boolean
   /** One-shot per entry: the next call to this operationId answers with this status. */
   failNextByOperation: Map<string, number>
+  /** One-shot: the next exercise archive download fails, this late. */
+  failNextArchive: { delayMs: number } | undefined
   // The integration mock runs in a separate process from the test, so the two
   // members below record the most recent authenticated request's `Authorization`
   // header and a count, surfaced via `GET /mooc-mock/auth-state`, to let a test
@@ -230,6 +232,7 @@ const createMoocMockState = (baseUrl: string): MoocMockState => ({
   uploadBytesByStoredName: new Map(),
   expireNextUpload: false,
   failNextByOperation: new Map(),
+  failNextArchive: undefined,
   lastAuthorization: undefined,
   authenticatedRequestCount: 0,
   oauth: createMoocOAuthState(),
@@ -287,6 +290,11 @@ export interface MoocMockControls {
    * it could not be armed, or undefined once armed.
    */
   failNext: (operationId: string, status: number) => FailNextRejection | undefined
+  /**
+   * Arms a one-shot failure of the next exercise archive download, which answers 500 after
+   * `delayMs`: the archive route is outside the client API, so {@link failNext} cannot reach it.
+   */
+  failNextArchive: (delayMs?: number) => void
   /**
    * Seeds a submission the host has no files for, so its download is an empty list.
    * Only an exercise type with no files at all is like this, and a submit through the
@@ -448,6 +456,7 @@ const createMoocMockControls = (
     state.uploadBytesByStoredName.clear()
     state.expireNextUpload = false
     state.failNextByOperation.clear()
+    state.failNextArchive = undefined
     state.lastAuthorization = undefined
     state.authenticatedRequestCount = 0
     state.oauth.reset()
@@ -480,6 +489,9 @@ const createMoocMockControls = (
     }
     state.failNextByOperation.set(operationId, status)
     return undefined
+  },
+  failNextArchive: (delayMs = 0) => {
+    state.failNextArchive = { delayMs }
   },
   seedFilelessSubmission: (exerciseId) => {
     if (!state.fixtures.exerciseById.has(exerciseId)) {
@@ -1845,6 +1857,12 @@ export const registerMoocRoutes = (
 
   // Spec-exempt archive route (see doc comment above).
   app.get("/mooc-archives/:archive", (req, res, next) => {
+    const fault = state.failNextArchive
+    if (fault) {
+      state.failNextArchive = undefined
+      setTimeout(() => res.status(500).send("injected archive fault"), fault.delayMs)
+      return
+    }
     const archive = req.params.archive.replace(/\.tar\.zst$/, "")
     const exercise = state.fixtures.exerciseByArchiveSlug.get(archive)
     if (!exercise || !fs.existsSync(exercise.sourceDir)) {
@@ -2079,6 +2097,16 @@ export const registerMoocRoutes = (
   // outside this process can reach no error the fixtures do not already
   // produce -- a 5xx above all, which is what the client's retry and
   // error-reporting paths are written for.
+  app.post("/mooc-mock/fail-next-archive", json, (req, res) => {
+    const { delayMs } = (req.body ?? {}) as { delayMs?: unknown }
+    if (delayMs !== undefined && typeof delayMs !== "number") {
+      res.status(400).json({ error: "delayMs must be a number" })
+      return
+    }
+    controls.failNextArchive(delayMs)
+    res.status(204).end()
+  })
+
   app.post("/mooc-mock/fail-next", json, (req, res) => {
     const { operationId, status } = (req.body ?? {}) as {
       operationId?: unknown

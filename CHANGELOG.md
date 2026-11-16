@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- A failed action in Course Details or the results screen, such as a download, shows in that screen until dismissed instead of in a notification. While the screen is out of sight a notification says so too, and the screen shows the failure when you return to it.
 - Error notifications and the error notices in screens offer Show Details instead of Show Logs and inline details: a screen with the error, its causes and the recent log, with Copy Details, Show Logs and the error's own remedy. Show Help for the TestMyCode tools no longer claims the extension failed to start.
 - Every notification goes through one place, and a test pins how many each part of the extension shows, so a new one is a deliberate choice.
 - Logging in shows a login screen instead of a notification: your code in large type with Copy, and Open courses.mooc.fi, which opens the page where you approve it. The screen counts down until the code expires and says when the login is denied, the code expires or courses.mooc.fi cannot be reached or fails, with Try Again. Cancel or closing the screen stops the login. A login with no course added goes on to the add-course screen.

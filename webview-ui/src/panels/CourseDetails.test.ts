@@ -822,3 +822,25 @@ suite("the course home", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("The server did not answer.")
   })
 })
+
+suite("CourseDetails action failures", () => {
+  test("keeps a failure the host resends before the course arrives, below the notices", async () => {
+    const panel = tmcPanel()
+    render(CourseDetails, { props: { panel } })
+    dispatch({
+      type: "operationFailed",
+      target: { id: panel.id, type: panel.type },
+      failure: {
+        serial: 7,
+        tone: "error",
+        title: "Failed to download the exercises.",
+        error: { message: "tmc.mooc.fi returned an error (500)." },
+      },
+    })
+    sendView(panel, courseHomeView({ title: "Python Course" }))
+
+    const alert = await screen.findByRole("alert")
+    expect(alert).toHaveTextContent("Failed to download the exercises.")
+    expect(screen.getByRole("heading", { level: 1, name: "Python Course" })).toBeInTheDocument()
+  })
+})

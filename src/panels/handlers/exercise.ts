@@ -9,10 +9,11 @@ import type {
 } from "../../../shared/lib"
 import { LocalCourseData } from "../../../shared/lib"
 import * as actions from "../../actions"
-import { reportWarnings, withOperation } from "../../api/withOperation"
+import { reportFailureIn, withOperation } from "../../api/withOperation"
 import { Logger } from "../../utilities"
 import { restoreSubmission } from "../restoreSubmission"
 import type { HandlerMap, PanelHost } from "../router"
+import { screenFailureSink } from "../screenFailures"
 
 const EXERCISE_ACTION_COMMANDS = {
   runTests: "tmc.testExercise",
@@ -88,14 +89,18 @@ export const exerciseHandlers = {
   keepWaitingForGrading: {
     requiresReady: true,
     async handle(message, { host, actionContext }): Promise<Result<undefined, Error>> {
-      if (!shownExercisePanel(host, message.sourcePanel.id)) {
+      const shown = shownExercisePanel(host, message.sourcePanel.id)
+      if (!shown) {
         return Err(new Error("This submission is no longer shown."))
       }
       const waited = await actions.keepWaitingForGrading(actionContext, message.sourcePanel.id)
       if (waited.err) {
         return waited
       }
-      reportWarnings(actionContext.dialog, waited.val.warnings)
+      const shownIn = screenFailureSink(host, shown)
+      for (const { headline, error } of waited.val.warnings) {
+        reportFailureIn(actionContext.dialog, shownIn, headline, error)
+      }
       return Ok(undefined)
     },
   },
@@ -121,21 +126,27 @@ export const exerciseHandlers = {
     requiresReady: true,
     async handle(message, { host, actionContext }): Promise<void> {
       const shown = shownExercisePanel(host, message.sourcePanel.id)
-      if (shown && message.action === "openExercise") {
+      if (!shown) {
+        Logger.warn("Ignoring an exercise action from a panel that is no longer shown")
+        return
+      }
+      const { dialog } = actionContext
+      const shownIn = screenFailureSink(host, shown)
+      if (message.action === "openExercise") {
         const stored = actionContext.startup.userData.getExercise(shown.exerciseId)
         if (stored.err) {
-          void actionContext.dialog.errorNotification("This exercise is no longer in its course.")
+          reportFailureIn(dialog, shownIn, "This exercise is no longer in its course.")
           return
         }
         const courseId = LocalCourseData.getCourseId(stored.val.course)
-        await withOperation(actionContext.dialog, { failure: "Failed to open the exercise." }, () =>
+        await withOperation(dialog, { failure: "Failed to open the exercise.", shownIn }, () =>
           actions.downloadAndOpenExercises(actionContext, [shown.exerciseId], courseId),
         )
         return
       }
-      const exercise = shown && actionContext.startup.workspaceManager.getExercise(shown.exerciseId)
-      if (!exercise || message.action === "openExercise") {
-        void actionContext.dialog.errorNotification("This exercise is no longer downloaded.")
+      const exercise = actionContext.startup.workspaceManager.getExercise(shown.exerciseId)
+      if (!exercise) {
+        reportFailureIn(dialog, shownIn, "This exercise is no longer downloaded.")
         return
       }
       if (message.action === "openNextExercise") {

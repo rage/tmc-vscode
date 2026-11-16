@@ -193,9 +193,24 @@ export class TmcPanel {
     // A `reply` is left out: the reloaded webview asks again, and a replayed answer to the
     // request of a page that no longer exists settles nothing.
     if (message.type !== "reply" && message.target.id === this._route?.id) {
-      this._messageBuffer.set(`${message.target.id}:${message.type}`, message)
+      // Each failure is resent, not only the latest: a reloaded screen lists them all.
+      const key =
+        message.type === "operationFailed"
+          ? `${message.target.id}:${message.type}:${message.failure.serial}`
+          : `${message.target.id}:${message.type}`
+      this._messageBuffer.set(key, message)
+      this._dropOldestFailures()
     }
     this._postTransient(message)
+  }
+
+  private _dropOldestFailures(): void {
+    const failures = [...this._messageBuffer].filter(
+      ([, buffered]) => buffered.type === "operationFailed",
+    )
+    for (const [key] of failures.slice(0, -FAILURES_RESENT)) {
+      this._messageBuffer.delete(key)
+    }
   }
 
   private _postTransient(message: PanelMessage): void {
@@ -421,10 +436,14 @@ export class TmcPanel {
 
   private _createHost(extensionContext: vscode.ExtensionContext): PanelHost {
     const currentRoute = (): Panel | undefined => this._route
+    const isVisible = (): boolean => !this._isDisposed && this._panel.visible
     return {
       name: this._webviewName,
       get route() {
         return currentRoute()
+      },
+      get isVisible() {
+        return isVisible()
       },
       post: (message) => this._postMessage(message),
       closeSidePanel: () => TmcPanel.sidePanel?.dispose(),
@@ -584,6 +603,9 @@ async function offerSubmissionOutcome(
     show(panel)
   }
 }
+
+/** How many of a screen's failures a reloaded webview is sent again, the latest. */
+const FAILURES_RESENT = 5
 
 function webviewOptions(extensionUri: Uri): WebviewOptions {
   return {

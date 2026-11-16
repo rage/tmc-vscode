@@ -39,6 +39,7 @@ function host(route: Panel | undefined = SHOWN): PanelHost {
   return {
     name: "Main webview",
     route,
+    isVisible: true,
     post: vi.fn(),
     closeSidePanel: vi.fn(),
     showBeside: vi.fn(),
@@ -69,11 +70,13 @@ async function exerciseAction(
   exerciseId: ExerciseIdentifier,
   action: "open" | "download" | "reset" | "downloadOldSubmission",
   shown: Panel | undefined = SHOWN,
-): Promise<void> {
+): Promise<PanelHost> {
+  const shownHost = host(shown)
   await courseDetailsHandlers.courseExerciseAction.handle(
     { type: "courseExerciseAction", sourcePanel: SOURCE, exerciseId, action },
-    { host: host(shown), actionContext },
+    { host: shownHost, actionContext },
   )
+  return shownHost
 }
 
 async function courseAction(
@@ -105,6 +108,7 @@ suite("the course home's exercise actions", function () {
       COURSE,
       [idOfTmcExercise(1)],
       "coursesView",
+      expect.objectContaining({ isVisible: expect.any(Function) }),
     )
   })
 
@@ -143,14 +147,42 @@ suite("the course home's exercise actions", function () {
     expect(openCourseExercises).not.toHaveBeenCalled()
   })
 
-  test("says so when a reset targets an exercise no longer on disk", async function () {
+  test("says so in the screen when a reset targets an exercise no longer on disk", async function () {
     const actionContext = context()
 
-    await exerciseAction(actionContext, idOfTmcExercise(2), "reset")
+    const shownHost = await exerciseAction(actionContext, idOfTmcExercise(2), "reset")
 
-    expect(actionContext.dialog.errorNotification).toHaveBeenCalledExactlyOnceWith(
-      "This exercise is not downloaded.",
+    expect(shownHost.post).toHaveBeenCalledExactlyOnceWith({
+      type: "operationFailed",
+      target: SOURCE,
+      failure: {
+        serial: expect.any(Number),
+        tone: "error",
+        error: { message: "This exercise is not downloaded." },
+      },
+    })
+    expect(actionContext.dialog.errorNotification).not.toHaveBeenCalled()
+  })
+
+  test("a download that fails says so in the screen, not in a notification", async function () {
+    const actionContext = context()
+    vi.mocked(actions.downloadCourseExercises).mockResolvedValueOnce(
+      Err(new Error("the CLI exited with 1")),
     )
+
+    const shownHost = await exerciseAction(actionContext, idOfTmcExercise(2), "download")
+
+    expect(shownHost.post).toHaveBeenCalledExactlyOnceWith({
+      type: "operationFailed",
+      target: SOURCE,
+      failure: {
+        serial: expect.any(Number),
+        tone: "error",
+        title: "Failed to download the exercise.",
+        error: { message: "The CLI exited with 1.", detailsId: expect.any(String) },
+      },
+    })
+    expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
   })
 })
 

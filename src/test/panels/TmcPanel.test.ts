@@ -124,7 +124,7 @@ suite("TmcPanel initialization guards", () => {
     })
   })
 
-  test("a data request that throws is still answered, and reported as the bug it is", async () => {
+  test("a data request that throws is answered with why, and notified nowhere else", async () => {
     const actionContext = createMockActionContext({
       startup: {
         userData: storedCourses(() => {
@@ -144,10 +144,7 @@ suite("TmcPanel initialization guards", () => {
     expect(replyTo(panel, 1)).toMatchObject({
       outcome: { ok: false, error: { message: "Storage exploded." } },
     })
-    expect(actionContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Something went wrong while handling that action.",
-      expect.objectContaining({ message: "storage exploded" }),
-    )
+    expectNoNotification(actionContext)
   })
 
   test("a request served from stored data is answered without an error", async () => {
@@ -491,8 +488,61 @@ suite("TmcPanel handler dispatch", () => {
       ["tmc.submitExercise", exerciseUri],
       ["tmc.openNextExercise", exerciseUri],
     ])
+    expectNoNotification(actionContext)
+  })
+
+  test("an exercise action on an exercise gone from disk says so in the screen", async () => {
+    stubHandlers()
+    const shown = exerciseSubmissionPanel()
+    const actionContext = createMockActionContext()
+    const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
+
+    await listener({ type: "exerciseAction", sourcePanel: targetOf(shown), action: "runTests" })
+
+    expect(postedMessages(panel)).toEqual([
+      {
+        type: "operationFailed",
+        target: targetOf(shown),
+        failure: {
+          serial: expect.any(Number),
+          tone: "error",
+          error: { message: "This exercise is no longer downloaded." },
+        },
+      },
+    ])
+    expectNoNotification(actionContext)
+  })
+
+  test("a failure in a hidden screen is notified, and shown once the screen is back", async () => {
+    stubHandlers()
+    TmcPanel.sidePanel?.dispose()
+    const fake = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(fake.panel)
+    const shown = exerciseSubmissionPanel()
+    const actionContext = createMockActionContext()
+    TmcPanel.renderSide(createMockContext(), actionContext, shown)
+    await fake.sendReady()
+    fake.hide()
+
+    await fake.getMessageListener()({
+      type: "exerciseAction",
+      sourcePanel: targetOf(shown),
+      action: "runTests",
+    })
+
     expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
       "This exercise is no longer downloaded.",
+      expect.any(Error),
+    )
+    vi.mocked(fake.panel.webview.postMessage).mockClear()
+    await fake.reveal()
+    expect(postedMessages(fake.panel)).toContainEqual(
+      expect.objectContaining({
+        type: "operationFailed",
+        failure: expect.objectContaining({
+          error: { message: "This exercise is no longer downloaded." },
+        }),
+      }),
     )
   })
 

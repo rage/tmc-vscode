@@ -198,6 +198,19 @@ export const WebviewErrorSchema = z.object({
 
 export type WebviewError = z.infer<typeof WebviewErrorSchema>
 
+/** A failure of something a screen started, shown on that screen until dismissed. */
+export const ScreenFailureSchema = z.object({
+  /** Tells this failure apart from one reported earlier, for a dismissal across reloads. */
+  serial: z.number(),
+  /** What was being done, e.g. "Failed to download the exercises."; absent for a refusal. */
+  title: z.string().optional(),
+  /** `warning` for an action held back rather than failed. */
+  tone: z.enum(["error", "warning"]),
+  error: WebviewErrorSchema,
+})
+
+export type ScreenFailure = z.infer<typeof ScreenFailureSchema>
+
 /** Why a login failed, as far as the login screen words it differently. */
 const LoginFailureSchema = z.enum(["denied", "expired", "unreachable", "serverError", "other"])
 
@@ -402,6 +415,12 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     section: ExerciseSectionSchema,
     serial: z.number(),
     shouldPaste: z.boolean(),
+  }),
+  // An action the screen started failed, or one of its buttons could not run.
+  z.object({
+    type: z.literal("operationFailed"),
+    target: targetPanelSchema("CourseDetails", "ExerciseSubmission"),
+    failure: ScreenFailureSchema,
   }),
   // The login a Login panel shows, whenever it moves on.
   z.object({

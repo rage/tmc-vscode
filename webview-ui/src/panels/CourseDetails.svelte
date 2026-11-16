@@ -24,9 +24,11 @@
   import ErrorNotice from "../components/ErrorNotice.svelte"
   import Meter from "../components/Meter.svelte"
   import PanelHeader from "../components/PanelHeader.svelte"
+  import ScreenFailures from "../components/ScreenFailures.svelte"
   import Spinner from "../components/Spinner.svelte"
   import ToolbarButton from "../components/ToolbarButton.svelte"
   import { announce, reducedMotion } from "../utilities/a11y.svelte"
+  import { listenForFailures } from "../utilities/screenFailures.svelte"
   import { addMessageListener, createRequester, HOST_STATE_TIMEOUT_MS } from "../utilities/script"
   import { restoreScroll, uiState } from "../utilities/uiState.svelte"
   import { vscode } from "../utilities/vscode"
@@ -90,8 +92,11 @@
   // Its id and type are all the listener filters on, and they never change: a new panel remounts.
   const listeningPanel = untrack(() => panel)
   addMessageListener(listeningPanel, (message) => {
-    view = message.view
+    if (message.type === "setCourseHomeView") {
+      view = message.view
+    }
   })
+  const screenFailures = listenForFailures(listeningPanel)
 
   async function refresh() {
     if (refreshing) {
@@ -406,6 +411,7 @@
     <ActionBar primary={bar.primary} secondary={bar.secondary} />
 
     <CourseNotices {notices} />
+    <ScreenFailures failures={screenFailures} />
     {#if refreshError}
       <ErrorNotice
         error={refreshError}

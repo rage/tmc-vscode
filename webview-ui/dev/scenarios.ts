@@ -626,6 +626,38 @@ export const SCENARIOS: Scenario[] = [
     panel: courseDetailsPanel(7, makeTmcKind({ courseId: 42 })),
     reply: answerCourseDetails({ id: 7 }, restrictedCourse),
   },
+  {
+    id: "course-details/action-failed",
+    panel: courseDetailsPanel(8, makeTmcKind({ courseId: 42 })),
+    reply: answerCourseDetails({ id: 8 }, tmcCourse),
+    pushes: [
+      {
+        type: "operationFailed",
+        target: { id: 8, type: "CourseDetails" },
+        failure: {
+          serial: 1,
+          tone: "error",
+          title: "Failed to download the exercises.",
+          error: {
+            message: "tmc.mooc.fi returned an error (500). Try again later.",
+            detailsId: "download-failure",
+          },
+        },
+      },
+      {
+        type: "operationFailed",
+        target: { id: 8, type: "CourseDetails" },
+        failure: {
+          serial: 2,
+          tone: "warning",
+          error: {
+            message:
+              "You have over 50 exercises open, which can slow VS Code down. Close the ones you have finished.",
+          },
+        },
+      },
+    ],
+  },
   // Never answered, so the panel shows its loading state until the request times out.
   { id: "course-details/loading", panel: courseDetailsPanel(5, makeTmcKind({ courseId: 42 })) },
   {
@@ -904,6 +936,25 @@ export const SCENARIOS: Scenario[] = [
           3,
         ),
       ),
+    ],
+  },
+  {
+    id: "exercise-submission/action-failed",
+    panel: submissionPanel,
+    pushes: [
+      submissionViewMessage(
+        submissionPanel.id,
+        tmcResultView(submissionFinished({ points: ["1.3", "1.4"] }), [], 2),
+      ),
+      {
+        type: "operationFailed",
+        target: { id: submissionPanel.id, type: "ExerciseSubmission" },
+        failure: {
+          serial: 3,
+          tone: "error",
+          error: { message: "This exercise is no longer downloaded." },
+        },
+      },
     ],
   },
   {

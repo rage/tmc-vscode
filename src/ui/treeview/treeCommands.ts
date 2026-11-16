@@ -14,6 +14,7 @@ import {
 } from "../../actions"
 import type { DownloadProgressPlace } from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
+import type { FailureSink } from "../../api/withOperation"
 import { withOperation } from "../../api/withOperation"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { downloadUpdates } from "../../commands/updateExercises"
@@ -92,26 +93,35 @@ export async function openExercises(
  * course then has too many open.
  *
  * @param progressPlace See `DownloadProgressPlace`.
+ * @param shownIn The screen the student opened them from, which shows the failure and the warning.
  */
 export async function openCourseExercises(
   actionContext: ReadyActionContext,
   courseId: CourseIdentifier,
   ids: ExerciseIdentifier[],
   progressPlace?: DownloadProgressPlace,
+  shownIn?: FailureSink,
 ): Promise<void> {
   const { dialog } = actionContext
-  const opened = await withOperation(dialog, { failure: "Failed to open the exercises." }, () =>
-    downloadAndOpenExercises(actionContext, ids, courseId, progressPlace),
-  )
+  const failure = "Failed to open the exercises."
+  const open = (): ReturnType<typeof downloadAndOpenExercises> =>
+    downloadAndOpenExercises(actionContext, ids, courseId, progressPlace)
+  const opened = await (shownIn
+    ? withOperation(dialog, { failure, shownIn }, open)
+    : withOperation(dialog, { failure }, open))
   const openLimit = opened.ok ? opened.val.exceededOpenLimit : undefined
-  if (openLimit !== undefined) {
-    void dialog.warningNotification(
-      `You have over ${openLimit} exercises open, which can slow VS Code down. Close the ones you have finished.`,
-      [
-        "Close Completed Exercises",
-        (): void => void closeCompletedExercises(actionContext, courseId),
-      ],
-    )
+  if (openLimit === undefined) {
+    return
+  }
+  const tooMany = `You have over ${openLimit} exercises open, which can slow VS Code down. Close the ones you have finished.`
+  if (shownIn?.isVisible()) {
+    // The course home offers Close Completed Exercises itself.
+    shownIn.show(tooMany, undefined, "warning")
+  } else {
+    void dialog.warningNotification(tooMany, [
+      "Close Completed Exercises",
+      (): void => void closeCompletedExercises(actionContext, courseId),
+    ])
   }
 }
 
