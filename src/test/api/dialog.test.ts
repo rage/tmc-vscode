@@ -252,6 +252,25 @@ suite("Dialog.errorNotification with an error", function () {
   })
 })
 
+suite("Dialog.offer", function () {
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("resolves true when its one button is pressed", async function () {
+    const show = stubMessage("showInformationMessage", (actions) => actions[0])
+
+    expect(await new Dialog().offer("Trusted now. Submit?", "Submit")).toBe(true)
+    expect(buttonTitles(show)).toEqual(["Submit"])
+  })
+
+  test("resolves false when the notification is dismissed", async function () {
+    stubMessage("showInformationMessage", () => undefined)
+
+    expect(await new Dialog().offer("Trusted now. Submit?", "Submit")).toBe(false)
+  })
+})
+
 function tmcCourse(id: number, name: string, title: string): LocalCourseData {
   return makeTmcKind({ id, name, title } as SharedTmcCourseData)
 }

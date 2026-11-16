@@ -313,6 +313,29 @@
       }
     },
     {
+      "files": [
+        "src/*.ts",
+        "src/{actions,api,commands,config,init,panels,storage,testing,ui,utilities,window}/**/*.ts"
+      ],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "property": "showInformationMessage",
+            "message": "Notifications go through Dialog in src/api/dialog.ts, which the notification budget counts."
+          },
+          {
+            "property": "showWarningMessage",
+            "message": "Notifications go through Dialog in src/api/dialog.ts, which the notification budget counts."
+          },
+          {
+            "property": "showErrorMessage",
+            "message": "Notifications go through Dialog in src/api/dialog.ts, which the notification budget counts."
+          }
+        ]
+      }
+    },
+    {
       "files": ["src/commands/**/*"],
       "rules": {
         "no-restricted-imports": [
@@ -331,6 +354,18 @@
           {
             "property": "langs",
             "message": "Commands resolve arguments, prompt and report; the CLI call belongs in an operation in src/actions."
+          },
+          {
+            "property": "showInformationMessage",
+            "message": "Notifications go through Dialog in src/api/dialog.ts, which the notification budget counts."
+          },
+          {
+            "property": "showWarningMessage",
+            "message": "Notifications go through Dialog in src/api/dialog.ts, which the notification budget counts."
+          },
+          {
+            "property": "showErrorMessage",
+            "message": "Notifications go through Dialog in src/api/dialog.ts, which the notification budget counts."
           }
         ]
       }
@@ -380,6 +415,18 @@
             "object": "vscode",
             "property": "window",
             "message": "Operations never talk to the user. Return the outcome; the entry point shows it."
+          },
+          {
+            "property": "showInformationMessage",
+            "message": "Notifications go through Dialog in src/api/dialog.ts, which the notification budget counts."
+          },
+          {
+            "property": "showWarningMessage",
+            "message": "Notifications go through Dialog in src/api/dialog.ts, which the notification budget counts."
+          },
+          {
+            "property": "showErrorMessage",
+            "message": "Notifications go through Dialog in src/api/dialog.ts, which the notification budget counts."
           }
         ]
       }
@@ -398,6 +445,12 @@
             ]
           }
         ]
+      }
+    },
+    {
+      "files": ["src/api/dialog.ts"],
+      "rules": {
+        "no-restricted-properties": "off"
       }
     }
   ]

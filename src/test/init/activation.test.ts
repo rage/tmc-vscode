@@ -231,7 +231,7 @@ vi.mock("../../api/aiRestriction", async (importOriginal) => ({
 }))
 
 vi.mock("../../api/workspaceTrustPrompt", () => ({
-  promptForCourseWorkspaceTrust: async (courseTitle: string): Promise<void> => {
+  promptForCourseWorkspaceTrust: async (_dialog: unknown, courseTitle: string): Promise<void> => {
     trustPrompts.push(courseTitle)
   },
   requestWorkspaceTrust: async (): Promise<void> => {},
@@ -473,7 +473,7 @@ suite("activation that throws", function () {
     expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(true)
     expect(showErrorMessage).toHaveBeenCalledExactlyOnceWith(
       "TestMyCode could not start. boom",
-      "Show Logs",
+      expect.objectContaining({ title: "Show Logs" }),
     )
     expect(Logger.show).not.toHaveBeenCalled()
   })

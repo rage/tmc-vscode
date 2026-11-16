@@ -4,7 +4,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { backendName, LocalCourseData } from "../shared/lib"
+import { backendName, LocalCourseData, toError } from "../shared/lib"
 import { onDidFinishSubmission, refreshLocalExercises, scanLocalExercises } from "./actions"
 import type {
   ActionContext,
@@ -183,10 +183,8 @@ async function activateFully(context: vscode.ExtensionContext): Promise<void> {
     if (!startupContext.isApplied) {
       void vscode.commands.executeCommand("setContext", "test-my-code:Degraded", true)
     }
-    const message = e instanceof Error ? e.message : String(e)
-    void vscode.window
-      .showErrorMessage(`TestMyCode could not start. ${message}`, "Show Logs")
-      .then((picked) => picked && Logger.show())
+    const error = toError(e)
+    void new Dialog().errorNotification(`TestMyCode could not start. ${error.message}`, error)
   }
 }
 
@@ -442,7 +440,10 @@ async function activateInner(
   // The window that switched here has just offered whatever the startup refresh would.
   const openingSwitch = await courseWorkspaceSwitches.take(vscode.workspace.workspaceFile?.fsPath)
   const isOpenedBySwitch = openingSwitch !== undefined
-  const trustGate = new WorkspaceTrustGate()
+  const trustGate = new WorkspaceTrustGate(
+    ({ message, action }) => dialog.offer(message, action),
+    (message) => void dialog.notification(message),
+  )
   context.subscriptions.push(trustGate)
   const startup: Startup =
     langs.ok && resources.ok && workspaceManager && userData?.ok && exerciseDecorationProvider
@@ -478,6 +479,7 @@ async function activateInner(
     if (isRestrictedCourseWorkspace && activeCourseBackend !== undefined) {
       const course = ready.userData.getCourseBySlug(activeCourseBackend, activeCourse)
       void promptForCourseWorkspaceTrust(
+        readyContext.dialog,
         course.ok ? LocalCourseData.getCourseTitle(course.val) : activeCourse,
         context.workspaceState,
       )

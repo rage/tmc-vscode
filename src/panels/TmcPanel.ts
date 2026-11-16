@@ -126,7 +126,7 @@ export class TmcPanel {
         } else if (shouldReopen && sidePanel === undefined) {
           show(panel)
         } else if (shouldReopen) {
-          void offerSubmissionOutcome(panel, view, show)
+          void offerSubmissionOutcome(actionContext, panel, view, show)
         }
       }),
       ...(isReady(actionContext)
@@ -547,21 +547,20 @@ function submissionViewMessage(
 
 /** Offers to show the outcome of a submission the side panel is not showing. */
 async function offerSubmissionOutcome(
+  { dialog }: ActionContext,
   panel: ExerciseSubmissionPanel,
   view: SubmissionView,
   show: (panel: ExerciseSubmissionPanel) => void,
 ): Promise<void> {
-  const choice = await window.showInformationMessage(
+  const isShowRequested = await dialog.offer(
     `Submission of ${panel.exerciseName}: ${view.headline}`,
-    SHOW_SUBMISSION,
+    "Show Result",
   )
   // A later submission of the exercise supersedes this one.
-  if (choice === SHOW_SUBMISSION && submissionViews.latestView(panel.id) !== undefined) {
+  if (isShowRequested && submissionViews.latestView(panel.id) !== undefined) {
     show(panel)
   }
 }
-
-const SHOW_SUBMISSION = "Show Result"
 
 function webviewOptions(extensionUri: Uri): WebviewOptions {
   return {

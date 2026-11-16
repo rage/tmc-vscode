@@ -205,6 +205,17 @@ export default class Dialog {
   }
 
   /**
+   * Offers one action in an information notification.
+   *
+   * @returns Whether the user pressed `action`; dismissing the notification says no.
+   */
+  public async offer(message: string, action: string): Promise<boolean> {
+    let isPressed = false
+    await this.notification(message, [action, (): void => void (isPressed = true)])
+    return isPressed
+  }
+
+  /**
    * Shows a progress notification to the user.
    *
    * @param message A prompt to be displayed to the user.

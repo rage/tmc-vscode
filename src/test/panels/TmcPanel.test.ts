@@ -1669,26 +1669,27 @@ suite("TmcPanel side panel placement", () => {
   test("offers a background submission's outcome instead of leaving the shown one", async () => {
     const { panel, sendReady } = createFakeWebviewPanel()
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
-    const subscription = TmcPanel.showSubmissionViews(createMockContext(), submissionContext())
+    const actionContext = submissionContext()
+    const subscription = TmcPanel.showSubmissionViews(createMockContext(), actionContext)
     onTestFinished(() => subscription.dispose())
     const shown = exerciseSubmissionPanel()
     const background = { ...exerciseSubmissionPanel(), exerciseName: "part01-02_other" }
     submissionViews.open(shown)
     await sendReady()
-    const offered = Promise.withResolvers<string | undefined>()
-    vi.mocked(vscode.window.showInformationMessage).mockReturnValueOnce(offered.promise as never)
+    const offered = Promise.withResolvers<boolean>()
+    vi.mocked(actionContext.dialog.offer).mockReturnValueOnce(offered.promise)
     vi.mocked(panel.webview.postMessage).mockClear()
     const graded = submissionViewFor(background, "Exercise graded")
 
     submissionViews.update({ panel: background, view: graded.view, shouldReopen: true })
 
-    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+    expect(actionContext.dialog.offer).toHaveBeenCalledWith(
       "Submission of part01-02_other: Exercise graded",
       "Show Result",
     )
     expect(panel.webview.postMessage).not.toHaveBeenCalled()
 
-    offered.resolve("Show Result")
+    offered.resolve(true)
     await vi.waitFor(() =>
       expect(postedMessages(panel)).toEqual([
         expect.objectContaining({ type: "setPanel", panel: background }),
