@@ -3,7 +3,7 @@ import { vi } from "vitest"
 
 import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../../../shared/langsSchema"
 import type { ExerciseSubmissionPanel, FeedbackQuestion, SubmissionView } from "../../../shared/lib"
-import { BaseError, makeMoocKind, makeTmcKind } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import {
   gradingUnavailableView,
   inProgressView,
@@ -13,7 +13,6 @@ import {
   testedLocallyView,
   tmcResultView,
 } from "../../../src/panels/submissionView"
-import { toWebviewError } from "../../../src/panels/webviewError"
 import { moocGrading, submissionFinished, submissionViewMessage } from "../test/fixtures"
 import { dispatchToWebview, postedMessages, reloadDocument, replyToRequest } from "../test/setup"
 import { withinShadowRoot } from "../test/shadow"
@@ -193,14 +192,13 @@ suite("ExerciseSubmission panel (in progress)", () => {
 suite("ExerciseSubmission panel (failures)", () => {
   test("replaces the progress with the failure and offers to submit again", async () => {
     render(ExerciseSubmission, { props: { panel } })
-    showView(
-      panel.id,
-      submitFailedView(toWebviewError(new BaseError("Failed to submit", "ECONNRESET"))),
-    )
+    showView(panel.id, submitFailedView({ message: "Failed to submit.", detailsId: "submit" }))
 
     expect(await screen.findByRole("heading", { name: "Submission failed" })).toBeInTheDocument()
-    expect(screen.getByRole("alert")).toHaveTextContent("Failed to submit")
-    expect(screen.getByRole("alert")).toHaveTextContent("ECONNRESET")
+    expect(screen.getByRole("alert")).toHaveTextContent("Failed to submit.")
+    postedMessages.mockClear()
+    await fireEvent.click(screen.getByRole("button", { name: "Show Details" }))
+    expect(postedMessages).toHaveBeenCalledWith({ type: "showErrorDetails", detailsId: "submit" })
     expect(document.querySelector("vscode-progress-bar")).toBeNull()
     expect(screen.queryByText("Run in Background")).not.toBeInTheDocument()
     expect(isSecondary(screen.getByRole("button", { name: "Submit Again" }))).toBe(false)
@@ -226,13 +224,15 @@ suite("ExerciseSubmission panel (failures)", () => {
     })
   })
 
-  test("announces whether the host managed to copy the error details", async () => {
+  test("announces whether the host managed to copy the server's output", async () => {
     vi.useFakeTimers()
     try {
       render(ExerciseSubmission, { props: { panel } })
-      showView(panel.id, submitFailedView({ message: "Failed", details: "ECONNRESET" }))
+      showTmcResult(
+        submissionFinished({ status: "error", all_tests_passed: null, error: "ECONNRESET" }),
+      )
       await vi.runAllTimersAsync()
-      const copy = await withinShadowRoot(screen.getByTitle("Copy Error details"))
+      const copy = await withinShadowRoot(screen.getByTitle("Copy Server output"))
       await fireEvent.click(copy.getByRole("button"))
       expect(postedMessages).toHaveBeenCalledWith({
         type: "copyToClipboard",
@@ -259,7 +259,7 @@ suite("ExerciseSubmission panel (failures)", () => {
     expect(
       await screen.findByRole("heading", { name: "The server could not process the submission" }),
     ).toBeInTheDocument()
-    expect(screen.getByRole("group", { name: "Error details" })).toHaveTextContent("Out of memory")
+    expect(screen.getByRole("group", { name: "Server output" })).toHaveTextContent("Out of memory")
   })
 })
 

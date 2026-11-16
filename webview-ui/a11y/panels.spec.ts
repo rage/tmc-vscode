@@ -191,7 +191,7 @@ for (const scenarioId of SCENARIO_IDS) {
 
 test("a disclosure reports the state it toggles to", async ({ context, page }) => {
   await serveHarness(context)
-  await page.goto(`${ORIGIN}/frame.html?scenario=initialization-error-help%2Ferrors`)
+  await page.goto(`${ORIGIN}/frame.html?scenario=error-help%2Fstartup`)
   const toggle = page.getByRole("button", { name: /^Stack trace of / })
   await expect(toggle).toHaveAttribute("aria-expanded", "false")
   await toggle.click()

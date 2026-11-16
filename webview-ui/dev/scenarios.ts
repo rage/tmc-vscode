@@ -556,6 +556,27 @@ function addCourseScenario(
   }
 }
 
+const LOG_TAIL = [
+  "[2026-10-01 08:58:10:120] [INFO] Downloading 1 exercise of Python Programming 2026",
+  "[2026-10-01 08:58:12:004] [ERROR] Failed to download the exercise. Server Error: tmc.mooc.fi " +
+    "returned 500 Internal Server Error",
+].join("\n")
+
+/** Answers the help screen's request for the log. */
+function answerLogTail(panelId: number): NonNullable<Scenario["reply"]> {
+  return (message) =>
+    message.type === "requestLogTail"
+      ? [
+          {
+            type: "reply",
+            target: { id: panelId, type: "ErrorHelp" },
+            requestId: message.requestId,
+            outcome: { ok: true, value: LOG_TAIL },
+          },
+        ]
+      : []
+}
+
 export const SCENARIOS: Scenario[] = [
   {
     id: "course-details/tmc",
@@ -891,7 +912,10 @@ export const SCENARIOS: Scenario[] = [
     pushes: [
       submissionViewMessage(
         submissionPanel.id,
-        submitFailedView({ message: "Submitting failed", details: "The server returned 500" }),
+        submitFailedView({
+          message: "tmc.mooc.fi returned an error (500). Try again later.",
+          detailsId: "submit-failure",
+        }),
       ),
     ],
   },
@@ -917,8 +941,7 @@ export const SCENARIOS: Scenario[] = [
     failure: "unreachable",
     error: {
       message: "Could not reach courses.mooc.fi. Check your internet connection.",
-      details: "Caused by: error sending request for url (https://courses.mooc.fi/api/v0/…)",
-      actions: [{ label: "Show Logs", command: "tmc.logs" }],
+      detailsId: "login-failure",
     },
   }),
   addCourseScenario("loading", {}),
@@ -956,21 +979,70 @@ export const SCENARIOS: Scenario[] = [
     },
   }),
   {
-    id: "initialization-error-help/errors",
+    id: "error-help/startup",
     panel: {
       id: 50,
-      type: "InitializationErrorHelp",
-      failures: [
-        {
-          service: "tmc-langs",
-          error: "Failed to download the TMC-langs CLI",
-          stack: "Error: ENOTFOUND",
-          hint:
-            "A proxy, firewall or antivirus program blocking network requests can cause this. " +
-            "Try adding an exception for the directory '/home/student/.local/share/tmc/cli'.",
-        },
-      ],
+      type: "ErrorHelp",
+      topic: {
+        kind: "startup",
+        failures: [
+          {
+            service: "tmc-langs",
+            error: "Failed to download the TMC-langs CLI",
+            stack: "Error: ENOTFOUND",
+            hint:
+              "A proxy, firewall or antivirus program blocking network requests can cause this. " +
+              "Try adding an exception for the directory '/home/student/.local/share/tmc/cli'.",
+          },
+        ],
+      },
     },
+    reply: answerLogTail(50),
+  },
+  {
+    id: "error-help/operation",
+    panel: {
+      id: 51,
+      type: "ErrorHelp",
+      topic: {
+        kind: "operation",
+        detailsId: "download-failure",
+        details: {
+          summary: "Failed to download the exercise. tmc.mooc.fi returned an error (500).",
+          actions: [],
+          causeChain:
+            "Server Error: tmc.mooc.fi returned 500 Internal Server Error\n" +
+            "GET https://tmc.mooc.fi/api/v8/core/exercises/1/download\n\n" +
+            "Caused by: Error: connection reset by peer",
+          occurredAt: "2026-10-01T08:58:12.000Z",
+        },
+      },
+    },
+    reply: answerLogTail(51),
+  },
+  {
+    id: "error-help/operation-cleared",
+    panel: {
+      id: 52,
+      type: "ErrorHelp",
+      topic: { kind: "operation", detailsId: "before-reload", details: null },
+    },
+    reply: answerLogTail(52),
+  },
+  {
+    id: "error-help/general",
+    panel: {
+      id: 53,
+      type: "ErrorHelp",
+      topic: {
+        kind: "general",
+        hint:
+          "An antivirus program can stop the TestMyCode tools from running, and a proxy or " +
+          "firewall can block their network requests. Try adding an exception for the directory " +
+          "'/home/student/.local/share/tmc/cli'.",
+      },
+    },
+    reply: answerLogTail(53),
   },
 ]
 

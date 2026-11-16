@@ -276,8 +276,7 @@ export interface ErrorPresentation {
  * Deliberately not the logger's formatter, which also appends the class name, `details` —
  * on a CLI failure that is the process's backtrace and the tail of its stderr — the `cause`
  * chain, and the stack. Those diagnose a failure rather than describe it, and a notification
- * is the one place they cannot be scrolled or copied. The logger still writes all of them to
- * the output channel, which the "Show Logs" button reveals.
+ * is the one place they cannot be scrolled or copied. Its Show Details screen has them all.
  */
 function userSentence(error: Error): string {
   const trimmed = error.message.trim() || error.name

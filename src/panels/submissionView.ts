@@ -180,10 +180,8 @@ export function tmcResultView(
         phase: "failed",
         headline: "The server could not process the submission",
         tone: "failed",
-        error: {
-          message: "Try submitting again.",
-          ...(result.error ? { details: result.error } : {}),
-        },
+        error: { message: "Try submitting again." },
+        ...(result.error ? { serverOutput: result.error } : {}),
       }
     case "processing":
       return {
@@ -226,7 +224,7 @@ export function moocGradingView(
     points: given === undefined ? undefined : { given, max: maxPoints },
     feedbackText: grading.feedback_text ?? undefined,
     testCases: grading.test_results?.test_results.map((result) => toTestCase(result)) ?? [],
-    error: testRunError(grading.test_results),
+    ...testRunFailure(grading.test_results),
   }
   const standing = grading.exercise_progress?.standing
   // A pass may come from an earlier submission; a short score is about this one.
@@ -304,7 +302,9 @@ function toTestCase({
 }
 
 /** Why the server's test run produced no test results, with the output that tells. */
-function testRunError(run: GradingTestRun | null): SubmissionView["error"] {
+function testRunFailure(
+  run: GradingTestRun | null,
+): Pick<SubmissionView, "error" | "serverOutput"> {
   const message =
     run?.status === "COMPILE_FAILED"
       ? "Your code did not compile on the server."
@@ -312,12 +312,12 @@ function testRunError(run: GradingTestRun | null): SubmissionView["error"] {
         ? "The tests could not be run on the server."
         : undefined
   if (message === undefined) {
-    return undefined
+    return {}
   }
   const output = Object.values(run?.logs ?? {})
     .filter((log) => log.trim() !== "")
     .join("\n\n")
-  return output === "" ? { message } : { message, details: output }
+  return output === "" ? { error: { message } } : { error: { message }, serverOutput: output }
 }
 
 function fullyGradedExplanation(

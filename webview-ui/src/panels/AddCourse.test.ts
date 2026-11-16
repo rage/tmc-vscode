@@ -187,13 +187,13 @@ suite("the add-course screen", () => {
     replyToRequest("requestMoocCatalog", { ok: true, value: MOOC_COURSES })
     replyToRequest("requestTmcOrganizations", {
       ok: false,
-      error: { message: "Could not reach tmc.mooc.fi.", details: "Caused by: connection refused" },
+      error: { message: "Could not reach tmc.mooc.fi.", detailsId: "tmc-listing" },
     })
 
     const tmc = section("tmc.mooc.fi")
     const alert = await within(tmc).findByRole("alert")
     expect(alert).toHaveTextContent("Could not list the tmc.mooc.fi organizations")
-    expect(alert).not.toHaveTextContent("connection refused")
+    expect(within(alert).getByRole("button", { name: "Show Details" })).toBeInTheDocument()
     expect(cardNames(within(section("courses.mooc.fi")).getByRole("list"))).toHaveLength(2)
     postedMessages.mockClear()
     await fireEvent.click(within(tmc).getByRole("button", { name: "Retry" }))

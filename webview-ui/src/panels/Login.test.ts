@@ -122,15 +122,14 @@ suite("the login screen", () => {
     },
   )
 
-  test("an unreachable server offers its logs, and the details behind a disclosure", async () => {
+  test("an unreachable server offers its details on the help screen", async () => {
     render(Login, { props: { panel: PANEL } })
     sendView({
       phase: "failed",
       failure: "unreachable",
       error: {
         message: "Could not reach courses.mooc.fi. Check your internet connection.",
-        details: "Caused by: dns error",
-        actions: [{ label: "Show Logs", command: "tmc.logs" }],
+        detailsId: "login-failure",
       },
     })
 
@@ -140,12 +139,11 @@ suite("the login screen", () => {
         name: "Connection failed",
       }),
     ).toBeInTheDocument()
-    await fireEvent.click(screen.getByRole("button", { name: "Show Logs" }))
-    expect(postedMessages).toHaveBeenCalledWith({ type: "runCommand", command: "tmc.logs" })
-    expect(screen.getByRole("button", { name: "Error details" })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    )
+    await fireEvent.click(screen.getByRole("button", { name: "Show Details" }))
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "showErrorDetails",
+      detailsId: "login-failure",
+    })
   })
 
   test.each([

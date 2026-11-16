@@ -86,12 +86,7 @@
   }
 
   function failed(error: WebviewError): Loadable<never> {
-    return { state: "failed", error: withoutDetails(error) }
-  }
-
-  // A listing's failure details are a CLI trace taller than the screen; the log keeps them.
-  function withoutDetails({ details: _details, ...error }: WebviewError): WebviewError {
-    return error
+    return { state: "failed", error }
   }
 
   onMount(() => {
@@ -126,7 +121,7 @@
     const outcome = await request("addCourse", { sourcePanel, key: course.key })
     addingKey = undefined
     if (!outcome.ok) {
-      addFailure = { key: course.key, error: withoutDetails(outcome.error) }
+      addFailure = { key: course.key, error: outcome.error }
     }
   }
 

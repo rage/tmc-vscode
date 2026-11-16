@@ -364,7 +364,7 @@ suite("login command", function () {
     expect(h.closed).toEqual([])
   })
 
-  test("shows an unreachable server on the screen with its logs, before any code arrives", async function () {
+  test("shows an unreachable server on the screen with its details, before any code arrives", async function () {
     const h = harness()
     const outcome = login(h.context)
     await settle()
@@ -377,7 +377,7 @@ suite("login command", function () {
       failure: "unreachable",
       error: {
         message: "Could not reach courses.mooc.fi. Check your internet connection.",
-        actions: [{ label: "Show Logs", command: "tmc.logs" }],
+        detailsId: expect.any(String),
       },
     })
     expect(h.context.dialog.errorNotification).not.toHaveBeenCalled()

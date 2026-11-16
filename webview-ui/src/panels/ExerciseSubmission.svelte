@@ -13,6 +13,7 @@
   import ActionBar from "../components/ActionBar.svelte"
   import type { MenuAction } from "../components/ActionMenu.svelte"
   import ActionMenu from "../components/ActionMenu.svelte"
+  import Button from "../components/Button.svelte"
   import CodeBlock from "../components/CodeBlock.svelte"
   import Disclosure from "../components/Disclosure.svelte"
   import ErrorNotice from "../components/ErrorNotice.svelte"
@@ -333,12 +334,18 @@
     <p class="feedback-text"><span class="muted">Grader feedback:</span> {view.feedbackText}</p>
   {/if}
   {#if view?.error}
+    {@const detailsId = view.error.detailsId}
     <div role="alert">
       <p>{view.error.message}</p>
-      {#if view.error.details}
-        <CodeBlock code={view.error.details} label="Error details" oncopy={copyToClipboard} />
-      {/if}
     </div>
+    {#if detailsId !== undefined}
+      <Button secondary onclick={() => vscode.postMessage({ type: "showErrorDetails", detailsId })}>
+        Show Details
+      </Button>
+    {/if}
+  {/if}
+  {#if view?.serverOutput}
+    <CodeBlock code={view.serverOutput} label="Server output" oncopy={copyToClipboard} />
   {/if}
 </StatusBanner>
 

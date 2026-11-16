@@ -198,9 +198,9 @@ suite("initializationErrorHelpPanel", () => {
       },
     })
 
-    const panel = initializationErrorHelpPanel(actionContext, createMockContext())
+    const { topic } = initializationErrorHelpPanel(actionContext, createMockContext())
 
-    expect(panel.failures).toEqual([
+    expect(topic.kind === "startup" && topic.failures).toEqual([
       {
         service: "the TestMyCode tools",
         error: "langs offline",
@@ -212,10 +212,13 @@ suite("initializationErrorHelpPanel", () => {
     ])
   })
 
-  test("a ready startup carries no initialization failures", () => {
-    const panel = initializationErrorHelpPanel(createMockActionContext(), createMockContext())
+  test("after a ready startup, says what to try when the tools fail", () => {
+    const { topic } = initializationErrorHelpPanel(createMockActionContext(), createMockContext())
 
-    expect(panel.failures).toEqual([])
+    expect(topic).toEqual({
+      kind: "general",
+      hint: expect.stringMatching(/antivirus.*exception for the directory '.*cli'/s),
+    })
   })
 
   test("leads the hint for a damaged CLI with the file, then the network advice", () => {
@@ -229,7 +232,8 @@ suite("initializationErrorHelpPanel", () => {
       },
     })
 
-    const [failure] = initializationErrorHelpPanel(actionContext, createMockContext()).failures
+    const { topic } = initializationErrorHelpPanel(actionContext, createMockContext())
+    const [failure] = topic.kind === "startup" ? topic.failures : []
 
     expect(failure?.hint).toMatch(/^The file '\/storage\/cli\/tmc-langs-cli' may be damaged/)
     expect(failure?.hint).toContain("proxy, firewall or antivirus")
@@ -240,9 +244,11 @@ suite("initializationErrorHelpPanel", () => {
       failures: { langs: new Error("langs offline", { cause: "network unreachable" }) },
     })
 
-    const panel = initializationErrorHelpPanel(actionContext, createMockContext())
+    const { topic } = initializationErrorHelpPanel(actionContext, createMockContext())
 
-    expect(panel.failures[0]).toMatchObject({ error: "langs offline: network unreachable" })
+    expect(topic.kind === "startup" && topic.failures[0]).toMatchObject({
+      error: "langs offline: network unreachable",
+    })
   })
 })
 
@@ -636,7 +642,10 @@ suite("TmcPanel reports a handler's failure once", () => {
       type: "reply",
       target: { id: shown.id, type: "CourseDetails" },
       requestId: 1,
-      outcome: { ok: false, error: { message: "tmc-langs crashed." } },
+      outcome: {
+        ok: false,
+        error: { message: "tmc-langs crashed.", detailsId: expect.any(String) },
+      },
     })
   })
 })
@@ -771,7 +780,7 @@ suite("TmcPanel ready handshake", () => {
     expect(panel.webview.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "setPanel",
-        panel: expect.objectContaining({ type: "InitializationErrorHelp" }),
+        panel: expect.objectContaining({ type: "ErrorHelp" }),
       }),
     )
   })
@@ -1238,7 +1247,7 @@ suite("TmcPanel host services for the webview", () => {
       type: "reply",
       target: targetOf(shown),
       requestId: 1,
-      outcome: { ok: false, error: { message: "Server said no." } },
+      outcome: { ok: false, error: { message: "Server said no.", detailsId: expect.any(String) } },
     })
   })
 
@@ -1367,7 +1376,7 @@ suite("TmcPanel main panel lifecycle", () => {
     expect(panel.webview.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "setPanel",
-        panel: expect.objectContaining({ type: "InitializationErrorHelp" }),
+        panel: expect.objectContaining({ type: "ErrorHelp" }),
       }),
     )
   })
@@ -1990,6 +1999,7 @@ suite("TmcPanel webview document", () => {
 /** The failure a panel is answered with before activation succeeded, remedy included. */
 const notInitialized = {
   message: expect.stringContaining("did not initialize properly"),
+  detailsId: expect.any(String),
   actions: [{ label: "Show Help", command: "tmc.viewInitializationErrorHelp" }],
 }
 
@@ -2355,7 +2365,7 @@ suite("TmcPanel main panel restore after a window reload", () => {
     expect(postedMessages(fake.panel)).toEqual([
       expect.objectContaining({
         type: "setPanel",
-        panel: expect.objectContaining({ type: "InitializationErrorHelp" }),
+        panel: expect.objectContaining({ type: "ErrorHelp" }),
       }),
     ])
   })
@@ -2365,12 +2375,37 @@ suite("TmcPanel main panel restore after a window reload", () => {
 
     await restore(
       fake,
-      { screen: "InitializationErrorHelp", route: { type: "InitializationErrorHelp" }, ui: {} },
+      {
+        screen: "ErrorHelp:startup",
+        route: { type: "ErrorHelp", kind: "startup" },
+        ui: {},
+      },
       createDegradedContext(),
     )
 
     expect(fake.dispose).not.toHaveBeenCalled()
     expect(TmcPanel.mainPanel).toBeDefined()
+  })
+
+  test("reopens a failure's details as gone, the reload having cleared them", async () => {
+    const fake = createFakeWebviewPanel()
+    const detailsId = "from-before-the-reload"
+
+    await restore(fake, {
+      screen: `ErrorHelp:${detailsId}`,
+      route: { type: "ErrorHelp", kind: "operation", detailsId },
+      ui: {},
+    })
+    await fake.sendReady()
+
+    const [setPanel] = postedMessages(fake.panel) as Extract<
+      ExtensionToWebview,
+      { type: "setPanel" }
+    >[]
+    expect(setPanel?.panel).toMatchObject({
+      type: "ErrorHelp",
+      topic: { kind: "operation", detailsId, details: null },
+    })
   })
 
   const unrestorable: [description: string, state: unknown, actionContext?: ActionContext][] = [
@@ -2387,7 +2422,7 @@ suite("TmcPanel main panel restore after a window reload", () => {
     ["a course while activation degraded", savedCourseDetails, createDegradedContext()],
     [
       "the initialization help after a healthy activation",
-      { screen: "InitializationErrorHelp", route: { type: "InitializationErrorHelp" }, ui: {} },
+      { screen: "ErrorHelp:startup", route: { type: "ErrorHelp", kind: "startup" }, ui: {} },
       createMockActionContext(),
     ],
   ]

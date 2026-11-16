@@ -98,11 +98,9 @@ export const loginScreens = new LoginScreens()
 
 const SITE = backendName("mooc")
 
-const SHOW_LOGS = { label: "Show Logs", command: "tmc.logs" } as const
-
 /**
  * The login screen's view of a failed login. Only a failure the student did not cause in the
- * browser offers the logs.
+ * browser offers its details.
  */
 export function loginFailureView(error: Error): Extract<LoginView, { phase: "failed" }> {
   const [failure, shown] = describeFailure(error)
@@ -116,17 +114,14 @@ function describeFailure(error: Error): [LoginFailure, WebviewError] {
   if (error instanceof DeviceLoginExpiredError) {
     return ["expired", { message: "The login code expired before it was approved." }]
   }
-  const { details } = toWebviewError(error)
-  const withLogs = (message: string): WebviewError => ({
-    message,
-    ...(details === undefined ? {} : { details }),
-    actions: [SHOW_LOGS],
-  })
+  const { detailsId } = toWebviewError(error)
+  const withDetails = (message: string): WebviewError =>
+    detailsId === undefined ? { message } : { message, detailsId }
   if (error instanceof ConnectionError) {
-    return ["unreachable", withLogs(`Could not reach ${SITE}. Check your internet connection.`)]
+    return ["unreachable", withDetails(`Could not reach ${SITE}. Check your internet connection.`)]
   }
   if (error instanceof ServerError) {
-    return ["serverError", withLogs(presentationFor(error).message)]
+    return ["serverError", withDetails(presentationFor(error).message)]
   }
-  return ["other", withLogs(`Logging in to ${SITE} failed. ${presentationFor(error).message}`)]
+  return ["other", withDetails(`Logging in to ${SITE} failed. ${presentationFor(error).message}`)]
 }

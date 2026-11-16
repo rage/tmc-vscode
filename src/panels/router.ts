@@ -29,6 +29,8 @@ export interface PanelHost {
   /** Sends `message` to this webview alone, kept for a reload if it targets `route`. */
   post: (message: PanelMessage) => void
   closeSidePanel: () => void
+  /** Shows `route`, focused, in the other webview. */
+  showBeside: (route: Panel) => void
 }
 
 /** What a message handler acts through. */

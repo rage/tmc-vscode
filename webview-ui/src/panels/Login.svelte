@@ -6,8 +6,6 @@
   import type { BarAction } from "../components/ActionBar.svelte"
   import ActionBar from "../components/ActionBar.svelte"
   import Button from "../components/Button.svelte"
-  import CodeBlock from "../components/CodeBlock.svelte"
-  import Disclosure from "../components/Disclosure.svelte"
   import PanelHeader from "../components/PanelHeader.svelte"
   import Spinner from "../components/Spinner.svelte"
   import StatusBanner from "../components/StatusBanner.svelte"
@@ -115,15 +113,15 @@
 
   const cancel: BarAction = { label: "Cancel", onclick: () => run("cancel") }
 
-  // The host offers one remedy at most: the logs of a failure the student did not cause.
-  const remedy: BarAction | undefined = $derived.by(() => {
-    const offered = view.phase === "failed" ? view.error.actions?.[0] : undefined
-    return (
-      offered && {
-        label: offered.label,
-        onclick: () => vscode.postMessage({ type: "runCommand", command: offered.command }),
-      }
-    )
+  // Only a failure the student did not cause in the browser has details to show.
+  const showDetails: BarAction | undefined = $derived.by(() => {
+    const detailsId = view.phase === "failed" ? view.error.detailsId : undefined
+    return detailsId === undefined
+      ? undefined
+      : {
+          label: "Show Details",
+          onclick: () => void vscode.postMessage({ type: "showErrorDetails", detailsId }),
+        }
   })
 </script>
 
@@ -165,13 +163,8 @@
     </StatusBanner>
     <ActionBar
       primary={{ label: "Try Again", onclick: () => run("tryAgain") }}
-      secondary={remedy ? [remedy] : []}
+      secondary={showDetails ? [showDetails] : []}
     />
-    {#if view.error.details}
-      <Disclosure title="Error details" persistAs="loginErrorDetails">
-        <CodeBlock label="Error details" code={view.error.details} />
-      </Disclosure>
-    {/if}
   {:else}
     <StatusBanner tone="passed" title="Logged in">
       <p>You are logged in to {SITE}.</p>

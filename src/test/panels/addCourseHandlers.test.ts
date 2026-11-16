@@ -50,7 +50,13 @@ function addCoursePanel(): AddCoursePanel {
 }
 
 function host(route: Panel | undefined): PanelHost {
-  return { name: "Main webview", route, post: vi.fn(), closeSidePanel: vi.fn() }
+  return {
+    name: "Main webview",
+    route,
+    post: vi.fn(),
+    closeSidePanel: vi.fn(),
+    showBeside: vi.fn(),
+  }
 }
 
 /** A context whose user has added `added`. */
@@ -264,7 +270,7 @@ suite("the add-course screen's handlers", function () {
       true,
     )
     expect((await add(actionContext, addCoursePanel(), key)).err).toBe(true)
-    const help: Panel = { id: 1, type: "InitializationErrorHelp", failures: [] }
+    const help: Panel = { id: 1, type: "ErrorHelp", topic: { kind: "startup", failures: [] } }
     expect((await add(actionContext, panel, key, help)).err).toBe(true)
     expect(actions.addNewCourse).not.toHaveBeenCalled()
   })

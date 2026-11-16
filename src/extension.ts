@@ -112,14 +112,18 @@ function makeInitializationErrorReporter(dialog: Dialog): InitializationErrorRep
         others > 0
           ? ` ${others} more ${others === 1 ? "problem is" : "problems are"} in the logs.`
           : ""
-      void dialog.errorNotification(
+      const notification =
         `TestMyCode ${isDegraded ? "could not start" : "started with a problem"}. ` +
-          `${first.step} failed: ${message}${more}`,
-        first.error,
-        [
-          "Show Details",
-          (): void => void vscode.commands.executeCommand("tmc.viewInitializationErrorHelp"),
-        ],
+        `${first.step} failed: ${message}${more}`
+      // The startup help lists every failure, where Show Details of one would show only it.
+      const startupHelp: NotificationButton = [
+        "Show Details",
+        (): void => void vscode.commands.executeCommand("tmc.viewInitializationErrorHelp"),
+      ]
+      void dialog.errorNotification(
+        notification,
+        isDegraded ? undefined : first.error,
+        ...(isDegraded ? [startupHelp] : []),
       )
     },
   }

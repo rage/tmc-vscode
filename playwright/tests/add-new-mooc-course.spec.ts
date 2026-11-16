@@ -166,7 +166,9 @@ vsCodeTest("submitting an exercise gone from the server says so", async ({ page,
       sidePanel.getByText("This exercise no longer exists on courses.mooc.fi.", { exact: false }),
     ).toBeVisible()
     await expect(sidePanel.getByRole("button", { name: "Refresh Courses" })).toBeVisible()
-    const details = await sidePanel.getByRole("group", { name: "Error details" }).textContent()
-    expect(details?.split("Caused by: 404 Not Found from")).toHaveLength(2)
+    await sidePanel.getByRole("button", { name: "Show Details" }).click()
+    const help = await new TmcPage(page, webview).panelHeaded("Error Details")
+    const cause = await help.getByRole("group", { name: "Cause" }).textContent()
+    expect(cause?.split("404 Not Found from")).toHaveLength(2)
   })
 })

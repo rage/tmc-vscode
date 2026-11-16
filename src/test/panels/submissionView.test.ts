@@ -143,7 +143,7 @@ suite("tmcResultView", () => {
     expect(view).toMatchObject({
       phase: "failed",
       tone: "failed",
-      error: { details: "Out of memory" },
+      serverOutput: "Out of memory",
     })
     expect(view.points).toBeUndefined()
   })
@@ -326,17 +326,14 @@ suite("moocGradingView", () => {
     )
 
     expect(view.testCases).toEqual([])
-    expect(view.error).toEqual({
-      message: "Your code did not compile on the server.",
-      details: "Main.java:3: error",
-    })
+    expect(view.error).toEqual({ message: "Your code did not compile on the server." })
+    expect(view.serverOutput).toBe("Main.java:3: error")
   })
 
   test("a grading without a test run has no test cases", () => {
-    expect(moocGradingView(moocGrading("FullyGraded", 1, "Passed"), 1)).toMatchObject({
-      testCases: [],
-      error: undefined,
-    })
+    const view = moocGradingView(moocGrading("FullyGraded", 1, "Passed"), 1)
+    expect(view.testCases).toEqual([])
+    expect(view.error).toBeUndefined()
   })
 
   test("manual review is terminal: nothing to wait for", () => {

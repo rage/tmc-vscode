@@ -8,8 +8,8 @@
   import Spinner from "./components/Spinner.svelte"
   import AddCourse from "./panels/AddCourse.svelte"
   import CourseDetails from "./panels/CourseDetails.svelte"
+  import ErrorHelp from "./panels/ErrorHelp.svelte"
   import ExerciseSubmission from "./panels/ExerciseSubmission.svelte"
-  import InitializationErrorHelp from "./panels/InitializationErrorHelp.svelte"
   import Login from "./panels/Login.svelte"
   import { onSetPanel } from "./utilities/script"
   import { enterScreen } from "./utilities/uiState.svelte"
@@ -115,8 +115,8 @@
             <CourseDetails {panel} />
           {:else if panel.type === "ExerciseSubmission"}
             <ExerciseSubmission {panel} />
-          {:else if panel.type === "InitializationErrorHelp"}
-            <InitializationErrorHelp {panel} />
+          {:else if panel.type === "ErrorHelp"}
+            <ErrorHelp {panel} />
           {:else if panel.type === "Login"}
             <Login {panel} />
           {:else if panel.type === "AddCourse"}

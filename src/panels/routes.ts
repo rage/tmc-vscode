@@ -1,9 +1,10 @@
 import type * as vscode from "vscode"
 
-import type { ExerciseSubmissionPanel, InitializationErrorHelpPanel, Panel } from "../../shared/lib"
+import type { ErrorHelpPanel, ExerciseSubmissionPanel, Panel } from "../../shared/lib"
 import { assertUnreachable, LocalCourseData, unwrap } from "../../shared/lib"
 import type { ActionContext, StartupStep } from "../actions/types"
 import { isReady } from "../actions/types"
+import { errorDetails } from "../api/errorDetails"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import type { StoredExercise } from "../config/userdata"
 import { CliVerificationError } from "../errors"
@@ -20,8 +21,8 @@ export function panelTitle(route: Panel, actionContext: ActionContext): string {
     }
     case "ExerciseSubmission":
       return `Results: ${route.exerciseName}`
-    case "InitializationErrorHelp":
-      return "TestMyCode Help"
+    case "ErrorHelp":
+      return route.topic.kind === "operation" ? "Error Details" : "TestMyCode Help"
     case "Login":
       return "Log In"
     case "AddCourse":
@@ -58,15 +59,24 @@ export function exerciseSubmissionPanel(
   }
 }
 
-/** A new help panel for the activation failures `actionContext` holds, if any. */
+/**
+ * A new help panel: the activation's failures after a failed start, else what to try when the
+ * TestMyCode tools fail.
+ */
 export function initializationErrorHelpPanel(
   actionContext: ActionContext,
   extensionContext: vscode.ExtensionContext,
-): InitializationErrorHelpPanel {
-  const failures = actionContext.startup.kind === "degraded" ? actionContext.startup.failures : {}
+): ErrorHelpPanel {
+  const exception = `Try adding an exception for the directory '${cliFolder(extensionContext)}'.`
+  if (actionContext.startup.kind !== "degraded") {
+    const hint =
+      "An antivirus program can stop the TestMyCode tools from running, and a proxy or " +
+      `firewall can block their network requests. ${exception}`
+    return { id: nextPanelId(), type: "ErrorHelp", topic: { kind: "general", hint } }
+  }
   const networkHint =
-    "A proxy, firewall or antivirus program blocking network requests can cause this. " +
-    `Try adding an exception for the directory '${cliFolder(extensionContext)}'.`
+    "A proxy, firewall or antivirus program blocking network requests can cause this. " + exception
+  const { failures } = actionContext.startup
   const langsFailure = failures.langs
   const cliHint =
     langsFailure instanceof CliVerificationError
@@ -76,20 +86,32 @@ export function initializationErrorHelpPanel(
       : networkHint
   return {
     id: nextPanelId(),
-    type: "InitializationErrorHelp",
-    failures: STARTUP_STEPS.flatMap((step) => {
-      const error = failures[step]
-      return error
-        ? [
-            {
-              service: SERVICE_NAMES[step],
-              error: error.cause ? `${error.message}: ${error.cause}` : error.message,
-              stack: error.stack ?? "no stack trace",
-              ...(step === "langs" ? { hint: cliHint } : {}),
-            },
-          ]
-        : []
-    }),
+    type: "ErrorHelp",
+    topic: {
+      kind: "startup",
+      failures: STARTUP_STEPS.flatMap((step) => {
+        const error = failures[step]
+        return error
+          ? [
+              {
+                service: SERVICE_NAMES[step],
+                error: error.cause ? `${error.message}: ${error.cause}` : error.message,
+                stack: error.stack ?? "no stack trace",
+                ...(step === "langs" ? { hint: cliHint } : {}),
+              },
+            ]
+          : []
+      }),
+    },
+  }
+}
+
+/** A new help panel on the failure `detailsId` names, or saying it is gone. */
+export function errorDetailsPanel(detailsId: string): ErrorHelpPanel {
+  return {
+    id: nextPanelId(),
+    type: "ErrorHelp",
+    topic: { kind: "operation", detailsId, details: errorDetails.get(detailsId) ?? null },
   }
 }
 

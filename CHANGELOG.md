@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Error notifications and the error notices in screens offer Show Details instead of Show Logs and inline details: a screen with the error, its causes and the recent log, with Copy Details, Show Logs and the error's own remedy. Show Help for the TestMyCode tools no longer claims the extension failed to start.
 - Every notification goes through one place, and a test pins how many each part of the extension shows, so a new one is a deliberate choice.
 - Logging in shows a login screen instead of a notification: your code in large type with Copy, and Open courses.mooc.fi, which opens the page where you approve it. The screen counts down until the code expires and says when the login is denied, the code expires or courses.mooc.fi cannot be reached or fails, with Try Again. Cancel or closing the screen stops the login. A login with no course added goes on to the add-course screen.
 - Add Course opens a screen listing your courses.mooc.fi courses as cards with their organization and description, and the tmc.mooc.fi organizations, whose courses open under them. Search narrows both. Each site says on its own when you need to log in, it cannot be reached or you have no courses there, with Find a Course on courses.mooc.fi. Adding a course opens its Course Details; a course you already have is marked Added and opens. The Courses view, its welcome, the walkthrough and the screen after login open it; "TestMyCode: Add Course..." in the Command Palette keeps the quick pick.

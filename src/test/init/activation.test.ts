@@ -446,7 +446,7 @@ suite("activation with unusable storage", function () {
     expect(message).toMatch(
       /^TestMyCode could not start\. Preparing the extension's files failed: /,
     )
-    expect(buttons.map((button) => button.title)).toEqual(["Show Details", "Show Logs"])
+    expect(buttons.map((button) => button.title)).toEqual(["Show Details"])
   })
 })
 
@@ -473,7 +473,7 @@ suite("activation that throws", function () {
     expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(true)
     expect(showErrorMessage).toHaveBeenCalledExactlyOnceWith(
       "TestMyCode could not start. boom",
-      expect.objectContaining({ title: "Show Logs" }),
+      expect.objectContaining({ title: "Show Details" }),
     )
     expect(Logger.show).not.toHaveBeenCalled()
   })

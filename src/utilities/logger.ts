@@ -21,6 +21,11 @@ enum ConsoleLogLevel {
 
 const channel = `[${OUTPUT_CHANNEL_NAME}]`
 
+const TAIL_MAX_LINES = 300
+const TAIL_MAX_CHARS = 64 * 1024
+// One CLI trace must not push every other line out of the tail.
+const TAIL_LINE_MAX_CHARS = 8 * 1024
+
 // Key names whose values must never reach the output channel: users are asked to paste it
 // into bug reports, and an OAuth token or a completed device-flow URL in it is a live
 // credential. Matched with separators and case removed, so `access_token`, `accessToken`
@@ -156,6 +161,15 @@ export class Logger {
     this.output.show()
   }
 
+  /**
+   * The latest info, warning and error lines, oldest first, whatever the configured level: what
+   * an error's Show Details screen shows of the log. Kept in memory only, with credentials
+   * redacted.
+   */
+  public static tail(): string {
+    return this._tail.join("\n")
+  }
+
   /** Closes the output channel; `show()` or a non-`none` level creates a fresh one. */
   public static dispose(): void {
     this.output?.dispose()
@@ -184,6 +198,9 @@ export class Logger {
   }
 
   private static _level: LogLevel = LogLevel.None
+
+  private static readonly _tail: string[] = []
+  private static _tailChars = 0
 
   /**
    * Logs the params if the extension has been configured to log with this level.
@@ -221,8 +238,28 @@ export class Logger {
     } else if (this.testmode) {
       console.log(this._timestamp, channel, this._toLoggableParams(params))
     }
-    if (toOutput && this.output !== undefined) {
-      this._logToOutput(this.output, level, ...params)
+    const isTailed = level !== ConsoleLogLevel.Debug
+    if ((toOutput && this.output !== undefined) || isTailed) {
+      const line = `${this._timestamp} [${level}] ${this._toLoggableParams(params)}`
+      if (toOutput) {
+        this.output?.appendLine(line)
+      }
+      if (isTailed) {
+        this._appendToTail(line)
+      }
+    }
+  }
+
+  private static _appendToTail(line: string): void {
+    const redacted = redactSecrets(line)
+    const kept =
+      redacted.length > TAIL_LINE_MAX_CHARS
+        ? `${redacted.slice(0, TAIL_LINE_MAX_CHARS)}…`
+        : redacted
+    this._tail.push(kept)
+    this._tailChars += kept.length
+    while (this._tail.length > TAIL_MAX_LINES || this._tailChars > TAIL_MAX_CHARS) {
+      this._tailChars -= this._tail.shift()?.length ?? 0
     }
   }
 
@@ -238,21 +275,6 @@ export class Logger {
         return true
       }
     }
-  }
-
-  /**
-   * Logs the output channel with the
-   *
-   * @param output Output channel to log to.
-   * @param level The logging level. Doesn't check the logging config.
-   * @param params The parameters to be logged.
-   */
-  private static _logToOutput(
-    output: OutputChannel,
-    level: ConsoleLogLevel,
-    ...params: unknown[]
-  ): void {
-    output.appendLine(`${this._timestamp} [${level}] ${this._toLoggableParams(params)}`)
   }
 
   private static get _timestamp(): string {

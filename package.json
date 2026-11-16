@@ -347,7 +347,12 @@
       },
       {
         "command": "tmc.viewInitializationErrorHelp",
-        "title": "Show Initialization Error Help",
+        "title": "Show Help",
+        "category": "TestMyCode"
+      },
+      {
+        "command": "tmc.showErrorDetails",
+        "title": "Show Error Details",
         "category": "TestMyCode"
       },
       {
@@ -472,6 +477,10 @@
         },
         {
           "command": "tmc.viewInitializationErrorHelp",
+          "when": "false"
+        },
+        {
+          "command": "tmc.showErrorDetails",
           "when": "false"
         },
         {

@@ -1,3 +1,4 @@
+import { errorDetails } from "../../api/errorDetails"
 import {
   DeadlinePassedError,
   InsufficientScopeError,
@@ -10,14 +11,18 @@ suite("toWebviewError", () => {
   test("carries the sentence and remedies a notification of the error would show", () => {
     expect(toWebviewError(new InsufficientScopeError("403 forbidden"))).toEqual({
       message: expect.stringContaining("Log in again to continue."),
+      detailsId: expect.any(String),
       actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
     })
   })
 
-  test("keeps a CLI failure's details for the panel's disclosure", () => {
-    expect(toWebviewError(new RuntimeError("the CLI exited with 1", "stderr tail"))).toEqual({
-      message: "The CLI exited with 1.",
-      details: "stderr tail",
+  test("keeps a CLI failure's details for its Show Details screen", () => {
+    const shown = toWebviewError(new RuntimeError("the CLI exited with 1", "stderr tail"))
+
+    expect(shown).toEqual({ message: "The CLI exited with 1.", detailsId: expect.any(String) })
+    expect(errorDetails.get(shown.detailsId!)).toMatchObject({
+      summary: "The CLI exited with 1.",
+      causeChain: "Runtime Error: the CLI exited with 1\nstderr tail",
     })
   })
 
@@ -27,11 +32,11 @@ suite("toWebviewError", () => {
       new DeadlinePassedError("The deadline of x has passed.", debugLines),
       new NotEnrolledError("You're no longer enrolled.", debugLines),
     ]) {
-      expect(toWebviewError(refusal).details).toBeUndefined()
+      expect(toWebviewError(refusal).detailsId).toBeUndefined()
     }
   })
 
   test("turns anything else thrown into a sentence", () => {
-    expect(toWebviewError("boom")).toEqual({ message: "Boom." })
+    expect(toWebviewError("boom")).toEqual({ message: "Boom.", detailsId: expect.any(String) })
   })
 })

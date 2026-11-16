@@ -136,4 +136,24 @@ export class TmcPage {
   public getSidePanel(): FrameLocator {
     return this.page.frameLocator(`.webview.ready`).last().frameLocator("iframe#active-frame")
   }
+
+  /** The webview whose screen is headed `heading`, whichever editor group it is in. */
+  public async panelHeaded(heading: string): Promise<FrameLocator> {
+    const webviews = this.page.locator("iframe.webview.ready")
+    let found: FrameLocator | undefined
+    await expect(async () => {
+      for (let index = (await webviews.count()) - 1; index >= 0; index--) {
+        const screen = webviews.nth(index).contentFrame().frameLocator("iframe#active-frame")
+        if ((await screen.getByRole("heading", { level: 1, name: heading }).count()) > 0) {
+          found = screen
+          return
+        }
+      }
+      throw new Error(`No webview is headed "${heading}"`)
+    }).toPass({ timeout: 30_000 })
+    if (!found) {
+      throw new Error(`No webview is headed "${heading}"`)
+    }
+    return found
+  }
 }

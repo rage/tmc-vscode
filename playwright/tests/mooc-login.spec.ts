@@ -84,7 +84,7 @@ vsCodeTest.describe(() => {
         loginScreen.webview.getByText("courses.mooc.fi returned an error (503). Try again later."),
       ).toBeVisible()
       await expect(loginScreen.webview.getByText("Check your internet connection")).toHaveCount(0)
-      await expect(loginScreen.button("Show Logs")).toBeVisible()
+      await expect(loginScreen.button("Show Details")).toBeVisible()
     },
   )
 })

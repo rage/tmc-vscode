@@ -767,7 +767,7 @@ suite("the course home", () => {
 
     replyToRequest("requestCourseDetailsData", {
       ok: false,
-      error: { message: "Failed to read the course.", details: "no such course" },
+      error: { message: "Failed to read the course." },
     })
 
     expect(

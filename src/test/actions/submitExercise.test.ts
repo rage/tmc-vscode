@@ -987,7 +987,7 @@ suite("submitExercise action, through the real runForExercise boundary", () => {
         message:
           "This exercise no longer exists on courses.mooc.fi. Refresh the courses to see the" +
           " course's current exercises.",
-        details: "Caused by: HTTP error 404 Not Found for …",
+        detailsId: expect.any(String),
         actions: [{ label: "Refresh Courses", command: "tmcTreeView.refreshCourses" }],
       },
     })

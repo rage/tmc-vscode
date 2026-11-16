@@ -261,3 +261,51 @@ suite("Logger diagnostics", function () {
     expect(loggable).toContain("<TRACE>")
   })
 })
+
+suite("Logger tail", function () {
+  afterEach(function () {
+    Logger.configure(LogLevel.None)
+  })
+
+  test("keeps info, warnings and errors whatever the channel keeps, but not debug", function () {
+    Logger.configure(LogLevel.None)
+
+    Logger.debug("tail-debug-line")
+    Logger.info("tail-info-line")
+    Logger.warn("tail-warn-line")
+    Logger.error("tail-error-line")
+
+    const tail = Logger.tail()
+    expect(tail).not.toContain("tail-debug-line")
+    expect(tail).toMatch(
+      /\[INFO\] tail-info-line\n.*\[WARN\] tail-warn-line\n.*\[ERROR\] tail-error-line$/,
+    )
+  })
+
+  test("leaves credentials out", function () {
+    Logger.info(`Authorization: Bearer ${TOKEN}`)
+
+    expect(Logger.tail()).not.toContain(TOKEN)
+  })
+
+  test("drops the oldest lines beyond its 300", function () {
+    for (let line = 0; line < 400; line++) {
+      Logger.info(`tail-line-${line}`)
+    }
+
+    const lines = Logger.tail().split("\n")
+    expect(lines).toHaveLength(300)
+    expect(lines[0]).toContain("tail-line-100")
+    expect(lines.at(-1)).toContain("tail-line-399")
+  })
+
+  test("cuts a huge line short instead of letting it push everything else out", function () {
+    Logger.info("tail-before-huge")
+    Logger.error(`tail-huge ${"x".repeat(100_000)}`)
+
+    const tail = Logger.tail()
+    expect(tail).toContain("tail-before-huge")
+    expect(tail.length).toBeLessThanOrEqual(64 * 1024)
+    expect(tail.endsWith("…")).toBe(true)
+  })
+})

@@ -5,6 +5,7 @@ import { LocalCourseData, toError } from "../../shared/lib"
 import type { ActionContext, ReadyActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type Dialog from "../api/dialog"
+import { SHOW_ERROR_DETAILS_COMMAND } from "../api/dialog"
 import { requestWorkspaceTrust } from "../api/workspaceTrustPrompt"
 import * as commands from "../commands"
 import { EXTENSION_ID } from "../config/constants"
@@ -13,7 +14,7 @@ import {
   SHOW_AI_USE_PROBLEM_COMMAND,
   TRUST_COURSE_WORKSPACE_COMMAND,
 } from "../errors"
-import { initializationErrorHelpPanel, nextPanelId } from "../panels/routes"
+import { errorDetailsPanel, initializationErrorHelpPanel, nextPanelId } from "../panels/routes"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseTestController } from "../testing/exerciseTestController"
 import { openCourseId } from "../ui/courseHome"
@@ -138,6 +139,12 @@ export function registerCommands(
       actionContext,
       initializationErrorHelpPanel(actionContext, context),
     )
+  })
+
+  register(SHOW_ERROR_DETAILS_COMMAND, (detailsId: unknown) => {
+    if (typeof detailsId === "string") {
+      TmcPanel.renderBeside(context, actionContext, errorDetailsPanel(detailsId), undefined)
+    }
   })
 
   if (!isReady(actionContext)) {

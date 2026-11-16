@@ -4,6 +4,7 @@ import type { CourseIdentifier } from "../../shared/lib"
 import { backendName, LocalCourseData } from "../../shared/lib"
 import { isSessionLost, presentationFor } from "../errors"
 import { Logger } from "../utilities"
+import { errorDetails } from "./errorDetails"
 
 /**
  * One row of a quick pick: what the user reads and what picking it yields. Rows are
@@ -38,6 +39,9 @@ export type NotificationButton = [label: string, callback: () => void]
 type NotificationAction = vscode.MessageItem & { callback: () => void }
 
 const STATUS_MESSAGE_MS = 5000
+
+/** Opens the help screen on the failure an id from `errorDetails` names. */
+export const SHOW_ERROR_DETAILS_COMMAND = "tmc.showErrorDetails"
 
 type ShowNotification = (
   message: string,
@@ -82,8 +86,6 @@ export function courseSelectionItems(
  * A class that provides a centralized interface to user dialogue.
  */
 export default class Dialog {
-  private static readonly _logsButton: NotificationButton = ["Show Logs", (): void => Logger.show()]
-
   private _reportSessionLost: ((cause: Error) => void) | undefined
 
   /**
@@ -128,16 +130,23 @@ export default class Dialog {
   /**
    * Wrapper for `vscode.window.showErrorMessage` that resolves optional items to associated
    * callbacks.
+   *
+   * @param error What failed: logged, and kept for the Show Details button it adds.
    */
   public async errorNotification(
     notification: string,
     error?: Error,
     ...items: NotificationButton[]
   ): Promise<void> {
+    const buttons = [...items]
     if (error) {
       Logger.error(notification, error)
+      const detailsId = errorDetails.record(notification, error)
+      buttons.push([
+        "Show Details",
+        (): void => void vscode.commands.executeCommand(SHOW_ERROR_DETAILS_COMMAND, detailsId),
+      ])
     }
-    const buttons = error ? items.concat([Dialog._logsButton]) : items
 
     return this._notify(vscode.window.showErrorMessage, notification, buttons)
   }
@@ -155,8 +164,7 @@ export default class Dialog {
    * the rest of the sentence and any buttons its class prescribes.
    *
    * The notification carries the sentence and nothing else: the error's diagnostics —
-   * details, cause chain and stack — go to the output channel behind the "Show Logs"
-   * button, which {@link Logger} writes in full. An operation the error only held back, such as
+   * details, cause chain and the log around it — are behind its "Show Details" button. An operation the error only held back, such as
    * one refused in Restricted Mode, is a warning with the error's sentence alone.
    */
   public async reportError(message: string, error: Error): Promise<void> {

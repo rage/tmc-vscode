@@ -27,7 +27,7 @@ import { messageHandlers } from "./handlers"
 import { postMessageToWebview, renderPanel } from "./panel"
 import type { HandlerContext, PanelHost, PanelMessage } from "./router"
 import { dispatch } from "./router"
-import { initializationErrorHelpPanel, nextPanelId, panelTitle } from "./routes"
+import { errorDetailsPanel, initializationErrorHelpPanel, nextPanelId, panelTitle } from "./routes"
 import { withExerciseState } from "./submissionView"
 
 /**
@@ -226,6 +226,19 @@ export class TmcPanel {
     TmcPanel._renderIn(false, extensionContext, actionContext, route)
   }
 
+  /**
+   * Shows `route`, which the student asked for, focused beside the screen they asked from: in the
+   * main panel when asked from the side one, else in the side panel.
+   */
+  public static renderBeside(
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+    route: Panel,
+    askedFrom: "main" | "side" | undefined,
+  ): void {
+    TmcPanel._renderIn(askedFrom === "side", extensionContext, actionContext, route, true)
+  }
+
   /** @param isRequested The student asked for `route`, so it takes the focus even beside. */
   private static _renderIn(
     isMain: boolean,
@@ -367,7 +380,10 @@ export class TmcPanel {
       )
     }
 
-    const handlerContext: HandlerContext = { host: this._createHost(), actionContext }
+    const handlerContext: HandlerContext = {
+      host: this._createHost(extensionContext),
+      actionContext,
+    }
     const handlers = {
       ...messageHandlers,
       ready: { requiresReady: false, handle: () => this._onReady() },
@@ -403,7 +419,7 @@ export class TmcPanel {
     }
   }
 
-  private _createHost(): PanelHost {
+  private _createHost(extensionContext: vscode.ExtensionContext): PanelHost {
     const currentRoute = (): Panel | undefined => this._route
     return {
       name: this._webviewName,
@@ -412,6 +428,13 @@ export class TmcPanel {
       },
       post: (message) => this._postMessage(message),
       closeSidePanel: () => TmcPanel.sidePanel?.dispose(),
+      showBeside: (route) =>
+        TmcPanel.renderBeside(
+          extensionContext,
+          this._actionContext,
+          route,
+          this._isMain ? "main" : "side",
+        ),
     }
   }
 
@@ -615,8 +638,12 @@ function restoredRoute(
         isReady(actionContext) && actionContext.startup.userData.getCourse(route.courseId).ok
       return isCourseStored ? { id: nextPanelId(), ...route } : undefined
     }
-    case "InitializationErrorHelp":
-      return isReady(actionContext)
+    case "ErrorHelp":
+      if (route.kind === "operation") {
+        return route.detailsId === undefined ? undefined : errorDetailsPanel(route.detailsId)
+      }
+      // A startup help reopened after a healthy start would list another start's failures.
+      return route.kind === "startup" && isReady(actionContext)
         ? undefined
         : initializationErrorHelpPanel(actionContext, extensionContext)
     case "AddCourse":

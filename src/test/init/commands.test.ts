@@ -8,6 +8,7 @@ import * as vscode from "vscode"
 import type { LocalCourseData } from "../../../shared/lib"
 import type { ActionContext } from "../../actions/types"
 import { isReady } from "../../actions/types"
+import { errorDetails } from "../../api/errorDetails"
 import type WorkspaceManager from "../../api/workspaceManager"
 import * as commands from "../../commands"
 import { EXTENSION_ID, EXTENSION_VERSION } from "../../config/constants"
@@ -75,17 +76,19 @@ const expectedCommands = [
   "tmc.debug",
   "tmc.wipe",
   "tmc.viewInitializationErrorHelp",
+  "tmc.showErrorDetails",
 ]
 
 // Of those, the ones that reach no service, so a failed activation can still offer them:
-// `registerServiceFreeCommands`'s, plus `tmc.viewInitializationErrorHelp`, which
-// needs an `ActionContext` but no service and so stays in `registerCommands`.
+// `registerServiceFreeCommands`'s, plus the help screen's, which need an `ActionContext` but no
+// service and so stay in `registerCommands`.
 const expectedDegradedCommands = [
   "tmc.settings",
   "tmc.logs",
   "tmc.debug",
   "tmc.trustCourseWorkspace",
   "tmc.viewInitializationErrorHelp",
+  "tmc.showErrorDetails",
 ]
 
 // What `registerServiceFreeCommands` registers on its own, regardless of startup state.
@@ -704,7 +707,32 @@ suite("registered command handlers", function () {
     expect(renderMain).toHaveBeenCalledWith(
       context,
       actionContext,
-      expect.objectContaining({ type: "InitializationErrorHelp" }),
+      expect.objectContaining({
+        type: "ErrorHelp",
+        topic: expect.objectContaining({ kind: "startup" }),
+      }),
+    )
+  })
+
+  test("tmc.showErrorDetails opens the failure it names beside, focused", async function () {
+    const renderBeside = vi.spyOn(TmcPanel, "renderBeside").mockReturnValue(undefined)
+    const { handlers, context, actionContext } = registerAndCollect(createDegradedContext())
+    const detailsId = errorDetails.record("Failed to download.", new Error("reset"))
+
+    await handlers.get("tmc.showErrorDetails")?.(detailsId)
+
+    expect(renderBeside).toHaveBeenCalledWith(
+      context,
+      actionContext,
+      expect.objectContaining({
+        type: "ErrorHelp",
+        topic: {
+          kind: "operation",
+          detailsId,
+          details: expect.objectContaining({ summary: "Failed to download." }),
+        },
+      }),
+      undefined,
     )
   })
 

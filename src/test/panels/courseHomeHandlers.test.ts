@@ -36,7 +36,13 @@ const SOURCE = { id: SHOWN.id, type: SHOWN.type }
 const ON_DISK = { id: idOfTmcExercise(1), uri: vscode.Uri.file("/exercises/hello") }
 
 function host(route: Panel | undefined = SHOWN): PanelHost {
-  return { name: "Main webview", route, post: vi.fn(), closeSidePanel: vi.fn() }
+  return {
+    name: "Main webview",
+    route,
+    post: vi.fn(),
+    closeSidePanel: vi.fn(),
+    showBeside: vi.fn(),
+  }
 }
 
 /** Course 42 with exercise 1 on disk; exercise 9 belongs to course 43. */
