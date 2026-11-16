@@ -12,7 +12,8 @@ function cliFolder(userDataDir: string): string {
 }
 
 // No stored login and no course: the window TestMyCode starts light in.
-vsCodeTest.use({ seedTmcCredentials: false })
+// The never-approving client keeps the login screen on its code, which an approval would replace.
+vsCodeTest.use({ seedTmcCredentials: false, moocClientId: "mooc-mock-never" })
 
 vsCodeTest(
   "a fresh install opens the walkthrough without starting the CLI",

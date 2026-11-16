@@ -15,7 +15,8 @@ vsCodeTest("the account item shows the logged-in session", async ({ page, webvie
 })
 
 vsCodeTest.describe(() => {
-  vsCodeTest.use({ seedTmcCredentials: false })
+  // The never-approving client keeps the login screen on its code, which an approval would replace.
+  vsCodeTest.use({ seedTmcCredentials: false, moocClientId: "mooc-mock-never" })
 
   vsCodeTest("the logged-out account item opens the login screen", async ({ page, webview }) => {
     const moocLoginPage = new MoocLoginPage(page, webview)

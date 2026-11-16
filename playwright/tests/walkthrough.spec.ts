@@ -42,7 +42,6 @@ vsCodeTest.describe(() => {
       ).toBeVisible({ timeout: 30_000 })
       await logIn.getByRole("button", { name: "Log In", exact: true }).click()
 
-      await new MoocLoginPage(page, webview).expectWaiting()
       const addCourse = new AddCoursePage(page, webview)
       await addCourse.expectShown()
       await addCourse.addMoocCourse(courseTitle)

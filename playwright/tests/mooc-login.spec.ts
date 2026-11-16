@@ -16,37 +16,20 @@ import { MoocLoginPage } from "../pages/mooc-login"
 // credentials are missing.
 
 vsCodeTest(
-  "shows the code, opens the approval page on request and goes back to adding a course",
-  async ({ page, webview, openedExternalUrls }) => {
+  "an approved login goes back to the add-course screen, listing the enrolled courses",
+  async ({ page, webview }) => {
     const coursesView = new CoursesViewPage(page, webview)
     const loginScreen = new MoocLoginPage(page, webview)
 
-    await vsCodeTest.step("start the login from the add-course screen", async () => {
-      await coursesView.goto()
-      await coursesView.startMoocLogin()
-    })
+    await coursesView.goto()
+    await coursesView.startMoocLogin()
 
-    await vsCodeTest.step("the screen shows the code and opens nothing by itself", async () => {
-      await loginScreen.expectWaiting()
-      await expect(loginScreen.webview.getByText(`${MOCK_BACKEND_URL}/oauth_device`)).toBeVisible()
-      expect(await openedExternalUrls()).toStrictEqual([])
-    })
-
-    await vsCodeTest.step("Open courses.mooc.fi opens the page carrying the code", async () => {
-      await loginScreen.button("Open courses.mooc.fi").click()
-      await expect
-        .poll(openedExternalUrls)
-        .toStrictEqual([`${MOCK_BACKEND_URL}/oauth_device?user_code=${mockUserCode(1)}`])
-    })
-
-    await vsCodeTest.step("the mock approves and the enrolled courses are listed", async () => {
-      await expect(coursesView.statusBarMessage("Logged in to courses.mooc.fi.")).toBeVisible()
-      const addCourse = new AddCoursePage(page, webview)
-      await addCourse.expectShown()
-      await expect(addCourse.card("MOOC Python Course")).toBeVisible()
-      // A modal stays until answered, so with the flow over, none was ever raised.
-      await expect(loginScreen.modalDialog()).toHaveCount(0)
-    })
+    await expect(coursesView.statusBarMessage("Logged in to courses.mooc.fi.")).toBeVisible()
+    const addCourse = new AddCoursePage(page, webview)
+    await addCourse.expectShown()
+    await expect(addCourse.card("MOOC Python Course")).toBeVisible()
+    // A modal stays until answered, so with the flow over, none was ever raised.
+    await expect(loginScreen.modalDialog()).toHaveCount(0)
   },
 )
 
@@ -110,6 +93,25 @@ vsCodeTest.describe(() => {
 vsCodeTest.describe(() => {
   vsCodeTest.use({ moocClientId: "mooc-mock-never" })
 
+  vsCodeTest(
+    "shows the code and opens the approval page only on request",
+    async ({ page, webview, openedExternalUrls }) => {
+      const coursesView = new CoursesViewPage(page, webview)
+      const loginScreen = new MoocLoginPage(page, webview)
+
+      await coursesView.goto()
+      await coursesView.startMoocLogin()
+
+      await loginScreen.expectWaiting()
+      await expect(loginScreen.webview.getByText(`${MOCK_BACKEND_URL}/oauth_device`)).toBeVisible()
+      expect(await openedExternalUrls()).toStrictEqual([])
+      await loginScreen.button("Open courses.mooc.fi").click()
+      await expect
+        .poll(openedExternalUrls)
+        .toStrictEqual([`${MOCK_BACKEND_URL}/oauth_device?user_code=${mockUserCode(1)}`])
+    },
+  )
+
   // Cancel-then-retry must start a clean attempt, unaffected by the killed one ending late.
   vsCodeTest(
     "Cancel closes the screen, and a retry starts a clean login",
@@ -160,7 +162,6 @@ vsCodeTest.describe(() => {
       const loginScreen = new MoocLoginPage(page, webview)
 
       await loginScreen.gotoFromCoursesView()
-      await loginScreen.expectWaiting()
       await expect(loginScreen.statusBarMessage("Logged in to courses.mooc.fi.")).toBeVisible()
       await new AddCoursePage(page, webview).expectShown()
     },
