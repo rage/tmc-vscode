@@ -642,6 +642,21 @@
         "closed_chapters"
       ]
     },
+    "CourseRefusalKind": {
+      "description": "How courses.mooc.fi refused one course. The values are the CLI error kinds the same response\nfails a single-course command with.",
+      "oneOf": [
+        {
+          "description": "A 403: the course is hidden or closed to the user, or the session lacks the\n`exercise-services` scope, which courses.mooc.fi answers the same way.",
+          "type": "string",
+          "const": "insufficient-scope"
+        },
+        {
+          "description": "A 404: the course does not exist, or not for this user.",
+          "type": "string",
+          "const": "not-found"
+        }
+      ]
+    },
     "DataKind": {
       "oneOf": [
         {
@@ -2736,6 +2751,13 @@
             "format": "uuid"
           }
         },
+        "unchecked_courses": {
+          "description": "Courses on disk that courses.mooc.fi refused to serve. `updated` and `removed` say nothing\nabout their exercises.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UncheckedMoocCourse"
+          }
+        },
         "updated": {
           "description": "Exercises whose server version differs from the local copy.",
           "type": "array",
@@ -2747,7 +2769,8 @@
       },
       "required": [
         "updated",
-        "removed"
+        "removed",
+        "unchecked_courses"
       ]
     },
     "MoocOldSubmissionRestore": {
@@ -4245,6 +4268,23 @@
         "FAIL",
         "WARN",
         "DISABLED"
+      ]
+    },
+    "UncheckedMoocCourse": {
+      "description": "A course [`check_mooc_exercise_updates`] could not check.",
+      "type": "object",
+      "properties": {
+        "course_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "kind": {
+          "$ref": "#/$defs/CourseRefusalKind"
+        }
+      },
+      "required": [
+        "course_id",
+        "kind"
       ]
     },
     "UpdateResult": {

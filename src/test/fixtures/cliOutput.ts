@@ -546,7 +546,11 @@ const validCliOutputFixtures: CliOutputFixture[] = [
   { name: "tmc-config", value: outputData("tmc-config", { projects_dir: "/projects" }) },
   {
     name: "mooc-exercise-updates",
-    value: outputData("mooc-exercise-updates", { updated: [UUID_B], removed: [UUID_C] }),
+    value: outputData("mooc-exercise-updates", {
+      updated: [UUID_B],
+      removed: [UUID_C],
+      unchecked_courses: [{ course_id: UUID_A, kind: "not-found" }],
+    }),
   },
   {
     name: "mooc-submission-status: no-grading-yet",

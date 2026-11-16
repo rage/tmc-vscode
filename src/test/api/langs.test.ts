@@ -1187,7 +1187,13 @@ suite("Langs response cache", function () {
     let callCount = 0
     stubSpawn(langs, () => {
       callCount += 1
-      return Ok(dataOutput("mooc-exercise-updates", { updated: [uuid(callCount)], removed: [] }))
+      return Ok(
+        dataOutput("mooc-exercise-updates", {
+          updated: [uuid(callCount)],
+          removed: [],
+          unchecked_courses: [],
+        }),
+      )
     })
     const first = await langs.checkExerciseUpdates("mooc")
     const second = await langs.checkExerciseUpdates("mooc")
@@ -1201,7 +1207,13 @@ suite("Langs response cache", function () {
     let callCount = 0
     stubSpawn(langs, () => {
       callCount += 1
-      return Ok(dataOutput("mooc-exercise-updates", { updated: [uuid(callCount)], removed: [] }))
+      return Ok(
+        dataOutput("mooc-exercise-updates", {
+          updated: [uuid(callCount)],
+          removed: [],
+          unchecked_courses: [],
+        }),
+      )
     })
     await langs.checkExerciseUpdates("mooc")
     const refreshed = await langs.checkExerciseUpdates("mooc", { forceRefresh: true })
@@ -1287,7 +1299,13 @@ suite("Langs exercise-update cache invalidation", function () {
     stubSpawn(langs, (_i, args) => {
       if (args.includes("check-exercise-updates")) {
         updateCheckCalls += 1
-        return Ok(dataOutput("mooc-exercise-updates", { updated: [uuid(1)], removed: [] }))
+        return Ok(
+          dataOutput("mooc-exercise-updates", {
+            updated: [uuid(1)],
+            removed: [],
+            unchecked_courses: [],
+          }),
+        )
       }
       return Ok(
         dataOutput("mooc-exercise-download", {
