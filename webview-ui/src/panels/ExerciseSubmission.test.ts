@@ -787,7 +787,7 @@ suite("ExerciseSubmission panel (results hub)", () => {
     expect(isSecondary(submit)).toBe(true)
   })
 
-  test("a passed exercise leads on, with its model solution in the menu", async () => {
+  test("a passed exercise leads on, with its model solution beside", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showView(panel.id, {
       ...standingView(tmcExercise(true), "https://tmc.mooc.fi/exercises/1/solution"),
@@ -796,8 +796,17 @@ suite("ExerciseSubmission panel (results hub)", () => {
 
     expect(await screen.findByRole("heading", { name: "Exercise passed" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Next: part01-02_name" })).toBeInTheDocument()
+    expect(isSecondary(screen.getByRole("button", { name: "Show Model Solution" }))).toBe(true)
     expect(screen.queryByRole("button", { name: "Submit" })).not.toBeInTheDocument()
-    expect(await menuItems()).toContain("Show Model Solution in Browser")
+    expect(await menuItems()).not.toContain("Show Model Solution in Browser")
+  })
+
+  test("the last exercise passed leads to its model solution", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, standingView(tmcExercise(true), "https://tmc.mooc.fi/exercises/1/solution"))
+
+    const solution = await screen.findByRole("button", { name: "Show Model Solution" })
+    expect(isSecondary(solution)).toBe(false)
   })
 
   test("all tests passing locally makes Submit the main action", async () => {

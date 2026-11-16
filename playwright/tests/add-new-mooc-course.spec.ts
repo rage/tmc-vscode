@@ -113,10 +113,7 @@ vsCodeTest(
         "aria-valuetext",
         /^1 \/ \d+ points$/,
       )
-      await sidePanel.getByRole("button", { name: "More Actions" }).click()
-      await expect(
-        sidePanel.getByRole("menuitem", { name: "Show Model Solution in Browser" }),
-      ).toBeVisible()
+      await expect(sidePanel.getByRole("button", { name: "Show Model Solution" })).toBeVisible()
     })
   },
 )

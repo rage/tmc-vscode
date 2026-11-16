@@ -137,7 +137,9 @@
           ? view.submitRefusal
             ? [runTests]
             : [runTests, submitAgain]
-          : [],
+          : showSolution
+            ? [showSolution]
+            : [],
       }
     }
     if (view?.exerciseState === "notOnDisk") {
@@ -155,7 +157,10 @@
       return { primary: submit }
     }
     if (view?.phase === "standing") {
-      return view.isExercisePassed ? {} : { primary: runTests, secondary: [submit] }
+      if (view.isExercisePassed) {
+        return showSolution ? { primary: showSolution } : {}
+      }
+      return { primary: runTests, secondary: [submit] }
     }
     if (canRetry) {
       if (remedy) {
@@ -166,8 +171,16 @@
         ? { primary: submitAgain, secondary: [runTests] }
         : { primary: runTests, secondary: [submitAgain] }
     }
-    return remedy ? { primary: remedy } : {}
+    if (remedy) {
+      return { primary: remedy }
+    }
+    return view?.isExercisePassed && showSolution ? { primary: showSolution } : {}
   })
+
+  const isSolutionInBar = $derived(
+    showSolution !== undefined &&
+      [barActions.primary, ...(barActions.secondary ?? [])].includes(showSolution),
+  )
 
   const menuActions = $derived.by((): MenuAction[] => {
     const submissionUrl = view?.submissionUrl
@@ -176,7 +189,7 @@
       ...(submissionUrl
         ? [{ label: "Show Submission in Browser", onselect: () => showInBrowser(submissionUrl) }]
         : []),
-      ...(solutionUrl && !view?.submitRefusal
+      ...(solutionUrl && !isSolutionInBar
         ? [{ label: "Show Model Solution in Browser", onselect: () => showInBrowser(solutionUrl) }]
         : []),
       ...(view?.canPaste && !view.exerciseState
