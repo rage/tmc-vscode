@@ -17,12 +17,12 @@ vsCodeTest("the account item shows the logged-in session", async ({ page, webvie
 vsCodeTest.describe(() => {
   vsCodeTest.use({ seedTmcCredentials: false })
 
-  vsCodeTest("the logged-out account item starts the device flow", async ({ page, webview }) => {
+  vsCodeTest("the logged-out account item opens the login screen", async ({ page, webview }) => {
     const moocLoginPage = new MoocLoginPage(page, webview)
     await moocLoginPage.openMenu()
 
     await statusBarItem(page, /not logged in/).click()
 
-    await expect(moocLoginPage.waitingNotification()).toBeVisible()
+    await moocLoginPage.expectWaiting()
   })
 })

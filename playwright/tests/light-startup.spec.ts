@@ -49,6 +49,6 @@ vsCodeTest(
       .getByRole("button", { name: "Log In" })
       .click()
 
-    await expect(moocLoginPage.waitingNotification()).toBeVisible()
+    await moocLoginPage.expectWaiting()
   },
 )

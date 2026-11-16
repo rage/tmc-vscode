@@ -1,8 +1,10 @@
 import { expect } from "@playwright/test"
 
 import { vsCodeTest } from "../fixtures"
+import { AddCoursePage } from "../pages/add-course"
+import { CourseHomePage } from "../pages/course-home"
 import { CoursesViewPage } from "../pages/courses-view"
-import { QuickPickPage } from "../pages/quick-pick"
+import { MoocLoginPage } from "../pages/mooc-login"
 import { TmcPage } from "../pages/tmc"
 
 // Every test starts from an empty profile, which activation treats as a fresh install.
@@ -26,7 +28,7 @@ vsCodeTest.describe(() => {
   vsCodeTest.use({ seedTmcCredentials: false })
 
   vsCodeTest(
-    "logging in from the walkthrough leaves the keyboard in the Add Course pick",
+    "logging in from the walkthrough goes on to the add-course screen, then the course home",
     async ({ page, webview }) => {
       const courseTitle = "MOOC Python Course"
       await new TmcPage(page, webview).openMenu()
@@ -40,17 +42,32 @@ vsCodeTest.describe(() => {
       ).toBeVisible({ timeout: 30_000 })
       await logIn.getByRole("button", { name: "Log In", exact: true }).click()
 
-      const quickPick = new QuickPickPage(page)
-      await quickPick.waitForTitle("Add Course")
-      await quickPick.expectItem(courseTitle)
-      await page.keyboard.type(courseTitle)
-      await page.keyboard.press("Enter")
-      await quickPick.expectClosed()
+      await new MoocLoginPage(page, webview).expectWaiting()
+      const addCourse = new AddCoursePage(page, webview)
+      await addCourse.expectShown()
+      await addCourse.addMoocCourse(courseTitle)
+      await new CourseHomePage(page, webview).expectShown(courseTitle)
       const coursesView = new CoursesViewPage(page, webview)
       await coursesView.goto()
       await expect(coursesView.row(courseTitle)).toBeVisible()
     },
   )
+
+  vsCodeTest("the Add a course step opens the add-course screen", async ({ page, webview }) => {
+    const loginScreen = new MoocLoginPage(page, webview)
+    await loginScreen.gotoFromCoursesView()
+    await expect(loginScreen.statusBarMessage("Logged in to courses.mooc.fi.")).toBeVisible()
+    const addCourseTab = page.getByRole("tab", { name: /^Add Course/ })
+    await addCourseTab.hover()
+    await addCourseTab.getByRole("button", { name: /^Close/ }).click()
+
+    await loginScreen.runPaletteCommand("TestMyCode: Get Started")
+    const step = page.locator(".getting-started-step").filter({ hasText: "Add a course" }).first()
+    await step.click()
+    await step.getByRole("button", { name: "Add Course", exact: true }).click()
+
+    await new AddCoursePage(page, webview).expectShown()
+  })
 })
 
 vsCodeTest(

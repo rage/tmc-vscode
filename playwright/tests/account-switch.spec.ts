@@ -4,9 +4,9 @@ import type { Page } from "@playwright/test"
 import { MOCK_BACKEND_URL } from "../../backend/mockSession"
 import { MOCK_DEFAULT_USER_ID } from "../../backend/mooc/fixtures"
 import { vsCodeTest } from "../fixtures"
+import { AddCoursePage } from "../pages/add-course"
 import { CoursesViewPage } from "../pages/courses-view"
 import { MoocLoginPage } from "../pages/mooc-login"
-import { QuickPickPage } from "../pages/quick-pick"
 
 const OTHER_STUDENT_ID = "0d6a3a7e-1f0b-4c8e-8f3d-6b2a9c4e5f70"
 
@@ -38,10 +38,7 @@ vsCodeTest.describe(() => {
       await vsCodeTest.step("the first student logs in and downloads an exercise", async () => {
         await moocLoginPage.gotoFromCoursesView()
         await expect(moocLoginPage.statusBarMessage("Logged in to courses.mooc.fi.")).toBeVisible()
-        const quickPick = new QuickPickPage(page)
-        await quickPick.waitForTitle("Add Course")
-        await quickPick.selectByLabel(courseTitle)
-        await quickPick.expectClosed()
+        await new AddCoursePage(page, webview).addMoocCourse(courseTitle)
         await coursesView.goto()
         await coursesView.expand(coursesView.row(courseTitle))
         const row = coursesView.row(exerciseName)

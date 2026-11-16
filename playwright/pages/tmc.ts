@@ -92,19 +92,19 @@ export class TmcPage {
   /** Runs the command titled `title` ("Category: Name") from the command palette. */
   public async runPaletteCommand(title: string): Promise<void> {
     const palette = this.page.locator(".quick-input-widget")
-    // A webview that has just taken the focus may swallow the key before it forwards keys.
+    // A webview that has just taken the focus may swallow the key before it forwards keys, and
+    // an editor the extension opens meanwhile closes the palette; a click that lands ran it.
     await expect(async () => {
       if (!(await palette.locator("input").isVisible())) {
         await this.page.keyboard.press("F1")
       }
-      await expect(palette.locator("input")).toBeVisible({ timeout: 2_000 })
-    }).toPass({ timeout: 15_000 })
-    await palette.locator("input").fill(`>${title}`)
-    await palette
-      .locator(".quick-input-list .monaco-list-row")
-      .filter({ hasText: title })
-      .first()
-      .click()
+      await palette.locator("input").fill(`>${title}`, { timeout: 2_000 })
+      await palette
+        .locator(".quick-input-list .monaco-list-row")
+        .filter({ hasText: title })
+        .first()
+        .click({ timeout: 2_000 })
+    }).toPass({ timeout: 30_000 })
     await expect(palette).toBeHidden()
   }
 

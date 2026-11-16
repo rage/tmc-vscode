@@ -3,6 +3,8 @@ import { expect } from "@playwright/test"
 import { MOCK_BACKEND_URL } from "../../backend/mockSession"
 import { courseWorkspaceSettings } from "../courseWorkspace"
 import { vsCodeTest } from "../fixtures"
+import { AddCoursePage } from "../pages/add-course"
+import { CourseHomePage } from "../pages/course-home"
 import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
 import { TestResultsPage } from "../pages/test-results"
@@ -12,7 +14,7 @@ import { TmcPage } from "../pages/tmc"
 // mock backend (backend/mooc, mounted in the same process as the legacy TMC
 // mock and routed via TMC_LANGS_MOOC_ROOT_URL in fixtures.ts). It covers the
 // full path the mooc migration adds: device-flow login -> picking an enrolled
-// course from the add-course quick pick -> the course's exercises in the Courses
+// course on the add-course screen -> the course's exercises in the Courses
 // view -> opening (downloading) an exercise from its context menu -> opening the
 // workspace -> opening the exercise file -> running the local tests -> submitting
 // -> the reduced mooc result panel.
@@ -40,10 +42,20 @@ vsCodeTest(
       await coursesView.goto()
     })
 
-    await vsCodeTest.step("add the mooc course", async () => {
+    await vsCodeTest.step("log in and see the enrolled course's card", async () => {
+      await coursesView.logInToMooc()
+      const card = new AddCoursePage(page, webview).card(courseTitle)
+      await expect(card).toContainText(
+        "A test python course served by the local mooc mock backend.",
+      )
+      await expect(card).not.toContainText("Added")
+    })
+
+    await vsCodeTest.step("add the mooc course, which opens its course home", async () => {
       const course = coursesView.row(courseTitle)
       await expect(course).toBeHidden()
-      await coursesView.addNewMoocCourse(courseTitle)
+      await new AddCoursePage(page, webview).addMoocCourse(courseTitle)
+      await new CourseHomePage(page, webview).expectShown(courseTitle)
       await expect(course).toHaveAccessibleName(/, courses\.mooc\.fi(,|$)/)
     })
 

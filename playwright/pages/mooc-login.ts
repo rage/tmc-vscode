@@ -1,9 +1,13 @@
+import { expect } from "@playwright/test"
 import type { Locator } from "@playwright/test"
 
 import { mockUserCode } from "../../backend/mockSession"
 import { clickUntilVisible, TmcPage } from "./tmc"
 
-/** The courses.mooc.fi device-flow login: a progress notification showing the code. */
+/**
+ * The courses.mooc.fi device-flow login screen in the main panel
+ * (webview-ui/src/panels/Login.svelte).
+ */
 export class MoocLoginPage extends TmcPage {
   // Only reachable with no credentials at all: the Courses view shows this welcome
   // content only while the extension considers the user logged out.
@@ -11,27 +15,37 @@ export class MoocLoginPage extends TmcPage {
     await this.openMenu()
     await clickUntilVisible(
       this.coursesViewWelcomeButton("Log In"),
-      this.waitingNotification(),
-      "the login did not start",
+      this.heading(),
+      "the login screen did not open",
     )
+  }
+
+  public heading(): Locator {
+    return this.webview.getByRole("heading", { level: 1, name: "Log in to courses.mooc.fi" })
+  }
+
+  /** The code of the `attempt`th login since the test started, as the screen shows it. */
+  public code(attempt = 1): Locator {
+    return this.webview.getByText(mockUserCode(attempt), { exact: true })
+  }
+
+  /** The failure the screen heads with `title`, e.g. "Login denied". */
+  public failure(title: string): Locator {
+    return this.webview.getByRole("heading", { level: 2, name: title })
+  }
+
+  public button(name: string): Locator {
+    return this.webview.getByRole("button", { name, exact: true })
+  }
+
+  public async expectWaiting(attempt = 1): Promise<void> {
+    await expect(this.code(attempt)).toBeVisible({ timeout: 30_000 })
   }
 
   /** Any modal dialog; `window.dialogStyle: custom` renders one inside the page. */
   public modalDialog(): Locator {
     // Not `getByRole("dialog")`: every notification toast has that role too.
     return this.page.locator(".monaco-dialog-box")
-  }
-
-  /** The progress notification of the `attempt`th login since the test started. */
-  public waitingNotification(attempt = 1): Locator {
-    return this.page
-      .locator(".notification-toast")
-      .filter({ hasText: `Code ${mockUserCode(attempt)}: approve it at` })
-  }
-
-  public async cancelWaiting(attempt = 1): Promise<void> {
-    await this.waitingNotification(attempt).hover()
-    await this.waitingNotification(attempt).getByRole("button", { name: "Cancel" }).click()
   }
 
   /**

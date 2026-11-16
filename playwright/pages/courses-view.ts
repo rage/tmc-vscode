@@ -1,7 +1,8 @@
 import { expect } from "@playwright/test"
 import type { Locator } from "@playwright/test"
 
-import { QuickPickPage } from "./quick-pick"
+import { AddCoursePage } from "./add-course"
+import { CourseHomePage } from "./course-home"
 import { TmcPage } from "./tmc"
 
 function startingWith(text: string): RegExp {
@@ -65,42 +66,45 @@ export class CoursesViewPage extends TmcPage {
     await expect(item).toBeHidden()
   }
 
-  /** Opens the add-course quick pick from the view's title bar. */
-  public async openAddCourseQuickPick(): Promise<QuickPickPage> {
+  /** Opens the add-course screen from the view's title bar. */
+  public async openAddCourse(): Promise<AddCoursePage> {
     await this.page.getByRole("button", { name: "Add Course...", exact: true }).click()
-    const quickPick = new QuickPickPage(this.page)
-    await quickPick.waitForTitle("Add Course")
-    return quickPick
+    const addCourse = new AddCoursePage(this.page, this.webview)
+    await addCourse.expectShown()
+    return addCourse
   }
 
-  /** Adds a tmc.mooc.fi course, which is picked inside its organization. */
+  /** Adds a tmc.mooc.fi course, which is picked inside its organization, and waits for its home. */
   public async addNewCourse(name: string): Promise<void> {
-    const quickPick = await this.openAddCourseQuickPick()
-    await quickPick.selectByLabel("Test Organization")
-    await quickPick.selectByLabel(name)
-    await quickPick.expectClosed()
+    const addCourse = await this.openAddCourse()
+    await addCourse.addTmcCourse("Test Organization", name)
+    await new CourseHomePage(this.page, this.webview).expectShown(name)
   }
 
   /**
-   * Adds a courses.mooc.fi course. Enrolled courses are only listed once that
-   * backend has a session, so this logs in first.
+   * Adds a courses.mooc.fi course and waits for its home. Enrolled courses are only listed once
+   * that backend has a session, so this logs in first.
    */
   public async addNewMoocCourse(name: string): Promise<void> {
     await this.logInToMooc()
-    const quickPick = await this.openAddCourseQuickPick()
-    await quickPick.selectByLabel(name)
-    await quickPick.expectClosed()
+    const addCourse = new AddCoursePage(this.page, this.webview)
+    await addCourse.addMoocCourse(name)
+    await new CourseHomePage(this.page, this.webview).expectShown(name)
   }
 
-  /** Picks the login entry the quick pick offers while courses.mooc.fi has no session. */
+  /** Logs in from the add-course screen, which offers it while courses.mooc.fi has no session. */
   public async startMoocLogin(): Promise<void> {
-    const quickPick = await this.openAddCourseQuickPick()
-    await quickPick.selectByLabel("Log in to courses.mooc.fi")
+    const addCourse = await this.openAddCourse()
+    await addCourse.section("courses.mooc.fi").getByRole("button", { name: "Log In" }).click()
   }
 
-  /** Runs the device flow to completion against the mock's auto-approving client. */
+  /**
+   * Runs the device flow to completion against the mock's auto-approving client, which leaves
+   * the add-course screen showing the enrolled courses.
+   */
   public async logInToMooc(): Promise<void> {
     await this.startMoocLogin()
     await expect(this.statusBarMessage("Logged in to courses.mooc.fi.")).toBeVisible()
+    await new AddCoursePage(this.page, this.webview).expectShown()
   }
 }
