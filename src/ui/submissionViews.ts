@@ -33,7 +33,10 @@ class SubmissionViews {
   private _shown: ExerciseSubmissionPanel | undefined
   private _sectionSerial = 0
 
-  /** Fires with a new submission's panel, which the side panel then shows. */
+  /**
+   * Fires with a panel the side panel then shows without taking the focus: a new submission's,
+   * or one {@link show} names.
+   */
   public readonly onDidOpen = this._opened.event
 
   public readonly onDidUpdate = this._updated.event
@@ -51,6 +54,11 @@ class SubmissionViews {
         this._latest.delete(id)
       }
     }
+    this._opened.fire(panel)
+  }
+
+  /** Shows `panel` with the view it was last updated with, leaving the focus where it is. */
+  public show(panel: ExerciseSubmissionPanel): void {
     this._opened.fire(panel)
   }
 

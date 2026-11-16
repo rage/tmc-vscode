@@ -10,6 +10,7 @@ import {
   withDistinctKeys,
 } from "../../shared/lib"
 import { checkAiUse } from "../actions/checkAiUse"
+import { exerciseResultsPanel } from "../actions/exerciseResults"
 import type { ExerciseTestOutcome } from "../actions/testExercise"
 import { testExercise } from "../actions/testExercise"
 import type { ReadyActionContext } from "../actions/types"
@@ -395,7 +396,7 @@ export class ExerciseTestController implements vscode.Disposable {
     if (
       outcome.kind !== "examMode" &&
       this._actionContext.authState.loggedIn &&
-      showLocalPassInResults(exercise)
+      showLocalPassInResults(this._actionContext, exercise)
     ) {
       return
     }
@@ -430,18 +431,28 @@ export class ExerciseTestController implements vscode.Disposable {
 }
 
 /**
- * Shows a local all-pass in the exercise's results panel when the student can see it, where
- * Submit is then the main action.
+ * Shows a local all-pass in the exercise's results panel, opening it without taking the focus,
+ * where Submit is then the main action. A panel still busy with a submission keeps showing that.
  *
- * @returns Whether it was shown; a panel still busy with a submission keeps showing that.
+ * @returns Whether the pass was handled here; `false` when the exercise has no results panel.
  */
-function showLocalPassInResults(exercise: WorkspaceExercise): boolean {
-  const panel = submissionViews.shownFor(exercise.id)
-  const view = panel && submissionViews.latestView(panel.id)
-  if (!panel || !view || view.canKeepWaiting || ["uploading", "grading"].includes(view.phase)) {
+function showLocalPassInResults(
+  actionContext: ReadyActionContext,
+  exercise: WorkspaceExercise,
+): boolean {
+  const latest = submissionViews.latestFor(exercise.id)
+  if (
+    latest &&
+    (latest.view.canKeepWaiting || ["uploading", "grading"].includes(latest.view.phase))
+  ) {
+    return true
+  }
+  const panel = exerciseResultsPanel(actionContext, exercise)
+  if (panel.err) {
     return false
   }
-  submissionViews.update({ panel, view: testedLocallyView(), shouldReopen: false })
+  submissionViews.update({ panel: panel.val, view: testedLocallyView(), shouldReopen: false })
+  submissionViews.show(panel.val)
   return true
 }
 

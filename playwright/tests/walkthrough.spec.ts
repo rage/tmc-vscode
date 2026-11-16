@@ -54,7 +54,7 @@ vsCodeTest.describe(() => {
 })
 
 vsCodeTest(
-  "running tests and submitting from a notification tick off their walkthrough steps",
+  "running tests and submitting from the results screen tick off their walkthrough steps",
   async ({ page, webview }) => {
     const coursesView = new CoursesViewPage(page, webview)
     const course = "Python Course"
@@ -68,18 +68,17 @@ vsCodeTest(
       await coursesView.runInlineAction(coursesView.row(course), "Open Course Workspace")
     })
 
-    await vsCodeTest.step("run the tests and submit from the notification", async () => {
+    await vsCodeTest.step("run the tests and submit from the results screen", async () => {
       await coursesView.goto()
       await coursesView.expand(coursesView.row(course))
       await coursesView.runInlineAction(coursesView.row(exercise), "Run Tests")
-      const passed = page
-        .locator(".notifications-toasts .notification-toast")
-        .filter({ hasText: new RegExp(`All tests of \\S*${exercise} passed\\.`) })
-      await passed.getByRole("button", { name: "Submit", exact: true }).click()
+      const sidePanel = new TmcPage(page, webview).getSidePanel()
       await expect(
-        new TmcPage(page, webview)
-          .getSidePanel()
-          .getByRole("heading", { name: "All tests passed on the server" }),
+        sidePanel.getByRole("heading", { name: "All tests passed locally" }),
+      ).toBeVisible()
+      await sidePanel.getByRole("button", { name: "Submit", exact: true }).click()
+      await expect(
+        sidePanel.getByRole("heading", { name: "All tests passed on the server" }),
       ).toBeVisible({ timeout: 30_000 })
     })
 
