@@ -4,15 +4,19 @@ import type {
   CourseHomeExercise,
   CourseHomeView,
   DeadlineText,
+  ExerciseSection,
   ExtensionToWebview,
   Panel,
+  SubmissionHistoryEntry,
   WebviewToExtension,
 } from "../../shared/lib"
 import { makeMoocKind, makeTmcKind } from "../../shared/lib"
 import {
   inProgressView,
   moocGradingView,
+  standingView,
   submitFailedView,
+  testedLocallyView,
   tmcResultView,
 } from "../../src/panels/submissionView"
 import {
@@ -307,6 +311,106 @@ const moocSubmissionPanel = {
   organization: "University of Helsinki",
 }
 
+/** The host's answers to what a results panel asks of its History and Get help. */
+function answerResultsRequests(
+  panel: { id: number },
+  history: SubmissionHistoryEntry[],
+): (message: WebviewToExtension) => ExtensionToWebview[] {
+  return (message) => {
+    const target = { type: "ExerciseSubmission" as const, id: panel.id }
+    switch (message.type) {
+      case "requestSubmissionHistory":
+        return [
+          {
+            type: "reply",
+            target,
+            requestId: message.requestId,
+            outcome: { ok: true, value: history },
+          },
+        ]
+      case "pasteExercise":
+        return [
+          {
+            type: "reply",
+            target,
+            requestId: message.requestId,
+            outcome: {
+              ok: true,
+              value: { link: `${MOOC_COURSE_URL}/shared-submissions/5f0c2a`, isReused: true },
+            },
+          },
+        ]
+      default:
+        return []
+    }
+  }
+}
+
+function openSection(
+  panel: { id: number },
+  section: ExerciseSection,
+  shouldPaste = false,
+): ExtensionToWebview {
+  return {
+    type: "openExerciseSection",
+    target: { type: "ExerciseSubmission", id: panel.id },
+    section,
+    serial: 1,
+    shouldPaste,
+  }
+}
+
+const moocHistory: SubmissionHistoryEntry[] = [
+  {
+    key: "sub-3",
+    createdAt: "2026-10-01T08:40:12Z",
+    dateLabel: "11:40:12 AM",
+    kind: "submission",
+    points: { given: 2, max: 3 },
+    status: "Some tests failed",
+    isPassed: false,
+    isNewestGraded: true,
+    isShared: false,
+  },
+  {
+    key: "sub-1",
+    createdAt: "2026-09-29T14:02:55Z",
+    dateLabel: "Sep 29, 2026, 5:02:55 PM",
+    kind: "submission",
+    points: { given: 0, max: 3 },
+    status: "Tests failed",
+    isPassed: false,
+    isNewestGraded: false,
+    isShared: false,
+  },
+  {
+    key: "paste-1",
+    createdAt: "2026-09-30T10:15:00Z",
+    dateLabel: "Sep 30, 2026, 1:15:00 PM",
+    kind: "paste",
+    status: "Not graded",
+    isPassed: false,
+    isNewestGraded: false,
+    isShared: true,
+  },
+  {
+    key: "backup-1",
+    createdAt: "2026-09-30T09:00:00Z",
+    dateLabel: "Sep 30, 2026, 12:00:00 PM",
+    kind: "backup",
+    status: "Not graded",
+    isPassed: false,
+    isNewestGraded: false,
+    isShared: false,
+  },
+]
+
+const moocResultsPanel = { ...moocSubmissionPanel, id: 32 }
+
+const moocStandingPanel = { ...moocSubmissionPanel, id: 33 }
+
+const tmcResultsPanel = { ...submissionPanel, id: 34 }
+
 function moocGrading(
   overrides: Parameters<typeof baseMoocGrading>[0],
 ): ExerciseTaskSubmissionStatus {
@@ -532,6 +636,47 @@ export const SCENARIOS: Scenario[] = [
         triesLeft: 0,
       }),
     ],
+  },
+  {
+    id: "exercise-submission/mooc-history",
+    panel: moocResultsPanel,
+    reply: answerResultsRequests(moocResultsPanel, moocHistory),
+    pushes: [
+      submissionViewMessage(moocResultsPanel.id, {
+        ...moocGradingView(moocGrading({ score_given: 2, feedback_text: null }), 3),
+        isExercisePassed: false,
+        triesLeft: 2,
+      }),
+      openSection(moocResultsPanel, "history"),
+    ],
+  },
+  {
+    id: "exercise-submission/mooc-get-help",
+    panel: moocStandingPanel,
+    reply: answerResultsRequests(moocStandingPanel, moocHistory),
+    pushes: [
+      submissionViewMessage(
+        moocStandingPanel.id,
+        standingView(
+          makeMoocKind({
+            id: "mooc-exercise-uuid",
+            name: "Sum of three numbers",
+            availablePoints: 3,
+            awardedPoints: 0,
+            deadline: null,
+            passed: false,
+          }),
+          undefined,
+        ),
+      ),
+      openSection(moocStandingPanel, "getHelp", true),
+    ],
+  },
+  {
+    id: "exercise-submission/tmc-tested-locally",
+    panel: tmcResultsPanel,
+    reply: answerResultsRequests(tmcResultsPanel, []),
+    pushes: [submissionViewMessage(tmcResultsPanel.id, testedLocallyView())],
   },
   {
     id: "exercise-submission/mooc-grading",
