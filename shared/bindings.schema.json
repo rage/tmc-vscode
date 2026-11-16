@@ -1865,7 +1865,7 @@
           "format": "uuid"
         },
         "exercise_locked": {
-          "description": "`true` once the exercise takes no more submissions from the user, whatever its chapter's\nlocking status says; a submit fails with the `exercise-locked` error kind.",
+          "description": "`true` once the exercise takes no more submissions from the user, whatever its chapter's\nlocking status says. A submit fails with the `chapter-completed-and-locked` error kind\nwhile the chapter is locked for the user, and with `exercise-locked` otherwise.",
           "type": "boolean",
           "default": false
         },
@@ -1997,7 +1997,7 @@
           "const": "NotAttempted"
         },
         {
-          "description": "Below full points with tries left, still being graded, or waiting for a teacher's review\n(`pending_teacher_review`).",
+          "description": "Below full points with tries left, still being graded, in peer or self review, or waiting\nfor a teacher's review (`pending_teacher_review`).",
           "type": "string",
           "const": "Attempted"
         },
@@ -2007,7 +2007,7 @@
           "const": "Passed"
         },
         {
-          "description": "Below full points (0 included), the try limit used up and no teacher review pending, so\nthe score is final.",
+          "description": "Below full points (0 included), the try limit used up and no review pending, so the score\nis final.",
           "type": "string",
           "const": "OutOfTries"
         }
