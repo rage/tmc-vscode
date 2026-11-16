@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 
-import type { ExerciseSubmissionPanel, SubmissionView } from "../../shared/lib"
+import type { ExerciseSection, ExerciseSubmissionPanel, SubmissionView } from "../../shared/lib"
 import { ExerciseIdentifier } from "../../shared/lib"
 
 /** A view of a submission, for the side panel showing `panel`. */
@@ -9,6 +9,13 @@ export interface SubmissionViewUpdate {
   view: SubmissionView
   /** Whether the student should see this view even if the side panel is closed or elsewhere. */
   shouldReopen: boolean
+}
+
+/** A student's request to see a submission panel, from a command rather than a submit. */
+export interface SubmissionPanelReveal {
+  panel: ExerciseSubmissionPanel
+  /** The section to open and focus. */
+  section?: { name: ExerciseSection; shouldPaste: boolean; serial: number } | undefined
 }
 
 /**
@@ -22,6 +29,9 @@ class SubmissionViews {
   private readonly _updated = new vscode.EventEmitter<SubmissionViewUpdate>()
   private readonly _latest = new Map<number, SubmissionViewUpdate>()
   private readonly _cleared = new vscode.EventEmitter<void>()
+  private readonly _revealed = new vscode.EventEmitter<SubmissionPanelReveal>()
+  private _shown: ExerciseSubmissionPanel | undefined
+  private _sectionSerial = 0
 
   /** Fires with a new submission's panel, which the side panel then shows. */
   public readonly onDidOpen = this._opened.event
@@ -30,6 +40,9 @@ class SubmissionViews {
 
   /** Fires after {@link clear}; whatever shows a submission should close. */
   public readonly onDidClear = this._cleared.event
+
+  /** Fires for {@link reveal}; the side panel then shows the panel, focused. */
+  public readonly onDidRequestReveal = this._revealed.event
 
   /** Announces a new submission, forgetting earlier submissions of the same exercise. */
   public open(panel: ExerciseSubmissionPanel): void {
@@ -50,6 +63,42 @@ class SubmissionViews {
   public clear(): void {
     this._latest.clear()
     this._cleared.fire()
+  }
+
+  /**
+   * Shows `panel` because the student asked to, with `section` open when given. The panel
+   * shows the view it was last updated with.
+   */
+  public reveal(
+    panel: ExerciseSubmissionPanel,
+    section?: { name: ExerciseSection; shouldPaste: boolean },
+  ): void {
+    this._sectionSerial += 1
+    this._revealed.fire({
+      panel,
+      section: section && { ...section, serial: this._sectionSerial },
+    })
+  }
+
+  /** The latest panel of `exerciseId` and its view, unless every one has been superseded. */
+  public latestFor(exerciseId: ExerciseIdentifier): SubmissionViewUpdate | undefined {
+    const key = ExerciseIdentifier.key(exerciseId)
+    return [...this._latest.values()].findLast(
+      ({ panel }) => ExerciseIdentifier.key(panel.exerciseId) === key,
+    )
+  }
+
+  /** Records the panel on screen in the side panel, or `undefined` when none is visible. */
+  public setShown(panel: ExerciseSubmissionPanel | undefined): void {
+    this._shown = panel
+  }
+
+  /** The panel of `exerciseId` the student can see now, if any. */
+  public shownFor(exerciseId: ExerciseIdentifier): ExerciseSubmissionPanel | undefined {
+    const shown = this._shown
+    return shown && ExerciseIdentifier.key(shown.exerciseId) === ExerciseIdentifier.key(exerciseId)
+      ? shown
+      : undefined
   }
 
   /** The view submission panel `panelId` was last updated with, unless it has been superseded. */

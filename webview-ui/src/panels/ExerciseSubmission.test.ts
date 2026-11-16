@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/svelte"
+import { vi } from "vitest"
 
 import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../../../shared/langsSchema"
 import type { ExerciseSubmissionPanel, FeedbackQuestion, SubmissionView } from "../../../shared/lib"
@@ -7,7 +8,9 @@ import {
   gradingUnavailableView,
   inProgressView,
   moocGradingView,
+  standingView,
   submitFailedView,
+  testedLocallyView,
   tmcResultView,
 } from "../../../src/panels/submissionView"
 import { toWebviewError } from "../../../src/panels/webviewError"
@@ -332,11 +335,13 @@ suite("ExerciseSubmission panel (tmc results)", () => {
     render(ExerciseSubmission, { props: { panel } })
     showTmcResult(submissionFinished({ status: "fail", all_tests_passed: false, points: [] }))
     await screen.findByRole("heading", { name: "Some tests failed on the server" })
-    expect(screen.queryByRole("region", { name: "Get help" })).not.toBeInTheDocument()
+    const toggle = screen.getByRole("button", { name: "Get help" })
+    expect(toggle).toHaveAttribute("aria-expanded", "false")
 
     await chooseMenuItem("Ask for Help…")
 
-    expect(await screen.findByRole("heading", { name: "Get help" })).toHaveFocus()
+    expect(toggle).toHaveAttribute("aria-expanded", "true")
+    expect(toggle).toHaveFocus()
   })
 
   test("a passed submission offers no paste help", async () => {
@@ -743,6 +748,201 @@ suite("ExerciseSubmission panel (mooc results)", () => {
 
 // VS Code reloads the document of a panel that was hidden; the host sends the panel and its
 // latest view again, and the webview state keeps what only the webview knew.
+const tmcExercise = (passed: boolean) =>
+  makeTmcKind({
+    id: 1,
+    name: "part01-01_hello",
+    availablePoints: 2,
+    awardedPoints: passed ? 2 : 0,
+    passed,
+    deadline: null,
+    softDeadline: null,
+  })
+
+function openSection(
+  section: "history" | "getHelp",
+  serial: number,
+  shouldPaste = false,
+  shown: ExerciseSubmissionPanel = panel,
+): void {
+  dispatchToWebview({
+    type: "openExerciseSection",
+    target: { id: shown.id, type: shown.type },
+    section,
+    serial,
+    shouldPaste,
+  })
+}
+
+suite("ExerciseSubmission panel (results hub)", () => {
+  test("without a submission, shows where the exercise stands and offers to test it", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, standingView(tmcExercise(false), undefined))
+
+    expect(await screen.findByRole("heading", { name: "Not passed yet" })).toBeInTheDocument()
+    expect(screen.getByRole("meter", { name: "Points" })).toBeInTheDocument()
+    const runTests = screen.getByRole("button", { name: "Run Tests" })
+    const submit = screen.getByRole("button", { name: "Submit" })
+    expect(isSecondary(runTests)).toBe(false)
+    expect(isSecondary(submit)).toBe(true)
+  })
+
+  test("a passed exercise leads on, with its model solution in the menu", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...standingView(tmcExercise(true), "https://tmc.mooc.fi/exercises/1/solution"),
+      nextExercise: { name: "part01-02_name" },
+    })
+
+    expect(await screen.findByRole("heading", { name: "Exercise passed" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Next: part01-02_name" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Submit" })).not.toBeInTheDocument()
+    expect(await menuItems()).toContain("Show Model Solution in Browser")
+  })
+
+  test("all tests passing locally makes Submit the main action", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, testedLocallyView())
+    const submit = await screen.findByRole("button", { name: "Submit" })
+    postedMessages.mockClear()
+
+    expect(screen.getByRole("heading", { name: "All tests passed locally" })).toBeInTheDocument()
+    expect(isSecondary(submit)).toBe(false)
+    submit.click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "exerciseAction",
+      sourcePanel: { id: panel.id, type: panel.type },
+      action: "submit",
+    })
+  })
+
+  test("a local pass of an exercise that cannot be submitted says why instead of offering Submit", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...testedLocallyView(),
+      submitRefusal:
+        "The deadline of part01-01_hello has passed, so it can no longer be submitted.",
+    })
+
+    expect(await screen.findByText(/deadline of part01-01_hello has passed/)).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Submit" })).not.toBeInTheDocument()
+  })
+
+  test("History stays closed, and lists nothing, until opened", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, standingView(tmcExercise(false), undefined))
+    const toggle = await screen.findByRole("button", { name: "History" })
+
+    expect(toggle).toHaveAttribute("aria-expanded", "false")
+    expect(postedMessages).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "requestSubmissionHistory" }),
+    )
+    toggle.click()
+
+    await vi.waitFor(() =>
+      expect(postedMessages).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "requestSubmissionHistory" }),
+      ),
+    )
+  })
+
+  test("a command's request opens History and moves the focus to it", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, standingView(tmcExercise(false), undefined))
+    await screen.findByRole("heading", { name: "Not passed yet" })
+
+    openSection("history", 1)
+
+    const toggle = screen.getByRole("button", { name: "History" })
+    await vi.waitFor(() => expect(toggle).toHaveFocus())
+    expect(toggle).toHaveAttribute("aria-expanded", "true")
+    expect(postedMessages).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "requestSubmissionHistory" }),
+    )
+  })
+
+  test("the menu opens History too", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, standingView(tmcExercise(false), undefined))
+    await screen.findByRole("heading", { name: "Not passed yet" })
+
+    await chooseMenuItem("Show History")
+
+    expect(screen.getByRole("button", { name: "History" })).toHaveAttribute("aria-expanded", "true")
+  })
+
+  test("an exercise gone from disk lists its History without Restore", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...standingView(tmcExercise(false), undefined),
+      exerciseState: "notOnDisk",
+    })
+    await screen.findByRole("heading", { name: "Not passed yet" })
+
+    openSection("history", 1)
+
+    expect(await screen.findByText(/Open the exercise again to restore/)).toBeInTheDocument()
+  })
+
+  test("an exercise removed from its course has no History", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, { ...standingView(tmcExercise(false), undefined), exerciseState: "removed" })
+    await screen.findByRole("heading", { name: "Not passed yet" })
+
+    expect(screen.queryByRole("button", { name: "History" })).not.toBeInTheDocument()
+    expect(await menuItems()).not.toContain("Show History")
+  })
+
+  test("Share via paste opens Get help and sends the code there, once", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, standingView(tmcExercise(true), undefined))
+    await screen.findByRole("heading", { name: "Exercise passed" })
+    expect(screen.queryByRole("button", { name: "Get help" })).not.toBeInTheDocument()
+
+    openSection("getHelp", 1, true)
+
+    const toggle = await screen.findByRole("button", { name: "Get help" })
+    await vi.waitFor(() => expect(toggle).toHaveFocus())
+    await vi.waitFor(() =>
+      expect(
+        postedMessages.mock.calls.filter(([message]) => message.type === "pasteExercise"),
+      ).toHaveLength(1),
+    )
+    replyToRequest("pasteExercise", {
+      ok: true,
+      value: { link: "https://tmc.mooc.fi/paste/abc", isReused: false },
+    })
+    expect(await screen.findByText("https://tmc.mooc.fi/paste/abc")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Copy Link" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Open Link" })).toBeInTheDocument()
+  })
+
+  test("a section request resent after a reload does not send the code again", async () => {
+    enterScreen(panel)
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, standingView(tmcExercise(false), undefined))
+    openSection("getHelp", 7, true)
+    await vi.waitFor(() =>
+      expect(postedMessages).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "pasteExercise" }),
+      ),
+    )
+
+    reloadDocument()
+    postedMessages.mockClear()
+    enterScreen(panel)
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, standingView(tmcExercise(false), undefined))
+    openSection("getHelp", 7, true)
+    await screen.findByRole("button", { name: "Get help" })
+
+    expect(postedMessages).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "pasteExercise" }),
+    )
+  })
+})
+
 suite("ExerciseSubmission panel shown again after being hidden", () => {
   const questions: FeedbackQuestion[] = [{ id: 2, kind: "text", question: "Free feedback" }]
 
@@ -795,7 +995,10 @@ suite("ExerciseSubmission panel shown again after being hidden", () => {
     showPanel()
     await chooseMenuItem("Ask for Help…")
     ;(await screen.findByRole("button", { name: /^Send to .* paste$/ })).click()
-    replyToRequest("pasteExercise", { ok: true, value: "https://tmc.mooc.fi/paste/abc" })
+    replyToRequest("pasteExercise", {
+      ok: true,
+      value: { link: "https://tmc.mooc.fi/paste/abc", isReused: false },
+    })
     await screen.findByText(/https:\/\/tmc\.mooc\.fi\/paste\/abc/)
 
     reloadDocument()

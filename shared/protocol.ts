@@ -8,7 +8,7 @@ import {
 } from "./courseHome"
 import type { BackendKind } from "./enum"
 import { CourseIdentifierSchema, ExerciseIdentifierSchema } from "./enum"
-import { TestCase, TmcStyleValidationResult } from "./langsSchema"
+import { SubmissionKind, TestCase, TmcStyleValidationResult } from "./langsSchema"
 
 export const CourseDetailsPanelSchema = z.object({
   id: z.number(),
@@ -151,6 +151,10 @@ const SubmissionPhaseSchema = z.enum([
   "timedOut",
   "failed",
   "manualReview",
+  // No submission is shown: the exercise as the course last reported it.
+  "standing",
+  // Every test passed in the student's own run, which the backend has not seen.
+  "testedLocally",
 ])
 
 /**
@@ -209,6 +213,39 @@ export const SubmissionViewSchema = z.object({
 
 export type SubmissionView = z.infer<typeof SubmissionViewSchema>
 
+/** One earlier submission, help request or backup of an exercise, as its History lists it. */
+export const SubmissionHistoryEntrySchema = z.object({
+  /** Names the entry to `restoreSubmission`, for the panel that listed it only. */
+  key: z.string(),
+  /** ISO timestamp. */
+  createdAt: z.string(),
+  /** `createdAt` in the student's language. */
+  dateLabel: z.string(),
+  kind: SubmissionKind,
+  /** In the exercise's own unit; absent while ungraded. */
+  points: z.object({ given: z.number(), max: z.number() }).optional(),
+  /** The outcome in a few words, e.g. "Some tests failed" or "Not graded". */
+  status: z.string(),
+  /** All tests passed on tmc; full points on courses.mooc.fi. */
+  isPassed: z.boolean(),
+  /** The newest graded submission, which a fresh download restores. */
+  isNewestGraded: z.boolean(),
+  /** A help request whose link has been shared. */
+  isShared: z.boolean(),
+})
+
+export type SubmissionHistoryEntry = z.infer<typeof SubmissionHistoryEntrySchema>
+
+/** What `restoreSubmission` did; `cancelled` when the student said no in the confirmation. */
+const RestoreOutcomeSchema = z.enum(["restored", "cancelled", "nothingToDownload"])
+
+export type RestoreOutcome = z.infer<typeof RestoreOutcomeSchema>
+
+/** A part of the ExerciseSubmission panel a command can open and move the focus to. */
+export const ExerciseSectionSchema = z.enum(["history", "getHelp"])
+
+export type ExerciseSection = z.infer<typeof ExerciseSectionSchema>
+
 /** One answer to a TMC submission's feedback question. */
 const FeedbackAnswerSchema = z.object({ questionId: z.number(), answer: z.string() })
 
@@ -234,6 +271,15 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     type: z.literal("submissionView"),
     target: targetPanelSchema("ExerciseSubmission"),
     view: SubmissionViewSchema,
+  }),
+  // Opens a section of the panel for a command the student ran; `serial` tells a new request
+  // from the same one resent after a reload, which must not paste again.
+  z.object({
+    type: z.literal("openExerciseSection"),
+    target: targetPanelSchema("ExerciseSubmission"),
+    section: ExerciseSectionSchema,
+    serial: z.number(),
+    shouldPaste: z.boolean(),
   }),
   // The one answer to a request, see `RequestMessage`.
   z.object({
@@ -305,6 +351,19 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     requestId: z.number(),
     sourcePanel: targetPanelSchema("ExerciseSubmission"),
   }),
+  // Lists the earlier submissions of the exercise the named panel shows.
+  z.object({
+    type: z.literal("requestSubmissionHistory"),
+    requestId: z.number(),
+    sourcePanel: targetPanelSchema("ExerciseSubmission"),
+  }),
+  // Restores an entry the named panel's last history listed, after the host's confirmation.
+  z.object({
+    type: z.literal("restoreSubmission"),
+    requestId: z.number(),
+    sourcePanel: targetPanelSchema("ExerciseSubmission"),
+    key: z.string(),
+  }),
   // Waits again for the grading of the submission the named panel shows, after the host
   // stopped waiting; progress and the outcome arrive as `submissionView`.
   z.object({
@@ -368,8 +427,10 @@ export type RequestType = RequestMessage["type"]
 export const ReplyValueSchemas = {
   requestCourseDetailsData: CourseHomeViewSchema,
   refreshCourseDetails: CourseHomeViewSchema,
-  // the paste link
-  pasteExercise: z.string(),
+  // `isReused` when the code is unchanged since the paste that made `link`
+  pasteExercise: z.object({ link: z.string(), isReused: z.boolean() }),
+  requestSubmissionHistory: z.array(SubmissionHistoryEntrySchema),
+  restoreSubmission: RestoreOutcomeSchema,
   keepWaitingForGrading: z.undefined(),
   sendFeedback: z.undefined(),
   copyToClipboard: z.undefined(),

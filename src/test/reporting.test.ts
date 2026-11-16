@@ -6,7 +6,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { ExerciseStatus as RowStatus, ExtensionToWebview } from "../../shared/lib"
-import { backendName, makeMoocKind } from "../../shared/lib"
+import { makeMoocKind } from "../../shared/lib"
 import type { ReadyActionContext, ReadyStartup } from "../actions/types"
 import { AiUseGate } from "../api/aiUseGate"
 import type Dialog from "../api/dialog"
@@ -25,6 +25,7 @@ import { TmcPanel } from "../panels/TmcPanel"
 import Storage from "../storage"
 import type { MoocLocalCourseData } from "../storage/data"
 import { failedUpdates } from "../ui/failedUpdates"
+import { submissionViews } from "../ui/submissionViews"
 import { CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
 import type CoursesTree from "../ui/treeview/treeview"
 import { updateablesRegistry } from "../ui/updateablesRegistry"
@@ -327,6 +328,7 @@ function lastTestRunErrors(): string[] {
 
 beforeEach(function () {
   vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+  submissionViews.clear()
   updateablesRegistry.clear()
   failedUpdates.clear()
 })
@@ -394,29 +396,43 @@ suite("reported once: exercise commands", function () {
     ])
   })
 
-  test("a failed paste from the palette is one notification", async function () {
-    const { run, shown } = await harness({
+  test("a failed paste from the palette shows in the Get help it opens only", async function () {
+    const { run, post, shown, panelFailures, shownPanel } = await harness({
       langs: { paste: async () => Err(offline()) },
     })
 
     await run("tmc.pasteExercise")
+    await post({ type: "pasteExercise", requestId: 1, sourcePanel: shownPanel() })
 
-    expect(shown).toEqual([`error: Failed to send the exercise to ${backendName("mooc")} paste.`])
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual(["pasteExercise: Offline."])
   })
 
-  test.each([
-    ["tmc.pasteExercise", "paste"],
-    ["tmc.resetExercise", "resetExercise"],
-    ["tmc.downloadOldSubmission", "restoreSubmission"],
-  ])("a busy %s says so, as information", async function (id, method) {
-    const { run, shown } = await harness({
-      langs: { getOldSubmissions: oldSubmissions, [method]: busy },
+  test("a busy restore from the History shows in the panel only", async function () {
+    const { run, post, shown, panelFailures, shownPanel } = await harness({
+      langs: { getOldSubmissions: oldSubmissions, restoreSubmission: busy },
     })
 
-    await run(id)
+    await run("tmc.downloadOldSubmission")
+    await post({ type: "requestSubmissionHistory", requestId: 1, sourcePanel: shownPanel() })
+    await post({ type: "restoreSubmission", requestId: 2, sourcePanel: shownPanel(), key: "sub-1" })
 
-    expect(shown).toEqual(["info: This exercise is being reset."])
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual(["restoreSubmission: This exercise is being reset."])
   })
+
+  test.each([["tmc.resetExercise", "resetExercise"]])(
+    "a busy %s says so, as information",
+    async function (id, method) {
+      const { run, shown } = await harness({
+        langs: { getOldSubmissions: oldSubmissions, [method]: busy },
+      })
+
+      await run(id)
+
+      expect(shown).toEqual(["info: This exercise is being reset."])
+    },
+  )
 
   test("a failed paste from the panel shows in the panel only", async function () {
     const { actionContext, post, shown, panelFailures, shownPanel } = await harness({
@@ -456,22 +472,69 @@ suite("reported once: exercise commands", function () {
     ])
   })
 
+  test("a restore names only what the panel's own History listed", async function () {
+    const restoreSubmission = vi.fn()
+    const { run, post, shown, panelFailures, shownPanel } = await harness({
+      langs: { getOldSubmissions: oldSubmissions, restoreSubmission },
+    })
+
+    await run("tmc.downloadOldSubmission")
+    await post({ type: "restoreSubmission", requestId: 1, sourcePanel: shownPanel(), key: "sub-1" })
+    await post({ type: "requestSubmissionHistory", requestId: 2, sourcePanel: shownPanel() })
+    await post({ type: "restoreSubmission", requestId: 3, sourcePanel: shownPanel(), key: "sub-9" })
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual([
+      "restoreSubmission: That submission is no longer listed. Refresh the history.",
+      "restoreSubmission: That submission is no longer listed. Refresh the history.",
+    ])
+    expect(restoreSubmission).not.toHaveBeenCalled()
+  })
+
+  test("a restore over an exercise no longer on disk says so in the panel", async function () {
+    const restoreSubmission = vi.fn()
+    let isOnDisk = true
+    const { run, post, panelFailures, shownPanel } = await harness({
+      langs: { getOldSubmissions: oldSubmissions, restoreSubmission },
+      workspaceManager: { getExercise: () => (isOnDisk ? exercise : undefined) },
+    })
+
+    await run("tmc.downloadOldSubmission")
+    await post({ type: "requestSubmissionHistory", requestId: 1, sourcePanel: shownPanel() })
+    isOnDisk = false
+    await post({ type: "restoreSubmission", requestId: 2, sourcePanel: shownPanel(), key: "sub-1" })
+
+    expect(panelFailures()).toEqual([
+      "restoreSubmission: This exercise is no longer downloaded. Open it to restore.",
+    ])
+    expect(restoreSubmission).not.toHaveBeenCalled()
+  })
+
+  test("a History that fails to list or restore shows it in the panel only", async function () {
+    let isListed = false
+    const { run, post, shown, panelFailures, shownPanel } = await harness({
+      langs: {
+        getOldSubmissions: async () => (isListed ? Ok(oldSubmission) : Err(offline())),
+        restoreSubmission: async () => Err(offline()),
+      },
+    })
+
+    await run("tmc.downloadOldSubmission")
+    await post({ type: "requestSubmissionHistory", requestId: 1, sourcePanel: shownPanel() })
+    isListed = true
+    await post({ type: "requestSubmissionHistory", requestId: 2, sourcePanel: shownPanel() })
+    await post({ type: "restoreSubmission", requestId: 3, sourcePanel: shownPanel(), key: "sub-1" })
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual([
+      "requestSubmissionHistory: Offline.",
+      "restoreSubmission: Offline.",
+    ])
+  })
+
   test.each([
     ["tmc.cleanExercise", { clean: offline }, "Failed to clean exercise."],
     ["tmc.resetExercise", { resetExercise: offline }, "Failed to reset exercise."],
-    [
-      "tmc.downloadOldSubmission",
-      { getOldSubmissions: offline },
-      "Failed to fetch old submissions.",
-    ],
-    [
-      "tmc.downloadOldSubmission",
-      {
-        getOldSubmissions: () => Ok(oldSubmission),
-        restoreSubmission: offline,
-      },
-      "Failed to download old submission.",
-    ],
   ])("a failed %s is one notification", async function (id, failing, headline) {
     const langs = Object.fromEntries(
       Object.entries(failing).map(([method, outcome]) => [
@@ -865,14 +928,11 @@ suite("refused while an AI extension runs: every entry point", function () {
   test.each<[string, string, () => unknown[]]>([
     ["the palette", "tmc.submitExercise", () => []],
     ["the palette", "tmc.testExercise", () => []],
-    ["the palette", "tmc.pasteExercise", () => []],
     ["an editor title button", "tmc.submitExercise", () => [exercise.uri]],
     ["an editor title button", "tmc.testExercise", () => [exercise.uri]],
     ["a Courses view inline action", "tmc.submitExercise", () => [row()]],
     ["a Courses view inline action", "tmc.testExercise", () => [row()]],
     ["a test item's context menu", "tmc.testing.submitExercise", () => [undefined]],
-    ["a test item's context menu", "tmc.testing.pasteExercise", () => [undefined]],
-    ["the status bar's action pick", "tmc.showExerciseActions", () => []],
   ])(
     "%s's %s says why, once, with one remedy, and does nothing",
     async function (_entry, id, args) {
@@ -890,21 +950,69 @@ suite("refused while an AI extension runs: every entry point", function () {
     },
   )
 
-  test.each([
-    ["tmc.resetExercise", "resetExercise"],
-    ["tmc.downloadOldSubmission", "restoreSubmission"],
-  ])("%s's Submit first says why, once, and changes nothing", async function (id, method) {
-    const destructive = vi.fn()
-    const { run, shown } = await refusingHarness({
-      getOldSubmissions: oldSubmissions,
-      [method]: destructive,
-    })
+  test("the status bar's action pick's Run Tests says why, once, and does nothing", async function () {
+    const langs = neverCalled()
+    const { actionContext, run, shown } = await refusingHarness(langs)
+    vi.mocked(actionContext.dialog.selectItem).mockImplementation(
+      async (_options, ...items) =>
+        items.filter((item) => "value" in item).find((item) => item.label.includes("Run Tests"))
+          ?.value,
+    )
 
-    await run(id)
+    await run("tmc.showExerciseActions")
 
     expect(shown).toEqual([`warning: ${reason}`])
+    for (const method of Object.values(langs)) {
+      expect(method).not.toHaveBeenCalled()
+    }
+  })
+
+  test.each<[string, string, () => unknown[]]>([
+    ["the palette", "tmc.pasteExercise", () => []],
+    ["a test item's context menu", "tmc.testing.pasteExercise", () => [undefined]],
+  ])("%s's %s opens Get help, whose paste says why", async function (_entry, id, args) {
+    const langs = neverCalled()
+    const { run, post, shown, panelFailures, shownPanel } = await refusingHarness(langs)
+
+    await run(id, ...args())
+    await post({ type: "pasteExercise", requestId: 1, sourcePanel: shownPanel() })
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual([`pasteExercise: ${reason}`])
+    expect(langs.paste).not.toHaveBeenCalled()
+  })
+
+  test("a restore from the History says why its backup first is refused, and changes nothing", async function () {
+    const destructive = vi.fn()
+    const { run, post, shown, panelFailures, shownPanel } = await refusingHarness({
+      getOldSubmissions: oldSubmissions,
+      restoreSubmission: destructive,
+    })
+
+    await run("tmc.downloadOldSubmission")
+    await post({ type: "requestSubmissionHistory", requestId: 1, sourcePanel: shownPanel() })
+    await post({ type: "restoreSubmission", requestId: 2, sourcePanel: shownPanel(), key: "sub-1" })
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual([`restoreSubmission: ${reason}`])
     expect(destructive).not.toHaveBeenCalled()
   })
+
+  test.each([["tmc.resetExercise", "resetExercise"]])(
+    "%s's Submit first says why, once, and changes nothing",
+    async function (id, method) {
+      const destructive = vi.fn()
+      const { run, shown } = await refusingHarness({
+        getOldSubmissions: oldSubmissions,
+        [method]: destructive,
+      })
+
+      await run(id)
+
+      expect(shown).toEqual([`warning: ${reason}`])
+      expect(destructive).not.toHaveBeenCalled()
+    },
+  )
 
   test("the remedy shows the extension in the Extensions view", async function () {
     const { run } = await refusingHarness()

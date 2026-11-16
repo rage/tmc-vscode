@@ -3,6 +3,7 @@
   import { tick } from "svelte"
 
   import type {
+    ExerciseSection,
     ExerciseSubmissionPanel,
     FeedbackAnswer,
     SubmissionView,
@@ -26,6 +27,7 @@
   import { addMessageListener, createRequester } from "../utilities/script"
   import { restoreScroll, uiState } from "../utilities/uiState.svelte"
   import { vscode } from "../utilities/vscode"
+  import SubmissionHistory from "./exerciseSubmission/SubmissionHistory.svelte"
 
   interface Props {
     panel: ExerciseSubmissionPanel
@@ -48,7 +50,13 @@
   let feedbackError = $state<WebviewError | undefined>(undefined)
   let isKeepWaitingRequested = $state(false)
   let keepWaitingError = $state<WebviewError | undefined>(undefined)
-  const isPasteHelpOpen = uiState("showPasteHelp", false)
+  let isHistoryOpen = $state(false)
+  let isGetHelpOpen = $state(false)
+  // Get help stays for a student who asked for it where the result would not offer it.
+  const isGetHelpRequested = uiState("isGetHelpRequested", false)
+  // The last section request handled, so one resent after a reload does not paste again.
+  const handledSectionSerial = uiState("handledSectionSerial", 0)
+  let pasteHelp = $state<ReturnType<typeof PasteHelpBox> | undefined>(undefined)
 
   const isInProgress = $derived(
     view === undefined || view.phase === "uploading" || view.phase === "grading",
@@ -67,6 +75,7 @@
     icon: "cloud-upload",
     onclick: () => runExerciseAction("submit"),
   }
+  const submit: BarAction = { ...submitAgain, label: "Submit" }
 
   const openExercise: BarAction = {
     label: "Open Exercise",
@@ -142,6 +151,12 @@
         ? { primary: showSolution, secondary: [runTests] }
         : { secondary: [runTests] }
     }
+    if (view?.phase === "testedLocally") {
+      return { primary: submit }
+    }
+    if (view?.phase === "standing") {
+      return view.isExercisePassed ? {} : { primary: runTests, secondary: [submit] }
+    }
     if (canRetry) {
       if (remedy) {
         return { primary: remedy, secondary: [submitAgain] }
@@ -165,14 +180,34 @@
         ? [{ label: "Show Model Solution in Browser", onselect: () => showInBrowser(solutionUrl) }]
         : []),
       ...(view?.canPaste && !view.exerciseState
-        ? [{ label: "Ask for Help…", onselect: openPasteHelp }]
+        ? [{ label: "Ask for Help…", onselect: () => openSection("getHelp") }]
+        : []),
+      ...(isHistoryShown
+        ? [{ label: "Show History", onselect: () => openSection("history") }]
         : []),
     ]
   })
 
+  const isHistoryShown = $derived(view !== undefined && view.exerciseState !== "removed")
+  const isGetHelpShown = $derived(
+    view !== undefined && !view.exerciseState && (view.canPaste || isGetHelpRequested.current),
+  )
+  const restoreRefusal = $derived(
+    view?.exerciseState === "notOnDisk"
+      ? "Open the exercise again to restore a submission over it."
+      : undefined,
+  )
+
   // svelte-ignore state_referenced_locally -- the panel identity (id/type)
   // is fixed for the lifetime of the component, capturing the initial value is intended
   addMessageListener(panel, (message) => {
+    if (message.type === "openExerciseSection") {
+      if (message.serial > handledSectionSerial.current) {
+        handledSectionSerial.current = message.serial
+        void openSection(message.section, message.shouldPaste)
+      }
+      return
+    }
     const previous = view
     view = message.view
     if (previous === undefined) {
@@ -195,10 +230,20 @@
   function showInBrowser(url: string) {
     vscode.postMessage({ type: "openLinkInBrowser", url })
   }
-  async function openPasteHelp() {
-    isPasteHelpOpen.current = true
+  /** Opens `section` and moves the focus to it, pasting there for `shouldPaste`. */
+  async function openSection(section: ExerciseSection, shouldPaste = false) {
+    if (section === "history") {
+      isHistoryOpen = true
+    } else {
+      isGetHelpRequested.current = true
+      isGetHelpOpen = true
+    }
     await tick()
-    document.querySelector<HTMLElement>(`[id="${pasteHelpHeadingId}"]`)?.focus()
+    const toggleId = section === "history" ? historyToggleId : getHelpToggleId
+    document.querySelector<HTMLElement>(`[id="${toggleId}"]`)?.focus()
+    if (shouldPaste) {
+      await pasteHelp?.paste()
+    }
   }
   async function keepWaiting() {
     isKeepWaitingRequested = true
@@ -225,7 +270,9 @@
     }
   }
 
-  const pasteHelpHeadingId = $props.id()
+  const sectionIdPrefix = $props.id()
+  const historyToggleId = `${sectionIdPrefix}-history`
+  const getHelpToggleId = `${sectionIdPrefix}-get-help`
 </script>
 
 <PanelHeader title={panel.exerciseName} {subtitle} shouldFocusOnMount={false}>
@@ -307,16 +354,6 @@
     </Disclosure>
   {/if}
 
-  {#if view.canPaste && isPasteHelpOpen.current}
-    <PasteHelpBox
-      backend={panel.backend}
-      {sourcePanel}
-      headingId={pasteHelpHeadingId}
-      oncopy={copyToClipboard}
-      onhide={() => (isPasteHelpOpen.current = false)}
-    />
-  {/if}
-
   {#if view.feedback}
     <SubmissionFeedbackForm
       questions={view.feedback.questions}
@@ -324,6 +361,38 @@
       error={feedbackError}
       onsend={sendFeedback}
     />
+  {/if}
+
+  {#if isGetHelpShown || isHistoryShown}
+    <div class="more">
+      {#if isGetHelpShown}
+        <Disclosure
+          title="Get help"
+          persistAs="getHelp"
+          toggleId={getHelpToggleId}
+          bind:open={isGetHelpOpen}
+        >
+          <PasteHelpBox
+            bind:this={pasteHelp}
+            backend={panel.backend}
+            {sourcePanel}
+            oncopy={copyToClipboard}
+          />
+        </Disclosure>
+      {/if}
+      {#if isHistoryShown}
+        <Disclosure
+          title="History"
+          persistAs="history"
+          toggleId={historyToggleId}
+          bind:open={isHistoryOpen}
+        >
+          {#if isHistoryOpen}
+            <SubmissionHistory {sourcePanel} {restoreRefusal} />
+          {/if}
+        </Disclosure>
+      {/if}
+    </div>
   {/if}
 {/if}
 
@@ -350,5 +419,8 @@
   }
   .feedback-text {
     white-space: pre-wrap;
+  }
+  .more {
+    margin-top: var(--tmc-space-6);
   }
 </style>

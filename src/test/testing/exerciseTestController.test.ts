@@ -7,6 +7,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { RunResult, StyleValidationResult } from "../../../shared/langsSchema"
+import type { SubmissionView } from "../../../shared/lib"
 import { BaseError, LocalCourseData } from "../../../shared/lib"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import type { AiUseGate } from "../../api/aiUseGate"
@@ -22,9 +23,11 @@ import {
   TRUST_COURSE_WORKSPACE_COMMAND,
   WorkspaceUntrustedError,
 } from "../../errors"
+import { testedLocallyView } from "../../panels/submissionView"
 import { CheckstyleDiagnostics } from "../../testing/checkstyleDiagnostics"
 import { ExerciseTestController } from "../../testing/exerciseTestController"
 import { exerciseOperations } from "../../ui/exerciseOperations"
+import { submissionViews } from "../../ui/submissionViews"
 import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
 import { idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
@@ -687,6 +690,85 @@ suite("ExerciseTestController", function () {
     )
     expect(several.runTests).toHaveBeenCalledTimes(2)
     expect(several.actionContext.dialog.notification).not.toHaveBeenCalled()
+  })
+
+  suite("with the exercise's results panel", function () {
+    const panel = {
+      id: 900,
+      type: "ExerciseSubmission",
+      exerciseId: idOfTmcExercise(1),
+      backend: "tmc",
+      exerciseName: "part01-01_hello",
+      courseTitle: "Python Course",
+    } as const
+
+    function showResults(view: Partial<SubmissionView> = {}, isOnScreen = true): void {
+      submissionViews.update({
+        panel,
+        view: { ...testedLocallyView(), phase: "finished", headline: "Some tests failed", ...view },
+        shouldReopen: false,
+      })
+      submissionViews.setShown(isOnScreen ? panel : undefined)
+      onTestFinished(() => {
+        submissionViews.setShown(undefined)
+        submissionViews.clear()
+      })
+    }
+
+    test("on screen, a pass shows there with Submit, and toasts nothing", async function () {
+      const s = setup()
+      showResults()
+
+      await s.controller.runExercise(exerciseAt(s))
+
+      expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+      expect(submissionViews.latestView(panel.id)).toEqual(testedLocallyView())
+    })
+
+    test("on screen, a pass past the deadline shows there too, which says why", async function () {
+      const s = setup({ deadline: "2000-01-01T00:00:00Z" })
+      showResults()
+
+      await s.controller.runExercise(exerciseAt(s))
+
+      expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+      expect(submissionViews.latestView(panel.id)?.phase).toBe("testedLocally")
+    })
+
+    test("hidden, a pass falls back to the notification", async function () {
+      const s = setup()
+      showResults({}, false)
+
+      await s.controller.runExercise(exerciseAt(s))
+
+      expect(s.actionContext.dialog.notification).toHaveBeenCalledOnce()
+      expect(submissionViews.latestView(panel.id)?.phase).toBe("finished")
+    })
+
+    test.each<[string, Partial<SubmissionView>]>([
+      ["still grading", { phase: "grading" }],
+      ["waiting to be checked again", { canKeepWaiting: true }],
+    ])(
+      "a panel %s keeps its submission, and the pass is a notification",
+      async function (_name, view) {
+        const s = setup()
+        showResults(view)
+
+        await s.controller.runExercise(exerciseAt(s))
+
+        expect(s.actionContext.dialog.notification).toHaveBeenCalledOnce()
+        expect(submissionViews.latestView(panel.id)?.phase).not.toBe("testedLocally")
+      },
+    )
+
+    test("logged out, the pass stays a notification offering to log in", async function () {
+      const s = setup({ loggedIn: false })
+      showResults()
+
+      await s.controller.runExercise(exerciseAt(s))
+
+      expect(s.actionContext.dialog.notification).toHaveBeenCalledOnce()
+    })
   })
 
   test("a test's exercise folder is found through its parent", async function () {

@@ -14,6 +14,7 @@ import {
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import { buildCourseHomeView } from "../ui/courseHome"
+import { exerciseStandingView } from "../ui/exerciseStanding"
 import { recentUpdates } from "../ui/recentUpdates"
 import { shownCourseHome } from "../ui/shownCourseHome"
 import { submissionViews } from "../ui/submissionViews"
@@ -94,6 +95,23 @@ export class TmcPanel {
     }
     return Disposable.from(
       submissionViews.onDidOpen(show),
+      submissionViews.onDidRequestReveal(({ panel, section }) => {
+        TmcPanel._renderIn(false, extensionContext, actionContext, panel, true)
+        const sidePanel = TmcPanel.sidePanel
+        const view = submissionViews.latestView(panel.id)
+        if (view !== undefined) {
+          sidePanel?._postMessage(submissionViewMessage(actionContext, panel, view))
+        }
+        if (section) {
+          sidePanel?._postMessage({
+            type: "openExerciseSection",
+            target: { id: panel.id, type: panel.type },
+            section: section.name,
+            serial: section.serial,
+            shouldPaste: section.shouldPaste,
+          })
+        }
+      }),
       submissionViews.onDidClear(() => {
         if (TmcPanel.sidePanel?._route?.type === "ExerciseSubmission") {
           TmcPanel.sidePanel.dispose()
@@ -174,17 +192,22 @@ export class TmcPanel {
     TmcPanel._renderIn(false, extensionContext, actionContext, route)
   }
 
+  /** @param isRequested The student asked for `route`, so it takes the focus even beside. */
   private static _renderIn(
     isMain: boolean,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
     route: Panel,
+    isRequested = isMain,
   ): void {
     const existing = isMain ? TmcPanel.mainPanel : TmcPanel.sidePanel
     if (existing !== undefined) {
       Logger.info(`Revealing the ${existing._webviewName} for "${route.type}"`)
-      existing._render(route)
-      existing._panel.reveal(undefined, !isMain)
+      // Rendering the shown screen again would reload its document for nothing.
+      if (existing._route?.id !== route.id) {
+        existing._render(route)
+      }
+      existing._panel.reveal(undefined, !isRequested)
       return
     }
     // VS Code restores a background webview without asking the serializer until it is shown,
@@ -193,7 +216,7 @@ export class TmcPanel {
     const restoredColumn = restoredMainTabs[0]?.group.viewColumn
     const showOptions = isMain
       ? { viewColumn: restoredColumn ?? ViewColumn.One, preserveFocus: false }
-      : { viewColumn: ViewColumn.Beside, preserveFocus: true }
+      : { viewColumn: ViewColumn.Beside, preserveFocus: !isRequested }
     const panelViewType = isMain ? MAIN_PANEL_VIEW_TYPE : SIDE_PANEL_VIEW_TYPE
     const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", showOptions, {
       ...webviewOptions(extensionContext.extensionUri),
@@ -291,7 +314,7 @@ export class TmcPanel {
         if (!webviewPanel.visible) {
           this._isWebviewReady = false
         }
-        this._recordShownCourseHome()
+        this._recordShown()
       },
       null,
       this._disposables,
@@ -334,6 +357,7 @@ export class TmcPanel {
       shownCourseHome.set(undefined)
     } else {
       TmcPanel.sidePanel = undefined
+      submissionViews.setShown(undefined)
     }
 
     while (this._disposables.length > 0) {
@@ -386,21 +410,29 @@ export class TmcPanel {
     })
   }
 
-  /** Tells {@link shownCourseHome} which course this main panel shows on screen, if any. */
-  private _recordShownCourseHome(): void {
-    if (!this._isMain || this._isDisposed) {
+  /**
+   * Tells {@link shownCourseHome} which course this main panel shows on screen, and
+   * {@link submissionViews} which submission this side panel shows, if any.
+   */
+  private _recordShown(): void {
+    if (this._isDisposed) {
       return
     }
     const route = this._route
-    shownCourseHome.set(
-      route?.type === "CourseDetails" && this._panel.visible ? route.courseId : undefined,
-    )
+    const isVisible = this._panel.visible
+    if (this._isMain) {
+      shownCourseHome.set(route?.type === "CourseDetails" && isVisible ? route.courseId : undefined)
+    } else {
+      submissionViews.setShown(
+        route?.type === "ExerciseSubmission" && isVisible ? route : undefined,
+      )
+    }
   }
 
   // remembers `route` so "ready" can (re)send it
   private _render(route: Panel): void {
     this._route = route
-    this._recordShownCourseHome()
+    this._recordShown()
     this._messageBuffer.clear()
     this._panel.title = panelTitle(route, this._actionContext)
     if (this._isWebviewReady && !this._isDisposed) {
@@ -434,11 +466,15 @@ function submissionViewMessage(
   if (!isReady(actionContext)) {
     return { type: "submissionView", target: { id: panel.id, type: panel.type }, view }
   }
-  const stored = actionContext.startup.userData.getExercise(panel.exerciseId)
+  const { userData } = actionContext.startup
+  const stored = userData.getExercise(panel.exerciseId)
   const exercise = stored.ok ? stored.val.exercise : undefined
   const refusal =
     exercise && submitRefusalOf(exercise, new Date(), stored.ok ? stored.val.course : undefined)
-  const shown = withExerciseState(view, {
+  // Without a submission the view is the stored standing, which a course refresh changes.
+  const current =
+    view.phase === "standing" ? (exerciseStandingView(userData, panel.exerciseId) ?? view) : view
+  const shown = withExerciseState(current, {
     isOnDisk: actionContext.startup.workspaceManager.getExercise(panel.exerciseId) !== undefined,
     isInCourse: stored.ok,
     submitRefusal:

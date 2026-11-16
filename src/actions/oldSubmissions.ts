@@ -5,91 +5,73 @@ import type {
   MoocOldSubmissionRestore,
   SubmissionKind,
 } from "../../shared/langsSchema"
-import type { ExerciseIdentifier } from "../../shared/lib"
+import type { ExerciseIdentifier, SubmissionHistoryEntry } from "../../shared/lib"
 import { assertUnreachable, makeMoocKind, makeTmcKind, match, unwrap } from "../../shared/lib"
 import type { RestoreTarget } from "../api/langs"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { exerciseOperations } from "../ui/exerciseOperations"
+import { formatTimestamp, parseDate } from "../utilities/dateDeadline"
 import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import { fingerprintStudentFiles, recordKeptCopy } from "./keptCopies"
 import type { ReadyActionContext } from "./types"
 
-/**
- * A submission normalized for the picker across both backends: what restoring it
- * takes, a timestamp, and a human-readable status shown next to the date.
- */
-export interface PickableSubmission {
+/** An earlier submission, help request or backup of an exercise, from either backend. */
+export interface OldSubmission {
   target: RestoreTarget
   createdAt: string
+  /** The outcome in a few words, without the score or the kind. */
   status: string
+  /** In the exercise's own unit; absent while ungraded. */
+  points?: { given: number; max: number } | undefined
   /** Passed all tests on tmc; graded to full points on mooc. */
   isPassed: boolean
   /** Only courses.mooc.fi keeps ungraded pastes and backups beside the submissions. */
   kind: SubmissionKind
+  isShared: boolean
 }
 
-/**
- * Human-readable status for a mooc submission (score + progress) or snapshot, and whether it
- * has a share link.
- *
- * @param maxPoints The exercise's points available; 0 when unknown.
- */
-function moocSubmissionStatus(
-  submission: ExerciseSlideSubmissionListItem,
-  maxPoints: number,
-): string {
-  const status = moocGradingStatus(submission, maxPoints)
-  return submission.is_shared ? `${status} · Shared` : status
-}
-
-function moocGradingStatus(submission: ExerciseSlideSubmissionListItem, maxPoints: number): string {
-  switch (submission.kind) {
-    case "paste":
-      return "Sent for help, not graded"
-    case "backup":
-      return "Backup, not graded"
-    case "submission":
-      break
-    default:
-      return assertUnreachable(submission.kind)
-  }
-  const progress = submission.grading_progress
-  if (progress === null) {
+function moocStatus(submission: ExerciseSlideSubmissionListItem, maxPoints: number): string {
+  if (submission.kind !== "submission") {
     return "Not graded"
   }
   const given = submission.score_given
-  const score =
-    given === null ? "" : maxPoints > 0 ? ` (${given}/${maxPoints} points)` : ` (score ${given})`
-  switch (progress) {
+  switch (submission.grading_progress) {
+    case null:
+      return "Not graded"
     case "FullyGraded":
       if (given === null || maxPoints <= 0) {
-        return `Graded${score}`
+        return "Graded"
       }
-      return given >= maxPoints
-        ? `Passed${score}`
-        : given > 0
-          ? `Some tests failed${score}`
-          : `Tests failed${score}`
+      return given >= maxPoints ? "Passed" : given > 0 ? "Some tests failed" : "Tests failed"
     case "Failed":
-      return `Failed${score}`
+      return "Grading failed"
     case "PendingManual":
-      return `Awaiting manual grading${score}`
+      return "Awaiting manual grading"
     case "NotReady":
     case "Pending":
-      return `Pending${score}`
+      return "Pending"
   }
-  return assertUnreachable(progress)
+  return assertUnreachable(submission.grading_progress)
+}
+
+function moocPoints(
+  submission: ExerciseSlideSubmissionListItem,
+  maxPoints: number,
+): OldSubmission["points"] {
+  if (submission.kind !== "submission" || submission.score_given === null) {
+    return undefined
+  }
+  return { given: Math.round(submission.score_given * 100) / 100, max: maxPoints }
 }
 
 /**
- * Lists an exercise's earlier submissions, normalized for the picker across both backends.
- * The status is derived differently: TMC reports whether all tests passed, courses.mooc.fi
- * the grading progress and score.
+ * Lists an exercise's earlier submissions, normalized across both backends. TMC reports whether
+ * all tests passed and the points awarded, courses.mooc.fi the grading progress and score.
  */
 export async function listOldSubmissions(
   actionContext: ReadyActionContext,
   id: ExerciseIdentifier,
-): Promise<Result<PickableSubmission[], Error>> {
+): Promise<Result<OldSubmission[], Error>> {
   const { langs, userData } = actionContext.startup
   const stored = userData.getExercise(id)
   // The list does not carry the maximum, which the course's progress does.
@@ -99,26 +81,77 @@ export async function listOldSubmissions(
     match(
       old,
       ({ exerciseId, submissions }) =>
-        submissions.map<PickableSubmission>((submission) => ({
+        submissions.map<OldSubmission>((submission) => ({
           target: makeTmcKind({ exerciseId, submissionId: submission.id }),
           createdAt: submission.created_at,
-          status: submission.all_tests_passed ? "Passed" : "Not passed",
+          status: submission.all_tests_passed
+            ? "Passed"
+            : submission.processed
+              ? "Tests failed"
+              : "Pending",
+          points: submission.processed
+            ? { given: tmcPointNames(submission.points).length, max: maxPoints }
+            : undefined,
           isPassed: submission.all_tests_passed,
           kind: "submission",
+          isShared: false,
         })),
       ({ exerciseId, submissions }) =>
-        submissions.map<PickableSubmission>((submission) => ({
+        submissions.map<OldSubmission>((submission) => ({
           target: makeMoocKind({ exerciseId, submissionId: submission.id }),
           createdAt: submission.created_at,
-          status: moocSubmissionStatus(submission, maxPoints),
+          status: moocStatus(submission, maxPoints),
+          points: moocPoints(submission, maxPoints),
           isPassed:
             submission.grading_progress === "FullyGraded" &&
             maxPoints > 0 &&
             (submission.score_given ?? 0) >= maxPoints,
           kind: submission.kind,
+          isShared: submission.is_shared,
         })),
     ),
   )
+}
+
+/** The point names a TMC submission was awarded, which its API sends space-separated. */
+function tmcPointNames(points: string | null): string[] {
+  return (points ?? "").split(" ").filter((name) => name !== "")
+}
+
+/** Names `submission` among its exercise's History entries. */
+export function oldSubmissionKey(submission: OldSubmission): string {
+  return String(submission.target.data.submissionId)
+}
+
+/**
+ * `submissions` as History lists them: graded submissions first, then help requests and
+ * backups, each newest first, so the ones a student almost always wants are not buried under
+ * backups. The newest graded submission is marked.
+ *
+ * @param locale The language the dates are written in.
+ */
+export function submissionHistory(
+  submissions: readonly OldSubmission[],
+  now: Date,
+  locale: string | undefined,
+): SubmissionHistoryEntry[] {
+  const sorted = submissions
+    .map((submission) => ({ submission, createdAt: parseDate(submission.createdAt) }))
+    .toSorted((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
+  const graded = sorted.filter(({ submission }) => submission.kind === "submission")
+  const ungraded = sorted.filter(({ submission }) => submission.kind !== "submission")
+  const newestGraded = graded[0]?.submission
+  return [...graded, ...ungraded].map(({ submission, createdAt }) => ({
+    key: oldSubmissionKey(submission),
+    createdAt: submission.createdAt,
+    dateLabel: createdAt ? formatTimestamp(createdAt, now, locale) : "Unknown date",
+    kind: submission.kind,
+    ...(submission.points ? { points: submission.points } : {}),
+    status: submission.status,
+    isPassed: submission.isPassed,
+    isNewestGraded: submission === newestGraded,
+    isShared: submission.isShared,
+  }))
 }
 
 /**

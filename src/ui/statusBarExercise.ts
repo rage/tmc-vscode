@@ -5,7 +5,6 @@ import {
   arePointsHeldForReview,
   ExerciseIdentifier,
   LocalCourseData,
-  modelSolutionUrlOf,
   SUBMIT_REFUSAL_LABELS,
   submitRefusalOf,
   PENDING_REVIEW_LABEL,
@@ -19,6 +18,7 @@ import type { WorkspaceExercise } from "../api/workspaceManager"
 import { exerciseFor } from "../api/workspaceManager"
 import type { UserData } from "../config/userdata"
 import type { ExerciseOperationKind, ExerciseOperations } from "./exerciseOperations"
+import { modelSolutionUrl } from "./modelSolution"
 import { pointsText } from "./points"
 import { tooltipOf } from "./tooltip"
 
@@ -220,6 +220,9 @@ export async function showExerciseActions(
         : "What do you want to do with this exercise?"
   const picked = await dialog.selectItem(
     { title: exercise.exerciseSlug, placeHolder },
+    ...(isLoggedIn && !isUnlisted
+      ? [action("$(output) Show Results", "tmc.showExerciseResults")]
+      : []),
     action("$(beaker) Run Tests", "tmc.testExercise"),
     ...(isLoggedIn && !isUnlisted
       ? [
@@ -232,7 +235,7 @@ export async function showExerciseActions(
       : []),
     separator("Course"),
     action("$(arrow-right) Open Next Exercise", "tmc.openNextExercise"),
-    ...(stored.ok && modelSolutionUrlOf(stored.val.exercise)
+    ...(stored.ok && modelSolutionUrl(stored.val)
       ? [action("$(lightbulb) Show Model Solution", "tmc.showModelSolution")]
       : []),
     ...(course.ok

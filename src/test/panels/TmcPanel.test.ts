@@ -27,6 +27,7 @@ import {
 } from "../../errors"
 import type { PanelMessage } from "../../panels/router"
 import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
+import { standingView } from "../../panels/submissionView"
 import { MAIN_PANEL_VIEW_TYPE, SIDE_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
 import { shownCourseHome } from "../../ui/shownCourseHome"
 import { submissionViews } from "../../ui/submissionViews"
@@ -382,7 +383,7 @@ suite("TmcPanel handler dispatch", () => {
       type: "reply",
       target: targetOf(shown),
       requestId: 1,
-      outcome: { ok: true, value: "link" },
+      outcome: { ok: true, value: { link: "link", isReused: false } },
     })
   })
 
@@ -1496,7 +1497,7 @@ suite("TmcPanel side panel placement", () => {
     submissionViews.open(shown)
 
     expect(TmcPanel.sidePanel).toBeDefined()
-    expect(panel.title).toBe(`Submission: ${shown.exerciseName}`)
+    expect(panel.title).toBe(`Results: ${shown.exerciseName}`)
   })
 
   test("reopens a closed side panel for a submission's outcome, not for its progress", async () => {
@@ -1688,7 +1689,7 @@ suite("TmcPanel tab identity", () => {
   test("names the exercise a results tab belongs to", () => {
     const title = mainPanelTitleFor(exerciseSubmissionPanel())
 
-    expect(title).toBe("Submission: part01-01_hello")
+    expect(title).toBe("Results: part01-01_hello")
   })
 
   test("retitles a reused tab when it navigates", () => {
@@ -2216,5 +2217,142 @@ suite("TmcPanel main panel restore after a window reload", () => {
 
     expect(fake.dispose).toHaveBeenCalled()
     expect(TmcPanel.mainPanel).toBe(existing)
+  })
+})
+
+/** Has the panels show what `submissionViews` reports for the rest of the test. */
+function showing(actionContext: ActionContext = submissionContext()): void {
+  const subscription = TmcPanel.showSubmissionViews(createMockContext(), actionContext)
+  onTestFinished(() => subscription.dispose())
+}
+
+suite("TmcPanel results the student asks for", () => {
+  beforeEach(() => {
+    resetPanels()
+    submissionViews.clear()
+  })
+  afterEach(resetPanels)
+
+  test("opens the panel focused, with its latest view and then the section asked for", async () => {
+    const fake = createFakeWebviewPanel()
+    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
+    createWebviewPanel.mockClear()
+    createWebviewPanel.mockReturnValue(fake.panel)
+    showing()
+    const shown = exerciseSubmissionPanel()
+    const graded = submissionViewFor(shown, "Exercise graded")
+    submissionViews.update({ panel: shown, view: graded.view, shouldReopen: false })
+
+    submissionViews.reveal(shown, { name: "history", shouldPaste: false })
+    await fake.sendReady()
+
+    expect(createWebviewPanel).toHaveBeenCalledWith(
+      "tmc.sidePanel",
+      expect.any(String),
+      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
+      expect.anything(),
+    )
+    expect(postedMessages(fake.panel)).toEqual([
+      expect.objectContaining({ type: "setPanel", panel: shown }),
+      graded,
+      {
+        type: "openExerciseSection",
+        target: targetOf(shown),
+        section: "history",
+        serial: expect.any(Number),
+        shouldPaste: false,
+      },
+    ])
+  })
+
+  test("numbers each request apart, so a resent one can be told from a new one", async () => {
+    const fake = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(fake.panel)
+    showing()
+    const shown = exerciseSubmissionPanel()
+    submissionViews.update({
+      panel: shown,
+      view: submissionViewFor(shown, "Exercise graded").view,
+      shouldReopen: false,
+    })
+    submissionViews.reveal(shown, { name: "getHelp", shouldPaste: true })
+    await fake.sendReady()
+
+    submissionViews.reveal(shown, { name: "getHelp", shouldPaste: true })
+
+    const serials = postedMessages(fake.panel)
+      .filter((message) => message.type === "openExerciseSection")
+      .map((message) => (message as unknown as { serial: number }).serial)
+    expect(serials).toHaveLength(2)
+    expect(serials[1]).toBeGreaterThan(serials[0]!)
+  })
+
+  test("brings the panel it already shows forward with focus, without reloading it", async () => {
+    const fake = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(fake.panel)
+    showing()
+    const shown = exerciseSubmissionPanel()
+    renderSidePanel(shown)
+    await fake.sendReady()
+    vi.mocked(fake.panel.webview.postMessage).mockClear()
+
+    submissionViews.reveal(shown)
+
+    expect(fake.panel.reveal).toHaveBeenLastCalledWith(undefined, false)
+    expect(postedMessages(fake.panel).map(({ type }) => type)).not.toContain("setPanel")
+  })
+
+  test("tells which exercise's results are on screen, and none once hidden or closed", () => {
+    const fake = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(fake.panel)
+    const shown = exerciseSubmissionPanel()
+
+    renderSidePanel(shown)
+    expect(submissionViews.shownFor(shown.exerciseId)).toEqual(shown)
+    expect(submissionViews.shownFor(idOfTmcExercise(2))).toBeUndefined()
+
+    fake.hide()
+    expect(submissionViews.shownFor(shown.exerciseId)).toBeUndefined()
+
+    void fake.reveal()
+    expect(submissionViews.shownFor(shown.exerciseId)).toEqual(shown)
+    TmcPanel.sidePanel?.dispose()
+    expect(submissionViews.shownFor(shown.exerciseId)).toBeUndefined()
+  })
+
+  test("shows a panel without a submission as its exercise stands now", async () => {
+    const fake = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(fake.panel)
+    const passedData = tmcCourseExercise({ id: 1, passed: true, awardedPoints: 1 })
+    const passed = makeTmcKind(passedData)
+    const course = tmcLocalCourse({ exercises: [passedData] })
+    showing(
+      createMockActionContext({
+        startup: {
+          workspaceManager: {
+            getExercise: () => ({}),
+            onDidChangeExercises: new vscode.EventEmitter<void>().event,
+          } as unknown as WorkspaceManager,
+          userData: {
+            getExercise: () => Ok({ exercise: passed, course }),
+            getCourse: () => Ok(course),
+            onDidChangeCourses: new vscode.EventEmitter<void>().event,
+          } as unknown as UserData,
+        },
+      }),
+    )
+    const shown = exerciseSubmissionPanel()
+    const stale = standingView(makeTmcKind(tmcCourseExercise({ id: 1, passed: false })), undefined)
+    submissionViews.update({ panel: shown, view: stale, shouldReopen: false })
+
+    submissionViews.reveal(shown)
+    await fake.sendReady()
+
+    expect(postedMessages(fake.panel)).toContainEqual(
+      expect.objectContaining({
+        type: "submissionView",
+        view: expect.objectContaining({ phase: "standing", headline: "Exercise passed" }),
+      }),
+    )
   })
 })

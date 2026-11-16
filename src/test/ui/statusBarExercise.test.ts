@@ -306,6 +306,7 @@ suite("showExerciseActions", function () {
     await showExerciseActions(new Dialog(), harness().sources, true)
 
     expect(offered()).toEqual([
+      "Show Results",
       "Run Tests",
       "Submit Solution",
       "Share Exercise via Paste",
@@ -315,6 +316,17 @@ suite("showExerciseActions", function () {
       "Reveal in Courses View",
     ])
     expect(executeCommand).toHaveBeenCalledWith("tmc.submitExercise", exerciseHelloWorld.uri)
+  })
+
+  test("Show Results opens the exercise's results panel", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    vi.spyOn(vscode.window, "showQuickPick").mockImplementation((async (
+      items: readonly { label: string }[],
+    ) => items.find((x) => x.label.includes("Show Results"))) as never)
+
+    await showExerciseActions(new Dialog(), harness().sources, true)
+
+    expect(executeCommand).toHaveBeenCalledWith("tmc.showExerciseResults", exerciseHelloWorld.uri)
   })
 
   test("reveals the exercise in the Courses view", async function () {

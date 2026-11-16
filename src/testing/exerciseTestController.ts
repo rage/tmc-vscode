@@ -24,6 +24,8 @@ import {
   TRUST_COURSE_WORKSPACE_COMMAND,
   WorkspaceUntrustedError,
 } from "../errors"
+import { testedLocallyView } from "../panels/submissionView"
+import { submissionViews } from "../ui/submissionViews"
 import { countOf } from "../utilities"
 import { reachWalkthroughMilestone } from "../window/walkthrough"
 import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
@@ -389,6 +391,14 @@ export class ExerciseTestController implements vscode.Disposable {
     } else {
       return
     }
+    // The panel says so itself when the exercise cannot be submitted.
+    if (
+      outcome.kind !== "examMode" &&
+      this._actionContext.authState.loggedIn &&
+      showLocalPassInResults(exercise)
+    ) {
+      return
+    }
     const stored = this._actionContext.startup.userData.getExercise(exercise.id)
     if (stored.err) {
       return
@@ -417,6 +427,22 @@ export class ExerciseTestController implements vscode.Disposable {
         ),
     ])
   }
+}
+
+/**
+ * Shows a local all-pass in the exercise's results panel when the student can see it, where
+ * Submit is then the main action.
+ *
+ * @returns Whether it was shown; a panel still busy with a submission keeps showing that.
+ */
+function showLocalPassInResults(exercise: WorkspaceExercise): boolean {
+  const panel = submissionViews.shownFor(exercise.id)
+  const view = panel && submissionViews.latestView(panel.id)
+  if (!panel || !view || view.canKeepWaiting || ["uploading", "grading"].includes(view.phase)) {
+    return false
+  }
+  submissionViews.update({ panel, view: testedLocallyView(), shouldReopen: false })
+  return true
 }
 
 /** The open course workspace's exercises that are open in it; none outside a course workspace. */

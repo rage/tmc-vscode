@@ -2,14 +2,19 @@ import { Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import { makeMoocKind } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { showModelSolution } from "../../commands/showModelSolution"
 import type { UserData } from "../../config/userdata"
 import { openWebLink } from "../../utilities/webLink"
-import { moocCourseExercise } from "../fixtures/courses"
+import {
+  moocCourseExercise,
+  moocLocalCourse,
+  tmcCourseExercise,
+  tmcLocalCourse,
+} from "../fixtures/courses"
 import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
@@ -37,7 +42,9 @@ function contextWith(passed: boolean) {
   const stored = makeMoocKind(
     moocCourseExercise({ id: "mooc-ex-uuid", passed, pageUrl: "https://courses.example/page" }),
   )
-  const userData = { getExercise: () => Ok({ exercise: stored }) } as unknown as UserData
+  const userData = {
+    getExercise: () => Ok({ exercise: stored, course: moocLocalCourse() }),
+  } as unknown as UserData
   return { ...createMockActionContext({ startup: { workspaceManager, userData } }), dialog }
 }
 
@@ -60,6 +67,23 @@ suite("Show model solution command", function () {
     expect(openWebLink).not.toHaveBeenCalled()
     expect(context.dialog.notification).toHaveBeenCalledWith(
       "The model solution of ex-1 is shown once you pass it or run out of tries.",
+    )
+  })
+
+  test("opens a passed tmc exercise's solution page", async function () {
+    const context = contextWith(true)
+    context.startup.userData = {
+      getExercise: () =>
+        Ok({
+          exercise: makeTmcKind(tmcCourseExercise({ id: 41, passed: true })),
+          course: tmcLocalCourse(),
+        }),
+    } as unknown as UserData
+
+    await showModelSolution(context, undefined)
+
+    expect(openWebLink).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(/\/exercises\/41\/solution$/),
     )
   })
 })

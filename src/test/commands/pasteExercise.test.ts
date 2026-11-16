@@ -1,14 +1,13 @@
-import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { BackendKind } from "../../../shared/lib"
-import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import type WorkspaceManager from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { pasteExercise } from "../../commands/pasteExercise"
+import { showExerciseResults } from "../../commands/showExerciseResults"
 import {
   idOfMoocCourse,
   idOfMoocExercise,
@@ -19,176 +18,69 @@ import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 import { restrictedTrustGate } from "../support/trustGate"
 
-vi.mock("../../actions", () => ({
-  pasteExercise: vi.fn(async (_context: unknown, backend: BackendKind) =>
-    Ok(`https://pastebin.example/${backend}`),
-  ),
-}))
+vi.mock("../../commands/showExerciseResults", () => ({ showExerciseResults: vi.fn() }))
 
-// jest-mock-vscode ships no `env` namespace, so the link-opening assertions
-// install one on the mock the `vscode` alias resolves to.
-const vscodeMock = vscode as unknown as {
-  env: {
-    openExternal: (uri: vscode.Uri) => void
-    clipboard: { writeText: (text: string) => Promise<void> }
-  }
-}
-
-type NotificationCall = [string, ...[string, () => unknown][]]
-
-interface Harness {
-  context: ReadyActionContext
-  notifications: NotificationCall[]
-}
-
-const TMC_ID = idOfTmcExercise(1)
-const MOOC_ID = idOfMoocExercise("mooc-ex-uuid")
-
-function harness(backend: BackendKind): Harness {
-  const exercise: WorkspaceExercise = {
-    id: backend === "tmc" ? TMC_ID : MOOC_ID,
-    courseId: backend === "tmc" ? idOfTmcCourse(1) : idOfMoocCourse("mooc-course-uuid"),
-    backend,
-    courseSlug: `${backend}-course`,
-    exerciseSlug: "ex-1",
-    status: ExerciseStatus.Open,
-    uri: vscode.Uri.file(`/workspace/${backend}/course/ex-1`),
-  }
-  const [dialog] = createDialogMock()
-  const notifications: NotificationCall[] = []
-  dialog.notification = vi.fn(async (...call: NotificationCall) => {
-    notifications.push(call)
-  }) as unknown as typeof dialog.notification
-
+function harness(backend: BackendKind, exercise?: WorkspaceExercise | null): ReadyActionContext {
+  const shown =
+    exercise === undefined
+      ? {
+          id: backend === "tmc" ? idOfTmcExercise(1) : idOfMoocExercise("mooc-ex-uuid"),
+          courseId: backend === "tmc" ? idOfTmcCourse(1) : idOfMoocCourse("mooc-course-uuid"),
+          backend,
+          courseSlug: `${backend}-course`,
+          exerciseSlug: "ex-1",
+          status: ExerciseStatus.Open,
+          uri: vscode.Uri.file(`/workspace/${backend}/course/ex-1`),
+        }
+      : (exercise ?? undefined)
   const workspaceManager = {
     get activeExercise() {
-      return exercise
+      return shown
     },
-    getExerciseContaining: () => exercise,
+    getExerciseContaining: () => shown,
   } as unknown as WorkspaceManager
-
   return {
-    context: {
-      ...createMockActionContext({ startup: { workspaceManager } }),
-      dialog,
-    },
-    notifications,
+    ...createMockActionContext({ startup: { workspaceManager } }),
+    dialog: createDialogMock()[0],
   }
 }
 
 suite("Paste exercise command", function () {
-  beforeEach(function () {
-    vi.mocked(actions.pasteExercise).mockImplementation(async (_context, id) =>
-      Ok({ link: `https://pastebin.example/${id.kind}`, isReused: false }),
-    )
-    vscodeMock.env = { openExternal: vi.fn(), clipboard: { writeText: vi.fn(async () => {}) } }
-  })
+  test.each<BackendKind>(["tmc", "mooc"])(
+    "opens Get help in the %s exercise's results, which pastes it there",
+    async function (backend) {
+      const context = harness(backend)
 
-  test("shows progress naming the exercise and the paste service", async function () {
-    const { context } = harness("mooc")
+      await pasteExercise(context, undefined)
 
-    await pasteExercise(context, undefined)
+      expect(showExerciseResults).toHaveBeenCalledExactlyOnceWith(
+        context,
+        vscode.Uri.file(`/workspace/${backend}/course/ex-1`),
+        { name: "getHelp", shouldPaste: true },
+      )
+      expect(context.dialog.notification).not.toHaveBeenCalled()
+    },
+  )
 
-    expect(context.dialog.progressNotification).toHaveBeenCalledWith(
-      "Sending ex-1 to courses.mooc.fi paste…",
-      expect.any(Function),
-    )
-  })
-
-  test("pastes a tmc exercise through the tmc backend and offers its link", async function () {
-    const { context, notifications } = harness("tmc")
+  test("without an exercise at hand says so and opens nothing", async function () {
+    const context = harness("mooc", null)
 
     await pasteExercise(context, undefined)
 
-    expect(actions.pasteExercise).toHaveBeenCalledExactlyOnceWith(context, TMC_ID)
-    expect(vscodeMock.env.clipboard.writeText).toHaveBeenCalledExactlyOnceWith(
-      "https://pastebin.example/tmc",
+    expect(context.dialog.errorNotification).toHaveBeenCalledExactlyOnceWith(
+      "Open a file of an exercise first.",
     )
-    expect(notifications[0]?.[0]).toBe(
-      "Copied the paste link to the clipboard: https://pastebin.example/tmc",
-    )
+    expect(showExerciseResults).not.toHaveBeenCalled()
   })
 
-  test("pastes a mooc exercise through the mooc backend", async function () {
-    const { context, notifications } = harness("mooc")
-
-    await pasteExercise(context, undefined)
-
-    expect(actions.pasteExercise).toHaveBeenCalledExactlyOnceWith(context, MOOC_ID)
-    expect(notifications[0]?.[0]).toBe(
-      "Copied the paste link to the clipboard: https://pastebin.example/mooc",
-    )
-  })
-
-  test("says when it copied the last paste's link for unchanged code", async function () {
-    vi.mocked(actions.pasteExercise).mockResolvedValue(
-      Ok({ link: "https://pastebin.example/old", isReused: true }),
-    )
-    const { context, notifications } = harness("mooc")
-
-    await pasteExercise(context, undefined)
-
-    expect(notifications[0]?.[0]).toBe(
-      "Your code is unchanged since the last paste. Copied its link to the clipboard: https://pastebin.example/old",
-    )
-  })
-
-  test("still shows the link when it could not be copied", async function () {
-    vi.mocked(vscodeMock.env.clipboard.writeText).mockRejectedValue(new Error("no clipboard"))
-    const { context, notifications } = harness("mooc")
-
-    await pasteExercise(context, undefined)
-
-    expect(notifications[0]?.[0]).toBe("Paste link: https://pastebin.example/mooc")
-  })
-
-  test("the offered button opens the paste in the browser", async function () {
-    const { context, notifications } = harness("mooc")
-
-    await pasteExercise(context, undefined)
-    const [label, open] = notifications[0]?.[1] ?? []
-    expect(label).toBe("Open in Browser")
-    await open?.()
-
-    expect(vscodeMock.env.openExternal).toHaveBeenCalledExactlyOnceWith(
-      vscode.Uri.parse("https://pastebin.example/mooc"),
-    )
-  })
-
-  test("never opens a paste link that is not http(s)", async function () {
-    vi.mocked(actions.pasteExercise).mockResolvedValue(
-      Ok({ link: "file:///etc/passwd", isReused: false }),
-    )
-    const { context, notifications } = harness("mooc")
-
-    await pasteExercise(context, undefined)
-    const [, open] = notifications[0]?.[1] ?? []
-    await open?.()
-
-    expect(vscodeMock.env.openExternal).not.toHaveBeenCalled()
-  })
-
-  test("names the paste service on a failure, and offers no link", async function () {
-    vi.mocked(actions.pasteExercise).mockResolvedValue(Err(new Error("submission rejected")))
-    const { context, notifications } = harness("mooc")
-
-    await pasteExercise(context, undefined)
-
-    expect(context.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to send the exercise to courses.mooc.fi paste.",
-      expect.objectContaining({ message: "submission rejected" }),
-    )
-    expect(notifications).toEqual([])
-  })
-
-  test("in Restricted Mode shares nothing, and once trusted asks before sharing", async function () {
-    const { context } = harness("mooc")
+  test("in Restricted Mode opens nothing, and once trusted asks before sharing", async function () {
+    const context = harness("mooc")
     const { trustGate } = restrictedTrustGate()
     context.startup.trustGate = trustGate
 
     await pasteExercise(context, undefined)
 
-    expect(actions.pasteExercise).not.toHaveBeenCalled()
+    expect(showExerciseResults).not.toHaveBeenCalled()
     expect(vi.mocked(trustGate.refusal).mock.lastCall?.[1]).toMatchObject({ action: "Share" })
   })
 })
