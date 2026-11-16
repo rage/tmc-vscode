@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test"
-import type { Locator, Page } from "@playwright/test"
+import type { FrameLocator, Locator, Page } from "@playwright/test"
 
 import { VSCODE_TEST_VERSION } from "../../config"
 import { vsCodeTest } from "../fixtures"
@@ -25,6 +25,13 @@ const isAskedOnStartup =
   VSCODE_TEST_VERSION.localeCompare("1.137.0", undefined, { numeric: true }) < 0
 
 vsCodeTest.use({ isWorkspaceTrustEnabled: true })
+
+/** The results screen's heading after an all-passing local run. */
+function passedLocally(page: Page, webview: FrameLocator): Locator {
+  return new TmcPage(page, webview)
+    .getSidePanel()
+    .getByRole("heading", { name: "All tests passed locally" })
+}
 
 function toast(page: Page, text: string | RegExp): Locator {
   return page.locator(".notifications-toasts .notification-toast").filter({ hasText: text })
@@ -120,7 +127,7 @@ vsCodeTest(
     await vsCodeTest.step("runs tests without a reload", async () => {
       await coursesView.goto()
       await coursesView.runInlineAction(coursesView.row(FIRST_EXERCISE), "Run Tests")
-      await expect(toast(page, /All tests of \S*01_passing_exercise passed\./)).toBeVisible()
+      await expect(passedLocally(page, webview)).toBeVisible()
     })
 
     await vsCodeTest.step("a second course's workspace asks again", async () => {
@@ -139,7 +146,7 @@ vsCodeTest(
       await coursesView.goto()
       await coursesView.expand(coursesView.row(MOOC_COURSE))
       await coursesView.runInlineAction(coursesView.row(MOOC_EXERCISE), "Run Tests")
-      await expect(toast(page, /All tests of \S*passing_exercise passed\./)).toBeVisible()
+      await expect(passedLocally(page, webview)).toBeVisible()
     })
   },
 )
@@ -174,7 +181,7 @@ vsCodeTest(
       const refusal = toast(page, RESTRICTED_MESSAGE)
       await refusal.getByRole("button", { name: "Trust Course Workspace" }).click()
       await answer(page, WORKSPACE_QUESTION, "Trust Workspace & Continue")
-      await expect(toast(page, /All tests of \S*01_passing_exercise passed\./)).toBeVisible()
+      await expect(passedLocally(page, webview)).toBeVisible()
       await expect(restrictedModeIndicator(page)).toBeHidden()
     })
   },

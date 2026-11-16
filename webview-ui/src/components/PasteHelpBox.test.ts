@@ -1,14 +1,12 @@
-import { fireEvent, render, screen } from "@testing-library/svelte"
+import { render, screen } from "@testing-library/svelte"
 import { vi } from "vitest"
 
 import { postedMessages, replyToRequest } from "../test/setup"
-import { withinShadowRoot } from "../test/shadow"
 import PasteHelpBox from "./PasteHelpBox.svelte"
 
 const sourcePanel = { id: 1, type: "ExerciseSubmission" } as const
 const oncopy = vi.fn()
-const onhide = vi.fn()
-const tmcProps = { backend: "tmc", sourcePanel, oncopy, onhide } as const
+const tmcProps = { backend: "tmc", sourcePanel, oncopy } as const
 const moocProps = { ...tmcProps, backend: "mooc" } as const
 
 async function paste(): Promise<HTMLElement> {
@@ -18,11 +16,6 @@ async function paste(): Promise<HTMLElement> {
 }
 
 suite("PasteHelpBox component", () => {
-  test("is a Get help section", () => {
-    render(PasteHelpBox, { props: tmcProps })
-    expect(screen.getByRole("region", { name: "Get help" })).toBeInTheDocument()
-  })
-
   test("asks the host to paste the exercise the panel shows", async () => {
     render(PasteHelpBox, { props: tmcProps })
 
@@ -39,7 +32,10 @@ suite("PasteHelpBox component", () => {
     render(PasteHelpBox, { props: tmcProps })
     await paste()
 
-    replyToRequest("pasteExercise", { ok: true, value: "https://paste.example/abc" })
+    replyToRequest("pasteExercise", {
+      ok: true,
+      value: { link: "https://paste.example/abc", isReused: false },
+    })
 
     expect(await screen.findByText("https://paste.example/abc")).toBeVisible()
   })
@@ -47,7 +43,10 @@ suite("PasteHelpBox component", () => {
   test("has the host open the paste link, which it checks first", async () => {
     render(PasteHelpBox, { props: tmcProps })
     await paste()
-    replyToRequest("pasteExercise", { ok: true, value: "https://paste.example/abc" })
+    replyToRequest("pasteExercise", {
+      ok: true,
+      value: { link: "https://paste.example/abc", isReused: false },
+    })
 
     ;(await screen.findByRole("button", { name: "Open Link" })).click()
 
@@ -81,7 +80,10 @@ suite("PasteHelpBox component", () => {
     await vi.waitFor(() => expect(send).toHaveAttribute("disabled"))
     expect(screen.getByText("Sending to tmc.mooc.fi paste…")).toBeInTheDocument()
 
-    replyToRequest("pasteExercise", { ok: true, value: "https://paste.example/abc" })
+    replyToRequest("pasteExercise", {
+      ok: true,
+      value: { link: "https://paste.example/abc", isReused: false },
+    })
     expect(await screen.findByRole("button", { name: "Send Again" })).not.toHaveAttribute(
       "disabled",
     )
@@ -90,7 +92,10 @@ suite("PasteHelpBox component", () => {
   test("hands the paste link to the panel's copy action", async () => {
     render(PasteHelpBox, { props: tmcProps })
     await paste()
-    replyToRequest("pasteExercise", { ok: true, value: "https://paste.example/abc" })
+    replyToRequest("pasteExercise", {
+      ok: true,
+      value: { link: "https://paste.example/abc", isReused: false },
+    })
 
     ;(await screen.findByRole("button", { name: "Copy Link" })).click()
     expect(oncopy).toHaveBeenCalledWith("https://paste.example/abc")
@@ -101,10 +106,29 @@ suite("PasteHelpBox component", () => {
     expect(await screen.findByText(/Send your code to/)).not.toHaveTextContent(/submit|grad/i)
   })
 
-  test("can be hidden again", async () => {
+  test("says when the link is the last one, as the code is unchanged since", async () => {
     render(PasteHelpBox, { props: tmcProps })
-    const hide = await withinShadowRoot(screen.getByTitle("Hide Get Help"))
-    await fireEvent.click(hide.getByRole("button"))
-    expect(onhide).toHaveBeenCalledOnce()
+    await paste()
+
+    replyToRequest("pasteExercise", {
+      ok: true,
+      value: { link: "https://paste.example/abc", isReused: true },
+    })
+
+    expect(await screen.findByText(/unchanged since you last sent it/)).toBeVisible()
+    expect(screen.getByText("https://paste.example/abc")).toBeVisible()
+  })
+
+  test("pastes when its owner asks, as a command that opens Get help does", async () => {
+    const { component } = render(PasteHelpBox, { props: tmcProps })
+
+    void component.paste()
+    void component.paste()
+
+    await vi.waitFor(() =>
+      expect(
+        postedMessages.mock.calls.filter(([message]) => message.type === "pasteExercise"),
+      ).toHaveLength(1),
+    )
   })
 })

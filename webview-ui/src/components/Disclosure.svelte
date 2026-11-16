@@ -9,22 +9,37 @@
     headingLevel?: 2 | 3 | 4
     /** Keeps the open state across the panel being hidden, under this name unique on the screen. */
     persistAs?: string | undefined
+    /** Bind it to open the section from outside, as a command that leads to it does. */
+    open?: boolean
+    /** The toggle button's id, for moving focus to the section. */
+    toggleId?: string | undefined
     children: Snippet
   }
 
-  let { title, headingLevel = 2, persistAs, children }: Props = $props()
+  let {
+    title,
+    headingLevel = 2,
+    persistAs,
+    open = $bindable(false),
+    toggleId,
+    children,
+  }: Props = $props()
 
   const regionId = $props.id()
 
   // svelte-ignore state_referenced_locally -- read once: the name seeds it
   const persisted = persistAs === undefined ? undefined : uiState(`disclosure:${persistAs}`, false)
-  let open = $state(persisted?.current ?? false)
+  if (persisted?.current) {
+    open = true
+  }
+  $effect(() => {
+    if (persisted && persisted.current !== open) {
+      persisted.current = open
+    }
+  })
 
   function toggle() {
     open = !open
-    if (persisted) {
-      persisted.current = open
-    }
   }
 </script>
 
@@ -32,6 +47,7 @@
   <div class="header">
     <svelte:element this={`h${headingLevel}`} class="heading">
       <button
+        id={toggleId}
         type="button"
         class="toggle"
         aria-expanded={open}

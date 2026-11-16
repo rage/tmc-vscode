@@ -291,6 +291,10 @@ export function registerCommands(
     ),
   )
 
+  register("tmc.showExerciseResults", async (target: ExerciseTarget | undefined) =>
+    commands.showExerciseResults(readyContext, resourceOf(target)),
+  )
+
   register("tmc.showWelcome", async () => {
     await vscode.commands.executeCommand("workbench.action.openWalkthrough", WALKTHROUGH, false)
   })

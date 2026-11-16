@@ -5,8 +5,18 @@ import type {
   SubmissionFinished,
   TestCase,
 } from "../../shared/langsSchema"
-import type { FeedbackQuestion, SubmissionView, WebviewError } from "../../shared/lib"
-import { arePointsHeldForReview, assertUnreachable, pendingReviewSentence } from "../../shared/lib"
+import type {
+  FeedbackQuestion,
+  LocalCourseExercise,
+  SubmissionView,
+  WebviewError,
+} from "../../shared/lib"
+import {
+  arePointsHeldForReview,
+  assertUnreachable,
+  pendingReviewSentence,
+  unwrap,
+} from "../../shared/lib"
 
 /** The phases in which the backend is still working on the submission. */
 export type InProgressPhase = "uploading" | "grading"
@@ -54,6 +64,46 @@ export function inProgressView(
     progressFraction: progress.fraction,
     progressSteps: [...progress.steps],
     submissionUrl: progress.submissionUrl,
+  }
+}
+
+/**
+ * An exercise's results screen with no submission to show: where the exercise stands as its
+ * course last reported it.
+ *
+ * @param solutionUrl The model solution's page, once the backend shows it to the student.
+ */
+export function standingView(
+  exercise: LocalCourseExercise,
+  solutionUrl: string | undefined,
+): SubmissionView {
+  const { passed, awardedPoints, availablePoints } = unwrap(exercise)
+  const isOutOfTries = exercise.kind === "mooc" && exercise.data.outOfTries === true
+  const arePointsHeld =
+    exercise.kind === "mooc" && arePointsHeldForReview(exercise.data.pendingReview, awardedPoints)
+  return {
+    ...emptyView,
+    phase: "standing",
+    headline: passed ? "Exercise passed" : isOutOfTries ? "Exercise not passed" : "Not passed yet",
+    tone: passed ? "passed" : isOutOfTries ? "failed" : "info",
+    points:
+      availablePoints > 0 && !arePointsHeld
+        ? { given: awardedPoints, max: availablePoints }
+        : undefined,
+    solutionUrl,
+    canPaste: !passed,
+    isExercisePassed: passed,
+  }
+}
+
+/** Every test passed in the student's own run, so submitting is the next step. */
+export function testedLocallyView(): SubmissionView {
+  return {
+    ...emptyView,
+    phase: "testedLocally",
+    headline: "All tests passed locally",
+    tone: "passed",
+    explanation: "Submit the exercise to have it graded.",
   }
 }
 
@@ -325,6 +375,8 @@ function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): str
  * @param exercise.submitRefusal See {@link SubmissionView.submitRefusal}.
  * @param exercise.pendingReview See {@link SubmissionView.pendingReview}; replaces the one a
  *   finished grading was shown with.
+ * @param exercise.solutionUrl The model solution's page once the stored course reveals it; fills
+ *   in a view that has none, as a course refresh after the grading can reveal it.
  */
 export function withExerciseState(
   view: SubmissionView,
@@ -334,6 +386,7 @@ export function withExerciseState(
     submitRefusal?: string | undefined
     triesLeft?: number | undefined
     pendingReview?: string | undefined
+    solutionUrl?: string | undefined
   },
 ): SubmissionView {
   const {
@@ -346,9 +399,15 @@ export function withExerciseState(
   if (!exercise.isInCourse) {
     return { ...rest, exerciseState: "removed" }
   }
-  const pendingReview = view.phase === "finished" ? exercise.pendingReview : gradedPendingReview
+  const pendingReview =
+    view.phase === "finished" || view.phase === "standing"
+      ? exercise.pendingReview
+      : gradedPendingReview
+  const isInProgress = view.phase === "uploading" || view.phase === "grading"
+  const solutionUrl = isInProgress ? undefined : (view.solutionUrl ?? exercise.solutionUrl)
   const standing = {
     ...rest,
+    ...(solutionUrl === undefined ? {} : { solutionUrl }),
     ...(pendingReview === undefined ? {} : { pendingReview }),
     ...(exercise.submitRefusal === undefined ? {} : { submitRefusal: exercise.submitRefusal }),
     ...(exercise.triesLeft === undefined ? {} : { triesLeft: exercise.triesLeft }),

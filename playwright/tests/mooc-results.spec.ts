@@ -109,6 +109,7 @@ vsCodeTest(
         sidePanel.getByText("You have no tries left on limited_tries_exercise", { exact: false }),
       ).toBeVisible()
       await expect(sidePanel.getByRole("button", { name: "Submit Again" })).toHaveCount(0)
+      await expect(sidePanel.getByRole("button", { name: "Show Model Solution" })).toBeVisible()
       await coursesView.goto()
       await coursesView.expand(coursesView.row(courseTitle))
       await expect(exercise).toHaveAccessibleName(/no tries left/)

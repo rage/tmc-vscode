@@ -7,6 +7,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { RunResult, StyleValidationResult } from "../../../shared/langsSchema"
+import type { SubmissionView } from "../../../shared/lib"
 import { BaseError, LocalCourseData } from "../../../shared/lib"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import type { AiUseGate } from "../../api/aiUseGate"
@@ -22,9 +23,11 @@ import {
   TRUST_COURSE_WORKSPACE_COMMAND,
   WorkspaceUntrustedError,
 } from "../../errors"
+import { testedLocallyView } from "../../panels/submissionView"
 import { CheckstyleDiagnostics } from "../../testing/checkstyleDiagnostics"
 import { ExerciseTestController } from "../../testing/exerciseTestController"
 import { exerciseOperations } from "../../ui/exerciseOperations"
+import { submissionViews } from "../../ui/submissionViews"
 import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
 import { idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
@@ -113,6 +116,7 @@ beforeEach(function () {
 
 afterEach(function () {
   fs.rmSync(tempDir, { recursive: true, force: true })
+  submissionViews.clear()
 })
 
 function setup(
@@ -277,25 +281,35 @@ suite("ExerciseTestController", function () {
       true,
     )
 
-    expect(s.actionContext.dialog.notification).toHaveBeenCalledOnce()
-    const [message, [label, onSubmit]] = vi.mocked(s.actionContext.dialog.notification).mock
-      .calls[0] as unknown as [string, [string, () => void]]
-    expect(message).toBe("All tests of part01-01_hello passed.")
-    expect(label).toBe("Submit")
-    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
-    onSubmit()
-    expect(executeCommand).toHaveBeenCalledWith("tmc.submitExercise", exercise.uri)
-    executeCommand.mockRestore()
+    expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+    expect(submissionViews.latestFor(exercise.id)?.view).toEqual(testedLocallyView())
   })
 
-  test("a passing run past the deadline says why it cannot be submitted instead of offering Submit", async function () {
+  test("a passing run opens the results panel without taking the focus", async function () {
+    const s = setup()
+    const exercise = exerciseAt(s)
+    const opened = vi.fn()
+    const subscription = submissionViews.onDidOpen(opened)
+    onTestFinished(() => subscription.dispose())
+
+    await s.controller.runExercise(exercise)
+
+    expect(opened).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ type: "ExerciseSubmission", exerciseId: exercise.id }),
+    )
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
+      "tmc.showExerciseResults",
+      expect.anything(),
+    )
+  })
+
+  test("a passing run past the deadline shows in the results panel, which says why", async function () {
     const s = setup({ deadline: "2000-01-01T00:00:00Z" })
 
     await s.controller.runExercise(exerciseAt(s))
 
-    expect(s.actionContext.dialog.notification).toHaveBeenCalledExactlyOnceWith(
-      "All tests of part01-01_hello passed. The deadline of part01-01_hello has passed, so it can no longer be submitted.",
-    )
+    expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+    expect(submissionViews.latestFor(exerciseAt(s).id)?.view.phase).toBe("testedLocally")
   })
 
   test("a run langs stopped for taking too long says so, not as failed tests", async function () {
@@ -687,6 +701,86 @@ suite("ExerciseTestController", function () {
     )
     expect(several.runTests).toHaveBeenCalledTimes(2)
     expect(several.actionContext.dialog.notification).not.toHaveBeenCalled()
+  })
+
+  suite("with the exercise's results panel", function () {
+    const panel = {
+      id: 900,
+      type: "ExerciseSubmission",
+      exerciseId: idOfTmcExercise(1),
+      backend: "tmc",
+      exerciseName: "part01-01_hello",
+      courseTitle: "Python Course",
+    } as const
+
+    function showResults(view: Partial<SubmissionView> = {}, isOnScreen = true): void {
+      submissionViews.update({
+        panel,
+        view: { ...testedLocallyView(), phase: "finished", headline: "Some tests failed", ...view },
+        shouldReopen: false,
+      })
+      submissionViews.setShown(isOnScreen ? panel : undefined)
+      onTestFinished(() => {
+        submissionViews.setShown(undefined)
+        submissionViews.clear()
+      })
+    }
+
+    test("on screen, a pass shows there with Submit, and toasts nothing", async function () {
+      const s = setup()
+      showResults()
+
+      await s.controller.runExercise(exerciseAt(s))
+
+      expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+      expect(submissionViews.latestView(panel.id)).toEqual(testedLocallyView())
+    })
+
+    test("on screen, a pass past the deadline shows there too, which says why", async function () {
+      const s = setup({ deadline: "2000-01-01T00:00:00Z" })
+      showResults()
+
+      await s.controller.runExercise(exerciseAt(s))
+
+      expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+      expect(submissionViews.latestView(panel.id)?.phase).toBe("testedLocally")
+    })
+
+    test("hidden, a pass opens the panel there too", async function () {
+      const s = setup()
+      showResults({}, false)
+      const opened = vi.fn()
+      const subscription = submissionViews.onDidOpen(opened)
+      onTestFinished(() => subscription.dispose())
+
+      await s.controller.runExercise(exerciseAt(s))
+
+      expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+      expect(opened).toHaveBeenCalledExactlyOnceWith(panel)
+      expect(submissionViews.latestView(panel.id)).toEqual(testedLocallyView())
+    })
+
+    test.each<[string, Partial<SubmissionView>]>([
+      ["still grading", { phase: "grading" }],
+      ["waiting to be checked again", { canKeepWaiting: true }],
+    ])("a panel %s keeps its submission, and nothing else shows", async function (_name, view) {
+      const s = setup()
+      showResults(view, false)
+
+      await s.controller.runExercise(exerciseAt(s))
+
+      expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+      expect(submissionViews.latestView(panel.id)?.phase).not.toBe("testedLocally")
+    })
+
+    test("logged out, the pass stays a notification offering to log in", async function () {
+      const s = setup({ loggedIn: false })
+      showResults()
+
+      await s.controller.runExercise(exerciseAt(s))
+
+      expect(s.actionContext.dialog.notification).toHaveBeenCalledOnce()
+    })
   })
 
   test("a test's exercise folder is found through its parent", async function () {

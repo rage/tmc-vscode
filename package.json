@@ -247,6 +247,12 @@
         "category": "TestMyCode"
       },
       {
+        "command": "tmc.showExerciseResults",
+        "title": "Show Results",
+        "category": "TestMyCode",
+        "icon": "$(output)"
+      },
+      {
         "command": "tmc.showAiUseProblem",
         "title": "Show What Keeps AI Assistance On",
         "category": "TestMyCode"
@@ -431,6 +437,10 @@
           "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise"
         },
         {
+          "command": "tmc.showExerciseResults",
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn && !test-my-code:ActiveExerciseRemoved"
+        },
+        {
           "command": "tmc.resetExercise",
           "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise && test-my-code:LoggedIn"
         },
@@ -596,6 +606,11 @@
         {
           "command": "tmc.pasteExercise",
           "group": "1_check@3",
+          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
+        },
+        {
+          "command": "tmc.showExerciseResults",
+          "group": "1_check@4",
           "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
         },
         {
@@ -810,6 +825,11 @@
         {
           "command": "tmc.pasteExercise",
           "group": "2_check@3",
+          "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\.opened(\\.|$)/ && !listMultiSelection"
+        },
+        {
+          "command": "tmc.showExerciseResults",
+          "group": "2_check@4",
           "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\.opened(\\.|$)/ && !listMultiSelection"
         },
         {

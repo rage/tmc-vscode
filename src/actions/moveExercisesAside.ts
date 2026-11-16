@@ -1,3 +1,5 @@
+import * as path from "path"
+
 import * as fs from "fs-extra"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
@@ -74,8 +76,12 @@ export async function bringBackMovedExercises(
     if (entries.length > 0) {
       return Ok(false)
     }
-    await fs.remove(projectsDirectory)
-    await fs.move(folder, projectsDirectory)
+    // Fills the folder rather than replacing it: every tmc-langs call recreates a missing one.
+    await fs.ensureDir(projectsDirectory)
+    for (const entry of await fs.readdir(folder)) {
+      await fs.move(path.join(folder, entry), path.join(projectsDirectory, entry))
+    }
+    await fs.rmdir(folder)
   } catch (e) {
     return Err(new FileSystemError(e, `Failed to move ${folder} back to ${projectsDirectory}.`))
   }

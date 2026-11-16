@@ -1,36 +1,31 @@
-import * as vscode from "vscode"
+import { Ok } from "ts-results"
+import type * as vscode from "vscode"
 
 import { pasteServiceName } from "../../shared/lib"
-import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import { failure } from "../api/withOperation"
-import { Logger, openWebLink } from "../utilities"
 import { runForExercise } from "./runForExercise"
+import { showExerciseResults } from "./showExerciseResults"
 
-/** Shares the exercise via its backend's paste service and copies the link it gets. */
+/**
+ * Opens Get help in the exercise's results panel and shares the exercise there via its
+ * backend's paste service, where the link can be copied or opened.
+ *
+ * @param resource An exercise file or folder; the active editor's exercise when omitted.
+ */
 export async function pasteExercise(
   actionContext: ReadyActionContext,
   resource: vscode.Uri | undefined,
 ): Promise<void> {
-  const { dialog } = actionContext
-  const pasteResult = await runForExercise(
+  await runForExercise(
     actionContext,
     resource,
     "Pasting the exercise",
     async (exercise) => {
-      const result = await dialog.progressNotification(
-        `Sending ${exercise.exerciseSlug} to ${pasteServiceName(exercise.backend)}…`,
-        () => actions.pasteExercise(actionContext, exercise.id),
-      )
-      if (result.ok) {
-        return result
-      }
-      return failure(
-        `Failed to send the exercise to ${pasteServiceName(exercise.backend)}.`,
-        result.val,
-      )
+      await showExerciseResults(actionContext, exercise.uri, { name: "getHelp", shouldPaste: true })
+      return Ok.EMPTY
     },
     {
+      // Checked before the panel opens, so the share can be offered again once trusted.
       trustedCommand: "tmc.pasteExercise",
       retryOffer: (exercise) => ({
         message:
@@ -42,24 +37,5 @@ export async function pasteExercise(
           "Share it again to send your code as it is now.",
       }),
     },
-  )
-  if (pasteResult.err) {
-    return
-  }
-
-  const { link, isReused } = pasteResult.val
-  const isCopied = await Promise.resolve(vscode.env.clipboard.writeText(link)).then(
-    () => true,
-    (error: unknown) => {
-      Logger.warn("Could not copy the paste link", error)
-      return false
-    },
-  )
-  const unchanged = isReused ? "Your code is unchanged since the last paste. " : ""
-  void dialog.notification(
-    isCopied
-      ? `${unchanged}Copied ${isReused ? "its" : "the paste"} link to the clipboard: ${link}`
-      : `${unchanged}${isReused ? "Its" : "Paste"} link: ${link}`,
-    ["Open in Browser", (): void => void openWebLink(link)],
   )
 }

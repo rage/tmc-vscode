@@ -51,7 +51,7 @@ vsCodeTest(
     const courseTitle = "MOOC Variants Course"
     const exercise = coursesView.row("mixed_task_exercise")
     const code = page.locator(".monaco-editor").getByText("def hello()")
-    const submissionTab = page.getByRole("tab", { name: /^Submission: / })
+    const submissionTab = page.getByRole("tab", { name: /^Results: / })
 
     await vsCodeTest.step("submit an exercise in its course workspace", async () => {
       await coursesView.goto()

@@ -81,9 +81,7 @@ vsCodeTest(
       await expect(contents).toBeVisible()
     })
 
-    const allPassed = page
-      .locator(".notifications-toasts .notification-toast")
-      .filter({ hasText: "All tests of passing_exercise passed." })
+    const allPassed = sidePanel.getByRole("heading", { name: "All tests passed locally" })
 
     await vsCodeTest.step("run tests", async () => {
       await page.getByText(fileContents).click()
@@ -107,12 +105,13 @@ vsCodeTest(
         name: "Exercise passed",
       })
       await expect(gradedHeading).toBeHidden()
-      await allPassed.getByRole("button", { name: "Submit" }).click()
+      await sidePanel.getByRole("button", { name: "Submit", exact: true }).click()
       await expect(gradedHeading).toBeVisible()
       await expect(sidePanel.getByRole("meter", { name: "Points" })).toHaveAttribute(
         "aria-valuetext",
         /^1 \/ \d+ points$/,
       )
+      await expect(sidePanel.getByRole("button", { name: "Show Model Solution" })).toBeVisible()
     })
   },
 )

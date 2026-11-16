@@ -1,9 +1,11 @@
 import type * as vscode from "vscode"
 
-import type { InitializationErrorHelpPanel, Panel } from "../../shared/lib"
-import { assertUnreachable, LocalCourseData } from "../../shared/lib"
+import type { ExerciseSubmissionPanel, InitializationErrorHelpPanel, Panel } from "../../shared/lib"
+import { assertUnreachable, LocalCourseData, unwrap } from "../../shared/lib"
 import type { ActionContext, StartupStep } from "../actions/types"
 import { isReady } from "../actions/types"
+import type { WorkspaceExercise } from "../api/workspaceManager"
+import type { StoredExercise } from "../config/userdata"
 import { CliVerificationError } from "../errors"
 import { cliFolder } from "../utilities"
 
@@ -17,7 +19,7 @@ export function panelTitle(route: Panel, actionContext: ActionContext): string {
       return course?.ok ? LocalCourseData.getCourseTitle(course.val) : "Course Details"
     }
     case "ExerciseSubmission":
-      return `Submission: ${route.exerciseName}`
+      return `Results: ${route.exerciseName}`
     case "InitializationErrorHelp":
       return "TestMyCode Help"
     default:
@@ -34,6 +36,22 @@ let panelIdCounter = 0
 export function nextPanelId(): number {
   panelIdCounter += 1
   return panelIdCounter
+}
+
+/** A new results panel for `exercise`, named as its stored course names it. */
+export function exerciseSubmissionPanel(
+  exercise: Pick<WorkspaceExercise, "id" | "backend">,
+  { course, exercise: courseExercise }: StoredExercise,
+): ExerciseSubmissionPanel {
+  return {
+    id: nextPanelId(),
+    type: "ExerciseSubmission",
+    exerciseId: exercise.id,
+    backend: exercise.backend,
+    exerciseName: unwrap(courseExercise).name,
+    courseTitle: LocalCourseData.getCourseTitle(course),
+    ...(course.kind === "mooc" ? { organization: course.data.organization } : {}),
+  }
 }
 
 /** A new help panel for the activation failures `actionContext` holds, if any. */

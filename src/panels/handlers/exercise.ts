@@ -2,11 +2,16 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import type { ExerciseSubmissionPanel } from "../../../shared/lib"
+import type {
+  ExerciseSubmissionPanel,
+  RestoreOutcome,
+  SubmissionHistoryEntry,
+} from "../../../shared/lib"
 import { LocalCourseData } from "../../../shared/lib"
 import * as actions from "../../actions"
 import { reportWarnings, withOperation } from "../../api/withOperation"
 import { Logger } from "../../utilities"
+import { restoreSubmission } from "../restoreSubmission"
 import type { HandlerMap, PanelHost } from "../router"
 
 const EXERCISE_ACTION_COMMANDS = {
@@ -19,19 +24,65 @@ const EXERCISE_ACTION_COMMANDS = {
 export const exerciseHandlers = {
   pasteExercise: {
     requiresReady: true,
-    async handle(message, { host, actionContext }): Promise<Result<string, Error>> {
+    async handle(message, { host, actionContext }): Promise<Result<actions.PasteLink, Error>> {
       const shown = shownExercisePanel(host, message.sourcePanel.id)
       if (!shown) {
         Logger.warn("Ignoring a paste from a panel that is no longer shown")
         return Err(new Error("This exercise is no longer shown."))
       }
       // Silent: the panel that asked shows the failure, remedies included.
-      const pasted = await withOperation(
+      return withOperation(
         actionContext.dialog,
         { failure: "Failed to paste the exercise.", silent: true },
         () => actions.pasteExercise(actionContext, shown.exerciseId),
       )
-      return pasted.map(({ link }) => link)
+    },
+  },
+  requestSubmissionHistory: {
+    requiresReady: true,
+    async handle(
+      message,
+      { host, actionContext },
+    ): Promise<Result<SubmissionHistoryEntry[], Error>> {
+      const shown = shownExercisePanel(host, message.sourcePanel.id)
+      if (!shown) {
+        return Err(new Error("This exercise is no longer shown."))
+      }
+      const listed = await withOperation(
+        actionContext.dialog,
+        { failure: "Failed to fetch old submissions.", silent: true },
+        () => actions.listOldSubmissions(actionContext, shown.exerciseId),
+      )
+      if (listed.err) {
+        return listed
+      }
+      rememberListing(shown.id, listed.val)
+      return Ok(actions.submissionHistory(listed.val, new Date(), vscode.env.language))
+    },
+  },
+  restoreSubmission: {
+    requiresReady: true,
+    async handle(message, { host, actionContext }): Promise<Result<RestoreOutcome, Error>> {
+      const shown = shownExercisePanel(host, message.sourcePanel.id)
+      if (!shown) {
+        return Err(new Error("This exercise is no longer shown."))
+      }
+      const exercise = actionContext.startup.workspaceManager.getExercise(shown.exerciseId)
+      if (!exercise) {
+        return Err(new Error("This exercise is no longer downloaded. Open it to restore."))
+      }
+      // The webview names an entry of the host's own listing, never a submission of its choosing.
+      const submission = listings
+        .get(shown.id)
+        ?.find((listed) => actions.oldSubmissionKey(listed) === message.key)
+      if (!submission) {
+        return Err(new Error("That submission is no longer listed. Refresh the history."))
+      }
+      return withOperation(
+        actionContext.dialog,
+        { failure: "Failed to download old submission.", silent: true },
+        () => restoreSubmission(actionContext, exercise, submission),
+      )
     },
   },
   keepWaitingForGrading: {
@@ -107,6 +158,22 @@ export const exerciseHandlers = {
     },
   },
 } satisfies Partial<HandlerMap>
+
+/** The submissions each panel's History last listed, by panel id; the newest panels only. */
+const listings = new Map<number, actions.OldSubmission[]>()
+
+const LISTINGS_KEPT = 10
+
+function rememberListing(panelId: number, submissions: actions.OldSubmission[]): void {
+  listings.delete(panelId)
+  listings.set(panelId, submissions)
+  for (const oldest of listings.keys()) {
+    if (listings.size <= LISTINGS_KEPT) {
+      break
+    }
+    listings.delete(oldest)
+  }
+}
 
 /**
  * The submission panel `host` shows, if it is still panel `id`.

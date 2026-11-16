@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- The submission result is now the exercise's results screen. Show Results, in the exercise's status bar actions, the Command Palette and the exercise menus, opens it for the exercise at hand, showing where the exercise stands when nothing was submitted in this session. Tests passing locally open it with Submit as its main action instead of a notification, unless it is still showing a submission being graded.
+- The results screen's History lists an exercise's earlier submissions, help requests and backups with their date, score and outcome, marks the latest submission, and restores one after asking. Download Old Submission opens it instead of a list to pick from.
+- The results screen's Get help sends the code via paste and shows the link with Copy Link and Open Link instead of a notification, saying when the code is unchanged since the last paste. Share Exercise via Paste opens it.
+- A passed tmc.mooc.fi exercise offers its model solution in the results screen and the exercise's actions, not only after a submission. Once revealed, the model solution is a button on the results screen, and a course refresh that reveals it updates the open screen.
 - In its course workspace, Course Details offers Continue with the next exercise to do once nothing is left to download. Its exercise rows say "In workspace" instead of "Open", and their open button has a clearer icon.
 - The notification offering a course's workspace is not shown while that course's Course Details, which offers the same, is on screen.
 - A courses.mooc.fi course links to its course material: the course from Course Details' menu, and each exercise from its row's menu.
@@ -64,7 +68,7 @@
 - A paste from the exercise panel that fails now shows its error in the panel only, instead of also as a notification.
 - A course workspace that fails to open is now reported.
 - Checking for exercise updates no longer says "All exercises are up to date." when refreshing the courses failed, or when a site holding your courses could not be checked; that site's failure is reported instead.
-- Updated TMC-langs to 0.41.1.
+- Updated TMC-langs to 0.42.0.
 - Fixed Course Details sometimes staying blank for half a minute when shown again from its tab right after opening an exercise.
 - Removed the Ctrl+Shift+T (Run Tests), Ctrl+Shift+C (Close Exercise) and Ctrl+Shift+A (Action Menu) shortcuts. They replaced VS Code's Reopen Closed Editor, terminal Copy and Toggle Block Comment in every course workspace, and copying from the terminal on Linux could close an exercise. To keep a shortcut for running tests, bind "TestMyCode: Run Tests" in Keyboard Shortcuts (Ctrl+K Ctrl+S).
 - The Java Home setting now takes effect: Java exercises run with the JDK it names. It had been ignored.

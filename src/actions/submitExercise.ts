@@ -10,11 +10,11 @@ import type {
   FeedbackAnswer,
   SubmissionView,
   SubmitRefusal,
+  LocalCourseExercise,
 } from "../../shared/lib"
 import {
   backendName,
   LocalCourseData,
-  LocalCourseExercise,
   match,
   submitRefusalOf,
   submitRefusalSentence,
@@ -34,7 +34,7 @@ import {
   isSubmitRefusal,
   OutOfTriesError,
 } from "../errors"
-import { nextPanelId } from "../panels/routes"
+import { exerciseSubmissionPanel } from "../panels/routes"
 import type { InProgressPhase, SubmissionProgress } from "../panels/submissionView"
 import {
   gradingUnavailableView,
@@ -46,9 +46,9 @@ import {
 } from "../panels/submissionView"
 import { toWebviewError } from "../panels/webviewError"
 import { exerciseOperations } from "../ui/exerciseOperations"
+import { nextExerciseOf } from "../ui/exerciseStanding"
 import { pointsText } from "../ui/points"
 import { isSameExercise, submissionViews } from "../ui/submissionViews"
-import { nextExerciseAfter } from "../ui/treeview/courseViewModel"
 import { Logger, parseFeedbackQuestion } from "../utilities"
 import type { MoocStoredStanding } from "../utilities/apiData"
 import { moocStoredStanding } from "../utilities/apiData"
@@ -323,17 +323,10 @@ function withNextExercise(
   view: SubmissionView,
 ): SubmissionView {
   const isExercisePassed = view.phase === "finished" && userData.getPassed(submission.exerciseId)
-  const course = userData.getCourse(submission.courseId)
-  const nextId =
-    isExercisePassed && course.ok
-      ? nextExerciseAfter(course.val, submission.exerciseId, new Date())
-      : undefined
-  const next = nextId && userData.getExercise(nextId)
-  return {
-    ...view,
-    isExercisePassed,
-    ...(next?.ok ? { nextExercise: { name: LocalCourseExercise.getSlug(next.val.exercise) } } : {}),
-  }
+  const nextExercise = isExercisePassed
+    ? nextExerciseOf(userData, submission.courseId, submission.exerciseId)
+    : undefined
+  return { ...view, isExercisePassed, ...(nextExercise ? { nextExercise } : {}) }
 }
 
 /** What {@link checkCanSubmit} found an exercise to be submitted with. */
@@ -436,15 +429,7 @@ export async function submitExercise(
     }
     const fingerprint = await fingerprintStudentFiles(actionContext, exercise)
     const submission: Submission = {
-      panel: {
-        id: nextPanelId(),
-        type: "ExerciseSubmission",
-        exerciseId,
-        backend: exercise.backend,
-        exerciseName: unwrap(courseExercise).name,
-        courseTitle: LocalCourseData.getCourseTitle(course),
-        ...(course.kind === "mooc" ? { organization: course.data.organization } : {}),
-      },
+      panel: exerciseSubmissionPanel(exercise, { course, exercise: courseExercise }),
       exercise,
       exerciseId,
       courseId,

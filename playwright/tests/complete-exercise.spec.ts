@@ -2,7 +2,7 @@ import * as fs from "fs"
 import { join } from "node:path"
 
 import { expect } from "@playwright/test"
-import type { Locator, Page } from "@playwright/test"
+import type { FrameLocator, Locator, Page } from "@playwright/test"
 
 import { VSCODE_TEST_VERSION } from "../../config"
 import { courseWorkspaceSettings } from "../courseWorkspace"
@@ -128,13 +128,13 @@ for (const exercise of exercises) {
       await expect(runTests).toBeVisible()
       await runTests.click()
       if (exercise.expected_result === "pass") {
-        await expect(allPassedToast(page)).toBeVisible()
+        await expect(passedLocally(sidePanel)).toBeVisible()
       }
       await testResultsPage.open()
       await expect(testResultsPage.result(exercise.test_name).first()).toBeVisible()
       if (exercise.expected_result === "fail") {
         await expect(testResultsPage.result("1 of 1 tests failed.").first()).toBeVisible()
-        await expect(allPassedToast(page)).toBeHidden()
+        await expect(passedLocally(sidePanel)).toBeHidden()
       }
     })
 
@@ -142,7 +142,7 @@ for (const exercise of exercises) {
       const expectedString = expectedResultInSubmissionView(exercise.expected_result)
       await expect(sidePanel.getByRole("heading", { name: expectedString })).toBeHidden()
       if (exercise.expected_result === "pass") {
-        await allPassedToast(page).getByRole("button", { name: "Submit" }).click()
+        await sidePanel.getByRole("button", { name: "Submit", exact: true }).click()
       } else {
         await editorActions(page).getByLabel("Submit Solution", { exact: true }).click()
       }
@@ -156,11 +156,9 @@ function editorActions(page: Page): Locator {
   return page.getByRole("toolbar", { name: "Editor actions" })
 }
 
-/** The notification that offers Submit after an all-passing local run. */
-function allPassedToast(page: Page): Locator {
-  return page
-    .locator(".notifications-toasts .notification-toast")
-    .filter({ hasText: /All tests of .+ passed\./ })
+/** The results screen's heading after an all-passing local run, which offers Submit. */
+function passedLocally(sidePanel: FrameLocator): Locator {
+  return sidePanel.getByRole("heading", { name: "All tests passed locally" })
 }
 
 function expectedResultInSubmissionView(expectedResult: "pass" | "fail"): string {

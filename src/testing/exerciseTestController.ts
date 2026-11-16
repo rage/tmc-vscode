@@ -10,6 +10,7 @@ import {
   withDistinctKeys,
 } from "../../shared/lib"
 import { checkAiUse } from "../actions/checkAiUse"
+import { exerciseResultsPanel } from "../actions/exerciseResults"
 import type { ExerciseTestOutcome } from "../actions/testExercise"
 import { testExercise } from "../actions/testExercise"
 import type { ReadyActionContext } from "../actions/types"
@@ -24,6 +25,8 @@ import {
   TRUST_COURSE_WORKSPACE_COMMAND,
   WorkspaceUntrustedError,
 } from "../errors"
+import { testedLocallyView } from "../panels/submissionView"
+import { submissionViews } from "../ui/submissionViews"
 import { countOf } from "../utilities"
 import { reachWalkthroughMilestone } from "../window/walkthrough"
 import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
@@ -389,6 +392,14 @@ export class ExerciseTestController implements vscode.Disposable {
     } else {
       return
     }
+    // The panel says so itself when the exercise cannot be submitted.
+    if (
+      outcome.kind !== "examMode" &&
+      this._actionContext.authState.loggedIn &&
+      showLocalPassInResults(this._actionContext, exercise)
+    ) {
+      return
+    }
     const stored = this._actionContext.startup.userData.getExercise(exercise.id)
     if (stored.err) {
       return
@@ -417,6 +428,32 @@ export class ExerciseTestController implements vscode.Disposable {
         ),
     ])
   }
+}
+
+/**
+ * Shows a local all-pass in the exercise's results panel, opening it without taking the focus,
+ * where Submit is then the main action. A panel still busy with a submission keeps showing that.
+ *
+ * @returns Whether the pass was handled here; `false` when the exercise has no results panel.
+ */
+function showLocalPassInResults(
+  actionContext: ReadyActionContext,
+  exercise: WorkspaceExercise,
+): boolean {
+  const latest = submissionViews.latestFor(exercise.id)
+  if (
+    latest &&
+    (latest.view.canKeepWaiting || ["uploading", "grading"].includes(latest.view.phase))
+  ) {
+    return true
+  }
+  const panel = exerciseResultsPanel(actionContext, exercise)
+  if (panel.err) {
+    return false
+  }
+  submissionViews.update({ panel: panel.val, view: testedLocallyView(), shouldReopen: false })
+  submissionViews.show(panel.val)
+  return true
 }
 
 /** The open course workspace's exercises that are open in it; none outside a course workspace. */

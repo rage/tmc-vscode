@@ -4,11 +4,11 @@ import type * as vscode from "vscode"
 import { checkAiUse, resetExercise as resetExerciseAction, storedExerciseOf } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { failure } from "../api/withOperation"
-import { revertExerciseDocuments } from "../window/exerciseDocuments"
 import {
   confirmSubmitBeforeDestructiveAction,
   keepingVerb,
-} from "./confirmSubmitBeforeDestructiveAction"
+} from "../window/confirmSubmitBeforeDestructiveAction"
+import { revertExerciseDocuments } from "../window/exerciseDocuments"
 import { checkTrustRetrying, runForExercise } from "./runForExercise"
 
 /**

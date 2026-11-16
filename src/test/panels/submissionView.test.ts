@@ -4,17 +4,20 @@ import type {
   GradingProgress,
   SubmissionFinished,
 } from "../../../shared/langsSchema"
-import { SubmissionViewSchema } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind, SubmissionViewSchema } from "../../../shared/lib"
 import { moocGrading as gradingOf, submissionFinished } from "../../../webview-ui/src/test/fixtures"
 import {
   gradingUnavailableView,
   inProgressView,
   moocGradingView,
+  standingView,
   submitFailedView,
+  testedLocallyView,
   tmcResultView,
   withExerciseState,
   withProgressStep,
 } from "../../panels/submissionView"
+import { moocCourseExercise, tmcCourseExercise } from "../fixtures/courses"
 
 function tmcResult(overrides: Partial<SubmissionFinished> = {}): SubmissionFinished {
   return submissionFinished({
@@ -384,11 +387,108 @@ suite("withExerciseState", () => {
     expect(withExerciseState(view, onDisk).pendingReview).toBeUndefined()
   })
 
+  test("a finished grading takes the model solution a later course refresh revealed", () => {
+    const view = moocGradingView(moocGrading("FullyGraded", 3, "Passed"), 3)
+
+    expect(
+      withExerciseState(view, { ...onDisk, solutionUrl: "https://material/loops" }),
+    ).toMatchObject({ solutionUrl: "https://material/loops" })
+  })
+
+  test("a grading keeps the model solution it was shown with", () => {
+    const view = {
+      ...moocGradingView(moocGrading("FullyGraded", 3, "Passed"), 3),
+      solutionUrl: "https://material/loops",
+    }
+
+    expect(withExerciseState(view, onDisk).solutionUrl).toBe("https://material/loops")
+  })
+
+  test("a grading still in progress gets no model solution", () => {
+    const view = inProgressView("grading", { steps: [] })
+
+    expect(
+      withExerciseState(view, { ...onDisk, solutionUrl: "https://material/loops" }).solutionUrl,
+    ).toBeUndefined()
+  })
+
   test("a grading still in progress gets no review sentence", () => {
     const view = inProgressView("grading", { steps: [] })
 
     expect(
       withExerciseState(view, { ...onDisk, pendingReview: heldForLock }).pendingReview,
     ).toBeUndefined()
+  })
+})
+
+suite("standingView", function () {
+  test("a passed exercise is passed, with its points and model solution, and no paste help", function () {
+    const view = standingView(
+      makeTmcKind(tmcCourseExercise({ passed: true, awardedPoints: 1 })),
+      "https://tmc.example/exercises/1/solution",
+    )
+
+    expect(SubmissionViewSchema.parse(view)).toEqual(view)
+    expect(view).toMatchObject({
+      phase: "standing",
+      headline: "Exercise passed",
+      tone: "passed",
+      points: { given: 1, max: 1 },
+      solutionUrl: "https://tmc.example/exercises/1/solution",
+      canPaste: false,
+      isExercisePassed: true,
+    })
+  })
+
+  test("an exercise not passed yet offers paste help", function () {
+    const view = standingView(makeMoocKind(moocCourseExercise({ availablePoints: 3 })), undefined)
+
+    expect(view).toMatchObject({
+      headline: "Not passed yet",
+      tone: "info",
+      points: { given: 0, max: 3 },
+      canPaste: true,
+      isExercisePassed: false,
+    })
+  })
+
+  test("an exercise out of tries reads as not passed, for good", function () {
+    const view = standingView(makeMoocKind(moocCourseExercise({ outOfTries: true })), undefined)
+
+    expect(view).toMatchObject({ headline: "Exercise not passed", tone: "failed" })
+  })
+
+  test("points held for a teacher's review are not shown as a score", function () {
+    const view = standingView(
+      makeMoocKind(moocCourseExercise({ pendingReview: "awaits_teacher" })),
+      undefined,
+    )
+
+    expect(view.points).toBeUndefined()
+  })
+
+  test("takes the pending review the exercise stands with now", function () {
+    const view = withExerciseState(standingView(makeMoocKind(moocCourseExercise()), undefined), {
+      isOnDisk: true,
+      isInCourse: true,
+      pendingReview: "Waiting for a teacher's review.",
+    })
+
+    expect(view.pendingReview).toBe("Waiting for a teacher's review.")
+  })
+})
+
+suite("testedLocallyView", function () {
+  test("says the tests passed here, and leaves grading to a submit", function () {
+    const view = testedLocallyView()
+
+    expect(SubmissionViewSchema.parse(view)).toEqual(view)
+    expect(view).toMatchObject({
+      phase: "testedLocally",
+      headline: "All tests passed locally",
+      tone: "passed",
+      canPaste: false,
+      canKeepWaiting: false,
+    })
   })
 })
