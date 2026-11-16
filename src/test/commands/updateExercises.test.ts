@@ -51,7 +51,7 @@ const moocCourse = { kind: "mooc", data: { id: "mooc-course" } } as LocalCourseD
 
 /** A check that reached every backend. */
 function checked(exercises: ExerciseUpdateCheck["outdated"]): ExerciseUpdateCheck {
-  return { outdated: exercises, removed: [], failures: [] }
+  return { outdated: exercises, removed: [], failures: [], unchecked: [] }
 }
 
 function contextWith(
@@ -104,6 +104,7 @@ suite("updateExercises command", function () {
       outdated: [outdated(1, 10), outdated(1, 11)],
       removed: [idOfTmcExercise(12)],
       failures: [{ backend: "mooc", error: new Error("offline") }],
+      unchecked: [],
     })
     const [actionContext] = contextWith(true)
 
@@ -118,6 +119,37 @@ suite("updateExercises command", function () {
     ])
     expect(updateablesRegistry.get(idOfTmcCourse(2))).toEqual([])
     expect(updateablesRegistry.get(idOfMoocCourse("mooc-course"))).toEqual(staleMooc)
+  })
+
+  test("keeps a course it could not check at its last answer", async function () {
+    const lostCourse = {
+      kind: "mooc",
+      data: { id: "lost", exercises: [{ id: "lost-removed" }, { id: "lost-kept" }] },
+    } as LocalCourseData
+    const staleLost = [idOfMoocExercise("lost-outdated")]
+    updateablesRegistry.setMany([
+      [idOfMoocCourse("lost"), staleLost],
+      [idOfMoocCourse("mooc-course"), [idOfMoocExercise("stale")]],
+    ])
+    updateablesRegistry.setRemoved("mooc", [
+      idOfMoocExercise("lost-removed"),
+      idOfMoocExercise("checked-removed"),
+    ])
+    checkForExerciseUpdates.mockResolvedValue({
+      outdated: [],
+      removed: [],
+      failures: [],
+      unchecked: [idOfMoocCourse("lost")],
+    })
+    const [actionContext] = contextWith(true)
+    vi.spyOn(actionContext.startup.userData, "getCourses").mockReturnValue([moocCourse, lostCourse])
+
+    await updateExercises(actionContext, "silent")
+
+    expect(updateablesRegistry.get(idOfMoocCourse("lost"))).toEqual(staleLost)
+    expect(updateablesRegistry.get(idOfMoocCourse("mooc-course"))).toEqual([])
+    expect(updateablesRegistry.isRemoved(idOfMoocExercise("lost-removed"))).toBe(true)
+    expect(updateablesRegistry.isRemoved(idOfMoocExercise("checked-removed"))).toBe(false)
   })
 
   test("does not credit a tmc course's updates to a mooc course with the same id", async function () {
@@ -304,6 +336,7 @@ suite("updateExercises command", function () {
       outdated: [],
       removed: [],
       failures: [{ backend: "mooc", error }],
+      unchecked: [],
     })
     const [loudContext, loudDialog] = contextWith(false)
     const [silentContext, silentDialog] = contextWith(false)
@@ -329,6 +362,7 @@ suite("updateExercises command", function () {
         { backend: "tmc", error: tmcError },
         { backend: "mooc", error: new Error("mooc offline") },
       ],
+      unchecked: [],
     })
     const [context, dialog] = contextWith(false)
 
@@ -348,6 +382,30 @@ suite("updateExercises command", function () {
 
     expect(dialog.statusMessage).toHaveBeenCalledExactlyOnceWith("All exercises are up to date.")
     expect(dialog.notification).not.toHaveBeenCalled()
+  })
+
+  test("names the courses it could not check in the all-clear", async function () {
+    checkForExerciseUpdates.mockResolvedValue({
+      ...checked([]),
+      unchecked: [idOfTmcCourse(1), idOfTmcCourse(2)],
+    })
+    const [context, dialog] = contextWith(false)
+    vi.spyOn(context.startup.userData, "getCourses").mockReturnValue([
+      {
+        kind: "tmc",
+        data: { id: 1, title: "Lost One", exercises: [] },
+      } as unknown as LocalCourseData,
+      {
+        kind: "tmc",
+        data: { id: 2, title: "Lost Two", exercises: [] },
+      } as unknown as LocalCourseData,
+    ])
+
+    await updateExercises(context, "loud")
+
+    expect(dialog.statusMessage).toHaveBeenCalledExactlyOnceWith(
+      "Lost One and Lost Two are no longer available. Your other exercises are up to date.",
+    )
   })
 
   test("offers an update once in silent runs, and never the all-clear", async function () {

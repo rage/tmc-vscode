@@ -213,11 +213,11 @@ export async function updateCourse(
 }
 
 /**
- * What a failed course fetch says of the student's access to the course, if anything. A mooc 403
- * is the course's only when the same session could list the student's courses: tmc-langs reports
- * every courses.mooc.fi 403 as an insufficient scope.
+ * What a failed course fetch, or a course an update check could not check, says of the student's
+ * access to the course, if anything. A mooc 403 is the course's only when the same session could
+ * list the student's courses: tmc-langs reports every courses.mooc.fi 403 as an insufficient scope.
  */
-function accessLossOf(
+export function accessLossOf(
   error: Error,
   moocEnrollments: MoocEnrollments | undefined,
 ): CourseAccessLoss["reason"] | undefined {

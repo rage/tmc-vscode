@@ -30,7 +30,7 @@ import type {
   TmcConfig,
 } from "../../shared/langsSchema"
 import { CliNotification, CliOutputData, CliStatusUpdate } from "../../shared/langsSchema"
-import type { BackendKind, Enum } from "../../shared/lib"
+import type { BackendKind, CourseIdentifier, Enum } from "../../shared/lib"
 import {
   backendName,
   BaseError,
@@ -226,6 +226,18 @@ export interface LocalExerciseUpdates {
   updated: ExerciseIdentifier[]
   /** No longer on the server; their local copies stay and are never updated. */
   removed: ExerciseIdentifier[]
+  /**
+   * Courses the backend refused to serve, which `updated` and `removed` say nothing about. Only
+   * courses.mooc.fi refuses single courses; tmc.mooc.fi fails the whole check instead.
+   */
+  uncheckedCourses?: UncheckedCourse[]
+}
+
+/** A course an update check could not check. */
+export interface UncheckedCourse {
+  courseId: CourseIdentifier
+  /** What a command about this course alone fails with. */
+  refusal: InsufficientScopeError | NotFoundError
 }
 
 /** A backend's download result, with each exercise as `toDownload` identifies it. */
@@ -740,9 +752,16 @@ export default class Langs {
     }
     if (backend === "mooc") {
       const res = await this._fetch(command, "mooc-exercise-updates", cacheConfig)
-      return res.map(({ updated, removed }) => ({
+      return res.map(({ updated, removed, unchecked_courses }) => ({
         updated: updated.map((id) => makeMoocKind({ moocExerciseId: id })),
         removed: removed.map((id) => makeMoocKind({ moocExerciseId: id })),
+        uncheckedCourses: unchecked_courses.map(({ course_id, kind }) => ({
+          courseId: makeMoocKind({ moocCourseId: course_id }),
+          refusal:
+            kind === "insufficient-scope"
+              ? new InsufficientScopeError(`${backendName("mooc")} refused the course.`)
+              : new NotFoundError(`${backendName("mooc")} no longer has the course.`),
+        })),
       }))
     }
     const res = await this._fetch(command, "exercise-updates", cacheConfig)

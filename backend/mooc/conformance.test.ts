@@ -146,6 +146,22 @@ describe("mooc mock conformance", () => {
     assert.equal(mock.setCourseAccess("no-such-course", "forbidden"), false)
   })
 
+  // tmc-langs' update check lists each course's exercises and leaves out only the ones refused.
+  test("a closed or deleted course refuses its exercise listing alone", async () => {
+    const listing = async (id: string): Promise<number> =>
+      (await authFetch(api(`/courses/${id}/exercises`))).status
+    try {
+      assert.equal(mock.setCourseAccess(pythonCourse.id, "forbidden"), true)
+      assert.equal(await listing(pythonCourse.id), 403)
+      assert.equal(await listing(extraCourse.id), 200)
+      assert.equal(mock.setCourseAccess(pythonCourse.id, "deleted"), true)
+      assert.equal(await listing(pythonCourse.id), 404)
+      assert.equal(await listing(extraCourse.id), 200)
+    } finally {
+      mock.reset()
+    }
+  })
+
   test("a revoked grant rejects every token until a reset", async () => {
     try {
       mock.revokeGrant()

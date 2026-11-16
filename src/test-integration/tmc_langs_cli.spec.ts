@@ -44,7 +44,7 @@ import {
   RateLimitedError,
   RuntimeError,
 } from "../errors"
-import { idOfMoocExercise, idOfTmcExercise } from "../test/fixtures/identifiers"
+import { idOfMoocCourse, idOfMoocExercise, idOfTmcExercise } from "../test/fixtures/identifiers"
 import { getLangsCLIForPlatform, getPlatform } from "../utilities"
 
 // __dirname is the dist folder when built.
@@ -826,6 +826,34 @@ suite("tmc langs cli spec", function () {
         expect(data.val).to.be.instanceOf(NotFoundError)
         expect((data.val as NotFoundError).httpStatus).to.equal(404)
       })
+
+      const leavesUncheckedAlone = (
+        access: string,
+        refusal: typeof InsufficientScopeError | typeof NotFoundError,
+      ) =>
+        async function (): Promise<void> {
+          const ids = [PASSING_EXERCISE_ID, FAILING_EXERCISE_ID]
+          ;(await tmc.downloadMoocExercises(ids, undefined, () => {})).unwrap()
+          expect((await setCourseAccess(access)).status).to.equal(204)
+
+          const updates = (await tmc.checkExerciseUpdates("mooc", { forceRefresh: true })).unwrap()
+
+          expect(updates.removed).to.deep.equal([])
+          expect(updates.uncheckedCourses).to.have.length(1)
+          const [unchecked] = updates.uncheckedCourses ?? []
+          expect(unchecked?.courseId).to.deep.equal(idOfMoocCourse(PYTHON_COURSE_ID))
+          expect(unchecked?.refusal).to.be.instanceOf(refusal)
+        }
+
+      test(
+        "should leave a closed course unchecked and still check the others",
+        leavesUncheckedAlone("forbidden", InsufficientScopeError),
+      )
+
+      test(
+        "should leave a deleted course unchecked and still check the others",
+        leavesUncheckedAlone("deleted", NotFoundError),
+      )
     })
 
     test("should paste a mooc exercise as a shared, ungraded snapshot", async function () {
@@ -928,6 +956,7 @@ suite("tmc langs cli spec", function () {
         expect(updates).to.deep.equal({
           updated: [],
           removed: [idOfMoocExercise(PASSING_EXERCISE_ID)],
+          uncheckedCourses: [],
         })
       } finally {
         await setRemoved(false)

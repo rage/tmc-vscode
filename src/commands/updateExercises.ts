@@ -1,17 +1,16 @@
 import { Ok } from "ts-results"
 
-import type { BackendKind } from "../../shared/lib"
 import {
   backendName,
   CourseIdentifier,
   ExerciseIdentifier,
   LocalCourseData,
+  LocalCourseExercise,
 } from "../../shared/lib"
 import { checkForExerciseUpdates, downloadExerciseUpdates } from "../actions"
 import { describeExercises, exerciseName } from "../actions/exerciseNames"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
-import { CourseAccessLostError, InsufficientScopeError, NotFoundError } from "../errors"
 import { recentUpdates } from "../ui/recentUpdates"
 import { shownCourseHome } from "../ui/shownCourseHome"
 import { updateablesRegistry } from "../ui/updateablesRegistry"
@@ -45,18 +44,24 @@ export async function updateExercises(
     return
   }
 
-  const { outdated, removed, failures } = updateablesResult.val
+  const { outdated, removed, failures, unchecked } = updateablesResult.val
   const knownBefore = new Set(
     userData
       .getCourses()
       .flatMap((course) => updateablesRegistry.get(LocalCourseData.getCourseId(course)))
       .map((id) => ExerciseIdentifier.key(id)),
   )
-  // What a failed backend's courses last showed is still the best answer for them.
+  const uncheckedCourses = userData
+    .getCourses()
+    .filter((course) =>
+      unchecked.some((id) => CourseIdentifier.equals(id, LocalCourseData.getCourseId(course))),
+    )
+  // What a failed backend's courses, or an unchecked course, last showed is still the best answer.
   updateablesRegistry.setMany(
     userData
       .getCourses()
       .filter((course) => failures.every(({ backend }) => backend !== course.kind))
+      .filter((course) => !uncheckedCourses.includes(course))
       .map((course) => {
         const courseId = LocalCourseData.getCourseId(course)
         return [
@@ -69,10 +74,14 @@ export async function updateExercises(
   )
   for (const backend of ["tmc", "mooc"] as const) {
     if (failures.every((failure) => failure.backend !== backend)) {
-      updateablesRegistry.setRemoved(
-        backend,
-        removed.filter((id) => id.kind === backend),
-      )
+      updateablesRegistry.setRemoved(backend, [
+        ...removed.filter((id) => id.kind === backend),
+        ...uncheckedCourses
+          .filter((course) => course.kind === backend)
+          .flatMap((course) => LocalCourseData.getExercises(course))
+          .map((exercise) => LocalCourseExercise.getId(exercise))
+          .filter((id) => updateablesRegistry.isRemoved(id)),
+      ])
     }
   }
   const [firstFailure] = failures
@@ -82,10 +91,7 @@ export async function updateExercises(
     for (const { backend, error } of failures.slice(1)) {
       Logger.error(`Failed to check ${backendName(backend)} for exercise updates.`, error)
     }
-    void dialog.reportError(
-      `Failed to check ${sites} for exercise updates.`,
-      explainedByLostCourse(actionContext, firstFailure) ?? firstFailure.error,
-    )
+    void dialog.reportError(`Failed to check ${sites} for exercise updates.`, firstFailure.error)
   }
 
   const updateable = outdated.filter((x) => {
@@ -113,7 +119,7 @@ export async function updateExercises(
 
   if (exercisesToUpdate.length === 0 || mode === "promptless") {
     if (!silent && failures.length === 0) {
-      dialog.statusMessage("All exercises are up to date.")
+      dialog.statusMessage(allClear(uncheckedCourses))
     }
     return
   }
@@ -209,28 +215,14 @@ export async function downloadUpdates(
   }
 }
 
-/**
- * The failed update check `failure` as the lost course that causes it, if one does. tmc-langs
- * checks every course with exercises on disk and stops at the first one its backend refuses, which
- * it reports as an expired session or a bare 404.
- */
-function explainedByLostCourse(
-  { startup }: ReadyActionContext,
-  failure: { backend: BackendKind; error: Error },
-): CourseAccessLostError | undefined {
-  if (
-    !(failure.error instanceof InsufficientScopeError || failure.error instanceof NotFoundError)
-  ) {
-    return undefined
+/** The all-clear of a check that found nothing to update, naming the courses it could not check. */
+function allClear(uncheckedCourses: readonly LocalCourseData[]): string {
+  if (uncheckedCourses.length === 0) {
+    return "All exercises are up to date."
   }
-  const lost = startup.userData
-    .getCourses()
-    .find((course) => course.kind === failure.backend && LocalCourseData.getAccessLoss(course))
-  return (
-    lost &&
-    new CourseAccessLostError(
-      `${LocalCourseData.getCourseTitle(lost)} is no longer available, so its exercises and those` +
-        " of your other courses there cannot be checked for updates.",
-    )
+  const titles = new Intl.ListFormat("en").format(
+    uncheckedCourses.map((course) => LocalCourseData.getCourseTitle(course)),
   )
+  const verb = uncheckedCourses.length === 1 ? "is" : "are"
+  return `${titles} ${verb} no longer available. Your other exercises are up to date.`
 }

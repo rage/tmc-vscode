@@ -34,7 +34,7 @@ import {
   UploadExpiredError,
 } from "../../errors"
 import { courseData, courseDetails, moocCourse, submissionFinished } from "../fixtures/cliOutput"
-import { idOfMoocExercise, idOfTmcExercise } from "../fixtures/identifiers"
+import { idOfMoocCourse, idOfMoocExercise, idOfTmcExercise } from "../fixtures/identifiers"
 
 // `_spawnLangsProcess` is private; cast to `any` to stub it without spawning a
 // real tmc-langs-cli process.
@@ -1198,8 +1198,16 @@ suite("Langs response cache", function () {
     const first = await langs.checkExerciseUpdates("mooc")
     const second = await langs.checkExerciseUpdates("mooc")
     expect(callCount).toBe(1)
-    expect(first.val).toEqual({ updated: [idOfMoocExercise(uuid(1))], removed: [] })
-    expect(second.val).toEqual({ updated: [idOfMoocExercise(uuid(1))], removed: [] })
+    expect(first.val).toEqual({
+      updated: [idOfMoocExercise(uuid(1))],
+      removed: [],
+      uncheckedCourses: [],
+    })
+    expect(second.val).toEqual({
+      updated: [idOfMoocExercise(uuid(1))],
+      removed: [],
+      uncheckedCourses: [],
+    })
   })
 
   test("forceRefresh bypasses the cache", async function () {
@@ -1218,7 +1226,33 @@ suite("Langs response cache", function () {
     await langs.checkExerciseUpdates("mooc")
     const refreshed = await langs.checkExerciseUpdates("mooc", { forceRefresh: true })
     expect(callCount).toBe(2)
-    expect(refreshed.val).toEqual({ updated: [idOfMoocExercise(uuid(2))], removed: [] })
+    expect(refreshed.val).toEqual({
+      updated: [idOfMoocExercise(uuid(2))],
+      removed: [],
+      uncheckedCourses: [],
+    })
+  })
+
+  test("checkExerciseUpdates names each course courses.mooc.fi refused with its refusal", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, () =>
+      Ok(
+        dataOutput("mooc-exercise-updates", {
+          updated: [],
+          removed: [],
+          unchecked_courses: [
+            { course_id: uuid(1), kind: "insufficient-scope" },
+            { course_id: uuid(2), kind: "not-found" },
+          ],
+        }),
+      ),
+    )
+    const result = await langs.checkExerciseUpdates("mooc")
+    const [hidden, deleted] = result.unwrap().uncheckedCourses ?? []
+    expect(hidden?.courseId).toEqual(idOfMoocCourse(uuid(1)))
+    expect(hidden?.refusal).toBeInstanceOf(InsufficientScopeError)
+    expect(deleted?.courseId).toEqual(idOfMoocCourse(uuid(2)))
+    expect(deleted?.refusal).toBeInstanceOf(NotFoundError)
   })
 
   test("getMoocCourseData serves a repeat view from cache until a refresh is forced", async function () {
