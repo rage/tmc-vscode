@@ -502,6 +502,7 @@ async function activateInner(
   context.subscriptions.push(
     TmcPanel.registerSerializers(context, actionContext),
     TmcPanel.showSubmissionViews(context, actionContext),
+    TmcPanel.showLoginScreens(context, actionContext),
   )
   if (readyContext) {
     init.registerSettingsCallbacks(readyContext)

@@ -161,6 +161,7 @@ vi.mock("../../panels/TmcPanel", () => ({
       recorded.panelTypes.push(panel.type)
     },
     showSubmissionViews: () => ({ dispose: () => {} }),
+    showLoginScreens: () => ({ dispose: () => {} }),
     registerSerializers: () => {
       recorded.serializerRegistrations += 1
       return { dispose: () => {} }

@@ -54,7 +54,8 @@ function courseItem(
 }
 
 /**
- * Lets the user pick a course from either backend, adds it and opens its course home.
+ * Lets the user pick a course from either backend in a quick pick, the Command Palette's fast
+ * path past the add-course screen, then adds it and opens its course home.
  *
  * courses.mooc.fi lists only the courses the user is enrolled in, so they come first and add in
  * one step. tmc.mooc.fi hides thousands of courses behind its organizations, so picking one of

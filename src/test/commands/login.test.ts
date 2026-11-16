@@ -4,7 +4,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { MoocDeviceLogin } from "../../../shared/langsSchema"
-import type { BaseError } from "../../../shared/lib"
+import type { BaseError, LoginPanel, LoginView } from "../../../shared/lib"
 import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
 import { handOverExercises } from "../../commands/handOverExercises"
@@ -17,6 +17,7 @@ import {
   DeviceLoginExpiredError,
   ServerError,
 } from "../../errors"
+import { loginScreens } from "../../ui/loginScreens"
 import { Logger } from "../../utilities"
 import { tmcLocalCourse } from "../fixtures/courses"
 import { createMockActionContext } from "../mocks/actionContext"
@@ -38,13 +39,7 @@ const DEVICE: MoocDeviceLogin = {
   interval: 5,
 }
 
-/** A server that sends no code-carrying URL, which only a modal can bridge. */
-const DEVICE_WITHOUT_COMPLETE_URI: MoocDeviceLogin = { ...DEVICE, verification_uri_complete: null }
-
-const COPY_AND_OPEN = "Copy & Open courses.mooc.fi"
-
-// The code leads: the status bar cuts a hidden progress notification's message short.
-const WAITING = `Code WXYZ-1234: approve it at ${DEVICE.verification_uri}`
+const NOW = new Date("2026-11-16T10:00:00Z")
 
 /** One `mooc login` process the test drives: it emits the code and ends when told to. */
 interface FakeLogin {
@@ -56,12 +51,13 @@ interface FakeLogin {
 interface Harness {
   context: ReadyActionContext
   logins: FakeLogin[]
-  progressMessages: string[]
-  cancelProgress: () => void
-  clipboard: ReturnType<typeof vi.fn>
+  /** The screens the logins opened, newest last. */
+  opened: LoginPanel[]
+  /** Every view sent to a screen, oldest first. */
+  views: { panelId: number; view: LoginView }[]
+  /** The screens a login asked to close. */
+  closed: number[]
   openExternal: ReturnType<typeof vi.fn>
-  /** Answers the code modal: a button label presses that button, undefined dismisses it. */
-  answerModal: (answer: string | undefined) => void
 }
 
 function harness(): Harness {
@@ -84,44 +80,31 @@ function harness(): Harness {
   vi.mocked(context.startup.userData.getCourses).mockReturnValue([])
   vi.mocked(context.startup.workspaceManager.getExercises).mockReturnValue([])
 
-  const progressMessages: string[] = []
-  const progressCancellation = new vscode.CancellationTokenSource()
-  vi.spyOn(vscode.window, "withProgress").mockImplementation(((
-    _options: unknown,
-    task: (
-      progress: { report: (value: { message?: string }) => void },
-      token: vscode.CancellationToken,
-    ) => Promise<unknown>,
-  ) =>
-    task(
-      { report: ({ message }): void => void (message && progressMessages.push(message)) },
-      progressCancellation.token,
-    )) as unknown as typeof vscode.window.withProgress)
+  const opened: LoginPanel[] = []
+  const views: Harness["views"] = []
+  const closed: number[] = []
+  const subscriptions = vscode.Disposable.from(
+    loginScreens.onDidOpen((panel) => {
+      opened.push(panel)
+      const view = loginScreens.latestView(panel.id)
+      if (view) {
+        views.push({ panelId: panel.id, view })
+      }
+    }),
+    loginScreens.onDidUpdate(({ panel, view }) => views.push({ panelId: panel.id, view })),
+    loginScreens.onDidRequestClose((panel) => closed.push(panel.id)),
+  )
+  onTestFinished(() => subscriptions.dispose())
 
-  let modal = Promise.withResolvers<string | undefined>()
-  vi.spyOn(vscode.window, "showInformationMessage").mockImplementation((() => {
-    modal = Promise.withResolvers<string | undefined>()
-    return modal.promise
-  }) as unknown as typeof vscode.window.showInformationMessage)
-
-  const clipboard = vi.fn(async () => {})
   const openExternal = vi.fn(async () => true)
   const vscodeModule: object = vscode
   Object.defineProperty(vscodeModule, "env", {
-    value: { clipboard: { writeText: clipboard }, openExternal },
+    value: { clipboard: { writeText: vi.fn(async () => {}) }, openExternal },
     writable: true,
     configurable: true,
   })
 
-  return {
-    context,
-    logins,
-    progressMessages,
-    cancelProgress: () => progressCancellation.cancel(),
-    clipboard,
-    openExternal,
-    answerModal: (answer) => modal.resolve(answer),
-  }
+  return { context, logins, opened, views, closed, openExternal }
 }
 
 /** Lets the login's awaits between two steps run. */
@@ -135,20 +118,20 @@ async function settle(): Promise<void> {
 async function runToCode(
   h: Harness,
   info: MoocDeviceLogin = DEVICE,
-): Promise<{ outcome: Promise<unknown> }> {
+): Promise<{ outcome: Promise<unknown>; panel: LoginPanel }> {
   const outcome = login(h.context)
   await settle()
-  h.logins[0]?.emitCode(info)
+  h.logins.at(-1)?.emitCode(info)
   await settle()
-  return { outcome }
+  return { outcome, panel: h.opened.at(-1) as LoginPanel }
+}
+
+function lastView(h: Harness): LoginView | undefined {
+  return h.views.at(-1)?.view
 }
 
 function openedUrl(h: Harness): string | undefined {
   return (h.openExternal.mock.calls[0]?.[0] as vscode.Uri | undefined)?.toString(true)
-}
-
-function errorNotificationCall(context: ReadyActionContext): unknown[] | undefined {
-  return vi.mocked(context.dialog.errorNotification).mock.calls[0]
 }
 
 /** Puts `tabs` in the one editor group, `activeTab` shown; returns what undoes it. */
@@ -169,47 +152,173 @@ function showTabs(
 }
 
 suite("login command", function () {
+  beforeEach(function () {
+    vi.mocked(vscode.commands.executeCommand).mockClear()
+  })
+
   afterEach(function () {
     vi.restoreAllMocks()
     vi.useRealTimers()
   })
 
-  test("opens the page carrying the code at once, and shows the code in the progress", async function () {
+  test("shows the login screen at once, then the code with its page and expiry", async function () {
+    vi.useFakeTimers({ now: NOW, toFake: ["Date"] })
     const h = harness()
-    const { outcome } = await runToCode(h)
+    const outcome = login(h.context)
 
-    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
-    expect(h.clipboard).not.toHaveBeenCalled()
-    expect(h.openExternal).toHaveBeenCalledOnce()
-    expect(openedUrl(h)).toBe(DEVICE.verification_uri_complete)
-    expect(h.progressMessages.at(-1)).toBe(WAITING)
+    expect(h.opened).toEqual([{ id: expect.any(Number), type: "Login", isAddingCourse: false }])
+    expect(lastView(h)).toEqual({ phase: "requestingCode" })
+
+    await settle()
+    h.logins[0]?.emitCode()
+    await settle()
+    expect(lastView(h)).toEqual({
+      phase: "waiting",
+      userCode: "WXYZ-1234",
+      verificationUrl: DEVICE.verification_uri,
+      expiresAt: "2026-11-16T10:15:00.000Z",
+    })
+    // The student opens the page from the screen, after seeing the code.
+    expect(h.openExternal).not.toHaveBeenCalled()
 
     h.logins[0]?.finish(Ok(undefined))
     expect(await outcome).toBe("loggedIn")
+  })
+
+  test("Open on the screen opens the page carrying the code", async function () {
+    const h = harness()
+    const { panel } = await runToCode(h)
+
+    loginScreens.requestAction(panel.id, "openVerificationPage")
+    await settle()
+
+    expect(openedUrl(h)).toBe(DEVICE.verification_uri_complete)
+  })
+
+  test("without a page carrying the code, Open opens the one it is typed into", async function () {
+    const h = harness()
+    const { panel } = await runToCode(h, { ...DEVICE, verification_uri_complete: null })
+
+    loginScreens.requestAction(panel.id, "openVerificationPage")
+    await settle()
+
+    expect(openedUrl(h)).toBe(DEVICE.verification_uri)
+  })
+
+  test("an action from an older login's screen does nothing", async function () {
+    const h = harness()
+    const { panel } = await runToCode(h)
+
+    loginScreens.requestAction(panel.id + 1000, "openVerificationPage")
+    loginScreens.requestAction(panel.id + 1000, "cancel")
+    await settle()
+
+    expect(h.openExternal).not.toHaveBeenCalled()
+    expect(h.logins[0]?.interrupt).not.toHaveBeenCalled()
+  })
+
+  test("a browser that does not open leaves the login waiting, logged without its code", async function () {
+    const warn = vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    const h = harness()
+    h.openExternal.mockResolvedValue(false)
+    const { outcome, panel } = await runToCode(h)
+
+    loginScreens.requestAction(panel.id, "openVerificationPage")
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
+
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("WXYZ-1234")
+    expect(h.logins[0]?.interrupt).not.toHaveBeenCalled()
+    h.logins[0]?.finish(Ok(undefined))
+    expect(await outcome).toBe("loggedIn")
+  })
+
+  test("never opens a verification page that is not http(s)", async function () {
+    const h = harness()
+    const { panel } = await runToCode(h, {
+      ...DEVICE,
+      verification_uri_complete: "command:workbench.action.quit",
+    })
+
+    loginScreens.requestAction(panel.id, "openVerificationPage")
+    await settle()
+
+    expect(h.openExternal).not.toHaveBeenCalled()
+    expect(h.logins[0]?.interrupt).not.toHaveBeenCalled()
+  })
+
+  test("Cancel kills the CLI process and closes the screen, silently", async function () {
+    const h = harness()
+    const { outcome, panel } = await runToCode(h)
+
+    loginScreens.requestAction(panel.id, "cancel")
+
+    expect(await outcome).toBe("cancelled")
+    expect(h.logins[0]?.interrupt).toHaveBeenCalled()
+    expect(h.closed).toEqual([panel.id])
+    expect(h.context.dialog.errorNotification).not.toHaveBeenCalled()
+    expect(lastView(h)?.phase).toBe("waiting")
+  })
+
+  test("leaving the screen cancels its login, and no code arriving later is shown", async function () {
+    const h = harness()
+    const outcome = login(h.context)
+    await settle()
+    const panel = h.opened[0] as LoginPanel
+
+    loginScreens.leave(panel.id + 1000)
+    await settle()
+    expect(h.logins[0]?.interrupt).not.toHaveBeenCalled()
+
+    loginScreens.leave(panel.id)
+    expect(await outcome).toBe("cancelled")
+    expect(h.logins[0]?.interrupt).toHaveBeenCalled()
+    h.logins[0]?.emitCode()
+    await settle()
+    expect(lastView(h)).toEqual({ phase: "requestingCode" })
+  })
+
+  test("with no course added, a login goes on to the add-course screen", async function () {
+    const h = harness()
+    const { outcome } = await runToCode(h)
+
+    h.logins[0]?.finish(Ok(undefined))
+
+    expect(await outcome).toBe("loggedIn")
+    expect(lastView(h)).toEqual({ phase: "loggedIn" })
     expect(h.context.dialog.statusMessage).toHaveBeenCalledWith("Logged in to courses.mooc.fi.")
     expect(h.context.dialog.notification).not.toHaveBeenCalled()
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith("tmc.addNewCourse")
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith("tmc.showAddCourse")
+    expect(h.closed).toEqual([])
     expect(refreshEverything).toHaveBeenCalledWith(h.context, { silent: true })
     expect(handOverExercises).toHaveBeenCalledWith(h.context)
   })
 
-  test("leaves the walkthrough alone when the course pick opens, so the pick has focus", async function () {
+  test("a login with courses added closes its screen and goes to no add-course screen", async function () {
     const h = harness()
-    const restore = showTabs([{ label: "Welcome", input: undefined }])
-    try {
-      const { outcome } = await runToCode(h)
-      h.logins[0]?.finish(Ok(undefined))
-      expect(await outcome).toBe("loggedIn")
-    } finally {
-      restore()
-    }
+    vi.mocked(h.context.startup.userData.getCourses).mockReturnValue([tmcLocalCourse()])
+    const { outcome, panel } = await runToCode(h)
 
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith("tmc.addNewCourse")
-    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
-      "workbench.action.openWalkthrough",
-      expect.anything(),
-      expect.anything(),
+    h.logins[0]?.finish(Ok(undefined))
+
+    expect(await outcome).toBe("loggedIn")
+    expect(h.closed).toEqual([panel.id])
+    expect(h.context.dialog.statusMessage).toHaveBeenCalledExactlyOnceWith(
+      "Logged in to courses.mooc.fi.",
     )
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith("tmc.showAddCourse")
+  })
+
+  test("a login started to add a course goes on to the add-course screen anyway", async function () {
+    const h = harness()
+    vi.mocked(h.context.startup.userData.getCourses).mockReturnValue([tmcLocalCourse()])
+    const outcome = login(h.context, { isAddingCourse: true })
+    await settle()
+
+    expect(h.opened[0]?.isAddingCourse).toBe(true)
+    h.logins[0]?.finish(Ok(undefined))
+    expect(await outcome).toBe("loggedIn")
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith("tmc.showAddCourse")
+    expect(h.closed).toEqual([])
   })
 
   test("a login with courses moves a shown walkthrough on, but not one behind code", async function () {
@@ -236,148 +345,45 @@ suite("login command", function () {
     }
   })
 
-  test("a login that finds courses already added goes to no course pick", async function () {
-    const h = harness()
-    vi.mocked(h.context.startup.userData.getCourses).mockReturnValue([tmcLocalCourse()])
-    const { outcome } = await runToCode(h)
-
-    h.logins[0]?.finish(Ok(undefined))
-    expect(await outcome).toBe("loggedIn")
-    expect(h.context.dialog.statusMessage).toHaveBeenCalledExactlyOnceWith(
-      "Logged in to courses.mooc.fi.",
-    )
-    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith("tmc.addNewCourse")
-  })
-
-  test("without a page carrying the code, offers to copy it before opening the page", async function () {
-    const h = harness()
-    const { outcome } = await runToCode(h, DEVICE_WITHOUT_COMPLETE_URI)
-
-    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      "Your courses.mooc.fi login code is WXYZ-1234",
-      { modal: true, detail: "Paste the code on the page that opens, then approve the login." },
-      COPY_AND_OPEN,
-    )
-    expect(h.progressMessages.at(-1)).toBe(WAITING)
-    expect(h.openExternal).not.toHaveBeenCalled()
-    h.answerModal(COPY_AND_OPEN)
-    await settle()
-    expect(h.clipboard).toHaveBeenCalledExactlyOnceWith("WXYZ-1234")
-    expect(openedUrl(h)).toBe(DEVICE.verification_uri)
-
-    h.logins[0]?.finish(Ok(undefined))
-    expect(await outcome).toBe("loggedIn")
-  })
-
-  test("a browser that does not open leaves the login waiting", async function () {
-    const h = harness()
-    h.openExternal.mockResolvedValue(false)
-    const { outcome } = await runToCode(h)
-
-    expect(h.logins[0]?.interrupt).not.toHaveBeenCalled()
-    h.logins[0]?.finish(Ok(undefined))
-    expect(await outcome).toBe("loggedIn")
-  })
-
-  test("a browser that does not open logs the page without its user code", async function () {
-    const warn = vi.spyOn(Logger, "warn").mockImplementation(() => {})
-    onTestFinished(() => warn.mockRestore())
-    const h = harness()
-    h.openExternal.mockResolvedValue(false)
-    await runToCode(h)
-    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
-
-    expect(JSON.stringify(warn.mock.calls)).not.toContain("WXYZ-1234")
-  })
-
-  test("never opens a verification page that is not http(s)", async function () {
-    const h = harness()
-    await runToCode(h, { ...DEVICE, verification_uri_complete: "command:workbench.action.quit" })
-
-    expect(h.openExternal).not.toHaveBeenCalled()
-    expect(h.logins[0]?.interrupt).not.toHaveBeenCalled()
-  })
-
-  test("dismissing the code modal cancels the login silently", async function () {
-    const h = harness()
-    const { outcome } = await runToCode(h, DEVICE_WITHOUT_COMPLETE_URI)
-
-    h.answerModal(undefined)
-
-    expect(await outcome).toBe("cancelled")
-    expect(h.logins[0]?.interrupt).toHaveBeenCalled()
-    expect(h.openExternal).not.toHaveBeenCalled()
-    expect(h.context.dialog.errorNotification).not.toHaveBeenCalled()
-    expect(h.context.dialog.notification).not.toHaveBeenCalled()
-  })
-
-  test("cancelling the progress notification kills the CLI process", async function () {
-    const h = harness()
-    const { outcome } = await runToCode(h)
-
-    h.cancelProgress()
-
-    expect(await outcome).toBe("cancelled")
-    expect(h.logins[0]?.interrupt).toHaveBeenCalled()
-    expect(h.context.dialog.errorNotification).not.toHaveBeenCalled()
-  })
-
-  test("a login that ends while the code modal is still open opens no browser", async function () {
-    const h = harness()
-    const { outcome } = await runToCode(h, DEVICE_WITHOUT_COMPLETE_URI)
-
-    h.logins[0]?.finish(Ok(undefined))
-    await settle()
-    h.answerModal(COPY_AND_OPEN)
-
-    expect(await outcome).toBe("loggedIn")
-    expect(h.openExternal).not.toHaveBeenCalled()
-    expect(h.logins[0]?.interrupt).not.toHaveBeenCalled()
-  })
-
   test.each([
-    [new DeviceLoginDeniedError("denied"), "The login was denied in the browser."],
-    [new DeviceLoginExpiredError("expired"), "The login code expired before it was approved."],
-  ])("says what went wrong for %s, and offers Try again", async function (error, shown) {
+    [new DeviceLoginDeniedError("denied"), "denied", "The login was denied in the browser."],
+    [
+      new DeviceLoginExpiredError("expired"),
+      "expired",
+      "The login code expired before it was approved.",
+    ],
+  ])("shows %s on the screen, with no logs to offer", async function (error, failure, message) {
     const h = harness()
     const { outcome } = await runToCode(h)
 
     h.logins[0]?.finish(Err(error))
 
     expect(await outcome).toBe("failed")
-    expect(errorNotificationCall(h.context)).toEqual([
-      shown,
-      undefined,
-      ["Try Again", expect.any(Function)],
-    ])
-    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
-    const [, , [, tryAgain]] = errorNotificationCall(h.context) as [
-      string,
-      undefined,
-      [string, () => void],
-    ]
-    tryAgain()
-    expect(executeCommand).toHaveBeenCalledWith("tmc.showMoocLogin")
+    expect(lastView(h)).toEqual({ phase: "failed", failure, error: { message } })
+    expect(h.context.dialog.errorNotification).not.toHaveBeenCalled()
+    expect(h.closed).toEqual([])
   })
 
-  test("reports an unreachable server with its logs, before any code arrives", async function () {
+  test("shows an unreachable server on the screen with its logs, before any code arrives", async function () {
     const h = harness()
     const outcome = login(h.context)
     await settle()
-    const error = new ConnectionError("dns error")
 
-    h.logins[0]?.finish(Err(error))
+    h.logins[0]?.finish(Err(new ConnectionError("dns error")))
 
     expect(await outcome).toBe("failed")
-    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
-    expect(errorNotificationCall(h.context)).toEqual([
-      "Could not reach courses.mooc.fi. Check your internet connection.",
-      error,
-      ["Try Again", expect.any(Function)],
-    ])
+    expect(lastView(h)).toEqual({
+      phase: "failed",
+      failure: "unreachable",
+      error: {
+        message: "Could not reach courses.mooc.fi. Check your internet connection.",
+        actions: [{ label: "Show Logs", command: "tmc.logs" }],
+      },
+    })
+    expect(h.context.dialog.errorNotification).not.toHaveBeenCalled()
   })
 
-  test("reports a server error status as the server failing, not the connection", async function () {
+  test("shows a server error status as the server failing, not the connection", async function () {
     const h = harness()
     const outcome = login(h.context)
     await settle()
@@ -389,14 +395,16 @@ suite("login command", function () {
     h.logins[0]?.finish(Err(error))
 
     expect(await outcome).toBe("failed")
-    expect(errorNotificationCall(h.context)?.[0]).toBe(
+    const view = lastView(h)
+    expect(view?.phase === "failed" && view.failure).toBe("serverError")
+    expect(view?.phase === "failed" && view.error.message).toBe(
       "courses.mooc.fi returned an error (503). Try again later.",
     )
   })
 
-  test("a new login cancels the one in flight", async function () {
+  test("a new login cancels the one in flight, which then shows nothing more", async function () {
     const h = harness()
-    const { outcome: first } = await runToCode(h)
+    const { outcome: first, panel: firstPanel } = await runToCode(h)
 
     const second = login(h.context)
     await settle()
@@ -404,6 +412,10 @@ suite("login command", function () {
     expect(await first).toBe("cancelled")
     expect(h.logins[0]?.interrupt).toHaveBeenCalled()
     expect(h.logins).toHaveLength(2)
+    expect(h.opened).toHaveLength(2)
+    expect(h.views.filter(({ panelId }) => panelId === firstPanel.id).at(-1)?.view.phase).toBe(
+      "waiting",
+    )
     h.logins[1]?.finish(Ok(undefined))
     expect(await second).toBe("loggedIn")
   })

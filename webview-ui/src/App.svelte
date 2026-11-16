@@ -6,9 +6,11 @@
   import Notice from "./components/Notice.svelte"
   import PanelHeader from "./components/PanelHeader.svelte"
   import Spinner from "./components/Spinner.svelte"
+  import AddCourse from "./panels/AddCourse.svelte"
   import CourseDetails from "./panels/CourseDetails.svelte"
   import ExerciseSubmission from "./panels/ExerciseSubmission.svelte"
   import InitializationErrorHelp from "./panels/InitializationErrorHelp.svelte"
+  import Login from "./panels/Login.svelte"
   import { onSetPanel } from "./utilities/script"
   import { enterScreen } from "./utilities/uiState.svelte"
   import { vscode } from "./utilities/vscode"
@@ -115,6 +117,10 @@
             <ExerciseSubmission {panel} />
           {:else if panel.type === "InitializationErrorHelp"}
             <InitializationErrorHelp {panel} />
+          {:else if panel.type === "Login"}
+            <Login {panel} />
+          {:else if panel.type === "AddCourse"}
+            <AddCourse {panel} />
           {:else}
             {assertUnreachable(panel)}
           {/if}

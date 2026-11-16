@@ -122,6 +122,18 @@ const PAIRINGS: Pairing[] = [
     minimum: TEXT,
   },
   { name: "focus ring", foreground: "var(--tmc-focus-border)", minimum: NON_TEXT },
+  {
+    name: "input text",
+    foreground: "var(--tmc-input-foreground)",
+    background: "var(--tmc-input-background)",
+    minimum: TEXT,
+  },
+  {
+    name: "input placeholder",
+    foreground: "var(--tmc-input-placeholder)",
+    background: "var(--tmc-input-background)",
+    minimum: TEXT,
+  },
 ]
 
 /** Colour tokens no pairing covers, and why none has to. */
@@ -134,6 +146,7 @@ const UNPAIRED_COLOUR_TOKENS: Record<string, string> = {
   "--tmc-menu-border": "decorative",
   "--tmc-menu-selection-border": "transparent outside High Contrast, where the theme picks it",
   "--tmc-menu-shadow": "decorative",
+  "--tmc-input-border": "as in VS Code's own inputs; the placeholder and icon mark the field",
 }
 
 /**

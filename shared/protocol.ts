@@ -66,6 +66,23 @@ export const InitializationErrorHelpPanelSchema = z.object({
 
 export type InitializationErrorHelpPanel = z.infer<typeof InitializationErrorHelpPanelSchema>
 
+/** The courses.mooc.fi login screen; the host runs the login and sends its `LoginView`s. */
+export const LoginPanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("Login"),
+  /** Whether a successful login goes on to the add-course screen even when courses are added. */
+  isAddingCourse: z.boolean(),
+})
+
+export type LoginPanel = z.infer<typeof LoginPanelSchema>
+
+export const AddCoursePanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("AddCourse"),
+})
+
+export type AddCoursePanel = z.infer<typeof AddCoursePanelSchema>
+
 /**
  * Represents a panel that is rendered by the webview.
  *
@@ -75,6 +92,8 @@ export const PanelSchema = z.discriminatedUnion("type", [
   CourseDetailsPanelSchema,
   ExerciseSubmissionPanelSchema,
   InitializationErrorHelpPanelSchema,
+  LoginPanelSchema,
+  AddCoursePanelSchema,
 ])
 
 export type Panel = z.infer<typeof PanelSchema>
@@ -85,6 +104,7 @@ export type PanelType = Panel["type"]
 export const RestorableRouteSchema = z.discriminatedUnion("type", [
   CourseDetailsPanelSchema.pick({ type: true, courseId: true }),
   InitializationErrorHelpPanelSchema.pick({ type: true }),
+  AddCoursePanelSchema.pick({ type: true }),
 ])
 
 export type RestorableRoute = z.infer<typeof RestorableRouteSchema>
@@ -141,6 +161,70 @@ export const WebviewErrorSchema = z.object({
 })
 
 export type WebviewError = z.infer<typeof WebviewErrorSchema>
+
+/** Why a login failed, as far as the login screen words it differently. */
+const LoginFailureSchema = z.enum(["denied", "expired", "unreachable", "serverError", "other"])
+
+export type LoginFailure = z.infer<typeof LoginFailureSchema>
+
+/** Where a courses.mooc.fi login is, as the login screen shows it. */
+export const LoginViewSchema = z.discriminatedUnion("phase", [
+  z.object({ phase: z.literal("requestingCode") }),
+  z.object({
+    phase: z.literal("waiting"),
+    userCode: z.string(),
+    /** The page the code is entered on, shown for typing it into another browser. */
+    verificationUrl: z.string(),
+    /** ISO timestamp. */
+    expiresAt: z.string(),
+  }),
+  z.object({ phase: z.literal("failed"), failure: LoginFailureSchema, error: WebviewErrorSchema }),
+  z.object({ phase: z.literal("loggedIn") }),
+])
+
+export type LoginView = z.infer<typeof LoginViewSchema>
+
+/** What the login screen's buttons ask of the login it shows. */
+export const LoginActionSchema = z.enum(["openVerificationPage", "cancel", "tryAgain"])
+
+export type LoginAction = z.infer<typeof LoginActionSchema>
+
+/** A course the add-course screen offers. */
+export const CatalogCourseSchema = z.object({
+  /** Names the course to `addCourse`, for the panel that listed it only. */
+  key: z.string(),
+  name: z.string(),
+  organization: z.string(),
+  description: z.string().optional(),
+  isAdded: z.boolean(),
+})
+
+export type CatalogCourse = z.infer<typeof CatalogCourseSchema>
+
+/** A tmc.mooc.fi organization, the add-course screen's way into its courses. */
+export const CatalogOrganizationSchema = z.object({
+  slug: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+})
+
+export type CatalogOrganization = z.infer<typeof CatalogOrganizationSchema>
+
+/** A backend's listing for the add-course screen; `loggedOut` when it needs a login first. */
+function catalogListingSchema<T extends z.ZodType>(items: T) {
+  return z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("loggedOut") }),
+    z.object({ kind: z.literal("listed"), items: z.array(items) }),
+  ])
+}
+
+export const MoocCatalogSchema = catalogListingSchema(CatalogCourseSchema)
+
+export type MoocCatalog = z.infer<typeof MoocCatalogSchema>
+
+export const TmcOrganizationsSchema = catalogListingSchema(CatalogOrganizationSchema)
+
+export type TmcOrganizations = z.infer<typeof TmcOrganizationsSchema>
 
 /** Where a submission is, from sending it to its final grade. */
 const SubmissionPhaseSchema = z.enum([
@@ -281,10 +365,22 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     serial: z.number(),
     shouldPaste: z.boolean(),
   }),
+  // The login a Login panel shows, whenever it moves on.
+  z.object({
+    type: z.literal("loginView"),
+    target: targetPanelSchema("Login"),
+    view: LoginViewSchema,
+  }),
   // The one answer to a request, see `RequestMessage`.
   z.object({
     type: z.literal("reply"),
-    target: targetPanelSchema("CourseDetails", "ExerciseSubmission", "InitializationErrorHelp"),
+    target: targetPanelSchema(
+      "CourseDetails",
+      "ExerciseSubmission",
+      "InitializationErrorHelp",
+      "Login",
+      "AddCourse",
+    ),
     requestId: z.number(),
     outcome: z.discriminatedUnion("ok", [
       // `value` is checked against `ReplyValueSchemas` by the side that knows the request.
@@ -386,8 +482,44 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("copyToClipboard"),
     requestId: z.number(),
-    sourcePanel: targetPanelSchema("ExerciseSubmission"),
+    sourcePanel: targetPanelSchema("ExerciseSubmission", "Login"),
     text: z.string(),
+  }),
+  // Acts on the login the named panel shows.
+  z.object({
+    type: z.literal("loginAction"),
+    sourcePanel: targetPanelSchema("Login"),
+    action: LoginActionSchema,
+  }),
+  // The courses.mooc.fi courses the student is enrolled in.
+  z.object({
+    type: z.literal("requestMoocCatalog"),
+    requestId: z.number(),
+    sourcePanel: targetPanelSchema("AddCourse"),
+  }),
+  z.object({
+    type: z.literal("requestTmcOrganizations"),
+    requestId: z.number(),
+    sourcePanel: targetPanelSchema("AddCourse"),
+  }),
+  // The courses of a tmc.mooc.fi organization the named panel's last listing named.
+  z.object({
+    type: z.literal("requestTmcCourses"),
+    requestId: z.number(),
+    sourcePanel: targetPanelSchema("AddCourse"),
+    organizationSlug: z.string(),
+  }),
+  // Adds a course the named panel listed, unless it already is, and opens its course home.
+  z.object({
+    type: z.literal("addCourse"),
+    requestId: z.number(),
+    sourcePanel: targetPanelSchema("AddCourse"),
+    key: z.string(),
+  }),
+  z.object({
+    type: z.literal("addCourseAction"),
+    sourcePanel: targetPanelSchema("AddCourse"),
+    action: z.enum(["logIn", "findCourse"]),
   }),
   z.object({
     type: z.literal("openLinkInBrowser"),
@@ -434,6 +566,10 @@ export const ReplyValueSchemas = {
   keepWaitingForGrading: z.undefined(),
   sendFeedback: z.undefined(),
   copyToClipboard: z.undefined(),
+  requestMoocCatalog: MoocCatalogSchema,
+  requestTmcOrganizations: TmcOrganizationsSchema,
+  requestTmcCourses: z.array(CatalogCourseSchema),
+  addCourse: z.undefined(),
 } satisfies Record<RequestType, z.ZodType>
 
 export type ReplyValue<K extends RequestType> = z.infer<(typeof ReplyValueSchemas)[K]>

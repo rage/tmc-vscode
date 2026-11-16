@@ -2,7 +2,7 @@ import type { Webview, WebviewOptions, WebviewPanel } from "vscode"
 import { Disposable, Uri, ViewColumn, window } from "vscode"
 import type * as vscode from "vscode"
 
-import type { ExerciseSubmissionPanel, Panel, SubmissionView } from "../../shared/lib"
+import type { ExerciseSubmissionPanel, LoginPanel, Panel, SubmissionView } from "../../shared/lib"
 import {
   assertUnreachable,
   CourseIdentifier,
@@ -15,6 +15,7 @@ import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import { buildCourseHomeView } from "../ui/courseHome"
 import { exerciseStandingView } from "../ui/exerciseStanding"
+import { loginScreens } from "../ui/loginScreens"
 import { modelSolutionUrl } from "../ui/modelSolution"
 import { recentUpdates } from "../ui/recentUpdates"
 import { shownCourseHome } from "../ui/shownCourseHome"
@@ -134,6 +135,38 @@ export class TmcPanel {
             actionContext.startup.userData.onDidChangeCourses(repostShown),
           ]
         : []),
+    )
+  }
+
+  /**
+   * Shows each login's screen in the main panel, with the views the login sends it. Call once,
+   * at activation.
+   */
+  public static showLoginScreens(
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+  ): Disposable {
+    const post = (panel: LoginPanel): void => {
+      const view = loginScreens.latestView(panel.id)
+      if (view && TmcPanel.mainPanel?._route?.id === panel.id) {
+        TmcPanel.mainPanel._postMessage({
+          type: "loginView",
+          target: { id: panel.id, type: panel.type },
+          view,
+        })
+      }
+    }
+    return Disposable.from(
+      loginScreens.onDidOpen((panel) => {
+        TmcPanel.renderMain(extensionContext, actionContext, panel)
+        post(panel)
+      }),
+      loginScreens.onDidUpdate(({ panel }) => post(panel)),
+      loginScreens.onDidRequestClose((panel) => {
+        if (TmcPanel.mainPanel?._route?.id === panel.id) {
+          TmcPanel.mainPanel.dispose()
+        }
+      }),
     )
   }
 
@@ -352,6 +385,7 @@ export class TmcPanel {
     }
     this._isDisposed = true
     this._panel.dispose()
+    this._leaveLoginScreen()
 
     if (this._isMain) {
       TmcPanel.mainPanel = undefined
@@ -435,8 +469,18 @@ export class TmcPanel {
     }
   }
 
+  /** Tells the login this panel shows, if any, that its screen is gone. */
+  private _leaveLoginScreen(): void {
+    if (this._route?.type === "Login") {
+      loginScreens.leave(this._route.id)
+    }
+  }
+
   // remembers `route` so "ready" can (re)send it
   private _render(route: Panel): void {
+    if (this._route?.id !== route.id) {
+      this._leaveLoginScreen()
+    }
     this._route = route
     this._recordShown()
     this._messageBuffer.clear()
@@ -576,6 +620,8 @@ function restoredRoute(
       return isReady(actionContext)
         ? undefined
         : initializationErrorHelpPanel(actionContext, extensionContext)
+    case "AddCourse":
+      return isReady(actionContext) ? { id: nextPanelId(), type: route.type } : undefined
     case undefined:
       return undefined
     default:

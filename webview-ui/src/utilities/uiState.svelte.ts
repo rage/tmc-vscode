@@ -29,7 +29,11 @@ function screenOf(panel: Panel): string {
     case "ExerciseSubmission":
       return `ExerciseSubmission:${panel.id}`
     case "InitializationErrorHelp":
+    case "AddCourse":
       return panel.type
+    // Each login has its own code.
+    case "Login":
+      return `Login:${panel.id}`
   }
 }
 
@@ -39,8 +43,11 @@ function restorableRouteOf(panel: Panel): RestorableRoute | undefined {
     case "CourseDetails":
       return { type: panel.type, courseId: panel.courseId }
     case "InitializationErrorHelp":
+    case "AddCourse":
       return { type: panel.type }
+    // The login the screen showed is gone after a reload.
     case "ExerciseSubmission":
+    case "Login":
       return undefined
   }
 }

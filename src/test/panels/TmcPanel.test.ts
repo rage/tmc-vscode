@@ -29,6 +29,7 @@ import type { PanelMessage } from "../../panels/router"
 import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
 import { standingView } from "../../panels/submissionView"
 import { MAIN_PANEL_VIEW_TYPE, SIDE_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
+import { loginScreens } from "../../ui/loginScreens"
 import { shownCourseHome } from "../../ui/shownCourseHome"
 import { submissionViews } from "../../ui/submissionViews"
 import type CoursesTree from "../../ui/treeview/treeview"
@@ -1456,6 +1457,118 @@ suite("TmcPanel main panel lifecycle", () => {
 
     expect(dispose).toHaveBeenCalledTimes(1)
     expect(TmcPanel.mainPanel).toBeUndefined()
+  })
+})
+
+/** Shows each login's screen in a fresh main panel; returns the panel and what it was sent. */
+function showLogins(): ReturnType<typeof createFakeWebviewPanel> & { posted: () => unknown[] } {
+  const fake = createFakeWebviewPanel()
+  vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(fake.panel)
+  const subscription = TmcPanel.showLoginScreens(createMockContext(), createMockActionContext())
+  onTestFinished(() => subscription.dispose())
+  return {
+    ...fake,
+    posted: () => vi.mocked(fake.panel.webview.postMessage).mock.calls.map(([m]) => m),
+  }
+}
+
+suite("TmcPanel login screens", () => {
+  beforeEach(resetPanels)
+  afterEach(resetPanels)
+
+  test("a login opens its screen in the main panel and sends it each view", async () => {
+    const fake = showLogins()
+
+    const panel = loginScreens.open({}, { phase: "requestingCode" })
+    await fake.sendReady()
+    loginScreens.update(panel, {
+      phase: "waiting",
+      userCode: "WXYZ-0001",
+      verificationUrl: "https://courses.mooc.fi/oauth_device",
+      expiresAt: "2026-11-16T10:15:00.000Z",
+    })
+
+    expect(fake.posted()).toEqual([
+      { type: "setPanel", panel },
+      { type: "loginView", target: targetOf(panel), view: { phase: "requestingCode" } },
+      {
+        type: "loginView",
+        target: targetOf(panel),
+        view: expect.objectContaining({ phase: "waiting", userCode: "WXYZ-0001" }),
+      },
+    ])
+  })
+
+  test("a login done with its screen closes it, but not a screen shown since", async () => {
+    const fake = showLogins()
+    const panel = loginScreens.open({}, { phase: "requestingCode" })
+
+    TmcPanel.renderMain(createMockContext(), createMockActionContext(), helpPanel())
+    loginScreens.close(panel)
+    expect(fake.dispose).not.toHaveBeenCalled()
+
+    const next = loginScreens.open({}, { phase: "requestingCode" })
+    loginScreens.close(next)
+    expect(fake.dispose).toHaveBeenCalledOnce()
+  })
+
+  test("closing the screen or showing another one there tells its login", async () => {
+    showLogins()
+    const left: number[] = []
+    const subscription = loginScreens.onDidLeave((id) => left.push(id))
+    onTestFinished(() => subscription.dispose())
+
+    const first = loginScreens.open({}, { phase: "requestingCode" })
+    TmcPanel.renderMain(createMockContext(), createMockActionContext(), first)
+    expect(left).toEqual([])
+    TmcPanel.renderMain(createMockContext(), createMockActionContext(), helpPanel())
+    expect(left).toEqual([first.id])
+
+    const second = loginScreens.open({}, { phase: "requestingCode" })
+    TmcPanel.mainPanel?.dispose()
+    expect(left).toEqual([first.id, second.id])
+  })
+
+  test("the screen's buttons reach the login it shows, and Try Again starts a new one", async () => {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const fake = showLogins()
+    const panel = loginScreens.open({ isAddingCourse: true }, { phase: "requestingCode" })
+    await fake.sendReady()
+    const requested: unknown[] = []
+    const subscription = loginScreens.onDidRequestAction((action) => requested.push(action))
+    onTestFinished(() => subscription.dispose())
+    const listener = fake.getMessageListener()
+
+    await listener({ type: "loginAction", sourcePanel: targetOf(panel), action: "cancel" })
+    await listener({ type: "loginAction", sourcePanel: targetOf(panel), action: "tryAgain" })
+    await listener({
+      type: "loginAction",
+      sourcePanel: { id: panel.id + 1000, type: "Login" },
+      action: "openVerificationPage",
+    })
+
+    expect(requested).toEqual([{ panelId: panel.id, action: "cancel" }])
+    expect(executeCommand).toHaveBeenCalledExactlyOnceWith("tmc.showMoocLogin", {
+      isAddingCourse: true,
+    })
+  })
+
+  test("copies the login code for the screen", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    ;(vscode as unknown as { env: unknown }).env = { clipboard: { writeText } }
+    const fake = showLogins()
+    const panel = loginScreens.open({}, { phase: "requestingCode" })
+    await fake.sendReady()
+
+    await fake.getMessageListener()({
+      type: "copyToClipboard",
+      requestId: 3,
+      sourcePanel: targetOf(panel),
+      text: "WXYZ-0001",
+    })
+
+    expect(writeText).toHaveBeenCalledWith("WXYZ-0001")
+    expect(replyTo(fake.panel, 3)).toMatchObject({ outcome: { ok: true } })
   })
 })
 

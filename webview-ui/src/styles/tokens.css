@@ -52,6 +52,13 @@
   --tmc-list-active-foreground: var(--vscode-list-activeSelectionForeground, inherit);
   --tmc-list-focus-outline: var(--vscode-list-focusOutline, var(--tmc-focus-border));
 
+  /* The settings editor's inputs, which @vscode-elements' text fields also use. */
+  --tmc-input-background: var(--vscode-settings-textInputBackground);
+  --tmc-input-foreground: var(--vscode-settings-textInputForeground);
+  /* input.placeholderForeground fails text contrast in the 2026 themes. */
+  --tmc-input-placeholder: var(--tmc-fg-muted);
+  --tmc-input-border: var(--vscode-settings-textInputBorder, var(--tmc-hc-outline));
+
   --tmc-badge-background: var(--vscode-badge-background);
   --tmc-badge-foreground: var(--vscode-badge-foreground);
 

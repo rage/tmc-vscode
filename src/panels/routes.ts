@@ -22,6 +22,10 @@ export function panelTitle(route: Panel, actionContext: ActionContext): string {
       return `Results: ${route.exerciseName}`
     case "InitializationErrorHelp":
       return "TestMyCode Help"
+    case "Login":
+      return "Log In"
+    case "AddCourse":
+      return "Add Course"
     default:
       return assertUnreachable(route)
   }

@@ -117,6 +117,12 @@
         "icon": "$(add)"
       },
       {
+        "command": "tmc.showAddCourse",
+        "title": "Add Course...",
+        "category": "TestMyCode",
+        "icon": "$(add)"
+      },
+      {
         "command": "tmc.changeTmcDataPath",
         "title": "Move Exercises Folder...",
         "category": "TestMyCode"
@@ -405,6 +411,10 @@
           "when": "test-my-code:Initialized && test-my-code:LoggedIn || test-my-code:Light"
         },
         {
+          "command": "tmc.showAddCourse",
+          "when": "false"
+        },
+        {
           "command": "tmc.courseDetails",
           "when": "test-my-code:Initialized && test-my-code:HasCourses"
         },
@@ -646,7 +656,7 @@
           "when": "view == tmcView && test-my-code:WorkspaceActive && !isWorkspaceTrusted"
         },
         {
-          "command": "tmc.addNewCourse",
+          "command": "tmc.showAddCourse",
           "group": "navigation@1",
           "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn"
         },
@@ -899,7 +909,7 @@
       {
         "view": "tmcView",
         "when": "test-my-code:Initialized && test-my-code:LoggedIn",
-        "contents": "You have not added any courses yet.\n[Add Course](command:tmc.addNewCourse)"
+        "contents": "You have not added any courses yet.\n[Add Course](command:tmc.showAddCourse)"
       }
     ],
     "walkthroughs": [
@@ -923,7 +933,7 @@
           {
             "id": "addCourse",
             "title": "Add a course",
-            "description": "Pick the course you are taking.\n[Add Course](command:tmc.addNewCourse)",
+            "description": "Pick the course you are taking.\n[Add Course](command:tmc.showAddCourse)",
             "media": {
               "markdown": "media/walkthrough/add-course.md"
             },

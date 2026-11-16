@@ -17,6 +17,7 @@ import { initializationErrorHelpPanel, nextPanelId } from "../panels/routes"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseTestController } from "../testing/exerciseTestController"
 import { openCourseId } from "../ui/courseHome"
+import type { LoginOptions } from "../ui/loginScreens"
 import { showAccountMenu } from "../ui/statusBarAccount"
 import { showExerciseActions } from "../ui/statusBarExercise"
 import * as treeCommands from "../ui/treeview/treeCommands"
@@ -148,6 +149,10 @@ export function registerCommands(
   register("tmcTreeView.refreshCourses", async () => commands.refreshCourses(readyContext))
 
   register("tmc.addNewCourse", async () => commands.addNewCourse(readyContext))
+
+  register("tmc.showAddCourse", () =>
+    TmcPanel.renderMain(context, readyContext, { id: nextPanelId(), type: "AddCourse" }),
+  )
 
   register("tmc.changeTmcDataPath", async () => commands.changeTmcDataPath(readyContext))
 
@@ -299,7 +304,10 @@ export function registerCommands(
     await vscode.commands.executeCommand("workbench.action.openWalkthrough", WALKTHROUGH, false)
   })
 
-  register("tmc.showMoocLogin", async () => commands.login(readyContext))
+  // Also run from the Courses view's exercise menu, whose row is no `LoginOptions`.
+  register("tmc.showMoocLogin", async (options?: LoginOptions) =>
+    commands.login(readyContext, { isAddingCourse: options?.isAddingCourse === true }),
+  )
 
   register("tmc.showModelSolution", async (target: ExerciseTarget | undefined) =>
     commands.showModelSolution(readyContext, resourceOf(target)),

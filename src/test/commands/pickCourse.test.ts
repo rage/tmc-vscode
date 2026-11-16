@@ -62,7 +62,7 @@ suite("pickCourse", function () {
     const [message, button] = notification.mock.calls[0] ?? []
     expect(message).toBe("No courses added yet.")
     await button?.[1]()
-    expect(executeCommand).toHaveBeenCalledWith("tmc.addNewCourse")
+    expect(executeCommand).toHaveBeenCalledWith("tmc.showAddCourse")
   })
 
   test("offers a login rather than a course pick that needs one, logged out", async function () {

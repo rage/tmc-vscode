@@ -31,11 +31,11 @@ export async function pickCourse(
   const { userData, workspaceManager } = actionContext.startup
   const courses = userData.getCourses()
   if (courses.length === 0) {
-    // Adding a course takes a login first, which the course pick would only offer.
+    // Adding a course takes a login first, which the add-course screen would only offer.
     await dialog.notification(
       "No courses added yet.",
       actionContext.authState.loggedIn
-        ? ["Add Course", (): void => void vscode.commands.executeCommand("tmc.addNewCourse")]
+        ? ["Add Course", (): void => void vscode.commands.executeCommand("tmc.showAddCourse")]
         : ["Log In", (): void => void vscode.commands.executeCommand("tmc.showMoocLogin")],
     )
     return undefined
