@@ -270,9 +270,9 @@ suite("login command", function () {
     expect(h.logins[0]?.interrupt).not.toHaveBeenCalled()
 
     loginScreens.leave(panel.id)
+    h.logins[0]?.emitCode()
     expect(await outcome).toBe("cancelled")
     expect(h.logins[0]?.interrupt).toHaveBeenCalled()
-    h.logins[0]?.emitCode()
     await settle()
     expect(lastView(h)).toEqual({ phase: "requestingCode" })
   })

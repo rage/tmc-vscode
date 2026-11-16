@@ -36,10 +36,12 @@ export async function login(
   const panel = loginScreens.open({ isAddingCourse }, { phase: "requestingCode" })
   const { deviceCode, result, interrupt } = actions.startMoocLogin(actionContext)
 
-  let isSettled = false
+  // Once set, a code the CLI still reports belongs to a login no screen shows.
+  let isEnded = false
   let verificationPage: string | undefined
   const cancellation = Promise.withResolvers<"cancelled">()
   const cancel = (): void => {
+    isEnded = true
     interrupt()
     cancellation.resolve("cancelled")
   }
@@ -63,7 +65,7 @@ export async function login(
     }),
   )
   void deviceCode.then((info) => {
-    if (isSettled) {
+    if (isEnded) {
       return
     }
     verificationPage = info.verification_uri_complete ?? info.verification_uri
@@ -76,7 +78,7 @@ export async function login(
   })
 
   const settled = await Promise.race([result, cancellation.promise])
-  isSettled = true
+  isEnded = true
   subscriptions.dispose()
   if (cancelCurrentLogin === cancel) {
     cancelCurrentLogin = undefined
