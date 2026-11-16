@@ -588,22 +588,34 @@ suite("the course home", () => {
   })
 
   test("tells a student no longer enrolled to enroll again", async () => {
-    await renderHome(
-      courseHomeView({
-        backend: "mooc",
-        isNotEnrolled: true,
-        materialUrl: "https://courses.example/org/o/courses/c",
-      }),
-      moocPanel(),
-    )
+    const panel = moocPanel()
+    await renderHome(courseHomeView({ backend: "mooc", isNotEnrolled: true }), panel)
 
     const notices = screen.getByRole("list", { name: "Course notices" })
     expect(notices).toHaveTextContent("You are not enrolled on this course")
-    within(notices).getByRole("button", { name: "Open Course Page" }).click()
-    expect(postedMessages).toHaveBeenCalledWith({
-      type: "openLinkInBrowser",
-      url: "https://courses.example/org/o/courses/c",
-    })
+    within(notices).getByRole("button", { name: "Enroll Again" }).click()
+    expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "findCourseOnline"))
+    within(notices).getByRole("button", { name: "Remove Course" }).click()
+    expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "removeCourse"))
+  })
+
+  test.each([
+    ["forbidden", "You no longer have access to this course"],
+    ["notFound", "This course no longer exists on courses.mooc.fi"],
+  ] as const)("says why a %s course is out of reach, and what to do", async (accessLoss, title) => {
+    const panel = moocPanel()
+    await renderHome(courseHomeView({ backend: "mooc", accessLoss, isNotEnrolled: true }), panel)
+
+    const notices = screen.getByRole("list", { name: "Course notices" })
+    expect(notices).toHaveTextContent(title)
+    expect(notices).toHaveTextContent("Your exercises stay on this computer")
+    // The access loss says it all; not being enrolled is the lesser news.
+    expect(notices).not.toHaveTextContent("You are not enrolled")
+    expect(screen.queryByRole("button", { name: /^Download/ })).toBeNull()
+    within(notices).getByRole("button", { name: "Find the Course on courses.mooc.fi" }).click()
+    expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "findCourseOnline"))
+    within(notices).getByRole("button", { name: "Remove Course" }).click()
+    expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "removeCourse"))
   })
 
   test("names an expired session as the account status bar item does, with Log In", async () => {

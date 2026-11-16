@@ -9,14 +9,14 @@ import type {
   CourseHomeView,
   ExerciseSubmissionPanel,
   ExtensionToWebview,
-  LocalCourseData,
   Panel,
   CourseIdentifier,
 } from "../../../shared/lib"
-import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
+import { LocalCourseData, makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import * as actions from "../../actions"
 import type { ActionContext } from "../../actions/types"
 import type WorkspaceManager from "../../api/workspaceManager"
+import { TMC_BACKEND_URL } from "../../config/constants"
 import type { UserData } from "../../config/userdata"
 import {
   BottleneckError,
@@ -353,6 +353,36 @@ suite("TmcPanel handler dispatch", () => {
 
     expect(handlers.openWorkspace.mock.calls).toEqual([["tmc.switchWorkspace"]])
     expect(actionContext.coursesTree.revealCourse).toHaveBeenCalledExactlyOnceWith(
+      idOfTmcCourse(42),
+    )
+  })
+
+  test("a course notice finds the course online, or removes the course", async () => {
+    const handlers = stubHandlers()
+    const openExternal = stubOpenExternal()
+    let course = tmcLocalCourse({ materialUrl: "https://materials.example/python" })
+    const actionContext = createMockActionContext({
+      startup: { userData: storedCourses(() => Ok(course)) },
+    })
+    const { listener, shown } = await mountCourseDetails(actionContext)
+    const act = (action: string): Promise<void> =>
+      listener({ type: "courseAction", sourcePanel: { id: shown.id, type: shown.type }, action })
+
+    await act("findCourseOnline")
+    // A course that no longer exists took its material with it.
+    course = tmcLocalCourse({
+      materialUrl: "https://materials.example/python",
+      accessLoss: { reason: "notFound", checkedAt: 0 },
+    })
+    await act("findCourseOnline")
+    await act("removeCourse")
+
+    expect(openExternal.mock.calls.map(([uri]) => (uri as vscode.Uri).authority)).toEqual([
+      "materials.example",
+      new URL(TMC_BACKEND_URL).host,
+    ])
+    expect(handlers.openWorkspace).toHaveBeenCalledExactlyOnceWith(
+      "tmc.removeCourse",
       idOfTmcCourse(42),
     )
   })
@@ -1882,6 +1912,7 @@ function courseHomeOf(course: LocalCourseData): CourseHomeView {
     isExamMode: false,
     isDisabled: false,
     isNotEnrolled: false,
+    accessLoss: null,
     isOffline: false,
     aiPolicy: null,
     isLoggedIn: true,
@@ -1941,14 +1972,15 @@ suite("TmcPanel keeps Course Details on the stored course", () => {
   function contextWithChangingCourse(): {
     actionContext: ActionContext
     changed: vscode.EventEmitter<CourseIdentifier | undefined>
-    course: { current: LocalCourseData }
+    course: { current: LocalCourseData | undefined }
   } {
     const changed = new vscode.EventEmitter<CourseIdentifier | undefined>()
-    const course = { current: courseWith(2) }
+    const course: { current: LocalCourseData | undefined } = { current: courseWith(2) }
     const actionContext = createMockActionContext({
       startup: {
         userData: {
-          getCourse: () => Ok(course.current),
+          getCourse: () =>
+            course.current ? Ok(course.current) : Err(new Error("The course is not stored.")),
           onDidChangeCourses: changed.event,
         } as unknown as UserData,
       },
@@ -1966,6 +1998,17 @@ suite("TmcPanel keeps Course Details on the stored course", () => {
     expect(postedMessages(panel)).toEqual([
       { type: "setCourseHomeView", target: targetOf(shown), view: courseHomeOf(courseWith(3)) },
     ])
+  })
+
+  test("closes once its course is removed", async () => {
+    const { actionContext, changed, course } = contextWithChangingCourse()
+    const { panel } = await mountCourseDetails(actionContext)
+    const removed = LocalCourseData.getCourseId(courseWith(2))
+    course.current = undefined
+
+    changed.fire(removed)
+
+    expect(panel.dispose).toHaveBeenCalled()
   })
 
   test("sends the view again whenever the Courses view re-renders", async () => {

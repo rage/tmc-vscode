@@ -91,6 +91,8 @@ export const CourseHomeViewSchema = z.object({
   isDisabled: z.boolean(),
   /** courses.mooc.fi last refused the student as not enrolled on the course. */
   isNotEnrolled: z.boolean(),
+  /** Why the backend last refused the course itself; null while it serves it. */
+  accessLoss: z.enum(["forbidden", "notFound"]).nullable(),
   /** The backend did not answer the last refresh, so deadlines and points may be stale. */
   isOffline: z.boolean(),
   /** courses.mooc.fi's AI-use policy and whether it allows AI; null on tmc.mooc.fi, which has none. */
@@ -130,6 +132,8 @@ export const CourseHomeActionSchema = z.enum([
   "closeCompletedExercises",
   "switchCourseWorkspace",
   "revealInCoursesView",
+  "findCourseOnline",
+  "removeCourse",
 ])
 
 export type CourseHomeAction = z.infer<typeof CourseHomeActionSchema>

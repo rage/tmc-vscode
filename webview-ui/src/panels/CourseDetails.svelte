@@ -30,7 +30,7 @@
   import { addMessageListener, createRequester, HOST_STATE_TIMEOUT_MS } from "../utilities/script"
   import { restoreScroll, uiState } from "../utilities/uiState.svelte"
   import { vscode } from "../utilities/vscode"
-  import type { CourseNotice } from "./courseHome/CourseNotices.svelte"
+  import type { CourseNotice, CourseNoticeAction } from "./courseHome/CourseNotices.svelte"
   import CourseNotices from "./courseHome/CourseNotices.svelte"
   import CoursePart from "./courseHome/CoursePart.svelte"
 
@@ -63,7 +63,9 @@
   const completedOpenCount = $derived(
     exercises.filter((ex) => ex.passed && ex.status === "opened").length,
   )
-  const canDownload = $derived(view !== undefined && !view.isDisabled && view.isLoggedIn)
+  const canDownload = $derived(
+    view !== undefined && !view.isDisabled && view.accessLoss === null && view.isLoggedIn,
+  )
 
   async function requestData() {
     dataError = undefined
@@ -195,21 +197,28 @@
       return []
     }
     const site = backendName(view.backend)
-    const materialUrl = view.materialUrl
+    const findCourse: CourseNoticeAction = {
+      label: `Find the Course on ${site}`,
+      onclick: () => runCourseAction("findCourseOnline"),
+    }
+    const removeCourse: CourseNoticeAction = {
+      label: "Remove Course",
+      onclick: () => runCourseAction("removeCourse"),
+    }
     const candidates: (CourseNotice | false)[] = [
       view.isRestricted && {
         key: "restricted",
         tone: "warning",
         title: "Restricted Mode",
         detail: "Trust this course workspace to run tests, submit and share exercises.",
-        action: { label: "Trust", onclick: () => runCommand("tmc.trustCourseWorkspace") },
+        actions: [{ label: "Trust", onclick: () => runCommand("tmc.trustCourseWorkspace") }],
       },
       view.isSessionExpired && {
         key: "sessionExpired",
         tone: "warning",
         title: "Session expired",
         detail: SESSION_EXPIRED_DETAIL,
-        action: { label: "Log In", onclick: () => runCommand("tmc.showMoocLogin") },
+        actions: [{ label: "Log In", onclick: () => runCommand("tmc.showMoocLogin") }],
       },
       !view.isLoggedIn &&
         !view.isSessionExpired && {
@@ -217,7 +226,7 @@
           tone: "info",
           title: "Not logged in",
           detail: `Log in to ${backendName("mooc")} to download and submit exercises.`,
-          action: { label: "Log In", onclick: () => runCommand("tmc.showMoocLogin") },
+          actions: [{ label: "Log In", onclick: () => runCommand("tmc.showMoocLogin") }],
         },
       view.isLoggedIn &&
         view.isOffline && {
@@ -226,21 +235,39 @@
           title: `${site} could not be reached`,
           detail: "Showing the exercises on this computer; deadlines may be out of date.",
         },
-      view.isNotEnrolled && {
-        key: "notEnrolled",
+      view.accessLoss === "forbidden" && {
+        key: "accessLoss",
         tone: "warning",
-        title: "You are not enrolled on this course",
-        detail: `Enroll on the course on ${site} to submit its exercises, then refresh it here.`,
-        action: materialUrl
-          ? { label: "Open Course Page", onclick: () => openInBrowser(materialUrl) }
-          : undefined,
+        title: "You no longer have access to this course",
+        detail:
+          `${site} no longer shows it to you: it may have been hidden or closed. ` +
+          "Your exercises stay on this computer, and their tests still run.",
+        actions: [findCourse, removeCourse],
       },
-      view.isDisabled && {
-        key: "disabled",
+      view.accessLoss === "notFound" && {
+        key: "accessLoss",
         tone: "warning",
-        title: "This course is disabled",
-        detail: "Its exercises cannot be downloaded or submitted.",
+        title: `This course no longer exists on ${site}`,
+        detail:
+          "It may have been removed or replaced by a new course. " +
+          "Your exercises stay on this computer, and their tests still run.",
+        actions: [findCourse, removeCourse],
       },
+      view.isNotEnrolled &&
+        !view.accessLoss && {
+          key: "notEnrolled",
+          tone: "warning",
+          title: "You are not enrolled on this course",
+          detail: `Enroll on the course on ${site} to submit its exercises, then refresh it here.`,
+          actions: [{ ...findCourse, label: "Enroll Again" }, removeCourse],
+        },
+      view.isDisabled &&
+        !view.accessLoss && {
+          key: "disabled",
+          tone: "warning",
+          title: "This course is disabled",
+          detail: "Its exercises cannot be downloaded or submitted.",
+        },
       view.isExamMode && {
         key: "exam",
         tone: "info",
@@ -252,10 +279,10 @@
         tone: "info",
         title: plural(view.newExercises.length, "new exercise"),
         detail: listNames(view.newExercises.map((ex) => ex.name)),
-        action:
+        actions:
           canDownload && !view.isOffline
-            ? { label: "Download", onclick: () => runCourseAction("downloadNewExercises") }
-            : undefined,
+            ? [{ label: "Download", onclick: () => runCourseAction("downloadNewExercises") }]
+            : [],
         ondismiss: () => runCourseAction("dismissNewExercises"),
         dismissLabel: "Dismiss the new exercises",
       },
@@ -264,10 +291,10 @@
         tone: "info",
         title: view.updates.length === 1 ? "1 update" : `${view.updates.length} updates`,
         detail: `${listNames(view.updates.map((ex) => ex.name))}. Your own code is kept.`,
-        action:
+        actions:
           canDownload && !view.isOffline
-            ? { label: "Update", onclick: () => runCourseAction("updateExercises") }
-            : undefined,
+            ? [{ label: "Update", onclick: () => runCourseAction("updateExercises") }]
+            : [],
       },
       view.recentlyUpdated.length > 0 && {
         key: "updated",

@@ -13,11 +13,12 @@ import { assertUnreachable, CourseIdentifier, LocalCourseData } from "../../../s
 import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import { withOperation } from "../../api/withOperation"
+import { MOOC_BACKEND_URL, TMC_BACKEND_URL } from "../../config/constants"
 import { buildCourseHomeView } from "../../ui/courseHome"
 import { showExerciseSourceFile } from "../../ui/exerciseSourceFile"
 import { recentUpdates } from "../../ui/recentUpdates"
 import { closeCompletedExercises, openCourseExercises } from "../../ui/treeview/treeCommands"
-import { Logger } from "../../utilities"
+import { Logger, openWebLink } from "../../utilities"
 import type { HandlerMap, PanelHost } from "../router"
 
 /** The course home does each download's progress itself, so the notification is left out. */
@@ -153,9 +154,29 @@ async function runCourseAction(
     case "revealInCoursesView":
       await actionContext.coursesTree.revealCourse(courseId)
       return
+    case "findCourseOnline":
+      await openWebLink(courseSearchUrl(actionContext, courseId))
+      return
+    case "removeCourse":
+      // Asks first, which is the command layer's to do.
+      await vscode.commands.executeCommand("tmc.removeCourse", courseId)
+      return
     default:
       assertUnreachable(action)
   }
+}
+
+/**
+ * Where the student can look for a course on its backend's site: its material, unless the course
+ * is gone and the material with it; then the site's front page.
+ */
+function courseSearchUrl({ startup }: ReadyActionContext, courseId: CourseIdentifier): string {
+  const siteUrl = courseId.kind === "mooc" ? MOOC_BACKEND_URL : TMC_BACKEND_URL
+  const course = startup.userData.getCourse(courseId)
+  if (course.err || LocalCourseData.getAccessLoss(course.val) === "notFound") {
+    return siteUrl
+  }
+  return LocalCourseData.getMaterialUrl(course.val) ?? siteUrl
 }
 
 async function runExerciseAction(

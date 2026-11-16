@@ -116,18 +116,20 @@ export class CourseTreeItem extends vscode.TreeItem {
     const hasMissing = exercises.some((ex) => ex.status === "missing" || ex.status === "new")
     const disabled = LocalCourseData.isDisabled(course)
     const notEnrolled = LocalCourseData.isNotEnrolled(course)
+    const accessLoss = LocalCourseData.getAccessLoss(course)
     const points = pointsText(course.data.awardedPoints, course.data.availablePoints)
     const backend = backendName(course.kind)
 
     this.iconPath =
-      disabled || notEnrolled
+      disabled || notEnrolled || accessLoss
         ? new vscode.ThemeIcon("book", new vscode.ThemeColor("disabledForeground"))
         : new vscode.ThemeIcon("book")
     this.contextValue = [
       `course.${course.kind}`,
-      ...(newCount > 0 ? ["hasNew"] : []),
-      ...(hasMissing ? ["hasMissing"] : []),
-      ...(updateCount > 0 ? ["hasUpdates"] : []),
+      // A course its backend refuses offers no downloads; the download would only be refused.
+      ...(newCount > 0 && !accessLoss ? ["hasNew"] : []),
+      ...(hasMissing && !accessLoss ? ["hasMissing"] : []),
+      ...(updateCount > 0 && !accessLoss ? ["hasUpdates"] : []),
       ...(hasCompleted ? ["hasCompleted"] : []),
     ].join(".")
     const newExercises = countOf(newCount, "new exercise")
@@ -140,16 +142,28 @@ export class CourseTreeItem extends vscode.TreeItem {
       },
       // Titles are only unique within one backend, so the backend is always shown.
       { description: backend, spoken: backend, tooltip: backend },
-      disabled && {
-        description: "disabled",
-        spoken: "disabled",
-        tooltip: "This course is disabled: its exercises cannot be downloaded or submitted.",
+      accessLoss === "forbidden" && {
+        description: "no access",
+        spoken: "no access",
+        tooltip: `You no longer have access to this course on ${backend}. Its exercises on this computer still run their tests.`,
       },
-      notEnrolled && {
-        description: "not enrolled",
-        spoken: "not enrolled",
-        tooltip: "You are not enrolled on this course: its exercises cannot be submitted.",
+      accessLoss === "notFound" && {
+        description: "removed",
+        spoken: "removed",
+        tooltip: `This course no longer exists on ${backend}. Its exercises on this computer still run their tests.`,
       },
+      disabled &&
+        !accessLoss && {
+          description: "disabled",
+          spoken: "disabled",
+          tooltip: "This course is disabled: its exercises cannot be downloaded or submitted.",
+        },
+      notEnrolled &&
+        !accessLoss && {
+          description: "not enrolled",
+          spoken: "not enrolled",
+          tooltip: "You are not enrolled on this course: its exercises cannot be submitted.",
+        },
       newCount > 0 && { spoken: newExercises, tooltip: newExercises },
       updateCount > 0 && { spoken: updates, tooltip: updates },
     ])

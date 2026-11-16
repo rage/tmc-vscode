@@ -278,6 +278,27 @@ suite("CoursesTree", function () {
     expect(tooltipOf(item)).toContain("You are not enrolled on this course")
   })
 
+  test("a course its backend refuses says why, and offers no download", function () {
+    const forbidden = first(
+      show(
+        moocCourse({
+          newExercises: ["a"],
+          notEnrolled: true,
+          accessLoss: { reason: "forbidden", checkedAt: 0 },
+        }),
+      ),
+    )
+    const removed = first(
+      show(tmcCourse({ disabled: true, accessLoss: { reason: "notFound", checkedAt: 0 } })),
+    )
+
+    expect(forbidden.description).toBe("courses.mooc.fi · no access")
+    expect(tooltipOf(forbidden)).toContain("You no longer have access to this course")
+    expect(forbidden.contextValue).toBe("course.mooc")
+    expect(removed.description).toBe("12/40 · tmc.mooc.fi · removed")
+    expect(tooltipOf(removed)).toContain("This course no longer exists on tmc.mooc.fi")
+  })
+
   test("a course with new exercises is marked for the inline download action", function () {
     const item = first(show(moocCourse({ newExercises: ["a", "b"] })))
 

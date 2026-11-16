@@ -395,6 +395,11 @@ export class TmcPanel {
     if (changed && !CourseIdentifier.equals(changed, route.courseId)) {
       return
     }
+    // A removed course leaves nothing to show, e.g. after Remove Course in its own notice.
+    if (this._actionContext.startup.userData.getCourse(route.courseId).err) {
+      this.dispose()
+      return
+    }
     // Hidden, the document is gone, and the one loaded on reveal asks for the view itself.
     if (!this._isWebviewReady) {
       return

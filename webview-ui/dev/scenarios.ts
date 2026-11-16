@@ -10,7 +10,12 @@ import type {
   SubmissionHistoryEntry,
   WebviewToExtension,
 } from "../../shared/lib"
-import { makeMoocKind, makeTmcKind } from "../../shared/lib"
+import {
+  makeMoocKind,
+  makeTmcKind,
+  SUBMIT_REFUSAL_LABELS,
+  submitRefusalSentence,
+} from "../../shared/lib"
 import {
   inProgressView,
   moocGradingView,
@@ -204,6 +209,26 @@ const moocCourseInWorkspace = courseHomeView({
     })),
   })),
 })
+
+/** The course in its workspace once its backend refuses it: what is on disk stays. */
+function moocCourseOutOfReach(accessLoss: "forbidden" | "notFound"): CourseHomeView {
+  const refusal = accessLoss === "forbidden" ? "courseForbidden" : "courseNotFound"
+  const { nextExercise: _none, nextDeadline: _passed, ...rest } = moocCourseInWorkspace
+  return courseHomeView({
+    ...rest,
+    accessLoss,
+    parts: rest.parts.map((part) => ({
+      ...part,
+      exercises: part.exercises.map((ex) => ({
+        ...ex,
+        submitRefusal: {
+          label: SUBMIT_REFUSAL_LABELS[refusal],
+          sentence: submitRefusalSentence(refusal, ex.name),
+        },
+      })),
+    })),
+  })
+}
 
 const moocCourseWithRules = courseHomeView({
   ...moocCourse,
@@ -444,6 +469,16 @@ export const SCENARIOS: Scenario[] = [
     id: "course-details/mooc-not-enrolled",
     panel: courseDetailsPanel(61, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
     reply: answerCourseDetails({ id: 61 }, { ...moocCourse, isNotEnrolled: true }),
+  },
+  {
+    id: "course-details/mooc-no-access",
+    panel: courseDetailsPanel(63, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
+    reply: answerCourseDetails({ id: 63 }, moocCourseOutOfReach("forbidden")),
+  },
+  {
+    id: "course-details/mooc-course-removed",
+    panel: courseDetailsPanel(64, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
+    reply: answerCourseDetails({ id: 64 }, moocCourseOutOfReach("notFound")),
   },
   {
     id: "course-details/mooc-downloading",

@@ -336,6 +336,7 @@ suite("buildCourseHomeView", function () {
       isExamMode: false,
       isDisabled: false,
       isNotEnrolled: false,
+      accessLoss: null,
       materialUrl: null,
     })
     expect(view.parts.map((part) => [part.name, part.exercises.map((ex) => ex.name)])).toEqual([
@@ -408,6 +409,27 @@ suite("buildCourseHomeView", function () {
     ).unwrap()
 
     expect(view.isNotEnrolled).toBe(true)
+  })
+
+  test("carries why the backend refuses the course, and refuses its exercises' submits", function () {
+    const course = moocLocalCourse({
+      accessLoss: { reason: "notFound", checkedAt: 0 },
+      exercises: [moocCourseExercise({ name: "Hello world", deadline: "2099-01-01T00:00:00Z" })],
+    })
+
+    const view = buildCourseHomeView(
+      contextFor(course),
+      LocalCourseDataNs.getCourseId(course),
+      NOW,
+    ).unwrap()
+
+    expect(view.accessLoss).toBe("notFound")
+    expect(view.nextDeadline).toBeUndefined()
+    expect(view.parts[0]?.exercises[0]?.submitRefusal).toEqual({
+      label: "course removed",
+      sentence: "This course no longer exists, so Hello world cannot be submitted.",
+    })
+    expect(view.nextExercise).toBeUndefined()
   })
 
   test("calls a course whose exercises name no part just Exercises", function () {

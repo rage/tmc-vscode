@@ -126,6 +126,7 @@ export function courseHomeView(overrides: Partial<CourseHomeView> = {}): CourseH
     isExamMode: false,
     isDisabled: false,
     isNotEnrolled: false,
+    accessLoss: null,
     isOffline: false,
     aiPolicy: null,
     isLoggedIn: true,

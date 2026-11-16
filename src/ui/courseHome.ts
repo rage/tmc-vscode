@@ -94,16 +94,20 @@ export function buildCourseHomeView(
     materialUrl: LocalCourseData.getMaterialUrl(course) ?? null,
     awardedPoints: course.data.awardedPoints,
     availablePoints: course.data.availablePoints,
-    nextDeadline: deadlineText(
-      findNextDateAfter(
-        now,
-        parts.map((part) => part.nextDeadline),
-      ),
-    ),
+    // Nothing can be submitted to a course its backend refuses, so no deadline is ahead.
+    nextDeadline: LocalCourseData.getAccessLoss(course)
+      ? undefined
+      : deadlineText(
+          findNextDateAfter(
+            now,
+            parts.map((part) => part.nextDeadline),
+          ),
+        ),
     hasSoftDeadlines: exercises.some((ex) => !ex.isHard),
     isExamMode: LocalCourseData.isExamMode(course),
     isDisabled: LocalCourseData.isDisabled(course),
     isNotEnrolled: LocalCourseData.isNotEnrolled(course),
+    accessLoss: LocalCourseData.getAccessLoss(course) ?? null,
     isOffline: !actionContext.coursesTree.isBackendReachable(course.kind),
     aiPolicy:
       course.kind === "mooc"
