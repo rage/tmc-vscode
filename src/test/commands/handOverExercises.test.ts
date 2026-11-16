@@ -132,7 +132,7 @@ suite("handOverExercises", function () {
 
     expect(saved).toEqual([source])
     const closed = (close.mock.lastCall?.[0] ?? []) as { input: { uri: vscode.Uri } }[]
-    expect(closed.map(({ input }) => input.uri.fsPath)).toEqual([source])
+    expect(closed.map(({ input }) => input.uri.fsPath)).toEqual([vscode.Uri.file(source).fsPath])
     const [moved] = context.startup.accountHandover.movedAside
     expect(
       fs.readFileSync(path.join(moved?.folder ?? "", "mooc/course/exercise/src/main.py"), "utf8"),
