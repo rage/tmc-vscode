@@ -111,6 +111,51 @@ describe("mooc mock conformance", () => {
     assert.equal(mock.setEnrolled("no-such-course", true), false)
   })
 
+  test("a course closed to students serves itself and its progress, not its material", async () => {
+    const exerciseId = passingExercise.slide.exercise_id
+    try {
+      assert.equal(mock.setCourseAccess(pythonCourse.id, "forbidden"), true)
+      const status = async (p: string): Promise<number> => (await authFetch(api(p))).status
+      assert.equal(await status(`/courses/${pythonCourse.id}`), 200)
+      assert.equal(await status(`/courses/${pythonCourse.id}/progress`), 200)
+      const exercises = await authFetch(api(`/courses/${pythonCourse.id}/exercises`))
+      assert.equal(exercises.status, 403)
+      assert.equal(((await exercises.json()) as { message_key: string }).message_key, "forbidden")
+      assert.equal(await status(`/exercises/${exerciseId}`), 403)
+    } finally {
+      mock.reset()
+    }
+    assert.equal((await authFetch(api(`/courses/${pythonCourse.id}/exercises`))).status, 200)
+  })
+
+  test("a deleted course is gone from every route, and back once opened", async () => {
+    const exerciseId = passingExercise.slide.exercise_id
+    const status = async (p: string): Promise<number> => (await authFetch(api(p))).status
+    assert.equal(mock.setCourseAccess(pythonCourse.id, "deleted"), true)
+    try {
+      assert.equal(await status(`/courses/${pythonCourse.id}`), 404)
+      assert.equal(await status(`/courses/${pythonCourse.id}/exercises`), 404)
+      assert.equal(await status(`/courses/${pythonCourse.id}/progress`), 404)
+      assert.equal(await status(`/exercises/${exerciseId}`), 404)
+      const listed = (await (await authFetch(api("/courses"))).json()) as { id: string }[]
+      assert.ok(!listed.some((c) => c.id === pythonCourse.id))
+    } finally {
+      assert.equal(mock.setCourseAccess(pythonCourse.id, "open"), true)
+    }
+    assert.equal(await status(`/courses/${pythonCourse.id}`), 200)
+    assert.equal(mock.setCourseAccess("no-such-course", "forbidden"), false)
+  })
+
+  test("a revoked grant rejects every token until a reset", async () => {
+    try {
+      mock.revokeGrant()
+      assert.equal((await authFetch(api("/courses"))).status, 401)
+    } finally {
+      mock.reset()
+    }
+    assert.equal((await authFetch(api("/courses"))).status, 200)
+  })
+
   test("a course's exercises name their material pages as the host lays them out", async () => {
     const res = await authFetch(api(`/courses/${pythonCourse.id}/exercises`))
     const [slide] = (await res.json()) as { page_url: string }[]
