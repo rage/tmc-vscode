@@ -217,3 +217,42 @@ test("the overflow menu is reachable and operable from the keyboard", async ({ c
   await expect(menu).toBeHidden()
   await expect(trigger).toBeFocused()
 })
+
+test("a course is found and added from the keyboard alone", async ({ context, page }) => {
+  await serveHarness(context)
+  await page.goto(`${ORIGIN}/frame.html?scenario=add-course%2Fcourses`)
+  await expect(page.getByRole("heading", { level: 1, name: "Add a Course" })).toBeFocused()
+  await page.keyboard.press("Tab")
+  await page.keyboard.press("Tab")
+  await expect(
+    page.getByRole("searchbox", { name: "Search courses and organizations" }),
+  ).toBeFocused()
+  await page.keyboard.type("everything")
+  await page.keyboard.press("Tab")
+  const add = page.getByRole("button", { name: "Add Introduction to everything" })
+  await expect(add).toBeFocused()
+  await page.keyboard.press("Enter")
+  const posted = await page.evaluate(
+    () => (window as unknown as { tmcHarness: { posted: { type: string }[] } }).tmcHarness.posted,
+  )
+  expect(posted.map((message) => message.type)).toContain("addCourse")
+})
+
+test("the login screen's buttons follow the code in keyboard order", async ({ context, page }) => {
+  await serveHarness(context)
+  await page.goto(`${ORIGIN}/frame.html?scenario=login%2Fwaiting`)
+  await expect(page.getByText("WXYZ-0001")).toBeVisible()
+  await page.keyboard.press("Tab")
+  await expect(page.getByRole("button", { name: "Copy" })).toBeFocused()
+  await page.keyboard.press("Tab")
+  await expect(page.getByRole("button", { name: "Open courses.mooc.fi" })).toBeFocused()
+  await page.keyboard.press("Enter")
+  const posted = await page.evaluate(
+    () =>
+      (window as unknown as { tmcHarness: { posted: { type: string; action?: string }[] } })
+        .tmcHarness.posted,
+  )
+  expect(posted).toContainEqual(
+    expect.objectContaining({ type: "loginAction", action: "openVerificationPage" }),
+  )
+})

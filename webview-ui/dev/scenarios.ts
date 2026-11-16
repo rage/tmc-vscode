@@ -1,13 +1,21 @@
 import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../../shared/langsSchema"
 import type {
+  AddCoursePanel,
+  CatalogCourse,
   CourseDetailsPanel,
   CourseHomeExercise,
   CourseHomeView,
   DeadlineText,
   ExerciseSection,
   ExtensionToWebview,
+  LoginPanel,
+  LoginView,
+  MoocCatalog,
   Panel,
+  RequestType,
   SubmissionHistoryEntry,
+  TmcOrganizations,
+  WebviewState,
   WebviewToExtension,
 } from "../../shared/lib"
 import {
@@ -42,6 +50,8 @@ export interface Scenario {
   reply?: (message: WebviewToExtension) => ExtensionToWebview[]
   /** Posted once the panel is on screen, the way a running operation reports its progress. */
   pushes?: ExtensionToWebview[]
+  /** What VS Code hands the document as saved, as after the student left it in this state. */
+  savedState?: WebviewState
 }
 
 function deadline(
@@ -449,6 +459,103 @@ function moocGrading(
 }
 
 /** Every scenario the dev harness offers and the accessibility tests walk through. */
+
+const loginPanel: LoginPanel = { id: 60, type: "Login", isAddingCourse: false }
+
+function loginScenario(id: string, view: LoginView): Scenario {
+  return {
+    id: `login/${id}`,
+    panel: loginPanel,
+    pushes: [{ type: "loginView", target: { id: loginPanel.id, type: "Login" }, view }],
+  }
+}
+
+// The visual tier fixes the clock at 2026-10-01T09:00:00Z.
+const LOGIN_EXPIRES_AT = "2026-10-01T09:15:00.000Z"
+
+const addCoursePanel: AddCoursePanel = { id: 70, type: "AddCourse" }
+
+function catalogCourse(name: string, overrides: Partial<CatalogCourse> = {}): CatalogCourse {
+  return {
+    key: `key:${name}`,
+    name,
+    organization: "University of Helsinki",
+    isAdded: false,
+    ...overrides,
+  }
+}
+
+const enrolledCourses: MoocCatalog = {
+  kind: "listed",
+  items: [
+    catalogCourse("Introduction to everything", {
+      description:
+        "A whirlwind tour of programming, from the first print to files and objects, " +
+        "with exercises tested on your own computer.",
+    }),
+    catalogCourse("Python Programming 2026", {
+      description: "The University of Helsinki's introduction to programming in Python.",
+      isAdded: true,
+    }),
+    catalogCourse("Data Analysis with Python", { organization: "Aalto University" }),
+  ],
+}
+
+const tmcOrganizations: TmcOrganizations = {
+  kind: "listed",
+  items: [
+    {
+      slug: "mooc",
+      name: "MOOC",
+      description: "Open online courses of the University of Helsinki.",
+    },
+    { slug: "hy", name: "University of Helsinki" },
+    { slug: "aalto", name: "Aalto University", description: "Courses taught at Aalto." },
+  ],
+}
+
+type CatalogRequest = Extract<
+  RequestType,
+  "requestMoocCatalog" | "requestTmcOrganizations" | "requestTmcCourses"
+>
+
+/** Answers the add-course screen's listings; a request left out of `answers` stays pending. */
+function answerCatalog(
+  answers: Partial<
+    Record<CatalogRequest, { ok: true; value: unknown } | { ok: false; error: { message: string } }>
+  >,
+) {
+  return (message: WebviewToExtension): ExtensionToWebview[] => {
+    if (!("requestId" in message) || !(message.type in answers)) {
+      return []
+    }
+    const outcome = answers[message.type as CatalogRequest]
+    return outcome
+      ? [
+          {
+            type: "reply",
+            target: { type: "AddCourse", id: addCoursePanel.id },
+            requestId: message.requestId,
+            outcome,
+          } as ExtensionToWebview,
+        ]
+      : []
+  }
+}
+
+function addCourseScenario(
+  id: string,
+  answers: Parameters<typeof answerCatalog>[0],
+  savedState?: WebviewState,
+): Scenario {
+  return {
+    id: `add-course/${id}`,
+    panel: addCoursePanel,
+    reply: answerCatalog(answers),
+    ...(savedState ? { savedState } : {}),
+  }
+}
+
 export const SCENARIOS: Scenario[] = [
   {
     id: "course-details/tmc",
@@ -788,6 +895,66 @@ export const SCENARIOS: Scenario[] = [
       ),
     ],
   },
+  loginScenario("requesting-code", { phase: "requestingCode" }),
+  loginScenario("waiting", {
+    phase: "waiting",
+    userCode: "WXYZ-0001",
+    verificationUrl: "https://courses.mooc.fi/oauth_device",
+    expiresAt: LOGIN_EXPIRES_AT,
+  }),
+  loginScenario("denied", {
+    phase: "failed",
+    failure: "denied",
+    error: { message: "The login was denied in the browser." },
+  }),
+  loginScenario("expired", {
+    phase: "failed",
+    failure: "expired",
+    error: { message: "The login code expired before it was approved." },
+  }),
+  loginScenario("unreachable", {
+    phase: "failed",
+    failure: "unreachable",
+    error: {
+      message: "Could not reach courses.mooc.fi. Check your internet connection.",
+      details: "Caused by: error sending request for url (https://courses.mooc.fi/api/v0/…)",
+      actions: [{ label: "Show Logs", command: "tmc.logs" }],
+    },
+  }),
+  addCourseScenario("loading", {}),
+  addCourseScenario("courses", {
+    requestMoocCatalog: { ok: true, value: enrolledCourses },
+    requestTmcOrganizations: { ok: true, value: tmcOrganizations },
+  }),
+  addCourseScenario(
+    "organization",
+    {
+      requestMoocCatalog: { ok: true, value: enrolledCourses },
+      requestTmcOrganizations: { ok: true, value: tmcOrganizations },
+      requestTmcCourses: {
+        ok: true,
+        value: [
+          catalogCourse("Java Programming I", {
+            organization: "MOOC",
+            description: "The basics of programming in Java.",
+          }),
+          catalogCourse("Java Programming II", { organization: "MOOC", isAdded: true }),
+        ],
+      },
+    },
+    { screen: "AddCourse", ui: { organization: "mooc" } },
+  ),
+  addCourseScenario("not-enrolled", {
+    requestMoocCatalog: { ok: true, value: { kind: "listed", items: [] } },
+    requestTmcOrganizations: { ok: true, value: tmcOrganizations },
+  }),
+  addCourseScenario("unavailable", {
+    requestMoocCatalog: { ok: true, value: { kind: "loggedOut" } },
+    requestTmcOrganizations: {
+      ok: false,
+      error: { message: "Could not reach tmc.mooc.fi. Check your internet connection." },
+    },
+  }),
   {
     id: "initialization-error-help/errors",
     panel: {

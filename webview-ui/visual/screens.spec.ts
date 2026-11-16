@@ -43,11 +43,12 @@ test.use({
   timezoneId: "Europe/Helsinki",
 })
 
-/** The course home's widths in an editor group of a narrow window, where columns give way. */
+/** Widths of an editor group in a narrow window, where columns give way. */
 const NARROW_WIDTHS = [215, 330]
 const NARROW_SCENARIO_IDS = [
   "course-details/mooc-in-workspace",
   "course-details/mooc-submission-rules",
+  "add-course/courses",
 ]
 
 for (const scenarioId of SCENARIO_IDS) {
