@@ -4,7 +4,7 @@ import { MOCK_BACKEND_URL } from "../../backend/mockSession"
 import { vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
-import { QuickPickPage } from "../pages/quick-pick"
+import { TmcPage } from "../pages/tmc"
 
 // A submission the server has no files for has nothing to download. That is
 // ordinary news, not an error: the exercise on disk must be left untouched and
@@ -14,14 +14,13 @@ import { QuickPickPage } from "../pages/quick-pick"
 // submitting -- so it has to be seeded in the mock (backend/mooc/router.ts
 // `seedMoocFilelessSubmission`). The integration tier
 // covers the CLI's `nothing-to-download` result directly; this walks the UI that
-// reports it -- the explorer context menu and the three quick picks in
-// src/commands/downloadOldSubmission.ts.
+// reports it: the explorer context menu opens History in the results panel.
 vsCodeTest(
   "reports a mooc submission with no downloadable files without touching the exercise",
   async ({ page, webview }) => {
     const coursesView = new CoursesViewPage(page, webview)
     const explorerPage = new ExplorerPage(page)
-    const quickPick = new QuickPickPage(page)
+    const sidePanel = new TmcPage(page, webview).getSidePanel()
 
     const courseTitle = "MOOC Python Course"
     const exerciseName = "passing_exercise"
@@ -54,13 +53,18 @@ vsCodeTest(
       expect(response.status).toBe(200)
     })
 
-    await vsCodeTest.step("pick the submission from the explorer context menu", async () => {
+    await vsCodeTest.step("restore the submission from History", async () => {
       await explorerPage.runContextMenuCommand(fileName, "Download Old Submission")
 
-      await quickPick.waitForTitle(/^Download Old Submission — /)
+      await expect(sidePanel.getByRole("button", { name: "History", exact: true })).toHaveAttribute(
+        "aria-expanded",
+        "true",
+      )
       // The seeded one is the only submission: nothing has been submitted from here.
-      await quickPick.selectOnlyItem()
-      await quickPick.expectClosed()
+      const restore = sidePanel.getByRole("button", { name: /^Restore the submission from / })
+      await expect(restore).toHaveCount(1)
+      await expect(sidePanel.getByText("Latest submission")).toBeVisible()
+      await restore.click()
 
       // The exercise is as downloaded, so there is nothing to back up first.
       await page
@@ -69,10 +73,11 @@ vsCodeTest(
         .click()
     })
 
-    await vsCodeTest.step("see it reported as a normal outcome", async () => {
+    await vsCodeTest.step("see it reported in History as a normal outcome", async () => {
+      await expect(sidePanel.getByText("That submission has no files to download.")).toBeVisible()
       await expect(
         coursesView.notificationToast("That submission has no files to download."),
-      ).toBeVisible()
+      ).toBeHidden()
       // Nothing was restored, so the editor still holds the exercise stub.
       await expect(page.getByText(fileContents)).toBeVisible()
     })

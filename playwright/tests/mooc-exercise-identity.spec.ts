@@ -4,7 +4,6 @@ import type { Page } from "@playwright/test"
 import { vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
-import { QuickPickPage } from "../pages/quick-pick"
 import { TmcPage } from "../pages/tmc"
 
 function statusBarText(page: Page, text: string) {
@@ -19,7 +18,6 @@ vsCodeTest(
     const coursesView = new CoursesViewPage(page, webview)
     const sidePanel = new TmcPage(page, webview).getSidePanel()
     const explorerPage = new ExplorerPage(page)
-    const quickPick = new QuickPickPage(page)
 
     const courseTitle = "MOOC Variants Course"
     const exerciseName = "Exercise 1"
@@ -64,28 +62,34 @@ vsCodeTest(
     })
 
     await vsCodeTest.step(
-      "restore the submission, with no offer to back up the template",
+      "restore the submission from History, with no offer to back up the template",
       async () => {
         await explorerPage.runContextMenuCommand(fileName, "Download Old Submission")
-        await quickPick.waitForTitle(/^Download Old Submission — /)
-        await quickPick.selectOnlyItem()
-        await quickPick.expectClosed()
+        const restore = sidePanel.getByRole("button", { name: /^Restore the submission from / })
+        await expect(restore).toHaveCount(1)
+        await restore.click()
         const dialog = page.locator(".monaco-dialog-box")
         await expect(dialog.getByRole("button", { name: "Back Up and Restore" })).toHaveCount(0)
         await dialog.getByRole("button", { name: "Restore", exact: true }).click()
+        await expect(sidePanel.getByText(/^Restored the submission from /)).toBeVisible()
         await expect(editor.getByText(edit)).toBeVisible()
       },
     )
 
-    await vsCodeTest.step("share it via paste, twice, getting one link", async () => {
+    await vsCodeTest.step("share it via paste in Get help, twice, getting one link", async () => {
       await page.getByText("def hello()").click()
       await coursesView.runExercisePaletteCommand("TestMyCode: Share Exercise via Paste")
-      await expect(coursesView.notificationToast("Copied the paste link")).toBeVisible()
+      const link = sidePanel.getByText(/\/shared-submissions\/[0-9a-f-]+$/)
+      await expect(link).toBeVisible()
+      const firstLink = await link.textContent()
+      await expect(sidePanel.getByRole("button", { name: "Copy Link" })).toBeVisible()
+      await expect(sidePanel.getByRole("button", { name: "Open Link" })).toBeVisible()
+
+      await page.getByText("def hello()").click()
       await coursesView.runExercisePaletteCommand("TestMyCode: Share Exercise via Paste")
-      // VS Code announces each notification, though it may not toast one beside another.
-      await expect(
-        page.getByRole("alert").filter({ hasText: "Your code is unchanged since the last paste." }),
-      ).toHaveCount(1)
+      await expect(sidePanel.getByText(/unchanged since you last sent it/)).toBeVisible()
+      await expect(link).toHaveText(firstLink ?? "")
+      await expect(coursesView.notificationToast("Copied the paste link")).toBeHidden()
     })
   },
 )

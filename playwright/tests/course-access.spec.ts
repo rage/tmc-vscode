@@ -64,7 +64,7 @@ vsCodeTest(
       await expect(coursesView.row(COURSE_TITLE)).toHaveAccessibleName(/, not enrolled(,|$)/)
 
       // `webview` is the TestMyCode webview shown last, the result until it is closed.
-      const submissionTab = page.getByRole("tab", { name: /^Submission: / })
+      const submissionTab = page.getByRole("tab", { name: /^Results: / })
       await submissionTab.click()
       await page.keyboard.press("Control+W")
       await expect(submissionTab).toBeHidden()
