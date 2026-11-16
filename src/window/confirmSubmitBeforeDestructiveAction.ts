@@ -1,6 +1,6 @@
 import type { BackendKind } from "../../shared/lib"
 import { backendName } from "../../shared/lib"
-import { findKeptCopy } from "../actions"
+import { findKeptCopy } from "../actions/keptCopies"
 import type { ReadyActionContext } from "../actions/types"
 import type { KeptCopy } from "../api/keptCopies"
 import type { WorkspaceExercise } from "../api/workspaceManager"

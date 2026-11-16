@@ -10,11 +10,11 @@ import type { Item, Separator } from "../api/dialog"
 import { separator } from "../api/dialog"
 import { failure } from "../api/withOperation"
 import { formatTimestamp, parseDate } from "../utilities"
-import { revertExerciseDocuments } from "../window/exerciseDocuments"
 import {
   confirmSubmitBeforeDestructiveAction,
   keepingVerb,
-} from "./confirmSubmitBeforeDestructiveAction"
+} from "../window/confirmSubmitBeforeDestructiveAction"
+import { revertExerciseDocuments } from "../window/exerciseDocuments"
 import { checkTrustRetrying, runForExercise } from "./runForExercise"
 
 const TITLE = "Download Old Submission"

@@ -2,7 +2,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import { findKeptCopy } from "../../actions/keptCopies"
-import { confirmSubmitBeforeDestructiveAction } from "../../commands/confirmSubmitBeforeDestructiveAction"
+import { confirmSubmitBeforeDestructiveAction } from "../../window/confirmSubmitBeforeDestructiveAction"
 import { idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
