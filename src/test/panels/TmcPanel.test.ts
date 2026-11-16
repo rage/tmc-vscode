@@ -1624,6 +1624,44 @@ suite("TmcPanel side panel placement", () => {
     ])
   })
 
+  test("shows the model solution once a course refresh reveals it", async () => {
+    const { panel, sendReady } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    const pageUrl = "http://project-331.local/org/uh-cs/courses/c/chapter-1/loops"
+    let exercise = moocCourseExercise({ name: "loops", pageUrl })
+    const changed = new vscode.EventEmitter<undefined>()
+    const context = createMockActionContext({
+      startup: {
+        workspaceManager: {
+          getExercise: () => ({}),
+          onDidChangeExercises: changed.event,
+        } as unknown as WorkspaceManager,
+        userData: {
+          getExercise: () => Ok({ exercise: makeMoocKind(exercise) }),
+          onDidChangeCourses: changed.event,
+        } as unknown as UserData,
+      },
+    })
+    const subscription = TmcPanel.showSubmissionViews(createMockContext(), context)
+    onTestFinished(() => subscription.dispose())
+    const shown = exerciseSubmissionPanel()
+    submissionViews.open(shown)
+    await sendReady()
+    submissionViews.update({
+      panel: shown,
+      view: { ...submissionViewFor(shown, "Exercise passed").view, phase: "finished" },
+      shouldReopen: false,
+    })
+
+    exercise = { ...exercise, passed: true }
+    changed.fire(undefined)
+
+    const solutionUrls = (postedMessages(panel) as PanelMessage[]).flatMap((message) =>
+      message.type === "submissionView" ? [message.view.solutionUrl] : [],
+    )
+    expect(solutionUrls).toEqual([undefined, pageUrl])
+  })
+
   test("closes the shown submission once the submissions are cleared, as at logout", async () => {
     const { panel, sendReady } = createFakeWebviewPanel()
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)

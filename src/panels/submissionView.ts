@@ -375,6 +375,8 @@ function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): str
  * @param exercise.submitRefusal See {@link SubmissionView.submitRefusal}.
  * @param exercise.pendingReview See {@link SubmissionView.pendingReview}; replaces the one a
  *   finished grading was shown with.
+ * @param exercise.solutionUrl The model solution's page once the stored course reveals it; fills
+ *   in a view that has none, as a course refresh after the grading can reveal it.
  */
 export function withExerciseState(
   view: SubmissionView,
@@ -384,6 +386,7 @@ export function withExerciseState(
     submitRefusal?: string | undefined
     triesLeft?: number | undefined
     pendingReview?: string | undefined
+    solutionUrl?: string | undefined
   },
 ): SubmissionView {
   const {
@@ -400,8 +403,11 @@ export function withExerciseState(
     view.phase === "finished" || view.phase === "standing"
       ? exercise.pendingReview
       : gradedPendingReview
+  const isInProgress = view.phase === "uploading" || view.phase === "grading"
+  const solutionUrl = isInProgress ? undefined : (view.solutionUrl ?? exercise.solutionUrl)
   const standing = {
     ...rest,
+    ...(solutionUrl === undefined ? {} : { solutionUrl }),
     ...(pendingReview === undefined ? {} : { pendingReview }),
     ...(exercise.submitRefusal === undefined ? {} : { submitRefusal: exercise.submitRefusal }),
     ...(exercise.triesLeft === undefined ? {} : { triesLeft: exercise.triesLeft }),

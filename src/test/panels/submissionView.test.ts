@@ -387,6 +387,31 @@ suite("withExerciseState", () => {
     expect(withExerciseState(view, onDisk).pendingReview).toBeUndefined()
   })
 
+  test("a finished grading takes the model solution a later course refresh revealed", () => {
+    const view = moocGradingView(moocGrading("FullyGraded", 3, "Passed"), 3)
+
+    expect(
+      withExerciseState(view, { ...onDisk, solutionUrl: "https://material/loops" }),
+    ).toMatchObject({ solutionUrl: "https://material/loops" })
+  })
+
+  test("a grading keeps the model solution it was shown with", () => {
+    const view = {
+      ...moocGradingView(moocGrading("FullyGraded", 3, "Passed"), 3),
+      solutionUrl: "https://material/loops",
+    }
+
+    expect(withExerciseState(view, onDisk).solutionUrl).toBe("https://material/loops")
+  })
+
+  test("a grading still in progress gets no model solution", () => {
+    const view = inProgressView("grading", { steps: [] })
+
+    expect(
+      withExerciseState(view, { ...onDisk, solutionUrl: "https://material/loops" }).solutionUrl,
+    ).toBeUndefined()
+  })
+
   test("a grading still in progress gets no review sentence", () => {
     const view = inProgressView("grading", { steps: [] })
 

@@ -15,6 +15,7 @@ import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import { buildCourseHomeView } from "../ui/courseHome"
 import { exerciseStandingView } from "../ui/exerciseStanding"
+import { modelSolutionUrl } from "../ui/modelSolution"
 import { recentUpdates } from "../ui/recentUpdates"
 import { shownCourseHome } from "../ui/shownCourseHome"
 import { submissionViews } from "../ui/submissionViews"
@@ -490,6 +491,7 @@ function submissionViewMessage(
       exercise?.kind === "mooc" && exercise.data.pendingReview
         ? pendingReviewSentence(exercise.data.pendingReview, exercise.data.awardedPoints)
         : undefined,
+    solutionUrl: exercise && stored.ok ? modelSolutionUrl(stored.val) : undefined,
   })
   return { type: "submissionView", target: { id: panel.id, type: panel.type }, view: shown }
 }
