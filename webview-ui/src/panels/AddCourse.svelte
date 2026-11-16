@@ -237,7 +237,7 @@
       <ActionMenu actions={[{ label: `Find a Course on ${MOOC}`, onselect: findCourse }]} />
     {/snippet}
   </PanelHeader>
-  <p class="muted intro">Pick the course you are taking. Your course material names it.</p>
+  <p class="muted intro">Pick the course you're taking.</p>
 
   <div class="search">
     <vscode-icon name="search" aria-hidden="true"></vscode-icon>
