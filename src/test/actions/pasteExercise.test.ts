@@ -13,7 +13,7 @@ import { failure } from "../../api/withOperation"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { runForExercise } from "../../commands/runForExercise"
-import { BottleneckError, WorkspaceUntrustedError } from "../../errors"
+import { BottleneckError, CourseAccessLostError, WorkspaceUntrustedError } from "../../errors"
 import { idOfMoocCourse, idOfMoocExercise, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { restrictedTrustGate } from "../support/trustGate"
@@ -42,7 +42,9 @@ function contextFor(langsMethods: Record<string, unknown>): ReadyActionContext {
   return createMockActionContext({
     startup: {
       langs: langsMethods as unknown as ReadyStartup["langs"],
-      userData: { getCourse: () => Ok({}) } as unknown as ReadyStartup["userData"],
+      userData: {
+        getCourse: () => Ok({ kind: "mooc", data: {} }),
+      } as unknown as ReadyStartup["userData"],
       workspaceManager: {
         getExercise: (id: ExerciseIdentifier) => ({ ...moocExercise, id }),
       } as unknown as ReadyStartup["workspaceManager"],
@@ -80,6 +82,20 @@ suite("paste action", () => {
     const result = await pasteExercise(actionContext, TMC_ID)
 
     expect(result.val).toBeInstanceOf(WorkspaceUntrustedError)
+    expect(submit).not.toHaveBeenCalled()
+  })
+
+  test("sends nothing for a course its backend refuses", async () => {
+    const { actionContext, submit } = contextWith(Ok("https://tmc.mooc.fi/paste/abc123"))
+    actionContext.startup.userData = {
+      getCourse: () =>
+        Ok({ kind: "mooc", data: { accessLoss: { reason: "forbidden", checkedAt: 0 } } }),
+    } as unknown as ReadyStartup["userData"]
+
+    const result = await pasteExercise(actionContext, TMC_ID)
+
+    expect(result.val).toBeInstanceOf(CourseAccessLostError)
+    expect((result.val as Error).message).toMatch(/^You no longer have access to this course, so /)
     expect(submit).not.toHaveBeenCalled()
   })
 
@@ -137,7 +153,9 @@ suite("paste action", () => {
           paste,
           getStudentFilePaths: async () => Ok(["src"]),
         } as unknown as ReadyStartup["langs"],
-        userData: { getCourse: () => Ok({}) } as unknown as ReadyStartup["userData"],
+        userData: {
+          getCourse: () => Ok({ kind: "mooc", data: {} }),
+        } as unknown as ReadyStartup["userData"],
         workspaceManager: {
           getExercise: () => ({ ...moocExercise, uri: vscode.Uri.file(root) }),
         } as unknown as ReadyStartup["workspaceManager"],
@@ -197,7 +215,9 @@ suite("paste action, through the real runForExercise boundary", () => {
     const actionContext = createMockActionContext({
       startup: {
         langs: {} as unknown as ReadyStartup["langs"],
-        userData: { getCourse: () => Ok({}) } as unknown as ReadyStartup["userData"],
+        userData: {
+          getCourse: () => Ok({ kind: "mooc", data: {} }),
+        } as unknown as ReadyStartup["userData"],
         workspaceManager: {
           getExercise: () => exercise,
           get activeExercise() {

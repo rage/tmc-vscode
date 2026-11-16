@@ -405,7 +405,7 @@ export class ExerciseTestController implements vscode.Disposable {
       return
     }
     const storedExercise = stored.val.exercise
-    const refusal = submitRefusalOf(storedExercise, new Date())
+    const refusal = submitRefusalOf(storedExercise, new Date(), stored.val.course)
     if (refusal) {
       const chapterName =
         storedExercise.kind === "mooc" ? storedExercise.data.chapter?.name : undefined

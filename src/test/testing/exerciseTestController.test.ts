@@ -7,7 +7,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { RunResult, StyleValidationResult } from "../../../shared/langsSchema"
-import type { SubmissionView } from "../../../shared/lib"
+import type { CourseAccessLoss, SubmissionView } from "../../../shared/lib"
 import { BaseError, LocalCourseData } from "../../../shared/lib"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import type { AiUseGate } from "../../api/aiUseGate"
@@ -64,6 +64,7 @@ function course(options: {
   examMode?: boolean | undefined
   disabled?: boolean | undefined
   deadline?: string | undefined
+  accessLoss?: CourseAccessLoss | undefined
   slugs: string[]
 }) {
   return tmcLocalCourse({
@@ -74,6 +75,7 @@ function course(options: {
     availablePoints: 1,
     perhapsExamMode: options.examMode ?? false,
     disabled: options.disabled ?? false,
+    ...(options.accessLoss ? { accessLoss: options.accessLoss } : {}),
   })
 }
 
@@ -126,6 +128,7 @@ function setup(
     examMode?: boolean
     disabled?: boolean
     deadline?: string
+    accessLoss?: CourseAccessLoss
     loggedIn?: boolean
     slugs?: string[]
     closedSlugs?: string[]
@@ -137,6 +140,7 @@ function setup(
     examMode: options.examMode,
     disabled: options.disabled,
     deadline: options.deadline,
+    accessLoss: options.accessLoss,
     slugs,
   })
   const exercises: WorkspaceExercise[] = [...slugs, ...(options.closedSlugs ?? [])].map(
@@ -669,6 +673,17 @@ suite("ExerciseTestController", function () {
     expect(second.err && second.val).toBeInstanceOf(BottleneckError)
     expect(finalStates(s.fake.runs[1] as FakeTestRun).get(itemOf(s, exerciseAt(s)).id)?.[0]).toBe(
       "skipped",
+    )
+  })
+
+  test("exam mode in a course its backend refuses says why instead of offering Submit", async function () {
+    const s = setup({ examMode: true, accessLoss: { reason: "forbidden", checkedAt: 0 } })
+
+    await s.controller.runExercise(exerciseAt(s))
+
+    expect(s.actionContext.dialog.notification).toHaveBeenCalledExactlyOnceWith(
+      "Tests are not run locally in exam mode. You no longer have access to this course," +
+        " so part01-01_hello cannot be submitted.",
     )
   })
 

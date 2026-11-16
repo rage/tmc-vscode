@@ -6,6 +6,7 @@ import type { BackendKind, CourseIdentifier } from "../../shared/lib"
 import {
   backendName,
   ExerciseIdentifier,
+  LocalCourseData,
   makeMoocKind,
   makeTmcKind,
   match,
@@ -14,7 +15,12 @@ import {
 import type Langs from "../api/langs"
 import type { ExerciseDownload, ExerciseDownloadProgress, ExerciseDownloads } from "../api/langs"
 import type { OperationWarning, Warned } from "../api/withOperation"
-import { ChapterNotOpenError, ExerciseUpdateError, presentationFor } from "../errors"
+import {
+  ChapterNotOpenError,
+  CourseAccessLostError,
+  ExerciseUpdateError,
+  presentationFor,
+} from "../errors"
 import { downloadFailures } from "../ui/downloadFailures"
 import type { ExerciseClaim } from "../ui/exerciseOperations"
 import { exerciseOperations } from "../ui/exerciseOperations"
@@ -55,7 +61,8 @@ interface DownloadResults {
  *
  * Fails as a whole only with a `BottleneckError`, downloading nothing, while any of the
  * exercises is busy with another operation. Every other failure lands in `failed`, with one
- * warning naming the exercises; a cancelled download returns what had completed.
+ * warning naming the exercises; a cancelled download returns what had completed. Exercises of a
+ * course its backend last refused are not asked for: they fail with a `CourseAccessLostError`.
  *
  * @param exerciseIds Exercises to download.
  * @param courseId Course the exercises belong to, when they all share one. Passed
@@ -75,17 +82,69 @@ export async function downloadOrUpdateExercises(
   options: DownloadOptions = {},
 ): Promise<Result<DownloadResults & Warned, Error>> {
   Logger.info("Downloading exercises", exerciseIds)
-  if (exerciseIds.length === 0) {
-    return Ok({ successful: [], failed: [], warnings: [] })
+  const refusal = courseAccessRefusal(actionContext, exerciseIds)
+  const refused = new Set(refusal?.exerciseIds.map((id) => ExerciseIdentifier.key(id)))
+  const requested = exerciseIds.filter((id) => !refused.has(ExerciseIdentifier.key(id)))
+  if (requested.length === 0) {
+    return Ok(withRefusal({ successful: [], failed: [], warnings: [] }, refusal, options))
   }
-  const claim = exerciseOperations.claim(exerciseIds, "downloading")
+  const claim = exerciseOperations.claim(requested, "downloading")
   if (claim.err) {
     return claim
   }
   try {
-    return Ok(await download(actionContext, exerciseIds, courseId, claim.val, options))
+    const results = await download(actionContext, requested, courseId, claim.val, options)
+    return Ok(withRefusal(results, refusal, options))
   } finally {
     claim.val.releaseAll()
+  }
+}
+
+/** Exercises whose course's backend last refused the course, and why, in a sentence. */
+interface CourseAccessRefusal {
+  exerciseIds: ExerciseIdentifier[]
+  error: CourseAccessLostError
+}
+
+function courseAccessRefusal(
+  { startup }: ReadyActionContext,
+  exerciseIds: ExerciseIdentifier[],
+): CourseAccessRefusal | undefined {
+  let firstCourse: LocalCourseData | undefined
+  const refused = exerciseIds.filter((id) => {
+    const stored = startup.userData.getExercise(id)
+    if (stored.err || LocalCourseData.getAccessLoss(stored.val.course) === undefined) {
+      return false
+    }
+    firstCourse ??= stored.val.course
+    return true
+  })
+  if (firstCourse === undefined) {
+    return undefined
+  }
+  const title = LocalCourseData.getCourseTitle(firstCourse)
+  const sentence =
+    LocalCourseData.getAccessLoss(firstCourse) === "forbidden"
+      ? `You no longer have access to ${title}, so its exercises cannot be downloaded.`
+      : `${title} no longer exists on ${backendName(firstCourse.kind)}, so its exercises cannot be downloaded.`
+  return { exerciseIds: refused, error: new CourseAccessLostError(sentence) }
+}
+
+function withRefusal(
+  results: DownloadResults & Warned,
+  refusal: CourseAccessRefusal | undefined,
+  options: DownloadOptions,
+): DownloadResults & Warned {
+  if (!refusal) {
+    return results
+  }
+  return {
+    successful: results.successful,
+    failed: [...results.failed, ...refusal.exerciseIds],
+    failureCause: results.failureCause ?? refusal.error,
+    warnings: options.isUnrequested
+      ? results.warnings
+      : [...results.warnings, { headline: refusal.error.message, error: refusal.error }],
   }
 }
 

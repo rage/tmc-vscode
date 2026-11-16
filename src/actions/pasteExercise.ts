@@ -2,6 +2,8 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 
 import type { ExerciseIdentifier } from "../../shared/lib"
+import { LocalCourseData } from "../../shared/lib"
+import { CourseAccessLostError } from "../errors"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import { checkAiUse } from "./checkAiUse"
@@ -22,17 +24,33 @@ export interface PasteLink {
  * Nothing is reported here: the caller shows the failure, once, in the place the user
  * asked from. A paste that comes back without a link is an error rather than an empty
  * `Ok`, so no caller has to check for one. Errs with `AiUseRefusedError` while AI assistance
- * may be on, and with `WorkspaceUntrustedError` in Restricted Mode.
+ * may be on, with `WorkspaceUntrustedError` in Restricted Mode, and with `CourseAccessLostError`
+ * while the course's backend refuses the course.
  */
 export async function pasteExercise(
   actionContext: ReadyActionContext,
   exerciseId: ExerciseIdentifier,
 ): Promise<Result<PasteLink, Error>> {
-  const { keptCopies, langs, workspaceManager } = actionContext.startup
+  const { keptCopies, langs, userData, workspaceManager } = actionContext.startup
 
   const exercise = workspaceManager.getExercise(exerciseId)
   if (!exercise) {
     return Err(new Error("The exercise is not downloaded."))
+  }
+  const course = userData.getCourse(exercise.courseId)
+  switch (course.ok ? LocalCourseData.getAccessLoss(course.val) : undefined) {
+    case "forbidden":
+      return Err(
+        new CourseAccessLostError(
+          `You no longer have access to this course, so ${exercise.exerciseSlug} cannot be sent for help.`,
+        ),
+      )
+    case "notFound":
+      return Err(
+        new CourseAccessLostError(
+          `This course no longer exists, so ${exercise.exerciseSlug} cannot be sent for help.`,
+        ),
+      )
   }
   const trusted = checkWorkspaceTrust(actionContext)
   if (trusted.err) {

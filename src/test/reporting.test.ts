@@ -17,7 +17,13 @@ import { ExerciseStatus } from "../api/workspaceManager"
 import * as commands from "../commands"
 import type Resources from "../config/resources"
 import { UserData } from "../config/userdata"
-import { BottleneckError, ConnectionError, InsufficientScopeError } from "../errors"
+import {
+  BottleneckError,
+  ConnectionError,
+  CourseAccessLostError,
+  InsufficientScopeError,
+  NotFoundError,
+} from "../errors"
 import { registerCommands } from "../init/commands"
 import { registerTesting } from "../init/testing"
 import { nextPanelId } from "../panels/routes"
@@ -797,6 +803,27 @@ suite("reported once: the Courses view and course details", function () {
 
     expect(loud.shown).toEqual(["error: Failed to check courses.mooc.fi for exercise updates."])
     expect(silent.shown).toEqual([])
+  })
+
+  test("an update check stopped by a course its backend refuses names that course", async function () {
+    const { run, actionContext } = await harness({
+      langs: {
+        checkExerciseUpdates: async () => Err(new NotFoundError("404 Not Found")),
+      },
+      course: storedCourse({ accessLoss: { reason: "notFound", checkedAt: 0 } }),
+    })
+
+    await run("tmc.updateExercises", "loud")
+
+    const [[headline, error]] = vi.mocked(actionContext.dialog.reportError).mock.calls as [
+      [string, Error],
+    ]
+    expect(headline).toBe("Failed to check courses.mooc.fi for exercise updates.")
+    expect(error).toBeInstanceOf(CourseAccessLostError)
+    expect(error.message).toBe(
+      "Mooc Course is no longer available, so its exercises and those of your other courses" +
+        " there cannot be checked for updates.",
+    )
   })
 
   test("an update check that fails where the user has no courses is still an all-clear", async function () {

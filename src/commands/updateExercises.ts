@@ -1,5 +1,6 @@
 import { Ok } from "ts-results"
 
+import type { BackendKind } from "../../shared/lib"
 import {
   backendName,
   CourseIdentifier,
@@ -10,6 +11,7 @@ import { checkForExerciseUpdates, downloadExerciseUpdates } from "../actions"
 import { describeExercises, exerciseName } from "../actions/exerciseNames"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
+import { CourseAccessLostError, InsufficientScopeError, NotFoundError } from "../errors"
 import { recentUpdates } from "../ui/recentUpdates"
 import { shownCourseHome } from "../ui/shownCourseHome"
 import { updateablesRegistry } from "../ui/updateablesRegistry"
@@ -80,12 +82,19 @@ export async function updateExercises(
     for (const { backend, error } of failures.slice(1)) {
       Logger.error(`Failed to check ${backendName(backend)} for exercise updates.`, error)
     }
-    void dialog.reportError(`Failed to check ${sites} for exercise updates.`, firstFailure.error)
+    void dialog.reportError(
+      `Failed to check ${sites} for exercise updates.`,
+      explainedByLostCourse(actionContext, firstFailure) ?? firstFailure.error,
+    )
   }
 
   const updateable = outdated.filter((x) => {
     const course = userData.getCourse(x.courseId)
-    return course.ok && !LocalCourseData.isDisabled(course.val)
+    return (
+      course.ok &&
+      !LocalCourseData.isDisabled(course.val) &&
+      LocalCourseData.getAccessLoss(course.val) === undefined
+    )
   })
   if (updateable.length > 0 && settings.getAutomaticallyUpdateExercises()) {
     // The student did not pick these exercises to update, even when they asked for a refresh.
@@ -198,4 +207,30 @@ export async function downloadUpdates(
       showCourseHomeButton(first.courseId),
     )
   }
+}
+
+/**
+ * The failed update check `failure` as the lost course that causes it, if one does. tmc-langs
+ * checks every course with exercises on disk and stops at the first one its backend refuses, which
+ * it reports as an expired session or a bare 404.
+ */
+function explainedByLostCourse(
+  { startup }: ReadyActionContext,
+  failure: { backend: BackendKind; error: Error },
+): CourseAccessLostError | undefined {
+  if (
+    !(failure.error instanceof InsufficientScopeError || failure.error instanceof NotFoundError)
+  ) {
+    return undefined
+  }
+  const lost = startup.userData
+    .getCourses()
+    .find((course) => course.kind === failure.backend && LocalCourseData.getAccessLoss(course))
+  return (
+    lost &&
+    new CourseAccessLostError(
+      `${LocalCourseData.getCourseTitle(lost)} is no longer available, so its exercises and those` +
+        " of your other courses there cannot be checked for updates.",
+    )
+  )
 }
