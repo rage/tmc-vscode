@@ -1,5 +1,6 @@
-import { expect } from "@playwright/test"
 import type { FrameLocator, Locator, Page } from "@playwright/test"
+
+import { expectVisibleInWebview } from "./tmc"
 
 /**
  * The add-course screen in the main panel, driven by its accessible names
@@ -12,8 +13,8 @@ export class AddCoursePage {
   ) {}
 
   public async expectShown(): Promise<void> {
-    await expect(this.webview.getByRole("heading", { level: 1, name: "Add a Course" })).toBeVisible(
-      { timeout: 30_000 },
+    await expectVisibleInWebview(
+      this.webview.getByRole("heading", { level: 1, name: "Add a Course" }),
     )
   }
 

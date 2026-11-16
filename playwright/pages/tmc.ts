@@ -48,6 +48,16 @@ export async function clickUntilVisible(
     .toBe(true)
 }
 
+/**
+ * Waits for `target`, inside a webview, to be visible. VS Code replaces a webview's frame when it
+ * reloads the document, which ends a plain wait on the old frame at once.
+ */
+export async function expectVisibleInWebview(target: Locator, timeout = 30_000): Promise<void> {
+  await expect(async () => {
+    await expect(target).toBeVisible({ timeout: 5_000 })
+  }).toPass({ timeout })
+}
+
 export class TmcPage {
   public constructor(
     public readonly page: Page,

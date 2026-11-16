@@ -1,6 +1,8 @@
 import { expect } from "@playwright/test"
 import type { FrameLocator, Locator, Page } from "@playwright/test"
 
+import { expectVisibleInWebview } from "./tmc"
+
 /**
  * Course Details, the course home in the main panel, driven by its accessible names
  * (webview-ui/src/panels/CourseDetails.svelte).
@@ -19,7 +21,7 @@ export class CourseHomePage {
   }
 
   public async expectShown(courseTitle: string): Promise<void> {
-    await expect(this.heading(courseTitle)).toBeVisible({ timeout: 30_000 })
+    await expectVisibleInWebview(this.heading(courseTitle))
   }
 
   /** Brings Course Details back from behind another editor through its tab. */

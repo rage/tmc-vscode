@@ -1,8 +1,7 @@
-import { expect } from "@playwright/test"
 import type { Locator } from "@playwright/test"
 
 import { mockUserCode } from "../../backend/mockSession"
-import { clickUntilVisible, TmcPage } from "./tmc"
+import { clickUntilVisible, expectVisibleInWebview, TmcPage } from "./tmc"
 
 /**
  * The courses.mooc.fi device-flow login screen in the main panel
@@ -39,7 +38,7 @@ export class MoocLoginPage extends TmcPage {
   }
 
   public async expectWaiting(attempt = 1): Promise<void> {
-    await expect(this.code(attempt)).toBeVisible({ timeout: 30_000 })
+    await expectVisibleInWebview(this.code(attempt))
   }
 
   /** Any modal dialog; `window.dialogStyle: custom` renders one inside the page. */
