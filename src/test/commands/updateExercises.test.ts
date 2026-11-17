@@ -1,4 +1,4 @@
-import { Ok } from "ts-results"
+import { Err, Ok } from "ts-results"
 import { onTestFinished, vi } from "vitest"
 import * as vscode from "vscode"
 
@@ -9,6 +9,7 @@ import type { ReadyActionContext } from "../../actions/types"
 import { downloadUpdates, updateExercises } from "../../commands/updateExercises"
 import type Settings from "../../config/settings"
 import type { UserData } from "../../config/userdata"
+import { BottleneckError } from "../../errors"
 import { recentUpdates } from "../../ui/recentUpdates"
 import { shownCourseHome } from "../../ui/shownCourseHome"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
@@ -344,6 +345,43 @@ suite("updateExercises command", function () {
 
     expect(recentUpdates.get(idOfTmcCourse(1))).toEqual(["loops"])
     expect(dialog.statusMessage).not.toHaveBeenCalled()
+  })
+
+  test("leaves a picked update's failed exercise to the failed-update item, not a notification", async function () {
+    const failure = new Error("archive 500")
+    downloadExerciseUpdates.mockResolvedValue(
+      Ok({
+        updated: [],
+        warnings: [
+          {
+            headline: "Failed to update the exercise loops.",
+            error: failure,
+            failedExercises: [idOfTmcExercise(10)],
+          },
+          { headline: "Failed to refresh local exercises.", error: failure },
+        ],
+      }),
+    )
+    const [actionContext, dialog] = contextWith(false)
+    const picked = [{ courseId: idOfTmcCourse(1), exerciseId: idOfTmcExercise(10) }]
+
+    await downloadUpdates(actionContext, picked)
+
+    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to refresh local exercises.",
+      failure,
+    )
+  })
+
+  test("an automatic update another one holds back stays quiet", async function () {
+    downloadExerciseUpdates.mockResolvedValue(Err(new BottleneckError("busy")))
+    const [actionContext, dialog] = contextWith(false)
+    const picked = [{ courseId: idOfTmcCourse(1), exerciseId: idOfTmcExercise(10) }]
+
+    await downloadUpdates(actionContext, picked, { isUnrequested: true })
+
+    expect(dialog.notification).not.toHaveBeenCalled()
+    expect(dialog.reportError).not.toHaveBeenCalled()
   })
 
   test("reports a failed check once when loud, and only logs it when silent", async function () {

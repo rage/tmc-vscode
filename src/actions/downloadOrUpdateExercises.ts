@@ -209,7 +209,11 @@ async function download(
           progress.report({ fraction, message: downloaded.message })
           job.report(fraction)
           downloadFailures.record([], [downloaded.id])
-          claim.release(downloaded.id)
+          // An update holds its exercises to the end, lest a check that began before it ends
+          // update them again under a second progress notification.
+          if (!options.isUpdate) {
+            claim.release(downloaded.id)
+          }
         }
 
         // One backend after the other, so a cancel stops the second before it starts.
