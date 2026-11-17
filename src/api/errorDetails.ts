@@ -3,7 +3,7 @@ import { randomUUID } from "crypto"
 import type { ErrorDetails } from "../../shared/lib"
 import { BaseError } from "../../shared/lib"
 import { presentationFor } from "../errors"
-import { redactSecrets } from "../utilities/logger"
+import { redactPersonalInfo, redactSecrets } from "../utilities/logger"
 
 const KEPT = 20
 
@@ -25,7 +25,7 @@ class ErrorDetailsRegistry {
   public record(summary: string, error: Error): string {
     const id = randomUUID()
     this._byId.set(id, {
-      summary,
+      summary: redactPersonalInfo(summary),
       actions: presentationFor(error).actions,
       causeChain: describeCauseChain(error),
       occurredAt: new Date().toISOString(),
@@ -62,7 +62,7 @@ function describeCauseChain(error: Error): string {
     links.push(`${current.name}: ${current.message}${details}`)
     current = current.cause
   }
-  return redactSecrets(links.join("\n\nCaused by: "))
+  return redactPersonalInfo(redactSecrets(links.join("\n\nCaused by: ")))
 }
 
 export const errorDetails = new ErrorDetailsRegistry()

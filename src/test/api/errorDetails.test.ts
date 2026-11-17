@@ -1,3 +1,6 @@
+import * as os from "os"
+import * as path from "path"
+
 import { BaseError } from "../../../shared/lib"
 import { errorDetails } from "../../api/errorDetails"
 import { InsufficientScopeError } from "../../errors"
@@ -27,6 +30,18 @@ suite("errorDetails", function () {
     )
 
     expect(errorDetails.get(id)?.causeChain).not.toContain("abcdefghij")
+  })
+
+  test("leaves the home directory out of what it shows", function () {
+    const home = os.homedir()
+    const id = errorDetails.record(
+      `Failed to open ${path.join(home, "a")}.`,
+      new BaseError(`EACCES ${path.join(home, "tmc", "cli")}`),
+    )
+
+    const details = errorDetails.get(id)
+    expect(details?.summary).not.toContain(home)
+    expect(details?.causeChain).not.toContain(home)
   })
 
   test("forgets all but the latest twenty, the oldest first", function () {

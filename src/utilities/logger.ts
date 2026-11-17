@@ -1,5 +1,7 @@
+import * as os from "os"
 import { env } from "process"
 
+import * as _ from "lodash"
 import type { OutputChannel } from "vscode"
 import { Uri, window } from "vscode"
 
@@ -95,6 +97,46 @@ export function redactSecrets(text: string): string {
     .replaceAll(USER_CODE, "<redacted>")
 }
 
+/**
+ * `text` with the home directory written as `~` (`%USERPROFILE%` on Windows) and the OS username
+ * replaced, for what a student may screenshot or paste into a bug report.
+ */
+export function redactPersonalInfo(
+  text: string,
+  home = os.homedir(),
+  username = currentUsername(),
+  isWindows = process.platform === "win32",
+): string {
+  let redacted = text
+  if (home.length > 1) {
+    const separators = isWindows ? ["\\", "/", "\\\\"] : ["/"]
+    const spellings = _.uniq(
+      separators.map((separator) => home.split(/[\\/]/).join(separator)),
+    ).map((spelling) => _.escapeRegExp(spelling))
+    // Not a longer name that starts with the home's, such as /home/al for /home/alice.
+    const homePattern = new RegExp(`(?:${spellings.join("|")})(?![\\w.-])`, isWindows ? "gi" : "g")
+    redacted = redacted.replace(homePattern, isWindows ? "%USERPROFILE%" : "~")
+  }
+  // A name this short would match inside ordinary words.
+  if (username && username.length >= 3) {
+    const userPattern = new RegExp(
+      `(?<![\\w.-])${_.escapeRegExp(username)}(?![\\w-])`,
+      isWindows ? "gi" : "g",
+    )
+    redacted = redacted.replace(userPattern, "<user>")
+  }
+  return redacted
+}
+
+function currentUsername(): string | undefined {
+  try {
+    return os.userInfo().username
+  } catch {
+    // A directory-service account may have no passwd entry.
+    return env["USER"] ?? env["USERNAME"]
+  }
+}
+
 export class Logger {
   public static output: OutputChannel | undefined
   public static testmode = !!env["TMC_VSCODE_TESTMODE"]
@@ -163,11 +205,11 @@ export class Logger {
 
   /**
    * The latest info, warning and error lines, oldest first, whatever the configured level: what
-   * an error's Show Details screen shows of the log. Kept in memory only, with credentials
-   * redacted.
+   * an error's Show Details screen shows of the log. Kept in memory only, with credentials, the
+   * home directory and the OS username redacted.
    */
   public static tail(): string {
-    return this._tail.join("\n")
+    return redactPersonalInfo(this._tail.join("\n"))
   }
 
   /** Closes the output channel; `show()` or a non-`none` level creates a fresh one. */
