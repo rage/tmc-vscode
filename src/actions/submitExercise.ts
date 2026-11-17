@@ -46,6 +46,8 @@ import {
   withProgressStep,
 } from "../panels/submissionView"
 import { toWebviewError } from "../panels/webviewError"
+import type { JobOptions, JobProgress, JobScreen } from "../ui/backgroundJobs"
+import { backgroundJobs } from "../ui/backgroundJobs"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { nextExerciseOf } from "../ui/exerciseStanding"
 import { pointsText } from "../ui/points"
@@ -131,8 +133,14 @@ const submissionFinished = new vscode.EventEmitter<CourseIdentifier>()
  */
 export const onDidFinishSubmission = submissionFinished.event
 
-/** Sends one exercise to its backend and waits for the grading, reporting progress to its panel. */
-type ExerciseSubmitter = (submission: Submission) => Promise<Result<SubmissionOutcome, Error>>
+/**
+ * Sends one exercise to its backend and waits for the grading, reporting progress to its panel,
+ * and to `job` once the backend has the submission.
+ */
+type ExerciseSubmitter = (
+  submission: Submission,
+  job: JobProgress,
+) => Promise<Result<SubmissionOutcome, Error>>
 
 /** A TMC submission's feedback questions, not yet answered. */
 interface PendingFeedback {
@@ -169,13 +177,16 @@ function forgetEarlierSubmissions(panel: ExerciseSubmissionPanel): void {
 }
 
 function tmcSubmitter(langs: Langs, exerciseId: number): ExerciseSubmitter {
-  return async (submission) => {
+  return async (submission, job) => {
     const reporter = new SubmissionProgressReporter(submission.panel, "uploading")
     const submitted = await langs.submitTmcExerciseAndWaitForResults(
       exerciseId,
       submission.exercise.uri.fsPath,
       (fraction, message) => reporter.report(fraction, message),
-      (url) => reporter.received(url),
+      (url) => {
+        reporter.received(url)
+        job.relabel(gradingJobLabel(submission.exercise))
+      },
     )
     if (submitted.err) {
       return submitted
@@ -202,7 +213,7 @@ function tmcSubmitter(langs: Langs, exerciseId: number): ExerciseSubmitter {
  * between is what lets the student keep waiting after the CLI's poll gives up.
  */
 function moocSubmitter(langs: Langs, exerciseId: string): ExerciseSubmitter {
-  return async (submission) => {
+  return async (submission, job) => {
     const reporter = new SubmissionProgressReporter(submission.panel, "uploading")
     const submitted = await langs.submitMoocExercise(exerciseId, submission.exercise.uri.fsPath)
     if (submitted.err) {
@@ -210,6 +221,7 @@ function moocSubmitter(langs: Langs, exerciseId: string): ExerciseSubmitter {
     }
     const exercisePageUrl = submitted.val.exercise_page_url ?? submission.materialPageUrl
     reporter.received(exercisePageUrl)
+    job.relabel(gradingJobLabel(submission.exercise))
     const grading = {
       ...submission,
       taskSubmissionId: submitted.val.task_submission_id,
@@ -217,6 +229,15 @@ function moocSubmitter(langs: Langs, exerciseId: string): ExerciseSubmitter {
     }
     return Ok(await waitForMoocGrading(langs, grading, reporter))
   }
+}
+
+function gradingJobLabel(exercise: WorkspaceExercise): string {
+  return `Waiting for grading of ${exercise.exerciseSlug}`
+}
+
+/** The results screen of `exercise`, as the screen of a job that submits it. */
+function resultsScreen(exercise: WorkspaceExercise): JobScreen {
+  return { kind: "results", exerciseId: exercise.id, exerciseUri: exercise.uri }
 }
 
 async function waitForMoocGrading(
@@ -453,47 +474,54 @@ export async function submitExercise(
 
   // Held only until the result is posted: the panel offers Paste from that point on, and
   // the refresh that follows doesn't need the same protection.
-  return exerciseOperations.run(exerciseId, "submitting", async () => {
-    const saved = await saveExerciseDocuments(exercise)
-    if (saved.err) {
-      return saved
-    }
-    const fingerprint = await fingerprintStudentFiles(actionContext, exercise)
-    const submission: Submission = {
-      panel: exerciseSubmissionPanel(exercise, { course, exercise: courseExercise }),
-      exercise,
-      exerciseId,
-      courseId,
-      availablePoints: unwrap(courseExercise).availablePoints,
-      materialPageUrl: courseExercise.kind === "mooc" ? courseExercise.data.pageUrl : undefined,
-    }
-    forgetEarlierSubmissions(submission.panel)
-    submissionViews.open(submission.panel)
-
-    const outcome = await submit(submission)
-    if (outcome.ok) {
-      await actionContext.startup.keptCopies.record(exerciseId, "submission", fingerprint)
-    }
-    const enrollment = await recordMoocEnrollment(
-      actionContext,
-      courseId,
-      outcome.err ? outcome.val : undefined,
-    )
-    if (enrollment.err) {
-      Logger.warn("Failed to record the enrollment on the course.", enrollment.val)
-    }
-    if (outcome.err) {
-      Logger.error("Exercise submission failed", outcome.val)
-      const error = toWebviewError(outcome.val)
-      showSubmissionView(submission.panel, submitFailedView(error))
-      if (isSubmitRefusal(outcome.val)) {
-        // The stored data did not foresee the refusal, so it is out of date.
-        submissionFinished.fire(courseId)
+  const job: JobOptions = {
+    label: `Submitting ${exercise.exerciseSlug}`,
+    screen: resultsScreen(exercise),
+    isLong: true,
+  }
+  return exerciseOperations.run(exerciseId, "submitting", () =>
+    backgroundJobs.run(job, async (progress) => {
+      const saved = await saveExerciseDocuments(exercise)
+      if (saved.err) {
+        return saved
       }
-      return Ok({ warnings: [] })
-    }
-    return Ok(await showOutcome(actionContext, submission, outcome.val))
-  })
+      const fingerprint = await fingerprintStudentFiles(actionContext, exercise)
+      const submission: Submission = {
+        panel: exerciseSubmissionPanel(exercise, { course, exercise: courseExercise }),
+        exercise,
+        exerciseId,
+        courseId,
+        availablePoints: unwrap(courseExercise).availablePoints,
+        materialPageUrl: courseExercise.kind === "mooc" ? courseExercise.data.pageUrl : undefined,
+      }
+      forgetEarlierSubmissions(submission.panel)
+      submissionViews.open(submission.panel)
+
+      const outcome = await submit(submission, progress)
+      if (outcome.ok) {
+        await actionContext.startup.keptCopies.record(exerciseId, "submission", fingerprint)
+      }
+      const enrollment = await recordMoocEnrollment(
+        actionContext,
+        courseId,
+        outcome.err ? outcome.val : undefined,
+      )
+      if (enrollment.err) {
+        Logger.warn("Failed to record the enrollment on the course.", enrollment.val)
+      }
+      if (outcome.err) {
+        Logger.error("Exercise submission failed", outcome.val)
+        const error = toWebviewError(outcome.val)
+        showSubmissionView(submission.panel, submitFailedView(error))
+        if (isSubmitRefusal(outcome.val)) {
+          // The stored data did not foresee the refusal, so it is out of date.
+          submissionFinished.fire(courseId)
+        }
+        return Ok({ warnings: [] })
+      }
+      return Ok(await showOutcome(actionContext, submission, outcome.val))
+    }),
+  )
 }
 
 /** The error a submission refused for `refusal` is, named after `exercise`. */
@@ -547,12 +575,19 @@ export async function keepWaitingForGrading(
   if (allowed.err) {
     return allowed
   }
-  return exerciseOperations.run(grading.exerciseId, "submitting", async () => {
-    unfinishedGradings.delete(panelId)
-    const reporter = new SubmissionProgressReporter(grading.panel, "grading")
-    const outcome = await waitForMoocGrading(actionContext.startup.langs, grading, reporter)
-    return Ok(await showOutcome(actionContext, grading, outcome))
-  })
+  const job: JobOptions = {
+    label: gradingJobLabel(grading.exercise),
+    screen: resultsScreen(grading.exercise),
+    isLong: true,
+  }
+  return exerciseOperations.run(grading.exerciseId, "submitting", () =>
+    backgroundJobs.run(job, async () => {
+      unfinishedGradings.delete(panelId)
+      const reporter = new SubmissionProgressReporter(grading.panel, "grading")
+      const outcome = await waitForMoocGrading(actionContext.startup.langs, grading, reporter)
+      return Ok(await showOutcome(actionContext, grading, outcome))
+    }),
+  )
 }
 
 /**

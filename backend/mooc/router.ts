@@ -166,6 +166,8 @@ interface MoocMockState {
   failNextByOperation: Map<string, number>
   /** One-shot: the next exercise archive download fails, this late. */
   failNextArchive: { delayMs: number } | undefined
+  /** One-shot: the next exercise archive download succeeds, this many ms late. */
+  delayNextArchiveMs: number | undefined
   /** Exercises republished with a new template, by id, with each task's checksum before it. */
   checksumsBeforeUpdate: Map<string, string[]>
   // The integration mock runs in a separate process from the test, so the two
@@ -236,6 +238,7 @@ const createMoocMockState = (baseUrl: string): MoocMockState => ({
   expireNextUpload: false,
   failNextByOperation: new Map(),
   failNextArchive: undefined,
+  delayNextArchiveMs: undefined,
   checksumsBeforeUpdate: new Map(),
   lastAuthorization: undefined,
   authenticatedRequestCount: 0,
@@ -299,6 +302,8 @@ export interface MoocMockControls {
    * `delayMs`: the archive route is outside the client API, so {@link failNext} cannot reach it.
    */
   failNextArchive: (delayMs?: number) => void
+  /** Arms a one-shot delay of the next exercise archive download, which then succeeds. */
+  delayNextArchive: (delayMs: number) => void
   /**
    * Republishes an exercise with a new template, as a teacher can: its checksum changes, so a
    * client that downloaded it finds an update. Returns false for an unknown exercise.
@@ -471,6 +476,7 @@ const createMoocMockControls = (
     state.expireNextUpload = false
     state.failNextByOperation.clear()
     state.failNextArchive = undefined
+    state.delayNextArchiveMs = undefined
     for (const [exerciseId, checksums] of state.checksumsBeforeUpdate) {
       state.fixtures.exerciseById.get(exerciseId)?.slide.tasks.forEach((task, index) => {
         task.public_spec.checksum = checksums[index] ?? task.public_spec.checksum
@@ -514,6 +520,9 @@ const createMoocMockControls = (
   },
   failNextArchive: (delayMs = 0) => {
     state.failNextArchive = { delayMs }
+  },
+  delayNextArchive: (delayMs) => {
+    state.delayNextArchiveMs = delayMs
   },
   publishExerciseUpdate: (exerciseId) => {
     const exercise = state.fixtures.exerciseById.get(exerciseId)
@@ -1916,12 +1925,16 @@ export const registerMoocRoutes = (
     if (!exercise || !fs.existsSync(exercise.sourceDir)) {
       return next()
     }
-    buildTarZst(exercise.sourceDir)
-      .then((bytes) => {
-        res.setHeader("Content-Type", "application/octet-stream")
-        res.send(bytes)
-      })
-      .catch(next)
+    const delayMs = state.delayNextArchiveMs ?? 0
+    state.delayNextArchiveMs = undefined
+    setTimeout(() => {
+      buildTarZst(exercise.sourceDir)
+        .then((bytes) => {
+          res.setHeader("Content-Type", "application/octet-stream")
+          res.send(bytes)
+        })
+        .catch(next)
+    }, delayMs)
   })
 
   // Spec-exempt claim route: resolves an answer file's `url` to the object, as the
@@ -2191,6 +2204,16 @@ export const registerMoocRoutes = (
       return
     }
     controls.failNextArchive(delayMs)
+    res.status(204).end()
+  })
+
+  app.post("/mooc-mock/delay-next-archive", json, (req, res) => {
+    const { delayMs } = (req.body ?? {}) as { delayMs?: unknown }
+    if (typeof delayMs !== "number") {
+      res.status(400).json({ error: "delayMs must be a number" })
+      return
+    }
+    controls.delayNextArchive(delayMs)
     res.status(204).end()
   })
 

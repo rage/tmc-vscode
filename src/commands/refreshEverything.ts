@@ -1,17 +1,19 @@
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 
-import { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../../shared/lib"
+import { CourseIdentifier, LocalCourseData } from "../../shared/lib"
 import type { AiPolicyChange, CourseUpdateOptions } from "../actions"
 import { checkForCourseUpdates } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import type { OperationWarning } from "../api/withOperation"
 import { reportFailureIn, reportWarnings, withOperation } from "../api/withOperation"
 import { BottleneckError } from "../errors"
+import { backgroundJobs } from "../ui/backgroundJobs"
 import { recentPolicyChanges } from "../ui/recentPolicyChanges"
 import { shownCourseHome } from "../ui/shownCourseHome"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
-import { countOf, Logger } from "../utilities"
+import { Logger } from "../utilities"
+import { offerNewExercises } from "./offerNewExercises"
 import { showCourseHomeButton } from "./showCourseHome"
 import { updateExercises } from "./updateExercises"
 
@@ -44,7 +46,7 @@ type RefreshOptions = {
  * @param isQueuedWhenBusy While another refresh runs, runs this one silently once that one
  * ends, and returns `Ok` at once. Calls queued meanwhile run together, as one refresh.
  * @param offersNewExercises `false` keeps the new exercises found for a later refresh to
- * offer, e.g. while a submission's result is what the student is reading.
+ * act on, e.g. while a submission's result is what the student is reading.
  * @param isPromptless Offers neither new exercises nor exercise updates, for a window that
  * another one has just opened after offering them itself.
  */
@@ -132,11 +134,21 @@ async function runRefresh(
   options: RefreshOptions,
 ): Promise<Result<void, Error>> {
   const { silent, courseId, onProgress, offersNewExercises, isPromptless } = options
-  const refreshed = await checkForCourseUpdates(actionContext, {
-    courseId,
-    onProgress,
-    skipsRecentlyLostCourses: options.skipsRecentlyLostCourses,
-  })
+  const course = courseId && actionContext.startup.userData.getCourse(courseId)
+  const refreshed = await backgroundJobs.run(
+    course?.ok
+      ? {
+          label: `Refreshing ${LocalCourseData.getCourseTitle(course.val)}`,
+          screen: { kind: "courseHome", courseId: LocalCourseData.getCourseId(course.val) },
+        }
+      : { label: "Refreshing courses", screen: { kind: "coursesView" } },
+    () =>
+      checkForCourseUpdates(actionContext, {
+        courseId,
+        onProgress,
+        skipsRecentlyLostCourses: options.skipsRecentlyLostCourses,
+      }),
+  )
   if (refreshed.ok) {
     reportRefreshWarnings(actionContext, refreshed.val.warnings)
     announceAiPolicyChanges(actionContext, refreshed.val.aiPolicyChanges)
@@ -189,63 +201,4 @@ function announceAiPolicyChanges(
       )
     }
   }
-}
-
-/**
- * Offers, in one notification, to show the new exercises of every course whose reminder is
- * due; a course whose home is on screen gets none, as its banner says it.
- */
-function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCourseData[]): void {
-  const { dialog } = actionContext
-  const { userData } = actionContext.startup
-
-  // `notifyAfter` throttles this toast only: gating the refresh on it too would
-  // freeze course metadata and point totals for the whole delay, including the
-  // refresh each submit asks for.
-  const now = Date.now()
-  const offered = courses.filter(
-    (course) =>
-      hasUnofferedNewExercises(course) &&
-      !LocalCourseData.isDisabled(course) &&
-      LocalCourseData.getAccessLoss(course) === undefined &&
-      course.data.notifyAfter <= now,
-  )
-  for (const course of offered) {
-    void userData.setNewExercisesOffered(LocalCourseData.getCourseId(course)).then((recorded) => {
-      if (recorded.err) {
-        Logger.error("Failed to record the offered new exercises", recorded.val)
-      }
-    })
-  }
-  const unseen = offered.filter(
-    (course) => !shownCourseHome.isShowing(LocalCourseData.getCourseId(course)),
-  )
-  const [first] = unseen
-  if (first) {
-    void dialog.notification(
-      newExercisesMessage(unseen),
-      showCourseHomeButton(LocalCourseData.getCourseId(first)),
-    )
-  }
-}
-
-/** Whether the course has new exercises no notification has offered yet. */
-function hasUnofferedNewExercises(course: LocalCourseData): boolean {
-  const offered = new Set((course.data.offeredNewExercises ?? []).map(String))
-  return LocalCourseData.getNewExercises(course).some(
-    (id) => !offered.has(ExerciseIdentifier.toString(id)),
-  )
-}
-
-function newExercisesMessage(courses: LocalCourseData[]): string {
-  const counted = courses.map((course) => ({
-    title: LocalCourseData.getCourseTitle(course),
-    count: LocalCourseData.getNewExercises(course).length,
-  }))
-  const [only] = counted
-  if (only && counted.length === 1) {
-    return `${only.title} has ${countOf(only.count, "new exercise")}.`
-  }
-  const list = counted.map(({ title, count }) => `${title} (${count})`).join(", ")
-  return `New exercises in ${counted.length} courses: ${list}.`
 }
