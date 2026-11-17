@@ -249,10 +249,12 @@ suite("ExerciseStatusBarItem", function () {
   })
 
   test.each([
-    [{ maxTries: 3, triesLeft: 1 }, "1 try left"],
-    [{ deadline: "2000-01-01T00:00:00Z" }, "deadline passed"],
-    [{ outOfTries: true }, "no tries left"],
-  ])("shows where the exercise stands in its text: %o", function (data, standing) {
+    [{ maxTries: 3, triesLeft: 1 }, "1 try left", "1 try left"],
+    [{ deadline: "2000-01-01T00:00:00Z" }, "$(watch) deadline passed", "deadline passed"],
+    [{ outOfTries: true }, "$(circle-slash) no tries left", "no tries left"],
+    [{ exerciseLocked: true }, "$(lock) locked by the teacher", "locked by the teacher"],
+    [{ pendingReview: "awaits_teacher" }, "$(eye) waiting for review", "waiting for review"],
+  ] as const)("shows where the exercise stands in its text: %o", function (data, shown, standing) {
     const h = harness()
     h.stored.exercise = makeMoocKind(
       moocCourseExercise({
@@ -265,8 +267,9 @@ suite("ExerciseStatusBarItem", function () {
     )
     track(new ExerciseStatusBarItem(h.sources))
 
-    expect(itemOf().text).toBe(`$(beaker) ${exerciseHelloWorld.exerciseSlug} · 1/2 · ${standing}`)
+    expect(itemOf().text).toBe(`$(beaker) ${exerciseHelloWorld.exerciseSlug} · 1/2 · ${shown}`)
     expect(itemOf().accessibilityInformation?.label).toContain(standing)
+    expect(itemOf().accessibilityInformation?.label).not.toContain("$(")
   })
 
   test("stops listening when disposed", function () {
@@ -410,6 +413,7 @@ suite("showExerciseActions", function () {
         triesLeft: 0,
         maxTries: 2,
         outOfTries: true,
+        hasModelSolution: true,
         pageUrl: "https://courses.example/page",
       }),
     )

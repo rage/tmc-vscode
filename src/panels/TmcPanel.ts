@@ -18,6 +18,7 @@ import {
 } from "../../shared/lib"
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
+import type { StoredExercise } from "../config/userdata"
 import { buildCourseHomeView } from "../ui/courseHome"
 import { exerciseStandingView } from "../ui/exerciseStanding"
 import { failedUpdates } from "../ui/failedUpdates"
@@ -700,12 +701,21 @@ function submissionViewMessage(
         ? pendingReviewSentence(exercise.data.pendingReview, exercise.data.awardedPoints)
         : undefined,
     solutionUrl: exercise && stored.ok ? modelSolutionUrl(stored.val) : undefined,
+    materialUrl: exercise && stored.ok ? materialUrlOf(stored.val) : undefined,
     isLoggedOut: !actionContext.authState.loggedIn,
     arePointsHeld:
       exercise?.kind === "mooc" &&
       arePointsHeldForReview(exercise.data.pendingReview, exercise.data.awardedPoints),
   })
   return { type: "submissionView", target: { id: panel.id, type: panel.type }, view: shown }
+}
+
+/** The exercise's course material page, else its course's. */
+function materialUrlOf({ exercise, course }: StoredExercise): string | undefined {
+  if (exercise.kind === "mooc") {
+    return exercise.data.pageUrl
+  }
+  return course.kind === "tmc" ? (course.data.materialUrl ?? undefined) : undefined
 }
 
 /** Offers to show the outcome of a submission the side panel is not showing. */

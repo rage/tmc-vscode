@@ -525,7 +525,7 @@ suite("CoursesTree", function () {
         throw new Error("no exercise")
       }
 
-      expect(icon(item)).toEqual(["circle-slash", "testing.iconSkipped"])
+      expect(icon(item)).toEqual(["circle-slash", "disabledForeground"])
       expect(item.contextValue).toBe("exercise.missing")
       expect(item.description).toBe("not downloaded · 2/3 points · no tries left")
       expect(item.accessibilityInformation?.label).toBe(
@@ -570,7 +570,27 @@ suite("CoursesTree", function () {
       expect(tooltipOf(recursion!)).toContain(
         "The teacher has locked recursion, so it can no longer be submitted.",
       )
+      expect(icon(loops!)).toEqual(["eye", "disabledForeground"])
+      expect(icon(recursion!)).toEqual(["eye", "disabledForeground"])
     })
+
+    test.each([
+      [{ exerciseLocked: true }, {}, "lock"],
+      [{ chapter: { name: "Two", number: 2, lockingStatus: "CompletedAndLocked" } }, {}, "lock"],
+      [
+        { chapter: { name: "Two", number: 2, lockingStatus: "NotUnlockedYet" } },
+        {},
+        "list-ordered",
+      ],
+      [{}, { notEnrolled: true }, "person"],
+    ] as const)(
+      "a mooc exercise refused for %o shows the reason's icon",
+      function (data, course, name) {
+        const [item] = show(moocCourse({ ...course, exercises: [moocCourseExercise(data)] }))
+
+        expect(icon(exercisesOf(item!)[0]!)).toEqual([name, "disabledForeground"])
+      },
+    )
 
     test("a mooc exercise under review keeps showing points already given", function () {
       const [course] = show(
@@ -616,6 +636,7 @@ suite("CoursesTree", function () {
       expect(tooltipOf(recursion!)).toContain(
         'Complete the chapters before the chapter "Recursion" to submit recursion.',
       )
+      expect(icon(recursion!)).toEqual(["list-ordered", "disabledForeground"])
       const part = tree
         .getChildren(course)
         .find(
@@ -652,7 +673,7 @@ suite("CoursesTree", function () {
     test("past its hard deadline and not downloaded is expired", function () {
       const item = onlyExercise({ deadline: "2026-05-01T00:00:00Z" })
 
-      expect(icon(item)).toEqual(["lock", "disabledForeground"])
+      expect(icon(item)).toEqual(["watch", "disabledForeground"])
       expect(item.contextValue).toBe("exercise.expired")
     })
 

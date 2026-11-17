@@ -425,7 +425,7 @@ export class ExerciseTestController implements vscode.Disposable {
 
 /**
  * Shows a local all-pass in the exercise's results panel, opening it without taking the focus,
- * where Submit is then the main action. A panel still busy with a submission keeps showing that.
+ * which asks whether to submit it. A panel still busy with a submission keeps showing that.
  *
  * @returns Whether the pass was handled here; `false` when the exercise has no results panel.
  */
@@ -444,7 +444,11 @@ function showLocalPassInResults(
   if (panel.err) {
     return false
   }
-  submissionViews.update({ panel: panel.val, view: testedLocallyView(), shouldReopen: false })
+  submissionViews.update({
+    panel: panel.val,
+    view: testedLocallyView(Date.now()),
+    shouldReopen: false,
+  })
   submissionViews.show(panel.val)
   return true
 }
