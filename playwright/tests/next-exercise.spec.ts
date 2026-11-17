@@ -23,7 +23,7 @@ vsCodeTest(
       const last = coursesView.row("02_failing_exercise")
       await coursesView.runInlineAction(last, "Download")
       await expect(last).toHaveAccessibleName(/, (downloaded|in workspace),/)
-      await coursesView.runInlineAction(coursesView.row("Python Course"), "Open Course Workspace")
+      await coursesView.openCourseWorkspace("Python Course")
       await new ExplorerPage(page).openPath(["src", "failing_exercise.py"])
       await expect(code).toBeVisible({ timeout: 30_000 })
     })

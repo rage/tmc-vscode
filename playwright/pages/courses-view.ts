@@ -49,6 +49,13 @@ export class CoursesViewPage extends TmcPage {
     await expect(this.page.locator(".context-view:visible")).toHaveCount(0)
   }
 
+  /** Opens the workspace of the course labelled `course`, which reloads the window. */
+  public async openCourseWorkspace(course: string): Promise<void> {
+    await this.reloadingWindow(() =>
+      this.runInlineAction(this.row(course), "Open Course Workspace"),
+    )
+  }
+
   /** Runs `command` from `row`'s context menu, on the rows selected with it. */
   public async runContextMenuCommand(row: Locator, command: string): Promise<void> {
     const item = this.page

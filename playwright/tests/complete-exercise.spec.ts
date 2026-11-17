@@ -78,7 +78,7 @@ for (const exercise of exercises) {
     })
 
     await vsCodeTest.step("open workspace", async () => {
-      await coursesView.runInlineAction(coursesView.row(exercise.course), "Open Course Workspace")
+      await coursesView.openCourseWorkspace(exercise.course)
     })
 
     await vsCodeTest.step("the course workspace turns AI assistance off", async () => {
@@ -219,7 +219,7 @@ vsCodeTest(
       await coursesView.addNewCourse(course)
       await coursesView.expand(coursesView.row(course))
       await coursesView.runInlineAction(coursesView.row(exercise), "Download")
-      await coursesView.runInlineAction(coursesView.row(course), "Open Course Workspace")
+      await coursesView.openCourseWorkspace(course)
     })
 
     await vsCodeTest.step("delete its source file and submit", async () => {

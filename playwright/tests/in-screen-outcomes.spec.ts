@@ -116,7 +116,7 @@ vsCodeTest(
       const row = coursesView.row("passing_exercise")
       await coursesView.runContextMenuCommand(row, "Open")
       await expect(row).toHaveAccessibleName(/, (downloaded|in workspace),/)
-      await coursesView.runInlineAction(coursesView.row(COURSE_TITLE), "Open Course Workspace")
+      await coursesView.openCourseWorkspace(COURSE_TITLE)
       await new ExplorerPage(page).openPath(["src", "passing_exercise.py"])
       await expect(code).toBeVisible({ timeout: 30_000 })
       await coursesView.runPaletteCommand("TestMyCode: Log Out")

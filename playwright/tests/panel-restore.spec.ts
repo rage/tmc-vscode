@@ -32,7 +32,9 @@ vsCodeTest(
     })
 
     await vsCodeTest.step("reload the window", async () => {
-      await coursesView.runPaletteCommand("Developer: Reload Window")
+      await coursesView.reloadingWindow(() =>
+        coursesView.runPaletteCommand("Developer: Reload Window"),
+      )
       await expect(courseTab).toBeVisible({ timeout: 30_000 })
       await courseTab.click()
       await expect(courseHeading).toBeVisible({ timeout: 30_000 })
@@ -56,7 +58,7 @@ vsCodeTest(
       await coursesView.expand(coursesView.row(courseTitle))
       await exercise.click()
       await expect(exercise).toHaveAccessibleName(/, (downloaded|in workspace),/)
-      await coursesView.runInlineAction(coursesView.row(courseTitle), "Open Course Workspace")
+      await coursesView.openCourseWorkspace(courseTitle)
       await expect(page).toHaveTitle(/\(mooc\)/, { timeout: 30_000 })
       await coursesView.goto()
       await expect(coursesView.row(courseTitle)).toBeVisible({ timeout: 30_000 })

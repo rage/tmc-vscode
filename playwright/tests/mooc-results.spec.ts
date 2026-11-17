@@ -86,7 +86,7 @@ vsCodeTest(
       await coursesView.expand(coursesView.row(courseTitle))
       await exercise.click()
       await expect(exercise).toHaveAccessibleName(/, (downloaded|in workspace),.*1 try left/)
-      await coursesView.runInlineAction(coursesView.row(courseTitle), "Open Course Workspace")
+      await coursesView.openCourseWorkspace(courseTitle)
       await new ExplorerPage(page).openPath(["src", "passing_exercise.py"])
       await expect(page.getByText("def hello()")).toBeVisible()
     })
