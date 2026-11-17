@@ -23,7 +23,7 @@ suite("LanguageExtensionOffer", function () {
       { notification } as unknown as Pick<Dialog, "notification">,
       {
         getExerciseContaining: (uri: vscode.Uri) =>
-          uri.fsPath.startsWith("/tmc/projects/") ? { uri } : undefined,
+          uri.path.startsWith("/tmc/projects/") ? { uri } : undefined,
       } as unknown as Pick<WorkspaceManager, "getExerciseContaining">,
       globalState,
       openDocuments,
