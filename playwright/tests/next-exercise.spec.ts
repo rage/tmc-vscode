@@ -33,6 +33,10 @@ vsCodeTest(
       await tmc.runExercisePaletteCommand("TestMyCode: Open Next Exercise")
 
       const courseHome = await tmc.panelHeaded("Python Course")
+      await expect(courseHome.getByText("You reached the last exercise")).toBeVisible()
+      await expect(
+        courseHome.getByRole("button", { name: "Continue: 02_failing_exercise" }),
+      ).toHaveAttribute("secondary")
       await expect(
         courseHome.getByRole("button", { name: "Download 01_passing_exercise" }),
       ).toBeVisible()

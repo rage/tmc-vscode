@@ -2485,6 +2485,7 @@ function courseHomeOf(course: LocalCourseData): CourseHomeView {
     isWorkspaceOpen: false,
     isRestricted: false,
     isAllDone: false,
+    hasReachedLastExercise: false,
     failedUpdates: [],
     aiPolicyChange: null,
     newExercises: [],

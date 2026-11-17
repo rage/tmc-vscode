@@ -8,6 +8,7 @@ import { reportFailureIn, withOperation } from "../api/withOperation"
 import { exerciseFor } from "../api/workspaceManager"
 import { exerciseToContinue, openCourseId } from "../ui/courseHome"
 import { showExerciseSourceFile } from "../ui/exerciseSourceFile"
+import { lastExerciseReached } from "../ui/lastExerciseReached"
 import { shownCourseHome } from "../ui/shownCourseHome"
 import { nextExerciseAfter } from "../ui/treeview/courseViewModel"
 import { pickCourse } from "./pickCourse"
@@ -39,11 +40,13 @@ export async function openNextExercise(
     return
   }
   const { course, nextId } = found
+  const courseId = LocalCourseData.getCourseId(course)
   if (!nextId) {
-    await vscode.commands.executeCommand("tmc.courseDetails", LocalCourseData.getCourseId(course))
+    lastExerciseReached.add(courseId)
+    await vscode.commands.executeCommand("tmc.courseDetails", courseId)
     return
   }
-  const courseId = LocalCourseData.getCourseId(course)
+  lastExerciseReached.clear(courseId)
   // Shown in the course home, which lists the exercise and what can be done with it.
   const opened = await withOperation(dialog, { failure: OPEN_NEXT_FAILED, silent: true }, () =>
     downloadAndOpenExercises(actionContext, [nextId], courseId),

@@ -23,6 +23,7 @@ import { getExerciseIncludingClosedChapters } from "../config/userdata"
 import { buildCourseHomeView } from "../ui/courseHome"
 import { exerciseStandingView } from "../ui/exerciseStanding"
 import { failedUpdates } from "../ui/failedUpdates"
+import { lastExerciseReached } from "../ui/lastExerciseReached"
 import { loginScreens } from "../ui/loginScreens"
 import { modelSolutionUrl } from "../ui/modelSolution"
 import { recentPolicyChanges } from "../ui/recentPolicyChanges"
@@ -480,6 +481,7 @@ export class TmcPanel {
         recentUpdates.onDidChange(() => this._onDidChangeCourses(undefined)),
         failedUpdates.onDidChange(() => this._onDidChangeCourses(undefined)),
         recentPolicyChanges.onDidChange(() => this._onDidChangeCourses(undefined)),
+        lastExerciseReached.onDidChange(() => this._onDidChangeCourses(undefined)),
         shownCourseHome.onDidClearFailures(({ courseId, operation }) => {
           const route = this._route
           if (

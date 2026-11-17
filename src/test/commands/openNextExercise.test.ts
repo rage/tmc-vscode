@@ -8,6 +8,7 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import { openNextExercise } from "../../commands/openNextExercise"
 import type { UserData } from "../../config/userdata"
 import { showExerciseSourceFile } from "../../ui/exerciseSourceFile"
+import { lastExerciseReached } from "../../ui/lastExerciseReached"
 import { shownCourseHome } from "../../ui/shownCourseHome"
 import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
 import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
@@ -113,6 +114,11 @@ suite("Open Next Exercise command", function () {
 
     expect(executeCommand).toHaveBeenCalledExactlyOnceWith("tmc.courseDetails", idOfTmcCourse(42))
     expect(downloadAndOpenExercises).not.toHaveBeenCalled()
+    expect(lastExerciseReached.has(idOfTmcCourse(42))).toBe(true)
+
+    await openNextExercise(context, idOfTmcExercise(1))
+
+    expect(lastExerciseReached.has(idOfTmcCourse(42))).toBe(false)
   })
 
   test("shows why the next exercise could not be opened in the course home, not a notification", async function () {

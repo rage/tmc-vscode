@@ -464,6 +464,29 @@ suite("the course home", () => {
     expect(postedMessages).toHaveBeenCalledWith(exerciseAction(panel, 2, "open"))
   })
 
+  test("past the last exercise, says so and offers the one left behind as secondary", async () => {
+    const view = onDiskView({
+      isWorkspaceOpen: true,
+      hasReachedLastExercise: true,
+      nextExercise: { id: makeTmcKind({ tmcExerciseId: 2 }), name: "02_loops", isOnDisk: true },
+    })
+    const [part] = view.parts
+    const panel = await renderHome({
+      ...view,
+      parts: part
+        ? [{ ...part, exercises: part.exercises.map((ex) => ({ ...ex, status: "opened" })) }]
+        : [],
+    })
+
+    const notices = screen.getByRole("list", { name: "Course notices" })
+    expect(notices).toHaveTextContent("You reached the last exercise")
+    expect(notices).toHaveTextContent("02_loops is still left to do.")
+    expect(screen.getByRole("button", { name: "Continue: 02_loops" })).toHaveAttribute("secondary")
+    await clickIconButton("Dismiss the last exercise notice")
+
+    expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "dismissLastExerciseReached"))
+  })
+
   test("offers to download and open a next exercise not on disk", async () => {
     const panel = await renderHome(
       onDiskView({

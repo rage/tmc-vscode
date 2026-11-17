@@ -689,6 +689,14 @@ export const SCENARIOS: Scenario[] = [
     reply: answerCourseDetails({ id: 7 }, restrictedCourse),
   },
   {
+    id: "course-details/last-exercise-reached",
+    panel: courseDetailsPanel(66, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
+    reply: answerCourseDetails(
+      { id: 66 },
+      { ...moocCourseInWorkspace, hasReachedLastExercise: true },
+    ),
+  },
+  {
     id: "course-details/all-done",
     panel: courseDetailsPanel(9, makeTmcKind({ courseId: 42 })),
     reply: answerCourseDetails({ id: 9 }, allDoneCourse),

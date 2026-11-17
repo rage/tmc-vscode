@@ -122,6 +122,11 @@ export const CourseHomeViewSchema = z.object({
    * to do until that changes.
    */
   isAllDone: z.boolean(),
+  /**
+   * Open Next Exercise found none after the course's last exercise, so {@link nextExercise} lies
+   * behind the student; set until they open an exercise of the course or dismiss the notice.
+   */
+  hasReachedLastExercise: z.boolean(),
   /** Announced as new and not dismissed; downloadable ones only. */
   newExercises: z.array(z.object({ id: ExerciseIdentifierSchema, name: z.string() })),
   /** Exercises on disk whose template changed on the backend. */
@@ -151,6 +156,7 @@ export const CourseHomeActionSchema = z.enum([
   "updateExercises",
   "dismissRecentUpdates",
   "dismissAiPolicyChange",
+  "dismissLastExerciseReached",
   "closeCompletedExercises",
   "switchCourseWorkspace",
   "revealInCoursesView",

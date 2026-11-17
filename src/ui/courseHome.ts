@@ -22,6 +22,7 @@ import {
   formatNearRelativeTime,
 } from "../utilities"
 import { failedUpdates } from "./failedUpdates"
+import { lastExerciseReached } from "./lastExerciseReached"
 import { recentPolicyChanges } from "./recentPolicyChanges"
 import { recentUpdates } from "./recentUpdates"
 import type { ExerciseView, PartView } from "./treeview/courseViewModel"
@@ -156,6 +157,7 @@ export function buildCourseHomeView(
         }
       : {}),
     isAllDone: exercises.length > 0 && nextExercise === undefined,
+    hasReachedLastExercise: lastExerciseReached.has(courseId),
     newExercises: exercises
       .filter((ex) => ex.status === "new" && newKeys.has(ExerciseIdentifier.key(ex.id)))
       .map(({ id, name }) => ({ id, name })),

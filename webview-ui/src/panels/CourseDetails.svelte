@@ -342,6 +342,17 @@
             ? [{ label: "Try Again", onclick: () => runCourseAction("updateExercises") }]
             : [],
       },
+      view.hasReachedLastExercise &&
+        !view.isAllDone && {
+          key: "lastExerciseReached",
+          tone: "info",
+          title: "You reached the last exercise",
+          ...(view.nextExercise
+            ? { detail: `${view.nextExercise.name} is still left to do.` }
+            : {}),
+          ondismiss: () => runCourseAction("dismissLastExerciseReached"),
+          dismissLabel: "Dismiss the last exercise notice",
+        },
       view.isAllDone &&
         !view.accessLoss &&
         !view.isNotEnrolled &&
@@ -402,6 +413,13 @@
         downloadingCount === 0 && view.newExercises.length >= downloadableCount
       const download = offersDownload && !isDownloadInNotice ? downloadAll : undefined
       const close = completedOpenCount > 0 ? closeCompleted : undefined
+      // Past the last exercise, the one left to do is behind the student: offered, not urged.
+      if (view.hasReachedLastExercise && continueWithNext) {
+        return {
+          primary: download,
+          secondary: close ? [continueWithNext, close] : [continueWithNext],
+        }
+      }
       const primary = continueWithNext ?? download
       const extra = primary === download ? undefined : download
       if (extra && close) {
