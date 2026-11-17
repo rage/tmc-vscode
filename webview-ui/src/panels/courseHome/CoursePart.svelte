@@ -154,7 +154,7 @@
     {#if part.locked}
       <span class="muted part-locked">
         <vscode-icon name={part.locked.icon} aria-hidden="true"></vscode-icon>
-        {part.locked.reason}
+        <span>{part.locked.reason}</span>
       </span>
     {/if}
   </div>
@@ -181,6 +181,7 @@
             <button
               type="button"
               class="name-button"
+              title={exercise.name}
               disabled={exercise.status === "downloading"}
               onclick={() => onaction(exercise, "open")}
             >
@@ -271,13 +272,19 @@
     text-transform: inherit;
     cursor: pointer;
   }
+  /* Inside the row, as VS Code rings a focused list row. */
+  .part-toggle:focus-visible {
+    outline-offset: -1px;
+  }
   .part-progress {
     flex: none;
     font-variant-numeric: tabular-nums;
   }
+  /* Its own line under the name: a sentence, unlike the counts beside the name. */
   .part-locked {
-    display: inline-flex;
-    align-items: center;
+    display: flex;
+    flex-basis: 100%;
+    align-items: flex-start;
     gap: var(--tmc-space-1);
   }
   .rows {

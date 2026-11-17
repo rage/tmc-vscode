@@ -10,7 +10,6 @@
   import Button from "../../components/Button.svelte"
   import ErrorNotice from "../../components/ErrorNotice.svelte"
   import Spinner from "../../components/Spinner.svelte"
-  import ToolbarButton from "../../components/ToolbarButton.svelte"
   import { announce } from "../../utilities/a11y.svelte"
   import { createRequester } from "../../utilities/script"
 
@@ -45,7 +44,8 @@
 
   let isLoading = false
 
-  async function load() {
+  /** Lists the submissions again, e.g. for a refresh control outside this component. */
+  export async function load() {
     if (isLoading) {
       return
     }
@@ -154,10 +154,7 @@
   </ul>
 {/snippet}
 
-<div class="toolbar">
-  {#if restoreRefusal}<p class="muted">{restoreRefusal}</p>{/if}
-  <ToolbarButton icon="refresh" label="Refresh History" onclick={load} />
-</div>
+{#if restoreRefusal}<p class="muted refusal">{restoreRefusal}</p>{/if}
 {#if restoreNote}
   <p>{restoreNote}</p>
 {/if}
@@ -184,15 +181,8 @@
 {/if}
 
 <style>
-  .toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: var(--tmc-space-2);
-  }
-  .toolbar p {
-    flex: 1;
-    margin: 0;
+  .refusal {
+    margin: 0 0 var(--tmc-space-2);
   }
   .rows {
     list-style: none;

@@ -49,7 +49,7 @@
     gap: var(--tmc-space-3);
     padding: var(--tmc-space-3) var(--tmc-space-4);
     margin: var(--tmc-space-3) 0 var(--tmc-space-4);
-    border: 1px solid var(--tmc-hc-outline);
+    border: 1px solid var(--tmc-surface-border);
     border-left: 3px solid var(--banner-accent);
     border-radius: var(--tmc-radius);
     background: var(--tmc-banner-background);

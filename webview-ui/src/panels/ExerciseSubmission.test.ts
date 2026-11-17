@@ -956,6 +956,31 @@ suite("ExerciseSubmission panel (results hub)", () => {
     )
   })
 
+  test("History's refresh, in its header while open, lists the submissions again", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, standingView(tmcExercise(false), undefined))
+    const toggle = await screen.findByRole("button", { name: "History" })
+    expect(screen.queryByTitle("Refresh History")).not.toBeInTheDocument()
+    toggle.click()
+    await vi.waitFor(() =>
+      expect(postedMessages).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "requestSubmissionHistory" }),
+      ),
+    )
+    replyToRequest("requestSubmissionHistory", { ok: true, value: [] })
+    await screen.findByText("No earlier submissions yet.")
+    postedMessages.mockClear()
+
+    const refresh = await withinShadowRoot(screen.getByTitle("Refresh History"))
+    refresh.getByRole("button").click()
+
+    await vi.waitFor(() =>
+      expect(postedMessages).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "requestSubmissionHistory" }),
+      ),
+    )
+  })
+
   test("a command's request opens History and moves the focus to it", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showView(panel.id, standingView(tmcExercise(false), undefined))
