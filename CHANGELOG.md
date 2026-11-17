@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Submitting an exercise the course refuses, or one held back by the AI policy or a submission in progress, says so in its results screen while that is on screen. Passing tests while logged out opens the results screen with Log In to Submit. Exam mode no longer adds a notification to what Test Results says.
 - A failed action in Course Details or the results screen, such as a download, shows in that screen until dismissed instead of in a notification. While the screen is out of sight a notification says so too, and the screen shows the failure when you return to it.
 - Error notifications and the error notices in screens offer Show Details instead of Show Logs and inline details: a screen with the error, its causes and the recent log, with Copy Details, Show Logs and the error's own remedy. Show Help for the TestMyCode tools no longer claims the extension failed to start.
 - Every notification goes through one place, and a test pins how many each part of the extension shows, so a new one is a deliberate choice.

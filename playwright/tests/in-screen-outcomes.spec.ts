@@ -4,11 +4,13 @@ import { MOCK_BACKEND_URL } from "../../backend/mockSession"
 import { vsCodeTest } from "../fixtures"
 import { CourseHomePage } from "../pages/course-home"
 import { CoursesViewPage } from "../pages/courses-view"
+import { ExplorerPage } from "../pages/explorer"
 import { TmcPage } from "../pages/tmc"
 
-// A failure of something a screen started shows in that screen; a notification tells of it only
-// while the screen is out of sight, and the screen still shows it once back. backend/mooc
-// serves the course and fails the download on request.
+// What a screen says in place of a notification. A failure of something it started shows in it,
+// and a notification tells of the failure only while the screen is out of sight. A local pass
+// while logged out shows in the results screen. backend/mooc serves the course and fails a
+// download on request.
 
 const COURSE_TITLE = "MOOC Python Course"
 
@@ -66,5 +68,48 @@ vsCodeTest(
         await expect(failure).toBeVisible()
       },
     )
+  },
+)
+
+vsCodeTest(
+  "a pass while logged out opens the results screen with Log In to Submit",
+  async ({ page, webview }) => {
+    const coursesView = new CoursesViewPage(page, webview)
+    const tmc = new TmcPage(page, webview)
+    const code = page.locator(".monaco-editor").getByText("def hello()")
+    const passToast = page
+      .locator(".notifications-toasts .notification-toast")
+      .filter({ hasText: "All tests of passing_exercise passed" })
+
+    await vsCodeTest.step("open the exercise in its course workspace, then log out", async () => {
+      await coursesView.goto()
+      await coursesView.addNewMoocCourse(COURSE_TITLE)
+      await coursesView.expand(coursesView.row(COURSE_TITLE))
+      const row = coursesView.row("passing_exercise")
+      await coursesView.runContextMenuCommand(row, "Open")
+      await expect(row).toHaveAccessibleName(/, (downloaded|in workspace),/)
+      await coursesView.runInlineAction(coursesView.row(COURSE_TITLE), "Open Course Workspace")
+      await new ExplorerPage(page).openPath(["src", "passing_exercise.py"])
+      await expect(code).toBeVisible({ timeout: 30_000 })
+      await coursesView.runPaletteCommand("TestMyCode: Log Out")
+      await expect(coursesView.statusBarMessage("Logged out.")).toBeVisible()
+    })
+
+    await vsCodeTest.step("passing tests offer to log in from the results screen", async () => {
+      await code.click()
+      await page
+        .getByRole("toolbar", { name: "Editor actions" })
+        .getByLabel("Run Tests", { exact: true })
+        .click()
+      const results = await tmc.panelHeaded("passing_exercise")
+      await expect(results.getByRole("heading", { name: "All tests passed locally" })).toBeVisible()
+      await expect(passToast).toHaveCount(0)
+
+      await results.getByRole("button", { name: "Log In to Submit" }).click()
+
+      await expect(results.getByRole("heading", { name: "Exercise passed" })).toBeVisible({
+        timeout: 30_000,
+      })
+    })
   },
 )

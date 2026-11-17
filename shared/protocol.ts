@@ -344,6 +344,8 @@ export const SubmissionViewSchema = z.object({
   submitRefusal: z.string().optional(),
   /** The tries left on the exercise as it stands now; absent when unlimited. */
   triesLeft: z.number().optional(),
+  /** Submitting takes a login first, which Submit then offers as Log In to Submit. */
+  isLoggedOut: z.boolean().optional(),
 })
 
 export type SubmissionView = z.infer<typeof SubmissionViewSchema>
@@ -528,7 +530,7 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("exerciseAction"),
     sourcePanel: targetPanelSchema("ExerciseSubmission"),
-    action: z.enum(["runTests", "submit", "openNextExercise", "openExercise"]),
+    action: z.enum(["runTests", "submit", "logInToSubmit", "openNextExercise", "openExercise"]),
   }),
   z.object({
     type: z.literal("sendFeedback"),

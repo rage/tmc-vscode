@@ -6,6 +6,7 @@ import type { ExerciseSubmissionPanel, LoginPanel, Panel, SubmissionView } from 
 import {
   assertUnreachable,
   CourseIdentifier,
+  ExerciseIdentifier,
   submitRefusalOf,
   submitRefusalSentence,
   pendingReviewSentence,
@@ -28,6 +29,7 @@ import { postMessageToWebview, renderPanel } from "./panel"
 import type { HandlerContext, PanelHost, PanelMessage } from "./router"
 import { dispatch } from "./router"
 import { errorDetailsPanel, initializationErrorHelpPanel, nextPanelId, panelTitle } from "./routes"
+import { screenFailureMessage } from "./screenFailures"
 import { withExerciseState } from "./submissionView"
 
 /**
@@ -95,7 +97,7 @@ export class TmcPanel {
         TmcPanel.sidePanel?._postMessage(submissionViewMessage(actionContext, route, view))
       }
     }
-    return Disposable.from(
+    const subscriptions = Disposable.from(
       submissionViews.onDidOpen(show),
       submissionViews.onDidRequestReveal(({ panel, section }) => {
         TmcPanel._renderIn(false, extensionContext, actionContext, panel, true)
@@ -112,6 +114,16 @@ export class TmcPanel {
             serial: section.serial,
             shouldPaste: section.shouldPaste,
           })
+        }
+      }),
+      submissionViews.onDidFail(({ exerciseId, headline, error, tone }) => {
+        const sidePanel = TmcPanel.sidePanel
+        const route = sidePanel?._route
+        if (
+          route?.type === "ExerciseSubmission" &&
+          ExerciseIdentifier.key(route.exerciseId) === ExerciseIdentifier.key(exerciseId)
+        ) {
+          sidePanel?._postMessage(screenFailureMessage(route, headline, error, tone))
         }
       }),
       submissionViews.onDidClear(() => {
@@ -136,6 +148,9 @@ export class TmcPanel {
           ]
         : []),
     )
+    // A login or logout turns the results screen's Submit into Log In to Submit, or back.
+    actionContext.authState.subscribe(repostShown)
+    return subscriptions
   }
 
   /**
@@ -583,6 +598,7 @@ function submissionViewMessage(
         ? pendingReviewSentence(exercise.data.pendingReview, exercise.data.awardedPoints)
         : undefined,
     solutionUrl: exercise && stored.ok ? modelSolutionUrl(stored.val) : undefined,
+    isLoggedOut: !actionContext.authState.loggedIn,
   })
   return { type: "submissionView", target: { id: panel.id, type: panel.type }, view: shown }
 }

@@ -149,6 +149,15 @@ export const exerciseHandlers = {
         reportFailureIn(dialog, shownIn, "This exercise is no longer downloaded.")
         return
       }
+      if (message.action === "logInToSubmit") {
+        const isLoggedIn =
+          actionContext.authState.loggedIn ||
+          (await vscode.commands.executeCommand("tmc.showMoocLogin")) === "loggedIn"
+        if (isLoggedIn) {
+          await vscode.commands.executeCommand("tmc.submitExercise", exercise.uri)
+        }
+        return
+      }
       if (message.action === "openNextExercise") {
         // The result is done with, and its split would take the next exercise's file.
         host.closeSidePanel()

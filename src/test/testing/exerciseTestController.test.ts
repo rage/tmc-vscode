@@ -579,7 +579,7 @@ suite("ExerciseTestController", function () {
     )
   })
 
-  test("exam mode skips the exercise, says why and offers Submit", async function () {
+  test("exam mode skips the exercise and says why in Test Results alone", async function () {
     const s = setup({ examMode: true })
 
     await s.controller.runExercise(exerciseAt(s))
@@ -588,10 +588,7 @@ suite("ExerciseTestController", function () {
     expect(finalStates(run).get(itemOf(s, exerciseAt(s)).id)?.[0]).toBe("skipped")
     expect(run.output[0]?.output).toContain("not run locally in exam mode")
     expect(s.runTests).not.toHaveBeenCalled()
-    expect(s.actionContext.dialog.notification).toHaveBeenCalledExactlyOnceWith(
-      "Tests are not run locally in exam mode.",
-      ["Submit", expect.any(Function)],
-    )
+    expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
   })
 
   test("code quality problems fail an otherwise passing exercise and show as diagnostics", async function () {
@@ -676,32 +673,20 @@ suite("ExerciseTestController", function () {
     )
   })
 
-  test("exam mode in a course its backend refuses says why instead of offering Submit", async function () {
-    const s = setup({ examMode: true, accessLoss: { reason: "forbidden", checkedAt: 0 } })
-
-    await s.controller.runExercise(exerciseAt(s))
-
-    expect(s.actionContext.dialog.notification).toHaveBeenCalledExactlyOnceWith(
-      "Tests are not run locally in exam mode. You no longer have access to this course," +
-        " so part01-01_hello cannot be submitted.",
-    )
-  })
-
-  test("logged out, a pass offers to log in and then submit", async function () {
+  test("logged out, a pass shows in the results screen, which offers to log in", async function () {
     const s = setup({ loggedIn: false })
-    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue("loggedIn")
+    const opened = vi.fn()
+    const subscription = submissionViews.onDidOpen(opened)
+    onTestFinished(() => {
+      subscription.dispose()
+      submissionViews.clear()
+    })
+
     await s.controller.runExercise(exerciseAt(s))
 
-    const [, [label, logInToSubmit]] = vi.mocked(s.actionContext.dialog.notification).mock
-      .calls[0] as [string, [string, () => void]]
-    expect(label).toBe("Log In to Submit")
-    logInToSubmit()
-
-    await vi.waitFor(() =>
-      expect(executeCommand).toHaveBeenCalledWith("tmc.submitExercise", exerciseAt(s).uri),
-    )
-    expect(executeCommand).toHaveBeenCalledWith("tmc.showMoocLogin")
-    executeCommand.mockRestore()
+    expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+    const [panel] = opened.mock.calls[0] as [{ id: number }]
+    expect(submissionViews.latestView(panel.id)).toEqual(testedLocallyView())
   })
 
   test("Submit is not offered for a disabled course, or for several exercises", async function () {
@@ -788,13 +773,14 @@ suite("ExerciseTestController", function () {
       expect(submissionViews.latestView(panel.id)?.phase).not.toBe("testedLocally")
     })
 
-    test("logged out, the pass stays a notification offering to log in", async function () {
+    test("logged out, the pass shows there too", async function () {
       const s = setup({ loggedIn: false })
       showResults()
 
       await s.controller.runExercise(exerciseAt(s))
 
-      expect(s.actionContext.dialog.notification).toHaveBeenCalledOnce()
+      expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+      expect(submissionViews.latestView(panel.id)).toEqual(testedLocallyView())
     })
   })
 

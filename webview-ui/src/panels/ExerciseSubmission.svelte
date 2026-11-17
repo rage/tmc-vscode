@@ -73,12 +73,19 @@
     icon: "beaker",
     onclick: () => runExerciseAction("runTests"),
   }
-  const submitAgain: BarAction = {
-    label: "Submit Again",
-    icon: "cloud-upload",
-    onclick: () => runExerciseAction("submit"),
+  const logInToSubmit: BarAction = {
+    label: "Log In to Submit",
+    icon: "sign-in",
+    onclick: () => runExerciseAction("logInToSubmit"),
   }
-  const submit: BarAction = { ...submitAgain, label: "Submit" }
+  const submitAgain: BarAction = $derived(
+    view?.isLoggedOut
+      ? logInToSubmit
+      : { label: "Submit Again", icon: "cloud-upload", onclick: () => runExerciseAction("submit") },
+  )
+  const submit: BarAction = $derived(
+    view?.isLoggedOut ? logInToSubmit : { ...submitAgain, label: "Submit" },
+  )
 
   const openExercise: BarAction = {
     label: "Open Exercise",
@@ -245,7 +252,9 @@
   function closePanel() {
     vscode.postMessage({ type: "closeSidePanel" })
   }
-  function runExerciseAction(action: "runTests" | "submit" | "openNextExercise" | "openExercise") {
+  function runExerciseAction(
+    action: "runTests" | "submit" | "logInToSubmit" | "openNextExercise" | "openExercise",
+  ) {
     vscode.postMessage({ type: "exerciseAction", sourcePanel, action })
   }
   function showInBrowser(url: string) {

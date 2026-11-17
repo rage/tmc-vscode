@@ -491,6 +491,33 @@ suite("TmcPanel handler dispatch", () => {
     expectNoNotification(actionContext)
   })
 
+  test("Log In to Submit logs in first, then submits the exercise the host shows", async () => {
+    const handlers = stubHandlers()
+    handlers.openWorkspace.mockResolvedValue("loggedIn")
+    const shown = { ...exerciseSubmissionPanel(), exerciseId: idOfTmcExercise(7) }
+    const exerciseUri = vscode.Uri.file("/exercises/loops")
+    const actionContext = createMockActionContext({
+      loggedIn: false,
+      startup: {
+        workspaceManager: {
+          getExercise: () => ({ uri: exerciseUri }),
+        } as unknown as WorkspaceManager,
+      },
+    })
+    const { listener } = await mountSidePanel(actionContext, createMockContext(), shown)
+
+    await listener({
+      type: "exerciseAction",
+      sourcePanel: targetOf(shown),
+      action: "logInToSubmit",
+    })
+
+    expect(handlers.openWorkspace.mock.calls).toEqual([
+      ["tmc.showMoocLogin"],
+      ["tmc.submitExercise", exerciseUri],
+    ])
+  })
+
   test("an exercise action on an exercise gone from disk says so in the screen", async () => {
     stubHandlers()
     const shown = exerciseSubmissionPanel()
@@ -1783,6 +1810,71 @@ suite("TmcPanel side panel placement", () => {
       message.type === "submissionView" ? [message.view.exerciseState] : [],
     )
     expect(views).toEqual([undefined, "notOnDisk"])
+  })
+
+  test("shows a failure of a command on the shown exercise in its results screen", async () => {
+    const { panel, sendReady } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    const subscription = TmcPanel.showSubmissionViews(createMockContext(), submissionContext())
+    onTestFinished(() => subscription.dispose())
+    const shown = exerciseSubmissionPanel()
+    submissionViews.open(shown)
+    await sendReady()
+    vi.mocked(panel.webview.postMessage).mockClear()
+
+    submissionViews
+      .failureSink(shown.exerciseId)
+      .show("Exercise submission failed.", new Error("No tries left."), "warning")
+    submissionViews
+      .failureSink({ ...shown.exerciseId, data: { tmcExerciseId: 999 } } as typeof shown.exerciseId)
+      .show("Exercise submission failed.", new Error("Another exercise."), "warning")
+
+    expect(postedMessages(panel)).toEqual([
+      {
+        type: "operationFailed",
+        target: targetOf(shown),
+        failure: {
+          serial: expect.any(Number),
+          tone: "warning",
+          error: { message: "No tries left.", detailsId: expect.any(String) },
+        },
+      },
+    ])
+  })
+
+  test("turns the shown submission's Submit into Log In to Submit while logged out", async () => {
+    const { panel, sendReady } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    const actionContext = submissionContext()
+    const listeners: ((loggedIn: boolean) => void)[] = []
+    let isLoggedIn = true
+    actionContext.authState = {
+      ...actionContext.authState,
+      get loggedIn() {
+        return isLoggedIn
+      },
+      subscribe: (listener) => void listeners.push(listener),
+    }
+    const subscription = TmcPanel.showSubmissionViews(createMockContext(), actionContext)
+    onTestFinished(() => subscription.dispose())
+    const shown = exerciseSubmissionPanel()
+    submissionViews.open(shown)
+    await sendReady()
+    submissionViews.update({
+      panel: shown,
+      view: submissionViewFor(shown, "Exercise graded").view,
+      shouldReopen: false,
+    })
+
+    isLoggedIn = false
+    for (const listener of listeners) {
+      listener(false)
+    }
+
+    const views = (postedMessages(panel) as PanelMessage[]).flatMap((message) =>
+      message.type === "submissionView" ? [message.view.isLoggedOut] : [],
+    )
+    expect(views).toEqual([undefined, true])
   })
 
   test("tells the shown submission the tries left, and why the backend would refuse another", async () => {

@@ -826,6 +826,23 @@ suite("ExerciseSubmission panel (results hub)", () => {
     })
   })
 
+  test("logged out, a local pass offers to log in and submit as its main action", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, { ...testedLocallyView(), isLoggedOut: true })
+    const logIn = await screen.findByRole("button", { name: "Log In to Submit" })
+    postedMessages.mockClear()
+
+    expect(isSecondary(logIn)).toBe(false)
+    expect(screen.queryByRole("button", { name: "Submit" })).not.toBeInTheDocument()
+    logIn.click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "exerciseAction",
+      sourcePanel: { id: panel.id, type: panel.type },
+      action: "logInToSubmit",
+    })
+  })
+
   test("a local pass of an exercise that cannot be submitted says why instead of offering Submit", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showView(panel.id, {

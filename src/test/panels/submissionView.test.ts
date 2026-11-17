@@ -375,6 +375,13 @@ suite("withExerciseState", () => {
     expect(shown.pendingReview).toBe("The points wait for a teacher's review.")
   })
 
+  test("says a logged-out student must log in to submit, and forgets it once logged in", () => {
+    const loggedOut = withExerciseState(testedLocallyView(), { ...onDisk, isLoggedOut: true })
+
+    expect(loggedOut.isLoggedOut).toBe(true)
+    expect(withExerciseState(loggedOut, onDisk).isLoggedOut).toBeUndefined()
+  })
+
   test("a finished grading drops a review no longer pending", () => {
     const view = {
       ...moocGradingView(moocGrading("FullyGraded", 3, "Attempted"), 3),

@@ -874,6 +874,14 @@ export const SCENARIOS: Scenario[] = [
     pushes: [submissionViewMessage(tmcResultsPanel.id, testedLocallyView())],
   },
   {
+    id: "exercise-submission/tested-locally-logged-out",
+    panel: tmcResultsPanel,
+    reply: answerResultsRequests(tmcResultsPanel, []),
+    pushes: [
+      submissionViewMessage(tmcResultsPanel.id, { ...testedLocallyView(), isLoggedOut: true }),
+    ],
+  },
+  {
     id: "exercise-submission/mooc-grading",
     panel: moocSubmissionPanel,
     pushes: [

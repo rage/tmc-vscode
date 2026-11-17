@@ -5,6 +5,7 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { ReadyActionContext } from "../actions/types"
+import type { FailureSink } from "../api/withOperation"
 import { withOperation } from "../api/withOperation"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { exerciseFor } from "../api/workspaceManager"
@@ -26,6 +27,7 @@ import { Logger } from "../utilities"
  * user trusts the workspace.
  * @param options.retryOffer What to ask before running the command again once trusted; without
  * it the command runs again unasked.
+ * @param options.shownIn The screen of the exercise that shows a failure while it is on screen.
  * @returns What `body` returned, or `Err` when there was no exercise to run it against.
  * A failure has already been reported by the time this resolves.
  */
@@ -37,6 +39,7 @@ export async function runForExercise<T>(
   options: {
     trustedCommand?: string
     retryOffer?: (exercise: WorkspaceExercise) => RetryOffer
+    shownIn?: (exercise: WorkspaceExercise) => FailureSink
   } = {},
 ): Promise<Result<T, Error>> {
   const { dialog } = actionContext
@@ -55,12 +58,17 @@ export async function runForExercise<T>(
   }
 
   const { trustedCommand, retryOffer } = options
-  return withOperation(dialog, { failure: `${label} failed.` }, () => {
+  const run = (): Promise<Result<T, Error>> => {
     const trusted = trustedCommand
       ? checkTrustRetrying(actionContext, trustedCommand, exercise, retryOffer?.(exercise))
       : Ok.EMPTY
     return trusted.err ? Promise.resolve(trusted) : body(exercise)
-  })
+  }
+  const failure = `${label} failed.`
+  const shownIn = options.shownIn?.(exercise)
+  return shownIn
+    ? withOperation(dialog, { failure, shownIn }, run)
+    : withOperation(dialog, { failure }, run)
 }
 
 /**

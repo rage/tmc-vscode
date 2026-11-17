@@ -377,6 +377,7 @@ function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): str
  *   finished grading was shown with.
  * @param exercise.solutionUrl The model solution's page once the stored course reveals it; fills
  *   in a view that has none, as a course refresh after the grading can reveal it.
+ * @param exercise.isLoggedOut See {@link SubmissionView.isLoggedOut}.
  */
 export function withExerciseState(
   view: SubmissionView,
@@ -387,12 +388,14 @@ export function withExerciseState(
     triesLeft?: number | undefined
     pendingReview?: string | undefined
     solutionUrl?: string | undefined
+    isLoggedOut?: boolean | undefined
   },
 ): SubmissionView {
   const {
     exerciseState: _exerciseState,
     submitRefusal: _submitRefusal,
     triesLeft: _triesLeft,
+    isLoggedOut: _isLoggedOut,
     pendingReview: gradedPendingReview,
     ...rest
   } = view
@@ -411,6 +414,7 @@ export function withExerciseState(
     ...(pendingReview === undefined ? {} : { pendingReview }),
     ...(exercise.submitRefusal === undefined ? {} : { submitRefusal: exercise.submitRefusal }),
     ...(exercise.triesLeft === undefined ? {} : { triesLeft: exercise.triesLeft }),
+    ...(exercise.isLoggedOut ? { isLoggedOut: true } : {}),
   }
   return exercise.isOnDisk ? standing : { ...standing, exerciseState: "notOnDisk" }
 }

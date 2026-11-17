@@ -67,7 +67,6 @@ const BUDGET: Budget = {
   "src/commands/runForExercise.ts": { errorNotification: 1, withOperation: 1 },
   "src/commands/showExerciseResults.ts": { errorNotification: 2 },
   "src/commands/showModelSolution.ts": { errorNotification: 1, notification: 1 },
-  "src/commands/submitExercise.ts": { notification: 1 },
   "src/commands/switchWorkspace.ts": { reportError: 1 },
   "src/commands/updateExercises.ts": {
     notification: 2,

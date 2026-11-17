@@ -2,6 +2,7 @@ import * as vscode from "vscode"
 
 import type { ExerciseSection, ExerciseSubmissionPanel, SubmissionView } from "../../shared/lib"
 import { ExerciseIdentifier } from "../../shared/lib"
+import type { FailureSink } from "../api/withOperation"
 
 /** A view of a submission, for the side panel showing `panel`. */
 export interface SubmissionViewUpdate {
@@ -9,6 +10,14 @@ export interface SubmissionViewUpdate {
   view: SubmissionView
   /** Whether the student should see this view even if the side panel is closed or elsewhere. */
   shouldReopen: boolean
+}
+
+/** A failure of a command run on an exercise, for its results screen. */
+export interface ExerciseFailure {
+  exerciseId: ExerciseIdentifier
+  headline: string
+  error: Error | undefined
+  tone: "error" | "warning"
 }
 
 /** A student's request to see a submission panel, from a command rather than a submit. */
@@ -30,6 +39,7 @@ class SubmissionViews {
   private readonly _latest = new Map<number, SubmissionViewUpdate>()
   private readonly _cleared = new vscode.EventEmitter<void>()
   private readonly _revealed = new vscode.EventEmitter<SubmissionPanelReveal>()
+  private readonly _failed = new vscode.EventEmitter<ExerciseFailure>()
   private _shown: ExerciseSubmissionPanel | undefined
   private _sectionSerial = 0
 
@@ -46,6 +56,9 @@ class SubmissionViews {
 
   /** Fires for {@link reveal}; the side panel then shows the panel, focused. */
   public readonly onDidRequestReveal = this._revealed.event
+
+  /** Fires with a failure the exercise's results screen should show; see {@link failureSink}. */
+  public readonly onDidFail = this._failed.event
 
   /** Announces a new submission, forgetting earlier submissions of the same exercise. */
   public open(panel: ExerciseSubmissionPanel): void {
@@ -107,6 +120,17 @@ class SubmissionViews {
     return shown && ExerciseIdentifier.key(shown.exerciseId) === ExerciseIdentifier.key(exerciseId)
       ? shown
       : undefined
+  }
+
+  /**
+   * The results screen of `exerciseId` as the {@link FailureSink} of a command run on the
+   * exercise: on screen only while the side panel shows that exercise.
+   */
+  public failureSink(exerciseId: ExerciseIdentifier): FailureSink {
+    return {
+      isVisible: () => this.shownFor(exerciseId) !== undefined,
+      show: (headline, error, tone) => this._failed.fire({ exerciseId, headline, error, tone }),
+    }
   }
 
   /** The view submission panel `panelId` was last updated with, unless it has been superseded. */
