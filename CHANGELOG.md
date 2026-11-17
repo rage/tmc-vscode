@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Student-facing text follows one glossary: your MOOC.fi account, Log In, the course home (Open Course Home), Add Course, Submit, Passed and Not passed, Tests pass on your computer, Get Help with Send to Pastebin, History, Show in Courses View and Open Course Material. Lock reasons read Complete earlier chapters first, Locked by the teacher and Waiting for review. Errors say what happened and what to do, with codes and causes behind Show Details, and an expired or revoked login says "You were logged out. Log in again." Server names show only where you pick a course. A course with no AI policy says nothing about it, while AI assistance stays off.
 - Refreshing a course home after logging out no longer shows an error there; its Not logged in notice already says what to do.
 - The walkthrough's exercise steps open Course Details and Continue with an Exercise instead of a course quick pick, a download notification, or Run Tests and Submit Solution that only worked from an exercise file. Its Get help step offers Show Help.
 - A course's changed AI policy is noted in its Course Details until dismissed, and notified only while Course Details is not on screen. An update you started is listed in Course Details too, with the status bar message only while it is not on screen, and a warning about your session found by a refresh shows in the Course Details on screen.

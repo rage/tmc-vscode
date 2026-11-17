@@ -6,7 +6,6 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { ExerciseIdentifier } from "../../../shared/lib"
-import { pasteServiceName } from "../../../shared/lib"
 import { pasteExercise } from "../../actions/pasteExercise"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { failure } from "../../api/withOperation"
@@ -65,12 +64,7 @@ function contextWith(pasteResult: unknown): {
 function pasteBody(actionContext: ReadyActionContext) {
   return (exercise: WorkspaceExercise) =>
     pasteExercise(actionContext, exercise.id).then((result) =>
-      result.ok
-        ? result
-        : failure(
-            `Failed to send the exercise to ${pasteServiceName(exercise.backend)}.`,
-            result.val,
-          ),
+      result.ok ? result : failure("Failed to send the exercise to the pastebin.", result.val),
     )
 }
 

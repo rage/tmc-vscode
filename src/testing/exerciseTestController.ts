@@ -388,7 +388,7 @@ export class ExerciseTestController implements vscode.Disposable {
     if (outcome.kind === "examMode" || !isAllPassed || outcome.isCourseDisabled) {
       return
     }
-    const message = `All tests of ${exercise.exerciseSlug} passed.`
+    const message = `Tests pass on your computer for ${exercise.exerciseSlug}.`
     // The panel says so itself when the exercise cannot be submitted, or needs a login first.
     if (showLocalPassInResults(this._actionContext, exercise)) {
       return

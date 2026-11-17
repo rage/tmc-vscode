@@ -62,7 +62,7 @@ export interface WalkthroughProgress {
 
 /**
  * The walkthrough step the student has yet to do, of the ones TestMyCode can tell are done; past
- * those, Run the tests. The ids are package.json's.
+ * those, Run Tests. The ids are package.json's.
  */
 export function nextWalkthroughStep(progress: WalkthroughProgress): string {
   if (!progress.isLoggedIn) {

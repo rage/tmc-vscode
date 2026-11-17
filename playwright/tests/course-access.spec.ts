@@ -28,7 +28,7 @@ vsCodeTest(
     await page.keyboard.press("Escape")
 
     const rowMenu = await courseHome.openMenu("More Actions for passing_exercise")
-    await expect(rowMenu.getByRole("menuitem", { name: "Open in Course Material" })).toBeVisible()
+    await expect(rowMenu.getByRole("menuitem", { name: "Open Course Material" })).toBeVisible()
   },
 )
 
@@ -58,7 +58,7 @@ vsCodeTest(
       await code.click()
       await page
         .getByRole("toolbar", { name: "Editor actions" })
-        .getByLabel("Submit Solution", { exact: true })
+        .getByLabel("Submit", { exact: true })
         .click()
       await expect(sidePanel.getByRole("heading", { name: "Submission failed" })).toBeVisible()
 
@@ -89,7 +89,7 @@ vsCodeTest(
     const coursesView = new CoursesViewPage(page, webview)
     const courseHome = new CourseHomePage(page, webview)
     const noAccess = courseHome.notices().getByText("You no longer have access to this course")
-    const gone = courseHome.notices().getByText("This course no longer exists on courses.mooc.fi")
+    const gone = courseHome.notices().getByText("This course no longer exists", { exact: true })
 
     await vsCodeTest.step("download the course's exercises", async () => {
       await coursesView.goto()
@@ -107,7 +107,7 @@ vsCodeTest(
 
         await expect(noAccess).toBeVisible()
         await expect(
-          courseHome.notices().getByRole("button", { name: "Find the Course on courses.mooc.fi" }),
+          courseHome.notices().getByRole("button", { name: "Find the Course" }),
         ).toBeVisible()
         await expect(courseHome.webview.getByRole("button", { name: /^Download/ })).toHaveCount(0)
         await expect(courseHome.row("passing_exercise")).toContainText("no access")

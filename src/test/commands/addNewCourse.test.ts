@@ -362,10 +362,10 @@ suite("Add New Course command", function () {
     const { context, quickPick, done } = harness({ moocAuthenticated: false })
     await flush()
 
-    expect(quickPick.rows[1]).toBe("Log in to courses.mooc.fi")
+    expect(quickPick.rows[1]).toBe("Log In")
     expect(context.startup.langs.getEnrolledMoocCourses).not.toHaveBeenCalled()
 
-    quickPick.accept("Log in to courses.mooc.fi")
+    quickPick.accept("Log In")
     await done
 
     expect(executeCommand).toHaveBeenCalledWith("tmc.showMoocLogin")
@@ -394,9 +394,9 @@ suite("Add New Course command", function () {
     expect(quickPick.isShown).toBe(true)
     expect(quickPick.rows).toEqual([
       "--- courses.mooc.fi — your courses",
-      "Find a course on courses.mooc.fi",
+      "Find a Course on courses.mooc.fi",
     ])
-    quickPick.accept("Find a course on courses.mooc.fi")
+    quickPick.accept("Find a Course on courses.mooc.fi")
     await done
 
     expect(openWebLink).toHaveBeenCalledExactlyOnceWith(MOOC_BACKEND_URL)
@@ -410,7 +410,7 @@ suite("Add New Course command", function () {
 
     expect(quickPick.rows).toEqual([
       "--- courses.mooc.fi — your courses",
-      "Find a course on courses.mooc.fi",
+      "Find a Course on courses.mooc.fi",
       "--- tmc.mooc.fi — organizations",
       "MOOC",
       "Test org",

@@ -30,7 +30,7 @@ vsCodeTest.use({ isWorkspaceTrustEnabled: true })
 function passedLocally(page: Page, webview: FrameLocator): Locator {
   return new TmcPage(page, webview)
     .getSidePanel()
-    .getByRole("heading", { name: "All tests passed locally" })
+    .getByRole("heading", { name: "Tests pass on your computer" })
 }
 
 function toast(page: Page, text: string | RegExp): Locator {
@@ -203,7 +203,7 @@ vsCodeTest(
     await vsCodeTest.step("trusting after a refused submit asks before submitting", async () => {
       await coursesView.goto()
       await coursesView.expand(coursesView.row(COURSE))
-      await coursesView.runInlineAction(coursesView.row(FIRST_EXERCISE), "Submit Solution")
+      await coursesView.runInlineAction(coursesView.row(FIRST_EXERCISE), "Submit")
       const refusal = toast(page, RESTRICTED_MESSAGE)
       await refusal.getByRole("button", { name: "Trust Course Workspace" }).click()
       await answer(page, WORKSPACE_QUESTION, "Trust Workspace & Continue")
@@ -213,7 +213,7 @@ vsCodeTest(
       )
       const result = new TmcPage(page, webview)
         .getSidePanel()
-        .getByRole("heading", { name: "All tests passed on the server" })
+        .getByRole("heading", { name: "Passed", exact: true })
       await expect(offer).toBeVisible()
       await expect(result).toBeHidden()
       await offer.getByRole("button", { name: "Submit", exact: true }).click()

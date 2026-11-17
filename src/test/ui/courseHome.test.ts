@@ -120,11 +120,10 @@ suite("buildCourseHomeView", function () {
     expect(basics?.lockedReason).toBeUndefined()
     expect(basics?.exercises[0]).toMatchObject({ triesLeft: 2 })
     expect(basics?.exercises[0]).not.toHaveProperty("submitRefusal")
-    expect(advanced?.lockedReason).toBe("You have completed and locked this chapter.")
+    expect(advanced?.lockedReason).toBe("This chapter is locked.")
     expect(advanced?.exercises[0]?.submitRefusal).toEqual({
       label: "chapter locked",
-      sentence:
-        'You have completed and locked the chapter "Advanced", so recursion can no longer be submitted.',
+      sentence: 'The chapter "Advanced" is locked, so recursion can no longer be submitted.',
     })
   })
 
@@ -174,9 +173,8 @@ suite("buildCourseHomeView", function () {
     expect(view.parts[0]?.exercises[0]).toMatchObject({
       pendingReview: "The points wait for a teacher's review.",
       submitRefusal: {
-        label: "locked",
-        sentence:
-          "loops is locked for you, so it can no longer be submitted. Only a teacher can unlock it.",
+        label: "locked by the teacher",
+        sentence: "The teacher has locked loops, so it can no longer be submitted.",
       },
     })
   })

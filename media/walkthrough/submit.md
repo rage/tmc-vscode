@@ -1,6 +1,6 @@
-# Submit your solution
+# Submit
 
-**Submit Solution**, the cloud next to the beaker in the editor's title bar, sends the exercise folder to the course's server, which tests it again and awards the points.
+**Submit**, the cloud next to the beaker in the editor's title bar, sends the exercise folder to the course's server, which tests it again and awards the points.
 
 The result opens beside your code, and your points update in the Courses view and the status bar.
 

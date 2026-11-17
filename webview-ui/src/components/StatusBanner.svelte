@@ -8,7 +8,7 @@
 
   interface Props {
     tone: BannerTone
-    /** The state in a few words, e.g. "Exercise passed"; rendered as a level-2 heading. */
+    /** The state in a few words, e.g. "Passed"; rendered as a level-2 heading. */
     title: string
     children?: Snippet | undefined
   }

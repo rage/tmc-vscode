@@ -17,7 +17,7 @@ export function panelTitle(route: Panel, actionContext: ActionContext): string {
       const course = isReady(actionContext)
         ? actionContext.startup.userData.getCourse(route.courseId)
         : undefined
-      return course?.ok ? LocalCourseData.getCourseTitle(course.val) : "Course Details"
+      return course?.ok ? LocalCourseData.getCourseTitle(course.val) : "Course Home"
     }
     case "ExerciseSubmission":
       return `Results: ${route.exerciseName}`

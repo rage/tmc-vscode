@@ -1,7 +1,7 @@
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
-import { SESSION_EXPIRED_DETAIL } from "../../../shared/lib"
+import { LOGGED_OUT_MESSAGE } from "../../../shared/lib"
 import Dialog from "../../api/dialog"
 import { AccountStatusBarItem, showAccountMenu } from "../../ui/statusBarAccount"
 import { fakeStatusBarItems, tooltipText } from "../mocks/statusBar"
@@ -21,9 +21,9 @@ function create(isLoggedIn: boolean): {
 
 /** The item's text for each state it can show. */
 const shown = {
-  loggedIn: "$(account) courses.mooc.fi",
+  loggedIn: "$(account) MOOC.fi",
   loggedOut: "$(sign-in) TestMyCode: Log In",
-  sessionExpired: "$(warning) TestMyCode: Session Expired",
+  sessionExpired: "$(warning) TestMyCode: Logged Out",
 }
 
 suite("AccountStatusBarItem", function () {
@@ -54,9 +54,9 @@ suite("AccountStatusBarItem", function () {
     const { item } = create(true)
 
     expect(item.text).toBe(shown.loggedIn)
-    expect(item.text).toBe("$(account) courses.mooc.fi")
+    expect(item.text).toBe("$(account) MOOC.fi")
     expect(item.command).toBe("tmc.showAccountMenu")
-    expect(item.accessibilityInformation?.label).toContain("logged in with courses.mooc.fi")
+    expect(item.accessibilityInformation?.label).toContain("logged in with your MOOC.fi account")
   })
 
   test("follows logins and logouts", function () {
@@ -74,9 +74,9 @@ suite("AccountStatusBarItem", function () {
 
     account.update({ loggedIn: false, isSessionExpired: true })
     expect(item.text).toBe(shown.sessionExpired)
-    expect(item.text).toBe("$(warning) TestMyCode: Session Expired")
+    expect(item.text).toBe("$(warning) TestMyCode: Logged Out")
     expect(item.command).toBe("tmc.showMoocLogin")
-    expect(tooltipText(item)).toContain(SESSION_EXPIRED_DETAIL)
+    expect(tooltipText(item)).toContain(LOGGED_OUT_MESSAGE)
   })
 
   test("disposes its item", function () {

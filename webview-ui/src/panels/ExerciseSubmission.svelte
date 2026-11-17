@@ -200,14 +200,12 @@
         ? [{ label: "Show Submission in Browser", onselect: () => showInBrowser(submissionUrl) }]
         : []),
       ...(solutionUrl && !isSolutionInBar
-        ? [{ label: "Show Model Solution in Browser", onselect: () => showInBrowser(solutionUrl) }]
+        ? [{ label: "Show Model Solution", onselect: () => showInBrowser(solutionUrl) }]
         : []),
       ...(view?.canPaste && !view.exerciseState
-        ? [{ label: "Ask for Help…", onselect: () => openSection("getHelp") }]
+        ? [{ label: "Get Help", onselect: () => openSection("getHelp") }]
         : []),
-      ...(isHistoryShown
-        ? [{ label: "Show History", onselect: () => openSection("history") }]
-        : []),
+      ...(isHistoryShown ? [{ label: "History", onselect: () => openSection("history") }] : []),
     ]
   })
 
@@ -404,17 +402,12 @@
     <div class="more">
       {#if isGetHelpShown}
         <Disclosure
-          title="Get help"
+          title="Get Help"
           persistAs="getHelp"
           toggleId={getHelpToggleId}
           bind:open={isGetHelpOpen}
         >
-          <PasteHelpBox
-            bind:this={pasteHelp}
-            backend={panel.backend}
-            {sourcePanel}
-            oncopy={copyToClipboard}
-          />
+          <PasteHelpBox bind:this={pasteHelp} {sourcePanel} oncopy={copyToClipboard} />
         </Disclosure>
       {/if}
       {#if isHistoryShown}

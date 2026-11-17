@@ -394,7 +394,7 @@ suite("reported once: exercise commands", function () {
 
     expect(shown).toEqual([])
     expect(panelFailures()).toEqual([
-      expect.stringMatching(/^submissionView: .*Log in again to continue\.$/),
+      expect.stringMatching(/^submissionView: You were logged out\. Log in again\.$/),
     ])
   })
 
@@ -795,7 +795,7 @@ suite("reported once: the Courses view and course details", function () {
     await loud.run("tmc.updateExercises", "loud")
     await silent.run("tmc.updateExercises", "silent")
 
-    expect(loud.shown).toEqual(["error: Failed to check courses.mooc.fi for exercise updates."])
+    expect(loud.shown).toEqual(["error: Failed to check for exercise updates."])
     expect(silent.shown).toEqual([])
   })
 
@@ -839,7 +839,7 @@ suite("reported once: the Courses view and course details", function () {
     const [[headline, error]] = vi.mocked(actionContext.dialog.reportError).mock.calls as [
       [string, Error],
     ]
-    expect(headline).toBe("Failed to check courses.mooc.fi for exercise updates.")
+    expect(headline).toBe("Failed to check for exercise updates.")
     expect(error).toBeInstanceOf(InsufficientScopeError)
     expect(actionContext.startup.userData.getMoocCourses()[0]?.accessLoss).toBeUndefined()
   })

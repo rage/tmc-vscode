@@ -1,11 +1,11 @@
 import { z } from "zod"
 
 import type { BackendKind } from "./enum"
-import { backendName, ExerciseIdentifierSchema } from "./enum"
+import { ExerciseIdentifierSchema } from "./enum"
 import { CourseAiPolicy } from "./generated/langs"
 
-/** What the account status bar item and the course home say of an expired session. */
-export const SESSION_EXPIRED_DETAIL = `Your ${backendName("mooc")} session has expired. Log in again to download and submit exercises.`
+/** What every surface says of a session that expired or was revoked. */
+export const LOGGED_OUT_MESSAGE = "You were logged out. Log in again."
 
 const BackendKindSchema = z.enum(["tmc", "mooc"]) satisfies z.ZodType<BackendKind>
 

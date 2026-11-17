@@ -160,7 +160,7 @@ suite("downloadOrUpdateExercises action", function () {
     expect(result.failed).toEqual([idOfTmcExercise(70)])
     expect(result.failureCause).toBeInstanceOf(CourseAccessLostError)
     expect(result.warnings.map((w) => w.headline)).toEqual([
-      "Lost Course no longer exists on tmc.mooc.fi, so its exercises cannot be downloaded.",
+      "Lost Course no longer exists, so its exercises cannot be downloaded.",
     ])
   })
 
@@ -649,7 +649,7 @@ suite("downloadOrUpdateExercises action", function () {
 
       expect(result.successful).toEqual([fresh.id])
       expect(result.warnings.map((w) => w.headline)).toEqual([
-        `Downloaded the template of the exercise ${freshId}: the latest submission could not be restored. Use Download Old Submission to get it.`,
+        `Downloaded the template of the exercise ${freshId}: the latest submission could not be restored. Use History to get it.`,
       ])
     })
 

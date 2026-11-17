@@ -182,8 +182,8 @@ export function registerCommands(
     const courseId =
       courseIdOf(target) ??
       (await commands.pickCourse(readyContext, {
-        title: "Course Details",
-        placeHolder: "Which course page do you want to open?",
+        title: "Open Course Home",
+        placeHolder: "Which course do you want to open?",
       }))
     if (courseId) {
       showCourseHome(courseId)

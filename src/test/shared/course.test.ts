@@ -112,7 +112,7 @@ suite("submitRefusalOf", () => {
       submitRefusalOf(mooc({ exerciseLocked: true, deadline: "2026-11-01T00:00:00Z" }), now),
     ).toBe("exerciseLocked")
     expect(submitRefusalSentence("exerciseLocked", "loops")).toBe(
-      "loops is locked for you, so it can no longer be submitted. Only a teacher can unlock it.",
+      "The teacher has locked loops, so it can no longer be submitted.",
     )
   })
 
@@ -142,7 +142,7 @@ suite("submitRefusalOf", () => {
 
   test("names the exercise and its chapter in the sentence", () => {
     expect(submitRefusalSentence("chapterCompletedAndLocked", "loops", "Loops")).toBe(
-      'You have completed and locked the chapter "Loops", so loops can no longer be submitted.',
+      'The chapter "Loops" is locked, so loops can no longer be submitted.',
     )
     expect(triesLeftText(1)).toBe("1 try left")
     expect(triesLeftText(2)).toBe("2 tries left")

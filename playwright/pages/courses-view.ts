@@ -68,7 +68,10 @@ export class CoursesViewPage extends TmcPage {
 
   /** Opens the add-course screen from the view's title bar. */
   public async openAddCourse(): Promise<AddCoursePage> {
-    await this.page.getByRole("button", { name: "Add Course...", exact: true }).click()
+    await this.page
+      .getByRole("toolbar", { name: "TestMyCode: Courses actions" })
+      .getByRole("button", { name: "Add Course", exact: true })
+      .click()
     const addCourse = new AddCoursePage(this.page, this.webview)
     await addCourse.expectShown()
     return addCourse
@@ -104,7 +107,7 @@ export class CoursesViewPage extends TmcPage {
    */
   public async logInToMooc(): Promise<void> {
     await this.startMoocLogin()
-    await expect(this.statusBarMessage("Logged in to courses.mooc.fi.")).toBeVisible()
+    await expect(this.statusBarMessage("Logged in.")).toBeVisible()
     await new AddCoursePage(this.page, this.webview).expectShown()
   }
 }

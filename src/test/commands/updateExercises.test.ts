@@ -368,7 +368,7 @@ suite("updateExercises command", function () {
     await updateExercises(silentContext, "silent")
 
     expect(loudDialog.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to check courses.mooc.fi for exercise updates.",
+      "Failed to check for exercise updates.",
       error,
     )
     expect(loudDialog.notification).not.toHaveBeenCalled()
@@ -392,7 +392,7 @@ suite("updateExercises command", function () {
     await updateExercises(context, "loud")
 
     expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Failed to check tmc.mooc.fi and courses.mooc.fi for exercise updates.",
+      "Failed to check for exercise updates.",
       tmcError,
     )
   })

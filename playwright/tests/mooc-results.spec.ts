@@ -29,11 +29,9 @@ vsCodeTest("a failing submission lists the server's tests", async ({ page, webvi
     await page.locator(".monaco-editor").first().click()
     await page
       .getByRole("toolbar", { name: "Editor actions" })
-      .getByLabel("Submit Solution", { exact: true })
+      .getByLabel("Submit", { exact: true })
       .click()
-    await expect(
-      sidePanel.getByRole("heading", { name: "Some tests failed on the server" }),
-    ).toBeVisible()
+    await expect(sidePanel.getByRole("heading", { name: "Not passed", exact: true })).toBeVisible()
     await expect(sidePanel.getByText("1 of 2 tests passed")).toBeVisible()
     await expect(sidePanel.getByText("HelloTest.counts", { exact: true })).toBeVisible()
     await expect(sidePanel.getByText("expected 2 but was 1")).toBeVisible()
@@ -80,7 +78,7 @@ vsCodeTest(
     const exercise = coursesView.row("limited_tries_exercise")
     const submitButton = page
       .getByRole("toolbar", { name: "Editor actions" })
-      .getByLabel("Submit Solution", { exact: true })
+      .getByLabel("Submit", { exact: true })
 
     await vsCodeTest.step("open the exercise, which has one try, in its workspace", async () => {
       await coursesView.goto()
@@ -100,7 +98,7 @@ vsCodeTest(
       await expect(dialog).toContainText("This is your last try on limited_tries_exercise. Submit?")
       await dialog.getByRole("button", { name: "Submit", exact: true }).click()
       await expect(
-        sidePanel.getByRole("heading", { name: "Some tests failed on the server" }),
+        sidePanel.getByRole("heading", { name: "Not passed", exact: true }),
       ).toBeVisible()
     })
 

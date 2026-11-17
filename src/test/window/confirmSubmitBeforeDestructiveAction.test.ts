@@ -48,11 +48,11 @@ suite("confirmSubmitBeforeDestructiveAction", function () {
       ])
     expect(choices).toEqual([
       [
-        "Your current code will be replaced by the exercise template. Submit it to tmc.mooc.fi first to keep a copy you can download later.",
+        "Your current code will be replaced by the exercise template. Submit it first to keep a copy you can restore from History.",
         ["Submit and Reset", "Reset Without Submitting"],
       ],
       [
-        "Your current code will be replaced by the exercise template. Back it up to courses.mooc.fi first to keep a copy you can download later. A backup is not graded, and courses.mooc.fi keeps your newest 20 backups of each exercise.",
+        "Your current code will be replaced by the exercise template. Back it up first to keep a copy you can restore from History. A backup is not graded, and only your newest 20 backups of each exercise are kept.",
         ["Back Up and Reset", "Reset Without Backup"],
       ],
     ])
@@ -66,8 +66,7 @@ suite("confirmSubmitBeforeDestructiveAction", function () {
     expect(actionContext.dialog.choose).not.toHaveBeenCalled()
     expect(actionContext.dialog.confirm).toHaveBeenCalledExactlyOnceWith("Reset hello?", {
       confirmLabel: "Reset",
-      detail:
-        "Your current code, already submitted to tmc.mooc.fi, will be replaced by the exercise template.",
+      detail: "Your current code, already submitted, will be replaced by the exercise template.",
     })
 
     vi.mocked(actionContext.dialog.confirm).mockResolvedValue(false)
@@ -77,10 +76,7 @@ suite("confirmSubmitBeforeDestructiveAction", function () {
   })
 
   test.each([
-    [
-      "backup",
-      "Your current code, already backed up to courses.mooc.fi, will be replaced by the exercise template.",
-    ],
+    ["backup", "Your current code, already backed up, will be replaced by the exercise template."],
     [
       "reset",
       "Your current code, unchanged since the exercise was reset, will be replaced by the exercise template.",

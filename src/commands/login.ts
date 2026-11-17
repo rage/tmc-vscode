@@ -1,6 +1,5 @@
 import * as vscode from "vscode"
 
-import { backendName } from "../../shared/lib"
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import type { LoginOptions } from "../ui/loginScreens"
@@ -9,8 +8,6 @@ import { Logger, openWebLink, redactUrlQuery } from "../utilities"
 import { showNextWalkthroughStep, walkthroughProgressOf } from "../window/walkthrough"
 import { handOverExercises } from "./handOverExercises"
 import { refreshEverything } from "./refreshEverything"
-
-const SITE = backendName("mooc")
 
 /** How a login ended. `cancelled` also covers a newer login replacing this one. */
 export type LoginOutcome = "loggedIn" | "cancelled" | "failed"
@@ -96,7 +93,7 @@ export async function login(
   }
 
   loginScreens.update(panel, { phase: "loggedIn" })
-  dialog.statusMessage(`Logged in to ${SITE}.`)
+  dialog.statusMessage("Logged in.")
   void handOverExercises(actionContext).catch((e) =>
     Logger.error("Checking whose the exercises are after login failed", e),
   )

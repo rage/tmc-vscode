@@ -57,8 +57,7 @@ export class WorkspaceTrustGate implements vscode.Disposable {
       this._pendingRetry = { retry, offer, refusedAt: this._now() }
     }
     return new WorkspaceUntrustedError(
-      "This course workspace is in Restricted Mode, so TestMyCode can't run, submit or share" +
-        " exercise code. Trust the course workspace to continue.",
+      "This course workspace is in Restricted Mode. Trust it to run tests, submit and get help.",
     )
   }
 

@@ -211,7 +211,7 @@ suite("ExerciseStatusBarItem", function () {
     )
     track(new ExerciseStatusBarItem(h.sources))
 
-    expect(itemOf().text).toContain("waiting for teacher review")
+    expect(itemOf().text).toContain("waiting for review")
     expect(itemOf().text).not.toContain("0/2")
   })
 
@@ -229,7 +229,7 @@ suite("ExerciseStatusBarItem", function () {
     track(new ExerciseStatusBarItem(h.sources))
 
     expect(itemOf().text).toContain("1/2")
-    expect(itemOf().text).toContain("waiting for teacher review")
+    expect(itemOf().text).toContain("waiting for review")
   })
 
   test("says when the backend reports no tries left", function () {
@@ -308,12 +308,12 @@ suite("showExerciseActions", function () {
     expect(offered()).toEqual([
       "Show Results",
       "Run Tests",
-      "Submit Solution",
-      "Share Exercise via Paste",
-      "Download Old Submission…",
+      "Submit",
+      "Get Help",
+      "History",
       "Reset Exercise",
       "Open Next Exercise",
-      "Reveal in Courses View",
+      "Show in Courses View",
     ])
     expect(executeCommand).toHaveBeenCalledWith("tmc.submitExercise", exerciseHelloWorld.uri)
   })
@@ -345,7 +345,7 @@ suite("showExerciseActions", function () {
 
     await showExerciseActions(new Dialog(), harness().sources, false)
 
-    expect(offered()).toEqual(["Run Tests", "Open Next Exercise", "Reveal in Courses View"])
+    expect(offered()).toEqual(["Run Tests", "Open Next Exercise", "Show in Courses View"])
   })
 
   test("for an exercise removed from its course, offers only what runs locally and says why", async function () {
@@ -355,7 +355,7 @@ suite("showExerciseActions", function () {
 
     await showExerciseActions(new Dialog(), h.sources, true)
 
-    expect(offered()).toEqual(["Run Tests", "Open Next Exercise", "Reveal in Courses View"])
+    expect(offered()).toEqual(["Run Tests", "Open Next Exercise", "Show in Courses View"])
     expect(showQuickPick.mock.calls[0]?.[1]).toMatchObject({
       placeHolder: expect.stringMatching(/^Removed from the course/),
     })
@@ -370,8 +370,8 @@ suite("showExerciseActions", function () {
 
     await showExerciseActions(new Dialog(), h.sources, true)
 
-    expect(offered()).not.toContain("Submit Solution")
-    expect(offered()).toContain("Share Exercise via Paste")
+    expect(offered()).not.toContain("Submit")
+    expect(offered()).toContain("Get Help")
     expect(showQuickPick.mock.calls[0]?.[1]).toMatchObject({
       placeHolder: "Can't be submitted: no tries left",
     })
@@ -419,7 +419,7 @@ suite("showExerciseActions", function () {
 
     await showExerciseActions(new Dialog(), h.sources, true)
 
-    expect(offered()).toEqual(["Run Tests", "Open Next Exercise", "Reveal in Courses View"])
+    expect(offered()).toEqual(["Run Tests", "Open Next Exercise", "Show in Courses View"])
     expect(showQuickPick.mock.calls[0]?.[1]).toMatchObject({
       placeHolder: expect.stringContaining('chapter "Recursion" has not opened yet'),
     })
@@ -432,7 +432,7 @@ suite("showExerciseActions", function () {
 
     await showExerciseActions(new Dialog(), sources, true)
 
-    expect(offered()).not.toContain("Reveal in Courses View")
+    expect(offered()).not.toContain("Show in Courses View")
   })
 
   test("shows nothing outside an exercise", async function () {

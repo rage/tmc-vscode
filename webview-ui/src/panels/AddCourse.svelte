@@ -227,7 +227,7 @@
 {/snippet}
 
 <div class="add-course">
-  <PanelHeader title="Add a Course">
+  <PanelHeader title="Add Course">
     {#snippet toolbar()}
       <ActionMenu actions={[{ label: `Find a Course on ${MOOC}`, onselect: findCourse }]} />
     {/snippet}
@@ -255,7 +255,7 @@
       </ErrorNotice>
     {:else if mooc.value.kind === "loggedOut"}
       <Notice kind="info" title="Not logged in">
-        <p>Log in to {MOOC} to see the courses you are enrolled in.</p>
+        <p>Log in with your MOOC.fi account to see the courses you are enrolled in.</p>
         {#snippet actions()}
           <Button onclick={logIn}>Log In</Button>
         {/snippet}
@@ -316,7 +316,7 @@
       </ErrorNotice>
     {:else if organizations.value.kind === "loggedOut"}
       <Notice kind="info" title="Not logged in">
-        <p>Log in to {MOOC} to see the courses on {TMC}.</p>
+        <p>Log in with your MOOC.fi account to see the courses on {TMC}.</p>
         {#snippet actions()}
           <Button secondary onclick={logIn}>Log In</Button>
         {/snippet}

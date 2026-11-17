@@ -103,12 +103,14 @@ vsCodeTest(
         .getByLabel("Run Tests", { exact: true })
         .click()
       const results = await tmc.panelHeaded("passing_exercise")
-      await expect(results.getByRole("heading", { name: "All tests passed locally" })).toBeVisible()
+      await expect(
+        results.getByRole("heading", { name: "Tests pass on your computer" }),
+      ).toBeVisible()
       await expect(passToast).toHaveCount(0)
 
       await results.getByRole("button", { name: "Log In to Submit" }).click()
 
-      await expect(results.getByRole("heading", { name: "Exercise passed" })).toBeVisible({
+      await expect(results.getByRole("heading", { name: "Passed", exact: true })).toBeVisible({
         timeout: 30_000,
       })
     })

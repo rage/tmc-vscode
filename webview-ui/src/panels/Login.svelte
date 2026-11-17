@@ -2,7 +2,6 @@
   import { untrack } from "svelte"
 
   import type { LoginAction, LoginFailure, LoginPanel, LoginView } from "../../../shared/lib"
-  import { backendName } from "../../../shared/lib"
   import type { BarAction } from "../components/ActionBar.svelte"
   import ActionBar from "../components/ActionBar.svelte"
   import Button from "../components/Button.svelte"
@@ -20,13 +19,11 @@
   /** The courses.mooc.fi device-flow login, which the host runs and reports here. */
   let { panel }: Props = $props()
 
-  const SITE = backendName("mooc")
-
   const FAILURE_TITLES: Record<LoginFailure, string> = {
     denied: "Login denied",
     expired: "Login code expired",
     unreachable: "Connection failed",
-    serverError: `${SITE} ran into a problem`,
+    serverError: "The server ran into a problem",
     other: "Login failed",
   }
 
@@ -58,7 +55,7 @@
       case "failed":
         return FAILURE_TITLES[next.failure]
       case "loggedIn":
-        return `Logged in to ${SITE}`
+        return "Logged in"
     }
   }
 
@@ -126,7 +123,7 @@
 </script>
 
 <div class="login">
-  <PanelHeader title="Log in to {SITE}" />
+  <PanelHeader title="Log In" />
 
   {#if view.phase === "requestingCode"}
     <p><Spinner label="Getting a login code…" /></p>
@@ -144,7 +141,7 @@
       <p class="muted">Could not copy the code. Select it and copy it by hand.</p>
     {/if}
     <ActionBar
-      primary={{ label: `Open ${SITE}`, onclick: () => run("openVerificationPage") }}
+      primary={{ label: "Open MOOC.fi", onclick: () => run("openVerificationPage") }}
       secondary={[cancel]}
     />
     <p class="waiting">
@@ -167,7 +164,7 @@
     />
   {:else}
     <StatusBanner tone="passed" title="Logged in">
-      <p>You are logged in to {SITE}.</p>
+      <p>You are logged in with your MOOC.fi account.</p>
     </StatusBanner>
   {/if}
 </div>

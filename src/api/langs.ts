@@ -32,7 +32,6 @@ import type {
 import { CliNotification, CliOutputData, CliStatusUpdate } from "../../shared/langsSchema"
 import type { BackendKind, CourseIdentifier, Enum } from "../../shared/lib"
 import {
-  backendName,
   BaseError,
   ExerciseIdentifier,
   makeMoocKind,
@@ -759,8 +758,8 @@ export default class Langs {
           courseId: makeMoocKind({ moocCourseId: course_id }),
           refusal:
             kind === "insufficient-scope"
-              ? new InsufficientScopeError(`${backendName("mooc")} refused the course.`)
-              : new NotFoundError(`${backendName("mooc")} no longer has the course.`),
+              ? new InsufficientScopeError("You no longer have access to the course.")
+              : new NotFoundError("The course no longer exists."),
         })),
       }))
     }
@@ -1483,23 +1482,21 @@ export default class Langs {
       case "chapter-not-unlocked-yet":
         return Err(
           new ChapterLockedError(
-            "This exercise's chapter is locked until you have completed the chapters before it.",
+            "Complete the chapters before this exercise's chapter to submit it.",
             details,
           ),
         )
       case "chapter-completed-and-locked":
         return Err(
           new ChapterLockedError(
-            "You have completed and locked this exercise's chapter, so its exercises can no" +
-              " longer be submitted.",
+            "This exercise's chapter is locked, so the exercise can no longer be submitted.",
             details,
           ),
         )
       case "exercise-locked":
         return Err(
           new ExerciseLockedError(
-            "This exercise is locked for you, so it can no longer be submitted. Only a teacher" +
-              " can unlock it.",
+            "The teacher has locked this exercise, so it can no longer be submitted.",
             details,
           ),
         )
@@ -1508,7 +1505,7 @@ export default class Langs {
       case "rate-limited":
         return Err(
           new RateLimitedError(
-            "You have sent this exercise for help too many times recently. Try again in a few minutes.",
+            "You have sent this exercise to the pastebin too often. Try again in a few minutes.",
             details,
           ),
         )
@@ -1546,9 +1543,7 @@ export default class Langs {
       case "exercise-not-found":
         return Err(
           new ExerciseNotFoundError(
-            auth.backend
-              ? `This exercise no longer exists on ${backendName(auth.backend)}.`
-              : message,
+            auth.backend ? "This exercise is no longer in the course." : message,
             details,
           ),
         )

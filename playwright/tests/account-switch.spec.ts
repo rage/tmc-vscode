@@ -37,7 +37,7 @@ vsCodeTest.describe(() => {
 
       await vsCodeTest.step("the first student logs in and downloads an exercise", async () => {
         await moocLoginPage.gotoFromCoursesView()
-        await expect(moocLoginPage.statusBarMessage("Logged in to courses.mooc.fi.")).toBeVisible()
+        await expect(moocLoginPage.statusBarMessage("Logged in.")).toBeVisible()
         await new AddCoursePage(page, webview).addMoocCourse(courseTitle)
         await coursesView.goto()
         await coursesView.expand(coursesView.row(courseTitle))
@@ -52,13 +52,13 @@ vsCodeTest.describe(() => {
         await expect(coursesView.statusBarMessage("Logged out.")).toBeVisible()
         await setCurrentUser(OTHER_STUDENT_ID)
         await accountStatusBarItem(page, /not logged in/).click()
-        await expect(moocLoginPage.statusBarMessage("Logged in to courses.mooc.fi.")).toBeVisible()
+        await expect(moocLoginPage.statusBarMessage("Logged in.")).toBeVisible()
       })
 
       await vsCodeTest.step("moving the first student's exercises aside", async () => {
         const dialog = moocLoginPage
           .modalDialog()
-          .filter({ hasText: "were downloaded by another courses.mooc.fi account" })
+          .filter({ hasText: "were downloaded by another MOOC.fi account" })
         await expect(dialog).toBeVisible()
         await dialog.getByRole("button", { name: "Move Them Aside" }).click()
         await expect(

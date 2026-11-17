@@ -271,13 +271,16 @@ const moocCourseWithRules = courseHomeView({
       key: "chapter:2",
       name: "Conditionals and loops",
       isDefaultOpen: true,
-      lockedReason: "Locked until you have completed the chapters before it.",
+      lockedReason: "Complete earlier chapters first.",
       exercises: [
         moocExercise(4, "Is it even?", {
           submitRefusal: {
-            label: "chapter not unlocked yet",
-            sentence:
-              'Is it even? can be submitted once you have completed the chapters before the chapter "Conditionals and loops".',
+            label: SUBMIT_REFUSAL_LABELS.chapterNotUnlockedYet,
+            sentence: submitRefusalSentence(
+              "chapterNotUnlockedYet",
+              "Is it even?",
+              "Conditionals and loops",
+            ),
           },
         }),
       ],
@@ -661,7 +664,7 @@ export const SCENARIOS: Scenario[] = [
           {
             id: makeTmcKind({ tmcExerciseId: 103 }),
             name: "03_sum_of_numbers",
-            reason: "tmc.mooc.fi could not be reached. Check your network connection.",
+            reason: "Could not reach the server. Check your network connection.",
           },
         ],
       },
@@ -675,8 +678,7 @@ export const SCENARIOS: Scenario[] = [
       {
         ...moocCourse,
         aiPolicy: { policy: "no_ai", isAiAllowed: false },
-        aiPolicyChange:
-          "AI may not be used at any point. TestMyCode turns AI assistance off in the course workspace.",
+        aiPolicyChange: "AI may not be used at any point. AI assistance is off in this course.",
       },
     ),
   },
@@ -693,7 +695,7 @@ export const SCENARIOS: Scenario[] = [
           tone: "error",
           title: "Failed to download the exercises.",
           error: {
-            message: "tmc.mooc.fi returned an error (500). Try again later.",
+            message: "The server ran into a problem. Try again later.",
             detailsId: "download-failure",
           },
         },
@@ -1026,7 +1028,7 @@ export const SCENARIOS: Scenario[] = [
       submissionViewMessage(
         submissionPanel.id,
         submitFailedView({
-          message: "tmc.mooc.fi returned an error (500). Try again later.",
+          message: "The server ran into a problem. Try again later.",
           detailsId: "submit-failure",
         }),
       ),
@@ -1053,7 +1055,7 @@ export const SCENARIOS: Scenario[] = [
     phase: "failed",
     failure: "unreachable",
     error: {
-      message: "Could not reach courses.mooc.fi. Check your internet connection.",
+      message: "Could not reach the server. Check your internet connection.",
       detailsId: "login-failure",
     },
   }),
@@ -1088,7 +1090,7 @@ export const SCENARIOS: Scenario[] = [
     requestMoocCatalog: { ok: true, value: { kind: "loggedOut" } },
     requestTmcOrganizations: {
       ok: false,
-      error: { message: "Could not reach tmc.mooc.fi. Check your internet connection." },
+      error: { message: "Could not reach the server. Check your network connection." },
     },
   }),
   {

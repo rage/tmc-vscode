@@ -312,7 +312,7 @@ suite("Langs class arg building", function () {
     stubSpawn(langs, () => Ok(errorOutput("exercise-not-found", line, [`Caused by: ${line}`], 404)))
     const result = await call(langs)
     expect(result.val).toBeInstanceOf(ExerciseNotFoundError)
-    expect((result.val as Error).message).toBe("This exercise no longer exists on courses.mooc.fi.")
+    expect((result.val as Error).message).toBe("This exercise is no longer in the course.")
     expect((result.val as ExerciseNotFoundError).details).toContain(line)
   })
 
@@ -914,9 +914,9 @@ suite("Langs error-kind mapping", function () {
     ["deadline-passed", "The deadline of this exercise has passed"],
     ["out-of-tries", "You have no tries left on this exercise"],
     ["chapter-not-open-yet", "This exercise's chapter has not opened yet"],
-    ["chapter-not-unlocked-yet", "locked until you have completed the chapters before it"],
-    ["chapter-completed-and-locked", "You have completed and locked this exercise's chapter"],
-    ["exercise-locked", "This exercise is locked for you, so it can no longer be submitted"],
+    ["chapter-not-unlocked-yet", "Complete the chapters before this exercise's chapter"],
+    ["chapter-completed-and-locked", "This exercise's chapter is locked"],
+    ["exercise-locked", "The teacher has locked this exercise"],
   ])("a %s refusal says so plainly, never as a lost login", async function (kind, message) {
     const onLogout = vi.fn()
     const langs = newLangs()

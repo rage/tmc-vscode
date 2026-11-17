@@ -82,7 +82,10 @@ vsCodeTest("search narrows the organizations as it is typed", async ({ page, web
  * the view's Add Course action, shown under the same activation keys.
  */
 async function waitForActivation(page: Page): Promise<void> {
-  await expect(page.getByRole("button", { name: "Add Course...", exact: true })).toBeVisible({
+  const addCourse = page
+    .getByRole("toolbar", { name: "TestMyCode: Courses actions" })
+    .getByRole("button", { name: "Add Course", exact: true })
+  await expect(addCourse).toBeVisible({
     timeout: 30_000,
   })
 }

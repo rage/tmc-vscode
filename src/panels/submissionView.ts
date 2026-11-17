@@ -84,7 +84,7 @@ export function standingView(
   return {
     ...emptyView,
     phase: "standing",
-    headline: passed ? "Exercise passed" : isOutOfTries ? "Exercise not passed" : "Not passed yet",
+    headline: passed ? "Passed" : "Not passed",
     tone: passed ? "passed" : isOutOfTries ? "failed" : "info",
     points:
       availablePoints > 0 && !arePointsHeld
@@ -101,7 +101,7 @@ export function testedLocallyView(): SubmissionView {
   return {
     ...emptyView,
     phase: "testedLocally",
-    headline: "All tests passed locally",
+    headline: "Tests pass on your computer",
     tone: "passed",
     explanation: "Submit the exercise to have it graded.",
   }
@@ -161,7 +161,7 @@ export function tmcResultView(
       return {
         ...shared,
         phase: "finished",
-        headline: isPassed ? "All tests passed on the server" : "Some tests failed on the server",
+        headline: isPassed ? "Passed" : "Not passed",
         tone: isPassed ? "passed" : scoreTone(points.given),
         points,
       }
@@ -243,7 +243,7 @@ export function moocGradingView(
         return {
           ...graded,
           phase: "finished",
-          headline: isBelowMax ? "Some tests failed on the server" : "All tests passed",
+          headline: isBelowMax ? "Some tests failed" : "All tests passed",
           tone: isBelowMax ? scoreTone(given) : "passed",
           points: undefined,
           ...reviewNote,
@@ -257,7 +257,7 @@ export function moocGradingView(
         headline: isPassedEarlier
           ? "This submission failed some tests"
           : isBelowMax
-            ? "Some tests failed on the server"
+            ? "Not passed"
             : fullyGradedHeadline(standing),
         // This score does not count, so it is no failure, and a meter of it would read as lost points.
         tone: isPassedEarlier ? "info" : isBelowMax ? scoreTone(given) : fullyGradedTone(standing),
@@ -358,12 +358,12 @@ function fullyGradedTone(standing: ExerciseStanding | null | undefined): Submiss
 function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): string {
   switch (standing) {
     case "Passed":
-      return "Exercise passed"
+      return "Passed"
     case "Attempted":
     case "OutOfTries":
-      return "Some tests failed on the server"
+      return "Not passed"
     default:
-      return "Exercise graded"
+      return "Graded"
   }
 }
 

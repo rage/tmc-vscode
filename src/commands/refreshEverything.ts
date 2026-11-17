@@ -191,7 +191,9 @@ function announceAiPolicyChanges(
       continue
     }
     const courseId = LocalCourseData.getCourseId(course)
-    const sentence = `${aiPolicyRule(course.data.aiPolicy)} ${aiAssistanceSentence(isAiAllowed(course))}`
+    const sentence = [aiPolicyRule(course.data.aiPolicy), aiAssistanceSentence(isAiAllowed(course))]
+      .filter((part) => part !== undefined)
+      .join(" ")
     recentPolicyChanges.add(courseId, sentence)
     if (!shownCourseHome.isShowing(courseId)) {
       void dialog.notification(

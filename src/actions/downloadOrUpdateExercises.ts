@@ -126,7 +126,7 @@ function courseAccessRefusal(
   const sentence =
     LocalCourseData.getAccessLoss(firstCourse) === "forbidden"
       ? `You no longer have access to ${title}, so its exercises cannot be downloaded.`
-      : `${title} no longer exists on ${backendName(firstCourse.kind)}, so its exercises cannot be downloaded.`
+      : `${title} no longer exists, so its exercises cannot be downloaded.`
   return { exerciseIds: refused, error: new CourseAccessLostError(sentence) }
 }
 
@@ -290,7 +290,7 @@ async function download(
   if (unrestored.length > 0) {
     const names = unrestored.map((id) => exerciseName(actionContext, id))
     warnings.push({
-      headline: `Downloaded the template of ${describeExercises(names)}: the latest submission could not be restored. Use Download Old Submission to get it.`,
+      headline: `Downloaded the template of ${describeExercises(names)}: the latest submission could not be restored. Use History to get it.`,
       error: new ExerciseUpdateError("restoring the latest submission failed"),
     })
   }

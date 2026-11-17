@@ -266,8 +266,8 @@ function moocListingRows(
   if (listing === actions.MOOC_LOGIN) {
     return [
       {
-        label: `Log in to ${backendName("mooc")}`,
-        description: "to list the courses you are enrolled in",
+        label: "Log In",
+        description: "with your MOOC.fi account to list the courses you are enrolled in",
         iconPath: new vscode.ThemeIcon("sign-in"),
         choice: { kind: "login" },
       },
@@ -281,7 +281,7 @@ function moocListingRows(
   if (listing.val.length === 0) {
     return [
       {
-        label: `Find a course on ${backendName("mooc")}`,
+        label: `Find a Course on ${backendName("mooc")}`,
         description: "You are not enrolled on any course with programming exercises yet",
         iconPath: new vscode.ThemeIcon("link-external"),
         choice: { kind: "findCourse" },

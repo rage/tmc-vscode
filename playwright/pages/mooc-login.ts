@@ -20,7 +20,7 @@ export class MoocLoginPage extends TmcPage {
   }
 
   public heading(): Locator {
-    return this.webview.getByRole("heading", { level: 1, name: "Log in to courses.mooc.fi" })
+    return this.webview.getByRole("heading", { level: 1, name: "Log In" })
   }
 
   /** The code of the `attempt`th login since the test started, as the screen shows it. */

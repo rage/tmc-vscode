@@ -11,7 +11,7 @@ function statusBarItem(page: Page, name: RegExp) {
 vsCodeTest("the account item shows the logged-in session", async ({ page, webview }) => {
   await new MoocLoginPage(page, webview).openMenu()
 
-  await expect(statusBarItem(page, /logged in with courses\.mooc\.fi/)).toBeVisible()
+  await expect(statusBarItem(page, /logged in with your MOOC\.fi account/)).toBeVisible()
 })
 
 vsCodeTest.describe(() => {

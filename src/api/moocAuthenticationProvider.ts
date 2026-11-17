@@ -5,6 +5,7 @@ import { backendName } from "../../shared/lib"
 /** Must match the `authentication` contribution's `id` in package.json. */
 export const MOOC_AUTHENTICATION_PROVIDER_ID = "courses-mooc-fi"
 
+// VS Code stores which extensions may use an account under its label; renaming it drops them.
 const SITE = backendName("mooc")
 
 const SESSION: vscode.AuthenticationSession = {
@@ -49,7 +50,7 @@ export class MoocAuthenticationProvider
       throw new Error(`${SITE} sessions have no scopes.`)
     }
     if (!(await this._account.login())) {
-      throw new Error(`Did not log in to ${SITE}.`)
+      throw new Error("You did not log in.")
     }
     return SESSION
   }

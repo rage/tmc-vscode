@@ -4,7 +4,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { backendName, LocalCourseData, toError } from "../shared/lib"
+import { LocalCourseData, LOGGED_OUT_MESSAGE, toError } from "../shared/lib"
 import { onDidFinishSubmission, refreshLocalExercises, scanLocalExercises } from "./actions"
 import type {
   ActionContext,
@@ -49,12 +49,7 @@ import {
 } from "./config/constants"
 import Settings from "./config/settings"
 import { UserData } from "./config/userdata"
-import {
-  FileSystemError,
-  InitializationError,
-  presentationFor,
-  SESSION_ENDED_MESSAGE,
-} from "./errors"
+import { FileSystemError, InitializationError } from "./errors"
 import * as init from "./init"
 import { OpenCourseRefresh } from "./openCourseRefresh"
 import { TmcPanel } from "./panels/TmcPanel"
@@ -105,16 +100,9 @@ function makeInitializationErrorReporter(dialog: Dialog): InitializationErrorRep
       if (!first) {
         return
       }
-      const { message } = presentationFor(first.error)
-      const others =
-        new Set(failures.map(({ error }) => `${error.name}\n${error.message}`)).size - 1
-      const more =
-        others > 0
-          ? ` ${others} more ${others === 1 ? "problem is" : "problems are"} in the logs.`
-          : ""
       const notification =
         `TestMyCode ${isDegraded ? "could not start" : "started with a problem"}. ` +
-        `${first.step} failed: ${message}${more}`
+        `${first.step} failed.`
       // The startup help lists every failure, where Show Details of one would show only it.
       const startupHelp: NotificationButton = [
         "Show Details",
@@ -188,7 +176,10 @@ async function activateFully(context: vscode.ExtensionContext): Promise<void> {
       void vscode.commands.executeCommand("setContext", "test-my-code:Degraded", true)
     }
     const error = toError(e)
-    void new Dialog().errorNotification(`TestMyCode could not start. ${error.message}`, error)
+    void new Dialog().errorNotification(
+      "TestMyCode could not start. Show Details says what failed.",
+      error,
+    )
   }
 }
 
@@ -338,7 +329,7 @@ async function activateInner(
       "Log In",
       (): void => void vscode.commands.executeCommand("tmc.showMoocLogin"),
     ]
-    dialog.warningNotification(SESSION_ENDED_MESSAGE, ...(canOfferLogin ? [logIn] : []))
+    dialog.warningNotification(LOGGED_OUT_MESSAGE, ...(canOfferLogin ? [logIn] : []))
   }
 
   // Seeded from the startup check above; shared with the background poll further down.
@@ -524,7 +515,7 @@ async function activateInner(
       moocAccount,
       vscode.authentication.registerAuthenticationProvider(
         MOOC_AUTHENTICATION_PROVIDER_ID,
-        backendName("mooc"),
+        "MOOC.fi",
         moocAccount,
       ),
       account,

@@ -33,7 +33,7 @@ suite("walkthrough", function () {
     vi.restoreAllMocks()
   })
 
-  test("the next step is the first one not done, then Run the tests", function () {
+  test("the next step is the first one not done, then Run Tests", function () {
     expect(nextWalkthroughStep({ ...done, isLoggedIn: false })).toBe("logIn")
     expect(nextWalkthroughStep({ ...done, hasCourses: false })).toBe("addCourse")
     expect(nextWalkthroughStep({ ...done, hasDownloadedExercises: false })).toBe("openExercises")

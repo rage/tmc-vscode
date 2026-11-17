@@ -142,7 +142,7 @@ suite("downloadExerciseUpdates action", function () {
           courseId: idOfTmcCourse(2),
           exerciseId: idOfTmcExercise(20),
           exerciseName: "20",
-          reason: "courses.mooc.fi could not be reached. Check your network connection.",
+          reason: "Could not reach the server. Check your network connection.",
         },
       ],
       [idOfTmcExercise(10)],

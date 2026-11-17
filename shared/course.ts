@@ -231,10 +231,10 @@ export function modelSolutionUrlOf(exercise: LocalCourseExercise): string | unde
 
 /** A few words for a row that cannot be submitted, e.g. "deadline passed". */
 export const SUBMIT_REFUSAL_LABELS: Record<SubmitRefusal, string> = {
-  chapterNotUnlockedYet: "chapter not unlocked yet",
+  chapterNotUnlockedYet: "complete earlier chapters first",
   chapterCompletedAndLocked: "chapter locked",
   chapterNotOpenYet: "chapter not open yet",
-  exerciseLocked: "locked",
+  exerciseLocked: "locked by the teacher",
   deadlinePassed: "deadline passed",
   outOfTries: "no tries left",
   notEnrolled: "not enrolled",
@@ -255,19 +255,21 @@ export function submitRefusalSentence(
   const chapter = chapterName === undefined ? "its chapter" : `the chapter "${chapterName}"`
   switch (refusal) {
     case "chapterNotUnlockedYet":
-      return `${exerciseName} can be submitted once you have completed the chapters before ${chapter}.`
+      return `Complete the chapters before ${chapter} to submit ${exerciseName}.`
     case "chapterCompletedAndLocked":
-      return `You have completed and locked ${chapter}, so ${exerciseName} can no longer be submitted.`
+      return chapterName === undefined
+        ? `The chapter of ${exerciseName} is locked, so it can no longer be submitted.`
+        : `The chapter "${chapterName}" is locked, so ${exerciseName} can no longer be submitted.`
     case "chapterNotOpenYet":
       return `${exerciseName} can be submitted once ${chapter} opens.`
     case "exerciseLocked":
-      return `${exerciseName} is locked for you, so it can no longer be submitted. Only a teacher can unlock it.`
+      return `The teacher has locked ${exerciseName}, so it can no longer be submitted.`
     case "deadlinePassed":
       return `The deadline of ${exerciseName} has passed, so it can no longer be submitted.`
     case "outOfTries":
       return `You have no tries left on ${exerciseName}, so it can no longer be submitted.`
     case "notEnrolled":
-      return `You are not enrolled on this course, so ${exerciseName} can be submitted once you enroll again.`
+      return `You are not enrolled on this course. Enroll again to submit ${exerciseName}.`
     case "courseForbidden":
       return `You no longer have access to this course, so ${exerciseName} cannot be submitted.`
     case "courseNotFound":
@@ -276,7 +278,7 @@ export function submitRefusalSentence(
 }
 
 /** A few words for a row whose points wait for a teacher's review. */
-export const PENDING_REVIEW_LABEL = "waiting for teacher review"
+export const PENDING_REVIEW_LABEL = "waiting for review"
 
 /**
  * Whether an exercise's points are held back for a pending teacher review. The backend holds them

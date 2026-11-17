@@ -1,5 +1,5 @@
 import type { CourseIdentifier } from "../../shared/lib"
-import { backendName, LocalCourseData } from "../../shared/lib"
+import { LocalCourseData } from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
 import { MOOC_BACKEND_URL } from "../config/constants"
 import { openWebLink } from "../utilities"
@@ -26,7 +26,7 @@ export async function enrollOnCourse(
       ? LocalCourseData.getCourseId(only)
       : await pickCourse(actionContext, {
           title: "Enroll on a Course",
-          placeHolder: `Pick the course to open on ${backendName("mooc")}`,
+          placeHolder: "Which course do you want to enroll on?",
         }))
   if (!target) {
     return

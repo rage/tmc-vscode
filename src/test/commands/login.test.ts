@@ -285,7 +285,7 @@ suite("login command", function () {
 
     expect(await outcome).toBe("loggedIn")
     expect(lastView(h)).toEqual({ phase: "loggedIn" })
-    expect(h.context.dialog.statusMessage).toHaveBeenCalledWith("Logged in to courses.mooc.fi.")
+    expect(h.context.dialog.statusMessage).toHaveBeenCalledWith("Logged in.")
     expect(h.context.dialog.notification).not.toHaveBeenCalled()
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith("tmc.showAddCourse")
     expect(h.closed).toEqual([])
@@ -302,9 +302,7 @@ suite("login command", function () {
 
     expect(await outcome).toBe("loggedIn")
     expect(h.closed).toEqual([panel.id])
-    expect(h.context.dialog.statusMessage).toHaveBeenCalledExactlyOnceWith(
-      "Logged in to courses.mooc.fi.",
-    )
+    expect(h.context.dialog.statusMessage).toHaveBeenCalledExactlyOnceWith("Logged in.")
     expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith("tmc.showAddCourse")
   })
 
@@ -376,7 +374,7 @@ suite("login command", function () {
       phase: "failed",
       failure: "unreachable",
       error: {
-        message: "Could not reach courses.mooc.fi. Check your internet connection.",
+        message: "Could not reach the server. Check your internet connection.",
         detailsId: expect.any(String),
       },
     })
@@ -398,7 +396,7 @@ suite("login command", function () {
     const view = lastView(h)
     expect(view?.phase === "failed" && view.failure).toBe("serverError")
     expect(view?.phase === "failed" && view.error.message).toBe(
-      "courses.mooc.fi returned an error (503). Try again later.",
+      "The server ran into a problem. Try again later.",
     )
   })
 

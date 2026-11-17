@@ -121,14 +121,14 @@ export class TmcPage {
   /**
    * Runs a command the palette lists only while the active editor is an exercise, such as
    * "TestMyCode: Reset Exercise". The palette checks that once, when it opens, so this
-   * first waits for the Submit Solution editor action, shown under the same `when` keys
+   * first waits for the Submit editor action, shown under the same `when` keys
    * (package.json).
    */
   public async runExercisePaletteCommand(title: string): Promise<void> {
     await expect(
       this.page
         .getByRole("toolbar", { name: "Editor actions" })
-        .getByLabel("Submit Solution", { exact: true }),
+        .getByLabel("Submit", { exact: true }),
     ).toBeVisible()
     await this.runPaletteCommand(title)
   }

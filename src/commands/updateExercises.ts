@@ -87,11 +87,10 @@ export async function updateExercises(
   const [firstFailure] = failures
   if (!silent && firstFailure) {
     // One notification however many sites failed; the log has each one's error.
-    const sites = failures.map(({ backend }) => backendName(backend)).join(" and ")
     for (const { backend, error } of failures.slice(1)) {
       Logger.error(`Failed to check ${backendName(backend)} for exercise updates.`, error)
     }
-    void dialog.reportError(`Failed to check ${sites} for exercise updates.`, firstFailure.error)
+    void dialog.reportError("Failed to check for exercise updates.", firstFailure.error)
   }
 
   const updateable = outdated.filter((x) => {

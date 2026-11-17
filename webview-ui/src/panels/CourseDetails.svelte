@@ -13,8 +13,7 @@
   import {
     aiAssistanceSentence,
     aiPolicyRule,
-    backendName,
-    SESSION_EXPIRED_DETAIL,
+    LOGGED_OUT_MESSAGE,
     SOFT_DEADLINE_PENALTY,
   } from "../../../shared/lib"
   import type { BarAction } from "../components/ActionBar.svelte"
@@ -201,9 +200,8 @@
     if (!view) {
       return []
     }
-    const site = backendName(view.backend)
     const findCourse: CourseNoticeAction = {
-      label: `Find the Course on ${site}`,
+      label: "Find the Course",
       onclick: () => runCourseAction("findCourseOnline"),
     }
     const removeCourse: CourseNoticeAction = {
@@ -215,14 +213,14 @@
         key: "restricted",
         tone: "warning",
         title: "Restricted Mode",
-        detail: "Trust this course workspace to run tests, submit and share exercises.",
+        detail: "Trust this course workspace to run tests, submit and get help.",
         actions: [{ label: "Trust", onclick: () => runCommand("tmc.trustCourseWorkspace") }],
       },
       view.isSessionExpired && {
         key: "sessionExpired",
         tone: "warning",
-        title: "Session expired",
-        detail: SESSION_EXPIRED_DETAIL,
+        title: "Logged out",
+        detail: LOGGED_OUT_MESSAGE,
         actions: [{ label: "Log In", onclick: () => runCommand("tmc.showMoocLogin") }],
       },
       !view.isLoggedIn &&
@@ -230,14 +228,14 @@
           key: "loggedOut",
           tone: "info",
           title: "Not logged in",
-          detail: `Log in to ${backendName("mooc")} to download and submit exercises.`,
+          detail: "Log in with your MOOC.fi account to download and submit exercises.",
           actions: [{ label: "Log In", onclick: () => runCommand("tmc.showMoocLogin") }],
         },
       view.isLoggedIn &&
         view.isOffline && {
           key: "offline",
           tone: "warning",
-          title: `${site} could not be reached`,
+          title: "Could not reach the server",
           detail: "Showing the exercises on this computer; deadlines may be out of date.",
         },
       view.accessLoss === "forbidden" && {
@@ -245,14 +243,14 @@
         tone: "warning",
         title: "You no longer have access to this course",
         detail:
-          `${site} no longer shows it to you: it may have been hidden or closed. ` +
+          "It may have been hidden or closed. " +
           "Your exercises stay on this computer, and their tests still run.",
         actions: [findCourse, removeCourse],
       },
       view.accessLoss === "notFound" && {
         key: "accessLoss",
         tone: "warning",
-        title: `This course no longer exists on ${site}`,
+        title: "This course no longer exists",
         detail:
           "It may have been removed or replaced by a new course. " +
           "Your exercises stay on this computer, and their tests still run.",
@@ -263,7 +261,7 @@
           key: "notEnrolled",
           tone: "warning",
           title: "You are not enrolled on this course",
-          detail: `Enroll on the course on ${site} to submit its exercises, then refresh it here.`,
+          detail: "Enroll again to submit its exercises, then refresh the course.",
           actions: [{ ...findCourse, label: "Enroll Again" }, removeCourse],
         },
       view.isDisabled &&
@@ -396,7 +394,7 @@
 
 <div class="course-home">
   {#if view}
-    <PanelHeader title={view.title} subtitle="{view.organization} · {backendName(view.backend)}">
+    <PanelHeader title={view.title} subtitle={view.organization}>
       {#snippet toolbar()}
         <ToolbarButton
           icon="refresh"
@@ -431,7 +429,7 @@
       {/if}
     </div>
 
-    {#if view.aiPolicy}
+    {#if view.aiPolicy && view.aiPolicy.policy !== "not_set"}
       <p class="ai-policy">
         <span class="muted">AI use:</span>
         {aiPolicyRule(view.aiPolicy.policy)}
@@ -446,7 +444,7 @@
     {#if refreshError}
       <ErrorNotice
         error={refreshError}
-        title="Could not refresh this course"
+        title="Refresh failed"
         ondismiss={() => (refreshError = undefined)}
         dismissLabel="Dismiss refresh error"
       />
@@ -485,7 +483,7 @@
       {/snippet}
     </ErrorNotice>
   {:else}
-    <PanelHeader title="Course Details" />
+    <PanelHeader title="Course Home" />
     <Spinner label="Loading the course…" />
   {/if}
 </div>

@@ -24,7 +24,7 @@ suite("ErrorNotice component", () => {
     render(ErrorNotice, {
       props: {
         error: {
-          message: "Log in again to continue.",
+          message: "Log in again.",
           actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
         },
       },

@@ -54,7 +54,7 @@ vsCodeTest(
     })
 
     await vsCodeTest.step("restore the submission from History", async () => {
-      await explorerPage.runContextMenuCommand(fileName, "Download Old Submission")
+      await explorerPage.runContextMenuCommand(fileName, "History")
 
       await expect(sidePanel.getByRole("button", { name: "History", exact: true })).toHaveAttribute(
         "aria-expanded",

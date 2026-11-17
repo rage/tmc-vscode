@@ -7,7 +7,7 @@ import type {
   SharedTmcCourseData,
   SharedTmcCourseExercise,
 } from "../../../shared/lib"
-import { makeTmcKind, SESSION_EXPIRED_DETAIL } from "../../../shared/lib"
+import { makeTmcKind, LOGGED_OUT_MESSAGE } from "../../../shared/lib"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { downloadFailures } from "../../ui/downloadFailures"
@@ -194,9 +194,7 @@ suite("CoursesTree", function () {
     settle()
 
     expect(tree.getChildren()).toHaveLength(1)
-    expect(view.message).toBe(
-      "Log in to courses.mooc.fi to download and submit exercises. The exercises on this computer still open and run their tests.",
-    )
+    expect(view.message).toBe("Log in with your MOOC.fi account to download and submit exercises.")
 
     tree.setAccount({ loggedIn: true, isSessionExpired: false })
     settle()
@@ -209,9 +207,7 @@ suite("CoursesTree", function () {
     tree.setAccount({ loggedIn: false, isSessionExpired: true })
     settle()
 
-    expect(view.message).toBe(
-      `${SESSION_EXPIRED_DETAIL} The exercises on this computer still open and run their tests.`,
-    )
+    expect(view.message).toBe(LOGGED_OUT_MESSAGE)
   })
 
   test("lists the courses as roots, read afresh on every refresh", function () {
@@ -226,13 +222,11 @@ suite("CoursesTree", function () {
   })
 
   // A click expands the course, so Course Details is left to the context menu.
-  test("a course item carries its points, backend and id, and opens its course home on click", function () {
+  test("a course item carries its points and id, and opens its course home on click", function () {
     const item = first(show(tmcCourse())) as CourseTreeItem
 
-    expect(item.description).toBe("12/40 · tmc.mooc.fi")
-    expect(item.accessibilityInformation?.label).toBe(
-      "The Python Course, 12 of 40 points, tmc.mooc.fi",
-    )
+    expect(item.description).toBe("12/40")
+    expect(item.accessibilityInformation?.label).toBe("The Python Course, 12 of 40 points")
     expect(item.contextValue).toBe("course.tmc")
     expect(item.courseId).toEqual(idOfTmcCourse(1))
     expect(item.command).toMatchObject({ command: "tmc.courseDetails", arguments: [item] })
@@ -259,22 +253,21 @@ suite("CoursesTree", function () {
     expect(inWorkspace?.accessibilityInformation?.label).toMatch(/, in workspace,/)
   })
 
-  // Same-titled courses exist on both backends; the backend tells them apart.
-  test("a course without points still names its backend", function () {
-    expect(show(moocCourse())[0]?.description).toBe("courses.mooc.fi")
+  test("a course item does not name its backend's host", function () {
+    expect(show(moocCourse())[0]?.description).toBe("")
   })
 
   test("a disabled course says so", function () {
     const item = first(show(tmcCourse({ disabled: true })))
 
-    expect(item.description).toBe("12/40 · tmc.mooc.fi · disabled")
+    expect(item.description).toBe("12/40 · disabled")
     expect(tooltipOf(item)).toContain("disabled")
   })
 
   test("a mooc course the student is not enrolled on says so", function () {
     const item = first(show(moocCourse({ notEnrolled: true })))
 
-    expect(item.description).toBe("courses.mooc.fi · not enrolled")
+    expect(item.description).toBe("not enrolled")
     expect(tooltipOf(item)).toContain("You are not enrolled on this course")
   })
 
@@ -292,11 +285,11 @@ suite("CoursesTree", function () {
       show(tmcCourse({ disabled: true, accessLoss: { reason: "notFound", checkedAt: 0 } })),
     )
 
-    expect(forbidden.description).toBe("courses.mooc.fi · no access")
+    expect(forbidden.description).toBe("no access")
     expect(tooltipOf(forbidden)).toContain("You no longer have access to this course")
     expect(forbidden.contextValue).toBe("course.mooc")
-    expect(removed.description).toBe("12/40 · tmc.mooc.fi · removed")
-    expect(tooltipOf(removed)).toContain("This course no longer exists on tmc.mooc.fi")
+    expect(removed.description).toBe("12/40 · removed")
+    expect(tooltipOf(removed)).toContain("This course no longer exists.")
   })
 
   test("a course with new exercises is marked for the inline download action", function () {
@@ -488,7 +481,7 @@ suite("CoursesTree", function () {
       expect(item.description).toBe("closed · 1/1 points")
     })
 
-    test("a mooc exercise with a material page says so, for its Open in Course Material", function () {
+    test("a mooc exercise with a material page says so, for its Open Course Material", function () {
       const [course] = show(
         moocCourse({
           exercises: [moocCourseExercise({ name: "loops", pageUrl: "https://courses.example/p" })],
@@ -569,13 +562,13 @@ suite("CoursesTree", function () {
       const loops = exercisesOf(course).find((item) => item.label === "loops")
       const recursion = exercisesOf(course).find((item) => item.label === "recursion")
 
-      expect(loops?.description).toBe("not downloaded · waiting for teacher review")
+      expect(loops?.description).toBe("not downloaded · waiting for review")
       expect(tooltipOf(loops!)).toContain(
         "The points wait for a teacher's review, which starts once you complete and lock the chapter.",
       )
-      expect(recursion?.description).toBe("not downloaded · waiting for teacher review")
+      expect(recursion?.description).toBe("not downloaded · waiting for review")
       expect(tooltipOf(recursion!)).toContain(
-        "recursion is locked for you, so it can no longer be submitted. Only a teacher can unlock it.",
+        "The teacher has locked recursion, so it can no longer be submitted.",
       )
     })
 
@@ -594,7 +587,7 @@ suite("CoursesTree", function () {
       )
       const [loops] = exercisesOf(course)
 
-      expect(loops?.description).toBe("not downloaded · 1/1 points · waiting for teacher review")
+      expect(loops?.description).toBe("not downloaded · 1/1 points · waiting for review")
       expect(tooltipOf(loops!)).toContain(
         "A teacher reviews this answer, which can change the points.",
       )
@@ -617,9 +610,11 @@ suite("CoursesTree", function () {
       const recursion = exercisesOf(course).find((item) => item.label === "recursion")
 
       expect(loops?.description).toBe("not downloaded · 0/1 points · 2 tries left")
-      expect(recursion?.description).toBe("not downloaded · 0/1 points · chapter not unlocked yet")
+      expect(recursion?.description).toBe(
+        "not downloaded · 0/1 points · complete earlier chapters first",
+      )
       expect(tooltipOf(recursion!)).toContain(
-        'recursion can be submitted once you have completed the chapters before the chapter "Recursion".',
+        'Complete the chapters before the chapter "Recursion" to submit recursion.',
       )
       const part = tree
         .getChildren(course)
@@ -627,7 +622,7 @@ suite("CoursesTree", function () {
           (child): child is PartTreeItem =>
             child instanceof PartTreeItem && child.label === "Recursion",
         )
-      expect(part?.description).toContain("locked")
+      expect(part?.description).toContain("complete earlier chapters first")
     })
 
     test("downloading spins, and a failed download says so", function () {
@@ -712,12 +707,12 @@ suite("CoursesTree", function () {
     expect(view.badge).toBeUndefined()
   })
 
-  test("says which backend could not be reached, until it answers again", function () {
+  test("says a backend could not be reached, until it answers again", function () {
     show(tmcCourse())
 
     tree.setBackendReachable("tmc", false)
     settle()
-    expect(view.message).toMatch(/^tmc.mooc.fi could not be reached\./)
+    expect(view.message).toMatch(/^Could not reach the server\./)
 
     tree.setBackendReachable("tmc", true)
     settle()
@@ -729,7 +724,7 @@ suite("CoursesTree", function () {
 
     tree.setRestricted(true)
     settle()
-    expect(view.message).toMatch(/Restricted Mode: trust it to run tests, submit and share/)
+    expect(view.message).toMatch(/Restricted Mode\. Trust it to run tests, submit and get help/)
 
     tree.setRestricted(false)
     settle()

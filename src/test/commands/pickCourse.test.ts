@@ -69,11 +69,11 @@ suite("pickCourse", function () {
     const selectItem = vi.fn(async (_prompt: SelectPrompt, ..._items: unknown[]) => undefined)
     dialog.selectItem = selectItem
 
-    await pickCourse(context, { title: "Course Details", placeHolder: "Which course?" })
+    await pickCourse(context, { title: "Open Course Home", placeHolder: "Which course?" })
 
     expect(selectItem).toHaveBeenCalledOnce()
     const [prompt, ...items] = selectItem.mock.calls[0] ?? []
-    expect(prompt).toEqual({ title: "Course Details", placeHolder: "Which course?" })
+    expect(prompt).toEqual({ title: "Open Course Home", placeHolder: "Which course?" })
     expect(items).toEqual([
       { label: "The Python Course", value: idOfTmcCourse(1), description: "tmc.mooc.fi" },
       {

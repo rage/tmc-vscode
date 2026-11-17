@@ -38,7 +38,7 @@ suite("the login screen", () => {
   test("waits for its code with Cancel only", async () => {
     render(Login, { props: { panel: PANEL } })
 
-    expect(screen.getByRole("heading", { level: 1, name: "Log in to courses.mooc.fi" }))
+    expect(screen.getByRole("heading", { level: 1, name: "Log In" }))
     expect(screen.getByText("Getting a login code…")).toBeInTheDocument()
     await fireEvent.click(await screen.findByRole("button", { name: "Cancel" }))
     expect(postedMessages).toHaveBeenCalledWith(loginAction("cancel"))
@@ -54,10 +54,10 @@ suite("the login screen", () => {
     expect(screen.getByText("Waiting for you to approve the login in your browser.")).toBeVisible()
   })
 
-  test("Open courses.mooc.fi is the one primary button, and asks the host to open the page", async () => {
+  test("Open MOOC.fi is the one primary button, and asks the host to open the page", async () => {
     await renderWaiting()
 
-    const open = screen.getByRole("button", { name: "Open courses.mooc.fi" })
+    const open = screen.getByRole("button", { name: "Open MOOC.fi" })
     expect(open).not.toHaveAttribute("secondary")
     expect(screen.getByRole("button", { name: "Cancel" })).toHaveAttribute("secondary")
     expect(screen.getByRole("button", { name: "Copy" })).toHaveAttribute("secondary")
@@ -128,7 +128,7 @@ suite("the login screen", () => {
       phase: "failed",
       failure: "unreachable",
       error: {
-        message: "Could not reach courses.mooc.fi. Check your internet connection.",
+        message: "Could not reach the server. Check your internet connection.",
         detailsId: "login-failure",
       },
     })
@@ -147,7 +147,7 @@ suite("the login screen", () => {
   })
 
   test.each([
-    ["serverError", "courses.mooc.fi ran into a problem"],
+    ["serverError", "The server ran into a problem"],
     ["other", "Login failed"],
   ] as const)("a %s failure is headed %s", async (failure, title) => {
     render(Login, { props: { panel: PANEL } })

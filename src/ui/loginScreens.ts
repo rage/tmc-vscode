@@ -7,7 +7,6 @@ import type {
   LoginView,
   WebviewError,
 } from "../../shared/lib"
-import { backendName } from "../../shared/lib"
 import {
   ConnectionError,
   DeviceLoginDeniedError,
@@ -96,8 +95,6 @@ class LoginScreens {
 
 export const loginScreens = new LoginScreens()
 
-const SITE = backendName("mooc")
-
 /**
  * The login screen's view of a failed login. Only a failure the student did not cause in the
  * browser offers its details.
@@ -118,10 +115,13 @@ function describeFailure(error: Error): [LoginFailure, WebviewError] {
   const withDetails = (message: string): WebviewError =>
     detailsId === undefined ? { message } : { message, detailsId }
   if (error instanceof ConnectionError) {
-    return ["unreachable", withDetails(`Could not reach ${SITE}. Check your internet connection.`)]
+    return [
+      "unreachable",
+      withDetails("Could not reach the server. Check your internet connection."),
+    ]
   }
   if (error instanceof ServerError) {
     return ["serverError", withDetails(presentationFor(error).message)]
   }
-  return ["other", withDetails(`Logging in to ${SITE} failed. ${presentationFor(error).message}`)]
+  return ["other", withDetails(presentationFor(error).message)]
 }

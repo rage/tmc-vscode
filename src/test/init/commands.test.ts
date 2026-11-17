@@ -616,7 +616,7 @@ suite("walkthrough", function () {
         ?.description.split("\n")
         .slice(1)
         .join("\n")
-    expect(buttonsOf("openExercises")).toBe("[Show Course Details](command:tmc.courseDetails)")
+    expect(buttonsOf("openExercises")).toBe("[Open Course Home](command:tmc.courseDetails)")
     for (const id of ["runTests", "submit"]) {
       expect(buttonsOf(id)).toBe("[Continue with an Exercise](command:tmc.openNextExercise)")
     }

@@ -183,9 +183,9 @@ export function buildCourseHomeView(
               " can be tested but not submitted.",
           }
         : part.lockingStatus === "NotUnlockedYet"
-          ? { lockedReason: "Locked until you have completed the chapters before it." }
+          ? { lockedReason: "Complete earlier chapters first." }
           : part.lockingStatus === "CompletedAndLocked"
-            ? { lockedReason: "You have completed and locked this chapter." }
+            ? { lockedReason: "This chapter is locked." }
             : {}),
       exercises: part.exercises.map((ex) => {
         const deadline = deadlineText(shownDeadline(ex))

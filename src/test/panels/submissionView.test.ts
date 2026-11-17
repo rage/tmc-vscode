@@ -112,7 +112,7 @@ suite("tmcResultView", () => {
   test("a passed run has its points, links and no paste help", () => {
     expect(tmcResultView(tmcResult(), [], 3)).toMatchObject({
       phase: "finished",
-      headline: "All tests passed on the server",
+      headline: "Passed",
       tone: "passed",
       points: { given: 2, max: 3 },
       solutionUrl: "https://tmc.mooc.fi/solutions/1",
@@ -124,7 +124,7 @@ suite("tmcResultView", () => {
 
   test("a failed run offers paste help", () => {
     const view = tmcResultView(tmcResult({ status: "fail", all_tests_passed: false }), [], 3)
-    expect(view).toMatchObject({ headline: "Some tests failed on the server", canPaste: true })
+    expect(view).toMatchObject({ headline: "Not passed", canPaste: true })
   })
 
   test("a failed run reads as partial success while it earned points, as a failure without", () => {
@@ -197,7 +197,7 @@ suite("moocGradingView", () => {
 
   test("a grading held for review is judged by its own score, never the held-back 0", () => {
     expect(moocGradingView(underReview(1, "awaits_teacher"), 3)).toMatchObject({
-      headline: "Some tests failed on the server",
+      headline: "Some tests failed",
       pendingReview: "The points wait for a teacher's review.",
     })
   })
@@ -212,7 +212,7 @@ suite("moocGradingView", () => {
     }
 
     expect(moocGradingView(status, 3)).toMatchObject({
-      headline: "Exercise passed",
+      headline: "Passed",
       points: { given: 3, max: 3 },
       pendingReview: "A teacher reviews this answer, which can change the points.",
     })
@@ -221,7 +221,7 @@ suite("moocGradingView", () => {
   test("a grading the backend counts passed is finished, rounded, and asks for no help", () => {
     expect(moocGradingView(moocGrading("FullyGraded", 2.999, "Passed"), 3)).toMatchObject({
       phase: "finished",
-      headline: "Exercise passed",
+      headline: "Passed",
       tone: "passed",
       points: { given: 3, max: 3 },
       feedbackText: "Feedback",
@@ -232,7 +232,7 @@ suite("moocGradingView", () => {
 
   test("a partial grade says tests failed and offers paste help", () => {
     expect(moocGradingView(moocGrading("FullyGraded", 1, "Attempted"), 3)).toMatchObject({
-      headline: "Some tests failed on the server",
+      headline: "Not passed",
       tone: "warning",
       canPaste: true,
     })
@@ -254,7 +254,7 @@ suite("moocGradingView", () => {
     const view = moocGradingView(moocGrading("FullyGraded", 2, "OutOfTries"), 3)
     expect(view).toMatchObject({
       phase: "finished",
-      headline: "Some tests failed on the server",
+      headline: "Not passed",
       explanation: "That was your last try, so this score is final.",
       points: { given: 2, max: 3 },
       canPaste: true,
@@ -263,7 +263,7 @@ suite("moocGradingView", () => {
 
   test("without a standing from the backend, no score is called passed", () => {
     expect(moocGradingView(moocGrading("FullyGraded", 3), 3)).toMatchObject({
-      headline: "Exercise graded",
+      headline: "Graded",
       tone: "info",
       canPaste: true,
     })
@@ -435,7 +435,7 @@ suite("standingView", function () {
     expect(SubmissionViewSchema.parse(view)).toEqual(view)
     expect(view).toMatchObject({
       phase: "standing",
-      headline: "Exercise passed",
+      headline: "Passed",
       tone: "passed",
       points: { given: 1, max: 1 },
       solutionUrl: "https://tmc.example/exercises/1/solution",
@@ -448,7 +448,7 @@ suite("standingView", function () {
     const view = standingView(makeMoocKind(moocCourseExercise({ availablePoints: 3 })), undefined)
 
     expect(view).toMatchObject({
-      headline: "Not passed yet",
+      headline: "Not passed",
       tone: "info",
       points: { given: 0, max: 3 },
       canPaste: true,
@@ -459,7 +459,7 @@ suite("standingView", function () {
   test("an exercise out of tries reads as not passed, for good", function () {
     const view = standingView(makeMoocKind(moocCourseExercise({ outOfTries: true })), undefined)
 
-    expect(view).toMatchObject({ headline: "Exercise not passed", tone: "failed" })
+    expect(view).toMatchObject({ headline: "Not passed", tone: "failed" })
   })
 
   test("points held for a teacher's review are not shown as a score", function () {
@@ -489,7 +489,7 @@ suite("testedLocallyView", function () {
     expect(SubmissionViewSchema.parse(view)).toEqual(view)
     expect(view).toMatchObject({
       phase: "testedLocally",
-      headline: "All tests passed locally",
+      headline: "Tests pass on your computer",
       tone: "passed",
       canPaste: false,
       canKeepWaiting: false,

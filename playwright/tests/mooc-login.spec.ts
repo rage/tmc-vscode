@@ -24,7 +24,7 @@ vsCodeTest(
     await coursesView.goto()
     await coursesView.startMoocLogin()
 
-    await expect(coursesView.statusBarMessage("Logged in to courses.mooc.fi.")).toBeVisible()
+    await expect(coursesView.statusBarMessage("Logged in.")).toBeVisible()
     const addCourse = new AddCoursePage(page, webview)
     await addCourse.expectShown()
     await expect(addCourse.card("MOOC Python Course")).toBeVisible()
@@ -77,11 +77,11 @@ vsCodeTest.describe(() => {
       await coursesView.goto()
       await coursesView.startMoocLogin()
 
-      await expect(loginScreen.failure("courses.mooc.fi ran into a problem")).toBeVisible({
+      await expect(loginScreen.failure("The server ran into a problem")).toBeVisible({
         timeout: 30_000,
       })
       await expect(
-        loginScreen.webview.getByText("courses.mooc.fi returned an error (503). Try again later."),
+        loginScreen.webview.getByText("The server ran into a problem. Try again later."),
       ).toBeVisible()
       await expect(loginScreen.webview.getByText("Check your internet connection")).toHaveCount(0)
       await expect(loginScreen.button("Show Details")).toBeVisible()
@@ -105,7 +105,7 @@ vsCodeTest.describe(() => {
       await loginScreen.expectWaiting()
       await expect(loginScreen.webview.getByText(`${MOCK_BACKEND_URL}/oauth_device`)).toBeVisible()
       expect(await openedExternalUrls()).toStrictEqual([])
-      await loginScreen.button("Open courses.mooc.fi").click()
+      await loginScreen.button("Open MOOC.fi").click()
       await expect
         .poll(openedExternalUrls)
         .toStrictEqual([`${MOCK_BACKEND_URL}/oauth_device?user_code=${mockUserCode(1)}`])
@@ -162,7 +162,7 @@ vsCodeTest.describe(() => {
       const loginScreen = new MoocLoginPage(page, webview)
 
       await loginScreen.gotoFromCoursesView()
-      await expect(loginScreen.statusBarMessage("Logged in to courses.mooc.fi.")).toBeVisible()
+      await expect(loginScreen.statusBarMessage("Logged in.")).toBeVisible()
       await new AddCoursePage(page, webview).expectShown()
     },
   )
@@ -171,7 +171,7 @@ vsCodeTest.describe(() => {
     const loginScreen = new MoocLoginPage(page, webview)
 
     await loginScreen.gotoFromCoursesView()
-    await expect(loginScreen.statusBarMessage("Logged in to courses.mooc.fi.")).toBeVisible()
+    await expect(loginScreen.statusBarMessage("Logged in.")).toBeVisible()
 
     await page.getByRole("button", { name: "Accounts" }).click()
     await expect(page.getByRole("menuitem", { name: /courses\.mooc\.fi/ })).toBeVisible()

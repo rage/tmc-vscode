@@ -14,7 +14,7 @@ export class AddCoursePage {
 
   public async expectShown(): Promise<void> {
     await expectVisibleInWebview(
-      this.webview.getByRole("heading", { level: 1, name: "Add a Course" }),
+      this.webview.getByRole("heading", { level: 1, name: "Add Course" }),
     )
   }
 

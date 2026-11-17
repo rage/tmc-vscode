@@ -1057,7 +1057,7 @@ suite("TmcPanel hidden webviews", () => {
     vi.mocked(panel.webview.postMessage).mockClear()
 
     showSubmissionView(shown, "Processing submission…")
-    showSubmissionView(shown, "Exercise graded")
+    showSubmissionView(shown, "Graded")
     expect(panel.webview.postMessage).not.toHaveBeenCalled()
 
     await reveal()
@@ -1067,7 +1067,7 @@ suite("TmcPanel hidden webviews", () => {
         type: "setPanel",
         panel: expect.objectContaining({ id: shown.id }),
       }),
-      submissionViewFor(shown, "Exercise graded"),
+      submissionViewFor(shown, "Graded"),
     ])
   })
 
@@ -1725,7 +1725,7 @@ suite("TmcPanel side panel placement", () => {
     await side.sendReady()
     vi.mocked(main.panel.webview.postMessage).mockClear()
 
-    showSubmissionView(shown, "Exercise graded")
+    showSubmissionView(shown, "Graded")
 
     expect(side.panel.webview.postMessage).toHaveBeenLastCalledWith(
       expect.objectContaining({ type: "submissionView" }),
@@ -1754,7 +1754,7 @@ suite("TmcPanel side panel placement", () => {
     const subscription = TmcPanel.showSubmissionViews(createMockContext(), submissionContext())
     onTestFinished(() => subscription.dispose())
     const shown = exerciseSubmissionPanel()
-    const graded = submissionViewFor(shown, "Exercise graded")
+    const graded = submissionViewFor(shown, "Graded")
 
     submissionViews.update({ panel: shown, view: graded.view, shouldReopen: false })
     expect(createWebviewPanel).not.toHaveBeenCalled()
@@ -1782,12 +1782,12 @@ suite("TmcPanel side panel placement", () => {
     const offered = Promise.withResolvers<boolean>()
     vi.mocked(actionContext.dialog.offer).mockReturnValueOnce(offered.promise)
     vi.mocked(panel.webview.postMessage).mockClear()
-    const graded = submissionViewFor(background, "Exercise graded")
+    const graded = submissionViewFor(background, "Graded")
 
     submissionViews.update({ panel: background, view: graded.view, shouldReopen: true })
 
     expect(actionContext.dialog.offer).toHaveBeenCalledWith(
-      "Submission of part01-02_other: Exercise graded",
+      "Submission of part01-02_other: Graded",
       "Show Result",
     )
     expect(panel.webview.postMessage).not.toHaveBeenCalled()
@@ -1816,7 +1816,7 @@ suite("TmcPanel side panel placement", () => {
     await sendReady()
     submissionViews.update({
       panel: shown,
-      view: submissionViewFor(shown, "Exercise graded").view,
+      view: submissionViewFor(shown, "Graded").view,
       shouldReopen: false,
     })
 
@@ -1879,7 +1879,7 @@ suite("TmcPanel side panel placement", () => {
     await sendReady()
     submissionViews.update({
       panel: shown,
-      view: submissionViewFor(shown, "Exercise graded").view,
+      view: submissionViewFor(shown, "Graded").view,
       shouldReopen: false,
     })
 
@@ -1961,7 +1961,7 @@ suite("TmcPanel side panel placement", () => {
     await sendReady()
     submissionViews.update({
       panel: shown,
-      view: { ...submissionViewFor(shown, "Exercise passed").view, phase: "finished" },
+      view: { ...submissionViewFor(shown, "Passed").view, phase: "finished" },
       shouldReopen: false,
     })
 
@@ -1991,7 +1991,7 @@ suite("TmcPanel side panel placement", () => {
     const earlier = exerciseSubmissionPanel()
     submissionViews.update({
       panel: earlier,
-      view: submissionViewFor(earlier, "Exercise graded").view,
+      view: submissionViewFor(earlier, "Graded").view,
       shouldReopen: false,
     })
 
@@ -2053,7 +2053,7 @@ suite("TmcPanel tab identity", () => {
       courseId: idOfTmcCourse(42),
     })
 
-    expect(panel.title).toBe("Course Details")
+    expect(panel.title).toBe("Course Home")
   })
 
   test("carries the extension's icon for both theme kinds, and a find widget", () => {
@@ -2157,7 +2157,7 @@ suite("TmcPanel webview document", () => {
 
 /** The failure a panel is answered with before activation succeeded, remedy included. */
 const notInitialized = {
-  message: expect.stringContaining("did not initialize properly"),
+  message: expect.stringContaining("could not start"),
   detailsId: expect.any(String),
   actions: [{ label: "Show Help", command: "tmc.viewInitializationErrorHelp" }],
 }
@@ -2632,7 +2632,7 @@ suite("TmcPanel results the student asks for", () => {
     createWebviewPanel.mockReturnValue(fake.panel)
     showing()
     const shown = exerciseSubmissionPanel()
-    const graded = submissionViewFor(shown, "Exercise graded")
+    const graded = submissionViewFor(shown, "Graded")
     submissionViews.update({ panel: shown, view: graded.view, shouldReopen: false })
 
     submissionViews.reveal(shown, { name: "history", shouldPaste: false })
@@ -2664,7 +2664,7 @@ suite("TmcPanel results the student asks for", () => {
     const shown = exerciseSubmissionPanel()
     submissionViews.update({
       panel: shown,
-      view: submissionViewFor(shown, "Exercise graded").view,
+      view: submissionViewFor(shown, "Graded").view,
       shouldReopen: false,
     })
     submissionViews.reveal(shown, { name: "getHelp", shouldPaste: true })
@@ -2743,7 +2743,7 @@ suite("TmcPanel results the student asks for", () => {
     expect(postedMessages(fake.panel)).toContainEqual(
       expect.objectContaining({
         type: "submissionView",
-        view: expect.objectContaining({ phase: "standing", headline: "Exercise passed" }),
+        view: expect.objectContaining({ phase: "standing", headline: "Passed" }),
       }),
     )
   })

@@ -221,7 +221,7 @@ test("the overflow menu is reachable and operable from the keyboard", async ({ c
 test("a course is found and added from the keyboard alone", async ({ context, page }) => {
   await serveHarness(context)
   await page.goto(`${ORIGIN}/frame.html?scenario=add-course%2Fcourses`)
-  await expect(page.getByRole("heading", { level: 1, name: "Add a Course" })).toBeFocused()
+  await expect(page.getByRole("heading", { level: 1, name: "Add Course" })).toBeFocused()
   await page.keyboard.press("Tab")
   await page.keyboard.press("Tab")
   await expect(
@@ -245,7 +245,7 @@ test("the login screen's buttons follow the code in keyboard order", async ({ co
   await page.keyboard.press("Tab")
   await expect(page.getByRole("button", { name: "Copy" })).toBeFocused()
   await page.keyboard.press("Tab")
-  await expect(page.getByRole("button", { name: "Open courses.mooc.fi" })).toBeFocused()
+  await expect(page.getByRole("button", { name: "Open MOOC.fi" })).toBeFocused()
   await page.keyboard.press("Enter")
   const posted = await page.evaluate(
     () =>

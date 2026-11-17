@@ -34,7 +34,7 @@ export const exerciseHandlers = {
       // Silent: the panel that asked shows the failure, remedies included.
       return withOperation(
         actionContext.dialog,
-        { failure: "Failed to paste the exercise.", silent: true },
+        { failure: "Failed to send the exercise to the pastebin.", silent: true },
         () => actions.pasteExercise(actionContext, shown.exerciseId),
       )
     },
@@ -81,7 +81,7 @@ export const exerciseHandlers = {
       }
       return withOperation(
         actionContext.dialog,
-        { failure: "Failed to download old submission.", silent: true },
+        { failure: "Failed to restore the submission.", silent: true },
         () => restoreSubmission(actionContext, exercise, submission),
       )
     },

@@ -261,7 +261,7 @@ suite("refreshEverything's new-exercises prompt", function () {
 
     expect(dialog.notification).toHaveBeenCalledExactlyOnceWith(
       "Mooc Course changed its AI policy: AI may be used freely, with disclosure." +
-        " TestMyCode leaves AI assistance on in the course workspace.",
+        " AI assistance is on in this course.",
       expect.anything(),
     )
   })
@@ -277,7 +277,7 @@ suite("refreshEverything's new-exercises prompt", function () {
 
     expect(dialog.notification).toHaveBeenCalledExactlyOnceWith(
       "Mooc Course changed its AI policy: AI may not be used at any point." +
-        " TestMyCode turns AI assistance off in the course workspace.",
+        " AI assistance is off in this course.",
       expect.anything(),
     )
   })
@@ -298,7 +298,7 @@ suite("refreshEverything's new-exercises prompt", function () {
     await refreshEverything(actionContext, { silent: true })
 
     expect(recentPolicyChanges.get(courseId)).toBe(
-      "AI may not be used at any point. TestMyCode turns AI assistance off in the course workspace.",
+      "AI may not be used at any point. AI assistance is off in this course.",
     )
     expect(dialog.notification).not.toHaveBeenCalled()
   })

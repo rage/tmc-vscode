@@ -10,7 +10,11 @@ import { QuickPickPage } from "../pages/quick-pick"
 import { TmcPage } from "../pages/tmc"
 
 function walkthroughStep(page: Page, title: string): Locator {
-  return page.locator(".getting-started-step").filter({ hasText: title }).first()
+  // Titles such as "Submit" also occur in other steps' text, so match the title alone.
+  return page
+    .locator(".getting-started-step")
+    .filter({ has: page.locator(".step-title").getByText(title, { exact: true }) })
+    .first()
 }
 
 // Every test starts from an empty profile, which activation treats as a fresh install.
@@ -26,7 +30,7 @@ vsCodeTest("a fresh install opens the walkthrough", async ({ page, webview }) =>
 vsCodeTest("a session from before the walkthrough ticks off Log in", async ({ page, webview }) => {
   await new TmcPage(page, webview).openMenu()
 
-  const logIn = walkthroughStep(page, "Log in")
+  const logIn = walkthroughStep(page, "Log In")
   await expect(logIn.locator(".codicon-getting-started-step-checked")).toBeVisible()
 })
 
@@ -38,7 +42,7 @@ vsCodeTest.describe(() => {
     async ({ page, webview }) => {
       const courseTitle = "MOOC Python Course"
       await new TmcPage(page, webview).openMenu()
-      const logIn = walkthroughStep(page, "Log in")
+      const logIn = walkthroughStep(page, "Log In")
       // The step's button does nothing until the extension has activated, which its status
       // bar item shows.
       await expect(
@@ -58,16 +62,16 @@ vsCodeTest.describe(() => {
     },
   )
 
-  vsCodeTest("the Add a course step opens the add-course screen", async ({ page, webview }) => {
+  vsCodeTest("the Add Course step opens the add-course screen", async ({ page, webview }) => {
     const loginScreen = new MoocLoginPage(page, webview)
     await loginScreen.gotoFromCoursesView()
-    await expect(loginScreen.statusBarMessage("Logged in to courses.mooc.fi.")).toBeVisible()
+    await expect(loginScreen.statusBarMessage("Logged in.")).toBeVisible()
     const addCourseTab = page.getByRole("tab", { name: /^Add Course/ })
     await addCourseTab.hover()
     await addCourseTab.getByRole("button", { name: /^Close/ }).click()
 
     await loginScreen.runPaletteCommand("TestMyCode: Get Started")
-    const step = walkthroughStep(page, "Add a course")
+    const step = walkthroughStep(page, "Add Course")
     await step.click()
     await step.getByRole("button", { name: "Add Course", exact: true }).click()
 
@@ -96,23 +100,19 @@ vsCodeTest(
       await coursesView.runInlineAction(coursesView.row(exercise), "Run Tests")
       const sidePanel = new TmcPage(page, webview).getSidePanel()
       await expect(
-        sidePanel.getByRole("heading", { name: "All tests passed locally" }),
+        sidePanel.getByRole("heading", { name: "Tests pass on your computer" }),
       ).toBeVisible()
       await sidePanel.getByRole("button", { name: "Submit", exact: true }).click()
-      await expect(
-        sidePanel.getByRole("heading", { name: "All tests passed on the server" }),
-      ).toBeVisible({ timeout: 30_000 })
+      await expect(sidePanel.getByRole("heading", { name: "Passed", exact: true })).toBeVisible({
+        timeout: 30_000,
+      })
     })
 
     await vsCodeTest.step("the walkthrough has both steps ticked", async () => {
       await coursesView.runPaletteCommand("TestMyCode: Get Started")
-      for (const step of ["Run the tests", "Submit your solution"]) {
+      for (const step of ["Run Tests", "Submit"]) {
         await expect(
-          page
-            .locator(".getting-started-step")
-            .filter({ hasText: step })
-            .first()
-            .locator(".codicon-getting-started-step-checked"),
+          walkthroughStep(page, step).locator(".codicon-getting-started-step-checked"),
         ).toBeVisible()
       }
     })
@@ -122,7 +122,7 @@ vsCodeTest(
 // The walkthrough tab is no exercise file, and a button passes no course, so a step's button
 // must not need either.
 vsCodeTest(
-  "the exercise steps' buttons open Course Details and the exercise to continue with",
+  "the exercise steps' buttons open the course home and the exercise to continue with",
   async ({ page, webview }) => {
     const coursesView = new CoursesViewPage(page, webview)
     const courseHome = new CourseHomePage(page, webview)
@@ -139,14 +139,14 @@ vsCodeTest(
       await walkthroughStep(page, step).getByRole("button", { name: button, exact: true }).click()
     }
 
-    await vsCodeTest.step("Download and open exercises opens Course Details", async () => {
+    await vsCodeTest.step("Download and Open Exercises opens the course home", async () => {
       await coursesView.goto()
       await coursesView.addNewCourse(course)
       const courseTab = page.getByRole("tab", { name: new RegExp(`^${course}`) })
       await courseTab.hover()
       await courseTab.getByRole("button", { name: /^Close/ }).click()
 
-      await clickStepButton("Download and open exercises", "Show Course Details")
+      await clickStepButton("Download and Open Exercises", "Open Course Home")
 
       await courseHome.expectShown(course)
       await quickPick.expectClosed()
@@ -162,7 +162,7 @@ vsCodeTest(
       await courseHome.expectShown(course)
     })
 
-    for (const step of ["Run the tests", "Submit your solution"]) {
+    for (const step of ["Run Tests", "Submit"]) {
       await vsCodeTest.step(`${step} opens the exercise to continue with`, async () => {
         await coursesView.runPaletteCommand("View: Close All Editors")
         await expect(runTests).toBeHidden()
