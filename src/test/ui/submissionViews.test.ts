@@ -14,7 +14,7 @@ function panelOf(id: number, exerciseId = 1): ExerciseSubmissionPanel {
   }
 }
 
-const view: SubmissionView = testedLocallyView()
+const view: SubmissionView = testedLocallyView(0)
 
 suite("submission views", () => {
   beforeEach(() => {

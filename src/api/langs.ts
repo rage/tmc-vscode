@@ -28,6 +28,7 @@ import type {
   SubmissionFeedbackResponse,
   SubmissionFinished,
   TmcConfig,
+  TmcExerciseSlide,
 } from "../../shared/langsSchema"
 import { CliNotification, CliOutputData, CliStatusUpdate } from "../../shared/langsSchema"
 import type { BackendKind, CourseIdentifier, Enum } from "../../shared/lib"
@@ -985,6 +986,17 @@ export default class Langs {
       { backend: "tmc", args: this._tmcCmd("get-course-data", "--course-id", courseId.toString()) },
       "combined-course-data",
       { forceRefresh: options?.forceRefresh, key: cacheKey("tmc", "course-data", courseId) },
+    )
+  }
+
+  /**
+   * Gets one courses.mooc.fi exercise slide. Unlike the slides of `getMoocCourseData`, its tasks
+   * carry their model solutions once the student may see them.
+   */
+  public async getMoocExercise(exerciseId: string): Promise<Result<TmcExerciseSlide, Error>> {
+    return this._fetch(
+      { backend: "mooc", args: this._moocCmd("exercise", "--exercise-id", exerciseId) },
+      "mooc-exercise-slide",
     )
   }
 

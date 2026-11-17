@@ -96,14 +96,19 @@ export function standingView(
   }
 }
 
-/** Every test passed in the student's own run, so submitting is the next step. */
-export function testedLocallyView(): SubmissionView {
+/**
+ * Every test passed in the student's own run, so submitting is the next step.
+ *
+ * @param localPassAt See {@link SubmissionView.localPassAt}.
+ */
+export function testedLocallyView(localPassAt: number): SubmissionView {
   return {
     ...emptyView,
     phase: "testedLocally",
     headline: "Tests pass on your computer",
     tone: "passed",
     explanation: "Submit the exercise to have it graded.",
+    localPassAt,
   }
 }
 
@@ -380,6 +385,7 @@ function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): str
  *   finished grading was shown with.
  * @param exercise.solutionUrl The model solution's page once the stored course reveals it; fills
  *   in a view that has none, as a course refresh after the grading can reveal it.
+ * @param exercise.materialUrl See {@link SubmissionView.materialUrl}.
  * @param exercise.isLoggedOut See {@link SubmissionView.isLoggedOut}.
  * @param exercise.arePointsHeld A teacher's review holds the exercise's points back now, so a
  *   finished grading's score is not what the student has.
@@ -394,6 +400,7 @@ export function withExerciseState(
     triesLeft?: number | undefined
     pendingReview?: string | undefined
     solutionUrl?: string | undefined
+    materialUrl?: string | undefined
     isLoggedOut?: boolean | undefined
     arePointsHeld?: boolean | undefined
   },
@@ -436,6 +443,7 @@ export function withExerciseState(
     // Nothing tested locally can be submitted any more.
     ...(isClosed && view.phase === "testedLocally" ? { explanation: undefined } : {}),
     ...(solutionUrl === undefined ? {} : { solutionUrl }),
+    ...(exercise.materialUrl === undefined ? {} : { materialUrl: exercise.materialUrl }),
     ...(pendingReview === undefined ? {} : { pendingReview }),
     ...(exercise.submitRefusal === undefined ? {} : { submitRefusal: exercise.submitRefusal }),
     ...(exercise.triesLeft === undefined ? {} : { triesLeft: exercise.triesLeft }),

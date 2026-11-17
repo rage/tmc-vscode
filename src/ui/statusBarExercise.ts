@@ -1,12 +1,14 @@
 import * as vscode from "vscode"
 
-import type { LocalCourseExercise } from "../../shared/lib"
+import type { LocalCourseExercise, SubmitRefusal } from "../../shared/lib"
 import {
   arePointsHeldForReview,
   ExerciseIdentifier,
   LocalCourseData,
+  SUBMIT_REFUSAL_ICONS,
   SUBMIT_REFUSAL_LABELS,
   submitRefusalOf,
+  PENDING_REVIEW_ICON,
   PENDING_REVIEW_LABEL,
   triesLeftText,
 } from "../../shared/lib"
@@ -83,24 +85,31 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
     const isChapterClosed =
       course.ok && LocalCourseData.getClosedChapterOf(course.val, exercise.id) !== undefined
     const standing = isChapterClosed
-      ? SUBMIT_REFUSAL_LABELS.chapterNotOpenYet
-      : standingText(stored, course.ok ? course.val : undefined)
-    const shownStanding = standing === "passed" ? undefined : standing
+      ? refusalStanding("chapterNotOpenYet")
+      : standingOf(stored, course.ok ? course.val : undefined)
+    const shownStanding = standing?.text === "passed" ? undefined : standing
 
-    this._item.text = [`$(beaker) ${slug}`, points?.short, shownStanding]
+    this._item.text = [
+      `$(beaker) ${slug}`,
+      points?.short,
+      shownStanding &&
+        (shownStanding.icon
+          ? `$(${shownStanding.icon}) ${shownStanding.text}`
+          : shownStanding.text),
+    ]
       .filter(Boolean)
       .join(" · ")
     this._item.accessibilityInformation = {
       label:
         `TestMyCode exercise ${slug}` +
         (points ? `, ${points.spoken}` : "") +
-        (shownStanding ? `, ${shownStanding}` : "") +
+        (shownStanding ? `, ${shownStanding.text}` : "") +
         ". Show exercise actions",
     }
     this._item.tooltip = tooltipOf([
       slug,
       exercise.courseSlug,
-      ...(points ? [`${points.short} points${standing ? ` · ${standing}` : ""}`] : []),
+      ...(points ? [`${points.short} points${standing ? ` · ${standing.text}` : ""}`] : []),
       "Click for exercise actions.",
     ])
     this._item.show()
@@ -135,28 +144,39 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
   }
 }
 
+/** Where an exercise stands in a few words, with the icon of the reason it is locked, if any. */
+interface Standing {
+  text: string
+  icon?: string
+}
+
+function refusalStanding(refusal: SubmitRefusal): Standing {
+  return { text: SUBMIT_REFUSAL_LABELS[refusal], icon: SUBMIT_REFUSAL_ICONS[refusal] }
+}
+
 /**
  * Where the stored exercise stands, e.g. "passed", "1 try left" or "deadline passed"; `undefined`
  * when there is nothing to tell.
  */
-function standingText(
+function standingOf(
   stored: Readonly<LocalCourseExercise> | undefined,
   course: Readonly<LocalCourseData> | undefined,
-): string | undefined {
+): Standing | undefined {
   if (!stored) {
     return undefined
   }
   if (stored.data.passed) {
-    return "passed"
+    return { text: "passed" }
   }
   if (stored.kind === "mooc" && stored.data.pendingReview !== undefined) {
-    return PENDING_REVIEW_LABEL
+    return { text: PENDING_REVIEW_LABEL, icon: PENDING_REVIEW_ICON }
   }
   const refusal = submitRefusalOf(stored, new Date(), course)
   if (refusal) {
-    return SUBMIT_REFUSAL_LABELS[refusal]
+    return refusalStanding(refusal)
   }
-  return stored.kind === "mooc" ? triesLeftText(stored.data.triesLeft) : undefined
+  const tries = stored.kind === "mooc" ? triesLeftText(stored.data.triesLeft) : undefined
+  return tries === undefined ? undefined : { text: tries }
 }
 
 interface ExerciseAction {

@@ -2176,7 +2176,7 @@ suite("TmcPanel side panel placement", () => {
       shouldReopen: false,
     })
 
-    exercise = { ...exercise, passed: true }
+    exercise = { ...exercise, passed: true, hasModelSolution: true }
     changed.fire(undefined)
 
     const solutionUrls = (postedMessages(panel) as PanelMessage[]).flatMap((message) =>

@@ -39,6 +39,8 @@
 
   let { panel }: Props = $props()
 
+  const SUBMIT_PROMPT = "All tests pass. Submit for grading?"
+
   const sourcePanel = $derived({ id: panel.id, type: panel.type })
   const subtitle = $derived(
     panel.organization ? `${panel.courseTitle} · ${panel.organization}` : panel.courseTitle,
@@ -60,7 +62,22 @@
   const isGetHelpRequested = uiState("isGetHelpRequested", false)
   // The last section request handled, so one resent after a reload does not paste again.
   const handledSectionSerial = uiState("handledSectionSerial", 0)
+  // The local pass whose submit prompt the student answered Not Now; the next run asks again.
+  const dismissedLocalPassAt = uiState("dismissedLocalPassAt", -1)
+  let actionBarSlot = $state<HTMLElement | undefined>(undefined)
   let pasteHelp = $state<ReturnType<typeof PasteHelpBox> | undefined>(undefined)
+
+  // Logged out, Log In to Submit asks instead; a refusal says why submitting is not offered.
+  const isSubmitPromptShown = $derived(
+    view?.phase === "testedLocally" &&
+      !view.isLoggedOut &&
+      !view.submitRefusal &&
+      !view.exerciseState &&
+      view.localPassAt !== dismissedLocalPassAt.current,
+  )
+  const explanation = $derived(
+    view?.phase === "testedLocally" && !view.isLoggedOut ? undefined : view?.explanation,
+  )
 
   const isInProgress = $derived(
     view === undefined || view.phase === "uploading" || view.phase === "grading",
@@ -164,16 +181,17 @@
       return { secondary: [runTests] }
     }
     if (view?.submitRefusal) {
-      return showSolution
-        ? { primary: showSolution, secondary: [runTests] }
-        : { secondary: [runTests] }
+      return { secondary: showSolution ? [runTests, showSolution] : [runTests] }
     }
     if (view?.phase === "testedLocally") {
-      return { primary: submit }
+      if (isSubmitPromptShown) {
+        return { primary: submit, secondary: [{ label: "Not Now", onclick: dismissSubmitPrompt }] }
+      }
+      return view.isLoggedOut ? { primary: submit } : { primary: runTests, secondary: [submit] }
     }
     if (view?.phase === "standing") {
       if (view.isExercisePassed) {
-        return showSolution ? { primary: showSolution } : {}
+        return showSolution ? { secondary: [showSolution] } : {}
       }
       return { primary: runTests, secondary: [submit] }
     }
@@ -189,25 +207,31 @@
     if (remedy) {
       return { primary: remedy }
     }
-    return view?.isExercisePassed && showSolution ? { primary: showSolution } : {}
+    return view?.isExercisePassed && showSolution ? { secondary: [showSolution] } : {}
   })
 
-  const isSolutionInBar = $derived(
-    showSolution !== undefined &&
-      [barActions.primary, ...(barActions.secondary ?? [])].includes(showSolution),
-  )
+  const isSolutionInBar = $derived.by(() => {
+    const secondary: readonly BarAction[] = barActions.secondary ?? []
+    return showSolution !== undefined && secondary.includes(showSolution)
+  })
 
   const menuActions = $derived.by((): MenuAction[] => {
     const submissionUrl = view?.submissionUrl
     const solutionUrl = view?.solutionUrl
+    const materialUrl = view?.materialUrl
     return [
       ...(submissionUrl
         ? [{ label: "Show Submission in Browser", onselect: () => showInBrowser(submissionUrl) }]
         : []),
-      ...(solutionUrl && !isSolutionInBar
-        ? [{ label: "Show Model Solution", onselect: () => showInBrowser(solutionUrl) }]
-        : []),
-      ...(view?.canPaste && !view.exerciseState
+      ...(solutionUrl
+        ? isSolutionInBar
+          ? []
+          : [{ label: "Show Model Solution", onselect: () => showInBrowser(solutionUrl) }]
+        : materialUrl
+          ? [{ label: "Open Course Material", onselect: () => showInBrowser(materialUrl) }]
+          : []),
+      // Always offered; the Get Help section shows unasked only on results that did not pass.
+      ...(view && !view.exerciseState
         ? [{ label: "Get Help", onselect: () => openSection("getHelp") }]
         : []),
       ...(isHistoryShown ? [{ label: "History", onselect: () => openSection("history") }] : []),
@@ -245,13 +269,20 @@
       void tick().then(restoreScroll)
     }
     const latestStep = view.progressSteps.at(-1)
-    if (previous?.phase !== view.phase || previous.headline !== view.headline) {
+    if (isSubmitPromptShown && previous?.localPassAt !== view.localPassAt) {
+      announce(`${view.headline}. ${SUBMIT_PROMPT}`)
+    } else if (previous?.phase !== view.phase || previous.headline !== view.headline) {
       announce(view.headline)
     } else if (latestStep !== undefined && latestStep !== previous.progressSteps.at(-1)) {
       announce(latestStep)
     }
   })
 
+  async function dismissSubmitPrompt() {
+    dismissedLocalPassAt.current = view?.localPassAt ?? -1
+    await tick()
+    actionBarSlot?.querySelector<HTMLElement>("vscode-button")?.focus()
+  }
   function closePanel() {
     vscode.postMessage({ type: "closeSidePanel" })
   }
@@ -305,6 +336,7 @@
 
   const sectionIdPrefix = $props.id()
   const historyToggleId = `${sectionIdPrefix}-history`
+  const submitPromptId = `${sectionIdPrefix}-submit-prompt`
   const getHelpToggleId = `${sectionIdPrefix}-get-help`
 </script>
 
@@ -343,8 +375,10 @@
   {#if view?.points}
     <Meter label="Points" value={view.points.given} max={view.points.max} />
   {/if}
-  {#if view?.explanation}
-    <p>{view.explanation}</p>
+  {#if isSubmitPromptShown}
+    <p id={submitPromptId}>{SUBMIT_PROMPT}</p>
+  {:else if explanation}
+    <p>{explanation}</p>
   {/if}
   {#if view?.pendingReview}
     <p>{view.pendingReview}</p>
@@ -374,7 +408,13 @@
   {:else if triesNote}
     <p class="muted">{triesNote}</p>
   {/if}
-  <ActionBar {...barActions} />
+  <div
+    bind:this={actionBarSlot}
+    role={isSubmitPromptShown ? "group" : undefined}
+    aria-labelledby={isSubmitPromptShown ? submitPromptId : undefined}
+  >
+    <ActionBar {...barActions} />
+  </div>
   <ScreenFailures failures={screenFailures} isLogInShown={view.isLoggedOut === true} />
   {#if keepWaitingError}
     <ErrorNotice error={keepWaitingError} title="Could not keep waiting" />

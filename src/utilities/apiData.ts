@@ -86,8 +86,15 @@ export function combineMoocApiExerciseData(
           }
         : {}),
       ...(slide.page_url ? { pageUrl: slide.page_url } : {}),
+      // The course's slide list leaves model solutions out, so one seen elsewhere stays.
+      ...(hasModelSolution(slide) || previous?.hasModelSolution ? { hasModelSolution: true } : {}),
     }
   })
+}
+
+/** Whether courses.mooc.fi sent a model solution with any of the slide's tasks. */
+export function hasModelSolution(slide: TmcExerciseSlide): boolean {
+  return slide.tasks.some((task) => task.model_solution_spec !== null)
 }
 
 function storedPoints(

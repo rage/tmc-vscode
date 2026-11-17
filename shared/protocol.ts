@@ -339,7 +339,10 @@ export const SubmissionViewSchema = z.object({
   testCases: z.array(TestCase),
   validations: TmcStyleValidationResult.optional(),
   valgrind: z.string().optional(),
+  /** The page that shows the exercise's model solution, once its backend shows one. */
   solutionUrl: z.string().optional(),
+  /** The exercise's course material page, or its course's; offered while there is no solution. */
+  materialUrl: z.string().optional(),
   /** The submission's page on the backend's site. */
   submissionUrl: z.string().optional(),
   /** Whether `keepWaitingForGrading` can pick the wait up again for this submission. */
@@ -365,6 +368,8 @@ export const SubmissionViewSchema = z.object({
   triesLeft: z.number().optional(),
   /** Submitting takes a login first, which Submit then offers as Log In to Submit. */
   isLoggedOut: z.boolean().optional(),
+  /** ms timestamp of the run a `testedLocally` view shows, which tells one run from the next. */
+  localPassAt: z.number().optional(),
 })
 
 export type SubmissionView = z.infer<typeof SubmissionViewSchema>
