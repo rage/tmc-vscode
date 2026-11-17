@@ -286,12 +286,6 @@
         "category": "TestMyCode"
       },
       {
-        "command": "tmc.testing.submitExercise",
-        "title": "Submit",
-        "category": "TestMyCode",
-        "icon": "$(cloud-upload)"
-      },
-      {
         "command": "tmc.testing.pasteExercise",
         "title": "Get Help",
         "category": "TestMyCode"
@@ -540,10 +534,6 @@
           "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:ActiveEditorIsExercise"
         },
         {
-          "command": "tmc.testing.submitExercise",
-          "when": "false"
-        },
-        {
           "command": "tmc.testing.pasteExercise",
           "when": "false"
         },
@@ -628,34 +618,9 @@
           "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
         },
         {
-          "command": "tmc.showExerciseResults",
-          "group": "1_check@4",
-          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
-        },
-        {
           "command": "tmc.downloadOldSubmission",
           "group": "2_restore@1",
           "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
-        },
-        {
-          "command": "tmc.resetExercise",
-          "group": "2_restore@2",
-          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive && test-my-code:LoggedIn"
-        },
-        {
-          "command": "tmc.cleanExercise",
-          "group": "3_close@1",
-          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive"
-        },
-        {
-          "command": "tmc.closeExercise",
-          "group": "3_close@2",
-          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive"
-        },
-        {
-          "command": "tmc.openNextExercise",
-          "group": "4_next@1",
-          "when": "test-my-code:Initialized && test-my-code:WorkspaceActive"
         }
       ],
       "view/title": [
@@ -813,74 +778,79 @@
         },
         {
           "command": "tmc.showMoocLogin",
-          "group": "1_exercises@0",
+          "group": "0_get@0",
           "when": "view == tmcView && test-my-code:Initialized && !test-my-code:LoggedIn && viewItem =~ /^exercise\\.(missing|new|expired|downloadFailed)(\\.|$)/"
         },
         {
           "command": "tmc.downloadExercises",
-          "group": "1_exercises@1",
+          "group": "0_get@1",
           "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && (viewItem =~ /^exercise\\.(missing|new|expired|downloadFailed)(\\.|$)/ || viewItem =~ /^exercise\\./ && listMultiSelection)"
         },
         {
           "command": "tmc.openExercises",
-          "group": "1_exercises@2",
+          "group": "0_get@2",
           "when": "view == tmcView && test-my-code:Initialized && (viewItem =~ /^exercise\\.(removed\\.)?closed(\\.|$)/ || test-my-code:LoggedIn && (viewItem =~ /^exercise\\.(missing|new|expired|downloadFailed)(\\.|$)/ || viewItem =~ /^exercise\\./ && listMultiSelection))"
         },
         {
-          "command": "tmc.closeExercises",
-          "group": "1_exercises@3",
-          "when": "view == tmcView && test-my-code:Initialized && (viewItem =~ /^exercise\\.(removed\\.)?opened(\\.|$)/ || viewItem =~ /^exercise\\./ && listMultiSelection)"
-        },
-        {
           "command": "tmc.testExercise",
-          "group": "2_check@1",
+          "group": "1_check@1",
           "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\.(removed\\.)?opened(\\.|$)/ && !listMultiSelection"
         },
         {
           "command": "tmc.submitExercise",
-          "group": "2_check@2",
+          "group": "1_check@2",
           "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\.opened(?!.*\\.submitRefused(\\.|$))(\\.|$)/ && !listMultiSelection"
         },
         {
-          "command": "tmc.pasteExercise",
-          "group": "2_check@3",
+          "command": "tmc.showExerciseResults",
+          "group": "1_check@3",
           "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\.opened(\\.|$)/ && !listMultiSelection"
         },
         {
-          "command": "tmc.showExerciseResults",
-          "group": "2_check@4",
+          "command": "tmc.pasteExercise",
+          "group": "1_check@4",
           "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\.opened(\\.|$)/ && !listMultiSelection"
         },
         {
           "command": "tmc.downloadOldSubmission",
-          "group": "3_restore@1",
+          "group": "2_restore@1",
           "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\.opened(\\.|$)/ && !listMultiSelection"
         },
         {
           "command": "tmc.resetExercise",
-          "group": "3_restore@2",
+          "group": "2_restore@2",
           "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn && viewItem =~ /^exercise\\.opened(\\.|$)/ && !listMultiSelection"
         },
         {
-          "command": "tmc.cleanExercise",
-          "group": "4_clean@1",
+          "command": "tmc.openNextExercise",
+          "group": "3_course@1",
           "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\.(removed\\.)?opened(\\.|$)/ && !listMultiSelection"
         },
         {
+          "command": "tmc.showModelSolution",
+          "group": "3_course@2",
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\.opened\\..*hasModelSolution(\\.|$)/ && !listMultiSelection"
+        },
+        {
           "command": "tmc.openExerciseMaterial",
-          "group": "5_material@1",
+          "group": "3_course@3",
           "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\..*\\.hasMaterial(\\.|$)/ && !listMultiSelection"
+        },
+        {
+          "command": "tmc.cleanExercise",
+          "group": "4_close@1",
+          "when": "view == tmcView && test-my-code:Initialized && viewItem =~ /^exercise\\.(removed\\.)?opened(\\.|$)/ && !listMultiSelection"
+        },
+        {
+          "command": "tmc.closeExercises",
+          "group": "4_close@2",
+          "when": "view == tmcView && test-my-code:Initialized && (viewItem =~ /^exercise\\.(removed\\.)?opened(\\.|$)/ || viewItem =~ /^exercise\\./ && listMultiSelection)"
         }
       ],
       "testing/item/context": [
         {
-          "command": "tmc.testing.submitExercise",
-          "group": "1_testmycode@1",
-          "when": "controllerId == tmc && test-my-code:Initialized && test-my-code:LoggedIn"
-        },
-        {
           "command": "tmc.testing.pasteExercise",
-          "group": "1_testmycode@2",
+          "group": "1_testmycode@1",
           "when": "controllerId == tmc && test-my-code:Initialized && test-my-code:LoggedIn"
         }
       ]

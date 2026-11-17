@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- The Courses view's exercise menu and the exercise status bar item offer the same actions in the same order: Run Tests, Submit, Show Results, Get Help; History, Reset Exercise; Open Next Exercise, Show Model Solution, Open Course Material; Delete Generated Files, Close Exercise. The status bar adds Show in Courses View. The Explorer's TestMyCode menu keeps Run Tests, Submit, Get Help and History, and the Testing view no longer offers Submit.
 - Exercise files open in the first editor group, beside the results screen instead of in its group, and a file already open is focused instead of opened twice. Error Details opens as a tab in the group of the screen you opened it from.
 - The exercise actions of a passed exercise in a chapter not unlocked yet no longer say to complete earlier chapters first; the chapter says it.
 - A course home you are not enrolled on no longer offers to download its exercises.

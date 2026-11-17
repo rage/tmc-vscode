@@ -985,7 +985,6 @@ suite("refused while an AI extension runs: every entry point", function () {
     ["an editor title button", "tmc.testExercise", () => [exercise.uri]],
     ["a Courses view inline action", "tmc.submitExercise", () => [row()]],
     ["a Courses view inline action", "tmc.testExercise", () => [row()]],
-    ["a test item's context menu", "tmc.testing.submitExercise", () => [undefined]],
   ])(
     "%s's %s says why, once, with one remedy, and does nothing",
     async function (_entry, id, args) {

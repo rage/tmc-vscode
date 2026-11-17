@@ -257,6 +257,29 @@ suite("CoursesTree", function () {
     expect(show(moocCourse())[0]?.description).toBe("")
   })
 
+  test("every row's hover leads with the full name the sidebar may truncate", function () {
+    const courseTitle = "Introduction to Programming with Python, Autumn 2026 Edition"
+    const chapterName = "Loops, conditionals and the first longer programs"
+    const exerciseName = "a_rather_long_exercise_name_that_does_not_fit"
+    const course = first(
+      show(
+        moocCourse({
+          title: courseTitle,
+          exercises: [
+            moocCourseExercise({ name: exerciseName, chapter: { name: chapterName, number: 1 } }),
+          ],
+        }),
+      ),
+    )
+    const part = tree
+      .getChildren(course)
+      .find((child): child is PartTreeItem => child instanceof PartTreeItem)
+
+    expect(tooltipOf(course).split("\n\n")[0]).toBe(`**${courseTitle}**`)
+    expect(tooltipOf(part).split("\n\n")[0]).toBe(`**${chapterName}**`)
+    expect(tooltipOf(first(exercisesOf(course))).split("\n\n")[0]).toBe(`**${exerciseName}**`)
+  })
+
   test("a disabled course says so", function () {
     const item = first(show(tmcCourse({ disabled: true })))
 
@@ -472,12 +495,12 @@ suite("CoursesTree", function () {
       )
     })
 
-    test("passed shows the passed icon whatever its local state", function () {
+    test("passed shows the passed icon whatever its local state, and offers the model solution", function () {
       workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Closed)]
       const item = onlyExercise({ passed: true, awardedPoints: 1 })
 
       expect(icon(item)).toEqual(["pass-filled", "testing.iconPassed"])
-      expect(item.contextValue).toBe("exercise.closed.passed")
+      expect(item.contextValue).toBe("exercise.closed.passed.hasModelSolution")
       expect(item.description).toBe("closed · 1/1 points")
     })
 

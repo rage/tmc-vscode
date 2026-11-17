@@ -225,8 +225,8 @@ export function registerCommands(
     commands.enrollOnCourse(readyContext, courseIdOf(target)),
   )
 
-  register("tmc.openExerciseMaterial", async (row?: CoursesTreeItem) =>
-    treeCommands.openExerciseMaterial(row),
+  register("tmc.openExerciseMaterial", async (target?: CoursesTreeItem | vscode.Uri) =>
+    treeCommands.openExerciseMaterial(readyContext, target),
   )
 
   register("tmc.updateCourseExercises", async (row: CoursesTreeItem) =>

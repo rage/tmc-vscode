@@ -16,6 +16,7 @@ import type { FakeStatusBarItem } from "../mocks/statusBar"
 import { fakeStatusBarItems, tooltipText } from "../mocks/statusBar"
 import type { WorkspaceManagerMockValues } from "../mocks/workspaceManager"
 import { createWorkspaceMangerMock } from "../mocks/workspaceManager"
+import { commandTitle, shownMenu } from "../support/manifestMenus"
 
 function storedExercise(awardedPoints: number, availablePoints: number): LocalCourseExercise {
   return makeMoocKind(
@@ -292,6 +293,27 @@ function offered(): string[] {
     .map((x) => x.label.replace(/^\$\([\w-]+\) /, ""))
 }
 
+/** The commands of the actions the pick offered, with their labels without codicons. */
+function offeredCommands(): [command: string, label: string][] {
+  const [actions] = vi.mocked(vscode.window.showQuickPick).mock.calls[0] as unknown as [
+    { label: string; value?: { command: string } }[],
+  ]
+  return actions.flatMap((x) =>
+    x.value ? [[x.value.command, x.label.replace(/^\$\([\w-]+\) /, "")] as [string, string]] : [],
+  )
+}
+
+/** The Courses view's context menu on `viewItem`, as the pick names its commands. */
+function treeMenu(viewItem: string, isLoggedIn: boolean): string[] {
+  return shownMenu("view/item/context", {
+    view: "tmcView",
+    viewItem,
+    "test-my-code:Initialized": true,
+    "test-my-code:LoggedIn": isLoggedIn,
+    listMultiSelection: false,
+  }).map((command) => (command === "tmc.closeExercises" ? "tmc.closeExercise" : command))
+}
+
 suite("showExerciseActions", function () {
   afterEach(function () {
     vi.restoreAllMocks()
@@ -306,14 +328,16 @@ suite("showExerciseActions", function () {
     await showExerciseActions(new Dialog(), harness().sources, true)
 
     expect(offered()).toEqual([
-      "Show Results",
       "Run Tests",
       "Submit",
+      "Show Results",
       "Get Help",
       "History",
       "Reset Exercise",
       "Open Next Exercise",
       "Show in Courses View",
+      "Delete Generated Files",
+      "Close Exercise",
     ])
     expect(executeCommand).toHaveBeenCalledWith("tmc.submitExercise", exerciseHelloWorld.uri)
   })
@@ -345,7 +369,13 @@ suite("showExerciseActions", function () {
 
     await showExerciseActions(new Dialog(), harness().sources, false)
 
-    expect(offered()).toEqual(["Run Tests", "Open Next Exercise", "Show in Courses View"])
+    expect(offered()).toEqual([
+      "Run Tests",
+      "Open Next Exercise",
+      "Show in Courses View",
+      "Delete Generated Files",
+      "Close Exercise",
+    ])
   })
 
   test("for an exercise removed from its course, offers only what runs locally and says why", async function () {
@@ -355,7 +385,13 @@ suite("showExerciseActions", function () {
 
     await showExerciseActions(new Dialog(), h.sources, true)
 
-    expect(offered()).toEqual(["Run Tests", "Open Next Exercise", "Show in Courses View"])
+    expect(offered()).toEqual([
+      "Run Tests",
+      "Open Next Exercise",
+      "Show in Courses View",
+      "Delete Generated Files",
+      "Close Exercise",
+    ])
     expect(showQuickPick.mock.calls[0]?.[1]).toMatchObject({
       placeHolder: expect.stringMatching(/^Removed from the course/),
     })
@@ -439,7 +475,13 @@ suite("showExerciseActions", function () {
 
     await showExerciseActions(new Dialog(), h.sources, true)
 
-    expect(offered()).toEqual(["Run Tests", "Open Next Exercise", "Show in Courses View"])
+    expect(offered()).toEqual([
+      "Run Tests",
+      "Open Next Exercise",
+      "Show in Courses View",
+      "Delete Generated Files",
+      "Close Exercise",
+    ])
     expect(showQuickPick.mock.calls[0]?.[1]).toMatchObject({
       placeHolder: expect.stringContaining('chapter "Recursion" has not opened yet'),
     })
@@ -453,6 +495,71 @@ suite("showExerciseActions", function () {
     await showExerciseActions(new Dialog(), sources, true)
 
     expect(offered()).not.toContain("Show in Courses View")
+  })
+
+  test("offers the Courses view menu's actions in its order, under the same titles", async function () {
+    const cases: [string, boolean, (h: Harness) => void][] = [
+      [
+        "exercise.opened.passed.hasMaterial.hasModelSolution",
+        true,
+        (h) => {
+          h.stored.exercise = makeMoocKind(
+            moocCourseExercise({
+              id: "exercise-uuid",
+              name: "hello",
+              passed: true,
+              pageUrl: "https://courses.example/page",
+            }),
+          )
+        },
+      ],
+      ["exercise.opened", false, () => {}],
+      [
+        "exercise.removed.opened",
+        true,
+        (h) => {
+          h.stored.exercise = undefined
+        },
+      ],
+    ]
+    for (const [viewItem, isLoggedIn, arrange] of cases) {
+      const showQuickPick = vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)
+      const h = harness()
+      arrange(h)
+
+      await showExerciseActions(new Dialog(), h.sources, isLoggedIn)
+
+      const offeredActions = offeredCommands()
+      // The view's own row needs no way back to itself.
+      expect(
+        offeredActions
+          .map(([command]) => command)
+          .filter((command) => command !== "tmc.revealInCoursesView"),
+      ).toEqual(treeMenu(viewItem, isLoggedIn))
+      for (const [command, label] of offeredActions) {
+        expect(label).toBe(commandTitle(command))
+      }
+      showQuickPick.mockRestore()
+    }
+  })
+
+  test("opens the course material page of an exercise that has one", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    vi.spyOn(vscode.window, "showQuickPick").mockImplementation((async (
+      items: readonly { label: string }[],
+    ) => items.find((x) => x.label.includes("Course Material"))) as never)
+    const h = harness()
+    h.stored.exercise = makeMoocKind(
+      moocCourseExercise({
+        id: "exercise-uuid",
+        name: "hello",
+        pageUrl: "https://courses.example",
+      }),
+    )
+
+    await showExerciseActions(new Dialog(), h.sources, true)
+
+    expect(executeCommand).toHaveBeenCalledWith("tmc.openExerciseMaterial", exerciseHelloWorld.uri)
   })
 
   test("shows nothing outside an exercise", async function () {

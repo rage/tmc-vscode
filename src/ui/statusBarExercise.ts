@@ -223,15 +223,17 @@ export async function showExerciseActions(
       : shownRefusal
         ? `Can't be submitted: ${SUBMIT_REFUSAL_LABELS[shownRefusal]}`
         : "What do you want to do with this exercise?"
+  const hasBackendActions = isLoggedIn && !isUnlisted
+  const materialUrl =
+    stored.ok && stored.val.exercise.kind === "mooc" ? stored.val.exercise.data.pageUrl : undefined
+  // The same actions, order and labels as the Courses view's exercise menu in package.json.
   const picked = await dialog.selectItem(
     { title: exercise.exerciseSlug, placeHolder },
-    ...(isLoggedIn && !isUnlisted
-      ? [action("$(output) Show Results", "tmc.showExerciseResults")]
-      : []),
     action("$(beaker) Run Tests", "tmc.testExercise"),
-    ...(isLoggedIn && !isUnlisted
+    ...(hasBackendActions
       ? [
           ...(refusal ? [] : [action("$(cloud-upload) Submit", "tmc.submitExercise")]),
+          action("$(output) Show Results", "tmc.showExerciseResults"),
           action("$(link) Get Help", "tmc.pasteExercise"),
           separator("Restore"),
           action("$(history) History", "tmc.downloadOldSubmission"),
@@ -243,7 +245,11 @@ export async function showExerciseActions(
     ...(stored.ok && modelSolutionUrl(stored.val)
       ? [action("$(lightbulb) Show Model Solution", "tmc.showModelSolution")]
       : []),
+    ...(materialUrl ? [action("$(book) Open Course Material", "tmc.openExerciseMaterial")] : []),
     ...(course.ok ? [action("$(list-tree) Show in Courses View", "tmc.revealInCoursesView")] : []),
+    separator("Folder"),
+    action("$(trash) Delete Generated Files", "tmc.cleanExercise"),
+    action("$(close) Close Exercise", "tmc.closeExercise"),
   )
   if (picked) {
     await vscode.commands.executeCommand(picked.command, ...picked.arguments)
