@@ -224,10 +224,12 @@ suite("updateExercises command", function () {
 
     await updateExercises(actionContext, "loud")
     await updateExercises(actionContext, "silent")
+    await updateExercises(actionContext, "silent", true)
 
     expect(checkForExerciseUpdates.mock.calls.map(([, options]) => options)).toEqual([
       { forceRefresh: true },
       { forceRefresh: false },
+      { forceRefresh: true },
     ])
   })
 

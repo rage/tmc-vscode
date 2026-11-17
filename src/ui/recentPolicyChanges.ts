@@ -1,7 +1,13 @@
 import * as vscode from "vscode"
 
-import type { CourseIdentifier } from "../../shared/lib"
-import { CourseIdentifier as CourseIdentifierNs } from "../../shared/lib"
+import type { CourseIdentifier, LocalCourseData } from "../../shared/lib"
+import {
+  aiAssistanceSentence,
+  aiPolicyRule,
+  CourseIdentifier as CourseIdentifierNs,
+  LocalCourseData as LocalCourseDataNs,
+} from "../../shared/lib"
+import { isAiAllowed } from "../api/aiRestriction"
 
 /**
  * The AI-policy changes a refresh found, per course, until the student dismisses the course
@@ -24,6 +30,22 @@ class RecentPolicyChanges {
   public add(courseId: CourseIdentifier, sentence: string): void {
     this._byCourse.set(CourseIdentifierNs.key(courseId), sentence)
     this._changed.fire()
+  }
+
+  /**
+   * Records that `course`, as stored now, changed its AI policy.
+   *
+   * @returns The sentence recorded; `undefined` for a tmc.mooc.fi course, which has no policy.
+   */
+  public addChangeOf(course: LocalCourseData): string | undefined {
+    if (course.kind !== "mooc") {
+      return undefined
+    }
+    const sentence = [aiPolicyRule(course.data.aiPolicy), aiAssistanceSentence(isAiAllowed(course))]
+      .filter((part) => part !== undefined)
+      .join(" ")
+    this.add(LocalCourseDataNs.getCourseId(course), sentence)
+    return sentence
   }
 
   public dismiss(courseId: CourseIdentifier): void {

@@ -1,17 +1,10 @@
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 
-import {
-  aiAssistanceSentence,
-  aiPolicyRule,
-  CourseIdentifier,
-  ExerciseIdentifier,
-  LocalCourseData,
-} from "../../shared/lib"
+import { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../../shared/lib"
 import type { AiPolicyChange, CourseUpdateOptions } from "../actions"
 import { checkForCourseUpdates } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import { isAiAllowed } from "../api/aiRestriction"
 import type { OperationWarning } from "../api/withOperation"
 import { reportFailureIn, reportWarnings, withOperation } from "../api/withOperation"
 import { BottleneckError } from "../errors"
@@ -187,17 +180,11 @@ function announceAiPolicyChanges(
   changes: readonly AiPolicyChange[],
 ): void {
   for (const { course } of changes) {
-    if (course.kind !== "mooc") {
-      continue
-    }
+    const sentence = recentPolicyChanges.addChangeOf(course)
     const courseId = LocalCourseData.getCourseId(course)
-    const sentence = [aiPolicyRule(course.data.aiPolicy), aiAssistanceSentence(isAiAllowed(course))]
-      .filter((part) => part !== undefined)
-      .join(" ")
-    recentPolicyChanges.add(courseId, sentence)
-    if (!shownCourseHome.isShowing(courseId)) {
+    if (sentence !== undefined && !shownCourseHome.isShowing(courseId)) {
       void dialog.notification(
-        `${course.data.title} changed its AI policy: ${sentence}`,
+        `${LocalCourseData.getCourseTitle(course)} changed its AI policy: ${sentence}`,
         showCourseHomeButton(courseId),
       )
     }

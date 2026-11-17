@@ -32,11 +32,17 @@ import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
 import { standingView, submitFailedView } from "../../panels/submissionView"
 import { MAIN_PANEL_VIEW_TYPE, SIDE_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
 import { loginScreens } from "../../ui/loginScreens"
+import { recentPolicyChanges } from "../../ui/recentPolicyChanges"
 import { shownCourseHome } from "../../ui/shownCourseHome"
 import { submissionViews } from "../../ui/submissionViews"
 import type CoursesTree from "../../ui/treeview/treeview"
 import { Logger } from "../../utilities"
-import { moocCourseExercise, tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
+import {
+  moocCourseExercise,
+  moocLocalCourse,
+  tmcCourseExercise,
+  tmcLocalCourse,
+} from "../fixtures/courses"
 import { idOfMoocExercise, idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createDegradedContext, createMockActionContext } from "../mocks/actionContext"
 import { createMockContext } from "../mocks/vscode"
@@ -1196,6 +1202,31 @@ suite("TmcPanel refreshCourseDetails", () => {
         outcome: { ok: true, value: courseHomeOf(courseWith(2)) },
       },
     ])
+  })
+
+  test("checks the exercises for updates, skipping the cached answer", async () => {
+    const { openWorkspace: executeCommand } = stubHandlers()
+    const actionContext = courseDetailsContext()
+    const { panel, listener, shown } = await mountCourseDetails(actionContext)
+
+    await listener(refreshRequest(shown))
+
+    expect(executeCommand).toHaveBeenCalledWith("tmc.updateExercises", "silent", true)
+    expect(replyTo(panel, 1)).toMatchObject({ outcome: { ok: true } })
+  })
+
+  test("notes a changed AI policy the refresh found in the course home", async () => {
+    const handlers = stubHandlers()
+    const course = moocLocalCourse({ aiPolicy: "no_ai" })
+    handlers.updateCourse.mockResolvedValue(
+      Ok({ isUpdated: true, warnings: [], aiPolicyChange: { course } }),
+    )
+    const actionContext = courseDetailsContext()
+    const { listener, shown } = await mountCourseDetails(actionContext)
+
+    await listener(refreshRequest(shown))
+
+    expect(recentPolicyChanges.get(LocalCourseData.getCourseId(course))).toBeDefined()
   })
 
   test("answers with the course, not an error, when the student has logged out", async () => {

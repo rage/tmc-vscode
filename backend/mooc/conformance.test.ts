@@ -111,6 +111,24 @@ describe("mooc mock conformance", () => {
     assert.equal(mock.setEnrolled("no-such-course", true), false)
   })
 
+  test("a teacher's AI policy change shows in the course until a reset", async () => {
+    const policy = async (): Promise<unknown> =>
+      (
+        (await (await authFetch(api(`/courses/${pythonCourse.id}`))).json()) as {
+          ai_policy?: unknown
+        }
+      ).ai_policy
+    try {
+      assert.equal(mock.setAiPolicy(pythonCourse.id, "no_ai"), true)
+      assert.equal(await policy(), "no_ai")
+      assert.equal(pythonCourse.ai_policy, undefined)
+    } finally {
+      mock.reset()
+    }
+    assert.equal(await policy(), undefined)
+    assert.equal(mock.setAiPolicy("no-such-course", "no_ai"), false)
+  })
+
   test("a course closed to students serves itself and its progress, not its material", async () => {
     const exerciseId = passingExercise.slide.exercise_id
     try {

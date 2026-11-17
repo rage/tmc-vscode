@@ -54,10 +54,18 @@ export const courseDetailsHandlers = {
         { failure: "Failed to update course.", silent: true },
         () => actions.updateCourse(actionContext, courseId),
       )
+      // The panel that asked is on screen, so its notice is the whole announcement.
+      if (updateResult.ok && updateResult.val.aiPolicyChange) {
+        recentPolicyChanges.addChangeOf(updateResult.val.aiPolicyChange.course)
+      }
       // `updateCourse` does not rescan, and a course update can drop exercises still on disk.
       const rescanResult = await actions.refreshLocalExercises(actionContext)
       if (rescanResult.err) {
         Logger.warn("Failed to rescan the local exercises", rescanResult.val)
+      }
+      // A teacher's change to a downloaded exercise shows as an update only once checked for.
+      if (updateResult.ok && updateResult.val.isUpdated) {
+        await vscode.commands.executeCommand("tmc.updateExercises", "silent", true)
       }
       if (updateResult.err) {
         actionContext.dialog.noteSessionLost(updateResult.val)
