@@ -88,6 +88,11 @@ async function waitForActivation(page: Page): Promise<void> {
   await expect(addCourse).toBeVisible({
     timeout: 30_000,
   })
+  // Activation ends by opening the walkthrough of a fresh install, which takes the focus. The
+  // add-course pick ignores focus loss, so one opened before would stay up, and miss Escape.
+  await expect(page.getByRole("tab", { name: /^Walkthrough: TestMyCode/ })).toBeVisible({
+    timeout: 30_000,
+  })
 }
 
 vsCodeTest(
