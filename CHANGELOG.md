@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Logging out leaves you logged out, not expired: the status bar keeps "TestMyCode: Log In" and the course home and Courses view keep "Not logged in" after a refresh, and an action that needs a login asks you to log in instead of saying you were logged out. Only an expired or revoked login reads "You were logged out. Log in again."
 - The Courses view's exercise menu and the exercise status bar item offer the same actions in the same order: Run Tests, Submit, Show Results, Get Help; History, Reset Exercise; Open Next Exercise, Show Model Solution, Open Course Material; Delete Generated Files, Close Exercise. The status bar adds Show in Courses View. The Explorer's TestMyCode menu keeps Run Tests, Submit, Get Help and History, and the Testing view no longer offers Submit.
 - Exercise files open in the first editor group, beside the results screen instead of in its group, and a file already open is focused instead of opened twice. Error Details opens as a tab in the group of the screen you opened it from.
 - When all tests pass on your computer, whether run from the results screen, the editor or the Testing view, the results screen opens and asks "All tests pass. Submit for grading?" with Submit and Not Now. Not Now leaves Submit beside Run Tests until the next run. It does not ask while logged out, in exam mode, or when the exercise cannot be submitted.
@@ -11,8 +12,6 @@
 - A long job, such as a download of several exercises, an update or waiting for a grading, shows its progress in a notification while the course home or results screen that shows it is out of sight, and the notification goes away when you bring the screen back.
 - One status bar item shows what runs out of sight: a spinner reading "TestMyCode: <job>" while a refresh, an update check, a download or update, a test run or a submission until it is graded runs, with how many more run beside it. Clicking it opens the course home, the results screen or Test Results that shows the job. The exercise item no longer spins, and the failed-update item is the same item while nothing runs.
 - New exercises found in the background are offered course by course: "N new exercises in <course>." with Download and Later, which asks again in 30 minutes. The new setting `testMyCode.newExercises` downloads them by themselves instead and says how many, or leaves them to the course home. Courses you are not enrolled on or have lost access to are not offered.
-
-> > > > > > > origin/programming-exercise-migration
 
 - The exercise actions of a passed exercise in a chapter not unlocked yet no longer say to complete earlier chapters first; the chapter says it.
 - A course home you are not enrolled on no longer offers to download its exercises.

@@ -7,6 +7,10 @@ import { CourseAiPolicy } from "./generated/langs"
 /** What every surface says of a session that expired or was revoked. */
 export const LOGGED_OUT_MESSAGE = "You were logged out. Log in again."
 
+/** What every surface says when the user is not logged in, including after logging out. */
+export const NOT_LOGGED_IN_MESSAGE =
+  "Log in with your MOOC.fi account to download and submit exercises."
+
 const BackendKindSchema = z.enum(["tmc", "mooc"]) satisfies z.ZodType<BackendKind>
 
 /** A deadline as the course home prints it, formatted on the host in the display language. */

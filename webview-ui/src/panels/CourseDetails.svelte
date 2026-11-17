@@ -14,6 +14,7 @@
     aiAssistanceSentence,
     aiPolicyRule,
     LOGGED_OUT_MESSAGE,
+    NOT_LOGGED_IN_MESSAGE,
     offersLogIn,
     SOFT_DEADLINE_PENALTY,
     withoutLogIn,
@@ -256,7 +257,7 @@
           key: "loggedOut",
           tone: "info",
           title: "Not logged in",
-          detail: "Log in with your MOOC.fi account to download and submit exercises.",
+          detail: NOT_LOGGED_IN_MESSAGE,
           actions: [{ label: "Log In", onclick: () => runCommand("tmc.showMoocLogin") }],
         },
       view.isLoggedIn &&

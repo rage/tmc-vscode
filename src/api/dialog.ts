@@ -1,7 +1,7 @@
 import * as vscode from "vscode"
 
 import type { CourseIdentifier } from "../../shared/lib"
-import { backendName, LocalCourseData } from "../../shared/lib"
+import { backendName, LocalCourseData, NOT_LOGGED_IN_MESSAGE } from "../../shared/lib"
 import { isSessionLost, presentationFor } from "../errors"
 import { Logger } from "../utilities"
 import { errorDetails } from "./errorDetails"
@@ -86,7 +86,7 @@ export function courseSelectionItems(
  * A class that provides a centralized interface to user dialogue.
  */
 export default class Dialog {
-  private _reportSessionLost: ((cause: Error) => void) | undefined
+  private _reportSessionLost: ((cause: Error) => boolean) | undefined
 
   /**
    * Asks the user to confirm an action, in a modal dialog.
@@ -153,9 +153,10 @@ export default class Dialog {
 
   /**
    * Takes over {@link reportError}'s notification for a lost session, which the session's own
-   * warning already tells about; `undefined` hands it back.
+   * warning already tells about; `undefined` hands it back. The reporter returns `false` for a
+   * session the user logged out of, which takes a neutral Log In prompt instead.
    */
-  public setSessionLostReporter(reporter: ((cause: Error) => void) | undefined): void {
+  public setSessionLostReporter(reporter: ((cause: Error) => boolean) | undefined): void {
     this._reportSessionLost = reporter
   }
 
@@ -180,7 +181,12 @@ export default class Dialog {
   public async reportError(message: string, error: Error): Promise<void> {
     if (this._reportSessionLost && isSessionLost(error)) {
       Logger.warn(message, error)
-      this._reportSessionLost(error)
+      if (!this._reportSessionLost(error)) {
+        await this.notification(NOT_LOGGED_IN_MESSAGE, [
+          "Log In",
+          (): void => void vscode.commands.executeCommand("tmc.showMoocLogin"),
+        ])
+      }
       return
     }
     const presentation = presentationFor(error)

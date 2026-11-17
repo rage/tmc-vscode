@@ -6,6 +6,7 @@ import {
   ExerciseIdentifier,
   LocalCourseData,
   LOGGED_OUT_MESSAGE,
+  NOT_LOGGED_IN_MESSAGE,
   SOFT_DEADLINE_PENALTY,
   SUBMIT_REFUSAL_ICONS,
   SUBMIT_REFUSAL_LABELS,
@@ -597,7 +598,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
     } else if (this._isSessionExpired) {
       status = LOGGED_OUT_MESSAGE
     } else if (!this._isLoggedIn) {
-      status = "Log in with your MOOC.fi account to download and submit exercises."
+      status = NOT_LOGGED_IN_MESSAGE
     } else if (this._unreachableBackends.size > 0) {
       status =
         "Could not reach the server. Showing the exercises on this computer; deadlines may be out of date."
