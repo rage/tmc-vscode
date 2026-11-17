@@ -45,12 +45,12 @@ suite("ErrorNotice component", () => {
           message: "Offline.",
           actions: [{ label: "Show Help", command: "tmc.viewInitializationErrorHelp" }],
         },
-        actions: createRawSnippet(() => ({ render: () => "<button>Retry</button>" })),
+        actions: createRawSnippet(() => ({ render: () => "<button>Try Again</button>" })),
       },
     })
 
     const remedy = await screen.findByRole("button", { name: "Show Help" })
-    const retry = screen.getByRole("button", { name: "Retry" })
+    const retry = screen.getByRole("button", { name: "Try Again" })
     expect(remedy.compareDocumentPosition(retry) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
@@ -58,12 +58,12 @@ suite("ErrorNotice component", () => {
     render(ErrorNotice, {
       props: {
         error: { message: "Offline.", detailsId: "d-2" },
-        actions: createRawSnippet(() => ({ render: () => "<button>Retry</button>" })),
+        actions: createRawSnippet(() => ({ render: () => "<button>Try Again</button>" })),
       },
     })
 
     const details = await screen.findByRole("button", { name: "Show Details" })
-    const retry = screen.getByRole("button", { name: "Retry" })
+    const retry = screen.getByRole("button", { name: "Try Again" })
     expect(retry.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 })

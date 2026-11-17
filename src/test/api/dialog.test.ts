@@ -236,10 +236,10 @@ suite("Dialog.errorNotification with an error", function () {
     const logError = vi.spyOn(Logger, "error").mockImplementation(() => {})
     const show = stubMessage("showErrorMessage", (actions) => actions.at(-1))
     const boom = new Error("boom")
-    await new Dialog().errorNotification("Download failed", boom, ["Retry", (): void => {}])
+    await new Dialog().errorNotification("Download failed", boom, ["Try Again", (): void => {}])
 
     expect(logError).toHaveBeenCalledWith("Download failed", boom)
-    expect(buttonTitles(show)).toEqual(["Retry", "Show Details"])
+    expect(buttonTitles(show)).toEqual(["Try Again", "Show Details"])
     const [command, detailsId] = executeCommand.mock.calls[0] ?? []
     expect(command).toBe("tmc.showErrorDetails")
     expect(errorDetails.get(detailsId as string)).toMatchObject({

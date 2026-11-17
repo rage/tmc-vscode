@@ -14,7 +14,7 @@
     /** Renders a dismiss button; `dismissLabel` should say what goes away. */
     ondismiss?: (() => void) | undefined
     dismissLabel?: string | undefined
-    /** Buttons shown under the text, e.g. Retry. */
+    /** Buttons shown under the text, e.g. Try Again. */
     actions?: Snippet | undefined
     children?: Snippet | undefined
   }

@@ -826,7 +826,7 @@ suite("the course home", () => {
     expect(screen.queryByText(/Loading/)).not.toBeInTheDocument()
 
     postedMessages.mockClear()
-    ;(await screen.findByRole("button", { name: "Retry" })).click()
+    ;(await screen.findByRole("button", { name: "Try Again" })).click()
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "requestCourseDetailsData",

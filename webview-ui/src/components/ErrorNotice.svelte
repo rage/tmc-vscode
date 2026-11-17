@@ -13,7 +13,7 @@
     title?: string | undefined
     ondismiss?: (() => void) | undefined
     dismissLabel?: string | undefined
-    /** Buttons after the error's own remedies, e.g. Retry. */
+    /** Buttons after the error's own remedies, e.g. Try Again. */
     actions?: Snippet | undefined
   }
 

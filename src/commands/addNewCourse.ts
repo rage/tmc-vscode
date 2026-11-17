@@ -26,7 +26,7 @@ type Choice =
   | { kind: "organization"; organization: Organization }
   | { kind: "course"; courseId: CourseIdentifier; name: string; organizationSlug: string }
   | { kind: "added"; courseId: CourseIdentifier }
-  // Neither backend listed anything; the add-course screen says why for each, with Retry.
+  // Neither backend listed anything; the add-course screen says why for each, with Try Again.
   | { kind: "unavailable" }
 
 interface ChoiceItem extends vscode.QuickPickItem {

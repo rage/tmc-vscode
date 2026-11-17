@@ -479,7 +479,7 @@
     <PanelHeader title="Could not load this course" />
     <ErrorNotice error={dataError}>
       {#snippet actions()}
-        <Button onclick={() => void requestData()}>Retry</Button>
+        <Button onclick={() => void requestData()}>Try Again</Button>
       {/snippet}
     </ErrorNotice>
   {:else}

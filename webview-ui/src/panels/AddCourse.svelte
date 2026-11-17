@@ -250,7 +250,7 @@
     {:else if mooc.state === "failed"}
       <ErrorNotice error={mooc.error} title="Could not list your {MOOC} courses">
         {#snippet actions()}
-          <Button secondary onclick={() => void loadMooc()}>Retry</Button>
+          <Button secondary onclick={() => void loadMooc()}>Try Again</Button>
         {/snippet}
       </ErrorNotice>
     {:else if mooc.value.kind === "loggedOut"}
@@ -295,7 +295,7 @@
               onclick={() =>
                 browsedOrganization && void loadOrganizationCourses(browsedOrganization.slug)}
             >
-              Retry
+              Try Again
             </Button>
           {/snippet}
         </ErrorNotice>
@@ -311,7 +311,7 @@
     {:else if organizations.state === "failed"}
       <ErrorNotice error={organizations.error} title="Could not list the {TMC} organizations">
         {#snippet actions()}
-          <Button secondary onclick={() => void loadOrganizations()}>Retry</Button>
+          <Button secondary onclick={() => void loadOrganizations()}>Try Again</Button>
         {/snippet}
       </ErrorNotice>
     {:else if organizations.value.kind === "loggedOut"}

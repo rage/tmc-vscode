@@ -182,7 +182,7 @@ suite("the add-course screen", () => {
     })
   })
 
-  test("a backend that cannot be reached says so in its own section, with Retry", async () => {
+  test("a backend that cannot be reached says so in its own section, with Try Again", async () => {
     render(AddCourse, { props: { panel: PANEL } })
     replyToRequest("requestMoocCatalog", { ok: true, value: MOOC_COURSES })
     replyToRequest("requestTmcOrganizations", {
@@ -196,7 +196,7 @@ suite("the add-course screen", () => {
     expect(within(alert).getByRole("button", { name: "Show Details" })).toBeInTheDocument()
     expect(cardNames(within(section("courses.mooc.fi")).getByRole("list"))).toHaveLength(2)
     postedMessages.mockClear()
-    await fireEvent.click(within(tmc).getByRole("button", { name: "Retry" }))
+    await fireEvent.click(within(tmc).getByRole("button", { name: "Try Again" }))
     expect(postedMessages).toHaveBeenCalledWith(
       expect.objectContaining({ type: "requestTmcOrganizations" }),
     )

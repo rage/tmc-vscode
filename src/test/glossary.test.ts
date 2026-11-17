@@ -1,8 +1,8 @@
 import * as fs from "fs"
 import * as path from "path"
 
-// Terms the student-facing glossary replaces; matched case-insensitively.
-const BANNED_TERMS = [
+// Terms the student-facing glossary replaces; matched case-insensitively against lowercased text.
+const BANNED_TERMS: (string | RegExp)[] = [
   "courses.mooc.fi account",
   "TMC account",
   "Sign In",
@@ -28,6 +28,8 @@ const BANNED_TERMS = [
   "Reveal in Courses View",
   "Open in Course Material",
   "The teacher has not chosen",
+  // A Retry label, not `RetryOffer` and the like.
+  /(>\s*|["'`])retry(\s*<|["'`])/,
 ]
 
 // Hits that are not student-facing text, as "file: term". Keep each one justified.
@@ -76,9 +78,9 @@ function bannedTermHits(): string[] {
   return scannedFiles().flatMap((file) => {
     const raw = fs.readFileSync(path.join(repoRoot, file), "utf8")
     const text = withoutLogCalls(withoutComments(file, raw)).toLowerCase()
-    return BANNED_TERMS.filter((term) => text.includes(term.toLowerCase())).map(
-      (term) => `${file.split(path.sep).join("/")}: ${term}`,
-    )
+    return BANNED_TERMS.filter((term) =>
+      typeof term === "string" ? text.includes(term.toLowerCase()) : term.test(text),
+    ).map((term) => `${file.split(path.sep).join("/")}: ${String(term)}`)
   })
 }
 
