@@ -340,7 +340,7 @@ suite("submitExercise action, tmc", () => {
       ...tmcCourse,
       exercises: [
         ...tmcCourse.exercises,
-        tmcCourseExercise({ id: TMC_EXERCISE_ID + 1, name: "part02-01_next" }),
+        tmcCourseExercise({ id: TMC_EXERCISE_ID + 1, name: "next_exercise" }),
       ],
     })
 
@@ -348,7 +348,7 @@ suite("submitExercise action, tmc", () => {
 
     expect(lastView()).toMatchObject({
       isExercisePassed: true,
-      nextExercise: { name: "part02-01_next" },
+      nextExercise: { name: "next_exercise" },
     })
   })
 

@@ -388,8 +388,8 @@ function compareNames(a: string, b: string): number {
 
 /**
  * The exercise a student goes on to after `current`: the first one after it, in the order the
- * Courses view lists them, that is left to do (see {@link isLeftToDo}); failing that, the first
- * such one before it. `undefined` when none is left.
+ * Courses view lists them, that is left to do (see {@link isLeftToDo}). `undefined` when none
+ * after it is; one left before it is the course home's to offer, not this.
  */
 export function nextExerciseAfter(
   course: LocalCourseData,
@@ -407,10 +407,7 @@ export function nextExerciseAfter(
   const index = ordered.findIndex((exercise) => ExerciseIdentifier.key(exercise.id) === currentKey)
   const isNext = (exercise: ExerciseView): boolean =>
     ExerciseIdentifier.key(exercise.id) !== currentKey && isLeftToDo(exercise)
-  const next =
-    ordered.slice(index + 1).find((exercise) => isNext(exercise)) ??
-    ordered.slice(0, Math.max(index, 0)).find((exercise) => isNext(exercise))
-  return next?.id
+  return ordered.slice(index + 1).find((exercise) => isNext(exercise))?.id
 }
 
 /**

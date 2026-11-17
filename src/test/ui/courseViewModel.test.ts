@@ -451,14 +451,14 @@ suite("nextExerciseAfter", () => {
     expect(nextExerciseAfter(courseData, idOfTmcExercise(1), NOW)).toEqual(idOfTmcExercise(3))
   })
 
-  test("skips the expired, then wraps around to an earlier one left to do", () => {
+  test("skips the expired, and never goes back to an earlier one left to do", () => {
     const courseData = course([
       exercise({ id: 1, name: "part01-01_hello" }),
       exercise({ id: 2, name: "part01-02_world", passed: true }),
       exercise({ id: 3, name: "part01-03_late", deadline: "2026-05-01T00:00:00Z" }),
     ])
 
-    expect(nextExerciseAfter(courseData, idOfTmcExercise(2), NOW)).toEqual(idOfTmcExercise(1))
+    expect(nextExerciseAfter(courseData, idOfTmcExercise(2), NOW)).toBeUndefined()
   })
 
   test("skips a mooc exercise with no tries left", () => {

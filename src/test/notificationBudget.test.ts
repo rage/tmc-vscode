@@ -52,7 +52,7 @@ const BUDGET: Budget = {
   "src/commands/logout.ts": { statusMessage: 1, withOperation: 1 },
   "src/commands/offerCourseWorkspace.ts": { notification: 1 },
   "src/commands/openExercisesFolder.ts": { errorNotification: 1 },
-  "src/commands/openNextExercise.ts": { errorNotification: 1, reportError: 2, withOperation: 1 },
+  "src/commands/openNextExercise.ts": { errorNotification: 1, reportError: 2 },
   "src/commands/openWorkspace.ts": { withOperation: 1 },
   "src/commands/refreshEverything.ts": { notification: 2, reportWarnings: 1, withOperation: 2 },
   "src/commands/removeCourse.ts": { reportError: 1, statusMessage: 1, withOperation: 1 },
