@@ -64,7 +64,7 @@ suite("pickCourse", function () {
     },
   )
 
-  test("prompts among the user's courses, labelled by title and backend", async function () {
+  test("prompts among the user's courses, labelled by title", async function () {
     const [context, dialog] = contextWith(courses)
     const selectItem = vi.fn(async (_prompt: SelectPrompt, ..._items: unknown[]) => undefined)
     dialog.selectItem = selectItem
@@ -75,12 +75,8 @@ suite("pickCourse", function () {
     const [prompt, ...items] = selectItem.mock.calls[0] ?? []
     expect(prompt).toEqual({ title: "Open Course Home", placeHolder: "Which course?" })
     expect(items).toEqual([
-      { label: "The Python Course", value: idOfTmcCourse(1), description: "tmc.mooc.fi" },
-      {
-        label: "Introduction to CS",
-        value: idOfMoocCourse("course-uuid"),
-        description: "courses.mooc.fi",
-      },
+      { label: "The Python Course", value: idOfTmcCourse(1) },
+      { label: "Introduction to CS", value: idOfMoocCourse("course-uuid") },
     ])
   })
 

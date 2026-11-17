@@ -7,6 +7,10 @@ import { CourseAiPolicy } from "./generated/langs"
 /** What every surface says of a session that expired or was revoked. */
 export const LOGGED_OUT_MESSAGE = "You were logged out. Log in again."
 
+/** What every surface says when the user is not logged in, including after logging out. */
+export const NOT_LOGGED_IN_MESSAGE =
+  "Log in with your MOOC.fi account to download and submit exercises."
+
 const BackendKindSchema = z.enum(["tmc", "mooc"]) satisfies z.ZodType<BackendKind>
 
 /** A deadline as the course home prints it, formatted on the host in the display language. */
@@ -47,8 +51,11 @@ export const CourseHomeExerciseSchema = z.object({
   submitRefusal: z.object({ label: z.string(), sentence: z.string(), icon: z.string() }).optional(),
   awardedPoints: z.number(),
   availablePoints: z.number(),
-  /** What the points wait for, as a sentence; `awardedPoints` is 0 until then. */
-  pendingReview: z.string().optional(),
+  /**
+   * What a teacher's review waits for: a few words, a sentence and its codicon. `awardedPoints`
+   * is 0 until the review unless points were given before it.
+   */
+  pendingReview: z.object({ label: z.string(), sentence: z.string(), icon: z.string() }).optional(),
   /** The deadline the exercise is judged by; a binding soft one sets `isSoftDeadline`. */
   deadline: DeadlineTextSchema.optional(),
   isSoftDeadline: z.boolean(),
@@ -118,6 +125,11 @@ export const CourseHomeViewSchema = z.object({
    * to do until that changes.
    */
   isAllDone: z.boolean(),
+  /**
+   * Open Next Exercise found none after the course's last exercise, so {@link nextExercise} lies
+   * behind the student; set until they open an exercise of the course or dismiss the notice.
+   */
+  hasReachedLastExercise: z.boolean(),
   /** Announced as new and not dismissed; downloadable ones only. */
   newExercises: z.array(z.object({ id: ExerciseIdentifierSchema, name: z.string() })),
   /** Exercises on disk whose template changed on the backend. */
@@ -147,6 +159,7 @@ export const CourseHomeActionSchema = z.enum([
   "updateExercises",
   "dismissRecentUpdates",
   "dismissAiPolicyChange",
+  "dismissLastExerciseReached",
   "closeCompletedExercises",
   "switchCourseWorkspace",
   "revealInCoursesView",

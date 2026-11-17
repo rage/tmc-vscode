@@ -700,13 +700,14 @@ suite("reported once: the Courses view and course details", function () {
     expect(shown).toEqual(["error: Failed to download the exercise loops."])
   })
 
-  test("a failed update from the Courses view is one warning", async function () {
+  test("a failed update from the Courses view is the status bar's, not a notification", async function () {
     const { run, shown } = await harness({ langs: moocDownloadFails })
     updateablesRegistry.setMany([[COURSE_ID, [idOfMoocExercise(EXERCISE_ID)]]])
 
     await run("tmc.updateCourseExercises", courseRow())
 
-    expect(shown).toEqual(["error: Failed to update the exercise loops."])
+    expect(shown).toEqual([])
+    expect(failedUpdates.all().map((x) => x.exerciseName)).toEqual([EXERCISE])
   })
 
   test("a failed new-exercise download from the palette is one warning", async function () {
@@ -720,7 +721,7 @@ suite("reported once: the Courses view and course details", function () {
     expect(shown).toEqual(["error: Failed to download the exercise loops."])
   })
 
-  test("a failed update download from the palette is one warning", async function () {
+  test("a failed update download from the palette is the status bar's, not a notification", async function () {
     const { actionContext, run, shown } = await harness({
       langs: {
         ...moocDownloadFails,
@@ -732,7 +733,8 @@ suite("reported once: the Courses view and course details", function () {
 
     await run("tmc.updateExercises", "loud")
 
-    expect(shown).toEqual(["error: Failed to update the exercise loops."])
+    expect(shown).toEqual([])
+    expect(failedUpdates.all().map((x) => x.exerciseName)).toEqual([EXERCISE])
   })
 
   test("a failed automatic update shows in the status bar only, until an update succeeds", async function () {

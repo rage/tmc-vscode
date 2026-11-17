@@ -8,8 +8,13 @@ export interface SessionExpiryTracker {
    * whichever of this and {@link onSessionLost} sees it first.
    */
   onAuthChecked: (authenticated: boolean, cause?: Error) => void
-  /** Call when an operation the user asked for failed on a lost session. Warns once per `cause`. */
-  onSessionLost: (cause: Error) => void
+  /**
+   * Call when an operation the user asked for failed on a lost session. Warns once per `cause`.
+   *
+   * @returns Whether the failure is an expiry; `false` when there was no session to lose, as
+   * after a logout.
+   */
+  onSessionLost: (cause: Error) => boolean
   /** Call when a login succeeds. */
   onLogin: () => void
   /** Call when the user logs out, which never warns. */
@@ -49,9 +54,13 @@ export function createSessionExpiryTracker(
       }
     },
     onSessionLost(cause) {
+      if (!hadSession) {
+        return false
+      }
       if (!warnedCauses.has(cause)) {
         warn(cause)
       }
+      return true
     },
     onLogin() {
       hadSession = true

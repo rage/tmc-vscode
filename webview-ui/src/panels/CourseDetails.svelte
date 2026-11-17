@@ -14,6 +14,7 @@
     aiAssistanceSentence,
     aiPolicyRule,
     LOGGED_OUT_MESSAGE,
+    NOT_LOGGED_IN_MESSAGE,
     offersLogIn,
     SOFT_DEADLINE_PENALTY,
     withoutLogIn,
@@ -224,6 +225,15 @@
     onclick: () => runCourseAction("closeCompletedExercises"),
   })
 
+  // Not passed and nothing left to do about it but wait for a teacher.
+  const awaitingReview = $derived(
+    (view?.parts ?? []).flatMap((part) =>
+      part.exercises.flatMap((ex) =>
+        !ex.passed && ex.pendingReview ? [{ name: ex.name, pendingReview: ex.pendingReview }] : [],
+      ),
+    ),
+  )
+
   const notices = $derived.by((): CourseNotice[] => {
     if (!view) {
       return []
@@ -256,7 +266,7 @@
           key: "loggedOut",
           tone: "info",
           title: "Not logged in",
-          detail: "Log in with your MOOC.fi account to download and submit exercises.",
+          detail: NOT_LOGGED_IN_MESSAGE,
           actions: [{ label: "Log In", onclick: () => runCommand("tmc.showMoocLogin") }],
         },
       view.isLoggedIn &&
@@ -341,15 +351,36 @@
             ? [{ label: "Try Again", onclick: () => runCourseAction("updateExercises") }]
             : [],
       },
+      view.hasReachedLastExercise &&
+        !view.isAllDone && {
+          key: "lastExerciseReached",
+          tone: "info",
+          title: "You reached the last exercise",
+          ...(view.nextExercise
+            ? { detail: `${view.nextExercise.name} is still left to do.` }
+            : {}),
+          ondismiss: () => runCourseAction("dismissLastExerciseReached"),
+          dismissLabel: "Dismiss the last exercise notice",
+        },
       view.isAllDone &&
         !view.accessLoss &&
         !view.isNotEnrolled &&
-        !view.isDisabled && {
-          key: "allDone",
-          tone: "info",
-          title: "Nothing left to do right now",
-          detail: "Every exercise is passed or closed for submissions.",
-        },
+        !view.isDisabled &&
+        (awaitingReview.length > 0
+          ? {
+              key: "allDone",
+              tone: "info",
+              title: "Waiting for review",
+              detail: awaitingReview
+                .map(({ name, pendingReview }) => `${name} is ${pendingReview.label}.`)
+                .join(" "),
+            }
+          : {
+              key: "allDone",
+              tone: "info",
+              title: "Nothing left to do right now",
+              detail: "Every exercise is passed or closed for submissions.",
+            }),
       ...view.missingLanguageExtensions.map(
         ({ extensionId, installSentence }): CourseNotice => ({
           key: `extension:${extensionId}`,
@@ -401,6 +432,13 @@
         downloadingCount === 0 && view.newExercises.length >= downloadableCount
       const download = offersDownload && !isDownloadInNotice ? downloadAll : undefined
       const close = completedOpenCount > 0 ? closeCompleted : undefined
+      // Past the last exercise, the one left to do is behind the student: offered, not urged.
+      if (view.hasReachedLastExercise && continueWithNext) {
+        return {
+          primary: download,
+          secondary: close ? [continueWithNext, close] : [continueWithNext],
+        }
+      }
       const primary = continueWithNext ?? download
       const extra = primary === download ? undefined : download
       if (extra && close) {

@@ -74,6 +74,18 @@ suite("createSessionExpiryTracker with an operation that hit the rejection", () 
     }
   })
 
+  test("an operation refused after a logout is not an expiry", () => {
+    const onExpired = vi.fn()
+    const tracker = createSessionExpiryTracker(true, onExpired)
+
+    tracker.onLogout()
+    const isExpiry = tracker.onSessionLost(new Error("not logged in"))
+    tracker.onAuthChecked(false)
+
+    expect(isExpiry).toBe(false)
+    expect(onExpired).not.toHaveBeenCalled()
+  })
+
   test("a later operation on the lost session warns again", () => {
     const onExpired = vi.fn()
     const tracker = createSessionExpiryTracker(true, onExpired)

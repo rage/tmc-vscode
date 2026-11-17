@@ -6,14 +6,15 @@ import {
   ExerciseIdentifier,
   LocalCourseData,
   LOGGED_OUT_MESSAGE,
+  NOT_LOGGED_IN_MESSAGE,
   SOFT_DEADLINE_PENALTY,
   SUBMIT_REFUSAL_ICONS,
   SUBMIT_REFUSAL_LABELS,
   submitRefusalSentence,
   arePointsHeldForReview,
   pendingReviewSentence,
-  PENDING_REVIEW_ICON,
-  PENDING_REVIEW_LABEL,
+  PENDING_REVIEW_ICONS,
+  PENDING_REVIEW_LABELS,
   triesLeftText,
 } from "../../../shared/lib"
 import type { AuthState } from "../../api/authState"
@@ -359,8 +360,8 @@ export class ExerciseTreeItem extends vscode.TreeItem {
           tooltip: `${points.short} points`,
         },
       exercise.pendingReview && {
-        description: PENDING_REVIEW_LABEL,
-        spoken: PENDING_REVIEW_LABEL,
+        description: PENDING_REVIEW_LABELS[exercise.pendingReview],
+        spoken: PENDING_REVIEW_LABELS[exercise.pendingReview],
         tooltip: pendingReviewSentence(exercise.pendingReview, exercise.awardedPoints),
       },
       exercise.isOutOfTries && {
@@ -597,7 +598,7 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
     } else if (this._isSessionExpired) {
       status = LOGGED_OUT_MESSAGE
     } else if (!this._isLoggedIn) {
-      status = "Log in with your MOOC.fi account to download and submit exercises."
+      status = NOT_LOGGED_IN_MESSAGE
     } else if (this._unreachableBackends.size > 0) {
       status =
         "Could not reach the server. Showing the exercises on this computer; deadlines may be out of date."
@@ -863,7 +864,10 @@ function exerciseIcon(exercise: ExerciseView): vscode.ThemeIcon {
     return new vscode.ThemeIcon("pass-filled", new vscode.ThemeColor("testing.iconPassed"))
   }
   if (exercise.pendingReview) {
-    return new vscode.ThemeIcon(PENDING_REVIEW_ICON, new vscode.ThemeColor("disabledForeground"))
+    return new vscode.ThemeIcon(
+      PENDING_REVIEW_ICONS[exercise.pendingReview],
+      new vscode.ThemeColor("disabledForeground"),
+    )
   }
   if (exercise.submitRefusal) {
     return new vscode.ThemeIcon(

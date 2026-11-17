@@ -88,6 +88,15 @@ function findExercise<Course extends { exercises: { id: unknown }[] }>(
   return undefined
 }
 
+/** The stored exercise, including one of a chapter not open yet, which is not removed. */
+export function getExerciseIncludingClosedChapters(
+  userData: Pick<UserData, "getExercise" | "getExerciseInClosedChapter">,
+  id: ExerciseIdentifier,
+): Result<StoredExercise, Error> {
+  const listed = userData.getExercise(id)
+  return listed.ok ? listed : userData.getExerciseInClosedChapter(id)
+}
+
 export class UserData {
   private _tmcCourses: Map<number, TmcLocalCourseData>
   // keyed by course id, not slug
@@ -224,6 +233,26 @@ export class UserData {
     return found
       ? Ok(found)
       : Err(new Error(`No stored ${id.kind} exercise ${ExerciseIdentifier.toString(id)}.`))
+  }
+
+  /**
+   * An exercise of a chapter not open yet, which its course hides from the exercises
+   * {@link getExercise} finds without removing it; see {@link getExerciseIncludingClosedChapters}.
+   */
+  public getExerciseInClosedChapter(id: ExerciseIdentifier): Result<StoredExercise, Error> {
+    if (id.kind === "mooc") {
+      for (const course of this._moocCourses.values()) {
+        for (const chapter of course.closedChapters ?? []) {
+          const exercise = chapter.exercises.find((x) => x.id === id.data.moocExerciseId)
+          if (exercise) {
+            return Ok({ course: makeMoocKind(course), exercise: makeMoocKind(exercise) })
+          }
+        }
+      }
+    }
+    return Err(
+      new Error(`No ${id.kind} exercise ${ExerciseIdentifier.toString(id)} in a closed chapter.`),
+    )
   }
 
   /**

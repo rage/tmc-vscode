@@ -11,6 +11,7 @@ import { checkForExerciseUpdates, downloadExerciseUpdates } from "../actions"
 import { describeExercises, exerciseName } from "../actions/exerciseNames"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
+import { isSessionLost } from "../errors"
 import { backgroundJobs } from "../ui/backgroundJobs"
 import { recentUpdates } from "../ui/recentUpdates"
 import { shownCourseHome } from "../ui/shownCourseHome"
@@ -128,7 +129,11 @@ export async function updateExercises(
     : updateable
 
   if (exercisesToUpdate.length === 0 || mode === "promptless") {
-    if (!silent && failures.length === 0) {
+    // New exercises are not up to date with the course; their own offer speaks for them.
+    const hasNewExercises = userData
+      .getCourses()
+      .some((course) => LocalCourseData.getNewExercises(course).length > 0)
+    if (!silent && failures.length === 0 && !hasNewExercises) {
       dialog.statusMessage(allClear(uncheckedCourses))
     }
     return
@@ -189,8 +194,19 @@ export async function downloadUpdates(
   const isUnrequested = options.isUnrequested ?? false
   const result = await withOperation(
     actionContext.dialog,
-    { failure: "Failed to update exercises." },
-    () => downloadExerciseUpdates(actionContext, updates, isUnrequested),
+    { failure: "Failed to update exercises.", silent: isUnrequested },
+    async () => {
+      const downloaded = await downloadExerciseUpdates(actionContext, updates, isUnrequested)
+      // The failed-update status bar item and course home notice say which failed, and clear
+      // once a later update succeeds, which a notification could not. A lost session still
+      // warns: that warning is what offers Log In.
+      return downloaded.map(({ updated, warnings }) => ({
+        updated,
+        warnings: warnings.filter(
+          (warning) => !warning.failedExercises || isSessionLost(warning.error),
+        ),
+      }))
+    },
   )
   if (result.err || result.val.updated.length === 0) {
     return

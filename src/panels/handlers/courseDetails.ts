@@ -19,6 +19,7 @@ import { MOOC_BACKEND_URL, TMC_BACKEND_URL } from "../../config/constants"
 import { isSessionLost } from "../../errors"
 import { buildCourseHomeView } from "../../ui/courseHome"
 import { showExerciseSourceFile } from "../../ui/exerciseSourceFile"
+import { lastExerciseReached } from "../../ui/lastExerciseReached"
 import { recentPolicyChanges } from "../../ui/recentPolicyChanges"
 import { recentUpdates } from "../../ui/recentUpdates"
 import { closeCompletedExercises, openCourseExercises } from "../../ui/treeview/treeCommands"
@@ -108,6 +109,9 @@ export const courseDetailsHandlers = {
       ) {
         Logger.warn("Ignoring an exercise action for an exercise of another course")
         return
+      }
+      if (message.action === "open") {
+        lastExerciseReached.clear(route.courseId)
       }
       const shownIn = screenFailureSink(host, route)
       await runExerciseAction(
@@ -202,6 +206,9 @@ async function runCourseAction(
       return
     case "dismissAiPolicyChange":
       recentPolicyChanges.dismiss(courseId)
+      return
+    case "dismissLastExerciseReached":
+      lastExerciseReached.clear(courseId)
       return
     case "closeCompletedExercises":
       await closeCompletedExercises(actionContext, courseId)

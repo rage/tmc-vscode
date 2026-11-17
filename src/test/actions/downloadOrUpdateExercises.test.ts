@@ -203,6 +203,23 @@ suite("downloadOrUpdateExercises action", function () {
     })
   })
 
+  test("an update holds its exercise until it ends, so a second one cannot start meanwhile", async function () {
+    const heldAfterDownload: (string | undefined)[] = []
+    fakeDownloads(tmcMock, async (_ids, onDownloaded) => {
+      onDownloaded({ id: helloWorld.id, fraction: 1 })
+      heldAfterDownload.push(exerciseOperations.current(helloWorld.id))
+      return createDownloadResult([helloWorld], [])
+    })
+
+    await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID, {
+      isUpdate: true,
+    })
+    await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
+
+    expect(heldAfterDownload).toEqual(["downloading", undefined])
+    expect(exerciseOperations.current(helloWorld.id)).toBeUndefined()
+  })
+
   test("says a failed update failed to update", async function () {
     tmcMockValues.downloadTmcExercises = Err(new Error("boom"))
 

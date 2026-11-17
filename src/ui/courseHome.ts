@@ -9,6 +9,8 @@ import {
   LocalCourseData,
   SUBMIT_REFUSAL_ICONS,
   SUBMIT_REFUSAL_LABELS,
+  PENDING_REVIEW_ICONS,
+  PENDING_REVIEW_LABELS,
   pendingReviewSentence,
   submitRefusalSentence,
 } from "../../shared/lib"
@@ -22,6 +24,7 @@ import {
   formatNearRelativeTime,
 } from "../utilities"
 import { failedUpdates } from "./failedUpdates"
+import { lastExerciseReached } from "./lastExerciseReached"
 import { recentPolicyChanges } from "./recentPolicyChanges"
 import { recentUpdates } from "./recentUpdates"
 import type { ExerciseView, PartView } from "./treeview/courseViewModel"
@@ -156,6 +159,7 @@ export function buildCourseHomeView(
         }
       : {}),
     isAllDone: exercises.length > 0 && nextExercise === undefined,
+    hasReachedLastExercise: lastExerciseReached.has(courseId),
     newExercises: exercises
       .filter((ex) => ex.status === "new" && newKeys.has(ExerciseIdentifier.key(ex.id)))
       .map(({ id, name }) => ({ id, name })),
@@ -233,7 +237,13 @@ export function buildCourseHomeView(
           awardedPoints: ex.awardedPoints,
           availablePoints: ex.availablePoints,
           ...(pendingReview
-            ? { pendingReview: pendingReviewSentence(pendingReview, ex.awardedPoints) }
+            ? {
+                pendingReview: {
+                  label: PENDING_REVIEW_LABELS[pendingReview],
+                  sentence: pendingReviewSentence(pendingReview, ex.awardedPoints),
+                  icon: PENDING_REVIEW_ICONS[pendingReview],
+                },
+              }
             : {}),
           ...(deadline ? { deadline } : {}),
           isSoftDeadline: !ex.isHard,

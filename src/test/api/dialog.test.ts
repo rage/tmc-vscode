@@ -7,7 +7,7 @@ import type {
   SharedMoocCourseData,
   SharedTmcCourseData,
 } from "../../../shared/lib"
-import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind, NOT_LOGGED_IN_MESSAGE } from "../../../shared/lib"
 import Dialog, { courseSelectionItems, separator } from "../../api/dialog"
 import { errorDetails } from "../../api/errorDetails"
 import {
@@ -291,7 +291,16 @@ suite("courseSelectionItems", function () {
     moocCourse("course-uuid", "python-mooc", "Programming 1"),
   ]
 
-  test("labels a course by its title and describes it by its backend", function () {
+  test("names no backend where the titles alone tell the courses apart", function () {
+    const items = courseSelectionItems([
+      tmcCourse(3, "python-mooc", "Programming 1"),
+      moocCourse("course-uuid", "java-mooc", "Programming 2"),
+    ])
+
+    expect(items.map(({ description }) => description)).toEqual([undefined, undefined])
+  })
+
+  test("describes courses of the same title by their backend", function () {
     expect(courseSelectionItems(courses)).toEqual([
       { label: "Programming 1", value: makeTmcKind({ courseId: 3 }), description: "tmc.mooc.fi" },
       {
@@ -335,7 +344,7 @@ suite("Dialog.reportError", function () {
   test("hands a lost session to the session reporter instead of a notification", async function () {
     vi.spyOn(Logger, "warn").mockImplementation(() => {})
     const show = stubMessage("showErrorMessage", () => undefined)
-    const reportSessionLost = vi.fn()
+    const reportSessionLost = vi.fn(() => true)
     const dialog = new Dialog()
     dialog.setSessionLostReporter(reportSessionLost)
     const rejection = new InvalidTokenError("Invalid token. Deleted credentials file.")
@@ -344,6 +353,20 @@ suite("Dialog.reportError", function () {
 
     expect(reportSessionLost).toHaveBeenCalledWith(rejection)
     expect(show).not.toHaveBeenCalled()
+  })
+
+  test("a session refused after a logout asks to log in, without an error", async function () {
+    vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    const showError = stubMessage("showErrorMessage", () => undefined)
+    const showInfo = stubMessage("showInformationMessage", () => undefined)
+    const dialog = new Dialog()
+    dialog.setSessionLostReporter(() => false)
+
+    await dialog.reportError("Failed to submit.", new InvalidTokenError("not logged in"))
+
+    expect(showError).not.toHaveBeenCalled()
+    expect(showInfo.mock.calls[0]?.[0]).toBe(NOT_LOGGED_IN_MESSAGE)
+    expect(buttonTitles(showInfo)).toEqual(["Log In"])
   })
 
   test("a Restricted Mode refusal says trust is needed, not that the operation failed", async function () {

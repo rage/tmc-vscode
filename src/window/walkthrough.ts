@@ -46,11 +46,40 @@ export function trackWalkthroughActive(): vscode.Disposable {
  */
 export type WalkthroughMilestone = "test-my-code:HasRunTests" | "test-my-code:HasSubmitted"
 
-/** Completes the walkthrough step that `milestone` stands for. */
-export function reachWalkthroughMilestone(milestone: WalkthroughMilestone): void {
+const MILESTONES_KEY = "walkthroughMilestones"
+
+/** Where milestones outlive the window; unset before {@link restoreWalkthroughMilestones}. */
+let milestoneStore: vscode.Memento | undefined
+
+function setMilestoneKey(milestone: WalkthroughMilestone): void {
   void Promise.resolve(vscode.commands.executeCommand("setContext", milestone, true)).catch((e) =>
     Logger.warn(`Could not set ${milestone}`, e),
   )
+}
+
+/**
+ * Sets the milestones reached in earlier windows again, and keeps later ones in `store`.
+ *
+ * A context key lasts one window, and opening a course workspace opens another: a step done
+ * there before VS Code registered the walkthrough completes only once the key is set as its
+ * walkthrough tab shows, which `test-my-code:WalkthroughActive` pairs it with.
+ */
+export function restoreWalkthroughMilestones(store: vscode.Memento): void {
+  milestoneStore = store
+  for (const milestone of store.get<WalkthroughMilestone[]>(MILESTONES_KEY, [])) {
+    setMilestoneKey(milestone)
+  }
+}
+
+/** Completes the walkthrough step that `milestone` stands for, in this window and later ones. */
+export function reachWalkthroughMilestone(milestone: WalkthroughMilestone): void {
+  setMilestoneKey(milestone)
+  const reached = milestoneStore?.get<WalkthroughMilestone[]>(MILESTONES_KEY, []) ?? []
+  if (milestoneStore && !reached.includes(milestone)) {
+    void Promise.resolve(milestoneStore.update(MILESTONES_KEY, [...reached, milestone])).catch(
+      (e) => Logger.warn(`Could not store ${milestone}`, e),
+    )
+  }
 }
 
 /** What TestMyCode knows of the student's progress through the walkthrough. */

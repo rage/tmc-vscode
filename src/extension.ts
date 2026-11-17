@@ -77,6 +77,7 @@ import { cliFolder, Logger, semVerCompare } from "./utilities"
 import { keepExerciseFilesInFirstGroup } from "./window/exerciseEditorPlacement"
 import {
   reachWalkthroughMilestone,
+  restoreWalkthroughMilestones,
   showNextWalkthroughStep,
   trackWalkthroughActive,
   walkthroughProgressOf,
@@ -256,6 +257,7 @@ async function activateInner(
   const authState = createAuthState(langs)
   authState.subscribe(() => coursesTree.setAccount(authState))
   context.subscriptions.push(trackWalkthroughActive())
+  restoreWalkthroughMilestones(context.globalState)
   // Awaited only after the migration: it can refresh a token over the network, and nothing
   // before needs its answer.
   const initialAuthCheck = authState.refresh({ timeout: 15000 })

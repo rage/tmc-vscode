@@ -283,7 +283,11 @@ suite("the course home", () => {
               courseHomeExercise(1, "loops", {
                 status: "opened",
                 availablePoints: 2,
-                pendingReview: "The points wait for a teacher's review.",
+                pendingReview: {
+                  label: "waiting for teacher review",
+                  sentence: "The points wait for a teacher's review.",
+                  icon: "eye",
+                },
                 submitRefusal: {
                   label: "locked",
                   sentence: "loops is locked for you.",
@@ -297,7 +301,7 @@ suite("the course home", () => {
     )
 
     const [row] = screen.getAllByRole("listitem")
-    expect(within(row as HTMLElement).getByText("waiting for review")).toHaveAttribute(
+    expect(within(row as HTMLElement).getByText("waiting for teacher review")).toHaveAttribute(
       "title",
       "The points wait for a teacher's review.",
     )
@@ -320,7 +324,11 @@ suite("the course home", () => {
                 passed: true,
                 awardedPoints: 2,
                 availablePoints: 2,
-                pendingReview: "A teacher reviews this answer, which can change the points.",
+                pendingReview: {
+                  label: "waiting for the chapter to be locked",
+                  sentence: "A teacher reviews this answer, which can change the points.",
+                  icon: "milestone",
+                },
               }),
             ],
           },
@@ -330,7 +338,9 @@ suite("the course home", () => {
 
     const [row] = screen.getAllByRole("listitem")
     expect(row).toHaveTextContent("2/2")
-    expect(within(row as HTMLElement).getByText("waiting for review")).toBeInTheDocument()
+    expect(
+      within(row as HTMLElement).getByText("waiting for the chapter to be locked"),
+    ).toBeInTheDocument()
   })
 
   test("calls an exercise on disk Downloaded until the course workspace is open", async () => {
@@ -462,6 +472,29 @@ suite("the course home", () => {
     next.click()
 
     expect(postedMessages).toHaveBeenCalledWith(exerciseAction(panel, 2, "open"))
+  })
+
+  test("past the last exercise, says so and offers the one left behind as secondary", async () => {
+    const view = onDiskView({
+      isWorkspaceOpen: true,
+      hasReachedLastExercise: true,
+      nextExercise: { id: makeTmcKind({ tmcExerciseId: 2 }), name: "02_loops", isOnDisk: true },
+    })
+    const [part] = view.parts
+    const panel = await renderHome({
+      ...view,
+      parts: part
+        ? [{ ...part, exercises: part.exercises.map((ex) => ({ ...ex, status: "opened" })) }]
+        : [],
+    })
+
+    const notices = screen.getByRole("list", { name: "Course notices" })
+    expect(notices).toHaveTextContent("You reached the last exercise")
+    expect(notices).toHaveTextContent("02_loops is still left to do.")
+    expect(screen.getByRole("button", { name: "Continue: 02_loops" })).toHaveAttribute("secondary")
+    await clickIconButton("Dismiss the last exercise notice")
+
+    expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "dismissLastExerciseReached"))
   })
 
   test("offers to download and open a next exercise not on disk", async () => {
@@ -780,6 +813,37 @@ suite("the course home", () => {
     sendView(panel, courseHomeView({ isAllDone: true, accessLoss: "forbidden" }))
 
     await vi.waitFor(() => expect(screen.queryByText(/Nothing left to do/)).not.toBeInTheDocument())
+  })
+
+  test("with nothing else left, says an exercise waits for review rather than nothing is left", async () => {
+    await renderHome(
+      courseHomeView({
+        isAllDone: true,
+        parts: [
+          {
+            key: "chapter:1",
+            name: "Basics",
+            isDefaultOpen: true,
+            exercises: [
+              courseHomeExercise(1, "loops", {
+                status: "opened",
+                availablePoints: 1,
+                pendingReview: {
+                  label: "waiting for teacher review",
+                  sentence: "The points wait for a teacher's review.",
+                  icon: "eye",
+                },
+              }),
+            ],
+          },
+        ],
+      }),
+    )
+
+    const notices = screen.getByRole("list", { name: "Course notices" })
+    expect(notices).toHaveTextContent("Waiting for review")
+    expect(notices).toHaveTextContent("loops is waiting for teacher review.")
+    expect(notices).not.toHaveTextContent("Nothing left to do")
   })
 
   test("states the soft-deadline policy only when a soft deadline binds", async () => {

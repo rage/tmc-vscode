@@ -19,9 +19,11 @@ import {
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type { StoredExercise } from "../config/userdata"
+import { getExerciseIncludingClosedChapters } from "../config/userdata"
 import { buildCourseHomeView } from "../ui/courseHome"
 import { exerciseStandingView } from "../ui/exerciseStanding"
 import { failedUpdates } from "../ui/failedUpdates"
+import { lastExerciseReached } from "../ui/lastExerciseReached"
 import { loginScreens } from "../ui/loginScreens"
 import { modelSolutionUrl } from "../ui/modelSolution"
 import { recentPolicyChanges } from "../ui/recentPolicyChanges"
@@ -479,6 +481,7 @@ export class TmcPanel {
         recentUpdates.onDidChange(() => this._onDidChangeCourses(undefined)),
         failedUpdates.onDidChange(() => this._onDidChangeCourses(undefined)),
         recentPolicyChanges.onDidChange(() => this._onDidChangeCourses(undefined)),
+        lastExerciseReached.onDidChange(() => this._onDidChangeCourses(undefined)),
         shownCourseHome.onDidClearFailures(({ courseId, operation }) => {
           const route = this._route
           if (
@@ -684,7 +687,7 @@ function submissionViewMessage(
     return { type: "submissionView", target: { id: panel.id, type: panel.type }, view }
   }
   const { userData } = actionContext.startup
-  const stored = userData.getExercise(panel.exerciseId)
+  const stored = getExerciseIncludingClosedChapters(userData, panel.exerciseId)
   const exercise = stored.ok ? stored.val.exercise : undefined
   const refusal =
     exercise && submitRefusalOf(exercise, new Date(), stored.ok ? stored.val.course : undefined)

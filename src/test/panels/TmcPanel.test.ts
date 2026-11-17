@@ -2147,7 +2147,78 @@ suite("TmcPanel side panel placement", () => {
     ])
   })
 
-  test("shows the model solution once a course refresh reveals it", async () => {
+  test("an exercise whose chapter closes reads as not open yet, not as removed", async () => {
+    const { panel, sendReady } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    const exercise = moocCourseExercise({
+      name: "loops",
+      chapter: { name: "Loops", number: 2 },
+      triesLeft: 1,
+    })
+    let isClosed = false
+    const course = () =>
+      makeMoocKind(
+        moocLocalCourse({
+          exercises: isClosed ? [] : [exercise],
+          ...(isClosed
+            ? {
+                closedChapters: [
+                  {
+                    name: "Loops",
+                    number: 2,
+                    opensAt: "2100-01-01T00:00:00Z",
+                    exercises: [exercise],
+                  },
+                ],
+              }
+            : {}),
+        }).data,
+      )
+    const changed = new vscode.EventEmitter<undefined>()
+    const context = createMockActionContext({
+      startup: {
+        workspaceManager: {
+          getExercise: () => ({}),
+          onDidChangeExercises: changed.event,
+        } as unknown as WorkspaceManager,
+        userData: {
+          getExercise: () =>
+            isClosed
+              ? Err(new Error("not listed"))
+              : Ok({ course: course(), exercise: makeMoocKind(exercise) }),
+          getExerciseInClosedChapter: () =>
+            Ok({ course: course(), exercise: makeMoocKind(exercise) }),
+          getCourse: () => Ok(course()),
+          onDidChangeCourses: changed.event,
+        } as unknown as UserData,
+      },
+    })
+    const subscription = TmcPanel.showSubmissionViews(createMockContext(), context)
+    onTestFinished(() => subscription.dispose())
+    const shown = exerciseSubmissionPanel()
+    submissionViews.open(shown)
+    await sendReady()
+    submissionViews.update({
+      panel: shown,
+      view: submissionViewFor(shown, "Some tests failed").view,
+      shouldReopen: false,
+    })
+
+    isClosed = true
+    changed.fire(undefined)
+
+    const views = (postedMessages(panel) as PanelMessage[]).flatMap((message) =>
+      message.type === "submissionView"
+        ? [[message.view.exerciseState, message.view.submitRefusal]]
+        : [],
+    )
+    expect(views.at(-1)).toEqual([
+      undefined,
+      'loops can be submitted once the chapter "Loops" opens.',
+    ])
+  })
+
+  test("a mooc model solution a course refresh reveals adds no link beside the course material", async () => {
     const { panel, sendReady } = createFakeWebviewPanel()
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
     const pageUrl = "http://project-331.local/org/uh-cs/courses/c/chapter-1/loops"
@@ -2182,7 +2253,7 @@ suite("TmcPanel side panel placement", () => {
     const solutionUrls = (postedMessages(panel) as PanelMessage[]).flatMap((message) =>
       message.type === "submissionView" ? [message.view.solutionUrl] : [],
     )
-    expect(solutionUrls).toEqual([undefined, pageUrl])
+    expect(solutionUrls).toEqual([undefined, undefined])
   })
 
   test("closes the shown submission once the submissions are cleared, as at logout", async () => {
@@ -2414,6 +2485,7 @@ function courseHomeOf(course: LocalCourseData): CourseHomeView {
     isWorkspaceOpen: false,
     isRestricted: false,
     isAllDone: false,
+    hasReachedLastExercise: false,
     failedUpdates: [],
     aiPolicyChange: null,
     newExercises: [],

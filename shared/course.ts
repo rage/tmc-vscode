@@ -179,55 +179,72 @@ export type SubmitRefusal =
   | "courseNotFound"
 
 /**
- * Why the backend would refuse a submission of `exercise` at `now`; `undefined` if it would not.
+ * The refusal every surface names when several apply: the first of them here. Course-wide
+ * reasons come first, then the exercise's lasting ones, then the chapter's, which pass by
+ * themselves, so a student out of tries is never told to complete earlier chapters first.
+ */
+export const SUBMIT_REFUSAL_PRIORITY = [
+  "courseNotFound",
+  "courseForbidden",
+  "notEnrolled",
+  "exerciseLocked",
+  "deadlinePassed",
+  "outOfTries",
+  "chapterCompletedAndLocked",
+  "chapterNotOpenYet",
+  "chapterNotUnlockedYet",
+] as const satisfies readonly SubmitRefusal[]
+
+/**
+ * Why the backend would refuse a submission of `exercise` at `now`, by
+ * {@link SUBMIT_REFUSAL_PRIORITY}; `undefined` if it would not.
  *
- * @param course The exercise's course, for its enrollment and access: `notEnrolled`,
- * `courseForbidden` and `courseNotFound` only come from it. A submit itself leaves those to the
- * backend, as they may have changed since the course was last refreshed.
+ * @param course The exercise's course, for its enrollment, access and closed chapters:
+ * `notEnrolled`, `courseForbidden`, `courseNotFound` and `chapterNotOpenYet` only come from it. A
+ * submit itself leaves those to the backend, as they may have changed since the course was last
+ * refreshed.
  */
 export function submitRefusalOf(
   exercise: LocalCourseExercise,
   now: Date,
   course?: Readonly<LocalCourseData>,
 ): SubmitRefusal | undefined {
+  const applies = new Set<SubmitRefusal>()
   switch (course && LocalCourseData.getAccessLoss(course)) {
     case "forbidden":
-      return "courseForbidden"
+      applies.add("courseForbidden")
+      break
     case "notFound":
-      return "courseNotFound"
+      applies.add("courseNotFound")
+      break
   }
   if (course?.kind === "mooc" && course.data.notEnrolled === true) {
-    return "notEnrolled"
+    applies.add("notEnrolled")
+  }
+  if (course && LocalCourseData.getClosedChapterOf(course, LocalCourseExercise.getId(exercise))) {
+    applies.add("chapterNotOpenYet")
   }
   if (exercise.kind === "mooc") {
     switch (exercise.data.chapter?.lockingStatus) {
       case "NotUnlockedYet":
-        return "chapterNotUnlockedYet"
+        applies.add("chapterNotUnlockedYet")
+        break
       case "CompletedAndLocked":
-        return "chapterCompletedAndLocked"
+        applies.add("chapterCompletedAndLocked")
+        break
     }
     if (exercise.data.exerciseLocked) {
-      return "exerciseLocked"
+      applies.add("exerciseLocked")
+    }
+    if (exercise.data.outOfTries || exercise.data.triesLeft === 0) {
+      applies.add("outOfTries")
     }
   }
   const { deadline } = exercise.data
   if (deadline !== null && Date.parse(deadline) <= now.getTime()) {
-    return "deadlinePassed"
+    applies.add("deadlinePassed")
   }
-  if (exercise.kind === "mooc" && (exercise.data.outOfTries || exercise.data.triesLeft === 0)) {
-    return "outOfTries"
-  }
-  return undefined
-}
-
-/**
- * The course material page that shows a mooc exercise's model solution, once courses.mooc.fi has
- * sent one; `undefined` before that, and for tmc.
- */
-export function modelSolutionUrlOf(exercise: LocalCourseExercise): string | undefined {
-  return exercise.kind === "mooc" && exercise.data.hasModelSolution
-    ? exercise.data.pageUrl
-    : undefined
+  return SUBMIT_REFUSAL_PRIORITY.find((refusal) => applies.has(refusal))
 }
 
 /** A few words for a row that cannot be submitted, e.g. "deadline passed". */
@@ -294,11 +311,22 @@ export function submitRefusalSentence(
   }
 }
 
-/** A few words for a row whose points wait for a teacher's review. */
-export const PENDING_REVIEW_LABEL = "waiting for review"
+/** What a teacher's review of an exercise waits for. */
+export type PendingReview = NonNullable<SharedMoocCourseExercise["pendingReview"]>
 
-/** The codicon of a row waiting for review; see {@link SUBMIT_REFUSAL_ICONS}. */
-export const PENDING_REVIEW_ICON = "eye"
+/** A few words for a row whose answer waits for a teacher's review. */
+export const PENDING_REVIEW_LABELS: Record<PendingReview, string> = {
+  awaits_teacher: "waiting for teacher review",
+  awaits_chapter_lock: "waiting for the chapter to be locked",
+  unrecognized: "waiting for review",
+}
+
+/** The codicon of a row waiting for review, apart from {@link SUBMIT_REFUSAL_ICONS}. */
+export const PENDING_REVIEW_ICONS: Record<PendingReview, string> = {
+  awaits_teacher: "eye",
+  awaits_chapter_lock: "milestone",
+  unrecognized: "eye",
+}
 
 /**
  * Whether an exercise's points are held back for a pending teacher review. The backend holds them
@@ -316,10 +344,7 @@ export function arePointsHeldForReview(
  *
  * @param awardedPoints The exercise's points now; see {@link arePointsHeldForReview}.
  */
-export function pendingReviewSentence(
-  pendingReview: NonNullable<SharedMoocCourseExercise["pendingReview"]>,
-  awardedPoints: number,
-): string {
+export function pendingReviewSentence(pendingReview: PendingReview, awardedPoints: number): string {
   const startsOnLock = pendingReview === "awaits_chapter_lock"
   if (arePointsHeldForReview(pendingReview, awardedPoints)) {
     return startsOnLock

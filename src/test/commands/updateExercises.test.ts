@@ -1,4 +1,4 @@
-import { Ok } from "ts-results"
+import { Err, Ok } from "ts-results"
 import { onTestFinished, vi } from "vitest"
 import * as vscode from "vscode"
 
@@ -9,6 +9,7 @@ import type { ReadyActionContext } from "../../actions/types"
 import { downloadUpdates, updateExercises } from "../../commands/updateExercises"
 import type Settings from "../../config/settings"
 import type { UserData } from "../../config/userdata"
+import { BottleneckError } from "../../errors"
 import { recentUpdates } from "../../ui/recentUpdates"
 import { shownCourseHome } from "../../ui/shownCourseHome"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
@@ -44,10 +45,13 @@ function outdated(
 }
 
 function tmcCourse(id: number): LocalCourseData {
-  return { kind: "tmc", data: { id } } as LocalCourseData
+  return { kind: "tmc", data: { id, newExercises: [] } } as unknown as LocalCourseData
 }
 
-const moocCourse = { kind: "mooc", data: { id: "mooc-course" } } as LocalCourseData
+const moocCourse = {
+  kind: "mooc",
+  data: { id: "mooc-course", newExercises: [] },
+} as unknown as LocalCourseData
 
 /** A check that reached every backend. */
 function checked(exercises: ExerciseUpdateCheck["outdated"]): ExerciseUpdateCheck {
@@ -124,8 +128,12 @@ suite("updateExercises command", function () {
   test("keeps a course it could not check at its last answer", async function () {
     const lostCourse = {
       kind: "mooc",
-      data: { id: "lost", exercises: [{ id: "lost-removed" }, { id: "lost-kept" }] },
-    } as LocalCourseData
+      data: {
+        id: "lost",
+        exercises: [{ id: "lost-removed" }, { id: "lost-kept" }],
+        newExercises: [],
+      },
+    } as unknown as LocalCourseData
     const staleLost = [idOfMoocExercise("lost-outdated")]
     updateablesRegistry.setMany([
       [idOfMoocCourse("lost"), staleLost],
@@ -339,6 +347,43 @@ suite("updateExercises command", function () {
     expect(dialog.statusMessage).not.toHaveBeenCalled()
   })
 
+  test("leaves a picked update's failed exercise to the failed-update item, not a notification", async function () {
+    const failure = new Error("archive 500")
+    downloadExerciseUpdates.mockResolvedValue(
+      Ok({
+        updated: [],
+        warnings: [
+          {
+            headline: "Failed to update the exercise loops.",
+            error: failure,
+            failedExercises: [idOfTmcExercise(10)],
+          },
+          { headline: "Failed to refresh local exercises.", error: failure },
+        ],
+      }),
+    )
+    const [actionContext, dialog] = contextWith(false)
+    const picked = [{ courseId: idOfTmcCourse(1), exerciseId: idOfTmcExercise(10) }]
+
+    await downloadUpdates(actionContext, picked)
+
+    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to refresh local exercises.",
+      failure,
+    )
+  })
+
+  test("an automatic update another one holds back stays quiet", async function () {
+    downloadExerciseUpdates.mockResolvedValue(Err(new BottleneckError("busy")))
+    const [actionContext, dialog] = contextWith(false)
+    const picked = [{ courseId: idOfTmcCourse(1), exerciseId: idOfTmcExercise(10) }]
+
+    await downloadUpdates(actionContext, picked, { isUnrequested: true })
+
+    expect(dialog.notification).not.toHaveBeenCalled()
+    expect(dialog.reportError).not.toHaveBeenCalled()
+  })
+
   test("reports a failed check once when loud, and only logs it when silent", async function () {
     checkForExerciseUpdates.mockRejectedValue(new Error("offline"))
     const [loudContext, loudDialog] = contextWith(false)
@@ -409,6 +454,21 @@ suite("updateExercises command", function () {
     expect(dialog.notification).not.toHaveBeenCalled()
   })
 
+  test("says nothing is up to date while a course has new exercises to offer", async function () {
+    checkForExerciseUpdates.mockResolvedValue(checked([]))
+    const [context, dialog] = contextWith(false)
+    vi.spyOn(context.startup.userData, "getCourses").mockReturnValue([
+      {
+        kind: "mooc",
+        data: { id: "c", title: "Course", exercises: [], newExercises: ["new-one"] },
+      } as unknown as LocalCourseData,
+    ])
+
+    await updateExercises(context, "loud")
+
+    expect(dialog.statusMessage).not.toHaveBeenCalled()
+  })
+
   test("names the courses it could not check in the all-clear", async function () {
     checkForExerciseUpdates.mockResolvedValue({
       ...checked([]),
@@ -418,11 +478,11 @@ suite("updateExercises command", function () {
     vi.spyOn(context.startup.userData, "getCourses").mockReturnValue([
       {
         kind: "tmc",
-        data: { id: 1, title: "Lost One", exercises: [] },
+        data: { id: 1, title: "Lost One", exercises: [], newExercises: [] },
       } as unknown as LocalCourseData,
       {
         kind: "tmc",
-        data: { id: 2, title: "Lost Two", exercises: [] },
+        data: { id: 2, title: "Lost Two", exercises: [], newExercises: [] },
       } as unknown as LocalCourseData,
     ])
 

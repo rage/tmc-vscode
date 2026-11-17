@@ -139,6 +139,7 @@ export function courseHomeView(overrides: Partial<CourseHomeView> = {}): CourseH
     isWorkspaceOpen: false,
     isRestricted: false,
     isAllDone: false,
+    hasReachedLastExercise: false,
     newExercises: [],
     updates: [],
     failedUpdates: [],

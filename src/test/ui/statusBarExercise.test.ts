@@ -60,6 +60,18 @@ function harness(): Harness {
           ? Ok({ course, exercise: stored.exercise })
           : Err(new Error("no such exercise")),
       getCourse: () => Ok(course),
+      getExerciseInClosedChapter(id) {
+        const shown = this.getCourse(onDiskExercise.courseId)
+        const closed =
+          shown.ok && shown.val.kind === "mooc"
+            ? (shown.val.data.closedChapters ?? [])
+                .flatMap((chapter) => chapter.exercises)
+                .find((x) => id.kind === "mooc" && x.id === id.data.moocExerciseId)
+            : undefined
+        return closed && shown.ok
+          ? Ok({ course: shown.val, exercise: makeMoocKind(closed) })
+          : Err(new Error("no such exercise"))
+      },
       onDidChangeCourses: coursesChanged.event,
     },
   }
@@ -171,7 +183,7 @@ suite("ExerciseStatusBarItem", function () {
     expect(tooltipText(itemOf())).toContain("passed")
   })
 
-  test("says the points wait for teacher review instead of showing them", function () {
+  test("says the points wait for the chapter's lock instead of showing them", function () {
     const h = harness()
     h.stored.exercise = makeMoocKind(
       moocCourseExercise({
@@ -183,7 +195,7 @@ suite("ExerciseStatusBarItem", function () {
     )
     track(new ExerciseStatusBarItem(h.sources))
 
-    expect(itemOf().text).toContain("waiting for review")
+    expect(itemOf().text).toContain("$(milestone) waiting for the chapter to be locked")
     expect(itemOf().text).not.toContain("0/2")
   })
 
@@ -201,7 +213,7 @@ suite("ExerciseStatusBarItem", function () {
     track(new ExerciseStatusBarItem(h.sources))
 
     expect(itemOf().text).toContain("1/2")
-    expect(itemOf().text).toContain("waiting for review")
+    expect(itemOf().text).toContain("waiting for teacher review")
   })
 
   test("says when the backend reports no tries left", function () {
@@ -225,7 +237,11 @@ suite("ExerciseStatusBarItem", function () {
     [{ deadline: "2000-01-01T00:00:00Z" }, "$(watch) deadline passed", "deadline passed"],
     [{ outOfTries: true }, "$(circle-slash) no tries left", "no tries left"],
     [{ exerciseLocked: true }, "$(lock) locked by the teacher", "locked by the teacher"],
-    [{ pendingReview: "awaits_teacher" }, "$(eye) waiting for review", "waiting for review"],
+    [
+      { pendingReview: "awaits_teacher" },
+      "$(eye) waiting for teacher review",
+      "waiting for teacher review",
+    ],
   ] as const)("shows where the exercise stands in its text: %o", function (data, shown, standing) {
     const h = harness()
     h.stored.exercise = makeMoocKind(
@@ -407,11 +423,11 @@ suite("showExerciseActions", function () {
     })
   })
 
-  test("offers the model solution once it is revealed", async function () {
+  test("offers a revealed mooc model solution as its course material, not twice", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     vi.spyOn(vscode.window, "showQuickPick").mockImplementation((async (
       items: readonly { label: string }[],
-    ) => items.find((x) => x.label.includes("Model Solution"))) as never)
+    ) => items.find((x) => x.label.includes("Course Material"))) as never)
     const h = harness()
     h.stored.exercise = makeMoocKind(
       moocCourseExercise({
@@ -427,11 +443,11 @@ suite("showExerciseActions", function () {
 
     await showExerciseActions(new Dialog(), h.sources, true)
 
-    expect(offered()).toContain("Show Model Solution")
-    expect(executeCommand).toHaveBeenCalledWith("tmc.showModelSolution", exerciseHelloWorld.uri)
+    expect(offered()).not.toContain("Show Model Solution")
+    expect(executeCommand).toHaveBeenCalledWith("tmc.openExerciseMaterial", exerciseHelloWorld.uri)
   })
 
-  test("for an exercise whose chapter has not opened, names the chapter", async function () {
+  test("for an exercise whose chapter has not opened, names the chapter and keeps its history", async function () {
     const showQuickPick = vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)
     const h = harness()
     h.stored.exercise = undefined
@@ -452,6 +468,10 @@ suite("showExerciseActions", function () {
 
     expect(offered()).toEqual([
       "Run Tests",
+      "Show Results",
+      "Get Help",
+      "History",
+      "Reset Exercise",
       "Open Next Exercise",
       "Show in Courses View",
       "Delete Generated Files",
@@ -475,7 +495,7 @@ suite("showExerciseActions", function () {
   test("offers the Courses view menu's actions in its order, under the same titles", async function () {
     const cases: [string, boolean, (h: Harness) => void][] = [
       [
-        "exercise.opened.passed.hasMaterial.hasModelSolution",
+        "exercise.opened.passed.hasMaterial",
         true,
         (h) => {
           h.stored.exercise = makeMoocKind(
