@@ -202,6 +202,11 @@ function setup(
   return { controller, fake, actionContext, exercises, runTests, interrupts, diagnostics }
 }
 
+/** The results screen's local pass, as of any run. */
+function localPass(): SubmissionView {
+  return { ...testedLocallyView(0), localPassAt: expect.any(Number) as number }
+}
+
 function exerciseAt(s: Setup, index = 0): WorkspaceExercise {
   const exercise = s.exercises[index]
   if (!exercise) {
@@ -286,7 +291,7 @@ suite("ExerciseTestController", function () {
     )
 
     expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
-    expect(submissionViews.latestFor(exercise.id)?.view).toEqual(testedLocallyView())
+    expect(submissionViews.latestFor(exercise.id)?.view).toEqual(localPass())
   })
 
   test("a passing run opens the results panel without taking the focus", async function () {
@@ -686,7 +691,7 @@ suite("ExerciseTestController", function () {
 
     expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
     const [panel] = opened.mock.calls[0] as [{ id: number }]
-    expect(submissionViews.latestView(panel.id)).toEqual(testedLocallyView())
+    expect(submissionViews.latestView(panel.id)).toEqual(localPass())
   })
 
   test("Submit is not offered for a disabled course, or for several exercises", async function () {
@@ -716,7 +721,12 @@ suite("ExerciseTestController", function () {
     function showResults(view: Partial<SubmissionView> = {}, isOnScreen = true): void {
       submissionViews.update({
         panel,
-        view: { ...testedLocallyView(), phase: "finished", headline: "Some tests failed", ...view },
+        view: {
+          ...testedLocallyView(0),
+          phase: "finished",
+          headline: "Some tests failed",
+          ...view,
+        },
         shouldReopen: false,
       })
       submissionViews.setShown(isOnScreen ? panel : undefined)
@@ -733,7 +743,7 @@ suite("ExerciseTestController", function () {
       await s.controller.runExercise(exerciseAt(s))
 
       expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
-      expect(submissionViews.latestView(panel.id)).toEqual(testedLocallyView())
+      expect(submissionViews.latestView(panel.id)).toEqual(localPass())
     })
 
     test("on screen, a pass past the deadline shows there too, which says why", async function () {
@@ -757,7 +767,7 @@ suite("ExerciseTestController", function () {
 
       expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
       expect(opened).toHaveBeenCalledExactlyOnceWith(panel)
-      expect(submissionViews.latestView(panel.id)).toEqual(testedLocallyView())
+      expect(submissionViews.latestView(panel.id)).toEqual(localPass())
     })
 
     test.each<[string, Partial<SubmissionView>]>([
@@ -780,7 +790,7 @@ suite("ExerciseTestController", function () {
       await s.controller.runExercise(exerciseAt(s))
 
       expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
-      expect(submissionViews.latestView(panel.id)).toEqual(testedLocallyView())
+      expect(submissionViews.latestView(panel.id)).toEqual(localPass())
     })
   })
 

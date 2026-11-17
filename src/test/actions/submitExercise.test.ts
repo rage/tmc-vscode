@@ -172,7 +172,16 @@ function contextFor(
 const TASK_SUBMISSION_ID = "task-submission-1"
 const EXERCISE_PAGE_URL = "https://courses.mooc.fi/org/uh-cs/courses/python/chapter-1/page-1"
 
-function moocContextWith(gradingResult: unknown): {
+/** The exercise's slide as `mooc exercise` gives it, with a model solution or without. */
+function slideWith(hasModelSolution: boolean): unknown {
+  const spec = { type: "editor", solution_download_url: "https://x/solution.tar.zst" }
+  return { tasks: [{ model_solution_spec: hasModelSolution ? spec : null }] }
+}
+
+function moocContextWith(
+  gradingResult: unknown,
+  slide: unknown = slideWith(true),
+): {
   actionContext: ReadyActionContext
   setStanding: ReturnType<typeof vi.fn>
   submit: ReturnType<typeof vi.fn>
@@ -189,6 +198,7 @@ function moocContextWith(gradingResult: unknown): {
   const { actionContext, setStanding } = contextFor(makeMoocKind(moocCourse), {
     submitMoocExercise: submit,
     waitForMoocGrading: wait,
+    getMoocExercise: vi.fn().mockResolvedValue(Ok(slide)),
   })
   return { actionContext, setStanding, submit, wait }
 }
@@ -435,6 +445,7 @@ suite("submitExercise action, mooc", () => {
       idOfMoocExercise(MOOC_EXERCISE_ID),
       { passed: true, outOfTries: false },
       3,
+      true,
     )
     expect(finishedCourses).toEqual([idOfMoocCourse(moocCourse.id)])
   })
@@ -491,6 +502,28 @@ suite("submitExercise action, mooc", () => {
     },
   )
 
+  test("a passing grading links no model solution when courses.mooc.fi sends none", async () => {
+    const { actionContext, setStanding } = moocContextWith(
+      grading({ score_given: 3, exercise_progress: progress("Passed", 3) }),
+      slideWith(false),
+    )
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect(lastView()?.solutionUrl).toBeUndefined()
+    expect(setStanding).toHaveBeenCalledWith(expect.anything(), expect.anything(), 3, false)
+  })
+
+  test("a passing grading records the model solution courses.mooc.fi sends", async () => {
+    const { actionContext, setStanding } = moocContextWith(
+      grading({ score_given: 3, exercise_progress: progress("Passed", 3) }),
+    )
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect(setStanding).toHaveBeenCalledWith(expect.anything(), expect.anything(), 3, true)
+  })
+
   test("links the stored material page when the backend names none", async () => {
     const storedPage = "https://courses.mooc.fi/org/uh-cs/courses/python/stored-page"
     const { actionContext } = contextFor(
@@ -518,6 +551,7 @@ suite("submitExercise action, mooc", () => {
           .mockResolvedValue(
             Ok(grading({ score_given: 3, exercise_progress: progress("Passed", 3) })),
           ),
+        getMoocExercise: vi.fn().mockResolvedValue(Ok(slideWith(true))),
       },
     )
 
@@ -536,6 +570,7 @@ suite("submitExercise action, mooc", () => {
       idOfMoocExercise(MOOC_EXERCISE_ID),
       { passed: false, outOfTries: false },
       2,
+      false,
     )
     expect(lastView()).toMatchObject({
       headline: "Not passed",
@@ -553,6 +588,7 @@ suite("submitExercise action, mooc", () => {
       idOfMoocExercise(MOOC_EXERCISE_ID),
       { passed: false, outOfTries: true },
       2,
+      true,
     )
     expect(lastView()).toMatchObject({
       headline: "Not passed",
@@ -770,6 +806,7 @@ suite("submitExercise action, mooc", () => {
       idOfMoocExercise(MOOC_EXERCISE_ID),
       { passed: true, outOfTries: false },
       3,
+      true,
     )
 
     const again = await keepWaitingForGrading(actionContext, panelId)

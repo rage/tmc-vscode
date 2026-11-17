@@ -4,7 +4,12 @@
     CourseHomeExerciseAction,
     CourseHomePart,
   } from "../../../../shared/lib"
-  import { ExerciseIdentifier, PENDING_REVIEW_LABEL } from "../../../../shared/lib"
+  import {
+    ExerciseIdentifier,
+    PENDING_REVIEW_ICON,
+    PENDING_REVIEW_LABEL,
+    SUBMIT_REFUSAL_ICONS,
+  } from "../../../../shared/lib"
   import ActionMenu from "../../components/ActionMenu.svelte"
   import ToolbarButton from "../../components/ToolbarButton.svelte"
   import { reducedMotion } from "../../utilities/a11y.svelte"
@@ -18,7 +23,7 @@
     isExpanded: boolean
     ontoggle: () => void
     onaction: (exercise: CourseHomeExercise, action: CourseHomeExerciseAction) => void
-    /** Opens an exercise's course material page in the browser. */
+    /** Opens an exercise's course material or model solution page in the browser. */
     onopenmaterial: (url: string) => void
   }
 
@@ -71,14 +76,15 @@
     if (exercise.passed) {
       return { name: "pass-filled", tone: "passed", label: "Passed" }
     }
-    if (exercise.isOutOfTries) {
-      return { name: "circle-slash", tone: "muted", label: "No tries left" }
-    }
-    if (exercise.status === "expired") {
-      return { name: "lock", tone: "muted", label: "Deadline passed" }
+    if (exercise.pendingReview) {
+      return { name: PENDING_REVIEW_ICON, tone: "muted", label: exercise.pendingReview }
     }
     if (exercise.submitRefusal) {
-      return { name: "lock", tone: "muted", label: exercise.submitRefusal.sentence }
+      const { icon, sentence } = exercise.submitRefusal
+      return { name: icon, tone: "muted", label: sentence }
+    }
+    if (exercise.status === "expired") {
+      return { name: SUBMIT_REFUSAL_ICONS.deadlinePassed, tone: "muted", label: "Deadline passed" }
     }
     return { name: "circle-large-outline", tone: "muted", label: "Not passed" }
   }
@@ -110,7 +116,7 @@
   }
 
   function menuActions(exercise: CourseHomeExercise) {
-    const { materialUrl } = exercise
+    const { materialUrl, solutionUrl } = exercise
     return [
       ...(isOnDisk(exercise)
         ? [
@@ -121,18 +127,11 @@
             },
           ]
         : []),
-      ...(materialUrl
-        ? [
-            {
-              // The material page shows the model solution once courses.mooc.fi reveals it.
-              label:
-                exercise.passed || exercise.isOutOfTries
-                  ? "Show Model Solution"
-                  : "Open Course Material",
-              onselect: () => onopenmaterial(materialUrl),
-            },
-          ]
-        : []),
+      ...(solutionUrl
+        ? [{ label: "Show Model Solution", onselect: () => onopenmaterial(solutionUrl) }]
+        : materialUrl
+          ? [{ label: "Open Course Material", onselect: () => onopenmaterial(materialUrl) }]
+          : []),
     ]
   }
 </script>
@@ -152,10 +151,10 @@
       </button>
     </h2>
     <span class="muted part-progress">{passedCount}/{part.exercises.length} passed</span>
-    {#if part.lockedReason}
+    {#if part.locked}
       <span class="muted part-locked">
-        <vscode-icon name="lock" aria-hidden="true"></vscode-icon>
-        {part.lockedReason}
+        <vscode-icon name={part.locked.icon} aria-hidden="true"></vscode-icon>
+        {part.locked.reason}
       </span>
     {/if}
   </div>

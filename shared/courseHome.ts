@@ -43,8 +43,8 @@ export const CourseHomeExerciseSchema = z.object({
   isOutOfTries: z.boolean(),
   /** Absent when tries are unlimited. */
   triesLeft: z.number().optional(),
-  /** Why the backend would refuse a submission now: a few words and a sentence. */
-  submitRefusal: z.object({ label: z.string(), sentence: z.string() }).optional(),
+  /** Why the backend would refuse a submission now: a few words, a sentence and its codicon. */
+  submitRefusal: z.object({ label: z.string(), sentence: z.string(), icon: z.string() }).optional(),
   awardedPoints: z.number(),
   availablePoints: z.number(),
   /** What the points wait for, as a sentence; `awardedPoints` is 0 until then. */
@@ -55,6 +55,8 @@ export const CourseHomeExerciseSchema = z.object({
   isUpdateable: z.boolean(),
   /** The course material page the exercise is on. */
   materialUrl: z.string().optional(),
+  /** The page that shows the exercise's model solution, once its backend shows one. */
+  solutionUrl: z.string().optional(),
 })
 
 export type CourseHomeExercise = z.infer<typeof CourseHomeExerciseSchema>
@@ -64,8 +66,8 @@ export const CourseHomePartSchema = z.object({
   key: z.string(),
   name: z.string(),
   isDefaultOpen: z.boolean(),
-  /** Why chapter locking refuses submissions to the part's exercises, as a sentence. */
-  lockedReason: z.string().optional(),
+  /** Why the part's exercises cannot be submitted, as a sentence, and the reason's codicon. */
+  locked: z.object({ reason: z.string(), icon: z.string() }).optional(),
   exercises: z.array(CourseHomeExerciseSchema),
 })
 

@@ -33,14 +33,19 @@ const exercise: WorkspaceExercise = {
   uri: vscode.Uri.file("/workspace/mooc/mooc-course/ex-1"),
 }
 
-function contextWith(passed: boolean) {
+function contextWith(hasModelSolution: boolean) {
   const [dialog] = createDialogMock()
   const workspaceManager = {
     activeExercise: exercise,
     getExerciseContaining: () => exercise,
   } as unknown as WorkspaceManager
   const stored = makeMoocKind(
-    moocCourseExercise({ id: "mooc-ex-uuid", passed, pageUrl: "https://courses.example/page" }),
+    moocCourseExercise({
+      id: "mooc-ex-uuid",
+      passed: hasModelSolution,
+      hasModelSolution,
+      pageUrl: "https://courses.example/page",
+    }),
   )
   const userData = {
     getExercise: () => Ok({ exercise: stored, course: moocLocalCourse() }),
@@ -53,20 +58,21 @@ suite("Show model solution command", function () {
     vi.mocked(openWebLink).mockClear()
   })
 
-  test("opens the material page of a passed exercise", async function () {
+  test("opens the material page of an exercise whose model solution was sent", async function () {
     await showModelSolution(contextWith(true), undefined)
 
     expect(openWebLink).toHaveBeenCalledExactlyOnceWith("https://courses.example/page")
   })
 
-  test("says when the model solution is not revealed yet", async function () {
+  test("says when there is no model solution to show yet", async function () {
     const context = contextWith(false)
 
     await showModelSolution(context, undefined)
 
     expect(openWebLink).not.toHaveBeenCalled()
     expect(context.dialog.notification).toHaveBeenCalledWith(
-      "The model solution of ex-1 is shown once you pass it or run out of tries.",
+      "ex-1 has no model solution to show yet. If it has one, it shows once you pass the exercise " +
+        "or run out of tries.",
     )
   })
 

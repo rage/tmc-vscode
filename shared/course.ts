@@ -89,6 +89,8 @@ export const SharedMoocCourseExerciseSchema = z.object({
   chapter: MoocExerciseChapterSchema.optional(),
   /** The course material page the exercise is on; absent when the backend sent none. */
   pageUrl: z.string().optional(),
+  /** courses.mooc.fi has sent the exercise's model solution, which it does once you may see it. */
+  hasModelSolution: z.boolean().optional(),
 })
 
 export type SharedMoocCourseExercise = z.infer<typeof SharedMoocCourseExerciseSchema>
@@ -219,14 +221,13 @@ export function submitRefusalOf(
 }
 
 /**
- * The course material page that shows a mooc exercise's model solution, which courses.mooc.fi
- * reveals once the exercise is passed or out of tries; `undefined` before that, and for tmc.
+ * The course material page that shows a mooc exercise's model solution, once courses.mooc.fi has
+ * sent one; `undefined` before that, and for tmc.
  */
 export function modelSolutionUrlOf(exercise: LocalCourseExercise): string | undefined {
-  if (exercise.kind !== "mooc" || !(exercise.data.passed || exercise.data.outOfTries)) {
-    return undefined
-  }
-  return exercise.data.pageUrl
+  return exercise.kind === "mooc" && exercise.data.hasModelSolution
+    ? exercise.data.pageUrl
+    : undefined
 }
 
 /** A few words for a row that cannot be submitted, e.g. "deadline passed". */
@@ -240,6 +241,22 @@ export const SUBMIT_REFUSAL_LABELS: Record<SubmitRefusal, string> = {
   notEnrolled: "not enrolled",
   courseForbidden: "no access",
   courseNotFound: "course removed",
+}
+
+/**
+ * The codicon of each refusal. The course home, the Courses view and the status bar all draw a
+ * refused exercise with it, so one icon means one reason everywhere.
+ */
+export const SUBMIT_REFUSAL_ICONS: Record<SubmitRefusal, string> = {
+  chapterNotUnlockedYet: "list-ordered",
+  chapterCompletedAndLocked: "lock",
+  chapterNotOpenYet: "calendar",
+  exerciseLocked: "lock",
+  deadlinePassed: "watch",
+  outOfTries: "circle-slash",
+  notEnrolled: "person",
+  courseForbidden: "eye-closed",
+  courseNotFound: "trash",
 }
 
 /**
@@ -279,6 +296,9 @@ export function submitRefusalSentence(
 
 /** A few words for a row whose points wait for a teacher's review. */
 export const PENDING_REVIEW_LABEL = "waiting for review"
+
+/** The codicon of a row waiting for review; see {@link SUBMIT_REFUSAL_ICONS}. */
+export const PENDING_REVIEW_ICON = "eye"
 
 /**
  * Whether an exercise's points are held back for a pending teacher review. The backend holds them

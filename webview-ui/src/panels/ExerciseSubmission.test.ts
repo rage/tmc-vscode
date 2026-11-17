@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/svelte"
+import { fireEvent, render, screen, within } from "@testing-library/svelte"
+import { tick } from "svelte"
 import { vi } from "vitest"
 
 import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../../../shared/langsSchema"
@@ -37,6 +38,8 @@ const moocPanel: ExerciseSubmissionPanel = {
   courseTitle: "Introduction to Programming",
   organization: "University of Helsinki",
 }
+
+const LOCAL_PASS_AT = 1_800_000_000_000
 
 const FEEDBACK_URL = "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback"
 
@@ -340,12 +343,19 @@ suite("ExerciseSubmission panel (tmc results)", () => {
     expect(toggle).toHaveFocus()
   })
 
-  test("a passed submission offers no paste help", async () => {
+  test("a passed submission shows no Get Help section, but More Actions still opens it", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showTmcResult(submissionFinished())
 
     await screen.findByRole("heading", { name: "Passed" })
-    expect(await menuItems()).not.toContain("Get Help")
+    expect(screen.queryByRole("button", { name: "Get Help" })).not.toBeInTheDocument()
+
+    await chooseMenuItem("Get Help")
+
+    expect(screen.getByRole("button", { name: "Get Help" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    )
   })
 
   test("valgrind output is available behind a disclosure", async () => {
@@ -481,10 +491,11 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     expect(screen.queryByText("Run in Background")).not.toBeInTheDocument()
   })
 
-  test("a partial score offers paste help, a full one does not", async () => {
+  test("a partial score shows the Get Help section, a full one only offers it in More Actions", async () => {
     const { unmount } = render(ExerciseSubmission, { props: { panel: moocPanel } })
     showMoocGrading(moocGrading({ score_given: 1 }))
     await screen.findByRole("heading", { name: "Not passed" })
+    expect(screen.getByRole("button", { name: "Get Help" })).toBeInTheDocument()
     expect(await menuItems()).toContain("Get Help")
     unmount()
 
@@ -507,7 +518,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
       }),
     )
     await screen.findByRole("heading", { name: "Passed" })
-    expect(await menuItems()).not.toContain("Get Help")
+    expect(screen.queryByRole("button", { name: "Get Help" })).not.toBeInTheDocument()
+    expect(await menuItems()).toContain("Get Help")
   })
 
   test("the last try below full points says the score is final", async () => {
@@ -656,7 +668,7 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     postedMessages.mockClear()
 
     const solution = await screen.findByRole("button", { name: "Show Model Solution" })
-    expect(isSecondary(solution)).toBe(false)
+    expect(isSecondary(solution)).toBe(true)
     expect(screen.getByText(/no tries left on loops/)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Run Tests" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Submit Again" })).not.toBeInTheDocument()
@@ -796,17 +808,36 @@ suite("ExerciseSubmission panel (results hub)", () => {
     expect(await menuItems()).not.toContain("Show Model Solution")
   })
 
-  test("the last exercise passed leads to its model solution", async () => {
+  test("the last exercise passed offers its model solution, never as the main action", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showView(panel.id, standingView(tmcExercise(true), "https://tmc.mooc.fi/exercises/1/solution"))
 
     const solution = await screen.findByRole("button", { name: "Show Model Solution" })
-    expect(isSecondary(solution)).toBe(false)
+    expect(isSecondary(solution)).toBe(true)
+    expect(await menuItems()).not.toContain("Open Course Material")
+  })
+
+  test("without a model solution, More Actions opens the course material instead", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...standingView(tmcExercise(true), undefined),
+      materialUrl: "https://courses.example/page",
+    })
+    await screen.findByRole("heading", { name: "Passed" })
+    expect(screen.queryByRole("button", { name: "Show Model Solution" })).not.toBeInTheDocument()
+    postedMessages.mockClear()
+
+    await chooseMenuItem("Open Course Material")
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "openLinkInBrowser",
+      url: "https://courses.example/page",
+    })
   })
 
   test("all tests passing locally makes Submit the main action", async () => {
     render(ExerciseSubmission, { props: { panel } })
-    showView(panel.id, testedLocallyView())
+    showView(panel.id, testedLocallyView(LOCAL_PASS_AT))
     const submit = await screen.findByRole("button", { name: "Submit" })
     postedMessages.mockClear()
 
@@ -821,9 +852,51 @@ suite("ExerciseSubmission panel (results hub)", () => {
     })
   })
 
+  test("a local pass asks to submit, and Not Now dismisses the question for that run", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, testedLocallyView(LOCAL_PASS_AT))
+
+    const prompt = await screen.findByRole("group", { name: "All tests pass. Submit for grading?" })
+    expect(within(prompt).getByRole("button", { name: "Submit" })).toBeInTheDocument()
+    expect(screen.queryByText("Submit the exercise to have it graded.")).not.toBeInTheDocument()
+    await fireEvent.click(within(prompt).getByRole("button", { name: "Not Now" }))
+    await tick()
+
+    expect(screen.queryByRole("group", { name: /Submit for grading/ })).not.toBeInTheDocument()
+    expect(screen.queryByText("All tests pass. Submit for grading?")).not.toBeInTheDocument()
+    expect(isSecondary(screen.getByRole("button", { name: "Submit" }))).toBe(true)
+    expect(isSecondary(screen.getByRole("button", { name: "Run Tests" }))).toBe(false)
+    expect(screen.getByRole("button", { name: "Run Tests" })).toHaveFocus()
+
+    showView(panel.id, testedLocallyView(LOCAL_PASS_AT))
+    await tick()
+    expect(screen.queryByRole("group", { name: /Submit for grading/ })).not.toBeInTheDocument()
+
+    showView(panel.id, testedLocallyView(LOCAL_PASS_AT + 1))
+    expect(
+      await screen.findByRole("group", { name: "All tests pass. Submit for grading?" }),
+    ).toBeInTheDocument()
+  })
+
+  test.each([
+    ["logged out", { isLoggedOut: true }],
+    [
+      "refused",
+      { submitRefusal: "You have no tries left on loops, so it can no longer be submitted." },
+    ],
+    ["not on disk", { exerciseState: "notOnDisk" as const }],
+  ])("a local pass does not ask to submit when %s", async (_state, overrides) => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, { ...testedLocallyView(LOCAL_PASS_AT), ...overrides })
+
+    await screen.findByRole("heading", { name: "Tests pass on your computer" })
+    expect(screen.queryByText("All tests pass. Submit for grading?")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Not Now" })).not.toBeInTheDocument()
+  })
+
   test("logged out, a local pass offers to log in and submit as its main action", async () => {
     render(ExerciseSubmission, { props: { panel } })
-    showView(panel.id, { ...testedLocallyView(), isLoggedOut: true })
+    showView(panel.id, { ...testedLocallyView(LOCAL_PASS_AT), isLoggedOut: true })
     const logIn = await screen.findByRole("button", { name: "Log In to Submit" })
     postedMessages.mockClear()
 
@@ -856,7 +929,7 @@ suite("ExerciseSubmission panel (results hub)", () => {
   test("a local pass of an exercise that cannot be submitted says why instead of offering Submit", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showView(panel.id, {
-      ...testedLocallyView(),
+      ...testedLocallyView(LOCAL_PASS_AT),
       submitRefusal:
         "The deadline of part01-01_hello has passed, so it can no longer be submitted.",
     })

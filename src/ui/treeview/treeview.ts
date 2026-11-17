@@ -7,10 +7,12 @@ import {
   LocalCourseData,
   LOGGED_OUT_MESSAGE,
   SOFT_DEADLINE_PENALTY,
+  SUBMIT_REFUSAL_ICONS,
   SUBMIT_REFUSAL_LABELS,
   submitRefusalSentence,
   arePointsHeldForReview,
   pendingReviewSentence,
+  PENDING_REVIEW_ICON,
   PENDING_REVIEW_LABEL,
   triesLeftText,
 } from "../../../shared/lib"
@@ -311,7 +313,7 @@ export class ExerciseTreeItem extends vscode.TreeItem {
       ...(exercise.passed ? ["passed"] : []),
       ...(exercise.isUpdateable ? ["updateable"] : []),
       ...(exercise.materialUrl ? ["hasMaterial"] : []),
-      ...(exercise.onDisk && exercise.hasModelSolution ? ["hasModelSolution"] : []),
+      ...(exercise.onDisk && exercise.solutionUrl ? ["hasModelSolution"] : []),
       ...(exercise.onDisk && exercise.submitRefusal ? ["submitRefused"] : []),
     ].join(".")
     this.command = { command: "tmc.openExercises", title: "Open", arguments: [this] }
@@ -860,12 +862,21 @@ function exerciseIcon(exercise: ExerciseView): vscode.ThemeIcon {
   if (exercise.passed) {
     return new vscode.ThemeIcon("pass-filled", new vscode.ThemeColor("testing.iconPassed"))
   }
-  if (exercise.isOutOfTries) {
-    return new vscode.ThemeIcon("circle-slash", new vscode.ThemeColor("testing.iconSkipped"))
+  if (exercise.pendingReview) {
+    return new vscode.ThemeIcon(PENDING_REVIEW_ICON, new vscode.ThemeColor("disabledForeground"))
+  }
+  if (exercise.submitRefusal) {
+    return new vscode.ThemeIcon(
+      SUBMIT_REFUSAL_ICONS[exercise.submitRefusal],
+      new vscode.ThemeColor("disabledForeground"),
+    )
   }
   switch (exercise.status) {
     case "expired":
-      return new vscode.ThemeIcon("lock", new vscode.ThemeColor("disabledForeground"))
+      return new vscode.ThemeIcon(
+        SUBMIT_REFUSAL_ICONS.deadlinePassed,
+        new vscode.ThemeColor("disabledForeground"),
+      )
     case "new":
       return new vscode.ThemeIcon("cloud-download", new vscode.ThemeColor("testing.iconQueued"))
     case "missing":
