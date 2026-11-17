@@ -1731,7 +1731,7 @@ suite("TmcPanel side panel placement", () => {
   beforeEach(resetPanels)
   afterEach(resetPanels)
 
-  test("opens submission results beside the editor without taking its focus", () => {
+  test("opens submission results beside the first group without taking its focus", () => {
     const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
     createWebviewPanel.mockClear()
     createWebviewPanel.mockReturnValue(createFakeWebviewPanel().panel)
@@ -1741,7 +1741,7 @@ suite("TmcPanel side panel placement", () => {
     expect(createWebviewPanel).toHaveBeenCalledWith(
       "tmc.sidePanel",
       expect.any(String),
-      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+      { viewColumn: vscode.ViewColumn.Two, preserveFocus: true },
       expect.anything(),
     )
   })
@@ -1754,6 +1754,41 @@ suite("TmcPanel side panel placement", () => {
     renderSidePanel(exerciseSubmissionPanel())
 
     expect(panel.reveal).toHaveBeenCalledExactlyOnceWith(undefined, true)
+  })
+
+  test("moves submission results Error Details put in the first group back beside it", () => {
+    const { panel } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    renderSidePanel(exerciseSubmissionPanel())
+    Object.assign(panel, { viewColumn: vscode.ViewColumn.One })
+
+    renderSidePanel(exerciseSubmissionPanel())
+
+    expect(panel.reveal).toHaveBeenCalledExactlyOnceWith(vscode.ViewColumn.Two, true)
+  })
+
+  test("opens Error Details asked from a screen in that screen's group, focused", () => {
+    const side = createFakeWebviewPanel()
+    const main = createFakeWebviewPanel()
+    const createWebviewPanel = vi.mocked(vscode.window.createWebviewPanel)
+    createWebviewPanel.mockClear()
+    createWebviewPanel.mockReturnValueOnce(side.panel).mockReturnValueOnce(main.panel)
+    renderSidePanel(exerciseSubmissionPanel())
+    Object.assign(side.panel, { viewColumn: vscode.ViewColumn.Two })
+
+    TmcPanel.renderBeside(createMockContext(), createMockActionContext(), helpPanel(), "side")
+
+    expect(createWebviewPanel).toHaveBeenLastCalledWith(
+      MAIN_PANEL_VIEW_TYPE,
+      expect.any(String),
+      { viewColumn: vscode.ViewColumn.Two, preserveFocus: false },
+      expect.anything(),
+    )
+
+    Object.assign(main.panel, { viewColumn: vscode.ViewColumn.One })
+    TmcPanel.renderBeside(createMockContext(), createMockActionContext(), helpPanel(), "main")
+
+    expect(side.panel.reveal).toHaveBeenLastCalledWith(vscode.ViewColumn.One, false)
   })
 
   test("sends submission views to the side panel and not the main one", async () => {
@@ -2818,7 +2853,7 @@ suite("TmcPanel results the student asks for", () => {
     expect(createWebviewPanel).toHaveBeenCalledWith(
       "tmc.sidePanel",
       expect.any(String),
-      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
+      { viewColumn: vscode.ViewColumn.Two, preserveFocus: false },
       expect.anything(),
     )
     expect(postedMessages(fake.panel)).toEqual([

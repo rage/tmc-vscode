@@ -71,6 +71,7 @@ import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
 import { FailedUpdatesStatusBarItem } from "./ui/statusBarFailedUpdates"
 import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
+import { keepExerciseFilesInFirstGroup } from "./window/exerciseEditorPlacement"
 import {
   reachWalkthroughMilestone,
   showNextWalkthroughStep,
@@ -537,6 +538,9 @@ async function activateInner(
         operations: exerciseOperations,
       }),
       new FailedUpdatesStatusBarItem(failedUpdates),
+      keepExerciseFilesInFirstGroup(
+        (uri) => readyContext.startup.workspaceManager.getExerciseContaining(uri) !== undefined,
+      ),
       new LanguageExtensionOffer(
         readyContext.dialog,
         readyContext.startup.workspaceManager,

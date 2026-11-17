@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Exercise files open in the first editor group, beside the results screen instead of in its group, and a file already open is focused instead of opened twice. Error Details opens as a tab in the group of the screen you opened it from.
 - The exercise actions of a passed exercise in a chapter not unlocked yet no longer say to complete earlier chapters first; the chapter says it.
 - A course home you are not enrolled on no longer offers to download its exercises.
 - Open Next Exercise, and Next in the results screen, only go forward in the course: from its last exercise left to do they open the course home, which offers the earlier ones. When the next exercise cannot be downloaded, the course home opens and says why instead of a notification.
