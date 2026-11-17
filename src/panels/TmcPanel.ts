@@ -1,3 +1,4 @@
+import { upperFirst } from "lodash"
 import type { Webview, WebviewOptions, WebviewPanel } from "vscode"
 import { Disposable, Uri, ViewColumn, window } from "vscode"
 import type * as vscode from "vscode"
@@ -8,6 +9,7 @@ import {
   CourseIdentifier,
   ExerciseIdentifier,
   offersLogIn,
+  SUBMIT_REFUSAL_LABELS,
   submitRefusalOf,
   submitRefusalSentence,
   pendingReviewSentence,
@@ -688,6 +690,7 @@ function submissionViewMessage(
             exercise.kind === "mooc" ? exercise.data.chapter?.name : undefined,
           )
         : undefined,
+    submitRefusalLabel: refusal && upperFirst(SUBMIT_REFUSAL_LABELS[refusal]),
     triesLeft: exercise?.kind === "mooc" ? exercise.data.triesLeft : undefined,
     pendingReview:
       exercise?.kind === "mooc" && exercise.data.pendingReview

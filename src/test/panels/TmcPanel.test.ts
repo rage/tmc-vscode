@@ -2004,6 +2004,7 @@ suite("TmcPanel side panel placement", () => {
     expect(last).toMatchObject({
       view: {
         phase: "standing",
+        headline: "Deadline passed",
         submitRefusal: "The deadline of loops has passed, so it can no longer be submitted.",
       },
     })

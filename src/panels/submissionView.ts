@@ -254,8 +254,9 @@ export function moocGradingView(
         ...graded,
         ...reviewNote,
         phase: "finished",
+        // The exercise's outcome, as its standing reads in a later session too.
         headline: isPassedEarlier
-          ? "This submission failed some tests"
+          ? "Passed"
           : isBelowMax
             ? "Not passed"
             : fullyGradedHeadline(standing),
@@ -330,7 +331,7 @@ function fullyGradedExplanation(
   if (standing === "Passed" && isBelowMax) {
     return {
       explanation:
-        "You have already passed this exercise with an earlier submission, so you keep its points.",
+        "This submission failed some tests. You keep the points of your earlier passing submission.",
     }
   }
   return {}
@@ -373,6 +374,8 @@ function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): str
  * changes what the backend accepts.
  *
  * @param exercise.submitRefusal See {@link SubmissionView.submitRefusal}.
+ * @param exercise.submitRefusalLabel The refusal in a few words, e.g. "Deadline passed": the
+ *   headline of a standing that is not passed, as it can no longer be.
  * @param exercise.pendingReview See {@link SubmissionView.pendingReview}; replaces the one a
  *   finished grading was shown with.
  * @param exercise.solutionUrl The model solution's page once the stored course reveals it; fills
@@ -385,6 +388,7 @@ export function withExerciseState(
     isOnDisk: boolean
     isInCourse: boolean
     submitRefusal?: string | undefined
+    submitRefusalLabel?: string | undefined
     triesLeft?: number | undefined
     pendingReview?: string | undefined
     solutionUrl?: string | undefined
@@ -408,8 +412,17 @@ export function withExerciseState(
       : gradedPendingReview
   const isInProgress = view.phase === "uploading" || view.phase === "grading"
   const solutionUrl = isInProgress ? undefined : (view.solutionUrl ?? exercise.solutionUrl)
+  const isClosed = exercise.submitRefusal !== undefined
   const standing = {
     ...rest,
+    ...(isClosed &&
+    view.phase === "standing" &&
+    !view.isExercisePassed &&
+    exercise.submitRefusalLabel
+      ? { headline: exercise.submitRefusalLabel }
+      : {}),
+    // Nothing tested locally can be submitted any more.
+    ...(isClosed && view.phase === "testedLocally" ? { explanation: undefined } : {}),
     ...(solutionUrl === undefined ? {} : { solutionUrl }),
     ...(pendingReview === undefined ? {} : { pendingReview }),
     ...(exercise.submitRefusal === undefined ? {} : { submitRefusal: exercise.submitRefusal }),

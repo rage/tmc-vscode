@@ -242,10 +242,10 @@ suite("moocGradingView", () => {
     const view = moocGradingView(moocGrading("FullyGraded", 0, "Passed"), 1)
     expect(view).toMatchObject({
       phase: "finished",
-      headline: "This submission failed some tests",
+      headline: "Passed",
       tone: "info",
       explanation:
-        "You have already passed this exercise with an earlier submission, so you keep its points.",
+        "This submission failed some tests. You keep the points of your earlier passing submission.",
     })
     expect(view.points).toBeUndefined()
   })
@@ -373,6 +373,35 @@ suite("withExerciseState", () => {
     })
 
     expect(shown.pendingReview).toBe("The points wait for a teacher's review.")
+  })
+
+  test("a standing short of a pass is headed by why it can no longer be submitted", () => {
+    const standing = { ...testedLocallyView(), phase: "standing" as const, headline: "Not passed" }
+    const refused = {
+      ...onDisk,
+      submitRefusal: "The deadline of loops has passed, so it can no longer be submitted.",
+      submitRefusalLabel: "Deadline passed",
+    }
+
+    expect(withExerciseState(standing, refused).headline).toBe("Deadline passed")
+    expect(withExerciseState({ ...standing, isExercisePassed: true }, refused).headline).toBe(
+      "Not passed",
+    )
+    expect(withExerciseState(standing, onDisk).headline).toBe("Not passed")
+  })
+
+  test("a local pass of an exercise that can no longer be submitted invites no submit", () => {
+    const shown = withExerciseState(testedLocallyView(), {
+      ...onDisk,
+      submitRefusal: "The deadline of loops has passed, so it can no longer be submitted.",
+      submitRefusalLabel: "Deadline passed",
+    })
+
+    expect(shown.headline).toBe("Tests pass on your computer")
+    expect(shown.explanation).toBeUndefined()
+    expect(withExerciseState(testedLocallyView(), onDisk).explanation).toBe(
+      "Submit the exercise to have it graded.",
+    )
   })
 
   test("says a logged-out student must log in to submit, and forgets it once logged in", () => {

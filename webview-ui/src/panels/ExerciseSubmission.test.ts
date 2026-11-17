@@ -579,7 +579,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
       nextExercise: { name: "part01-02_world" },
     })
 
-    await screen.findByRole("heading", { name: "This submission failed some tests" })
+    await screen.findByRole("heading", { name: "Passed" })
+    expect(screen.getByText(/This submission failed some tests/)).toBeInTheDocument()
     expect(screen.queryByRole("meter", { name: "Points" })).not.toBeInTheDocument()
     expect(isSecondary(screen.getByRole("button", { name: "Next: part01-02_world" }))).toBe(false)
     expect(isSecondary(screen.getByRole("button", { name: "Run Tests" }))).toBe(true)
