@@ -42,6 +42,18 @@ suite("submission views", () => {
     expect(submissionViews.shownFor(idOfTmcExercise(2))).toBeUndefined()
   })
 
+  test("fires when the panel on screen changes, not when it is recorded again", () => {
+    let changes = 0
+    const subscription = submissionViews.onDidChangeShown(() => changes++)
+
+    submissionViews.setShown(panelOf(1))
+    submissionViews.setShown(panelOf(1))
+    submissionViews.setShown(undefined)
+    subscription.dispose()
+
+    expect(changes).toBe(2)
+  })
+
   test("a reveal carries the section with a number newer than the last one's", () => {
     const reveals: { serial: number | undefined }[] = []
     const subscription = submissionViews.onDidRequestReveal(({ section }) =>

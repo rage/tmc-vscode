@@ -106,3 +106,30 @@ vsCodeTest(
     await expect(spinner).toBeHidden({ timeout: 30_000 })
   },
 )
+
+vsCodeTest(
+  "a long job's progress is notified only while its screen is out of sight",
+  async ({ page, webview }) => {
+    const coursesView = new CoursesViewPage(page, webview)
+    const courseHome = new CourseHomePage(page, webview)
+    const progress = page
+      .locator(".notifications-toasts .notification-toast")
+      .filter({ hasText: "Downloading 2 exercises" })
+
+    await coursesView.goto()
+    await coursesView.addNewMoocCourse(COURSE_TITLE)
+    await postToMock("delay-next-archive", { delayMs: 10_000 })
+    await courseHome.downloadAll()
+    await expect(
+      page
+        .locator('[id="workbench.parts.statusbar"]')
+        .getByRole("button", { name: /^TestMyCode: Downloading 2 exercises/ }),
+    ).toBeVisible()
+    await expect(progress).toHaveCount(0)
+
+    await coursesView.runPaletteCommand("View: Close All Editors")
+
+    await expect(progress).toBeVisible()
+    await expect(progress).toBeHidden({ timeout: 30_000 })
+  },
+)

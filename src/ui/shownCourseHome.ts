@@ -18,11 +18,15 @@ export interface CourseHomeFailure {
  */
 class ShownCourseHome {
   private _courseId: CourseIdentifier | undefined
+  private readonly _changed = new vscode.EventEmitter<void>()
   private readonly _failed = new vscode.EventEmitter<CourseHomeFailure>()
   private readonly _failuresCleared = new vscode.EventEmitter<{
     courseId: CourseIdentifier
     operation: string
   }>()
+
+  /** Fires when the course home on screen changes, or goes out of sight. */
+  public readonly onDidChange = this._changed.event
 
   /** Fires with a failure the course home of its course should show. */
   public readonly onDidFail = this._failed.event
@@ -36,7 +40,14 @@ class ShownCourseHome {
   }
 
   public set(courseId: CourseIdentifier | undefined): void {
+    const isSame =
+      courseId === undefined
+        ? this._courseId === undefined
+        : this._courseId !== undefined && CourseIdentifierNs.equals(this._courseId, courseId)
     this._courseId = courseId
+    if (!isSame) {
+      this._changed.fire()
+    }
   }
 
   public isShowing(courseId: CourseIdentifier): boolean {

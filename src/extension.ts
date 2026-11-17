@@ -65,10 +65,13 @@ import {
 } from "./ui/contextKeys"
 import { openCourseId } from "./ui/courseHome"
 import { failedUpdates } from "./ui/failedUpdates"
+import { JobProgressNotifications } from "./ui/jobProgressNotifications"
 import { LanguageExtensionOffer } from "./ui/languageExtensionOffer"
+import { shownCourseHome } from "./ui/shownCourseHome"
 import { AccountStatusBarItem } from "./ui/statusBarAccount"
 import { BackgroundStatusBarItem } from "./ui/statusBarBackground"
 import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
+import { submissionViews } from "./ui/submissionViews"
 import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
 import {
@@ -536,6 +539,17 @@ async function activateInner(
         userData: readyContext.startup.userData,
       }),
       new BackgroundStatusBarItem({ jobs: backgroundJobs, failedUpdates }),
+      new JobProgressNotifications(readyContext.dialog, backgroundJobs, {
+        isCourseHomeVisible: (courseId) => shownCourseHome.isShowing(courseId),
+        isResultsVisible: (exerciseId) => submissionViews.shownFor(exerciseId) !== undefined,
+        isCoursesViewVisible: () => coursesTree.isVisible,
+        onDidChange: (listener) =>
+          vscode.Disposable.from(
+            shownCourseHome.onDidChange(listener),
+            submissionViews.onDidChangeShown(listener),
+            coursesTree.onDidChangeVisibility(listener),
+          ),
+      }),
       new LanguageExtensionOffer(
         readyContext.dialog,
         readyContext.startup.workspaceManager,

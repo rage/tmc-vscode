@@ -149,6 +149,8 @@ vi.mock("../../ui/treeview/treeview", async (importOriginal) => ({
     }
     public setRestricted = (): void => {}
     public refresh = (): void => {}
+    public isVisible = false
+    public onDidChangeVisibility = (): { dispose: () => void } => ({ dispose: () => {} })
     public dispose = (): void => {
       recorded.uiDisposals += 1
     }

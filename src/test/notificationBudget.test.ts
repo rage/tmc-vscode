@@ -87,6 +87,8 @@ const BUDGET: Budget = {
   "src/testing/exerciseTestController.ts": { notification: 3, warningNotification: 2 },
   // Once per language: the editor lacking Run and Debug is not a screen that could say so.
   "src/ui/languageExtensionOffer.ts": { notification: 1 },
+  // A long download, update or grading wait, only while no screen showing it is in sight.
+  "src/ui/jobProgressNotifications.ts": { progressNotification: 1 },
   "src/ui/treeview/treeCommands.ts": { statusMessage: 2, warningNotification: 1, withOperation: 5 },
 }
 
