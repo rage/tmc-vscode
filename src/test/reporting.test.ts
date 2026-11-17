@@ -926,7 +926,7 @@ suite("reported once: the refresh", function () {
     expect(shown).toEqual([])
   })
 
-  test("new exercises are one notification, whose one button shows the course", async function () {
+  test("new exercises are one notification, which offers Download or Later", async function () {
     const { actionContext, shown } = await harness({
       langs: { getMoocCourseData: async () => Err(new ConnectionError("offline")) },
       course: storedCourse({ newExercises: [EXERCISE_ID] }),
@@ -937,8 +937,8 @@ suite("reported once: the refresh", function () {
       .mocked(actionContext.dialog.notification)
       .mock.calls.find(([message]) => message.includes("new exercise"))
 
-    expect(shown).toEqual(["info: Mooc Course has 1 new exercise."])
-    expect(offer?.slice(1).map((button) => button?.[0])).toEqual(["Show"])
+    expect(shown).toEqual(["info: 1 new exercise in Mooc Course."])
+    expect(offer?.slice(1).map((button) => button?.[0])).toEqual(["Download", "Later"])
   })
 })
 
