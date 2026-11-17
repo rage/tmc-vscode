@@ -210,7 +210,8 @@
         : materialUrl
           ? [{ label: "Open Course Material", onselect: () => showInBrowser(materialUrl) }]
           : []),
-      ...(view?.canPaste && !view.exerciseState
+      // Always offered; the Get Help section shows unasked only on results that did not pass.
+      ...(view && !view.exerciseState
         ? [{ label: "Get Help", onselect: () => openSection("getHelp") }]
         : []),
       ...(isHistoryShown ? [{ label: "History", onselect: () => openSection("history") }] : []),

@@ -340,12 +340,19 @@ suite("ExerciseSubmission panel (tmc results)", () => {
     expect(toggle).toHaveFocus()
   })
 
-  test("a passed submission offers no paste help", async () => {
+  test("a passed submission shows no Get Help section, but More Actions still opens it", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showTmcResult(submissionFinished())
 
     await screen.findByRole("heading", { name: "Passed" })
-    expect(await menuItems()).not.toContain("Get Help")
+    expect(screen.queryByRole("button", { name: "Get Help" })).not.toBeInTheDocument()
+
+    await chooseMenuItem("Get Help")
+
+    expect(screen.getByRole("button", { name: "Get Help" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    )
   })
 
   test("valgrind output is available behind a disclosure", async () => {
@@ -481,10 +488,11 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     expect(screen.queryByText("Run in Background")).not.toBeInTheDocument()
   })
 
-  test("a partial score offers paste help, a full one does not", async () => {
+  test("a partial score shows the Get Help section, a full one only offers it in More Actions", async () => {
     const { unmount } = render(ExerciseSubmission, { props: { panel: moocPanel } })
     showMoocGrading(moocGrading({ score_given: 1 }))
     await screen.findByRole("heading", { name: "Not passed" })
+    expect(screen.getByRole("button", { name: "Get Help" })).toBeInTheDocument()
     expect(await menuItems()).toContain("Get Help")
     unmount()
 
@@ -507,7 +515,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
       }),
     )
     await screen.findByRole("heading", { name: "Passed" })
-    expect(await menuItems()).not.toContain("Get Help")
+    expect(screen.queryByRole("button", { name: "Get Help" })).not.toBeInTheDocument()
+    expect(await menuItems()).toContain("Get Help")
   })
 
   test("the last try below full points says the score is final", async () => {
