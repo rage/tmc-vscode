@@ -1127,7 +1127,7 @@ suite("status bar", function () {
     vi.restoreAllMocks()
   })
 
-  test("a ready activation creates the account, exercise and failed-update items", async function () {
+  test("a ready activation creates the account, exercise and background items", async function () {
     vi.mocked(vscode.window.createStatusBarItem).mockClear()
 
     await activate(createContext())
@@ -1135,7 +1135,7 @@ suite("status bar", function () {
     expect(createdStatusBarItemIds()).toEqual([
       "tmc.account",
       "tmc.activeExercise",
-      "tmc.failedUpdates",
+      "tmc.background",
     ])
     expect(recorded.contextKeys.get("test-my-code:HasCourses")).toBe(false)
   })

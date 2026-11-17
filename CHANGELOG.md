@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- One status bar item shows what runs out of sight: a spinner reading "TestMyCode: <job>" while a refresh, an update check, a download or update, a test run or a submission until it is graded runs, with how many more run beside it. Clicking it opens the course home, the results screen or Test Results that shows the job. The exercise item no longer spins, and the failed-update item is the same item while nothing runs.
 - New exercises found in the background are offered course by course: "N new exercises in <course>." with Download and Later, which asks again in 30 minutes. The new setting `testMyCode.newExercises` downloads them by themselves instead and says how many, or leaves them to the course home. Courses you are not enrolled on or have lost access to are not offered.
 - The exercise actions of a passed exercise in a chapter not unlocked yet no longer say to complete earlier chapters first; the chapter says it.
 - A course home you are not enrolled on no longer offers to download its exercises.

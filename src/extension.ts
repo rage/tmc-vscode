@@ -55,6 +55,7 @@ import { OpenCourseRefresh } from "./openCourseRefresh"
 import { TmcPanel } from "./panels/TmcPanel"
 import { createExpiryNotifier, createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
+import { backgroundJobs } from "./ui/backgroundJobs"
 import {
   trackActiveEditorExercise,
   trackActiveExerciseRemoved,
@@ -63,12 +64,11 @@ import {
   trackHasDownloadedExercises,
 } from "./ui/contextKeys"
 import { openCourseId } from "./ui/courseHome"
-import { exerciseOperations } from "./ui/exerciseOperations"
 import { failedUpdates } from "./ui/failedUpdates"
 import { LanguageExtensionOffer } from "./ui/languageExtensionOffer"
 import { AccountStatusBarItem } from "./ui/statusBarAccount"
+import { BackgroundStatusBarItem } from "./ui/statusBarBackground"
 import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
-import { FailedUpdatesStatusBarItem } from "./ui/statusBarFailedUpdates"
 import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import { cliFolder, Logger, semVerCompare } from "./utilities"
 import {
@@ -534,9 +534,8 @@ async function activateInner(
       new ExerciseStatusBarItem({
         workspaceManager: readyContext.startup.workspaceManager,
         userData: readyContext.startup.userData,
-        operations: exerciseOperations,
       }),
-      new FailedUpdatesStatusBarItem(failedUpdates),
+      new BackgroundStatusBarItem({ jobs: backgroundJobs, failedUpdates }),
       new LanguageExtensionOffer(
         readyContext.dialog,
         readyContext.startup.workspaceManager,

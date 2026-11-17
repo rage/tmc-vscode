@@ -83,3 +83,26 @@ vsCodeTest.describe(() => {
     },
   )
 })
+
+vsCodeTest(
+  "a job running out of sight shows in the status bar, which opens its screen",
+  async ({ page, webview }) => {
+    const coursesView = new CoursesViewPage(page, webview)
+    const courseHome = new CourseHomePage(page, webview)
+    const spinner = page
+      .locator('[id="workbench.parts.statusbar"]')
+      .getByRole("button", { name: /^TestMyCode: Downloading/ })
+
+    await coursesView.goto()
+    await coursesView.addNewMoocCourse(COURSE_TITLE)
+    await postToMock("delay-next-archive", { delayMs: 10_000 })
+    await courseHome.downloadAll()
+    await coursesView.runPaletteCommand("View: Close All Editors")
+
+    await expect(spinner).toBeVisible()
+    await spinner.click()
+
+    await courseHome.expectShown(COURSE_TITLE)
+    await expect(spinner).toBeHidden({ timeout: 30_000 })
+  },
+)

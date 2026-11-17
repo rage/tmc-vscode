@@ -8,6 +8,7 @@ import type { ReadyActionContext } from "../actions/types"
 import type { OperationWarning } from "../api/withOperation"
 import { reportFailureIn, reportWarnings, withOperation } from "../api/withOperation"
 import { BottleneckError } from "../errors"
+import { backgroundJobs } from "../ui/backgroundJobs"
 import { recentPolicyChanges } from "../ui/recentPolicyChanges"
 import { shownCourseHome } from "../ui/shownCourseHome"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
@@ -133,11 +134,21 @@ async function runRefresh(
   options: RefreshOptions,
 ): Promise<Result<void, Error>> {
   const { silent, courseId, onProgress, offersNewExercises, isPromptless } = options
-  const refreshed = await checkForCourseUpdates(actionContext, {
-    courseId,
-    onProgress,
-    skipsRecentlyLostCourses: options.skipsRecentlyLostCourses,
-  })
+  const course = courseId && actionContext.startup.userData.getCourse(courseId)
+  const refreshed = await backgroundJobs.run(
+    course?.ok
+      ? {
+          label: `Refreshing ${LocalCourseData.getCourseTitle(course.val)}`,
+          screen: { kind: "courseHome", courseId: LocalCourseData.getCourseId(course.val) },
+        }
+      : { label: "Refreshing courses", screen: { kind: "coursesView" } },
+    () =>
+      checkForCourseUpdates(actionContext, {
+        courseId,
+        onProgress,
+        skipsRecentlyLostCourses: options.skipsRecentlyLostCourses,
+      }),
+  )
   if (refreshed.ok) {
     reportRefreshWarnings(actionContext, refreshed.val.warnings)
     announceAiPolicyChanges(actionContext, refreshed.val.aiPolicyChanges)

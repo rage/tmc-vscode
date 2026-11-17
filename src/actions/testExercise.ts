@@ -5,6 +5,7 @@ import type * as vscode from "vscode"
 import type { RunResult, StyleValidationResult } from "../../shared/langsSchema"
 import { LocalCourseData } from "../../shared/lib"
 import type { WorkspaceExercise } from "../api/workspaceManager"
+import { backgroundJobs } from "../ui/backgroundJobs"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { Logger } from "../utilities"
 import { resolvePythonInterpreter } from "../window"
@@ -68,49 +69,53 @@ export async function testExercise(
 
   // guards the run-tests + checkstyle pair as one unit against a second click
   const exercisePath = exercise.uri.fsPath
-  return exerciseOperations.run(
-    exercise.id,
-    "testing",
-    async (): Promise<Result<ExerciseTestOutcome, Error>> => {
-      const saved = await saveExerciseDocuments(exercise)
-      if (saved.err) {
-        return saved
-      }
-      const { process: testRunner, interrupt: testInterrupt } = langs.runTests(
-        exercisePath,
-        resolvePythonInterpreter(exercise.uri),
-      )
-      const { process: validationRunner, interrupt: validationInterrupt } =
-        langs.runCheckstyle(exercisePath)
-      const cancellation = token.onCancellationRequested(() => {
-        testInterrupt()
-        validationInterrupt()
-      })
-      const exerciseName = exercise.exerciseSlug
-
-      try {
-        Logger.info(`Running local tests and validations for ${exerciseName}`)
-        const testResults = await testRunner
-        Logger.info(`Tests finished for ${exerciseName}`)
-        if (testResults.err) {
+  return exerciseOperations.run(exercise.id, "testing", () =>
+    backgroundJobs.run(
+      { label: `Testing ${exercise.exerciseSlug}`, screen: { kind: "testResults" } },
+      async (): Promise<Result<ExerciseTestOutcome, Error>> => {
+        const saved = await saveExerciseDocuments(exercise)
+        if (saved.err) {
+          return saved
+        }
+        const { process: testRunner, interrupt: testInterrupt } = langs.runTests(
+          exercisePath,
+          resolvePythonInterpreter(exercise.uri),
+        )
+        const { process: validationRunner, interrupt: validationInterrupt } =
+          langs.runCheckstyle(exercisePath)
+        const cancellation = token.onCancellationRequested(() => {
+          testInterrupt()
           validationInterrupt()
-          return testResults
-        }
-
-        const styleValidation = await validationRunner
-        Logger.info(`Validations finished for ${exerciseName}`)
-        if (styleValidation.err) {
-          Logger.error(`Code quality checks failed to run for ${exerciseName}`, styleValidation.val)
-        }
-        return Ok({
-          kind: "ran",
-          runResult: testResults.val,
-          styleValidation,
-          isCourseDisabled: LocalCourseData.isDisabled(course),
         })
-      } finally {
-        cancellation.dispose()
-      }
-    },
+        const exerciseName = exercise.exerciseSlug
+
+        try {
+          Logger.info(`Running local tests and validations for ${exerciseName}`)
+          const testResults = await testRunner
+          Logger.info(`Tests finished for ${exerciseName}`)
+          if (testResults.err) {
+            validationInterrupt()
+            return testResults
+          }
+
+          const styleValidation = await validationRunner
+          Logger.info(`Validations finished for ${exerciseName}`)
+          if (styleValidation.err) {
+            Logger.error(
+              `Code quality checks failed to run for ${exerciseName}`,
+              styleValidation.val,
+            )
+          }
+          return Ok({
+            kind: "ran",
+            runResult: testResults.val,
+            styleValidation,
+            isCourseDisabled: LocalCourseData.isDisabled(course),
+          })
+        } finally {
+          cancellation.dispose()
+        }
+      },
+    ),
   )
 }
