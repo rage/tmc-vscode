@@ -9,6 +9,8 @@ import {
   LocalCourseData,
   SUBMIT_REFUSAL_ICONS,
   SUBMIT_REFUSAL_LABELS,
+  PENDING_REVIEW_ICONS,
+  PENDING_REVIEW_LABELS,
   pendingReviewSentence,
   submitRefusalSentence,
 } from "../../shared/lib"
@@ -235,7 +237,13 @@ export function buildCourseHomeView(
           awardedPoints: ex.awardedPoints,
           availablePoints: ex.availablePoints,
           ...(pendingReview
-            ? { pendingReview: pendingReviewSentence(pendingReview, ex.awardedPoints) }
+            ? {
+                pendingReview: {
+                  label: PENDING_REVIEW_LABELS[pendingReview],
+                  sentence: pendingReviewSentence(pendingReview, ex.awardedPoints),
+                  icon: PENDING_REVIEW_ICONS[pendingReview],
+                },
+              }
             : {}),
           ...(deadline ? { deadline } : {}),
           isSoftDeadline: !ex.isHard,

@@ -8,8 +8,8 @@ import {
   SUBMIT_REFUSAL_ICONS,
   SUBMIT_REFUSAL_LABELS,
   submitRefusalOf,
-  PENDING_REVIEW_ICON,
-  PENDING_REVIEW_LABEL,
+  PENDING_REVIEW_ICONS,
+  PENDING_REVIEW_LABELS,
   triesLeftText,
 } from "../../shared/lib"
 import type Dialog from "../api/dialog"
@@ -169,7 +169,10 @@ function standingOf(
     return { text: "passed" }
   }
   if (stored.kind === "mooc" && stored.data.pendingReview !== undefined) {
-    return { text: PENDING_REVIEW_LABEL, icon: PENDING_REVIEW_ICON }
+    return {
+      text: PENDING_REVIEW_LABELS[stored.data.pendingReview],
+      icon: PENDING_REVIEW_ICONS[stored.data.pendingReview],
+    }
   }
   const refusal = submitRefusalOf(stored, new Date(), course)
   if (refusal) {

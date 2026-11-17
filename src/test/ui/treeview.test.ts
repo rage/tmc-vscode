@@ -585,15 +585,15 @@ suite("CoursesTree", function () {
       const loops = exercisesOf(course).find((item) => item.label === "loops")
       const recursion = exercisesOf(course).find((item) => item.label === "recursion")
 
-      expect(loops?.description).toBe("not downloaded · waiting for review")
+      expect(loops?.description).toBe("not downloaded · waiting for the chapter to be locked")
       expect(tooltipOf(loops!)).toContain(
         "The points wait for a teacher's review, which starts once you complete and lock the chapter.",
       )
-      expect(recursion?.description).toBe("not downloaded · waiting for review")
+      expect(recursion?.description).toBe("not downloaded · waiting for teacher review")
       expect(tooltipOf(recursion!)).toContain(
         "The teacher has locked recursion, so it can no longer be submitted.",
       )
-      expect(icon(loops!)).toEqual(["eye", "disabledForeground"])
+      expect(icon(loops!)).toEqual(["milestone", "disabledForeground"])
       expect(icon(recursion!)).toEqual(["eye", "disabledForeground"])
     })
 
@@ -630,7 +630,7 @@ suite("CoursesTree", function () {
       )
       const [loops] = exercisesOf(course)
 
-      expect(loops?.description).toBe("not downloaded · 1/1 points · waiting for review")
+      expect(loops?.description).toBe("not downloaded · 1/1 points · waiting for teacher review")
       expect(tooltipOf(loops!)).toContain(
         "A teacher reviews this answer, which can change the points.",
       )

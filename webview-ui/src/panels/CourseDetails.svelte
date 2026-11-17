@@ -225,6 +225,15 @@
     onclick: () => runCourseAction("closeCompletedExercises"),
   })
 
+  // Not passed and nothing left to do about it but wait for a teacher.
+  const awaitingReview = $derived(
+    (view?.parts ?? []).flatMap((part) =>
+      part.exercises.flatMap((ex) =>
+        !ex.passed && ex.pendingReview ? [{ name: ex.name, pendingReview: ex.pendingReview }] : [],
+      ),
+    ),
+  )
+
   const notices = $derived.by((): CourseNotice[] => {
     if (!view) {
       return []
@@ -356,12 +365,22 @@
       view.isAllDone &&
         !view.accessLoss &&
         !view.isNotEnrolled &&
-        !view.isDisabled && {
-          key: "allDone",
-          tone: "info",
-          title: "Nothing left to do right now",
-          detail: "Every exercise is passed or closed for submissions.",
-        },
+        !view.isDisabled &&
+        (awaitingReview.length > 0
+          ? {
+              key: "allDone",
+              tone: "info",
+              title: "Waiting for review",
+              detail: awaitingReview
+                .map(({ name, pendingReview }) => `${name} is ${pendingReview.label}.`)
+                .join(" "),
+            }
+          : {
+              key: "allDone",
+              tone: "info",
+              title: "Nothing left to do right now",
+              detail: "Every exercise is passed or closed for submissions.",
+            }),
       ...view.missingLanguageExtensions.map(
         ({ extensionId, installSentence }): CourseNotice => ({
           key: `extension:${extensionId}`,

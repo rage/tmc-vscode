@@ -4,12 +4,7 @@
     CourseHomeExerciseAction,
     CourseHomePart,
   } from "../../../../shared/lib"
-  import {
-    ExerciseIdentifier,
-    PENDING_REVIEW_ICON,
-    PENDING_REVIEW_LABEL,
-    SUBMIT_REFUSAL_ICONS,
-  } from "../../../../shared/lib"
+  import { ExerciseIdentifier, SUBMIT_REFUSAL_ICONS } from "../../../../shared/lib"
   import ActionMenu from "../../components/ActionMenu.svelte"
   import ToolbarButton from "../../components/ToolbarButton.svelte"
   import { reducedMotion } from "../../utilities/a11y.svelte"
@@ -77,7 +72,8 @@
       return { name: "pass-filled", tone: "passed", label: "Passed" }
     }
     if (exercise.pendingReview) {
-      return { name: PENDING_REVIEW_ICON, tone: "muted", label: exercise.pendingReview }
+      const { icon, sentence } = exercise.pendingReview
+      return { name: icon, tone: "muted", label: sentence }
     }
     if (exercise.submitRefusal) {
       const { icon, sentence } = exercise.submitRefusal
@@ -191,7 +187,7 @@
           <span class="state muted">{stateLabel(exercise)}</span>
           <span class="deadline muted">
             {#if exercise.pendingReview}
-              <span title={exercise.pendingReview}>{PENDING_REVIEW_LABEL}</span>
+              <span title={exercise.pendingReview.sentence}>{exercise.pendingReview.label}</span>
             {:else if refusal}
               <span title={refusal.sentence}>{refusal.label}</span>
             {:else if exercise.deadline && isDue(exercise)}

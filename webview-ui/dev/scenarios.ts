@@ -13,6 +13,7 @@ import type {
   MoocCatalog,
   Panel,
   RequestType,
+  PendingReview,
   SubmissionHistoryEntry,
   SubmitRefusal,
   TmcOrganizations,
@@ -22,6 +23,8 @@ import type {
 import {
   makeMoocKind,
   makeTmcKind,
+  PENDING_REVIEW_ICONS,
+  PENDING_REVIEW_LABELS,
   pendingReviewSentence,
   SUBMIT_REFUSAL_ICONS,
   SUBMIT_REFUSAL_LABELS,
@@ -223,6 +226,15 @@ const moocCourseInWorkspace = courseHomeView({
   })),
 })
 
+/** A course home row's pending review as the host builds it, with its points still held. */
+function rowReview(review: PendingReview) {
+  return {
+    label: PENDING_REVIEW_LABELS[review],
+    sentence: pendingReviewSentence(review, 0),
+    icon: PENDING_REVIEW_ICONS[review],
+  }
+}
+
 /** A course home row's refusal as the host builds it. */
 function rowRefusal(refusal: SubmitRefusal, exerciseName: string, chapterName?: string) {
   return {
@@ -275,7 +287,7 @@ const moocCourseWithRules = courseHomeView({
         moocExercise(6, "Strings", {
           status: "opened",
           awardedPoints: 0,
-          pendingReview: pendingReviewSentence("awaits_teacher", 0),
+          pendingReview: rowReview("awaits_teacher"),
         }),
       ],
     },
@@ -611,6 +623,21 @@ const allDoneCourse: CourseHomeView = {
   })),
 }
 
+/** Everything passed but one exercise, whose points wait for a teacher's review. */
+const awaitingReviewCourse: CourseHomeView = courseHomeView({
+  ...moocCourseInWorkspace,
+  nextExercise: undefined,
+  isAllDone: true,
+  parts: moocCourseInWorkspace.parts.map((part, partIndex) => ({
+    ...part,
+    exercises: part.exercises.map((ex, index) =>
+      partIndex === 0 && index === 1
+        ? { ...ex, awardedPoints: 0, pendingReview: rowReview("awaits_teacher") }
+        : { ...ex, passed: true, awardedPoints: ex.availablePoints },
+    ),
+  })),
+})
+
 export const SCENARIOS: Scenario[] = [
   {
     id: "course-details/tmc",
@@ -695,6 +722,11 @@ export const SCENARIOS: Scenario[] = [
       { id: 66 },
       { ...moocCourseInWorkspace, hasReachedLastExercise: true },
     ),
+  },
+  {
+    id: "course-details/waiting-for-review",
+    panel: courseDetailsPanel(67, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
+    reply: answerCourseDetails({ id: 67 }, awaitingReviewCourse),
   },
   {
     id: "course-details/all-done",

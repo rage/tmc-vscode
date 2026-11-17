@@ -152,8 +152,12 @@ suite("buildCourseHomeView", function () {
 
     expect(view.parts[0]?.exercises[0]).toMatchObject({
       awardedPoints: 1,
-      pendingReview:
-        "A teacher reviews this answer once you complete and lock the chapter, which can change the points.",
+      pendingReview: {
+        label: "waiting for the chapter to be locked",
+        sentence:
+          "A teacher reviews this answer once you complete and lock the chapter, which can change the points.",
+        icon: "milestone",
+      },
     })
   })
 
@@ -176,7 +180,11 @@ suite("buildCourseHomeView", function () {
     ).unwrap()
 
     expect(view.parts[0]?.exercises[0]).toMatchObject({
-      pendingReview: "The points wait for a teacher's review.",
+      pendingReview: {
+        label: "waiting for teacher review",
+        sentence: "The points wait for a teacher's review.",
+        icon: "eye",
+      },
       submitRefusal: {
         label: "locked by the teacher",
         sentence: "The teacher has locked loops, so it can no longer be submitted.",

@@ -51,8 +51,11 @@ export const CourseHomeExerciseSchema = z.object({
   submitRefusal: z.object({ label: z.string(), sentence: z.string(), icon: z.string() }).optional(),
   awardedPoints: z.number(),
   availablePoints: z.number(),
-  /** What the points wait for, as a sentence; `awardedPoints` is 0 until then. */
-  pendingReview: z.string().optional(),
+  /**
+   * What a teacher's review waits for: a few words, a sentence and its codicon. `awardedPoints`
+   * is 0 until the review unless points were given before it.
+   */
+  pendingReview: z.object({ label: z.string(), sentence: z.string(), icon: z.string() }).optional(),
   /** The deadline the exercise is judged by; a binding soft one sets `isSoftDeadline`. */
   deadline: DeadlineTextSchema.optional(),
   isSoftDeadline: z.boolean(),

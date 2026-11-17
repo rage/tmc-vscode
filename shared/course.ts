@@ -311,11 +311,22 @@ export function submitRefusalSentence(
   }
 }
 
-/** A few words for a row whose points wait for a teacher's review. */
-export const PENDING_REVIEW_LABEL = "waiting for review"
+/** What a teacher's review of an exercise waits for. */
+export type PendingReview = NonNullable<SharedMoocCourseExercise["pendingReview"]>
 
-/** The codicon of a row waiting for review; see {@link SUBMIT_REFUSAL_ICONS}. */
-export const PENDING_REVIEW_ICON = "eye"
+/** A few words for a row whose answer waits for a teacher's review. */
+export const PENDING_REVIEW_LABELS: Record<PendingReview, string> = {
+  awaits_teacher: "waiting for teacher review",
+  awaits_chapter_lock: "waiting for the chapter to be locked",
+  unrecognized: "waiting for review",
+}
+
+/** The codicon of a row waiting for review, apart from {@link SUBMIT_REFUSAL_ICONS}. */
+export const PENDING_REVIEW_ICONS: Record<PendingReview, string> = {
+  awaits_teacher: "eye",
+  awaits_chapter_lock: "milestone",
+  unrecognized: "eye",
+}
 
 /**
  * Whether an exercise's points are held back for a pending teacher review. The backend holds them
@@ -333,10 +344,7 @@ export function arePointsHeldForReview(
  *
  * @param awardedPoints The exercise's points now; see {@link arePointsHeldForReview}.
  */
-export function pendingReviewSentence(
-  pendingReview: NonNullable<SharedMoocCourseExercise["pendingReview"]>,
-  awardedPoints: number,
-): string {
+export function pendingReviewSentence(pendingReview: PendingReview, awardedPoints: number): string {
   const startsOnLock = pendingReview === "awaits_chapter_lock"
   if (arePointsHeldForReview(pendingReview, awardedPoints)) {
     return startsOnLock

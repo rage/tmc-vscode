@@ -183,7 +183,7 @@ suite("ExerciseStatusBarItem", function () {
     expect(tooltipText(itemOf())).toContain("passed")
   })
 
-  test("says the points wait for teacher review instead of showing them", function () {
+  test("says the points wait for the chapter's lock instead of showing them", function () {
     const h = harness()
     h.stored.exercise = makeMoocKind(
       moocCourseExercise({
@@ -195,7 +195,7 @@ suite("ExerciseStatusBarItem", function () {
     )
     track(new ExerciseStatusBarItem(h.sources))
 
-    expect(itemOf().text).toContain("waiting for review")
+    expect(itemOf().text).toContain("$(milestone) waiting for the chapter to be locked")
     expect(itemOf().text).not.toContain("0/2")
   })
 
@@ -213,7 +213,7 @@ suite("ExerciseStatusBarItem", function () {
     track(new ExerciseStatusBarItem(h.sources))
 
     expect(itemOf().text).toContain("1/2")
-    expect(itemOf().text).toContain("waiting for review")
+    expect(itemOf().text).toContain("waiting for teacher review")
   })
 
   test("says when the backend reports no tries left", function () {
@@ -237,7 +237,11 @@ suite("ExerciseStatusBarItem", function () {
     [{ deadline: "2000-01-01T00:00:00Z" }, "$(watch) deadline passed", "deadline passed"],
     [{ outOfTries: true }, "$(circle-slash) no tries left", "no tries left"],
     [{ exerciseLocked: true }, "$(lock) locked by the teacher", "locked by the teacher"],
-    [{ pendingReview: "awaits_teacher" }, "$(eye) waiting for review", "waiting for review"],
+    [
+      { pendingReview: "awaits_teacher" },
+      "$(eye) waiting for teacher review",
+      "waiting for teacher review",
+    ],
   ] as const)("shows where the exercise stands in its text: %o", function (data, shown, standing) {
     const h = harness()
     h.stored.exercise = makeMoocKind(

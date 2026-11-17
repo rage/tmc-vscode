@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- The two review states read apart in the course home, the Courses view and the status bar: "waiting for teacher review" with an eye, and "waiting for the chapter to be locked" with a milestone. A course home with nothing left to do but an exercise waiting for review says "Waiting for review" and names it, instead of "Nothing left to do right now".
 - Open Next Exercise from a course's last exercise opens its course home with "You reached the last exercise", naming an earlier exercise still left to do, and offers that exercise as a secondary action instead of the main Continue button, until you open an exercise of the course or dismiss the notice.
 - When several reasons stop a submission, every screen names the same one: the course's access or enrollment first, then the exercise's own (locked by the teacher, deadline passed, no tries left), then its chapter's (locked, not open yet, complete earlier chapters first). An exercise out of tries no longer reads "complete earlier chapters first" once chapter locking is on, and one whose chapter has not opened yet reads so on its results screen and in the status bar, with Get Help and History, instead of as removed from the course.
 - A courses.mooc.fi exercise no longer offers Show Model Solution beside Open Course Material, as both opened the same page: the results screen, the course home, the Courses view and the status bar offer Open Course Material, which shows the model solution once it is revealed. The Show Model Solution command still opens that page.
