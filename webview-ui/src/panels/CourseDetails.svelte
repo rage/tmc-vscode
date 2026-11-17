@@ -69,7 +69,11 @@
   // The logged-out notice carries the screen's one Log In.
   const isLogInShown = $derived(view !== undefined && isLoginNoticed(view))
   const canDownload = $derived(
-    view !== undefined && !view.isDisabled && view.accessLoss === null && view.isLoggedIn,
+    view !== undefined &&
+      !view.isDisabled &&
+      view.accessLoss === null &&
+      !view.isNotEnrolled &&
+      view.isLoggedIn,
   )
 
   function isLoginNoticed({ isLoggedIn, isSessionExpired }: CourseHomeView): boolean {
@@ -196,13 +200,14 @@
     onclick: openWorkspace,
   })
   const continueWithNext: BarAction | undefined = $derived(
-    view?.nextExercise && {
-      label: view.nextExercise.isOnDisk
-        ? `Continue: ${view.nextExercise.name}`
-        : `Download and Open: ${view.nextExercise.name}`,
-      icon: view.nextExercise.isOnDisk ? "arrow-right" : "cloud-download",
-      onclick: () => view?.nextExercise && runExerciseAction(view.nextExercise.id, "open"),
-    },
+    view?.nextExercise &&
+      (view.nextExercise.isOnDisk || (canDownload && !view.isOffline)) && {
+        label: view.nextExercise.isOnDisk
+          ? `Continue: ${view.nextExercise.name}`
+          : `Download and Open: ${view.nextExercise.name}`,
+        icon: view.nextExercise.isOnDisk ? "arrow-right" : "cloud-download",
+        onclick: () => view?.nextExercise && runExerciseAction(view.nextExercise.id, "open"),
+      },
   )
   const closeCompleted: BarAction = $derived({
     label: `Close ${plural(completedOpenCount, "Completed Exercise")}`,

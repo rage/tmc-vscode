@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- A course home you are not enrolled on no longer offers to download its exercises.
 - Open Next Exercise, and Next in the results screen, only go forward in the course: from its last exercise left to do they open the course home, which offers the earlier ones. When the next exercise cannot be downloaded, the course home opens and says why instead of a notification.
 - When tmc.mooc.fi cannot list its organizations, the add-course screen says its course list is unavailable, with Try Again, instead of an error blaming your network.
 - While a teacher's review holds an exercise's points back, its results screen shows no score, as Course Details does: a passing grading reads All tests passed, and the exercise reads Waiting for review. The tmc.mooc.fi test server awards a passing submission's points and marks the exercise passed, as tmc.mooc.fi does, so its results screen, History and the Courses view agree.

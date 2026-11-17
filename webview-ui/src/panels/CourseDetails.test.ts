@@ -630,6 +630,13 @@ suite("the course home", () => {
     expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "removeCourse"))
   })
 
+  test("offers no download to a student no longer enrolled", async () => {
+    const panel = moocPanel()
+    await renderHome(courseHomeView({ backend: "mooc", isNotEnrolled: true }), panel)
+
+    expect(screen.queryByRole("button", { name: /^Download/ })).toBeNull()
+  })
+
   test.each([
     ["forbidden", "You no longer have access to this course"],
     ["notFound", "This course no longer exists"],
