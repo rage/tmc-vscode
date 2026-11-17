@@ -164,16 +164,14 @@
       return { secondary: [runTests] }
     }
     if (view?.submitRefusal) {
-      return showSolution
-        ? { primary: showSolution, secondary: [runTests] }
-        : { secondary: [runTests] }
+      return { secondary: showSolution ? [runTests, showSolution] : [runTests] }
     }
     if (view?.phase === "testedLocally") {
       return { primary: submit }
     }
     if (view?.phase === "standing") {
       if (view.isExercisePassed) {
-        return showSolution ? { primary: showSolution } : {}
+        return showSolution ? { secondary: [showSolution] } : {}
       }
       return { primary: runTests, secondary: [submit] }
     }
@@ -189,24 +187,29 @@
     if (remedy) {
       return { primary: remedy }
     }
-    return view?.isExercisePassed && showSolution ? { primary: showSolution } : {}
+    return view?.isExercisePassed && showSolution ? { secondary: [showSolution] } : {}
   })
 
-  const isSolutionInBar = $derived(
-    showSolution !== undefined &&
-      [barActions.primary, ...(barActions.secondary ?? [])].includes(showSolution),
-  )
+  const isSolutionInBar = $derived.by(() => {
+    const secondary: readonly BarAction[] = barActions.secondary ?? []
+    return showSolution !== undefined && secondary.includes(showSolution)
+  })
 
   const menuActions = $derived.by((): MenuAction[] => {
     const submissionUrl = view?.submissionUrl
     const solutionUrl = view?.solutionUrl
+    const materialUrl = view?.materialUrl
     return [
       ...(submissionUrl
         ? [{ label: "Show Submission in Browser", onselect: () => showInBrowser(submissionUrl) }]
         : []),
-      ...(solutionUrl && !isSolutionInBar
-        ? [{ label: "Show Model Solution", onselect: () => showInBrowser(solutionUrl) }]
-        : []),
+      ...(solutionUrl
+        ? isSolutionInBar
+          ? []
+          : [{ label: "Show Model Solution", onselect: () => showInBrowser(solutionUrl) }]
+        : materialUrl
+          ? [{ label: "Open Course Material", onselect: () => showInBrowser(materialUrl) }]
+          : []),
       ...(view?.canPaste && !view.exerciseState
         ? [{ label: "Get Help", onselect: () => openSection("getHelp") }]
         : []),

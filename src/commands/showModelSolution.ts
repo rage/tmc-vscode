@@ -27,8 +27,8 @@ export async function showModelSolution(
   if (!url) {
     void dialog.notification(
       exercise.backend === "mooc"
-        ? `The model solution of ${exercise.exerciseSlug} is shown once you pass it or run ` +
-            "out of tries."
+        ? `${exercise.exerciseSlug} has no model solution to show yet. If it has one, it shows ` +
+            "once you pass the exercise or run out of tries."
         : `The model solution of ${exercise.exerciseSlug} is shown once you pass it.`,
     )
     return

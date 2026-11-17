@@ -23,7 +23,7 @@
     isExpanded: boolean
     ontoggle: () => void
     onaction: (exercise: CourseHomeExercise, action: CourseHomeExerciseAction) => void
-    /** Opens an exercise's course material page in the browser. */
+    /** Opens an exercise's course material or model solution page in the browser. */
     onopenmaterial: (url: string) => void
   }
 
@@ -116,7 +116,7 @@
   }
 
   function menuActions(exercise: CourseHomeExercise) {
-    const { materialUrl } = exercise
+    const { materialUrl, solutionUrl } = exercise
     return [
       ...(isOnDisk(exercise)
         ? [
@@ -127,18 +127,11 @@
             },
           ]
         : []),
-      ...(materialUrl
-        ? [
-            {
-              // The material page shows the model solution once courses.mooc.fi reveals it.
-              label:
-                exercise.passed || exercise.isOutOfTries
-                  ? "Show Model Solution"
-                  : "Open Course Material",
-              onselect: () => onopenmaterial(materialUrl),
-            },
-          ]
-        : []),
+      ...(solutionUrl
+        ? [{ label: "Show Model Solution", onselect: () => onopenmaterial(solutionUrl) }]
+        : materialUrl
+          ? [{ label: "Open Course Material", onselect: () => onopenmaterial(materialUrl) }]
+          : []),
     ]
   }
 </script>

@@ -55,6 +55,8 @@ export const CourseHomeExerciseSchema = z.object({
   isUpdateable: z.boolean(),
   /** The course material page the exercise is on. */
   materialUrl: z.string().optional(),
+  /** The page that shows the exercise's model solution, once its backend shows one. */
+  solutionUrl: z.string().optional(),
 })
 
 export type CourseHomeExercise = z.infer<typeof CourseHomeExerciseSchema>

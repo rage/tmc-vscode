@@ -413,6 +413,7 @@ suite("showExerciseActions", function () {
         triesLeft: 0,
         maxTries: 2,
         outOfTries: true,
+        hasModelSolution: true,
         pageUrl: "https://courses.example/page",
       }),
     )

@@ -241,6 +241,37 @@ suite("combineMoocApiExerciseData", function () {
     expect(pageless).not.toHaveProperty("pageUrl")
   })
 
+  test("notes a model solution a slide carries, and keeps one noted before", function () {
+    const [slide] = moocExerciseSlides
+    if (slide === undefined) {
+      throw new Error("the fixture has a slide")
+    }
+    const unsolved = {
+      ...slide,
+      tasks: slide.tasks.map((task) => ({ ...task, model_solution_spec: null })),
+    }
+    const solved = {
+      ...slide,
+      tasks: slide.tasks.map((task) => ({
+        ...task,
+        model_solution_spec: {
+          type: "editor" as const,
+          solution_download_url: "https://x/solution.tar.zst",
+        },
+      })),
+    }
+
+    const [withSolution] = combineMoocApiExerciseData([solved], NO_PROGRESS)
+    const [without] = combineMoocApiExerciseData([unsolved], NO_PROGRESS)
+    const [kept] = combineMoocApiExerciseData([unsolved], NO_PROGRESS, [
+      { ...without!, hasModelSolution: true },
+    ])
+
+    expect(withSolution?.hasModelSolution).toBe(true)
+    expect(without).not.toHaveProperty("hasModelSolution")
+    expect(kept?.hasModelSolution).toBe(true)
+  })
+
   const [slide] = moocExerciseSlides
   /** The fixture slide's progress, completed with the given standing and points of 3. */
   function progressOf(standing: ExerciseProgress["standing"], scoreGiven: number): CourseProgress {

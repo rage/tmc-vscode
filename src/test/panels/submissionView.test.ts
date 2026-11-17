@@ -454,6 +454,14 @@ suite("withExerciseState", () => {
     expect(withExerciseState(view, onDisk).solutionUrl).toBe("https://material/loops")
   })
 
+  test("carries the course material page, offered while there is no model solution", () => {
+    const view = moocGradingView(moocGrading("FullyGraded", 3, "Passed"), 3)
+
+    expect(
+      withExerciseState(view, { ...onDisk, materialUrl: "https://material/loops" }),
+    ).toMatchObject({ materialUrl: "https://material/loops" })
+  })
+
   test("a grading still in progress gets no model solution", () => {
     const view = inProgressView("grading", { steps: [] })
 

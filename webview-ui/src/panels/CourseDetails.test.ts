@@ -851,36 +851,42 @@ suite("the course home", () => {
     })
   })
 
-  test("calls the material page the model solution once it is revealed", async () => {
-    await renderHome(
-      courseHomeView({
-        backend: "mooc",
-        parts: [
-          {
-            key: "p",
-            name: "Exercises",
-            isDefaultOpen: true,
-            exercises: [
-              courseHomeExercise(1, "one", {
-                materialUrl: "https://courses.example/page",
-                isOutOfTries: true,
-              }),
-            ],
-          },
-        ],
-      }),
-      moocPanel(),
-    )
+  test.each([
+    ["https://courses.example/solution", "Show Model Solution", "https://courses.example/solution"],
+    [undefined, "Open Course Material", "https://courses.example/page"],
+  ] as const)(
+    "offers the model solution its backend shows (%s), else the course material",
+    async (solutionUrl, label, url) => {
+      await renderHome(
+        courseHomeView({
+          backend: "mooc",
+          parts: [
+            {
+              key: "p",
+              name: "Exercises",
+              isDefaultOpen: true,
+              exercises: [
+                courseHomeExercise(1, "one", {
+                  materialUrl: "https://courses.example/page",
+                  isOutOfTries: true,
+                  ...(solutionUrl ? { solutionUrl } : {}),
+                }),
+              ],
+            },
+          ],
+        }),
+        moocPanel(),
+      )
 
-    await fireEvent.click(screen.getByRole("button", { name: "More Actions for one" }))
-    await tick()
-    await fireEvent.click(screen.getByRole("menuitem", { name: "Show Model Solution" }))
+      await fireEvent.click(screen.getByRole("button", { name: "More Actions for one" }))
+      await tick()
+      const other = label === "Show Model Solution" ? "Open Course Material" : "Show Model Solution"
+      expect(screen.queryByRole("menuitem", { name: other })).not.toBeInTheDocument()
+      await fireEvent.click(screen.getByRole("menuitem", { name: label }))
 
-    expect(postedMessages).toHaveBeenCalledWith({
-      type: "openLinkInBrowser",
-      url: "https://courses.example/page",
-    })
-  })
+      expect(postedMessages).toHaveBeenCalledWith({ type: "openLinkInBrowser", url })
+    },
+  )
 
   test("follows the view the host pushes", async () => {
     const panel = await renderHome()

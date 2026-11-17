@@ -656,7 +656,7 @@ suite("ExerciseSubmission panel (mooc results)", () => {
     postedMessages.mockClear()
 
     const solution = await screen.findByRole("button", { name: "Show Model Solution" })
-    expect(isSecondary(solution)).toBe(false)
+    expect(isSecondary(solution)).toBe(true)
     expect(screen.getByText(/no tries left on loops/)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Run Tests" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Submit Again" })).not.toBeInTheDocument()
@@ -796,12 +796,31 @@ suite("ExerciseSubmission panel (results hub)", () => {
     expect(await menuItems()).not.toContain("Show Model Solution")
   })
 
-  test("the last exercise passed leads to its model solution", async () => {
+  test("the last exercise passed offers its model solution, never as the main action", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showView(panel.id, standingView(tmcExercise(true), "https://tmc.mooc.fi/exercises/1/solution"))
 
     const solution = await screen.findByRole("button", { name: "Show Model Solution" })
-    expect(isSecondary(solution)).toBe(false)
+    expect(isSecondary(solution)).toBe(true)
+    expect(await menuItems()).not.toContain("Open Course Material")
+  })
+
+  test("without a model solution, More Actions opens the course material instead", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...standingView(tmcExercise(true), undefined),
+      materialUrl: "https://courses.example/page",
+    })
+    await screen.findByRole("heading", { name: "Passed" })
+    expect(screen.queryByRole("button", { name: "Show Model Solution" })).not.toBeInTheDocument()
+    postedMessages.mockClear()
+
+    await chooseMenuItem("Open Course Material")
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "openLinkInBrowser",
+      url: "https://courses.example/page",
+    })
   })
 
   test("all tests passing locally makes Submit the main action", async () => {

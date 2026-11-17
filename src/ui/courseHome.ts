@@ -213,7 +213,7 @@ export function buildCourseHomeView(
             : {}),
       exercises: part.exercises.map((ex) => {
         const deadline = deadlineText(shownDeadline(ex))
-        const { materialUrl, pendingReview, submitRefusal, triesLeft } = ex
+        const { materialUrl, pendingReview, solutionUrl, submitRefusal, triesLeft } = ex
         return {
           id: ex.id,
           name: ex.name,
@@ -239,6 +239,7 @@ export function buildCourseHomeView(
           isSoftDeadline: !ex.isHard,
           isUpdateable: ex.isUpdateable,
           ...(materialUrl ? { materialUrl } : {}),
+          ...(solutionUrl ? { solutionUrl } : {}),
         }
       }),
     })),
