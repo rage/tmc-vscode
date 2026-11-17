@@ -96,14 +96,19 @@ export function standingView(
   }
 }
 
-/** Every test passed in the student's own run, so submitting is the next step. */
-export function testedLocallyView(): SubmissionView {
+/**
+ * Every test passed in the student's own run, so submitting is the next step.
+ *
+ * @param localPassAt See {@link SubmissionView.localPassAt}.
+ */
+export function testedLocallyView(localPassAt: number): SubmissionView {
   return {
     ...emptyView,
     phase: "testedLocally",
     headline: "Tests pass on your computer",
     tone: "passed",
     explanation: "Submit the exercise to have it graded.",
+    localPassAt,
   }
 }
 

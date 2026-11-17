@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/svelte"
+import { fireEvent, render, screen, within } from "@testing-library/svelte"
+import { tick } from "svelte"
 import { vi } from "vitest"
 
 import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../../../shared/langsSchema"
@@ -37,6 +38,8 @@ const moocPanel: ExerciseSubmissionPanel = {
   courseTitle: "Introduction to Programming",
   organization: "University of Helsinki",
 }
+
+const LOCAL_PASS_AT = 1_800_000_000_000
 
 const FEEDBACK_URL = "https://tmc.mooc.fi/api/v8/core/submissions/1/feedback"
 
@@ -834,7 +837,7 @@ suite("ExerciseSubmission panel (results hub)", () => {
 
   test("all tests passing locally makes Submit the main action", async () => {
     render(ExerciseSubmission, { props: { panel } })
-    showView(panel.id, testedLocallyView())
+    showView(panel.id, testedLocallyView(LOCAL_PASS_AT))
     const submit = await screen.findByRole("button", { name: "Submit" })
     postedMessages.mockClear()
 
@@ -849,9 +852,51 @@ suite("ExerciseSubmission panel (results hub)", () => {
     })
   })
 
+  test("a local pass asks to submit, and Not Now dismisses the question for that run", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, testedLocallyView(LOCAL_PASS_AT))
+
+    const prompt = await screen.findByRole("group", { name: "All tests pass. Submit for grading?" })
+    expect(within(prompt).getByRole("button", { name: "Submit" })).toBeInTheDocument()
+    expect(screen.queryByText("Submit the exercise to have it graded.")).not.toBeInTheDocument()
+    await fireEvent.click(within(prompt).getByRole("button", { name: "Not Now" }))
+    await tick()
+
+    expect(screen.queryByRole("group", { name: /Submit for grading/ })).not.toBeInTheDocument()
+    expect(screen.queryByText("All tests pass. Submit for grading?")).not.toBeInTheDocument()
+    expect(isSecondary(screen.getByRole("button", { name: "Submit" }))).toBe(true)
+    expect(isSecondary(screen.getByRole("button", { name: "Run Tests" }))).toBe(false)
+    expect(screen.getByRole("button", { name: "Run Tests" })).toHaveFocus()
+
+    showView(panel.id, testedLocallyView(LOCAL_PASS_AT))
+    await tick()
+    expect(screen.queryByRole("group", { name: /Submit for grading/ })).not.toBeInTheDocument()
+
+    showView(panel.id, testedLocallyView(LOCAL_PASS_AT + 1))
+    expect(
+      await screen.findByRole("group", { name: "All tests pass. Submit for grading?" }),
+    ).toBeInTheDocument()
+  })
+
+  test.each([
+    ["logged out", { isLoggedOut: true }],
+    [
+      "refused",
+      { submitRefusal: "You have no tries left on loops, so it can no longer be submitted." },
+    ],
+    ["not on disk", { exerciseState: "notOnDisk" as const }],
+  ])("a local pass does not ask to submit when %s", async (_state, overrides) => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, { ...testedLocallyView(LOCAL_PASS_AT), ...overrides })
+
+    await screen.findByRole("heading", { name: "Tests pass on your computer" })
+    expect(screen.queryByText("All tests pass. Submit for grading?")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Not Now" })).not.toBeInTheDocument()
+  })
+
   test("logged out, a local pass offers to log in and submit as its main action", async () => {
     render(ExerciseSubmission, { props: { panel } })
-    showView(panel.id, { ...testedLocallyView(), isLoggedOut: true })
+    showView(panel.id, { ...testedLocallyView(LOCAL_PASS_AT), isLoggedOut: true })
     const logIn = await screen.findByRole("button", { name: "Log In to Submit" })
     postedMessages.mockClear()
 
@@ -884,7 +929,7 @@ suite("ExerciseSubmission panel (results hub)", () => {
   test("a local pass of an exercise that cannot be submitted says why instead of offering Submit", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showView(panel.id, {
-      ...testedLocallyView(),
+      ...testedLocallyView(LOCAL_PASS_AT),
       submitRefusal:
         "The deadline of part01-01_hello has passed, so it can no longer be submitted.",
     })

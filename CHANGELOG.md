@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- When all tests pass on your computer, whether run from the results screen, the editor or the Testing view, the results screen opens and asks "All tests pass. Submit for grading?" with Submit and Not Now. Not Now leaves Submit beside Run Tests until the next run. It does not ask while logged out, in exam mode, or when the exercise cannot be submitted.
 - Get Help is always in the results screen's More Actions, a passed exercise's too; the Get Help section shows by itself only on results that did not pass.
 - Show Model Solution appears only once courses.mooc.fi has sent the exercise's model solution, checked after a grading that passes it or uses its last try, and is never the main button of the results screen. Where there is none, the results screen and the course home offer Open Course Material instead.
 - Each reason an exercise cannot be submitted has its own icon in the course home, the Courses view and the status bar: a watch for deadline passed, a crossed circle for no tries left, a lock for locked, a numbered list for complete earlier chapters first, a calendar for a chapter not open yet, a person for not enrolled and an eye for waiting for review.

@@ -393,7 +393,7 @@ suite("withExerciseState", () => {
   })
 
   test("a standing short of a pass is headed by why it can no longer be submitted", () => {
-    const standing = { ...testedLocallyView(), phase: "standing" as const, headline: "Not passed" }
+    const standing = { ...testedLocallyView(0), phase: "standing" as const, headline: "Not passed" }
     const refused = {
       ...onDisk,
       submitRefusal: "The deadline of loops has passed, so it can no longer be submitted.",
@@ -408,7 +408,7 @@ suite("withExerciseState", () => {
   })
 
   test("a local pass of an exercise that can no longer be submitted invites no submit", () => {
-    const shown = withExerciseState(testedLocallyView(), {
+    const shown = withExerciseState(testedLocallyView(0), {
       ...onDisk,
       submitRefusal: "The deadline of loops has passed, so it can no longer be submitted.",
       submitRefusalLabel: "Deadline passed",
@@ -416,13 +416,13 @@ suite("withExerciseState", () => {
 
     expect(shown.headline).toBe("Tests pass on your computer")
     expect(shown.explanation).toBeUndefined()
-    expect(withExerciseState(testedLocallyView(), onDisk).explanation).toBe(
+    expect(withExerciseState(testedLocallyView(0), onDisk).explanation).toBe(
       "Submit the exercise to have it graded.",
     )
   })
 
   test("says a logged-out student must log in to submit, and forgets it once logged in", () => {
-    const loggedOut = withExerciseState(testedLocallyView(), { ...onDisk, isLoggedOut: true })
+    const loggedOut = withExerciseState(testedLocallyView(0), { ...onDisk, isLoggedOut: true })
 
     expect(loggedOut.isLoggedOut).toBe(true)
     expect(withExerciseState(loggedOut, onDisk).isLoggedOut).toBeUndefined()
@@ -539,7 +539,7 @@ suite("standingView", function () {
 
 suite("testedLocallyView", function () {
   test("says the tests passed here, and leaves grading to a submit", function () {
-    const view = testedLocallyView()
+    const view = testedLocallyView(0)
 
     expect(SubmissionViewSchema.parse(view)).toEqual(view)
     expect(view).toMatchObject({

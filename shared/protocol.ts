@@ -368,6 +368,8 @@ export const SubmissionViewSchema = z.object({
   triesLeft: z.number().optional(),
   /** Submitting takes a login first, which Submit then offers as Log In to Submit. */
   isLoggedOut: z.boolean().optional(),
+  /** ms timestamp of the run a `testedLocally` view shows, which tells one run from the next. */
+  localPassAt: z.number().optional(),
 })
 
 export type SubmissionView = z.infer<typeof SubmissionViewSchema>

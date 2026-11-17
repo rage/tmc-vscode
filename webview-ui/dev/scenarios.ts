@@ -969,14 +969,14 @@ export const SCENARIOS: Scenario[] = [
     id: "exercise-submission/tmc-tested-locally",
     panel: tmcResultsPanel,
     reply: answerResultsRequests(tmcResultsPanel, []),
-    pushes: [submissionViewMessage(tmcResultsPanel.id, testedLocallyView())],
+    pushes: [submissionViewMessage(tmcResultsPanel.id, testedLocallyView(0))],
   },
   {
     id: "exercise-submission/tested-locally-logged-out",
     panel: tmcResultsPanel,
     reply: answerResultsRequests(tmcResultsPanel, []),
     pushes: [
-      submissionViewMessage(tmcResultsPanel.id, { ...testedLocallyView(), isLoggedOut: true }),
+      submissionViewMessage(tmcResultsPanel.id, { ...testedLocallyView(0), isLoggedOut: true }),
     ],
   },
   {
