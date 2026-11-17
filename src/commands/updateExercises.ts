@@ -11,6 +11,7 @@ import { checkForExerciseUpdates, downloadExerciseUpdates } from "../actions"
 import { describeExercises, exerciseName } from "../actions/exerciseNames"
 import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
+import { backgroundJobs } from "../ui/backgroundJobs"
 import { recentUpdates } from "../ui/recentUpdates"
 import { shownCourseHome } from "../ui/shownCourseHome"
 import { updateablesRegistry } from "../ui/updateablesRegistry"
@@ -42,7 +43,13 @@ export async function updateExercises(
   const updateablesResult = await withOperation(
     dialog,
     { failure: "Failed to check for exercise updates.", silent },
-    async () => Ok(await checkForExerciseUpdates(actionContext, { forceRefresh: isRequested })),
+    async () =>
+      Ok(
+        await backgroundJobs.run(
+          { label: "Checking for updates", screen: { kind: "coursesView" } },
+          () => checkForExerciseUpdates(actionContext, { forceRefresh: isRequested }),
+        ),
+      ),
   )
   if (updateablesResult.err) {
     return

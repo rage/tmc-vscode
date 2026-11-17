@@ -1,10 +1,12 @@
+import * as _ from "lodash"
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import type { BackendKind, CourseIdentifier } from "../../shared/lib"
+import type { BackendKind } from "../../shared/lib"
 import {
   backendName,
+  CourseIdentifier,
   ExerciseIdentifier,
   LocalCourseData,
   makeMoocKind,
@@ -12,6 +14,8 @@ import {
   match,
   partition,
 } from "../../shared/lib"
+import type Dialog from "../api/dialog"
+import type { FractionProgress } from "../api/dialog"
 import type Langs from "../api/langs"
 import type { ExerciseDownload, ExerciseDownloadProgress, ExerciseDownloads } from "../api/langs"
 import type { OperationWarning, Warned } from "../api/withOperation"
@@ -22,11 +26,13 @@ import {
   ServerError,
   presentationFor,
 } from "../errors"
+import type { JobOptions } from "../ui/backgroundJobs"
+import { backgroundJobs } from "../ui/backgroundJobs"
 import { downloadFailures } from "../ui/downloadFailures"
 import type { ExerciseClaim } from "../ui/exerciseOperations"
 import { exerciseOperations } from "../ui/exerciseOperations"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
-import { formatDateTime, Logger, mapConcurrently, parseDate } from "../utilities"
+import { countOf, formatDateTime, Logger, mapConcurrently, parseDate } from "../utilities"
 import { describeExercises, exerciseName } from "./exerciseNames"
 import { recordKeptCopy } from "./keptCopies"
 import type { ReadyActionContext } from "./types"
@@ -38,11 +44,11 @@ interface DownloadLeg {
 }
 
 /**
- * Where a requested download shows its progress: in a cancellable notification, or only on the
+ * Where a requested download shows its progress: in a cancellable notification, only on the
  * Courses view's progress bar, for one started from a screen that shows each exercise's
- * progress itself.
+ * progress itself, or only in the status bar, for one a setting started.
  */
-export type DownloadProgressPlace = "notification" | "coursesView"
+export type DownloadProgressPlace = "notification" | "coursesView" | "statusBar"
 
 interface DownloadOptions {
   isUpdate?: boolean
@@ -175,86 +181,85 @@ async function download(
   let cancelled = false
   const unrestored: ExerciseIdentifier[] = []
   const fresh: ExerciseDownload[] = []
-  const legs = await dialog.progressNotification(
-    "Downloading exercises…",
-    async (progress, token) => {
-      // Cancelling kills the CLI download process; already-written exercises stay downloaded.
-      let interruptDownload: (() => void) | undefined
-      token.onCancellationRequested(() => {
-        cancelled = true
-        interruptDownload?.()
-      })
-      // A leg that was still starting up when the user cancelled gets killed as
-      // soon as the CLI hands back its handle.
-      const registerInterrupt = (interrupt: () => void): void => {
-        if (cancelled) {
-          interrupt()
-          return
-        }
-        interruptDownload = interrupt
-      }
-
-      // Each backend reports its own completion fraction, so counting finished
-      // exercises is the only measure that keeps rising across both.
-      const onDownloaded = (downloaded: ExerciseDownloadProgress): void => {
-        succeeded.add(ExerciseIdentifier.key(downloaded.id))
-        progress.report({
-          fraction: succeeded.size / exerciseIds.length,
-          message: downloaded.message,
+  const legs = await backgroundJobs.run(
+    jobOf(actionContext, exerciseIds, courseId, options),
+    (job) =>
+      withProgress(dialog, options, async (progress, token) => {
+        // Cancelling kills the CLI download process; already-written exercises stay downloaded.
+        let interruptDownload: (() => void) | undefined
+        token.onCancellationRequested(() => {
+          cancelled = true
+          interruptDownload?.()
         })
-        downloadFailures.record([], [downloaded.id])
-        claim.release(downloaded.id)
-      }
+        // A leg that was still starting up when the user cancelled gets killed as
+        // soon as the CLI hands back its handle.
+        const registerInterrupt = (interrupt: () => void): void => {
+          if (cancelled) {
+            interrupt()
+            return
+          }
+          interruptDownload = interrupt
+        }
 
-      // One backend after the other, so a cancel stops the second before it starts.
-      const finished: DownloadLeg[] = []
-      const runLeg = async (
-        backend: BackendKind,
-        count: number,
-        run: () => Promise<Result<ExerciseDownloads, Error>>,
-      ): Promise<void> => {
-        if (count > 0 && !cancelled) {
-          finished.push({ backend, result: await run() })
-          interruptDownload = undefined
+        // Each backend reports its own completion fraction, so counting finished
+        // exercises is the only measure that keeps rising across both.
+        const onDownloaded = (downloaded: ExerciseDownloadProgress): void => {
+          succeeded.add(ExerciseIdentifier.key(downloaded.id))
+          const fraction = succeeded.size / exerciseIds.length
+          progress.report({ fraction, message: downloaded.message })
+          job.report(fraction)
+          downloadFailures.record([], [downloaded.id])
+          claim.release(downloaded.id)
         }
-      }
-      const alreadyLocal = await localExerciseKeys(langs)
-      const freshDownloads = (downloads: Result<ExerciseDownloads, Error>): ExerciseDownload[] =>
-        alreadyLocal && downloads.ok
-          ? downloads.val.downloaded.filter(
-              ({ id }) => !alreadyLocal.has(ExerciseIdentifier.key(id)),
-            )
-          : []
-      await runLeg("tmc", tmcIds.length, async () => {
-        const downloads = await langs.downloadTmcExercises(
-          tmcIds,
-          downloadTemplate,
-          onDownloaded,
-          registerInterrupt,
-        )
-        fresh.push(...freshDownloads(downloads))
-        return downloads
-      })
-      await runLeg("mooc", moocIds.length, async () => {
-        const downloads = await langs.downloadMoocExercises(
-          moocIds,
-          moocCourseId,
-          onDownloaded,
-          registerInterrupt,
-        )
-        const freshMooc = freshDownloads(downloads)
-        if (!downloadTemplate && !cancelled) {
-          unrestored.push(...(await restoreLatestSubmissions(langs, freshMooc)))
+
+        // One backend after the other, so a cancel stops the second before it starts.
+        const finished: DownloadLeg[] = []
+        const runLeg = async (
+          backend: BackendKind,
+          count: number,
+          run: () => Promise<Result<ExerciseDownloads, Error>>,
+        ): Promise<void> => {
+          if (count > 0 && !cancelled) {
+            finished.push({ backend, result: await run() })
+            interruptDownload = undefined
+          }
         }
-        fresh.push(...freshMooc)
-        return downloads
-      })
-      if (!options.isUpdate) {
-        await recordDownloadedCopies(actionContext, fresh)
-      }
-      return finished
-    },
-    progressOptions(options),
+        const alreadyLocal = await localExerciseKeys(langs)
+        const freshDownloads = (downloads: Result<ExerciseDownloads, Error>): ExerciseDownload[] =>
+          alreadyLocal && downloads.ok
+            ? downloads.val.downloaded.filter(
+                ({ id }) => !alreadyLocal.has(ExerciseIdentifier.key(id)),
+              )
+            : []
+        await runLeg("tmc", tmcIds.length, async () => {
+          const downloads = await langs.downloadTmcExercises(
+            tmcIds,
+            downloadTemplate,
+            onDownloaded,
+            registerInterrupt,
+          )
+          fresh.push(...freshDownloads(downloads))
+          return downloads
+        })
+        await runLeg("mooc", moocIds.length, async () => {
+          const downloads = await langs.downloadMoocExercises(
+            moocIds,
+            moocCourseId,
+            onDownloaded,
+            registerInterrupt,
+          )
+          const freshMooc = freshDownloads(downloads)
+          if (!downloadTemplate && !cancelled) {
+            unrestored.push(...(await restoreLatestSubmissions(langs, freshMooc)))
+          }
+          fresh.push(...freshMooc)
+          return downloads
+        })
+        if (!options.isUpdate) {
+          await recordDownloadedCopies(actionContext, fresh)
+        }
+        return finished
+      }),
   )
   const failedLegs: Error[] = []
   const exerciseReasons: string[][] = []
@@ -310,16 +315,70 @@ async function download(
   return { ...results, failureCause: cause, warnings }
 }
 
-function progressOptions(options: DownloadOptions): {
-  cancellable?: boolean
-  location: vscode.ProgressLocation | { viewId: string }
-} {
-  if (options.isUnrequested) {
-    return { location: vscode.ProgressLocation.Window }
+type DownloadTask<T> = (
+  progress: vscode.Progress<FractionProgress>,
+  token: vscode.CancellationToken,
+) => Promise<T>
+
+/**
+ * Runs `task` under the progress a download of its kind shows: a cancellable notification for a
+ * requested one, the Courses view's bar for one started from a screen, and only the status bar
+ * spinner for one the student did not start.
+ */
+function withProgress<T>(
+  dialog: Dialog,
+  options: DownloadOptions,
+  task: DownloadTask<T>,
+): Promise<T> {
+  if (options.isUnrequested || options.progressPlace === "statusBar") {
+    return task({ report: () => {} }, new vscode.CancellationTokenSource().token)
   }
-  return options.progressPlace === "coursesView"
-    ? { location: { viewId: COURSES_VIEW_ID } }
-    : { cancellable: true, location: vscode.ProgressLocation.Notification }
+  return dialog.progressNotification(
+    "Downloading exercises…",
+    task,
+    options.progressPlace === "coursesView"
+      ? { location: { viewId: COURSES_VIEW_ID } }
+      : { cancellable: true, location: vscode.ProgressLocation.Notification },
+  )
+}
+
+/**
+ * The background job a download is. It is long, and notified while its screen is hidden, when it
+ * updates or downloads several exercises without a cancellable notification of its own.
+ */
+function jobOf(
+  actionContext: ReadyActionContext,
+  exerciseIds: readonly ExerciseIdentifier[],
+  courseId: CourseIdentifier | undefined,
+  options: DownloadOptions,
+): JobOptions {
+  const [only] = exerciseIds
+  const what =
+    only && exerciseIds.length === 1
+      ? exerciseName(actionContext, only)
+      : countOf(exerciseIds.length, "exercise")
+  const courseIds = courseId
+    ? [courseId]
+    : _.uniqBy(
+        exerciseIds.flatMap((id) => {
+          const stored = actionContext.startup.userData.getExercise(id)
+          return stored.ok ? [LocalCourseData.getCourseId(stored.val.course)] : []
+        }),
+        (id) => CourseIdentifier.key(id),
+      )
+  const [onlyCourse] = courseIds
+  const hasOwnNotification =
+    !options.isUnrequested &&
+    options.progressPlace !== "statusBar" &&
+    options.progressPlace !== "coursesView"
+  return {
+    label: `${options.isUpdate ? "Updating" : "Downloading"} ${what}`,
+    screen:
+      onlyCourse && courseIds.length === 1
+        ? { kind: "courseHome", courseId: onlyCourse }
+        : { kind: "coursesView" },
+    isLong: (options.isUpdate === true || exerciseIds.length > 1) && !hasOwnNotification,
+  }
 }
 
 /**

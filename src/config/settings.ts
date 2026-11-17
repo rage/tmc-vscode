@@ -3,6 +3,12 @@ import * as vscode from "vscode"
 import { Logger, LogLevel } from "../utilities/logger"
 
 /**
+ * `testMyCode.newExercises`: download them, ask with a notification, or only list them in the
+ * course home.
+ */
+export type NewExerciseHandling = "download" | "ask" | "courseHome"
+
+/**
  * Reads the extension's settings, and follows the changes the rest of the extension must
  * act on.
  *
@@ -47,6 +53,12 @@ export default class Settings implements vscode.Disposable {
 
   public getDownloadOldSubmission(): boolean {
     return Settings._configuration().get<boolean>("downloadOldSubmission", true)
+  }
+
+  /** What a background refresh does with the new exercises it finds. */
+  public getNewExerciseHandling(): NewExerciseHandling {
+    const handling = Settings._configuration().get<string>("newExercises", "ask")
+    return handling === "download" || handling === "courseHome" ? handling : "ask"
   }
 
   public getAutomaticallyUpdateExercises(): boolean {

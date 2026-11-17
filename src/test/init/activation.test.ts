@@ -149,6 +149,8 @@ vi.mock("../../ui/treeview/treeview", async (importOriginal) => ({
     }
     public setRestricted = (): void => {}
     public refresh = (): void => {}
+    public isVisible = false
+    public onDidChangeVisibility = (): { dispose: () => void } => ({ dispose: () => {} })
     public dispose = (): void => {
       recorded.uiDisposals += 1
     }
@@ -1127,7 +1129,7 @@ suite("status bar", function () {
     vi.restoreAllMocks()
   })
 
-  test("a ready activation creates the account, exercise and failed-update items", async function () {
+  test("a ready activation creates the account, exercise and background items", async function () {
     vi.mocked(vscode.window.createStatusBarItem).mockClear()
 
     await activate(createContext())
@@ -1135,7 +1137,7 @@ suite("status bar", function () {
     expect(createdStatusBarItemIds()).toEqual([
       "tmc.account",
       "tmc.activeExercise",
-      "tmc.failedUpdates",
+      "tmc.background",
     ])
     expect(recorded.contextKeys.get("test-my-code:HasCourses")).toBe(false)
   })

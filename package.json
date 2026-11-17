@@ -388,6 +388,22 @@
           "order": 4,
           "description": "How much TestMyCode writes to its log, which Show Logs opens."
         },
+        "testMyCode.newExercises": {
+          "type": "string",
+          "default": "ask",
+          "enum": [
+            "download",
+            "ask",
+            "courseHome"
+          ],
+          "enumDescriptions": [
+            "Download new exercises when they are found, then say how many were downloaded.",
+            "Ask with a notification whether to download them now or later.",
+            "Only list them in the course home."
+          ],
+          "description": "What to do when a course gets new exercises.",
+          "order": 1
+        },
         "testMyCode.updateExercisesAutomatically": {
           "type": "boolean",
           "default": true,
