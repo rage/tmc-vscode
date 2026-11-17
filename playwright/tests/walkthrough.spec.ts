@@ -108,14 +108,21 @@ vsCodeTest(
       })
     })
 
-    await vsCodeTest.step("the walkthrough has both steps ticked", async () => {
-      await coursesView.runPaletteCommand("TestMyCode: Get Started")
-      for (const step of ["Run Tests", "Submit"]) {
-        await expect(
-          walkthroughStep(page, step).locator(".codicon-getting-started-step-checked"),
-        ).toBeVisible()
-      }
-    })
+    await vsCodeTest.step(
+      "the walkthrough has both steps ticked, also in a new window",
+      async () => {
+        // A window opened later, as a course workspace's is, knows the milestones only from storage.
+        await coursesView.runPaletteCommand("Developer: Reload Window")
+        await coursesView.goto()
+        await expect(coursesView.row(course)).toBeVisible({ timeout: 30_000 })
+        await coursesView.runPaletteCommand("TestMyCode: Get Started")
+        for (const step of ["Run Tests", "Submit"]) {
+          await expect(
+            walkthroughStep(page, step).locator(".codicon-getting-started-step-checked"),
+          ).toBeVisible()
+        }
+      },
+    )
   },
 )
 

@@ -4,6 +4,8 @@ import * as vscode from "vscode"
 import {
   isWalkthroughOpen,
   nextWalkthroughStep,
+  reachWalkthroughMilestone,
+  restoreWalkthroughMilestones,
   showNextWalkthroughStep,
   trackWalkthroughActive,
   WALKTHROUGH,
@@ -98,5 +100,25 @@ suite("walkthrough", function () {
       ["setContext", "test-my-code:WalkthroughActive", false],
       ["setContext", "test-my-code:WalkthroughActive", true],
     ])
+  })
+
+  test("sets a milestone reached in an earlier window again in the next", function () {
+    const stored = new Map<string, unknown>()
+    const store = {
+      get: (key: string, fallback: unknown) => stored.get(key) ?? fallback,
+      update: async (key: string, value: unknown) => void stored.set(key, value),
+    } as unknown as vscode.Memento
+
+    restoreWalkthroughMilestones(store)
+    reachWalkthroughMilestone("test-my-code:HasRunTests")
+    reachWalkthroughMilestone("test-my-code:HasRunTests")
+    executeCommand.mockClear()
+    restoreWalkthroughMilestones(store)
+
+    expect(executeCommand).toHaveBeenCalledExactlyOnceWith(
+      "setContext",
+      "test-my-code:HasRunTests",
+      true,
+    )
   })
 })
