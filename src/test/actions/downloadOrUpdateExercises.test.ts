@@ -220,6 +220,20 @@ suite("downloadOrUpdateExercises action", function () {
     expect(warning?.error).toMatchObject({ details: reason })
   })
 
+  test("blames the server, not the package, for a server error, and logs tmc-langs' reason", async function () {
+    const reason =
+      "500 Internal Server Error from http://localhost:4001/mooc-archives/hello.tar.zst: fault"
+    tmcMockValues.downloadTmcExercises = createDownloadResult([], [], [[helloWorld, [reason]]])
+
+    const result = await downloadResults(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
+
+    const [warning] = result.warnings
+    expect(errors.presentationFor(warning?.error ?? new Error()).message).toBe(
+      "The server ran into a problem. Try again later.",
+    )
+    expect(warning?.error).toMatchObject({ details: reason })
+  })
+
   test("says when the chapter of an exercise not open yet opens", async function () {
     // jest-mock-vscode ships no `env` namespace.
     const vscodeModule: object = vscode

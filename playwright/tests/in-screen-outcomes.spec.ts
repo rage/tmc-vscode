@@ -1,3 +1,5 @@
+import * as os from "node:os"
+
 import { expect } from "@playwright/test"
 
 import { MOCK_BACKEND_URL } from "../../backend/mockSession"
@@ -47,6 +49,31 @@ vsCodeTest(
       await expect(failure.getByRole("button", { name: "Show Details" })).toBeVisible()
       await expect(toast).toHaveCount(0)
     })
+
+    await vsCodeTest.step(
+      "it blames the server, and its details keep tmc-langs' reason without the home folder",
+      async () => {
+        await expect(failure).toContainText("The server ran into a problem. Try again later.")
+        await failure.getByRole("button", { name: "Show Details" }).click()
+
+        const details = await tmc.panelHeaded("Error Details")
+        await expect(details.getByRole("group", { name: "Cause" })).toContainText(
+          "500 Internal Server Error from",
+        )
+        await expect(details.getByRole("button", { name: "Show Logs" })).not.toHaveAttribute(
+          "secondary",
+        )
+        await expect(details.getByRole("button", { name: "Copy Details" })).toHaveAttribute(
+          "secondary",
+        )
+        await expect(details.getByRole("group", { name: "Recent log" })).toBeVisible()
+        expect(await details.locator("body").textContent()).not.toContain(os.homedir())
+        // The steps after this read the webview shown last, which must be Course Details again.
+        await page.getByRole("tab", { name: /^Error Details/ }).click()
+        await tmc.runPaletteCommand("View: Close Editor")
+        await expect(page.getByRole("tab", { name: /^Error Details/ })).toHaveCount(0)
+      },
+    )
 
     await vsCodeTest.step("dismissing it removes it", async () => {
       await failure.locator('vscode-toolbar-button[title="Dismiss this error"]').click()

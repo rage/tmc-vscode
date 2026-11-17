@@ -128,6 +128,10 @@ export const CourseHomeViewSchema = z.object({
   aiPolicyChange: z.string().nullable(),
   /** Exercises the last automatic update replaced, until the student dismisses the notice. */
   recentlyUpdated: z.array(z.string()),
+  /** VS Code extensions the course's exercises on disk need to run and debug, not installed. */
+  missingLanguageExtensions: z.array(
+    z.object({ extensionId: z.string(), installSentence: z.string() }),
+  ),
   parts: z.array(CourseHomePartSchema),
 })
 

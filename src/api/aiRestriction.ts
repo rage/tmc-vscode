@@ -50,6 +50,37 @@ export function isActiveCourseAiAllowed(
   return isAiAllowed(course?.ok ? course.val : undefined)
 }
 
+/**
+ * The top-level {@link AI_OFF_SETTINGS} a course workspace file's `settings` do not hold yet,
+ * each merged with what the file stores, for writing into the file before its window opens: a
+ * window opened without them shows chat until {@link AiRestriction} writes them.
+ *
+ * @param isDeclaredSection Whether VS Code or an installed extension declares the section.
+ */
+export function missingAiOffSettings(
+  stored: Readonly<Record<string, unknown>>,
+  isDeclaredSection: (section: string) => boolean = isDeclared,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(AI_OFF_SETTINGS)
+      .filter(([section]) => isDeclaredSection(section))
+      .map(([section, off]) => [section, merged(stored[section], off)] as const)
+      .filter(([section, desired]) => !_.isEqual(stored[section], desired)),
+  )
+}
+
+/**
+ * Closes the secondary side bar, where chat shows in a course workspace whose window opened
+ * before the AI settings reached it. VS Code offers no way to tell what the bar shows.
+ */
+export async function closeChatSideBar(): Promise<void> {
+  try {
+    await vscode.commands.executeCommand("workbench.action.closeAuxiliaryBar")
+  } catch (e) {
+    Logger.debug("Could not close the secondary side bar.", e)
+  }
+}
+
 /** Where a student-editable setting that beats the course workspace file lives. */
 export type SettingSource = { kind: "user" } | { kind: "folder"; folder: vscode.Uri }
 
@@ -229,6 +260,16 @@ export default class AiRestriction implements vscode.Disposable {
     this._isForcedPassRequested = true
     await this.apply()
     return this._lapse(resource)
+  }
+
+  /**
+   * Takes top-level sections as this extension's own, to remove once the course allows AI:
+   * those another window wrote into the workspace file before opening it.
+   */
+  public async adopt(sections: readonly string[]): Promise<void> {
+    if (sections.length > 0) {
+      await this._state.update(OWNED_SECTIONS_KEY, _.union(this._ownedTargets(), sections))
+    }
   }
 
   public dispose(): void {

@@ -5,7 +5,7 @@ import * as path from "path"
 import * as jsonc from "jsonc-parser"
 import { Err, Ok } from "ts-results"
 import type { Mock } from "vitest"
-import { vi } from "vitest"
+import { onTestFinished, vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { BackendKind } from "../../../shared/lib"
@@ -20,6 +20,7 @@ import WorkspaceManager, {
   ExerciseStatus,
 } from "../../api/workspaceManager"
 import {
+  AI_OFF_SETTINGS,
   closedExercisesSettingKey,
   HIDE_META_FILES,
   WATCHER_EXCLUDE,
@@ -978,6 +979,27 @@ suite("WorkspaceManager class", function () {
 
       expect(manager.addWorkspaceRecommendation).not.toHaveBeenCalled()
     })
+
+    test("recommends the language's extension in VSCodium, which does not itself", function () {
+      Object.defineProperty(vscodeModule, "env", {
+        value: { appName: "VSCodium" },
+        configurable: true,
+      })
+      onTestFinished(() => {
+        Object.defineProperty(vscodeModule, "env", {
+          value: { appName: "Visual Studio Code" },
+          configurable: true,
+        })
+      })
+      stubExtensions(() => undefined)
+      resources = new Resources(WORKSPACE_FILE_FOLDER, PROJECTS_DIRECTORY)
+
+      const manager = openDocument("Main.java", "java")
+
+      expect(manager.addWorkspaceRecommendation).toHaveBeenCalledWith("test-python-course", "tmc", [
+        "vscjava.vscode-java-pack",
+      ])
+    })
   })
 
   suite("addWorkspaceRecommendation", function () {
@@ -1122,7 +1144,7 @@ suite("WorkspaceManager class", function () {
         '{\n  // the student\'s note\n  "folders": [{ "path": ".tmc" }],\n  "settings": { "a": 1 }\n}',
       )
 
-      await manager.prepareWorkspaceFileToOpen(courseSlug, "tmc")
+      await manager.prepareWorkspaceFileToOpen(courseSlug, "tmc", false)
 
       const text = fs.readFileSync(workspaceFile, "utf-8")
       expect(text).toContain("// the student's note")
@@ -1136,8 +1158,29 @@ suite("WorkspaceManager class", function () {
       })
     })
 
+    test("writes the settings that turn AI off before the workspace opens, keeping the file's own", async function () {
+      const declared = vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
+        inspect: () => ({ defaultValue: null }),
+      } as unknown as vscode.WorkspaceConfiguration)
+      onTestFinished(() => declared.mockRestore())
+      fs.writeFileSync(
+        workspaceFile,
+        '{ "folders": [], "settings": { "a": 1, "chat.agent.enabled": false } }',
+      )
+
+      const written = await manager.prepareWorkspaceFileToOpen(courseSlug, "tmc", true)
+
+      expect(jsonc.parse(fs.readFileSync(workspaceFile, "utf-8")).settings).toEqual({
+        a: 1,
+        ...AI_OFF_SETTINGS,
+      })
+      expect(written).toEqual(
+        Object.keys(AI_OFF_SETTINGS).filter((section) => section !== "chat.agent.enabled"),
+      )
+    })
+
     test("creates the workspace file it prepares to open", async function () {
-      await manager.prepareWorkspaceFileToOpen(courseSlug, "tmc")
+      await manager.prepareWorkspaceFileToOpen(courseSlug, "tmc", false)
 
       expect(JSON.parse(fs.readFileSync(workspaceFile, "utf-8"))).toEqual(WORKSPACE_SETTINGS)
     })

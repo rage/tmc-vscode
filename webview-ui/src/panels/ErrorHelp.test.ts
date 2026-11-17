@@ -129,6 +129,15 @@ suite("ErrorHelp panel on one failure", () => {
     expect(text).toContain("[ERROR] download failed")
   })
 
+  test("leads with Show Logs, Copy Details beside it", async () => {
+    render(ErrorHelp, { props: { panel } })
+
+    expect(await screen.findByRole("button", { name: "Show Logs" })).not.toHaveAttribute(
+      "secondary",
+    )
+    expect(screen.getByRole("button", { name: "Copy Details" })).toHaveAttribute("secondary")
+  })
+
   test("leads with the failure's remedy", async () => {
     render(ErrorHelp, {
       props: {
@@ -141,6 +150,7 @@ suite("ErrorHelp panel on one failure", () => {
     })
 
     ;(await screen.findByRole("button", { name: "Log In" })).click()
+    expect(screen.getByRole("button", { name: "Show Logs" })).toHaveAttribute("secondary")
     expect(postedMessages).toHaveBeenCalledWith({
       type: "runCommand",
       command: "tmc.showMoocLogin",

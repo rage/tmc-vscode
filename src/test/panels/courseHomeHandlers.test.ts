@@ -315,4 +315,22 @@ suite("the course home's course actions", function () {
 
     expect(recentUpdates.get(COURSE)).toEqual([])
   })
+
+  test("Install installs a language extension the course home offers, and no other", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    onTestFinished(() => executeCommand.mockRestore())
+    const install = (extensionId: string): Promise<void> =>
+      courseDetailsHandlers.installLanguageExtension.handle({
+        type: "installLanguageExtension",
+        sourcePanel: SOURCE,
+        extensionId,
+      })
+
+    await install("ms-python.python")
+    await install("evil.extension")
+
+    expect(executeCommand.mock.calls).toEqual([
+      ["workbench.extensions.installExtension", "ms-python.python"],
+    ])
+  })
 })

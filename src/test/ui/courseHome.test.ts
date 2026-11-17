@@ -1,3 +1,7 @@
+import * as fs from "fs"
+import * as os from "os"
+import * as path from "path"
+
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
@@ -249,6 +253,40 @@ suite("buildCourseHomeView", function () {
     expect(view.updates).toEqual([{ id: idOfTmcExercise(1), name: "01_hello" }])
     expect(view.parts[0]?.exercises[0]?.isUpdateable).toBe(true)
     expect(view.recentlyUpdated).toEqual(["part01-02_loops"])
+  })
+
+  test("names the language extensions its exercises on disk need and VS Code lacks", function () {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tmc-course-home-"))
+    onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }))
+    fs.mkdirSync(path.join(root, "hello", "src"), { recursive: true })
+    fs.writeFileSync(path.join(root, "hello", "src", "hello.py"), "")
+    const course = tmcLocalCourse({
+      exercises: [tmcCourseExercise({ id: 1, name: "part01-01_hello" })],
+    })
+    const exercise = {
+      ...onDisk(1, "part01-01_hello", ExerciseStatus.Open),
+      uri: vscode.Uri.file(path.join(root, "hello")),
+    }
+    const otherCourse = { ...exercise, courseId: idOfTmcCourse(43) }
+
+    const view = buildCourseHomeView(
+      contextFor(course, { onDisk: [exercise] }),
+      idOfTmcCourse(42),
+      NOW,
+    ).unwrap()
+    const otherView = buildCourseHomeView(
+      contextFor(course, { onDisk: [otherCourse] }),
+      idOfTmcCourse(42),
+      NOW,
+    ).unwrap()
+
+    expect(view.missingLanguageExtensions).toEqual([
+      {
+        extensionId: "ms-python.python",
+        installSentence: "Install the Python extension to run and debug your code.",
+      },
+    ])
+    expect(otherView.missingLanguageExtensions).toEqual([])
   })
 
   test("lists the course's failed updates with why, and no other course's", function () {
