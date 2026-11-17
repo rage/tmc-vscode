@@ -121,7 +121,7 @@ vsCodeTest(
         "aria-valuetext",
         /^1 \/ \d+ points$/,
       )
-      await expect(sidePanel.getByRole("button", { name: "Show Model Solution" })).toBeVisible()
+      await expect(sidePanel.getByRole("button", { name: "Show Model Solution" })).toHaveCount(0)
     })
   },
 )

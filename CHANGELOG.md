@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- A courses.mooc.fi exercise no longer offers Show Model Solution beside Open Course Material, as both opened the same page: the results screen, the course home, the Courses view and the status bar offer Open Course Material, which shows the model solution once it is revealed. The Show Model Solution command still opens that page.
 - Logging out leaves you logged out, not expired: the status bar keeps "TestMyCode: Log In" and the course home and Courses view keep "Not logged in" after a refresh, and an action that needs a login asks you to log in instead of saying you were logged out. Only an expired or revoked login reads "You were logged out. Log in again."
 - The Courses view's exercise menu and the exercise status bar item offer the same actions in the same order: Run Tests, Submit, Show Results, Get Help; History, Reset Exercise; Open Next Exercise, Show Model Solution, Open Course Material; Delete Generated Files, Close Exercise. The status bar adds Show in Courses View. The Explorer's TestMyCode menu keeps Run Tests, Submit, Get Help and History, and the Testing view no longer offers Submit.
 - Exercise files open in the first editor group, beside the results screen instead of in its group, and a file already open is focused instead of opened twice. Error Details opens as a tab in the group of the screen you opened it from.

@@ -220,16 +220,6 @@ export function submitRefusalOf(
   return undefined
 }
 
-/**
- * The course material page that shows a mooc exercise's model solution, once courses.mooc.fi has
- * sent one; `undefined` before that, and for tmc.
- */
-export function modelSolutionUrlOf(exercise: LocalCourseExercise): string | undefined {
-  return exercise.kind === "mooc" && exercise.data.hasModelSolution
-    ? exercise.data.pageUrl
-    : undefined
-}
-
 /** A few words for a row that cannot be submitted, e.g. "deadline passed". */
 export const SUBMIT_REFUSAL_LABELS: Record<SubmitRefusal, string> = {
   chapterNotUnlockedYet: "complete earlier chapters first",

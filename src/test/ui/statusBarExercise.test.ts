@@ -407,11 +407,11 @@ suite("showExerciseActions", function () {
     })
   })
 
-  test("offers the model solution once it is revealed", async function () {
+  test("offers a revealed mooc model solution as its course material, not twice", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     vi.spyOn(vscode.window, "showQuickPick").mockImplementation((async (
       items: readonly { label: string }[],
-    ) => items.find((x) => x.label.includes("Model Solution"))) as never)
+    ) => items.find((x) => x.label.includes("Course Material"))) as never)
     const h = harness()
     h.stored.exercise = makeMoocKind(
       moocCourseExercise({
@@ -427,8 +427,8 @@ suite("showExerciseActions", function () {
 
     await showExerciseActions(new Dialog(), h.sources, true)
 
-    expect(offered()).toContain("Show Model Solution")
-    expect(executeCommand).toHaveBeenCalledWith("tmc.showModelSolution", exerciseHelloWorld.uri)
+    expect(offered()).not.toContain("Show Model Solution")
+    expect(executeCommand).toHaveBeenCalledWith("tmc.openExerciseMaterial", exerciseHelloWorld.uri)
   })
 
   test("for an exercise whose chapter has not opened, names the chapter", async function () {
@@ -475,7 +475,7 @@ suite("showExerciseActions", function () {
   test("offers the Courses view menu's actions in its order, under the same titles", async function () {
     const cases: [string, boolean, (h: Harness) => void][] = [
       [
-        "exercise.opened.passed.hasMaterial.hasModelSolution",
+        "exercise.opened.passed.hasMaterial",
         true,
         (h) => {
           h.stored.exercise = makeMoocKind(

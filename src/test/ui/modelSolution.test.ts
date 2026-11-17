@@ -32,22 +32,17 @@ suite("modelSolutionUrl", function () {
     ).toBeUndefined()
   })
 
-  test("links a mooc exercise's material page once courses.mooc.fi has sent its model solution", function () {
-    const course = moocLocalCourse()
-    const page = "https://courses.example/page"
-
+  test("has none for a mooc exercise, whose solution is on its course material page", function () {
     expect(
       modelSolutionUrl({
         exercise: makeMoocKind(
-          moocCourseExercise({ passed: true, hasModelSolution: true, pageUrl: page }),
+          moocCourseExercise({
+            passed: true,
+            hasModelSolution: true,
+            pageUrl: "https://courses.example/page",
+          }),
         ),
-        course,
-      }),
-    ).toBe(page)
-    expect(
-      modelSolutionUrl({
-        exercise: makeMoocKind(moocCourseExercise({ passed: true, pageUrl: page })),
-        course,
+        course: moocLocalCourse(),
       }),
     ).toBeUndefined()
   })

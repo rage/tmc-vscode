@@ -273,8 +273,6 @@ async function waitForMoocGrading(
   const view = {
     ...moocGradingView(status, grading.availablePoints),
     submissionUrl: grading.exercisePageUrl,
-    // The material page shows the model solution.
-    solutionUrl: isSolutionRevealed ? grading.exercisePageUrl : undefined,
   }
   if (view.canKeepWaiting) {
     unfinishedGradings.set(panel.id, grading)

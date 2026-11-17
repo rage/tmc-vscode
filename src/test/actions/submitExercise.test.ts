@@ -486,19 +486,25 @@ suite("submitExercise action, mooc", () => {
   })
 
   test.each([
-    ["Passed", EXERCISE_PAGE_URL],
-    ["OutOfTries", EXERCISE_PAGE_URL],
-    ["Attempted", undefined],
+    ["Passed", true],
+    ["OutOfTries", true],
+    ["Attempted", false],
   ] as const)(
-    "a grading leaving the exercise %s links the model solution on its page: %s",
-    async (standing, solutionUrl) => {
-      const { actionContext } = moocContextWith(
+    "a grading leaving the exercise %s records a sent model solution: %s, and links none",
+    async (standing, hasModelSolution) => {
+      const { actionContext, setStanding } = moocContextWith(
         grading({ score_given: 1, exercise_progress: progress(standing, 1) }),
       )
 
       await submitExercise(actionContext, moocExercise)
 
-      expect(lastView()?.solutionUrl).toBe(solutionUrl)
+      expect(lastView()?.solutionUrl).toBeUndefined()
+      expect(setStanding).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        1,
+        hasModelSolution,
+      )
     },
   )
 
@@ -557,7 +563,7 @@ suite("submitExercise action, mooc", () => {
 
     await submitExercise(actionContext, moocExercise)
 
-    expect(lastView()).toMatchObject({ submissionUrl: storedPage, solutionUrl: storedPage })
+    expect(lastView()).toMatchObject({ submissionUrl: storedPage })
   })
 
   test("a completed grading below full points is recorded as not passed", async () => {
