@@ -99,6 +99,10 @@
     text-align: start;
     cursor: pointer;
   }
+  /* Inside the row, as VS Code rings a focused list row. */
+  .toggle:focus-visible {
+    outline-offset: -1px;
+  }
   .toggle:hover {
     background: var(--tmc-list-hover);
     border-color: var(--tmc-hc-active-outline);

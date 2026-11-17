@@ -178,8 +178,9 @@
   [role="menuitem"] {
     display: block;
     width: 100%;
-    padding: 0 var(--tmc-space-6) 0 var(--tmc-space-3);
-    line-height: var(--tmc-list-row-height);
+    /* VS Code's own context menus: 2em rows, 2em side padding. */
+    padding: 0 2em;
+    line-height: 2em;
     border: 1px solid transparent;
     border-radius: 3px;
     background: none;

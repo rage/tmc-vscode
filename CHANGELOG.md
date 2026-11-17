@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- In the course home, a chapter's lock reason has its own line under the chapter name, and an exercise name cut short shows in full in its tooltip. Focused chapter and section toggles are ringed inside their row, as VS Code rings a list row, and the More Actions menus are spaced like VS Code's own menus.
 - History's refresh button sits in its header beside the title instead of on a line of its own.
 - Notices in the course home, results, add-course and Error Details screens share one look: the same border, a coloured left edge for their kind, the icon level with the first line, and their buttons under the full-width text instead of squeezing it into a column.
 - The Courses view's exercise menu and the exercise status bar item offer the same actions in the same order: Run Tests, Submit, Show Results, Get Help; History, Reset Exercise; Open Next Exercise, Show Model Solution, Open Course Material; Delete Generated Files, Close Exercise. The status bar adds Show in Courses View. The Explorer's TestMyCode menu keeps Run Tests, Submit, Get Help and History, and the Testing view no longer offers Submit.
