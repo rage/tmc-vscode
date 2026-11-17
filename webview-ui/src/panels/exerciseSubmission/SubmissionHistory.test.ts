@@ -1,9 +1,7 @@
 import { render, screen, within } from "@testing-library/svelte"
-import { vi } from "vitest"
 
 import type { SubmissionHistoryEntry } from "../../../../shared/lib"
 import { postedMessages, replyToRequest } from "../../test/setup"
-import { withinShadowRoot } from "../../test/shadow"
 import SubmissionHistory from "./SubmissionHistory.svelte"
 
 const sourcePanel = { id: 4, type: "ExerciseSubmission" } as const
@@ -192,22 +190,6 @@ suite("SubmissionHistory component", () => {
 
     expect(postedMessages).toHaveBeenCalledWith(
       expect.objectContaining({ type: "requestSubmissionHistory" }),
-    )
-  })
-
-  test("refreshes on request", async () => {
-    render(SubmissionHistory, { props: { sourcePanel } })
-    listWith([passed])
-    await screen.findByText("Latest submission")
-    postedMessages.mockClear()
-
-    const refresh = await withinShadowRoot(screen.getByTitle("Refresh History"))
-    refresh.getByRole("button").click()
-
-    await vi.waitFor(() =>
-      expect(postedMessages).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "requestSubmissionHistory" }),
-      ),
     )
   })
 

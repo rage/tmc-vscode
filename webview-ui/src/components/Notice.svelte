@@ -37,13 +37,14 @@
 </div>
 
 <style>
+  /* Course notices (courseHome/CourseNotices.svelte) mirror this look; change both together. */
   .notice {
     display: flex;
     align-items: flex-start;
     gap: var(--tmc-space-2);
     padding: var(--tmc-space-2) var(--tmc-space-3);
-    margin: var(--tmc-space-2) 0;
-    border: 1px solid var(--tmc-hc-outline);
+    margin: var(--tmc-space-3) 0;
+    border: 1px solid var(--tmc-surface-border);
     border-left: 3px solid var(--notice-accent);
     border-radius: var(--tmc-radius);
     background: var(--notice-background);
@@ -60,19 +61,28 @@
     --notice-accent: var(--tmc-notice-info-accent);
     --notice-background: var(--tmc-notice-info-background);
   }
+  /* Centred on the first line of text, however many lines follow. */
   .notice-icon {
-    color: var(--notice-accent);
     flex: none;
+    display: inline-flex;
+    align-items: center;
+    height: var(--tmc-list-row-height);
+    color: var(--notice-accent);
   }
   .notice-body {
     flex: 1;
     min-width: 0;
+    padding-block: calc((var(--tmc-list-row-height) - 1lh) / 2);
+    overflow-wrap: anywhere;
   }
   .notice-body > :global(:first-child) {
     margin-top: 0;
   }
   .notice-body > :global(:last-child) {
     margin-bottom: 0;
+  }
+  .notice-body > :global(p) {
+    margin: var(--tmc-space-1) 0;
   }
   .notice-title {
     font-weight: 600;
