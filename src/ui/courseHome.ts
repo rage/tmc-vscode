@@ -7,6 +7,7 @@ import {
   CourseIdentifier,
   ExerciseIdentifier,
   LocalCourseData,
+  SUBMIT_REFUSAL_ICONS,
   SUBMIT_REFUSAL_LABELS,
   pendingReviewSentence,
   submitRefusalSentence,
@@ -188,14 +189,27 @@ export function buildCourseHomeView(
       isDefaultOpen: part.isDefaultOpen,
       ...(part.opensAt
         ? {
-            lockedReason:
-              `Opens on ${formatDateTime(part.opensAt, locale)}. Until then its exercises` +
-              " can be tested but not submitted.",
+            locked: {
+              reason:
+                `Opens on ${formatDateTime(part.opensAt, locale)}. Until then its exercises` +
+                " can be tested but not submitted.",
+              icon: SUBMIT_REFUSAL_ICONS.chapterNotOpenYet,
+            },
           }
         : part.lockingStatus === "NotUnlockedYet"
-          ? { lockedReason: "Complete earlier chapters first." }
+          ? {
+              locked: {
+                reason: "Complete earlier chapters first.",
+                icon: SUBMIT_REFUSAL_ICONS.chapterNotUnlockedYet,
+              },
+            }
           : part.lockingStatus === "CompletedAndLocked"
-            ? { lockedReason: "This chapter is locked." }
+            ? {
+                locked: {
+                  reason: "This chapter is locked.",
+                  icon: SUBMIT_REFUSAL_ICONS.chapterCompletedAndLocked,
+                },
+              }
             : {}),
       exercises: part.exercises.map((ex) => {
         const deadline = deadlineText(shownDeadline(ex))
@@ -212,6 +226,7 @@ export function buildCourseHomeView(
                 submitRefusal: {
                   label: SUBMIT_REFUSAL_LABELS[submitRefusal],
                   sentence: submitRefusalSentence(submitRefusal, ex.slug, part.name),
+                  icon: SUBMIT_REFUSAL_ICONS[submitRefusal],
                 },
               }
             : {}),

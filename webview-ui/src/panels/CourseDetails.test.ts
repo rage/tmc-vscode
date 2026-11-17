@@ -54,6 +54,15 @@ function courseAction(panel: CourseDetailsPanel, action: string): unknown {
   return { type: "courseAction", sourcePanel: { id: panel.id, type: panel.type }, action }
 }
 
+/** A course home row's status icon and the label it has for assistive technology. */
+function rowIcon(row: HTMLElement | undefined): { name: string | null; label: string | null } {
+  const slot = row?.querySelector(".icon")
+  return {
+    name: slot?.querySelector("vscode-icon")?.name ?? null,
+    label: slot?.getAttribute("title") ?? null,
+  }
+}
+
 function exerciseAction(panel: CourseDetailsPanel, id: number, action: string): unknown {
   return {
     type: "courseExerciseAction",
@@ -197,7 +206,7 @@ suite("the course home", () => {
             key: "chapter:2",
             name: "Loops",
             isDefaultOpen: true,
-            lockedReason: "This chapter is locked.",
+            locked: { reason: "This chapter is locked.", icon: "lock" },
             exercises: [
               courseHomeExercise(1, "while", { status: "opened", triesLeft: 2 }),
               courseHomeExercise(2, "for", {
@@ -205,6 +214,7 @@ suite("the course home", () => {
                 submitRefusal: {
                   label: "deadline passed",
                   sentence: "The deadline of for has passed.",
+                  icon: "watch",
                 },
               }),
             ],
@@ -221,6 +231,7 @@ suite("the course home", () => {
       "The deadline of for has passed.",
     )
     expect(screen.getByText(/This chapter is locked\./)).toBeInTheDocument()
+    expect(rowIcon(forRow)).toEqual({ name: "watch", label: "The deadline of for has passed." })
   })
 
   test("a passed exercise of a chapter not unlocked yet shows as passed, the lock on the chapter", async () => {
@@ -231,7 +242,10 @@ suite("the course home", () => {
             key: "chapter:2",
             name: "Tour",
             isDefaultOpen: true,
-            lockedReason: "Locked until you have completed the chapters before it.",
+            locked: {
+              reason: "Locked until you have completed the chapters before it.",
+              icon: "list-ordered",
+            },
             exercises: [
               courseHomeExercise(1, "tour_first", {
                 status: "opened",
@@ -240,6 +254,7 @@ suite("the course home", () => {
                 submitRefusal: {
                   label: "complete earlier chapters first",
                   sentence: "Complete the chapters before Tour to submit tour_first.",
+                  icon: "list-ordered",
                 },
               }),
             ],
@@ -269,7 +284,11 @@ suite("the course home", () => {
                 status: "opened",
                 availablePoints: 2,
                 pendingReview: "The points wait for a teacher's review.",
-                submitRefusal: { label: "locked", sentence: "loops is locked for you." },
+                submitRefusal: {
+                  label: "locked",
+                  sentence: "loops is locked for you.",
+                  icon: "lock",
+                },
               }),
             ],
           },
@@ -284,6 +303,7 @@ suite("the course home", () => {
     )
     expect(row).not.toHaveTextContent("0/2")
     expect(within(row as HTMLElement).queryByText("locked")).not.toBeInTheDocument()
+    expect(rowIcon(row)).toEqual({ name: "eye", label: "The points wait for a teacher's review." })
   })
 
   test("shows points already given alongside a pending review", async () => {

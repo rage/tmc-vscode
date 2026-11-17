@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Each reason an exercise cannot be submitted has its own icon in the course home, the Courses view and the status bar: a watch for deadline passed, a crossed circle for no tries left, a lock for locked, a numbered list for complete earlier chapters first, a calendar for a chapter not open yet, a person for not enrolled and an eye for waiting for review.
 - The exercise actions of a passed exercise in a chapter not unlocked yet no longer say to complete earlier chapters first; the chapter says it.
 - A course home you are not enrolled on no longer offers to download its exercises.
 - Open Next Exercise, and Next in the results screen, only go forward in the course: from its last exercise left to do they open the course home, which offers the earlier ones. When the next exercise cannot be downloaded, the course home opens and says why instead of a notification.

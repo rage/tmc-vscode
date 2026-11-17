@@ -121,13 +121,14 @@ suite("buildCourseHomeView", function () {
     ).unwrap()
 
     const [basics, advanced] = view.parts
-    expect(basics?.lockedReason).toBeUndefined()
+    expect(basics?.locked).toBeUndefined()
     expect(basics?.exercises[0]).toMatchObject({ triesLeft: 2 })
     expect(basics?.exercises[0]).not.toHaveProperty("submitRefusal")
-    expect(advanced?.lockedReason).toBe("This chapter is locked.")
+    expect(advanced?.locked).toEqual({ reason: "This chapter is locked.", icon: "lock" })
     expect(advanced?.exercises[0]?.submitRefusal).toEqual({
       label: "chapter locked",
       sentence: 'The chapter "Advanced" is locked, so recursion can no longer be submitted.',
+      icon: "lock",
     })
   })
 
@@ -179,6 +180,7 @@ suite("buildCourseHomeView", function () {
       submitRefusal: {
         label: "locked by the teacher",
         sentence: "The teacher has locked loops, so it can no longer be submitted.",
+        icon: "lock",
       },
     })
   })
@@ -498,6 +500,7 @@ suite("buildCourseHomeView", function () {
     expect(view.parts[0]?.exercises[0]?.submitRefusal).toEqual({
       label: "course removed",
       sentence: "This course no longer exists, so Hello world cannot be submitted.",
+      icon: "trash",
     })
     expect(view.nextExercise).toBeUndefined()
   })
@@ -623,9 +626,10 @@ suite("buildCourseHomeView", function () {
     ).unwrap()
 
     const [recursion] = view.parts
-    expect(recursion?.lockedReason).toMatch(
+    expect(recursion?.locked?.reason).toMatch(
       /^Opens on .+\. Until then its exercises can be tested but not submitted\.$/,
     )
+    expect(recursion?.locked?.icon).toBe("calendar")
     expect(recursion?.exercises[0]?.submitRefusal?.label).toBe("chapter not open yet")
   })
 })

@@ -14,6 +14,7 @@ import type {
   Panel,
   RequestType,
   SubmissionHistoryEntry,
+  SubmitRefusal,
   TmcOrganizations,
   WebviewState,
   WebviewToExtension,
@@ -21,6 +22,8 @@ import type {
 import {
   makeMoocKind,
   makeTmcKind,
+  pendingReviewSentence,
+  SUBMIT_REFUSAL_ICONS,
   SUBMIT_REFUSAL_LABELS,
   submitRefusalSentence,
 } from "../../shared/lib"
@@ -220,6 +223,15 @@ const moocCourseInWorkspace = courseHomeView({
   })),
 })
 
+/** A course home row's refusal as the host builds it. */
+function rowRefusal(refusal: SubmitRefusal, exerciseName: string, chapterName?: string) {
+  return {
+    label: SUBMIT_REFUSAL_LABELS[refusal],
+    sentence: submitRefusalSentence(refusal, exerciseName, chapterName),
+    icon: SUBMIT_REFUSAL_ICONS[refusal],
+  }
+}
+
 /** The course in its workspace once its backend refuses it: what is on disk stays. */
 function moocCourseOutOfReach(accessLoss: "forbidden" | "notFound"): CourseHomeView {
   const refusal = accessLoss === "forbidden" ? "courseForbidden" : "courseNotFound"
@@ -231,10 +243,7 @@ function moocCourseOutOfReach(accessLoss: "forbidden" | "notFound"): CourseHomeV
       ...part,
       exercises: part.exercises.map((ex) => ({
         ...ex,
-        submitRefusal: {
-          label: SUBMIT_REFUSAL_LABELS[refusal],
-          sentence: submitRefusalSentence(refusal, ex.name),
-        },
+        submitRefusal: rowRefusal(refusal, ex.name),
       })),
     })),
   })
@@ -252,18 +261,21 @@ const moocCourseWithRules = courseHomeView({
         moocExercise(1, "Hello, world!", { status: "opened", triesLeft: 2, deadline: DUE_SOON }),
         moocExercise(2, "Reading input", {
           status: "opened",
-          submitRefusal: {
-            label: "deadline passed",
-            sentence: "The deadline of Reading input has passed, so it can no longer be submitted.",
-          },
+          submitRefusal: rowRefusal("deadlinePassed", "Reading input"),
         }),
         moocExercise(3, "Arithmetic", {
           status: "opened",
           isOutOfTries: true,
-          submitRefusal: {
-            label: "no tries left",
-            sentence: "You have no tries left on Arithmetic, so it can no longer be submitted.",
-          },
+          submitRefusal: rowRefusal("outOfTries", "Arithmetic"),
+        }),
+        moocExercise(5, "Variables", {
+          status: "opened",
+          submitRefusal: rowRefusal("exerciseLocked", "Variables"),
+        }),
+        moocExercise(6, "Strings", {
+          status: "opened",
+          awardedPoints: 0,
+          pendingReview: pendingReviewSentence("awaits_teacher", 0),
         }),
       ],
     },
@@ -271,17 +283,17 @@ const moocCourseWithRules = courseHomeView({
       key: "chapter:2",
       name: "Conditionals and loops",
       isDefaultOpen: true,
-      lockedReason: "Complete earlier chapters first.",
+      locked: {
+        reason: "Complete earlier chapters first.",
+        icon: SUBMIT_REFUSAL_ICONS.chapterNotUnlockedYet,
+      },
       exercises: [
         moocExercise(4, "Is it even?", {
-          submitRefusal: {
-            label: SUBMIT_REFUSAL_LABELS.chapterNotUnlockedYet,
-            sentence: submitRefusalSentence(
-              "chapterNotUnlockedYet",
-              "Is it even?",
-              "Conditionals and loops",
-            ),
-          },
+          submitRefusal: rowRefusal(
+            "chapterNotUnlockedYet",
+            "Is it even?",
+            "Conditionals and loops",
+          ),
         }),
       ],
     },
@@ -634,7 +646,19 @@ export const SCENARIOS: Scenario[] = [
   {
     id: "course-details/mooc-not-enrolled",
     panel: courseDetailsPanel(61, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
-    reply: answerCourseDetails({ id: 61 }, { ...moocCourse, isNotEnrolled: true }),
+    reply: answerCourseDetails(
+      { id: 61 },
+      {
+        ...moocCourse,
+        isNotEnrolled: true,
+        parts: moocCourse.parts.map((part) => ({
+          ...part,
+          exercises: part.exercises.map((ex) =>
+            ex.passed ? ex : { ...ex, submitRefusal: rowRefusal("notEnrolled", ex.name) },
+          ),
+        })),
+      },
+    ),
   },
   {
     id: "course-details/mooc-no-access",

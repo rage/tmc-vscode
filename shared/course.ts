@@ -243,6 +243,22 @@ export const SUBMIT_REFUSAL_LABELS: Record<SubmitRefusal, string> = {
 }
 
 /**
+ * The codicon of each refusal. The course home, the Courses view and the status bar all draw a
+ * refused exercise with it, so one icon means one reason everywhere.
+ */
+export const SUBMIT_REFUSAL_ICONS: Record<SubmitRefusal, string> = {
+  chapterNotUnlockedYet: "list-ordered",
+  chapterCompletedAndLocked: "lock",
+  chapterNotOpenYet: "calendar",
+  exerciseLocked: "lock",
+  deadlinePassed: "watch",
+  outOfTries: "circle-slash",
+  notEnrolled: "person",
+  courseForbidden: "eye-closed",
+  courseNotFound: "trash",
+}
+
+/**
  * Why `exerciseName` cannot be submitted, as a sentence for the student.
  *
  * @param chapterName The exercise's chapter, which the chapter refusals name when known.
@@ -279,6 +295,9 @@ export function submitRefusalSentence(
 
 /** A few words for a row whose points wait for a teacher's review. */
 export const PENDING_REVIEW_LABEL = "waiting for review"
+
+/** The codicon of a row waiting for review; see {@link SUBMIT_REFUSAL_ICONS}. */
+export const PENDING_REVIEW_ICON = "eye"
 
 /**
  * Whether an exercise's points are held back for a pending teacher review. The backend holds them
