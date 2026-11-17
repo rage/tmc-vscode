@@ -1,3 +1,5 @@
+import type { Result } from "ts-results"
+import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { RunnableCommand } from "../../../shared/lib"
@@ -5,6 +7,7 @@ import { assertUnreachable } from "../../../shared/lib"
 import { EXTENSION_ID } from "../../config/constants"
 import { Logger, openWebLink } from "../../utilities"
 import type { HandlerMap } from "../router"
+import { errorDetailsPanel } from "../routes"
 
 /** Messages any screen may send. */
 export const miscHandlers = {
@@ -24,6 +27,18 @@ export const miscHandlers = {
     requiresReady: false,
     handle(message, { host }): void {
       Logger.error(`${host.name} error: ${message.message}`, message.stack ?? "")
+    },
+  },
+  showErrorDetails: {
+    requiresReady: false,
+    handle(message, { host }): void {
+      host.showBeside(errorDetailsPanel(message.detailsId))
+    },
+  },
+  requestLogTail: {
+    requiresReady: false,
+    handle(): Result<string, never> {
+      return Ok(Logger.tail())
     },
   },
   runCommand: {

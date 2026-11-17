@@ -17,7 +17,7 @@ import { ExerciseStatus } from "../api/workspaceManager"
 import * as commands from "../commands"
 import type Resources from "../config/resources"
 import { UserData } from "../config/userdata"
-import { BottleneckError, ConnectionError, InsufficientScopeError } from "../errors"
+import { BottleneckError, ConnectionError, InsufficientScopeError, NotFoundError } from "../errors"
 import { registerCommands } from "../init/commands"
 import { registerTesting } from "../init/testing"
 import { nextPanelId } from "../panels/routes"
@@ -153,6 +153,8 @@ async function harness(
     listLocalExercises: async () => Ok([]),
     listSettings: async () => Ok({}),
     checkExerciseUpdates: async () => Ok({ updated: [], removed: [] }),
+    getEnrolledMoocCourses: async () =>
+      Ok([{ id: "instance-1", name: "Mooc Course", organization_name: "mooc" }]),
     getStudentFilePaths: async () => Ok([]),
     unsetSetting: async () => Ok.EMPTY,
   })
@@ -392,7 +394,7 @@ suite("reported once: exercise commands", function () {
 
     expect(shown).toEqual([])
     expect(panelFailures()).toEqual([
-      expect.stringMatching(/^submissionView: .*Log in again to continue\.$/),
+      expect.stringMatching(/^submissionView: You were logged out\. Log in again\.$/),
     ])
   })
 
@@ -793,8 +795,53 @@ suite("reported once: the Courses view and course details", function () {
     await loud.run("tmc.updateExercises", "loud")
     await silent.run("tmc.updateExercises", "silent")
 
-    expect(loud.shown).toEqual(["error: Failed to check courses.mooc.fi for exercise updates."])
+    expect(loud.shown).toEqual(["error: Failed to check for exercise updates."])
     expect(silent.shown).toEqual([])
+  })
+
+  test("an update check that a course's backend refused marks the course and names it", async function () {
+    const { run, shown, actionContext } = await harness({
+      langs: {
+        checkExerciseUpdates: async () =>
+          Ok({
+            updated: [],
+            removed: [],
+            uncheckedCourses: [
+              { courseId: COURSE_ID, refusal: new NotFoundError("courses.mooc.fi refused") },
+            ],
+          }),
+      },
+    })
+
+    await run("tmc.updateExercises", "loud")
+
+    expect(shown).toEqual([
+      "status: Mooc Course is no longer available. Your other exercises are up to date.",
+    ])
+    const [course] = actionContext.startup.userData.getMoocCourses()
+    expect(course?.accessLoss?.reason).toBe("notFound")
+  })
+
+  test("an update check that every course refused for scope asks for a new login", async function () {
+    const { run, actionContext } = await harness({
+      langs: {
+        checkExerciseUpdates: async () =>
+          Ok({
+            updated: [],
+            removed: [],
+            uncheckedCourses: [{ courseId: COURSE_ID, refusal: new InsufficientScopeError("403") }],
+          }),
+      },
+    })
+
+    await run("tmc.updateExercises", "loud")
+
+    const [[headline, error]] = vi.mocked(actionContext.dialog.reportError).mock.calls as [
+      [string, Error],
+    ]
+    expect(headline).toBe("Failed to check for exercise updates.")
+    expect(error).toBeInstanceOf(InsufficientScopeError)
+    expect(actionContext.startup.userData.getMoocCourses()[0]?.accessLoss).toBeUndefined()
   })
 
   test("an update check that fails where the user has no courses is still an all-clear", async function () {
@@ -832,6 +879,7 @@ suite("reported once: the Courses view and course details", function () {
     const { post, shown, shownPanel } = await harness({
       langs: {
         getMoocCourseData: async () => Err(new InsufficientScopeError("exercise-services")),
+        getEnrolledMoocCourses: async () => Err(new InsufficientScopeError("exercise-services")),
       },
     })
     const sourcePanel = shownPanel()
@@ -858,6 +906,7 @@ suite("reported once: the refresh", function () {
     const { run, shown } = await harness({
       langs: {
         getMoocCourseData: async () => Err(new InsufficientScopeError("exercise-services")),
+        getEnrolledMoocCourses: async () => Err(new InsufficientScopeError("exercise-services")),
       },
     })
 

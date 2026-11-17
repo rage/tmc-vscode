@@ -150,6 +150,8 @@ interface MoocMockState {
   pasteTimesByExercise: Map<string, number[]>
   /** Exercises a teacher has deleted since the student downloaded them. */
   removedExerciseIds: Set<string>
+  /** Courses a teacher has closed to students or deleted; the rest are open. */
+  courseAccessById: Map<string, Exclude<MockCourseAccess, "open">>
   /** The chapter a teacher has put an exercise in; fixtures are in none. */
   chapterByExerciseId: Map<string, MockChapter>
   /** Where chapter locking's teacher review has an exercise; fixtures have none. */
@@ -161,6 +163,10 @@ interface MoocMockState {
   expireNextUpload: boolean
   /** One-shot per entry: the next call to this operationId answers with this status. */
   failNextByOperation: Map<string, number>
+  /** One-shot: the next exercise archive download fails, this late. */
+  failNextArchive: { delayMs: number } | undefined
+  /** Exercises republished with a new template, by id, with each task's checksum before it. */
+  checksumsBeforeUpdate: Map<string, string[]>
   // The integration mock runs in a separate process from the test, so the two
   // members below record the most recent authenticated request's `Authorization`
   // header and a count, surfaced via `GET /mooc-mock/auth-state`, to let a test
@@ -221,12 +227,15 @@ const createMoocMockState = (baseUrl: string): MoocMockState => ({
   submissionsByExercise: new Map(),
   pasteTimesByExercise: new Map(),
   removedExerciseIds: new Set(),
+  courseAccessById: new Map(),
   reviewByExerciseId: new Map(),
   chapterByExerciseId: new Map(),
   uploadsById: new Map(),
   uploadBytesByStoredName: new Map(),
   expireNextUpload: false,
   failNextByOperation: new Map(),
+  failNextArchive: undefined,
+  checksumsBeforeUpdate: new Map(),
   lastAuthorization: undefined,
   authenticatedRequestCount: 0,
   oauth: createMoocOAuthState(),
@@ -251,6 +260,9 @@ const FAULT_ERRORS: Record<number, ApiErrorMessageKey> = {
 
 /** Why {@link MoocMockControls.failNext} refused to arm a fault. */
 type FailNextRejection = "unknown-operation" | "unsupported-status"
+
+/** Whether students may reach a course, see {@link MoocMockControls.setCourseAccess}. */
+export type MockCourseAccess = "open" | "forbidden" | "deleted"
 
 /**
  * Drives one mock's state from a test or a control route. Reach it with
@@ -282,6 +294,16 @@ export interface MoocMockControls {
    */
   failNext: (operationId: string, status: number) => FailNextRejection | undefined
   /**
+   * Arms a one-shot failure of the next exercise archive download, which answers 500 after
+   * `delayMs`: the archive route is outside the client API, so {@link failNext} cannot reach it.
+   */
+  failNextArchive: (delayMs?: number) => void
+  /**
+   * Republishes an exercise with a new template, as a teacher can: its checksum changes, so a
+   * client that downloaded it finds an update. Returns false for an unknown exercise.
+   */
+  publishExerciseUpdate: (exerciseId: string) => boolean
+  /**
    * Seeds a submission the host has no files for, so its download is an empty list.
    * Only an exercise type with no files at all is like this, and a submit through the
    * client API cannot produce one -- hence the seed.
@@ -304,6 +326,17 @@ export interface MoocMockControls {
    * can on the host. Returns false for an unknown course.
    */
   setEnrolled: (courseId: string, enrolled: boolean) => boolean
+  /**
+   * Closes a fixture course to students (`forbidden`, as a course put back in draft is),
+   * deletes it (`deleted`), or opens it again (`open`). Returns false for an unknown course.
+   */
+  setCourseAccess: (courseId: string, access: MockCourseAccess) => boolean
+  /**
+   * Revokes every token this instance has minted or seeded, as revoking the student's grant on
+   * the host's account page does: resource calls and refreshes are rejected until a new login
+   * or a reset.
+   */
+  revokeGrant: () => void
   /**
    * Deletes a fixture exercise from its course, as a teacher can, or brings it back: every
    * client operation then treats it as an exercise that never existed. Returns false for an
@@ -424,12 +457,20 @@ const createMoocMockControls = (
     state.submissionsByExercise.clear()
     state.pasteTimesByExercise.clear()
     state.removedExerciseIds.clear()
+    state.courseAccessById.clear()
     state.chapterByExerciseId.clear()
     state.reviewByExerciseId.clear()
     state.uploadsById.clear()
     state.uploadBytesByStoredName.clear()
     state.expireNextUpload = false
     state.failNextByOperation.clear()
+    state.failNextArchive = undefined
+    for (const [exerciseId, checksums] of state.checksumsBeforeUpdate) {
+      state.fixtures.exerciseById.get(exerciseId)?.slide.tasks.forEach((task, index) => {
+        task.public_spec.checksum = checksums[index] ?? task.public_spec.checksum
+      })
+    }
+    state.checksumsBeforeUpdate.clear()
     state.lastAuthorization = undefined
     state.authenticatedRequestCount = 0
     state.oauth.reset()
@@ -463,6 +504,26 @@ const createMoocMockControls = (
     state.failNextByOperation.set(operationId, status)
     return undefined
   },
+  failNextArchive: (delayMs = 0) => {
+    state.failNextArchive = { delayMs }
+  },
+  publishExerciseUpdate: (exerciseId) => {
+    const exercise = state.fixtures.exerciseById.get(exerciseId)
+    if (!exercise) {
+      return false
+    }
+    const { tasks } = exercise.slide
+    if (!state.checksumsBeforeUpdate.has(exerciseId)) {
+      state.checksumsBeforeUpdate.set(
+        exerciseId,
+        tasks.map((task) => task.public_spec.checksum),
+      )
+    }
+    for (const task of tasks) {
+      task.public_spec.checksum = `${task.public_spec.checksum}-updated`
+    }
+    return true
+  },
   seedFilelessSubmission: (exerciseId) => {
     if (!state.fixtures.exerciseById.has(exerciseId)) {
       return undefined
@@ -489,6 +550,21 @@ const createMoocMockControls = (
     }
     course.enrolled = enrolled
     return true
+  },
+  setCourseAccess: (courseId, access) => {
+    if (!findCourse(state, courseId) && !state.courseAccessById.has(courseId)) {
+      return false
+    }
+    if (access === "open") {
+      state.courseAccessById.delete(courseId)
+    } else {
+      state.courseAccessById.set(courseId, access)
+    }
+    return true
+  },
+  revokeGrant: () => {
+    state.oauth.issuedAccessTokens.clear()
+    state.oauth.issuedRefreshTokens.clear()
   },
   setCurrentUser: (userId) => {
     state.currentUserId = userId
@@ -650,8 +726,35 @@ const obsoleteClientError = (
   )
 }
 
+/** The course the host still has, unless a teacher deleted it. */
 const findCourse = (state: MoocMockState, id: string) =>
-  state.fixtures.courses.find((c) => c.course.id === id)
+  state.courseAccessById.get(id) === "deleted"
+    ? undefined
+    : state.fixtures.courses.find((c) => c.course.id === id)
+
+/**
+ * How the host refuses the course of `exerciseId`, if it does: `authorize_access_to_course_material`
+ * 403s a course closed to students, and a deleted course's exercises are gone with it.
+ */
+const exerciseCourseRefusal = (
+  state: MoocMockState,
+  exerciseId: string,
+): MockResponse | undefined => {
+  const courseId = state.courseByExerciseId.get(exerciseId)?.course.id
+  switch (courseId && state.courseAccessById.get(courseId)) {
+    case "forbidden":
+      return courseForbiddenError()
+    case "deleted":
+      return apiError("not_found", `no such exercise: ${exerciseId}`)
+  }
+  return undefined
+}
+
+const courseForbiddenError = (): MockResponse =>
+  apiError(
+    "forbidden",
+    "Unauthorized. Please contact course staff if you believe you should have access.",
+  )
 
 /** The exercise the host still has, unless a teacher deleted it. */
 const findExercise = (state: MoocMockState, id: string): MoocExerciseFixture | undefined =>
@@ -1133,7 +1236,11 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
         // id must be a uuid + required fields missing -> spec violation
         return ok([{ id: 42 }])
       }
-      return ok(state.fixtures.courses.filter((c) => c.enrolled).map((c) => c.course))
+      return ok(
+        state.fixtures.courses
+          .filter((c) => c.enrolled && findCourse(state, c.course.id))
+          .map((c) => c.course),
+      )
     },
 
     // GET /api/v0/exercise-services/client/courses/{id}
@@ -1152,6 +1259,11 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       const found = findCourse(state, id)
       if (!found) {
         return apiError("not_found", `no such course: ${id}`)
+      }
+      // Unlike the course and its progress, which any user may view, the exercises are course
+      // material.
+      if (state.courseAccessById.get(id) === "forbidden") {
+        return courseForbiddenError()
       }
       // A slide left with no servable task drops out of the listing entirely, as
       // the host's `if !tasks.is_empty()` does.
@@ -1210,6 +1322,10 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
         // from the not-enrolled 422 below.
         return apiError("not_found", `no such exercise: ${id}`)
       }
+      const courseRefused = exerciseCourseRefusal(state, id)
+      if (courseRefused) {
+        return courseRefused
+      }
       if (!isEnrolled(state, id)) {
         // The backend resolves the slide but its course context is inaccessible,
         // raising a BadRequest that maps to 422 with message_key `not_enrolled`
@@ -1243,6 +1359,10 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       // multipart rule below. Stored objects outlive the request, which is why the
       // gate is here at all and not only on submit. A snapshot is accepted past the
       // deadline and out of tries, so its files are too.
+      const courseRefused = exerciseCourseRefusal(state, exerciseId)
+      if (courseRefused) {
+        return courseRefused
+      }
       if (!isEnrolled(state, exerciseId)) {
         return notEnrolledError()
       }
@@ -1310,6 +1430,10 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       const exercise = findExercise(state, exerciseId)
       if (!exercise) {
         return apiError("not_found", `no such exercise: ${exerciseId}`)
+      }
+      const courseRefused = exerciseCourseRefusal(state, exerciseId)
+      if (courseRefused) {
+        return courseRefused
       }
       if (!isEnrolled(state, exerciseId)) {
         // Consistent with getClientExercise's 422 above; the spec documents
@@ -1384,6 +1508,10 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       const exerciseId = String(c.request.params.id)
       if (!findExercise(state, exerciseId)) {
         return apiError("not_found", `no such exercise: ${exerciseId}`)
+      }
+      const courseRefused = exerciseCourseRefusal(state, exerciseId)
+      if (courseRefused) {
+        return courseRefused
       }
       if (!isEnrolled(state, exerciseId)) {
         return notEnrolledError()
@@ -1760,6 +1888,12 @@ export const registerMoocRoutes = (
 
   // Spec-exempt archive route (see doc comment above).
   app.get("/mooc-archives/:archive", (req, res, next) => {
+    const fault = state.failNextArchive
+    if (fault) {
+      state.failNextArchive = undefined
+      setTimeout(() => res.status(500).send("injected archive fault"), fault.delayMs)
+      return
+    }
     const archive = req.params.archive.replace(/\.tar\.zst$/, "")
     const exercise = state.fixtures.exerciseByArchiveSlug.get(archive)
     if (!exercise || !fs.existsSync(exercise.sourceDir)) {
@@ -1879,6 +2013,30 @@ export const registerMoocRoutes = (
     res.status(204).end()
   })
 
+  app.post("/mooc-mock/set-course-access", json, (req, res) => {
+    const { course_id: courseId, access } = (req.body ?? {}) as {
+      course_id?: unknown
+      access?: unknown
+    }
+    const accesses: unknown[] = ["open", "forbidden", "deleted"] satisfies MockCourseAccess[]
+    if (typeof courseId !== "string" || !accesses.includes(access)) {
+      res.status(400).json({
+        error: "course_id must be a string and access one of " + JSON.stringify(accesses),
+      })
+      return
+    }
+    if (!controls.setCourseAccess(courseId, access as MockCourseAccess)) {
+      res.status(404).json({ error: `no such course: ${courseId}` })
+      return
+    }
+    res.status(204).end()
+  })
+
+  app.post("/mooc-mock/revoke-grant", (_req, res) => {
+    controls.revokeGrant()
+    res.status(204).end()
+  })
+
   app.post("/mooc-mock/set-current-user", json, (req, res) => {
     const { id } = (req.body ?? {}) as { id?: unknown }
     if (typeof id !== "string") {
@@ -1886,6 +2044,19 @@ export const registerMoocRoutes = (
       return
     }
     controls.setCurrentUser(id)
+    res.status(204).end()
+  })
+
+  app.post("/mooc-mock/publish-exercise-update", json, (req, res) => {
+    const { exercise_id: exerciseId } = (req.body ?? {}) as { exercise_id?: unknown }
+    if (typeof exerciseId !== "string") {
+      res.status(400).json({ error: "exercise_id must be a string" })
+      return
+    }
+    if (!controls.publishExerciseUpdate(exerciseId)) {
+      res.status(404).json({ error: `no such exercise: ${exerciseId}` })
+      return
+    }
     res.status(204).end()
   })
 
@@ -1970,6 +2141,16 @@ export const registerMoocRoutes = (
   // outside this process can reach no error the fixtures do not already
   // produce -- a 5xx above all, which is what the client's retry and
   // error-reporting paths are written for.
+  app.post("/mooc-mock/fail-next-archive", json, (req, res) => {
+    const { delayMs } = (req.body ?? {}) as { delayMs?: unknown }
+    if (delayMs !== undefined && typeof delayMs !== "number") {
+      res.status(400).json({ error: "delayMs must be a number" })
+      return
+    }
+    controls.failNextArchive(delayMs)
+    res.status(204).end()
+  })
+
   app.post("/mooc-mock/fail-next", json, (req, res) => {
     const { operationId, status } = (req.body ?? {}) as {
       operationId?: unknown

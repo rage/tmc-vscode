@@ -2,10 +2,10 @@ import { screen, render, waitFor } from "@testing-library/svelte"
 
 import { makeTmcKind } from "../../shared/lib"
 import App from "./App.svelte"
-import { initializationErrorHelpPanel } from "./test/fixtures"
+import { startupHelpPanel } from "./test/fixtures"
 import { dispatchToWebview, postedMessages } from "./test/setup"
 
-vi.mock("./panels/InitializationErrorHelp.svelte", async () => ({
+vi.mock("./panels/ErrorHelp.svelte", async () => ({
   default: (await import("./test/ThrowingPanel.svelte")).default,
 }))
 
@@ -14,7 +14,7 @@ suite("App render-crash boundary", () => {
     render(App)
     dispatchToWebview({
       type: "setPanel",
-      panel: initializationErrorHelpPanel(),
+      panel: startupHelpPanel(),
     })
     expect(await screen.findByText("Uncaught error: render boom")).toBeInTheDocument()
     expect(postedMessages).toHaveBeenCalledWith({

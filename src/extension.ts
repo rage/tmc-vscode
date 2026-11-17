@@ -4,7 +4,7 @@ import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
-import { backendName, LocalCourseData } from "../shared/lib"
+import { LocalCourseData, LOGGED_OUT_MESSAGE, toError } from "../shared/lib"
 import { onDidFinishSubmission, refreshLocalExercises, scanLocalExercises } from "./actions"
 import type {
   ActionContext,
@@ -49,12 +49,7 @@ import {
 } from "./config/constants"
 import Settings from "./config/settings"
 import { UserData } from "./config/userdata"
-import {
-  FileSystemError,
-  InitializationError,
-  presentationFor,
-  SESSION_ENDED_MESSAGE,
-} from "./errors"
+import { FileSystemError, InitializationError } from "./errors"
 import * as init from "./init"
 import { OpenCourseRefresh } from "./openCourseRefresh"
 import { TmcPanel } from "./panels/TmcPanel"
@@ -105,21 +100,18 @@ function makeInitializationErrorReporter(dialog: Dialog): InitializationErrorRep
       if (!first) {
         return
       }
-      const { message } = presentationFor(first.error)
-      const others =
-        new Set(failures.map(({ error }) => `${error.name}\n${error.message}`)).size - 1
-      const more =
-        others > 0
-          ? ` ${others} more ${others === 1 ? "problem is" : "problems are"} in the logs.`
-          : ""
-      void dialog.errorNotification(
+      const notification =
         `TestMyCode ${isDegraded ? "could not start" : "started with a problem"}. ` +
-          `${first.step} failed: ${message}${more}`,
-        first.error,
-        [
-          "Show Details",
-          (): void => void vscode.commands.executeCommand("tmc.viewInitializationErrorHelp"),
-        ],
+        `${first.step} failed.`
+      // The startup help lists every failure, where Show Details of one would show only it.
+      const startupHelp: NotificationButton = [
+        "Show Details",
+        (): void => void vscode.commands.executeCommand("tmc.viewInitializationErrorHelp"),
+      ]
+      void dialog.errorNotification(
+        notification,
+        isDegraded ? undefined : first.error,
+        ...(isDegraded ? [startupHelp] : []),
       )
     },
   }
@@ -183,10 +175,11 @@ async function activateFully(context: vscode.ExtensionContext): Promise<void> {
     if (!startupContext.isApplied) {
       void vscode.commands.executeCommand("setContext", "test-my-code:Degraded", true)
     }
-    const message = e instanceof Error ? e.message : String(e)
-    void vscode.window
-      .showErrorMessage(`TestMyCode could not start. ${message}`, "Show Logs")
-      .then((picked) => picked && Logger.show())
+    const error = toError(e)
+    void new Dialog().errorNotification(
+      "TestMyCode could not start. Show Details says what failed.",
+      error,
+    )
   }
 }
 
@@ -200,9 +193,11 @@ function refreshInBackground(
 ): void {
   lastBackgroundRefreshAt = Date.now()
   openCourseRefresh?.noteRefreshed()
-  void refreshEverything(ready, { silent: true, isPromptless }).catch((e) =>
-    Logger.error("Background refresh failed", e),
-  )
+  void refreshEverything(ready, {
+    silent: true,
+    isPromptless,
+    skipsRecentlyLostCourses: true,
+  }).catch((e) => Logger.error("Background refresh failed", e))
 }
 
 async function activateInner(
@@ -334,7 +329,7 @@ async function activateInner(
       "Log In",
       (): void => void vscode.commands.executeCommand("tmc.showMoocLogin"),
     ]
-    dialog.warningNotification(SESSION_ENDED_MESSAGE, ...(canOfferLogin ? [logIn] : []))
+    dialog.warningNotification(LOGGED_OUT_MESSAGE, ...(canOfferLogin ? [logIn] : []))
   }
 
   // Seeded from the startup check above; shared with the background poll further down.
@@ -440,7 +435,10 @@ async function activateInner(
   // The window that switched here has just offered whatever the startup refresh would.
   const openingSwitch = await courseWorkspaceSwitches.take(vscode.workspace.workspaceFile?.fsPath)
   const isOpenedBySwitch = openingSwitch !== undefined
-  const trustGate = new WorkspaceTrustGate()
+  const trustGate = new WorkspaceTrustGate(
+    ({ message, action }) => dialog.offer(message, action),
+    (message) => void dialog.notification(message),
+  )
   context.subscriptions.push(trustGate)
   const startup: Startup =
     langs.ok && resources.ok && workspaceManager && userData?.ok && exerciseDecorationProvider
@@ -476,6 +474,7 @@ async function activateInner(
     if (isRestrictedCourseWorkspace && activeCourseBackend !== undefined) {
       const course = ready.userData.getCourseBySlug(activeCourseBackend, activeCourse)
       void promptForCourseWorkspaceTrust(
+        readyContext.dialog,
         course.ok ? LocalCourseData.getCourseTitle(course.val) : activeCourse,
         context.workspaceState,
       )
@@ -500,6 +499,7 @@ async function activateInner(
   context.subscriptions.push(
     TmcPanel.registerSerializers(context, actionContext),
     TmcPanel.showSubmissionViews(context, actionContext),
+    TmcPanel.showLoginScreens(context, actionContext),
   )
   if (readyContext) {
     init.registerSettingsCallbacks(readyContext)
@@ -515,7 +515,7 @@ async function activateInner(
       moocAccount,
       vscode.authentication.registerAuthenticationProvider(
         MOOC_AUTHENTICATION_PROVIDER_ID,
-        backendName("mooc"),
+        "MOOC.fi",
         moocAccount,
       ),
       account,
@@ -615,9 +615,11 @@ async function activateInner(
     openCourseRefresh = new OpenCourseRefresh({
       openCourse: () => (authState.loggedIn ? openCourseId(readyContext) : undefined),
       refresh: (courseId) =>
-        void refreshEverything(readyContext, { silent: true, courseId }).catch((e) =>
-          Logger.error("Open course refresh failed", e),
-        ),
+        void refreshEverything(readyContext, {
+          silent: true,
+          courseId,
+          skipsRecentlyLostCourses: true,
+        }).catch((e) => Logger.error("Open course refresh failed", e)),
     })
     context.subscriptions.push(openCourseRefresh)
   }

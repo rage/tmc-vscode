@@ -384,20 +384,13 @@ export class ExerciseTestController implements vscode.Disposable {
     outcome: ExerciseTestOutcome,
     isAllPassed: boolean,
   ): void {
-    let message: string
-    if (outcome.kind === "examMode") {
-      message = "Tests are not run locally in exam mode."
-    } else if (isAllPassed && !outcome.isCourseDisabled) {
-      message = `All tests of ${exercise.exerciseSlug} passed.`
-    } else {
+    // Test Results already says that exam mode runs no tests locally.
+    if (outcome.kind === "examMode" || !isAllPassed || outcome.isCourseDisabled) {
       return
     }
-    // The panel says so itself when the exercise cannot be submitted.
-    if (
-      outcome.kind !== "examMode" &&
-      this._actionContext.authState.loggedIn &&
-      showLocalPassInResults(this._actionContext, exercise)
-    ) {
+    const message = `Tests pass on your computer for ${exercise.exerciseSlug}.`
+    // The panel says so itself when the exercise cannot be submitted, or needs a login first.
+    if (showLocalPassInResults(this._actionContext, exercise)) {
       return
     }
     const stored = this._actionContext.startup.userData.getExercise(exercise.id)
@@ -405,7 +398,7 @@ export class ExerciseTestController implements vscode.Disposable {
       return
     }
     const storedExercise = stored.val.exercise
-    const refusal = submitRefusalOf(storedExercise, new Date())
+    const refusal = submitRefusalOf(storedExercise, new Date(), stored.val.course)
     if (refusal) {
       const chapterName =
         storedExercise.kind === "mooc" ? storedExercise.data.chapter?.name : undefined

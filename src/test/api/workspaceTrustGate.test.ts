@@ -24,10 +24,10 @@ suite("WorkspaceTrustGate", function () {
     ask = vi.fn(async () => true)
     tell = vi.fn()
     gate = new WorkspaceTrustGate(
-      () => isTrusted,
-      () => now,
       ask,
       tell,
+      () => isTrusted,
+      () => now,
     )
   })
 

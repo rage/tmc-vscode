@@ -26,6 +26,8 @@ type Choice =
   | { kind: "organization"; organization: Organization }
   | { kind: "course"; courseId: CourseIdentifier; name: string; organizationSlug: string }
   | { kind: "added"; courseId: CourseIdentifier }
+  // Neither backend listed anything; the add-course screen says why for each, with Try Again.
+  | { kind: "unavailable" }
 
 interface ChoiceItem extends vscode.QuickPickItem {
   choice?: Choice
@@ -54,7 +56,8 @@ function courseItem(
 }
 
 /**
- * Lets the user pick a course from either backend, adds it and opens its course home.
+ * Lets the user pick a course from either backend in a quick pick, the Command Palette's fast
+ * path past the add-course screen, then adds it and opens its course home.
  *
  * courses.mooc.fi lists only the courses the user is enrolled in, so they come first and add in
  * one step. tmc.mooc.fi hides thousands of courses behind its organizations, so picking one of
@@ -79,6 +82,10 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
   }
   if (chosen.kind === "login") {
     await vscode.commands.executeCommand("tmc.showMoocLogin")
+    return
+  }
+  if (chosen.kind === "unavailable") {
+    await vscode.commands.executeCommand("tmc.showAddCourse")
     return
   }
   if (chosen.kind === "findCourse") {
@@ -241,11 +248,8 @@ function pickCourse(
       }
       renderFirstStep()
       if (quickPick.items.length === 0) {
-        void dialog.errorNotification(
-          `Failed to fetch courses from ${unavailableNames().join(" or ")}. ` +
-            "Check your network connection and that you are logged in.",
-        )
-        settle(undefined)
+        Logger.warn(`Failed to fetch courses from ${unavailableNames().join(" or ")}.`)
+        settle({ kind: "unavailable" })
       }
     })
 
@@ -262,8 +266,8 @@ function moocListingRows(
   if (listing === actions.MOOC_LOGIN) {
     return [
       {
-        label: `Log in to ${backendName("mooc")}`,
-        description: "to list the courses you are enrolled in",
+        label: "Log In",
+        description: "with your MOOC.fi account to list the courses you are enrolled in",
         iconPath: new vscode.ThemeIcon("sign-in"),
         choice: { kind: "login" },
       },
@@ -277,7 +281,7 @@ function moocListingRows(
   if (listing.val.length === 0) {
     return [
       {
-        label: `Find a course on ${backendName("mooc")}`,
+        label: `Find a Course on ${backendName("mooc")}`,
         description: "You are not enrolled on any course with programming exercises yet",
         iconPath: new vscode.ThemeIcon("link-external"),
         choice: { kind: "findCourse" },

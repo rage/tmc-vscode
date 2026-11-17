@@ -5,9 +5,10 @@ import * as vscode from "vscode"
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import type { Warned } from "../api/withOperation"
-import { failure } from "../api/withOperation"
+import { failure, reportFailureIn } from "../api/withOperation"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { isSubmitRefusal } from "../errors"
+import { submissionViews } from "../ui/submissionViews"
 import { runForExercise } from "./runForExercise"
 
 /** Asks before the exercise's last try; `true` when there are more, or the student agrees. */
@@ -64,10 +65,14 @@ async function confirmMissingFiles(
   return choice === "submit"
 }
 
-function refusedOrFailed(actionContext: ReadyActionContext, error: Error): Result<Warned, Error> {
+function refusedOrFailed(
+  actionContext: ReadyActionContext,
+  exercise: WorkspaceExercise,
+  error: Error,
+): Result<Warned, Error> {
   if (isSubmitRefusal(error)) {
-    // The course's rules, not a failure.
-    void actionContext.dialog.notification(error.message)
+    const shownIn = submissionViews.failureSink(exercise.id)
+    reportFailureIn(actionContext.dialog, shownIn, "Exercise submission failed.", error)
     return Ok({ warnings: [] })
   }
   return failure("Exercise submission failed.", error)
@@ -84,7 +89,7 @@ export async function submitExercise(
     async (exercise) => {
       const allowed = await actions.checkCanSubmit(actionContext, exercise)
       if (allowed.err) {
-        return refusedOrFailed(actionContext, allowed.val)
+        return refusedOrFailed(actionContext, exercise, allowed.val)
       }
       if (!(await confirmMissingFiles(actionContext, exercise))) {
         return Ok({ warnings: [] })
@@ -93,10 +98,11 @@ export async function submitExercise(
         return Ok({ warnings: [] })
       }
       const result = await actions.submitExercise(actionContext, exercise)
-      return result.err ? refusedOrFailed(actionContext, result.val) : result
+      return result.err ? refusedOrFailed(actionContext, exercise, result.val) : result
     },
     {
       trustedCommand: "tmc.submitExercise",
+      shownIn: (exercise) => submissionViews.failureSink(exercise.id),
       retryOffer: (exercise) => ({
         message: `The course workspace is trusted now. Submit ${exercise.exerciseSlug}?`,
         action: "Submit",

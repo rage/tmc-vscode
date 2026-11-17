@@ -14,7 +14,7 @@ import type { ExerciseDownload, ExerciseDownloadProgress, ExerciseDownloads } fr
 import type { Warned } from "../../api/withOperation"
 import type Settings from "../../config/settings"
 import * as errors from "../../errors"
-import { BottleneckError, InvalidTokenError } from "../../errors"
+import { BottleneckError, CourseAccessLostError, InvalidTokenError } from "../../errors"
 import { downloadFailures } from "../../ui/downloadFailures"
 import { exerciseOperations } from "../../ui/exerciseOperations"
 import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
@@ -132,6 +132,38 @@ suite("downloadOrUpdateExercises action", function () {
     expect(result.failed.length).toBe(0)
   })
 
+  test("refuses the exercises of a course its backend refused, downloading the rest", async function () {
+    const lostCourse = tmcLocalCourse({
+      id: 7,
+      title: "Lost Course",
+      exercises: [tmcCourseExercise({ id: 70, name: "lost_one" })],
+      accessLoss: { reason: "notFound", checkedAt: 0 },
+    })
+    tmcMockValues.downloadTmcExercises = createDownloadResult([helloWorld], [])
+    const context: ReadyActionContext = {
+      ...actionContext(),
+      startup: {
+        ...actionContext().startup,
+        userData: {
+          getCourses: () => [storedCourse, lostCourse],
+          getExercise: exerciseLookupOver([storedCourse, lostCourse]),
+        } as never,
+      },
+    }
+
+    const result = (
+      await downloadOrUpdateExercises(context, [idOfTmcExercise(1), idOfTmcExercise(70)])
+    ).unwrap()
+
+    expect(vi.mocked(tmcMock.downloadTmcExercises).mock.calls[0]?.[0]).toEqual([1])
+    expect(result.successful).toEqual([idOfTmcExercise(1)])
+    expect(result.failed).toEqual([idOfTmcExercise(70)])
+    expect(result.failureCause).toBeInstanceOf(CourseAccessLostError)
+    expect(result.warnings.map((w) => w.headline)).toEqual([
+      "Lost Course no longer exists, so its exercises cannot be downloaded.",
+    ])
+  })
+
   test("shows a requested download in a cancellable notification, an automatic one in the status bar", async function () {
     tmcMockValues.downloadTmcExercises = createDownloadResult([helloWorld], [])
 
@@ -222,7 +254,11 @@ suite("downloadOrUpdateExercises action", function () {
     expect(result.successful).toEqual([])
     expect(result.failed).toEqual([idOfTmcExercise(1), idOfTmcExercise(2)])
     expect(result.warnings).toEqual([
-      { headline: "Failed to download 2 exercises: hello_world, other_world.", error: error },
+      {
+        headline: "Failed to download 2 exercises: hello_world, other_world.",
+        error: error,
+        failedExercises: [idOfTmcExercise(1), idOfTmcExercise(2)],
+      },
     ])
   })
 
@@ -249,6 +285,7 @@ suite("downloadOrUpdateExercises action", function () {
           message: "The download did not complete.",
           details: "checksum mismatch",
         }),
+        failedExercises: [idOfTmcExercise(1), idOfTmcExercise(2)],
       },
     ])
   })
@@ -270,7 +307,11 @@ suite("downloadOrUpdateExercises action", function () {
     )
 
     expect(result.warnings).toEqual([
-      { headline: "Failed to download 2 exercises: hello_world, mooc-exercise.", error: moocError },
+      {
+        headline: "Failed to download 2 exercises: hello_world, mooc-exercise.",
+        error: moocError,
+        failedExercises: [idOfTmcExercise(1), idOfMoocExercise("mooc-exercise")],
+      },
     ])
   })
 
@@ -423,6 +464,7 @@ suite("downloadOrUpdateExercises action", function () {
       {
         headline: "Failed to download 2 exercises: exercise-uuid-3, exercise-uuid-4.",
         error: moocError,
+        failedExercises: [idOfMoocExercise(downloadedId), idOfMoocExercise(undownloadedId)],
       },
     ])
     expect(result.successful).toEqual([])
@@ -607,7 +649,7 @@ suite("downloadOrUpdateExercises action", function () {
 
       expect(result.successful).toEqual([fresh.id])
       expect(result.warnings.map((w) => w.headline)).toEqual([
-        `Downloaded the template of the exercise ${freshId}: the latest submission could not be restored. Use Download Old Submission to get it.`,
+        `Downloaded the template of the exercise ${freshId}: the latest submission could not be restored. Use History to get it.`,
       ])
     })
 
@@ -714,7 +756,12 @@ suite("downloadOrUpdateExercises cancellation and progress", function () {
   let downloadedIdsPerCall: ExerciseIdentifier[][]
 
   const actionContext = (): ReadyActionContext => ({
-    ...createMockActionContext({ startup: { langs: tmcMock } }),
+    ...createMockActionContext({
+      startup: {
+        langs: tmcMock,
+        userData: { getExercise: () => Err(new Error("not stored")) } as never,
+      },
+    }),
     // The real Dialog, so the fractions the action reports pass through the
     // production increment wrapper before they are asserted on.
     dialog: new Dialog(),

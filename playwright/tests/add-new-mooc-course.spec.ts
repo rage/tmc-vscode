@@ -3,6 +3,8 @@ import { expect } from "@playwright/test"
 import { MOCK_BACKEND_URL } from "../../backend/mockSession"
 import { courseWorkspaceSettings } from "../courseWorkspace"
 import { vsCodeTest } from "../fixtures"
+import { AddCoursePage } from "../pages/add-course"
+import { CourseHomePage } from "../pages/course-home"
 import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
 import { TestResultsPage } from "../pages/test-results"
@@ -12,7 +14,7 @@ import { TmcPage } from "../pages/tmc"
 // mock backend (backend/mooc, mounted in the same process as the legacy TMC
 // mock and routed via TMC_LANGS_MOOC_ROOT_URL in fixtures.ts). It covers the
 // full path the mooc migration adds: device-flow login -> picking an enrolled
-// course from the add-course quick pick -> the course's exercises in the Courses
+// course on the add-course screen -> the course's exercises in the Courses
 // view -> opening (downloading) an exercise from its context menu -> opening the
 // workspace -> opening the exercise file -> running the local tests -> submitting
 // -> the reduced mooc result panel.
@@ -40,11 +42,21 @@ vsCodeTest(
       await coursesView.goto()
     })
 
-    await vsCodeTest.step("add the mooc course", async () => {
+    await vsCodeTest.step("log in and see the enrolled course's card", async () => {
+      await coursesView.logInToMooc()
+      const card = new AddCoursePage(page, webview).card(courseTitle)
+      await expect(card).toContainText(
+        "A test python course served by the local mooc mock backend.",
+      )
+      await expect(card).not.toContainText("Added")
+    })
+
+    await vsCodeTest.step("add the mooc course, which opens its course home", async () => {
       const course = coursesView.row(courseTitle)
       await expect(course).toBeHidden()
-      await coursesView.addNewMoocCourse(courseTitle)
-      await expect(course).toHaveAccessibleName(/, courses\.mooc\.fi(,|$)/)
+      await new AddCoursePage(page, webview).addMoocCourse(courseTitle)
+      await new CourseHomePage(page, webview).expectShown(courseTitle)
+      await expect(course).not.toHaveAccessibleName(/mooc\.fi/)
     })
 
     await vsCodeTest.step("expand the course and see its exercises", async () => {
@@ -81,7 +93,7 @@ vsCodeTest(
       await expect(contents).toBeVisible()
     })
 
-    const allPassed = sidePanel.getByRole("heading", { name: "All tests passed locally" })
+    const allPassed = sidePanel.getByRole("heading", { name: "Tests pass on your computer" })
 
     await vsCodeTest.step("run tests", async () => {
       await page.getByText(fileContents).click()
@@ -98,12 +110,10 @@ vsCodeTest(
     })
 
     await vsCodeTest.step("submit exercise and see the reduced mooc result", async () => {
-      // The mooc submit renders the reduced result panel: an "Exercise passed" heading
+      // The mooc submit renders the reduced result panel: a "Passed" heading
       // (full points, as the backend's standing says) plus the score, not the TMC per-test
       // submission view.
-      const gradedHeading = sidePanel.getByRole("heading", {
-        name: "Exercise passed",
-      })
+      const gradedHeading = sidePanel.getByRole("heading", { name: "Passed", exact: true })
       await expect(gradedHeading).toBeHidden()
       await sidePanel.getByRole("button", { name: "Submit", exact: true }).click()
       await expect(gradedHeading).toBeVisible()
@@ -146,15 +156,17 @@ vsCodeTest("submitting an exercise gone from the server says so", async ({ page,
     await page.getByText("def hello()").click()
     await page
       .getByRole("toolbar", { name: "Editor actions" })
-      .getByLabel("Submit Solution", { exact: true })
+      .getByLabel("Submit", { exact: true })
       .click()
 
     await expect(sidePanel.getByRole("heading", { name: "Submission failed" })).toBeVisible()
     await expect(
-      sidePanel.getByText("This exercise no longer exists on courses.mooc.fi.", { exact: false }),
+      sidePanel.getByText("This exercise is no longer in the course.", { exact: false }),
     ).toBeVisible()
     await expect(sidePanel.getByRole("button", { name: "Refresh Courses" })).toBeVisible()
-    const details = await sidePanel.getByRole("group", { name: "Error details" }).textContent()
-    expect(details?.split("Caused by: 404 Not Found from")).toHaveLength(2)
+    await sidePanel.getByRole("button", { name: "Show Details" }).click()
+    const help = await new TmcPage(page, webview).panelHeaded("Error Details")
+    const cause = await help.getByRole("group", { name: "Cause" }).textContent()
+    expect(cause?.split("404 Not Found from")).toHaveLength(2)
   })
 })

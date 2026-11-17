@@ -14,8 +14,11 @@ import {
   AiUseRefusedError,
   DeadlinePassedError,
   OutOfTriesError,
+  presentationFor,
   WorkspaceUntrustedError,
 } from "../../errors"
+import type { ExerciseFailure } from "../../ui/submissionViews"
+import { submissionViews } from "../../ui/submissionViews"
 import { moocCourseExercise } from "../fixtures/courses"
 import { idOfMoocCourse, idOfMoocExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
@@ -114,9 +117,8 @@ suite("Submit exercise command", function () {
   })
 
   test("tells of a passed deadline before asking about the last try", async function () {
-    vi.mocked(actions.checkCanSubmit).mockResolvedValue(
-      Err(new DeadlinePassedError("The deadline of ex-1 has passed.")),
-    )
+    const refusal = new DeadlinePassedError("The deadline of ex-1 has passed.")
+    vi.mocked(actions.checkCanSubmit).mockResolvedValue(Err(refusal))
     const context = contextWith(exercise, 1)
 
     const result = await submitExercise(context, uri)
@@ -124,24 +126,58 @@ suite("Submit exercise command", function () {
     expect(result.ok).toBe(true)
     expect(context.dialog.confirm).not.toHaveBeenCalled()
     expect(actions.submitExercise).not.toHaveBeenCalled()
-    expect(context.dialog.notification).toHaveBeenCalledExactlyOnceWith(
-      "The deadline of ex-1 has passed.",
+    expect(context.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Exercise submission failed.",
+      refusal,
     )
   })
 
-  test("tells of no tries left as the final score it is, not as a failure", async function () {
-    vi.mocked(actions.submitExercise).mockResolvedValue(
-      Err(new OutOfTriesError("You have no tries left on ex-1, so its 2/3 points are final.")),
+  test("tells of no tries left as the refusal it is, which the dialog words as a warning", async function () {
+    const refusal = new OutOfTriesError(
+      "You have no tries left on ex-1, so its 2/3 points are final.",
     )
+    vi.mocked(actions.submitExercise).mockResolvedValue(Err(refusal))
     const context = contextWith(exercise)
 
     await submitExercise(context, uri)
 
-    expect(context.dialog.notification).toHaveBeenCalledExactlyOnceWith(
-      "You have no tries left on ex-1, so its 2/3 points are final.",
+    expect(context.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Exercise submission failed.",
+      refusal,
     )
-    expect(context.dialog.reportError).not.toHaveBeenCalled()
+    expect(presentationFor(refusal).isHeldBack).toBe(true)
     expect(context.dialog.errorNotification).not.toHaveBeenCalled()
+  })
+
+  test("with the exercise's results screen on screen, a refusal shows there alone", async function () {
+    const refusal = new DeadlinePassedError("The deadline of ex-1 has passed.")
+    vi.mocked(actions.checkCanSubmit).mockResolvedValue(Err(refusal))
+    const context = contextWith(exercise)
+    submissionViews.setShown({
+      id: 1,
+      type: "ExerciseSubmission",
+      exerciseId: exercise.id,
+      backend: "mooc",
+      exerciseName: "ex-1",
+      courseTitle: "Course",
+    })
+    onTestFinished(() => submissionViews.setShown(undefined))
+    const failures: ExerciseFailure[] = []
+    const subscription = submissionViews.onDidFail((failed) => failures.push(failed))
+    onTestFinished(() => subscription.dispose())
+
+    await submitExercise(context, uri)
+
+    expect(failures).toEqual([
+      {
+        exerciseId: exercise.id,
+        headline: "Exercise submission failed.",
+        error: refusal,
+        tone: "warning",
+      },
+    ])
+    expect(context.dialog.reportError).not.toHaveBeenCalled()
+    expect(context.dialog.notification).not.toHaveBeenCalled()
   })
 
   test("in Restricted Mode submits nothing, and once trusted asks before submitting", async function () {

@@ -116,7 +116,7 @@
         ? [
             { label: "Reset Exercise…", onselect: () => onaction(exercise, "reset") },
             {
-              label: "Download Old Submission…",
+              label: "History",
               onselect: () => onaction(exercise, "downloadOldSubmission"),
             },
           ]
@@ -128,7 +128,7 @@
               label:
                 exercise.passed || exercise.isOutOfTries
                   ? "Show Model Solution"
-                  : "Open in Course Material",
+                  : "Open Course Material",
               onselect: () => onopenmaterial(materialUrl),
             },
           ]

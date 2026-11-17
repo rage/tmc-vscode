@@ -36,19 +36,19 @@ suite("presentationFor", function () {
     expect(presentation.actions).toEqual([])
   })
 
-  test("a server error status reads as the server failing, not as the network", function () {
+  test("a server error status reads as the server failing, without host or code", function () {
     const raw = "HTTP error 503 Service Unavailable for https://courses.mooc.fi/x: <html>…</html>"
     const unavailable = Object.assign(new ServerError(raw), { httpStatus: 503 })
     const notFound = Object.assign(new NotFoundError(raw), { httpStatus: 404 })
 
     expect(presentationFor(Object.assign(unavailable, { backend: "mooc" })).message).toBe(
-      "courses.mooc.fi returned an error (503). Try again later.",
+      "The server ran into a problem. Try again later.",
     )
     expect(presentationFor(Object.assign(new ServerError(raw), { httpStatus: 503 })).message).toBe(
-      "The server returned an error (503). Try again later.",
+      "The server ran into a problem. Try again later.",
     )
     expect(presentationFor(Object.assign(notFound, { backend: "mooc" })).message).toBe(
-      "courses.mooc.fi returned an error (404).",
+      "The server refused the request. Try again later.",
     )
   })
 
@@ -56,7 +56,7 @@ suite("presentationFor", function () {
     const presentation = presentationFor(new ExerciseNotFoundError("This exercise is gone."))
 
     expect(presentation.message).toBe(
-      "This exercise is gone. Refresh the courses to see the course's current exercises.",
+      "This exercise is no longer in the course. Refresh the courses to see its exercises.",
     )
     expect(presentation.actions).toEqual([
       { label: "Refresh Courses", command: "tmcTreeView.refreshCourses" },
@@ -64,7 +64,7 @@ suite("presentationFor", function () {
   })
 
   // The CLI's message quotes the request URL, which belongs in the logs.
-  test("an unreachable backend is named, not its request URL", function () {
+  test("an unreachable backend names neither its host nor its request URL", function () {
     const presentation = presentationFor(
       Object.assign(
         new ConnectionError(
@@ -74,9 +74,7 @@ suite("presentationFor", function () {
       ),
     )
 
-    expect(presentation.message).toBe(
-      "courses.mooc.fi could not be reached. Check your network connection.",
-    )
+    expect(presentation.message).toBe("Could not reach the server. Check your network connection.")
   })
 
   test("an unreachable server no backend raised keeps its own message", function () {
@@ -86,7 +84,7 @@ suite("presentationFor", function () {
   test("a lost courses.mooc.fi scope offers the login command", function () {
     const presentation = presentationFor(new InsufficientScopeError("403 forbidden"))
 
-    expect(presentation.message).toContain("Log in again to continue")
+    expect(presentation.message).toBe("You were logged out. Log in again.")
     expect(presentation.actions).toEqual([{ label: "Log In", command: "tmc.showMoocLogin" }])
   })
 
@@ -96,12 +94,10 @@ suite("presentationFor", function () {
       "a lost courses.mooc.fi login",
       Object.assign(new AuthorizationError("Authentication required"), { backend: "mooc" }),
     ],
-  ])("%s says the session ended and offers the login command", function (_, error) {
+  ])("%s says the student was logged out and offers the login command", function (_, error) {
     const presentation = presentationFor(error)
 
-    expect(presentation.message).toBe(
-      "Your courses.mooc.fi session has ended. Log in again to continue.",
-    )
+    expect(presentation.message).toBe("You were logged out. Log in again.")
     expect(presentation.actions).toEqual([{ label: "Log In", command: "tmc.showMoocLogin" }])
   })
 
@@ -110,7 +106,7 @@ suite("presentationFor", function () {
     const presentation = presentationFor(new TmcLoginNotAcceptedError("not logged in"))
 
     expect(presentation.message).toBe(
-      "tmc.mooc.fi did not accept your login. It may not accept courses.mooc.fi logins yet.",
+      "This course's server did not accept your MOOC.fi login. Try again later.",
     )
     expect(presentation.actions).toEqual([])
   })
@@ -126,26 +122,18 @@ suite("presentationFor", function () {
   test("a failed initialization offers the help panel", function () {
     const presentation = presentationFor(new InitializationError("langs is missing"))
 
-    expect(presentation.message).toBe(
-      "Langs is missing. The help page lists what failed and how to fix it.",
-    )
+    expect(presentation.message).toBe("TestMyCode could not start. Show Help says how to fix this.")
     expect(presentation.actions).toEqual([
       { label: "Show Help", command: "tmc.viewInitializationErrorHelp" },
     ])
   })
 
-  test("a dropped enrollment offers the course page, and says downloads still work", function () {
+  test("a dropped enrollment offers to enroll again", function () {
     const presentation = presentationFor(new NotEnrolledError("422 from https://…"))
-    expect(presentation.message).toContain("You're no longer enrolled on this course")
-    expect(presentation.message).toContain("can't be submitted")
-    expect(presentation.message).toContain(
-      "You can still download them and your earlier submissions",
+    expect(presentation.message).toBe(
+      "You are no longer enrolled on this course. Enroll again, then refresh the course.",
     )
-    expect(presentation.message).not.toContain("fetched")
-    expect(presentation.message).not.toContain("422")
-    expect(presentation.actions).toEqual([
-      { label: "Open Course Page", command: "tmc.enrollOnCourse" },
-    ])
+    expect(presentation.actions).toEqual([{ label: "Enroll Again", command: "tmc.enrollOnCourse" }])
   })
 
   test.each([
@@ -162,15 +150,12 @@ suite("presentationFor", function () {
     expect(isSubmitRefusal(error)).toBe(true)
   })
 
-  test("a dropped enrollment names the backend to re-enroll on when the error does", function () {
+  test("a dropped enrollment does not name the backend", function () {
     const withBackend = presentationFor(
       Object.assign(new NotEnrolledError("not enrolled"), { backend: "tmc" as const }),
     )
-    const withoutBackend = presentationFor(new NotEnrolledError("not enrolled"))
 
-    expect(withBackend.message).toContain("Enroll on the course again on tmc.mooc.fi")
-    expect(withoutBackend.message).toContain("Enroll on the course again,")
-    expect(withoutBackend.message).not.toContain("tmc.mooc.fi")
+    expect(withBackend.message).not.toContain("tmc.mooc.fi")
   })
 
   test("a CLI that cannot run points at the antivirus help", function () {
@@ -183,7 +168,7 @@ suite("presentationFor", function () {
   })
 
   test("an expired upload and an obsolete client each state their own remedy", function () {
-    expect(presentationFor(new UploadExpiredError("410 gone")).message).toContain("try again")
+    expect(presentationFor(new UploadExpiredError("410 gone")).message).toContain("Submit again")
     const obsolete = presentationFor(new ObsoleteClientError("too old"))
     expect(obsolete.message).toContain("out of date")
     expect(obsolete.actions).toEqual([

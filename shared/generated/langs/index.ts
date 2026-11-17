@@ -17,6 +17,7 @@ import {
     zCourseDetails,
     zCourseExercise,
     zCourseProgress,
+    zCourseRefusalKind,
     zDataKind,
     zDownloadOrUpdateMoocCourseExercisesResult,
     zDownloadOrUpdateTmcCourseExercisesResult,
@@ -88,6 +89,7 @@ import {
     zTmcStyleValidationError,
     zTmcStyleValidationResult,
     zTmcStyleValidationStrategy,
+    zUncheckedMoocCourse,
     zUpdateResult,
 } from './zod.gen';
 
@@ -176,6 +178,13 @@ export type CourseExercise = z.infer<typeof CourseExercise>;
  */
 export const CourseProgress = zCourseProgress;
 export type CourseProgress = z.infer<typeof CourseProgress>;
+
+/**
+ * How courses.mooc.fi refused one course. The values are the CLI error kinds the same response
+ * fails a single-course command with.
+ */
+export const CourseRefusalKind = zCourseRefusalKind;
+export type CourseRefusalKind = z.infer<typeof CourseRefusalKind>;
 
 export const DataKind = zDataKind;
 export type DataKind = z.infer<typeof DataKind>;
@@ -543,6 +552,12 @@ export type TmcStyleValidationResult = z.infer<typeof TmcStyleValidationResult>;
  */
 export const TmcStyleValidationStrategy = zTmcStyleValidationStrategy;
 export type TmcStyleValidationStrategy = z.infer<typeof TmcStyleValidationStrategy>;
+
+/**
+ * A course [`check_mooc_exercise_updates`] could not check.
+ */
+export const UncheckedMoocCourse = zUncheckedMoocCourse;
+export type UncheckedMoocCourse = z.infer<typeof UncheckedMoocCourse>;
 
 /**
  * Updated exercises.

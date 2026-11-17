@@ -19,8 +19,10 @@ import {
   formatDeadlineBriefly,
   formatNearRelativeTime,
 } from "../utilities"
+import { failedUpdates } from "./failedUpdates"
+import { recentPolicyChanges } from "./recentPolicyChanges"
 import { recentUpdates } from "./recentUpdates"
-import type { ExerciseView } from "./treeview/courseViewModel"
+import type { ExerciseView, PartView } from "./treeview/courseViewModel"
 import {
   buildCourseView,
   isLeftToDo,
@@ -44,6 +46,38 @@ function isOnDisk(exercise: ExerciseView): boolean {
   return exercise.status === "opened" || exercise.status === "closed"
 }
 
+function courseView(
+  { startup }: ReadyActionContext,
+  course: LocalCourseData,
+  now: Date,
+): PartView[] {
+  return buildCourseView(course, {
+    onDisk: onDiskByCourse(startup.workspaceManager.getExercises())(course),
+    downloadStatusOf,
+    updateable: updateablesRegistry.get(LocalCourseData.getCourseId(course)),
+    isRemoved: (id) => updateablesRegistry.isRemoved(id),
+    now,
+  })
+}
+
+function exerciseToContinueIn(exercises: ExerciseView[]): ExerciseView | undefined {
+  const leftToDo = exercises.filter((ex) => isLeftToDo(ex))
+  return leftToDo.find((ex) => isOnDisk(ex)) ?? leftToDo[0]
+}
+
+/**
+ * The exercise the course home's Continue opens: the first left to do that is on disk, else the
+ * first left to do. `undefined` when nothing is left.
+ */
+export function exerciseToContinue(
+  actionContext: ReadyActionContext,
+  course: LocalCourseData,
+  now = new Date(),
+): ExerciseIdentifier | undefined {
+  return exerciseToContinueIn(courseView(actionContext, course, now).flatMap((x) => x.exercises))
+    ?.id
+}
+
 /**
  * What the course home shows of a stored course, from the state the Courses view is drawn from.
  *
@@ -54,20 +88,14 @@ export function buildCourseHomeView(
   courseId: CourseIdentifier,
   now = new Date(),
 ): Result<CourseHomeView, Error> {
-  const { userData, workspaceManager } = actionContext.startup
+  const { userData } = actionContext.startup
   const stored = userData.getCourse(courseId)
   if (stored.err) {
     return stored
   }
   const course = stored.val
   const locale = vscode.env.language
-  const parts = buildCourseView(course, {
-    onDisk: onDiskByCourse(workspaceManager.getExercises())(course),
-    downloadStatusOf,
-    updateable: updateablesRegistry.get(courseId),
-    isRemoved: (id) => updateablesRegistry.isRemoved(id),
-    now,
-  })
+  const parts = courseView(actionContext, course, now)
   const exercises = parts.flatMap((part) => part.exercises)
   const deadlineText = (date: Date | null): DeadlineText | undefined =>
     date
@@ -81,8 +109,7 @@ export function buildCourseHomeView(
   const newKeys = new Set(
     LocalCourseData.getNewExercises(course).map((id) => ExerciseIdentifier.key(id)),
   )
-  const leftToDo = exercises.filter((ex) => isLeftToDo(ex))
-  const nextExercise = leftToDo.find((ex) => isOnDisk(ex)) ?? leftToDo[0]
+  const nextExercise = exerciseToContinueIn(exercises)
   const openCourse = openCourseId(actionContext)
   const isWorkspaceOpen = openCourse !== undefined && CourseIdentifier.equals(openCourse, courseId)
 
@@ -94,16 +121,20 @@ export function buildCourseHomeView(
     materialUrl: LocalCourseData.getMaterialUrl(course) ?? null,
     awardedPoints: course.data.awardedPoints,
     availablePoints: course.data.availablePoints,
-    nextDeadline: deadlineText(
-      findNextDateAfter(
-        now,
-        parts.map((part) => part.nextDeadline),
-      ),
-    ),
+    // Nothing can be submitted to a course its backend refuses, so no deadline is ahead.
+    nextDeadline: LocalCourseData.getAccessLoss(course)
+      ? undefined
+      : deadlineText(
+          findNextDateAfter(
+            now,
+            parts.map((part) => part.nextDeadline),
+          ),
+        ),
     hasSoftDeadlines: exercises.some((ex) => !ex.isHard),
     isExamMode: LocalCourseData.isExamMode(course),
     isDisabled: LocalCourseData.isDisabled(course),
     isNotEnrolled: LocalCourseData.isNotEnrolled(course),
+    accessLoss: LocalCourseData.getAccessLoss(course) ?? null,
     isOffline: !actionContext.coursesTree.isBackendReachable(course.kind),
     aiPolicy:
       course.kind === "mooc"
@@ -122,10 +153,20 @@ export function buildCourseHomeView(
           },
         }
       : {}),
+    isAllDone: exercises.length > 0 && nextExercise === undefined,
     newExercises: exercises
       .filter((ex) => ex.status === "new" && newKeys.has(ExerciseIdentifier.key(ex.id)))
       .map(({ id, name }) => ({ id, name })),
     updates: exercises.filter((ex) => ex.isUpdateable).map(({ id, name }) => ({ id, name })),
+    failedUpdates: failedUpdates
+      .all()
+      .filter((failed) => CourseIdentifier.equals(failed.courseId, courseId))
+      .map(({ exerciseId, exerciseName, reason }) => ({
+        id: exerciseId,
+        name: exerciseName,
+        reason,
+      })),
+    aiPolicyChange: recentPolicyChanges.get(courseId) ?? null,
     recentlyUpdated: recentUpdates.get(courseId),
     parts: parts.map((part) => ({
       key: part.key,
@@ -142,9 +183,9 @@ export function buildCourseHomeView(
               " can be tested but not submitted.",
           }
         : part.lockingStatus === "NotUnlockedYet"
-          ? { lockedReason: "Locked until you have completed the chapters before it." }
+          ? { lockedReason: "Complete earlier chapters first." }
           : part.lockingStatus === "CompletedAndLocked"
-            ? { lockedReason: "You have completed and locked this chapter." }
+            ? { lockedReason: "This chapter is locked." }
             : {}),
       exercises: part.exercises.map((ex) => {
         const deadline = deadlineText(shownDeadline(ex))

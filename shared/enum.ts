@@ -101,9 +101,9 @@ export function match<A, B, C, D>(data: Enum<A, B>, tmc: (x: A) => C, mooc: (x: 
 }
 
 /**
- * The name to show the user for a backend. Course slugs and titles are only
- * unique within one backend, so anything listing courses from both must name
- * the backend alongside them.
+ * The name to show the user for a backend, only where they pick a course: elsewhere student
+ * text names neither host. Course slugs and titles are only unique within one backend, so a
+ * list of courses from both must name the backend alongside them.
  *
  * This is the only place those names are spelled: no component, panel or message
  * writes "tmc.mooc.fi", "TestMyCode", "courses.mooc.fi" or "Courses MOOC" itself.
@@ -112,14 +112,6 @@ export function match<A, B, C, D>(data: Enum<A, B>, tmc: (x: A) => C, mooc: (x: 
  */
 export function backendName(kind: BackendKind): string {
   return kind === "tmc" ? "tmc.mooc.fi" : "courses.mooc.fi"
-}
-
-/**
- * The name to show the user for a backend's paste service, where an exercise can be shared
- * for help. Derived from {@link backendName} so the two never disagree.
- */
-export function pasteServiceName(kind: BackendKind): string {
-  return `${backendName(kind)} paste`
 }
 
 export function makeTmcKind<T>(t: T): { kind: "tmc" } & { data: T } {

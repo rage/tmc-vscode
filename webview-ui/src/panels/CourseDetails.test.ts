@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/svelte"
 import { tick } from "svelte"
 
 import type { CourseDetailsPanel, CourseHomeView } from "../../../shared/lib"
-import { makeMoocKind, makeTmcKind, SESSION_EXPIRED_DETAIL } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind, LOGGED_OUT_MESSAGE } from "../../../shared/lib"
 import { courseHomeExercise, courseHomeView, MOOC_INSTANCE_ID } from "../test/fixtures"
 import {
   dispatchToWebview as dispatch,
@@ -123,7 +123,7 @@ suite("the course home", () => {
       }),
     )
 
-    expect(screen.getByText("mooc · tmc.mooc.fi")).toBeInTheDocument()
+    expect(screen.getByText("mooc")).toBeInTheDocument()
     expect(screen.getByRole("meter", { name: "Points" })).toHaveAttribute(
       "aria-valuetext",
       "3 / 8 points",
@@ -197,7 +197,7 @@ suite("the course home", () => {
             key: "chapter:2",
             name: "Loops",
             isDefaultOpen: true,
-            lockedReason: "You have completed and locked this chapter.",
+            lockedReason: "This chapter is locked.",
             exercises: [
               courseHomeExercise(1, "while", { status: "opened", triesLeft: 2 }),
               courseHomeExercise(2, "for", {
@@ -220,7 +220,7 @@ suite("the course home", () => {
       "title",
       "The deadline of for has passed.",
     )
-    expect(screen.getByText(/You have completed and locked this chapter\./)).toBeInTheDocument()
+    expect(screen.getByText(/This chapter is locked\./)).toBeInTheDocument()
   })
 
   test("says an exercise waits for teacher review instead of showing its held-back points", async () => {
@@ -245,7 +245,7 @@ suite("the course home", () => {
     )
 
     const [row] = screen.getAllByRole("listitem")
-    expect(within(row as HTMLElement).getByText("waiting for teacher review")).toHaveAttribute(
+    expect(within(row as HTMLElement).getByText("waiting for review")).toHaveAttribute(
       "title",
       "The points wait for a teacher's review.",
     )
@@ -277,7 +277,7 @@ suite("the course home", () => {
 
     const [row] = screen.getAllByRole("listitem")
     expect(row).toHaveTextContent("2/2")
-    expect(within(row as HTMLElement).getByText("waiting for teacher review")).toBeInTheDocument()
+    expect(within(row as HTMLElement).getByText("waiting for review")).toBeInTheDocument()
   })
 
   test("calls an exercise on disk Downloaded until the course workspace is open", async () => {
@@ -456,7 +456,7 @@ suite("the course home", () => {
     await fireEvent.click(screen.getByRole("menuitem", { name: "Reset Exercise…" }))
     await fireEvent.click(screen.getByRole("button", { name: "More Actions for 01_hello" }))
     await tick()
-    await fireEvent.click(screen.getByRole("menuitem", { name: "Download Old Submission…" }))
+    await fireEvent.click(screen.getByRole("menuitem", { name: "History" }))
 
     expect(postedMessages.mock.calls.map(([message]) => message)).toEqual([
       exerciseAction(panel, 2, "download"),
@@ -526,6 +526,37 @@ suite("the course home", () => {
     expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "updateExercises"))
   })
 
+  test("turns the updates notice into a warning of the ones that failed, with Try Again", async () => {
+    const hello = makeTmcKind({ tmcExerciseId: 1 })
+    const reason = "The exercise on the server is not a valid exercise package."
+    const panel = await renderHome(
+      courseHomeView({
+        updates: [{ id: hello, name: "01_hello" }],
+        failedUpdates: [{ id: hello, name: "01_hello", reason }],
+      }),
+    )
+
+    const notices = screen.getByRole("list", { name: "Course notices" })
+    expect(notices).toHaveTextContent(/Couldn't update 1 exercise\s*01_hello\. The exercise on the/)
+    expect(within(notices).queryByRole("button", { name: "Update" })).not.toBeInTheDocument()
+    within(notices).getByRole("button", { name: "Try Again" }).click()
+
+    expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "updateExercises"))
+  })
+
+  test("says how the AI policy changed until dismissed", async () => {
+    const panel = await renderHome(
+      courseHomeView({ aiPolicyChange: "AI may not be used at any point." }),
+    )
+
+    expect(screen.getByRole("list", { name: "Course notices" })).toHaveTextContent(
+      /AI policy changed\s*AI may not be used at any point\./,
+    )
+    await clickIconButton("Dismiss the AI policy notice")
+
+    expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "dismissAiPolicyChange"))
+  })
+
   test("says what an automatic update replaced until dismissed", async () => {
     const panel = await renderHome(courseHomeView({ recentlyUpdated: ["01_hello", "02_loops"] }))
 
@@ -582,35 +613,47 @@ suite("the course home", () => {
     await renderHome(courseHomeView({ isOffline: true, isDisabled: true, isExamMode: true }))
 
     const notices = screen.getByRole("list", { name: "Course notices" })
-    expect(notices).toHaveTextContent("tmc.mooc.fi could not be reached")
+    expect(notices).toHaveTextContent("Could not reach the server")
     expect(notices).toHaveTextContent("This course is disabled")
     expect(notices).toHaveTextContent("This is an exam")
   })
 
   test("tells a student no longer enrolled to enroll again", async () => {
-    await renderHome(
-      courseHomeView({
-        backend: "mooc",
-        isNotEnrolled: true,
-        materialUrl: "https://courses.example/org/o/courses/c",
-      }),
-      moocPanel(),
-    )
+    const panel = moocPanel()
+    await renderHome(courseHomeView({ backend: "mooc", isNotEnrolled: true }), panel)
 
     const notices = screen.getByRole("list", { name: "Course notices" })
     expect(notices).toHaveTextContent("You are not enrolled on this course")
-    within(notices).getByRole("button", { name: "Open Course Page" }).click()
-    expect(postedMessages).toHaveBeenCalledWith({
-      type: "openLinkInBrowser",
-      url: "https://courses.example/org/o/courses/c",
-    })
+    within(notices).getByRole("button", { name: "Enroll Again" }).click()
+    expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "findCourseOnline"))
+    within(notices).getByRole("button", { name: "Remove Course" }).click()
+    expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "removeCourse"))
+  })
+
+  test.each([
+    ["forbidden", "You no longer have access to this course"],
+    ["notFound", "This course no longer exists"],
+  ] as const)("says why a %s course is out of reach, and what to do", async (accessLoss, title) => {
+    const panel = moocPanel()
+    await renderHome(courseHomeView({ backend: "mooc", accessLoss, isNotEnrolled: true }), panel)
+
+    const notices = screen.getByRole("list", { name: "Course notices" })
+    expect(notices).toHaveTextContent(title)
+    expect(notices).toHaveTextContent("Your exercises stay on this computer")
+    // The access loss says it all; not being enrolled is the lesser news.
+    expect(notices).not.toHaveTextContent("You are not enrolled")
+    expect(screen.queryByRole("button", { name: /^Download/ })).toBeNull()
+    within(notices).getByRole("button", { name: "Find the Course" }).click()
+    expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "findCourseOnline"))
+    within(notices).getByRole("button", { name: "Remove Course" }).click()
+    expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "removeCourse"))
   })
 
   test("names an expired session as the account status bar item does, with Log In", async () => {
     await renderHome(courseHomeView({ isLoggedIn: false, isSessionExpired: true }))
 
     const notices = screen.getByRole("list", { name: "Course notices" })
-    expect(notices).toHaveTextContent(`Session expired ${SESSION_EXPIRED_DETAIL}`)
+    expect(notices).toHaveTextContent(`Logged out ${LOGGED_OUT_MESSAGE}`)
     expect(notices).not.toHaveTextContent("Not logged in")
     within(notices).getByRole("button", { name: "Log In" }).click()
     expect(postedMessages).toHaveBeenCalledWith({
@@ -627,15 +670,33 @@ suite("the course home", () => {
         (_, node) =>
           node?.classList.contains("ai-policy") === true &&
           node.textContent?.replaceAll(/\s+/g, " ").trim() ===
-            "AI use: AI may not be used at any point. TestMyCode turns AI assistance off in the course workspace.",
+            "AI use: AI may not be used at any point. AI assistance is off in this course.",
       ),
     ).toBeInTheDocument()
+  })
+
+  test("says nothing of an AI policy the course has not set", async () => {
+    await renderHome(courseHomeView({ aiPolicy: { policy: "not_set", isAiAllowed: false } }))
+
+    expect(screen.queryByText(/AI/)).not.toBeInTheDocument()
   })
 
   test("shows no notices when there is nothing to say", async () => {
     await renderHome()
 
     expect(screen.queryByRole("list", { name: "Course notices" })).not.toBeInTheDocument()
+  })
+
+  test("says when nothing is left to do, unless the course itself is out of reach", async () => {
+    const panel = await renderHome(courseHomeView({ isAllDone: true }))
+
+    expect(screen.getByRole("list", { name: "Course notices" })).toHaveTextContent(
+      "Nothing left to do right now",
+    )
+
+    sendView(panel, courseHomeView({ isAllDone: true, accessLoss: "forbidden" }))
+
+    await vi.waitFor(() => expect(screen.queryByText(/Nothing left to do/)).not.toBeInTheDocument())
   })
 
   test("states the soft-deadline policy only when a soft deadline binds", async () => {
@@ -699,7 +760,7 @@ suite("the course home", () => {
     expect(screen.queryByRole("button", { name: "More Actions for two" })).not.toBeInTheDocument()
     await fireEvent.click(screen.getByRole("button", { name: "More Actions for one" }))
     await tick()
-    await fireEvent.click(screen.getByRole("menuitem", { name: "Open in Course Material" }))
+    await fireEvent.click(screen.getByRole("menuitem", { name: "Open Course Material" }))
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "openLinkInBrowser",
@@ -755,7 +816,7 @@ suite("the course home", () => {
 
     replyToRequest("requestCourseDetailsData", {
       ok: false,
-      error: { message: "Failed to read the course.", details: "no such course" },
+      error: { message: "Failed to read the course." },
     })
 
     expect(
@@ -765,7 +826,7 @@ suite("the course home", () => {
     expect(screen.queryByText(/Loading/)).not.toBeInTheDocument()
 
     postedMessages.mockClear()
-    ;(await screen.findByRole("button", { name: "Retry" })).click()
+    ;(await screen.findByRole("button", { name: "Try Again" })).click()
 
     expect(postedMessages).toHaveBeenCalledWith({
       type: "requestCourseDetailsData",
@@ -808,5 +869,27 @@ suite("the course home", () => {
       expect(document.querySelector('[title="Refresh"]')).toHaveAttribute("aria-disabled", "false"),
     )
     expect(screen.getByRole("alert")).toHaveTextContent("The server did not answer.")
+  })
+})
+
+suite("CourseDetails action failures", () => {
+  test("keeps a failure the host resends before the course arrives, below the notices", async () => {
+    const panel = tmcPanel()
+    render(CourseDetails, { props: { panel } })
+    dispatch({
+      type: "operationFailed",
+      target: { id: panel.id, type: panel.type },
+      failure: {
+        serial: 7,
+        tone: "error",
+        title: "Failed to download the exercises.",
+        error: { message: "tmc.mooc.fi returned an error (500)." },
+      },
+    })
+    sendView(panel, courseHomeView({ title: "Python Course" }))
+
+    const alert = await screen.findByRole("alert")
+    expect(alert).toHaveTextContent("Failed to download the exercises.")
+    expect(screen.getByRole("heading", { level: 1, name: "Python Course" })).toBeInTheDocument()
   })
 })

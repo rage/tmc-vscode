@@ -13,8 +13,7 @@
   import {
     aiAssistanceSentence,
     aiPolicyRule,
-    backendName,
-    SESSION_EXPIRED_DETAIL,
+    LOGGED_OUT_MESSAGE,
     SOFT_DEADLINE_PENALTY,
   } from "../../../shared/lib"
   import type { BarAction } from "../components/ActionBar.svelte"
@@ -24,13 +23,15 @@
   import ErrorNotice from "../components/ErrorNotice.svelte"
   import Meter from "../components/Meter.svelte"
   import PanelHeader from "../components/PanelHeader.svelte"
+  import ScreenFailures from "../components/ScreenFailures.svelte"
   import Spinner from "../components/Spinner.svelte"
   import ToolbarButton from "../components/ToolbarButton.svelte"
   import { announce, reducedMotion } from "../utilities/a11y.svelte"
+  import { listenForFailures } from "../utilities/screenFailures.svelte"
   import { addMessageListener, createRequester, HOST_STATE_TIMEOUT_MS } from "../utilities/script"
   import { restoreScroll, uiState } from "../utilities/uiState.svelte"
   import { vscode } from "../utilities/vscode"
-  import type { CourseNotice } from "./courseHome/CourseNotices.svelte"
+  import type { CourseNotice, CourseNoticeAction } from "./courseHome/CourseNotices.svelte"
   import CourseNotices from "./courseHome/CourseNotices.svelte"
   import CoursePart from "./courseHome/CoursePart.svelte"
 
@@ -63,7 +64,9 @@
   const completedOpenCount = $derived(
     exercises.filter((ex) => ex.passed && ex.status === "opened").length,
   )
-  const canDownload = $derived(view !== undefined && !view.isDisabled && view.isLoggedIn)
+  const canDownload = $derived(
+    view !== undefined && !view.isDisabled && view.accessLoss === null && view.isLoggedIn,
+  )
 
   async function requestData() {
     dataError = undefined
@@ -88,8 +91,11 @@
   // Its id and type are all the listener filters on, and they never change: a new panel remounts.
   const listeningPanel = untrack(() => panel)
   addMessageListener(listeningPanel, (message) => {
-    view = message.view
+    if (message.type === "setCourseHomeView") {
+      view = message.view
+    }
   })
+  const screenFailures = listenForFailures(listeningPanel)
 
   async function refresh() {
     if (refreshing) {
@@ -194,53 +200,77 @@
     if (!view) {
       return []
     }
-    const site = backendName(view.backend)
-    const materialUrl = view.materialUrl
+    const findCourse: CourseNoticeAction = {
+      label: "Find the Course",
+      onclick: () => runCourseAction("findCourseOnline"),
+    }
+    const removeCourse: CourseNoticeAction = {
+      label: "Remove Course",
+      onclick: () => runCourseAction("removeCourse"),
+    }
     const candidates: (CourseNotice | false)[] = [
       view.isRestricted && {
         key: "restricted",
         tone: "warning",
         title: "Restricted Mode",
-        detail: "Trust this course workspace to run tests, submit and share exercises.",
-        action: { label: "Trust", onclick: () => runCommand("tmc.trustCourseWorkspace") },
+        detail: "Trust this course workspace to run tests, submit and get help.",
+        actions: [{ label: "Trust", onclick: () => runCommand("tmc.trustCourseWorkspace") }],
       },
       view.isSessionExpired && {
         key: "sessionExpired",
         tone: "warning",
-        title: "Session expired",
-        detail: SESSION_EXPIRED_DETAIL,
-        action: { label: "Log In", onclick: () => runCommand("tmc.showMoocLogin") },
+        title: "Logged out",
+        detail: LOGGED_OUT_MESSAGE,
+        actions: [{ label: "Log In", onclick: () => runCommand("tmc.showMoocLogin") }],
       },
       !view.isLoggedIn &&
         !view.isSessionExpired && {
           key: "loggedOut",
           tone: "info",
           title: "Not logged in",
-          detail: `Log in to ${backendName("mooc")} to download and submit exercises.`,
-          action: { label: "Log In", onclick: () => runCommand("tmc.showMoocLogin") },
+          detail: "Log in with your MOOC.fi account to download and submit exercises.",
+          actions: [{ label: "Log In", onclick: () => runCommand("tmc.showMoocLogin") }],
         },
       view.isLoggedIn &&
         view.isOffline && {
           key: "offline",
           tone: "warning",
-          title: `${site} could not be reached`,
+          title: "Could not reach the server",
           detail: "Showing the exercises on this computer; deadlines may be out of date.",
         },
-      view.isNotEnrolled && {
-        key: "notEnrolled",
+      view.accessLoss === "forbidden" && {
+        key: "accessLoss",
         tone: "warning",
-        title: "You are not enrolled on this course",
-        detail: `Enroll on the course on ${site} to submit its exercises, then refresh it here.`,
-        action: materialUrl
-          ? { label: "Open Course Page", onclick: () => openInBrowser(materialUrl) }
-          : undefined,
+        title: "You no longer have access to this course",
+        detail:
+          "It may have been hidden or closed. " +
+          "Your exercises stay on this computer, and their tests still run.",
+        actions: [findCourse, removeCourse],
       },
-      view.isDisabled && {
-        key: "disabled",
+      view.accessLoss === "notFound" && {
+        key: "accessLoss",
         tone: "warning",
-        title: "This course is disabled",
-        detail: "Its exercises cannot be downloaded or submitted.",
+        title: "This course no longer exists",
+        detail:
+          "It may have been removed or replaced by a new course. " +
+          "Your exercises stay on this computer, and their tests still run.",
+        actions: [findCourse, removeCourse],
       },
+      view.isNotEnrolled &&
+        !view.accessLoss && {
+          key: "notEnrolled",
+          tone: "warning",
+          title: "You are not enrolled on this course",
+          detail: "Enroll again to submit its exercises, then refresh the course.",
+          actions: [{ ...findCourse, label: "Enroll Again" }, removeCourse],
+        },
+      view.isDisabled &&
+        !view.accessLoss && {
+          key: "disabled",
+          tone: "warning",
+          title: "This course is disabled",
+          detail: "Its exercises cannot be downloaded or submitted.",
+        },
       view.isExamMode && {
         key: "exam",
         tone: "info",
@@ -252,22 +282,53 @@
         tone: "info",
         title: plural(view.newExercises.length, "new exercise"),
         detail: listNames(view.newExercises.map((ex) => ex.name)),
-        action:
+        actions:
           canDownload && !view.isOffline
-            ? { label: "Download", onclick: () => runCourseAction("downloadNewExercises") }
-            : undefined,
+            ? [{ label: "Download", onclick: () => runCourseAction("downloadNewExercises") }]
+            : [],
         ondismiss: () => runCourseAction("dismissNewExercises"),
         dismissLabel: "Dismiss the new exercises",
       },
-      view.updates.length > 0 && {
+      view.updates.length > 0 &&
+        view.failedUpdates.length === 0 && {
+          key: "updates",
+          tone: "info",
+          title: view.updates.length === 1 ? "1 update" : `${view.updates.length} updates`,
+          detail: `${listNames(view.updates.map((ex) => ex.name))}. Your own code is kept.`,
+          actions:
+            canDownload && !view.isOffline
+              ? [{ label: "Update", onclick: () => runCourseAction("updateExercises") }]
+              : [],
+        },
+      view.failedUpdates.length > 0 && {
         key: "updates",
-        tone: "info",
-        title: view.updates.length === 1 ? "1 update" : `${view.updates.length} updates`,
-        detail: `${listNames(view.updates.map((ex) => ex.name))}. Your own code is kept.`,
-        action:
+        tone: "warning",
+        title: `Couldn't update ${plural(view.failedUpdates.length, "exercise")}`,
+        detail: [
+          `${listNames(view.failedUpdates.map((ex) => ex.name))}.`,
+          ...new Set(view.failedUpdates.map((ex) => ex.reason).filter((reason) => reason !== "")),
+        ].join(" "),
+        actions:
           canDownload && !view.isOffline
-            ? { label: "Update", onclick: () => runCourseAction("updateExercises") }
-            : undefined,
+            ? [{ label: "Try Again", onclick: () => runCourseAction("updateExercises") }]
+            : [],
+      },
+      view.isAllDone &&
+        !view.accessLoss &&
+        !view.isNotEnrolled &&
+        !view.isDisabled && {
+          key: "allDone",
+          tone: "info",
+          title: "Nothing left to do right now",
+          detail: "Every exercise is passed or closed for submissions.",
+        },
+      view.aiPolicyChange !== null && {
+        key: "aiPolicyChange",
+        tone: "info",
+        title: "AI policy changed",
+        detail: view.aiPolicyChange,
+        ondismiss: () => runCourseAction("dismissAiPolicyChange"),
+        dismissLabel: "Dismiss the AI policy notice",
       },
       view.recentlyUpdated.length > 0 && {
         key: "updated",
@@ -333,7 +394,7 @@
 
 <div class="course-home">
   {#if view}
-    <PanelHeader title={view.title} subtitle="{view.organization} · {backendName(view.backend)}">
+    <PanelHeader title={view.title} subtitle={view.organization}>
       {#snippet toolbar()}
         <ToolbarButton
           icon="refresh"
@@ -368,7 +429,7 @@
       {/if}
     </div>
 
-    {#if view.aiPolicy}
+    {#if view.aiPolicy && view.aiPolicy.policy !== "not_set"}
       <p class="ai-policy">
         <span class="muted">AI use:</span>
         {aiPolicyRule(view.aiPolicy.policy)}
@@ -379,10 +440,11 @@
     <ActionBar primary={bar.primary} secondary={bar.secondary} />
 
     <CourseNotices {notices} />
+    <ScreenFailures failures={screenFailures} />
     {#if refreshError}
       <ErrorNotice
         error={refreshError}
-        title="Could not refresh this course"
+        title="Refresh failed"
         ondismiss={() => (refreshError = undefined)}
         dismissLabel="Dismiss refresh error"
       />
@@ -417,11 +479,11 @@
     <PanelHeader title="Could not load this course" />
     <ErrorNotice error={dataError}>
       {#snippet actions()}
-        <Button onclick={() => void requestData()}>Retry</Button>
+        <Button onclick={() => void requestData()}>Try Again</Button>
       {/snippet}
     </ErrorNotice>
   {:else}
-    <PanelHeader title="Course Details" />
+    <PanelHeader title="Course Home" />
     <Spinner label="Loading the course…" />
   {/if}
 </div>

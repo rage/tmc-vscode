@@ -1,5 +1,16 @@
+import * as vscode from "vscode"
+
 import type { CourseIdentifier } from "../../shared/lib"
 import { CourseIdentifier as CourseIdentifierNs } from "../../shared/lib"
+import type { FailureSink } from "../api/withOperation"
+
+/** A failure for the course home of `courseId`; see {@link ShownCourseHome.failureSink}. */
+export interface CourseHomeFailure {
+  courseId: CourseIdentifier
+  headline: string
+  error: Error | undefined
+  tone: "error" | "warning"
+}
 
 /**
  * The course whose course home is on screen, if any, so news about that course goes into the
@@ -7,6 +18,15 @@ import { CourseIdentifier as CourseIdentifierNs } from "../../shared/lib"
  */
 class ShownCourseHome {
   private _courseId: CourseIdentifier | undefined
+  private readonly _failed = new vscode.EventEmitter<CourseHomeFailure>()
+
+  /** Fires with a failure the course home of its course should show. */
+  public readonly onDidFail = this._failed.event
+
+  /** The course whose home is on screen, if any. */
+  public get courseId(): CourseIdentifier | undefined {
+    return this._courseId
+  }
 
   public set(courseId: CourseIdentifier | undefined): void {
     this._courseId = courseId
@@ -14,6 +34,14 @@ class ShownCourseHome {
 
   public isShowing(courseId: CourseIdentifier): boolean {
     return this._courseId !== undefined && CourseIdentifierNs.equals(this._courseId, courseId)
+  }
+
+  /** The course home of `courseId` as the {@link FailureSink} of work the student did not start there. */
+  public failureSink(courseId: CourseIdentifier): FailureSink {
+    return {
+      isVisible: () => this.isShowing(courseId),
+      show: (headline, error, tone) => this._failed.fire({ courseId, headline, error, tone }),
+    }
   }
 }
 

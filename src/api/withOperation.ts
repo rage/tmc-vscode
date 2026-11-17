@@ -2,11 +2,31 @@ import type { Result } from "ts-results"
 import { Err } from "ts-results"
 import * as vscode from "vscode"
 
+import type { ExerciseIdentifier } from "../../shared/lib"
 import { toError } from "../../shared/lib"
 import { AiUseRefusedError, BottleneckError, presentationFor } from "../errors"
 import { Logger } from "../utilities"
 import type Dialog from "./dialog"
 import type { FractionProgress, NotificationButton, ProgressLocation } from "./dialog"
+
+/**
+ * The screen an operation was started from, which shows its failure in place of a notification.
+ * Implemented by the webview host, which this layer cannot reach.
+ */
+export interface FailureSink {
+  /** Whether the student can see the screen now. */
+  isVisible: () => boolean
+  /**
+   * Shows the failure on the screen as a notice: at once if it is on screen, else once it is
+   * shown again.
+   *
+   * @param headline What was being done, e.g. "Failed to download the exercises."
+   * @param error Supplies the rest of the sentence and its remedies; without it, `headline` is
+   * the whole story.
+   * @param tone `warning` for an operation held back rather than failed.
+   */
+  show: (headline: string, error: Error | undefined, tone: "error" | "warning") => void
+}
 
 /** Options for {@link withOperation}. */
 export interface OperationOptions {
@@ -18,6 +38,11 @@ export interface OperationOptions {
    * {@link Warned.warnings} are still shown.
    */
   silent?: boolean
+  /**
+   * The screen that started the operation: its failures, and its warnings, show there while it
+   * is on screen. While it is not, they are notified too.
+   */
+  shownIn?: FailureSink
   /** Runs `body` under a progress notification with this message. */
   progress?: string
   /** Shows {@link progress} there instead of in a notification. */
@@ -28,6 +53,8 @@ export interface OperationOptions {
 export interface OperationWarning {
   headline: string
   error: Error
+  /** The exercises that failed, when that is what the warning says, for a screen listing them. */
+  failedExercises?: ExerciseIdentifier[]
 }
 
 /**
@@ -52,12 +79,27 @@ export function logWarnings(warnings: readonly OperationWarning[]): void {
   }
 }
 
+/**
+ * Shows a failure that was not an operation's, such as a button that found nothing to act on, the
+ * way {@link withOperation} shows an operation's in `shownIn`.
+ *
+ * @param error Supplies the rest of the sentence; without it, `headline` is the whole story.
+ */
+export function reportFailureIn(
+  dialog: Dialog,
+  shownIn: FailureSink,
+  headline: string,
+  error?: Error,
+): void {
+  reportFailure(dialog, { failure: headline, shownIn }, error ?? new OperationFailure(headline))
+}
+
 function isWarned(value: unknown): value is Warned {
   return typeof value === "object" && value !== null && Array.isArray((value as Warned).warnings)
 }
 
 class OperationFailure extends Error {
-  public constructor(headline: string, cause: Error | undefined) {
+  public constructor(headline: string, cause?: Error) {
     super(headline, { cause })
   }
 }
@@ -103,6 +145,10 @@ export async function withOperation<T>(
   }
   if (result.err) {
     reportFailure(dialog, options, result.val)
+  } else if (isWarned(result.val) && options.shownIn) {
+    for (const { headline, error } of result.val.warnings) {
+      reportFailureIn(dialog, options.shownIn, headline, error)
+    }
   } else if (isWarned(result.val)) {
     reportWarnings(dialog, result.val.warnings)
   }
@@ -114,12 +160,18 @@ function reportFailure(dialog: Dialog, options: OperationOptions, error: Error):
     error instanceof OperationFailure
       ? [error.message, error.cause instanceof Error ? error.cause : undefined]
       : [options.failure, error]
+  const { shownIn } = options
+  // Hidden, the screen keeps the failure for when it is shown again, and a notification says it now.
+  const isShownInPlace = shownIn?.isVisible() === true
 
-  // Not a fault: no failure headline and no Show logs, only the refusal and its one remedy.
+  // Not a fault: no failure headline and no Show Details, only the refusal and its one remedy.
   const refused = [detail, error].find((e) => e instanceof AiUseRefusedError)
   if (refused) {
     Logger.info(headline, refused)
     if (!options.silent) {
+      shownIn?.show(headline, refused, "warning")
+    }
+    if (!options.silent && !isShownInPlace) {
       const presentation = presentationFor(refused)
       void dialog.warningNotification(
         presentation.message,
@@ -137,6 +189,9 @@ function reportFailure(dialog: Dialog, options: OperationOptions, error: Error):
   if (busy) {
     Logger.info(`Not started: ${busy.message}`)
     if (!options.silent) {
+      shownIn?.show(headline, busy, "warning")
+    }
+    if (!options.silent && !isShownInPlace) {
       void dialog.notification(busy.message)
     }
     return
@@ -144,6 +199,16 @@ function reportFailure(dialog: Dialog, options: OperationOptions, error: Error):
 
   if (options.silent) {
     Logger.warn(headline, detail)
+    return
+  }
+  const isHeldBack = detail !== undefined && presentationFor(detail).isHeldBack === true
+  shownIn?.show(headline, detail, isHeldBack ? "warning" : "error")
+  if (isShownInPlace) {
+    if (isHeldBack) {
+      Logger.info(headline, detail)
+    } else {
+      Logger.error(headline, detail ?? error)
+    }
   } else if (detail) {
     void dialog.reportError(headline, detail)
   } else {

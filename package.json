@@ -106,13 +106,19 @@
     "authentication": [
       {
         "id": "courses-mooc-fi",
-        "label": "courses.mooc.fi"
+        "label": "MOOC.fi"
       }
     ],
     "commands": [
       {
         "command": "tmc.addNewCourse",
-        "title": "Add Course...",
+        "title": "Add Course",
+        "category": "TestMyCode",
+        "icon": "$(add)"
+      },
+      {
+        "command": "tmc.showAddCourse",
+        "title": "Add Course",
         "category": "TestMyCode",
         "icon": "$(add)"
       },
@@ -138,13 +144,13 @@
       },
       {
         "command": "tmc.closeExercises",
-        "title": "Close",
+        "title": "Close Exercise",
         "category": "TestMyCode",
         "icon": "$(close)"
       },
       {
         "command": "tmc.openExerciseMaterial",
-        "title": "Open in Course Material",
+        "title": "Open Course Material",
         "category": "TestMyCode"
       },
       {
@@ -154,7 +160,7 @@
       },
       {
         "command": "tmc.courseDetails",
-        "title": "Show Course Details...",
+        "title": "Open Course Home",
         "category": "TestMyCode"
       },
       {
@@ -171,7 +177,7 @@
       },
       {
         "command": "tmc.downloadOldSubmission",
-        "title": "Download Old Submission...",
+        "title": "History",
         "category": "TestMyCode"
       },
       {
@@ -208,7 +214,7 @@
       },
       {
         "command": "tmc.pasteExercise",
-        "title": "Share Exercise via Paste",
+        "title": "Get Help",
         "category": "TestMyCode"
       },
       {
@@ -223,7 +229,7 @@
       },
       {
         "command": "tmc.revealInCoursesView",
-        "title": "Reveal in Courses View",
+        "title": "Show in Courses View",
         "category": "TestMyCode"
       },
       {
@@ -264,7 +270,7 @@
       },
       {
         "command": "tmc.submitExercise",
-        "title": "Submit Solution",
+        "title": "Submit",
         "category": "TestMyCode",
         "icon": "$(cloud-upload)"
       },
@@ -281,13 +287,13 @@
       },
       {
         "command": "tmc.testing.submitExercise",
-        "title": "Submit Solution",
+        "title": "Submit",
         "category": "TestMyCode",
         "icon": "$(cloud-upload)"
       },
       {
         "command": "tmc.testing.pasteExercise",
-        "title": "Share Exercise via Paste",
+        "title": "Get Help",
         "category": "TestMyCode"
       },
       {
@@ -341,7 +347,12 @@
       },
       {
         "command": "tmc.viewInitializationErrorHelp",
-        "title": "Show Initialization Error Help",
+        "title": "Show Help",
+        "category": "TestMyCode"
+      },
+      {
+        "command": "tmc.showErrorDetails",
+        "title": "Show Error Details",
         "category": "TestMyCode"
       },
       {
@@ -405,6 +416,10 @@
           "when": "test-my-code:Initialized && test-my-code:LoggedIn || test-my-code:Light"
         },
         {
+          "command": "tmc.showAddCourse",
+          "when": "false"
+        },
+        {
           "command": "tmc.courseDetails",
           "when": "test-my-code:Initialized && test-my-code:HasCourses"
         },
@@ -462,6 +477,10 @@
         },
         {
           "command": "tmc.viewInitializationErrorHelp",
+          "when": "false"
+        },
+        {
+          "command": "tmc.showErrorDetails",
           "when": "false"
         },
         {
@@ -646,7 +665,7 @@
           "when": "view == tmcView && test-my-code:WorkspaceActive && !isWorkspaceTrusted"
         },
         {
-          "command": "tmc.addNewCourse",
+          "command": "tmc.showAddCourse",
           "group": "navigation@1",
           "when": "view == tmcView && test-my-code:Initialized && test-my-code:LoggedIn"
         },
@@ -894,12 +913,12 @@
       {
         "view": "tmcView",
         "when": "test-my-code:Initialized && !test-my-code:LoggedIn",
-        "contents": "Log in with your courses.mooc.fi account to download, test and submit exercises.\n[Log In](command:tmc.showMoocLogin)\n[Read the Installation Guide](https://www.mooc.fi/en/installation/vscode)"
+        "contents": "Log in with your MOOC.fi account to download, test and submit exercises.\n[Log In](command:tmc.showMoocLogin)\n[Read the Installation Guide](https://www.mooc.fi/en/installation/vscode)"
       },
       {
         "view": "tmcView",
         "when": "test-my-code:Initialized && test-my-code:LoggedIn",
-        "contents": "You have not added any courses yet.\n[Add Course](command:tmc.addNewCourse)"
+        "contents": "You have not added any courses yet.\n[Add Course](command:tmc.showAddCourse)"
       }
     ],
     "walkthroughs": [
@@ -910,8 +929,8 @@
         "steps": [
           {
             "id": "logIn",
-            "title": "Log in with courses.mooc.fi",
-            "description": "Use your courses.mooc.fi account. Logging in opens courses.mooc.fi in your browser.\n[Log In](command:tmc.showMoocLogin)",
+            "title": "Log In",
+            "description": "Log in with your MOOC.fi account. Logging in opens the MOOC.fi website in your browser.\n[Log In](command:tmc.showMoocLogin)",
             "media": {
               "markdown": "media/walkthrough/log-in.md"
             },
@@ -922,8 +941,8 @@
           },
           {
             "id": "addCourse",
-            "title": "Add a course",
-            "description": "Pick the course you are taking.\n[Add Course](command:tmc.addNewCourse)",
+            "title": "Add Course",
+            "description": "Pick the course you are taking.\n[Add Course](command:tmc.showAddCourse)",
             "media": {
               "markdown": "media/walkthrough/add-course.md"
             },
@@ -934,8 +953,8 @@
           },
           {
             "id": "openExercises",
-            "title": "Download and open exercises",
-            "description": "Download the course's exercises and open its workspace.\n[Download All Exercises](command:tmc.downloadAllExercises)\n[Open Course Workspace](command:tmc.openCourseWorkspace)",
+            "title": "Download and Open Exercises",
+            "description": "Your course home downloads its exercises and opens its workspace.\n[Open Course Home](command:tmc.courseDetails)",
             "media": {
               "markdown": "media/walkthrough/open-exercises.md"
             },
@@ -946,8 +965,8 @@
           },
           {
             "id": "runTests",
-            "title": "Run the tests",
-            "description": "Open a file of an exercise and run its tests on your computer.\n[Run Tests](command:tmc.testExercise)",
+            "title": "Run Tests",
+            "description": "Open an exercise and select Run Tests, the beaker in the editor's title bar, to run its tests on your computer.\n[Continue with an Exercise](command:tmc.openNextExercise)",
             "media": {
               "markdown": "media/walkthrough/run-tests.md"
             },
@@ -959,8 +978,8 @@
           },
           {
             "id": "submit",
-            "title": "Submit your solution",
-            "description": "Send the exercise for grading to earn its points.\n[Submit Solution](command:tmc.submitExercise)",
+            "title": "Submit",
+            "description": "Select Submit, the cloud next to the beaker, to send the exercise for grading and earn its points.\n[Continue with an Exercise](command:tmc.openNextExercise)",
             "media": {
               "markdown": "media/walkthrough/submit.md"
             },
@@ -972,8 +991,8 @@
           },
           {
             "id": "getHelp",
-            "title": "Get help",
-            "description": "Where to find instructions and report problems, and what data the extension sends.\n[Read the Installation Guide](https://www.mooc.fi/en/installation/vscode)\n[Show Logs](command:tmc.logs)",
+            "title": "Get Help",
+            "description": "Where to find instructions and report problems, and what data the extension sends.\n[Read the Installation Guide](https://www.mooc.fi/en/installation/vscode)\n[Show Help](command:tmc.viewInitializationErrorHelp)",
             "media": {
               "markdown": "media/walkthrough/get-help.md"
             },

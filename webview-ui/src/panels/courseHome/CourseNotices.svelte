@@ -1,5 +1,12 @@
 <script lang="ts" module>
-  /** One thing the student should know about the course, with at most one thing to do about it. */
+  /** Something to do about a notice. */
+  export interface CourseNoticeAction {
+    label: string
+    onclick: () => void
+    disabled?: boolean | undefined
+  }
+
+  /** One thing the student should know about the course, and what they can do about it. */
   export interface CourseNotice {
     /** Unique among the notices shown together. */
     key: string
@@ -7,7 +14,8 @@
     title: string
     /** Names what the notice is about, e.g. the exercises. */
     detail?: string | undefined
-    action?: { label: string; onclick: () => void; disabled?: boolean | undefined } | undefined
+    /** The first is the one most students want. */
+    actions?: CourseNoticeAction[] | undefined
     /** Renders a dismiss button; `dismissLabel` says what goes away. */
     ondismiss?: (() => void) | undefined
     dismissLabel?: string | undefined
@@ -41,11 +49,11 @@
             <span class="title">{notice.title}</span>
             {#if notice.detail}<span class="detail muted">{notice.detail}</span>{/if}
           </p>
-          {#if notice.action}
-            <Button secondary disabled={notice.action.disabled} onclick={notice.action.onclick}>
-              {notice.action.label}
+          {#each notice.actions ?? [] as action (action.label)}
+            <Button secondary disabled={action.disabled} onclick={action.onclick}>
+              {action.label}
             </Button>
-          {/if}
+          {/each}
           {#if notice.ondismiss}
             <ToolbarButton
               icon="close"

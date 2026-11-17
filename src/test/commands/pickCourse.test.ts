@@ -13,7 +13,6 @@ import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
 type SelectPrompt = string | { title: string; placeHolder: string }
-type NotificationButton = [string, () => void]
 
 const courses = [
   makeTmcKind({ id: 1, name: "tmc-slug", title: "The Python Course" }),
@@ -47,51 +46,34 @@ suite("pickCourse", function () {
     vi.restoreAllMocks()
   })
 
-  test("offers to add a course on an empty list, and picks nothing", async function () {
-    const [context, dialog] = contextWith([])
-    const notification = vi.fn(
-      async (_message: string, ..._items: NotificationButton[]) => undefined,
-    )
-    dialog.notification = notification
-    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+  test.each([true, false])(
+    "opens the add-course screen on an empty list, logged in %s, and picks nothing",
+    async function (isLoggedIn) {
+      const [context, dialog] = contextWith([], undefined, isLoggedIn)
+      const notification = vi.fn(async () => undefined)
+      dialog.notification = notification
+      const executeCommand = vi
+        .spyOn(vscode.commands, "executeCommand")
+        .mockResolvedValue(undefined)
 
-    const picked = await pickCourse(context, { title: "Title", placeHolder: "Pick one" })
+      const picked = await pickCourse(context, { title: "Title", placeHolder: "Pick one" })
 
-    expect(picked).toBeUndefined()
-    expect(notification).toHaveBeenCalledOnce()
-    const [message, button] = notification.mock.calls[0] ?? []
-    expect(message).toBe("No courses added yet.")
-    await button?.[1]()
-    expect(executeCommand).toHaveBeenCalledWith("tmc.addNewCourse")
-  })
-
-  test("offers a login rather than a course pick that needs one, logged out", async function () {
-    const [context, dialog] = contextWith([], undefined, false)
-    const notification = vi.fn(
-      async (_message: string, ..._items: NotificationButton[]) => undefined,
-    )
-    dialog.notification = notification
-    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
-
-    await pickCourse(context, { title: "Title", placeHolder: "Pick one" })
-
-    const [message, button] = notification.mock.calls[0] ?? []
-    expect(message).toBe("No courses added yet.")
-    expect(button?.[0]).toBe("Log In")
-    await button?.[1]()
-    expect(executeCommand).toHaveBeenCalledWith("tmc.showMoocLogin")
-  })
+      expect(picked).toBeUndefined()
+      expect(executeCommand).toHaveBeenCalledExactlyOnceWith("tmc.showAddCourse")
+      expect(notification).not.toHaveBeenCalled()
+    },
+  )
 
   test("prompts among the user's courses, labelled by title and backend", async function () {
     const [context, dialog] = contextWith(courses)
     const selectItem = vi.fn(async (_prompt: SelectPrompt, ..._items: unknown[]) => undefined)
     dialog.selectItem = selectItem
 
-    await pickCourse(context, { title: "Course Details", placeHolder: "Which course?" })
+    await pickCourse(context, { title: "Open Course Home", placeHolder: "Which course?" })
 
     expect(selectItem).toHaveBeenCalledOnce()
     const [prompt, ...items] = selectItem.mock.calls[0] ?? []
-    expect(prompt).toEqual({ title: "Course Details", placeHolder: "Which course?" })
+    expect(prompt).toEqual({ title: "Open Course Home", placeHolder: "Which course?" })
     expect(items).toEqual([
       { label: "The Python Course", value: idOfTmcCourse(1), description: "tmc.mooc.fi" },
       {

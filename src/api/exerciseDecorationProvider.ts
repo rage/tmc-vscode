@@ -14,29 +14,29 @@ export default class ExerciseDecorationProvider
 
   private static _passedExercise = new vscode.FileDecoration(
     "⬤",
-    "Exercise completed!",
+    "Passed",
     new vscode.ThemeColor("gitDecoration.addedResourceForeground"),
   )
 
   private static _partiallyCompletedExercise = new vscode.FileDecoration(
     "○",
-    "Some points gained",
+    "Not passed, some points",
     new vscode.ThemeColor("gitDecoration.modifiedResourceForeground"),
   )
 
   private static _outOfTriesExercise = new vscode.FileDecoration(
     "⊘",
-    "No tries left; the score is final.",
+    "No tries left, so this score is final.",
     new vscode.ThemeColor("disabledForeground"),
   )
 
   private static _missingExercise = new vscode.FileDecoration(
     "ⓘ",
-    "Exercise not found in course. This could be an old exercise that has been renamed or removed from course.",
+    "This exercise is no longer in the course.",
     new vscode.ThemeColor("gitDecoration.ignoredResourceForeground"),
   )
 
-  private static _expiredExercise = new vscode.FileDecoration("✗", "Deadline exceeded.")
+  private static _expiredExercise = new vscode.FileDecoration("✗", "Deadline passed")
 
   private _eventEmiter: vscode.EventEmitter<vscode.Uri | vscode.Uri[]>
 

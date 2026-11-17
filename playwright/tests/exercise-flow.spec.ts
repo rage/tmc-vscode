@@ -108,9 +108,9 @@ vsCodeTest(
       await code.click()
       await page
         .getByRole("toolbar", { name: "Editor actions" })
-        .getByLabel("Submit Solution", { exact: true })
+        .getByLabel("Submit", { exact: true })
         .click()
-      await expect(sidePanel.getByRole("heading", { name: "Exercise passed" })).toBeVisible()
+      await expect(sidePanel.getByRole("heading", { name: "Passed", exact: true })).toBeVisible()
       await expect(next).toHaveAccessibleName(/, not downloaded,/)
 
       // The deadline of the exercise between them has passed, so it is skipped.

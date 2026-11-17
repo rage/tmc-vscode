@@ -17,10 +17,7 @@ vsCodeTest(
     await vsCodeTest.step("open the course's details", async () => {
       await coursesView.goto()
       await coursesView.addNewCourse("Python Course")
-      await coursesView.runContextMenuCommand(
-        coursesView.row("Python Course"),
-        "Show Course Details...",
-      )
+      await coursesView.runContextMenuCommand(coursesView.row("Python Course"), "Open Course Home")
       await expect(courseHeading).toBeVisible()
     })
 
@@ -69,9 +66,9 @@ vsCodeTest(
       await code.click()
       await page
         .getByRole("toolbar", { name: "Editor actions" })
-        .getByLabel("Submit Solution", { exact: true })
+        .getByLabel("Submit", { exact: true })
         .click()
-      await expect(sidePanel.getByRole("heading", { name: "Exercise passed" })).toBeVisible()
+      await expect(sidePanel.getByRole("heading", { name: "Passed", exact: true })).toBeVisible()
     })
 
     await vsCodeTest.step("hide the result behind another editor in its group", async () => {

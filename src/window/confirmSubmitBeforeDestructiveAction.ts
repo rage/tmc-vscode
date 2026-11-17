@@ -1,5 +1,4 @@
 import type { BackendKind } from "../../shared/lib"
-import { backendName } from "../../shared/lib"
 import { findKeptCopy } from "../actions/keptCopies"
 import type { ReadyActionContext } from "../actions/types"
 import type { KeptCopy } from "../api/keptCopies"
@@ -31,12 +30,11 @@ export async function confirmSubmitBeforeDestructiveAction(
   prompt: DestructiveActionPrompt,
 ): Promise<boolean | undefined> {
   const { message, replacement, verb, backend } = prompt
-  const serverName = backendName(backend)
   const kept = await findKeptCopy(actionContext, exercise)
   if (kept) {
     const confirmed = await actionContext.dialog.confirm(message, {
       confirmLabel: verb,
-      detail: `Your current code, ${keptDescription(kept, serverName)}, will be replaced by ${replacement}.`,
+      detail: `Your current code, ${keptDescription(kept)}, will be replaced by ${replacement}.`,
     })
     return confirmed ? false : undefined
   }
@@ -46,8 +44,8 @@ export async function confirmSubmitBeforeDestructiveAction(
       {
         detail:
           `Your current code will be replaced by ${replacement}. ` +
-          `Back it up to ${serverName} first to keep a copy you can download later. ` +
-          `A backup is not graded, and ${serverName} keeps your newest ${MOOC_BACKUPS_KEPT} backups of each exercise.`,
+          "Back it up first to keep a copy you can restore from History. " +
+          `A backup is not graded, and only your newest ${MOOC_BACKUPS_KEPT} backups of each exercise are kept.`,
       },
       [`Back Up and ${verb}`, true],
       [`${verb} Without Backup`, false],
@@ -58,7 +56,7 @@ export async function confirmSubmitBeforeDestructiveAction(
     {
       detail:
         `Your current code will be replaced by ${replacement}. ` +
-        `Submit it to ${serverName} first to keep a copy you can download later.`,
+        "Submit it first to keep a copy you can restore from History.",
     },
     [`Submit and ${verb}`, true],
     [`${verb} Without Submitting`, false],
@@ -68,14 +66,14 @@ export async function confirmSubmitBeforeDestructiveAction(
 /** How many backups of one exercise courses.mooc.fi keeps per student before dropping the oldest. */
 const MOOC_BACKUPS_KEPT = 20
 
-function keptDescription(kept: KeptCopy, serverName: string): string {
+function keptDescription(kept: KeptCopy): string {
   switch (kept) {
     case "submission":
-      return `already submitted to ${serverName}`
+      return "already submitted"
     case "backup":
-      return `already backed up to ${serverName}`
+      return "already backed up"
     case "restore":
-      return `unchanged since you restored it from ${serverName}`
+      return "unchanged since you restored it"
     case "reset":
       return "unchanged since the exercise was reset"
     case "download":

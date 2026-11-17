@@ -12,13 +12,18 @@ import type {
 import { assertUnreachable, CourseIdentifier, LocalCourseData } from "../../../shared/lib"
 import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
-import { withOperation } from "../../api/withOperation"
+import type { FailureSink } from "../../api/withOperation"
+import { reportFailureIn, withOperation } from "../../api/withOperation"
+import { MOOC_BACKEND_URL, TMC_BACKEND_URL } from "../../config/constants"
+import { isSessionLost } from "../../errors"
 import { buildCourseHomeView } from "../../ui/courseHome"
 import { showExerciseSourceFile } from "../../ui/exerciseSourceFile"
+import { recentPolicyChanges } from "../../ui/recentPolicyChanges"
 import { recentUpdates } from "../../ui/recentUpdates"
 import { closeCompletedExercises, openCourseExercises } from "../../ui/treeview/treeCommands"
-import { Logger } from "../../utilities"
+import { Logger, openWebLink } from "../../utilities"
 import type { HandlerMap, PanelHost } from "../router"
+import { screenFailureSink } from "../screenFailures"
 
 /** The course home does each download's progress itself, so the notification is left out. */
 const PROGRESS_PLACE = "coursesView"
@@ -54,7 +59,11 @@ export const courseDetailsHandlers = {
       if (rescanResult.err) {
         Logger.warn("Failed to rescan the local exercises", rescanResult.val)
       }
-      if (updateResult.err) {
+      // Logged out, the view's own notice says so; an error box would only repeat it.
+      if (
+        updateResult.err &&
+        !(isSessionLost(updateResult.val) && !actionContext.authState.loggedIn)
+      ) {
         return updateResult
       }
       return buildCourseHomeView(actionContext, courseId)
@@ -68,7 +77,8 @@ export const courseDetailsHandlers = {
         Logger.warn("Ignoring a course action from a panel that no longer shows a course")
         return
       }
-      await runCourseAction(actionContext, route.courseId, message.action)
+      const shownIn = screenFailureSink(host, route)
+      await runCourseAction(actionContext, route.courseId, message.action, shownIn)
     },
   },
   courseExerciseAction: {
@@ -88,7 +98,14 @@ export const courseDetailsHandlers = {
         Logger.warn("Ignoring an exercise action for an exercise of another course")
         return
       }
-      await runExerciseAction(actionContext, route.courseId, message.exerciseId, message.action)
+      const shownIn = screenFailureSink(host, route)
+      await runExerciseAction(
+        actionContext,
+        route.courseId,
+        message.exerciseId,
+        message.action,
+        shownIn,
+      )
     },
   },
   openCourseWorkspace: {
@@ -104,6 +121,7 @@ async function runCourseAction(
   actionContext: ReadyActionContext,
   courseId: CourseIdentifier,
   action: CourseHomeAction,
+  shownIn: FailureSink,
 ): Promise<void> {
   const { dialog } = actionContext
   switch (action) {
@@ -121,28 +139,46 @@ async function runCourseAction(
               .flatMap((part) => part.exercises)
               .filter((ex) => ex.status === "missing" || ex.status === "new")
               .map(({ id }) => id)
-      await withOperation(dialog, { failure: "Failed to download the exercises." }, () =>
+      await withOperation(dialog, { failure: "Failed to download the exercises.", shownIn }, () =>
         actions.downloadCourseExercises(actionContext, courseId, ids, PROGRESS_PLACE),
       )
       return
     }
     case "dismissNewExercises":
-      await withOperation(dialog, { failure: "Failed to dismiss the new exercises." }, () =>
-        actionContext.startup.userData.clearFromNewExercises(courseId),
+      await withOperation(
+        dialog,
+        { failure: "Failed to dismiss the new exercises.", shownIn },
+        () => actionContext.startup.userData.clearFromNewExercises(courseId),
       )
       return
     case "updateExercises": {
       const view = buildCourseHomeView(actionContext, courseId)
       if (view.ok) {
         const updates = view.val.updates.map(({ id }) => ({ courseId, exerciseId: id }))
-        await withOperation(dialog, { failure: "Failed to update exercises." }, () =>
-          actions.downloadExerciseUpdates(actionContext, updates, false, PROGRESS_PLACE),
+        await withOperation(
+          dialog,
+          { failure: "Failed to update exercises.", shownIn },
+          async () => {
+            const downloaded = await actions.downloadExerciseUpdates(
+              actionContext,
+              updates,
+              false,
+              PROGRESS_PLACE,
+            )
+            // The updates notice lists the exercises that failed, with why and Try Again.
+            return downloaded.map(({ warnings }) => ({
+              warnings: warnings.filter((warning) => !warning.failedExercises),
+            }))
+          },
         )
       }
       return
     }
     case "dismissRecentUpdates":
       recentUpdates.dismiss(courseId)
+      return
+    case "dismissAiPolicyChange":
+      recentPolicyChanges.dismiss(courseId)
       return
     case "closeCompletedExercises":
       await closeCompletedExercises(actionContext, courseId)
@@ -153,9 +189,29 @@ async function runCourseAction(
     case "revealInCoursesView":
       await actionContext.coursesTree.revealCourse(courseId)
       return
+    case "findCourseOnline":
+      await openWebLink(courseSearchUrl(actionContext, courseId))
+      return
+    case "removeCourse":
+      // Asks first, which is the command layer's to do.
+      await vscode.commands.executeCommand("tmc.removeCourse", courseId)
+      return
     default:
       assertUnreachable(action)
   }
+}
+
+/**
+ * Where the student can look for a course on its backend's site: its material, unless the course
+ * is gone and the material with it; then the site's front page.
+ */
+function courseSearchUrl({ startup }: ReadyActionContext, courseId: CourseIdentifier): string {
+  const siteUrl = courseId.kind === "mooc" ? MOOC_BACKEND_URL : TMC_BACKEND_URL
+  const course = startup.userData.getCourse(courseId)
+  if (course.err || LocalCourseData.getAccessLoss(course.val) === "notFound") {
+    return siteUrl
+  }
+  return LocalCourseData.getMaterialUrl(course.val) ?? siteUrl
 }
 
 async function runExerciseAction(
@@ -163,11 +219,12 @@ async function runExerciseAction(
   courseId: CourseIdentifier,
   exerciseId: ExerciseIdentifier,
   action: CourseHomeExerciseAction,
+  shownIn: FailureSink,
 ): Promise<void> {
   const { workspaceManager } = actionContext.startup
   switch (action) {
     case "open": {
-      await openCourseExercises(actionContext, courseId, [exerciseId], PROGRESS_PLACE)
+      await openCourseExercises(actionContext, courseId, [exerciseId], PROGRESS_PLACE, shownIn)
       const exercise = workspaceManager.getExercise(exerciseId)
       if (exercise) {
         await showExerciseSourceFile(actionContext, exercise)
@@ -177,7 +234,7 @@ async function runExerciseAction(
     case "download":
       await withOperation(
         actionContext.dialog,
-        { failure: "Failed to download the exercise." },
+        { failure: "Failed to download the exercise.", shownIn },
         () =>
           actions.downloadCourseExercises(actionContext, courseId, [exerciseId], PROGRESS_PLACE),
       )
@@ -186,7 +243,7 @@ async function runExerciseAction(
     case "downloadOldSubmission": {
       const exercise = workspaceManager.getExercise(exerciseId)
       if (!exercise) {
-        void actionContext.dialog.errorNotification("This exercise is not downloaded.")
+        reportFailureIn(actionContext.dialog, shownIn, "This exercise is not downloaded.")
         return
       }
       // Both confirm first, which is the command layer's to do.

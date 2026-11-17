@@ -161,6 +161,7 @@ vi.mock("../../panels/TmcPanel", () => ({
       recorded.panelTypes.push(panel.type)
     },
     showSubmissionViews: () => ({ dispose: () => {} }),
+    showLoginScreens: () => ({ dispose: () => {} }),
     registerSerializers: () => {
       recorded.serializerRegistrations += 1
       return { dispose: () => {} }
@@ -230,7 +231,7 @@ vi.mock("../../api/aiRestriction", async (importOriginal) => ({
 }))
 
 vi.mock("../../api/workspaceTrustPrompt", () => ({
-  promptForCourseWorkspaceTrust: async (courseTitle: string): Promise<void> => {
+  promptForCourseWorkspaceTrust: async (_dialog: unknown, courseTitle: string): Promise<void> => {
     trustPrompts.push(courseTitle)
   },
   requestWorkspaceTrust: async (): Promise<void> => {},
@@ -442,10 +443,8 @@ suite("activation with unusable storage", function () {
     expect(calls).toHaveLength(1)
     const [message, ...buttons] = calls[0] as unknown as [string, ...{ title: string }[]]
     expect(message).not.toContain("Fatal error")
-    expect(message).toMatch(
-      /^TestMyCode could not start\. Preparing the extension's files failed: /,
-    )
-    expect(buttons.map((button) => button.title)).toEqual(["Show Details", "Show Logs"])
+    expect(message).toBe("TestMyCode could not start. Preparing the extension's files failed.")
+    expect(buttons.map((button) => button.title)).toEqual(["Show Details"])
   })
 })
 
@@ -471,8 +470,8 @@ suite("activation that throws", function () {
 
     expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(true)
     expect(showErrorMessage).toHaveBeenCalledExactlyOnceWith(
-      "TestMyCode could not start. boom",
-      "Show Logs",
+      "TestMyCode could not start. Show Details says what failed.",
+      expect.objectContaining({ title: "Show Details" }),
     )
     expect(Logger.show).not.toHaveBeenCalled()
   })
@@ -505,9 +504,7 @@ suite("initialization error deduplication", function () {
     const toasts = vi
       .mocked(vscode.window.showErrorMessage)
       .mock.calls.map((call) => String(call[0]))
-    expect(toasts).toEqual([
-      "TestMyCode started with a problem. Checking your login failed: tmc-langs-cli is unreachable.",
-    ])
+    expect(toasts).toEqual(["TestMyCode started with a problem. Checking your login failed."])
   })
 })
 
@@ -797,7 +794,9 @@ suite("the startup course refresh", function () {
     }
 
     await vi.waitFor(() =>
-      expect(courseRefresh.options).toEqual([{ silent: true, isPromptless: true }]),
+      expect(courseRefresh.options).toEqual([
+        { silent: true, isPromptless: true, skipsRecentlyLostCourses: true },
+      ]),
     )
   })
 })
@@ -1135,12 +1134,12 @@ suite("status bar", function () {
     await activate(createContext())
     const account = vi.mocked(vscode.window.createStatusBarItem).mock.results[0]
       ?.value as vscode.StatusBarItem
-    expect(account.text).toContain("courses.mooc.fi")
+    expect(account.text).toContain("MOOC.fi")
 
     langsStub.authenticated = false
     await (langsStub.handlers.get("logout") as (expected: boolean) => Promise<void>)(false)
 
-    expect(account.text).toContain("Session Expired")
+    expect(account.text).toContain("Logged Out")
   })
 
   // The other credential may still be good, so a rejected one is checked, not trusted.
@@ -1169,9 +1168,7 @@ suite("status bar", function () {
     langsStub.authenticated = false
     await (langsStub.handlers.get("logout") as (expected: boolean) => Promise<void>)(false)
 
-    expect(showWarningMessage).toHaveBeenCalledExactlyOnceWith(
-      "Your courses.mooc.fi session has ended. Log in again to continue.",
-    )
+    expect(showWarningMessage).toHaveBeenCalledExactlyOnceWith("You were logged out. Log in again.")
   })
 })
 

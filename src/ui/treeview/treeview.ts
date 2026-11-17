@@ -2,11 +2,10 @@ import * as vscode from "vscode"
 
 import type { BackendKind } from "../../../shared/lib"
 import {
-  backendName,
   CourseIdentifier,
   ExerciseIdentifier,
   LocalCourseData,
-  SESSION_EXPIRED_DETAIL,
+  LOGGED_OUT_MESSAGE,
   SOFT_DEADLINE_PENALTY,
   SUBMIT_REFUSAL_LABELS,
   submitRefusalSentence,
@@ -116,18 +115,19 @@ export class CourseTreeItem extends vscode.TreeItem {
     const hasMissing = exercises.some((ex) => ex.status === "missing" || ex.status === "new")
     const disabled = LocalCourseData.isDisabled(course)
     const notEnrolled = LocalCourseData.isNotEnrolled(course)
+    const accessLoss = LocalCourseData.getAccessLoss(course)
     const points = pointsText(course.data.awardedPoints, course.data.availablePoints)
-    const backend = backendName(course.kind)
 
     this.iconPath =
-      disabled || notEnrolled
+      disabled || notEnrolled || accessLoss
         ? new vscode.ThemeIcon("book", new vscode.ThemeColor("disabledForeground"))
         : new vscode.ThemeIcon("book")
     this.contextValue = [
       `course.${course.kind}`,
-      ...(newCount > 0 ? ["hasNew"] : []),
-      ...(hasMissing ? ["hasMissing"] : []),
-      ...(updateCount > 0 ? ["hasUpdates"] : []),
+      // A course its backend refuses offers no downloads; the download would only be refused.
+      ...(newCount > 0 && !accessLoss ? ["hasNew"] : []),
+      ...(hasMissing && !accessLoss ? ["hasMissing"] : []),
+      ...(updateCount > 0 && !accessLoss ? ["hasUpdates"] : []),
       ...(hasCompleted ? ["hasCompleted"] : []),
     ].join(".")
     const newExercises = countOf(newCount, "new exercise")
@@ -138,18 +138,30 @@ export class CourseTreeItem extends vscode.TreeItem {
         spoken: points.spoken,
         tooltip: `${points.short} points`,
       },
-      // Titles are only unique within one backend, so the backend is always shown.
-      { description: backend, spoken: backend, tooltip: backend },
-      disabled && {
-        description: "disabled",
-        spoken: "disabled",
-        tooltip: "This course is disabled: its exercises cannot be downloaded or submitted.",
+      accessLoss === "forbidden" && {
+        description: "no access",
+        spoken: "no access",
+        tooltip:
+          "You no longer have access to this course. Its exercises on this computer still run their tests.",
       },
-      notEnrolled && {
-        description: "not enrolled",
-        spoken: "not enrolled",
-        tooltip: "You are not enrolled on this course: its exercises cannot be submitted.",
+      accessLoss === "notFound" && {
+        description: "removed",
+        spoken: "removed",
+        tooltip:
+          "This course no longer exists. Its exercises on this computer still run their tests.",
       },
+      disabled &&
+        !accessLoss && {
+          description: "disabled",
+          spoken: "disabled",
+          tooltip: "This course is disabled: its exercises cannot be downloaded or submitted.",
+        },
+      notEnrolled &&
+        !accessLoss && {
+          description: "not enrolled",
+          spoken: "not enrolled",
+          tooltip: "You are not enrolled on this course: its exercises cannot be submitted.",
+        },
       newCount > 0 && { spoken: newExercises, tooltip: newExercises },
       updateCount > 0 && { spoken: updates, tooltip: updates },
     ])
@@ -222,14 +234,14 @@ export class PartTreeItem extends vscode.TreeItem {
           "its exercises on this computer can be tested but not submitted.",
       },
       part.lockingStatus === "NotUnlockedYet" && {
-        description: "locked",
-        spoken: "locked until the chapters before it are completed",
-        tooltip: "Locked until you have completed the chapters before it.",
+        description: "complete earlier chapters first",
+        spoken: "complete earlier chapters first",
+        tooltip: "Complete the earlier chapters first to submit its exercises.",
       },
       part.lockingStatus === "CompletedAndLocked" && {
-        description: "completed and locked",
-        spoken: "completed and locked",
-        tooltip: "You have completed and locked this chapter.",
+        description: "locked",
+        spoken: "locked",
+        tooltip: "This chapter is locked, so its exercises can no longer be submitted.",
       },
     ])
     this.iconPath = new vscode.ThemeIcon(
@@ -422,8 +434,6 @@ function showFacts(
   return [label, ...shown.flatMap((fact) => fact.tooltip ?? [])]
 }
 
-const LOCAL_EXERCISES_STILL_WORK = "The exercises on this computer still open and run their tests."
-
 /** How long a burst of changes, such as one per downloaded exercise, is gathered into one render. */
 const RENDER_DELAY_MS = 50
 
@@ -575,20 +585,19 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
     ]
     this._view.badge =
       counts.length > 0 ? { value: newCount + updateCount, tooltip: counts.join(", ") } : undefined
-    const unreachable = [...this._unreachableBackends].map((backend) => backendName(backend))
     const restricted = this._isRestricted
-      ? "This course workspace is in Restricted Mode: trust it to run tests, submit and share" +
-        " exercises."
+      ? "This course workspace is in Restricted Mode. Trust it to run tests, submit and get help."
       : undefined
     let status: string | undefined
     if (views.length === 0) {
       // Nothing to say about courses there are none of.
     } else if (this._isSessionExpired) {
-      status = `${SESSION_EXPIRED_DETAIL} ${LOCAL_EXERCISES_STILL_WORK}`
+      status = LOGGED_OUT_MESSAGE
     } else if (!this._isLoggedIn) {
-      status = `Log in to ${backendName("mooc")} to download and submit exercises. ${LOCAL_EXERCISES_STILL_WORK}`
-    } else if (unreachable.length > 0) {
-      status = `${unreachable.join(" and ")} could not be reached. Showing the exercises saved on this computer; deadlines may be out of date.`
+      status = "Log in with your MOOC.fi account to download and submit exercises."
+    } else if (this._unreachableBackends.size > 0) {
+      status =
+        "Could not reach the server. Showing the exercises on this computer; deadlines may be out of date."
     }
     // An empty message hides it; the typings do not admit `undefined`.
     this._view.message = [restricted, status].filter((x) => x !== undefined).join(" ")

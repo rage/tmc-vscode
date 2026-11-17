@@ -28,6 +28,7 @@ import {
   AiUseRefusedError,
   BottleneckError,
   ChapterLockedError,
+  CourseAccessLostError,
   DeadlinePassedError,
   ExerciseNotFoundError,
   InsufficientScopeError,
@@ -281,7 +282,7 @@ suite("submitExercise action, tmc", () => {
     )
     expect(lastView()).toMatchObject({
       phase: "finished",
-      headline: "All tests passed on the server",
+      headline: "Passed",
       points: { given: 1, max: 2 },
     })
     expect(setPassed).toHaveBeenCalledWith(idOfTmcExercise(TMC_EXERCISE_ID))
@@ -423,7 +424,7 @@ suite("submitExercise action, mooc", () => {
     expect(wait).toHaveBeenCalledWith(TASK_SUBMISSION_ID, expect.any(Function))
     expect(shownViews().map((view) => view.phase)).toEqual(["uploading", "grading", "finished"])
     expect(lastView()).toMatchObject({
-      headline: "Exercise passed",
+      headline: "Passed",
       points: { given: 3, max: 3 },
       feedbackText: "All tests passed",
       canKeepWaiting: false,
@@ -512,7 +513,7 @@ suite("submitExercise action, mooc", () => {
       2,
     )
     expect(lastView()).toMatchObject({
-      headline: "Some tests failed on the server",
+      headline: "Not passed",
       canPaste: true,
     })
   })
@@ -529,7 +530,7 @@ suite("submitExercise action, mooc", () => {
       2,
     )
     expect(lastView()).toMatchObject({
-      headline: "Some tests failed on the server",
+      headline: "Not passed",
       explanation: "That was your last try, so this score is final.",
     })
   })
@@ -569,7 +570,7 @@ suite("submitExercise action, mooc", () => {
       "in a chapter not unlocked yet",
       { chapter: { name: "Loops", number: 2, lockingStatus: "NotUnlockedYet" as const } },
       ChapterLockedError,
-      `${EXERCISE_SLUG} can be submitted once you have completed the chapters before the chapter "Loops".`,
+      `Complete the chapters before the chapter "Loops" to submit ${EXERCISE_SLUG}.`,
     ],
   ])("refuses up front an exercise %s", async (_case, data, errorClass, message) => {
     const refused = { ...moocCourse, exercises: [{ ...moocCourse.exercises[0]!, ...data }] }
@@ -581,6 +582,47 @@ suite("submitExercise action, mooc", () => {
     expect(result.val).toBeInstanceOf(errorClass)
     expect((result.val as Error).message).toBe(message)
     expect(submit).not.toHaveBeenCalled()
+  })
+
+  test("refuses a course its backend refused once a refresh finds it still refused", async () => {
+    const lost = { ...moocCourse, accessLoss: { reason: "forbidden" as const, checkedAt: 0 } }
+    const submit = vi.fn()
+    const { actionContext } = contextFor(makeMoocKind(lost), { submitMoocExercise: submit })
+
+    const result = await submitExercise(actionContext, moocExercise)
+
+    expect(updateCourse).toHaveBeenCalledOnce()
+    expect(result.val).toBeInstanceOf(CourseAccessLostError)
+    expect((result.val as Error).message).toBe(
+      `You no longer have access to this course, so ${EXERCISE_SLUG} cannot be submitted.`,
+    )
+    expect(submit).not.toHaveBeenCalled()
+  })
+
+  test("submits once the refresh finds the course served again", async () => {
+    const lost: MoocLocalCourseData = {
+      ...moocCourse,
+      accessLoss: { reason: "notFound", checkedAt: 0 },
+    }
+    const { actionContext } = contextFor(makeMoocKind(lost), {
+      submitMoocExercise: vi.fn(async () =>
+        Ok({
+          task_submission_id: TASK_SUBMISSION_ID,
+          slide_submission_id: "slide-submission-1",
+          exercise_page_url: EXERCISE_PAGE_URL,
+        }),
+      ),
+      waitForMoocGrading: vi.fn(async () => Ok(grading({}))),
+    })
+    vi.mocked(updateCourse).mockImplementationOnce(async () => {
+      delete lost.accessLoss
+      return Ok({ isUpdated: true, warnings: [] })
+    })
+
+    const result = await submitExercise(actionContext, moocExercise)
+
+    expect(result.ok).toBe(true)
+    expect(actionContext.startup.langs.submitMoocExercise).toHaveBeenCalledOnce()
   })
 
   test("a refusal the stored data did not foresee shows in the panel and refreshes the course", async () => {
@@ -923,7 +965,7 @@ suite("submitExercise action, through the real runForExercise boundary", () => {
 
   test("an exercise gone from the server says so and offers a refresh", async () => {
     const cause = new ExerciseNotFoundError(
-      "This exercise no longer exists on courses.mooc.fi.",
+      "This exercise is no longer in the course.",
       "Caused by: HTTP error 404 Not Found for …",
     )
     const actionContext = contextWithWorkspace(
@@ -943,9 +985,8 @@ suite("submitExercise action, through the real runForExercise boundary", () => {
       headline: "Submission failed",
       error: {
         message:
-          "This exercise no longer exists on courses.mooc.fi. Refresh the courses to see the" +
-          " course's current exercises.",
-        details: "Caused by: HTTP error 404 Not Found for …",
+          "This exercise is no longer in the course. Refresh the courses to see its exercises.",
+        detailsId: expect.any(String),
         actions: [{ label: "Refresh Courses", command: "tmcTreeView.refreshCourses" }],
       },
     })

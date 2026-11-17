@@ -1,16 +1,29 @@
 import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../../shared/langsSchema"
 import type {
+  AddCoursePanel,
+  CatalogCourse,
   CourseDetailsPanel,
   CourseHomeExercise,
   CourseHomeView,
   DeadlineText,
   ExerciseSection,
   ExtensionToWebview,
+  LoginPanel,
+  LoginView,
+  MoocCatalog,
   Panel,
+  RequestType,
   SubmissionHistoryEntry,
+  TmcOrganizations,
+  WebviewState,
   WebviewToExtension,
 } from "../../shared/lib"
-import { makeMoocKind, makeTmcKind } from "../../shared/lib"
+import {
+  makeMoocKind,
+  makeTmcKind,
+  SUBMIT_REFUSAL_LABELS,
+  submitRefusalSentence,
+} from "../../shared/lib"
 import {
   inProgressView,
   moocGradingView,
@@ -37,6 +50,8 @@ export interface Scenario {
   reply?: (message: WebviewToExtension) => ExtensionToWebview[]
   /** Posted once the panel is on screen, the way a running operation reports its progress. */
   pushes?: ExtensionToWebview[]
+  /** What VS Code hands the document as saved, as after the student left it in this state. */
+  savedState?: WebviewState
 }
 
 function deadline(
@@ -205,6 +220,26 @@ const moocCourseInWorkspace = courseHomeView({
   })),
 })
 
+/** The course in its workspace once its backend refuses it: what is on disk stays. */
+function moocCourseOutOfReach(accessLoss: "forbidden" | "notFound"): CourseHomeView {
+  const refusal = accessLoss === "forbidden" ? "courseForbidden" : "courseNotFound"
+  const { nextExercise: _none, nextDeadline: _passed, ...rest } = moocCourseInWorkspace
+  return courseHomeView({
+    ...rest,
+    accessLoss,
+    parts: rest.parts.map((part) => ({
+      ...part,
+      exercises: part.exercises.map((ex) => ({
+        ...ex,
+        submitRefusal: {
+          label: SUBMIT_REFUSAL_LABELS[refusal],
+          sentence: submitRefusalSentence(refusal, ex.name),
+        },
+      })),
+    })),
+  })
+}
+
 const moocCourseWithRules = courseHomeView({
   ...moocCourse,
   isWorkspaceOpen: true,
@@ -236,13 +271,16 @@ const moocCourseWithRules = courseHomeView({
       key: "chapter:2",
       name: "Conditionals and loops",
       isDefaultOpen: true,
-      lockedReason: "Locked until you have completed the chapters before it.",
+      lockedReason: "Complete earlier chapters first.",
       exercises: [
         moocExercise(4, "Is it even?", {
           submitRefusal: {
-            label: "chapter not unlocked yet",
-            sentence:
-              'Is it even? can be submitted once you have completed the chapters before the chapter "Conditionals and loops".',
+            label: SUBMIT_REFUSAL_LABELS.chapterNotUnlockedYet,
+            sentence: submitRefusalSentence(
+              "chapterNotUnlockedYet",
+              "Is it even?",
+              "Conditionals and loops",
+            ),
           },
         }),
       ],
@@ -424,6 +462,143 @@ function moocGrading(
 }
 
 /** Every scenario the dev harness offers and the accessibility tests walk through. */
+
+const loginPanel: LoginPanel = { id: 60, type: "Login", isAddingCourse: false }
+
+function loginScenario(id: string, view: LoginView): Scenario {
+  return {
+    id: `login/${id}`,
+    panel: loginPanel,
+    pushes: [{ type: "loginView", target: { id: loginPanel.id, type: "Login" }, view }],
+  }
+}
+
+// The visual tier fixes the clock at 2026-10-01T09:00:00Z.
+const LOGIN_EXPIRES_AT = "2026-10-01T09:15:00.000Z"
+
+const addCoursePanel: AddCoursePanel = { id: 70, type: "AddCourse" }
+
+function catalogCourse(name: string, overrides: Partial<CatalogCourse> = {}): CatalogCourse {
+  return {
+    key: `key:${name}`,
+    name,
+    organization: "University of Helsinki",
+    isAdded: false,
+    ...overrides,
+  }
+}
+
+const enrolledCourses: MoocCatalog = {
+  kind: "listed",
+  items: [
+    catalogCourse("Introduction to everything", {
+      description:
+        "A whirlwind tour of programming, from the first print to files and objects, " +
+        "with exercises tested on your own computer.",
+    }),
+    catalogCourse("Python Programming 2026", {
+      description: "The University of Helsinki's introduction to programming in Python.",
+      isAdded: true,
+    }),
+    catalogCourse("Data Analysis with Python", { organization: "Aalto University" }),
+  ],
+}
+
+const tmcOrganizations: TmcOrganizations = {
+  kind: "listed",
+  items: [
+    {
+      slug: "mooc",
+      name: "MOOC",
+      description: "Open online courses of the University of Helsinki.",
+    },
+    { slug: "hy", name: "University of Helsinki" },
+    { slug: "aalto", name: "Aalto University", description: "Courses taught at Aalto." },
+  ],
+}
+
+type CatalogRequest = Extract<
+  RequestType,
+  "requestMoocCatalog" | "requestTmcOrganizations" | "requestTmcCourses"
+>
+
+/** Answers the add-course screen's listings; a request left out of `answers` stays pending. */
+function answerCatalog(
+  answers: Partial<
+    Record<CatalogRequest, { ok: true; value: unknown } | { ok: false; error: { message: string } }>
+  >,
+) {
+  return (message: WebviewToExtension): ExtensionToWebview[] => {
+    if (!("requestId" in message) || !(message.type in answers)) {
+      return []
+    }
+    const outcome = answers[message.type as CatalogRequest]
+    return outcome
+      ? [
+          {
+            type: "reply",
+            target: { type: "AddCourse", id: addCoursePanel.id },
+            requestId: message.requestId,
+            outcome,
+          } as ExtensionToWebview,
+        ]
+      : []
+  }
+}
+
+function addCourseScenario(
+  id: string,
+  answers: Parameters<typeof answerCatalog>[0],
+  savedState?: WebviewState,
+): Scenario {
+  return {
+    id: `add-course/${id}`,
+    panel: addCoursePanel,
+    reply: answerCatalog(answers),
+    ...(savedState ? { savedState } : {}),
+  }
+}
+
+const LOG_TAIL = [
+  "[2026-10-01 08:58:10:120] [INFO] Downloading 1 exercise of Python Programming 2026",
+  "[2026-10-01 08:58:12:004] [ERROR] Failed to download the exercise. Server Error: tmc.mooc.fi " +
+    "returned 500 Internal Server Error",
+].join("\n")
+
+/** Answers the help screen's request for the log. */
+function answerLogTail(panelId: number): NonNullable<Scenario["reply"]> {
+  return (message) =>
+    message.type === "requestLogTail"
+      ? [
+          {
+            type: "reply",
+            target: { id: panelId, type: "ErrorHelp" },
+            requestId: message.requestId,
+            outcome: { ok: true, value: LOG_TAIL },
+          },
+        ]
+      : []
+}
+
+const { nextExercise: _nextExercise, ...tmcCourseWithoutNext } = tmcCourse
+const allDoneCourse: CourseHomeView = {
+  ...tmcCourseWithoutNext,
+  awardedPoints: tmcCourse.availablePoints,
+  isAllDone: true,
+  newExercises: [],
+  updates: [],
+  parts: tmcCourse.parts.map((part) => ({
+    ...part,
+    exercises: part.exercises.map((exercise) => ({
+      ...exercise,
+      passed: true,
+      status: "closed",
+      isUpdateable: false,
+      awardedPoints: exercise.availablePoints,
+    })),
+  })),
+}
+
 export const SCENARIOS: Scenario[] = [
   {
     id: "course-details/tmc",
@@ -446,6 +621,16 @@ export const SCENARIOS: Scenario[] = [
     reply: answerCourseDetails({ id: 61 }, { ...moocCourse, isNotEnrolled: true }),
   },
   {
+    id: "course-details/mooc-no-access",
+    panel: courseDetailsPanel(63, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
+    reply: answerCourseDetails({ id: 63 }, moocCourseOutOfReach("forbidden")),
+  },
+  {
+    id: "course-details/mooc-course-removed",
+    panel: courseDetailsPanel(64, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
+    reply: answerCourseDetails({ id: 64 }, moocCourseOutOfReach("notFound")),
+  },
+  {
     id: "course-details/mooc-downloading",
     panel: courseDetailsPanel(6, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
     reply: answerCourseDetails(
@@ -462,6 +647,72 @@ export const SCENARIOS: Scenario[] = [
     id: "course-details/restricted",
     panel: courseDetailsPanel(7, makeTmcKind({ courseId: 42 })),
     reply: answerCourseDetails({ id: 7 }, restrictedCourse),
+  },
+  {
+    id: "course-details/all-done",
+    panel: courseDetailsPanel(9, makeTmcKind({ courseId: 42 })),
+    reply: answerCourseDetails({ id: 9 }, allDoneCourse),
+  },
+  {
+    id: "course-details/update-failed",
+    panel: courseDetailsPanel(10, makeTmcKind({ courseId: 42 })),
+    reply: answerCourseDetails(
+      { id: 10 },
+      {
+        ...tmcCourse,
+        failedUpdates: [
+          {
+            id: makeTmcKind({ tmcExerciseId: 103 }),
+            name: "03_sum_of_numbers",
+            reason: "Could not reach the server. Check your network connection.",
+          },
+        ],
+      },
+    ),
+  },
+  {
+    id: "course-details/ai-policy-changed",
+    panel: courseDetailsPanel(11, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
+    reply: answerCourseDetails(
+      { id: 11 },
+      {
+        ...moocCourse,
+        aiPolicy: { policy: "no_ai", isAiAllowed: false },
+        aiPolicyChange: "AI may not be used at any point. AI assistance is off in this course.",
+      },
+    ),
+  },
+  {
+    id: "course-details/action-failed",
+    panel: courseDetailsPanel(8, makeTmcKind({ courseId: 42 })),
+    reply: answerCourseDetails({ id: 8 }, tmcCourse),
+    pushes: [
+      {
+        type: "operationFailed",
+        target: { id: 8, type: "CourseDetails" },
+        failure: {
+          serial: 1,
+          tone: "error",
+          title: "Failed to download the exercises.",
+          error: {
+            message: "The server ran into a problem. Try again later.",
+            detailsId: "download-failure",
+          },
+        },
+      },
+      {
+        type: "operationFailed",
+        target: { id: 8, type: "CourseDetails" },
+        failure: {
+          serial: 2,
+          tone: "warning",
+          error: {
+            message:
+              "You have over 50 exercises open, which can slow VS Code down. Close the ones you have finished.",
+          },
+        },
+      },
+    ],
   },
   // Never answered, so the panel shows its loading state until the request times out.
   { id: "course-details/loading", panel: courseDetailsPanel(5, makeTmcKind({ courseId: 42 })) },
@@ -679,6 +930,14 @@ export const SCENARIOS: Scenario[] = [
     pushes: [submissionViewMessage(tmcResultsPanel.id, testedLocallyView())],
   },
   {
+    id: "exercise-submission/tested-locally-logged-out",
+    panel: tmcResultsPanel,
+    reply: answerResultsRequests(tmcResultsPanel, []),
+    pushes: [
+      submissionViewMessage(tmcResultsPanel.id, { ...testedLocallyView(), isLoggedOut: true }),
+    ],
+  },
+  {
     id: "exercise-submission/mooc-grading",
     panel: moocSubmissionPanel,
     pushes: [
@@ -744,31 +1003,161 @@ export const SCENARIOS: Scenario[] = [
     ],
   },
   {
+    id: "exercise-submission/action-failed",
+    panel: submissionPanel,
+    pushes: [
+      submissionViewMessage(
+        submissionPanel.id,
+        tmcResultView(submissionFinished({ points: ["1.3", "1.4"] }), [], 2),
+      ),
+      {
+        type: "operationFailed",
+        target: { id: submissionPanel.id, type: "ExerciseSubmission" },
+        failure: {
+          serial: 3,
+          tone: "error",
+          error: { message: "This exercise is no longer downloaded." },
+        },
+      },
+    ],
+  },
+  {
     id: "exercise-submission/error",
     panel: submissionPanel,
     pushes: [
       submissionViewMessage(
         submissionPanel.id,
-        submitFailedView({ message: "Submitting failed", details: "The server returned 500" }),
+        submitFailedView({
+          message: "The server ran into a problem. Try again later.",
+          detailsId: "submit-failure",
+        }),
       ),
     ],
   },
+  loginScenario("requesting-code", { phase: "requestingCode" }),
+  loginScenario("waiting", {
+    phase: "waiting",
+    userCode: "WXYZ-0001",
+    verificationUrl: "https://courses.mooc.fi/oauth_device",
+    expiresAt: LOGIN_EXPIRES_AT,
+  }),
+  loginScenario("denied", {
+    phase: "failed",
+    failure: "denied",
+    error: { message: "The login was denied in the browser." },
+  }),
+  loginScenario("expired", {
+    phase: "failed",
+    failure: "expired",
+    error: { message: "The login code expired before it was approved." },
+  }),
+  loginScenario("unreachable", {
+    phase: "failed",
+    failure: "unreachable",
+    error: {
+      message: "Could not reach the server. Check your internet connection.",
+      detailsId: "login-failure",
+    },
+  }),
+  addCourseScenario("loading", {}),
+  addCourseScenario("courses", {
+    requestMoocCatalog: { ok: true, value: enrolledCourses },
+    requestTmcOrganizations: { ok: true, value: tmcOrganizations },
+  }),
+  addCourseScenario(
+    "organization",
+    {
+      requestMoocCatalog: { ok: true, value: enrolledCourses },
+      requestTmcOrganizations: { ok: true, value: tmcOrganizations },
+      requestTmcCourses: {
+        ok: true,
+        value: [
+          catalogCourse("Java Programming I", {
+            organization: "MOOC",
+            description: "The basics of programming in Java.",
+          }),
+          catalogCourse("Java Programming II", { organization: "MOOC", isAdded: true }),
+        ],
+      },
+    },
+    { screen: "AddCourse", ui: { organization: "mooc" } },
+  ),
+  addCourseScenario("not-enrolled", {
+    requestMoocCatalog: { ok: true, value: { kind: "listed", items: [] } },
+    requestTmcOrganizations: { ok: true, value: tmcOrganizations },
+  }),
+  addCourseScenario("unavailable", {
+    requestMoocCatalog: { ok: true, value: { kind: "loggedOut" } },
+    requestTmcOrganizations: {
+      ok: false,
+      error: { message: "Could not reach the server. Check your network connection." },
+    },
+  }),
   {
-    id: "initialization-error-help/errors",
+    id: "error-help/startup",
     panel: {
       id: 50,
-      type: "InitializationErrorHelp",
-      failures: [
-        {
-          service: "tmc-langs",
-          error: "Failed to download the TMC-langs CLI",
-          stack: "Error: ENOTFOUND",
-          hint:
-            "A proxy, firewall or antivirus program blocking network requests can cause this. " +
-            "Try adding an exception for the directory '/home/student/.local/share/tmc/cli'.",
-        },
-      ],
+      type: "ErrorHelp",
+      topic: {
+        kind: "startup",
+        failures: [
+          {
+            service: "tmc-langs",
+            error: "Failed to download the TMC-langs CLI",
+            stack: "Error: ENOTFOUND",
+            hint:
+              "A proxy, firewall or antivirus program blocking network requests can cause this. " +
+              "Try adding an exception for the directory '/home/student/.local/share/tmc/cli'.",
+          },
+        ],
+      },
     },
+    reply: answerLogTail(50),
+  },
+  {
+    id: "error-help/operation",
+    panel: {
+      id: 51,
+      type: "ErrorHelp",
+      topic: {
+        kind: "operation",
+        detailsId: "download-failure",
+        details: {
+          summary: "Failed to download the exercise. tmc.mooc.fi returned an error (500).",
+          actions: [],
+          causeChain:
+            "Server Error: tmc.mooc.fi returned 500 Internal Server Error\n" +
+            "GET https://tmc.mooc.fi/api/v8/core/exercises/1/download\n\n" +
+            "Caused by: Error: connection reset by peer",
+          occurredAt: "2026-10-01T08:58:12.000Z",
+        },
+      },
+    },
+    reply: answerLogTail(51),
+  },
+  {
+    id: "error-help/operation-cleared",
+    panel: {
+      id: 52,
+      type: "ErrorHelp",
+      topic: { kind: "operation", detailsId: "before-reload", details: null },
+    },
+    reply: answerLogTail(52),
+  },
+  {
+    id: "error-help/general",
+    panel: {
+      id: 53,
+      type: "ErrorHelp",
+      topic: {
+        kind: "general",
+        hint:
+          "An antivirus program can stop the TestMyCode tools from running, and a proxy or " +
+          "firewall can block their network requests. Try adding an exception for the directory " +
+          "'/home/student/.local/share/tmc/cli'.",
+      },
+    },
+    reply: answerLogTail(53),
   },
 ]
 

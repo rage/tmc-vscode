@@ -1,11 +1,17 @@
 import { Err, Ok } from "ts-results"
 
-import type { LocalCourseData } from "../../../shared/lib"
-import { makeMoocKind } from "../../../shared/lib"
+import type { CourseIdentifier, LocalCourseData } from "../../../shared/lib"
+import {
+  CourseIdentifier as CourseIdentifierNs,
+  LocalCourseData as LocalCourseDataNs,
+  makeMoocKind,
+} from "../../../shared/lib"
 import { checkForExerciseUpdates } from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import type Langs from "../../api/langs"
+import type { UncheckedCourse } from "../../api/langs"
 import type { UserData } from "../../config/userdata"
+import { InsufficientScopeError, NotFoundError } from "../../errors"
 import type { MoocLocalCourseData } from "../../storage/data"
 import { moocCourseData, moocCourseExercise } from "../fixtures/courses"
 import {
@@ -159,7 +165,7 @@ suite("checkForExerciseUpdates action", function () {
   test("does not name a failed backend the user has no courses on", async function () {
     tmcMockValues.moocExerciseUpdates = Err(new Error("mooc down"))
     const result = await checkForExerciseUpdates(actionContext())
-    expect(result).toEqual({ outdated: [tmcOutdated], removed: [], failures: [] })
+    expect(result).toEqual({ outdated: [tmcOutdated], removed: [], failures: [], unchecked: [] })
   })
 
   test("reports the exercises each backend no longer has", async function () {
@@ -194,5 +200,120 @@ suite("checkForExerciseUpdates action", function () {
     })
     await checkForExerciseUpdates(actionContext())
     expect(started.slice(0, 2)).toEqual(["tmc", "mooc"])
+  })
+})
+
+function refused(refusal: Error, courseId = "instance-uuid-1"): UncheckedCourse {
+  return { courseId: idOfMoocCourse(courseId), refusal } as UncheckedCourse
+}
+
+suite("checkForExerciseUpdates with courses courses.mooc.fi refused", function () {
+  const otherCourse: MoocLocalCourseData = moocCourseData({
+    id: "instance-uuid-2",
+    name: "mooc-java-course",
+    title: "Mooc Java",
+    availablePoints: 1,
+    exercises: [moocCourseExercise({ id: "mooc-ex-2", name: "mooc_java" })],
+  })
+  const courses = [moocCourse, otherCourse].map((x) => makeMoocKind(x) as LocalCourseData)
+
+  let tmcMock: Langs
+  let tmcMockValues: TMCMockValues
+  let replaceCourse: ReturnType<typeof vi.fn>
+
+  function actionContext(): ReadyActionContext {
+    const [userData, userDataValues] = createUserDataMock()
+    userDataValues.getCourses = courses
+    replaceCourse = vi.fn(async () => Ok.EMPTY)
+    Object.assign(userData, {
+      getCourse: (id: CourseIdentifier) => {
+        const found = courses.find((x) =>
+          CourseIdentifierNs.equals(LocalCourseDataNs.getCourseId(x), id),
+        )
+        return found ? Ok(found) : Err(new Error("not stored"))
+      },
+      replaceCourse,
+    })
+    return createMockActionContext({ startup: { langs: tmcMock, userData } })
+  }
+
+  beforeEach(function () {
+    ;[tmcMock, tmcMockValues] = createTMCMock()
+  })
+
+  test("marks a deleted course lost and keeps the other course's results", async function () {
+    tmcMockValues.moocExerciseUpdates = Ok({
+      updated: [idOfMoocExercise("mooc-ex-2")],
+      removed: [],
+      uncheckedCourses: [refused(new NotFoundError("404"))],
+    })
+
+    const result = await checkForExerciseUpdates(actionContext())
+
+    expect(result.outdated.map((x) => x.exerciseId)).toEqual([idOfMoocExercise("mooc-ex-2")])
+    expect(result.unchecked).toEqual([idOfMoocCourse("instance-uuid-1")])
+    expect(result.failures).toEqual([])
+    expect(replaceCourse).toHaveBeenCalledExactlyOnceWith({
+      kind: "mooc",
+      data: { ...moocCourse, accessLoss: { reason: "notFound", checkedAt: expect.any(Number) } },
+    })
+    expect(tmcMock.getEnrolledMoocCourses).not.toHaveBeenCalled()
+  })
+
+  test("marks a course refused with an insufficient scope forbidden when the enrollments load", async function () {
+    tmcMockValues.moocExerciseUpdates = Ok({
+      updated: [],
+      removed: [],
+      uncheckedCourses: [refused(new InsufficientScopeError("403"))],
+    })
+
+    const result = await checkForExerciseUpdates(actionContext())
+
+    expect(result.failures).toEqual([])
+    expect(replaceCourse).toHaveBeenCalledExactlyOnceWith({
+      kind: "mooc",
+      data: { ...moocCourse, accessLoss: { reason: "forbidden", checkedAt: expect.any(Number) } },
+    })
+  })
+
+  test("takes an insufficient scope for the session's when the enrollments do not load", async function () {
+    tmcMockValues.getEnrolledMoocCourses = Err(new InsufficientScopeError("403"))
+    tmcMockValues.moocExerciseUpdates = Ok({
+      updated: [],
+      removed: [],
+      uncheckedCourses: [
+        refused(new InsufficientScopeError("403")),
+        refused(new NotFoundError("404"), "instance-uuid-2"),
+      ],
+    })
+
+    const result = await checkForExerciseUpdates(actionContext())
+
+    expect(result.failures).toEqual([
+      { backend: "mooc", error: expect.any(InsufficientScopeError) },
+    ])
+    expect(replaceCourse).toHaveBeenCalledExactlyOnceWith({
+      kind: "mooc",
+      data: { ...otherCourse, accessLoss: { reason: "notFound", checkedAt: expect.any(Number) } },
+    })
+  })
+
+  test("takes every course refused with an insufficient scope for the session's", async function () {
+    tmcMockValues.moocExerciseUpdates = Ok({
+      updated: [],
+      removed: [],
+      uncheckedCourses: [
+        refused(new InsufficientScopeError("403")),
+        refused(new InsufficientScopeError("403"), "instance-uuid-2"),
+      ],
+    })
+
+    const result = await checkForExerciseUpdates(actionContext())
+
+    expect(result.failures).toEqual([
+      { backend: "mooc", error: expect.any(InsufficientScopeError) },
+    ])
+    expect(replaceCourse).not.toHaveBeenCalled()
+    expect(tmcMock.getEnrolledMoocCourses).not.toHaveBeenCalled()
   })
 })

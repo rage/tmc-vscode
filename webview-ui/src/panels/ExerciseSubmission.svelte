@@ -13,17 +13,20 @@
   import ActionBar from "../components/ActionBar.svelte"
   import type { MenuAction } from "../components/ActionMenu.svelte"
   import ActionMenu from "../components/ActionMenu.svelte"
+  import Button from "../components/Button.svelte"
   import CodeBlock from "../components/CodeBlock.svelte"
   import Disclosure from "../components/Disclosure.svelte"
   import ErrorNotice from "../components/ErrorNotice.svelte"
   import Meter from "../components/Meter.svelte"
   import PanelHeader from "../components/PanelHeader.svelte"
   import PasteHelpBox from "../components/PasteHelpBox.svelte"
+  import ScreenFailures from "../components/ScreenFailures.svelte"
   import StatusBanner from "../components/StatusBanner.svelte"
   import SubmissionFeedbackForm from "../components/SubmissionFeedbackForm.svelte"
   import TestResults from "../components/TestResults.svelte"
   import ToolbarButton from "../components/ToolbarButton.svelte"
   import { announce } from "../utilities/a11y.svelte"
+  import { listenForFailures } from "../utilities/screenFailures.svelte"
   import { addMessageListener, createRequester } from "../utilities/script"
   import { restoreScroll, uiState } from "../utilities/uiState.svelte"
   import { vscode } from "../utilities/vscode"
@@ -70,12 +73,19 @@
     icon: "beaker",
     onclick: () => runExerciseAction("runTests"),
   }
-  const submitAgain: BarAction = {
-    label: "Submit Again",
-    icon: "cloud-upload",
-    onclick: () => runExerciseAction("submit"),
+  const logInToSubmit: BarAction = {
+    label: "Log In to Submit",
+    icon: "sign-in",
+    onclick: () => runExerciseAction("logInToSubmit"),
   }
-  const submit: BarAction = { ...submitAgain, label: "Submit" }
+  const submitAgain: BarAction = $derived(
+    view?.isLoggedOut
+      ? logInToSubmit
+      : { label: "Submit Again", icon: "cloud-upload", onclick: () => runExerciseAction("submit") },
+  )
+  const submit: BarAction = $derived(
+    view?.isLoggedOut ? logInToSubmit : { ...submitAgain, label: "Submit" },
+  )
 
   const openExercise: BarAction = {
     label: "Open Exercise",
@@ -190,14 +200,12 @@
         ? [{ label: "Show Submission in Browser", onselect: () => showInBrowser(submissionUrl) }]
         : []),
       ...(solutionUrl && !isSolutionInBar
-        ? [{ label: "Show Model Solution in Browser", onselect: () => showInBrowser(solutionUrl) }]
+        ? [{ label: "Show Model Solution", onselect: () => showInBrowser(solutionUrl) }]
         : []),
       ...(view?.canPaste && !view.exerciseState
-        ? [{ label: "Ask for Help…", onselect: () => openSection("getHelp") }]
+        ? [{ label: "Get Help", onselect: () => openSection("getHelp") }]
         : []),
-      ...(isHistoryShown
-        ? [{ label: "Show History", onselect: () => openSection("history") }]
-        : []),
+      ...(isHistoryShown ? [{ label: "History", onselect: () => openSection("history") }] : []),
     ]
   })
 
@@ -213,12 +221,17 @@
 
   // svelte-ignore state_referenced_locally -- the panel identity (id/type)
   // is fixed for the lifetime of the component, capturing the initial value is intended
+  const screenFailures = listenForFailures(panel)
+  // svelte-ignore state_referenced_locally -- as above
   addMessageListener(panel, (message) => {
     if (message.type === "openExerciseSection") {
       if (message.serial > handledSectionSerial.current) {
         handledSectionSerial.current = message.serial
         void openSection(message.section, message.shouldPaste)
       }
+      return
+    }
+    if (message.type !== "submissionView") {
       return
     }
     const previous = view
@@ -237,7 +250,9 @@
   function closePanel() {
     vscode.postMessage({ type: "closeSidePanel" })
   }
-  function runExerciseAction(action: "runTests" | "submit" | "openNextExercise" | "openExercise") {
+  function runExerciseAction(
+    action: "runTests" | "submit" | "logInToSubmit" | "openNextExercise" | "openExercise",
+  ) {
     vscode.postMessage({ type: "exerciseAction", sourcePanel, action })
   }
   function showInBrowser(url: string) {
@@ -333,12 +348,18 @@
     <p class="feedback-text"><span class="muted">Grader feedback:</span> {view.feedbackText}</p>
   {/if}
   {#if view?.error}
+    {@const detailsId = view.error.detailsId}
     <div role="alert">
       <p>{view.error.message}</p>
-      {#if view.error.details}
-        <CodeBlock code={view.error.details} label="Error details" oncopy={copyToClipboard} />
-      {/if}
     </div>
+    {#if detailsId !== undefined}
+      <Button secondary onclick={() => vscode.postMessage({ type: "showErrorDetails", detailsId })}>
+        Show Details
+      </Button>
+    {/if}
+  {/if}
+  {#if view?.serverOutput}
+    <CodeBlock code={view.serverOutput} label="Server output" oncopy={copyToClipboard} />
   {/if}
 </StatusBanner>
 
@@ -349,6 +370,7 @@
     <p class="muted">{triesNote}</p>
   {/if}
   <ActionBar {...barActions} />
+  <ScreenFailures failures={screenFailures} />
   {#if keepWaitingError}
     <ErrorNotice error={keepWaitingError} title="Could not keep waiting" />
   {/if}
@@ -380,17 +402,12 @@
     <div class="more">
       {#if isGetHelpShown}
         <Disclosure
-          title="Get help"
+          title="Get Help"
           persistAs="getHelp"
           toggleId={getHelpToggleId}
           bind:open={isGetHelpOpen}
         >
-          <PasteHelpBox
-            bind:this={pasteHelp}
-            backend={panel.backend}
-            {sourcePanel}
-            oncopy={copyToClipboard}
-          />
+          <PasteHelpBox bind:this={pasteHelp} {sourcePanel} oncopy={copyToClipboard} />
         </Disclosure>
       {/if}
       {#if isHistoryShown}

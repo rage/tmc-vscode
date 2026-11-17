@@ -5,6 +5,7 @@ import {
   CourseIdentifier,
   ExerciseIdentifier,
   LocalCourseData,
+  LocalCourseExercise,
 } from "../../shared/lib"
 import { checkForExerciseUpdates, downloadExerciseUpdates } from "../actions"
 import { describeExercises, exerciseName } from "../actions/exerciseNames"
@@ -43,18 +44,24 @@ export async function updateExercises(
     return
   }
 
-  const { outdated, removed, failures } = updateablesResult.val
+  const { outdated, removed, failures, unchecked } = updateablesResult.val
   const knownBefore = new Set(
     userData
       .getCourses()
       .flatMap((course) => updateablesRegistry.get(LocalCourseData.getCourseId(course)))
       .map((id) => ExerciseIdentifier.key(id)),
   )
-  // What a failed backend's courses last showed is still the best answer for them.
+  const uncheckedCourses = userData
+    .getCourses()
+    .filter((course) =>
+      unchecked.some((id) => CourseIdentifier.equals(id, LocalCourseData.getCourseId(course))),
+    )
+  // What a failed backend's courses, or an unchecked course, last showed is still the best answer.
   updateablesRegistry.setMany(
     userData
       .getCourses()
       .filter((course) => failures.every(({ backend }) => backend !== course.kind))
+      .filter((course) => !uncheckedCourses.includes(course))
       .map((course) => {
         const courseId = LocalCourseData.getCourseId(course)
         return [
@@ -67,25 +74,32 @@ export async function updateExercises(
   )
   for (const backend of ["tmc", "mooc"] as const) {
     if (failures.every((failure) => failure.backend !== backend)) {
-      updateablesRegistry.setRemoved(
-        backend,
-        removed.filter((id) => id.kind === backend),
-      )
+      updateablesRegistry.setRemoved(backend, [
+        ...removed.filter((id) => id.kind === backend),
+        ...uncheckedCourses
+          .filter((course) => course.kind === backend)
+          .flatMap((course) => LocalCourseData.getExercises(course))
+          .map((exercise) => LocalCourseExercise.getId(exercise))
+          .filter((id) => updateablesRegistry.isRemoved(id)),
+      ])
     }
   }
   const [firstFailure] = failures
   if (!silent && firstFailure) {
     // One notification however many sites failed; the log has each one's error.
-    const sites = failures.map(({ backend }) => backendName(backend)).join(" and ")
     for (const { backend, error } of failures.slice(1)) {
       Logger.error(`Failed to check ${backendName(backend)} for exercise updates.`, error)
     }
-    void dialog.reportError(`Failed to check ${sites} for exercise updates.`, firstFailure.error)
+    void dialog.reportError("Failed to check for exercise updates.", firstFailure.error)
   }
 
   const updateable = outdated.filter((x) => {
     const course = userData.getCourse(x.courseId)
-    return course.ok && !LocalCourseData.isDisabled(course.val)
+    return (
+      course.ok &&
+      !LocalCourseData.isDisabled(course.val) &&
+      LocalCourseData.getAccessLoss(course.val) === undefined
+    )
   })
   if (updateable.length > 0 && settings.getAutomaticallyUpdateExercises()) {
     // The student did not pick these exercises to update, even when they asked for a refresh.
@@ -104,7 +118,7 @@ export async function updateExercises(
 
   if (exercisesToUpdate.length === 0 || mode === "promptless") {
     if (!silent && failures.length === 0) {
-      dialog.statusMessage("All exercises are up to date.")
+      dialog.statusMessage(allClear(uncheckedCourses))
     }
     return
   }
@@ -148,9 +162,9 @@ interface ExerciseUpdate {
 }
 
 /**
- * Downloads `updates`. An update the student picked says in the status bar which exercises it
- * updated. An automatic one leaves its trace in the course home, and offers to show it when it
- * is not on screen.
+ * Downloads `updates`, leaving a trace of what it updated in each course's home. While that is
+ * not on screen, an update the student picked says so in the status bar, and an automatic one
+ * offers to show it.
  *
  * @param options.isUnrequested See `downloadExerciseUpdates`.
  * @param options.isAnnounced Whether to announce the update as an automatic one, which the
@@ -171,11 +185,7 @@ export async function downloadUpdates(
     return
   }
   const { updated } = result.val
-  if (!isUnrequested && !options.isAnnounced) {
-    const names = updated.map((id) => exerciseName(actionContext, id))
-    actionContext.dialog.statusMessage(`Updated ${describeExercises(names)}.`)
-    return
-  }
+  const isRequested = !isUnrequested && !options.isAnnounced
   const updatedKeys = new Set(updated.map((id) => ExerciseIdentifier.key(id)))
   const byCourse = new Map<string, { courseId: CourseIdentifier; names: string[] }>()
   for (const { courseId, exerciseId } of updates) {
@@ -191,11 +201,27 @@ export async function downloadUpdates(
     return !shownCourseHome.isShowing(courseId)
   })
   const [first] = unseen
-  if (first) {
+  if (first && isRequested) {
+    actionContext.dialog.statusMessage(
+      `Updated ${describeExercises(unseen.flatMap((entry) => entry.names))}.`,
+    )
+  } else if (first) {
     const names = unseen.flatMap((entry) => entry.names)
     void actionContext.dialog.notification(
       `Updated ${describeExercises(names)} to the latest version.`,
       showCourseHomeButton(first.courseId),
     )
   }
+}
+
+/** The all-clear of a check that found nothing to update, naming the courses it could not check. */
+function allClear(uncheckedCourses: readonly LocalCourseData[]): string {
+  if (uncheckedCourses.length === 0) {
+    return "All exercises are up to date."
+  }
+  const titles = new Intl.ListFormat("en").format(
+    uncheckedCourses.map((course) => LocalCourseData.getCourseTitle(course)),
+  )
+  const verb = uncheckedCourses.length === 1 ? "is" : "are"
+  return `${titles} ${verb} no longer available. Your other exercises are up to date.`
 }

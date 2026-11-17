@@ -1,5 +1,5 @@
 import type { RunnableCommand } from "../shared/lib"
-import { asSentence, backendName, BaseError } from "../shared/lib"
+import { asSentence, BaseError, LOGGED_OUT_MESSAGE } from "../shared/lib"
 
 export class AuthorizationError extends BaseError {
   public override readonly name: string = "Authorization Error"
@@ -63,9 +63,18 @@ export class ExerciseLockedError extends BaseError {
   public override readonly name = "Exercise Locked Error"
 }
 
+/**
+ * The exercise's backend no longer serves its course: the student lost access to it, or it was
+ * deleted. The exercise stays on disk and its tests still run.
+ */
+export class CourseAccessLostError extends BaseError {
+  public override readonly name = "Course Access Lost Error"
+}
+
 /** Whether `error` is the backend's standing refusal of the exercise, which no retry changes. */
 export function isSubmitRefusal(error: Error): boolean {
   return (
+    error instanceof CourseAccessLostError ||
     error instanceof OutOfTriesError ||
     error instanceof DeadlinePassedError ||
     error instanceof ChapterNotOpenError ||
@@ -267,8 +276,7 @@ export interface ErrorPresentation {
  * Deliberately not the logger's formatter, which also appends the class name, `details` —
  * on a CLI failure that is the process's backtrace and the tail of its stderr — the `cause`
  * chain, and the stack. Those diagnose a failure rather than describe it, and a notification
- * is the one place they cannot be scrolled or copied. The logger still writes all of them to
- * the output channel, which the "Show Logs" button reveals.
+ * is the one place they cannot be scrolled or copied. Its Show Details screen has them all.
  */
 function userSentence(error: Error): string {
   const trimmed = error.message.trim() || error.name
@@ -279,15 +287,6 @@ function userSentence(error: Error): string {
   return asSentence(message)
 }
 
-/**
- * How to show `error` to the user.
- *
- * Every class whose remedy follows from the class itself states that remedy here, so no
- * call site spells one out and the same failure reads the same way wherever it surfaces.
- * A class with no entry shows its own message and no buttons, which is the right answer
- * for a failure the user cannot act on. No message carries diagnostics; see
- * {@link userSentence}. An error a backend raised names that backend where it matters.
- */
 /** Whether `error` means the courses.mooc.fi session is gone, which only a new login fixes. */
 export function isSessionLost(error: Error): boolean {
   const backend = error instanceof BaseError ? error.backend : undefined
@@ -296,9 +295,15 @@ export function isSessionLost(error: Error): boolean {
   )
 }
 
-/** What every surface that tells of a lost session says. */
-export const SESSION_ENDED_MESSAGE = `Your ${backendName("mooc")} session has ended. Log in again to continue.`
-
+/**
+ * How to show `error` to the user.
+ *
+ * Every class whose remedy follows from the class itself states that remedy here, so no
+ * call site spells one out and the same failure reads the same way wherever it surfaces.
+ * A class with no entry shows its own message and no buttons, which is the right answer
+ * for a failure the user cannot act on. No message carries diagnostics; see
+ * {@link userSentence}.
+ */
 export function presentationFor(error: Error): ErrorPresentation {
   const backend = error instanceof BaseError ? error.backend : undefined
   const reported = userSentence(error)
@@ -322,69 +327,59 @@ export function presentationFor(error: Error): ErrorPresentation {
   }
   if (error instanceof TmcLoginNotAcceptedError) {
     return {
-      message:
-        `${backendName("tmc")} did not accept your login. It may not accept` +
-        ` ${backendName("mooc")} logins yet.`,
+      message: "This course's server did not accept your MOOC.fi login. Try again later.",
       actions: [],
     }
   }
   if (isSessionLost(error)) {
     return {
-      message: SESSION_ENDED_MESSAGE,
+      message: LOGGED_OUT_MESSAGE,
       actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
     }
   }
   if (error instanceof InsufficientScopeError) {
     return {
-      message:
-        `${reported} Your ${backendName("mooc")} session no longer grants access to` +
-        " programming exercises. Log in again to continue.",
+      message: LOGGED_OUT_MESSAGE,
       actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
     }
   }
   if (error instanceof NotEnrolledError) {
-    const site = backend === undefined ? "" : ` on ${backendName(backend)}`
     return {
-      message:
-        `You're no longer enrolled on this course${site}, so its exercises can't be submitted.` +
-        ` You can still download them and your earlier submissions. Enroll on the course` +
-        ` again${site}, then refresh it here.`,
-      actions: [{ label: "Open Course Page", command: ENROLL_ON_COURSE_COMMAND }],
+      message: "You are no longer enrolled on this course. Enroll again, then refresh the course.",
+      actions: [{ label: "Enroll Again", command: ENROLL_ON_COURSE_COMMAND }],
     }
   }
   if (error instanceof UploadExpiredError) {
     // tmc-langs uploads and submits within one invocation and has already retried the
     // upload itself, so submitting afresh is the only step left to suggest.
     return {
-      message:
-        `${reported} The submission's files expired on the server before the submission` +
-        " was accepted. Please try again.",
+      message: "The submission expired before the server accepted it. Submit again.",
       actions: [],
     }
   }
   if (error instanceof ExerciseNotFoundError) {
     return {
-      message: `${reported} Refresh the courses to see the course's current exercises.`,
+      message:
+        "This exercise is no longer in the course. Refresh the courses to see its exercises.",
       actions: [{ label: "Refresh Courses", command: "tmcTreeView.refreshCourses" }],
     }
   }
   if (error instanceof SpawnError || error instanceof EmptyLangsResponseError) {
     return {
       message:
-        `${reported} An antivirus program may be blocking the TestMyCode tools;` +
-        " the help page says how to allow them.",
+        "An antivirus program may be blocking the TestMyCode tools. Show Help says how to allow them.",
       actions: [{ label: "Show Help", command: "tmc.viewInitializationErrorHelp" }],
     }
   }
   if (error instanceof InitializationError) {
     return {
-      message: `${reported} The help page lists what failed and how to fix it.`,
+      message: "TestMyCode could not start. Show Help says how to fix this.",
       actions: [{ label: "Show Help", command: "tmc.viewInitializationErrorHelp" }],
     }
   }
   if (error instanceof ObsoleteClientError) {
     return {
-      message: `${reported} This extension is out of date, please update it.`,
+      message: "This version of TestMyCode is out of date. Update the extension.",
       actions: [
         { label: "Update Extension", command: "workbench.extensions.action.checkForUpdates" },
       ],
@@ -392,7 +387,7 @@ export function presentationFor(error: Error): ErrorPresentation {
   }
   if (error instanceof ConnectionError && backend !== undefined) {
     return {
-      message: `${backendName(backend)} could not be reached. Check your network connection.`,
+      message: "Could not reach the server. Check your network connection.",
       actions: [],
     }
   }
@@ -402,10 +397,12 @@ export function presentationFor(error: Error): ErrorPresentation {
       error instanceof RuntimeError) &&
     error.httpStatus !== undefined
   ) {
-    // The reported message quotes the raw response body.
-    const server = backend === undefined ? "The server" : backendName(backend)
-    const retry = error.httpStatus >= 500 ? " Try again later." : ""
-    return { message: `${server} returned an error (${error.httpStatus}).${retry}`, actions: [] }
+    // The reported message quotes the raw response body, and the status is in Show Details.
+    const message =
+      error.httpStatus >= 500
+        ? "The server ran into a problem. Try again later."
+        : "The server refused the request. Try again later."
+    return { message, actions: [] }
   }
   return { message: reported, actions: [] }
 }

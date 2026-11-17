@@ -28,7 +28,7 @@ vsCodeTest(
     await vsCodeTest.step("close both from one selection", async () => {
       await passing.click()
       await failing.click({ modifiers: ["ControlOrMeta"] })
-      await coursesView.runContextMenuCommand(failing, "Close")
+      await coursesView.runContextMenuCommand(failing, "Close Exercise")
       await expect(passing).toHaveAccessibleName(/, closed,/)
       await expect(failing).toHaveAccessibleName(/, closed,/)
     })

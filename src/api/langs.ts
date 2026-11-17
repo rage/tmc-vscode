@@ -30,9 +30,8 @@ import type {
   TmcConfig,
 } from "../../shared/langsSchema"
 import { CliNotification, CliOutputData, CliStatusUpdate } from "../../shared/langsSchema"
-import type { BackendKind, Enum } from "../../shared/lib"
+import type { BackendKind, CourseIdentifier, Enum } from "../../shared/lib"
 import {
-  backendName,
   BaseError,
   ExerciseIdentifier,
   makeMoocKind,
@@ -226,6 +225,18 @@ export interface LocalExerciseUpdates {
   updated: ExerciseIdentifier[]
   /** No longer on the server; their local copies stay and are never updated. */
   removed: ExerciseIdentifier[]
+  /**
+   * Courses the backend refused to serve, which `updated` and `removed` say nothing about. Only
+   * courses.mooc.fi refuses single courses; tmc.mooc.fi fails the whole check instead.
+   */
+  uncheckedCourses?: UncheckedCourse[]
+}
+
+/** A course an update check could not check. */
+export interface UncheckedCourse {
+  courseId: CourseIdentifier
+  /** What a command about this course alone fails with. */
+  refusal: InsufficientScopeError | NotFoundError
 }
 
 /** A backend's download result, with each exercise as `toDownload` identifies it. */
@@ -740,9 +751,16 @@ export default class Langs {
     }
     if (backend === "mooc") {
       const res = await this._fetch(command, "mooc-exercise-updates", cacheConfig)
-      return res.map(({ updated, removed }) => ({
+      return res.map(({ updated, removed, unchecked_courses }) => ({
         updated: updated.map((id) => makeMoocKind({ moocExerciseId: id })),
         removed: removed.map((id) => makeMoocKind({ moocExerciseId: id })),
+        uncheckedCourses: unchecked_courses.map(({ course_id, kind }) => ({
+          courseId: makeMoocKind({ moocCourseId: course_id }),
+          refusal:
+            kind === "insufficient-scope"
+              ? new InsufficientScopeError("You no longer have access to the course.")
+              : new NotFoundError("The course no longer exists."),
+        })),
       }))
     }
     const res = await this._fetch(command, "exercise-updates", cacheConfig)
@@ -1464,23 +1482,21 @@ export default class Langs {
       case "chapter-not-unlocked-yet":
         return Err(
           new ChapterLockedError(
-            "This exercise's chapter is locked until you have completed the chapters before it.",
+            "Complete the chapters before this exercise's chapter to submit it.",
             details,
           ),
         )
       case "chapter-completed-and-locked":
         return Err(
           new ChapterLockedError(
-            "You have completed and locked this exercise's chapter, so its exercises can no" +
-              " longer be submitted.",
+            "This exercise's chapter is locked, so the exercise can no longer be submitted.",
             details,
           ),
         )
       case "exercise-locked":
         return Err(
           new ExerciseLockedError(
-            "This exercise is locked for you, so it can no longer be submitted. Only a teacher" +
-              " can unlock it.",
+            "The teacher has locked this exercise, so it can no longer be submitted.",
             details,
           ),
         )
@@ -1489,7 +1505,7 @@ export default class Langs {
       case "rate-limited":
         return Err(
           new RateLimitedError(
-            "You have sent this exercise for help too many times recently. Try again in a few minutes.",
+            "You have sent this exercise to the pastebin too often. Try again in a few minutes.",
             details,
           ),
         )
@@ -1527,9 +1543,7 @@ export default class Langs {
       case "exercise-not-found":
         return Err(
           new ExerciseNotFoundError(
-            auth.backend
-              ? `This exercise no longer exists on ${backendName(auth.backend)}.`
-              : message,
+            auth.backend ? "This exercise is no longer in the course." : message,
             details,
           ),
         )

@@ -18,10 +18,6 @@ export interface RetryOffer {
   expiredMessage: string
 }
 
-async function askInNotification({ message, action }: RetryOffer): Promise<boolean> {
-  return (await vscode.window.showInformationMessage(message, action)) === action
-}
-
 /**
  * Holds back whatever runs or submits exercise code while the window is in Restricted Mode, and
  * runs the latest refused operation again once the user trusts the workspace.
@@ -32,12 +28,15 @@ export class WorkspaceTrustGate implements vscode.Disposable {
     | undefined
   private readonly _grantListener: vscode.Disposable
 
+  /**
+   * @param _ask Asks a retry's offer, resolving whether the user accepted it.
+   * @param _tell Says that a retry's offer came too late.
+   */
   public constructor(
+    private readonly _ask: (offer: RetryOffer) => Promise<boolean>,
+    private readonly _tell: (message: string) => void,
     private readonly _isTrusted: () => boolean = () => vscode.workspace.isTrusted,
     private readonly _now: () => number = Date.now,
-    private readonly _ask: (offer: RetryOffer) => Promise<boolean> = askInNotification,
-    private readonly _tell: (message: string) => void = (message) =>
-      void vscode.window.showInformationMessage(message),
   ) {
     this._grantListener = vscode.workspace.onDidGrantWorkspaceTrust(() => this._onGrant())
   }
@@ -58,8 +57,7 @@ export class WorkspaceTrustGate implements vscode.Disposable {
       this._pendingRetry = { retry, offer, refusedAt: this._now() }
     }
     return new WorkspaceUntrustedError(
-      "This course workspace is in Restricted Mode, so TestMyCode can't run, submit or share" +
-        " exercise code. Trust the course workspace to continue.",
+      "This course workspace is in Restricted Mode. Trust it to run tests, submit and get help.",
     )
   }
 

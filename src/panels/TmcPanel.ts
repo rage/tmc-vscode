@@ -2,10 +2,11 @@ import type { Webview, WebviewOptions, WebviewPanel } from "vscode"
 import { Disposable, Uri, ViewColumn, window } from "vscode"
 import type * as vscode from "vscode"
 
-import type { ExerciseSubmissionPanel, Panel, SubmissionView } from "../../shared/lib"
+import type { ExerciseSubmissionPanel, LoginPanel, Panel, SubmissionView } from "../../shared/lib"
 import {
   assertUnreachable,
   CourseIdentifier,
+  ExerciseIdentifier,
   submitRefusalOf,
   submitRefusalSentence,
   pendingReviewSentence,
@@ -15,7 +16,10 @@ import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import { buildCourseHomeView } from "../ui/courseHome"
 import { exerciseStandingView } from "../ui/exerciseStanding"
+import { failedUpdates } from "../ui/failedUpdates"
+import { loginScreens } from "../ui/loginScreens"
 import { modelSolutionUrl } from "../ui/modelSolution"
+import { recentPolicyChanges } from "../ui/recentPolicyChanges"
 import { recentUpdates } from "../ui/recentUpdates"
 import { shownCourseHome } from "../ui/shownCourseHome"
 import { submissionViews } from "../ui/submissionViews"
@@ -26,7 +30,8 @@ import { messageHandlers } from "./handlers"
 import { postMessageToWebview, renderPanel } from "./panel"
 import type { HandlerContext, PanelHost, PanelMessage } from "./router"
 import { dispatch } from "./router"
-import { initializationErrorHelpPanel, nextPanelId, panelTitle } from "./routes"
+import { errorDetailsPanel, initializationErrorHelpPanel, nextPanelId, panelTitle } from "./routes"
+import { screenFailureMessage } from "./screenFailures"
 import { withExerciseState } from "./submissionView"
 
 /**
@@ -94,7 +99,7 @@ export class TmcPanel {
         TmcPanel.sidePanel?._postMessage(submissionViewMessage(actionContext, route, view))
       }
     }
-    return Disposable.from(
+    const subscriptions = Disposable.from(
       submissionViews.onDidOpen(show),
       submissionViews.onDidRequestReveal(({ panel, section }) => {
         TmcPanel._renderIn(false, extensionContext, actionContext, panel, true)
@@ -113,6 +118,16 @@ export class TmcPanel {
           })
         }
       }),
+      submissionViews.onDidFail(({ exerciseId, headline, error, tone }) => {
+        const sidePanel = TmcPanel.sidePanel
+        const route = sidePanel?._route
+        if (
+          route?.type === "ExerciseSubmission" &&
+          ExerciseIdentifier.key(route.exerciseId) === ExerciseIdentifier.key(exerciseId)
+        ) {
+          sidePanel?._postMessage(screenFailureMessage(route, headline, error, tone))
+        }
+      }),
       submissionViews.onDidClear(() => {
         if (TmcPanel.sidePanel?._route?.type === "ExerciseSubmission") {
           TmcPanel.sidePanel.dispose()
@@ -125,7 +140,7 @@ export class TmcPanel {
         } else if (shouldReopen && sidePanel === undefined) {
           show(panel)
         } else if (shouldReopen) {
-          void offerSubmissionOutcome(panel, view, show)
+          void offerSubmissionOutcome(actionContext, panel, view, show)
         }
       }),
       ...(isReady(actionContext)
@@ -134,6 +149,41 @@ export class TmcPanel {
             actionContext.startup.userData.onDidChangeCourses(repostShown),
           ]
         : []),
+    )
+    // A login or logout turns the results screen's Submit into Log In to Submit, or back.
+    actionContext.authState.subscribe(repostShown)
+    return subscriptions
+  }
+
+  /**
+   * Shows each login's screen in the main panel, with the views the login sends it. Call once,
+   * at activation.
+   */
+  public static showLoginScreens(
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+  ): Disposable {
+    const post = (panel: LoginPanel): void => {
+      const view = loginScreens.latestView(panel.id)
+      if (view && TmcPanel.mainPanel?._route?.id === panel.id) {
+        TmcPanel.mainPanel._postMessage({
+          type: "loginView",
+          target: { id: panel.id, type: panel.type },
+          view,
+        })
+      }
+    }
+    return Disposable.from(
+      loginScreens.onDidOpen((panel) => {
+        TmcPanel.renderMain(extensionContext, actionContext, panel)
+        post(panel)
+      }),
+      loginScreens.onDidUpdate(({ panel }) => post(panel)),
+      loginScreens.onDidRequestClose((panel) => {
+        if (TmcPanel.mainPanel?._route?.id === panel.id) {
+          TmcPanel.mainPanel.dispose()
+        }
+      }),
     )
   }
 
@@ -160,9 +210,24 @@ export class TmcPanel {
     // A `reply` is left out: the reloaded webview asks again, and a replayed answer to the
     // request of a page that no longer exists settles nothing.
     if (message.type !== "reply" && message.target.id === this._route?.id) {
-      this._messageBuffer.set(`${message.target.id}:${message.type}`, message)
+      // Each failure is resent, not only the latest: a reloaded screen lists them all.
+      const key =
+        message.type === "operationFailed"
+          ? `${message.target.id}:${message.type}:${message.failure.serial}`
+          : `${message.target.id}:${message.type}`
+      this._messageBuffer.set(key, message)
+      this._dropOldestFailures()
     }
     this._postTransient(message)
+  }
+
+  private _dropOldestFailures(): void {
+    const failures = [...this._messageBuffer].filter(
+      ([, buffered]) => buffered.type === "operationFailed",
+    )
+    for (const [key] of failures.slice(0, -FAILURES_RESENT)) {
+      this._messageBuffer.delete(key)
+    }
   }
 
   private _postTransient(message: PanelMessage): void {
@@ -191,6 +256,19 @@ export class TmcPanel {
     route: Panel,
   ): void {
     TmcPanel._renderIn(false, extensionContext, actionContext, route)
+  }
+
+  /**
+   * Shows `route`, which the student asked for, focused beside the screen they asked from: in the
+   * main panel when asked from the side one, else in the side panel.
+   */
+  public static renderBeside(
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+    route: Panel,
+    askedFrom: "main" | "side" | undefined,
+  ): void {
+    TmcPanel._renderIn(askedFrom === "side", extensionContext, actionContext, route, true)
   }
 
   /** @param isRequested The student asked for `route`, so it takes the focus even beside. */
@@ -331,10 +409,24 @@ export class TmcPanel {
         // Every other source of the Courses view, gathered into one change per burst.
         actionContext.coursesTree.onDidRender(() => this._onDidChangeCourses(undefined)),
         recentUpdates.onDidChange(() => this._onDidChangeCourses(undefined)),
+        failedUpdates.onDidChange(() => this._onDidChangeCourses(undefined)),
+        recentPolicyChanges.onDidChange(() => this._onDidChangeCourses(undefined)),
+        shownCourseHome.onDidFail(({ courseId, headline, error, tone }) => {
+          const route = this._route
+          if (
+            route?.type === "CourseDetails" &&
+            CourseIdentifier.equals(route.courseId, courseId)
+          ) {
+            this._postMessage(screenFailureMessage(route, headline, error, tone))
+          }
+        }),
       )
     }
 
-    const handlerContext: HandlerContext = { host: this._createHost(), actionContext }
+    const handlerContext: HandlerContext = {
+      host: this._createHost(extensionContext),
+      actionContext,
+    }
     const handlers = {
       ...messageHandlers,
       ready: { requiresReady: false, handle: () => this._onReady() },
@@ -352,6 +444,7 @@ export class TmcPanel {
     }
     this._isDisposed = true
     this._panel.dispose()
+    this._leaveLoginScreen()
 
     if (this._isMain) {
       TmcPanel.mainPanel = undefined
@@ -369,15 +462,26 @@ export class TmcPanel {
     }
   }
 
-  private _createHost(): PanelHost {
+  private _createHost(extensionContext: vscode.ExtensionContext): PanelHost {
     const currentRoute = (): Panel | undefined => this._route
+    const isVisible = (): boolean => !this._isDisposed && this._panel.visible
     return {
       name: this._webviewName,
       get route() {
         return currentRoute()
       },
+      get isVisible() {
+        return isVisible()
+      },
       post: (message) => this._postMessage(message),
       closeSidePanel: () => TmcPanel.sidePanel?.dispose(),
+      showBeside: (route) =>
+        TmcPanel.renderBeside(
+          extensionContext,
+          this._actionContext,
+          route,
+          this._isMain ? "main" : "side",
+        ),
     }
   }
 
@@ -393,6 +497,11 @@ export class TmcPanel {
       return
     }
     if (changed && !CourseIdentifier.equals(changed, route.courseId)) {
+      return
+    }
+    // A removed course leaves nothing to show, e.g. after Remove Course in its own notice.
+    if (this._actionContext.startup.userData.getCourse(route.courseId).err) {
+      this.dispose()
       return
     }
     // Hidden, the document is gone, and the one loaded on reveal asks for the view itself.
@@ -430,8 +539,18 @@ export class TmcPanel {
     }
   }
 
+  /** Tells the login this panel shows, if any, that its screen is gone. */
+  private _leaveLoginScreen(): void {
+    if (this._route?.type === "Login") {
+      loginScreens.leave(this._route.id)
+    }
+  }
+
   // remembers `route` so "ready" can (re)send it
   private _render(route: Panel): void {
+    if (this._route?.id !== route.id) {
+      this._leaveLoginScreen()
+    }
     this._route = route
     this._recordShown()
     this._messageBuffer.clear()
@@ -492,27 +611,30 @@ function submissionViewMessage(
         ? pendingReviewSentence(exercise.data.pendingReview, exercise.data.awardedPoints)
         : undefined,
     solutionUrl: exercise && stored.ok ? modelSolutionUrl(stored.val) : undefined,
+    isLoggedOut: !actionContext.authState.loggedIn,
   })
   return { type: "submissionView", target: { id: panel.id, type: panel.type }, view: shown }
 }
 
 /** Offers to show the outcome of a submission the side panel is not showing. */
 async function offerSubmissionOutcome(
+  { dialog }: ActionContext,
   panel: ExerciseSubmissionPanel,
   view: SubmissionView,
   show: (panel: ExerciseSubmissionPanel) => void,
 ): Promise<void> {
-  const choice = await window.showInformationMessage(
+  const isShowRequested = await dialog.offer(
     `Submission of ${panel.exerciseName}: ${view.headline}`,
-    SHOW_SUBMISSION,
+    "Show Result",
   )
   // A later submission of the exercise supersedes this one.
-  if (choice === SHOW_SUBMISSION && submissionViews.latestView(panel.id) !== undefined) {
+  if (isShowRequested && submissionViews.latestView(panel.id) !== undefined) {
     show(panel)
   }
 }
 
-const SHOW_SUBMISSION = "Show Result"
+/** How many of a screen's failures a reloaded webview is sent again, the latest. */
+const FAILURES_RESENT = 5
 
 function webviewOptions(extensionUri: Uri): WebviewOptions {
   return {
@@ -567,10 +689,16 @@ function restoredRoute(
         isReady(actionContext) && actionContext.startup.userData.getCourse(route.courseId).ok
       return isCourseStored ? { id: nextPanelId(), ...route } : undefined
     }
-    case "InitializationErrorHelp":
-      return isReady(actionContext)
+    case "ErrorHelp":
+      if (route.kind === "operation") {
+        return route.detailsId === undefined ? undefined : errorDetailsPanel(route.detailsId)
+      }
+      // A startup help reopened after a healthy start would list another start's failures.
+      return route.kind === "startup" && isReady(actionContext)
         ? undefined
         : initializationErrorHelpPanel(actionContext, extensionContext)
+    case "AddCourse":
+      return isReady(actionContext) ? { id: nextPanelId(), type: route.type } : undefined
     case undefined:
       return undefined
     default:

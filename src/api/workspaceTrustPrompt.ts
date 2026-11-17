@@ -2,6 +2,7 @@ import * as vscode from "vscode"
 
 import { Logger } from "../utilities"
 import { closeTrustEditorWhenTrusted } from "../window/workspaceTrustEditor"
+import type Dialog from "./dialog"
 
 /** Marks a workspace that has opened untrusted before, in its `workspaceState`. */
 const OPENED_UNTRUSTED_KEY = "workspaceTrust.openedUntrusted"
@@ -25,6 +26,7 @@ const TRUST_REQUEST_TASK_TYPE = "testMyCode.workspaceTrust"
  * @param workspaceState Where this records that the workspace has opened untrusted.
  */
 export async function promptForCourseWorkspaceTrust(
+  dialog: Pick<Dialog, "confirm">,
   courseTitle: string,
   workspaceState: vscode.Memento,
 ): Promise<void> {
@@ -51,18 +53,13 @@ export async function promptForCourseWorkspaceTrust(
     return
   }
 
-  const trust = "Trust Course Workspace"
-  const pick = await vscode.window.showWarningMessage(
-    `Trust ${courseTitle} to run tests and submit`,
-    {
-      modal: true,
-      detail:
-        "TestMyCode runs your exercise code, which VS Code allows only in a trusted workspace." +
-        " VS Code asks next: choose Trust Workspace & Continue.",
-    },
-    trust,
-  )
-  if (pick === trust) {
+  const isConfirmed = await dialog.confirm(`Trust ${courseTitle} to run tests and submit`, {
+    confirmLabel: "Trust Course Workspace",
+    detail:
+      "TestMyCode runs your exercise code, which VS Code allows only in a trusted workspace." +
+      " VS Code asks next: choose Trust Workspace & Continue.",
+  })
+  if (isConfirmed) {
     await requestWorkspaceTrust()
   }
 }

@@ -3,7 +3,7 @@ import { vi } from "vitest"
 
 import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../../../shared/langsSchema"
 import type { ExerciseSubmissionPanel, FeedbackQuestion, SubmissionView } from "../../../shared/lib"
-import { BaseError, makeMoocKind, makeTmcKind } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import {
   gradingUnavailableView,
   inProgressView,
@@ -13,7 +13,6 @@ import {
   testedLocallyView,
   tmcResultView,
 } from "../../../src/panels/submissionView"
-import { toWebviewError } from "../../../src/panels/webviewError"
 import { moocGrading, submissionFinished, submissionViewMessage } from "../test/fixtures"
 import { dispatchToWebview, postedMessages, reloadDocument, replyToRequest } from "../test/setup"
 import { withinShadowRoot } from "../test/shadow"
@@ -193,14 +192,13 @@ suite("ExerciseSubmission panel (in progress)", () => {
 suite("ExerciseSubmission panel (failures)", () => {
   test("replaces the progress with the failure and offers to submit again", async () => {
     render(ExerciseSubmission, { props: { panel } })
-    showView(
-      panel.id,
-      submitFailedView(toWebviewError(new BaseError("Failed to submit", "ECONNRESET"))),
-    )
+    showView(panel.id, submitFailedView({ message: "Failed to submit.", detailsId: "submit" }))
 
     expect(await screen.findByRole("heading", { name: "Submission failed" })).toBeInTheDocument()
-    expect(screen.getByRole("alert")).toHaveTextContent("Failed to submit")
-    expect(screen.getByRole("alert")).toHaveTextContent("ECONNRESET")
+    expect(screen.getByRole("alert")).toHaveTextContent("Failed to submit.")
+    postedMessages.mockClear()
+    await fireEvent.click(screen.getByRole("button", { name: "Show Details" }))
+    expect(postedMessages).toHaveBeenCalledWith({ type: "showErrorDetails", detailsId: "submit" })
     expect(document.querySelector("vscode-progress-bar")).toBeNull()
     expect(screen.queryByText("Run in Background")).not.toBeInTheDocument()
     expect(isSecondary(screen.getByRole("button", { name: "Submit Again" }))).toBe(false)
@@ -213,7 +211,7 @@ suite("ExerciseSubmission panel (failures)", () => {
     showView(
       moocPanel.id,
       submitFailedView({
-        message: "Log in again to continue.",
+        message: "Log in again.",
         actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
       }),
     )
@@ -226,13 +224,15 @@ suite("ExerciseSubmission panel (failures)", () => {
     })
   })
 
-  test("announces whether the host managed to copy the error details", async () => {
+  test("announces whether the host managed to copy the server's output", async () => {
     vi.useFakeTimers()
     try {
       render(ExerciseSubmission, { props: { panel } })
-      showView(panel.id, submitFailedView({ message: "Failed", details: "ECONNRESET" }))
+      showTmcResult(
+        submissionFinished({ status: "error", all_tests_passed: null, error: "ECONNRESET" }),
+      )
       await vi.runAllTimersAsync()
-      const copy = await withinShadowRoot(screen.getByTitle("Copy Error details"))
+      const copy = await withinShadowRoot(screen.getByTitle("Copy Server output"))
       await fireEvent.click(copy.getByRole("button"))
       expect(postedMessages).toHaveBeenCalledWith({
         type: "copyToClipboard",
@@ -259,7 +259,7 @@ suite("ExerciseSubmission panel (failures)", () => {
     expect(
       await screen.findByRole("heading", { name: "The server could not process the submission" }),
     ).toBeInTheDocument()
-    expect(screen.getByRole("group", { name: "Error details" })).toHaveTextContent("Out of memory")
+    expect(screen.getByRole("group", { name: "Server output" })).toHaveTextContent("Out of memory")
   })
 })
 
@@ -282,9 +282,7 @@ suite("ExerciseSubmission panel (tmc results)", () => {
     render(ExerciseSubmission, { props: { panel } })
     showTmcResult(submissionFinished({ points: ["1.1"] }))
 
-    expect(
-      await screen.findByRole("heading", { name: "All tests passed on the server" }),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "Passed" })).toBeInTheDocument()
     expect(screen.getByRole("meter", { name: "Points" })).toHaveAttribute(
       "aria-valuetext",
       "1 / 2 points",
@@ -295,10 +293,10 @@ suite("ExerciseSubmission panel (tmc results)", () => {
     render(ExerciseSubmission, { props: { panel } })
     showTmcResult(submissionFinished({ solution_url: "https://tmc.mooc.fi/solutions/1" }))
 
-    await screen.findByRole("heading", { name: "All tests passed on the server" })
+    await screen.findByRole("heading", { name: "Passed" })
     postedMessages.mockClear()
     await chooseMenuItem("Show Submission in Browser")
-    await chooseMenuItem("Show Model Solution in Browser")
+    await chooseMenuItem("Show Model Solution")
     expect(postedMessages.mock.calls).toEqual([
       [{ type: "openLinkInBrowser", url: "https://tmc.mooc.fi/submissions/1" }],
       [{ type: "openLinkInBrowser", url: "https://tmc.mooc.fi/solutions/1" }],
@@ -324,21 +322,19 @@ suite("ExerciseSubmission panel (tmc results)", () => {
       }),
     )
 
-    expect(
-      await screen.findByRole("heading", { name: "Some tests failed on the server" }),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "Not passed" })).toBeInTheDocument()
     expect(screen.getByText("0 of 1 tests passed")).toBeInTheDocument()
-    expect(await menuItems()).toContain("Ask for Help…")
+    expect(await menuItems()).toContain("Get Help")
   })
 
-  test("asking for help opens the Get help section and moves focus to it", async () => {
+  test("asking for help opens the Get Help section and moves focus to it", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showTmcResult(submissionFinished({ status: "fail", all_tests_passed: false, points: [] }))
-    await screen.findByRole("heading", { name: "Some tests failed on the server" })
-    const toggle = screen.getByRole("button", { name: "Get help" })
+    await screen.findByRole("heading", { name: "Not passed" })
+    const toggle = screen.getByRole("button", { name: "Get Help" })
     expect(toggle).toHaveAttribute("aria-expanded", "false")
 
-    await chooseMenuItem("Ask for Help…")
+    await chooseMenuItem("Get Help")
 
     expect(toggle).toHaveAttribute("aria-expanded", "true")
     expect(toggle).toHaveFocus()
@@ -348,8 +344,8 @@ suite("ExerciseSubmission panel (tmc results)", () => {
     render(ExerciseSubmission, { props: { panel } })
     showTmcResult(submissionFinished())
 
-    await screen.findByRole("heading", { name: "All tests passed on the server" })
-    expect(await menuItems()).not.toContain("Ask for Help…")
+    await screen.findByRole("heading", { name: "Passed" })
+    expect(await menuItems()).not.toContain("Get Help")
   })
 
   test("valgrind output is available behind a disclosure", async () => {
@@ -444,7 +440,7 @@ suite("ExerciseSubmission panel (tmc feedback)", () => {
     render(ExerciseSubmission, { props: { panel } })
     showTmcResult(submissionFinished({ feedback_answer_url: FEEDBACK_URL }))
 
-    await screen.findByRole("heading", { name: "All tests passed on the server" })
+    await screen.findByRole("heading", { name: "Passed" })
     expect(screen.queryByRole("heading", { name: "Give feedback" })).not.toBeInTheDocument()
   })
 })
@@ -471,9 +467,7 @@ suite("ExerciseSubmission panel (mooc results)", () => {
       }),
     )
 
-    expect(
-      await screen.findByRole("heading", { name: "Some tests failed on the server" }),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "Not passed" })).toBeInTheDocument()
     expect(screen.getByRole("meter", { name: "Points" })).toHaveAttribute(
       "aria-valuetext",
       "2.67 / 3 points",
@@ -490,8 +484,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
   test("a partial score offers paste help, a full one does not", async () => {
     const { unmount } = render(ExerciseSubmission, { props: { panel: moocPanel } })
     showMoocGrading(moocGrading({ score_given: 1 }))
-    await screen.findByRole("heading", { name: "Some tests failed on the server" })
-    expect(await menuItems()).toContain("Ask for Help…")
+    await screen.findByRole("heading", { name: "Not passed" })
+    expect(await menuItems()).toContain("Get Help")
     unmount()
 
     render(ExerciseSubmission, { props: { panel: moocPanel } })
@@ -512,8 +506,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
         },
       }),
     )
-    await screen.findByRole("heading", { name: "Exercise passed" })
-    expect(await menuItems()).not.toContain("Ask for Help…")
+    await screen.findByRole("heading", { name: "Passed" })
+    expect(await menuItems()).not.toContain("Get Help")
   })
 
   test("the last try below full points says the score is final", async () => {
@@ -535,7 +529,7 @@ suite("ExerciseSubmission panel (mooc results)", () => {
         },
       }),
     )
-    await screen.findByRole("heading", { name: "Some tests failed on the server" })
+    await screen.findByRole("heading", { name: "Not passed" })
     expect(screen.getByText("That was your last try, so this score is final.")).toBeInTheDocument()
   })
 
@@ -779,7 +773,7 @@ suite("ExerciseSubmission panel (results hub)", () => {
     render(ExerciseSubmission, { props: { panel } })
     showView(panel.id, standingView(tmcExercise(false), undefined))
 
-    expect(await screen.findByRole("heading", { name: "Not passed yet" })).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "Not passed" })).toBeInTheDocument()
     expect(screen.getByRole("meter", { name: "Points" })).toBeInTheDocument()
     const runTests = screen.getByRole("button", { name: "Run Tests" })
     const submit = screen.getByRole("button", { name: "Submit" })
@@ -794,11 +788,11 @@ suite("ExerciseSubmission panel (results hub)", () => {
       nextExercise: { name: "part01-02_name" },
     })
 
-    expect(await screen.findByRole("heading", { name: "Exercise passed" })).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "Passed" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Next: part01-02_name" })).toBeInTheDocument()
     expect(isSecondary(screen.getByRole("button", { name: "Show Model Solution" }))).toBe(true)
     expect(screen.queryByRole("button", { name: "Submit" })).not.toBeInTheDocument()
-    expect(await menuItems()).not.toContain("Show Model Solution in Browser")
+    expect(await menuItems()).not.toContain("Show Model Solution")
   })
 
   test("the last exercise passed leads to its model solution", async () => {
@@ -815,7 +809,7 @@ suite("ExerciseSubmission panel (results hub)", () => {
     const submit = await screen.findByRole("button", { name: "Submit" })
     postedMessages.mockClear()
 
-    expect(screen.getByRole("heading", { name: "All tests passed locally" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Tests pass on your computer" })).toBeInTheDocument()
     expect(isSecondary(submit)).toBe(false)
     submit.click()
 
@@ -823,6 +817,23 @@ suite("ExerciseSubmission panel (results hub)", () => {
       type: "exerciseAction",
       sourcePanel: { id: panel.id, type: panel.type },
       action: "submit",
+    })
+  })
+
+  test("logged out, a local pass offers to log in and submit as its main action", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, { ...testedLocallyView(), isLoggedOut: true })
+    const logIn = await screen.findByRole("button", { name: "Log In to Submit" })
+    postedMessages.mockClear()
+
+    expect(isSecondary(logIn)).toBe(false)
+    expect(screen.queryByRole("button", { name: "Submit" })).not.toBeInTheDocument()
+    logIn.click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "exerciseAction",
+      sourcePanel: { id: panel.id, type: panel.type },
+      action: "logInToSubmit",
     })
   })
 
@@ -859,7 +870,7 @@ suite("ExerciseSubmission panel (results hub)", () => {
   test("a command's request opens History and moves the focus to it", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showView(panel.id, standingView(tmcExercise(false), undefined))
-    await screen.findByRole("heading", { name: "Not passed yet" })
+    await screen.findByRole("heading", { name: "Not passed" })
 
     openSection("history", 1)
 
@@ -874,9 +885,9 @@ suite("ExerciseSubmission panel (results hub)", () => {
   test("the menu opens History too", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showView(panel.id, standingView(tmcExercise(false), undefined))
-    await screen.findByRole("heading", { name: "Not passed yet" })
+    await screen.findByRole("heading", { name: "Not passed" })
 
-    await chooseMenuItem("Show History")
+    await chooseMenuItem("History")
 
     expect(screen.getByRole("button", { name: "History" })).toHaveAttribute("aria-expanded", "true")
   })
@@ -887,7 +898,7 @@ suite("ExerciseSubmission panel (results hub)", () => {
       ...standingView(tmcExercise(false), undefined),
       exerciseState: "notOnDisk",
     })
-    await screen.findByRole("heading", { name: "Not passed yet" })
+    await screen.findByRole("heading", { name: "Not passed" })
 
     openSection("history", 1)
 
@@ -897,21 +908,21 @@ suite("ExerciseSubmission panel (results hub)", () => {
   test("an exercise removed from its course has no History", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showView(panel.id, { ...standingView(tmcExercise(false), undefined), exerciseState: "removed" })
-    await screen.findByRole("heading", { name: "Not passed yet" })
+    await screen.findByRole("heading", { name: "Not passed" })
 
     expect(screen.queryByRole("button", { name: "History" })).not.toBeInTheDocument()
-    expect(await menuItems()).not.toContain("Show History")
+    expect(await menuItems()).not.toContain("History")
   })
 
-  test("Share via paste opens Get help and sends the code there, once", async () => {
+  test("Get Help opens its section and sends the code there, once", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showView(panel.id, standingView(tmcExercise(true), undefined))
-    await screen.findByRole("heading", { name: "Exercise passed" })
-    expect(screen.queryByRole("button", { name: "Get help" })).not.toBeInTheDocument()
+    await screen.findByRole("heading", { name: "Passed" })
+    expect(screen.queryByRole("button", { name: "Get Help" })).not.toBeInTheDocument()
 
     openSection("getHelp", 1, true)
 
-    const toggle = await screen.findByRole("button", { name: "Get help" })
+    const toggle = await screen.findByRole("button", { name: "Get Help" })
     await vi.waitFor(() => expect(toggle).toHaveFocus())
     await vi.waitFor(() =>
       expect(
@@ -944,7 +955,7 @@ suite("ExerciseSubmission panel (results hub)", () => {
     render(ExerciseSubmission, { props: { panel } })
     showView(panel.id, standingView(tmcExercise(false), undefined))
     openSection("getHelp", 7, true)
-    await screen.findByRole("button", { name: "Get help" })
+    await screen.findByRole("button", { name: "Get Help" })
 
     expect(postedMessages).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: "pasteExercise" }),
@@ -1002,8 +1013,8 @@ suite("ExerciseSubmission panel shown again after being hidden", () => {
 
   test("still shows the paste link the host answered with", async () => {
     showPanel()
-    await chooseMenuItem("Ask for Help…")
-    ;(await screen.findByRole("button", { name: /^Send to .* paste$/ })).click()
+    await chooseMenuItem("Get Help")
+    ;(await screen.findByRole("button", { name: "Send to Pastebin" })).click()
     replyToRequest("pasteExercise", {
       ok: true,
       value: { link: "https://tmc.mooc.fi/paste/abc", isReused: false },

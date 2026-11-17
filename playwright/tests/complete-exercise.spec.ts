@@ -111,7 +111,7 @@ for (const exercise of exercises) {
     })
 
     await vsCodeTest.step("reveal the exercise in the Courses view", async () => {
-      await coursesView.runExercisePaletteCommand("TestMyCode: Reveal in Courses View")
+      await coursesView.runExercisePaletteCommand("TestMyCode: Show in Courses View")
       // A monaco list keeps DOM focus on itself and marks the focused row with a class.
       await expect(coursesView.tree()).toBeFocused()
       const row = coursesView.row(exercise.name)
@@ -140,13 +140,17 @@ for (const exercise of exercises) {
 
     await vsCodeTest.step("submit exercise", async () => {
       const expectedString = expectedResultInSubmissionView(exercise.expected_result)
-      await expect(sidePanel.getByRole("heading", { name: expectedString })).toBeHidden()
+      await expect(
+        sidePanel.getByRole("heading", { name: expectedString, exact: true }),
+      ).toBeHidden()
       if (exercise.expected_result === "pass") {
         await sidePanel.getByRole("button", { name: "Submit", exact: true }).click()
       } else {
-        await editorActions(page).getByLabel("Submit Solution", { exact: true }).click()
+        await editorActions(page).getByLabel("Submit", { exact: true }).click()
       }
-      await expect(sidePanel.getByRole("heading", { name: expectedString })).toBeVisible()
+      await expect(
+        sidePanel.getByRole("heading", { name: expectedString, exact: true }),
+      ).toBeVisible()
     })
   })
 }
@@ -158,14 +162,14 @@ function editorActions(page: Page): Locator {
 
 /** The results screen's heading after an all-passing local run, which offers Submit. */
 function passedLocally(sidePanel: FrameLocator): Locator {
-  return sidePanel.getByRole("heading", { name: "All tests passed locally" })
+  return sidePanel.getByRole("heading", { name: "Tests pass on your computer" })
 }
 
 function expectedResultInSubmissionView(expectedResult: "pass" | "fail"): string {
   if (expectedResult === "pass") {
-    return "All tests passed on the server"
+    return "Passed"
   }
-  return "Some tests failed on the server"
+  return "Not passed"
 }
 
 /** The folder of the exercise whose slug ends in `name` under `root`, wherever the CLI put it. */
@@ -207,7 +211,7 @@ vsCodeTest(
       fs.rmSync(join(folder ?? "", "src", "passing_exercise.py"))
       await coursesView.goto()
       await coursesView.expand(coursesView.row(course))
-      await coursesView.runInlineAction(coursesView.row(exercise), "Submit Solution")
+      await coursesView.runInlineAction(coursesView.row(exercise), "Submit")
       const question = page
         .locator(".monaco-dialog-box")
         .filter({ hasText: new RegExp(`is missing from \\S*${exercise}\\. Submit anyway\\?`) })

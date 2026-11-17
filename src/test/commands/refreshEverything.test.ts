@@ -2,13 +2,14 @@ import { Err, Ok } from "ts-results"
 import { onTestFinished, vi } from "vitest"
 import * as vscode from "vscode"
 
-import type { LocalCourseData } from "../../../shared/lib"
-import { CourseIdentifier } from "../../../shared/lib"
+import { CourseIdentifier, LocalCourseData } from "../../../shared/lib"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
 import type Dialog from "../../api/dialog"
 import { refreshCourses, refreshEverything } from "../../commands/refreshEverything"
 import { updateExercises } from "../../commands/updateExercises"
+import { recentPolicyChanges } from "../../ui/recentPolicyChanges"
+import type { CourseHomeFailure } from "../../ui/shownCourseHome"
 import { shownCourseHome } from "../../ui/shownCourseHome"
 import { Logger } from "../../utilities"
 import { moocLocalCourse, tmcLocalCourse } from "../fixtures/courses"
@@ -18,6 +19,7 @@ import { createDialogMock } from "../mocks/dialog"
 
 vi.mock("../../actions/updateCourse", () => ({
   updateCourse: vi.fn(async () => Ok({ isUpdated: true, warnings: [] })),
+  fetchMoocEnrollments: vi.fn(async () => Ok(new Set())),
 }))
 
 // The course-update pass ends by rescanning the exercises on disk, which would otherwise
@@ -259,7 +261,7 @@ suite("refreshEverything's new-exercises prompt", function () {
 
     expect(dialog.notification).toHaveBeenCalledExactlyOnceWith(
       "Mooc Course changed its AI policy: AI may be used freely, with disclosure." +
-        " TestMyCode leaves AI assistance on in the course workspace.",
+        " AI assistance is on in this course.",
       expect.anything(),
     )
   })
@@ -275,9 +277,60 @@ suite("refreshEverything's new-exercises prompt", function () {
 
     expect(dialog.notification).toHaveBeenCalledExactlyOnceWith(
       "Mooc Course changed its AI policy: AI may not be used at any point." +
-        " TestMyCode turns AI assistance off in the course workspace.",
+        " AI assistance is off in this course.",
       expect.anything(),
     )
+  })
+
+  test("notes a changed AI policy in the course home on screen, with no notification", async function () {
+    const course = moocLocalCourse({ title: "Mooc Course", aiPolicy: "no_ai" })
+    const courseId = LocalCourseData.getCourseId(course)
+    const [actionContext, dialog] = contextWithCourses([course])
+    vi.mocked(updateCourse).mockResolvedValue(
+      Ok({ isUpdated: true, warnings: [], aiPolicyChange: { course } }),
+    )
+    shownCourseHome.set(courseId)
+    onTestFinished(() => {
+      shownCourseHome.set(undefined)
+      recentPolicyChanges.dismiss(courseId)
+    })
+
+    await refreshEverything(actionContext, { silent: true })
+
+    expect(recentPolicyChanges.get(courseId)).toBe(
+      "AI may not be used at any point. AI assistance is off in this course.",
+    )
+    expect(dialog.notification).not.toHaveBeenCalled()
+  })
+
+  test("shows a session warning in the course home on screen instead of notifying it", async function () {
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [])])
+    const refusal = new Error("Your courses.mooc.fi session no longer grants access.")
+    vi.mocked(updateCourse).mockResolvedValue(
+      Ok({
+        isUpdated: true,
+        warnings: [{ headline: "Failed to update course data.", error: refusal }],
+      }),
+    )
+    shownCourseHome.set(idOfTmcCourse(1))
+    const shown: CourseHomeFailure[] = []
+    const subscription = shownCourseHome.onDidFail((failure) => shown.push(failure))
+    onTestFinished(() => {
+      shownCourseHome.set(undefined)
+      subscription.dispose()
+    })
+
+    await refreshEverything(actionContext, { silent: true })
+
+    expect(shown).toEqual([
+      {
+        courseId: idOfTmcCourse(1),
+        headline: "Failed to update course data.",
+        error: refusal,
+        tone: "error",
+      },
+    ])
+    expect(dialog.reportError).not.toHaveBeenCalled()
   })
 
   test("Show opens the course home of the course with new exercises", async function () {

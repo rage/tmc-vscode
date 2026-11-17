@@ -65,7 +65,7 @@ suite("Show results command", function () {
     expect(section).toBeUndefined()
     expect(submissionViews.latestView(panel!.id)).toMatchObject({
       phase: "standing",
-      headline: "Not passed yet",
+      headline: "Not passed",
     })
   })
 
@@ -82,7 +82,7 @@ suite("Show results command", function () {
       panel: submitted,
       view: {
         phase: "finished",
-        headline: "All tests passed on the server",
+        headline: "Passed",
         tone: "passed",
         progressSteps: [],
         testCases: [],

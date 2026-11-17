@@ -44,7 +44,7 @@ Object.assign(window, {
         console.error(error)
       })
     },
-    getState: () => undefined,
+    getState: () => scenario.savedState,
     setState: () => {},
   }),
 })

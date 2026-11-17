@@ -89,6 +89,15 @@ export const zCourseData = z.object({
     title: z.string().nullable()
 });
 
+/**
+ * How courses.mooc.fi refused one course. The values are the CLI error kinds the same response
+ * fails a single-course command with.
+ */
+export const zCourseRefusalKind = z.union([
+    z.literal('insufficient-scope'),
+    z.literal('not-found')
+]);
+
 export const zExercise = z.object({
     all_review_points_given: z.boolean(),
     attempted: z.boolean(),
@@ -395,15 +404,6 @@ export const zDownloadOrUpdateMoocCourseExercisesResult = z.object({
     downloaded: z.array(zMoocExerciseDownload),
     failed: z.array(z.tuple([zMoocExerciseDownload, z.array(z.string())])).nullish(),
     skipped: z.array(zMoocExerciseDownload)
-});
-
-/**
- * What [`check_mooc_exercise_updates`] found among the local mooc exercises; like
- * [`ExerciseUpdates`] but keyed by exercise id.
- */
-export const zMoocExerciseUpdates = z.object({
-    removed: z.array(z.uuid()),
-    updated: z.array(z.uuid())
 });
 
 /**
@@ -960,6 +960,24 @@ export const zSubmissionFinished = z.object({
     user_id: z.int().gte(0).max(4294967295, { error: 'Invalid value: Expected uint32 to be <= 4294967295' }),
     valgrind: z.string().nullable(),
     validations: zTmcStyleValidationResult.nullable()
+});
+
+/**
+ * A course [`check_mooc_exercise_updates`] could not check.
+ */
+export const zUncheckedMoocCourse = z.object({
+    course_id: z.uuid(),
+    kind: zCourseRefusalKind
+});
+
+/**
+ * What [`check_mooc_exercise_updates`] found among the local mooc exercises; like
+ * [`ExerciseUpdates`] but keyed by exercise id.
+ */
+export const zMoocExerciseUpdates = z.object({
+    removed: z.array(z.uuid()),
+    unchecked_courses: z.array(zUncheckedMoocCourse),
+    updated: z.array(z.uuid())
 });
 
 /**

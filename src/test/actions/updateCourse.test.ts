@@ -18,6 +18,8 @@ import {
   ConnectionError,
   ForbiddenError,
   InsufficientScopeError,
+  InvalidTokenError,
+  NotFoundError,
   ServerError,
   TmcLoginNotAcceptedError,
 } from "../../errors"
@@ -187,6 +189,7 @@ suite("updateCourse action (mooc)", function () {
   test("leaves the course alone when the session lacks the exercise scope", async function () {
     // The mooc backend 403s an underscoped token, which says nothing about the course.
     tmcMockValues.getMoocCourseData = Err(new InsufficientScopeError("no scope"))
+    tmcMockValues.getEnrolledMoocCourses = Err(new InsufficientScopeError("no scope"))
     const before = structuredClone(userData.getMoocCourses())
 
     const result = await updateCourse(actionContext(), courseId)
@@ -197,6 +200,7 @@ suite("updateCourse action (mooc)", function () {
 
   test("offers a login once per lapse, and again once the session is renewed", async function () {
     tmcMockValues.getMoocCourseData = Err(new InsufficientScopeError("no scope"))
+    tmcMockValues.getEnrolledMoocCourses = Err(new InsufficientScopeError("no scope"))
 
     expect((await updateCourse(actionContext(), courseId)).unwrap().warnings).toEqual([
       { headline: "Failed to update course data.", error: expect.any(InsufficientScopeError) },
@@ -241,10 +245,82 @@ suite("updateCourse action (mooc)", function () {
     expect(userData.getMoocCourses()[0]?.notEnrolled).toBeUndefined()
   })
 
-  test("asks for the student's courses only while a course is marked not enrolled", async function () {
+  test("marks a course the student's courses do not list as not enrolled", async function () {
+    tmcMockValues.getEnrolledMoocCourses = Ok([])
+
     await updateCourse(actionContext(), courseId)
 
+    expect(userData.getMoocCourses()[0]?.notEnrolled).toBe(true)
+  })
+
+  test("keeps the last enrollment answer when the student's courses cannot be listed", async function () {
+    vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    await storeCourse({ ...storedMoocCourse, notEnrolled: true })
+    tmcMockValues.getEnrolledMoocCourses = Err(new ConnectionError("down"))
+
+    await updateCourse(actionContext(), courseId)
+    expect(userData.getMoocCourses()[0]?.notEnrolled).toBe(true)
+
+    await storeCourse(storedMoocCourse)
+    await updateCourse(actionContext(), courseId)
+    expect(userData.getMoocCourses()[0]?.notEnrolled).toBeUndefined()
+  })
+
+  test("uses the enrollments it is given instead of listing them", async function () {
+    await updateCourse(actionContext(), courseId, Ok(new Set<string>()))
+
     expect(tmcMock.getEnrolledMoocCourses).not.toHaveBeenCalled()
+    expect(userData.getMoocCourses()[0]?.notEnrolled).toBe(true)
+  })
+
+  // courses.mooc.fi 403s a hidden or closed course's exercises, which tmc-langs reports as an
+  // insufficient scope; the session listing the student's courses tells the two apart.
+  test("marks a course refused while the session still works as forbidden", async function () {
+    vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    tmcMockValues.getMoocCourseData = Err(new InsufficientScopeError("forbidden"))
+    const context = actionContext()
+
+    const result = await updateCourse(context, courseId)
+
+    expect(result.unwrap()).toEqual({ isUpdated: false, warnings: [] })
+    expect(userData.getMoocCourses()[0]?.accessLoss).toEqual({
+      reason: "forbidden",
+      checkedAt: expect.any(Number),
+    })
+    expect(vi.mocked(context.coursesTree.setBackendReachable)).toHaveBeenCalledWith("mooc", true)
+  })
+
+  test("marks a course the backend no longer has as not found, keeping its exercises", async function () {
+    vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    await updateCourse(actionContext(), courseId)
+    tmcMockValues.getMoocCourseData = Err(new NotFoundError("no such course"))
+
+    const result = await updateCourse(actionContext(), courseId)
+
+    expect(result.unwrap().isUpdated).toBe(false)
+    const stored = userData.getMoocCourses()[0]
+    expect(stored?.accessLoss?.reason).toBe("notFound")
+    expect(stored?.exercises.map((e) => e.id)).toEqual([MOOC_EXERCISE_UUID])
+  })
+
+  test("clears the access loss once the backend serves the course again", async function () {
+    await storeCourse({ ...storedMoocCourse, accessLoss: { reason: "forbidden", checkedAt: 0 } })
+
+    const result = await updateCourse(actionContext(), courseId)
+
+    expect(result.unwrap().isUpdated).toBe(true)
+    expect(userData.getMoocCourses()[0]?.accessLoss).toBeUndefined()
+  })
+
+  test("leaves the course's access alone when the session is gone", async function () {
+    // A revoked grant: tmc-langs deletes the credentials and reports an invalid token.
+    tmcMockValues.getMoocCourseData = Err(new InvalidTokenError("grant revoked"))
+    tmcMockValues.getEnrolledMoocCourses = Err(new InvalidTokenError("grant revoked"))
+
+    const result = await updateCourse(actionContext(), courseId)
+
+    expect(result.val).toBeInstanceOf(InvalidTokenError)
+    expect(userData.getMoocCourses()[0]?.accessLoss).toBeUndefined()
   })
 
   test("tells the Courses view whether the backend answered", async function () {
@@ -495,14 +571,20 @@ suite("updateCourse action (tmc)", function () {
     expect(userData.getTmcCourses()[0]?.title).toBe("Stale title")
   })
 
-  test("marks the course disabled when the server refuses it", async function () {
+  test.each([
+    [new ForbiddenError("forbidden"), "forbidden"],
+    [new NotFoundError("not found"), "notFound"],
+  ] as const)("marks the course refused on %s", async function (error, reason) {
     await storeEnabledTmcCourse()
-    getTmcCourseData.mockResolvedValue(Err(new ForbiddenError("forbidden")))
+    vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    getTmcCourseData.mockResolvedValue(Err(error))
 
     const result = await updateCourse(actionContext(), courseId)
 
     expect(result.unwrap().isUpdated).toBe(false)
-    expect(userData.getTmcCourses()[0]?.disabled).toBe(true)
+    const stored = userData.getTmcCourses()[0]
+    expect(stored?.accessLoss?.reason).toBe(reason)
+    expect(stored?.disabled).toBe(false)
   })
 
   test("returns offline (not disabled) on a ConnectionError", async function () {

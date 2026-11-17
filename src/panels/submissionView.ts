@@ -84,7 +84,7 @@ export function standingView(
   return {
     ...emptyView,
     phase: "standing",
-    headline: passed ? "Exercise passed" : isOutOfTries ? "Exercise not passed" : "Not passed yet",
+    headline: passed ? "Passed" : "Not passed",
     tone: passed ? "passed" : isOutOfTries ? "failed" : "info",
     points:
       availablePoints > 0 && !arePointsHeld
@@ -101,7 +101,7 @@ export function testedLocallyView(): SubmissionView {
   return {
     ...emptyView,
     phase: "testedLocally",
-    headline: "All tests passed locally",
+    headline: "Tests pass on your computer",
     tone: "passed",
     explanation: "Submit the exercise to have it graded.",
   }
@@ -161,7 +161,7 @@ export function tmcResultView(
       return {
         ...shared,
         phase: "finished",
-        headline: isPassed ? "All tests passed on the server" : "Some tests failed on the server",
+        headline: isPassed ? "Passed" : "Not passed",
         tone: isPassed ? "passed" : scoreTone(points.given),
         points,
       }
@@ -180,10 +180,8 @@ export function tmcResultView(
         phase: "failed",
         headline: "The server could not process the submission",
         tone: "failed",
-        error: {
-          message: "Try submitting again.",
-          ...(result.error ? { details: result.error } : {}),
-        },
+        error: { message: "Try submitting again." },
+        ...(result.error ? { serverOutput: result.error } : {}),
       }
     case "processing":
       return {
@@ -226,7 +224,7 @@ export function moocGradingView(
     points: given === undefined ? undefined : { given, max: maxPoints },
     feedbackText: grading.feedback_text ?? undefined,
     testCases: grading.test_results?.test_results.map((result) => toTestCase(result)) ?? [],
-    error: testRunError(grading.test_results),
+    ...testRunFailure(grading.test_results),
   }
   const standing = grading.exercise_progress?.standing
   // A pass may come from an earlier submission; a short score is about this one.
@@ -245,7 +243,7 @@ export function moocGradingView(
         return {
           ...graded,
           phase: "finished",
-          headline: isBelowMax ? "Some tests failed on the server" : "All tests passed",
+          headline: isBelowMax ? "Some tests failed" : "All tests passed",
           tone: isBelowMax ? scoreTone(given) : "passed",
           points: undefined,
           ...reviewNote,
@@ -259,7 +257,7 @@ export function moocGradingView(
         headline: isPassedEarlier
           ? "This submission failed some tests"
           : isBelowMax
-            ? "Some tests failed on the server"
+            ? "Not passed"
             : fullyGradedHeadline(standing),
         // This score does not count, so it is no failure, and a meter of it would read as lost points.
         tone: isPassedEarlier ? "info" : isBelowMax ? scoreTone(given) : fullyGradedTone(standing),
@@ -304,7 +302,9 @@ function toTestCase({
 }
 
 /** Why the server's test run produced no test results, with the output that tells. */
-function testRunError(run: GradingTestRun | null): SubmissionView["error"] {
+function testRunFailure(
+  run: GradingTestRun | null,
+): Pick<SubmissionView, "error" | "serverOutput"> {
   const message =
     run?.status === "COMPILE_FAILED"
       ? "Your code did not compile on the server."
@@ -312,12 +312,12 @@ function testRunError(run: GradingTestRun | null): SubmissionView["error"] {
         ? "The tests could not be run on the server."
         : undefined
   if (message === undefined) {
-    return undefined
+    return {}
   }
   const output = Object.values(run?.logs ?? {})
     .filter((log) => log.trim() !== "")
     .join("\n\n")
-  return output === "" ? { message } : { message, details: output }
+  return output === "" ? { error: { message } } : { error: { message }, serverOutput: output }
 }
 
 function fullyGradedExplanation(
@@ -358,12 +358,12 @@ function fullyGradedTone(standing: ExerciseStanding | null | undefined): Submiss
 function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): string {
   switch (standing) {
     case "Passed":
-      return "Exercise passed"
+      return "Passed"
     case "Attempted":
     case "OutOfTries":
-      return "Some tests failed on the server"
+      return "Not passed"
     default:
-      return "Exercise graded"
+      return "Graded"
   }
 }
 
@@ -377,6 +377,7 @@ function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): str
  *   finished grading was shown with.
  * @param exercise.solutionUrl The model solution's page once the stored course reveals it; fills
  *   in a view that has none, as a course refresh after the grading can reveal it.
+ * @param exercise.isLoggedOut See {@link SubmissionView.isLoggedOut}.
  */
 export function withExerciseState(
   view: SubmissionView,
@@ -387,12 +388,14 @@ export function withExerciseState(
     triesLeft?: number | undefined
     pendingReview?: string | undefined
     solutionUrl?: string | undefined
+    isLoggedOut?: boolean | undefined
   },
 ): SubmissionView {
   const {
     exerciseState: _exerciseState,
     submitRefusal: _submitRefusal,
     triesLeft: _triesLeft,
+    isLoggedOut: _isLoggedOut,
     pendingReview: gradedPendingReview,
     ...rest
   } = view
@@ -411,6 +414,7 @@ export function withExerciseState(
     ...(pendingReview === undefined ? {} : { pendingReview }),
     ...(exercise.submitRefusal === undefined ? {} : { submitRefusal: exercise.submitRefusal }),
     ...(exercise.triesLeft === undefined ? {} : { triesLeft: exercise.triesLeft }),
+    ...(exercise.isLoggedOut ? { isLoggedOut: true } : {}),
   }
   return exercise.isOnDisk ? standing : { ...standing, exerciseState: "notOnDisk" }
 }

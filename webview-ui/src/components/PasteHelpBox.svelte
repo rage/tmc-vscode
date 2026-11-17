@@ -1,12 +1,10 @@
 <script lang="ts">
   import type {
-    BackendKind,
     ExerciseSubmissionPanel,
     ReplyValue,
     TargetPanel,
     WebviewError,
   } from "../../../shared/lib"
-  import { pasteServiceName } from "../../../shared/lib"
   import { announce } from "../utilities/a11y.svelte"
   import { createRequester } from "../utilities/script"
   import { uiState } from "../utilities/uiState.svelte"
@@ -16,17 +14,15 @@
   import Spinner from "./Spinner.svelte"
 
   interface Props {
-    /** Names the paste service; the host pastes the exercise `sourcePanel` shows. */
-    backend: BackendKind
+    /** The host pastes the exercise this panel shows. */
     sourcePanel: TargetPanel<ExerciseSubmissionPanel>
     /** Copies the paste link through the host. */
     oncopy: (text: string) => void
   }
 
-  /** The body of the "Get help" section: sends the exercise to the backend's paste service. */
-  let { backend, sourcePanel, oncopy }: Props = $props()
+  /** The body of the Get Help section: sends the exercise to the backend's pastebin. */
+  let { sourcePanel, oncopy }: Props = $props()
 
-  const pasteService = $derived(pasteServiceName(backend))
   const request = createRequester()
 
   let isPasting = $state<boolean>(false)
@@ -56,7 +52,8 @@
 </script>
 
 <p>
-  Send your code to {pasteService} and share the link on the course's discussion channel to ask for help.
+  Send your code to the pastebin and share the link on the course's discussion channel to ask for
+  help.
 </p>
 {#if pasted.current !== null}
   {@const { link, isReused } = pasted.current}
@@ -80,14 +77,14 @@
   </div>
 {:else}
   <div class="actions">
-    <Button secondary disabled={isPasting} onclick={paste}>Send to {pasteService}</Button>
+    <Button secondary disabled={isPasting} onclick={paste}>Send to Pastebin</Button>
     {#if isPasting}
-      <Spinner label="Sending to {pasteService}…" />
+      <Spinner label="Sending to the pastebin…" />
     {/if}
   </div>
 {/if}
 {#if pasteError !== undefined}
-  <ErrorNotice error={pasteError} title="Failed to send to {pasteService}" />
+  <ErrorNotice error={pasteError} title="Could not send to the pastebin" />
 {/if}
 
 <style>

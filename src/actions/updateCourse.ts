@@ -1,7 +1,7 @@
 import type { Result } from "ts-results"
 import { Ok } from "ts-results"
 
-import type { BackendKind, CourseIdentifier, Enum } from "../../shared/lib"
+import type { BackendKind, CourseAccessLoss, CourseIdentifier, Enum } from "../../shared/lib"
 import { backendName, LocalCourseData, makeMoocKind, makeTmcKind, match } from "../../shared/lib"
 import type Langs from "../api/langs"
 import type { OperationWarning, Warned } from "../api/withOperation"
@@ -9,6 +9,7 @@ import {
   ConnectionError,
   ForbiddenError,
   InsufficientScopeError,
+  NotFoundError,
   ServerError,
   TmcLoginNotAcceptedError,
 } from "../errors"
@@ -16,6 +17,7 @@ import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
 import { downloadFailures } from "../ui/downloadFailures"
 import { Logger } from "../utilities"
 import { toStoredMoocCourse, toStoredTmcCourse } from "../utilities/apiData"
+import { recordCourseAccessLoss } from "./courseAccess"
 import type { ReadyActionContext } from "./types"
 
 /**
@@ -79,17 +81,39 @@ export interface CourseUpdate extends Warned {
 }
 
 /**
+ * The ids of the courses.mooc.fi courses the student is enrolled on, as the backend lists them,
+ * or why they could not be listed. The course's own data does not tell: it is served to anyone
+ * who may view the course.
+ */
+export type MoocEnrollments = Result<ReadonlySet<string>, Error>
+
+/** Lists the student's courses.mooc.fi enrollments for {@link updateCourse}. */
+export async function fetchMoocEnrollments(langs: Langs): Promise<MoocEnrollments> {
+  const enrolled = await langs.getEnrolledMoocCourses()
+  if (enrolled.err) {
+    Logger.warn("Failed to list the courses the student is enrolled on.", enrolled.val)
+  }
+  return enrolled.map((courses) => new Set(courses.map((course) => course.id)))
+}
+
+/**
  * Updates the given course by re-fetching all data from the server. Handles authorization and
  * connection errors as successful operations where the data was not actually updated.
+ *
+ * A backend that refuses the course itself, or no longer has it, marks it with its access loss
+ * (see `recordCourseAccessLoss`); one that serves it again clears the mark.
  *
  * Local exercises are **not** rescanned; the caller runs `refreshLocalExercises` once it has
  * updated every course it means to, so a rescan does not repeat per course.
  *
  * @param courseId ID of the course to update.
+ * @param moocEnrollments The student's enrollments, when a caller updating several courses has
+ * listed them once; a mooc course's update lists them itself otherwise.
  */
 export async function updateCourse(
   actionContext: ReadyActionContext,
   courseId: CourseIdentifier,
+  moocEnrollments?: MoocEnrollments,
 ): Promise<Result<CourseUpdate, Error>> {
   const { exerciseDecorationProvider, langs, userData, workspaceManager } = actionContext.startup
   Logger.info("Updating course")
@@ -99,43 +123,37 @@ export async function updateCourse(
     return storedCourse
   }
   const courseData = storedCourse.val
-  const updateResult = await fetchStoredCourse(
-    langs,
-    match(
-      courseData,
-      (tmc) => makeTmcKind({ courseId: tmc.id, organization: tmc.organization, previous: tmc }),
-      (mooc) => makeMoocKind({ courseId: mooc.id, previous: mooc }),
+  const [updateResult, enrollments] = await Promise.all([
+    fetchStoredCourse(
+      langs,
+      match(
+        courseData,
+        (tmc) => makeTmcKind({ courseId: tmc.id, organization: tmc.organization, previous: tmc }),
+        (mooc) => makeMoocKind({ courseId: mooc.id, previous: mooc }),
+      ),
+      { forceRefresh: true },
     ),
-    { forceRefresh: true },
-  )
+    courseData.kind === "mooc"
+      ? (moocEnrollments ?? fetchMoocEnrollments(langs))
+      : Promise.resolve(undefined),
+  ])
   if (updateResult.err) {
-    if (
-      updateResult.val instanceof InsufficientScopeError ||
-      updateResult.val instanceof TmcLoginNotAcceptedError
-    ) {
+    const error = updateResult.val
+    const accessLoss = accessLossOf(error, enrollments)
+    if (accessLoss) {
+      actionContext.coursesTree.setBackendReachable(courseId.kind, true)
+      const recorded = await recordCourseAccessLoss(actionContext, courseData, accessLoss)
+      return recorded.err ? recorded : Ok({ isUpdated: false, warnings: [] })
+    }
+    if (error instanceof InsufficientScopeError || error instanceof TmcLoginNotAcceptedError) {
       // Says nothing about the course, so nothing stored about it is touched.
-      Logger.warn(`${backendName(courseId.kind)} refused the session.`, updateResult.val)
+      Logger.warn(`${backendName(courseId.kind)} refused the session.`, error)
       return Ok({
         isUpdated: false,
-        warnings: sessionRefusalWarnings(actionContext, courseId.kind, updateResult.val),
+        warnings: sessionRefusalWarnings(actionContext, courseId.kind, error),
       })
     }
-    if (updateResult.val instanceof ForbiddenError) {
-      if (courseData.kind === "tmc" && !courseData.data.disabled) {
-        Logger.warn(`Failed to access information for course. Marking as disabled.`)
-        courseData.data.disabled = true
-        const disableResult = await userData.replaceCourse(courseData)
-        if (disableResult.err) {
-          return disableResult
-        }
-      } else {
-        Logger.warn(`ForbiddenError above probably caused by course still being disabled`)
-      }
-      return Ok({ isUpdated: false, warnings: [] })
-    } else if (
-      updateResult.val instanceof ConnectionError ||
-      updateResult.val instanceof ServerError
-    ) {
+    if (error instanceof ConnectionError || error instanceof ServerError) {
       Logger.warn(`Failed to fetch data from ${backendName(courseId.kind)}, data not updated.`)
       actionContext.coursesTree.setBackendReachable(courseId.kind, false)
       return Ok({ isUpdated: false, warnings: [] })
@@ -148,14 +166,19 @@ export async function updateCourse(
   actionContext.authState.sessionRefusalsReported.delete(courseId.kind)
 
   const course = updateResult.val
-  if (
-    course.kind === "mooc" &&
-    courseData.kind === "mooc" &&
-    courseData.data.notEnrolled === true &&
-    !(await isEnrolledOn(langs, course.data.id))
-  ) {
-    course.data.notEnrolled = true
+  if (LocalCourseData.getAccessLoss(courseData) !== undefined) {
+    Logger.info(`${LocalCourseData.getCourseName(course)}: access restored`)
   }
+  if (course.kind === "mooc" && courseData.kind === "mooc") {
+    // An enrollment list that could not be fetched leaves the last answer standing.
+    const isNotEnrolled = enrollments?.ok
+      ? !enrollments.val.has(course.data.id)
+      : courseData.data.notEnrolled === true
+    if (isNotEnrolled) {
+      course.data.notEnrolled = true
+    }
+  }
+
   const stored = await userData.replaceCourse(course)
   if (stored.err) {
     return stored
@@ -190,15 +213,22 @@ export async function updateCourse(
 }
 
 /**
- * Whether the student is enrolled on mooc course `courseId`, which only the list of their
- * courses tells: the course's own data is served to anyone who may view it. `false` when the
- * list could not be fetched.
+ * What a failed course fetch, or a course an update check could not check, says of the student's
+ * access to the course, if anything. A mooc 403 is the course's only when the same session could
+ * list the student's courses: tmc-langs reports every courses.mooc.fi 403 as an insufficient scope.
  */
-async function isEnrolledOn(langs: Langs, courseId: string): Promise<boolean> {
-  const enrolled = await langs.getEnrolledMoocCourses()
-  if (enrolled.err) {
-    Logger.warn("Failed to check enrollment, assuming none.", enrolled.val)
-    return false
+export function accessLossOf(
+  error: Error,
+  moocEnrollments: MoocEnrollments | undefined,
+): CourseAccessLoss["reason"] | undefined {
+  if (error instanceof NotFoundError) {
+    return "notFound"
   }
-  return enrolled.val.some((course) => course.id === courseId)
+  if (error instanceof ForbiddenError) {
+    return "forbidden"
+  }
+  if (error instanceof InsufficientScopeError && moocEnrollments?.ok) {
+    return "forbidden"
+  }
+  return undefined
 }

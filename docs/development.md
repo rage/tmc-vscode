@@ -37,16 +37,15 @@ The extension talks to two unrelated backends:
 | Auth   | courses.mooc.fi access token | OAuth2 device authorization (RFC 8628) bearer |
 
 Both are supported at the same time, and a course carries its platform with it
-from then on. The user is not asked which platform to use: the `Add Course`
-command lists the courses.mooc.fi courses the user is enrolled in alongside the
-TMC organizations in one quick pick, each item naming its backend, and dispatches
-on what was picked. tmc.mooc.fi has far too many courses to enumerate, so its arm
-still needs a second pick within the chosen organization; a mooc course is added
-in one step. If one backend is unreachable the other's courses are still
-offered, and the quick pick's placeholder names what is missing. When
-courses.mooc.fi has no session the pick offers the device-flow login in place of
-its courses, which is the only route to it for a user whose TMC credential
-already satisfies the `LoggedIn` context key.
+from then on. The user is not asked which platform to use: the add-course screen
+(`tmc.showAddCourse`) lists the courses.mooc.fi courses the user is enrolled in
+above the TMC organizations, and dispatches on what was added. tmc.mooc.fi has far
+too many courses to enumerate, so its courses are listed under the organization
+the user opens. Each backend's section loads, fails and offers its login on its
+own. When courses.mooc.fi has no session its section offers the device-flow login,
+which is the only route to it for a user whose TMC credential already satisfies
+the `LoggedIn` context key. The Command Palette's `Add Course...` (`tmc.addNewCourse`)
+is the keyboard fast path to the same courses in one quick pick.
 
 Because course slugs and titles are only unique within one backend, anything
 listing courses from both must name the backend beside them — `backendName` in
@@ -65,9 +64,11 @@ authenticates the tmc backend with the same credential. A tmc token already in
 one, and `tmc logout` (the only thing that removes it) does not touch the mooc
 credentials.
 
-The login is native UI (`src/commands/login.ts`): a modal with the code, then a cancellable
-progress notification, and the browser opens the verification page so an existing
-courses.mooc.fi browser session is reused. `MoocAuthenticationProvider` puts the session in
+The login runs in `src/commands/login.ts` and shows on the login screen, which
+`src/ui/loginScreens.ts` connects to the main panel: the code with Copy, and Open
+courses.mooc.fi, which opens the verification page in the browser so an existing
+courses.mooc.fi browser session is reused. Leaving the screen cancels the login. A login that
+leaves the user with no course goes on to the add-course screen. `MoocAuthenticationProvider` puts the session in
 the Accounts menu; its `accessToken` is empty, because the CLI owns the real tokens and no
 other extension may obtain them through VS Code.
 
@@ -170,13 +171,11 @@ Most of the UI is VS Code's own, and webviews are left for what native UI cannot
 - **Status bar** (`src/ui/statusBar*.ts`): the account, which logs in or lists the account's
   actions, and the open exercise with its points, a spinner while it is tested or submitted,
   and a quick pick of its actions.
-- **Login** is a modal and a progress notification (see [One login](#one-login)).
-
-The webview panels are the course home (`CourseDetails`), the submission result and the
-initialization error help. The course home lists the course's exercises, news and actions; it is
-built by `src/ui/courseHome.ts` from the same view model and registries as the Courses view, and
-pushed again whenever that view re-renders, so the two always agree. While it is on screen, news
-about its course goes into it instead of a notification (`src/ui/shownCourseHome.ts`).
+  The webview panels are the course home (`CourseDetails`), the submission result, the login and
+  add-course screens (see [One login](#one-login)) and the initialization error help. The course home lists the course's exercises, news and actions; it is
+  built by `src/ui/courseHome.ts` from the same view model and registries as the Courses view, and
+  pushed again whenever that view re-renders, so the two always agree. While it is on screen, news
+  about its course goes into it instead of a notification (`src/ui/shownCourseHome.ts`).
 
 ## Webview panels
 

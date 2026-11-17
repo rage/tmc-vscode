@@ -9,6 +9,7 @@ import type {
 } from "../../../shared/lib"
 import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import Dialog, { courseSelectionItems, separator } from "../../api/dialog"
+import { errorDetails } from "../../api/errorDetails"
 import {
   InsufficientScopeError,
   InvalidTokenError,
@@ -230,25 +231,49 @@ suite("Dialog.errorNotification with an error", function () {
     vi.restoreAllMocks()
   })
 
-  test("offers the logs alongside the caller's own buttons and reveals them when pressed", async function () {
-    const showLogs = vi.spyOn(Logger, "show").mockImplementation(() => {})
+  test("offers the error's details after the caller's own buttons, and opens them when pressed", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     const logError = vi.spyOn(Logger, "error").mockImplementation(() => {})
     const show = stubMessage("showErrorMessage", (actions) => actions.at(-1))
     const boom = new Error("boom")
-    await new Dialog().errorNotification("Download failed", boom, ["Retry", (): void => {}])
+    await new Dialog().errorNotification("Download failed", boom, ["Try Again", (): void => {}])
 
     expect(logError).toHaveBeenCalledWith("Download failed", boom)
-    expect(buttonTitles(show)).toEqual(["Retry", "Show Logs"])
-    expect(showLogs).toHaveBeenCalledOnce()
+    expect(buttonTitles(show)).toEqual(["Try Again", "Show Details"])
+    const [command, detailsId] = executeCommand.mock.calls[0] ?? []
+    expect(command).toBe("tmc.showErrorDetails")
+    expect(errorDetails.get(detailsId as string)).toMatchObject({
+      summary: "Download failed",
+      causeChain: "Error: boom",
+    })
   })
 
-  test("without an error, neither logs nor offers the logs button", async function () {
+  test("without an error, neither logs nor offers details", async function () {
     const logError = vi.spyOn(Logger, "error").mockImplementation(() => {})
     const show = stubMessage("showErrorMessage", () => undefined)
     await new Dialog().errorNotification("Download failed")
 
     expect(logError).not.toHaveBeenCalled()
     expect(buttonTitles(show)).toEqual([])
+  })
+})
+
+suite("Dialog.offer", function () {
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("resolves true when its one button is pressed", async function () {
+    const show = stubMessage("showInformationMessage", (actions) => actions[0])
+
+    expect(await new Dialog().offer("Trusted now. Submit?", "Submit")).toBe(true)
+    expect(buttonTitles(show)).toEqual(["Submit"])
+  })
+
+  test("resolves false when the notification is dismissed", async function () {
+    stubMessage("showInformationMessage", () => undefined)
+
+    expect(await new Dialog().offer("Trusted now. Submit?", "Submit")).toBe(false)
   })
 })
 
@@ -302,7 +327,7 @@ suite("Dialog.reportError", function () {
     const show = stubMessage("showErrorMessage", (actions) => actions[0])
     await new Dialog().reportError("Could not read the course.", new InsufficientScopeError("403"))
 
-    expect(buttonTitles(show)).toEqual(["Log In", "Show Logs"])
+    expect(buttonTitles(show)).toEqual(["Log In", "Show Details"])
     expect(executeCommand).toHaveBeenCalledWith("tmc.showMoocLogin")
   })
 
@@ -341,7 +366,7 @@ suite("Dialog.reportError", function () {
 
     expect(show.mock.calls[0]?.[0]).toBe("Could not run the tests. The CLI exited with 1.")
     expect(logError).toHaveBeenCalledOnce()
-    expect(buttonTitles(show)).toEqual(["Show Logs"])
+    expect(buttonTitles(show)).toEqual(["Show Details"])
   })
 
   test("a CLI failure's diagnostics reach the logs and not the notification", async function () {

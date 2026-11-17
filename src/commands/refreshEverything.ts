@@ -12,8 +12,10 @@ import type { AiPolicyChange, CourseUpdateOptions } from "../actions"
 import { checkForCourseUpdates } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
 import { isAiAllowed } from "../api/aiRestriction"
-import { reportWarnings, withOperation } from "../api/withOperation"
+import type { OperationWarning } from "../api/withOperation"
+import { reportFailureIn, reportWarnings, withOperation } from "../api/withOperation"
 import { BottleneckError } from "../errors"
+import { recentPolicyChanges } from "../ui/recentPolicyChanges"
 import { shownCourseHome } from "../ui/shownCourseHome"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
 import { countOf, Logger } from "../utilities"
@@ -137,9 +139,13 @@ async function runRefresh(
   options: RefreshOptions,
 ): Promise<Result<void, Error>> {
   const { silent, courseId, onProgress, offersNewExercises, isPromptless } = options
-  const refreshed = await checkForCourseUpdates(actionContext, { courseId, onProgress })
+  const refreshed = await checkForCourseUpdates(actionContext, {
+    courseId,
+    onProgress,
+    skipsRecentlyLostCourses: options.skipsRecentlyLostCourses,
+  })
   if (refreshed.ok) {
-    reportWarnings(actionContext.dialog, refreshed.val.warnings)
+    reportRefreshWarnings(actionContext, refreshed.val.warnings)
     announceAiPolicyChanges(actionContext, refreshed.val.aiPolicyChanges)
     if (offersNewExercises) {
       offerNewExercises(actionContext, refreshed.val.courses)
@@ -154,9 +160,27 @@ async function runRefresh(
 }
 
 /**
- * Tells the student of each course whose AI policy changed, and what that does to AI assistance:
- * the workspace follows the policy silently, and a refused submit would otherwise be the first
- * sign.
+ * Shows the refresh's warnings, which concern the session rather than a course, in the course
+ * home on screen if there is one, and otherwise in notifications.
+ */
+function reportRefreshWarnings(
+  { dialog }: ReadyActionContext,
+  warnings: readonly OperationWarning[],
+): void {
+  const shownCourse = shownCourseHome.courseId
+  if (!shownCourse) {
+    reportWarnings(dialog, warnings)
+    return
+  }
+  for (const { headline, error } of warnings) {
+    reportFailureIn(dialog, shownCourseHome.failureSink(shownCourse), headline, error)
+  }
+}
+
+/**
+ * Notes in its course home each course whose AI policy changed, and what that does to AI
+ * assistance: the workspace follows the policy silently, and a refused submit would otherwise be
+ * the first sign. A course whose home is not on screen is notified too.
  */
 function announceAiPolicyChanges(
   { dialog }: ReadyActionContext,
@@ -166,10 +190,17 @@ function announceAiPolicyChanges(
     if (course.kind !== "mooc") {
       continue
     }
-    const message =
-      `${course.data.title} changed its AI policy: ${aiPolicyRule(course.data.aiPolicy)} ` +
-      aiAssistanceSentence(isAiAllowed(course))
-    void dialog.notification(message, showCourseHomeButton(LocalCourseData.getCourseId(course)))
+    const courseId = LocalCourseData.getCourseId(course)
+    const sentence = [aiPolicyRule(course.data.aiPolicy), aiAssistanceSentence(isAiAllowed(course))]
+      .filter((part) => part !== undefined)
+      .join(" ")
+    recentPolicyChanges.add(courseId, sentence)
+    if (!shownCourseHome.isShowing(courseId)) {
+      void dialog.notification(
+        `${course.data.title} changed its AI policy: ${sentence}`,
+        showCourseHomeButton(courseId),
+      )
+    }
   }
 }
 
@@ -189,6 +220,7 @@ function offerNewExercises(actionContext: ReadyActionContext, courses: LocalCour
     (course) =>
       hasUnofferedNewExercises(course) &&
       !LocalCourseData.isDisabled(course) &&
+      LocalCourseData.getAccessLoss(course) === undefined &&
       course.data.notifyAfter <= now,
   )
   for (const course of offered) {

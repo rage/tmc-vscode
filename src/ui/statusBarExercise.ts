@@ -226,10 +226,10 @@ export async function showExerciseActions(
     action("$(beaker) Run Tests", "tmc.testExercise"),
     ...(isLoggedIn && !isUnlisted
       ? [
-          ...(refusal ? [] : [action("$(cloud-upload) Submit Solution", "tmc.submitExercise")]),
-          action("$(link) Share Exercise via Paste", "tmc.pasteExercise"),
+          ...(refusal ? [] : [action("$(cloud-upload) Submit", "tmc.submitExercise")]),
+          action("$(link) Get Help", "tmc.pasteExercise"),
           separator("Restore"),
-          action("$(history) Download Old Submission…", "tmc.downloadOldSubmission"),
+          action("$(history) History", "tmc.downloadOldSubmission"),
           action("$(discard) Reset Exercise", "tmc.resetExercise"),
         ]
       : []),
@@ -238,9 +238,7 @@ export async function showExerciseActions(
     ...(stored.ok && modelSolutionUrl(stored.val)
       ? [action("$(lightbulb) Show Model Solution", "tmc.showModelSolution")]
       : []),
-    ...(course.ok
-      ? [action("$(list-tree) Reveal in Courses View", "tmc.revealInCoursesView")]
-      : []),
+    ...(course.ok ? [action("$(list-tree) Show in Courses View", "tmc.revealInCoursesView")] : []),
   )
   if (picked) {
     await vscode.commands.executeCommand(picked.command, ...picked.arguments)

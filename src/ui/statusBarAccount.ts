@@ -1,10 +1,8 @@
 import * as vscode from "vscode"
 
-import { backendName, SESSION_EXPIRED_DETAIL } from "../../shared/lib"
+import { LOGGED_OUT_MESSAGE } from "../../shared/lib"
 import type { AuthState } from "../api/authState"
 import type Dialog from "../api/dialog"
-
-const SITE = backendName("mooc")
 
 /** The courses.mooc.fi session as the account status bar item shows it. */
 type AccountStatus = "loggedIn" | "loggedOut" | "sessionExpired"
@@ -28,21 +26,21 @@ function statusOf({ loggedIn, isSessionExpired }: AccountState): AccountStatus {
 
 const presentations: Record<AccountStatus, AccountPresentation> = {
   loggedIn: {
-    text: `$(account) ${SITE}`,
-    tooltip: `**TestMyCode**\n\nLogged in with your ${SITE} account.`,
-    accessibilityLabel: `TestMyCode: logged in with ${SITE}. Show account actions`,
+    text: "$(account) MOOC.fi",
+    tooltip: "**TestMyCode**\n\nLogged in with your MOOC.fi account.",
+    accessibilityLabel: "TestMyCode: logged in with your MOOC.fi account. Show account actions",
     command: "tmc.showAccountMenu",
   },
   loggedOut: {
     text: "$(sign-in) TestMyCode: Log In",
-    tooltip: `**TestMyCode**\n\nNot logged in. Log in with your ${SITE} account.`,
+    tooltip: "**TestMyCode**\n\nNot logged in. Log in with your MOOC.fi account.",
     accessibilityLabel: "TestMyCode: not logged in. Log in",
     command: "tmc.showMoocLogin",
   },
   sessionExpired: {
-    text: "$(warning) TestMyCode: Session Expired",
-    tooltip: `**TestMyCode**\n\n${SESSION_EXPIRED_DETAIL}`,
-    accessibilityLabel: "TestMyCode: session expired. Log in again",
+    text: "$(warning) TestMyCode: Logged Out",
+    tooltip: `**TestMyCode**\n\n${LOGGED_OUT_MESSAGE}`,
+    accessibilityLabel: `TestMyCode: ${LOGGED_OUT_MESSAGE}`,
     command: "tmc.showMoocLogin",
   },
 }
@@ -91,7 +89,7 @@ export class AccountStatusBarItem implements vscode.Disposable {
 /** Offers what a logged-in user can do with their account, and runs the one they pick. */
 export async function showAccountMenu(dialog: Dialog): Promise<void> {
   const command = await dialog.selectItem(
-    { title: "TestMyCode Account", placeHolder: `Logged in with your ${SITE} account` },
+    { title: "TestMyCode Account", placeHolder: "Logged in with your MOOC.fi account" },
     { label: "$(book) Show Courses", value: "tmc.myCourses" },
     { label: "$(gear) Open Settings", value: "tmc.settings" },
     { label: "$(sign-out) Log Out", value: "tmc.logout" },

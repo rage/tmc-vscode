@@ -53,7 +53,7 @@ async function offerToMoveAside(
   // The paste links and fingerprints are the other account's.
   await keptCopies.clear()
   const isMovedAside = await dialog.choose(
-    "The exercises on this computer were downloaded by another courses.mooc.fi account.",
+    "The exercises on this computer were downloaded by another MOOC.fi account.",
     {
       detail:
         `Move them out of ${resources.projectsDirectory ?? "the exercises folder"} so you ` +

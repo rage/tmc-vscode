@@ -111,6 +111,67 @@ describe("mooc mock conformance", () => {
     assert.equal(mock.setEnrolled("no-such-course", true), false)
   })
 
+  test("a course closed to students serves itself and its progress, not its material", async () => {
+    const exerciseId = passingExercise.slide.exercise_id
+    try {
+      assert.equal(mock.setCourseAccess(pythonCourse.id, "forbidden"), true)
+      const status = async (p: string): Promise<number> => (await authFetch(api(p))).status
+      assert.equal(await status(`/courses/${pythonCourse.id}`), 200)
+      assert.equal(await status(`/courses/${pythonCourse.id}/progress`), 200)
+      const exercises = await authFetch(api(`/courses/${pythonCourse.id}/exercises`))
+      assert.equal(exercises.status, 403)
+      assert.equal(((await exercises.json()) as { message_key: string }).message_key, "forbidden")
+      assert.equal(await status(`/exercises/${exerciseId}`), 403)
+    } finally {
+      mock.reset()
+    }
+    assert.equal((await authFetch(api(`/courses/${pythonCourse.id}/exercises`))).status, 200)
+  })
+
+  test("a deleted course is gone from every route, and back once opened", async () => {
+    const exerciseId = passingExercise.slide.exercise_id
+    const status = async (p: string): Promise<number> => (await authFetch(api(p))).status
+    assert.equal(mock.setCourseAccess(pythonCourse.id, "deleted"), true)
+    try {
+      assert.equal(await status(`/courses/${pythonCourse.id}`), 404)
+      assert.equal(await status(`/courses/${pythonCourse.id}/exercises`), 404)
+      assert.equal(await status(`/courses/${pythonCourse.id}/progress`), 404)
+      assert.equal(await status(`/exercises/${exerciseId}`), 404)
+      const listed = (await (await authFetch(api("/courses"))).json()) as { id: string }[]
+      assert.ok(!listed.some((c) => c.id === pythonCourse.id))
+    } finally {
+      assert.equal(mock.setCourseAccess(pythonCourse.id, "open"), true)
+    }
+    assert.equal(await status(`/courses/${pythonCourse.id}`), 200)
+    assert.equal(mock.setCourseAccess("no-such-course", "forbidden"), false)
+  })
+
+  // tmc-langs' update check lists each course's exercises and leaves out only the ones refused.
+  test("a closed or deleted course refuses its exercise listing alone", async () => {
+    const listing = async (id: string): Promise<number> =>
+      (await authFetch(api(`/courses/${id}/exercises`))).status
+    try {
+      assert.equal(mock.setCourseAccess(pythonCourse.id, "forbidden"), true)
+      assert.equal(await listing(pythonCourse.id), 403)
+      assert.equal(await listing(extraCourse.id), 200)
+      assert.equal(mock.setCourseAccess(pythonCourse.id, "deleted"), true)
+      assert.equal(await listing(pythonCourse.id), 404)
+      assert.equal(await listing(extraCourse.id), 200)
+    } finally {
+      mock.reset()
+    }
+  })
+
+  test("a revoked grant rejects every token until a reset", async () => {
+    try {
+      mock.revokeGrant()
+      assert.equal((await authFetch(api("/courses"))).status, 401)
+    } finally {
+      mock.reset()
+    }
+    assert.equal((await authFetch(api("/courses"))).status, 200)
+  })
+
   test("a course's exercises name their material pages as the host lays them out", async () => {
     const res = await authFetch(api(`/courses/${pythonCourse.id}/exercises`))
     const [slide] = (await res.json()) as { page_url: string }[]
@@ -927,6 +988,43 @@ describe("mooc mock conformance", () => {
     // each 512-byte header block)
     assert.ok(tar.includes("src/passing_exercise.py"))
     assert.ok(tar.includes("ustar"))
+  })
+
+  test("an armed archive fault fails the next download alone, no sooner than asked", async () => {
+    const archiveUrl = `${base}/mooc-archives/${passingExercise.archiveSlug}.tar.zst`
+    mock.failNextArchive(150)
+    const started = Date.now()
+    assert.equal((await fetch(archiveUrl)).status, 500)
+    assert.ok(Date.now() - started >= 140)
+    assert.equal((await fetch(archiveUrl)).status, 200)
+  })
+
+  test("an archive fault arms from outside the process too", async () => {
+    const armed = await fetch(`${base}/mooc-mock/fail-next-archive`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    assert.equal(armed.status, 204)
+    assert.equal(
+      (await fetch(`${base}/mooc-archives/${passingExercise.archiveSlug}.tar.zst`)).status,
+      500,
+    )
+  })
+
+  test("a published update changes the exercise's checksum until a reset", async () => {
+    const checksum = async (): Promise<string> => {
+      const res = await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}`))
+      const body = (await res.json()) as { tasks: { public_spec: { checksum: string } }[] }
+      return body.tasks[0]!.public_spec.checksum
+    }
+    const original = await checksum()
+
+    assert.equal(mock.publishExerciseUpdate(passingExercise.slide.exercise_id), true)
+    assert.notEqual(await checksum(), original)
+    assert.equal(mock.publishExerciseUpdate("no-such-exercise"), false)
+    mock.reset()
+    assert.equal(await checksum(), original)
   })
 
   test("unknown endpoint 404s", async () => {

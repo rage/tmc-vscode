@@ -1,30 +1,16 @@
 import * as vscode from "vscode"
 
-import type { MoocDeviceLogin } from "../../shared/langsSchema"
-import { backendName } from "../../shared/lib"
 import * as actions from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import {
-  ConnectionError,
-  DeviceLoginDeniedError,
-  DeviceLoginExpiredError,
-  presentationFor,
-  ServerError,
-} from "../errors"
+import type { LoginOptions } from "../ui/loginScreens"
+import { loginFailureView, loginScreens } from "../ui/loginScreens"
 import { Logger, openWebLink, redactUrlQuery } from "../utilities"
 import { showNextWalkthroughStep, walkthroughProgressOf } from "../window/walkthrough"
 import { handOverExercises } from "./handOverExercises"
 import { refreshEverything } from "./refreshEverything"
 
-const SITE = backendName("mooc")
-
 /** How a login ended. `cancelled` also covers a newer login replacing this one. */
 export type LoginOutcome = "loggedIn" | "cancelled" | "failed"
-
-type Settled =
-  | { kind: "deviceCode"; info: MoocDeviceLogin }
-  | { kind: "finished"; error: Error | undefined }
-  | { kind: "cancelled" }
 
 let cancelCurrentLogin: (() => void) | undefined
 
@@ -32,83 +18,91 @@ let cancelCurrentLogin: (() => void) | undefined
  * Logs in to courses.mooc.fi with the device flow, in the user's own browser so their
  * existing browser session is reused.
  *
- * A cancellable progress notification shows the code while it waits for the approval. The
- * verification page opens at once when its URL carries the code; otherwise a modal first offers
- * to copy the code for pasting there. Starting a login cancels any login already in flight, so
- * two `mooc login` processes never race on the credentials file. Every failure is reported
- * here, with a Try again action.
+ * The login screen shows the code and opens the verification page on request. Leaving the
+ * screen cancels the login, and starting a login cancels any already in flight, so two
+ * `mooc login` processes never race on the credentials file. A failure stays on the screen, with
+ * Try again. A user with no courses goes on to the add-course screen, as does `isAddingCourse`.
  */
-export async function login(actionContext: ReadyActionContext): Promise<LoginOutcome> {
+export async function login(
+  actionContext: ReadyActionContext,
+  { isAddingCourse = false }: LoginOptions = {},
+): Promise<LoginOutcome> {
   const { dialog } = actionContext
 
   cancelCurrentLogin?.()
-  const { deviceCode: code, result, interrupt } = actions.startMoocLogin(actionContext)
-  const deviceCode = code.then((info): Settled => ({ kind: "deviceCode", info }))
-  const finished = result.then(
-    (loginResult): Settled => ({
-      kind: "finished",
-      error: loginResult.err ? loginResult.val : undefined,
-    }),
-  )
-  const cancellation = Promise.withResolvers<Settled>()
-  const cancelled = cancellation.promise
+  const panel = loginScreens.open({ isAddingCourse }, { phase: "requestingCode" })
+  const { deviceCode, result, interrupt } = actions.startMoocLogin(actionContext)
+
+  // Once set, a code the CLI still reports belongs to a login no screen shows.
+  let isEnded = false
+  let verificationPage: string | undefined
+  const cancellation = Promise.withResolvers<"cancelled">()
   const cancel = (): void => {
+    isEnded = true
     interrupt()
-    cancellation.resolve({ kind: "cancelled" })
+    cancellation.resolve("cancelled")
   }
   cancelCurrentLogin = cancel
-
-  const settled = await vscode.window.withProgress(
-    {
-      location: vscode.ProgressLocation.Notification,
-      title: `Logging in to ${SITE}`,
-      cancellable: true,
-    },
-    async (progress, token): Promise<Settled> => {
-      token.onCancellationRequested(cancel)
-      progress.report({ message: "Requesting a login code…" })
-      const first = await Promise.race([deviceCode, finished, cancelled])
-      if (first.kind !== "deviceCode") {
-        return first
-      }
-      const { info } = first
-      progress.report({
-        message: `Code ${info.user_code}: approve it at ${info.verification_uri}`,
-      })
-      const ended = Promise.race([finished, cancelled])
-      if (info.verification_uri_complete) {
-        // No modal of our own: VS Code already asks before opening a domain the user has not
-        // trusted, and the code is in the URL it shows.
-        void openInBrowser(info.verification_uri_complete)
-      } else if (!(await offerCode(info, ended))) {
+  const subscriptions = vscode.Disposable.from(
+    loginScreens.onDidLeave((panelId) => {
+      if (panelId === panel.id) {
         cancel()
-        return { kind: "cancelled" }
       }
-      return ended
-    },
+    }),
+    loginScreens.onDidRequestAction(({ panelId, action }) => {
+      if (panelId !== panel.id) {
+        return
+      }
+      if (action === "cancel") {
+        cancel()
+        loginScreens.close(panel)
+      } else if (action === "openVerificationPage" && verificationPage) {
+        void openInBrowser(verificationPage)
+      }
+    }),
   )
+  void deviceCode.then((info) => {
+    if (isEnded) {
+      return
+    }
+    verificationPage = info.verification_uri_complete ?? info.verification_uri
+    loginScreens.update(panel, {
+      phase: "waiting",
+      userCode: info.user_code,
+      verificationUrl: info.verification_uri,
+      expiresAt: new Date(Date.now() + info.expires_in * 1000).toISOString(),
+    })
+  })
 
+  const settled = await Promise.race([result, cancellation.promise])
+  isEnded = true
+  subscriptions.dispose()
   if (cancelCurrentLogin === cancel) {
     cancelCurrentLogin = undefined
   }
-  if (settled.kind === "cancelled") {
+  if (settled === "cancelled") {
     return "cancelled"
   }
-  if (settled.kind === "finished" && settled.error) {
-    reportFailure(actionContext, ...failureMessage(settled.error))
+  if (settled.err) {
+    const failed = loginFailureView(settled.val)
+    if (failed.error.actions) {
+      Logger.error("Logging in failed", settled.val)
+    }
+    loginScreens.update(panel, failed)
     return "failed"
   }
 
-  dialog.statusMessage(`Logged in to ${SITE}.`)
+  loginScreens.update(panel, { phase: "loggedIn" })
+  dialog.statusMessage("Logged in.")
   void handOverExercises(actionContext).catch((e) =>
     Logger.error("Checking whose the exercises are after login failed", e),
   )
   // A login that restores an expired session finds the user's courses still added.
-  if (actionContext.startup.userData.getCourses().length === 0) {
-    // The walkthrough moves on once the course is added: moving it now would take the focus
-    // the course pick needs.
-    void vscode.commands.executeCommand("tmc.addNewCourse")
+  if (isAddingCourse || actionContext.startup.userData.getCourses().length === 0) {
+    // Replaces the login screen; the walkthrough moves on once a course is added.
+    void vscode.commands.executeCommand("tmc.showAddCourse")
   } else {
+    loginScreens.close(panel)
     await showNextWalkthroughStep(
       () => ({ ...walkthroughProgressOf(actionContext), isLoggedIn: true }),
       { isVisibleOnly: true },
@@ -121,65 +115,11 @@ export async function login(actionContext: ReadyActionContext): Promise<LoginOut
 }
 
 /**
- * Shows a code the user must type in a modal, and on "Copy & Open" copies it and opens the
- * verification page.
- *
- * @param ended Settles when the login ends without the user. VS Code cannot close a modal,
- * so one still open then is left to the user, and its button opens nothing.
- * @returns false when the user dismissed the modal while the login was still running.
- */
-async function offerCode(info: MoocDeviceLogin, ended: Promise<unknown>): Promise<boolean> {
-  let hasEnded = false
-  void ended.then(() => {
-    hasEnded = true
-  })
-  const copyAndOpen = `Copy & Open ${SITE}`
-  const picked = await vscode.window.showInformationMessage(
-    `Your ${SITE} login code is ${info.user_code}`,
-    { modal: true, detail: "Paste the code on the page that opens, then approve the login." },
-    copyAndOpen,
-  )
-  if (hasEnded) {
-    return true
-  }
-  if (picked !== copyAndOpen) {
-    return false
-  }
-  await vscode.env.clipboard.writeText(info.user_code)
-  await openInBrowser(info.verification_uri)
-  return true
-}
-
-/**
- * Opens `url` in the user's browser. A refusal leaves the login waiting, as the progress names
+ * Opens `url` in the user's browser. A refusal leaves the login waiting, as the screen names
  * the page to open by hand.
  */
 async function openInBrowser(url: string): Promise<void> {
   if (!(await openWebLink(url))) {
     Logger.warn(`Could not open ${redactUrlQuery(url)} in a browser`)
   }
-}
-
-/** The sentence for a failed login, plus the error when its details belong in the logs. */
-function failureMessage(error: Error): [message: string, error?: Error] {
-  if (error instanceof DeviceLoginDeniedError) {
-    return ["The login was denied in the browser."]
-  }
-  if (error instanceof DeviceLoginExpiredError) {
-    return ["The login code expired before it was approved."]
-  }
-  if (error instanceof ConnectionError) {
-    return [`Could not reach ${SITE}. Check your internet connection.`, error]
-  }
-  if (error instanceof ServerError) {
-    return [presentationFor(error).message, error]
-  }
-  return [`Logging in to ${SITE} failed. ${presentationFor(error).message}`, error]
-}
-
-function reportFailure(actionContext: ReadyActionContext, message: string, error?: Error): void {
-  void actionContext.dialog.errorNotification(message, error, [
-    "Try Again",
-    (): void => void vscode.commands.executeCommand("tmc.showMoocLogin"),
-  ])
 }

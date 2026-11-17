@@ -34,7 +34,7 @@ import {
   UploadExpiredError,
 } from "../../errors"
 import { courseData, courseDetails, moocCourse, submissionFinished } from "../fixtures/cliOutput"
-import { idOfMoocExercise, idOfTmcExercise } from "../fixtures/identifiers"
+import { idOfMoocCourse, idOfMoocExercise, idOfTmcExercise } from "../fixtures/identifiers"
 
 // `_spawnLangsProcess` is private; cast to `any` to stub it without spawning a
 // real tmc-langs-cli process.
@@ -312,7 +312,7 @@ suite("Langs class arg building", function () {
     stubSpawn(langs, () => Ok(errorOutput("exercise-not-found", line, [`Caused by: ${line}`], 404)))
     const result = await call(langs)
     expect(result.val).toBeInstanceOf(ExerciseNotFoundError)
-    expect((result.val as Error).message).toBe("This exercise no longer exists on courses.mooc.fi.")
+    expect((result.val as Error).message).toBe("This exercise is no longer in the course.")
     expect((result.val as ExerciseNotFoundError).details).toContain(line)
   })
 
@@ -914,9 +914,9 @@ suite("Langs error-kind mapping", function () {
     ["deadline-passed", "The deadline of this exercise has passed"],
     ["out-of-tries", "You have no tries left on this exercise"],
     ["chapter-not-open-yet", "This exercise's chapter has not opened yet"],
-    ["chapter-not-unlocked-yet", "locked until you have completed the chapters before it"],
-    ["chapter-completed-and-locked", "You have completed and locked this exercise's chapter"],
-    ["exercise-locked", "This exercise is locked for you, so it can no longer be submitted"],
+    ["chapter-not-unlocked-yet", "Complete the chapters before this exercise's chapter"],
+    ["chapter-completed-and-locked", "This exercise's chapter is locked"],
+    ["exercise-locked", "The teacher has locked this exercise"],
   ])("a %s refusal says so plainly, never as a lost login", async function (kind, message) {
     const onLogout = vi.fn()
     const langs = newLangs()
@@ -1187,13 +1187,27 @@ suite("Langs response cache", function () {
     let callCount = 0
     stubSpawn(langs, () => {
       callCount += 1
-      return Ok(dataOutput("mooc-exercise-updates", { updated: [uuid(callCount)], removed: [] }))
+      return Ok(
+        dataOutput("mooc-exercise-updates", {
+          updated: [uuid(callCount)],
+          removed: [],
+          unchecked_courses: [],
+        }),
+      )
     })
     const first = await langs.checkExerciseUpdates("mooc")
     const second = await langs.checkExerciseUpdates("mooc")
     expect(callCount).toBe(1)
-    expect(first.val).toEqual({ updated: [idOfMoocExercise(uuid(1))], removed: [] })
-    expect(second.val).toEqual({ updated: [idOfMoocExercise(uuid(1))], removed: [] })
+    expect(first.val).toEqual({
+      updated: [idOfMoocExercise(uuid(1))],
+      removed: [],
+      uncheckedCourses: [],
+    })
+    expect(second.val).toEqual({
+      updated: [idOfMoocExercise(uuid(1))],
+      removed: [],
+      uncheckedCourses: [],
+    })
   })
 
   test("forceRefresh bypasses the cache", async function () {
@@ -1201,12 +1215,44 @@ suite("Langs response cache", function () {
     let callCount = 0
     stubSpawn(langs, () => {
       callCount += 1
-      return Ok(dataOutput("mooc-exercise-updates", { updated: [uuid(callCount)], removed: [] }))
+      return Ok(
+        dataOutput("mooc-exercise-updates", {
+          updated: [uuid(callCount)],
+          removed: [],
+          unchecked_courses: [],
+        }),
+      )
     })
     await langs.checkExerciseUpdates("mooc")
     const refreshed = await langs.checkExerciseUpdates("mooc", { forceRefresh: true })
     expect(callCount).toBe(2)
-    expect(refreshed.val).toEqual({ updated: [idOfMoocExercise(uuid(2))], removed: [] })
+    expect(refreshed.val).toEqual({
+      updated: [idOfMoocExercise(uuid(2))],
+      removed: [],
+      uncheckedCourses: [],
+    })
+  })
+
+  test("checkExerciseUpdates names each course courses.mooc.fi refused with its refusal", async function () {
+    const langs = newLangs()
+    stubSpawn(langs, () =>
+      Ok(
+        dataOutput("mooc-exercise-updates", {
+          updated: [],
+          removed: [],
+          unchecked_courses: [
+            { course_id: uuid(1), kind: "insufficient-scope" },
+            { course_id: uuid(2), kind: "not-found" },
+          ],
+        }),
+      ),
+    )
+    const result = await langs.checkExerciseUpdates("mooc")
+    const [hidden, deleted] = result.unwrap().uncheckedCourses ?? []
+    expect(hidden?.courseId).toEqual(idOfMoocCourse(uuid(1)))
+    expect(hidden?.refusal).toBeInstanceOf(InsufficientScopeError)
+    expect(deleted?.courseId).toEqual(idOfMoocCourse(uuid(2)))
+    expect(deleted?.refusal).toBeInstanceOf(NotFoundError)
   })
 
   test("getMoocCourseData serves a repeat view from cache until a refresh is forced", async function () {
@@ -1287,7 +1333,13 @@ suite("Langs exercise-update cache invalidation", function () {
     stubSpawn(langs, (_i, args) => {
       if (args.includes("check-exercise-updates")) {
         updateCheckCalls += 1
-        return Ok(dataOutput("mooc-exercise-updates", { updated: [uuid(1)], removed: [] }))
+        return Ok(
+          dataOutput("mooc-exercise-updates", {
+            updated: [uuid(1)],
+            removed: [],
+            unchecked_courses: [],
+          }),
+        )
       }
       return Ok(
         dataOutput("mooc-exercise-download", {

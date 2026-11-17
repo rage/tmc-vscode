@@ -9,7 +9,7 @@ Both sides import the schemas from the repository-root `shared/`, so they come f
 
 ## Panels
 
-A panel is one screen: `CourseDetails`, `ExerciseSubmission` or `InitializationErrorHelp`. Each has
+A panel is one screen, such as `CourseDetails`, `ExerciseSubmission` or `ErrorHelp`. Each has
 a schema in `shared/protocol.ts` and a component of the same name in `src/panels/`.
 The schemas form the `Panel` discriminated union, so adding a screen means
 adding a variant there and a branch in `App.svelte`; `assertUnreachable` turns a

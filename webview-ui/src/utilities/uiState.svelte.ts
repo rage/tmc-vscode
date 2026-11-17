@@ -28,8 +28,15 @@ function screenOf(panel: Panel): string {
     // A new submission of the same exercise starts with an empty feedback form.
     case "ExerciseSubmission":
       return `ExerciseSubmission:${panel.id}`
-    case "InitializationErrorHelp":
+    case "ErrorHelp":
+      return panel.topic.kind === "operation"
+        ? `${panel.type}:${panel.topic.detailsId}`
+        : `${panel.type}:${panel.topic.kind}`
+    case "AddCourse":
       return panel.type
+    // Each login has its own code.
+    case "Login":
+      return `Login:${panel.id}`
   }
 }
 
@@ -38,9 +45,15 @@ function restorableRouteOf(panel: Panel): RestorableRoute | undefined {
   switch (panel.type) {
     case "CourseDetails":
       return { type: panel.type, courseId: panel.courseId }
-    case "InitializationErrorHelp":
+    case "ErrorHelp":
+      return panel.topic.kind === "operation"
+        ? { type: panel.type, kind: panel.topic.kind, detailsId: panel.topic.detailsId }
+        : { type: panel.type, kind: panel.topic.kind }
+    case "AddCourse":
       return { type: panel.type }
+    // The login the screen showed is gone after a reload.
     case "ExerciseSubmission":
+    case "Login":
       return undefined
   }
 }

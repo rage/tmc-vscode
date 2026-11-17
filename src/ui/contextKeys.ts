@@ -42,7 +42,7 @@ export function trackActiveEditorExercise(
 
 /**
  * Keeps `test-my-code:HasCourses` true exactly while the user has a stored course, which is
- * what completes the walkthrough's "Add a course" step.
+ * what completes the walkthrough's "Add Course" step.
  */
 export function trackHasCourses(
   userData: Pick<UserData, "getCourses" | "onDidChangeCourses">,

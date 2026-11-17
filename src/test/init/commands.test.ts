@@ -8,6 +8,7 @@ import * as vscode from "vscode"
 import type { LocalCourseData } from "../../../shared/lib"
 import type { ActionContext } from "../../actions/types"
 import { isReady } from "../../actions/types"
+import { errorDetails } from "../../api/errorDetails"
 import type WorkspaceManager from "../../api/workspaceManager"
 import * as commands from "../../commands"
 import { EXTENSION_ID, EXTENSION_VERSION } from "../../config/constants"
@@ -31,6 +32,7 @@ import { createDegradedContext, createMockActionContext } from "../mocks/actionC
 const expectedCommands = [
   "tmcTreeView.refreshCourses",
   "tmc.addNewCourse",
+  "tmc.showAddCourse",
   "tmc.changeTmcDataPath",
   "tmc.cleanExercise",
   "tmc.closeExercise",
@@ -74,17 +76,19 @@ const expectedCommands = [
   "tmc.debug",
   "tmc.wipe",
   "tmc.viewInitializationErrorHelp",
+  "tmc.showErrorDetails",
 ]
 
 // Of those, the ones that reach no service, so a failed activation can still offer them:
-// `registerServiceFreeCommands`'s, plus `tmc.viewInitializationErrorHelp`, which
-// needs an `ActionContext` but no service and so stays in `registerCommands`.
+// `registerServiceFreeCommands`'s, plus the help screen's, which need an `ActionContext` but no
+// service and so stay in `registerCommands`.
 const expectedDegradedCommands = [
   "tmc.settings",
   "tmc.logs",
   "tmc.debug",
   "tmc.trustCourseWorkspace",
   "tmc.viewInitializationErrorHelp",
+  "tmc.showErrorDetails",
 ]
 
 // What `registerServiceFreeCommands` registers on its own, regardless of startup state.
@@ -289,11 +293,65 @@ suite("registerCommands", function () {
 
   test("the login command runs the courses.mooc.fi device flow", async function () {
     const login = vi.spyOn(commands, "login").mockResolvedValue("loggedIn")
-    const { handlers } = registerAndCollect()
+    const { handlers, actionContext } = registerAndCollect()
 
     await handlers.get("tmc.showMoocLogin")?.()
 
-    expect(login).toHaveBeenCalledOnce()
+    expect(login).toHaveBeenCalledExactlyOnceWith(actionContext, { isAddingCourse: false })
+  })
+
+  test("the login command goes on to adding a course only when code asks it to", async function () {
+    const login = vi.spyOn(commands, "login").mockResolvedValue("loggedIn")
+    const { handlers, actionContext } = registerAndCollect()
+    const row = Object.create(ExerciseTreeItem.prototype) as ExerciseTreeItem
+
+    await handlers.get("tmc.showMoocLogin")?.({ isAddingCourse: true })
+    await handlers.get("tmc.showMoocLogin")?.(row)
+
+    expect(login.mock.calls).toEqual([
+      [actionContext, { isAddingCourse: true }],
+      [actionContext, { isAddingCourse: false }],
+    ])
+  })
+
+  test("tmc.showAddCourse opens the add-course screen in the main panel", async function () {
+    const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
+    const { handlers, context, actionContext } = registerAndCollect()
+
+    await handlers.get("tmc.showAddCourse")?.()
+
+    expect(renderMain).toHaveBeenCalledExactlyOnceWith(context, actionContext, {
+      id: expect.any(Number),
+      type: "AddCourse",
+    })
+  })
+
+  // The palette keeps the quick pick as the keyboard fast path; every button opens the screen.
+  test("only the palette adds a course through the quick pick", function () {
+    const { menus, viewsWelcome = [], walkthroughs = [] } = packageJson().contributes
+    const menuCommands = Object.entries(menus).flatMap(([menu, entries]) =>
+      entries.flatMap((entry) => (entry.command ? [{ menu, entry }] : [])),
+    )
+    const links = [
+      ...viewsWelcome.map((entry) => entry.contents),
+      ...walkthroughs.flatMap((walkthrough) => walkthrough.steps.map((step) => step.description)),
+    ].flatMap((markdown) => linkedCommands(markdown))
+
+    expect(
+      menuCommands
+        .filter(({ entry }) => entry.command === "tmc.addNewCourse")
+        .map(({ menu, entry }) => [menu, entry.when !== "false"]),
+    ).toEqual([["commandPalette", true]])
+    expect(links).not.toContain("tmc.addNewCourse")
+    expect(links.filter((command) => command === "tmc.showAddCourse")).toHaveLength(2)
+    expect(
+      menuCommands
+        .filter(({ entry }) => entry.command === "tmc.showAddCourse")
+        .map(({ menu, entry }) => [menu, entry.when === "false"]),
+    ).toEqual([
+      ["commandPalette", true],
+      ["view/title", false],
+    ])
   })
 
   // VS Code discards a rejected handler promise, so a command that throws would
@@ -533,9 +591,35 @@ suite("walkthrough", function () {
       "onContext:test-my-code:WorkspaceActive && test-my-code:HasDownloadedExercises",
       "onContext:test-my-code:WorkspaceActive && test-my-code:HasDownloadedExercises && test-my-code:WalkthroughActive",
     ])
-    expect(step?.description).toContain(
-      "[Download All Exercises](command:tmc.downloadAllExercises)",
-    )
+  })
+
+  // A step's button passes no arguments, and the walkthrough tab is no exercise file: without
+  // them these ask through a quick pick or fail.
+  test("no step's button runs a command that needs a course or exercise", function () {
+    const steps = packageJson().contributes.walkthroughs?.[0]?.steps ?? []
+    const linked = steps.flatMap((step) => linkedCommands(step.description))
+    for (const command of [
+      "tmc.downloadAllExercises",
+      "tmc.openCourseWorkspace",
+      "tmc.testExercise",
+      "tmc.submitExercise",
+    ]) {
+      expect(linked).not.toContain(command)
+    }
+  })
+
+  test("the exercise steps open the course's page and then the exercise to continue with", function () {
+    const steps = packageJson().contributes.walkthroughs?.[0]?.steps ?? []
+    const buttonsOf = (id: string): string | undefined =>
+      steps
+        .find((step) => step.id === id)
+        ?.description.split("\n")
+        .slice(1)
+        .join("\n")
+    expect(buttonsOf("openExercises")).toBe("[Open Course Home](command:tmc.courseDetails)")
+    for (const id of ["runTests", "submit"]) {
+      expect(buttonsOf(id)).toBe("[Continue with an Exercise](command:tmc.openNextExercise)")
+    }
   })
 
   // The walkthrough is the onboarding a new user sees, so the privacy notice has to be in it.
@@ -550,8 +634,8 @@ suite("walkthrough", function () {
 
   test("the step that opens a course workspace says to trust it and each new exercise", function () {
     const root = path.join(__dirname, "..", "..", "..")
-    const step = packageJson().contributes.walkthroughs?.[0]?.steps.find((x) =>
-      x.description.includes("command:tmc.openCourseWorkspace"),
+    const step = packageJson().contributes.walkthroughs?.[0]?.steps.find(
+      (x) => x.id === "openExercises",
     )
     const text = fs.readFileSync(path.join(root, step?.media.markdown ?? ""), "utf8")
     expect(text).toMatch(/\*\*Trust Workspace & Continue\*\*/)
@@ -649,7 +733,32 @@ suite("registered command handlers", function () {
     expect(renderMain).toHaveBeenCalledWith(
       context,
       actionContext,
-      expect.objectContaining({ type: "InitializationErrorHelp" }),
+      expect.objectContaining({
+        type: "ErrorHelp",
+        topic: expect.objectContaining({ kind: "startup" }),
+      }),
+    )
+  })
+
+  test("tmc.showErrorDetails opens the failure it names beside, focused", async function () {
+    const renderBeside = vi.spyOn(TmcPanel, "renderBeside").mockReturnValue(undefined)
+    const { handlers, context, actionContext } = registerAndCollect(createDegradedContext())
+    const detailsId = errorDetails.record("Failed to download.", new Error("reset"))
+
+    await handlers.get("tmc.showErrorDetails")?.(detailsId)
+
+    expect(renderBeside).toHaveBeenCalledWith(
+      context,
+      actionContext,
+      expect.objectContaining({
+        type: "ErrorHelp",
+        topic: {
+          kind: "operation",
+          detailsId,
+          details: expect.objectContaining({ summary: "Failed to download." }),
+        },
+      }),
+      undefined,
     )
   })
 

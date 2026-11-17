@@ -1,11 +1,11 @@
 import { z } from "zod"
 
 import type { BackendKind } from "./enum"
-import { backendName, ExerciseIdentifierSchema } from "./enum"
+import { ExerciseIdentifierSchema } from "./enum"
 import { CourseAiPolicy } from "./generated/langs"
 
-/** What the account status bar item and the course home say of an expired session. */
-export const SESSION_EXPIRED_DETAIL = `Your ${backendName("mooc")} session has expired. Log in again to download and submit exercises.`
+/** What every surface says of a session that expired or was revoked. */
+export const LOGGED_OUT_MESSAGE = "You were logged out. Log in again."
 
 const BackendKindSchema = z.enum(["tmc", "mooc"]) satisfies z.ZodType<BackendKind>
 
@@ -91,6 +91,8 @@ export const CourseHomeViewSchema = z.object({
   isDisabled: z.boolean(),
   /** courses.mooc.fi last refused the student as not enrolled on the course. */
   isNotEnrolled: z.boolean(),
+  /** Why the backend last refused the course itself; null while it serves it. */
+  accessLoss: z.enum(["forbidden", "notFound"]).nullable(),
   /** The backend did not answer the last refresh, so deadlines and points may be stale. */
   isOffline: z.boolean(),
   /** courses.mooc.fi's AI-use policy and whether it allows AI; null on tmc.mooc.fi, which has none. */
@@ -109,10 +111,21 @@ export const CourseHomeViewSchema = z.object({
   nextExercise: z
     .object({ id: ExerciseIdentifierSchema, name: z.string(), isOnDisk: z.boolean() })
     .optional(),
+  /**
+   * The course has exercises, and every one is passed or refused submissions, so nothing is left
+   * to do until that changes.
+   */
+  isAllDone: z.boolean(),
   /** Announced as new and not dismissed; downloadable ones only. */
   newExercises: z.array(z.object({ id: ExerciseIdentifierSchema, name: z.string() })),
   /** Exercises on disk whose template changed on the backend. */
   updates: z.array(z.object({ id: ExerciseIdentifierSchema, name: z.string() })),
+  /** Exercises among {@link updates} whose last update failed, each with why, as a sentence. */
+  failedUpdates: z.array(
+    z.object({ id: ExerciseIdentifierSchema, name: z.string(), reason: z.string() }),
+  ),
+  /** How a refresh found the course's AI policy changed, until the student dismisses it. */
+  aiPolicyChange: z.string().nullable(),
   /** Exercises the last automatic update replaced, until the student dismisses the notice. */
   recentlyUpdated: z.array(z.string()),
   parts: z.array(CourseHomePartSchema),
@@ -127,9 +140,12 @@ export const CourseHomeActionSchema = z.enum([
   "dismissNewExercises",
   "updateExercises",
   "dismissRecentUpdates",
+  "dismissAiPolicyChange",
   "closeCompletedExercises",
   "switchCourseWorkspace",
   "revealInCoursesView",
+  "findCourseOnline",
+  "removeCourse",
 ])
 
 export type CourseHomeAction = z.infer<typeof CourseHomeActionSchema>

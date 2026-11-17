@@ -10,6 +10,7 @@ import { ExerciseStatus } from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
 import { buildCourseHomeView } from "../../ui/courseHome"
 import { exerciseOperations } from "../../ui/exerciseOperations"
+import { failedUpdates } from "../../ui/failedUpdates"
 import { recentUpdates } from "../../ui/recentUpdates"
 import type CoursesTree from "../../ui/treeview/treeview"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
@@ -119,11 +120,10 @@ suite("buildCourseHomeView", function () {
     expect(basics?.lockedReason).toBeUndefined()
     expect(basics?.exercises[0]).toMatchObject({ triesLeft: 2 })
     expect(basics?.exercises[0]).not.toHaveProperty("submitRefusal")
-    expect(advanced?.lockedReason).toBe("You have completed and locked this chapter.")
+    expect(advanced?.lockedReason).toBe("This chapter is locked.")
     expect(advanced?.exercises[0]?.submitRefusal).toEqual({
       label: "chapter locked",
-      sentence:
-        'You have completed and locked the chapter "Advanced", so recursion can no longer be submitted.',
+      sentence: 'The chapter "Advanced" is locked, so recursion can no longer be submitted.',
     })
   })
 
@@ -173,9 +173,8 @@ suite("buildCourseHomeView", function () {
     expect(view.parts[0]?.exercises[0]).toMatchObject({
       pendingReview: "The points wait for a teacher's review.",
       submitRefusal: {
-        label: "locked",
-        sentence:
-          "loops is locked for you, so it can no longer be submitted. Only a teacher can unlock it.",
+        label: "locked by the teacher",
+        sentence: "The teacher has locked loops, so it can no longer be submitted.",
       },
     })
   })
@@ -250,6 +249,39 @@ suite("buildCourseHomeView", function () {
     expect(view.updates).toEqual([{ id: idOfTmcExercise(1), name: "01_hello" }])
     expect(view.parts[0]?.exercises[0]?.isUpdateable).toBe(true)
     expect(view.recentlyUpdated).toEqual(["part01-02_loops"])
+  })
+
+  test("lists the course's failed updates with why, and no other course's", function () {
+    const course = tmcLocalCourse({
+      exercises: [tmcCourseExercise({ id: 1, name: "part01-01_hello" })],
+    })
+    updateablesRegistry.setMany([
+      [idOfTmcCourse(42), [idOfTmcExercise(1)]],
+      [idOfTmcCourse(43), [idOfTmcExercise(9)]],
+    ])
+    const reason = "The exercise on the server is not a valid exercise package."
+    failedUpdates.record(
+      [
+        {
+          courseId: idOfTmcCourse(42),
+          exerciseId: idOfTmcExercise(1),
+          exerciseName: "01_hello",
+          reason,
+        },
+        {
+          courseId: idOfTmcCourse(43),
+          exerciseId: idOfTmcExercise(9),
+          exerciseName: "other",
+          reason,
+        },
+      ],
+      [],
+    )
+    onTestFinished(() => failedUpdates.clear())
+
+    const view = buildCourseHomeView(contextFor(course), idOfTmcCourse(42), NOW).unwrap()
+
+    expect(view.failedUpdates).toEqual([{ id: idOfTmcExercise(1), name: "01_hello", reason }])
   })
 
   test("describes the next deadline among the exercises still to do", function () {
@@ -336,6 +368,7 @@ suite("buildCourseHomeView", function () {
       isExamMode: false,
       isDisabled: false,
       isNotEnrolled: false,
+      accessLoss: null,
       materialUrl: null,
     })
     expect(view.parts.map((part) => [part.name, part.exercises.map((ex) => ex.name)])).toEqual([
@@ -408,6 +441,49 @@ suite("buildCourseHomeView", function () {
     ).unwrap()
 
     expect(view.isNotEnrolled).toBe(true)
+  })
+
+  test("carries why the backend refuses the course, and refuses its exercises' submits", function () {
+    const course = moocLocalCourse({
+      accessLoss: { reason: "notFound", checkedAt: 0 },
+      exercises: [moocCourseExercise({ name: "Hello world", deadline: "2099-01-01T00:00:00Z" })],
+    })
+
+    const view = buildCourseHomeView(
+      contextFor(course),
+      LocalCourseDataNs.getCourseId(course),
+      NOW,
+    ).unwrap()
+
+    expect(view.accessLoss).toBe("notFound")
+    expect(view.nextDeadline).toBeUndefined()
+    expect(view.parts[0]?.exercises[0]?.submitRefusal).toEqual({
+      label: "course removed",
+      sentence: "This course no longer exists, so Hello world cannot be submitted.",
+    })
+    expect(view.nextExercise).toBeUndefined()
+  })
+
+  test("is all done once every exercise is passed or closed for submissions, and not before", function () {
+    const passed = tmcCourseExercise({ id: 1, name: "part01-01_hello", passed: true })
+    const pastDeadline = tmcCourseExercise({
+      id: 2,
+      name: "part01-02_world",
+      deadline: "2000-01-01T00:00:00Z",
+    })
+    const done = tmcLocalCourse({ exercises: [passed, pastDeadline] })
+    const notDone = tmcLocalCourse({
+      exercises: [passed, tmcCourseExercise({ id: 3, name: "part01-03_todo" })],
+    })
+    const empty = tmcLocalCourse({ exercises: [] })
+
+    const isAllDone = (course: LocalCourseData): boolean =>
+      buildCourseHomeView(contextFor(course), LocalCourseDataNs.getCourseId(course), NOW).unwrap()
+        .isAllDone
+
+    expect(isAllDone(done)).toBe(true)
+    expect(isAllDone(notDone)).toBe(false)
+    expect(isAllDone(empty)).toBe(false)
   })
 
   test("calls a course whose exercises name no part just Exercises", function () {

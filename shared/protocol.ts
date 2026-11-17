@@ -57,53 +57,6 @@ const InitializationFailureSchema = z.object({
   hint: z.string().optional(),
 })
 
-export const InitializationErrorHelpPanelSchema = z.object({
-  id: z.number(),
-  type: z.literal("InitializationErrorHelp"),
-  /** The activation's failures; empty when it had none. */
-  failures: z.array(InitializationFailureSchema),
-})
-
-export type InitializationErrorHelpPanel = z.infer<typeof InitializationErrorHelpPanelSchema>
-
-/**
- * Represents a panel that is rendered by the webview.
- *
- * `id`: used to make sure messages are delivered to the correct panels
- */
-export const PanelSchema = z.discriminatedUnion("type", [
-  CourseDetailsPanelSchema,
-  ExerciseSubmissionPanelSchema,
-  InitializationErrorHelpPanelSchema,
-])
-
-export type Panel = z.infer<typeof PanelSchema>
-
-export type PanelType = Panel["type"]
-
-/** A screen the main panel can be reopened on after a window reload. */
-export const RestorableRouteSchema = z.discriminatedUnion("type", [
-  CourseDetailsPanelSchema.pick({ type: true, courseId: true }),
-  InitializationErrorHelpPanelSchema.pick({ type: true }),
-])
-
-export type RestorableRoute = z.infer<typeof RestorableRouteSchema>
-
-/**
- * What a webview saves with `setState`: UI state the host does not hold, such as scroll
- * position, open sections and drafts. VS Code hands it back to the document it reloads a
- * hidden panel with, and to the panel serializer after a window reload.
- */
-export const WebviewStateSchema = z.object({
-  /** The screen `ui` belongs to, so another screen does not inherit it. */
-  screen: z.string(),
-  /** The screen to reopen after a window reload; absent for one that is not reopened. */
-  route: RestorableRouteSchema.optional(),
-  ui: z.record(z.string(), z.unknown()),
-})
-
-export type WebviewState = z.infer<typeof WebviewStateSchema>
-
 /**
  * A command a webview may ask the host to run. The webview cannot pass arguments: the host
  * supplies them, `testMyCode.logLevel` for openSettings and this extension's id for
@@ -126,6 +79,109 @@ export const RunnableCommandSchema = z.enum([
 
 export type RunnableCommand = z.infer<typeof RunnableCommandSchema>
 
+/** A failure's remedy, shown as a button that runs `command`. */
+const RemedySchema = z.object({ label: z.string(), command: RunnableCommandSchema })
+
+/** One failure as its Show Details screen explains it; the host keeps it by id. */
+export const ErrorDetailsSchema = z.object({
+  /** The sentence the failure was reported with. */
+  summary: z.string(),
+  actions: z.array(RemedySchema),
+  /** The error and its causes, outermost first, with the diagnostics each carries. */
+  causeChain: z.string(),
+  /** ISO timestamp. */
+  occurredAt: z.string(),
+})
+
+export type ErrorDetails = z.infer<typeof ErrorDetailsSchema>
+
+/** What the help screen is about. */
+const HelpTopicSchema = z.discriminatedUnion("kind", [
+  /** The activation's failures; empty when it had none. */
+  z.object({ kind: z.literal("startup"), failures: z.array(InitializationFailureSchema) }),
+  /** One failure; `details` is null once the host no longer has it, as after a window reload. */
+  z.object({
+    kind: z.literal("operation"),
+    detailsId: z.string(),
+    details: ErrorDetailsSchema.nullable(),
+  }),
+  /** No failure in particular: what to try when the TestMyCode tools fail. */
+  z.object({ kind: z.literal("general"), hint: z.string() }),
+])
+
+export type HelpTopic = z.infer<typeof HelpTopicSchema>
+
+/** The help screen: a failed start, one failure's details, or what to try. */
+export const ErrorHelpPanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("ErrorHelp"),
+  topic: HelpTopicSchema,
+})
+
+export type ErrorHelpPanel = z.infer<typeof ErrorHelpPanelSchema>
+
+/** The courses.mooc.fi login screen; the host runs the login and sends its `LoginView`s. */
+export const LoginPanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("Login"),
+  /** Whether a successful login goes on to the add-course screen even when courses are added. */
+  isAddingCourse: z.boolean(),
+})
+
+export type LoginPanel = z.infer<typeof LoginPanelSchema>
+
+export const AddCoursePanelSchema = z.object({
+  id: z.number(),
+  type: z.literal("AddCourse"),
+})
+
+export type AddCoursePanel = z.infer<typeof AddCoursePanelSchema>
+
+/**
+ * Represents a panel that is rendered by the webview.
+ *
+ * `id`: used to make sure messages are delivered to the correct panels
+ */
+export const PanelSchema = z.discriminatedUnion("type", [
+  CourseDetailsPanelSchema,
+  ExerciseSubmissionPanelSchema,
+  ErrorHelpPanelSchema,
+  LoginPanelSchema,
+  AddCoursePanelSchema,
+])
+
+export type Panel = z.infer<typeof PanelSchema>
+
+export type PanelType = Panel["type"]
+
+/** A screen the main panel can be reopened on after a window reload. */
+export const RestorableRouteSchema = z.discriminatedUnion("type", [
+  CourseDetailsPanelSchema.pick({ type: true, courseId: true }),
+  z.object({
+    type: z.literal("ErrorHelp"),
+    kind: z.enum(["startup", "operation", "general"]),
+    detailsId: z.string().optional(),
+  }),
+  AddCoursePanelSchema.pick({ type: true }),
+])
+
+export type RestorableRoute = z.infer<typeof RestorableRouteSchema>
+
+/**
+ * What a webview saves with `setState`: UI state the host does not hold, such as scroll
+ * position, open sections and drafts. VS Code hands it back to the document it reloads a
+ * hidden panel with, and to the panel serializer after a window reload.
+ */
+export const WebviewStateSchema = z.object({
+  /** The screen `ui` belongs to, so another screen does not inherit it. */
+  screen: z.string(),
+  /** The screen to reopen after a window reload; absent for one that is not reopened. */
+  route: RestorableRouteSchema.optional(),
+  ui: z.record(z.string(), z.unknown()),
+})
+
+export type WebviewState = z.infer<typeof WebviewStateSchema>
+
 /**
  * A failure flattened for display in a webview, as the host's `toWebviewError` builds it.
  *
@@ -135,12 +191,89 @@ export type RunnableCommand = z.infer<typeof RunnableCommandSchema>
 export const WebviewErrorSchema = z.object({
   /** The sentence a notification of the same failure would show. */
   message: z.string(),
-  details: z.string().optional(),
-  /** The remedies for the failure, shown as buttons that run `command`. */
-  actions: z.array(z.object({ label: z.string(), command: RunnableCommandSchema })).optional(),
+  /** Names the failure's {@link ErrorDetails} to `showErrorDetails`; absent for a refusal. */
+  detailsId: z.string().optional(),
+  actions: z.array(RemedySchema).optional(),
 })
 
 export type WebviewError = z.infer<typeof WebviewErrorSchema>
+
+/** A failure of something a screen started, shown on that screen until dismissed. */
+export const ScreenFailureSchema = z.object({
+  /** Tells this failure apart from one reported earlier, for a dismissal across reloads. */
+  serial: z.number(),
+  /** What was being done, e.g. "Failed to download the exercises."; absent for a refusal. */
+  title: z.string().optional(),
+  /** `warning` for an action held back rather than failed. */
+  tone: z.enum(["error", "warning"]),
+  error: WebviewErrorSchema,
+})
+
+export type ScreenFailure = z.infer<typeof ScreenFailureSchema>
+
+/** Why a login failed, as far as the login screen words it differently. */
+const LoginFailureSchema = z.enum(["denied", "expired", "unreachable", "serverError", "other"])
+
+export type LoginFailure = z.infer<typeof LoginFailureSchema>
+
+/** Where a courses.mooc.fi login is, as the login screen shows it. */
+export const LoginViewSchema = z.discriminatedUnion("phase", [
+  z.object({ phase: z.literal("requestingCode") }),
+  z.object({
+    phase: z.literal("waiting"),
+    userCode: z.string(),
+    /** The page the code is entered on, shown for typing it into another browser. */
+    verificationUrl: z.string(),
+    /** ISO timestamp. */
+    expiresAt: z.string(),
+  }),
+  z.object({ phase: z.literal("failed"), failure: LoginFailureSchema, error: WebviewErrorSchema }),
+  z.object({ phase: z.literal("loggedIn") }),
+])
+
+export type LoginView = z.infer<typeof LoginViewSchema>
+
+/** What the login screen's buttons ask of the login it shows. */
+export const LoginActionSchema = z.enum(["openVerificationPage", "cancel", "tryAgain"])
+
+export type LoginAction = z.infer<typeof LoginActionSchema>
+
+/** A course the add-course screen offers. */
+export const CatalogCourseSchema = z.object({
+  /** Names the course to `addCourse`, for the panel that listed it only. */
+  key: z.string(),
+  name: z.string(),
+  organization: z.string(),
+  description: z.string().optional(),
+  isAdded: z.boolean(),
+})
+
+export type CatalogCourse = z.infer<typeof CatalogCourseSchema>
+
+/** A tmc.mooc.fi organization, the add-course screen's way into its courses. */
+export const CatalogOrganizationSchema = z.object({
+  slug: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+})
+
+export type CatalogOrganization = z.infer<typeof CatalogOrganizationSchema>
+
+/** A backend's listing for the add-course screen; `loggedOut` when it needs a login first. */
+function catalogListingSchema<T extends z.ZodType>(items: T) {
+  return z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("loggedOut") }),
+    z.object({ kind: z.literal("listed"), items: z.array(items) }),
+  ])
+}
+
+export const MoocCatalogSchema = catalogListingSchema(CatalogCourseSchema)
+
+export type MoocCatalog = z.infer<typeof MoocCatalogSchema>
+
+export const TmcOrganizationsSchema = catalogListingSchema(CatalogOrganizationSchema)
+
+export type TmcOrganizations = z.infer<typeof TmcOrganizationsSchema>
 
 /** Where a submission is, from sending it to its final grade. */
 const SubmissionPhaseSchema = z.enum([
@@ -182,6 +315,8 @@ export const SubmissionViewSchema = z.object({
   feedbackText: z.string().optional(),
   /** Why the submission failed, when the backend or the extension said. */
   error: WebviewErrorSchema.optional(),
+  /** What the server's compiler or test run printed when it produced no test results. */
+  serverOutput: z.string().optional(),
   testCases: z.array(TestCase),
   validations: TmcStyleValidationResult.optional(),
   valgrind: z.string().optional(),
@@ -209,6 +344,8 @@ export const SubmissionViewSchema = z.object({
   submitRefusal: z.string().optional(),
   /** The tries left on the exercise as it stands now; absent when unlimited. */
   triesLeft: z.number().optional(),
+  /** Submitting takes a login first, which Submit then offers as Log In to Submit. */
+  isLoggedOut: z.boolean().optional(),
 })
 
 export type SubmissionView = z.infer<typeof SubmissionViewSchema>
@@ -281,10 +418,28 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     serial: z.number(),
     shouldPaste: z.boolean(),
   }),
+  // An action the screen started failed, or one of its buttons could not run.
+  z.object({
+    type: z.literal("operationFailed"),
+    target: targetPanelSchema("CourseDetails", "ExerciseSubmission"),
+    failure: ScreenFailureSchema,
+  }),
+  // The login a Login panel shows, whenever it moves on.
+  z.object({
+    type: z.literal("loginView"),
+    target: targetPanelSchema("Login"),
+    view: LoginViewSchema,
+  }),
   // The one answer to a request, see `RequestMessage`.
   z.object({
     type: z.literal("reply"),
-    target: targetPanelSchema("CourseDetails", "ExerciseSubmission", "InitializationErrorHelp"),
+    target: targetPanelSchema(
+      "CourseDetails",
+      "ExerciseSubmission",
+      "ErrorHelp",
+      "Login",
+      "AddCourse",
+    ),
     requestId: z.number(),
     outcome: z.discriminatedUnion("ok", [
       // `value` is checked against `ReplyValueSchemas` by the side that knows the request.
@@ -375,7 +530,7 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("exerciseAction"),
     sourcePanel: targetPanelSchema("ExerciseSubmission"),
-    action: z.enum(["runTests", "submit", "openNextExercise", "openExercise"]),
+    action: z.enum(["runTests", "submit", "logInToSubmit", "openNextExercise", "openExercise"]),
   }),
   z.object({
     type: z.literal("sendFeedback"),
@@ -386,8 +541,55 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("copyToClipboard"),
     requestId: z.number(),
-    sourcePanel: targetPanelSchema("ExerciseSubmission"),
+    sourcePanel: targetPanelSchema("ExerciseSubmission", "Login", "ErrorHelp"),
     text: z.string(),
+  }),
+  // Opens the help screen on the failure an error notice named, beside the screen it is on.
+  z.object({
+    type: z.literal("showErrorDetails"),
+    detailsId: z.string(),
+  }),
+  // The latest log lines, for the help screen.
+  z.object({
+    type: z.literal("requestLogTail"),
+    requestId: z.number(),
+    sourcePanel: targetPanelSchema("ErrorHelp"),
+  }),
+  // Acts on the login the named panel shows.
+  z.object({
+    type: z.literal("loginAction"),
+    sourcePanel: targetPanelSchema("Login"),
+    action: LoginActionSchema,
+  }),
+  // The courses.mooc.fi courses the student is enrolled in.
+  z.object({
+    type: z.literal("requestMoocCatalog"),
+    requestId: z.number(),
+    sourcePanel: targetPanelSchema("AddCourse"),
+  }),
+  z.object({
+    type: z.literal("requestTmcOrganizations"),
+    requestId: z.number(),
+    sourcePanel: targetPanelSchema("AddCourse"),
+  }),
+  // The courses of a tmc.mooc.fi organization the named panel's last listing named.
+  z.object({
+    type: z.literal("requestTmcCourses"),
+    requestId: z.number(),
+    sourcePanel: targetPanelSchema("AddCourse"),
+    organizationSlug: z.string(),
+  }),
+  // Adds a course the named panel listed, unless it already is, and opens its course home.
+  z.object({
+    type: z.literal("addCourse"),
+    requestId: z.number(),
+    sourcePanel: targetPanelSchema("AddCourse"),
+    key: z.string(),
+  }),
+  z.object({
+    type: z.literal("addCourseAction"),
+    sourcePanel: targetPanelSchema("AddCourse"),
+    action: z.enum(["logIn", "findCourse"]),
   }),
   z.object({
     type: z.literal("openLinkInBrowser"),
@@ -434,6 +636,11 @@ export const ReplyValueSchemas = {
   keepWaitingForGrading: z.undefined(),
   sendFeedback: z.undefined(),
   copyToClipboard: z.undefined(),
+  requestLogTail: z.string(),
+  requestMoocCatalog: MoocCatalogSchema,
+  requestTmcOrganizations: TmcOrganizationsSchema,
+  requestTmcCourses: z.array(CatalogCourseSchema),
+  addCourse: z.undefined(),
 } satisfies Record<RequestType, z.ZodType>
 
 export type ReplyValue<K extends RequestType> = z.infer<(typeof ReplyValueSchemas)[K]>

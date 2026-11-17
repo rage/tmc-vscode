@@ -9,16 +9,17 @@ import type {
   CourseHomeView,
   ExerciseSubmissionPanel,
   ExtensionToWebview,
-  LocalCourseData,
   Panel,
   CourseIdentifier,
 } from "../../../shared/lib"
-import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
+import { LocalCourseData, makeMoocKind, makeTmcKind } from "../../../shared/lib"
 import * as actions from "../../actions"
 import type { ActionContext } from "../../actions/types"
 import type WorkspaceManager from "../../api/workspaceManager"
+import { TMC_BACKEND_URL } from "../../config/constants"
 import type { UserData } from "../../config/userdata"
 import {
+  AuthorizationError,
   BottleneckError,
   CliVerificationError,
   InitializationError,
@@ -29,6 +30,7 @@ import type { PanelMessage } from "../../panels/router"
 import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
 import { standingView } from "../../panels/submissionView"
 import { MAIN_PANEL_VIEW_TYPE, SIDE_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
+import { loginScreens } from "../../ui/loginScreens"
 import { shownCourseHome } from "../../ui/shownCourseHome"
 import { submissionViews } from "../../ui/submissionViews"
 import type CoursesTree from "../../ui/treeview/treeview"
@@ -123,7 +125,7 @@ suite("TmcPanel initialization guards", () => {
     })
   })
 
-  test("a data request that throws is still answered, and reported as the bug it is", async () => {
+  test("a data request that throws is answered with why, and notified nowhere else", async () => {
     const actionContext = createMockActionContext({
       startup: {
         userData: storedCourses(() => {
@@ -143,10 +145,7 @@ suite("TmcPanel initialization guards", () => {
     expect(replyTo(panel, 1)).toMatchObject({
       outcome: { ok: false, error: { message: "Storage exploded." } },
     })
-    expect(actionContext.dialog.reportError).toHaveBeenCalledExactlyOnceWith(
-      "Something went wrong while handling that action.",
-      expect.objectContaining({ message: "storage exploded" }),
-    )
+    expectNoNotification(actionContext)
   })
 
   test("a request served from stored data is answered without an error", async () => {
@@ -197,9 +196,9 @@ suite("initializationErrorHelpPanel", () => {
       },
     })
 
-    const panel = initializationErrorHelpPanel(actionContext, createMockContext())
+    const { topic } = initializationErrorHelpPanel(actionContext, createMockContext())
 
-    expect(panel.failures).toEqual([
+    expect(topic.kind === "startup" && topic.failures).toEqual([
       {
         service: "the TestMyCode tools",
         error: "langs offline",
@@ -211,10 +210,13 @@ suite("initializationErrorHelpPanel", () => {
     ])
   })
 
-  test("a ready startup carries no initialization failures", () => {
-    const panel = initializationErrorHelpPanel(createMockActionContext(), createMockContext())
+  test("after a ready startup, says what to try when the tools fail", () => {
+    const { topic } = initializationErrorHelpPanel(createMockActionContext(), createMockContext())
 
-    expect(panel.failures).toEqual([])
+    expect(topic).toEqual({
+      kind: "general",
+      hint: expect.stringMatching(/antivirus.*exception for the directory '.*cli'/s),
+    })
   })
 
   test("leads the hint for a damaged CLI with the file, then the network advice", () => {
@@ -228,7 +230,8 @@ suite("initializationErrorHelpPanel", () => {
       },
     })
 
-    const [failure] = initializationErrorHelpPanel(actionContext, createMockContext()).failures
+    const { topic } = initializationErrorHelpPanel(actionContext, createMockContext())
+    const [failure] = topic.kind === "startup" ? topic.failures : []
 
     expect(failure?.hint).toMatch(/^The file '\/storage\/cli\/tmc-langs-cli' may be damaged/)
     expect(failure?.hint).toContain("proxy, firewall or antivirus")
@@ -239,9 +242,11 @@ suite("initializationErrorHelpPanel", () => {
       failures: { langs: new Error("langs offline", { cause: "network unreachable" }) },
     })
 
-    const panel = initializationErrorHelpPanel(actionContext, createMockContext())
+    const { topic } = initializationErrorHelpPanel(actionContext, createMockContext())
 
-    expect(panel.failures[0]).toMatchObject({ error: "langs offline: network unreachable" })
+    expect(topic.kind === "startup" && topic.failures[0]).toMatchObject({
+      error: "langs offline: network unreachable",
+    })
   })
 })
 
@@ -357,6 +362,36 @@ suite("TmcPanel handler dispatch", () => {
     )
   })
 
+  test("a course notice finds the course online, or removes the course", async () => {
+    const handlers = stubHandlers()
+    const openExternal = stubOpenExternal()
+    let course = tmcLocalCourse({ materialUrl: "https://materials.example/python" })
+    const actionContext = createMockActionContext({
+      startup: { userData: storedCourses(() => Ok(course)) },
+    })
+    const { listener, shown } = await mountCourseDetails(actionContext)
+    const act = (action: string): Promise<void> =>
+      listener({ type: "courseAction", sourcePanel: { id: shown.id, type: shown.type }, action })
+
+    await act("findCourseOnline")
+    // A course that no longer exists took its material with it.
+    course = tmcLocalCourse({
+      materialUrl: "https://materials.example/python",
+      accessLoss: { reason: "notFound", checkedAt: 0 },
+    })
+    await act("findCourseOnline")
+    await act("removeCourse")
+
+    expect(openExternal.mock.calls.map(([uri]) => (uri as vscode.Uri).authority)).toEqual([
+      "materials.example",
+      new URL(TMC_BACKEND_URL).host,
+    ])
+    expect(handlers.openWorkspace).toHaveBeenCalledExactlyOnceWith(
+      "tmc.removeCourse",
+      idOfTmcCourse(42),
+    )
+  })
+
   /** Mounts the submission of `python-course`'s `loops` and asks it to paste the exercise. */
   async function paste(
     actionContext: ActionContext,
@@ -454,8 +489,88 @@ suite("TmcPanel handler dispatch", () => {
       ["tmc.submitExercise", exerciseUri],
       ["tmc.openNextExercise", exerciseUri],
     ])
+    expectNoNotification(actionContext)
+  })
+
+  test("Log In to Submit logs in first, then submits the exercise the host shows", async () => {
+    const handlers = stubHandlers()
+    handlers.openWorkspace.mockResolvedValue("loggedIn")
+    const shown = { ...exerciseSubmissionPanel(), exerciseId: idOfTmcExercise(7) }
+    const exerciseUri = vscode.Uri.file("/exercises/loops")
+    const actionContext = createMockActionContext({
+      loggedIn: false,
+      startup: {
+        workspaceManager: {
+          getExercise: () => ({ uri: exerciseUri }),
+        } as unknown as WorkspaceManager,
+      },
+    })
+    const { listener } = await mountSidePanel(actionContext, createMockContext(), shown)
+
+    await listener({
+      type: "exerciseAction",
+      sourcePanel: targetOf(shown),
+      action: "logInToSubmit",
+    })
+
+    expect(handlers.openWorkspace.mock.calls).toEqual([
+      ["tmc.showMoocLogin"],
+      ["tmc.submitExercise", exerciseUri],
+    ])
+  })
+
+  test("an exercise action on an exercise gone from disk says so in the screen", async () => {
+    stubHandlers()
+    const shown = exerciseSubmissionPanel()
+    const actionContext = createMockActionContext()
+    const { panel, listener } = await mountSidePanel(actionContext, createMockContext(), shown)
+
+    await listener({ type: "exerciseAction", sourcePanel: targetOf(shown), action: "runTests" })
+
+    expect(postedMessages(panel)).toEqual([
+      {
+        type: "operationFailed",
+        target: targetOf(shown),
+        failure: {
+          serial: expect.any(Number),
+          tone: "error",
+          error: { message: "This exercise is no longer downloaded." },
+        },
+      },
+    ])
+    expectNoNotification(actionContext)
+  })
+
+  test("a failure in a hidden screen is notified, and shown once the screen is back", async () => {
+    stubHandlers()
+    TmcPanel.sidePanel?.dispose()
+    const fake = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(fake.panel)
+    const shown = exerciseSubmissionPanel()
+    const actionContext = createMockActionContext()
+    TmcPanel.renderSide(createMockContext(), actionContext, shown)
+    await fake.sendReady()
+    fake.hide()
+
+    await fake.getMessageListener()({
+      type: "exerciseAction",
+      sourcePanel: targetOf(shown),
+      action: "runTests",
+    })
+
     expect(actionContext.dialog.errorNotification).toHaveBeenCalledWith(
       "This exercise is no longer downloaded.",
+      expect.any(Error),
+    )
+    vi.mocked(fake.panel.webview.postMessage).mockClear()
+    await fake.reveal()
+    expect(postedMessages(fake.panel)).toContainEqual(
+      expect.objectContaining({
+        type: "operationFailed",
+        failure: expect.objectContaining({
+          error: { message: "This exercise is no longer downloaded." },
+        }),
+      }),
     )
   })
 
@@ -605,7 +720,10 @@ suite("TmcPanel reports a handler's failure once", () => {
       type: "reply",
       target: { id: shown.id, type: "CourseDetails" },
       requestId: 1,
-      outcome: { ok: false, error: { message: "tmc-langs crashed." } },
+      outcome: {
+        ok: false,
+        error: { message: "tmc-langs crashed.", detailsId: expect.any(String) },
+      },
     })
   })
 })
@@ -740,7 +858,7 @@ suite("TmcPanel ready handshake", () => {
     expect(panel.webview.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "setPanel",
-        panel: expect.objectContaining({ type: "InitializationErrorHelp" }),
+        panel: expect.objectContaining({ type: "ErrorHelp" }),
       }),
     )
   })
@@ -939,7 +1057,7 @@ suite("TmcPanel hidden webviews", () => {
     vi.mocked(panel.webview.postMessage).mockClear()
 
     showSubmissionView(shown, "Processing submission…")
-    showSubmissionView(shown, "Exercise graded")
+    showSubmissionView(shown, "Graded")
     expect(panel.webview.postMessage).not.toHaveBeenCalled()
 
     await reveal()
@@ -949,7 +1067,7 @@ suite("TmcPanel hidden webviews", () => {
         type: "setPanel",
         panel: expect.objectContaining({ id: shown.id }),
       }),
-      submissionViewFor(shown, "Exercise graded"),
+      submissionViewFor(shown, "Graded"),
     ])
   })
 
@@ -1065,6 +1183,22 @@ suite("TmcPanel refreshCourseDetails", () => {
         outcome: { ok: true, value: courseHomeOf(courseWith(2)) },
       },
     ])
+  })
+
+  test("answers with the course, not an error, when the student has logged out", async () => {
+    const handlers = stubHandlers()
+    handlers.updateCourse.mockResolvedValue(
+      Err(Object.assign(new AuthorizationError("Not logged in."), { backend: "mooc" as const })),
+    )
+    const actionContext = createMockActionContext({
+      loggedIn: false,
+      startup: { userData: storedCourses(() => Ok(courseWith(2))) },
+    })
+    const { panel, listener, shown } = await mountCourseDetails(actionContext)
+
+    await listener(refreshRequest(shown))
+
+    expect(replyTo(panel, 1)).toMatchObject({ outcome: { ok: true } })
   })
 
   test("refuses a refresh from a panel no longer showing the course", async () => {
@@ -1207,7 +1341,7 @@ suite("TmcPanel host services for the webview", () => {
       type: "reply",
       target: targetOf(shown),
       requestId: 1,
-      outcome: { ok: false, error: { message: "Server said no." } },
+      outcome: { ok: false, error: { message: "Server said no.", detailsId: expect.any(String) } },
     })
   })
 
@@ -1336,7 +1470,7 @@ suite("TmcPanel main panel lifecycle", () => {
     expect(panel.webview.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "setPanel",
-        panel: expect.objectContaining({ type: "InitializationErrorHelp" }),
+        panel: expect.objectContaining({ type: "ErrorHelp" }),
       }),
     )
   })
@@ -1429,6 +1563,118 @@ suite("TmcPanel main panel lifecycle", () => {
   })
 })
 
+/** Shows each login's screen in a fresh main panel; returns the panel and what it was sent. */
+function showLogins(): ReturnType<typeof createFakeWebviewPanel> & { posted: () => unknown[] } {
+  const fake = createFakeWebviewPanel()
+  vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(fake.panel)
+  const subscription = TmcPanel.showLoginScreens(createMockContext(), createMockActionContext())
+  onTestFinished(() => subscription.dispose())
+  return {
+    ...fake,
+    posted: () => vi.mocked(fake.panel.webview.postMessage).mock.calls.map(([m]) => m),
+  }
+}
+
+suite("TmcPanel login screens", () => {
+  beforeEach(resetPanels)
+  afterEach(resetPanels)
+
+  test("a login opens its screen in the main panel and sends it each view", async () => {
+    const fake = showLogins()
+
+    const panel = loginScreens.open({}, { phase: "requestingCode" })
+    await fake.sendReady()
+    loginScreens.update(panel, {
+      phase: "waiting",
+      userCode: "WXYZ-0001",
+      verificationUrl: "https://courses.mooc.fi/oauth_device",
+      expiresAt: "2026-11-16T10:15:00.000Z",
+    })
+
+    expect(fake.posted()).toEqual([
+      { type: "setPanel", panel },
+      { type: "loginView", target: targetOf(panel), view: { phase: "requestingCode" } },
+      {
+        type: "loginView",
+        target: targetOf(panel),
+        view: expect.objectContaining({ phase: "waiting", userCode: "WXYZ-0001" }),
+      },
+    ])
+  })
+
+  test("a login done with its screen closes it, but not a screen shown since", async () => {
+    const fake = showLogins()
+    const panel = loginScreens.open({}, { phase: "requestingCode" })
+
+    TmcPanel.renderMain(createMockContext(), createMockActionContext(), helpPanel())
+    loginScreens.close(panel)
+    expect(fake.dispose).not.toHaveBeenCalled()
+
+    const next = loginScreens.open({}, { phase: "requestingCode" })
+    loginScreens.close(next)
+    expect(fake.dispose).toHaveBeenCalledOnce()
+  })
+
+  test("closing the screen or showing another one there tells its login", async () => {
+    showLogins()
+    const left: number[] = []
+    const subscription = loginScreens.onDidLeave((id) => left.push(id))
+    onTestFinished(() => subscription.dispose())
+
+    const first = loginScreens.open({}, { phase: "requestingCode" })
+    TmcPanel.renderMain(createMockContext(), createMockActionContext(), first)
+    expect(left).toEqual([])
+    TmcPanel.renderMain(createMockContext(), createMockActionContext(), helpPanel())
+    expect(left).toEqual([first.id])
+
+    const second = loginScreens.open({}, { phase: "requestingCode" })
+    TmcPanel.mainPanel?.dispose()
+    expect(left).toEqual([first.id, second.id])
+  })
+
+  test("the screen's buttons reach the login it shows, and Try Again starts a new one", async () => {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const fake = showLogins()
+    const panel = loginScreens.open({ isAddingCourse: true }, { phase: "requestingCode" })
+    await fake.sendReady()
+    const requested: unknown[] = []
+    const subscription = loginScreens.onDidRequestAction((action) => requested.push(action))
+    onTestFinished(() => subscription.dispose())
+    const listener = fake.getMessageListener()
+
+    await listener({ type: "loginAction", sourcePanel: targetOf(panel), action: "cancel" })
+    await listener({ type: "loginAction", sourcePanel: targetOf(panel), action: "tryAgain" })
+    await listener({
+      type: "loginAction",
+      sourcePanel: { id: panel.id + 1000, type: "Login" },
+      action: "openVerificationPage",
+    })
+
+    expect(requested).toEqual([{ panelId: panel.id, action: "cancel" }])
+    expect(executeCommand).toHaveBeenCalledExactlyOnceWith("tmc.showMoocLogin", {
+      isAddingCourse: true,
+    })
+  })
+
+  test("copies the login code for the screen", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    ;(vscode as unknown as { env: unknown }).env = { clipboard: { writeText } }
+    const fake = showLogins()
+    const panel = loginScreens.open({}, { phase: "requestingCode" })
+    await fake.sendReady()
+
+    await fake.getMessageListener()({
+      type: "copyToClipboard",
+      requestId: 3,
+      sourcePanel: targetOf(panel),
+      text: "WXYZ-0001",
+    })
+
+    expect(writeText).toHaveBeenCalledWith("WXYZ-0001")
+    expect(replyTo(fake.panel, 3)).toMatchObject({ outcome: { ok: true } })
+  })
+})
+
 function renderMainPanel(panel: Panel): void {
   TmcPanel.renderMain(createMockContext(), createMockActionContext(), panel)
 }
@@ -1479,7 +1725,7 @@ suite("TmcPanel side panel placement", () => {
     await side.sendReady()
     vi.mocked(main.panel.webview.postMessage).mockClear()
 
-    showSubmissionView(shown, "Exercise graded")
+    showSubmissionView(shown, "Graded")
 
     expect(side.panel.webview.postMessage).toHaveBeenLastCalledWith(
       expect.objectContaining({ type: "submissionView" }),
@@ -1508,7 +1754,7 @@ suite("TmcPanel side panel placement", () => {
     const subscription = TmcPanel.showSubmissionViews(createMockContext(), submissionContext())
     onTestFinished(() => subscription.dispose())
     const shown = exerciseSubmissionPanel()
-    const graded = submissionViewFor(shown, "Exercise graded")
+    const graded = submissionViewFor(shown, "Graded")
 
     submissionViews.update({ panel: shown, view: graded.view, shouldReopen: false })
     expect(createWebviewPanel).not.toHaveBeenCalled()
@@ -1526,26 +1772,27 @@ suite("TmcPanel side panel placement", () => {
   test("offers a background submission's outcome instead of leaving the shown one", async () => {
     const { panel, sendReady } = createFakeWebviewPanel()
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
-    const subscription = TmcPanel.showSubmissionViews(createMockContext(), submissionContext())
+    const actionContext = submissionContext()
+    const subscription = TmcPanel.showSubmissionViews(createMockContext(), actionContext)
     onTestFinished(() => subscription.dispose())
     const shown = exerciseSubmissionPanel()
     const background = { ...exerciseSubmissionPanel(), exerciseName: "part01-02_other" }
     submissionViews.open(shown)
     await sendReady()
-    const offered = Promise.withResolvers<string | undefined>()
-    vi.mocked(vscode.window.showInformationMessage).mockReturnValueOnce(offered.promise as never)
+    const offered = Promise.withResolvers<boolean>()
+    vi.mocked(actionContext.dialog.offer).mockReturnValueOnce(offered.promise)
     vi.mocked(panel.webview.postMessage).mockClear()
-    const graded = submissionViewFor(background, "Exercise graded")
+    const graded = submissionViewFor(background, "Graded")
 
     submissionViews.update({ panel: background, view: graded.view, shouldReopen: true })
 
-    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      "Submission of part01-02_other: Exercise graded",
+    expect(actionContext.dialog.offer).toHaveBeenCalledWith(
+      "Submission of part01-02_other: Graded",
       "Show Result",
     )
     expect(panel.webview.postMessage).not.toHaveBeenCalled()
 
-    offered.resolve("Show Result")
+    offered.resolve(true)
     await vi.waitFor(() =>
       expect(postedMessages(panel)).toEqual([
         expect.objectContaining({ type: "setPanel", panel: background }),
@@ -1569,7 +1816,7 @@ suite("TmcPanel side panel placement", () => {
     await sendReady()
     submissionViews.update({
       panel: shown,
-      view: submissionViewFor(shown, "Exercise graded").view,
+      view: submissionViewFor(shown, "Graded").view,
       shouldReopen: false,
     })
 
@@ -1580,6 +1827,71 @@ suite("TmcPanel side panel placement", () => {
       message.type === "submissionView" ? [message.view.exerciseState] : [],
     )
     expect(views).toEqual([undefined, "notOnDisk"])
+  })
+
+  test("shows a failure of a command on the shown exercise in its results screen", async () => {
+    const { panel, sendReady } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    const subscription = TmcPanel.showSubmissionViews(createMockContext(), submissionContext())
+    onTestFinished(() => subscription.dispose())
+    const shown = exerciseSubmissionPanel()
+    submissionViews.open(shown)
+    await sendReady()
+    vi.mocked(panel.webview.postMessage).mockClear()
+
+    submissionViews
+      .failureSink(shown.exerciseId)
+      .show("Exercise submission failed.", new Error("No tries left."), "warning")
+    submissionViews
+      .failureSink({ ...shown.exerciseId, data: { tmcExerciseId: 999 } } as typeof shown.exerciseId)
+      .show("Exercise submission failed.", new Error("Another exercise."), "warning")
+
+    expect(postedMessages(panel)).toEqual([
+      {
+        type: "operationFailed",
+        target: targetOf(shown),
+        failure: {
+          serial: expect.any(Number),
+          tone: "warning",
+          error: { message: "No tries left.", detailsId: expect.any(String) },
+        },
+      },
+    ])
+  })
+
+  test("turns the shown submission's Submit into Log In to Submit while logged out", async () => {
+    const { panel, sendReady } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    const actionContext = submissionContext()
+    const listeners: ((loggedIn: boolean) => void)[] = []
+    let isLoggedIn = true
+    actionContext.authState = {
+      ...actionContext.authState,
+      get loggedIn() {
+        return isLoggedIn
+      },
+      subscribe: (listener) => void listeners.push(listener),
+    }
+    const subscription = TmcPanel.showSubmissionViews(createMockContext(), actionContext)
+    onTestFinished(() => subscription.dispose())
+    const shown = exerciseSubmissionPanel()
+    submissionViews.open(shown)
+    await sendReady()
+    submissionViews.update({
+      panel: shown,
+      view: submissionViewFor(shown, "Graded").view,
+      shouldReopen: false,
+    })
+
+    isLoggedIn = false
+    for (const listener of listeners) {
+      listener(false)
+    }
+
+    const views = (postedMessages(panel) as PanelMessage[]).flatMap((message) =>
+      message.type === "submissionView" ? [message.view.isLoggedOut] : [],
+    )
+    expect(views).toEqual([undefined, true])
   })
 
   test("tells the shown submission the tries left, and why the backend would refuse another", async () => {
@@ -1649,7 +1961,7 @@ suite("TmcPanel side panel placement", () => {
     await sendReady()
     submissionViews.update({
       panel: shown,
-      view: { ...submissionViewFor(shown, "Exercise passed").view, phase: "finished" },
+      view: { ...submissionViewFor(shown, "Passed").view, phase: "finished" },
       shouldReopen: false,
     })
 
@@ -1679,7 +1991,7 @@ suite("TmcPanel side panel placement", () => {
     const earlier = exerciseSubmissionPanel()
     submissionViews.update({
       panel: earlier,
-      view: submissionViewFor(earlier, "Exercise graded").view,
+      view: submissionViewFor(earlier, "Graded").view,
       shouldReopen: false,
     })
 
@@ -1741,7 +2053,7 @@ suite("TmcPanel tab identity", () => {
       courseId: idOfTmcCourse(42),
     })
 
-    expect(panel.title).toBe("Course Details")
+    expect(panel.title).toBe("Course Home")
   })
 
   test("carries the extension's icon for both theme kinds, and a find widget", () => {
@@ -1845,7 +2157,8 @@ suite("TmcPanel webview document", () => {
 
 /** The failure a panel is answered with before activation succeeded, remedy included. */
 const notInitialized = {
-  message: expect.stringContaining("did not initialize properly"),
+  message: expect.stringContaining("could not start"),
+  detailsId: expect.any(String),
   actions: [{ label: "Show Help", command: "tmc.viewInitializationErrorHelp" }],
 }
 
@@ -1882,12 +2195,16 @@ function courseHomeOf(course: LocalCourseData): CourseHomeView {
     isExamMode: false,
     isDisabled: false,
     isNotEnrolled: false,
+    accessLoss: null,
     isOffline: false,
     aiPolicy: null,
     isLoggedIn: true,
     isSessionExpired: false,
     isWorkspaceOpen: false,
     isRestricted: false,
+    isAllDone: false,
+    failedUpdates: [],
+    aiPolicyChange: null,
     newExercises: [],
     updates: [],
     recentlyUpdated: [],
@@ -1941,14 +2258,15 @@ suite("TmcPanel keeps Course Details on the stored course", () => {
   function contextWithChangingCourse(): {
     actionContext: ActionContext
     changed: vscode.EventEmitter<CourseIdentifier | undefined>
-    course: { current: LocalCourseData }
+    course: { current: LocalCourseData | undefined }
   } {
     const changed = new vscode.EventEmitter<CourseIdentifier | undefined>()
-    const course = { current: courseWith(2) }
+    const course: { current: LocalCourseData | undefined } = { current: courseWith(2) }
     const actionContext = createMockActionContext({
       startup: {
         userData: {
-          getCourse: () => Ok(course.current),
+          getCourse: () =>
+            course.current ? Ok(course.current) : Err(new Error("The course is not stored.")),
           onDidChangeCourses: changed.event,
         } as unknown as UserData,
       },
@@ -1966,6 +2284,17 @@ suite("TmcPanel keeps Course Details on the stored course", () => {
     expect(postedMessages(panel)).toEqual([
       { type: "setCourseHomeView", target: targetOf(shown), view: courseHomeOf(courseWith(3)) },
     ])
+  })
+
+  test("closes once its course is removed", async () => {
+    const { actionContext, changed, course } = contextWithChangingCourse()
+    const { panel } = await mountCourseDetails(actionContext)
+    const removed = LocalCourseData.getCourseId(courseWith(2))
+    course.current = undefined
+
+    changed.fire(removed)
+
+    expect(panel.dispose).toHaveBeenCalled()
   })
 
   test("sends the view again whenever the Courses view re-renders", async () => {
@@ -2198,7 +2527,7 @@ suite("TmcPanel main panel restore after a window reload", () => {
     expect(postedMessages(fake.panel)).toEqual([
       expect.objectContaining({
         type: "setPanel",
-        panel: expect.objectContaining({ type: "InitializationErrorHelp" }),
+        panel: expect.objectContaining({ type: "ErrorHelp" }),
       }),
     ])
   })
@@ -2208,12 +2537,37 @@ suite("TmcPanel main panel restore after a window reload", () => {
 
     await restore(
       fake,
-      { screen: "InitializationErrorHelp", route: { type: "InitializationErrorHelp" }, ui: {} },
+      {
+        screen: "ErrorHelp:startup",
+        route: { type: "ErrorHelp", kind: "startup" },
+        ui: {},
+      },
       createDegradedContext(),
     )
 
     expect(fake.dispose).not.toHaveBeenCalled()
     expect(TmcPanel.mainPanel).toBeDefined()
+  })
+
+  test("reopens a failure's details as gone, the reload having cleared them", async () => {
+    const fake = createFakeWebviewPanel()
+    const detailsId = "from-before-the-reload"
+
+    await restore(fake, {
+      screen: `ErrorHelp:${detailsId}`,
+      route: { type: "ErrorHelp", kind: "operation", detailsId },
+      ui: {},
+    })
+    await fake.sendReady()
+
+    const [setPanel] = postedMessages(fake.panel) as Extract<
+      ExtensionToWebview,
+      { type: "setPanel" }
+    >[]
+    expect(setPanel?.panel).toMatchObject({
+      type: "ErrorHelp",
+      topic: { kind: "operation", detailsId, details: null },
+    })
   })
 
   const unrestorable: [description: string, state: unknown, actionContext?: ActionContext][] = [
@@ -2230,7 +2584,7 @@ suite("TmcPanel main panel restore after a window reload", () => {
     ["a course while activation degraded", savedCourseDetails, createDegradedContext()],
     [
       "the initialization help after a healthy activation",
-      { screen: "InitializationErrorHelp", route: { type: "InitializationErrorHelp" }, ui: {} },
+      { screen: "ErrorHelp:startup", route: { type: "ErrorHelp", kind: "startup" }, ui: {} },
       createMockActionContext(),
     ],
   ]
@@ -2278,7 +2632,7 @@ suite("TmcPanel results the student asks for", () => {
     createWebviewPanel.mockReturnValue(fake.panel)
     showing()
     const shown = exerciseSubmissionPanel()
-    const graded = submissionViewFor(shown, "Exercise graded")
+    const graded = submissionViewFor(shown, "Graded")
     submissionViews.update({ panel: shown, view: graded.view, shouldReopen: false })
 
     submissionViews.reveal(shown, { name: "history", shouldPaste: false })
@@ -2310,7 +2664,7 @@ suite("TmcPanel results the student asks for", () => {
     const shown = exerciseSubmissionPanel()
     submissionViews.update({
       panel: shown,
-      view: submissionViewFor(shown, "Exercise graded").view,
+      view: submissionViewFor(shown, "Graded").view,
       shouldReopen: false,
     })
     submissionViews.reveal(shown, { name: "getHelp", shouldPaste: true })
@@ -2389,7 +2743,7 @@ suite("TmcPanel results the student asks for", () => {
     expect(postedMessages(fake.panel)).toContainEqual(
       expect.objectContaining({
         type: "submissionView",
-        view: expect.objectContaining({ phase: "standing", headline: "Exercise passed" }),
+        view: expect.objectContaining({ phase: "standing", headline: "Passed" }),
       }),
     )
   })

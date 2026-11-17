@@ -11,8 +11,9 @@ import type {
 import type {
   CourseHomeExercise,
   CourseHomeView,
+  ErrorHelpPanel,
   ExtensionToWebview,
-  InitializationErrorHelpPanel,
+  HelpTopic,
   SubmissionView,
 } from "../../../shared/lib"
 import { makeTmcKind } from "../../../shared/lib"
@@ -31,10 +32,14 @@ export function testCase(overrides: Partial<TestCase> = {}): TestCase {
   }
 }
 
-export function initializationErrorHelpPanel(
-  failures: InitializationErrorHelpPanel["failures"] = [],
-): InitializationErrorHelpPanel {
-  return { id: 4, type: "InitializationErrorHelp", failures }
+export function errorHelpPanel(topic: HelpTopic): ErrorHelpPanel {
+  return { id: 4, type: "ErrorHelp", topic }
+}
+
+export function startupHelpPanel(
+  failures: Extract<HelpTopic, { kind: "startup" }>["failures"] = [],
+): ErrorHelpPanel {
+  return errorHelpPanel({ kind: "startup", failures })
 }
 
 /** A TMC server's graded submission of `part01-01_hello`, all tests passed. */
@@ -126,14 +131,18 @@ export function courseHomeView(overrides: Partial<CourseHomeView> = {}): CourseH
     isExamMode: false,
     isDisabled: false,
     isNotEnrolled: false,
+    accessLoss: null,
     isOffline: false,
     aiPolicy: null,
     isLoggedIn: true,
     isSessionExpired: false,
     isWorkspaceOpen: false,
     isRestricted: false,
+    isAllDone: false,
     newExercises: [],
     updates: [],
+    failedUpdates: [],
+    aiPolicyChange: null,
     recentlyUpdated: [],
     parts: [
       {
