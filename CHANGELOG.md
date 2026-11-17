@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- New exercises found in the background are offered course by course: "N new exercises in <course>." with Download and Later, which asks again in 30 minutes. The new setting `testMyCode.newExercises` downloads them by themselves instead and says how many, or leaves them to the course home. Courses you are not enrolled on or have lost access to are not offered.
 - The exercise actions of a passed exercise in a chapter not unlocked yet no longer say to complete earlier chapters first; the chapter says it.
 - A course home you are not enrolled on no longer offers to download its exercises.
 - Open Next Exercise, and Next in the results screen, only go forward in the course: from its last exercise left to do they open the course home, which offers the earlier ones. When the next exercise cannot be downloaded, the course home opens and says why instead of a notification.

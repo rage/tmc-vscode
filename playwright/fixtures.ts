@@ -176,6 +176,8 @@ interface CustomTestOptions {
   // Set true to run under Workspace Trust with the VS Code version's own defaults. Newer VS Code
   // keeps the trusted folders in the home directory, so the run gets a home of its own.
   isWorkspaceTrustEnabled: boolean
+  // User settings beside the ones every run gets, e.g. `{ "testMyCode.newExercises": "download" }`.
+  userSettings: Record<string, unknown>
 }
 
 export const customTestFixtures: Fixtures<
@@ -187,6 +189,7 @@ export const customTestFixtures: Fixtures<
   moocClientId: [undefined, { option: true }],
   seedTmcCredentials: [true, { option: true }],
   isWorkspaceTrustEnabled: [false, { option: true }],
+  userSettings: [{}, { option: true }],
   userDataDir: tempDirFixture("tmc-vscode-playwright-user"),
   configDir: tempDirFixture("tmc-vscode-playwright-config"),
   projectsDir: tempDirFixture("tmc-vscode-playwright-projects"),
@@ -199,6 +202,7 @@ export const customTestFixtures: Fixtures<
       seedTmcCredentials: shouldSeedTmcCredentials,
       trace,
       userDataDir,
+      userSettings,
     },
     run,
     testInfo,
@@ -208,7 +212,7 @@ export const customTestFixtures: Fixtures<
     fs.mkdirSync(join(userDataDir, "User"))
     fs.writeFileSync(
       join(userDataDir, "User", "settings.json"),
-      JSON.stringify({ "window.dialogStyle": "custom" }),
+      JSON.stringify({ "window.dialogStyle": "custom", ...userSettings }),
     )
     if (isWorkspaceTrustEnabled) {
       fs.mkdirSync(join(userDataDir, "home"))

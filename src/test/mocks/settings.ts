@@ -2,6 +2,7 @@
 import { vi } from "vitest"
 
 import type Settings from "../../config/settings"
+import type { NewExerciseHandling } from "../../config/settings"
 import { LogLevel } from "../../utilities/logger"
 
 /**
@@ -13,6 +14,7 @@ export interface SettingsMockValues {
   downloadOldSubmission: boolean
   hideMetaFiles: boolean
   updateExercisesAutomatically: boolean
+  newExercises: NewExerciseHandling
   javaHome: string
   logLevel: LogLevel
 }
@@ -31,6 +33,7 @@ export function createSettingsMock(): [Settings, SettingsMockValues, SettingsMoc
     downloadOldSubmission: false,
     hideMetaFiles: true,
     updateExercisesAutomatically: false,
+    newExercises: "ask",
     javaHome: "",
     logLevel: LogLevel.Errors,
   }
@@ -41,6 +44,7 @@ export function createSettingsMock(): [Settings, SettingsMockValues, SettingsMoc
     getDownloadOldSubmission: vi.fn(() => values.downloadOldSubmission),
     getHideMetaFiles: vi.fn(() => values.hideMetaFiles),
     getAutomaticallyUpdateExercises: vi.fn(() => values.updateExercisesAutomatically),
+    getNewExerciseHandling: vi.fn(() => values.newExercises),
     getJavaHome: vi.fn(() => values.javaHome),
     getLogLevel: vi.fn(() => values.logLevel),
     dispose: vi.fn(),

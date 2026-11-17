@@ -38,11 +38,11 @@ interface DownloadLeg {
 }
 
 /**
- * Where a requested download shows its progress: in a cancellable notification, or only on the
+ * Where a requested download shows its progress: in a cancellable notification, only on the
  * Courses view's progress bar, for one started from a screen that shows each exercise's
- * progress itself.
+ * progress itself, or only in the status bar, for one a setting started.
  */
-export type DownloadProgressPlace = "notification" | "coursesView"
+export type DownloadProgressPlace = "notification" | "coursesView" | "statusBar"
 
 interface DownloadOptions {
   isUpdate?: boolean
@@ -314,7 +314,7 @@ function progressOptions(options: DownloadOptions): {
   cancellable?: boolean
   location: vscode.ProgressLocation | { viewId: string }
 } {
-  if (options.isUnrequested) {
+  if (options.isUnrequested || options.progressPlace === "statusBar") {
     return { location: vscode.ProgressLocation.Window }
   }
   return options.progressPlace === "coursesView"

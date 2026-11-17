@@ -51,10 +51,13 @@ const BUDGET: Budget = {
   "src/commands/login.ts": { statusMessage: 1 },
   "src/commands/logout.ts": { statusMessage: 1, withOperation: 1 },
   "src/commands/offerCourseWorkspace.ts": { notification: 1 },
+  // Download / Later for new exercises, or how many downloaded by themselves; both only while the
+  // course home that lists them is hidden.
+  "src/commands/offerNewExercises.ts": { notification: 2 },
   "src/commands/openExercisesFolder.ts": { errorNotification: 1 },
   "src/commands/openNextExercise.ts": { errorNotification: 1, reportError: 2 },
   "src/commands/openWorkspace.ts": { withOperation: 1 },
-  "src/commands/refreshEverything.ts": { notification: 2, reportWarnings: 1, withOperation: 2 },
+  "src/commands/refreshEverything.ts": { notification: 1, reportWarnings: 1, withOperation: 2 },
   "src/commands/removeCourse.ts": { reportError: 1, statusMessage: 1, withOperation: 1 },
   "src/commands/resetExercise.ts": { progressNotification: 1, statusMessage: 1 },
   "src/commands/runForExercise.ts": { errorNotification: 1, withOperation: 1 },

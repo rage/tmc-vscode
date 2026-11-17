@@ -26,6 +26,7 @@ suite("Settings", function () {
       hideMetaFiles: false,
       downloadOldSubmission: false,
       updateExercisesAutomatically: false,
+      newExercises: "download",
       javaHome: " /usr/lib/jvm/java-21 ",
     })
     settings = new Settings()
@@ -69,6 +70,7 @@ suite("Settings", function () {
     expect(settings.getHideMetaFiles()).toBe(false)
     expect(settings.getDownloadOldSubmission()).toBe(false)
     expect(settings.getAutomaticallyUpdateExercises()).toBe(false)
+    expect(settings.getNewExerciseHandling()).toBe("download")
     expect(settings.getJavaHome()).toBe("/usr/lib/jvm/java-21")
   })
 
@@ -79,7 +81,14 @@ suite("Settings", function () {
     expect(settings.getHideMetaFiles()).toBe(true)
     expect(settings.getDownloadOldSubmission()).toBe(true)
     expect(settings.getAutomaticallyUpdateExercises()).toBe(true)
+    expect(settings.getNewExerciseHandling()).toBe("ask")
     expect(settings.getJavaHome()).toBe("")
+  })
+
+  test("asks about new exercises when the setting holds an unknown value", function () {
+    stubConfiguration({ newExercises: "sometimes" })
+
+    expect(settings.getNewExerciseHandling()).toBe("ask")
   })
 
   test("disposing stops the configuration listener", function () {

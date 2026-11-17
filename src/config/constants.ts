@@ -53,6 +53,9 @@ export const LOGIN_PROCESS_TIMEOUT = 30 * 60 * 1000
 export const SUBMIT_PROCESS_TIMEOUT = 2 * 60 * 60 * 1000
 export const EXERCISE_CHECK_INTERVAL = 30 * 60 * 1000
 
+/** How long Later on the new-exercises notification holds the next one back. */
+export const NEW_EXERCISES_REMINDER_DELAY = 30 * 60 * 1000
+
 /** How long after an unprompted refresh the window regaining focus refreshes again. */
 export const FOCUS_REFRESH_INTERVAL = 10 * 60 * 1000
 
