@@ -179,45 +179,72 @@ export type SubmitRefusal =
   | "courseNotFound"
 
 /**
- * Why the backend would refuse a submission of `exercise` at `now`; `undefined` if it would not.
+ * The refusal every surface names when several apply: the first of them here. Course-wide
+ * reasons come first, then the exercise's lasting ones, then the chapter's, which pass by
+ * themselves, so a student out of tries is never told to complete earlier chapters first.
+ */
+export const SUBMIT_REFUSAL_PRIORITY = [
+  "courseNotFound",
+  "courseForbidden",
+  "notEnrolled",
+  "exerciseLocked",
+  "deadlinePassed",
+  "outOfTries",
+  "chapterCompletedAndLocked",
+  "chapterNotOpenYet",
+  "chapterNotUnlockedYet",
+] as const satisfies readonly SubmitRefusal[]
+
+/**
+ * Why the backend would refuse a submission of `exercise` at `now`, by
+ * {@link SUBMIT_REFUSAL_PRIORITY}; `undefined` if it would not.
  *
- * @param course The exercise's course, for its enrollment and access: `notEnrolled`,
- * `courseForbidden` and `courseNotFound` only come from it. A submit itself leaves those to the
- * backend, as they may have changed since the course was last refreshed.
+ * @param course The exercise's course, for its enrollment, access and closed chapters:
+ * `notEnrolled`, `courseForbidden`, `courseNotFound` and `chapterNotOpenYet` only come from it. A
+ * submit itself leaves those to the backend, as they may have changed since the course was last
+ * refreshed.
  */
 export function submitRefusalOf(
   exercise: LocalCourseExercise,
   now: Date,
   course?: Readonly<LocalCourseData>,
 ): SubmitRefusal | undefined {
+  const applies = new Set<SubmitRefusal>()
   switch (course && LocalCourseData.getAccessLoss(course)) {
     case "forbidden":
-      return "courseForbidden"
+      applies.add("courseForbidden")
+      break
     case "notFound":
-      return "courseNotFound"
+      applies.add("courseNotFound")
+      break
   }
   if (course?.kind === "mooc" && course.data.notEnrolled === true) {
-    return "notEnrolled"
+    applies.add("notEnrolled")
+  }
+  if (course && LocalCourseData.getClosedChapterOf(course, LocalCourseExercise.getId(exercise))) {
+    applies.add("chapterNotOpenYet")
   }
   if (exercise.kind === "mooc") {
     switch (exercise.data.chapter?.lockingStatus) {
       case "NotUnlockedYet":
-        return "chapterNotUnlockedYet"
+        applies.add("chapterNotUnlockedYet")
+        break
       case "CompletedAndLocked":
-        return "chapterCompletedAndLocked"
+        applies.add("chapterCompletedAndLocked")
+        break
     }
     if (exercise.data.exerciseLocked) {
-      return "exerciseLocked"
+      applies.add("exerciseLocked")
+    }
+    if (exercise.data.outOfTries || exercise.data.triesLeft === 0) {
+      applies.add("outOfTries")
     }
   }
   const { deadline } = exercise.data
   if (deadline !== null && Date.parse(deadline) <= now.getTime()) {
-    return "deadlinePassed"
+    applies.add("deadlinePassed")
   }
-  if (exercise.kind === "mooc" && (exercise.data.outOfTries || exercise.data.triesLeft === 0)) {
-    return "outOfTries"
-  }
-  return undefined
+  return SUBMIT_REFUSAL_PRIORITY.find((refusal) => applies.has(refusal))
 }
 
 /** A few words for a row that cannot be submitted, e.g. "deadline passed". */

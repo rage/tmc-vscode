@@ -1,7 +1,7 @@
 import { vi } from "vitest"
 
 import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
-import { UserData } from "../../config/userdata"
+import { getExerciseIncludingClosedChapters, UserData } from "../../config/userdata"
 import { CorruptStoredDataError } from "../../errors"
 import Storage from "../../storage"
 import type * as storage from "../../storage/data"
@@ -885,5 +885,28 @@ suite("UserData construction over unreadable storage", function () {
     const context = createMockContext()
     context.globalState.update(USER_DATA_KEY, { courses: "not an array" })
     expect(() => new UserData(new Storage(context))).toThrow(CorruptStoredDataError)
+  })
+})
+
+suite("getExerciseIncludingClosedChapters", function () {
+  test("finds an exercise of a chapter not open yet that the course no longer lists", async function () {
+    const hidden = moocExercise({ id: "exercise-uuid-3", name: "mooc_hidden" })
+    const [userData] = await makeUserData({
+      courses: [],
+      mooc_courses: [
+        moocCourse({
+          closedChapters: [
+            { name: "Recursion", number: 3, opensAt: "2100-01-01T00:00:00Z", exercises: [hidden] },
+          ],
+        }),
+      ],
+    })
+    const id = idOfMoocExercise("exercise-uuid-3")
+
+    expect(userData.getExercise(id).err).toBe(true)
+    expect(getExerciseIncludingClosedChapters(userData, id).unwrap().exercise.data.name).toBe(
+      "mooc_hidden",
+    )
+    expect(getExerciseIncludingClosedChapters(userData, idOfMoocExercise("missing")).err).toBe(true)
   })
 })

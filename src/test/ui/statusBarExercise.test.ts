@@ -60,6 +60,18 @@ function harness(): Harness {
           ? Ok({ course, exercise: stored.exercise })
           : Err(new Error("no such exercise")),
       getCourse: () => Ok(course),
+      getExerciseInClosedChapter(id) {
+        const shown = this.getCourse(onDiskExercise.courseId)
+        const closed =
+          shown.ok && shown.val.kind === "mooc"
+            ? (shown.val.data.closedChapters ?? [])
+                .flatMap((chapter) => chapter.exercises)
+                .find((x) => id.kind === "mooc" && x.id === id.data.moocExerciseId)
+            : undefined
+        return closed && shown.ok
+          ? Ok({ course: shown.val, exercise: makeMoocKind(closed) })
+          : Err(new Error("no such exercise"))
+      },
       onDidChangeCourses: coursesChanged.event,
     },
   }
@@ -431,7 +443,7 @@ suite("showExerciseActions", function () {
     expect(executeCommand).toHaveBeenCalledWith("tmc.openExerciseMaterial", exerciseHelloWorld.uri)
   })
 
-  test("for an exercise whose chapter has not opened, names the chapter", async function () {
+  test("for an exercise whose chapter has not opened, names the chapter and keeps its history", async function () {
     const showQuickPick = vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)
     const h = harness()
     h.stored.exercise = undefined
@@ -452,6 +464,10 @@ suite("showExerciseActions", function () {
 
     expect(offered()).toEqual([
       "Run Tests",
+      "Show Results",
+      "Get Help",
+      "History",
+      "Reset Exercise",
       "Open Next Exercise",
       "Show in Courses View",
       "Delete Generated Files",

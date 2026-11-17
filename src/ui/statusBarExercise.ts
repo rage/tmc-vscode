@@ -19,6 +19,7 @@ import type WorkspaceManager from "../api/workspaceManager"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { exerciseFor } from "../api/workspaceManager"
 import type { UserData } from "../config/userdata"
+import { getExerciseIncludingClosedChapters } from "../config/userdata"
 import { modelSolutionUrl } from "./modelSolution"
 import { pointsText } from "./points"
 import { tooltipOf } from "./tooltip"
@@ -29,7 +30,10 @@ export interface ExerciseStatusSources {
     WorkspaceManager,
     "activeExercise" | "getExerciseContaining" | "onDidChangeExercises"
   >
-  userData: Pick<UserData, "getExercise" | "getCourse" | "onDidChangeCourses">
+  userData: Pick<
+    UserData,
+    "getExercise" | "getExerciseInClosedChapter" | "getCourse" | "onDidChangeCourses"
+  >
 }
 
 /**
@@ -72,7 +76,7 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
       arguments: [exercise.uri],
     }
     const slug = exercise.exerciseSlug
-    const storedResult = this._sources.userData.getExercise(exercise.id)
+    const storedResult = getExerciseIncludingClosedChapters(this._sources.userData, exercise.id)
     const stored = storedResult.ok ? storedResult.val.exercise : undefined
     const arePointsHeld =
       stored?.kind === "mooc" &&
@@ -82,11 +86,7 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
         ? pointsText(stored.data.awardedPoints, stored.data.availablePoints)
         : undefined
     const course = this._sources.userData.getCourse(exercise.courseId)
-    const isChapterClosed =
-      course.ok && LocalCourseData.getClosedChapterOf(course.val, exercise.id) !== undefined
-    const standing = isChapterClosed
-      ? refusalStanding("chapterNotOpenYet")
-      : standingOf(stored, course.ok ? course.val : undefined)
+    const standing = standingOf(stored, course.ok ? course.val : undefined)
     const shownStanding = standing?.text === "passed" ? undefined : standing
 
     this._item.text = [
@@ -206,11 +206,8 @@ export async function showExerciseActions(
     value: { command, arguments: target },
   })
   const course = sources.userData.getCourse(exercise.courseId)
-  const stored = sources.userData.getExercise(exercise.id)
+  const stored = getExerciseIncludingClosedChapters(sources.userData, exercise.id)
   const isUnlisted = course.ok && stored.err
-  const closedChapter = course.ok
-    ? LocalCourseData.getClosedChapterOf(course.val, exercise.id)
-    : undefined
   const refusal = stored.ok
     ? submitRefusalOf(stored.val.exercise, new Date(), stored.val.course)
     : undefined
@@ -219,6 +216,10 @@ export async function showExerciseActions(
     refusal === "chapterNotUnlockedYet" && stored.ok && stored.val.exercise.data.passed
       ? undefined
       : refusal
+  const closedChapter =
+    refusal === "chapterNotOpenYet" && course.ok
+      ? LocalCourseData.getClosedChapterOf(course.val, exercise.id)
+      : undefined
   const placeHolder = closedChapter
     ? `Its chapter "${closedChapter.name}" has not opened yet: it can't be submitted, but its tests run here`
     : isUnlisted

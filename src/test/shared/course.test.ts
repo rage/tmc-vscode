@@ -5,6 +5,8 @@ import {
   makeMoocKind,
   makeTmcKind,
   moocCourseUrlOf,
+  SUBMIT_REFUSAL_LABELS,
+  SUBMIT_REFUSAL_PRIORITY,
   submitRefusalOf,
   submitRefusalSentence,
   triesLeftText,
@@ -91,14 +93,23 @@ suite("submitRefusalOf", () => {
     )
   })
 
-  test("refuses a locked chapter first", () => {
+  test("refuses a locked chapter after the exercise's own reasons", () => {
     const chapter = { name: "Loops", number: 2 }
+    expect(
+      submitRefusalOf(mooc({ chapter: { ...chapter, lockingStatus: "NotUnlockedYet" } }), now),
+    ).toBe("chapterNotUnlockedYet")
     expect(
       submitRefusalOf(
         mooc({ chapter: { ...chapter, lockingStatus: "NotUnlockedYet" }, triesLeft: 0 }),
         now,
       ),
-    ).toBe("chapterNotUnlockedYet")
+    ).toBe("outOfTries")
+    expect(
+      submitRefusalOf(
+        mooc({ chapter: { ...chapter, lockingStatus: "CompletedAndLocked" }, outOfTries: true }),
+        now,
+      ),
+    ).toBe("outOfTries")
     expect(
       submitRefusalOf(mooc({ chapter: { ...chapter, lockingStatus: "CompletedAndLocked" } }), now),
     ).toBe("chapterCompletedAndLocked")
@@ -148,6 +159,44 @@ suite("submitRefusalOf", () => {
     expect(triesLeftText(2)).toBe("2 tries left")
     expect(triesLeftText(0)).toBe("no tries left")
     expect(triesLeftText(undefined)).toBeUndefined()
+  })
+})
+
+/** A course whose one closed chapter holds `exercise`. */
+const courseClosing = (exercise: LocalCourseExercise): LocalCourseData =>
+  makeMoocKind({
+    id: "course",
+    name: "course",
+    title: "Course",
+    description: null,
+    organization: "org",
+    aiPolicy: "not_set" as const,
+    exercises: [],
+    availablePoints: 0,
+    awardedPoints: 0,
+    newExercises: [],
+    notifyAfter: 0,
+    closedChapters: [
+      {
+        name: "Recursion",
+        number: 3,
+        opensAt: "2100-01-01T00:00:00Z",
+        exercises: exercise.kind === "mooc" ? [exercise.data] : [],
+      },
+    ],
+  })
+
+suite("submitRefusalOf for an exercise of a chapter not open yet", () => {
+  const now = new Date("2026-11-13T12:00:00Z")
+  test("says the chapter is not open, after the exercise's own lasting reasons", () => {
+    const hidden = mooc({ id: "hidden", triesLeft: 2 })
+    expect(submitRefusalOf(hidden, now, courseClosing(hidden))).toBe("chapterNotOpenYet")
+    const usedUp = mooc({ id: "hidden", triesLeft: 0 })
+    expect(submitRefusalOf(usedUp, now, courseClosing(usedUp))).toBe("outOfTries")
+  })
+
+  test("orders every refusal once", () => {
+    expect(new Set(SUBMIT_REFUSAL_PRIORITY).size).toBe(Object.keys(SUBMIT_REFUSAL_LABELS).length)
   })
 })
 

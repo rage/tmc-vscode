@@ -19,6 +19,7 @@ import {
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import type { StoredExercise } from "../config/userdata"
+import { getExerciseIncludingClosedChapters } from "../config/userdata"
 import { buildCourseHomeView } from "../ui/courseHome"
 import { exerciseStandingView } from "../ui/exerciseStanding"
 import { failedUpdates } from "../ui/failedUpdates"
@@ -684,7 +685,7 @@ function submissionViewMessage(
     return { type: "submissionView", target: { id: panel.id, type: panel.type }, view }
   }
   const { userData } = actionContext.startup
-  const stored = userData.getExercise(panel.exerciseId)
+  const stored = getExerciseIncludingClosedChapters(userData, panel.exerciseId)
   const exercise = stored.ok ? stored.val.exercise : undefined
   const refusal =
     exercise && submitRefusalOf(exercise, new Date(), stored.ok ? stored.val.course : undefined)

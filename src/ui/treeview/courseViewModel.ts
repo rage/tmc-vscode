@@ -163,11 +163,7 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       isOutOfTries: ex.kind === "mooc" && ex.data.outOfTries === true,
       maxTries: ex.kind === "mooc" ? ex.data.maxTries : undefined,
       triesLeft: ex.kind === "mooc" ? ex.data.triesLeft : undefined,
-      submitRefusal: isRemoved
-        ? undefined
-        : closed
-          ? "chapterNotOpenYet"
-          : submitRefusalOf(ex, state.now, course),
+      submitRefusal: isRemoved ? undefined : submitRefusalOf(ex, state.now, course),
       awardedPoints: ex.data.awardedPoints,
       availablePoints: ex.data.availablePoints,
       pendingReview: ex.kind === "mooc" ? ex.data.pendingReview : undefined,

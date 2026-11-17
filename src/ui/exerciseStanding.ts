@@ -1,6 +1,7 @@
 import type { CourseIdentifier, ExerciseIdentifier, SubmissionView } from "../../shared/lib"
 import { LocalCourseData, LocalCourseExercise } from "../../shared/lib"
 import type { UserData } from "../config/userdata"
+import { getExerciseIncludingClosedChapters } from "../config/userdata"
 import { standingView } from "../panels/submissionView"
 import { modelSolutionUrl } from "./modelSolution"
 import { nextExerciseAfter } from "./treeview/courseViewModel"
@@ -19,13 +20,13 @@ export function nextExerciseOf(
 
 /**
  * A results panel's view of `exerciseId` with no submission to show, as its stored course
- * stands now; `undefined` when the course no longer lists it.
+ * stands now; `undefined` when the course no longer has it.
  */
 export function exerciseStandingView(
-  userData: Pick<UserData, "getCourse" | "getExercise">,
+  userData: Pick<UserData, "getCourse" | "getExercise" | "getExerciseInClosedChapter">,
   exerciseId: ExerciseIdentifier,
 ): SubmissionView | undefined {
-  const stored = userData.getExercise(exerciseId)
+  const stored = getExerciseIncludingClosedChapters(userData, exerciseId)
   if (stored.err) {
     return undefined
   }
