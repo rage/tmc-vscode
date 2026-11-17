@@ -324,6 +324,14 @@
           title: "Nothing left to do right now",
           detail: "Every exercise is passed or closed for submissions.",
         },
+      view.aiPolicyChange !== null && {
+        key: "aiPolicyChange",
+        tone: "info",
+        title: "AI policy changed",
+        detail: view.aiPolicyChange,
+        ondismiss: () => runCourseAction("dismissAiPolicyChange"),
+        dismissLabel: "Dismiss the AI policy notice",
+      },
       view.recentlyUpdated.length > 0 && {
         key: "updated",
         tone: "info",

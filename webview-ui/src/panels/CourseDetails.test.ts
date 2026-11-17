@@ -544,6 +544,19 @@ suite("the course home", () => {
     expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "updateExercises"))
   })
 
+  test("says how the AI policy changed until dismissed", async () => {
+    const panel = await renderHome(
+      courseHomeView({ aiPolicyChange: "AI may not be used at any point." }),
+    )
+
+    expect(screen.getByRole("list", { name: "Course notices" })).toHaveTextContent(
+      /AI policy changed\s*AI may not be used at any point\./,
+    )
+    await clickIconButton("Dismiss the AI policy notice")
+
+    expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "dismissAiPolicyChange"))
+  })
+
   test("says what an automatic update replaced until dismissed", async () => {
     const panel = await renderHome(courseHomeView({ recentlyUpdated: ["01_hello", "02_loops"] }))
 

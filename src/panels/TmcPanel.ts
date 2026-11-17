@@ -19,6 +19,7 @@ import { exerciseStandingView } from "../ui/exerciseStanding"
 import { failedUpdates } from "../ui/failedUpdates"
 import { loginScreens } from "../ui/loginScreens"
 import { modelSolutionUrl } from "../ui/modelSolution"
+import { recentPolicyChanges } from "../ui/recentPolicyChanges"
 import { recentUpdates } from "../ui/recentUpdates"
 import { shownCourseHome } from "../ui/shownCourseHome"
 import { submissionViews } from "../ui/submissionViews"
@@ -409,6 +410,16 @@ export class TmcPanel {
         actionContext.coursesTree.onDidRender(() => this._onDidChangeCourses(undefined)),
         recentUpdates.onDidChange(() => this._onDidChangeCourses(undefined)),
         failedUpdates.onDidChange(() => this._onDidChangeCourses(undefined)),
+        recentPolicyChanges.onDidChange(() => this._onDidChangeCourses(undefined)),
+        shownCourseHome.onDidFail(({ courseId, headline, error, tone }) => {
+          const route = this._route
+          if (
+            route?.type === "CourseDetails" &&
+            CourseIdentifier.equals(route.courseId, courseId)
+          ) {
+            this._postMessage(screenFailureMessage(route, headline, error, tone))
+          }
+        }),
       )
     }
 

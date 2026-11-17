@@ -9,6 +9,7 @@ import type { UserData } from "../../config/userdata"
 import { courseDetailsHandlers } from "../../panels/handlers/courseDetails"
 import type { PanelHost } from "../../panels/router"
 import { buildCourseHomeView } from "../../ui/courseHome"
+import { recentPolicyChanges } from "../../ui/recentPolicyChanges"
 import { recentUpdates } from "../../ui/recentUpdates"
 import { openCourseExercises } from "../../ui/treeview/treeCommands"
 import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
@@ -297,6 +298,14 @@ suite("the course home's course actions", function () {
     await courseAction(actionContext, "updateExercises")
 
     expect(actions.downloadExerciseUpdates).not.toHaveBeenCalled()
+  })
+
+  test("dismissing the AI policy notice forgets the change", async function () {
+    recentPolicyChanges.add(COURSE, "AI may not be used at any point.")
+
+    await courseAction(context(), "dismissAiPolicyChange")
+
+    expect(recentPolicyChanges.get(COURSE)).toBeUndefined()
   })
 
   test("dismissing the update notice forgets what the automatic update replaced", async function () {

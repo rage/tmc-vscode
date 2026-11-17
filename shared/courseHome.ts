@@ -124,6 +124,8 @@ export const CourseHomeViewSchema = z.object({
   failedUpdates: z.array(
     z.object({ id: ExerciseIdentifierSchema, name: z.string(), reason: z.string() }),
   ),
+  /** How a refresh found the course's AI policy changed, until the student dismisses it. */
+  aiPolicyChange: z.string().nullable(),
   /** Exercises the last automatic update replaced, until the student dismisses the notice. */
   recentlyUpdated: z.array(z.string()),
   parts: z.array(CourseHomePartSchema),
@@ -138,6 +140,7 @@ export const CourseHomeActionSchema = z.enum([
   "dismissNewExercises",
   "updateExercises",
   "dismissRecentUpdates",
+  "dismissAiPolicyChange",
   "closeCompletedExercises",
   "switchCourseWorkspace",
   "revealInCoursesView",

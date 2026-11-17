@@ -20,6 +20,7 @@ import {
   formatNearRelativeTime,
 } from "../utilities"
 import { failedUpdates } from "./failedUpdates"
+import { recentPolicyChanges } from "./recentPolicyChanges"
 import { recentUpdates } from "./recentUpdates"
 import type { ExerciseView } from "./treeview/courseViewModel"
 import {
@@ -140,6 +141,7 @@ export function buildCourseHomeView(
         name: exerciseName,
         reason,
       })),
+    aiPolicyChange: recentPolicyChanges.get(courseId) ?? null,
     recentlyUpdated: recentUpdates.get(courseId),
     parts: parts.map((part) => ({
       key: part.key,

@@ -17,6 +17,7 @@ import { reportFailureIn, withOperation } from "../../api/withOperation"
 import { MOOC_BACKEND_URL, TMC_BACKEND_URL } from "../../config/constants"
 import { buildCourseHomeView } from "../../ui/courseHome"
 import { showExerciseSourceFile } from "../../ui/exerciseSourceFile"
+import { recentPolicyChanges } from "../../ui/recentPolicyChanges"
 import { recentUpdates } from "../../ui/recentUpdates"
 import { closeCompletedExercises, openCourseExercises } from "../../ui/treeview/treeCommands"
 import { Logger, openWebLink } from "../../utilities"
@@ -170,6 +171,9 @@ async function runCourseAction(
     }
     case "dismissRecentUpdates":
       recentUpdates.dismiss(courseId)
+      return
+    case "dismissAiPolicyChange":
+      recentPolicyChanges.dismiss(courseId)
       return
     case "closeCompletedExercises":
       await closeCompletedExercises(actionContext, courseId)

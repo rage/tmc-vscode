@@ -163,9 +163,9 @@ interface ExerciseUpdate {
 }
 
 /**
- * Downloads `updates`. An update the student picked says in the status bar which exercises it
- * updated. An automatic one leaves its trace in the course home, and offers to show it when it
- * is not on screen.
+ * Downloads `updates`, leaving a trace of what it updated in each course's home. While that is
+ * not on screen, an update the student picked says so in the status bar, and an automatic one
+ * offers to show it.
  *
  * @param options.isUnrequested See `downloadExerciseUpdates`.
  * @param options.isAnnounced Whether to announce the update as an automatic one, which the
@@ -186,11 +186,7 @@ export async function downloadUpdates(
     return
   }
   const { updated } = result.val
-  if (!isUnrequested && !options.isAnnounced) {
-    const names = updated.map((id) => exerciseName(actionContext, id))
-    actionContext.dialog.statusMessage(`Updated ${describeExercises(names)}.`)
-    return
-  }
+  const isRequested = !isUnrequested && !options.isAnnounced
   const updatedKeys = new Set(updated.map((id) => ExerciseIdentifier.key(id)))
   const byCourse = new Map<string, { courseId: CourseIdentifier; names: string[] }>()
   for (const { courseId, exerciseId } of updates) {
@@ -206,7 +202,11 @@ export async function downloadUpdates(
     return !shownCourseHome.isShowing(courseId)
   })
   const [first] = unseen
-  if (first) {
+  if (first && isRequested) {
+    actionContext.dialog.statusMessage(
+      `Updated ${describeExercises(unseen.flatMap((entry) => entry.names))}.`,
+    )
+  } else if (first) {
     const names = unseen.flatMap((entry) => entry.names)
     void actionContext.dialog.notification(
       `Updated ${describeExercises(names)} to the latest version.`,

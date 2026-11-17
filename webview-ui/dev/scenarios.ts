@@ -668,6 +668,19 @@ export const SCENARIOS: Scenario[] = [
     ),
   },
   {
+    id: "course-details/ai-policy-changed",
+    panel: courseDetailsPanel(11, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
+    reply: answerCourseDetails(
+      { id: 11 },
+      {
+        ...moocCourse,
+        aiPolicy: { policy: "no_ai", isAiAllowed: false },
+        aiPolicyChange:
+          "AI may not be used at any point. TestMyCode turns AI assistance off in the course workspace.",
+      },
+    ),
+  },
+  {
     id: "course-details/action-failed",
     panel: courseDetailsPanel(8, makeTmcKind({ courseId: 42 })),
     reply: answerCourseDetails({ id: 8 }, tmcCourse),

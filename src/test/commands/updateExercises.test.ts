@@ -6,7 +6,7 @@ import type { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../.
 import { CourseIdentifier as CourseIdentifierNs } from "../../../shared/lib"
 import type { ExerciseUpdateCheck } from "../../actions/checkForExerciseUpdates"
 import type { ReadyActionContext } from "../../actions/types"
-import { updateExercises } from "../../commands/updateExercises"
+import { downloadUpdates, updateExercises } from "../../commands/updateExercises"
 import type Settings from "../../config/settings"
 import type { UserData } from "../../config/userdata"
 import { recentUpdates } from "../../ui/recentUpdates"
@@ -312,6 +312,29 @@ suite("updateExercises command", function () {
 
     expect(recentUpdates.get(idOfTmcCourse(1))).toEqual(["loops"])
     expect(dialog.notification).not.toHaveBeenCalled()
+  })
+
+  test("an update the student picked leaves a trace in the course home, and a status message only while it is hidden", async function () {
+    downloadExerciseUpdates.mockResolvedValue(Ok({ updated: [idOfTmcExercise(10)], warnings: [] }))
+    const [actionContext, dialog] = contextWith(false)
+    Object.assign(actionContext.startup.userData, {
+      getExercise: () => Ok({ exercise: { kind: "tmc", data: { name: "loops" } } }),
+    })
+    onTestFinished(() => {
+      shownCourseHome.set(undefined)
+      recentUpdates.dismiss(idOfTmcCourse(1))
+    })
+    const picked = [{ courseId: idOfTmcCourse(1), exerciseId: idOfTmcExercise(10) }]
+
+    await downloadUpdates(actionContext, picked)
+    expect(dialog.statusMessage).toHaveBeenCalledExactlyOnceWith("Updated the exercise loops.")
+
+    vi.mocked(dialog.statusMessage).mockClear()
+    shownCourseHome.set(idOfTmcCourse(1))
+    await downloadUpdates(actionContext, picked)
+
+    expect(recentUpdates.get(idOfTmcCourse(1))).toEqual(["loops"])
+    expect(dialog.statusMessage).not.toHaveBeenCalled()
   })
 
   test("reports a failed check once when loud, and only logs it when silent", async function () {

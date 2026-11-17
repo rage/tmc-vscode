@@ -2187,6 +2187,7 @@ function courseHomeOf(course: LocalCourseData): CourseHomeView {
     isRestricted: false,
     isAllDone: false,
     failedUpdates: [],
+    aiPolicyChange: null,
     newExercises: [],
     updates: [],
     recentlyUpdated: [],
