@@ -44,10 +44,13 @@ function outdated(
 }
 
 function tmcCourse(id: number): LocalCourseData {
-  return { kind: "tmc", data: { id } } as LocalCourseData
+  return { kind: "tmc", data: { id, newExercises: [] } } as unknown as LocalCourseData
 }
 
-const moocCourse = { kind: "mooc", data: { id: "mooc-course" } } as LocalCourseData
+const moocCourse = {
+  kind: "mooc",
+  data: { id: "mooc-course", newExercises: [] },
+} as unknown as LocalCourseData
 
 /** A check that reached every backend. */
 function checked(exercises: ExerciseUpdateCheck["outdated"]): ExerciseUpdateCheck {
@@ -124,8 +127,12 @@ suite("updateExercises command", function () {
   test("keeps a course it could not check at its last answer", async function () {
     const lostCourse = {
       kind: "mooc",
-      data: { id: "lost", exercises: [{ id: "lost-removed" }, { id: "lost-kept" }] },
-    } as LocalCourseData
+      data: {
+        id: "lost",
+        exercises: [{ id: "lost-removed" }, { id: "lost-kept" }],
+        newExercises: [],
+      },
+    } as unknown as LocalCourseData
     const staleLost = [idOfMoocExercise("lost-outdated")]
     updateablesRegistry.setMany([
       [idOfMoocCourse("lost"), staleLost],
@@ -409,6 +416,21 @@ suite("updateExercises command", function () {
     expect(dialog.notification).not.toHaveBeenCalled()
   })
 
+  test("says nothing is up to date while a course has new exercises to offer", async function () {
+    checkForExerciseUpdates.mockResolvedValue(checked([]))
+    const [context, dialog] = contextWith(false)
+    vi.spyOn(context.startup.userData, "getCourses").mockReturnValue([
+      {
+        kind: "mooc",
+        data: { id: "c", title: "Course", exercises: [], newExercises: ["new-one"] },
+      } as unknown as LocalCourseData,
+    ])
+
+    await updateExercises(context, "loud")
+
+    expect(dialog.statusMessage).not.toHaveBeenCalled()
+  })
+
   test("names the courses it could not check in the all-clear", async function () {
     checkForExerciseUpdates.mockResolvedValue({
       ...checked([]),
@@ -418,11 +440,11 @@ suite("updateExercises command", function () {
     vi.spyOn(context.startup.userData, "getCourses").mockReturnValue([
       {
         kind: "tmc",
-        data: { id: 1, title: "Lost One", exercises: [] },
+        data: { id: 1, title: "Lost One", exercises: [], newExercises: [] },
       } as unknown as LocalCourseData,
       {
         kind: "tmc",
-        data: { id: 2, title: "Lost Two", exercises: [] },
+        data: { id: 2, title: "Lost Two", exercises: [], newExercises: [] },
       } as unknown as LocalCourseData,
     ])
 

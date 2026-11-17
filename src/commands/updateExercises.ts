@@ -128,7 +128,11 @@ export async function updateExercises(
     : updateable
 
   if (exercisesToUpdate.length === 0 || mode === "promptless") {
-    if (!silent && failures.length === 0) {
+    // New exercises are not up to date with the course; their own offer speaks for them.
+    const hasNewExercises = userData
+      .getCourses()
+      .some((course) => LocalCourseData.getNewExercises(course).length > 0)
+    if (!silent && failures.length === 0 && !hasNewExercises) {
       dialog.statusMessage(allClear(uncheckedCourses))
     }
     return
