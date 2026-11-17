@@ -316,8 +316,8 @@ export class TmcPanel {
   }
 
   /**
-   * Shows `route`, which the student asked for, focused beside the screen they asked from: in the
-   * main panel when asked from the side one, else in the side panel.
+   * Shows `route`, which the student asked for, focused in the panel other than the screen they
+   * asked from, as a tab in that screen's editor group; asked from no screen, in the side panel.
    */
   public static renderBeside(
     extensionContext: vscode.ExtensionContext,
@@ -325,16 +325,23 @@ export class TmcPanel {
     route: Panel,
     askedFrom: "main" | "side" | undefined,
   ): void {
-    TmcPanel._renderIn(askedFrom === "side", extensionContext, actionContext, route, true)
+    const opener = askedFrom === "main" ? TmcPanel.mainPanel : TmcPanel.sidePanel
+    const column = askedFrom === undefined ? undefined : opener?._panel.viewColumn
+    TmcPanel._renderIn(askedFrom === "side", extensionContext, actionContext, route, true, column)
   }
 
-  /** @param isRequested The student asked for `route`, so it takes the focus even beside. */
+  /**
+   * @param isRequested The student asked for `route`, so it takes the focus even beside.
+   * @param column The editor group to show the panel in; by default the main panel stays where it
+   * is, and the side panel stays beside the first group, which holds the exercise files.
+   */
   private static _renderIn(
     isMain: boolean,
     extensionContext: vscode.ExtensionContext,
     actionContext: ActionContext,
     route: Panel,
     isRequested = isMain,
+    column?: ViewColumn,
   ): void {
     const existing = isMain ? TmcPanel.mainPanel : TmcPanel.sidePanel
     if (existing !== undefined) {
@@ -343,16 +350,19 @@ export class TmcPanel {
       if (existing._route?.id !== route.id) {
         existing._render(route)
       }
-      existing._panel.reveal(undefined, !isRequested)
+      // A side panel Error Details put among the exercise files goes back beside them.
+      const isAmongCode = !isMain && existing._panel.viewColumn === ViewColumn.One
+      existing._panel.reveal(column ?? (isAmongCode ? ViewColumn.Two : undefined), !isRequested)
       return
     }
     // VS Code restores a background webview without asking the serializer until it is shown,
     // so the main panel a reload brought back may sit there unadopted.
     const restoredMainTabs = isMain ? panelTabs(MAIN_PANEL_VIEW_TYPE) : []
     const restoredColumn = restoredMainTabs[0]?.group.viewColumn
+    // `Beside` would follow the active group, which a third group could be.
     const showOptions = isMain
-      ? { viewColumn: restoredColumn ?? ViewColumn.One, preserveFocus: false }
-      : { viewColumn: ViewColumn.Beside, preserveFocus: !isRequested }
+      ? { viewColumn: column ?? restoredColumn ?? ViewColumn.One, preserveFocus: false }
+      : { viewColumn: column ?? ViewColumn.Two, preserveFocus: !isRequested }
     const panelViewType = isMain ? MAIN_PANEL_VIEW_TYPE : SIDE_PANEL_VIEW_TYPE
     const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", showOptions, {
       ...webviewOptions(extensionContext.extensionUri),

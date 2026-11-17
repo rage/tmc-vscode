@@ -1,8 +1,10 @@
 import { expect } from "@playwright/test"
+import type { Locator } from "@playwright/test"
 
 import { vsCodeTest } from "../fixtures"
 import { CourseHomePage } from "../pages/course-home"
 import { CoursesViewPage } from "../pages/courses-view"
+import { ExplorerPage } from "../pages/explorer"
 import { TmcPage } from "../pages/tmc"
 
 // The way from a course just added to the code of its exercises, and from a passed exercise
@@ -71,6 +73,7 @@ vsCodeTest(
   "selecting an exercise opens its code, and a pass leads on to the next one",
   async ({ page, webview }) => {
     const coursesView = new CoursesViewPage(page, webview)
+    const explorer = new ExplorerPage(page)
     const sidePanel = new TmcPage(page, webview).getSidePanel()
     const courseTitle = "MOOC Variants Course"
     const passed = coursesView.row("mixed_task_exercise")
@@ -119,5 +122,47 @@ vsCodeTest(
       await expect(next).toHaveAccessibleName(/, (downloaded|in workspace),/)
       await expect(page.getByRole("tab", { name: /passing_exercise\.py/ }).last()).toBeVisible()
     })
+
+    await vsCodeTest.step(
+      "exercise files open in the first group, beside the results screen, never twice",
+      async () => {
+        const groups = page.locator(".editor-group-container")
+        const codeTabs = (group: number): Locator =>
+          groups.nth(group).getByRole("tab", { name: /\.py\b/ })
+        const results = sidePanel.getByRole("heading", { level: 1 })
+        const shownFirst = (exercise: string): Locator =>
+          groups.nth(0).getByRole("tab", { selected: true }).filter({ hasText: exercise })
+        await page
+          .getByRole("toolbar", { name: "Editor actions" })
+          .getByLabel("Run Tests", { exact: true })
+          .click()
+        await expect(results).toBeVisible()
+        await expect(groups).toHaveCount(2)
+        await expect(codeTabs(0)).toHaveCount(2)
+        await expect(codeTabs(1)).toHaveCount(0)
+
+        // From the results screen's group, the Courses view lands on the tab already open in the
+        // first group, and the Explorer opens a new file there too.
+        await results.click()
+        await passed.click()
+        await expect(shownFirst("mixed_task_exercise")).toBeVisible()
+        await groups
+          .nth(1)
+          .getByRole("tab", { name: /^Results/ })
+          .click()
+        // The exercise roots sort by name, so the first test folder is future_deadline_exercise's.
+        await explorer.show()
+        const files = page.getByRole("tree", { name: "Files Explorer" })
+        const tests = files.getByRole("treeitem", { name: "test", exact: true }).first()
+        if ((await tests.getAttribute("aria-expanded")) !== "true") {
+          await tests.click()
+        }
+        await files.getByRole("treeitem", { name: "test_passing_exercise.py" }).first().click()
+        await expect(shownFirst("test_passing_exercise.py")).toBeVisible()
+        await expect(codeTabs(1)).toHaveCount(0)
+        await expect(codeTabs(0)).toHaveCount(3)
+        await expect(groups).toHaveCount(2)
+      },
+    )
   },
 )

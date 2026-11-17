@@ -1,5 +1,6 @@
 import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
+import * as vscode from "vscode"
 
 import type { CourseIdentifier, ExerciseStatus as RowStatus } from "../../../shared/lib"
 import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
@@ -31,6 +32,7 @@ import {
 } from "../../ui/treeview/treeview"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
 import { openWebLink } from "../../utilities/webLink"
+import { moocCourseExercise } from "../fixtures/courses"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 
@@ -285,8 +287,30 @@ suite("Courses view commands", function () {
   test("opens an exercise row's course material page", async function () {
     const url = "https://courses.example/org/o/courses/c/chapter-1/page"
 
-    await openExerciseMaterial(row(moocCourse, "ex", "missing", { materialUrl: url }))
-    await openExerciseMaterial(row(moocCourse, "other", "missing"))
+    await openExerciseMaterial(context(), row(moocCourse, "ex", "missing", { materialUrl: url }))
+    await openExerciseMaterial(context(), row(moocCourse, "other", "missing"))
+
+    expect(vi.mocked(openWebLink).mock.calls).toEqual([[url]])
+  })
+
+  test("opens the course material page of the exercise a file belongs to", async function () {
+    const url = "https://courses.example/org/o/courses/c/chapter-1/page"
+    const file = vscode.Uri.file("/exercises/c/hello/src/main.py")
+    const actionContext = createMockActionContext({
+      startup: {
+        workspaceManager: {
+          getExerciseContaining: (uri: vscode.Uri) =>
+            uri === file ? { id: makeMoocKind({ moocExerciseId: "ex" }) } : undefined,
+        } as unknown as WorkspaceManager,
+        userData: {
+          getExercise: () =>
+            Ok({ exercise: makeMoocKind(moocCourseExercise({ id: "ex", pageUrl: url })) }),
+        } as unknown as UserData,
+      },
+    })
+
+    await openExerciseMaterial(actionContext, file)
+    await openExerciseMaterial(actionContext, vscode.Uri.file("/elsewhere.py"))
 
     expect(vi.mocked(openWebLink).mock.calls).toEqual([[url]])
   })

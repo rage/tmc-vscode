@@ -69,7 +69,6 @@ const expectedCommands = [
   "tmc.switchWorkspace",
   "tmc.testExercise",
   "tmc.testing.pasteExercise",
-  "tmc.testing.submitExercise",
   "tmc.trustCourseWorkspace",
   "tmc.updateExercises",
   "tmc.logs",

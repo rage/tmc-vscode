@@ -1,88 +1,16 @@
-import * as fs from "fs"
-import * as path from "path"
-
-interface MenuEntry {
-  command: string
-  group?: string
-  when?: string
-}
-
-type Context = Record<string, string | boolean>
-
-function treeContextMenu(): MenuEntry[] {
-  const manifest = JSON.parse(
-    fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),
-  ) as { contributes: { menus: Record<string, MenuEntry[]> } }
-  return manifest.contributes.menus["view/item/context"] ?? []
-}
-
-/**
- * Evaluates the subset of VS Code's `when` syntax package.json uses: keys, `!`, `==`, `=~`
- * with a regex literal, `&&`, `||` and parentheses.
- */
-function evaluateWhen(when: string, context: Context): boolean {
-  const tokens = [...when.matchAll(/\s*(\/(?:\\.|[^/])*\/|&&|\|\||==|=~|[!()]|[^\s!()&|=]+)/g)].map(
-    (match) => match[1] ?? "",
-  )
-  let position = 0
-  const peek = (): string | undefined => tokens[position]
-  const next = (): string => tokens[position++] ?? ""
-
-  function or(): boolean {
-    let value = and()
-    while (peek() === "||") {
-      next()
-      value = and() || value
-    }
-    return value
-  }
-  function and(): boolean {
-    let value = unary()
-    while (peek() === "&&") {
-      next()
-      value = unary() && value
-    }
-    return value
-  }
-  function unary(): boolean {
-    const token = next()
-    if (token === "!") {
-      return !unary()
-    }
-    if (token === "(") {
-      const value = or()
-      next()
-      return value
-    }
-    const value = context[token]
-    if (peek() === "==") {
-      next()
-      return String(value) === next()
-    }
-    if (peek() === "=~") {
-      next()
-      const literal = next()
-      return new RegExp(literal.slice(1, literal.lastIndexOf("/"))).test(String(value ?? ""))
-    }
-    return value !== undefined && value !== false
-  }
-
-  return or()
-}
+import type { MenuContext } from "../support/manifestMenus"
+import { evaluateWhen, manifestMenu, shownMenu } from "../support/manifestMenus"
 
 /** The commands the Courses view's context menu offers on a row. */
 function menuFor(viewItem: string, options: { isLoggedIn: boolean }): string[] {
-  const context: Context = {
+  const context: MenuContext = {
     view: "tmcView",
     viewItem,
     "test-my-code:Initialized": true,
     "test-my-code:LoggedIn": options.isLoggedIn,
     listMultiSelection: false,
   }
-  return treeContextMenu()
-    .filter((entry) => !entry.group?.startsWith("inline"))
-    .filter((entry) => evaluateWhen(entry.when ?? "", context))
-    .map((entry) => entry.command)
+  return shownMenu("view/item/context", context)
 }
 
 suite("the Courses view's context menu", function () {
@@ -103,9 +31,10 @@ suite("the Courses view's context menu", function () {
 
   test("offers what runs locally on an exercise on disk while logged out", function () {
     expect(menuFor("exercise.opened", { isLoggedIn: false })).toEqual([
-      "tmc.closeExercises",
       "tmc.testExercise",
+      "tmc.openNextExercise",
       "tmc.cleanExercise",
+      "tmc.closeExercises",
     ])
     expect(menuFor("exercise.closed", { isLoggedIn: false })).toEqual(["tmc.openExercises"])
   })
@@ -113,23 +42,32 @@ suite("the Courses view's context menu", function () {
   test("offers what runs locally on a removed exercise still on disk", function () {
     for (const isLoggedIn of [true, false]) {
       expect(menuFor("exercise.removed.opened", { isLoggedIn })).toEqual([
-        "tmc.closeExercises",
         "tmc.testExercise",
+        "tmc.openNextExercise",
         "tmc.cleanExercise",
+        "tmc.closeExercises",
       ])
       expect(menuFor("exercise.removed.closed", { isLoggedIn })).toEqual(["tmc.openExercises"])
     }
   })
 
   test("offers the backend's actions too on an open exercise while logged in", function () {
-    expect(menuFor("exercise.opened.hasMaterial", { isLoggedIn: true })).toEqual(
-      expect.arrayContaining([
-        "tmc.submitExercise",
-        "tmc.pasteExercise",
-        "tmc.resetExercise",
-        "tmc.openExerciseMaterial",
-      ]),
-    )
+    expect(
+      menuFor("exercise.opened.passed.hasMaterial.hasModelSolution", { isLoggedIn: true }),
+    ).toEqual([
+      "tmc.testExercise",
+      "tmc.submitExercise",
+      "tmc.showExerciseResults",
+      "tmc.pasteExercise",
+      "tmc.downloadOldSubmission",
+      "tmc.resetExercise",
+      "tmc.openNextExercise",
+      "tmc.showModelSolution",
+      "tmc.openExerciseMaterial",
+      "tmc.cleanExercise",
+      "tmc.closeExercises",
+    ])
+    expect(menuFor("exercise.opened", { isLoggedIn: true })).not.toContain("tmc.showModelSolution")
   })
 
   test("leaves Submit out of an exercise whose submission the backend would refuse", function () {
@@ -142,12 +80,25 @@ suite("the Courses view's context menu", function () {
   })
 })
 
+suite("the Explorer's TestMyCode menu", function () {
+  test("offers only Run Tests, Submit, Get Help and History, and Submit only while logged in", function () {
+    const context = { "test-my-code:Initialized": true, "test-my-code:WorkspaceActive": true }
+
+    expect(shownMenu("tmc.exercise", { ...context, "test-my-code:LoggedIn": true })).toEqual([
+      "tmc.testExercise",
+      "tmc.submitExercise",
+      "tmc.pasteExercise",
+      "tmc.downloadOldSubmission",
+    ])
+    expect(shownMenu("tmc.exercise", { ...context, "test-my-code:LoggedIn": false })).toEqual([
+      "tmc.testExercise",
+    ])
+  })
+})
+
 suite("the command palette in a light window", function () {
   test("offers the entry commands, which start the full activation, and nothing else", function () {
-    const manifest = JSON.parse(
-      fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),
-    ) as { contributes: { menus: Record<string, MenuEntry[]> } }
-    const palette = manifest.contributes.menus["commandPalette"] ?? []
+    const palette = manifestMenu("commandPalette")
     const shown = palette
       .filter(
         (entry) =>

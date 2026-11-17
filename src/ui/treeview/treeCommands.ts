@@ -1,4 +1,5 @@
 import { Ok } from "ts-results"
+import * as vscode from "vscode"
 
 import type { CourseIdentifier, ExerciseIdentifier } from "../../../shared/lib"
 import {
@@ -245,9 +246,31 @@ function byCourse(
   return [...courses.values()].map(({ courseId, ids }) => ({ courseId, ids: [...ids.values()] }))
 }
 
-/** Opens the course material page an exercise row's exercise is on. */
-export async function openExerciseMaterial(row: CoursesTreeItem | undefined): Promise<void> {
-  if (row instanceof ExerciseTreeItem && row.materialUrl) {
-    await openWebLink(row.materialUrl)
+/**
+ * Opens the course material page an exercise is on.
+ *
+ * @param target An exercise row, or a file or folder of an exercise on disk.
+ */
+export async function openExerciseMaterial(
+  actionContext: ReadyActionContext,
+  target: CoursesTreeItem | vscode.Uri | undefined,
+): Promise<void> {
+  const url =
+    target === undefined || target instanceof vscode.TreeItem
+      ? target instanceof ExerciseTreeItem
+        ? target.materialUrl
+        : undefined
+      : materialUrlOf(actionContext, target)
+  if (url) {
+    await openWebLink(url)
   }
+}
+
+function materialUrlOf(actionContext: ReadyActionContext, uri: vscode.Uri): string | undefined {
+  const { userData, workspaceManager } = actionContext.startup
+  const exercise = workspaceManager.getExerciseContaining(uri)
+  const stored = exercise && userData.getExercise(exercise.id)
+  return stored?.ok && stored.val.exercise.kind === "mooc"
+    ? stored.val.exercise.data.pageUrl
+    : undefined
 }

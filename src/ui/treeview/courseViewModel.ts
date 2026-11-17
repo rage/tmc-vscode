@@ -18,6 +18,7 @@ import {
 import { ExerciseStatus as WorkspaceStatus } from "../../api/workspaceManager"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { findNextDateAfter, parseDate } from "../../utilities"
+import { modelSolutionUrl } from "../modelSolution"
 
 /** One exercise of a course, as the Courses view shows it. */
 export interface ExerciseView {
@@ -47,6 +48,8 @@ export interface ExerciseView {
   onDisk: WorkspaceExercise | undefined
   /** The course material page the exercise is on; mooc only, when the backend sent one. */
   materialUrl: string | undefined
+  /** Whether its backend shows the student the model solution now. */
+  hasModelSolution: boolean
 }
 
 /** A part of a course: a tmc course's exercises sharing a `partNN-` slug prefix, or a mooc chapter. */
@@ -174,6 +177,7 @@ export function buildCourseView(course: LocalCourseData, state: CourseViewState)
       isUpdateable: !isRemoved && updateableKeys.has(key),
       onDisk,
       materialUrl: ex.kind === "mooc" ? ex.data.pageUrl : undefined,
+      hasModelSolution: modelSolutionUrl({ exercise: ex, course }) !== undefined,
     }
     if (isRemoved) {
       removed.push(view)
@@ -249,6 +253,7 @@ function removedFromCourse(onDisk: WorkspaceExercise): ExerciseView {
     isUpdateable: false,
     onDisk,
     materialUrl: undefined,
+    hasModelSolution: false,
   }
 }
 

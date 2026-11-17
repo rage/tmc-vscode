@@ -277,8 +277,8 @@ const STATUS_LABELS: Record<Exclude<ExerciseView["status"], "opened">, string> =
 
 /**
  * One exercise. `contextValue` is `exercise.<status>` (see `ExerciseStatus`), then for a removed
- * exercise still on disk `.opened` or `.closed`, then `.passed`, `.updateable`, `.hasMaterial`
- * and, on disk, `.submitRefused` (see `submitRefusalOf`) when they apply.
+ * exercise still on disk `.opened` or `.closed`, then `.passed`, `.updateable`, `.hasMaterial` and,
+ * on disk, `.hasModelSolution` and `.submitRefused` (see `submitRefusalOf`) when they apply.
  */
 export class ExerciseTreeItem extends vscode.TreeItem {
   public readonly exerciseId: ExerciseIdentifier
@@ -311,6 +311,7 @@ export class ExerciseTreeItem extends vscode.TreeItem {
       ...(exercise.passed ? ["passed"] : []),
       ...(exercise.isUpdateable ? ["updateable"] : []),
       ...(exercise.materialUrl ? ["hasMaterial"] : []),
+      ...(exercise.onDisk && exercise.hasModelSolution ? ["hasModelSolution"] : []),
       ...(exercise.onDisk && exercise.submitRefusal ? ["submitRefused"] : []),
     ].join(".")
     this.command = { command: "tmc.openExercises", title: "Open", arguments: [this] }

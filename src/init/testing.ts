@@ -6,7 +6,7 @@ import { ExerciseTestController } from "../testing/exerciseTestController"
 
 /**
  * Sets up the reporting of local test runs for the rest of the activation: the test
- * controller, the code quality diagnostics, and the test item commands.
+ * controller, the code quality diagnostics, and the test item command.
  *
  * @returns the controller, which `tmc.testExercise` runs tests through.
  */
@@ -18,7 +18,7 @@ export function registerTesting(
   const diagnostics = new CheckstyleDiagnostics()
   const controller = new ExerciseTestController(actionContext, diagnostics)
   const syncExercises = (): void => controller.syncExercises()
-  // The test item menus hand over the item, which the exercise commands would read as a path.
+  // The test item menu hands over the item, which the exercise commands would read as a path.
   const forwardToExercise =
     (command: string) =>
     (item: vscode.TestItem | undefined): Thenable<unknown> =>
@@ -27,10 +27,6 @@ export function registerTesting(
     diagnostics,
     controller,
     workspaceManager.onDidChangeExercises(syncExercises),
-    vscode.commands.registerCommand(
-      "tmc.testing.submitExercise",
-      forwardToExercise("tmc.submitExercise"),
-    ),
     vscode.commands.registerCommand(
       "tmc.testing.pasteExercise",
       forwardToExercise("tmc.pasteExercise"),

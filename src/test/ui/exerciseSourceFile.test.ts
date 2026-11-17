@@ -47,7 +47,7 @@ suite("showExerciseSourceFile", function () {
       expect.objectContaining({
         fsPath: vscode.Uri.file(path.join(root, "lib/solution.py")).fsPath,
       }),
-      { preview: false },
+      { preview: false, viewColumn: vscode.ViewColumn.One },
     )
   })
 
@@ -63,11 +63,11 @@ suite("showExerciseSourceFile", function () {
     expect(shown).toBe(true)
     expect(vscode.window.showTextDocument).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ fsPath: vscode.Uri.file(path.join(root, "src/main.py")).fsPath }),
-      { preview: false },
+      { preview: false, viewColumn: vscode.ViewColumn.One },
     )
   })
 
-  test("opens the file among the code, not in the submission result's split", async function () {
+  test("opens the file in the first group, not in the active one holding the results", async function () {
     const root = makeTmpDirs({ "src/main.py": "" })
     const code = { viewColumn: 1, tabs: [{ input: { uri: vscode.Uri.file("/other.py") } }] }
     const result = {
@@ -85,6 +85,25 @@ suite("showExerciseSourceFile", function () {
     expect(vscode.window.showTextDocument).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ fsPath: vscode.Uri.file(path.join(root, "src/main.py")).fsPath }),
       { preview: false, viewColumn: 1 },
+    )
+  })
+
+  test("focuses the tab already showing the file instead of opening another", async function () {
+    const root = makeTmpDirs({ "src/main.py": "" })
+    const file = vscode.Uri.file(path.join(root, "src/main.py"))
+    const other = { viewColumn: 1, tabs: [{ input: { uri: vscode.Uri.file("/other.py") } }] }
+    const showing = { viewColumn: 3, tabs: [{ input: { uri: file } }] }
+    Object.defineProperty(vscode.window, "tabGroups", {
+      value: { all: [other, showing], activeTabGroup: other },
+      configurable: true,
+    })
+    const context = contextWith(async () => Ok(["src"]))
+
+    await showExerciseSourceFile(context, { uri: vscode.Uri.file(root), exerciseSlug: "main" })
+
+    expect(vscode.window.showTextDocument).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ fsPath: file.fsPath }),
+      { preview: false, viewColumn: 3 },
     )
   })
 
