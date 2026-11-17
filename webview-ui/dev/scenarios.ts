@@ -1037,6 +1037,20 @@ export const SCENARIOS: Scenario[] = [
       ),
     ],
   },
+  {
+    id: "exercise-submission/logged-out",
+    panel: submissionPanel,
+    pushes: [
+      submissionViewMessage(submissionPanel.id, {
+        ...submitFailedView({
+          message: "You were logged out. Log in again.",
+          detailsId: "submit-logged-out",
+          actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
+        }),
+        isLoggedOut: true,
+      }),
+    ],
+  },
   loginScenario("requesting-code", { phase: "requestingCode" }),
   loginScenario("waiting", {
     phase: "waiting",
