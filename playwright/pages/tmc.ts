@@ -115,7 +115,12 @@ export class TmcPage {
         .first()
         .click({ timeout: 2_000 })
     }).toPass({ timeout: 30_000 })
-    await expect(palette).toBeHidden()
+    // A command that opens a quick pick reuses the palette's widget, often before it is seen hidden.
+    await expect(async () => {
+      const isPaletteShown =
+        (await palette.isVisible()) && (await palette.locator("input").inputValue()).startsWith(">")
+      expect(isPaletteShown).toBe(false)
+    }).toPass()
   }
 
   /**
