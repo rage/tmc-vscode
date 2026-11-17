@@ -38,7 +38,6 @@ suite("modelSolutionUrl", function () {
         exercise: makeMoocKind(
           moocCourseExercise({
             passed: true,
-            hasModelSolution: true,
             pageUrl: "https://courses.example/page",
           }),
         ),

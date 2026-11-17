@@ -54,7 +54,7 @@ import { pointsText } from "../ui/points"
 import { isSameExercise, submissionViews } from "../ui/submissionViews"
 import { Logger, parseFeedbackQuestion } from "../utilities"
 import type { MoocStoredStanding } from "../utilities/apiData"
-import { hasModelSolution, moocStoredStanding } from "../utilities/apiData"
+import { moocStoredStanding } from "../utilities/apiData"
 import { saveExerciseDocuments } from "../window/exerciseDocuments"
 import { checkAiUse } from "./checkAiUse"
 import { checkWorkspaceTrust } from "./checkWorkspaceTrust"
@@ -81,7 +81,6 @@ type RecordedGrading =
       backend: "mooc"
       standing: MoocStoredStanding
       awardedPoints: number
-      hasModelSolution: boolean
     }
 
 /** One submission of an exercise, and the side panel showing it. */
@@ -267,9 +266,6 @@ async function waitForMoocGrading(
   }
   const status = waited.val
   const progress = status.status === "grading" ? status.grading.exercise_progress : null
-  const isSolutionRevealed =
-    (progress?.standing === "Passed" || progress?.standing === "OutOfTries") &&
-    (await isModelSolutionSent(langs, grading.exerciseId))
   const view = {
     ...moocGradingView(status, grading.availablePoints),
     submissionUrl: grading.exercisePageUrl,
@@ -283,24 +279,10 @@ async function waitForMoocGrading(
           backend: "mooc",
           standing: moocStoredStanding(progress),
           awardedPoints: progress.score_given,
-          hasModelSolution: isSolutionRevealed,
         }
       : undefined,
     view,
   }
-}
-
-/** Whether courses.mooc.fi now sends the exercise's model solution; `false` when it cannot tell. */
-async function isModelSolutionSent(langs: Langs, exerciseId: ExerciseIdentifier): Promise<boolean> {
-  if (exerciseId.kind !== "mooc") {
-    return false
-  }
-  const slide = await langs.getMoocExercise(exerciseId.data.moocExerciseId)
-  if (slide.err) {
-    Logger.warn("Could not check for the exercise's model solution", slide.val)
-    return false
-  }
-  return hasModelSolution(slide.val)
 }
 
 /**
@@ -340,7 +322,6 @@ async function showOutcome(
             exerciseId,
             recorded.standing,
             recorded.awardedPoints,
-            recorded.hasModelSolution,
           )
     if (written.err) {
       warnings.push({ headline: "Failed to record the grading.", error: written.val })

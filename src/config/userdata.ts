@@ -277,12 +277,10 @@ export class UserData {
    *
    * Errs when the catalogue holds no mooc exercise with this id.
    */
-  /** @param hasModelSolution courses.mooc.fi sent the exercise's model solution with it. */
   public async setMoocExerciseStanding(
     id: ExerciseIdentifier,
     standing: MoocStoredStanding,
     awardedPoints: number,
-    hasModelSolution = false,
   ): Promise<Result<void, Error>> {
     const stored = this.getExercise(id)
     if (stored.err) {
@@ -298,9 +296,6 @@ export class UserData {
     delete exercise.data.pendingReview
     delete exercise.data.exerciseLocked
     Object.assign(exercise.data, standing, { awardedPoints })
-    if (hasModelSolution) {
-      exercise.data.hasModelSolution = true
-    }
     this._setPassed(id, standing.passed)
     return this._updatePersistentData()
   }

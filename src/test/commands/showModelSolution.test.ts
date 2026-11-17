@@ -33,7 +33,7 @@ const exercise: WorkspaceExercise = {
   uri: vscode.Uri.file("/workspace/mooc/mooc-course/ex-1"),
 }
 
-function contextWith(hasModelSolution: boolean) {
+function moocContext() {
   const [dialog] = createDialogMock()
   const workspaceManager = {
     activeExercise: exercise,
@@ -42,8 +42,7 @@ function contextWith(hasModelSolution: boolean) {
   const stored = makeMoocKind(
     moocCourseExercise({
       id: "mooc-ex-uuid",
-      passed: hasModelSolution,
-      hasModelSolution,
+      passed: true,
       pageUrl: "https://courses.example/page",
     }),
   )
@@ -58,26 +57,20 @@ suite("Show model solution command", function () {
     vi.mocked(openWebLink).mockClear()
   })
 
-  test("opens the material page of an exercise whose model solution was sent", async function () {
-    await showModelSolution(contextWith(true), undefined)
-
-    expect(openWebLink).toHaveBeenCalledExactlyOnceWith("https://courses.example/page")
-  })
-
-  test("says when there is no model solution to show yet", async function () {
-    const context = contextWith(false)
+  test("points a mooc exercise to its course material", async function () {
+    const context = moocContext()
 
     await showModelSolution(context, undefined)
 
     expect(openWebLink).not.toHaveBeenCalled()
     expect(context.dialog.notification).toHaveBeenCalledWith(
-      "ex-1 has no model solution to show yet. If it has one, it shows once you pass the exercise " +
-        "or run out of tries.",
+      "The model solution of ex-1 is in its course material once you may see it. " +
+        "Use Open Course Material.",
     )
   })
 
   test("opens a passed tmc exercise's solution page", async function () {
-    const context = contextWith(true)
+    const context = moocContext()
     context.startup.userData = {
       getExercise: () =>
         Ok({

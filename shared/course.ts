@@ -89,8 +89,6 @@ export const SharedMoocCourseExerciseSchema = z.object({
   chapter: MoocExerciseChapterSchema.optional(),
   /** The course material page the exercise is on; absent when the backend sent none. */
   pageUrl: z.string().optional(),
-  /** courses.mooc.fi has sent the exercise's model solution, which it does once you may see it. */
-  hasModelSolution: z.boolean().optional(),
 })
 
 export type SharedMoocCourseExercise = z.infer<typeof SharedMoocCourseExerciseSchema>
