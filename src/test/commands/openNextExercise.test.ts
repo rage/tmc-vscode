@@ -32,11 +32,18 @@ const course = tmcLocalCourse({
 
 const nextOnDisk = { id: idOfTmcExercise(3), exerciseSlug: "part01-03_loops" }
 
-function harness(): ReturnType<typeof createMockActionContext> {
+function harness(isCourseWorkspaceOpen = false): ReturnType<typeof createMockActionContext> {
   const userData = {
     getExercise: () => Ok({ course, exercise: course.data.exercises[0] }),
+    getCourse: () => Ok(course),
+    getCourses: () => [course, tmcLocalCourse({ id: 43, name: "other-course" })],
+    getCourseBySlug: () => Ok(course),
   } as unknown as UserData
   const workspaceManager = {
+    activeCourse: isCourseWorkspaceOpen ? "test-python-course" : undefined,
+    activeCourseBackend: isCourseWorkspaceOpen ? "tmc" : undefined,
+    activeExercise: undefined,
+    getExercises: () => [],
     getExercise: () => nextOnDisk,
     getExerciseContaining: (uri: vscode.Uri) =>
       uri.path.startsWith("/exercises/hello/") ? { id: idOfTmcExercise(1) } : undefined,
@@ -105,5 +112,28 @@ suite("Open Next Exercise command", function () {
     expect(context.dialog.errorNotification).toHaveBeenCalledWith(
       "Open a file of an exercise first.",
     )
+  })
+
+  test("with no exercise at hand, opens the one to continue with in the open course", async function () {
+    const context = harness(true)
+
+    await openNextExercise(context, undefined)
+
+    expect(context.dialog.selectItem).not.toHaveBeenCalled()
+    expect(vi.mocked(downloadAndOpenExercises).mock.calls[0]?.slice(1)).toEqual([
+      [idOfTmcExercise(3)],
+      idOfTmcCourse(42),
+    ])
+    expect(vi.mocked(showExerciseSourceFile).mock.calls[0]?.[1]).toBe(nextOnDisk)
+  })
+
+  test("with no exercise at hand outside a course workspace, asks which course", async function () {
+    const context = harness()
+    vi.mocked(context.dialog.selectItem).mockResolvedValueOnce(idOfTmcCourse(42))
+
+    await openNextExercise(context, undefined)
+
+    expect(context.dialog.selectItem).toHaveBeenCalledOnce()
+    expect(vi.mocked(downloadAndOpenExercises).mock.calls[0]?.[1]).toEqual([idOfTmcExercise(3)])
   })
 })

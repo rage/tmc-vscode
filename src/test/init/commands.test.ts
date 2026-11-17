@@ -591,9 +591,35 @@ suite("walkthrough", function () {
       "onContext:test-my-code:WorkspaceActive && test-my-code:HasDownloadedExercises",
       "onContext:test-my-code:WorkspaceActive && test-my-code:HasDownloadedExercises && test-my-code:WalkthroughActive",
     ])
-    expect(step?.description).toContain(
-      "[Download All Exercises](command:tmc.downloadAllExercises)",
-    )
+  })
+
+  // A step's button passes no arguments, and the walkthrough tab is no exercise file: without
+  // them these ask through a quick pick or fail.
+  test("no step's button runs a command that needs a course or exercise", function () {
+    const steps = packageJson().contributes.walkthroughs?.[0]?.steps ?? []
+    const linked = steps.flatMap((step) => linkedCommands(step.description))
+    for (const command of [
+      "tmc.downloadAllExercises",
+      "tmc.openCourseWorkspace",
+      "tmc.testExercise",
+      "tmc.submitExercise",
+    ]) {
+      expect(linked).not.toContain(command)
+    }
+  })
+
+  test("the exercise steps open the course's page and then the exercise to continue with", function () {
+    const steps = packageJson().contributes.walkthroughs?.[0]?.steps ?? []
+    const buttonsOf = (id: string): string | undefined =>
+      steps
+        .find((step) => step.id === id)
+        ?.description.split("\n")
+        .slice(1)
+        .join("\n")
+    expect(buttonsOf("openExercises")).toBe("[Show Course Details](command:tmc.courseDetails)")
+    for (const id of ["runTests", "submit"]) {
+      expect(buttonsOf(id)).toBe("[Continue with an Exercise](command:tmc.openNextExercise)")
+    }
   })
 
   // The walkthrough is the onboarding a new user sees, so the privacy notice has to be in it.
@@ -608,8 +634,8 @@ suite("walkthrough", function () {
 
   test("the step that opens a course workspace says to trust it and each new exercise", function () {
     const root = path.join(__dirname, "..", "..", "..")
-    const step = packageJson().contributes.walkthroughs?.[0]?.steps.find((x) =>
-      x.description.includes("command:tmc.openCourseWorkspace"),
+    const step = packageJson().contributes.walkthroughs?.[0]?.steps.find(
+      (x) => x.id === "openExercises",
     )
     const text = fs.readFileSync(path.join(root, step?.media.markdown ?? ""), "utf8")
     expect(text).toMatch(/\*\*Trust Workspace & Continue\*\*/)

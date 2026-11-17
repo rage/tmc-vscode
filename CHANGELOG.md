@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- The walkthrough's exercise steps open Course Details and Continue with an Exercise instead of a course quick pick, a download notification, or Run Tests and Submit Solution that only worked from an exercise file. Its Get help step offers Show Help.
 - A course's changed AI policy is noted in its Course Details until dismissed, and notified only while Course Details is not on screen. An update you started is listed in Course Details too, with the status bar message only while it is not on screen, and a warning about your session found by a refresh shows in the Course Details on screen.
 - A failed exercise update shows in Course Details: the updates notice becomes "Couldn't update N exercises" with why and Try Again. The failed-update status bar item opens that course's Course Details.
 - Open Next Exercise with nothing left to do opens Course Details, which then says nothing is left to do right now. Commands that need a course open the add-course screen when none is added, as does Add Course in the Command Palette when neither site lists anything. Enroll on a course without a page of its own opens courses.mooc.fi.

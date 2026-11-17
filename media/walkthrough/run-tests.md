@@ -1,6 +1,6 @@
 # Run the tests
 
-Open any file of an exercise. The editor's title bar then shows **Run Tests** (the beaker) and **Submit Solution**, and the status bar names the exercise and its points.
+**Continue with an Exercise** opens the next exercise to do. With a file of an exercise open, the editor's title bar shows **Run Tests** (the beaker) and **Submit Solution** (the cloud), and the status bar names the exercise and its points.
 
 Run Tests runs the exercise's tests on your computer and shows which pass in the **Test Results** view. Nothing is sent anywhere.
 
