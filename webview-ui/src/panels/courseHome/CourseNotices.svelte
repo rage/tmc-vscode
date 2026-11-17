@@ -86,7 +86,7 @@
     background: var(--tmc-banner-background);
     overflow: hidden;
   }
-  /* The text keeps the full width; buttons go under it rather than squeezing it into a column. */
+  /* Buttons go under the text, so it keeps the full width. */
   .notice {
     display: grid;
     grid-template-columns: 16px minmax(0, 1fr) auto;

@@ -178,7 +178,7 @@
   [role="menuitem"] {
     display: block;
     width: 100%;
-    /* VS Code's own context menus: 2em rows, 2em side padding. */
+    /* VS Code's own context menu metrics. */
     padding: 0 2em;
     line-height: 2em;
     border: 1px solid transparent;
