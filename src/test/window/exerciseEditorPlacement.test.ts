@@ -25,7 +25,7 @@ suite("keepExerciseFilesInFirstGroup", function () {
       activeEditorChanged.event,
     )
     vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
-    placement = keepExerciseFilesInFirstGroup((uri) => uri.fsPath.startsWith("/exercises/"))
+    placement = keepExerciseFilesInFirstGroup((uri) => uri.path.startsWith("/exercises/"))
   })
 
   afterEach(function () {
