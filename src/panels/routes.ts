@@ -8,7 +8,7 @@ import { errorDetails } from "../api/errorDetails"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import type { StoredExercise } from "../config/userdata"
 import { CliVerificationError } from "../errors"
-import { cliFolder } from "../utilities"
+import { cliFolder, redactPersonalInfo } from "../utilities"
 
 /** The editor tab label for `route`, so tabs can be told apart in Open Editors and Ctrl+Tab. */
 export function panelTitle(route: Panel, actionContext: ActionContext): string {
@@ -67,7 +67,9 @@ export function initializationErrorHelpPanel(
   actionContext: ActionContext,
   extensionContext: vscode.ExtensionContext,
 ): ErrorHelpPanel {
-  const exception = `Try adding an exception for the directory '${cliFolder(extensionContext)}'.`
+  const exception =
+    "Try adding an exception for the directory " +
+    `'${redactPersonalInfo(cliFolder(extensionContext))}'.`
   if (actionContext.startup.kind !== "degraded") {
     const hint =
       "An antivirus program can stop the TestMyCode tools from running, and a proxy or " +
@@ -80,7 +82,7 @@ export function initializationErrorHelpPanel(
   const langsFailure = failures.langs
   const cliHint =
     langsFailure instanceof CliVerificationError
-      ? `The file '${langsFailure.cliPath}' may be damaged, or changed by another program ` +
+      ? `The file '${redactPersonalInfo(langsFailure.cliPath)}' may be damaged, or changed by another program ` +
         "such as an antivirus. Restarting downloads it again. If the download keeps failing: " +
         networkHint
       : networkHint
@@ -95,8 +97,10 @@ export function initializationErrorHelpPanel(
           ? [
               {
                 service: SERVICE_NAMES[step],
-                error: error.cause ? `${error.message}: ${error.cause}` : error.message,
-                stack: error.stack ?? "no stack trace",
+                error: redactPersonalInfo(
+                  error.cause ? `${error.message}: ${error.cause}` : error.message,
+                ),
+                stack: redactPersonalInfo(error.stack ?? "no stack trace"),
                 ...(step === "langs" ? { hint: cliHint } : {}),
               },
             ]

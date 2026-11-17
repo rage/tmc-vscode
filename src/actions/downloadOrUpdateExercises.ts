@@ -19,6 +19,7 @@ import {
   ChapterNotOpenError,
   CourseAccessLostError,
   ExerciseUpdateError,
+  ServerError,
   presentationFor,
 } from "../errors"
 import { downloadFailures } from "../ui/downloadFailures"
@@ -408,6 +409,9 @@ const CLOSED_CHAPTER_REASON = /is in chapter \d+ "(.*)", which opens at (.+)$/
 /** tmc-langs' reasons for an exercise whose package on the server cannot be unpacked. */
 const BROKEN_PACKAGE_REASON = /archive|\bzip\b|project directory/i
 
+/** tmc-langs' reason for a server that failed a request: "500 Internal Server Error from <url>". */
+const SERVER_FAILURE_REASON = /\b5\d\d [A-Z][\w ]* from \S/
+
 /**
  * The one error a failed download is reported with.
  *
@@ -432,6 +436,10 @@ function failureCause(failedLegs: Error[], exerciseReasons: string[][]): Error {
       `The chapter "${name}" has not opened yet. Its exercises can be downloaded once it opens${when}.`,
       details,
     )
+  }
+  // An archive URL names "archive" too, but the package is not to blame for the server's failure.
+  if (reasons.length > 0 && reasons.every((reason) => SERVER_FAILURE_REASON.test(reason))) {
+    return new ServerError("The server ran into a problem. Try again later.", details)
   }
   if (reasons.length > 0 && reasons.every((reason) => BROKEN_PACKAGE_REASON.test(reason))) {
     return new ExerciseUpdateError(

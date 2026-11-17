@@ -144,6 +144,7 @@ export function courseHomeView(overrides: Partial<CourseHomeView> = {}): CourseH
     failedUpdates: [],
     aiPolicyChange: null,
     recentlyUpdated: [],
+    missingLanguageExtensions: [],
     parts: [
       {
         key: "part01",

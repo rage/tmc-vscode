@@ -590,6 +590,29 @@ suite("the course home", () => {
     expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "dismissAiPolicyChange"))
   })
 
+  test("asks to install each missing language extension, with Install", async () => {
+    const panel = await renderHome(
+      courseHomeView({
+        missingLanguageExtensions: [
+          {
+            extensionId: "ms-python.python",
+            installSentence: "Install the Python extension to run and debug your code.",
+          },
+        ],
+      }),
+    )
+    const notices = screen.getByRole("list", { name: "Course notices" })
+
+    expect(notices).toHaveTextContent("Install the Python extension to run and debug your code.")
+    within(notices).getByRole("button", { name: "Install" }).click()
+
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "installLanguageExtension",
+      sourcePanel: { id: panel.id, type: panel.type },
+      extensionId: "ms-python.python",
+    })
+  })
+
   test("says what an automatic update replaced until dismissed", async () => {
     const panel = await renderHome(courseHomeView({ recentlyUpdated: ["01_hello", "02_loops"] }))
 

@@ -1,6 +1,6 @@
 import { upperFirst } from "lodash"
 import type { Webview, WebviewOptions, WebviewPanel } from "vscode"
-import { Disposable, Uri, ViewColumn, window } from "vscode"
+import { Disposable, extensions, Uri, ViewColumn, window } from "vscode"
 import type * as vscode from "vscode"
 
 import type { ExerciseSubmissionPanel, LoginPanel, Panel, SubmissionView } from "../../shared/lib"
@@ -477,6 +477,8 @@ export class TmcPanel {
             this._postMessage(failuresClearedMessage(route, operation))
           }
         }),
+        // Installing a language extension the course home asks for clears its notice.
+        extensions.onDidChange(() => this._onDidChangeCourses(undefined)),
         shownCourseHome.onDidFail(({ courseId, headline, error, tone }) => {
           const route = this._route
           if (

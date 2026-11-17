@@ -616,6 +616,22 @@ export const SCENARIOS: Scenario[] = [
     reply: answerCourseDetails({ id: 60 }, moocCourseInWorkspace),
   },
   {
+    id: "course-details/missing-extension",
+    panel: courseDetailsPanel(65, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
+    reply: answerCourseDetails(
+      { id: 65 },
+      {
+        ...moocCourseInWorkspace,
+        missingLanguageExtensions: [
+          {
+            extensionId: "ms-python.python",
+            installSentence: "Install the Python extension to run and debug your code.",
+          },
+        ],
+      },
+    ),
+  },
+  {
     id: "course-details/mooc-not-enrolled",
     panel: courseDetailsPanel(61, makeMoocKind({ moocCourseId: MOOC_INSTANCE_ID })),
     reply: answerCourseDetails({ id: 61 }, { ...moocCourse, isNotEnrolled: true }),

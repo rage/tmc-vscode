@@ -1,8 +1,7 @@
 import * as vscode from "vscode"
 
+import { PYTHON_EXTENSION_ID } from "../api/languageExtensions"
 import { Logger } from "../utilities/logger"
-
-const PYTHON_EXTENSION_ID = "ms-python.python"
 
 /** The slice of the Python extension's API that names the interpreter for a file. */
 interface PythonExtensionApi {

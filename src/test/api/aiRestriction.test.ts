@@ -5,7 +5,12 @@ import * as vscode from "vscode"
 
 import type { CourseAiPolicy } from "../../../shared/langsSchema"
 import { updateCourse } from "../../actions/updateCourse"
-import AiRestriction, { isActiveCourseAiAllowed, isAiAllowed } from "../../api/aiRestriction"
+import AiRestriction, {
+  closeChatSideBar,
+  isActiveCourseAiAllowed,
+  isAiAllowed,
+  missingAiOffSettings,
+} from "../../api/aiRestriction"
 import type { AiRestrictionEvents } from "../../api/aiRestriction"
 import type { SettingInspection, WorkspaceFileProblem } from "../../api/workspaceManager"
 import { AI_OFF_SETTINGS } from "../../config/constants"
@@ -462,6 +467,18 @@ suite("AI restriction", function () {
   suite("when the course allows AI", function () {
     test("removes the settings it wrote", async function () {
       await restriction.apply()
+      isAllowed = true
+
+      await restriction.apply()
+
+      expect(workspace.stored.size).toBe(0)
+    })
+
+    test("removes the settings another window wrote before opening the workspace", async function () {
+      holdEverySetting(workspace)
+      workspace.stored.set("chat.agent.enabled", true)
+      await restriction.apply()
+      await restriction.adopt(AI_SECTIONS.filter((section) => section !== "chat.agent.enabled"))
       isAllowed = true
 
       await restriction.apply()
@@ -1094,5 +1111,59 @@ suite("a course refresh that changes the AI policy", function () {
     await refreshWithPolicy("limited")
     await vi.waitFor(() => expect(Object.fromEntries(workspace.stored)).toEqual(AI_OFF_SETTINGS))
     restriction.dispose()
+  })
+})
+
+function isEveryDeclared(): boolean {
+  return true
+}
+
+suite("AI-off settings written before a course workspace opens", function () {
+  test("are every declared setting for a file that sets none", function () {
+    expect(missingAiOffSettings({}, isEveryDeclared)).toEqual(AI_OFF_SETTINGS)
+  })
+
+  test("leave out what the file already holds and what nothing declares", function () {
+    const missing = missingAiOffSettings(
+      { "chat.agent.enabled": false },
+      (section) => section !== "codeium.enableSearch",
+    )
+
+    expect(missing).not.toHaveProperty(["chat.agent.enabled"])
+    expect(missing).not.toHaveProperty(["codeium.enableSearch"])
+    expect(missing).toHaveProperty(["chat.disableAIFeatures"], true)
+  })
+
+  test("keep the student's own entries of a per-language map", function () {
+    const missing = missingAiOffSettings(
+      { "github.copilot.enable": { rust: true } },
+      isEveryDeclared,
+    )
+
+    expect(missing["github.copilot.enable"]).toEqual({
+      rust: true,
+      ...(AI_OFF_SETTINGS["github.copilot.enable"] as object),
+    })
+  })
+})
+
+suite("closing the chat side bar", function () {
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("closes the secondary side bar", async function () {
+    const executed = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await closeChatSideBar()
+
+    expect(executed).toHaveBeenCalledWith("workbench.action.closeAuxiliaryBar")
+  })
+
+  test("never rejects, as on a VS Code without the command", async function () {
+    vi.spyOn(vscode.commands, "executeCommand").mockRejectedValue(new Error("command not found"))
+    vi.spyOn(Logger, "debug").mockImplementation(() => undefined)
+
+    await expect(closeChatSideBar()).resolves.toBeUndefined()
   })
 })

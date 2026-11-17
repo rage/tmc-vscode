@@ -12,6 +12,7 @@ import type {
 import { assertUnreachable, CourseIdentifier, LocalCourseData } from "../../../shared/lib"
 import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
+import { installLanguageExtension, languageExtensionById } from "../../api/languageExtensions"
 import type { FailureSink } from "../../api/withOperation"
 import { reportFailureIn, withOperation } from "../../api/withOperation"
 import { MOOC_BACKEND_URL, TMC_BACKEND_URL } from "../../config/constants"
@@ -116,6 +117,18 @@ export const courseDetailsHandlers = {
         message.action,
         shownIn,
       )
+    },
+  },
+  installLanguageExtension: {
+    requiresReady: true,
+    async handle(message): Promise<void> {
+      // The id comes from the webview, so it may only name an extension the course home offers.
+      const extension = languageExtensionById(message.extensionId)
+      if (!extension) {
+        Logger.warn("Ignoring an install of an extension the course home does not offer")
+        return
+      }
+      await installLanguageExtension(extension)
     },
   },
   openCourseWorkspace: {

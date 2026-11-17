@@ -515,6 +515,12 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
     exerciseId: ExerciseIdentifierSchema,
     action: CourseHomeExerciseActionSchema,
   }),
+  // Installs a language extension the course home names as missing.
+  z.object({
+    type: z.literal("installLanguageExtension"),
+    sourcePanel: targetPanelSchema("CourseDetails"),
+    extensionId: z.string(),
+  }),
   // Refreshes the course the named panel shows.
   z.object({
     type: z.literal("refreshCourseDetails"),
