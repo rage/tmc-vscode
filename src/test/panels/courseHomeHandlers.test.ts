@@ -159,6 +159,7 @@ suite("the course home's exercise actions", function () {
       failure: {
         serial: expect.any(Number),
         tone: "error",
+        operation: "This exercise is not downloaded.",
         error: { message: "This exercise is not downloaded." },
       },
     })
@@ -180,6 +181,7 @@ suite("the course home's exercise actions", function () {
         serial: expect.any(Number),
         tone: "error",
         title: "Failed to download the exercise.",
+        operation: "Failed to download the exercise.",
         error: { message: "The CLI exited with 1.", detailsId: expect.any(String) },
       },
     })
@@ -284,6 +286,7 @@ suite("the course home's course actions", function () {
     )
 
     expect(vi.mocked(shownHost.post).mock.calls.map(([message]) => message)).toEqual([
+      { type: "failuresCleared", target: SOURCE, operation: "Failed to update exercises." },
       expect.objectContaining({
         type: "operationFailed",
         failure: expect.objectContaining({ title: "Failed to refresh local exercises." }),

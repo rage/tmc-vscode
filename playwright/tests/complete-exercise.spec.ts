@@ -152,6 +152,23 @@ for (const exercise of exercises) {
         sidePanel.getByRole("heading", { name: expectedString, exact: true }),
       ).toBeVisible()
     })
+
+    await vsCodeTest.step("the score, History and the Courses view agree", async () => {
+      const isPassed = exercise.expected_result === "pass"
+      await expect(sidePanel.getByRole("meter", { name: "Points" })).toHaveAttribute(
+        "aria-valuenow",
+        isPassed ? "1" : "0",
+      )
+      await coursesView.goto()
+      await expect(coursesView.row(exercise.name)).toHaveAccessibleName(
+        isPassed ? /, passed\b/ : /, not passed\b/,
+        { timeout: 30_000 },
+      )
+      await sidePanel.getByRole("button", { name: "History" }).click()
+      await expect(
+        sidePanel.getByRole("listitem").filter({ hasText: "Latest" }).first(),
+      ).toContainText(isPassed ? "1 / 1" : "0 / 1")
+    })
   })
 }
 

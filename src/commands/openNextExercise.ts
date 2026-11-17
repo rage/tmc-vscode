@@ -4,12 +4,15 @@ import type { ExerciseIdentifier } from "../../shared/lib"
 import { LocalCourseData } from "../../shared/lib"
 import { downloadAndOpenExercises } from "../actions"
 import type { ReadyActionContext } from "../actions/types"
-import { withOperation } from "../api/withOperation"
+import { reportFailureIn, withOperation } from "../api/withOperation"
 import { exerciseFor } from "../api/workspaceManager"
 import { exerciseToContinue, openCourseId } from "../ui/courseHome"
 import { showExerciseSourceFile } from "../ui/exerciseSourceFile"
+import { shownCourseHome } from "../ui/shownCourseHome"
 import { nextExerciseAfter } from "../ui/treeview/courseViewModel"
 import { pickCourse } from "./pickCourse"
+
+const OPEN_NEXT_FAILED = "Failed to open the next exercise."
 
 interface NextExercise {
   course: LocalCourseData
@@ -18,7 +21,8 @@ interface NextExercise {
 
 /**
  * Opens the exercise to do after this one, downloading it when needed, and shows its main
- * source file; opens the course home when none is left.
+ * source file. Opens the course home when none after it is left, and to show why the next one
+ * could not be opened.
  *
  * @param from The exercise just worked on: its id, or a file or folder of it; the active
  * editor's exercise when omitted. With neither, opens the exercise the course home's Continue
@@ -39,10 +43,17 @@ export async function openNextExercise(
     await vscode.commands.executeCommand("tmc.courseDetails", LocalCourseData.getCourseId(course))
     return
   }
-  const opened = await withOperation(dialog, { failure: "Failed to open the next exercise." }, () =>
-    downloadAndOpenExercises(actionContext, [nextId], LocalCourseData.getCourseId(course)),
+  const courseId = LocalCourseData.getCourseId(course)
+  // Shown in the course home, which lists the exercise and what can be done with it.
+  const opened = await withOperation(dialog, { failure: OPEN_NEXT_FAILED, silent: true }, () =>
+    downloadAndOpenExercises(actionContext, [nextId], courseId),
   )
-  const next = opened.ok ? workspaceManager.getExercise(nextId) : undefined
+  if (opened.err) {
+    await vscode.commands.executeCommand("tmc.courseDetails", courseId)
+    reportFailureIn(dialog, shownCourseHome.failureSink(courseId), OPEN_NEXT_FAILED, opened.val)
+    return
+  }
+  const next = workspaceManager.getExercise(nextId)
   if (next) {
     await showExerciseSourceFile(actionContext, next)
   }

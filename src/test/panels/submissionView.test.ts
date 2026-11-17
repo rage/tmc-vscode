@@ -242,10 +242,10 @@ suite("moocGradingView", () => {
     const view = moocGradingView(moocGrading("FullyGraded", 0, "Passed"), 1)
     expect(view).toMatchObject({
       phase: "finished",
-      headline: "This submission failed some tests",
+      headline: "Passed",
       tone: "info",
       explanation:
-        "You have already passed this exercise with an earlier submission, so you keep its points.",
+        "This submission failed some tests. You keep the points of your earlier passing submission.",
     })
     expect(view.points).toBeUndefined()
   })
@@ -375,6 +375,52 @@ suite("withExerciseState", () => {
     expect(shown.pendingReview).toBe("The points wait for a teacher's review.")
   })
 
+  test("a passing grading whose points a review has held back since loses its score", () => {
+    const view = moocGradingView(moocGrading("FullyGraded", 1, "Passed"), 1)
+
+    const shown = withExerciseState(view, {
+      ...onDisk,
+      pendingReview: "The points wait for a teacher's review.",
+      arePointsHeld: true,
+    })
+
+    expect(shown).toMatchObject({
+      headline: "All tests passed",
+      pendingReview: "The points wait for a teacher's review.",
+    })
+    expect(shown.points).toBeUndefined()
+    expect(withExerciseState(view, onDisk).points).toStrictEqual({ given: 1, max: 1 })
+  })
+
+  test("a standing short of a pass is headed by why it can no longer be submitted", () => {
+    const standing = { ...testedLocallyView(), phase: "standing" as const, headline: "Not passed" }
+    const refused = {
+      ...onDisk,
+      submitRefusal: "The deadline of loops has passed, so it can no longer be submitted.",
+      submitRefusalLabel: "Deadline passed",
+    }
+
+    expect(withExerciseState(standing, refused).headline).toBe("Deadline passed")
+    expect(withExerciseState({ ...standing, isExercisePassed: true }, refused).headline).toBe(
+      "Not passed",
+    )
+    expect(withExerciseState(standing, onDisk).headline).toBe("Not passed")
+  })
+
+  test("a local pass of an exercise that can no longer be submitted invites no submit", () => {
+    const shown = withExerciseState(testedLocallyView(), {
+      ...onDisk,
+      submitRefusal: "The deadline of loops has passed, so it can no longer be submitted.",
+      submitRefusalLabel: "Deadline passed",
+    })
+
+    expect(shown.headline).toBe("Tests pass on your computer")
+    expect(shown.explanation).toBeUndefined()
+    expect(withExerciseState(testedLocallyView(), onDisk).explanation).toBe(
+      "Submit the exercise to have it graded.",
+    )
+  })
+
   test("says a logged-out student must log in to submit, and forgets it once logged in", () => {
     const loggedOut = withExerciseState(testedLocallyView(), { ...onDisk, isLoggedOut: true })
 
@@ -462,13 +508,14 @@ suite("standingView", function () {
     expect(view).toMatchObject({ headline: "Not passed", tone: "failed" })
   })
 
-  test("points held for a teacher's review are not shown as a score", function () {
+  test("points held for a teacher's review are not shown as a score, and the wait heads it", function () {
     const view = standingView(
       makeMoocKind(moocCourseExercise({ pendingReview: "awaits_teacher" })),
       undefined,
     )
 
     expect(view.points).toBeUndefined()
+    expect(view.headline).toBe("Waiting for review")
   })
 
   test("takes the pending review the exercise stands with now", function () {

@@ -25,10 +25,14 @@ import { showCourseHomeButton } from "./showCourseHome"
  * notification but deliberately not the offer of updates found, which reaches a user who
  * has turned automatic updates off, once per update. `"promptless"` is `"silent"` without
  * that offer too. A run the user asked for skips the CLI's cached answer.
+ *
+ * @param isRequested The user asked for the run although its mode is not `"loud"`, as a course
+ * home's Refresh does, whose screen shows what the run finds: the cached answer is skipped too.
  */
 export async function updateExercises(
   actionContext: ReadyActionContext,
   mode?: "silent" | "promptless" | "loud",
+  isRequested = mode === "loud" || mode === undefined,
 ): Promise<void> {
   const { dialog, settings } = actionContext
   const { userData } = actionContext.startup
@@ -38,7 +42,7 @@ export async function updateExercises(
   const updateablesResult = await withOperation(
     dialog,
     { failure: "Failed to check for exercise updates.", silent },
-    async () => Ok(await checkForExerciseUpdates(actionContext, { forceRefresh: !silent })),
+    async () => Ok(await checkForExerciseUpdates(actionContext, { forceRefresh: isRequested })),
   )
   if (updateablesResult.err) {
     return

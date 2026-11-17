@@ -60,9 +60,9 @@ vsCodeTest(
         .getByRole("toolbar", { name: "Editor actions" })
         .getByLabel("Submit", { exact: true })
         .click()
-      await expect(sidePanel.getByRole("heading", { name: "Submission failed" })).toBeVisible()
-
       await expect(coursesView.row(COURSE_TITLE)).toHaveAccessibleName(/, not enrolled(,|$)/)
+      // Once the course is marked, the refusal heads the result instead of the failed submit.
+      await expect(sidePanel.getByRole("heading", { name: "Not enrolled" })).toBeVisible()
 
       // `webview` is the TestMyCode webview shown last, the result until it is closed.
       const submissionTab = page.getByRole("tab", { name: /^Results: / })

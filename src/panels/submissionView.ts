@@ -84,7 +84,7 @@ export function standingView(
   return {
     ...emptyView,
     phase: "standing",
-    headline: passed ? "Passed" : "Not passed",
+    headline: passed ? "Passed" : arePointsHeld ? "Waiting for review" : "Not passed",
     tone: passed ? "passed" : isOutOfTries ? "failed" : "info",
     points:
       availablePoints > 0 && !arePointsHeld
@@ -254,8 +254,9 @@ export function moocGradingView(
         ...graded,
         ...reviewNote,
         phase: "finished",
+        // The exercise's outcome, as its standing reads in a later session too.
         headline: isPassedEarlier
-          ? "This submission failed some tests"
+          ? "Passed"
           : isBelowMax
             ? "Not passed"
             : fullyGradedHeadline(standing),
@@ -330,7 +331,7 @@ function fullyGradedExplanation(
   if (standing === "Passed" && isBelowMax) {
     return {
       explanation:
-        "You have already passed this exercise with an earlier submission, so you keep its points.",
+        "This submission failed some tests. You keep the points of your earlier passing submission.",
     }
   }
   return {}
@@ -373,11 +374,15 @@ function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): str
  * changes what the backend accepts.
  *
  * @param exercise.submitRefusal See {@link SubmissionView.submitRefusal}.
+ * @param exercise.submitRefusalLabel The refusal in a few words, e.g. "Deadline passed": the
+ *   headline of a standing that is not passed, as it can no longer be.
  * @param exercise.pendingReview See {@link SubmissionView.pendingReview}; replaces the one a
  *   finished grading was shown with.
  * @param exercise.solutionUrl The model solution's page once the stored course reveals it; fills
  *   in a view that has none, as a course refresh after the grading can reveal it.
  * @param exercise.isLoggedOut See {@link SubmissionView.isLoggedOut}.
+ * @param exercise.arePointsHeld A teacher's review holds the exercise's points back now, so a
+ *   finished grading's score is not what the student has.
  */
 export function withExerciseState(
   view: SubmissionView,
@@ -385,10 +390,12 @@ export function withExerciseState(
     isOnDisk: boolean
     isInCourse: boolean
     submitRefusal?: string | undefined
+    submitRefusalLabel?: string | undefined
     triesLeft?: number | undefined
     pendingReview?: string | undefined
     solutionUrl?: string | undefined
     isLoggedOut?: boolean | undefined
+    arePointsHeld?: boolean | undefined
   },
 ): SubmissionView {
   const {
@@ -408,8 +415,26 @@ export function withExerciseState(
       : gradedPendingReview
   const isInProgress = view.phase === "uploading" || view.phase === "grading"
   const solutionUrl = isInProgress ? undefined : (view.solutionUrl ?? exercise.solutionUrl)
+  const isClosed = exercise.submitRefusal !== undefined
+  // As a grading held for review at grading time reads: the tests' outcome, and no points.
+  const heldForReview =
+    exercise.arePointsHeld && view.phase === "finished" && rest.points !== undefined
+      ? {
+          points: undefined,
+          ...(view.headline === "Passed" ? { headline: "All tests passed" } : {}),
+        }
+      : {}
   const standing = {
     ...rest,
+    ...heldForReview,
+    ...(isClosed &&
+    view.phase === "standing" &&
+    !view.isExercisePassed &&
+    exercise.submitRefusalLabel
+      ? { headline: exercise.submitRefusalLabel }
+      : {}),
+    // Nothing tested locally can be submitted any more.
+    ...(isClosed && view.phase === "testedLocally" ? { explanation: undefined } : {}),
     ...(solutionUrl === undefined ? {} : { solutionUrl }),
     ...(pendingReview === undefined ? {} : { pendingReview }),
     ...(exercise.submitRefusal === undefined ? {} : { submitRefusal: exercise.submitRefusal }),

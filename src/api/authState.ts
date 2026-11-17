@@ -26,7 +26,8 @@ export interface AuthState {
   set: (loggedIn: boolean) => Promise<void>
   /**
    * A session this run had ended without a logout. Stays set until the next login: a later
-   * check finding no session is the same expiry, not a logout.
+   * check finding no session is the same expiry, not a logout, and one finding credentials
+   * finds the ones the backend refused, which the CLI keeps when it cannot refresh them.
    */
   readonly isSessionExpired: boolean
   /** Records that the session ended without the user logging out. */
@@ -62,9 +63,6 @@ export function createAuthState(langs: Result<Langs, Error>): AuthState {
   }
 
   const apply = async (): Promise<void> => {
-    if (loggedIn) {
-      isSessionExpired = false
-    }
     if (loggedIn !== applied) {
       applied = loggedIn
       await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", loggedIn)
@@ -100,6 +98,9 @@ export function createAuthState(langs: Result<Langs, Error>): AuthState {
     },
     async set(value): Promise<void> {
       loggedIn = value
+      if (value) {
+        isSessionExpired = false
+      }
       await apply()
     },
     get isSessionExpired(): boolean {

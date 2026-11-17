@@ -223,6 +223,39 @@ suite("the course home", () => {
     expect(screen.getByText(/This chapter is locked\./)).toBeInTheDocument()
   })
 
+  test("a passed exercise of a chapter not unlocked yet shows as passed, the lock on the chapter", async () => {
+    await renderHome(
+      courseHomeView({
+        parts: [
+          {
+            key: "chapter:2",
+            name: "Tour",
+            isDefaultOpen: true,
+            lockedReason: "Locked until you have completed the chapters before it.",
+            exercises: [
+              courseHomeExercise(1, "tour_first", {
+                status: "opened",
+                passed: true,
+                awardedPoints: 1,
+                submitRefusal: {
+                  label: "complete earlier chapters first",
+                  sentence: "Complete the chapters before Tour to submit tour_first.",
+                },
+              }),
+            ],
+          },
+        ],
+      }),
+    )
+
+    const [row] = screen.getAllByRole("listitem")
+    expect(row).not.toHaveTextContent(/complete earlier chapters first/i)
+    expect(within(row as HTMLElement).getByTitle("Passed")).toBeInTheDocument()
+    expect(
+      screen.getByText(/Locked until you have completed the chapters before it/),
+    ).toBeInTheDocument()
+  })
+
   test("says an exercise waits for teacher review instead of showing its held-back points", async () => {
     await renderHome(
       courseHomeView({
@@ -630,6 +663,13 @@ suite("the course home", () => {
     expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "removeCourse"))
   })
 
+  test("offers no download to a student no longer enrolled", async () => {
+    const panel = moocPanel()
+    await renderHome(courseHomeView({ backend: "mooc", isNotEnrolled: true }), panel)
+
+    expect(screen.queryByRole("button", { name: /^Download/ })).toBeNull()
+  })
+
   test.each([
     ["forbidden", "You no longer have access to this course"],
     ["notFound", "This course no longer exists"],
@@ -883,6 +923,7 @@ suite("CourseDetails action failures", () => {
         serial: 7,
         tone: "error",
         title: "Failed to download the exercises.",
+        operation: "Failed to download the exercises.",
         error: { message: "tmc.mooc.fi returned an error (500)." },
       },
     })
@@ -891,5 +932,79 @@ suite("CourseDetails action failures", () => {
     const alert = await screen.findByRole("alert")
     expect(alert).toHaveTextContent("Failed to download the exercises.")
     expect(screen.getByRole("heading", { level: 1, name: "Python Course" })).toBeInTheDocument()
+  })
+})
+
+suite("CourseDetails after the session changes", () => {
+  const LOGGED_OUT_ERROR = {
+    message: LOGGED_OUT_MESSAGE,
+    actions: [{ label: "Log In", command: "tmc.showMoocLogin" as const }],
+  }
+
+  async function failRefresh(error: { message: string }): Promise<void> {
+    await clickIconButton("Refresh")
+    replyToRequest("refreshCourseDetails", { ok: false, error })
+    await vi.waitFor(() =>
+      expect(document.querySelector('[title="Refresh"]')).toHaveAttribute("aria-disabled", "false"),
+    )
+  }
+
+  test("a refresh refused for the lost session leaves one Log In, the notice's", async () => {
+    const panel = await renderHome(courseHomeView({ isSessionExpired: true }))
+    await failRefresh(LOGGED_OUT_ERROR)
+    sendView(panel, courseHomeView({ isSessionExpired: true }))
+    await tick()
+
+    expect(screen.getAllByRole("button", { name: "Log In" })).toHaveLength(1)
+    expect(screen.queryByText("Refresh failed")).not.toBeInTheDocument()
+  })
+
+  test("an action's failure leaves its Log In to the logged-out notice", async () => {
+    const panel = await renderHome(courseHomeView({ isLoggedIn: false }))
+    dispatch({
+      type: "operationFailed",
+      target: { id: panel.id, type: panel.type },
+      failure: {
+        serial: 41,
+        tone: "error",
+        title: "Failed to download the exercise.",
+        operation: "Failed to download the exercise.",
+        error: LOGGED_OUT_ERROR,
+      },
+    })
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Failed to download the exercise.")
+    expect(screen.getAllByRole("button", { name: "Log In" })).toHaveLength(1)
+  })
+
+  test("a login clears the refresh failure from before it", async () => {
+    const panel = await renderHome(courseHomeView({ isLoggedIn: false }))
+    await failRefresh({ message: "The server did not answer." })
+    expect(screen.getByRole("alert")).toHaveTextContent("The server did not answer.")
+
+    sendView(panel, courseHomeView())
+
+    await vi.waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument())
+  })
+
+  test("a refresh that succeeds clears what earlier actions reported", async () => {
+    const panel = await renderHome()
+    dispatch({
+      type: "operationFailed",
+      target: { id: panel.id, type: panel.type },
+      failure: {
+        serial: 42,
+        tone: "error",
+        title: "Failed to download the exercises.",
+        operation: "Failed to download the exercises.",
+        error: { message: "The server did not answer." },
+      },
+    })
+    await screen.findByRole("alert")
+
+    await clickIconButton("Refresh")
+    replyToRequest("refreshCourseDetails", { ok: true, value: courseHomeView() })
+
+    await vi.waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument())
   })
 })

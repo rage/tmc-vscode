@@ -14,6 +14,7 @@ import {
   createMoocFixtures,
   DEFAULT_MOOC_MOCK_BASE_URL,
   MOCK_DEFAULT_USER_ID,
+  type Course,
   type CourseWithExercises,
   type ExerciseSlide,
   type ExerciseTask,
@@ -332,6 +333,11 @@ export interface MoocMockControls {
    */
   setCourseAccess: (courseId: string, access: MockCourseAccess) => boolean
   /**
+   * Sets a fixture course's AI-use policy, as its teacher can on the host. Returns false for an
+   * unknown course.
+   */
+  setAiPolicy: (courseId: string, policy: NonNullable<Course["ai_policy"]>) => boolean
+  /**
    * Revokes every token this instance has minted or seeded, as revoking the student's grant on
    * the host's account page does: resource calls and refreshes are rejected until a new login
    * or a reset.
@@ -475,11 +481,13 @@ const createMoocMockControls = (
     state.authenticatedRequestCount = 0
     state.oauth.reset()
     state.currentUserId = MOCK_DEFAULT_USER_ID
-    const enrolledByDefault = new Map(
-      createMoocFixtures(state.baseUrl).courses.map((c) => [c.course.id, c.enrolled]),
+    const byDefault = new Map(
+      createMoocFixtures(state.baseUrl).courses.map((c) => [c.course.id, c]),
     )
     for (const course of state.fixtures.courses) {
-      course.enrolled = enrolledByDefault.get(course.course.id) ?? course.enrolled
+      const fixture = byDefault.get(course.course.id)
+      course.enrolled = fixture?.enrolled ?? course.enrolled
+      course.course = fixture?.course ?? course.course
     }
   },
   expireUpload: (fileId) => {
@@ -560,6 +568,15 @@ const createMoocMockControls = (
     } else {
       state.courseAccessById.set(courseId, access)
     }
+    return true
+  },
+  setAiPolicy: (courseId, policy) => {
+    const course = state.fixtures.courses.find((c) => c.course.id === courseId)
+    if (!course) {
+      return false
+    }
+    // A copy: the fixture's course object is shared by every mock instance.
+    course.course = { ...course.course, ai_policy: policy }
     return true
   },
   revokeGrant: () => {
@@ -2026,6 +2043,32 @@ export const registerMoocRoutes = (
       return
     }
     if (!controls.setCourseAccess(courseId, access as MockCourseAccess)) {
+      res.status(404).json({ error: `no such course: ${courseId}` })
+      return
+    }
+    res.status(204).end()
+  })
+
+  app.post("/mooc-mock/set-ai-policy", json, (req, res) => {
+    const { course_id: courseId, ai_policy: policy } = (req.body ?? {}) as {
+      course_id?: unknown
+      ai_policy?: unknown
+    }
+    const policies: unknown[] = [
+      "not_set",
+      "no_ai",
+      "planning_only",
+      "limited",
+      "full_use",
+      "required",
+    ] satisfies NonNullable<Course["ai_policy"]>[]
+    if (typeof courseId !== "string" || !policies.includes(policy)) {
+      res.status(400).json({
+        error: "course_id must be a string and ai_policy one of " + JSON.stringify(policies),
+      })
+      return
+    }
+    if (!controls.setAiPolicy(courseId, policy as NonNullable<Course["ai_policy"]>)) {
       res.status(404).json({ error: `no such course: ${courseId}` })
       return
     }

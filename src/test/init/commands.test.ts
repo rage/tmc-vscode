@@ -925,15 +925,19 @@ suite("registered command handlers", function () {
     ])
   })
 
-  test.each([[undefined], ["silent" as const]])(
-    "tmc.updateExercises passes the mode %s through to commands.updateExercises",
-    async function (mode) {
+  test.each([
+    [undefined, undefined],
+    ["silent" as const, undefined],
+    ["silent" as const, true],
+  ])(
+    "tmc.updateExercises passes the mode %s, requested %s, through to commands.updateExercises",
+    async function (mode, isRequested) {
       const updateExercises = vi.spyOn(commands, "updateExercises").mockResolvedValue(undefined)
       const { handlers, actionContext } = registerAndCollect()
 
-      await handlers.get("tmc.updateExercises")?.(mode)
+      await handlers.get("tmc.updateExercises")?.(mode, isRequested)
 
-      expect(updateExercises).toHaveBeenCalledWith(actionContext, mode)
+      expect(updateExercises).toHaveBeenCalledWith(actionContext, mode, isRequested)
     },
   )
 

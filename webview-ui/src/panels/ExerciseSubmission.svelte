@@ -9,6 +9,7 @@
     SubmissionView,
     WebviewError,
   } from "../../../shared/lib"
+  import { withoutLogIn } from "../../../shared/lib"
   import type { BarAction } from "../components/ActionBar.svelte"
   import ActionBar from "../components/ActionBar.svelte"
   import type { MenuAction } from "../components/ActionMenu.svelte"
@@ -115,9 +116,13 @@
       : undefined
   })
 
-  // The error's own remedies, such as Log In, come before trying again.
+  // The error's own remedies, such as Log In, come before trying again. Logged out, Log In to
+  // Submit is the one Log In.
+  const shownError = $derived(
+    view?.error && view.isLoggedOut ? withoutLogIn(view.error) : view?.error,
+  )
   const remedies = $derived(
-    (view?.error?.actions ?? []).map(
+    (shownError?.actions ?? []).map(
       ({ label, command }): BarAction => ({
         label,
         onclick: () => vscode.postMessage({ type: "runCommand", command }),
@@ -347,10 +352,10 @@
   {#if view?.feedbackText}
     <p class="feedback-text"><span class="muted">Grader feedback:</span> {view.feedbackText}</p>
   {/if}
-  {#if view?.error}
-    {@const detailsId = view.error.detailsId}
+  {#if shownError}
+    {@const detailsId = shownError.detailsId}
     <div role="alert">
-      <p>{view.error.message}</p>
+      <p>{shownError.message}</p>
     </div>
     {#if detailsId !== undefined}
       <Button secondary onclick={() => vscode.postMessage({ type: "showErrorDetails", detailsId })}>
@@ -370,7 +375,7 @@
     <p class="muted">{triesNote}</p>
   {/if}
   <ActionBar {...barActions} />
-  <ScreenFailures failures={screenFailures} />
+  <ScreenFailures failures={screenFailures} isLogInShown={view.isLoggedOut === true} />
   {#if keepWaitingError}
     <ErrorNotice error={keepWaitingError} title="Could not keep waiting" />
   {/if}

@@ -332,8 +332,8 @@ export function registerCommands(
     commands.testExercise(readyContext, testController, resourceOf(target)),
   )
 
-  register("tmc.updateExercises", async (mode?: "silent" | "loud") =>
-    commands.updateExercises(readyContext, mode),
+  register("tmc.updateExercises", async (mode?: "silent" | "loud", isRequested?: boolean) =>
+    commands.updateExercises(readyContext, mode, isRequested),
   )
 
   register("tmc.wipe", async () => commands.wipe(readyContext, context))

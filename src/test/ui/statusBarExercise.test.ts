@@ -377,6 +377,26 @@ suite("showExerciseActions", function () {
     })
   })
 
+  test("a passed exercise in a chapter not unlocked yet reads as passed, and stays unsubmittable", async function () {
+    const showQuickPick = vi.spyOn(vscode.window, "showQuickPick").mockResolvedValue(undefined)
+    const h = harness()
+    h.stored.exercise = makeMoocKind(
+      moocCourseExercise({
+        id: "exercise-uuid",
+        name: "hello",
+        passed: true,
+        chapter: { name: "Later", number: 2, lockingStatus: "NotUnlockedYet" },
+      }),
+    )
+
+    await showExerciseActions(new Dialog(), h.sources, true)
+
+    expect(offered()).not.toContain("Submit")
+    expect(showQuickPick.mock.calls[0]?.[1]).toMatchObject({
+      placeHolder: "What do you want to do with this exercise?",
+    })
+  })
+
   test("offers the model solution once it is revealed", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     vi.spyOn(vscode.window, "showQuickPick").mockImplementation((async (

@@ -2,11 +2,13 @@ import { Err, Ok } from "ts-results"
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import type { CourseIdentifier } from "../../../shared/lib"
 import { downloadAndOpenExercises } from "../../actions/openExercises"
 import type WorkspaceManager from "../../api/workspaceManager"
 import { openNextExercise } from "../../commands/openNextExercise"
 import type { UserData } from "../../config/userdata"
 import { showExerciseSourceFile } from "../../ui/exerciseSourceFile"
+import { shownCourseHome } from "../../ui/shownCourseHome"
 import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
 import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
@@ -32,12 +34,15 @@ const course = tmcLocalCourse({
 
 const nextOnDisk = { id: idOfTmcExercise(3), exerciseSlug: "part01-03_loops" }
 
-function harness(isCourseWorkspaceOpen = false): ReturnType<typeof createMockActionContext> {
+function harness(
+  isCourseWorkspaceOpen = false,
+  stored = course,
+): ReturnType<typeof createMockActionContext> {
   const userData = {
-    getExercise: () => Ok({ course, exercise: course.data.exercises[0] }),
-    getCourse: () => Ok(course),
-    getCourses: () => [course, tmcLocalCourse({ id: 43, name: "other-course" })],
-    getCourseBySlug: () => Ok(course),
+    getExercise: () => Ok({ course: stored, exercise: stored.data.exercises[0] }),
+    getCourse: () => Ok(stored),
+    getCourses: () => [stored, tmcLocalCourse({ id: 43, name: "other-course" })],
+    getCourseBySlug: () => Ok(stored),
   } as unknown as UserData
   const workspaceManager = {
     activeCourse: isCourseWorkspaceOpen ? "test-python-course" : undefined,
@@ -91,17 +96,49 @@ suite("Open Next Exercise command", function () {
     expect(downloadAndOpenExercises).not.toHaveBeenCalled()
   })
 
-  test("shows no file when the next exercise could not be opened", async function () {
+  test("from the last exercise, opens the course home rather than an earlier one", async function () {
+    const context = harness(
+      false,
+      tmcLocalCourse({
+        exercises: [
+          tmcCourseExercise({ id: 1, name: "part01-01_hello" }),
+          tmcCourseExercise({ id: 3, name: "part01-03_loops" }),
+        ],
+      }),
+    )
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    onTestFinished(() => executeCommand.mockRestore())
+
+    await openNextExercise(context, idOfTmcExercise(3))
+
+    expect(executeCommand).toHaveBeenCalledExactlyOnceWith("tmc.courseDetails", idOfTmcCourse(42))
+    expect(downloadAndOpenExercises).not.toHaveBeenCalled()
+  })
+
+  test("shows why the next exercise could not be opened in the course home, not a notification", async function () {
     vi.mocked(downloadAndOpenExercises).mockResolvedValueOnce(Err(new Error("offline")))
     const context = harness()
+    const executeCommand = vi
+      .spyOn(vscode.commands, "executeCommand")
+      .mockImplementation(async (_command: string, courseId: unknown) => {
+        shownCourseHome.set(courseId as CourseIdentifier)
+      })
+    onTestFinished(() => {
+      executeCommand.mockRestore()
+      shownCourseHome.set(undefined)
+    })
+    const failures: string[] = []
+    const subscription = shownCourseHome.onDidFail(({ headline, error }) =>
+      failures.push(`${headline} ${error?.message}`),
+    )
+    onTestFinished(() => subscription.dispose())
 
     await openNextExercise(context, idOfTmcExercise(1))
 
     expect(showExerciseSourceFile).not.toHaveBeenCalled()
-    expect(context.dialog.reportError).toHaveBeenCalledWith(
-      "Failed to open the next exercise.",
-      expect.objectContaining({ message: "offline" }),
-    )
+    expect(executeCommand).toHaveBeenCalledExactlyOnceWith("tmc.courseDetails", idOfTmcCourse(42))
+    expect(failures).toEqual(["Failed to open the next exercise. offline"])
+    expect(context.dialog.reportError).not.toHaveBeenCalled()
   })
 
   test("asks for an exercise outside one", async function () {

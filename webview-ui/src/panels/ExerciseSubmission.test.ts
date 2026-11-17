@@ -579,7 +579,8 @@ suite("ExerciseSubmission panel (mooc results)", () => {
       nextExercise: { name: "part01-02_world" },
     })
 
-    await screen.findByRole("heading", { name: "This submission failed some tests" })
+    await screen.findByRole("heading", { name: "Passed" })
+    expect(screen.getByText(/This submission failed some tests/)).toBeInTheDocument()
     expect(screen.queryByRole("meter", { name: "Points" })).not.toBeInTheDocument()
     expect(isSecondary(screen.getByRole("button", { name: "Next: part01-02_world" }))).toBe(false)
     expect(isSecondary(screen.getByRole("button", { name: "Run Tests" }))).toBe(true)
@@ -835,6 +836,21 @@ suite("ExerciseSubmission panel (results hub)", () => {
       sourcePanel: { id: panel.id, type: panel.type },
       action: "logInToSubmit",
     })
+  })
+
+  test("a submission failed on a lost session offers one Log In, Log In to Submit", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...submitFailedView({
+        message: "You were logged out. Log in again.",
+        actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
+      }),
+      isLoggedOut: true,
+    })
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("You were logged out.")
+    expect(screen.getByRole("button", { name: "Log In to Submit" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Log In" })).not.toBeInTheDocument()
   })
 
   test("a local pass of an exercise that cannot be submitted says why instead of offering Submit", async () => {

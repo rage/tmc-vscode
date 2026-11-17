@@ -1,3 +1,4 @@
+import { upperFirst } from "lodash"
 import type { Webview, WebviewOptions, WebviewPanel } from "vscode"
 import { Disposable, Uri, ViewColumn, window } from "vscode"
 import type * as vscode from "vscode"
@@ -7,6 +8,9 @@ import {
   assertUnreachable,
   CourseIdentifier,
   ExerciseIdentifier,
+  arePointsHeldForReview,
+  offersLogIn,
+  SUBMIT_REFUSAL_LABELS,
   submitRefusalOf,
   submitRefusalSentence,
   pendingReviewSentence,
@@ -31,7 +35,7 @@ import { postMessageToWebview, renderPanel } from "./panel"
 import type { HandlerContext, PanelHost, PanelMessage } from "./router"
 import { dispatch } from "./router"
 import { errorDetailsPanel, initializationErrorHelpPanel, nextPanelId, panelTitle } from "./routes"
-import { screenFailureMessage } from "./screenFailures"
+import { failuresClearedMessage, screenFailureMessage } from "./screenFailures"
 import { withExerciseState } from "./submissionView"
 
 /**
@@ -128,6 +132,15 @@ export class TmcPanel {
           sidePanel?._postMessage(screenFailureMessage(route, headline, error, tone))
         }
       }),
+      submissionViews.onDidClearFailures(({ exerciseId, operation }) => {
+        const route = TmcPanel.sidePanel?._route
+        if (
+          route?.type === "ExerciseSubmission" &&
+          ExerciseIdentifier.key(route.exerciseId) === ExerciseIdentifier.key(exerciseId)
+        ) {
+          TmcPanel.sidePanel?._postMessage(failuresClearedMessage(route, operation))
+        }
+      }),
       submissionViews.onDidClear(() => {
         if (TmcPanel.sidePanel?._route?.type === "ExerciseSubmission") {
           TmcPanel.sidePanel.dispose()
@@ -151,7 +164,22 @@ export class TmcPanel {
         : []),
     )
     // A login or logout turns the results screen's Submit into Log In to Submit, or back.
-    actionContext.authState.subscribe(repostShown)
+    let wasLoggedIn = actionContext.authState.loggedIn
+    actionContext.authState.subscribe((loggedIn) => {
+      const isAccountChange = loggedIn !== wasLoggedIn
+      wasLoggedIn = loggedIn
+      submissionViews.replaceLatest(({ panel, view }) =>
+        isSupersededByAuthChange(view, loggedIn && isAccountChange)
+          ? standingAfterFailure(actionContext, panel)
+          : undefined,
+      )
+      // What failed under the earlier account, or for the lack of one, is no longer the story.
+      if (isAccountChange) {
+        TmcPanel.mainPanel?._clearFailures()
+        TmcPanel.sidePanel?._clearFailures()
+      }
+      repostShown()
+    })
     return subscriptions
   }
 
@@ -200,13 +228,42 @@ export class TmcPanel {
     }
   }
 
+  /** Whether the student can see either panel now, whichever screen it shows. */
+  public static isAnyScreenVisible(): boolean {
+    return [TmcPanel.mainPanel, TmcPanel.sidePanel].some(
+      (shown) => shown !== undefined && !shown._isDisposed && shown._panel.visible,
+    )
+  }
+
   /** Tells the two panels' log lines apart. */
   private get _webviewName(): string {
     return this._isMain ? "Main webview" : "Side webview"
   }
 
+  /** Takes back every failure this panel's screen shows. */
+  private _clearFailures(): void {
+    const route = this._route
+    if (route?.type === "CourseDetails" || route?.type === "ExerciseSubmission") {
+      this._postMessage(failuresClearedMessage(route))
+    }
+  }
+
   /** Sends `message` to this panel's webview alone, buffering it for a reload. */
   private _postMessage(message: PanelMessage): void {
+    if (message.type === "failuresCleared") {
+      for (const [key, buffered] of this._messageBuffer) {
+        if (
+          buffered.type === "operationFailed" &&
+          buffered.target.id === message.target.id &&
+          (message.operation === undefined || buffered.failure.operation === message.operation)
+        ) {
+          this._messageBuffer.delete(key)
+        }
+      }
+      // Not buffered: a reloaded document is resent only the failures still standing.
+      this._postTransient(message)
+      return
+    }
     // A `reply` is left out: the reloaded webview asks again, and a replayed answer to the
     // request of a page that no longer exists settles nothing.
     if (message.type !== "reply" && message.target.id === this._route?.id) {
@@ -411,6 +468,15 @@ export class TmcPanel {
         recentUpdates.onDidChange(() => this._onDidChangeCourses(undefined)),
         failedUpdates.onDidChange(() => this._onDidChangeCourses(undefined)),
         recentPolicyChanges.onDidChange(() => this._onDidChangeCourses(undefined)),
+        shownCourseHome.onDidClearFailures(({ courseId, operation }) => {
+          const route = this._route
+          if (
+            route?.type === "CourseDetails" &&
+            CourseIdentifier.equals(route.courseId, courseId)
+          ) {
+            this._postMessage(failuresClearedMessage(route, operation))
+          }
+        }),
         shownCourseHome.onDidFail(({ courseId, headline, error, tone }) => {
           const route = this._route
           if (
@@ -578,6 +644,24 @@ export class TmcPanel {
   }
 }
 
+/**
+ * Whether an account change makes `view` out of date: a submission that failed before reaching
+ * the backend. One whose remedy is logging in stays until a login, as it still says what to do.
+ */
+function isSupersededByAuthChange(view: SubmissionView, isLogin: boolean): boolean {
+  return view.phase === "failed" && !view.canKeepWaiting && (isLogin || !offersLogIn(view.error))
+}
+
+/** The exercise's standing, shown in place of a failure that no longer holds. */
+function standingAfterFailure(
+  actionContext: ActionContext,
+  panel: ExerciseSubmissionPanel,
+): SubmissionView | undefined {
+  return isReady(actionContext)
+    ? exerciseStandingView(actionContext.startup.userData, panel.exerciseId)
+    : undefined
+}
+
 function submissionViewMessage(
   actionContext: ActionContext,
   panel: ExerciseSubmissionPanel,
@@ -591,9 +675,11 @@ function submissionViewMessage(
   const exercise = stored.ok ? stored.val.exercise : undefined
   const refusal =
     exercise && submitRefusalOf(exercise, new Date(), stored.ok ? stored.val.course : undefined)
-  // Without a submission the view is the stored standing, which a course refresh changes.
-  const current =
-    view.phase === "standing" ? (exerciseStandingView(userData, panel.exerciseId) ?? view) : view
+  // Without a submission the view is the stored standing, which a course refresh changes. A
+  // submission that failed is out of date once the exercise can no longer be submitted at all.
+  const isStanding =
+    view.phase === "standing" || (view.phase === "failed" && !view.canKeepWaiting && !!refusal)
+  const current = isStanding ? (exerciseStandingView(userData, panel.exerciseId) ?? view) : view
   const shown = withExerciseState(current, {
     isOnDisk: actionContext.startup.workspaceManager.getExercise(panel.exerciseId) !== undefined,
     isInCourse: stored.ok,
@@ -605,6 +691,7 @@ function submissionViewMessage(
             exercise.kind === "mooc" ? exercise.data.chapter?.name : undefined,
           )
         : undefined,
+    submitRefusalLabel: refusal && upperFirst(SUBMIT_REFUSAL_LABELS[refusal]),
     triesLeft: exercise?.kind === "mooc" ? exercise.data.triesLeft : undefined,
     pendingReview:
       exercise?.kind === "mooc" && exercise.data.pendingReview
@@ -612,6 +699,9 @@ function submissionViewMessage(
         : undefined,
     solutionUrl: exercise && stored.ok ? modelSolutionUrl(stored.val) : undefined,
     isLoggedOut: !actionContext.authState.loggedIn,
+    arePointsHeld:
+      exercise?.kind === "mooc" &&
+      arePointsHeldForReview(exercise.data.pendingReview, exercise.data.awardedPoints),
   })
   return { type: "submissionView", target: { id: panel.id, type: panel.type }, view: shown }
 }
