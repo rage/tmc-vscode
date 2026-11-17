@@ -55,7 +55,7 @@ const BUDGET: Budget = {
   "src/commands/openExercisesFolder.ts": { errorNotification: 1 },
   "src/commands/openNextExercise.ts": {
     errorNotification: 1,
-    reportError: 1,
+    reportError: 2,
     statusMessage: 1,
     withOperation: 1,
   },
