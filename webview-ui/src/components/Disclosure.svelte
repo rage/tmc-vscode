@@ -13,6 +13,8 @@
     open?: boolean
     /** The toggle button's id, for moving focus to the section. */
     toggleId?: string | undefined
+    /** Small controls at the header's right end while open, e.g. a refresh `ToolbarButton`. */
+    actions?: Snippet | undefined
     children: Snippet
   }
 
@@ -22,6 +24,7 @@
     persistAs,
     open = $bindable(false),
     toggleId,
+    actions,
     children,
   }: Props = $props()
 
@@ -58,6 +61,7 @@
         <span class="title">{title}</span>
       </button>
     </svelte:element>
+    {#if open && actions}{@render actions()}{/if}
   </div>
   <div id={regionId} class="content" hidden={!open}>
     {@render children()}

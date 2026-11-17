@@ -257,6 +257,16 @@ test("the login screen's buttons follow the code in keyboard order", async ({ co
   )
 })
 
+test("History's refresh follows its toggle in keyboard order", async ({ context, page }) => {
+  await serveHarness(context)
+  await page.goto(`${ORIGIN}/frame.html?scenario=exercise-submission%2Fmooc-history`)
+  const toggle = page.getByRole("button", { name: "History", exact: true })
+  await expect(toggle).toHaveAttribute("aria-expanded", "true")
+  await toggle.focus()
+  await page.keyboard.press("Tab")
+  await expect(page.getByRole("button", { name: "Refresh History" })).toBeFocused()
+})
+
 test("a course notice's action comes before its dismiss in keyboard order", async ({
   context,
   page,

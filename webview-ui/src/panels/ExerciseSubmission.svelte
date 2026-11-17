@@ -57,6 +57,7 @@
   let isKeepWaitingRequested = $state(false)
   let keepWaitingError = $state<WebviewError | undefined>(undefined)
   let isHistoryOpen = $state(false)
+  let history = $state<ReturnType<typeof SubmissionHistory> | undefined>(undefined)
   let isGetHelpOpen = $state(false)
   // Get help stays for a student who asked for it where the result would not offer it.
   const isGetHelpRequested = uiState("isGetHelpRequested", false)
@@ -462,8 +463,15 @@
           toggleId={historyToggleId}
           bind:open={isHistoryOpen}
         >
+          {#snippet actions()}
+            <ToolbarButton
+              icon="refresh"
+              label="Refresh History"
+              onclick={() => void history?.load()}
+            />
+          {/snippet}
           {#if isHistoryOpen}
-            <SubmissionHistory {sourcePanel} {restoreRefusal} />
+            <SubmissionHistory bind:this={history} {sourcePanel} {restoreRefusal} />
           {/if}
         </Disclosure>
       {/if}
