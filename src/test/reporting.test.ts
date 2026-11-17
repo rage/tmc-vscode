@@ -169,7 +169,7 @@ async function harness(
     setExercises: async () => Ok.EMPTY,
     deleteWorkspaceFile: async () => Ok.EMPTY,
     createWorkspaceFile: async () => {},
-    prepareWorkspaceFileToOpen: async () => {},
+    prepareWorkspaceFileToOpen: async () => [],
   })
 
   const actionContext: ReadyActionContext = {
@@ -958,7 +958,10 @@ suite("refused while an AI extension runs: every entry point", function () {
 
   function withEnabledExtensions(ids: string[]): void {
     Object.defineProperty(vscodeModule, "extensions", {
-      value: { all: ids.map((id) => ({ id })) },
+      value: {
+        all: ids.map((id) => ({ id })),
+        onDidChange: () => new vscode.Disposable(() => {}),
+      },
       configurable: true,
     })
   }

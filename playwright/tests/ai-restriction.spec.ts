@@ -125,3 +125,46 @@ vsCodeTest(
     })
   },
 )
+
+vsCodeTest(
+  "a course workspace that turns AI off opens without the chat side bar",
+  async ({ page, userDataDir, webview }) => {
+    const coursesView = new CoursesViewPage(page, webview)
+    const courseTitle = "MOOC Python Course"
+    const sideBar = page.locator(".part.auxiliarybar")
+
+    await vsCodeTest.step("download an exercise", async () => {
+      await coursesView.goto()
+      await coursesView.addNewMoocCourse(courseTitle)
+      await coursesView.expand(coursesView.row(courseTitle))
+      const row = coursesView.row("passing_exercise")
+      await coursesView.runInlineAction(row, "Download")
+      await expect(row).toHaveAccessibleName(/, (downloaded|in workspace),/)
+    })
+
+    await vsCodeTest.step("the course workspace never shows the chat side bar", async () => {
+      await coursesView.runInlineAction(coursesView.row(courseTitle), "Open Course Workspace")
+      // Newer VS Code opens chat in the secondary side bar of a workspace it has not seen, and
+      // the window reloads under these reads, so they sample rather than wait.
+      let openedAt: number | undefined
+      let isSideBarSeen = false
+      while (openedAt === undefined || Date.now() - openedAt < 5_000) {
+        const isWorkspace = await page
+          .title()
+          .then((title) => title.includes("(Workspace)"))
+          .catch(() => false)
+        if (isWorkspace) {
+          openedAt ??= Date.now()
+          isSideBarSeen ||= await sideBar.isVisible().catch(() => false)
+        }
+        await new Promise((resolve) => {
+          setTimeout(resolve, 100)
+        })
+      }
+      expect(isSideBarSeen).toBe(false)
+      expect(courseWorkspaceSettings(userDataDir)).toMatchObject({
+        "editor.inlineSuggest.enabled": false,
+      })
+    })
+  },
+)

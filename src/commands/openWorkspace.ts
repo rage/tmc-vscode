@@ -3,6 +3,7 @@ import * as vscode from "vscode"
 
 import { LocalCourseData } from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
+import { isAiAllowed } from "../api/aiRestriction"
 import { withOperation } from "../api/withOperation"
 import { isSamePath, Logger } from "../utilities"
 import { isWalkthroughOpen } from "../window/walkthrough"
@@ -54,10 +55,15 @@ export async function openWorkspace(
   }
 
   await withOperation(dialog, { failure: "Failed to open the course workspace." }, async () => {
-    await workspaceManager.prepareWorkspaceFileToOpen(courseSlug, course.kind)
+    const aiOffSettingsWritten = await workspaceManager.prepareWorkspaceFileToOpen(
+      courseSlug,
+      course.kind,
+      !isAiAllowed(course),
+    )
     // A new window leaves the walkthrough open in this one.
     await courseWorkspaceSwitches.record(workspaceAsUri.fsPath, {
       isWalkthroughOpen: where === "here" && isWalkthroughOpen(),
+      aiOffSettingsWritten,
     })
     await vscode.commands.executeCommand("vscode.openFolder", workspaceAsUri, {
       forceNewWindow: where === "newWindow",

@@ -227,6 +227,7 @@ vi.mock("../../api/aiRestriction", async (importOriginal) => ({
   default: class {
     public onDidRefuseWorkspaceFile = (): unknown => registration
     public apply = async (): Promise<void> => {}
+    public adopt = async (): Promise<void> => {}
     public dispose = (): void => {}
   },
 }))
@@ -658,6 +659,24 @@ suite("activation in a course workspace", function () {
 
     expect(trustPrompts).toEqual([])
   })
+
+  test("closes the secondary side bar when its course does not allow AI", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const context = createContext()
+    openCourseWorkspace(context)
+
+    await activate(context)
+
+    expect(executeCommand).toHaveBeenCalledWith("workbench.action.closeAuxiliaryBar")
+  })
+
+  test("leaves the secondary side bar alone outside a course workspace", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await activate(createContext())
+
+    expect(executeCommand).not.toHaveBeenCalledWith("workbench.action.closeAuxiliaryBar")
+  })
 })
 
 // The only failure reachable here that leaves the resources and the stored data intact.
@@ -780,6 +799,7 @@ suite("the startup course refresh", function () {
     const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
     await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
       isWalkthroughOpen: false,
+      aiOffSettingsWritten: [],
     })
     Object.defineProperty(vscode.workspace, "workspaceFile", {
       value: vscode.Uri.file(switchedTo),
@@ -816,6 +836,7 @@ suite("the Courses view on startup", function () {
     const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
     await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
       isWalkthroughOpen: false,
+      aiOffSettingsWritten: [],
     })
     Object.defineProperty(vscode.workspace, "workspaceFile", {
       value: vscode.Uri.file(switchedTo),
@@ -839,6 +860,7 @@ suite("the Courses view on startup", function () {
     const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
     await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
       isWalkthroughOpen: true,
+      aiOffSettingsWritten: [],
     })
     Object.defineProperty(vscode.workspace, "workspaceFile", {
       value: vscode.Uri.file(switchedTo),
@@ -879,6 +901,7 @@ suite("the Courses view on startup", function () {
     const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
     await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
       isWalkthroughOpen: true,
+      aiOffSettingsWritten: [],
     })
     Object.defineProperty(vscode.workspace, "workspaceFile", {
       value: vscode.Uri.file(switchedTo),

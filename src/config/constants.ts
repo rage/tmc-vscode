@@ -179,6 +179,8 @@ export const AI_OFF_SETTINGS: Readonly<Record<string, unknown>> = {
   "vsintellicode.typescript.completionsEnabled": false,
   "genieai.quickFix.enable": false,
   "genieai.enableGenerateCommitMessage": false,
+  // Chat's home, which newer VS Code opens in a workspace it has not seen before.
+  "workbench.secondarySideBar.defaultVisibility": "hidden",
   // Last: turning it on disables Copilot Chat and restarts the extension host, which would cut
   // off any write still to come.
   "chat.disableAIFeatures": true,

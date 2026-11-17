@@ -23,6 +23,8 @@ import type Resources from "../config/resources"
 import { EditorKind } from "../config/resources"
 import { FileSystemError } from "../errors"
 import { isSamePath, Logger } from "../utilities"
+import { missingAiOffSettings } from "./aiRestriction"
+import { languageExtensionForLanguageId } from "./languageExtensions"
 
 /** What keeps VS Code from writing a course's `.code-workspace`. */
 export type WorkspaceFileProblem = "unsaved" | "readOnly"
@@ -468,8 +470,16 @@ export default class WorkspaceManager implements vscode.Disposable {
    * Creates the course's `.code-workspace` file if needed, and lists the course's open exercises
    * as its folders, so that VS Code asks once to trust the workspace with all of them rather than
    * again for each folder added after it is trusted. Keeps the file's other contents.
+   *
+   * @param isAiOff Also write the settings that turn AI assistance off, so the window opens
+   * with them.
+   * @returns The AI-off settings written.
    */
-  public async prepareWorkspaceFileToOpen(courseSlug: string, backend: BackendKind): Promise<void> {
+  public async prepareWorkspaceFileToOpen(
+    courseSlug: string,
+    backend: BackendKind,
+    isAiOff: boolean,
+  ): Promise<string[]> {
     const workspaceFile = this._resources.getWorkspaceFilePath(courseSlug, backend)
     await ensureCourseWorkspaceFile(workspaceFile)
     const text = await fs.readFile(workspaceFile, "utf-8")
@@ -477,13 +487,25 @@ export default class WorkspaceManager implements vscode.Disposable {
       { path: WORKSPACE_ROOT_FOLDER_NAME },
       ...this._openExerciseFolders(courseSlug, backend).map((uri) => ({ path: uri.fsPath })),
     ]
-    const edits = jsonc.modify(text, ["folders"], folders, {
-      formattingOptions: { insertSpaces: true, tabSize: 2 },
-    })
-    const prepared = jsonc.applyEdits(text, edits)
+    const formattingOptions = { insertSpaces: true, tabSize: 2 }
+    let prepared = jsonc.applyEdits(
+      text,
+      jsonc.modify(text, ["folders"], folders, { formattingOptions }),
+    )
+    const stored: unknown = jsonc.parse(prepared, [], { allowTrailingComma: true })?.settings
+    const aiOff = isAiOff
+      ? missingAiOffSettings(_.isPlainObject(stored) ? (stored as Record<string, unknown>) : {})
+      : {}
+    for (const [section, value] of Object.entries(aiOff)) {
+      prepared = jsonc.applyEdits(
+        prepared,
+        jsonc.modify(prepared, ["settings", section], value, { formattingOptions }),
+      )
+    }
     if (prepared !== text) {
       await fs.writeFile(workspaceFile, prepared)
     }
+    return Object.keys(aiOff)
   }
 
   /**
@@ -1019,17 +1041,12 @@ export default class WorkspaceManager implements vscode.Disposable {
     if (this._resources.editorKind === EditorKind.Code) {
       return
     }
-    switch (e.languageId) {
-      case "r":
-        if (!vscode.extensions.getExtension("ikuyadeu.r")) {
-          void this.addWorkspaceRecommendation(activeCourse, activeBackend, ["ikuyadeu.r"])
-        }
-        break
-      case "python":
-        if (!vscode.extensions.getExtension("ms-python.python")) {
-          void this.addWorkspaceRecommendation(activeCourse, activeBackend, ["ms-python.python"])
-        }
-        break
+    const extensionId =
+      e.languageId === "r"
+        ? "ikuyadeu.r"
+        : languageExtensionForLanguageId(e.languageId)?.extensionId
+    if (extensionId && !vscode.extensions.getExtension(extensionId)) {
+      void this.addWorkspaceRecommendation(activeCourse, activeBackend, [extensionId])
     }
   }
 }

@@ -1,9 +1,18 @@
+import * as os from "os"
+import * as path from "path"
+
 import type { Mock } from "vitest"
 import type { OutputChannel } from "vscode"
 import { window } from "vscode"
 
 import { BaseError } from "../../../shared/lib"
-import { Logger, LogLevel, redactSecrets, redactUrlQuery } from "../../utilities/logger"
+import {
+  Logger,
+  LogLevel,
+  redactPersonalInfo,
+  redactSecrets,
+  redactUrlQuery,
+} from "../../utilities/logger"
 
 const TOKEN = "super-secret-refresh-token"
 
@@ -288,6 +297,12 @@ suite("Logger tail", function () {
     expect(Logger.tail()).not.toContain(TOKEN)
   })
 
+  test("leaves the home directory out", function () {
+    Logger.info(`Running ${path.join(os.homedir(), "tmc", "cli")}`)
+
+    expect(Logger.tail()).not.toContain(os.homedir())
+  })
+
   test("drops the oldest lines beyond its 300", function () {
     for (let line = 0; line < 400; line++) {
       Logger.info(`tail-line-${line}`)
@@ -307,5 +322,36 @@ suite("Logger tail", function () {
     expect(tail).toContain("tail-before-huge")
     expect(tail.length).toBeLessThanOrEqual(64 * 1024)
     expect(tail.endsWith("…")).toBe(true)
+  })
+})
+
+suite("redactPersonalInfo", function () {
+  test("writes the home directory as ~, and the username elsewhere as <user>", function () {
+    expect(
+      redactPersonalInfo(
+        "/home/alice/tmc/cli failed for alice; /home/alice2 and /home/al stay",
+        "/home/alice",
+        "alice",
+        false,
+      ),
+    ).toBe("~/tmc/cli failed for <user>; /home/alice2 and /home/al stay")
+  })
+
+  test("leaves a word that contains the username alone", function () {
+    expect(redactPersonalInfo("malice and alice-b", "/home/alice", "alice", false)).toBe(
+      "malice and alice-b",
+    )
+  })
+
+  test("finds a Windows home in any case and in either separator, and as escaped in JSON", function () {
+    const text = 'C:\\Users\\Alice\\tmc, c:/users/alice/tmc, {"path":"C:\\\\Users\\\\Alice"}'
+
+    expect(redactPersonalInfo(text, "C:\\Users\\Alice", "Alice", true)).toBe(
+      '%USERPROFILE%\\tmc, %USERPROFILE%/tmc, {"path":"%USERPROFILE%"}',
+    )
+  })
+
+  test("leaves a username too short to tell from a word", function () {
+    expect(redactPersonalInfo("an error in al", "/home/al", "al", false)).toBe("an error in al")
   })
 })

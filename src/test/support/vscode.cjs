@@ -201,7 +201,11 @@ vscode.authentication = {
 }
 
 // jest-mock-vscode has no `extensions` namespace; this one sees no extension installed.
-vscode.extensions = { all: [], getExtension: vi.fn(), onDidChange: vi.fn() }
+vscode.extensions = {
+  all: [],
+  getExtension: vi.fn(),
+  onDidChange: vi.fn(() => new vscode.Disposable(() => {})),
+}
 
 // jest-mock-vscode's tabGroups has no active group; this one shows no tab.
 Object.defineProperty(vscode.window, "tabGroups", {

@@ -13,6 +13,7 @@ import {
 } from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
 import { isAiAllowed } from "../api/aiRestriction"
+import { installSentence, missingLanguageExtensions } from "../api/languageExtensions"
 import {
   findNextDateAfter,
   formatDateTime,
@@ -168,6 +169,15 @@ export function buildCourseHomeView(
       })),
     aiPolicyChange: recentPolicyChanges.get(courseId) ?? null,
     recentlyUpdated: recentUpdates.get(courseId),
+    missingLanguageExtensions: missingLanguageExtensions(
+      actionContext.startup.workspaceManager
+        .getExercises()
+        .filter((exercise) => CourseIdentifier.equals(exercise.courseId, courseId))
+        .map((exercise) => exercise.uri.fsPath),
+    ).map((extension) => ({
+      extensionId: extension.extensionId,
+      installSentence: installSentence(extension),
+    })),
     parts: parts.map((part) => ({
       key: part.key,
       name: part.isUngrouped
