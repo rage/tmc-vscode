@@ -24,18 +24,39 @@ const DOWNLOAD_FAILED: ScreenFailure = {
   serial: 1,
   tone: "error",
   title: "Failed to download the exercises.",
+  operation: "Failed to download the exercises.",
   error: { message: "tmc.mooc.fi returned an error (500).", detailsId: "d-1" },
 }
 
 const BUSY: ScreenFailure = {
   serial: 2,
   tone: "warning",
+  operation: "Failed to refresh the course.",
   error: { message: "A refresh is already in progress." },
 }
 
-function mount(): void {
+function mount(isLogInShown = false): void {
   enterScreen(PANEL)
-  render(ScreenFailuresProbe, { props: { panel: PANEL } })
+  render(ScreenFailuresProbe, { props: { panel: PANEL, isLogInShown } })
+}
+
+function clearFailures(operation?: string): void {
+  dispatchToWebview({
+    type: "failuresCleared",
+    target: { id: PANEL.id, type: "CourseDetails" },
+    ...(operation === undefined ? {} : { operation }),
+  })
+}
+
+const LOGGED_OUT: ScreenFailure = {
+  serial: 4,
+  tone: "error",
+  title: "Failed to download the exercise.",
+  operation: "Failed to download the exercise.",
+  error: {
+    message: "You were logged out. Log in again.",
+    actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
+  },
 }
 
 suite("ScreenFailures", () => {
@@ -87,5 +108,52 @@ suite("ScreenFailures", () => {
     fail(DOWNLOAD_FAILED)
 
     expect(await screen.findAllByRole("alert")).toHaveLength(1)
+  })
+
+  test("a later failure of the same operation replaces the earlier one", async () => {
+    mount()
+    fail(DOWNLOAD_FAILED)
+    fail({ ...DOWNLOAD_FAILED, serial: 5, error: { message: "Still failing." } })
+
+    const alerts = await screen.findAllByRole("alert")
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0]).toHaveTextContent("Still failing.")
+  })
+
+  test("the host takes back the failures of one operation, or all of them", async () => {
+    mount()
+    fail(DOWNLOAD_FAILED)
+    fail(BUSY)
+    await screen.findByRole("alert")
+
+    clearFailures(DOWNLOAD_FAILED.operation)
+    await vi.waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument())
+    expect(screen.getByRole("status")).toHaveTextContent("A refresh is already in progress.")
+
+    clearFailures()
+    await vi.waitFor(() =>
+      expect(screen.queryByText("A refresh is already in progress.")).not.toBeInTheDocument(),
+    )
+  })
+
+  test("a failure the host took back stays gone when it is resent to a reloaded document", async () => {
+    mount()
+    fail(DOWNLOAD_FAILED)
+    await screen.findByRole("alert")
+    clearFailures()
+
+    reloadDocument()
+    mount()
+    fail(DOWNLOAD_FAILED)
+
+    await vi.waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument())
+  })
+
+  test("leaves out a failure's Log In where the screen has its own", async () => {
+    mount(true)
+    fail(LOGGED_OUT)
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("You were logged out.")
+    expect(screen.queryByRole("button", { name: "Log In" })).not.toBeInTheDocument()
   })
 })

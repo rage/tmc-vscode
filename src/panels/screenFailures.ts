@@ -14,6 +14,19 @@ export function screenFailureSink(host: PanelHost, screen: FailureScreen): Failu
   return {
     isVisible: () => host.isVisible && host.route?.id === screen.id,
     show: (headline, error, tone) => host.post(screenFailureMessage(screen, headline, error, tone)),
+    clear: (headline) => host.post(failuresClearedMessage(screen, headline)),
+  }
+}
+
+/** The message that takes back the failures of `operation` in `screen`, or all of them. */
+export function failuresClearedMessage(
+  screen: FailureScreen,
+  operation?: string,
+): Extract<PanelMessage, { type: "failuresCleared" }> {
+  return {
+    type: "failuresCleared",
+    target: { id: screen.id, type: screen.type },
+    ...(operation === undefined ? {} : { operation }),
   }
 }
 
@@ -30,6 +43,7 @@ export function screenFailureMessage(
     failure: {
       serial: nextSerial++,
       tone,
+      operation: headline,
       ...(error && tone === "error" ? { title: headline } : {}),
       error: error ? toWebviewError(error) : { message: headline },
     },

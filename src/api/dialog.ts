@@ -160,6 +160,16 @@ export default class Dialog {
   }
 
   /**
+   * Tells the session's own warning about `error` if it is a lost session, for a failure shown
+   * somewhere other than {@link reportError}.
+   */
+  public noteSessionLost(error: Error): void {
+    if (this._reportSessionLost && isSessionLost(error)) {
+      this._reportSessionLost(error)
+    }
+  }
+
+  /**
    * Reports a failed operation: `message` says what was being done, and `error` supplies
    * the rest of the sentence and any buttons its class prescribes.
    *

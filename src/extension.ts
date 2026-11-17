@@ -53,7 +53,7 @@ import { FileSystemError, InitializationError } from "./errors"
 import * as init from "./init"
 import { OpenCourseRefresh } from "./openCourseRefresh"
 import { TmcPanel } from "./panels/TmcPanel"
-import { createSessionExpiryTracker } from "./sessionExpiryTracker"
+import { createExpiryNotifier, createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
 import {
   trackActiveEditorExercise,
@@ -323,13 +323,19 @@ async function activateInner(
   // `tmc.showMoocLogin` exists only once a ready activation has registered it.
   let canOfferLogin = false
 
+  const expiryNotifier = createExpiryNotifier(
+    () => TmcPanel.isAnyScreenVisible(),
+    () => {
+      const logIn: NotificationButton = [
+        "Log In",
+        (): void => void vscode.commands.executeCommand("tmc.showMoocLogin"),
+      ]
+      dialog.warningNotification(LOGGED_OUT_MESSAGE, ...(canOfferLogin ? [logIn] : []))
+    },
+  )
   const sessionExpiredWarning = (): void => {
     authState.markSessionExpired()
-    const logIn: NotificationButton = [
-      "Log In",
-      (): void => void vscode.commands.executeCommand("tmc.showMoocLogin"),
-    ]
-    dialog.warningNotification(LOGGED_OUT_MESSAGE, ...(canOfferLogin ? [logIn] : []))
+    expiryNotifier.onExpired()
   }
 
   // Seeded from the startup check above; shared with the background poll further down.
@@ -340,6 +346,7 @@ async function activateInner(
     langs.val.on("login", async () => {
       await authState.set(true)
       sessionExpiry.onLogin()
+      expiryNotifier.onLogin()
     })
     langs.val.on("logout", async (expected, rejection) => {
       if (expected) {

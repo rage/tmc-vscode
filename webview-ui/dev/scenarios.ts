@@ -694,6 +694,7 @@ export const SCENARIOS: Scenario[] = [
           serial: 1,
           tone: "error",
           title: "Failed to download the exercises.",
+          operation: "Failed to download the exercises.",
           error: {
             message: "The server ran into a problem. Try again later.",
             detailsId: "download-failure",
@@ -706,6 +707,7 @@ export const SCENARIOS: Scenario[] = [
         failure: {
           serial: 2,
           tone: "warning",
+          operation: "Failed to open the exercises.",
           error: {
             message:
               "You have over 50 exercises open, which can slow VS Code down. Close the ones you have finished.",
@@ -1016,6 +1018,7 @@ export const SCENARIOS: Scenario[] = [
         failure: {
           serial: 3,
           tone: "error",
+          operation: "This exercise is no longer downloaded.",
           error: { message: "This exercise is no longer downloaded." },
         },
       },

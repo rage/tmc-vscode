@@ -883,6 +883,7 @@ suite("CourseDetails action failures", () => {
         serial: 7,
         tone: "error",
         title: "Failed to download the exercises.",
+        operation: "Failed to download the exercises.",
         error: { message: "tmc.mooc.fi returned an error (500)." },
       },
     })
@@ -891,5 +892,79 @@ suite("CourseDetails action failures", () => {
     const alert = await screen.findByRole("alert")
     expect(alert).toHaveTextContent("Failed to download the exercises.")
     expect(screen.getByRole("heading", { level: 1, name: "Python Course" })).toBeInTheDocument()
+  })
+})
+
+suite("CourseDetails after the session changes", () => {
+  const LOGGED_OUT_ERROR = {
+    message: LOGGED_OUT_MESSAGE,
+    actions: [{ label: "Log In", command: "tmc.showMoocLogin" as const }],
+  }
+
+  async function failRefresh(error: { message: string }): Promise<void> {
+    await clickIconButton("Refresh")
+    replyToRequest("refreshCourseDetails", { ok: false, error })
+    await vi.waitFor(() =>
+      expect(document.querySelector('[title="Refresh"]')).toHaveAttribute("aria-disabled", "false"),
+    )
+  }
+
+  test("a refresh refused for the lost session leaves one Log In, the notice's", async () => {
+    const panel = await renderHome(courseHomeView({ isSessionExpired: true }))
+    await failRefresh(LOGGED_OUT_ERROR)
+    sendView(panel, courseHomeView({ isSessionExpired: true }))
+    await tick()
+
+    expect(screen.getAllByRole("button", { name: "Log In" })).toHaveLength(1)
+    expect(screen.queryByText("Refresh failed")).not.toBeInTheDocument()
+  })
+
+  test("an action's failure leaves its Log In to the logged-out notice", async () => {
+    const panel = await renderHome(courseHomeView({ isLoggedIn: false }))
+    dispatch({
+      type: "operationFailed",
+      target: { id: panel.id, type: panel.type },
+      failure: {
+        serial: 41,
+        tone: "error",
+        title: "Failed to download the exercise.",
+        operation: "Failed to download the exercise.",
+        error: LOGGED_OUT_ERROR,
+      },
+    })
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Failed to download the exercise.")
+    expect(screen.getAllByRole("button", { name: "Log In" })).toHaveLength(1)
+  })
+
+  test("a login clears the refresh failure from before it", async () => {
+    const panel = await renderHome(courseHomeView({ isLoggedIn: false }))
+    await failRefresh({ message: "The server did not answer." })
+    expect(screen.getByRole("alert")).toHaveTextContent("The server did not answer.")
+
+    sendView(panel, courseHomeView())
+
+    await vi.waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument())
+  })
+
+  test("a refresh that succeeds clears what earlier actions reported", async () => {
+    const panel = await renderHome()
+    dispatch({
+      type: "operationFailed",
+      target: { id: panel.id, type: panel.type },
+      failure: {
+        serial: 42,
+        tone: "error",
+        title: "Failed to download the exercises.",
+        operation: "Failed to download the exercises.",
+        error: { message: "The server did not answer." },
+      },
+    })
+    await screen.findByRole("alert")
+
+    await clickIconButton("Refresh")
+    replyToRequest("refreshCourseDetails", { ok: true, value: courseHomeView() })
+
+    await vi.waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument())
   })
 })

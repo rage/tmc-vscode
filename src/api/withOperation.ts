@@ -26,6 +26,8 @@ export interface FailureSink {
    * @param tone `warning` for an operation held back rather than failed.
    */
   show: (headline: string, error: Error | undefined, tone: "error" | "warning") => void
+  /** Takes back the failures {@link show} was given for `headline`, which has since succeeded. */
+  clear: (headline: string) => void
 }
 
 /** Options for {@link withOperation}. */
@@ -145,7 +147,10 @@ export async function withOperation<T>(
   }
   if (result.err) {
     reportFailure(dialog, options, result.val)
-  } else if (isWarned(result.val) && options.shownIn) {
+    return result
+  }
+  options.shownIn?.clear(options.failure)
+  if (isWarned(result.val) && options.shownIn) {
     for (const { headline, error } of result.val.warnings) {
       reportFailureIn(dialog, options.shownIn, headline, error)
     }
@@ -204,6 +209,9 @@ function reportFailure(dialog: Dialog, options: OperationOptions, error: Error):
   const isHeldBack = detail !== undefined && presentationFor(detail).isHeldBack === true
   shownIn?.show(headline, detail, isHeldBack ? "warning" : "error")
   if (isShownInPlace) {
+    if (detail) {
+      dialog.noteSessionLost(detail)
+    }
     if (isHeldBack) {
       Logger.info(headline, detail)
     } else {

@@ -109,9 +109,12 @@ suite("AuthState", function () {
     expect(authState.isSessionExpired).toBe(true)
     await authState.refresh()
     expect(authState.isSessionExpired).toBe(true)
+    // The refused credentials the CLI keeps are no new session.
     await authState.refresh()
+    expect(authState.isSessionExpired).toBe(true)
+    await authState.set(true)
 
     expect(authState.isSessionExpired).toBe(false)
-    expect(setLoggedIn.mock.calls).toEqual([[true], [false], [false], [true]])
+    expect(setLoggedIn.mock.calls).toEqual([[true], [false], [false], [true], [true]])
   })
 })

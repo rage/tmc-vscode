@@ -198,12 +198,31 @@ export const WebviewErrorSchema = z.object({
 
 export type WebviewError = z.infer<typeof WebviewErrorSchema>
 
+const LOG_IN_COMMAND = "tmc.showMoocLogin"
+
+/** Whether logging in is how to get past `error`. */
+export function offersLogIn(error: WebviewError | undefined): boolean {
+  return error?.actions?.some(({ command }) => command === LOG_IN_COMMAND) ?? false
+}
+
+/** `error` without its Log In remedy, for a screen that offers logging in already. */
+export function withoutLogIn(error: WebviewError): WebviewError {
+  return error.actions
+    ? { ...error, actions: error.actions.filter(({ command }) => command !== LOG_IN_COMMAND) }
+    : error
+}
+
 /** A failure of something a screen started, shown on that screen until dismissed. */
 export const ScreenFailureSchema = z.object({
   /** Tells this failure apart from one reported earlier, for a dismissal across reloads. */
   serial: z.number(),
   /** What was being done, e.g. "Failed to download the exercises."; absent for a refusal. */
   title: z.string().optional(),
+  /**
+   * The operation that failed, as `failuresCleared` names it: a later failure of the same
+   * operation replaces this one, and its success clears it.
+   */
+  operation: z.string(),
   /** `warning` for an action held back rather than failed. */
   tone: z.enum(["error", "warning"]),
   error: WebviewErrorSchema,
@@ -423,6 +442,12 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     type: z.literal("operationFailed"),
     target: targetPanelSchema("CourseDetails", "ExerciseSubmission"),
     failure: ScreenFailureSchema,
+  }),
+  // The failures shown are out of date: those of `operation`, or every one without it.
+  z.object({
+    type: z.literal("failuresCleared"),
+    target: targetPanelSchema("CourseDetails", "ExerciseSubmission"),
+    operation: z.string().optional(),
   }),
   // The login a Login panel shows, whenever it moves on.
   z.object({

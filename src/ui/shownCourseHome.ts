@@ -19,9 +19,16 @@ export interface CourseHomeFailure {
 class ShownCourseHome {
   private _courseId: CourseIdentifier | undefined
   private readonly _failed = new vscode.EventEmitter<CourseHomeFailure>()
+  private readonly _failuresCleared = new vscode.EventEmitter<{
+    courseId: CourseIdentifier
+    operation: string
+  }>()
 
   /** Fires with a failure the course home of its course should show. */
   public readonly onDidFail = this._failed.event
+
+  /** Fires when an operation whose failure {@link onDidFail} reported has succeeded. */
+  public readonly onDidClearFailures = this._failuresCleared.event
 
   /** The course whose home is on screen, if any. */
   public get courseId(): CourseIdentifier | undefined {
@@ -41,6 +48,7 @@ class ShownCourseHome {
     return {
       isVisible: () => this.isShowing(courseId),
       show: (headline, error, tone) => this._failed.fire({ courseId, headline, error, tone }),
+      clear: (operation) => this._failuresCleared.fire({ courseId, operation }),
     }
   }
 }

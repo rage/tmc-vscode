@@ -20,6 +20,12 @@ export interface ExerciseFailure {
   tone: "error" | "warning"
 }
 
+/** Failures of `operation` on an exercise that its results screen should take back. */
+export interface ExerciseFailuresCleared {
+  exerciseId: ExerciseIdentifier
+  operation: string
+}
+
 /** A student's request to see a submission panel, from a command rather than a submit. */
 export interface SubmissionPanelReveal {
   panel: ExerciseSubmissionPanel
@@ -40,6 +46,7 @@ class SubmissionViews {
   private readonly _cleared = new vscode.EventEmitter<void>()
   private readonly _revealed = new vscode.EventEmitter<SubmissionPanelReveal>()
   private readonly _failed = new vscode.EventEmitter<ExerciseFailure>()
+  private readonly _failuresCleared = new vscode.EventEmitter<ExerciseFailuresCleared>()
   private _shown: ExerciseSubmissionPanel | undefined
   private _sectionSerial = 0
 
@@ -60,6 +67,9 @@ class SubmissionViews {
   /** Fires with a failure the exercise's results screen should show; see {@link failureSink}. */
   public readonly onDidFail = this._failed.event
 
+  /** Fires when an operation whose failure {@link onDidFail} reported has succeeded. */
+  public readonly onDidClearFailures = this._failuresCleared.event
+
   /** Announces a new submission, forgetting earlier submissions of the same exercise. */
   public open(panel: ExerciseSubmissionPanel): void {
     for (const [id, { panel: earlier }] of this._latest) {
@@ -78,6 +88,21 @@ class SubmissionViews {
   public update(update: SubmissionViewUpdate): void {
     this._latest.set(update.panel.id, update)
     this._updated.fire(update)
+  }
+
+  /**
+   * Replaces each submission's latest view with what `replacement` makes of it, if anything,
+   * telling the side panel as {@link update} does but reopening nothing.
+   */
+  public replaceLatest(
+    replacement: (update: SubmissionViewUpdate) => SubmissionView | undefined,
+  ): void {
+    for (const latest of this._latest.values()) {
+      const view = replacement(latest)
+      if (view !== undefined) {
+        this.update({ panel: latest.panel, view, shouldReopen: false })
+      }
+    }
   }
 
   /** Forgets every submission, as when the account that made them logs out. */
@@ -130,6 +155,7 @@ class SubmissionViews {
     return {
       isVisible: () => this.shownFor(exerciseId) !== undefined,
       show: (headline, error, tone) => this._failed.fire({ exerciseId, headline, error, tone }),
+      clear: (operation) => this._failuresCleared.fire({ exerciseId, operation }),
     }
   }
 

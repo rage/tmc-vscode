@@ -1,4 +1,4 @@
-import { createSessionExpiryTracker } from "../sessionExpiryTracker"
+import { createExpiryNotifier, createSessionExpiryTracker } from "../sessionExpiryTracker"
 
 suite("createSessionExpiryTracker", () => {
   test("never warns someone who has had no session this run", () => {
@@ -86,5 +86,33 @@ suite("createSessionExpiryTracker with an operation that hit the rejection", () 
     tracker.onSessionLost(second)
 
     expect(onExpired).toHaveBeenCalledTimes(2)
+  })
+})
+
+suite("createExpiryNotifier", () => {
+  test("notifies once until the next login", () => {
+    const notify = vi.fn()
+    const notifier = createExpiryNotifier(() => false, notify)
+
+    notifier.onExpired()
+    notifier.onExpired()
+    expect(notify).toHaveBeenCalledOnce()
+
+    notifier.onLogin()
+    notifier.onExpired()
+    expect(notify).toHaveBeenCalledTimes(2)
+  })
+
+  test("leaves a lost session to the screen in sight, and notifies it once out of sight", () => {
+    const notify = vi.fn()
+    let isScreenVisible = true
+    const notifier = createExpiryNotifier(() => isScreenVisible, notify)
+
+    notifier.onExpired()
+    expect(notify).not.toHaveBeenCalled()
+
+    isScreenVisible = false
+    notifier.onExpired()
+    expect(notify).toHaveBeenCalledOnce()
   })
 })

@@ -253,12 +253,15 @@ suite("withOperation", function () {
 suite("withOperation shown in a screen", function () {
   let dialog: Dialog
   let isVisible: boolean
-  let shownIn: FailureSink & { show: Mock<FailureSink["show"]> }
+  let shownIn: FailureSink & {
+    show: Mock<FailureSink["show"]>
+    clear: Mock<FailureSink["clear"]>
+  }
 
   beforeEach(function () {
     dialog = createMockActionContext().dialog
     isVisible = true
-    shownIn = { isVisible: () => isVisible, show: vi.fn() }
+    shownIn = { isVisible: () => isVisible, show: vi.fn(), clear: vi.fn() }
   })
 
   function notified(): number {
@@ -307,6 +310,28 @@ suite("withOperation shown in a screen", function () {
 
     expect(shownIn.show).toHaveBeenCalledExactlyOnceWith("Failed to download ex-1.", error, "error")
     expect(notified()).toBe(0)
+  })
+
+  test("takes back the screen's earlier failures of an operation that succeeds", async function () {
+    await withOperation(dialog, { failure: "Failed to download.", shownIn }, async () => Ok(1))
+
+    expect(shownIn.clear).toHaveBeenCalledExactlyOnceWith("Failed to download.")
+    expect(shownIn.show).not.toHaveBeenCalled()
+  })
+
+  test("a lost session shown in the screen still reaches the session's own warning", async function () {
+    const error = new Error("token revoked")
+
+    await withOperation(dialog, { failure: "Failed.", shownIn }, async () => Err(error))
+
+    expect(dialog.noteSessionLost).toHaveBeenCalledExactlyOnceWith(error)
+    expect(notified()).toBe(0)
+  })
+
+  test("takes back no failure of an operation that fails again", async function () {
+    await withOperation(dialog, { failure: "Failed.", shownIn }, async () => Err(new Error("x")))
+
+    expect(shownIn.clear).not.toHaveBeenCalled()
   })
 
   test("shows a failure that is not an operation's, headline alone", function () {

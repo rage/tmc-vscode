@@ -59,11 +59,13 @@ export const courseDetailsHandlers = {
       if (rescanResult.err) {
         Logger.warn("Failed to rescan the local exercises", rescanResult.val)
       }
-      // Logged out, the view's own notice says so; an error box would only repeat it.
-      if (
-        updateResult.err &&
-        !(isSessionLost(updateResult.val) && !actionContext.authState.loggedIn)
-      ) {
+      if (updateResult.err) {
+        actionContext.dialog.noteSessionLost(updateResult.val)
+      }
+      // Logged out or expired, the view's own notice says so; an error box would only repeat it.
+      const { authState } = actionContext
+      const isNoticed = !authState.loggedIn || authState.isSessionExpired
+      if (updateResult.err && !(isSessionLost(updateResult.val) && isNoticed)) {
         return updateResult
       }
       return buildCourseHomeView(actionContext, courseId)

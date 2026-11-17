@@ -10,6 +10,7 @@ import type {
   ExerciseSubmissionPanel,
   ExtensionToWebview,
   Panel,
+  SubmissionView,
   CourseIdentifier,
 } from "../../../shared/lib"
 import { LocalCourseData, makeMoocKind, makeTmcKind } from "../../../shared/lib"
@@ -28,7 +29,7 @@ import {
 } from "../../errors"
 import type { PanelMessage } from "../../panels/router"
 import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
-import { standingView } from "../../panels/submissionView"
+import { standingView, submitFailedView } from "../../panels/submissionView"
 import { MAIN_PANEL_VIEW_TYPE, SIDE_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
 import { loginScreens } from "../../ui/loginScreens"
 import { shownCourseHome } from "../../ui/shownCourseHome"
@@ -534,6 +535,7 @@ suite("TmcPanel handler dispatch", () => {
         failure: {
           serial: expect.any(Number),
           tone: "error",
+          operation: "This exercise is no longer downloaded.",
           error: { message: "This exercise is no longer downloaded." },
         },
       },
@@ -1039,6 +1041,17 @@ suite("TmcPanel hidden webviews", () => {
     renderSidePanel(route)
     return fake
   }
+
+  test("tells whether either panel's screen is in sight", async () => {
+    expect(TmcPanel.isAnyScreenVisible()).toBe(false)
+    const { hide, reveal } = mountHideable(exerciseSubmissionPanel())
+    expect(TmcPanel.isAnyScreenVisible()).toBe(true)
+
+    hide()
+    expect(TmcPanel.isAnyScreenVisible()).toBe(false)
+    await reveal()
+    expect(TmcPanel.isAnyScreenVisible()).toBe(true)
+  })
 
   test("does not keep a hidden webview's document alive", () => {
     mountHideable(exerciseSubmissionPanel())
@@ -1853,6 +1866,7 @@ suite("TmcPanel side panel placement", () => {
         failure: {
           serial: expect.any(Number),
           tone: "warning",
+          operation: "Exercise submission failed.",
           error: { message: "No tries left.", detailsId: expect.any(String) },
         },
       },
@@ -1892,6 +1906,136 @@ suite("TmcPanel side panel placement", () => {
       message.type === "submissionView" ? [message.view.isLoggedOut] : [],
     )
     expect(views).toEqual([undefined, true])
+  })
+
+  /** A side panel showing a failed submission, with an auth state the test drives. */
+  async function mountFailedSubmission(error: SubmissionView["error"]): Promise<{
+    panel: vscode.WebviewPanel
+    shown: ExerciseSubmissionPanel
+    setAuth: (loggedIn: boolean) => void
+    exercise: { current: ReturnType<typeof moocCourseExercise> }
+  }> {
+    const { panel, sendReady } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    const exercise = { current: moocCourseExercise({ name: "loops" }) }
+    const changed = new vscode.EventEmitter<undefined>()
+    const actionContext = createMockActionContext({
+      startup: {
+        workspaceManager: {
+          getExercise: () => ({}),
+          onDidChangeExercises: changed.event,
+        } as unknown as WorkspaceManager,
+        userData: {
+          getExercise: () => Ok({ exercise: makeMoocKind(exercise.current) }),
+          onDidChangeCourses: changed.event,
+        } as unknown as UserData,
+      },
+    })
+    const listeners: ((loggedIn: boolean) => void)[] = []
+    let isLoggedIn = true
+    actionContext.authState = {
+      ...actionContext.authState,
+      get loggedIn() {
+        return isLoggedIn
+      },
+      subscribe: (listener) => void listeners.push(listener),
+    }
+    const subscription = TmcPanel.showSubmissionViews(createMockContext(), actionContext)
+    onTestFinished(() => subscription.dispose())
+    const shown = exerciseSubmissionPanel()
+    submissionViews.open(shown)
+    await sendReady()
+    submissionViews.update({
+      panel: shown,
+      view: submitFailedView(error ?? { message: "Failed." }),
+      shouldReopen: false,
+    })
+    return {
+      panel,
+      shown,
+      exercise,
+      setAuth: (loggedIn) => {
+        isLoggedIn = loggedIn
+        for (const listener of listeners) {
+          listener(loggedIn)
+        }
+      },
+    }
+  }
+
+  function shownPhases(panel: vscode.WebviewPanel): string[] {
+    return (postedMessages(panel) as PanelMessage[]).flatMap((message) =>
+      message.type === "submissionView" ? [message.view.phase] : [],
+    )
+  }
+
+  const LOGGED_OUT_ERROR = {
+    message: "You were logged out. Log in again.",
+    actions: [{ label: "Log In", command: "tmc.showMoocLogin" as const }],
+  }
+
+  test("a login replaces a failed submission with the exercise's standing", async () => {
+    const { panel, setAuth } = await mountFailedSubmission(LOGGED_OUT_ERROR)
+    setAuth(false)
+    expect(shownPhases(panel).at(-1)).toBe("failed")
+
+    setAuth(true)
+
+    expect(shownPhases(panel).at(-1)).toBe("standing")
+  })
+
+  test("a logout replaces a failure that logging in would not fix", async () => {
+    const { panel, setAuth } = await mountFailedSubmission({ message: "Try again later." })
+
+    setAuth(false)
+
+    expect(shownPhases(panel).at(-1)).toBe("standing")
+  })
+
+  test("a failed submission gives way once the exercise can no longer be submitted", async () => {
+    const { panel, exercise, setAuth } = await mountFailedSubmission({ message: "Try again." })
+    exercise.current = { ...exercise.current, deadline: "2000-01-01T00:00:00Z" }
+
+    setAuth(true)
+
+    const last = (postedMessages(panel) as PanelMessage[]).findLast(
+      (message) => message.type === "submissionView",
+    )
+    expect(last).toMatchObject({
+      view: {
+        phase: "standing",
+        submitRefusal: "The deadline of loops has passed, so it can no longer be submitted.",
+      },
+    })
+  })
+
+  test("a login takes back the failures each screen shows", async () => {
+    const { panel, shown, setAuth } = await mountFailedSubmission(undefined)
+    submissionViews
+      .failureSink(shown.exerciseId)
+      .show("Failed to run the tests.", new Error("No tries left."), "error")
+    setAuth(false)
+    vi.mocked(panel.webview.postMessage).mockClear()
+
+    setAuth(true)
+
+    expect(postedMessages(panel)).toContainEqual({
+      type: "failuresCleared",
+      target: targetOf(shown),
+    })
+  })
+
+  test("an operation that succeeds takes back its failure in the results screen", async () => {
+    const { panel, shown } = await mountFailedSubmission(undefined)
+    const sink = submissionViews.failureSink(shown.exerciseId)
+    sink.show("Failed to run the tests.", new Error("boom"), "error")
+    vi.mocked(panel.webview.postMessage).mockClear()
+
+    sink.clear("Failed to run the tests.")
+
+    expect(postedMessages(panel)).toEqual([
+      { type: "failuresCleared", target: targetOf(shown), operation: "Failed to run the tests." },
+    ])
   })
 
   test("tells the shown submission the tries left, and why the backend would refuse another", async () => {

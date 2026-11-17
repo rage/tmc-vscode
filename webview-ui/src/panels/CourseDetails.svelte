@@ -14,7 +14,9 @@
     aiAssistanceSentence,
     aiPolicyRule,
     LOGGED_OUT_MESSAGE,
+    offersLogIn,
     SOFT_DEADLINE_PENALTY,
+    withoutLogIn,
   } from "../../../shared/lib"
   import type { BarAction } from "../components/ActionBar.svelte"
   import ActionBar from "../components/ActionBar.svelte"
@@ -64,9 +66,15 @@
   const completedOpenCount = $derived(
     exercises.filter((ex) => ex.passed && ex.status === "opened").length,
   )
+  // The logged-out notice carries the screen's one Log In.
+  const isLogInShown = $derived(view !== undefined && isLoginNoticed(view))
   const canDownload = $derived(
     view !== undefined && !view.isDisabled && view.accessLoss === null && view.isLoggedIn,
   )
+
+  function isLoginNoticed({ isLoggedIn, isSessionExpired }: CourseHomeView): boolean {
+    return !isLoggedIn || isSessionExpired
+  }
 
   async function requestData() {
     dataError = undefined
@@ -92,6 +100,10 @@
   const listeningPanel = untrack(() => panel)
   addMessageListener(listeningPanel, (message) => {
     if (message.type === "setCourseHomeView") {
+      // A refresh that failed before a login says nothing about the session after it.
+      if (view && isLoginNoticed(view) && !isLoginNoticed(message.view)) {
+        refreshError = undefined
+      }
       view = message.view
     }
   })
@@ -109,6 +121,8 @@
     refreshing = false
     if (outcome.ok) {
       view = outcome.value
+      // The course as it stands now replaces what earlier actions found.
+      screenFailures.dismissAll()
       announce("Course refreshed")
     } else {
       refreshError = outcome.error
@@ -440,10 +454,11 @@
     <ActionBar primary={bar.primary} secondary={bar.secondary} />
 
     <CourseNotices {notices} />
-    <ScreenFailures failures={screenFailures} />
-    {#if refreshError}
+    <ScreenFailures failures={screenFailures} {isLogInShown} />
+    <!-- A refresh refused for the lost session is what the logged-out notice says. -->
+    {#if refreshError && !(isLogInShown && offersLogIn(refreshError))}
       <ErrorNotice
-        error={refreshError}
+        error={isLogInShown ? withoutLogIn(refreshError) : refreshError}
         title="Refresh failed"
         ondismiss={() => (refreshError = undefined)}
         dismissLabel="Dismiss refresh error"

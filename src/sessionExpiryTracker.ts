@@ -62,3 +62,33 @@ export function createSessionExpiryTracker(
     },
   }
 }
+
+/** Decides whether a lost session also takes a notification; see {@link createExpiryNotifier}. */
+export interface ExpiryNotifier {
+  /** Call on each warning of {@link SessionExpiryTracker}. */
+  onExpired: () => void
+  /** Call when a login succeeds. */
+  onLogin: () => void
+}
+
+/**
+ * Notifies a lost session at most once until the next login, and only while no TestMyCode screen
+ * is in sight, as a screen on view says it with its own Log In and the status bar item always does.
+ */
+export function createExpiryNotifier(
+  isScreenVisible: () => boolean,
+  notify: () => void,
+): ExpiryNotifier {
+  let hasNotified = false
+  return {
+    onExpired() {
+      if (!hasNotified && !isScreenVisible()) {
+        hasNotified = true
+        notify()
+      }
+    },
+    onLogin() {
+      hasNotified = false
+    },
+  }
+}

@@ -162,6 +162,7 @@ vi.mock("../../panels/TmcPanel", () => ({
     },
     showSubmissionViews: () => ({ dispose: () => {} }),
     showLoginScreens: () => ({ dispose: () => {} }),
+    isAnyScreenVisible: () => false,
     registerSerializers: () => {
       recorded.serializerRegistrations += 1
       return { dispose: () => {} }

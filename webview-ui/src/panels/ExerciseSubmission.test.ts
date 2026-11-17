@@ -837,6 +837,21 @@ suite("ExerciseSubmission panel (results hub)", () => {
     })
   })
 
+  test("a submission failed on a lost session offers one Log In, Log In to Submit", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...submitFailedView({
+        message: "You were logged out. Log in again.",
+        actions: [{ label: "Log In", command: "tmc.showMoocLogin" }],
+      }),
+      isLoggedOut: true,
+    })
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("You were logged out.")
+    expect(screen.getByRole("button", { name: "Log In to Submit" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Log In" })).not.toBeInTheDocument()
+  })
+
   test("a local pass of an exercise that cannot be submitted says why instead of offering Submit", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showView(panel.id, {

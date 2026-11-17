@@ -123,6 +123,7 @@ async function harness(
     })
   const dialog = {
     reportError: toast("error"),
+    noteSessionLost: vi.fn(),
     errorNotification: toast("error"),
     warningNotification: toast("warning"),
     notification: toast("info"),
