@@ -309,11 +309,23 @@
     {:else if organizations.state === "loading"}
       <Spinner label="Loading the organizations…" />
     {:else if organizations.state === "failed"}
-      <ErrorNotice error={organizations.error} title="Could not list the {TMC} organizations">
+      <!-- Most students have no course here, so its failure is news, not an error, and the
+           cause is not theirs to fix. -->
+      {@const detailsId = organizations.error.detailsId}
+      <Notice kind="info" title="The {TMC} course list is unavailable">
+        <p>Try again later.</p>
         {#snippet actions()}
           <Button secondary onclick={() => void loadOrganizations()}>Try Again</Button>
+          {#if detailsId !== undefined}
+            <Button
+              secondary
+              onclick={() => vscode.postMessage({ type: "showErrorDetails", detailsId })}
+            >
+              Show Details
+            </Button>
+          {/if}
         {/snippet}
-      </ErrorNotice>
+      </Notice>
     {:else if organizations.value.kind === "loggedOut"}
       <Notice kind="info" title="Not logged in">
         <p>Log in with your MOOC.fi account to see the courses on {TMC}.</p>

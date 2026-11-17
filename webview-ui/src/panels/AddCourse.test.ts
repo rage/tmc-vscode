@@ -182,18 +182,23 @@ suite("the add-course screen", () => {
     })
   })
 
-  test("a backend that cannot be reached says so in its own section, with Try Again", async () => {
+  test("a tmc.mooc.fi list that fails is unavailable, blaming nothing, with Try Again", async () => {
     render(AddCourse, { props: { panel: PANEL } })
     replyToRequest("requestMoocCatalog", { ok: true, value: MOOC_COURSES })
     replyToRequest("requestTmcOrganizations", {
       ok: false,
-      error: { message: "Could not reach tmc.mooc.fi.", detailsId: "tmc-listing" },
+      error: {
+        message: "Could not reach the server. Check your network connection.",
+        detailsId: "tmc-listing",
+      },
     })
 
     const tmc = section("tmc.mooc.fi")
-    const alert = await within(tmc).findByRole("alert")
-    expect(alert).toHaveTextContent("Could not list the tmc.mooc.fi organizations")
-    expect(within(alert).getByRole("button", { name: "Show Details" })).toBeInTheDocument()
+    const notice = await within(tmc).findByRole("status")
+    expect(notice).toHaveTextContent("The tmc.mooc.fi course list is unavailable")
+    expect(notice).not.toHaveTextContent(/network/)
+    expect(within(tmc).queryByRole("alert")).not.toBeInTheDocument()
+    expect(within(notice).getByRole("button", { name: "Show Details" })).toBeInTheDocument()
     expect(cardNames(within(section("courses.mooc.fi")).getByRole("list"))).toHaveLength(2)
     postedMessages.mockClear()
     await fireEvent.click(within(tmc).getByRole("button", { name: "Try Again" }))
