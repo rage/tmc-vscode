@@ -256,3 +256,15 @@ test("the login screen's buttons follow the code in keyboard order", async ({ co
     expect.objectContaining({ type: "loginAction", action: "openVerificationPage" }),
   )
 })
+
+test("a course notice's action comes before its dismiss in keyboard order", async ({
+  context,
+  page,
+}) => {
+  await serveHarness(context)
+  await page.goto(`${ORIGIN}/frame.html?scenario=course-details%2Faction-failed`)
+  const notices = page.getByRole("list", { name: "Course notices" })
+  await notices.getByRole("button", { name: "Download", exact: true }).focus()
+  await page.keyboard.press("Tab")
+  await expect(notices.getByRole("button", { name: "Dismiss the new exercises" })).toBeFocused()
+})
