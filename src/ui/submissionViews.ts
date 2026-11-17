@@ -47,6 +47,7 @@ class SubmissionViews {
   private readonly _revealed = new vscode.EventEmitter<SubmissionPanelReveal>()
   private readonly _failed = new vscode.EventEmitter<ExerciseFailure>()
   private readonly _failuresCleared = new vscode.EventEmitter<ExerciseFailuresCleared>()
+  private readonly _shownChanged = new vscode.EventEmitter<void>()
   private _shown: ExerciseSubmissionPanel | undefined
   private _sectionSerial = 0
 
@@ -69,6 +70,9 @@ class SubmissionViews {
 
   /** Fires when an operation whose failure {@link onDidFail} reported has succeeded. */
   public readonly onDidClearFailures = this._failuresCleared.event
+
+  /** Fires when the panel on screen in the side panel changes, or goes out of sight. */
+  public readonly onDidChangeShown = this._shownChanged.event
 
   /** Announces a new submission, forgetting earlier submissions of the same exercise. */
   public open(panel: ExerciseSubmissionPanel): void {
@@ -136,7 +140,11 @@ class SubmissionViews {
 
   /** Records the panel on screen in the side panel, or `undefined` when none is visible. */
   public setShown(panel: ExerciseSubmissionPanel | undefined): void {
+    const isSame = panel?.id === this._shown?.id
     this._shown = panel
+    if (!isSame) {
+      this._shownChanged.fire()
+    }
   }
 
   /** The panel of `exerciseId` the student can see now, if any. */

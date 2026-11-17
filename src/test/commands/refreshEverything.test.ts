@@ -1,21 +1,25 @@
 import { Err, Ok } from "ts-results"
 import { onTestFinished, vi } from "vitest"
-import * as vscode from "vscode"
 
 import { CourseIdentifier, LocalCourseData } from "../../../shared/lib"
+import { downloadNewExercisesForCourse } from "../../actions/downloadNewExercisesForCourse"
 import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
 import { updateCourse } from "../../actions/updateCourse"
 import type Dialog from "../../api/dialog"
+import { downloadNewExercises } from "../../commands/downloadNewExercises"
 import { refreshCourses, refreshEverything } from "../../commands/refreshEverything"
 import { updateExercises } from "../../commands/updateExercises"
+import { NEW_EXERCISES_REMINDER_DELAY } from "../../config/constants"
+import type { NewExerciseHandling } from "../../config/settings"
 import { recentPolicyChanges } from "../../ui/recentPolicyChanges"
 import type { CourseHomeFailure } from "../../ui/shownCourseHome"
 import { shownCourseHome } from "../../ui/shownCourseHome"
 import { Logger } from "../../utilities"
 import { moocLocalCourse, tmcLocalCourse } from "../fixtures/courses"
-import { idOfTmcCourse } from "../fixtures/identifiers"
+import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
+import { createSettingsMock } from "../mocks/settings"
 
 vi.mock("../../actions/updateCourse", () => ({
   updateCourse: vi.fn(async () => Ok({ isUpdated: true, warnings: [] })),
@@ -32,6 +36,14 @@ vi.mock("../../commands/updateExercises", () => ({
   updateExercises: vi.fn(async () => undefined),
 }))
 
+vi.mock("../../actions/downloadNewExercisesForCourse", () => ({
+  downloadNewExercisesForCourse: vi.fn(async () => Ok({ downloaded: [], warnings: [] })),
+}))
+
+vi.mock("../../commands/downloadNewExercises", () => ({
+  downloadNewExercises: vi.fn(async () => undefined),
+}))
+
 const tmcCourse = (id: number, notifyAfter: number, newExercises: number[]): LocalCourseData =>
   tmcLocalCourse({
     id,
@@ -42,8 +54,13 @@ const tmcCourse = (id: number, notifyAfter: number, newExercises: number[]): Loc
     notifyAfter,
   })
 
-function contextWithCourses(courses: LocalCourseData[]): [ReadyActionContext, Dialog] {
+function contextWithCourses(
+  courses: LocalCourseData[],
+  newExercises: NewExerciseHandling = "ask",
+): [ReadyActionContext, Dialog] {
   const [dialog] = createDialogMock()
+  const [settings, settingValues] = createSettingsMock()
+  settingValues.newExercises = newExercises
   const byId = new Map(courses.map((c) => [String(c.data.id), c]))
   return [
     {
@@ -66,6 +83,7 @@ function contextWithCourses(courses: LocalCourseData[]): [ReadyActionContext, Di
         },
       }),
       dialog,
+      settings,
     },
     dialog,
   ]
@@ -244,10 +262,11 @@ suite("refreshEverything's new-exercises prompt", function () {
     await refreshEverything(actionContext, { silent: true })
 
     expect(dialog.notification).toHaveBeenCalledExactlyOnceWith(
-      "Course 1 has 1 new exercise.",
+      "1 new exercise in Course 1.",
+      expect.anything(),
       expect.anything(),
     )
-    expect(buttons(dialog).map(([label]) => label)).toEqual(["Show"])
+    expect(buttons(dialog).map(([label]) => label)).toEqual(["Download", "Later"])
   })
 
   test("announces a changed AI policy, and what it does to AI assistance", async function () {
@@ -333,14 +352,71 @@ suite("refreshEverything's new-exercises prompt", function () {
     expect(dialog.reportError).not.toHaveBeenCalled()
   })
 
-  test("Show opens the course home of the course with new exercises", async function () {
-    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+  test("Download downloads the course's new exercises", async function () {
     const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
     await refreshEverything(actionContext, { silent: true })
 
-    press(dialog, "Show")
+    press(dialog, "Download")
 
-    expect(executeCommand).toHaveBeenCalledWith("tmc.courseDetails", idOfTmcCourse(1))
+    expect(downloadNewExercises).toHaveBeenCalledExactlyOnceWith(actionContext, idOfTmcCourse(1))
+  })
+
+  test("Later offers the new exercises again after the reminder delay", async function () {
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])])
+    await refreshEverything(actionContext, { silent: true })
+    const before = Date.now()
+
+    press(dialog, "Later")
+
+    const [courseId, notifyAfter] =
+      vi.mocked(actionContext.startup.userData.postponeNewExercises).mock.calls[0] ?? []
+    expect(courseId).toEqual(idOfTmcCourse(1))
+    expect(notifyAfter).toBeGreaterThanOrEqual(before + NEW_EXERCISES_REMINDER_DELAY)
+  })
+
+  test("offers nothing about a course that is disabled, not enrolled on or out of reach", async function () {
+    const disabled = tmcLocalCourse({ id: 1, newExercises: [10], disabled: true })
+    const notEnrolled = moocLocalCourse({ id: "a", newExercises: ["e1"], notEnrolled: true })
+    const lost = moocLocalCourse({
+      id: "b",
+      newExercises: ["e2"],
+      accessLoss: { reason: "forbidden", checkedAt: 0 },
+    })
+    const [actionContext, dialog] = contextWithCourses([disabled, notEnrolled, lost])
+
+    await refreshEverything(actionContext, { silent: true })
+
+    expect(dialog.notification).not.toHaveBeenCalled()
+  })
+
+  test("offers nothing when new exercises are only for the course home", async function () {
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])], "courseHome")
+
+    await refreshEverything(actionContext, { silent: true })
+
+    expect(dialog.notification).not.toHaveBeenCalled()
+    expect(downloadNewExercisesForCourse).not.toHaveBeenCalled()
+  })
+
+  test("downloads new exercises when set to, then says how many it downloaded", async function () {
+    vi.mocked(downloadNewExercisesForCourse).mockResolvedValueOnce(
+      Ok({ downloaded: [idOfTmcExercise(10), idOfTmcExercise(11)], warnings: [] }),
+    )
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10, 11])], "download")
+
+    await refreshEverything(actionContext, { silent: true })
+
+    await vi.waitFor(() =>
+      expect(dialog.notification).toHaveBeenCalledExactlyOnceWith(
+        "2 new exercises downloaded in Course 1.",
+        expect.anything(),
+      ),
+    )
+    expect(downloadNewExercisesForCourse).toHaveBeenCalledExactlyOnceWith(
+      actionContext,
+      idOfTmcCourse(1),
+      "statusBar",
+    )
   })
 
   test("offers nothing about the course its course home shows, but still records the offer", async function () {
@@ -366,17 +442,17 @@ suite("refreshEverything's new-exercises prompt", function () {
     expect(updateExercises).toHaveBeenCalledWith(actionContext, "promptless")
   })
 
-  test("offers several courses' new exercises in one notification", async function () {
+  test("offers each course's new exercises in a notification of its own", async function () {
     const [actionContext, dialog] = contextWithCourses([
       tmcCourse(1, 0, [10, 11]),
       tmcCourse(2, 0, [20]),
     ])
     await refreshEverything(actionContext, { silent: true })
 
-    expect(dialog.notification).toHaveBeenCalledOnce()
-    expect(vi.mocked(dialog.notification).mock.calls[0]?.[0]).toBe(
-      "New exercises in 2 courses: Course 1 (2), Course 2 (1).",
-    )
+    expect(vi.mocked(dialog.notification).mock.calls.map(([message]) => message)).toEqual([
+      "2 new exercises in Course 1.",
+      "1 new exercise in Course 2.",
+    ])
   })
 
   test("does not offer the exercises of a course whose reminder is postponed", async function () {
@@ -399,7 +475,7 @@ suite("refreshEverything's new-exercises prompt", function () {
     course.data.newExercises = [10, 11]
     await refreshEverything(actionContext, { silent: true })
     expect(dialog.notification).toHaveBeenCalledTimes(2)
-    expect(vi.mocked(dialog.notification).mock.calls[1]?.[0]).toBe("Course 1 has 2 new exercises.")
+    expect(vi.mocked(dialog.notification).mock.calls[1]?.[0]).toBe("2 new exercises in Course 1.")
   })
 
   test("holds the offer back for a refresh that asks it to, until a later one", async function () {

@@ -19,7 +19,6 @@ import type WorkspaceManager from "../api/workspaceManager"
 import type { WorkspaceExercise } from "../api/workspaceManager"
 import { exerciseFor } from "../api/workspaceManager"
 import type { UserData } from "../config/userdata"
-import type { ExerciseOperationKind, ExerciseOperations } from "./exerciseOperations"
 import { modelSolutionUrl } from "./modelSolution"
 import { pointsText } from "./points"
 import { tooltipOf } from "./tooltip"
@@ -31,18 +30,12 @@ export interface ExerciseStatusSources {
     "activeExercise" | "getExerciseContaining" | "onDidChangeExercises"
   >
   userData: Pick<UserData, "getExercise" | "getCourse" | "onDidChangeCourses">
-  operations: Pick<ExerciseOperations, "current" | "onDidChange">
-}
-
-const activityLabels: Partial<Record<ExerciseOperationKind, string>> = {
-  testing: "Testing",
-  submitting: "Submitting",
 }
 
 /**
  * The status bar item that names the exercise the active editor belongs to, with its points,
- * and opens {@link showExerciseActions} when clicked. Hidden on any other file; shows a
- * spinner while the exercise is being tested or submitted.
+ * and opens {@link showExerciseActions} when clicked. Hidden on any other file. A test run or
+ * submission in progress shows in `BackgroundStatusBarItem` instead.
  */
 export class ExerciseStatusBarItem implements vscode.Disposable {
   private readonly _item: vscode.StatusBarItem
@@ -61,7 +54,6 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
       vscode.window.onDidChangeActiveTextEditor(render),
       vscode.window.onDidChangeVisibleTextEditors(render),
       _sources.workspaceManager.onDidChangeExercises(render),
-      _sources.operations.onDidChange(render),
       _sources.userData.onDidChangeCourses(render),
     ]
     this.render()
@@ -82,8 +74,6 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
     const slug = exercise.exerciseSlug
     const storedResult = this._sources.userData.getExercise(exercise.id)
     const stored = storedResult.ok ? storedResult.val.exercise : undefined
-    const running = this._sources.operations.current(exercise.id)
-    const activity = running && activityLabels[running]
     const arePointsHeld =
       stored?.kind === "mooc" &&
       arePointsHeldForReview(stored.data.pendingReview, stored.data.awardedPoints)
@@ -99,29 +89,22 @@ export class ExerciseStatusBarItem implements vscode.Disposable {
       : standingOf(stored, course.ok ? course.val : undefined)
     const shownStanding = standing?.text === "passed" ? undefined : standing
 
-    if (activity) {
-      this._item.text = `$(sync~spin) ${activity} ${slug}…`
-      this._item.accessibilityInformation = {
-        label: `TestMyCode: ${activity.toLowerCase()} ${slug}`,
-      }
-    } else {
-      this._item.text = [
-        `$(beaker) ${slug}`,
-        points?.short,
-        shownStanding &&
-          (shownStanding.icon
-            ? `$(${shownStanding.icon}) ${shownStanding.text}`
-            : shownStanding.text),
-      ]
-        .filter(Boolean)
-        .join(" · ")
-      this._item.accessibilityInformation = {
-        label:
-          `TestMyCode exercise ${slug}` +
-          (points ? `, ${points.spoken}` : "") +
-          (shownStanding ? `, ${shownStanding.text}` : "") +
-          ". Show exercise actions",
-      }
+    this._item.text = [
+      `$(beaker) ${slug}`,
+      points?.short,
+      shownStanding &&
+        (shownStanding.icon
+          ? `$(${shownStanding.icon}) ${shownStanding.text}`
+          : shownStanding.text),
+    ]
+      .filter(Boolean)
+      .join(" · ")
+    this._item.accessibilityInformation = {
+      label:
+        `TestMyCode exercise ${slug}` +
+        (points ? `, ${points.spoken}` : "") +
+        (shownStanding ? `, ${shownStanding.text}` : "") +
+        ". Show exercise actions",
     }
     this._item.tooltip = tooltipOf([
       slug,

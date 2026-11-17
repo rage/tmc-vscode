@@ -653,6 +653,16 @@ export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewR
     }
   }
 
+  /** Whether the student can see the view now. */
+  public get isVisible(): boolean {
+    return this._view.visible
+  }
+
+  /** Fires when the view comes into sight or goes out of it. */
+  public get onDidChangeVisibility(): vscode.Event<unknown> {
+    return this._view.onDidChangeVisibility
+  }
+
   public getChildren(element?: CoursesViewRow): CoursesViewRow[] {
     if (!element) {
       const roots = this._currentRoots()

@@ -2,10 +2,19 @@
 
 ## [Unreleased]
 
+<<<<<<< HEAD
+
 - When all tests pass on your computer, whether run from the results screen, the editor or the Testing view, the results screen opens and asks "All tests pass. Submit for grading?" with Submit and Not Now. Not Now leaves Submit beside Run Tests until the next run. It does not ask while logged out, in exam mode, or when the exercise cannot be submitted.
 - Get Help is always in the results screen's More Actions, a passed exercise's too; the Get Help section shows by itself only on results that did not pass.
 - Show Model Solution appears only once courses.mooc.fi has sent the exercise's model solution, checked after a grading that passes it or uses its last try, and is never the main button of the results screen. Where there is none, the results screen and the course home offer Open Course Material instead.
 - Each reason an exercise cannot be submitted has its own icon in the course home, the Courses view and the status bar: a watch for deadline passed, a crossed circle for no tries left, a lock for locked, a numbered list for complete earlier chapters first, a calendar for a chapter not open yet, a person for not enrolled and an eye for waiting for review.
+  \=======
+- A long job, such as a download of several exercises, an update or waiting for a grading, shows its progress in a notification while the course home or results screen that shows it is out of sight, and the notification goes away when you bring the screen back.
+- One status bar item shows what runs out of sight: a spinner reading "TestMyCode: <job>" while a refresh, an update check, a download or update, a test run or a submission until it is graded runs, with how many more run beside it. Clicking it opens the course home, the results screen or Test Results that shows the job. The exercise item no longer spins, and the failed-update item is the same item while nothing runs.
+- New exercises found in the background are offered course by course: "N new exercises in <course>." with Download and Later, which asks again in 30 minutes. The new setting `testMyCode.newExercises` downloads them by themselves instead and says how many, or leaves them to the course home. Courses you are not enrolled on or have lost access to are not offered.
+
+> > > > > > > origin/programming-exercise-migration
+
 - The exercise actions of a passed exercise in a chapter not unlocked yet no longer say to complete earlier chapters first; the chapter says it.
 - A course home you are not enrolled on no longer offers to download its exercises.
 - Open Next Exercise, and Next in the results screen, only go forward in the course: from its last exercise left to do they open the course home, which offers the earlier ones. When the next exercise cannot be downloaded, the course home opens and says why instead of a notification.

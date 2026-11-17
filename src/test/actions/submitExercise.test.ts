@@ -1,5 +1,5 @@
 import { Err, Ok } from "ts-results"
-import { vi } from "vitest"
+import { onTestFinished, vi } from "vitest"
 import type * as vscode from "vscode"
 
 import type { ExerciseStanding } from "../../../shared/langsSchema"
@@ -37,6 +37,8 @@ import {
   WorkspaceUntrustedError,
 } from "../../errors"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
+import type { BackgroundJob } from "../../ui/backgroundJobs"
+import { backgroundJobs } from "../../ui/backgroundJobs"
 import type { SubmissionViewUpdate } from "../../ui/submissionViews"
 import { submissionViews } from "../../ui/submissionViews"
 import { saveExerciseDocuments } from "../../window/exerciseDocuments"
@@ -446,6 +448,29 @@ suite("submitExercise action, mooc", () => {
       true,
     )
     expect(finishedCourses).toEqual([idOfMoocCourse(moocCourse.id)])
+  })
+
+  test("runs as a long job of the results screen, renamed once the backend has the submission", async () => {
+    const { actionContext } = moocContextWith(grading({ score_given: 3 }))
+    const labels: string[] = []
+    const seen: BackgroundJob[] = []
+    const subscription = backgroundJobs.onDidChange(() => {
+      seen.push(...backgroundJobs.running)
+      labels.push(...backgroundJobs.running.map((job) => job.label))
+    })
+    onTestFinished(() => subscription.dispose())
+
+    await submitExercise(actionContext, moocExercise)
+
+    expect([...new Set(labels)]).toEqual([
+      `Submitting ${moocExercise.exerciseSlug}`,
+      `Waiting for grading of ${moocExercise.exerciseSlug}`,
+    ])
+    expect(seen[0]).toMatchObject({
+      screen: { kind: "results", exerciseId: moocExercise.id, exerciseUri: moocExercise.uri },
+      isLong: true,
+    })
+    expect(backgroundJobs.running).toEqual([])
   })
 
   test("offers the exercise's page from the moment the backend has the submission", async () => {

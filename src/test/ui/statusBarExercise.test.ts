@@ -6,7 +6,6 @@ import type { LocalCourseExercise } from "../../../shared/lib"
 import { makeMoocKind } from "../../../shared/lib"
 import Dialog from "../../api/dialog"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
-import { exerciseOperations } from "../../ui/exerciseOperations"
 import type { ExerciseStatusSources } from "../../ui/statusBarExercise"
 import { ExerciseStatusBarItem, showExerciseActions } from "../../ui/statusBarExercise"
 import { moocCourseExercise, moocLocalCourse } from "../fixtures/courses"
@@ -62,7 +61,6 @@ function harness(): Harness {
       getCourse: () => Ok(course),
       onDidChangeCourses: coursesChanged.event,
     },
-    operations: exerciseOperations,
   }
   return { sources, workspace, stored, editorChanged, coursesChanged }
 }
@@ -159,33 +157,6 @@ suite("ExerciseStatusBarItem", function () {
     visible.mockReturnValue([])
     h.editorChanged.fire()
     expect(itemOf().isShown).toBe(false)
-  })
-
-  test("spins while the exercise is tested, then shows the points again", async function () {
-    const h = harness()
-    track(new ExerciseStatusBarItem(h.sources))
-    let duringRun = ""
-
-    await exerciseOperations.run(STORED_ID, "testing", async () => {
-      duringRun = itemOf().text
-      return Ok.EMPTY
-    })
-
-    expect(duringRun).toBe(`$(sync~spin) Testing ${exerciseHelloWorld.exerciseSlug}…`)
-    expect(itemOf().text).toContain("$(beaker)")
-  })
-
-  test("says it is submitting while a submission runs", async function () {
-    const h = harness()
-    track(new ExerciseStatusBarItem(h.sources))
-    let label: string | undefined
-
-    await exerciseOperations.run(STORED_ID, "submitting", async () => {
-      label = itemOf().accessibilityInformation?.label
-      return Ok.EMPTY
-    })
-
-    expect(label).toContain("submitting")
   })
 
   test("picks up new points when the courses change", function () {
