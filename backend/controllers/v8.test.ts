@@ -80,6 +80,7 @@ interface ProcessingBody {
 interface FinishedBody {
   status: string
   all_tests_passed: boolean | null
+  points: string[]
   test_cases: { name: string; successful: boolean }[]
 }
 
@@ -277,6 +278,33 @@ describe("legacy TMC mock contract", () => {
       graded.test_cases.map((c) => c.successful),
       [false],
     )
+  })
+
+  test("a passing submission lists its points and completes the exercise, as tmc-server's do", async () => {
+    const exerciseOf = async (): Promise<{ completed: boolean; awarded_points: unknown[] }> => {
+      const course = (await (
+        await authFetch(`${mock.base}/api/v8/core/courses/${pythonCourse.id}`)
+      ).json()) as {
+        course: { exercises: { id: number; completed: boolean; awarded_points: unknown[] }[] }
+      }
+      const exercise = course.course.exercises.find(({ id }) => id === passingExerciseId)
+      assert.ok(exercise)
+      return exercise
+    }
+    assert.equal((await exerciseOf()).completed, false)
+
+    const graded = await gradeOf(passingExerciseId)
+
+    assert.deepEqual(graded.points, ["1.passing_exercise"])
+    const exercise = await exerciseOf()
+    assert.equal(exercise.completed, true)
+    assert.equal(exercise.awarded_points.length, 1)
+  })
+
+  test("a failing submission lists no points and leaves the exercise not completed", async () => {
+    const graded = await gradeOf(failingExerciseId)
+
+    assert.deepEqual(graded.points, [])
   })
 
   test("a new submission joins the exercise's old submissions", async () => {

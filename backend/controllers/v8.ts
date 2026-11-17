@@ -15,7 +15,7 @@ import type {
 } from "../../shared/generated/langs"
 import { MOCK_TMC_ACCESS_TOKEN } from "../mockSession"
 import { EXERCISE_SERVICES_SCOPE } from "../mooc/oauth"
-import type { BackendCourse, ExerciseWithFile } from "../utils"
+import type { BackendCourse, BackendExercise, ExerciseWithFile } from "../utils"
 import {
   createCourse,
   createExercise,
@@ -135,6 +135,40 @@ interface SubmissionRecord {
   /** Archive served back for this submission's download. */
   file: string
   polls: number
+  /** A fixture's history, which awards nothing: the exercises start out unattempted. */
+  isSeeded?: true
+}
+
+/** The point names a passing submission of `exercise` lists, as tmc-server's grader awards them. */
+const pointNamesOf = (exercise: BackendExercise): string[] =>
+  exercise.available_points.filter((point) => !point.requires_review).map(({ name }) => name)
+
+/** The point names `submission` lists, which tmc-server keeps space-separated. */
+const pointNamesListed = (submission: Submission): string[] =>
+  (submission.points ?? "").split(" ").filter((name) => name !== "")
+
+/**
+ * `exercise` with the student's progress on it, as tmc-server derives it from the submissions:
+ * completed once one passed all tests, its points awarded by those passing submissions.
+ */
+const withProgress = (state: TmcMockState, exercise: BackendExercise): BackendExercise => {
+  const submissions = state.submissions.filter(
+    (record) => !record.isSeeded && record.submission.exercise_name === exercise.name,
+  )
+  const isCompleted = submissions.some((record) => record.submission.all_tests_passed)
+  const awarded = new Set(
+    submissions
+      .filter((record) => record.submission.all_tests_passed)
+      .flatMap((record) => pointNamesListed(record.submission)),
+  )
+  return {
+    ...exercise,
+    attempted: submissions.length > 0,
+    completed: isCompleted,
+    awarded_points: exercise.available_points
+      .map(({ name }) => name)
+      .filter((name) => awarded.has(name)),
+  }
 }
 
 const seededSubmissions = (): SubmissionRecord[] => [
@@ -150,6 +184,7 @@ const seededSubmissions = (): SubmissionRecord[] => [
     }),
     file: pythonExercisePassing.file,
     polls: 0,
+    isSeeded: true,
   },
 ]
 
@@ -299,7 +334,7 @@ export const registerV8Routes = (
   app.get(
     "/api/v8/courses/:courseId/exercises",
     ...forFixture(findCourse, [authenticated], ({ exercises }, _req, res) =>
-      res.json(exercises.map((e) => e.exercise) satisfies CourseExercise[]),
+      res.json(exercises.map((e) => withProgress(state, e.exercise)) satisfies CourseExercise[]),
     ),
   )
 
@@ -318,7 +353,7 @@ export const registerV8Routes = (
     "/api/v8/core/courses/:courseId",
     ...forFixture(findCourse, [authenticated], ({ course, exercises }, _req, res) =>
       res.json({
-        course: { ...course, exercises: exercises.map((e) => e.exercise) },
+        course: { ...course, exercises: exercises.map((e) => withProgress(state, e.exercise)) },
       } satisfies { course: CourseDetails }),
     ),
   )
@@ -345,7 +380,7 @@ export const registerV8Routes = (
     "/api/v8/core/exercises/:exerciseId",
     ...forFixture(findExercise, [authenticated], ({ course, exercise }, _req, res) =>
       res.json({
-        ...exercise,
+        ...withProgress(state, exercise),
         course_id: course.id,
         course_name: course.name,
       } satisfies ExerciseDetails),
@@ -364,12 +399,14 @@ export const registerV8Routes = (
     "/api/v8/core/exercises/:exerciseId/submissions",
     ...forFixture(findExercise, [authenticated], ({ course, exercise, file }, req, res) => {
       const newSubmissionId = state.nextSubmissionId++
+      const isPassed = testCasesOf(exercise.id).every((test) => test.successful)
       state.submissions.push({
         submission: createOldSubmission({
           courseId: course.id,
           exerciseName: exercise.name,
           id: newSubmissionId,
-          passed: exercise.id !== failingExerciseId,
+          passed: isPassed,
+          points: isPassed ? pointNamesOf(exercise).join(" ") : "",
           timestamp: new Date(),
           userId: 0,
         }),
@@ -407,6 +444,7 @@ export const registerV8Routes = (
           courseName: course.name,
           exerciseName: exercise.name,
           id: Math.trunc(Number(id)),
+          points: pointNamesListed(record.submission),
           testCases: testCasesOf(exercise.id),
         }) satisfies SubmissionStatusReport,
       )

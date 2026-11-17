@@ -84,7 +84,7 @@ export function standingView(
   return {
     ...emptyView,
     phase: "standing",
-    headline: passed ? "Passed" : "Not passed",
+    headline: passed ? "Passed" : arePointsHeld ? "Waiting for review" : "Not passed",
     tone: passed ? "passed" : isOutOfTries ? "failed" : "info",
     points:
       availablePoints > 0 && !arePointsHeld
@@ -381,6 +381,8 @@ function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): str
  * @param exercise.solutionUrl The model solution's page once the stored course reveals it; fills
  *   in a view that has none, as a course refresh after the grading can reveal it.
  * @param exercise.isLoggedOut See {@link SubmissionView.isLoggedOut}.
+ * @param exercise.arePointsHeld A teacher's review holds the exercise's points back now, so a
+ *   finished grading's score is not what the student has.
  */
 export function withExerciseState(
   view: SubmissionView,
@@ -393,6 +395,7 @@ export function withExerciseState(
     pendingReview?: string | undefined
     solutionUrl?: string | undefined
     isLoggedOut?: boolean | undefined
+    arePointsHeld?: boolean | undefined
   },
 ): SubmissionView {
   const {
@@ -413,8 +416,17 @@ export function withExerciseState(
   const isInProgress = view.phase === "uploading" || view.phase === "grading"
   const solutionUrl = isInProgress ? undefined : (view.solutionUrl ?? exercise.solutionUrl)
   const isClosed = exercise.submitRefusal !== undefined
+  // As a grading held for review at grading time reads: the tests' outcome, and no points.
+  const heldForReview =
+    exercise.arePointsHeld && view.phase === "finished" && rest.points !== undefined
+      ? {
+          points: undefined,
+          ...(view.headline === "Passed" ? { headline: "All tests passed" } : {}),
+        }
+      : {}
   const standing = {
     ...rest,
+    ...heldForReview,
     ...(isClosed &&
     view.phase === "standing" &&
     !view.isExercisePassed &&

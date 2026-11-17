@@ -8,6 +8,7 @@ import {
   assertUnreachable,
   CourseIdentifier,
   ExerciseIdentifier,
+  arePointsHeldForReview,
   offersLogIn,
   SUBMIT_REFUSAL_LABELS,
   submitRefusalOf,
@@ -698,6 +699,9 @@ function submissionViewMessage(
         : undefined,
     solutionUrl: exercise && stored.ok ? modelSolutionUrl(stored.val) : undefined,
     isLoggedOut: !actionContext.authState.loggedIn,
+    arePointsHeld:
+      exercise?.kind === "mooc" &&
+      arePointsHeldForReview(exercise.data.pendingReview, exercise.data.awardedPoints),
   })
   return { type: "submissionView", target: { id: panel.id, type: panel.type }, view: shown }
 }

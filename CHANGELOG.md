@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- While a teacher's review holds an exercise's points back, its results screen shows no score, as Course Details does: a passing grading reads All tests passed, and the exercise reads Waiting for review. The tmc.mooc.fi test server awards a passing submission's points and marks the exercise passed, as tmc.mooc.fi does, so its results screen, History and the Courses view agree.
 - Refresh in Course Details checks the course's exercises for updates too, so an exercise the teacher changed shows as an update, or is updated, without Update Exercises, and a changed AI policy is noted there.
 - The results screen no longer contradicts itself: an exercise that is not passed and can no longer be submitted is headed by why, such as Deadline passed, a local pass of such an exercise no longer asks you to submit it, and a failing submission of an exercise passed earlier is headed Passed, as the exercise reads in a later session.
 - A lost login is told once: the screen on view says it with a single Log In, the status bar item always does, and a notification appears only while no TestMyCode screen is on view, once until you log in again. A login the server refused stays shown as logged out until you log in again. Logging in or out clears the failures a screen showed, a failed submission gives way to the exercise's standing once you log in or it can no longer be submitted, an action that succeeds clears its earlier failure, a repeated failure replaces the earlier one, and a successful course home refresh clears what earlier actions reported.
