@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Error Details leads with Show Logs, with Copy Details beside it, unless the error has its own remedy.
 - Error Details shows and copies your home folder as ~ (%USERPROFILE% on Windows) and leaves your user name out, in the error, its causes, the recent log and the startup help.
 - A course whose exercises need a language extension VS Code lacks, Python's or Java's, says "Install the Python extension to run and debug your code." in its course home with Install, and the first time such an exercise opens a notification says the same, once per language until the extension is installed.
 - A course workspace with AI assistance off opens with its AI settings already in place, so the chat side bar no longer shows there for the first seconds, and the secondary side bar is closed when it opens.

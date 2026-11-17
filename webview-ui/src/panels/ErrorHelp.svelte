@@ -91,8 +91,8 @@
       return {
         primary: remedy
           ? { label: remedy.label, onclick: () => runCommand(remedy.command) }
-          : copyDetails,
-        secondary: remedy ? [copyDetails, showLogs] : [showLogs, reportIssue],
+          : showLogs,
+        secondary: remedy ? [showLogs, copyDetails] : [copyDetails, reportIssue],
       }
     }
     return { primary: showLogs, secondary: [] }
