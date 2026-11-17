@@ -111,6 +111,11 @@ export const CourseHomeViewSchema = z.object({
   nextExercise: z
     .object({ id: ExerciseIdentifierSchema, name: z.string(), isOnDisk: z.boolean() })
     .optional(),
+  /**
+   * The course has exercises, and every one is passed or refused submissions, so nothing is left
+   * to do until that changes.
+   */
+  isAllDone: z.boolean(),
   /** Announced as new and not dismissed; downloadable ones only. */
   newExercises: z.array(z.object({ id: ExerciseIdentifierSchema, name: z.string() })),
   /** Exercises on disk whose template changed on the backend. */

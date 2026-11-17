@@ -6,6 +6,7 @@ import type { CourseIdentifier, LocalCourseData } from "../../../shared/lib"
 import { LocalCourseData as LocalCourseDataNs } from "../../../shared/lib"
 import type { ReadyActionContext } from "../../actions/types"
 import { enrollOnCourse } from "../../commands/enrollOnCourse"
+import { MOOC_BACKEND_URL } from "../../config/constants"
 import type { UserData } from "../../config/userdata"
 import { moocCourseExercise, moocLocalCourse } from "../fixtures/courses"
 import { createMockActionContext } from "../mocks/actionContext"
@@ -60,5 +61,19 @@ suite("enrollOnCourse", function () {
     expect(String((openExternal.mock.calls[0] as unknown[])[0])).toBe(
       "https://courses.mooc.fi/org/uh-cs/courses/refused",
     )
+  })
+
+  test("opens courses.mooc.fi itself for a course with no page of its own", async function () {
+    const openExternal = vi.fn(async () => true)
+    const vscodeModule: object = vscode
+    Object.defineProperty(vscodeModule, "env", { value: { openExternal }, configurable: true })
+    const context = contextWith([
+      moocLocalCourse({ id: "pageless", exercises: [], notEnrolled: true }),
+    ])
+
+    await enrollOnCourse(context)
+
+    expect(String((openExternal.mock.calls[0] as unknown[])[0])).toBe(`${MOOC_BACKEND_URL}/`)
+    expect(context.dialog.notification).not.toHaveBeenCalled()
   })
 })

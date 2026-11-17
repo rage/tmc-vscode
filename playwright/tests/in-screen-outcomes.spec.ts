@@ -72,7 +72,7 @@ vsCodeTest(
 )
 
 vsCodeTest(
-  "a pass while logged out opens the results screen with Log In to Submit",
+  "a pass while logged out offers Log In to Submit, and with nothing left Course Details says so",
   async ({ page, webview }) => {
     const coursesView = new CoursesViewPage(page, webview)
     const tmc = new TmcPage(page, webview)
@@ -110,6 +110,16 @@ vsCodeTest(
       await expect(results.getByRole("heading", { name: "Exercise passed" })).toBeVisible({
         timeout: 30_000,
       })
+    })
+
+    await vsCodeTest.step("Open Next Exercise with nothing left opens Course Details", async () => {
+      await code.click()
+      await tmc.runExercisePaletteCommand("TestMyCode: Open Next Exercise")
+
+      const courseHome = await tmc.panelHeaded(COURSE_TITLE)
+      await expect(
+        courseHome.getByRole("list", { name: "Course notices" }).getByText("Nothing left to do"),
+      ).toBeVisible({ timeout: 30_000 })
     })
   },
 )

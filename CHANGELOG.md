@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Open Next Exercise with nothing left to do opens Course Details, which then says nothing is left to do right now. Commands that need a course open the add-course screen when none is added, as does Add Course in the Command Palette when neither site lists anything. Enroll on a course without a page of its own opens courses.mooc.fi.
 - Submitting an exercise the course refuses, or one held back by the AI policy or a submission in progress, says so in its results screen while that is on screen. Passing tests while logged out opens the results screen with Log In to Submit. Exam mode no longer adds a notification to what Test Results says.
 - A failed action in Course Details or the results screen, such as a download, shows in that screen until dismissed instead of in a notification. While the screen is out of sight a notification says so too, and the screen shows the failure when you return to it.
 - Error notifications and the error notices in screens offer Show Details instead of Show Logs and inline details: a screen with the error, its causes and the recent log, with Copy Details, Show Logs and the error's own remedy. Show Help for the TestMyCode tools no longer claims the extension failed to start.

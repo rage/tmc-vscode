@@ -2185,6 +2185,7 @@ function courseHomeOf(course: LocalCourseData): CourseHomeView {
     isSessionExpired: false,
     isWorkspaceOpen: false,
     isRestricted: false,
+    isAllDone: false,
     newExercises: [],
     updates: [],
     recentlyUpdated: [],

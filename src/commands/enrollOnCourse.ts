@@ -1,6 +1,7 @@
 import type { CourseIdentifier } from "../../shared/lib"
 import { backendName, LocalCourseData } from "../../shared/lib"
 import type { ReadyActionContext } from "../actions/types"
+import { MOOC_BACKEND_URL } from "../config/constants"
 import { openWebLink } from "../utilities"
 import { pickCourse } from "./pickCourse"
 
@@ -31,12 +32,8 @@ export async function enrollOnCourse(
     return
   }
   const course = userData.getCourse(target)
-  const url = course.ok ? LocalCourseData.getMaterialUrl(course.val) : undefined
-  if (url === undefined) {
-    await actionContext.dialog.notification(
-      `Open the course on ${backendName("mooc")} to enroll on it.`,
-    )
-    return
-  }
+  // Without the course's own page, the site's front page is where the student finds it.
+  const url =
+    (course.ok ? LocalCourseData.getMaterialUrl(course.val) : undefined) ?? MOOC_BACKEND_URL
   await openWebLink(url)
 }

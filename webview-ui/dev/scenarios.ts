@@ -577,6 +577,25 @@ function answerLogTail(panelId: number): NonNullable<Scenario["reply"]> {
       : []
 }
 
+const { nextExercise: _nextExercise, ...tmcCourseWithoutNext } = tmcCourse
+const allDoneCourse: CourseHomeView = {
+  ...tmcCourseWithoutNext,
+  awardedPoints: tmcCourse.availablePoints,
+  isAllDone: true,
+  newExercises: [],
+  updates: [],
+  parts: tmcCourse.parts.map((part) => ({
+    ...part,
+    exercises: part.exercises.map((exercise) => ({
+      ...exercise,
+      passed: true,
+      status: "closed",
+      isUpdateable: false,
+      awardedPoints: exercise.availablePoints,
+    })),
+  })),
+}
+
 export const SCENARIOS: Scenario[] = [
   {
     id: "course-details/tmc",
@@ -625,6 +644,11 @@ export const SCENARIOS: Scenario[] = [
     id: "course-details/restricted",
     panel: courseDetailsPanel(7, makeTmcKind({ courseId: 42 })),
     reply: answerCourseDetails({ id: 7 }, restrictedCourse),
+  },
+  {
+    id: "course-details/all-done",
+    panel: courseDetailsPanel(9, makeTmcKind({ courseId: 42 })),
+    reply: answerCourseDetails({ id: 9 }, allDoneCourse),
   },
   {
     id: "course-details/action-failed",

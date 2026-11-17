@@ -1,4 +1,4 @@
-import type * as vscode from "vscode"
+import * as vscode from "vscode"
 
 import type { ExerciseIdentifier } from "../../shared/lib"
 import { LocalCourseData } from "../../shared/lib"
@@ -11,7 +11,7 @@ import { nextExerciseAfter } from "../ui/treeview/courseViewModel"
 
 /**
  * Opens the exercise to do after this one, downloading it when needed, and shows its main
- * source file.
+ * source file; opens the course home when none is left.
  *
  * @param from The exercise just worked on: its id, or a file or folder of it; the active
  * editor's exercise when omitted.
@@ -36,7 +36,7 @@ export async function openNextExercise(
   const { course } = stored.val
   const nextId = nextExerciseAfter(course, currentId, new Date())
   if (!nextId) {
-    dialog.statusMessage(`No exercise is left to do in ${LocalCourseData.getCourseTitle(course)}.`)
+    await vscode.commands.executeCommand("tmc.courseDetails", LocalCourseData.getCourseId(course))
     return
   }
   const opened = await withOperation(dialog, { failure: "Failed to open the next exercise." }, () =>

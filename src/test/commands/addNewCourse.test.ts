@@ -372,7 +372,7 @@ suite("Add New Course command", function () {
     expect(actions.addNewCourse).not.toHaveBeenCalled()
   })
 
-  test("reports an error and closes when both backends fail", async function () {
+  test("opens the add-course screen, which says why for each, when both backends fail", async function () {
     const { context, quickPick, done } = harness({
       organizations: Promise.resolve(Err(new Error("down"))),
       moocCourses: Promise.resolve(Err(new Error("down"))),
@@ -380,10 +380,8 @@ suite("Add New Course command", function () {
     await done
 
     expect(quickPick.isShown).toBe(false)
-    expect(context.dialog.errorNotification).toHaveBeenCalledWith(
-      "Failed to fetch courses from courses.mooc.fi or tmc.mooc.fi. " +
-        "Check your network connection and that you are logged in.",
-    )
+    expect(executeCommand).toHaveBeenCalledWith("tmc.showAddCourse")
+    expect(context.dialog.errorNotification).not.toHaveBeenCalled()
   })
 
   test("without an enrolled course, offers to find one on courses.mooc.fi instead", async function () {

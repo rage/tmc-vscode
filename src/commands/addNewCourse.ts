@@ -26,6 +26,8 @@ type Choice =
   | { kind: "organization"; organization: Organization }
   | { kind: "course"; courseId: CourseIdentifier; name: string; organizationSlug: string }
   | { kind: "added"; courseId: CourseIdentifier }
+  // Neither backend listed anything; the add-course screen says why for each, with Retry.
+  | { kind: "unavailable" }
 
 interface ChoiceItem extends vscode.QuickPickItem {
   choice?: Choice
@@ -80,6 +82,10 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
   }
   if (chosen.kind === "login") {
     await vscode.commands.executeCommand("tmc.showMoocLogin")
+    return
+  }
+  if (chosen.kind === "unavailable") {
+    await vscode.commands.executeCommand("tmc.showAddCourse")
     return
   }
   if (chosen.kind === "findCourse") {
@@ -242,11 +248,8 @@ function pickCourse(
       }
       renderFirstStep()
       if (quickPick.items.length === 0) {
-        void dialog.errorNotification(
-          `Failed to fetch courses from ${unavailableNames().join(" or ")}. ` +
-            "Check your network connection and that you are logged in.",
-        )
-        settle(undefined)
+        Logger.warn(`Failed to fetch courses from ${unavailableNames().join(" or ")}.`)
+        settle({ kind: "unavailable" })
       }
     })
 

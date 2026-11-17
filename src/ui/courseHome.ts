@@ -126,6 +126,7 @@ export function buildCourseHomeView(
           },
         }
       : {}),
+    isAllDone: exercises.length > 0 && leftToDo.length === 0,
     newExercises: exercises
       .filter((ex) => ex.status === "new" && newKeys.has(ExerciseIdentifier.key(ex.id)))
       .map(({ id, name }) => ({ id, name })),

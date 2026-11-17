@@ -650,6 +650,18 @@ suite("the course home", () => {
     expect(screen.queryByRole("list", { name: "Course notices" })).not.toBeInTheDocument()
   })
 
+  test("says when nothing is left to do, unless the course itself is out of reach", async () => {
+    const panel = await renderHome(courseHomeView({ isAllDone: true }))
+
+    expect(screen.getByRole("list", { name: "Course notices" })).toHaveTextContent(
+      "Nothing left to do right now",
+    )
+
+    sendView(panel, courseHomeView({ isAllDone: true, accessLoss: "forbidden" }))
+
+    await vi.waitFor(() => expect(screen.queryByText(/Nothing left to do/)).not.toBeInTheDocument())
+  })
+
   test("states the soft-deadline policy only when a soft deadline binds", async () => {
     const panel = await renderHome()
     expect(screen.queryByText(/awards only 75%/)).not.toBeInTheDocument()

@@ -72,14 +72,15 @@ suite("Open Next Exercise command", function () {
     expect(vi.mocked(downloadAndOpenExercises).mock.calls[0]?.[1]).toEqual([idOfTmcExercise(3)])
   })
 
-  test("says so when no exercise is left to do", async function () {
+  test("opens the course home when no exercise is left to do", async function () {
     const context = harness()
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    onTestFinished(() => executeCommand.mockRestore())
 
     await openNextExercise(context, idOfTmcExercise(3))
 
-    expect(context.dialog.statusMessage).toHaveBeenCalledWith(
-      "No exercise is left to do in Python Course.",
-    )
+    expect(executeCommand).toHaveBeenCalledExactlyOnceWith("tmc.courseDetails", idOfTmcCourse(42))
+    expect(context.dialog.statusMessage).not.toHaveBeenCalled()
     expect(downloadAndOpenExercises).not.toHaveBeenCalled()
   })
 

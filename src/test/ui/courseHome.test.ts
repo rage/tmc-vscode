@@ -432,6 +432,28 @@ suite("buildCourseHomeView", function () {
     expect(view.nextExercise).toBeUndefined()
   })
 
+  test("is all done once every exercise is passed or closed for submissions, and not before", function () {
+    const passed = tmcCourseExercise({ id: 1, name: "part01-01_hello", passed: true })
+    const pastDeadline = tmcCourseExercise({
+      id: 2,
+      name: "part01-02_world",
+      deadline: "2000-01-01T00:00:00Z",
+    })
+    const done = tmcLocalCourse({ exercises: [passed, pastDeadline] })
+    const notDone = tmcLocalCourse({
+      exercises: [passed, tmcCourseExercise({ id: 3, name: "part01-03_todo" })],
+    })
+    const empty = tmcLocalCourse({ exercises: [] })
+
+    const isAllDone = (course: LocalCourseData): boolean =>
+      buildCourseHomeView(contextFor(course), LocalCourseDataNs.getCourseId(course), NOW).unwrap()
+        .isAllDone
+
+    expect(isAllDone(done)).toBe(true)
+    expect(isAllDone(notDone)).toBe(false)
+    expect(isAllDone(empty)).toBe(false)
+  })
+
   test("calls a course whose exercises name no part just Exercises", function () {
     const course = moocLocalCourse({ exercises: [moocCourseExercise({ name: "Hello world" })] })
 

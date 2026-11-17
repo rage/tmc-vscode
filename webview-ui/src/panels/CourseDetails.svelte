@@ -301,6 +301,15 @@
             ? [{ label: "Update", onclick: () => runCourseAction("updateExercises") }]
             : [],
       },
+      view.isAllDone &&
+        !view.accessLoss &&
+        !view.isNotEnrolled &&
+        !view.isDisabled && {
+          key: "allDone",
+          tone: "info",
+          title: "Nothing left to do right now",
+          detail: "Every exercise is passed or closed for submissions.",
+        },
       view.recentlyUpdated.length > 0 && {
         key: "updated",
         tone: "info",
