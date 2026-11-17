@@ -291,7 +291,16 @@ suite("courseSelectionItems", function () {
     moocCourse("course-uuid", "python-mooc", "Programming 1"),
   ]
 
-  test("labels a course by its title and describes it by its backend", function () {
+  test("names no backend where the titles alone tell the courses apart", function () {
+    const items = courseSelectionItems([
+      tmcCourse(3, "python-mooc", "Programming 1"),
+      moocCourse("course-uuid", "java-mooc", "Programming 2"),
+    ])
+
+    expect(items.map(({ description }) => description)).toEqual([undefined, undefined])
+  })
+
+  test("describes courses of the same title by their backend", function () {
     expect(courseSelectionItems(courses)).toEqual([
       { label: "Programming 1", value: makeTmcKind({ courseId: 3 }), description: "tmc.mooc.fi" },
       {

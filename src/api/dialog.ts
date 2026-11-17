@@ -58,12 +58,11 @@ export interface FractionProgress {
 }
 
 /**
- * Quick-pick rows for a list of courses, labelled by course title and described by the
- * backend they come from.
+ * Quick-pick rows for a list of courses, labelled by course title, and described by the backend
+ * they come from only where another course has the same title.
  *
  * Every place the user chooses among their courses builds its rows here: titles are only
- * unique within one backend, so a list that omits the backend can show two rows a student
- * cannot tell apart.
+ * unique within one backend, and service names are otherwise kept from students.
  *
  * @param decorate Replaces the label for one course, given the course and the title it would
  * otherwise get — for marking the workspace that is already open, and nothing heavier.
@@ -72,12 +71,14 @@ export function courseSelectionItems(
   courses: readonly LocalCourseData[],
   decorate?: (course: LocalCourseData, title: string) => string,
 ): Item<CourseIdentifier>[] {
-  return courses.map((course) => {
-    const title = LocalCourseData.getCourseTitle(course)
+  const titles = courses.map((course) => LocalCourseData.getCourseTitle(course))
+  return courses.map((course, index) => {
+    const title = titles[index] ?? LocalCourseData.getCourseTitle(course)
+    const isTitleShared = titles.filter((other) => other === title).length > 1
     return {
       label: decorate?.(course, title) ?? title,
       value: LocalCourseData.getCourseId(course),
-      description: backendName(course.kind),
+      ...(isTitleShared ? { description: backendName(course.kind) } : {}),
     }
   })
 }
