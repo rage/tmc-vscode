@@ -120,6 +120,10 @@ export const CourseHomeViewSchema = z.object({
   newExercises: z.array(z.object({ id: ExerciseIdentifierSchema, name: z.string() })),
   /** Exercises on disk whose template changed on the backend. */
   updates: z.array(z.object({ id: ExerciseIdentifierSchema, name: z.string() })),
+  /** Exercises among {@link updates} whose last update failed, each with why, as a sentence. */
+  failedUpdates: z.array(
+    z.object({ id: ExerciseIdentifierSchema, name: z.string(), reason: z.string() }),
+  ),
   /** Exercises the last automatic update replaced, until the student dismisses the notice. */
   recentlyUpdated: z.array(z.string()),
   parts: z.array(CourseHomePartSchema),

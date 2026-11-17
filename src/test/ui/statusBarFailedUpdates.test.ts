@@ -52,7 +52,7 @@ suite("FailedUpdatesStatusBarItem", function () {
     expect(createItem().isShown).toBe(false)
   })
 
-  test("names the exercise and says why in plain words, offering to check again", function () {
+  test("names the exercise and says why in plain words, offering its course home", function () {
     failed = [failure("trivial")]
 
     const item = createItem()
@@ -60,7 +60,11 @@ suite("FailedUpdatesStatusBarItem", function () {
     expect(item.isShown).toBe(true)
     expect(item.text).toBe("$(warning) Update failed: trivial")
     expect(tooltipText(item)).toContain(`Could not update trivial. ${NOT_A_PACKAGE}`)
-    expect(item.command).toBe("tmc.updateExercises")
+    expect(item.command).toEqual({
+      title: "Show Course",
+      command: "tmc.courseDetails",
+      arguments: [failed[0]!.courseId],
+    })
   })
 
   test("counts several exercises", function () {

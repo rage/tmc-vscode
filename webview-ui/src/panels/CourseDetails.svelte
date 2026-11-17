@@ -291,14 +291,28 @@
         ondismiss: () => runCourseAction("dismissNewExercises"),
         dismissLabel: "Dismiss the new exercises",
       },
-      view.updates.length > 0 && {
+      view.updates.length > 0 &&
+        view.failedUpdates.length === 0 && {
+          key: "updates",
+          tone: "info",
+          title: view.updates.length === 1 ? "1 update" : `${view.updates.length} updates`,
+          detail: `${listNames(view.updates.map((ex) => ex.name))}. Your own code is kept.`,
+          actions:
+            canDownload && !view.isOffline
+              ? [{ label: "Update", onclick: () => runCourseAction("updateExercises") }]
+              : [],
+        },
+      view.failedUpdates.length > 0 && {
         key: "updates",
-        tone: "info",
-        title: view.updates.length === 1 ? "1 update" : `${view.updates.length} updates`,
-        detail: `${listNames(view.updates.map((ex) => ex.name))}. Your own code is kept.`,
+        tone: "warning",
+        title: `Couldn't update ${plural(view.failedUpdates.length, "exercise")}`,
+        detail: [
+          `${listNames(view.failedUpdates.map((ex) => ex.name))}.`,
+          ...new Set(view.failedUpdates.map((ex) => ex.reason).filter((reason) => reason !== "")),
+        ].join(" "),
         actions:
           canDownload && !view.isOffline
-            ? [{ label: "Update", onclick: () => runCourseAction("updateExercises") }]
+            ? [{ label: "Try Again", onclick: () => runCourseAction("updateExercises") }]
             : [],
       },
       view.isAllDone &&

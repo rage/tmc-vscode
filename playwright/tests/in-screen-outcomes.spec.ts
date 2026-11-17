@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test"
 
 import { MOCK_BACKEND_URL } from "../../backend/mockSession"
+import { passingExercise } from "../../backend/mooc/fixtures"
 import { vsCodeTest } from "../fixtures"
 import { CourseHomePage } from "../pages/course-home"
 import { CoursesViewPage } from "../pages/courses-view"
@@ -120,6 +121,46 @@ vsCodeTest(
       await expect(
         courseHome.getByRole("list", { name: "Course notices" }).getByText("Nothing left to do"),
       ).toBeVisible({ timeout: 30_000 })
+    })
+  },
+)
+
+vsCodeTest(
+  "a failed update shows in Course Details' updates notice, with Try Again",
+  async ({ page, webview }) => {
+    const coursesView = new CoursesViewPage(page, webview)
+    const courseHome = new CourseHomePage(page, webview)
+    const failedNotice = courseHome.notices().getByText(/Couldn't update 1 exercise/)
+
+    await vsCodeTest.step("download the course's exercise", async () => {
+      await coursesView.goto()
+      await coursesView.addNewMoocCourse(COURSE_TITLE)
+      await courseHome.expectShown(COURSE_TITLE)
+      await courseHome.downloadAll()
+      await courseHome.expectState("passing_exercise", "Downloaded")
+    })
+
+    await vsCodeTest.step("an update that fails shows as a warning in its notice", async () => {
+      const published = await fetch(`${MOCK_BACKEND_URL}/mooc-mock/publish-exercise-update`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ exercise_id: passingExercise.slide.exercise_id }),
+      })
+      expect(published.status).toBe(204)
+      await failNextArchiveDownload()
+
+      // Updates install automatically once the check finds them, so this one fails at once.
+      await coursesView.runPaletteCommand("TestMyCode: Update Exercises")
+
+      await expect(failedNotice).toBeVisible({ timeout: 30_000 })
+      await expect(courseHome.webview.getByRole("alert")).toHaveCount(0)
+    })
+
+    await vsCodeTest.step("Try Again updates the exercise and clears the warning", async () => {
+      await courseHome.notices().getByRole("button", { name: "Try Again" }).click()
+
+      await expect(failedNotice).toBeHidden({ timeout: 30_000 })
+      await expect(courseHome.notices().getByText(/update/)).toHaveCount(0)
     })
   },
 )

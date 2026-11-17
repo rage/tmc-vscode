@@ -2,6 +2,7 @@ import type { Result } from "ts-results"
 import { Err } from "ts-results"
 import * as vscode from "vscode"
 
+import type { ExerciseIdentifier } from "../../shared/lib"
 import { toError } from "../../shared/lib"
 import { AiUseRefusedError, BottleneckError, presentationFor } from "../errors"
 import { Logger } from "../utilities"
@@ -52,6 +53,8 @@ export interface OperationOptions {
 export interface OperationWarning {
   headline: string
   error: Error
+  /** The exercises that failed, when that is what the warning says, for a screen listing them. */
+  failedExercises?: ExerciseIdentifier[]
 }
 
 /**

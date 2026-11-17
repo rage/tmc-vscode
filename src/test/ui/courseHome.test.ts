@@ -10,6 +10,7 @@ import { ExerciseStatus } from "../../api/workspaceManager"
 import type { UserData } from "../../config/userdata"
 import { buildCourseHomeView } from "../../ui/courseHome"
 import { exerciseOperations } from "../../ui/exerciseOperations"
+import { failedUpdates } from "../../ui/failedUpdates"
 import { recentUpdates } from "../../ui/recentUpdates"
 import type CoursesTree from "../../ui/treeview/treeview"
 import { updateablesRegistry } from "../../ui/updateablesRegistry"
@@ -250,6 +251,39 @@ suite("buildCourseHomeView", function () {
     expect(view.updates).toEqual([{ id: idOfTmcExercise(1), name: "01_hello" }])
     expect(view.parts[0]?.exercises[0]?.isUpdateable).toBe(true)
     expect(view.recentlyUpdated).toEqual(["part01-02_loops"])
+  })
+
+  test("lists the course's failed updates with why, and no other course's", function () {
+    const course = tmcLocalCourse({
+      exercises: [tmcCourseExercise({ id: 1, name: "part01-01_hello" })],
+    })
+    updateablesRegistry.setMany([
+      [idOfTmcCourse(42), [idOfTmcExercise(1)]],
+      [idOfTmcCourse(43), [idOfTmcExercise(9)]],
+    ])
+    const reason = "The exercise on the server is not a valid exercise package."
+    failedUpdates.record(
+      [
+        {
+          courseId: idOfTmcCourse(42),
+          exerciseId: idOfTmcExercise(1),
+          exerciseName: "01_hello",
+          reason,
+        },
+        {
+          courseId: idOfTmcCourse(43),
+          exerciseId: idOfTmcExercise(9),
+          exerciseName: "other",
+          reason,
+        },
+      ],
+      [],
+    )
+    onTestFinished(() => failedUpdates.clear())
+
+    const view = buildCourseHomeView(contextFor(course), idOfTmcCourse(42), NOW).unwrap()
+
+    expect(view.failedUpdates).toEqual([{ id: idOfTmcExercise(1), name: "01_hello", reason }])
   })
 
   test("describes the next deadline among the exercises still to do", function () {

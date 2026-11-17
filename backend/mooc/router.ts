@@ -165,6 +165,8 @@ interface MoocMockState {
   failNextByOperation: Map<string, number>
   /** One-shot: the next exercise archive download fails, this late. */
   failNextArchive: { delayMs: number } | undefined
+  /** Exercises republished with a new template, by id, with each task's checksum before it. */
+  checksumsBeforeUpdate: Map<string, string[]>
   // The integration mock runs in a separate process from the test, so the two
   // members below record the most recent authenticated request's `Authorization`
   // header and a count, surfaced via `GET /mooc-mock/auth-state`, to let a test
@@ -233,6 +235,7 @@ const createMoocMockState = (baseUrl: string): MoocMockState => ({
   expireNextUpload: false,
   failNextByOperation: new Map(),
   failNextArchive: undefined,
+  checksumsBeforeUpdate: new Map(),
   lastAuthorization: undefined,
   authenticatedRequestCount: 0,
   oauth: createMoocOAuthState(),
@@ -295,6 +298,11 @@ export interface MoocMockControls {
    * `delayMs`: the archive route is outside the client API, so {@link failNext} cannot reach it.
    */
   failNextArchive: (delayMs?: number) => void
+  /**
+   * Republishes an exercise with a new template, as a teacher can: its checksum changes, so a
+   * client that downloaded it finds an update. Returns false for an unknown exercise.
+   */
+  publishExerciseUpdate: (exerciseId: string) => boolean
   /**
    * Seeds a submission the host has no files for, so its download is an empty list.
    * Only an exercise type with no files at all is like this, and a submit through the
@@ -457,6 +465,12 @@ const createMoocMockControls = (
     state.expireNextUpload = false
     state.failNextByOperation.clear()
     state.failNextArchive = undefined
+    for (const [exerciseId, checksums] of state.checksumsBeforeUpdate) {
+      state.fixtures.exerciseById.get(exerciseId)?.slide.tasks.forEach((task, index) => {
+        task.public_spec.checksum = checksums[index] ?? task.public_spec.checksum
+      })
+    }
+    state.checksumsBeforeUpdate.clear()
     state.lastAuthorization = undefined
     state.authenticatedRequestCount = 0
     state.oauth.reset()
@@ -492,6 +506,23 @@ const createMoocMockControls = (
   },
   failNextArchive: (delayMs = 0) => {
     state.failNextArchive = { delayMs }
+  },
+  publishExerciseUpdate: (exerciseId) => {
+    const exercise = state.fixtures.exerciseById.get(exerciseId)
+    if (!exercise) {
+      return false
+    }
+    const { tasks } = exercise.slide
+    if (!state.checksumsBeforeUpdate.has(exerciseId)) {
+      state.checksumsBeforeUpdate.set(
+        exerciseId,
+        tasks.map((task) => task.public_spec.checksum),
+      )
+    }
+    for (const task of tasks) {
+      task.public_spec.checksum = `${task.public_spec.checksum}-updated`
+    }
+    return true
   },
   seedFilelessSubmission: (exerciseId) => {
     if (!state.fixtures.exerciseById.has(exerciseId)) {
@@ -2013,6 +2044,19 @@ export const registerMoocRoutes = (
       return
     }
     controls.setCurrentUser(id)
+    res.status(204).end()
+  })
+
+  app.post("/mooc-mock/publish-exercise-update", json, (req, res) => {
+    const { exercise_id: exerciseId } = (req.body ?? {}) as { exercise_id?: unknown }
+    if (typeof exerciseId !== "string") {
+      res.status(400).json({ error: "exercise_id must be a string" })
+      return
+    }
+    if (!controls.publishExerciseUpdate(exerciseId)) {
+      res.status(404).json({ error: `no such exercise: ${exerciseId}` })
+      return
+    }
     res.status(204).end()
   })
 

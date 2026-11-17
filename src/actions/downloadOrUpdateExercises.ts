@@ -303,6 +303,7 @@ async function download(
     warnings.push({
       headline: `Failed to ${options.isUpdate ? "update" : "download"} ${describeExercises(names)}.`,
       error: cause,
+      failedExercises: results.failed,
     })
   }
   return { ...results, failureCause: cause, warnings }

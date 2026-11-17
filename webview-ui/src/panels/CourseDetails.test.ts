@@ -526,6 +526,24 @@ suite("the course home", () => {
     expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "updateExercises"))
   })
 
+  test("turns the updates notice into a warning of the ones that failed, with Try Again", async () => {
+    const hello = makeTmcKind({ tmcExerciseId: 1 })
+    const reason = "The exercise on the server is not a valid exercise package."
+    const panel = await renderHome(
+      courseHomeView({
+        updates: [{ id: hello, name: "01_hello" }],
+        failedUpdates: [{ id: hello, name: "01_hello", reason }],
+      }),
+    )
+
+    const notices = screen.getByRole("list", { name: "Course notices" })
+    expect(notices).toHaveTextContent(/Couldn't update 1 exercise\s*01_hello\. The exercise on the/)
+    expect(within(notices).queryByRole("button", { name: "Update" })).not.toBeInTheDocument()
+    within(notices).getByRole("button", { name: "Try Again" }).click()
+
+    expect(postedMessages).toHaveBeenCalledWith(courseAction(panel, "updateExercises"))
+  })
+
   test("says what an automatic update replaced until dismissed", async () => {
     const panel = await renderHome(courseHomeView({ recentlyUpdated: ["01_hello", "02_loops"] }))
 

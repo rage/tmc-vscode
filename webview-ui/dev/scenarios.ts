@@ -651,6 +651,23 @@ export const SCENARIOS: Scenario[] = [
     reply: answerCourseDetails({ id: 9 }, allDoneCourse),
   },
   {
+    id: "course-details/update-failed",
+    panel: courseDetailsPanel(10, makeTmcKind({ courseId: 42 })),
+    reply: answerCourseDetails(
+      { id: 10 },
+      {
+        ...tmcCourse,
+        failedUpdates: [
+          {
+            id: makeTmcKind({ tmcExerciseId: 103 }),
+            name: "03_sum_of_numbers",
+            reason: "tmc.mooc.fi could not be reached. Check your network connection.",
+          },
+        ],
+      },
+    ),
+  },
+  {
     id: "course-details/action-failed",
     panel: courseDetailsPanel(8, makeTmcKind({ courseId: 42 })),
     reply: answerCourseDetails({ id: 8 }, tmcCourse),

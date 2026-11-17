@@ -254,7 +254,11 @@ suite("downloadOrUpdateExercises action", function () {
     expect(result.successful).toEqual([])
     expect(result.failed).toEqual([idOfTmcExercise(1), idOfTmcExercise(2)])
     expect(result.warnings).toEqual([
-      { headline: "Failed to download 2 exercises: hello_world, other_world.", error: error },
+      {
+        headline: "Failed to download 2 exercises: hello_world, other_world.",
+        error: error,
+        failedExercises: [idOfTmcExercise(1), idOfTmcExercise(2)],
+      },
     ])
   })
 
@@ -281,6 +285,7 @@ suite("downloadOrUpdateExercises action", function () {
           message: "The download did not complete.",
           details: "checksum mismatch",
         }),
+        failedExercises: [idOfTmcExercise(1), idOfTmcExercise(2)],
       },
     ])
   })
@@ -302,7 +307,11 @@ suite("downloadOrUpdateExercises action", function () {
     )
 
     expect(result.warnings).toEqual([
-      { headline: "Failed to download 2 exercises: hello_world, mooc-exercise.", error: moocError },
+      {
+        headline: "Failed to download 2 exercises: hello_world, mooc-exercise.",
+        error: moocError,
+        failedExercises: [idOfTmcExercise(1), idOfMoocExercise("mooc-exercise")],
+      },
     ])
   })
 
@@ -455,6 +464,7 @@ suite("downloadOrUpdateExercises action", function () {
       {
         headline: "Failed to download 2 exercises: exercise-uuid-3, exercise-uuid-4.",
         error: moocError,
+        failedExercises: [idOfMoocExercise(downloadedId), idOfMoocExercise(undownloadedId)],
       },
     ])
     expect(result.successful).toEqual([])

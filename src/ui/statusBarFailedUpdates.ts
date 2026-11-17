@@ -9,8 +9,9 @@ export interface FailedUpdatesSource {
 }
 
 /**
- * The status bar item that names the exercises whose update failed, and checks for updates again
- * when clicked. Hidden while none has failed, so it goes away by itself once the cause is gone.
+ * The status bar item that names the exercises whose update failed, and opens the course home of
+ * the first when clicked, which says why and offers Try Again. Hidden while none has failed, so
+ * it goes away by itself once the cause is gone.
  */
 export class FailedUpdatesStatusBarItem implements vscode.Disposable {
   private readonly _item: vscode.StatusBarItem
@@ -23,7 +24,6 @@ export class FailedUpdatesStatusBarItem implements vscode.Disposable {
       -1,
     )
     this._item.name = "TestMyCode Failed Updates"
-    this._item.command = "tmc.updateExercises"
     this._subscription = _source.onDidChange(() => this.render())
     this.render()
   }
@@ -39,11 +39,16 @@ export class FailedUpdatesStatusBarItem implements vscode.Disposable {
     const subject = failed.length === 1 ? first.exerciseName : `${failed.length} exercises`
     const reasons = [...new Set(failed.map((x) => x.reason))].join(" ")
     this._item.text = `$(warning) Update failed: ${subject}`
+    this._item.command = {
+      title: "Show Course",
+      command: "tmc.courseDetails",
+      arguments: [first.courseId],
+    }
     this._item.tooltip = new vscode.MarkdownString(
-      `**TestMyCode**\n\nCould not update ${names}. ${reasons}\n\nSelect to check for updates again.`,
+      `**TestMyCode**\n\nCould not update ${names}. ${reasons}\n\nSelect to show the course.`,
     )
     this._item.accessibilityInformation = {
-      label: `TestMyCode: could not update ${names}. Check for updates again`,
+      label: `TestMyCode: could not update ${names}. Show the course`,
     }
     this._item.show()
   }

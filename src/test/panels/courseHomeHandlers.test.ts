@@ -257,6 +257,39 @@ suite("the course home's course actions", function () {
     )
   })
 
+  test("leaves the updates that failed to the page's notice, showing any other warning", async function () {
+    const actionContext = context()
+    vi.mocked(buildCourseHomeView).mockReturnValue(
+      Ok(viewWith({ updates: [{ id: idOfTmcExercise(1), name: "hello" }] })),
+    )
+    vi.mocked(actions.downloadExerciseUpdates).mockResolvedValueOnce(
+      Ok({
+        updated: [],
+        warnings: [
+          {
+            headline: "Failed to update hello.",
+            error: new Error("not a package"),
+            failedExercises: [idOfTmcExercise(1)],
+          },
+          { headline: "Failed to refresh local exercises.", error: new Error("disk") },
+        ],
+      }),
+    )
+    const shownHost = host()
+
+    await courseDetailsHandlers.courseAction.handle(
+      { type: "courseAction", sourcePanel: SOURCE, action: "updateExercises" },
+      { host: shownHost, actionContext },
+    )
+
+    expect(vi.mocked(shownHost.post).mock.calls.map(([message]) => message)).toEqual([
+      expect.objectContaining({
+        type: "operationFailed",
+        failure: expect.objectContaining({ title: "Failed to refresh local exercises." }),
+      }),
+    ])
+  })
+
   test("updates nothing for a course that cannot be read", async function () {
     const actionContext = context()
     vi.mocked(buildCourseHomeView).mockReturnValue(Err(new Error("gone")))

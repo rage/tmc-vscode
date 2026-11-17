@@ -1012,6 +1012,21 @@ describe("mooc mock conformance", () => {
     )
   })
 
+  test("a published update changes the exercise's checksum until a reset", async () => {
+    const checksum = async (): Promise<string> => {
+      const res = await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}`))
+      const body = (await res.json()) as { tasks: { public_spec: { checksum: string } }[] }
+      return body.tasks[0]!.public_spec.checksum
+    }
+    const original = await checksum()
+
+    assert.equal(mock.publishExerciseUpdate(passingExercise.slide.exercise_id), true)
+    assert.notEqual(await checksum(), original)
+    assert.equal(mock.publishExerciseUpdate("no-such-exercise"), false)
+    mock.reset()
+    assert.equal(await checksum(), original)
+  })
+
   test("unknown endpoint 404s", async () => {
     const res = await authFetch(api("/does-not-exist"))
     assert.equal(res.status, 404)

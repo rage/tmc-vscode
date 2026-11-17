@@ -149,8 +149,21 @@ async function runCourseAction(
       const view = buildCourseHomeView(actionContext, courseId)
       if (view.ok) {
         const updates = view.val.updates.map(({ id }) => ({ courseId, exerciseId: id }))
-        await withOperation(dialog, { failure: "Failed to update exercises.", shownIn }, () =>
-          actions.downloadExerciseUpdates(actionContext, updates, false, PROGRESS_PLACE),
+        await withOperation(
+          dialog,
+          { failure: "Failed to update exercises.", shownIn },
+          async () => {
+            const downloaded = await actions.downloadExerciseUpdates(
+              actionContext,
+              updates,
+              false,
+              PROGRESS_PLACE,
+            )
+            // The updates notice lists the exercises that failed, with why and Try Again.
+            return downloaded.map(({ warnings }) => ({
+              warnings: warnings.filter((warning) => !warning.failedExercises),
+            }))
+          },
         )
       }
       return

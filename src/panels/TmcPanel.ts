@@ -16,6 +16,7 @@ import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
 import { buildCourseHomeView } from "../ui/courseHome"
 import { exerciseStandingView } from "../ui/exerciseStanding"
+import { failedUpdates } from "../ui/failedUpdates"
 import { loginScreens } from "../ui/loginScreens"
 import { modelSolutionUrl } from "../ui/modelSolution"
 import { recentUpdates } from "../ui/recentUpdates"
@@ -407,6 +408,7 @@ export class TmcPanel {
         // Every other source of the Courses view, gathered into one change per burst.
         actionContext.coursesTree.onDidRender(() => this._onDidChangeCourses(undefined)),
         recentUpdates.onDidChange(() => this._onDidChangeCourses(undefined)),
+        failedUpdates.onDidChange(() => this._onDidChangeCourses(undefined)),
       )
     }
 

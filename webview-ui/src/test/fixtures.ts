@@ -141,6 +141,7 @@ export function courseHomeView(overrides: Partial<CourseHomeView> = {}): CourseH
     isAllDone: false,
     newExercises: [],
     updates: [],
+    failedUpdates: [],
     recentlyUpdated: [],
     parts: [
       {

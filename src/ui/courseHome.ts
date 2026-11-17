@@ -19,6 +19,7 @@ import {
   formatDeadlineBriefly,
   formatNearRelativeTime,
 } from "../utilities"
+import { failedUpdates } from "./failedUpdates"
 import { recentUpdates } from "./recentUpdates"
 import type { ExerciseView } from "./treeview/courseViewModel"
 import {
@@ -131,6 +132,14 @@ export function buildCourseHomeView(
       .filter((ex) => ex.status === "new" && newKeys.has(ExerciseIdentifier.key(ex.id)))
       .map(({ id, name }) => ({ id, name })),
     updates: exercises.filter((ex) => ex.isUpdateable).map(({ id, name }) => ({ id, name })),
+    failedUpdates: failedUpdates
+      .all()
+      .filter((failed) => CourseIdentifier.equals(failed.courseId, courseId))
+      .map(({ exerciseId, exerciseName, reason }) => ({
+        id: exerciseId,
+        name: exerciseName,
+        reason,
+      })),
     recentlyUpdated: recentUpdates.get(courseId),
     parts: parts.map((part) => ({
       key: part.key,
