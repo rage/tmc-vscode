@@ -7,6 +7,13 @@ const otherFile = vscode.Uri.file("/notes/todo.md")
 const resultsTab = { input: { viewType: "mainThreadWebview-tmc.sidePanel" } }
 const courseHomeTab = { input: { viewType: "mainThreadWebview-tmc.mainPanel" } }
 
+function withGroups(...groups: { viewColumn: number; tabs: unknown[] }[]): void {
+  Object.defineProperty(vscode.window, "tabGroups", {
+    value: { all: groups, activeTabGroup: groups[0] },
+    configurable: true,
+  })
+}
+
 suite("keepExerciseFilesInFirstGroup", function () {
   const initialTabGroups = vscode.window.tabGroups
   let activeEditorChanged: vscode.EventEmitter<vscode.TextEditor | undefined>
@@ -29,13 +36,6 @@ suite("keepExerciseFilesInFirstGroup", function () {
       configurable: true,
     })
   })
-
-  function withGroups(...groups: { viewColumn: number; tabs: unknown[] }[]): void {
-    Object.defineProperty(vscode.window, "tabGroups", {
-      value: { all: groups, activeTabGroup: groups[0] },
-      configurable: true,
-    })
-  }
 
   function open(uri: vscode.Uri, viewColumn: vscode.ViewColumn): void {
     activeEditorChanged.fire({ document: { uri }, viewColumn } as vscode.TextEditor)

@@ -19,18 +19,19 @@ export function manifestMenu(menuId: string): MenuEntry[] {
   return manifest.contributes.menus[menuId] ?? []
 }
 
+function placeOf(entry: MenuEntry): [group: string, order: number] {
+  const [group = "", order = "0"] = (entry.group ?? "").split("@")
+  return [group, Number(order)]
+}
+
 /** The commands `menuId` shows in `context`, outside its inline group, in VS Code's order. */
 export function shownMenu(menuId: string, context: MenuContext): string[] {
-  const position = (entry: MenuEntry): [string, number] => {
-    const [group = "", order = "0"] = (entry.group ?? "").split("@")
-    return [group, Number(order)]
-  }
   return manifestMenu(menuId)
     .filter((entry) => !entry.group?.startsWith("inline"))
     .filter((entry) => evaluateWhen(entry.when ?? "", context))
     .toSorted((a, b) => {
-      const [groupA, orderA] = position(a)
-      const [groupB, orderB] = position(b)
+      const [groupA, orderA] = placeOf(a)
+      const [groupB, orderB] = placeOf(b)
       return groupA === groupB ? orderA - orderB : groupA < groupB ? -1 : 1
     })
     .map((entry) => entry.command)
