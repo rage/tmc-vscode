@@ -15,6 +15,7 @@ import type { ReadyActionContext } from "../../actions/types"
 import type { FailureSink } from "../../api/withOperation"
 import { reportFailureIn, withOperation } from "../../api/withOperation"
 import { MOOC_BACKEND_URL, TMC_BACKEND_URL } from "../../config/constants"
+import { isSessionLost } from "../../errors"
 import { buildCourseHomeView } from "../../ui/courseHome"
 import { showExerciseSourceFile } from "../../ui/exerciseSourceFile"
 import { recentPolicyChanges } from "../../ui/recentPolicyChanges"
@@ -58,7 +59,11 @@ export const courseDetailsHandlers = {
       if (rescanResult.err) {
         Logger.warn("Failed to rescan the local exercises", rescanResult.val)
       }
-      if (updateResult.err) {
+      // Logged out, the view's own notice says so; an error box would only repeat it.
+      if (
+        updateResult.err &&
+        !(isSessionLost(updateResult.val) && !actionContext.authState.loggedIn)
+      ) {
         return updateResult
       }
       return buildCourseHomeView(actionContext, courseId)

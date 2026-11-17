@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Refreshing a course home after logging out no longer shows an error there; its Not logged in notice already says what to do.
 - The walkthrough's exercise steps open Course Details and Continue with an Exercise instead of a course quick pick, a download notification, or Run Tests and Submit Solution that only worked from an exercise file. Its Get help step offers Show Help.
 - A course's changed AI policy is noted in its Course Details until dismissed, and notified only while Course Details is not on screen. An update you started is listed in Course Details too, with the status bar message only while it is not on screen, and a warning about your session found by a refresh shows in the Course Details on screen.
 - A failed exercise update shows in Course Details: the updates notice becomes "Couldn't update N exercises" with why and Try Again. The failed-update status bar item opens that course's Course Details.

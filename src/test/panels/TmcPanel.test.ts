@@ -19,6 +19,7 @@ import type WorkspaceManager from "../../api/workspaceManager"
 import { TMC_BACKEND_URL } from "../../config/constants"
 import type { UserData } from "../../config/userdata"
 import {
+  AuthorizationError,
   BottleneckError,
   CliVerificationError,
   InitializationError,
@@ -1182,6 +1183,22 @@ suite("TmcPanel refreshCourseDetails", () => {
         outcome: { ok: true, value: courseHomeOf(courseWith(2)) },
       },
     ])
+  })
+
+  test("answers with the course, not an error, when the student has logged out", async () => {
+    const handlers = stubHandlers()
+    handlers.updateCourse.mockResolvedValue(
+      Err(Object.assign(new AuthorizationError("Not logged in."), { backend: "mooc" as const })),
+    )
+    const actionContext = createMockActionContext({
+      loggedIn: false,
+      startup: { userData: storedCourses(() => Ok(courseWith(2))) },
+    })
+    const { panel, listener, shown } = await mountCourseDetails(actionContext)
+
+    await listener(refreshRequest(shown))
+
+    expect(replyTo(panel, 1)).toMatchObject({ outcome: { ok: true } })
   })
 
   test("refuses a refresh from a panel no longer showing the course", async () => {
