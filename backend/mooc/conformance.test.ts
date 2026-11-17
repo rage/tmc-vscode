@@ -1017,6 +1017,19 @@ describe("mooc mock conformance", () => {
     assert.equal((await fetch(archiveUrl)).status, 200)
   })
 
+  test("an armed archive delay serves the next download late", async () => {
+    const archiveUrl = `${base}/mooc-archives/${passingExercise.archiveSlug}.tar.zst`
+    const armed = await fetch(`${base}/mooc-mock/delay-next-archive`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ delayMs: 150 }),
+    })
+    assert.equal(armed.status, 204)
+    const started = Date.now()
+    assert.equal((await fetch(archiveUrl)).status, 200)
+    assert.ok(Date.now() - started >= 140)
+  })
+
   test("an archive fault arms from outside the process too", async () => {
     const armed = await fetch(`${base}/mooc-mock/fail-next-archive`, {
       method: "POST",

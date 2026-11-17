@@ -1,10 +1,11 @@
 import { Ok, Result } from "ts-results"
 
-import type { CourseIdentifier } from "../../shared/lib"
+import type { CourseIdentifier, ExerciseIdentifier } from "../../shared/lib"
 import { LocalCourseData } from "../../shared/lib"
 import type { Warned } from "../api/withOperation"
 import { logWarnings } from "../api/withOperation"
 import { Logger } from "../utilities"
+import type { DownloadProgressPlace } from "./downloadOrUpdateExercises"
 import { downloadOrUpdateExercises } from "./downloadOrUpdateExercises"
 import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
@@ -15,11 +16,14 @@ import type { ReadyActionContext } from "./types"
  * An exercise that fails to download is a warning and stays on the list; the `Err` is for
  * a course that is not stored or a list or rescan that could not be updated, and a
  * `BottleneckError` while some of the exercises are busy with another operation.
+ *
+ * @param progressPlace See `DownloadProgressPlace`.
  */
 export async function downloadNewExercisesForCourse(
   actionContext: ReadyActionContext,
   courseId: CourseIdentifier,
-): Promise<Result<Warned, Error>> {
+  progressPlace?: DownloadProgressPlace,
+): Promise<Result<Warned & { downloaded: ExerciseIdentifier[] }, Error>> {
   const { userData } = actionContext.startup
   const courseResult = userData.getCourse(courseId)
   if (courseResult.err) {
@@ -28,7 +32,9 @@ export async function downloadNewExercisesForCourse(
   Logger.info("Downloading new exercises for course")
 
   const newExercises = LocalCourseData.getNewExercises(courseResult.val)
-  const downloaded = await downloadOrUpdateExercises(actionContext, newExercises, courseId)
+  const downloaded = await downloadOrUpdateExercises(actionContext, newExercises, courseId, {
+    progressPlace,
+  })
   if (downloaded.err) {
     return downloaded
   }
@@ -40,5 +46,5 @@ export async function downloadNewExercisesForCourse(
     logWarnings(downloaded.val.warnings)
     return refreshResult
   }
-  return Ok({ warnings: downloaded.val.warnings })
+  return Ok({ downloaded: downloaded.val.successful, warnings: downloaded.val.warnings })
 }

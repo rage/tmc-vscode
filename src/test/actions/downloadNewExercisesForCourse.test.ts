@@ -77,7 +77,7 @@ suite("downloadNewExercisesForCourse action", function () {
 
     const result = await downloadNewExercisesForCourse(actionContext(), COURSE_ID)
 
-    expect(result.ok).toBe(true)
+    expect(result.ok && result.val.downloaded).toEqual([idOfTmcExercise(1), idOfTmcExercise(2)])
     expect(stillNew()).toEqual([])
   })
 

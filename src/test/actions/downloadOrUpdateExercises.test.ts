@@ -1,7 +1,7 @@
 import { first, last } from "lodash"
 import type { Result } from "ts-results"
 import { Err, Ok } from "ts-results"
-import { vi } from "vitest"
+import { onTestFinished, vi } from "vitest"
 import * as vscode from "vscode"
 
 import type { ExerciseStatus } from "../../../shared/lib"
@@ -15,6 +15,8 @@ import type { Warned } from "../../api/withOperation"
 import type Settings from "../../config/settings"
 import * as errors from "../../errors"
 import { BottleneckError, CourseAccessLostError, InvalidTokenError } from "../../errors"
+import type { BackgroundJob } from "../../ui/backgroundJobs"
+import { backgroundJobs } from "../../ui/backgroundJobs"
 import { downloadFailures } from "../../ui/downloadFailures"
 import { exerciseOperations } from "../../ui/exerciseOperations"
 import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
@@ -166,6 +168,11 @@ suite("downloadOrUpdateExercises action", function () {
 
   test("shows a requested download in a cancellable notification, an automatic one in the status bar", async function () {
     tmcMockValues.downloadTmcExercises = createDownloadResult([helloWorld], [])
+    const labels: string[] = []
+    const subscription = backgroundJobs.onDidChange(() =>
+      labels.push(...backgroundJobs.running.map((job) => job.label)),
+    )
+    onTestFinished(() => subscription.dispose())
 
     await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID)
     await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID, {
@@ -174,10 +181,26 @@ suite("downloadOrUpdateExercises action", function () {
 
     expect(
       vi.mocked(dialogMock.progressNotification).mock.calls.map(([, , options]) => options),
-    ).toEqual([
-      { cancellable: true, location: vscode.ProgressLocation.Notification },
-      { location: vscode.ProgressLocation.Window },
-    ])
+    ).toEqual([{ cancellable: true, location: vscode.ProgressLocation.Notification }])
+    expect(new Set(labels)).toEqual(new Set(["Downloading hello_world"]))
+  })
+
+  test("is a long job, notified while its course home is hidden, when it updates", async function () {
+    tmcMockValues.downloadTmcExercises = createDownloadResult([helloWorld], [])
+    const seen: BackgroundJob[] = []
+    const subscription = backgroundJobs.onDidChange(() => seen.push(...backgroundJobs.running))
+    onTestFinished(() => subscription.dispose())
+
+    await downloadOrUpdateExercises(actionContext(), [idOfTmcExercise(1)], TEST_COURSE_ID, {
+      isUpdate: true,
+      isUnrequested: true,
+    })
+
+    expect(seen[0]).toMatchObject({
+      label: "Updating hello_world",
+      screen: { kind: "courseHome", courseId: TEST_COURSE_ID },
+      isLong: true,
+    })
   })
 
   test("says a failed update failed to update", async function () {
