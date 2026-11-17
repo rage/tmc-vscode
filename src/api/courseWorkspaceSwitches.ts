@@ -14,6 +14,8 @@ interface RecordedSwitch extends CourseWorkspaceSwitch {
 export interface CourseWorkspaceSwitch {
   /** The switching window showed the walkthrough, which the switch closed. */
   isWalkthroughOpen: boolean
+  /** The AI-off settings the switching window wrote into the workspace file. */
+  aiOffSettingsWritten: string[]
 }
 
 /**
@@ -31,6 +33,7 @@ export class CourseWorkspaceSwitches {
       workspaceFile,
       switchedAt: this._now(),
       isWalkthroughOpen: state.isWalkthroughOpen,
+      aiOffSettingsWritten: state.aiOffSettingsWritten,
     }
     await this._memento.update(SWITCH_KEY, recorded)
   }
@@ -50,7 +53,12 @@ export class CourseWorkspaceSwitches {
       await this._memento.update(SWITCH_KEY, undefined)
     }
     return isThisWindow && !isExpired
-      ? { isWalkthroughOpen: recorded.isWalkthroughOpen === true }
+      ? {
+          isWalkthroughOpen: recorded.isWalkthroughOpen === true,
+          aiOffSettingsWritten: Array.isArray(recorded.aiOffSettingsWritten)
+            ? recorded.aiOffSettingsWritten
+            : [],
+        }
       : undefined
   }
 }

@@ -168,7 +168,7 @@ async function harness(
     setExercises: async () => Ok.EMPTY,
     deleteWorkspaceFile: async () => Ok.EMPTY,
     createWorkspaceFile: async () => {},
-    prepareWorkspaceFileToOpen: async () => {},
+    prepareWorkspaceFileToOpen: async () => [],
   })
 
   const actionContext: ReadyActionContext = {

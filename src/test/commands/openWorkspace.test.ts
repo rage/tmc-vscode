@@ -53,7 +53,7 @@ suite("openWorkspace command", function () {
 
   beforeEach(function () {
     ;[dialogMock] = createDialogMock()
-    prepareWorkspaceFileToOpen = vi.fn()
+    prepareWorkspaceFileToOpen = vi.fn().mockResolvedValue(["chat.disableAIFeatures"])
     recordSwitch = vi.fn()
     activeCourse = undefined
     executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
@@ -104,7 +104,7 @@ suite("openWorkspace command", function () {
   test("lists the course's open exercises in its workspace file before opening it", async function () {
     await openWorkspace(actionContext(), course)
 
-    expect(prepareWorkspaceFileToOpen).toHaveBeenCalledWith("python-course", "tmc")
+    expect(prepareWorkspaceFileToOpen).toHaveBeenCalledWith("python-course", "tmc", true)
     expect(prepareWorkspaceFileToOpen.mock.invocationCallOrder[0]).toBeLessThan(
       executeCommand.mock.invocationCallOrder.at(-1) ?? 0,
     )
@@ -115,6 +115,7 @@ suite("openWorkspace command", function () {
 
     expect(recordSwitch).toHaveBeenCalledWith(vscode.Uri.file(courseWorkspaceFile).fsPath, {
       isWalkthroughOpen: false,
+      aiOffSettingsWritten: ["chat.disableAIFeatures"],
     })
   })
 
@@ -136,9 +137,9 @@ suite("openWorkspace command", function () {
       })
     }
 
-    expect(recordSwitch.mock.calls.map(([, state]) => state)).toEqual([
-      { isWalkthroughOpen: true },
-      { isWalkthroughOpen: false },
+    expect(recordSwitch.mock.calls.map(([, state]) => state.isWalkthroughOpen)).toEqual([
+      true,
+      false,
     ])
   })
 

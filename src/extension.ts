@@ -15,7 +15,7 @@ import type {
 } from "./actions/types"
 import { isReady } from "./actions/types"
 import { AccountHandover } from "./api/accountHandover"
-import AiRestriction, { isActiveCourseAiAllowed } from "./api/aiRestriction"
+import AiRestriction, { closeChatSideBar, isActiveCourseAiAllowed } from "./api/aiRestriction"
 import { AiUseGate, warnOfUnwritableWorkspaceFile } from "./api/aiUseGate"
 import { createAuthState } from "./api/authState"
 import { CourseWorkspaceSwitches } from "./api/courseWorkspaceSwitches"
@@ -422,6 +422,9 @@ async function activateInner(
       )
       // The AI-use gate enforces its own pass before a submit, test run or paste.
       void aiRestriction.apply()
+      if (!isActiveCourseAiAllowed(courseWorkspace, courses)) {
+        void closeChatSideBar()
+      }
     }
   } else {
     Logger.warn("Skipped userdata setup")
@@ -435,6 +438,7 @@ async function activateInner(
   // The window that switched here has just offered whatever the startup refresh would.
   const openingSwitch = await courseWorkspaceSwitches.take(vscode.workspace.workspaceFile?.fsPath)
   const isOpenedBySwitch = openingSwitch !== undefined
+  await aiRestriction?.adopt(openingSwitch?.aiOffSettingsWritten ?? [])
   const trustGate = new WorkspaceTrustGate(
     ({ message, action }) => dialog.offer(message, action),
     (message) => void dialog.notification(message),
