@@ -223,6 +223,39 @@ suite("the course home", () => {
     expect(screen.getByText(/This chapter is locked\./)).toBeInTheDocument()
   })
 
+  test("a passed exercise of a chapter not unlocked yet shows as passed, the lock on the chapter", async () => {
+    await renderHome(
+      courseHomeView({
+        parts: [
+          {
+            key: "chapter:2",
+            name: "Tour",
+            isDefaultOpen: true,
+            lockedReason: "Locked until you have completed the chapters before it.",
+            exercises: [
+              courseHomeExercise(1, "tour_first", {
+                status: "opened",
+                passed: true,
+                awardedPoints: 1,
+                submitRefusal: {
+                  label: "complete earlier chapters first",
+                  sentence: "Complete the chapters before Tour to submit tour_first.",
+                },
+              }),
+            ],
+          },
+        ],
+      }),
+    )
+
+    const [row] = screen.getAllByRole("listitem")
+    expect(row).not.toHaveTextContent(/complete earlier chapters first/i)
+    expect(within(row as HTMLElement).getByTitle("Passed")).toBeInTheDocument()
+    expect(
+      screen.getByText(/Locked until you have completed the chapters before it/),
+    ).toBeInTheDocument()
+  })
+
   test("says an exercise waits for teacher review instead of showing its held-back points", async () => {
     await renderHome(
       courseHomeView({

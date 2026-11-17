@@ -211,12 +211,17 @@ export async function showExerciseActions(
   const refusal = stored.ok
     ? submitRefusalOf(stored.val.exercise, new Date(), stored.val.course)
     : undefined
+  // A passed exercise reads as passed, as its row does; the chapter's lock is the chapter's to tell.
+  const shownRefusal =
+    refusal === "chapterNotUnlockedYet" && stored.ok && stored.val.exercise.data.passed
+      ? undefined
+      : refusal
   const placeHolder = closedChapter
     ? `Its chapter "${closedChapter.name}" has not opened yet: it can't be submitted, but its tests run here`
     : isUnlisted
       ? "Removed from the course: it can no longer be submitted, but its tests still run here"
-      : refusal
-        ? `Can't be submitted: ${SUBMIT_REFUSAL_LABELS[refusal]}`
+      : shownRefusal
+        ? `Can't be submitted: ${SUBMIT_REFUSAL_LABELS[shownRefusal]}`
         : "What do you want to do with this exercise?"
   const picked = await dialog.selectItem(
     { title: exercise.exerciseSlug, placeHolder },
