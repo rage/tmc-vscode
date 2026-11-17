@@ -82,6 +82,8 @@ const BUDGET: Budget = {
   "src/panels/router.ts": { reportError: 1 },
   "src/storage/migration/exerciseData.ts": { progressNotification: 1, warningNotification: 1 },
   "src/testing/exerciseTestController.ts": { notification: 3, warningNotification: 2 },
+  // Once per language: the editor lacking Run and Debug is not a screen that could say so.
+  "src/ui/languageExtensionOffer.ts": { notification: 1 },
   "src/ui/treeview/treeCommands.ts": { statusMessage: 2, warningNotification: 1, withOperation: 5 },
 }
 

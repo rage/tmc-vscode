@@ -24,6 +24,7 @@ import { EditorKind } from "../config/resources"
 import { FileSystemError } from "../errors"
 import { isSamePath, Logger } from "../utilities"
 import { missingAiOffSettings } from "./aiRestriction"
+import { languageExtensionForLanguageId } from "./languageExtensions"
 
 /** What keeps VS Code from writing a course's `.code-workspace`. */
 export type WorkspaceFileProblem = "unsaved" | "readOnly"
@@ -1040,17 +1041,12 @@ export default class WorkspaceManager implements vscode.Disposable {
     if (this._resources.editorKind === EditorKind.Code) {
       return
     }
-    switch (e.languageId) {
-      case "r":
-        if (!vscode.extensions.getExtension("ikuyadeu.r")) {
-          void this.addWorkspaceRecommendation(activeCourse, activeBackend, ["ikuyadeu.r"])
-        }
-        break
-      case "python":
-        if (!vscode.extensions.getExtension("ms-python.python")) {
-          void this.addWorkspaceRecommendation(activeCourse, activeBackend, ["ms-python.python"])
-        }
-        break
+    const extensionId =
+      e.languageId === "r"
+        ? "ikuyadeu.r"
+        : languageExtensionForLanguageId(e.languageId)?.extensionId
+    if (extensionId && !vscode.extensions.getExtension(extensionId)) {
+      void this.addWorkspaceRecommendation(activeCourse, activeBackend, [extensionId])
     }
   }
 }

@@ -65,6 +65,7 @@ import {
 import { openCourseId } from "./ui/courseHome"
 import { exerciseOperations } from "./ui/exerciseOperations"
 import { failedUpdates } from "./ui/failedUpdates"
+import { LanguageExtensionOffer } from "./ui/languageExtensionOffer"
 import { AccountStatusBarItem } from "./ui/statusBarAccount"
 import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
 import { FailedUpdatesStatusBarItem } from "./ui/statusBarFailedUpdates"
@@ -529,6 +530,11 @@ async function activateInner(
         operations: exerciseOperations,
       }),
       new FailedUpdatesStatusBarItem(failedUpdates),
+      new LanguageExtensionOffer(
+        readyContext.dialog,
+        readyContext.startup.workspaceManager,
+        context.globalState,
+      ),
       trackHasCourses(readyContext.startup.userData),
       trackActiveExerciseRemoved(
         readyContext.startup.workspaceManager,

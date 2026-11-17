@@ -979,6 +979,27 @@ suite("WorkspaceManager class", function () {
 
       expect(manager.addWorkspaceRecommendation).not.toHaveBeenCalled()
     })
+
+    test("recommends the language's extension in VSCodium, which does not itself", function () {
+      Object.defineProperty(vscodeModule, "env", {
+        value: { appName: "VSCodium" },
+        configurable: true,
+      })
+      onTestFinished(() => {
+        Object.defineProperty(vscodeModule, "env", {
+          value: { appName: "Visual Studio Code" },
+          configurable: true,
+        })
+      })
+      stubExtensions(() => undefined)
+      resources = new Resources(WORKSPACE_FILE_FOLDER, PROJECTS_DIRECTORY)
+
+      const manager = openDocument("Main.java", "java")
+
+      expect(manager.addWorkspaceRecommendation).toHaveBeenCalledWith("test-python-course", "tmc", [
+        "vscjava.vscode-java-pack",
+      ])
+    })
   })
 
   suite("addWorkspaceRecommendation", function () {

@@ -2208,6 +2208,7 @@ function courseHomeOf(course: LocalCourseData): CourseHomeView {
     newExercises: [],
     updates: [],
     recentlyUpdated: [],
+    missingLanguageExtensions: [],
     parts: [],
   }
 }

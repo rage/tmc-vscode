@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- A course whose exercises need a language extension VS Code lacks, Python's or Java's, says "Install the Python extension to run and debug your code." in its course home with Install, and the first time such an exercise opens a notification says the same, once per language until the extension is installed.
 - A course workspace with AI assistance off opens with its AI settings already in place, so the chat side bar no longer shows there for the first seconds, and the secondary side bar is closed when it opens.
 - Student-facing text follows one glossary: your MOOC.fi account, Log In, the course home (Open Course Home), Add Course, Submit, Passed and Not passed, Tests pass on your computer, Get Help with Send to Pastebin, History, Show in Courses View and Open Course Material. Lock reasons read Complete earlier chapters first, Locked by the teacher and Waiting for review. Errors say what happened and what to do, with codes and causes behind Show Details, and an expired or revoked login says "You were logged out. Log in again." Server names show only where you pick a course. A course with no AI policy says nothing about it, while AI assistance stays off.
 - Refreshing a course home after logging out no longer shows an error there; its Not logged in notice already says what to do.

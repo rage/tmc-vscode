@@ -1,5 +1,5 @@
 import type { Webview, WebviewOptions, WebviewPanel } from "vscode"
-import { Disposable, Uri, ViewColumn, window } from "vscode"
+import { Disposable, extensions, Uri, ViewColumn, window } from "vscode"
 import type * as vscode from "vscode"
 
 import type { ExerciseSubmissionPanel, LoginPanel, Panel, SubmissionView } from "../../shared/lib"
@@ -411,6 +411,8 @@ export class TmcPanel {
         recentUpdates.onDidChange(() => this._onDidChangeCourses(undefined)),
         failedUpdates.onDidChange(() => this._onDidChangeCourses(undefined)),
         recentPolicyChanges.onDidChange(() => this._onDidChangeCourses(undefined)),
+        // Installing a language extension the course home asks for clears its notice.
+        extensions.onDidChange(() => this._onDidChangeCourses(undefined)),
         shownCourseHome.onDidFail(({ courseId, headline, error, tone }) => {
           const route = this._route
           if (
