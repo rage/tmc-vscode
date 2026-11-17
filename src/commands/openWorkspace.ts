@@ -2,6 +2,7 @@ import { Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import { LocalCourseData } from "../../shared/lib"
+import { downloadsSettled } from "../actions/downloadOrUpdateExercises"
 import type { ReadyActionContext } from "../actions/types"
 import { isAiAllowed } from "../api/aiRestriction"
 import { withOperation } from "../api/withOperation"
@@ -55,6 +56,9 @@ export async function openWorkspace(
   }
 
   await withOperation(dialog, { failure: "Failed to open the course workspace." }, async () => {
+    // A workspace file written mid-download misses the new exercises, and adding them once the
+    // workspace is open restarts its extension host; a reload here would also kill the download.
+    await downloadsSettled()
     const aiOffSettingsWritten = await workspaceManager.prepareWorkspaceFileToOpen(
       courseSlug,
       course.kind,

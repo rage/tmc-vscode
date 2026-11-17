@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Opening a course workspace waits for a running download or update to finish, so the workspace lists the new exercises without restarting the extension once open, and a reload of this window neither stops the download nor forgets which files it gave, which Submit needs to warn about a deleted file.
 - Course pickers, such as Switch Course Workspace, name a course's server only beside a course that shares its title with another.
 - The walkthrough ticks off Run Tests and Submit also when you open it in a later window, such as the course workspace's, as the extension remembers that you ran tests and submitted.
 - An exercise update shows one progress notification: an update holds its exercise until it ends, so a check that began meanwhile cannot update it a second time, and an automatic update held back that way stays quiet. A failed update is told by the "Update failed" status bar item and the course home's notice, which go away once Try Again succeeds, instead of a notification that stayed.

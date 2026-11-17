@@ -99,12 +99,22 @@ export async function downloadOrUpdateExercises(
   if (claim.err) {
     return claim
   }
+  const running = download(actionContext, requested, courseId, claim.val, options)
+  runningDownloads.add(running)
   try {
-    const results = await download(actionContext, requested, courseId, claim.val, options)
+    const results = await running
     return Ok(withRefusal(results, refusal, options))
   } finally {
+    runningDownloads.delete(running)
     claim.val.releaseAll()
   }
+}
+
+const runningDownloads = new Set<Promise<unknown>>()
+
+/** Settles once every download or update running now has ended, its downloaded copies recorded. */
+export async function downloadsSettled(): Promise<void> {
+  await Promise.allSettled(runningDownloads)
 }
 
 /** Exercises whose course's backend last refused the course, and why, in a sentence. */

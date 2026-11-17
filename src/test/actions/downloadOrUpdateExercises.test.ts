@@ -6,7 +6,7 @@ import * as vscode from "vscode"
 
 import type { ExerciseStatus } from "../../../shared/lib"
 import { ExerciseIdentifier } from "../../../shared/lib"
-import { downloadOrUpdateExercises, findKeptCopy } from "../../actions"
+import { downloadOrUpdateExercises, downloadsSettled, findKeptCopy } from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
@@ -218,6 +218,31 @@ suite("downloadOrUpdateExercises action", function () {
 
     expect(heldAfterDownload).toEqual(["downloading", undefined])
     expect(exerciseOperations.current(helloWorld.id)).toBeUndefined()
+  })
+
+  test("downloadsSettled waits for a running download to end", async function () {
+    const finish = Promise.withResolvers<void>()
+    fakeDownloads(tmcMock, async () => {
+      await finish.promise
+      return createDownloadResult([helloWorld], [])
+    })
+    const downloading = downloadOrUpdateExercises(
+      actionContext(),
+      [idOfTmcExercise(1)],
+      TEST_COURSE_ID,
+    )
+    let isSettled = false
+    const settled = downloadsSettled().then(() => {
+      isSettled = true
+    })
+
+    await vi.waitFor(() => expect(tmcMock.downloadTmcExercises).toHaveBeenCalled())
+    expect(isSettled).toBe(false)
+    finish.resolve()
+    await downloading
+    await settled
+
+    expect(isSettled).toBe(true)
   })
 
   test("says a failed update failed to update", async function () {
