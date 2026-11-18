@@ -6,7 +6,7 @@ import type { FrameLocator, Locator, Page } from "@playwright/test"
 
 import { VSCODE_TEST_VERSION } from "../../config"
 import { courseWorkspaceSettings } from "../courseWorkspace"
-import { vsCodeTest } from "../fixtures"
+import { BASE_USER_SETTINGS, vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
 import { TestResultsPage } from "../pages/test-results"
@@ -100,7 +100,7 @@ for (const exercise of exercises) {
       const userSettings = JSON.parse(
         fs.readFileSync(join(userDataDir, "User", "settings.json"), "utf-8"),
       )
-      expect(userSettings).toStrictEqual({ "window.dialogStyle": "custom" })
+      expect(userSettings).toStrictEqual(BASE_USER_SETTINGS)
     })
 
     await vsCodeTest.step("open exercise file", async () => {
