@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- The Courses view asks you to log in with the same sentence on a fresh install as after a Log Out.
 - Opening a course workspace waits for a running download or update to finish, so the workspace lists the new exercises without restarting the extension once open, and a reload of this window neither stops the download nor forgets which files it gave, which Submit needs to warn about a deleted file.
 - Course pickers, such as Switch Course Workspace, name a course's server only beside a course that shares its title with another.
 - The walkthrough ticks off Run Tests and Submit also when you open it in a later window, such as the course workspace's, as the extension remembers that you ran tests and submitted.

@@ -1,3 +1,6 @@
+import * as fs from "node:fs"
+import * as path from "node:path"
+
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
@@ -7,7 +10,7 @@ import type {
   SharedTmcCourseData,
   SharedTmcCourseExercise,
 } from "../../../shared/lib"
-import { makeTmcKind, LOGGED_OUT_MESSAGE } from "../../../shared/lib"
+import { makeTmcKind, LOGGED_OUT_MESSAGE, NOT_LOGGED_IN_MESSAGE } from "../../../shared/lib"
 import type { WorkspaceExercise } from "../../api/workspaceManager"
 import { ExerciseStatus } from "../../api/workspaceManager"
 import { downloadFailures } from "../../ui/downloadFailures"
@@ -199,6 +202,15 @@ suite("CoursesTree", function () {
     tree.setAccount({ loggedIn: true, isSessionExpired: false })
     settle()
     expect(view.message).toBe("")
+  })
+
+  test("the fresh-install welcome says what the logged-out view says", function () {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),
+    ) as { contributes: { viewsWelcome: { when: string; contents: string }[] } }
+    const welcomes = manifest.contributes.viewsWelcome
+    const loggedOut = welcomes.find((w) => w.when.includes("!test-my-code:LoggedIn"))
+    expect(loggedOut?.contents.split("\n")[0]).toBe(NOT_LOGGED_IN_MESSAGE)
   })
 
   test("says a session expired in the account status bar item's words", function () {
