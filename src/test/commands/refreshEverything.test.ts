@@ -11,6 +11,7 @@ import { refreshCourses, refreshEverything } from "../../commands/refreshEveryth
 import { updateExercises } from "../../commands/updateExercises"
 import { NEW_EXERCISES_REMINDER_DELAY } from "../../config/constants"
 import type { NewExerciseHandling } from "../../config/settings"
+import { BottleneckError } from "../../errors"
 import { recentPolicyChanges } from "../../ui/recentPolicyChanges"
 import type { CourseHomeFailure } from "../../ui/shownCourseHome"
 import { shownCourseHome } from "../../ui/shownCourseHome"
@@ -417,6 +418,21 @@ suite("refreshEverything's new-exercises prompt", function () {
       idOfTmcCourse(1),
       "statusBar",
     )
+  })
+
+  test("an automatic download held back by one running says nothing", async function () {
+    vi.mocked(downloadNewExercisesForCourse).mockResolvedValueOnce(
+      Err(new BottleneckError("Some of these exercises are already downloading.")),
+    )
+    const [actionContext, dialog] = contextWithCourses([tmcCourse(1, 0, [10])], "download")
+
+    await refreshEverything(actionContext, { silent: true })
+
+    await vi.waitFor(() => expect(downloadNewExercisesForCourse).toHaveBeenCalled())
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0)
+    })
+    expect(dialog.notification).not.toHaveBeenCalled()
   })
 
   test("offers nothing about the course its course home shows, but still records the offer", async function () {

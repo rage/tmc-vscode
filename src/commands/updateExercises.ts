@@ -194,7 +194,11 @@ export async function downloadUpdates(
   const isUnrequested = options.isUnrequested ?? false
   const result = await withOperation(
     actionContext.dialog,
-    { failure: "Failed to update exercises.", silent: isUnrequested },
+    {
+      failure: "Failed to update exercises.",
+      silent: isUnrequested,
+      isBackground: options.isAnnounced === true,
+    },
     async () => {
       const downloaded = await downloadExerciseUpdates(actionContext, updates, isUnrequested)
       // The failed-update status bar item and course home notice say which failed, and clear

@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- An automatic update or download that finds its exercises already downloading leaves them to the running one without a notification; the status bar spinner shows that work.
 - A submitted exercise that has not passed looks the same on its results screen whether you open it right after grading or later with Show Results: "Not passed" in red, or in yellow with some points, with Submit Again.
 - Get Started opens the walkthrough on the step you have yet to do, or on Get Help once all are done, instead of on Log In with its button while you are logged in.
 - The course home's "AI policy changed" notice goes away once the course's policy changes again, and a course that no longer sets a policy says nothing of it, though AI assistance stays off.
