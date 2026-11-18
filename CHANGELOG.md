@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- The results screen's Next follows the course as it stands now, as the course home does: once you are no longer enrolled, or nothing after the exercise is left to do, it is not offered.
 - An automatic update or download that finds its exercises already downloading leaves them to the running one without a notification; the status bar spinner shows that work.
 - A submitted exercise that has not passed looks the same on its results screen whether you open it right after grading or later with Show Results: "Not passed" in red, or in yellow with some points, with Submit Again.
 - Get Started opens the walkthrough on the step you have yet to do, or on Get Help once all are done, instead of on Log In with its button while you are logged in.

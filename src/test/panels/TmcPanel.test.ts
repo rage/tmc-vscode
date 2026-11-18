@@ -7,6 +7,7 @@ import * as vscode from "vscode"
 import type {
   BackendKind,
   CourseHomeView,
+  ExerciseIdentifier,
   ExerciseSubmissionPanel,
   ExtensionToWebview,
   Panel,
@@ -2216,6 +2217,59 @@ suite("TmcPanel side panel placement", () => {
       undefined,
       'loops can be submitted once the chapter "Loops" opens.',
     ])
+  })
+
+  test("offers no Next once the course no longer takes the student's submissions", async () => {
+    const { panel, sendReady } = createFakeWebviewPanel()
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
+    const passed = moocCourseExercise({ name: "loops", passed: true, awardedPoints: 1 })
+    const next = moocCourseExercise({ id: "dddddddd-dddd-4ddd-addd-dddddddddddd", name: "lists" })
+    let isNotEnrolled = false
+    const course = () =>
+      makeMoocKind(moocLocalCourse({ exercises: [passed, next], notEnrolled: isNotEnrolled }).data)
+    const changed = new vscode.EventEmitter<undefined>()
+    const context = createMockActionContext({
+      startup: {
+        workspaceManager: {
+          getExercise: () => ({}),
+          onDidChangeExercises: changed.event,
+        } as unknown as WorkspaceManager,
+        userData: {
+          getExercise: (id: ExerciseIdentifier) =>
+            Ok({
+              course: course(),
+              exercise: makeMoocKind(
+                id.kind === "mooc" && id.data.moocExerciseId === next.id ? next : passed,
+              ),
+            }),
+          getCourse: () => Ok(course()),
+          onDidChangeCourses: changed.event,
+        } as unknown as UserData,
+      },
+    })
+    const subscription = TmcPanel.showSubmissionViews(createMockContext(), context)
+    onTestFinished(() => subscription.dispose())
+    const shown = exerciseSubmissionPanel()
+    submissionViews.open(shown)
+    await sendReady()
+    submissionViews.update({
+      panel: shown,
+      view: {
+        ...submissionViewFor(shown, "Passed").view,
+        phase: "finished",
+        isExercisePassed: true,
+        nextExercise: { name: "lists" },
+      },
+      shouldReopen: false,
+    })
+
+    isNotEnrolled = true
+    changed.fire(undefined)
+
+    const nextNames = (postedMessages(panel) as PanelMessage[]).flatMap((message) =>
+      message.type === "submissionView" ? [message.view.nextExercise?.name] : [],
+    )
+    expect(nextNames).toEqual(["lists", undefined])
   })
 
   test("a mooc exercise a course refresh marks passed gets no model solution link", async () => {

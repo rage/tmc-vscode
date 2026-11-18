@@ -8,6 +8,7 @@ import {
   assertUnreachable,
   CourseIdentifier,
   ExerciseIdentifier,
+  LocalCourseData,
   arePointsHeldForReview,
   offersLogIn,
   SUBMIT_REFUSAL_LABELS,
@@ -18,10 +19,10 @@ import {
 } from "../../shared/lib"
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
-import type { StoredExercise } from "../config/userdata"
+import type { StoredExercise, UserData } from "../config/userdata"
 import { getExerciseIncludingClosedChapters } from "../config/userdata"
 import { buildCourseHomeView } from "../ui/courseHome"
-import { exerciseStandingView } from "../ui/exerciseStanding"
+import { exerciseStandingView, nextExerciseOf } from "../ui/exerciseStanding"
 import { failedUpdates } from "../ui/failedUpdates"
 import { lastExerciseReached } from "../ui/lastExerciseReached"
 import { loginScreens } from "../ui/loginScreens"
@@ -695,7 +696,12 @@ function submissionViewMessage(
   // submission that failed is out of date once the exercise can no longer be submitted at all.
   const isStanding =
     view.phase === "standing" || (view.phase === "failed" && !view.canKeepWaiting && !!refusal)
-  const current = isStanding ? (exerciseStandingView(userData, panel.exerciseId) ?? view) : view
+  const current = withCurrentNextExercise(
+    userData,
+    isStanding ? (exerciseStandingView(userData, panel.exerciseId) ?? view) : view,
+    stored.ok ? stored.val.course : undefined,
+    panel.exerciseId,
+  )
   const shown = withExerciseState(current, {
     isOnDisk: actionContext.startup.workspaceManager.getExercise(panel.exerciseId) !== undefined,
     isInCourse: stored.ok,
@@ -721,6 +727,25 @@ function submissionViewMessage(
       arePointsHeldForReview(exercise.data.pendingReview, exercise.data.awardedPoints),
   })
   return { type: "submissionView", target: { id: panel.id, type: panel.type }, view: shown }
+}
+
+/**
+ * `view` offering the exercise to go on to as the course stands now: a course change since the
+ * grading, such as an ended enrollment, can leave none.
+ */
+function withCurrentNextExercise(
+  userData: UserData,
+  view: SubmissionView,
+  course: LocalCourseData | undefined,
+  exerciseId: ExerciseIdentifier,
+): SubmissionView {
+  if (!view.nextExercise) {
+    return view
+  }
+  const { nextExercise: _graded, ...rest } = view
+  const nextExercise =
+    course && nextExerciseOf(userData, LocalCourseData.getCourseId(course), exerciseId)
+  return nextExercise ? { ...rest, nextExercise } : rest
 }
 
 /** The exercise's course material page, else its course's. */
