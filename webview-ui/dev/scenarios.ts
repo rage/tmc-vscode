@@ -1085,6 +1085,28 @@ export const SCENARIOS: Scenario[] = [
     ],
   },
   {
+    id: "exercise-submission/mooc-reopened-failed",
+    panel: moocStandingPanel,
+    reply: answerResultsRequests(moocStandingPanel, moocHistory),
+    pushes: [
+      submissionViewMessage(
+        moocStandingPanel.id,
+        standingView(
+          makeMoocKind({
+            id: "mooc-exercise-uuid",
+            name: "Sum of three numbers",
+            availablePoints: 3,
+            awardedPoints: 0,
+            deadline: null,
+            passed: false,
+            attempted: true,
+          }),
+          undefined,
+        ),
+      ),
+    ],
+  },
+  {
     id: "exercise-submission/action-failed",
     panel: submissionPanel,
     pushes: [

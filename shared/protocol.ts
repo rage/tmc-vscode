@@ -355,6 +355,8 @@ export const SubmissionViewSchema = z.object({
   canPaste: z.boolean(),
   /** The exercise counts as passed now; absent means not, or not known yet. */
   isExercisePassed: z.boolean().optional(),
+  /** A standing not passed is of an exercise submitted before, so Submit reads Submit Again. */
+  wasSubmitted: z.boolean().optional(),
   /** The exercise to go on to, offered once this one is passed. */
   nextExercise: z.object({ name: z.string() }).optional(),
   /**

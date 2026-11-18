@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- A submitted exercise that has not passed looks the same on its results screen whether you open it right after grading or later with Show Results: "Not passed" in red, or in yellow with some points, with Submit Again.
 - Get Started opens the walkthrough on the step you have yet to do, or on Get Help once all are done, instead of on Log In with its button while you are logged in.
 - The course home's "AI policy changed" notice goes away once the course's policy changes again, and a course that no longer sets a policy says nothing of it, though AI assistance stays off.
 - After a Log Out, the course home no longer offers to open an exercise that is not downloaded, as that needs a login, and an exercise opened from elsewhere asks you to log in without a red error or a "download failed" row.

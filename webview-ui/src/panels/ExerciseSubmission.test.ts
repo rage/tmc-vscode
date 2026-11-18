@@ -4,7 +4,7 @@ import { vi } from "vitest"
 
 import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../../../shared/langsSchema"
 import type { ExerciseSubmissionPanel, FeedbackQuestion, SubmissionView } from "../../../shared/lib"
-import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind, unwrap } from "../../../shared/lib"
 import {
   gradingUnavailableView,
   inProgressView,
@@ -792,6 +792,19 @@ suite("ExerciseSubmission panel (results hub)", () => {
     const submit = screen.getByRole("button", { name: "Submit" })
     expect(isSecondary(runTests)).toBe(false)
     expect(isSecondary(submit)).toBe(true)
+  })
+
+  test("a submitted exercise not passed reads as right after its grading, with Submit Again", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(
+      panel.id,
+      standingView(makeTmcKind({ ...unwrap(tmcExercise(false)), attempted: true }), undefined),
+    )
+
+    const banner = (await screen.findByRole("heading", { name: "Not passed" })).closest("section")
+    expect(banner).toHaveClass("tone-failed")
+    expect(screen.getByRole("button", { name: "Submit Again" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Submit" })).toBeNull()
   })
 
   test("a passed exercise leads on, with its model solution beside", async () => {

@@ -508,6 +508,24 @@ suite("standingView", function () {
       canPaste: true,
       isExercisePassed: false,
     })
+    expect(view.wasSubmitted).toBeUndefined()
+  })
+
+  test("a submitted exercise not passed reads as its grading did, with Submit Again", function () {
+    const failed = standingView(
+      makeMoocKind(moocCourseExercise({ availablePoints: 3, attempted: true })),
+      undefined,
+    )
+    const graded = moocGradingView(moocGrading("FullyGraded", 0, "Attempted"), 3)
+
+    expect(failed).toMatchObject({ headline: graded.headline, tone: graded.tone })
+    expect(failed.wasSubmitted).toBe(true)
+    expect(
+      standingView(
+        makeTmcKind(tmcCourseExercise({ availablePoints: 3, awardedPoints: 1 })),
+        undefined,
+      ),
+    ).toMatchObject({ headline: "Not passed", tone: "warning", wasSubmitted: true })
   })
 
   test("an exercise out of tries reads as not passed, for good", function () {

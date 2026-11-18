@@ -194,7 +194,7 @@
       if (view.isExercisePassed) {
         return showSolution ? { secondary: [showSolution] } : {}
       }
-      return { primary: runTests, secondary: [submit] }
+      return { primary: runTests, secondary: [view.wasSubmitted ? submitAgain : submit] }
     }
     if (canRetry) {
       if (remedy) {

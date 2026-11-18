@@ -87,6 +87,7 @@ suite("combineTmcApiExerciseData", function () {
         availablePoints: 3,
         awardedPoints: 2,
         passed: true,
+        attempted: true,
         deadline: "2026-01-01T00:00:00.000+02:00",
         softDeadline: "2025-12-01T00:00:00.000+02:00",
       },

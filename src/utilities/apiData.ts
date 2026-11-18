@@ -44,6 +44,7 @@ export function combineTmcApiExerciseData(
       name: x.name,
       deadline: x.deadline,
       passed: x.completed,
+      ...(x.attempted ? { attempted: true } : {}),
       softDeadline: x.soft_deadline,
     }
     return localCourseExercise
@@ -128,6 +129,8 @@ export function combineMoocClosedChapters(
 /** A mooc exercise's stored standing, tries and review state, as the backend decides them. */
 export interface MoocStoredStanding {
   passed: boolean
+  /** Absent means no. */
+  attempted?: boolean
   outOfTries: boolean
   /** Absent means unlimited. */
   maxTries?: number
@@ -148,9 +151,16 @@ export function moocStoredStanding(
   progress: ExerciseProgress | undefined,
   previous?: Pick<
     MoocLocalCourseExercise,
-    "passed" | "outOfTries" | "maxTries" | "triesLeft" | "pendingReview" | "exerciseLocked"
+    | "passed"
+    | "attempted"
+    | "outOfTries"
+    | "maxTries"
+    | "triesLeft"
+    | "pendingReview"
+    | "exerciseLocked"
   >,
 ): MoocStoredStanding {
+  const isAttempted = progress ? progress.attempted : previous?.attempted === true
   const triesAndReview = progress
     ? {
         ...(progress.max_tries === null ? {} : { maxTries: progress.max_tries }),
@@ -166,15 +176,18 @@ export function moocStoredStanding(
         ...(previous?.pendingReview === undefined ? {} : { pendingReview: previous.pendingReview }),
         ...(previous?.exerciseLocked ? { exerciseLocked: true } : {}),
       }
+  const attempted = isAttempted ? { attempted: true } : {}
   if (!progress?.standing) {
     return {
       passed: previous?.passed ?? false,
+      ...attempted,
       outOfTries: previous?.outOfTries ?? false,
       ...triesAndReview,
     }
   }
   return {
     passed: progress.standing === "Passed",
+    ...attempted,
     outOfTries: progress.standing === "OutOfTries",
     ...triesAndReview,
   }
