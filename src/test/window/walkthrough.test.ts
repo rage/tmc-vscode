@@ -2,6 +2,7 @@ import { vi } from "vitest"
 import * as vscode from "vscode"
 
 import {
+  hasReachedWalkthroughMilestone,
   isWalkthroughOpen,
   nextWalkthroughStep,
   reachWalkthroughMilestone,
@@ -19,7 +20,13 @@ function openTabs(...tabs: { label: string; input: unknown }[]): void {
 }
 
 suite("walkthrough", function () {
-  const done = { isLoggedIn: true, hasCourses: true, hasDownloadedExercises: true }
+  const done = {
+    isLoggedIn: true,
+    hasCourses: true,
+    hasDownloadedExercises: true,
+    hasRunTests: true,
+    hasSubmitted: true,
+  }
   let executeCommand: ReturnType<typeof vi.spyOn>
   const initialTabGroups = vscode.window.tabGroups
 
@@ -35,11 +42,28 @@ suite("walkthrough", function () {
     vi.restoreAllMocks()
   })
 
-  test("the next step is the first one not done, then Run Tests", function () {
+  // With every step done VS Code would expand the first, Log In, whose button misleads.
+  test("the next step is the first one not done, then Get Help", function () {
     expect(nextWalkthroughStep({ ...done, isLoggedIn: false })).toBe("logIn")
     expect(nextWalkthroughStep({ ...done, hasCourses: false })).toBe("addCourse")
     expect(nextWalkthroughStep({ ...done, hasDownloadedExercises: false })).toBe("openExercises")
-    expect(nextWalkthroughStep(done)).toBe("runTests")
+    expect(nextWalkthroughStep({ ...done, hasRunTests: false })).toBe("runTests")
+    expect(nextWalkthroughStep({ ...done, hasSubmitted: false })).toBe("submit")
+    expect(nextWalkthroughStep(done)).toBe("getHelp")
+  })
+
+  test("counts the milestones reached as steps done", function () {
+    const stored = new Map<string, unknown>()
+    restoreWalkthroughMilestones({
+      get: (key: string, fallback: unknown) => stored.get(key) ?? fallback,
+      update: async (key: string, value: unknown) => void stored.set(key, value),
+    } as unknown as vscode.Memento)
+    expect(hasReachedWalkthroughMilestone("test-my-code:HasRunTests")).toBe(false)
+
+    reachWalkthroughMilestone("test-my-code:HasRunTests")
+
+    expect(hasReachedWalkthroughMilestone("test-my-code:HasRunTests")).toBe(true)
+    expect(hasReachedWalkthroughMilestone("test-my-code:HasSubmitted")).toBe(false)
   })
 
   test("moves a restored walkthrough tab onto the next step, even behind another", async function () {
@@ -49,7 +73,7 @@ suite("walkthrough", function () {
 
     expect(executeCommand).toHaveBeenCalledExactlyOnceWith(
       "workbench.action.openWalkthrough",
-      { category: WALKTHROUGH, step: "runTests" },
+      { category: WALKTHROUGH, step: "getHelp" },
       false,
     )
   })

@@ -123,6 +123,11 @@ vsCodeTest(
             walkthroughStep(page, step).locator(".codicon-getting-started-step-checked"),
           ).toBeVisible()
         }
+        // It opens on the step left to do, not on Log In with its button.
+        await expect(walkthroughStep(page, "Get Help")).toHaveClass(/\bexpanded\b/)
+        await expect(
+          walkthroughStep(page, "Log In").getByRole("button", { name: "Log In", exact: true }),
+        ).toBeHidden()
       },
     )
   },
