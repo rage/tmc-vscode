@@ -328,6 +328,29 @@ suite("withOperation shown in a screen", function () {
     expect(notified()).toBe(0)
   })
 
+  test("a session logged out of fails nowhere in a screen whose own notice asks to log in", async function () {
+    const error = new Error("not logged in")
+    vi.mocked(dialog.noteSessionLost).mockReturnValue(true)
+
+    await withOperation(dialog, { failure: "Failed.", shownIn }, async () =>
+      Ok({ warnings: [{ headline: "Failed to download ex-1.", error }] }),
+    )
+
+    expect(shownIn.show).not.toHaveBeenCalled()
+    expect(notified()).toBe(0)
+  })
+
+  test("a session logged out of, failing in a hidden screen, takes only the neutral prompt", async function () {
+    isVisible = false
+    const error = new Error("not logged in")
+    vi.mocked(dialog.noteSessionLost).mockReturnValue(true)
+
+    await withOperation(dialog, { failure: "Failed.", shownIn }, async () => Err(error))
+
+    expect(shownIn.show).not.toHaveBeenCalled()
+    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith("Failed.", error)
+  })
+
   test("takes back no failure of an operation that fails again", async function () {
     await withOperation(dialog, { failure: "Failed.", shownIn }, async () => Err(new Error("x")))
 

@@ -206,12 +206,18 @@ function reportFailure(dialog: Dialog, options: OperationOptions, error: Error):
     Logger.warn(headline, detail)
     return
   }
+  // Logged out, the screen's own notice asks to log in; elsewhere the neutral prompt does.
+  if (detail && dialog.noteSessionLost(detail)) {
+    if (isShownInPlace) {
+      Logger.info(headline, detail)
+    } else {
+      void dialog.reportError(headline, detail)
+    }
+    return
+  }
   const isHeldBack = detail !== undefined && presentationFor(detail).isHeldBack === true
   shownIn?.show(headline, detail, isHeldBack ? "warning" : "error")
   if (isShownInPlace) {
-    if (detail) {
-      dialog.noteSessionLost(detail)
-    }
     if (isHeldBack) {
       Logger.info(headline, detail)
     } else {

@@ -155,6 +155,49 @@ vsCodeTest(
 )
 
 vsCodeTest(
+  "after a Log Out, an exercise not downloaded asks to log in, and is not marked failed",
+  async ({ page, webview }) => {
+    const coursesView = new CoursesViewPage(page, webview)
+    const courseHome = new CourseHomePage(page, webview)
+    const loginToast = page
+      .locator(".notifications-toasts .notification-toast")
+      .filter({ hasText: "Log in with your MOOC.fi account" })
+
+    await vsCodeTest.step("add the course, then log out", async () => {
+      await coursesView.goto()
+      await coursesView.addNewMoocCourse(COURSE_TITLE)
+      await courseHome.expectShown(COURSE_TITLE)
+      await coursesView.runPaletteCommand("TestMyCode: Log Out")
+      await expect(coursesView.statusBarMessage("Logged out.")).toBeVisible()
+    })
+
+    await vsCodeTest.step(
+      "the course home offers no download, only its notice's Log In",
+      async () => {
+        await expect(courseHome.notices()).toContainText("Not logged in")
+        await expect(courseHome.row("passing_exercise")).toContainText("Not downloaded")
+        await expect(
+          courseHome.webview.getByRole("button", { name: "passing_exercise", exact: true }),
+        ).toHaveCount(0)
+        await expect(courseHome.webview.getByRole("alert")).toHaveCount(0)
+      },
+    )
+
+    await vsCodeTest.step("opening it from the Courses view asks to log in", async () => {
+      await coursesView.expand(coursesView.row(COURSE_TITLE))
+      const row = coursesView.row("passing_exercise")
+      // Logged out, its menu offers no Open or Download; a click on the row still opens it.
+      await row.click()
+
+      await expect(loginToast).toBeVisible({ timeout: 30_000 })
+      await expect(row).not.toHaveAccessibleName(/download failed/i)
+      await expect(courseHome.row("passing_exercise")).toContainText("Not downloaded")
+      await expect(courseHome.webview.getByRole("alert")).toHaveCount(0)
+    })
+  },
+)
+
+vsCodeTest(
   "a failed update shows in Course Details' updates notice, with Try Again",
   async ({ page, webview }) => {
     const coursesView = new CoursesViewPage(page, webview)

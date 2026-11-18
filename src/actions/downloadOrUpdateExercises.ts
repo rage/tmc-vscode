@@ -23,6 +23,7 @@ import {
   ChapterNotOpenError,
   CourseAccessLostError,
   ExerciseUpdateError,
+  isSessionLost,
   ServerError,
   presentationFor,
 } from "../errors"
@@ -172,8 +173,9 @@ async function download(
   claim: ExerciseClaim,
   options: DownloadOptions,
 ): Promise<DownloadResults & Warned> {
-  const { dialog, settings } = actionContext
+  const { authState, dialog, settings } = actionContext
   const { langs } = actionContext.startup
+  const isLoggedOut = !authState.loggedIn && !authState.isSessionExpired
 
   const succeeded = new Set<string>()
   const downloadTemplate = !settings.getDownloadOldSubmission()
@@ -300,7 +302,13 @@ async function download(
   }
 
   const results = sortResults(exerciseIds, succeeded)
-  downloadFailures.record(results.failed, results.successful)
+  // Refused for want of a login the user knows they lack, the exercises were never really tried.
+  const isRefusedForLogin =
+    isLoggedOut &&
+    exerciseReasons.length === 0 &&
+    failedLegs.length > 0 &&
+    failedLegs.every((error) => isSessionLost(error))
+  downloadFailures.record(isRefusedForLogin ? [] : results.failed, results.successful)
   if (cancelled) {
     // The user chose to stop; what completed is the answer, not an error.
     Logger.info("Exercise download cancelled by the user")

@@ -34,7 +34,7 @@ export class CourseHomePage {
   public row(name: string): Locator {
     return this.webview
       .getByRole("listitem")
-      .filter({ has: this.webview.getByRole("button", { name, exact: true }) })
+      .filter({ has: this.webview.getByTitle(name, { exact: true }) })
   }
 
   /** The course's notices: new exercises, updates, Restricted Mode and the like. */

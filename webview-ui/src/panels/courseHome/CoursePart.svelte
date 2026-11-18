@@ -174,15 +174,20 @@
             <span class="visually-hidden">{icon.label}</span>
           </span>
           <span class="name">
-            <button
-              type="button"
-              class="name-button"
-              title={exercise.name}
-              disabled={exercise.status === "downloading"}
-              onclick={() => onaction(exercise, "open")}
-            >
-              {exercise.name}
-            </button>
+            {#if isDownloadable(exercise) && !canDownload}
+              <!-- Opening it would download it, which the notices say cannot happen now. -->
+              <span class="name-text" title={exercise.name}>{exercise.name}</span>
+            {:else}
+              <button
+                type="button"
+                class="name-text name-button"
+                title={exercise.name}
+                disabled={exercise.status === "downloading"}
+                onclick={() => onaction(exercise, "open")}
+              >
+                {exercise.name}
+              </button>
+            {/if}
             {#if exercise.isUpdateable}<span class="badge">update</span>{/if}
           </span>
           <span class="state muted">{stateLabel(exercise)}</span>
@@ -318,23 +323,25 @@
     gap: var(--tmc-space-2);
     min-width: 0;
   }
-  .name-button {
+  .name-text {
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .name-button {
     padding: 0;
     border: none;
     background: none;
     color: inherit;
     font: inherit;
     text-align: start;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     cursor: pointer;
   }
   .name-button:hover:not(:disabled) {
     text-decoration: underline;
   }
-  .is-passive .name-button {
+  .is-passive .name-text {
     color: var(--tmc-fg-muted);
   }
   .badge {

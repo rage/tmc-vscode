@@ -21,7 +21,7 @@ import { downloadFailures } from "../../ui/downloadFailures"
 import { exerciseOperations } from "../../ui/exerciseOperations"
 import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
 import { idOfMoocExercise, idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
-import { createMockActionContext } from "../mocks/actionContext"
+import { createMockActionContext, createMockAuthState } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 import type { SettingsMockValues } from "../mocks/settings"
 import { createSettingsMock } from "../mocks/settings"
@@ -551,6 +551,17 @@ suite("downloadOrUpdateExercises action", function () {
       idOfMoocExercise(downloadedId),
       idOfMoocExercise(undownloadedId),
     ])
+  })
+
+  test("leaves the exercises of a download refused for a login after a Log Out not failed", async function () {
+    const exerciseId = "exercise-uuid-7"
+    tmcMockValues.downloadMoocExercises = Err(new InvalidTokenError("not logged in"))
+    const loggedOut = { ...actionContext(), authState: createMockAuthState(false) }
+
+    const result = await downloadResults(loggedOut, [idOfMoocExercise(exerciseId)], TEST_COURSE_ID)
+
+    expect(result.failed).toEqual([idOfMoocExercise(exerciseId)])
+    expect(downloadFailures.has(idOfMoocExercise(exerciseId))).toBe(false)
   })
 
   test("should keep an already-downloaded exercise closed when the mooc leg errors", async function () {

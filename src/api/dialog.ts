@@ -164,11 +164,15 @@ export default class Dialog {
   /**
    * Tells the session's own warning about `error` if it is a lost session, for a failure shown
    * somewhere other than {@link reportError}.
+   *
+   * @returns Whether `error` is the missing session of a user who logged out or never logged in,
+   * which is no failure to show: a screen's own logged-out notice already asks to log in.
    */
-  public noteSessionLost(error: Error): void {
+  public noteSessionLost(error: Error): boolean {
     if (this._reportSessionLost && isSessionLost(error)) {
-      this._reportSessionLost(error)
+      return !this._reportSessionLost(error)
     }
+    return false
   }
 
   /**
