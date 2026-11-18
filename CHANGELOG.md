@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- Error Details writes the extension's storage folder, where the command-line tool lives, as `<extension storage>` in the text it shows and copies; the log file keeps the full path.
+- A result whose points wait for a teacher's review says "Points after review, out of n" where the points meter would be, and leads on to the next exercise as the course home does, as does one whose pass a review holds back since the grading.
+- History shows "Restoring…" only once you confirm the restore, not behind its confirmation.
+- Get Help opened on a result that did not pass is put away once a later result passes; on a passed result it shows only when you open it from More Actions.
+- The results screen's Next follows the course as it stands now, as the course home does: once you are no longer enrolled, or nothing after the exercise is left to do, it is not offered.
+- An automatic update or download that finds its exercises already downloading leaves them to the running one without a notification; the status bar spinner shows that work.
+- A submitted exercise that has not passed looks the same on its results screen whether you open it right after grading or later with Show Results: "Not passed" in red, or in yellow with some points, with Submit Again.
+- Get Started opens the walkthrough on the step you have yet to do, or on Get Help once all are done, instead of on Log In with its button while you are logged in.
+- The course home's "AI policy changed" notice goes away once the course's policy changes again, and a course that no longer sets a policy says nothing of it, though AI assistance stays off.
 - After a Log Out, the course home no longer offers to open an exercise that is not downloaded, as that needs a login, and an exercise opened from elsewhere asks you to log in without a red error or a "download failed" row.
 - The Courses view asks you to log in with the same sentence on a fresh install as after a Log Out.
 - Opening a course workspace waits for a running download or update to finish, so the workspace lists the new exercises without restarting the extension once open, and a reload of this window neither stops the download nor forgets which files it gave, which Submit needs to warn about a deleted file.

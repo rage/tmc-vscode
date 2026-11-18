@@ -996,19 +996,30 @@ suite("registered command handlers", function () {
     )
   })
 
-  test("tmc.showWelcome opens the walkthrough package.json contributes", async function () {
+  test("tmc.showWelcome opens the walkthrough package.json contributes, on the next step", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
-    const { handlers } = registerAndCollect()
+    const { handlers } = registerAndCollect(
+      createMockActionContext({
+        loggedIn: true,
+        startup: {
+          userData: { getCourses: () => [tmcLocalCourse()] } as unknown as UserData,
+          workspaceManager: { getExercises: () => [] } as unknown as WorkspaceManager,
+        },
+      }),
+    )
     const [walkthrough] = packageJson().contributes.walkthroughs ?? []
 
     await handlers.get("tmc.showWelcome")?.()
 
-    expect(executeCommand).toHaveBeenCalledWith(
-      "workbench.action.openWalkthrough",
-      `${EXTENSION_ID}#${walkthrough?.id}`,
-      false,
+    const opened = executeCommand.mock.calls.find(
+      ([command]) => command === "workbench.action.openWalkthrough",
     )
+    expect(opened?.[1]).toEqual({
+      category: `${EXTENSION_ID}#${walkthrough?.id}`,
+      step: "openExercises",
+    })
+    expect(walkthrough?.steps.map((step) => step.id)).toContain("openExercises")
     expect(renderMain).not.toHaveBeenCalled()
   })
 

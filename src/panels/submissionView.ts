@@ -77,19 +77,29 @@ export function standingView(
   exercise: LocalCourseExercise,
   solutionUrl: string | undefined,
 ): SubmissionView {
-  const { passed, awardedPoints, availablePoints } = unwrap(exercise)
+  const { passed, awardedPoints, availablePoints, attempted } = unwrap(exercise)
   const isOutOfTries = exercise.kind === "mooc" && exercise.data.outOfTries === true
   const arePointsHeld =
     exercise.kind === "mooc" && arePointsHeldForReview(exercise.data.pendingReview, awardedPoints)
+  const wasSubmitted = attempted === true || awardedPoints > 0
   return {
     ...emptyView,
     phase: "standing",
     headline: passed ? "Passed" : arePointsHeld ? "Waiting for review" : "Not passed",
-    tone: passed ? "passed" : isOutOfTries ? "failed" : "info",
+    // As the grading of its latest submission read, so the screen looks the same reopened.
+    tone: passed
+      ? "passed"
+      : isOutOfTries
+        ? "failed"
+        : wasSubmitted && !arePointsHeld
+          ? scoreTone(awardedPoints)
+          : "info",
+    ...(wasSubmitted && !passed ? { wasSubmitted: true } : {}),
     points:
       availablePoints > 0 && !arePointsHeld
         ? { given: awardedPoints, max: availablePoints }
         : undefined,
+    ...(arePointsHeld && availablePoints > 0 ? { heldPointsMax: availablePoints } : {}),
     solutionUrl,
     canPaste: !passed,
     isExercisePassed: passed,
@@ -251,6 +261,7 @@ export function moocGradingView(
           headline: isBelowMax ? "Some tests failed" : "All tests passed",
           tone: isBelowMax ? scoreTone(given) : "passed",
           points: undefined,
+          heldPointsMax: maxPoints,
           ...reviewNote,
           canPaste: true,
         }
@@ -428,6 +439,7 @@ export function withExerciseState(
     exercise.arePointsHeld && view.phase === "finished" && rest.points !== undefined
       ? {
           points: undefined,
+          heldPointsMax: rest.points.max,
           ...(view.headline === "Passed" ? { headline: "All tests passed" } : {}),
         }
       : {}

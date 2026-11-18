@@ -27,6 +27,8 @@ export const SharedTmcCourseExerciseSchema = z.object({
   name: z.string(),
   deadline: z.string().nullable(),
   passed: z.boolean(),
+  /** The student has submitted it; absent means no. */
+  attempted: z.boolean().optional(),
   softDeadline: z.string().nullable(),
 })
 
@@ -72,6 +74,8 @@ export const SharedMoocCourseExerciseSchema = z.object({
   name: z.string(),
   deadline: z.string().nullable(),
   passed: z.boolean(),
+  /** The student has submitted it; absent means no. */
+  attempted: z.boolean().optional(),
   /** Below full points with the try limit used up, so the score is final; absent means no. */
   outOfTries: z.boolean().optional(),
   /** The submissions the exercise accepts; absent means unlimited. */

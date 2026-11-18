@@ -59,7 +59,8 @@
   let isHistoryOpen = $state(false)
   let history = $state<ReturnType<typeof SubmissionHistory> | undefined>(undefined)
   let isGetHelpOpen = $state(false)
-  // Get help stays for a student who asked for it where the result would not offer it.
+  // Get help stays for a student who asked for it where the result would not offer it, until
+  // the result changes.
   const isGetHelpRequested = uiState("isGetHelpRequested", false)
   // The last section request handled, so one resent after a reload does not paste again.
   const handledSectionSerial = uiState("handledSectionSerial", 0)
@@ -160,7 +161,8 @@
         secondary: remedy ? [remedy] : [],
       }
     }
-    if (view?.isExercisePassed && view.nextExercise) {
+    // The host offers the next exercise once this one is passed or waits only for a review.
+    if (view?.nextExercise) {
       const next = view.nextExercise.name
       // A failing submission after the pass: the student may want to fix what they broke.
       const isThisOneFailed = view.tone !== "passed" && !view.exerciseState
@@ -194,7 +196,7 @@
       if (view.isExercisePassed) {
         return showSolution ? { secondary: [showSolution] } : {}
       }
-      return { primary: runTests, secondary: [submit] }
+      return { primary: runTests, secondary: [view.wasSubmitted ? submitAgain : submit] }
     }
     if (canRetry) {
       if (remedy) {
@@ -266,6 +268,11 @@
     }
     const previous = view
     view = message.view
+    // Help asked for on a result that did not pass stays with it, not with the next one.
+    if (previous?.canPaste && !view.canPaste) {
+      isGetHelpRequested.current = false
+      isGetHelpOpen = false
+    }
     if (previous === undefined) {
       void tick().then(restoreScroll)
     }
@@ -375,6 +382,8 @@
   {/if}
   {#if view?.points}
     <Meter label="Points" value={view.points.given} max={view.points.max} />
+  {:else if view?.heldPointsMax !== undefined}
+    <p class="muted">Points after review, out of {view.heldPointsMax}</p>
   {/if}
   {#if isSubmitPromptShown}
     <p id={submitPromptId}>{SUBMIT_PROMPT}</p>

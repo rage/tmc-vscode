@@ -330,6 +330,8 @@ export const SubmissionViewSchema = z.object({
   progressSteps: z.array(z.string()),
   /** In the exercise's own unit; `given` may be fractional. */
   points: z.object({ given: z.number(), max: z.number() }).optional(),
+  /** The most points a teacher's review can give, while it holds them back in place of `points`. */
+  heldPointsMax: z.number().optional(),
   /** The grader's feedback, shown as-is. */
   feedbackText: z.string().optional(),
   /** Why the submission failed, when the backend or the extension said. */
@@ -355,6 +357,8 @@ export const SubmissionViewSchema = z.object({
   canPaste: z.boolean(),
   /** The exercise counts as passed now; absent means not, or not known yet. */
   isExercisePassed: z.boolean().optional(),
+  /** A standing not passed is of an exercise submitted before, so Submit reads Submit Again. */
+  wasSubmitted: z.boolean().optional(),
   /** The exercise to go on to, offered once this one is passed. */
   nextExercise: z.object({ name: z.string() }).optional(),
   /**
@@ -441,6 +445,12 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     section: ExerciseSectionSchema,
     serial: z.number(),
     shouldPaste: z.boolean(),
+  }),
+  // The student confirmed restoring History's entry `key`, which runs now.
+  z.object({
+    type: z.literal("restoreConfirmed"),
+    target: targetPanelSchema("ExerciseSubmission"),
+    key: z.string(),
   }),
   // An action the screen started failed, or one of its buttons could not run.
   z.object({

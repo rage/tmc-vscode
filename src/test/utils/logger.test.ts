@@ -2,6 +2,7 @@ import * as os from "os"
 import * as path from "path"
 
 import type { Mock } from "vitest"
+import { onTestFinished } from "vitest"
 import type { OutputChannel } from "vscode"
 import { window } from "vscode"
 
@@ -10,6 +11,7 @@ import {
   Logger,
   LogLevel,
   redactPersonalInfo,
+  setRedactedExtensionStorage,
   redactSecrets,
   redactUrlQuery,
 } from "../../utilities/logger"
@@ -297,6 +299,26 @@ suite("Logger tail", function () {
     expect(Logger.tail()).not.toContain(TOKEN)
   })
 
+  test("shortens the extension's storage directory, which the log itself keeps in full", function () {
+    const lines: string[] = []
+    Logger.output = {
+      appendLine: (line: string) => lines.push(line),
+      dispose: () => {},
+    } as unknown as OutputChannel
+    Logger.configure(LogLevel.Verbose)
+    setRedactedExtensionStorage("/var/vscode/globalStorage/moocfi.test-my-code")
+    onTestFinished(() => {
+      setRedactedExtensionStorage(undefined)
+      Logger.output = undefined
+    })
+
+    Logger.info("CLI at /var/vscode/globalStorage/moocfi.test-my-code/cli")
+
+    expect(Logger.tail()).toContain("CLI at <extension storage>/cli")
+    expect(Logger.tail()).not.toContain("/var/vscode/globalStorage")
+    expect(lines.join("\n")).toContain("/var/vscode/globalStorage/moocfi.test-my-code/cli")
+  })
+
   test("leaves the home directory out", function () {
     Logger.info(`Running ${path.join(os.homedir(), "tmc", "cli")}`)
 
@@ -349,6 +371,34 @@ suite("redactPersonalInfo", function () {
     expect(redactPersonalInfo(text, "C:\\Users\\Alice", "Alice", true)).toBe(
       '%USERPROFILE%\\tmc, %USERPROFILE%/tmc, {"path":"%USERPROFILE%"}',
     )
+  })
+
+  test("writes the extension's storage directory as <extension storage>, wherever it is", function () {
+    const text =
+      "spawn /var/vscode/User/globalStorage/moocfi.test-my-code/cli/tmc-langs-cli failed; " +
+      "/home/alice/notes stays under ~"
+
+    expect(
+      redactPersonalInfo(
+        text,
+        "/home/alice",
+        "alice",
+        false,
+        "/var/vscode/User/globalStorage/moocfi.test-my-code",
+      ),
+    ).toBe("spawn <extension storage>/cli/tmc-langs-cli failed; ~/notes stays under ~")
+  })
+
+  test("names the storage directory, not the home, of a storage directory in the home", function () {
+    expect(
+      redactPersonalInfo(
+        "C:\\Users\\Alice\\AppData\\Code\\cli and c:/users/alice/appdata/code/cli",
+        "C:\\Users\\Alice",
+        "Alice",
+        true,
+        "C:\\Users\\Alice\\AppData\\Code",
+      ),
+    ).toBe("<extension storage>\\cli and <extension storage>/cli")
   })
 
   test("leaves a username too short to tell from a word", function () {

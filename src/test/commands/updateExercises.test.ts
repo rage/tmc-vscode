@@ -379,6 +379,8 @@ suite("updateExercises command", function () {
     const picked = [{ courseId: idOfTmcCourse(1), exerciseId: idOfTmcExercise(10) }]
 
     await downloadUpdates(actionContext, picked, { isUnrequested: true })
+    // Automatic also when a check the student asked for found it.
+    await downloadUpdates(actionContext, picked, { isAnnounced: true })
 
     expect(dialog.notification).not.toHaveBeenCalled()
     expect(dialog.reportError).not.toHaveBeenCalled()

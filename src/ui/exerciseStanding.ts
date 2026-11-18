@@ -1,10 +1,27 @@
 import type { CourseIdentifier, ExerciseIdentifier, SubmissionView } from "../../shared/lib"
-import { LocalCourseData, LocalCourseExercise } from "../../shared/lib"
+import {
+  arePointsHeldForReview,
+  LocalCourseData,
+  LocalCourseExercise,
+  unwrap,
+} from "../../shared/lib"
 import type { UserData } from "../config/userdata"
 import { getExerciseIncludingClosedChapters } from "../config/userdata"
 import { standingView } from "../panels/submissionView"
 import { modelSolutionUrl } from "./modelSolution"
 import { nextExerciseAfter } from "./treeview/courseViewModel"
+
+/**
+ * Whether a results screen leads on from `exercise` to the next one: it is passed, or all that
+ * is left is a teacher's review, as the course home then continues past it too.
+ */
+export function leadsOnFrom(exercise: LocalCourseExercise): boolean {
+  return (
+    unwrap(exercise).passed ||
+    (exercise.kind === "mooc" &&
+      arePointsHeldForReview(exercise.data.pendingReview, exercise.data.awardedPoints))
+  )
+}
 
 /** The exercise to go on to after `exerciseId`, as a results panel offers it. */
 export function nextExerciseOf(
@@ -31,7 +48,7 @@ export function exerciseStandingView(
     return undefined
   }
   const view = standingView(stored.val.exercise, modelSolutionUrl(stored.val))
-  const nextExercise = view.isExercisePassed
+  const nextExercise = leadsOnFrom(stored.val.exercise)
     ? nextExerciseOf(userData, LocalCourseData.getCourseId(stored.val.course), exerciseId)
     : undefined
   return nextExercise ? { ...view, nextExercise } : view

@@ -354,11 +354,30 @@ suite("Restoring a submission from the History", function () {
 
   test("restores nothing when the confirmation is cancelled", async function () {
     const context = actionContext({ answer: undefined })
+    const onConfirmed = vi.fn()
 
-    const restored = await restoreSubmission(context, moocExercise, await firstListed(context))
+    const restored = await restoreSubmission(
+      context,
+      moocExercise,
+      await firstListed(context),
+      onConfirmed,
+    )
 
     expect(restored.val).toBe("cancelled")
     expect(restoreInLangs).not.toHaveBeenCalled()
+    expect(onConfirmed).not.toHaveBeenCalled()
+  })
+
+  test("says the restore began only once the student confirmed it", async function () {
+    const context = actionContext()
+    const onConfirmed = vi.fn(() => {
+      expect(restoreInLangs).not.toHaveBeenCalled()
+    })
+
+    await restoreSubmission(context, moocExercise, await firstListed(context), onConfirmed)
+
+    expect(onConfirmed).toHaveBeenCalledOnce()
+    expect(restoreInLangs).toHaveBeenCalledOnce()
   })
 
   test("refuses to restore while a submission of the same exercise is in flight", async function () {

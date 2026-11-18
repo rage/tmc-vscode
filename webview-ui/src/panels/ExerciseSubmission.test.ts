@@ -4,7 +4,7 @@ import { vi } from "vitest"
 
 import type { ExerciseTaskSubmissionStatus, SubmissionFinished } from "../../../shared/langsSchema"
 import type { ExerciseSubmissionPanel, FeedbackQuestion, SubmissionView } from "../../../shared/lib"
-import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind, unwrap } from "../../../shared/lib"
 import {
   gradingUnavailableView,
   inProgressView,
@@ -267,6 +267,35 @@ suite("ExerciseSubmission panel (failures)", () => {
 })
 
 suite("ExerciseSubmission panel (teacher review)", () => {
+  test("says the points come after the review, out of how many", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...testedLocallyView(0),
+      phase: "finished",
+      headline: "All tests passed",
+      explanation: undefined,
+      heldPointsMax: 3,
+    })
+
+    expect(await screen.findByText("Points after review, out of 3")).toBeInTheDocument()
+    expect(screen.queryByRole("meter", { name: "Points" })).not.toBeInTheDocument()
+  })
+
+  test("a result awaiting review leads on to the next exercise, as the course home does", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...testedLocallyView(0),
+      phase: "finished",
+      headline: "All tests passed",
+      explanation: undefined,
+      heldPointsMax: 1,
+      pendingReview: "The points wait for a teacher's review.",
+      nextExercise: { name: "lists" },
+    })
+
+    expect(await screen.findByRole("button", { name: "Next: lists" })).toBeInTheDocument()
+  })
+
   test("says what the review waits for beside the explanation", async () => {
     render(ExerciseSubmission, { props: { panel: moocPanel } })
     showView(moocPanel.id, {
@@ -352,6 +381,27 @@ suite("ExerciseSubmission panel (tmc results)", () => {
 
     await chooseMenuItem("Get Help")
 
+    expect(screen.getByRole("button", { name: "Get Help" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    )
+  })
+
+  test("help asked for on a failed result is put away once a later one passes", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showTmcResult(submissionFinished({ status: "fail", all_tests_passed: false, points: [] }))
+    await screen.findByRole("heading", { name: "Not passed" })
+    await chooseMenuItem("Get Help")
+    expect(screen.getByRole("button", { name: "Get Help" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    )
+
+    showTmcResult(submissionFinished())
+
+    await screen.findByRole("heading", { name: "Passed" })
+    expect(screen.queryByRole("button", { name: "Get Help" })).not.toBeInTheDocument()
+    await chooseMenuItem("Get Help")
     expect(screen.getByRole("button", { name: "Get Help" })).toHaveAttribute(
       "aria-expanded",
       "true",
@@ -792,6 +842,19 @@ suite("ExerciseSubmission panel (results hub)", () => {
     const submit = screen.getByRole("button", { name: "Submit" })
     expect(isSecondary(runTests)).toBe(false)
     expect(isSecondary(submit)).toBe(true)
+  })
+
+  test("a submitted exercise not passed reads as right after its grading, with Submit Again", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(
+      panel.id,
+      standingView(makeTmcKind({ ...unwrap(tmcExercise(false)), attempted: true }), undefined),
+    )
+
+    const banner = (await screen.findByRole("heading", { name: "Not passed" })).closest("section")
+    expect(banner).toHaveClass("tone-failed")
+    expect(screen.getByRole("button", { name: "Submit Again" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Submit" })).toBeNull()
   })
 
   test("a passed exercise leads on, with its model solution beside", async () => {

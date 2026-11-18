@@ -301,6 +301,31 @@ suite("withOperation shown in a screen", function () {
     expect(notified()).toBe(0)
   })
 
+  test("a background job held back by another shows nothing, the other's progress being shown", async function () {
+    const busy = new BottleneckError("Some of these exercises are already downloading.")
+
+    await withOperation(dialog, { failure: "Failed.", shownIn, isBackground: true }, async () =>
+      Err(busy),
+    )
+    isVisible = false
+    await withOperation(dialog, { failure: "Failed.", shownIn, isBackground: true }, async () =>
+      Err(busy),
+    )
+
+    expect(shownIn.show).not.toHaveBeenCalled()
+    expect(notified()).toBe(0)
+  })
+
+  test("a background job's own failure still shows", async function () {
+    const error = new Error("disk full")
+
+    await withOperation(dialog, { failure: "Failed.", shownIn, isBackground: true }, async () =>
+      Err(error),
+    )
+
+    expect(shownIn.show).toHaveBeenCalledExactlyOnceWith("Failed.", error, "error")
+  })
+
   test("shows each warning of a success in the screen", async function () {
     const error = new Error("one exercise failed")
 

@@ -14,11 +14,14 @@ import { revertExerciseDocuments } from "../window/exerciseDocuments"
  * asks whether to keep the current code on the backend first.
  *
  * Reports nothing itself: the History that asked shows the outcome and any failure.
+ *
+ * @param onConfirmed Called once the student has confirmed, as the restore begins.
  */
 export async function restoreSubmission(
   actionContext: ReadyActionContext,
   exercise: WorkspaceExercise,
   submission: OldSubmission,
+  onConfirmed: () => void = () => {},
 ): Promise<Result<RestoreOutcome, Error>> {
   const { id } = exercise
   const submitFirst = await confirmSubmitBeforeDestructiveAction(actionContext, exercise, {
@@ -30,6 +33,7 @@ export async function restoreSubmission(
   if (submitFirst === undefined) {
     return Ok("cancelled")
   }
+  onConfirmed()
   if (submitFirst) {
     // The student presses Restore again once trusted, so nothing is held back to retry.
     const untrusted = actionContext.startup.trustGate.refusal()

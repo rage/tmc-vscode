@@ -88,6 +88,7 @@ async function downloadInTurn(
       {
         failure: `Failed to download the new exercises of ${title}.`,
         shownIn: shownCourseHome.failureSink(courseId),
+        isBackground: true,
       },
       () => downloadNewExercisesForCourse(actionContext, courseId, "statusBar"),
     )

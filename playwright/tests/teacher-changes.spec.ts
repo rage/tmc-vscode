@@ -58,5 +58,16 @@ vsCodeTest(
       })
       expect((await toasts()).filter((text) => /AI policy/.test(text))).toStrictEqual([])
     })
+
+    await vsCodeTest.step("a policy set back to none takes the notice away", async () => {
+      await postToMock("set-ai-policy", { course_id: pythonCourse.id, ai_policy: "not_set" })
+
+      await courseHome.refresh()
+
+      await expect(courseHome.notices().getByText("AI policy changed")).toBeHidden({
+        timeout: 30_000,
+      })
+      expect((await toasts()).filter((text) => /AI policy/.test(text))).toStrictEqual([])
+    })
   },
 )

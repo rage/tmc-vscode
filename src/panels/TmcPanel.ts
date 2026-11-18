@@ -8,20 +8,22 @@ import {
   assertUnreachable,
   CourseIdentifier,
   ExerciseIdentifier,
+  LocalCourseData,
   arePointsHeldForReview,
   offersLogIn,
   SUBMIT_REFUSAL_LABELS,
   submitRefusalOf,
   submitRefusalSentence,
   pendingReviewSentence,
+  unwrap,
   WebviewStateSchema,
 } from "../../shared/lib"
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
-import type { StoredExercise } from "../config/userdata"
+import type { StoredExercise, UserData } from "../config/userdata"
 import { getExerciseIncludingClosedChapters } from "../config/userdata"
 import { buildCourseHomeView } from "../ui/courseHome"
-import { exerciseStandingView } from "../ui/exerciseStanding"
+import { exerciseStandingView, leadsOnFrom, nextExerciseOf } from "../ui/exerciseStanding"
 import { failedUpdates } from "../ui/failedUpdates"
 import { lastExerciseReached } from "../ui/lastExerciseReached"
 import { loginScreens } from "../ui/loginScreens"
@@ -695,7 +697,12 @@ function submissionViewMessage(
   // submission that failed is out of date once the exercise can no longer be submitted at all.
   const isStanding =
     view.phase === "standing" || (view.phase === "failed" && !view.canKeepWaiting && !!refusal)
-  const current = isStanding ? (exerciseStandingView(userData, panel.exerciseId) ?? view) : view
+  const current = withCurrentStanding(
+    userData,
+    isStanding ? (exerciseStandingView(userData, panel.exerciseId) ?? view) : view,
+    stored.ok ? stored.val : undefined,
+    panel.exerciseId,
+  )
   const shown = withExerciseState(current, {
     isOnDisk: actionContext.startup.workspaceManager.getExercise(panel.exerciseId) !== undefined,
     isInCourse: stored.ok,
@@ -721,6 +728,32 @@ function submissionViewMessage(
       arePointsHeldForReview(exercise.data.pendingReview, exercise.data.awardedPoints),
   })
   return { type: "submissionView", target: { id: panel.id, type: panel.type }, view: shown }
+}
+
+/**
+ * `view` with whether the exercise is passed and the exercise to go on to, as the course stands
+ * now: a refresh since the grading can hold its points for a review, or end the enrollment.
+ */
+function withCurrentStanding(
+  userData: UserData,
+  view: SubmissionView,
+  stored: StoredExercise | undefined,
+  exerciseId: ExerciseIdentifier,
+): SubmissionView {
+  if (!stored || (view.phase !== "finished" && view.phase !== "standing")) {
+    return view
+  }
+  const { nextExercise: _graded, isExercisePassed: gradedPassed, ...rest } = view
+  const isExercisePassed = gradedPassed === undefined ? undefined : unwrap(stored.exercise).passed
+  const nextExercise =
+    leadsOnFrom(stored.exercise) && stored.course
+      ? nextExerciseOf(userData, LocalCourseData.getCourseId(stored.course), exerciseId)
+      : undefined
+  return {
+    ...rest,
+    ...(isExercisePassed === undefined ? {} : { isExercisePassed }),
+    ...(nextExercise ? { nextExercise } : {}),
+  }
 }
 
 /** The exercise's course material page, else its course's. */

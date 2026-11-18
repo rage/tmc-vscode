@@ -82,16 +82,28 @@ export function reachWalkthroughMilestone(milestone: WalkthroughMilestone): void
   }
 }
 
+/** Whether `milestone` was reached in this window or an earlier one. */
+export function hasReachedWalkthroughMilestone(milestone: WalkthroughMilestone): boolean {
+  return (
+    milestoneStore?.get<WalkthroughMilestone[]>(MILESTONES_KEY, []).includes(milestone) ?? false
+  )
+}
+
 /** What TestMyCode knows of the student's progress through the walkthrough. */
 export interface WalkthroughProgress {
   isLoggedIn: boolean
   hasCourses: boolean
   hasDownloadedExercises: boolean
+  hasRunTests: boolean
+  hasSubmitted: boolean
 }
 
 /**
- * The walkthrough step the student has yet to do, of the ones TestMyCode can tell are done; past
- * those, Run Tests. The ids are package.json's.
+ * The walkthrough step the student has yet to do; past those, Get Help, which is done once shown.
+ * The ids are package.json's.
+ *
+ * Opened on no step, VS Code expands the first not done, and with every step done the first of
+ * all, Log In, whose button then misleads a student logged in.
  */
 export function nextWalkthroughStep(progress: WalkthroughProgress): string {
   if (!progress.isLoggedIn) {
@@ -100,7 +112,13 @@ export function nextWalkthroughStep(progress: WalkthroughProgress): string {
   if (!progress.hasCourses) {
     return "addCourse"
   }
-  return progress.hasDownloadedExercises ? "runTests" : "openExercises"
+  if (!progress.hasDownloadedExercises) {
+    return "openExercises"
+  }
+  if (!progress.hasRunTests) {
+    return "runTests"
+  }
+  return progress.hasSubmitted ? "getHelp" : "submit"
 }
 
 /** Whether the walkthrough is open in any tab of this window, shown or not. */
@@ -124,6 +142,8 @@ export function walkthroughProgressOf({
     isLoggedIn: authState.loggedIn,
     hasCourses: startup.userData.getCourses().length > 0,
     hasDownloadedExercises: startup.workspaceManager.getExercises().length > 0,
+    hasRunTests: hasReachedWalkthroughMilestone("test-my-code:HasRunTests"),
+    hasSubmitted: hasReachedWalkthroughMilestone("test-my-code:HasSubmitted"),
   }
 }
 

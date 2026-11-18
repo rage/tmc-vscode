@@ -433,7 +433,7 @@ suite("submitExercise action, mooc", () => {
     })
     expect(setStanding).toHaveBeenCalledWith(
       idOfMoocExercise(MOOC_EXERCISE_ID),
-      { passed: true, outOfTries: false },
+      { passed: true, attempted: true, outOfTries: false },
       3,
     )
     expect(finishedCourses).toEqual([idOfMoocCourse(moocCourse.id)])
@@ -517,7 +517,7 @@ suite("submitExercise action, mooc", () => {
     await submitExercise(actionContext, moocExercise)
     expect(setStanding).toHaveBeenCalledWith(
       idOfMoocExercise(MOOC_EXERCISE_ID),
-      { passed: false, outOfTries: false },
+      { passed: false, attempted: true, outOfTries: false },
       2,
     )
     expect(lastView()).toMatchObject({
@@ -534,7 +534,7 @@ suite("submitExercise action, mooc", () => {
     await submitExercise(actionContext, moocExercise)
     expect(setStanding).toHaveBeenCalledWith(
       idOfMoocExercise(MOOC_EXERCISE_ID),
-      { passed: false, outOfTries: true },
+      { passed: false, attempted: true, outOfTries: true },
       2,
     )
     expect(lastView()).toMatchObject({
@@ -751,7 +751,7 @@ suite("submitExercise action, mooc", () => {
     })
     expect(setStanding).toHaveBeenCalledWith(
       idOfMoocExercise(MOOC_EXERCISE_ID),
-      { passed: true, outOfTries: false },
+      { passed: true, attempted: true, outOfTries: false },
       3,
     )
 

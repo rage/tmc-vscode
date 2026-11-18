@@ -45,6 +45,11 @@ export interface OperationOptions {
    * is on screen. While it is not, they are notified too.
    */
   shownIn?: FailureSink
+  /**
+   * The student did not start the operation: a busy rejection, which means another operation
+   * already does its work, is logged only. Its other failures still show.
+   */
+  isBackground?: boolean
   /** Runs `body` under a progress notification with this message. */
   progress?: string
   /** Shows {@link progress} there instead of in a notification. */
@@ -193,10 +198,11 @@ function reportFailure(dialog: Dialog, options: OperationOptions, error: Error):
   const busy = [detail, error].find((e) => e instanceof BottleneckError)
   if (busy) {
     Logger.info(`Not started: ${busy.message}`)
-    if (!options.silent) {
+    const isShown = !options.silent && !options.isBackground
+    if (isShown) {
       shownIn?.show(headline, busy, "warning")
     }
-    if (!options.silent && !isShownInPlace) {
+    if (isShown && !isShownInPlace) {
       void dialog.notification(busy.message)
     }
     return
