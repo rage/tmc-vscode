@@ -30,10 +30,8 @@ jobs:
         run: |
           chmod +x bin/package.bash
           bin/package.bash ${{ env.PRERELEASE }}
-          # move packaged extension from project root to own release folder
           mkdir extension && mv *.vsix extension
-          # What the marketplace serves and every user downloads, so a jump is
-          # worth seeing on the run that caused it rather than after a release.
+          # Surfaces size jumps on the run that caused them.
           echo "vsix: $(du -h extension/*.vsix | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
         env:
           CI: true
@@ -43,9 +41,7 @@ jobs:
         with:
           name: packaged-extension
           path: extension/
-      # The vsix excludes these, so this run is the only place the maps for the
-      # build it produced ever exist. Without them a production stack trace is
-      # minified column numbers.
+      # The vsix excludes the maps; this artifact is the only copy.
       - name: Upload source maps
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         if: success()

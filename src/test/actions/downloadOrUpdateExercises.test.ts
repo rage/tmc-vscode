@@ -526,8 +526,8 @@ suite("downloadOrUpdateExercises action", function () {
   })
 
   test("should report a permanent mooc auth failure and leave its exercises failed", async function () {
-    // The CLI now fails the whole mooc batch on a permanent auth failure rather
-    // than returning a partial result, so it arrives as an ordinary leg error.
+    // The CLI fails the whole mooc batch on a permanent auth failure, so it arrives
+    // as an ordinary leg error.
     const downloadedId = "exercise-uuid-3"
     const undownloadedId = "exercise-uuid-4"
     const moocError = new InvalidTokenError("401 unauthorized")

@@ -15,14 +15,12 @@ pnpm install --frozen-lockfile
 pnpm run webview:build
 
 # create package
-# --no-dependencies: esbuild bundles everything into dist/, so runtime
-# node_modules aren't shipped; also avoids @vscode/vsce choking on pnpm's
-# symlinked node_modules layout.
+# --no-dependencies: esbuild bundles dist/, and vsce chokes on pnpm's symlinked
+# node_modules.
 BACKEND=production pnpm exec vsce package --no-dependencies "${PRERELEASE_ARG}"
 
-# The listing is what reaches users, and nothing else fails when a source tree, a
-# test bundle, the coverage report or the docs slip into it -- so assert their
-# absence here rather than trusting .vscodeignore to stay right.
+# Nothing else fails when sources, test bundles, coverage or docs slip into the
+# VSIX, so assert their absence rather than trust .vscodeignore.
 LISTING=$(BACKEND=production pnpm exec vsce ls --no-dependencies)
 if echo "${LISTING}" | grep -E '(^|/)(src|backend|playwright|coverage|docs|node_modules)/|^dist/integration|\.map$|\.test\.js$'; then
   echo "The paths above would ship to users; fix .vscodeignore." >&2

@@ -182,8 +182,7 @@ suite("Extension data migration", function () {
   })
 
   suite("source key retirement", function () {
-    // Every key any migration touches, so the survivor assertion is exact
-    // rather than a spot check.
+    // Every key any migration touches, so the survivor assertion is exact.
     const migrationKeys = [
       v0.EXERCISE_DATA_KEY,
       v0.EXTENSION_SETTINGS_KEY,
@@ -237,8 +236,8 @@ suite("Extension data migration", function () {
         "done",
       )
 
-      // Everything the user does between two activations: enrol on a mooc
-      // course, which the v1 snapshot has no field for, and drop a tmc one.
+      // What the user does between two activations: enrol on a mooc course (which the v1
+      // snapshot has no field for) and drop a tmc one.
       await storage.updateUserData({ courses: [], mooc_courses: [moocCourse] })
 
       expect((await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)).kind).toBe(
@@ -311,8 +310,7 @@ suite("Extension data migration", function () {
       expect(context.globalState.get(v0.USER_DATA_KEY)).toEqual(userData.v0_9_0)
     })
 
-    // Writing the files and reopening the window belong to the caller, so the
-    // migration itself must leave the workspace alone.
+    // The caller writes the files and reopens the window; the migration must leave both alone.
     test("creates no workspace files of its own", async function () {
       await context.globalState.update(v0.EXTENSION_SETTINGS_KEY, { dataPath: root })
       openLegacyWorkspace(root, "python-course.code-workspace")

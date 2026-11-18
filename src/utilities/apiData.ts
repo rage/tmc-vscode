@@ -52,13 +52,11 @@ export function combineTmcApiExerciseData(
 }
 
 /**
- * Builds local mooc exercises from the course's exercise slides and the
- * user's per-exercise progress. An exercise `progress` does not list keeps its
- * `previousExercises` points and flags, so a refresh never wipes known ones.
+ * Builds local mooc exercises from the course's slides and the user's per-exercise progress.
+ * An exercise `progress` does not list keeps its `previousExercises` points and flags.
  *
- * One local exercise per slide, keyed by `slide.exercise_id` (a UUID): the bulk
- * download/update CLI subcommand resolves `--exercise-id` against that field, not
- * the task id, so it is the identity callers must carry.
+ * One local exercise per slide, keyed by `slide.exercise_id`: the bulk download/update CLI
+ * subcommand resolves `--exercise-id` against that field, not the task id.
  */
 export function combineMoocApiExerciseData(
   slides: TmcExerciseSlide[],
@@ -198,7 +196,7 @@ export interface CoursePoints {
   awardedPoints: number
 }
 
-/** Sums per-exercise points into course totals; local exercises carry the same two fields on both backends. */
+/** Sums per-exercise points into course totals; both backends' local exercises carry the fields. */
 export function sumCoursePoints(exercises: readonly CoursePoints[]): CoursePoints {
   return exercises.reduce(
     (totals, exercise) => ({
@@ -210,9 +208,8 @@ export function sumCoursePoints(exercises: readonly CoursePoints[]): CoursePoint
 }
 
 /**
- * Course totals straight from the tmc points endpoint. Summing the combined local
- * exercises instead would fold in `combineTmcApiExerciseData`'s placeholder points
- * for exercises that endpoint does not list.
+ * Course totals straight from the tmc points endpoint; summing the combined local exercises
+ * would fold in `combineTmcApiExerciseData`'s placeholder points for unlisted exercises.
  */
 export function sumTmcApiCoursePoints(courseExercises: CourseExercise[]): CoursePoints {
   return sumCoursePoints(
@@ -226,11 +223,10 @@ export function sumTmcApiCoursePoints(courseExercises: CourseExercise[]): Course
 /**
  * The stored form of a tmc course, for both adding it and refreshing it.
  *
- * @param organization Slug of the organization the course was picked from; the
- *   course data does not carry it, so a refresh passes the stored one.
- * @param previous The stored course being refreshed. Its `name`, `newExercises`
- *   and `notifyAfter` are kept; every other field is rebuilt, so a refresh and an
- *   add of the same payload agree.
+ * @param organization Slug of the organization the course was picked from; the course data
+ *   does not carry it, so a refresh passes the stored one.
+ * @param previous The stored course being refreshed. Its `name`, `newExercises` and
+ *   `notifyAfter` are kept; the rest is rebuilt, so a refresh and an add of one payload agree.
  */
 export function toStoredTmcCourse(
   courseData: CombinedCourseData,
@@ -240,8 +236,7 @@ export function toStoredTmcCourse(
   const { details, exercises, settings } = courseData
   return {
     id: details.id,
-    // The slug names the workspace folder and keys exercises on disk, so a
-    // renamed course keeps its old one.
+    // The slug names the workspace folder and keys exercises on disk, so a renamed course keeps it.
     name: previous?.name ?? details.name,
     title: details.title,
     description: details.description || "",
@@ -259,9 +254,8 @@ export function toStoredTmcCourse(
 /**
  * The stored form of a courses.mooc.fi course, for both adding it and refreshing it.
  *
- * @param previous The stored course being refreshed. Its `name`, `newExercises`
- *   and `notifyAfter` are kept; every other field is rebuilt, so a refresh and an
- *   add of the same payload agree. Unlike tmc, `organization` is the course's own.
+ * @param previous The stored course being refreshed; kept and rebuilt fields as in
+ *   {@link toStoredTmcCourse}, except that `organization` is the course's own.
  */
 export function toStoredMoocCourse(
   { course, slides, progress }: CombinedMoocCourseData,

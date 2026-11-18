@@ -30,8 +30,7 @@ suite("downloadFile", function () {
   })
 
   test("writes the full body to disk before resolving, even when the event loop is then starved", async function () {
-    // A tiny body arrives in one chunk; the file must be fully written by the
-    // time downloadFile resolves, even if the caller then blocks the event loop.
+    // A tiny body arrives in one chunk, so the write must finish before downloadFile resolves.
     const body = "2a31f5758b4488b279e80e57ff8248aa2485ef80d4cf27618403fb136fc07f71\r\n"
     server = await startServer((_req, res) => {
       res.writeHead(200, {
@@ -173,8 +172,8 @@ suite("downloadFile", function () {
   })
 
   test("returns an Err (does not throw) when the output directory cannot be created", async function () {
-    // A regular file occupies a parent path component, so creating the
-    // output directory fails before any request is made.
+    // A regular file as a parent path component fails directory creation before any request.
+
     const blocker = path.join(tmpDir.name, "blocker")
     fs.writeFileSync(blocker, "i am a file, not a directory")
     const out = path.join(blocker, "child", "f.txt")

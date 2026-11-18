@@ -4,7 +4,6 @@ import { last } from "lodash"
 import * as vscode from "vscode"
 import { z } from "zod"
 
-// All access to VSCode's storage should be done through this module.
 import type Dialog from "../api/dialog"
 import type Langs from "../api/langs"
 import { CorruptStoredDataError } from "../errors"
@@ -18,16 +17,10 @@ import migrateExtensionSettingsToLatest from "./migration/extensionSettings"
 import migrateSessionState from "./migration/sessionState"
 import migrateUserDataToLatest from "./migration/userData"
 
-/**
- * Interface class for accessing stored TMC configuration and data.
- */
+/** The only access to VS Code's storage; nothing else reads or writes mementos or settings. */
 export default class Storage {
   private _context: vscode.ExtensionContext
 
-  /**
-   * Creates new instance of the TMC storage access object.
-   * @param context context of the extension where all data is stored
-   */
   public constructor(context: vscode.ExtensionContext) {
     this._context = context
   }
@@ -102,8 +95,7 @@ export default class Storage {
       const migratedSessionState = migrateSessionState(memento)
       const migratedUserData = migrateUserDataToLatest(memento)
 
-      // A migration yields `undefined` when nothing was stored under any of its
-      // keys; that means "nothing to migrate", not "delete what is there".
+      // `undefined` means nothing was stored, not "delete what is there".
       if (migratedSessionState.data) {
         await this.updateSessionState(migratedSessionState.data)
       }

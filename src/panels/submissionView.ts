@@ -385,9 +385,9 @@ function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): str
 }
 
 /**
- * `view` with the exercise as it now stands, which the submit action that built the view cannot
- * know: the files or the exercise may go away while it is shown, and a grading or a deadline
- * changes what the backend accepts.
+ * `view` with the exercise as it now stands, which the submit action that built it cannot know:
+ * files or the exercise may go away while it is shown, and a grading or deadline changes what
+ * the backend accepts.
  *
  * @param exercise.submitRefusal See {@link SubmissionView.submitRefusal}.
  * @param exercise.submitRefusalLabel The refusal in a few words, e.g. "Deadline passed": the
@@ -395,7 +395,7 @@ function fullyGradedHeadline(standing: ExerciseStanding | null | undefined): str
  * @param exercise.pendingReview See {@link SubmissionView.pendingReview}; replaces the one a
  *   finished grading was shown with.
  * @param exercise.solutionUrl The model solution's page once the stored course reveals it; fills
- *   in a view that has none, as a course refresh after the grading can reveal it.
+ *   in a view that has none.
  * @param exercise.materialUrl See {@link SubmissionView.materialUrl}.
  * @param exercise.isLoggedOut See {@link SubmissionView.isLoggedOut}.
  * @param exercise.arePointsHeld A teacher's review holds the exercise's points back now, so a

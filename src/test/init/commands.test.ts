@@ -226,9 +226,7 @@ suite("registerCommands", function () {
     expect(ids.toSorted()).toEqual(expectedCommands.toSorted())
   })
 
-  // Pins the split itself: `registerServiceFreeCommands` must register exactly these
-  // and nothing `registerCommands` also registers, or the two other set
-  // assertions in this suite would only prove the union is right, not the partition.
+  // Pins the partition, not just the union: nothing `registerCommands` also registers may be here.
   test("registerServiceFreeCommands registers exactly the ids that need no service", function () {
     const { serviceFreeIds } = registerAndCollect()
     expect(serviceFreeIds.toSorted()).toEqual(expectedServiceFreeCommands.toSorted())
@@ -761,10 +759,8 @@ suite("registered command handlers", function () {
     )
   })
 
-  // `tmcTreeView.refreshCourses`'s wiring (progress notification, onProgress ->
-  // fraction) is tested against `refreshCourses` directly, in
-  // `test/commands/refreshEverything.test.ts`; the command-set test above already
-  // pins that this id stays registered.
+  // `tmcTreeView.refreshCourses`'s wiring is tested against `refreshCourses` directly, in
+  // `test/commands/refreshEverything.test.ts`; the command-set test above pins the id.
 
   test.each([
     ["tmc.addNewCourse", "addNewCourse"],
@@ -1153,9 +1149,8 @@ suite("extension identity", function () {
 })
 
 suite("keybindings", function () {
-  // A binding outranks whatever VS Code, the desktop or an input method has on the same
-  // chord. Adding one means editing this list, which puts the check below in front of
-  // whoever adds it.
+  // A binding outranks whatever VS Code, the desktop or an input method has on the same chord, so
+  // each addition must be reviewed here.
   test("claims exactly the reviewed keys", function () {
     expect(packageJson().contributes.keybindings ?? []).toEqual([])
   })

@@ -1,9 +1,5 @@
 // @ts-check
-// Extension-host bundler.
-//
-// esbuild does NOT type-check (it strips types); `pnpm run typecheck` gates on
-// types separately. Build-profile constants are injected via `define` (see
-// config.js).
+// Extension-host bundler. esbuild does not type-check; `pnpm run typecheck` does.
 import { createRequire } from "node:module"
 import path from "node:path"
 
@@ -32,8 +28,7 @@ const apiConfig = (() => {
   }
 })()
 
-// Profile map values are already JSON.stringify'd — that's exactly what
-// esbuild's `define` expects (raw text substituted at build time).
+// Profile map values are already JSON.stringify'd, as `define` expects.
 const define = {
   __DEBUG_MODE__: JSON.stringify(!production),
   ...apiConfig,
@@ -66,11 +61,9 @@ const common = {
   platform: "node",
   format: "cjs",
   target: "node20",
-  // Prefer the ESM entry of dual-published packages. In particular this picks
-  // ts-results' patched `esm/` build (static, fully bundlable) over its UMD
-  // `main`, whose factory-scoped `require("tslib")` esbuild cannot rewrite and
-  // would otherwise leak as an unresolved runtime require (fatal under
-  // `--no-dependencies` packaging).
+  // ts-results' UMD `main` has a factory-scoped `require("tslib")` that esbuild
+  // cannot rewrite; it would leak as an unresolved runtime require (fatal under
+  // `--no-dependencies` packaging). Its patched `esm/` build avoids that.
   mainFields: ["module", "main"],
   // `vscode` is injected by the runtime; chai and mocha are resolved from
   // node_modules when the test bundles run inside the extension host.
@@ -80,18 +73,16 @@ const common = {
     // docs/FAQ.md is imported as text (src/config/constants.ts).
     ".md": "text",
   },
-  // Emitted in every configuration, and kept out of the vsix by .vscodeignore's
-  // `**/*.map`: a minified stack trace a user pastes from "Show Logs" maps back
-  // to source from the archived build artifact, without growing their download.
+  // Kept out of the vsix by .vscodeignore's `**/*.map`; maps pasted "Show Logs"
+  // stack traces back to source from the archived build artifact.
   sourcemap: true,
   minify: production,
   logLevel: "info",
   plugins: watch ? [problemMatcherPlugin] : [],
 }
 
-// Bundles every matching spec file into a single test output via a generated
-// in-memory entry point. An empty match would bundle nothing and the tier
-// would then run zero tests and report success, so it is a build failure.
+// Bundles every matching spec file via a generated in-memory entry point. An
+// empty match is a build failure: the tier would otherwise run zero tests and pass.
 /**
  * @param {string} globPattern
  * @returns {import("esbuild").StdinOptions}
@@ -114,11 +105,8 @@ const builds = [
     entryPoints: { extension: "./src/extension.ts" },
     outdir: "dist",
   },
-  // The integration tier stays in test-electron and is bundled for the
-  // mocha loader (bin/runIntegrationTests.js). Matches both *.spec.ts (this
-  // tier's convention) and *.test.ts (the common convention elsewhere), so a
-  // new integration test named the latter way isn't silently excluded from
-  // the bundle.
+  // Bundled for the mocha loader (bin/runIntegrationTests.js). Matches both
+  // suffixes so a misnamed test isn't silently excluded.
   {
     ...common,
     stdin: aggregateEntry("src/test-integration/**/*.{spec,test}.ts"),

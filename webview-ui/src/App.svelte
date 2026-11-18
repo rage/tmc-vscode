@@ -102,8 +102,7 @@
     {#if crash}
       {@render crashView(crash, () => {
         crash = null
-        // The extension answers "ready" with the panel it last rendered, so the view
-        // comes back rather than sitting empty until the user navigates somewhere.
+        // The extension answers "ready" with the last rendered panel, so the view comes back.
         vscode.postMessage({ type: "ready" })
       })}
     {:else if panel === undefined}

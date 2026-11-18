@@ -299,10 +299,8 @@ function killProcessTree(cprocess: cp.ChildProcess): void {
  * The tail of a CLI process's stderr, and of the stdout lines that are not its JSON, kept for
  * the error details a failure attaches; redacted, as those details reach the output channel.
  *
- * A long-running `run-tests` can write more stderr than the extension host should hold, so
- * older output is dropped once {@link MAX_RETAINED_STDERR_BYTES} is exceeded and `text()`
- * says how much went. The newest output is the part that explains a failure, so the tail is
- * what survives; the most recent chunk is always kept whole.
+ * Once {@link MAX_RETAINED_STDERR_BYTES} is exceeded the oldest output is dropped and
+ * `text()` says how much went; the most recent chunk is always kept whole.
  */
 class BoundedStderr {
   private readonly _chunks: string[] = []
@@ -333,9 +331,7 @@ class BoundedStderr {
   }
 }
 
-/**
- * A Class that provides an interface to all langs functionality.
- */
+/** The extension's interface to `tmc-langs-cli`; one method per CLI operation. */
 export default class Langs {
   // Per-backend: tmc.mooc.fi and courses.mooc.fi are unrelated servers, so one must not throttle the other.
   private readonly _nextSubmissionAllowedTimestamp: Record<BackendKind, number>
@@ -349,9 +345,6 @@ export default class Langs {
 
   private readonly _activeInterrupts = new Set<() => void>()
 
-  /**
-   * Creates a new instance of the langs interface class.
-   */
   public constructor(
     private readonly cliPath: string,
     private readonly clientName: string,
@@ -410,10 +403,6 @@ export default class Langs {
         break
     }
   }
-
-  // ---------------------------------------------------------------------------------------------
-  // Authentication commands
-  // ---------------------------------------------------------------------------------------------
 
   /**
    * Whether the user has a session: stored courses.mooc.fi credentials, or else a tmc token
@@ -530,10 +519,6 @@ export default class Langs {
     return Ok.EMPTY
   }
 
-  // ---------------------------------------------------------------------------------------------
-  // Non-core commands
-  // ---------------------------------------------------------------------------------------------
-
   /** Removes build output and other generated files from an exercise, via `clean`. */
   public async clean(exercisePath: string): Promise<Result<void, Error>> {
     return this._run({ args: ["clean", "--exercise-path", exercisePath] })
@@ -612,10 +597,6 @@ export default class Langs {
     )
     return { process: result.then((res) => res.map((x) => x.data["output-data"])), interrupt }
   }
-
-  // ---------------------------------------------------------------------------------------------
-  // Settings commands
-  // ---------------------------------------------------------------------------------------------
 
   /**
    * Migrates exercise under TMC-langs's management. The new location will be determined by
@@ -727,10 +708,6 @@ export default class Langs {
   public async unsetSetting(key: string): Promise<Result<void, Error>> {
     return this._run({ args: this._settingsCmd("unset", key) })
   }
-
-  // ---------------------------------------------------------------------------------------------
-  // Core commands
-  // ---------------------------------------------------------------------------------------------
 
   /**
    * Compares the locally downloaded exercises of `backend` with the server: those with a newer
@@ -1439,12 +1416,11 @@ export default class Langs {
       return Err(new BaseError("Unexpected data in error response", stderr))
     }
 
-    // after this point, we know we have an error
     const data = langsResponse.data
     const message = langsResponse.message
     const errorKind = data["output-data"].kind
     // `trace` is the CLI's own reported backtrace; `stderr` is what the process wrote.
-    // Neither alone has been enough to diagnose a failure, so every error carries both.
+    // Neither alone suffices to diagnose a failure, so every error carries both.
     // The CLI lists a boxed error twice in a row, once as the box and once as itself.
     const trace = data["output-data"].trace.filter((line, i, lines) => line !== lines[i - 1])
     const details = [trace.join("\n"), stderr].filter(Boolean).join("\n\n")
@@ -1582,8 +1558,7 @@ export default class Langs {
 
     let theResult: OutputData | undefined
     let stdoutBuffer = ""
-    // Last schema-validation failure, if any — lets a process that ends without
-    // output data report *why* instead of a generic "no result data" message.
+    // Lets a process that ends without output data report why.
     let lastSchemaFailure: LangsSchemaFailure | undefined
 
     const loggableCommand = [this.cliPath]

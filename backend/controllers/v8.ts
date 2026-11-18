@@ -108,24 +108,20 @@ export const courseExercises: CourseWithExercises[] = [
   { course: javaCourse, exercises: javaExercises },
 ]
 
-// Grading is decided by exercise id: only the failing fixture reports a failed
-// test case, so a client can be driven through both outcomes. The names are the
-// unittest ids the packed python exercises really produce, so a client rendering
-// them shows what a real run would.
+// Only the failing fixture reports a failed test case, so a client can be driven
+// through both outcomes. Names match the unittest ids the packed exercises produce.
 const testCasesOf = (exerciseId: number): { name: string; successful: boolean }[] =>
   exerciseId === failingExerciseId
     ? [{ name: "test.test_failing_exercise.FailingExercise.test_failing", successful: false }]
     : [{ name: "test.test_passing_exercise.PassingExercise.test_passing", successful: true }]
 
 /**
- * The sandbox states a submission reports before it finishes, one per poll, so a
- * client walks all of them on every machine. Deriving them from elapsed time
- * instead skips states: the CLI's polls are a second apart, already past any
- * threshold short enough to keep a test fast.
+ * Sandbox states reported one per poll before a submission finishes. Not derived
+ * from elapsed time: the CLI polls a second apart, which would skip states.
  */
 const SANDBOX_PROGRESSION = ["created", "sending_to_sandbox", "processing_on_sandbox"] as const
 
-/** What a submission's URL answers: tmc-langs models only the finished shape. */
+/** What a submission's URL answers; tmc-langs models only the finished shape. */
 type SubmissionStatusReport =
   | { status: "processing"; sandbox_status: (typeof SANDBOX_PROGRESSION)[number] }
   | SubmissionFinished
@@ -147,10 +143,7 @@ const pointNamesOf = (exercise: BackendExercise): string[] =>
 const pointNamesListed = (submission: Submission): string[] =>
   (submission.points ?? "").split(" ").filter((name) => name !== "")
 
-/**
- * `exercise` with the student's progress on it, as tmc-server derives it from the submissions:
- * completed once one passed all tests, its points awarded by those passing submissions.
- */
+/** `exercise` with progress derived from the submissions, as tmc-server does. */
 const withProgress = (state: TmcMockState, exercise: BackendExercise): BackendExercise => {
   const submissions = state.submissions.filter(
     (record) => !record.isSeeded && record.submission.exercise_name === exercise.name,
@@ -198,16 +191,9 @@ const createTmcMockState = (): TmcMockState => ({
   nextSubmissionId: 2,
 })
 
-/**
- * Drives one legacy TMC mock's state from a test or a control route. Reach it
- * with {@link tmcMockOf} on the app the mock was mounted on.
- */
+/** Drives one legacy TMC mock's state; reach it with {@link tmcMockOf}. */
 export interface TmcMockControls {
-  /**
-   * Discards every submission made since the last reset, leaving the one
-   * pre-existing old submission the fixtures declare. Courses and exercises are
-   * immutable and survive.
-   */
+  /** Discards submissions made since the last reset, keeping the seeded old one. */
   reset: () => void
 }
 
@@ -220,10 +206,8 @@ const createTmcMockControls = (state: TmcMockState): TmcMockControls => ({
 
 export const tmcMockOf = (app: Express): TmcMockControls => app.locals.tmcMock as TmcMockControls
 
-// Absolute URLs are built from the request rather than a configured port so the
-// mock can be reached under an ephemeral port, and so the URLs it hands out
-// stay same-origin with whatever root the CLI was pointed at -- which is what
-// decides whether the CLI attaches its bearer to them.
+// Built from the request so ephemeral ports work and URLs stay same-origin with
+// the CLI's root, which decides whether the CLI attaches its bearer.
 const originOf = (req: Request): string => `${req.protocol}://${req.get("host") ?? "localhost"}`
 
 const exerciseFixtures = courseExercises.flatMap(({ course, exercises }) =>
@@ -245,8 +229,7 @@ const findOrganization = (
 
 /**
  * The handlers of a route answering for the fixture `find` picks out of the path, behind
- * `guards`. A path naming no fixture skips the route before any guard, so it answers 404, token
- * or not, as an unregistered path would.
+ * `guards`. A path naming no fixture skips the route before any guard: 404, token or not.
  */
 const forFixture = <Fixture>(
   find: (params: Record<string, unknown>) => Fixture | undefined,
@@ -272,10 +255,9 @@ const forFixture = <Fixture>(
 }
 
 /**
- * Turns away a request that carries neither {@link MOCK_TMC_ACCESS_TOKEN} nor a
- * courses.mooc.fi token with the exercise-services scope, as tmc-server's
- * `unauthorize_guest!` turns away a guest, down to the response body the CLI
- * parses.
+ * Rejects requests carrying neither {@link MOCK_TMC_ACCESS_TOKEN} nor a
+ * courses.mooc.fi token with the exercise-services scope, mirroring tmc-server's
+ * `unauthorize_guest!` including the response body.
  */
 const requireAccessToken =
   (options: RegisterV8RoutesOptions): RequestHandler =>
@@ -304,13 +286,11 @@ export interface RegisterV8RoutesOptions {
 }
 
 /**
- * Mounts the legacy TMC server's API v8 surface, plus the `/feedback` endpoint
- * its submission results point at and the spec-exempt `/tmc-mock/reset` control
- * route.
+ * Mounts the legacy TMC server's API v8 surface, plus `/feedback` and the
+ * spec-exempt `/tmc-mock/reset`.
  *
- * Which routes authenticate mirrors tmc-server: the organization endpoints, the
- * exercise-details query and the exercise stub download are readable by a
- * guest, everything else needs a token.
+ * Authentication mirrors tmc-server: organization endpoints, the exercise-details
+ * query and the exercise stub download are open to guests; the rest need a token.
  */
 export const registerV8Routes = (
   app: Express,
@@ -485,9 +465,8 @@ export const registerV8Routes = (
     res.json({ api_version: 8, status: "ok" }),
   )
 
-  // Spec-exempt reset route, outside the token check: it isolates one test from
-  // the previous one's submissions in the long-lived mock the Playwright tier
-  // shares, and the real server has no counterpart to authenticate it against.
+  // Spec-exempt and unauthenticated: isolates Playwright tests sharing this mock;
+  // the real server has no counterpart.
   app.post("/tmc-mock/reset", (_req, res) => {
     controls.reset()
     res.status(204).end()
@@ -496,10 +475,7 @@ export const registerV8Routes = (
   return controls
 }
 
-/**
- * A standalone app carrying the legacy TMC mock, for tests that drive it over an
- * ephemeral port instead of the shared mock server.
- */
+/** A standalone app carrying the legacy TMC mock, for tests on an ephemeral port. */
 export const createTmcApp = (options: RegisterV8RoutesOptions = {}): Express => {
   const app = express()
   app.use(express.json())

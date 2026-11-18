@@ -14,9 +14,8 @@ import type { ReadyActionContext } from "./types"
  * Removes a course from the user's courses, along with the extension's own state
  * for it: its closed-exercise setting and its `.code-workspace` file.
  *
- * The exercises already downloaded are deliberately left on disk. Failing to clean up the
- * setting or the workspace file is a warning and does not stop the removal; an `Err` means
- * the course is still in the user's courses.
+ * Downloaded exercises are deliberately left on disk. Failing to clean up the setting or the
+ * workspace file only warns; an `Err` means the course is still in the user's courses.
  *
  * @param id ID of the course to remove
  */
@@ -49,8 +48,8 @@ export async function removeCourse(
     })
   }
 
-  // Left behind, it would be reused verbatim if the course is added again, listing
-  // folders for exercises the student may have deleted in the meantime.
+  // Left behind, it would be reused verbatim if the course is added again, listing folders
+  // for exercises the student may have deleted since.
   const workspaceFileResult = await workspaceManager.deleteWorkspaceFile(courseName, course.kind)
   if (workspaceFileResult.err) {
     warnings.push({

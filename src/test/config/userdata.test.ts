@@ -15,10 +15,6 @@ import {
 } from "../fixtures/identifiers"
 import { createMockContext } from "../mocks/vscode"
 
-// -------------------------------------------------------------------------------------------------
-// Fixtures
-// -------------------------------------------------------------------------------------------------
-
 function tmcExercise(
   overrides: Partial<storage.TmcLocalCourseExercise> = {},
 ): storage.TmcLocalCourseExercise {
@@ -86,10 +82,7 @@ async function makeUserData(data: storage.UserData): Promise<[UserData, Storage]
   return [new UserData(store), store]
 }
 
-// -------------------------------------------------------------------------------------------------
-// Bug 1 regression: `getPassed` used an object-keyed Set, so membership never matched.
-// -------------------------------------------------------------------------------------------------
-
+// `getPassed` must match identifiers by value, not by object identity.
 suite("UserData passed-state (Bug 1 regression)", function () {
   test("getPassed returns true for a tmc exercise stored as passed", async function () {
     const [userData] = await makeUserData({
@@ -119,8 +112,7 @@ suite("UserData passed-state (Bug 1 regression)", function () {
   })
 
   test("getPassed does not collide across backends with identical string ids", async function () {
-    // A tmc id of 1 stringifies to "1"; a mooc id of "1" also stringifies to
-    // "1". The passed lookup must not conflate the two backends.
+    // A tmc id 1 and a mooc id "1" both stringify to "1"; the lookup must not conflate them.
     const [userData] = await makeUserData({
       courses: [tmcCourse({ exercises: [tmcExercise({ id: 1, passed: true })] })],
       mooc_courses: [moocCourse({ exercises: [moocExercise({ id: "1", passed: false })] })],
@@ -156,11 +148,7 @@ suite("UserData passed-state (Bug 1 regression)", function () {
   })
 })
 
-// -------------------------------------------------------------------------------------------------
-// Bug 2 regression: `clearFromNewExercises` diffed identifier objects by reference, so nothing
-// was ever cleared; the write-back also never reset a fully-cleared list.
-// -------------------------------------------------------------------------------------------------
-
+// `clearFromNewExercises` must diff identifiers by value and persist a fully-cleared list.
 suite("UserData clearFromNewExercises (Bug 2 regression)", function () {
   test("clears a subset of new tmc exercises and keeps the remainder", async function () {
     const [userData] = await makeUserData({
@@ -207,10 +195,6 @@ suite("UserData clearFromNewExercises (Bug 2 regression)", function () {
     expect(course.notifyAfter).toBe(0)
   })
 })
-
-// -------------------------------------------------------------------------------------------------
-// General UserData surface: construction, CRUD, replaceCourse, persistence, both backends
-// -------------------------------------------------------------------------------------------------
 
 suite("UserData construction", function () {
   test("starts empty when storage has no user data", function () {
@@ -615,13 +599,8 @@ suite("UserData persistence round-trip", function () {
   })
 })
 
-// -------------------------------------------------------------------------------------------------
-// Bug 3 regression: the by-slug lookups scanned tmc courses first and returned as soon as a
-// *course* slug matched, even when the requested exercise was not in that course. A mooc course
-// sharing its slug with a tmc course was therefore unreachable — the tmc course short-circuited
-// the search. Both lookups are now qualified by the backend the caller already knows.
-// -------------------------------------------------------------------------------------------------
-
+// By-slug lookups are qualified by backend, so a mooc course sharing a slug with a tmc
+// course stays reachable.
 suite("UserData slug collision across backends (Bug 3 regression)", function () {
   /** A tmc course and a mooc course that share the slug `shared-slug`. */
   async function collidingCourses(): Promise<UserData> {
@@ -651,11 +630,8 @@ suite("UserData slug collision across backends (Bug 3 regression)", function () 
   })
 })
 
-// -------------------------------------------------------------------------------------------------
-// The in-memory catalogue and the persisted one must agree: `getPassed` answers from a set that a
-// single-exercise write has to update too, and a rejected write must not read back as a success.
-// -------------------------------------------------------------------------------------------------
-
+// `getPassed` answers from a set that a single-exercise write must update, and a rejected
+// write must not read back as a success.
 suite("UserData setExerciseAsPassed", function () {
   test("a passed tmc exercise reads back as passed from memory and from storage", async function () {
     const [userData, store] = await makeUserData({
@@ -764,8 +740,7 @@ suite("UserData concurrent writes", function () {
     vi.spyOn(store, "updateUserData").mockImplementation(async () => {
       const write = ++writeCount
       events.push(`start${write}`)
-      // The first write is the slower one, so an unserialized second write
-      // would finish inside it.
+      // The first write is slower, so an unserialized second one would finish inside it.
       await new Promise((resolve) => {
         setTimeout(resolve, write === 1 ? 10 : 0)
       })

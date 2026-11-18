@@ -5,11 +5,11 @@ import { ExtensionToWebviewSchema } from "../../shared/lib"
 import type { Scenario } from "./scenarios"
 
 /**
- * Plays the extension host for `scenario`: answers each message the webview posts by handing the
- * replies, in order, to `deliver`.
+ * Plays the extension host for `scenario`: answers each webview message by handing the replies,
+ * in order, to `deliver`.
  *
- * Replies are validated first, because the webview drops a message that fails its schema without
- * a trace, which would leave a drifted scenario looking like a panel bug.
+ * Replies are validated first: the webview silently drops a message failing its schema, which
+ * would make a drifted scenario look like a panel bug.
  */
 export function createFakeHost(
   scenario: Scenario,

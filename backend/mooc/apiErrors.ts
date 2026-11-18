@@ -1,22 +1,17 @@
 // The host's error contract, transcribed from secret-project-331's
 // `server/src/domain/error.rs`.
 //
-// Every `ControllerErrorType` variant fixes three things at once: the envelope's
-// `type`, its `message_key` and the HTTP status. Within the client API the message
-// keys are unique, so naming the key determines the other two -- which is why
-// this table is keyed by it and why a handler here names only a key. The host also
-// sends `chapter_not_open_yet` as a 401 from the course-material API; the client
-// API's 403 is the one here.
+// Each `ControllerErrorType` variant fixes the envelope's `type`, `message_key`
+// and HTTP status. Client-API message keys are unique, so the table is keyed by
+// key and a handler names only that. `chapter_not_open_yet` is a 401 in the
+// course-material API; the client API's 403 is the one here.
 //
-// Transcribed rather than validated against, because the vendored spec cannot
-// stand in for it: `components.schemas.ApiErrorResponse` declares no `required`
-// members, every member nullable and no `additionalProperties: false`, so the
-// mock's response validation accepts `{}` for every documented 4xx. Keep this in
-// step with `error.rs`; nothing detects the drift automatically.
+// Transcribed, not validated: the vendored spec's `ApiErrorResponse` has no
+// `required` members and nullable fields, so response validation accepts `{}`
+// for every 4xx. Keep in step with `error.rs`; nothing detects drift.
 //
-// `ControllerErrorType::OAuthError` is deliberately absent: it answers with the
-// RFC 6749 `{error, error_description}` body instead of this envelope, and that
-// contract lives in ./oauth.ts.
+// `ControllerErrorType::OAuthError` is absent: it uses the RFC 6749
+// `{error, error_description}` body, see ./oauth.ts.
 
 interface ApiErrorContract {
   /** The envelope's `type`, shared by every key of the same variant group. */

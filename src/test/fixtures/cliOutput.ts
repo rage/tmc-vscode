@@ -285,10 +285,8 @@ const moocExerciseSlide = {
         checksum: "1234abcd",
         browser_test: { runtime: "python", script: "print('hello')", error: null },
       },
-      // The shape the `tmc` exercise service actually emits (pinned there by
-      // services/tmc/src/server/modelSolution.test.ts). A solved exercise's task
-      // carries this, so a wrong shape here would hide the CLI failing on every
-      // later command for that exercise.
+      // The shape the `tmc` service emits (pinned in services/tmc/.../modelSolution.test.ts);
+      // a wrong one would hide the CLI failing on every later command for a solved exercise.
       model_solution_spec: {
         type: "editor",
         solution_download_url: "https://courses.mooc.fi/api/v0/files/solution.tar.zst",
@@ -310,7 +308,6 @@ const moocExerciseSlide = {
 }
 
 const validCliOutputFixtures: CliOutputFixture[] = [
-  // envelope kinds
   {
     name: "status-update: client-update-data / exercise-download",
     value: {
@@ -372,7 +369,6 @@ const validCliOutputFixtures: CliOutputFixture[] = [
       data: null,
     },
   },
-  // error kinds
   {
     name: "error: generic",
     value: {
@@ -386,7 +382,6 @@ const validCliOutputFixtures: CliOutputFixture[] = [
       },
     },
   },
-  // one fixture per remaining DataKind variant
   {
     name: "validation (result)",
     value: outputData("validation", {

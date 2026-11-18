@@ -23,16 +23,13 @@ function copyCodicons(): Plugin {
   }
 }
 
-// Builds the webview bundle the extension loads from
-// `webview-ui/public/build/{bundle.js,bundle.css}` (see src/panels/TmcPanel.ts).
-// Library mode keeps a single-IIFE + separate-CSS layout, with stable,
-// unhashed filenames.
+// Builds the bundle src/panels/TmcPanel.ts loads from `public/build/{bundle.js,bundle.css}`:
+// library mode gives a single IIFE plus separate CSS, with unhashed filenames.
 export default defineConfig(({ mode }): UserConfig => {
   const production = mode === "production"
   return {
     plugins: [svelte(), copyCodicons()],
-    // The output dir lives under the default publicDir (public/), which Vite would
-    // otherwise copy into itself.
+    // outDir is under the default publicDir, which Vite would copy into itself.
     publicDir: false,
     build: {
       outDir: "public/build",

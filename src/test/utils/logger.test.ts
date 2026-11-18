@@ -163,8 +163,8 @@ suite("Logger output channel", function () {
     Logger.output = undefined
   })
 
-  // The banner is what makes a pasted log answerable: it names the VS Code and
-  // extension versions and the open workspace, and `errors` is the default level.
+  // The banner names the VS Code and extension versions and the workspace, which makes a
+  // pasted log answerable; `errors` is the default level.
   test("the activation banner reaches the channel at the default level", function () {
     captureChannel(LogLevel.Errors)
 

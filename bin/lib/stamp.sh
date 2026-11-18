@@ -1,11 +1,9 @@
-# Provenance-stamp helpers shared by the two vendoring scripts,
-# bin/updateLangsSchema.sh and bin/updateLangsOpenapi.sh.
+# Provenance-stamp helpers shared by bin/updateLangsSchema.sh and bin/updateLangsOpenapi.sh.
 #
-# A stamp records the source rev and the sha256 of the vendored file, so CI can
-# tell a hand-edit apart from a re-vendor without needing a checkout of the
-# source repository.
+# A stamp records the source rev and the vendored file's sha256, so CI can tell a
+# hand-edit from a re-vendor without the source checkout.
 
-# sha256 of a file, portable across Linux (sha256sum) and macOS (shasum).
+# sha256 of a file; sha256sum on Linux, shasum on macOS.
 sha256_of() {
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum "$1" | awk '{print $1}'
@@ -33,7 +31,7 @@ write_stamp() {
     }
     require("fs").writeFileSync(stamp, JSON.stringify(fields, null, 2) + "\n")
   ' "$stamp" "$@"
-  # Normalise to the repo's formatting so format:check stays green.
+  # Keeps format:check green.
   pnpm exec oxfmt "$stamp" >/dev/null 2>&1 || true
 }
 

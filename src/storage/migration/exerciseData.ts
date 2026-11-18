@@ -58,12 +58,11 @@ export function v0_resolveExercisePath(
 }
 
 /**
- * Hands v0 exercises that are still on disk over to langs, which owns the exercise
- * directory from v1 on.
+ * Hands v0 exercises that are still on disk over to langs, which owns the exercise directory
+ * from v1 on.
  *
- * Returns the exercises langs refused, each with `path` set to where its files were
- * found, so a retry needs nothing else from v0 storage. Exercises whose files are
- * already gone are dropped rather than returned: there is nothing left to point at.
+ * Returns the exercises langs refused, each with `path` set to where its files were found, so
+ * a retry needs nothing else from v0 storage. Exercises whose files are gone are dropped.
  */
 async function handOverToLangs(
   exercises: data.v0.LocalExerciseData[],

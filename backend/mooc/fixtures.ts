@@ -4,26 +4,18 @@ import { MOCK_BACKEND_URL } from "../mockSession"
 
 // Fixture data for the courses.mooc.fi (`/api/v0/exercise-services/client`) mock.
 //
-// Shapes mirror the vendored OpenAPI schemas (Course / ExerciseSlide /
-// ExerciseTask). Ids are FIXED UUIDs so integration + conformance tests can
-// hardcode them. The mooc client keys everything by UUID (unlike the legacy
-// TMC mock's integer ids).
+// Shapes mirror the vendored OpenAPI schemas. Ids are FIXED UUIDs so tests can hardcode them.
 //
-// NB on public_spec: the OpenAPI spec types public_spec / assignment /
-// model_solution_spec as opaque `{}` (envelope-level validation only), but the
-// CLI deserialises public_spec into tmc-mooc-client's PublicSpec struct, so the
-// CONTENT here must be a valid tmc PublicSpec (type/archive_name/
-// stub_download_url/student_file_paths/checksum) even though the mock's own
-// response validation treats it as free-form. See
-// tmc-langs-rust/crates/tmc-mooc-client/src/exercise.rs.
+// NB on public_spec / model_solution_spec: the OpenAPI spec types them as opaque `{}`, but the
+// CLI deserialises public_spec into tmc-mooc-client's PublicSpec, so the content here must be
+// a valid tmc PublicSpec even though the mock's response validation treats it as free-form.
+// See tmc-langs-rust/crates/tmc-mooc-client/src/exercise.rs.
 
 export const DEFAULT_MOOC_MOCK_BASE_URL = MOCK_BACKEND_URL
 
-// Content-Type the CLI sends for a submission archive, and what the tmc exercise
-// service writes for the same archive made in its IFrame. The host echoes the part's
-// type into `AnswerFile.mime` without checking it, so nothing rejects a wrong one --
-// the only guard is that all three repos spell it the same. Keep in step with
-// tmc-langs-rust's ANSWER_ARCHIVE_MIME and services/tmc/src/util/answerArchive.ts.
+// The host echoes the part's type into `AnswerFile.mime` unchecked, so only matching spelling
+// across repos guards it. Keep in step with tmc-langs-rust's ANSWER_ARCHIVE_MIME and
+// services/tmc/src/util/answerArchive.ts.
 export const TMC_ARCHIVE_MIME = "application/x-zstd-compressed-tar"
 
 const RESOURCES = path.resolve(__dirname, "..", "resources", "test-python-course")
@@ -117,7 +109,6 @@ export interface MoocExerciseFixture {
   archiveSlug: string
   /** Directory whose contents are packed into the served .tar.zst. */
   sourceDir: string
-  /** Grading result the mock returns for this exercise's submissions. */
   gradingOutcome: GradingOutcome
   /** Served by `GET exercises/{id}` once the mock's reveal rule allows it. */
   modelSolution: ModelSolutionSpec
@@ -131,8 +122,6 @@ export interface MoocExerciseFixture {
 
 const ORG = "Test Organization"
 const ORG_SLUG = "test-organization"
-
-// ---- courses ----
 
 export const pythonCourse: Course = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -151,9 +140,8 @@ export const extraCourse: Course = {
   ai_policy: "full_use",
 }
 
-// Holds the exercises that are not a plain submittable editor exercise. Each one
-// makes a host refusal or a client branch reachable that the two courses above
-// cannot reach.
+// Holds the exercises that are not a plain submittable editor exercise, to reach host refusals
+// and client branches the two courses above cannot.
 export const variantsCourse: Course = {
   id: "33333333-3333-4333-8333-333333333333",
   slug: "mooc-variants-course",
@@ -162,8 +150,7 @@ export const variantsCourse: Course = {
   organization_name: ORG,
 }
 
-// A course the student is NOT enrolled on. Every gate a submit passes through
-// starts with enrollment, so the mock needs a real course to fail it against.
+// A course the student is NOT enrolled on; every submit gate starts with enrollment.
 export const notEnrolledCourse: Course = {
   id: "44444444-4444-4444-8444-444444444444",
   slug: "mooc-unenrolled-course",
@@ -172,10 +159,7 @@ export const notEnrolledCourse: Course = {
   organization_name: ORG,
 }
 
-// ---- exercises ----
-
-// Fixed rather than computed from the current time, so the same request is
-// refused or accepted on every run and in every timezone.
+// Fixed, not computed from now, so a request gets the same answer in every run and timezone.
 const PAST_DEADLINE = "2000-01-01T00:00:00.000Z"
 const FUTURE_DEADLINE = "2100-01-01T00:00:00.000Z"
 
@@ -184,7 +168,7 @@ interface TaskFixture {
   taskId: string
   /** Decides the public spec shape: only an editor task is downloadable and submittable. */
   type: "editor" | "browser"
-  /** Defaults to `tmc`, the only slug the mock's client API can serve. */
+  /** Defaults to `tmc`, the only slug the mock serves. */
   serviceSlug?: string
 }
 
@@ -227,7 +211,6 @@ const makeExercise = (params: {
       exercise_name: params.name,
       exercise_order_number: params.order,
       deadline: params.deadline ?? null,
-      // Laid out as the host's `course_page_url` lays it out.
       page_url: `${params.baseUrl}/org/${ORG_SLUG}/courses/${params.course.slug}/${params.archiveSlug}`,
       chapter: null,
       tasks: params.tasks.map((task, orderNumber) => ({
@@ -249,23 +232,16 @@ const makeExercise = (params: {
   }
 }
 
-// An exercise id present in no course -- an entirely UNKNOWN id. The backend's
-// get_by_id yields RecordNotFound, so this drives the 404 path (not the 422
-// not-enrolled path). Also drives the bulk-download error path.
+// An id present in no course: drives the 404 path (not the 422 not-enrolled one) and the
+// bulk-download error path.
 export const nonexistentExerciseId = "ffffffff-0000-4000-8000-000000000000"
 
-// The exercise of {@link notEnrolledCourse}: a real exercise whose course the
-// current user is not enrolled on, which the backend answers with 422
-// `not_enrolled` -- distinct from an entirely unknown id (404 above).
+// The exercise of {@link notEnrolledCourse}; the backend answers 422 `not_enrolled`, not 404.
 export const notEnrolledExerciseId = "eeeeeeee-0000-4000-8000-000000000000"
 
 export interface CourseWithExercises {
   course: Course
-  /**
-   * Whether the mock's single student is enrolled. Viewing, uploading to and
-   * submitting an exercise are all gated on it before any other rule, so a
-   * course with it false is the only way to reach the host's `not_enrolled`.
-   */
+  /** Whether the mock's single student is enrolled; enrollment gates every other rule. */
   enrolled: boolean
   exercises: MoocExerciseFixture[]
 }
@@ -290,21 +266,15 @@ export interface MoocFixtures {
 }
 
 /**
- * The fixture courses and exercises, with every absolute URL they carry pointing
- * back at `baseUrl` -- the address the mock serving them is reachable at. A
- * client that follows a stub or model-solution URL verbatim therefore reaches
- * the mock that handed it out rather than whatever else holds the default port.
- *
- * Ids, names and checksums do not vary with `baseUrl`, so a test may read them
- * off the {@link DEFAULT_MOOC_MOCK_BASE_URL} set exported below.
+ * The fixture courses and exercises, with every absolute URL pointing at `baseUrl`, where the
+ * serving mock is reachable. Ids, names and checksums do not vary with `baseUrl`, so a test may
+ * read them off the {@link DEFAULT_MOOC_MOCK_BASE_URL} set exported below.
  */
 export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
-  // Exercise A lives in pythonCourse, exercise B in extraCourse -- this makes the
-  // bulk download-or-update path resolve exercise -> course by scanning ALL
-  // enrolled courses' slides (there is no exercise->course API endpoint), which
-  // is exactly the semantic the CLI relies on.
-  // exercise_name is the author's free-form name, as on courses.mooc.fi: no
-  // tmc-style "part<NN>-" prefix for the course-details view to group on.
+  // Exercise A lives in pythonCourse, exercise B in extraCourse, so bulk download-or-update must
+  // find an exercise's course by scanning all enrolled courses' slides (the API has no
+  // exercise -> course endpoint).
+  // Names are free-form, as on courses.mooc.fi: no tmc-style "part<NN>-" prefix to group on.
   const passingExercise = makeExercise({
     baseUrl,
     exerciseId: "a1a1a1a1-0000-4000-8000-000000000001",
@@ -334,9 +304,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     gradingOutcome: "failing",
   })
 
-  // A second exercise in extraCourse whose grading ends in PendingManual (awaiting
-  // a human), the terminal-for-student state. Reuses the failing exercise's source
-  // tree for its archive -- only its grading outcome matters here.
+  // Reuses the failing exercise's source tree; only its grading outcome matters.
   const pendingManualExercise = makeExercise({
     baseUrl,
     exerciseId: "c3c3c3c3-0000-4000-8000-000000000001",
@@ -352,9 +320,8 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     gradingOutcome: "pendingManual",
   })
 
-  // Answered only in the exercise service's IFrame: a native client can neither
-  // download nor submit it, which is the whole of what makes
-  // `editor_stub_download_url` / `editor_task_id` return None.
+  // Answered only in the service's IFrame: a native client can neither download nor submit it,
+  // so `editor_stub_download_url` / `editor_task_id` return None.
   const browserExercise = makeExercise({
     baseUrl,
     exerciseId: "d4d4d4d4-0000-4000-8000-000000000001",
@@ -369,8 +336,8 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     checksum: "mooc-checksum-browser",
   })
 
-  // Two tasks the client may be served, only the second of them submittable, so
-  // `TmcExerciseSlide::editor_task` has to select rather than take the first.
+  // Only the second task is submittable, so `TmcExerciseSlide::editor_task` must select, not
+  // take the first.
   const mixedTaskExercise = makeExercise({
     baseUrl,
     exerciseId: "e5e5e5e5-0000-4000-8000-000000000001",
@@ -403,8 +370,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     deadline: PAST_DEADLINE,
   })
 
-  // The other side of the deadline gate: a deadline that is set but has not
-  // passed must not refuse anything.
+  // A deadline that is set but has not passed must not refuse anything.
   const futureDeadlineExercise = makeExercise({
     baseUrl,
     exerciseId: "a7a7a7a7-0000-4000-8000-000000000001",
@@ -420,10 +386,8 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     deadline: FUTURE_DEADLINE,
   })
 
-  // One try, so a second submit is refused and the model solution is revealed
-  // after the first: the limit has to be exhaustible within a test rather than
-  // merely declared. It grades as failing, so full points cannot be what reveals
-  // the solution here.
+  // One try, so a second submit is refused and the model solution is revealed after the first.
+  // It grades as failing, so full points are not what reveals the solution.
   const limitedTriesExercise = makeExercise({
     baseUrl,
     exerciseId: "b8b8b8b8-0000-4000-8000-000000000001",
@@ -440,8 +404,7 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     maxTriesPerSlide: 1,
   })
 
-  // Belongs to a service that does not declare `supports_native_client`, so the
-  // host hides the task from every listing and refuses a submit naming it.
+  // Its service lacks `supports_native_client`: the host hides the task and refuses a submit.
   const notClientCapableExercise = makeExercise({
     baseUrl,
     exerciseId: "c9c9c9c9-0000-4000-8000-000000000001",
@@ -458,9 +421,8 @@ export const createMoocFixtures = (baseUrl: string): MoocFixtures => {
     checksum: "mooc-checksum-quiz",
   })
 
-  // Named the way course authors name exercises: langs stores it on disk under the
-  // kebab-cased "exercise-1", so nothing on the client may join it to its stored
-  // data by name.
+  // Langs stores it on disk as the kebab-cased "exercise-1", so the client must not join it to
+  // stored data by name.
   const spacedNameExercise = makeExercise({
     baseUrl,
     exerciseId: "dadadada-0000-4000-8000-000000000001",

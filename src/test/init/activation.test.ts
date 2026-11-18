@@ -87,10 +87,8 @@ const langsDownload = vi.hoisted(() => ({ failure: undefined as Error | undefine
 /** Whether the window counts as one TestMyCode has no part in yet. */
 const deferral = vi.hoisted(() => ({ isAllowed: false }))
 
-// jest-mock-vscode ships neither the `env` nor the `extensions` namespace, and activation
-// reads the editor name and the extension version from them. Its registration functions
-// also return nothing where the real API returns a `Disposable`, and activation puts what
-// they return into `context.subscriptions`.
+// jest-mock-vscode lacks the `env` and `extensions` namespaces, which activation reads, and its
+// registration functions return nothing where the real API returns a `Disposable`.
 vi.mock("vscode", async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>()
   return {
@@ -172,8 +170,7 @@ vi.mock("../../panels/TmcPanel", () => ({
   },
 }))
 
-// Wraps the real manager to capture the writer activation constructs it with; nothing
-// else can reach that closure.
+// Captures the writer activation constructs the manager with; nothing else reaches that closure.
 vi.mock("../../api/workspaceManager", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../api/workspaceManager")>()
   return {
@@ -415,9 +412,8 @@ suite("activation with unusable storage", function () {
     vi.restoreAllMocks()
   })
 
-  // Every branch written for a failed initialization -- the recovery view, the help
-  // panel, the commands -- runs after resource initialization, so a throw there reaches
-  // none of them and the user is left with an error message and an empty sidebar.
+  // The recovery view, help panel and commands run after resource initialization, so a throw
+  // there would leave an error message and an empty sidebar.
   test("offers the recovery view instead of aborting", async function () {
     await activate(createContextWithBlockedStorage())
 
@@ -500,8 +496,7 @@ suite("initialization error deduplication", function () {
     const loggedSteps = logError.mock.calls
       .map((call) => String(call[0]))
       .filter((m) => m.includes("Initialization error"))
-    // Confirms the scenario genuinely drives two failing steps sharing one cause; with
-    // only one, a missing dedup would pass the toast assertion below by accident.
+    // With only one failing step, a missing dedup would pass the toast assertion by accident.
     expect(loggedSteps.some((m) => m.includes("Checking your login"))).toBe(true)
     expect(loggedSteps.some((m) => m.includes("Finding the exercises folder"))).toBe(true)
 
@@ -582,10 +577,8 @@ suite("activation with usable storage", function () {
     expect(registered).toContain("tmc.testExercise")
   })
 
-  // A stalled CLI download shouldn't strand a user with no palette entries at all --
-  // "Show Logs" in particular has to be reachable before the download that might be
-  // the very thing worth looking at the logs for. An end-state assertion can't show
-  // this: the final registered set looks the same whichever step registers it.
+  // "Show Logs" must be reachable while a stalled CLI download is what needs a look; the final
+  // registered set cannot show the order.
   test("registers the service-free commands before downloading the CLI", async function () {
     await activate(createContext())
 
@@ -713,9 +706,8 @@ suite("the record of a course's closed exercises", function () {
     vi.restoreAllMocks()
   })
 
-  // `refreshLocalExercises` reads this setting back by the same key, and the manager
-  // skips a write it believes it already made, so a key that disagrees strands closed
-  // exercises with nothing to correct it.
+  // The manager skips a write it believes it already made, so a key that differs from the one
+  // `refreshLocalExercises` reads strands closed exercises.
   test("writes it to the backend-tagged settings key", async function () {
     await activate(createContext())
 
@@ -1057,11 +1049,8 @@ suite("activation in a workspace the migration cannot use in place", function ()
     )
   })
 
-  // The Courses view is never filled here (its source is set after this return).
-  // The service-free commands do register, since `registerServiceFreeCommands` runs
-  // ahead of the migration check -- but `vscode.openFolder` reloads the window into a
-  // fresh extension host process, discarding this one's `context.subscriptions` before
-  // the next activation registers anything, so nothing collides.
+  // The Courses view's source is set after this return. The service-free commands do register,
+  // but `vscode.openFolder` reloads into a fresh host, so nothing collides.
   test("fills no view before the reload", async function () {
     await activate(createContext())
 

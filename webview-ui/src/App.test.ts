@@ -114,11 +114,9 @@ suite("App reload handshake", () => {
   })
 
   test("renders a message that arrives right after the panel it targets", async () => {
-    // The extension answers "ready" with setPanel and then replays its buffer. Each
-    // postMessage is its own task in production, so the child panel has mounted and
-    // registered its listener before the next message lands. jsdom's dispatchEvent is
-    // synchronous, so the `tick` below stands in for that gap -- without it this test
-    // would pass for the wrong reason, or fail for one.
+    // The extension answers "ready" with setPanel, then replays its buffer. In production each
+    // postMessage is its own task, so the child panel has registered its listener before the
+    // next lands; jsdom's dispatchEvent is synchronous, so `tick` below stands in for that gap.
     render(App)
     const view = courseHomeView({ title: "Ordering Course" })
 

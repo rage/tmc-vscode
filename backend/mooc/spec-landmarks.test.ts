@@ -3,15 +3,12 @@ import fs from "node:fs"
 import path from "node:path"
 import { describe, test } from "node:test"
 
-// Staleness guard for the vendored spec. `bin/updateLangsOpenapi.sh --check-stamp`
-// only proves the vendored file matches its own recorded sha256, so a spec that was
-// never re-vendored is self-consistent and passes every check there is -- while the
-// mock it validates goes on accepting the old member names and the real backend
-// rejects the client. Master's schemas set no `additionalProperties: false` either,
-// so a half-done rename validates clean too.
+// Staleness guard for the vendored spec. `--check-stamp` only proves the file
+// matches its own sha256, so a never-re-vendored spec passes while the mock keeps
+// accepting old member names. Schemas set no `additionalProperties: false`, so a
+// half-done rename validates clean too.
 //
-// Naming the members by hand is the point: they cannot be derived from anything in
-// this repo, so this is the one check that fails when the spec is out of date.
+// The members are named by hand because nothing in this repo can derive them.
 
 const spec = JSON.parse(
   fs.readFileSync(path.join(__dirname, "exercise-services-client.openapi.generated.json"), "utf8"),

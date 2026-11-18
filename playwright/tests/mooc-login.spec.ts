@@ -6,13 +6,11 @@ import { AddCoursePage } from "../pages/add-course"
 import { CoursesViewPage } from "../pages/courses-view"
 import { MoocLoginPage } from "../pages/mooc-login"
 
-// E2E of the courses.mooc.fi device-flow login screen, the extension's only login. The
-// mock's OAuth endpoints (backend/mooc/oauth.ts) are not part of the vendored
-// exercise-services spec; its default client approves five seconds after the code is issued.
+// E2E of the courses.mooc.fi device-flow login screen. The mock's default client approves
+// five seconds after the code is issued.
 //
-// The fixture seeds tmc credentials, so the extension starts logged in and the
-// Courses view offers no Log In; these specs reach the device flow through
-// the add-course screen, which offers it while the (separate, absent) mooc
+// The fixture seeds tmc credentials, so the Courses view offers no Log In; these specs
+// reach the device flow through the add-course screen, which offers it while mooc
 // credentials are missing.
 
 vsCodeTest(
@@ -150,9 +148,8 @@ vsCodeTest.describe(() => {
   )
 })
 
-// The route a brand-new user takes: no credentials at all, so the Courses view's
-// welcome content offers Log In. It runs the same command as the Command
-// Palette's "TestMyCode: Log In".
+// A brand-new user has no credentials, so the Courses view's welcome content offers Log In
+// (the same command as "TestMyCode: Log In").
 vsCodeTest.describe(() => {
   vsCodeTest.use({ seedTmcCredentials: false })
 

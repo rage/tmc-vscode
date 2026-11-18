@@ -1,8 +1,5 @@
 import { defineConfig, devices } from "@playwright/test"
 
-/**
- * See https://playwright.dev/docs/test-configuration.
- */
 export default defineConfig({
   testDir: "./playwright",
   globalSetup: "./playwright/mockBackendLock.ts",
@@ -13,15 +10,12 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   failOnFlakyTests: !!process.env.CI,
   workers: 1,
-  // The html reporter writes a report nobody opens in CI, and on its own it
-  // prints no per-test output, so a failing run's log says only that the report
-  // was written. `list` puts the failures in the log; `open: never` stops the
-  // html reporter launching a browser on a local run.
+  // `list` puts failures in the CI log, which the html reporter alone does not; `open: never`
+  // stops the html reporter launching a browser locally.
   reporter: [["list"], ["html", { open: "never" }]],
 
   use: {
-    // Honoured by playwright/fixtures.ts on the VS Code window; recording every
-    // run costs time on every pass.
+    // Honoured by playwright/fixtures.ts on the VS Code window; recording every run is slow.
     trace: "on-first-retry",
   },
 
@@ -30,7 +24,6 @@ export default defineConfig({
     timeout: 10 * 1000,
   },
 
-  /* Configure projects for major browsers */
   projects: [
     {
       name: "chromium",
@@ -39,13 +32,11 @@ export default defineConfig({
   ],
 
   /*
-   * Nothing else starts the mock backend, in CI or locally, so without this
-   * every spec fails with ECONNREFUSED.
+   * Nothing else starts the mock backend; without this every spec fails with ECONNREFUSED.
    *
-   * A listener already on 4001 in CI would be serving some other run's build, so
-   * refusing to reuse it turns that into a failure instead of a false pass;
-   * locally, reusing the backend a developer already started is the point. The
-   * generous timeout covers cold tsx transpilation.
+   * In CI a listener already on 4001 would serve some other run's build, so reuse is refused;
+   * locally, reusing a developer's running backend is the point. The generous timeout covers
+   * cold tsx transpilation.
    */
   webServer: {
     command: "pnpm run backend:start",

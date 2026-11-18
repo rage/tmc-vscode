@@ -1,8 +1,6 @@
 import { Logger } from "./logger"
 
-/**
- * Parses a timestamp as a backend spells it into a date, or `null` if it cannot be parsed.
- */
+/** Parses a backend timestamp into a date, or `null` if it cannot be parsed. */
 export function parseDate(dateAsString: string): Date | null {
   const date = new Date(Date.parse(dateAsString))
   if (!isRealDate(date)) {
@@ -21,7 +19,7 @@ const HOUR_MS = 60 * MINUTE_MS
 const DAY_MS = 24 * HOUR_MS
 const RELATIVE_HINT_LIMIT_MS = 7 * DAY_MS
 
-// Building an Intl formatter costs far more than formatting with one, and the Courses view
+// Building an Intl formatter costs far more than formatting with one; the Courses view
 // formats several dates per row.
 const dateTimeFormats = new Map<string | undefined, Intl.DateTimeFormat>()
 const relativeTimeFormats = new Map<string | undefined, Intl.RelativeTimeFormat>()
@@ -47,9 +45,8 @@ export function formatDateTime(date: Date, locale: string | undefined): string {
 const timestampFormats = new Map<string, Intl.DateTimeFormat>()
 
 /**
- * Renders a moment to the second, as when two saves minutes apart must be told apart: the time
- * alone on `now`'s day, with the date otherwise. Unlike {@link formatDateTime}, which is for
- * deadlines.
+ * Renders a moment to the second, to tell apart saves minutes apart: the time alone on `now`'s
+ * day, else with the date. {@link formatDateTime} is for deadlines.
  */
 export function formatTimestamp(date: Date, now: Date, locale: string | undefined): string {
   if (!isRealDate(date)) {
@@ -80,10 +77,7 @@ function formatDate(date: Date, locale: string | undefined): string {
   return format.format(date)
 }
 
-/**
- * How far `date` is from `now` as {@link formatRelativeTime} says it, but only within a week:
- * further off, a count of days reads worse than the date.
- */
+/** {@link formatRelativeTime} within a week of `now`; further off, a date reads better. */
 export function formatNearRelativeTime(
   date: Date,
   now: Date,
@@ -135,9 +129,7 @@ function formatRelativeTime(date: Date, now: Date, locale: string | undefined): 
   return relative.format(Math.round(untilMs / MINUTE_MS), "minute")
 }
 
-/**
- * Finds the next date after initial date, or null if can't find any.
- */
+/** The earliest of `dates` after `after`, or null if none is. */
 export function findNextDateAfter(after: Date, dates: (Date | null)[]): Date | null {
   const pickNext = (currentDate: Date | null, candidate: Date | null): Date | null => {
     if (!isRealDate(candidate) || after >= candidate) {

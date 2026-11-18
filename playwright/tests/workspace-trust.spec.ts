@@ -17,8 +17,8 @@ const WORKSPACE_QUESTION = "Do you trust the authors of the files in this worksp
 const FOLDER_QUESTION = "Do you trust the authors of the files in this folder?"
 
 /**
- * Whether VS Code asks for trust on startup by itself: `security.workspace.trust.startupPrompt`
- * defaults to `once` before 1.137 and to `never` from it on.
+ * Whether VS Code asks for trust on startup: `security.workspace.trust.startupPrompt`
+ * defaults to `once` before 1.137 and `never` from it on.
  */
 const isAskedOnStartup =
   VSCODE_TEST_VERSION !== "stable" &&
@@ -55,9 +55,8 @@ async function answer(page: Page, question: string | RegExp, button: string): Pr
 }
 
 /**
- * Opens a course's workspace from the offer to, and answers each question about trusting it as it
- * opens untrusted: VS Code's own startup question where it asks one, as soon as it shows, else
- * TestMyCode's and then VS Code's.
+ * Opens a course's workspace from the offer and answers each trust question as it opens
+ * untrusted: VS Code's startup question where it asks one, else TestMyCode's and then VS Code's.
  */
 async function openCourseWorkspace(
   page: Page,

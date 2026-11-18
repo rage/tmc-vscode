@@ -1,7 +1,5 @@
-// Shared fixtures for the webview component tests. Built to satisfy the zod
-// schemas in `shared/shared` so a dispatched `MessageEvent` survives the
-// `MessageToWebviewSchema.safeParse` gate in `addMessageListener` and a click
-// handler's posted payload survives `WebviewToExtensionSchema.safeParse`.
+// Shared fixtures for the webview component tests. They satisfy the zod schemas in
+// `shared/protocol`, so messages survive the `safeParse` gates on both sides.
 
 import type {
   ExerciseTaskSubmissionStatus,

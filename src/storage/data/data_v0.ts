@@ -85,10 +85,8 @@ export interface UserData {
 
 // validation schemas
 //
-// These guard real users' persisted data and must tolerate unknown extra
-// keys (data written by a newer extension version): zod's default object
-// schema accepts and ignores unknown keys, and `validateData` returns the
-// original object untouched.
+// Must tolerate unknown extra keys from a newer extension version: zod objects ignore
+// them and `validateData` returns the original untouched.
 
 export const localCourseDataExerciseSchema: z.ZodType<LocalCourseDataExercise> = z.object({
   id: z.number(),

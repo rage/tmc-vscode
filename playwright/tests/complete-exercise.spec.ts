@@ -51,8 +51,7 @@ const exercises: Exercise[] = [
 ]
 
 for (const exercise of exercises) {
-  // The title is also the trace filename (fixtures.ts), so a constant one would
-  // have every case overwrite the last one's trace.
+  // The title doubles as the trace filename (fixtures.ts); a constant one would overwrite traces.
   vsCodeTest(`can complete ${exercise.name}`, async ({ page, userDataDir, webview }) => {
     const coursesView = new CoursesViewPage(page, webview)
     const testResultsPage = new TestResultsPage(page, webview)
@@ -121,9 +120,8 @@ for (const exercise of exercises) {
 
     await vsCodeTest.step("run tests", async () => {
       await page.getByText(exercise.file_contents).click()
-      // The editor-title action is contributed under `test-my-code:ActiveEditorIsExercise`
-      // (package.json), so it renders only once the extension has recognised the
-      // open exercise.
+      // Contributed under `test-my-code:ActiveEditorIsExercise` (package.json), so it
+      // renders only once the extension recognises the open exercise.
       const runTests = editorActions(page).getByLabel("Run Tests", { exact: true })
       await expect(runTests).toBeVisible()
       await runTests.click()

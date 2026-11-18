@@ -33,13 +33,10 @@ import {
 import type { MoocMockControls } from "./router"
 import { createMoocApp, moocMockOf } from "./router"
 
-// Conformance smoke test for the mooc mock. Boots the mock in-process and drives
-// every spec operation with a direct HTTP client, proving:
-//   - request + response validation PASS for the happy paths, and
-//   - response validation FAILS loudly (500) when a handler returns garbage
-//     (fault injection -- exercises the validator itself).
-// It also covers the two-step upload -> submit flow, the poll-grading loop, the
-// old-submission list/download/share endpoints and the spec-exempt archive routes.
+// Conformance smoke test for the mooc mock: drives every spec operation over HTTP, proving
+// request + response validation pass on happy paths and fail loudly (500) when a handler
+// returns garbage (fault injection). Also covers upload -> submit, the poll-grading loop,
+// old-submission list/download/share and the spec-exempt archive routes.
 
 const listen = (app: Express): Promise<{ server: Server; base: string; mock: MoocMockControls }> =>
   new Promise((resolve) => {
@@ -52,19 +49,16 @@ const listen = (app: Express): Promise<{ server: Server; base: string; mock: Moo
     })
   })
 
-// MOCK_SEEDED_ACCESS_TOKEN is recognised by the auth middleware without a
-// device-flow round trip, keeping this suite focused on the resource contract
-// rather than the auth handshake (pinned separately in oauth.test.ts). The
-// spec-exempt archive routes aren't behind the middleware and are fetched directly.
+// MOCK_SEEDED_ACCESS_TOKEN skips the device-flow round trip (pinned in oauth.test.ts). The
+// spec-exempt archive routes sit outside the auth middleware and are fetched directly.
 const authFetch = (url: string, init: RequestInit = {}): Promise<Response> =>
   fetch(url, {
     ...init,
     headers: { authorization: `Bearer ${MOCK_SEEDED_ACCESS_TOKEN}`, ...init.headers },
   })
 
-// Every multipart rule violation is a `controller_err!(BadRequest, …)` on the host,
-// which maps to 422 `validation_error` -- so the message is asserted too, because a
-// mock that answers with a different one hides which rule a client actually broke.
+// Every multipart rule violation is a `controller_err!(BadRequest, …)` on the host, i.e. 422
+// `validation_error`. The message is asserted too, or a mock could hide which rule was broken.
 const assertUploadRejected = async (res: Response, message: string): Promise<void> => {
   assert.equal(res.status, 422)
   const body = (await res.json()) as { message_key: string; message: string }
@@ -288,8 +282,7 @@ describe("mooc mock conformance", () => {
   })
 
   test("GET courses/{id}/progress reports heterogeneous per-exercise score_maximum", async () => {
-    // extraCourse's two exercises have different point weights (2 and 3),
-    // exercising aggregation over heterogeneous score_maximum values.
+    // extraCourse's exercises weigh 2 and 3, so aggregation sees heterogeneous maxima.
     const res = await authFetch(api(`/courses/${extraCourse.id}/progress`))
     assert.equal(res.status, 200)
     const body = (await res.json()) as {
@@ -299,7 +292,6 @@ describe("mooc mock conformance", () => {
     const byId = new Map(body.exercises.map((e) => [e.exercise_id, e.score_maximum]))
     assert.equal(byId.get(failingExercise.slide.exercise_id), 2)
     assert.equal(byId.get(pendingManualExercise.slide.exercise_id), 3)
-    // the course's total point weight is the sum of the differing maxima
     const totalMaximum = body.exercises.reduce((sum, e) => sum + e.score_maximum, 0)
     assert.equal(totalMaximum, 5)
   })
@@ -328,8 +320,7 @@ describe("mooc mock conformance", () => {
   })
 
   test("GET exercises/{not-enrolled} returns the spec's not-enrolled 422", async () => {
-    // A real exercise whose course the user is not enrolled in is the genuine
-    // 422 not_enrolled case (distinct from the unknown-id 404 above).
+    // A real exercise in a course the user is not enrolled in is the genuine 422 not_enrolled.
     const res = await authFetch(api(`/exercises/${notEnrolledExerciseId}`))
     assert.equal(res.status, 422)
     const body = (await res.json()) as { message_key: string }
@@ -398,7 +389,6 @@ describe("mooc mock conformance", () => {
       }),
     })
 
-  // Uploads an archive then submits it, returning both submission ids.
   const submit = async (
     exercise: MoocExerciseFixture,
     bytes = [1, 2, 3],
@@ -423,10 +413,8 @@ describe("mooc mock conformance", () => {
     })
 
   test("the file id the host assigns is never the client's field name", async () => {
-    // The host echoes the client's field name back on a different member and keys
-    // the file by its own `file_uploads` row id. A mock that reused the field name
-    // would hide a client that submits the wrong one, so this is asserted here as
-    // sp331 asserts it.
+    // The host keys the file by its own `file_uploads` row id, not the client's field name; a
+    // mock that reused the name would hide a client submitting the wrong one.
     const fieldName = randomUUID()
     const form = new FormData()
     form.append(fieldName, new Blob([new Uint8Array([1, 2, 3])]), "submission.tar.zst")
@@ -471,9 +459,8 @@ describe("mooc mock conformance", () => {
   })
 
   test("files rejects a part that carries no filename", async () => {
-    // A part with no filename is a plain field, not a file. The distinct message is
-    // the point: reporting the empty-body error here would tell a client its parts
-    // were dropped, not that they were malformed.
+    // A part with no filename is a plain field, not a file. The distinct message tells a
+    // client its parts were malformed, not dropped.
     const form = new FormData()
     form.append(randomUUID(), "not-a-file")
     form.append(randomUUID(), new Blob([new Uint8Array([1])]), "a.txt")
@@ -551,7 +538,6 @@ describe("mooc mock conformance", () => {
     assert.equal(second.Grading.grading_progress, "FullyGraded")
   })
 
-  // Drives a submission through the poll loop and returns the terminal Grading.
   interface Grading {
     grading_progress: string
     score_given: number | null
@@ -575,10 +561,9 @@ describe("mooc mock conformance", () => {
   }
 
   test("solving an exercise reveals its model solution on GET exercises/{id} only", async () => {
-    // The host attaches the model solution once full points are awarded, and the
-    // list view never does. The blob is opaque to the OpenAPI spec, so nothing but
-    // this asserts the shape the CLI actually deserializes -- and getting it wrong
-    // breaks every later command on an exercise the student has solved.
+    // The host attaches the model solution once full points are awarded, never in the list
+    // view. The blob is opaque to the spec, so only this pins the shape the CLI deserializes.
+
     const exerciseId = passingExercise.slide.exercise_id
     const taskShape = async (url: string): Promise<{ model_solution_spec: unknown }> => {
       const slide = (await (await authFetch(url)).json()) as {
@@ -641,9 +626,8 @@ describe("mooc mock conformance", () => {
   })
 
   test("submit naming no answer at all is a json answer, and a tmc exercise refuses it", async () => {
-    // All three answer members are optional and an absent `answer_kind` means json,
-    // so the slide and task alone are a complete request -- which a tmc exercise,
-    // whose answer is its archive, has nothing to grade.
+    // Slide and task alone are a complete request (`answer_kind` defaults to json), but a tmc
+    // exercise's answer is its archive, so there is nothing to grade.
     const res = await postJsonSubmit(passingExercise)
     assert.equal(res.status, 422)
     const body = (await res.json()) as { message_key: string; message: string }
@@ -652,8 +636,7 @@ describe("mooc mock conformance", () => {
   })
 
   test("submit of a json answer that names files is rejected", async () => {
-    // The one combination the flat body allows but the answer model does not: the
-    // files would be silently dropped.
+    // The flat body allows this but the answer model does not: the files would be dropped.
     const uploaded = await uploadOne(passingExercise.slide.exercise_id)
     const res = await postJsonSubmit(passingExercise, { data_files: [uploaded.id] })
     assert.equal(res.status, 422)
@@ -663,7 +646,7 @@ describe("mooc mock conformance", () => {
   })
 
   test("submit of a file answer that names nothing is rejected", async () => {
-    // The named files ARE the answer, so naming none is a claim with no content.
+    // The named files are the answer, so naming none has no content.
     const res = await postSubmit(passingExercise, [])
     assert.equal(res.status, 422)
     const body = (await res.json()) as { message_key: string; message: string }
@@ -679,8 +662,7 @@ describe("mooc mock conformance", () => {
   })
 
   test("submit naming another exercise's upload returns 422 unknown_upload", async () => {
-    // The upload is bound to the exercise it was uploaded for; replaying it into
-    // another exercise's submission is indistinguishable from never uploading it.
+    // An upload is bound to its exercise; replaying it elsewhere looks like never uploading it.
     const foreign = await uploadOne(failingExercise.slide.exercise_id)
     const res = await postSubmit(passingExercise, [foreign.id])
     assert.equal(res.status, 422)
@@ -689,8 +671,8 @@ describe("mooc mock conformance", () => {
   })
 
   test("submit naming a reaped upload returns 422 upload_expired", async () => {
-    // A soft-deleted binding is what makes "reaped" distinguishable from "never
-    // yours"; only the former is a race a client can recover from.
+    // A soft-deleted binding distinguishes "reaped" from "never yours"; only the former is
+    // recoverable by the client.
     const uploaded = await uploadOne(passingExercise.slide.exercise_id)
     assert.ok(mock.expireUpload(uploaded.id))
     const res = await postSubmit(passingExercise, [uploaded.id])
@@ -700,8 +682,8 @@ describe("mooc mock conformance", () => {
   })
 
   test("submit naming the same upload twice returns 422 duplicate_upload", async () => {
-    // Reported rather than deduplicated: dedup would record the file twice under one
-    // submission and list it twice in a download, hiding the client defect.
+    // Reported, not deduplicated: dedup would list the file twice in a download and hide the
+    // client defect.
     const uploaded = await uploadOne(passingExercise.slide.exercise_id)
     const res = await postSubmit(passingExercise, [uploaded.id, uploaded.id])
     assert.equal(res.status, 422)
@@ -721,8 +703,7 @@ describe("mooc mock conformance", () => {
     assert.equal(res.status, 404)
   })
 
-  // Submits arbitrary slide/task ids to the passing exercise. A json answer, because
-  // the host checks slide/task ownership before the answer shape.
+  // A json answer, because the host checks slide/task ownership before the answer shape.
   const postSubmitWith = (slideId: string, taskId: string): Promise<Response> =>
     postJsonSubmit(passingExercise, {}, { slideId, taskId })
 
@@ -734,8 +715,7 @@ describe("mooc mock conformance", () => {
   })
 
   test("submit naming another exercise's slide returns 422", async () => {
-    // The URL authorizes only the exercise; without this check the body could
-    // redirect the submission into an unrelated exercise's slide.
+    // The URL authorizes only the exercise; the body must not redirect into another's slide.
     const res = await postSubmitWith(
       failingExercise.slide.slide_id,
       passingExercise.slide.tasks[0]!.task_id,
@@ -758,9 +738,8 @@ describe("mooc mock conformance", () => {
   })
 
   test("retention never evicts an upload a submission was made from", async () => {
-    // Zero files is a legitimate outcome for the CLI (`nothing-to-download`), so
-    // an evicted upload would silently downgrade a restore to a no-op instead of
-    // failing anywhere a test could see it.
+    // Zero files is a legitimate CLI outcome (`nothing-to-download`), so an evicted upload
+    // would silently turn a restore into a no-op.
     const { slideSubmissionId } = await submit(passingExercise, [7, 8, 9])
     for (let i = 0; i < 40; i += 1) {
       await uploadOne(failingExercise.slide.exercise_id)
@@ -774,10 +753,8 @@ describe("mooc mock conformance", () => {
   })
 
   test("mime is the part's own Content-Type, echoed rather than inferred", async () => {
-    // The host echoes the part's declared type into `AnswerFile.mime` and checks
-    // nothing, so an archive the CLI sends untyped is stored `application/octet-stream`
-    // -- and the teacher-facing answer-file zip derives entry extensions from that.
-    // The extension is not the type: `submission.tar.zst` says nothing here.
+    // The host echoes the part's declared type into `AnswerFile.mime` unchecked, so an untyped
+    // archive is stored `application/octet-stream`; the filename extension is not consulted.
     const typed = await uploadOne(passingExercise.slide.exercise_id)
     assert.equal(typed.mime, TMC_ARCHIVE_MIME)
 
@@ -804,14 +781,13 @@ describe("mooc mock conformance", () => {
   })
 
   test("an answer file's url is an expiring claim, not a path to the object", async () => {
-    // The host mints a one-hour capability for that one file and redirects to the
-    // store; a client must treat the url as opaque and follow the redirect. Asserting
-    // the shape is what keeps the mock from handing back a plain path, which would let
-    // a client that persisted or rewrote the url pass here and fail in production.
+    // The host mints a one-hour capability for that one file and redirects to the store. The
+    // mock must not hand back a plain path, or a client that persisted or rewrote the url
+    // would pass here and fail in production.
     const uploaded = await uploadOne(passingExercise.slide.exercise_id, [4, 5, 6])
     const url = new URL(uploaded.url)
-    // The mock names the address it bound, not the default port -- a suite on an
-    // ephemeral port would otherwise hand out urls pointing at another process.
+    // The bound address, not the default port, or a suite on an ephemeral port would hand out
+    // urls pointing at another process.
     assert.equal(url.origin, base)
     assert.equal(url.pathname, `/api/v0/files/claimed/${uploaded.id}`)
     assert.ok(url.searchParams.get("download-claim"), "the url must carry a claim")
@@ -838,8 +814,8 @@ describe("mooc mock conformance", () => {
   })
 
   test("a claim minted for one file does not open another", async () => {
-    // The claim names its file, so replaying it against a different id must fail --
-    // otherwise one answer's url would be a handle on every stored file.
+    // The claim names its file; otherwise one answer's url would open every stored file.
+
     const mine = await uploadOne(passingExercise.slide.exercise_id)
     const other = await uploadOne(passingExercise.slide.exercise_id)
     const claim = new URL(mine.url).search
@@ -882,7 +858,7 @@ describe("mooc mock conformance", () => {
     const exerciseId = failingExercise.slide.exercise_id
     const { taskSubmissionId, slideSubmissionId } = await submit(failingExercise)
 
-    // the submissions list returns exercise-SLIDE-submission ids, newest first
+    // the list returns slide-submission ids, newest first
     const listRes = await authFetch(api(`/exercises/${exerciseId}/submissions`))
     assert.equal(listRes.status, 200)
     const items = (await listRes.json()) as {
@@ -894,15 +870,10 @@ describe("mooc mock conformance", () => {
     }[]
     assert.ok(items.length > 0)
     assert.ok(items.every((i) => i.exercise_id === exerciseId))
-    // the id submit returned for downloading/sharing is the one the list reports
     assert.equal(items[0]!.id, slideSubmissionId)
-    // the two id spaces are distinct
     assert.notEqual(slideSubmissionId, taskSubmissionId)
 
-    // download resolves the slide-submission id to the files the submission was
-    // made from, and each url serves back the EXACT bytes that were
-    // uploaded -- so an old-submission download returns that submission's own
-    // content, not the exercise stub.
+    // download serves the exact bytes uploaded for that submission, not the exercise stub
     const downloadRes = await authFetch(api(`/submissions/${slideSubmissionId}/download`))
     assert.equal(downloadRes.status, 200)
     const { data_files } = (await downloadRes.json()) as { data_files: AnswerFile[] }
@@ -913,7 +884,6 @@ describe("mooc mock conformance", () => {
     const fileBytes = new Uint8Array(await fileRes.arrayBuffer())
     assert.deepEqual([...fileBytes], [1, 2, 3])
 
-    // share mints a paste URL for the slide-submission id
     const shareRes = await authFetch(api(`/submissions/${slideSubmissionId}/share`), {
       method: "POST",
     })
@@ -925,8 +895,7 @@ describe("mooc mock conformance", () => {
     assert.equal(items[0]!.score_given, null)
     assert.equal(items[0]!.grading_progress, null)
 
-    // once grading completes, the list reflects the exercise's actual grading
-    // outcome (this fixture scores zero) rather than a hardcoded pass
+    // once graded, the list reflects the real outcome (this fixture scores zero), not a pass
     await authFetch(api(`/submissions/${taskSubmissionId}/grading`))
     await authFetch(api(`/submissions/${taskSubmissionId}/grading`))
     const gradedList = (await (
@@ -937,8 +906,7 @@ describe("mooc mock conformance", () => {
   })
 
   test("the seeding route produces a listed submission whose download is empty", async () => {
-    // The out-of-process route the integration suite uses to reach the
-    // no-downloadable-files outcome, which no submit can produce.
+    // The integration suite's route to the no-downloadable-files outcome, which no submit produces.
     const res = await fetch(`${base}/mooc-mock/seed-fileless-submission`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -956,9 +924,8 @@ describe("mooc mock conformance", () => {
     assert.equal(download.status, 200)
     assert.deepEqual(await download.json(), { data_files: [] })
 
-    // It is still listed, so a client picking an old submission to restore can
-    // reach it -- which is why the empty download has to be a first-class
-    // outcome rather than an error.
+    // Still listed, so a client restoring an old submission can reach it: an empty download
+    // must be a first-class outcome, not an error.
     const list = (await (
       await authFetch(api(`/exercises/${passingExercise.slide.exercise_id}/submissions`))
     ).json()) as { id: string }[]
@@ -975,8 +942,7 @@ describe("mooc mock conformance", () => {
   })
 
   test("grading of an unknown submission is a spec-documented 404", async () => {
-    // An unknown submission id is a 404 (RecordNotFound), mirroring the real
-    // backend -- not the previous synthetic 200 NoGradingYet.
+    // An unknown submission id is a 404 (RecordNotFound), as on the real backend.
     const res = await authFetch(api(`/submissions/${nonexistentExerciseId}/grading`))
     assert.equal(res.status, 404)
     const body = (await res.json()) as { message_key: string }
@@ -999,11 +965,10 @@ describe("mooc mock conformance", () => {
     const res = await fetch(`${base}/mooc-archives/${passingExercise.archiveSlug}.tar.zst`)
     assert.equal(res.status, 200)
     const bytes = Buffer.from(await res.arrayBuffer())
-    // zstd magic number 0x28 0xB5 0x2F 0xFD
+    // zstd magic number
     assert.deepEqual([...bytes.subarray(0, 4)], [0x28, 0xb5, 0x2f, 0xfd])
     const tar = zstdDecompressSync(bytes)
-    // the tar contains the exercise files at its root (ustar magic appears in
-    // each 512-byte header block)
+    // ustar magic appears in each 512-byte header block
     assert.ok(tar.includes("src/passing_exercise.py"))
     assert.ok(tar.includes("ustar"))
   })
@@ -1066,14 +1031,13 @@ describe("mooc mock conformance", () => {
 
 describe("mooc mock response-validation guard", () => {
   test("a spec-violating handler response fails loudly with 500", async () => {
-    // Inject a fault so getClientCourses returns garbage (id: number, missing
-    // required fields). The postResponseHandler's validateResponse must reject
-    // it and turn it into a 500 -- proving the mock cannot silently drift.
+    // getClientCourses returns garbage (id: number, missing required fields); validateResponse
+    // must turn it into a 500, proving the mock cannot silently drift.
     const { server, base } = await listen(
       createMoocApp({ injectResponseFault: "getClientCourses" }),
     )
     try {
-      // Seeded bearer gets past auth so the fault (500), not a 401, is observed.
+      // The seeded bearer passes auth, so the fault (500), not a 401, is observed.
       const res = await authFetch(`${base}/api/v0/exercise-services/client/courses`)
       assert.equal(res.status, 500)
       const body = (await res.json()) as { error: string }
@@ -1086,10 +1050,9 @@ describe("mooc mock response-validation guard", () => {
 
 describe("mooc mock instance isolation", () => {
   test("two mocks share no state and each hands out urls naming itself", async () => {
-    // The suites run several mocks at once, and the out-of-process tiers reach a
-    // long-lived one on a fixed port. State shared between instances would let one
-    // test's submissions decide another's assertions, and a url naming the default
-    // port would send a client that followed it to whatever else is serving there.
+    // Suites run several mocks at once, and out-of-process tiers reach a long-lived one on a
+    // fixed port. Shared state would let one test decide another's assertions, and a url naming
+    // the default port would send a client to whatever else serves there.
     const one = await listen(createMoocApp())
     const other = await listen(createMoocApp())
     const exerciseId = passingExercise.slide.exercise_id
@@ -1126,11 +1089,11 @@ describe("mooc mock instance isolation", () => {
   })
 })
 
-// The refusals a student meets before their answer is ever graded, and the shapes
-// a native client has to cope with. Every case below is reachable because a
-// fixture carries the state the host reads for it -- an enrollment, a deadline, a
-// try limit, a service slug -- and for no other reason.
+// The refusals a student meets before their answer is graded, and the shapes a native client
+// must cope with. Every case is reachable only because a fixture carries the state the host
+// reads for it (enrollment, deadline, try limit, service slug).
 // The status is read off the transcribed contract rather than passed in, so a case
+
 // cannot assert a status the host would not answer with for that message key.
 const assertRefused = async (
   res: Response,
@@ -1162,8 +1125,7 @@ describe("mooc mock enrollment, answerability and ownership", () => {
 
   const api = (p: string): string => `${base}/api/v0/exercise-services/client${p}`
 
-  // Uploads one archive for an exercise and returns the response, so a caller can
-  // assert on a refusal as easily as on the file id.
+  // Returns the response, so a caller can assert on a refusal as well as the file id.
   const postUpload = (exerciseId: string): Promise<Response> => {
     const form = new FormData()
     form.append(
@@ -1237,8 +1199,7 @@ describe("mooc mock enrollment, answerability and ownership", () => {
     ).json()) as { exercise_id: string }[]
     const listed = new Set(slides.map((slide) => slide.exercise_id))
     assert.ok(listed.has(browserExercise.slide.exercise_id))
-    // Its only task is a quizzes task, so the whole slide drops out rather than
-    // being listed with an empty task array.
+    // Its only task is a quizzes task, so the slide drops out instead of listing no tasks.
     assert.ok(!listed.has(notClientCapableExercise.slide.exercise_id))
   })
 
@@ -1297,9 +1258,8 @@ describe("mooc mock enrollment, answerability and ownership", () => {
   })
 
   test("the deadline is checked after the answer itself, as the host checks it", async () => {
-    // The host enforces it inside grading, so a submit that never gets that far is
-    // refused for its own reason. A mock that checked the deadline first would
-    // report a different rule than production does for the same request.
+    // The host enforces the deadline inside grading, so a submit that never gets that far is
+    // refused for its own reason; checking the deadline first would report a different rule.
     const res = await authFetch(
       api(`/exercises/${pastDeadlineExercise.slide.exercise_id}/submit`),
       {
@@ -1319,8 +1279,7 @@ describe("mooc mock enrollment, answerability and ownership", () => {
   })
 
   test("a submit past the slide's try limit is refused", async () => {
-    // Both uploads happen while a try remains, because the upload route is gated
-    // on the same limit -- which is the only way the submit-side check is reached.
+    // Both uploads happen while a try remains: the upload route is gated on the same limit.
     const first = await uploadFor(limitedTriesExercise.slide.exercise_id)
     const second = await uploadFor(limitedTriesExercise.slide.exercise_id)
     assert.equal((await postSubmit(limitedTriesExercise, [first])).status, 200)
@@ -1332,9 +1291,8 @@ describe("mooc mock enrollment, answerability and ownership", () => {
   })
 
   test("using up the tries reveals the model solution however the try scored", async () => {
-    // The host's reveal rule counts submissions, not points, on this half, and the
-    // fixture grades as failing -- so a mock that only modelled the full-points
-    // half would still withhold the solution from a student who can no longer try.
+    // The host's reveal rule counts submissions as well as points; this fixture grades as
+    // failing, so a mock modelling only full points would withhold the solution.
     const fileId = await uploadFor(limitedTriesExercise.slide.exercise_id)
     assert.equal((await postSubmit(limitedTriesExercise, [fileId])).status, 200)
     const slide = (await (
@@ -1800,10 +1758,9 @@ const read = async (res: Response): Promise<ErrorResponse> => ({
   body: (await res.json()) as Record<string, unknown>,
 })
 
-// The vendored spec's ApiErrorResponse constrains no member, so response
-// validation proves only that the status is documented. This walk is what pins
-// the envelope itself: every error the client API can answer with, checked
-// against the contract transcribed from the host in ./apiErrors.
+// The vendored spec's ApiErrorResponse constrains no member, so response validation proves
+// only that the status is documented. This walk pins the envelope of every error the client
+// API can answer with, against the contract transcribed from the host in ./apiErrors.
 describe("mooc mock error envelopes", () => {
   let server: Server
   let base: string
@@ -2075,8 +2032,7 @@ describe("mooc mock error envelopes", () => {
         ),
     },
     {
-      // Dormant in a normal run (the host's MINIMUM_CLIENT_VERSION is unset),
-      // so a mock naming a minimum is the only way to observe the envelope.
+      // Dormant unless a mock names a minimum (the host's MINIMUM_CLIENT_VERSION is unset).
       name: "a client the server considers obsolete",
       messageKey: "obsolete_client",
       run: async () => {
@@ -2101,17 +2057,14 @@ describe("mooc mock error envelopes", () => {
       assert.equal(body.message_key, probe.messageKey)
       assert.equal(typeof body.message, "string")
       assert.ok((body.message as string).length > 0)
-      // The host's serializer omits both when they carry nothing, and every
-      // error here does.
+      // The host's serializer omits both when empty, as every error here is.
       assert.equal("errors" in body, false)
       assert.equal("metadata" in body, false)
     })
   }
 
   test("every error key the router can answer with is walked above", () => {
-    // Read from the source rather than listed by hand: an error key added to a
-    // handler must fail here until a probe covers it, which is what makes the
-    // walk above exhaustive rather than merely long.
+    // Read from the source, so an error key added to a handler fails here until a probe covers it.
     const source = fs.readFileSync(path.join(__dirname, "router.ts"), "utf8")
     const emitted = [...source.matchAll(/\bapiError(?:Body)?\(\s*\n?\s*"([a-z_]+)"/g)].map(
       (match) => match[1] as ApiErrorMessageKey,
@@ -2126,12 +2079,10 @@ describe("mooc mock error envelopes", () => {
   })
 })
 
-// The host reads `X-Client-Version` on every client operation and turns away
-// anything below MINIMUM_CLIENT_VERSION with 426. That constant is None in
-// production, so a mock naming a minimum is the only place the rule -- and the
-// 426 every operation documents -- can be exercised at all. A 426 reaching the
-// client at all proves the validator accepted it as a documented status for the
-// operation; its envelope is pinned in the error-envelope walk below.
+// The host turns away a client older than MINIMUM_CLIENT_VERSION (`X-Client-Version`) with 426
+// on every operation. That constant is None in production, so only a mock naming a minimum can
+// exercise the rule. A 426 reaching the client proves the validator accepts it as documented;
+// its envelope is pinned in the error-envelope walk.
 const clientApi = (base: string, p: string): string => `${base}/api/v0/exercise-services/client${p}`
 
 describe("mooc mock client-version floor", () => {
@@ -2182,8 +2133,8 @@ describe("mooc mock client-version floor", () => {
   })
 
   test("an obsolete client's submit records nothing", async () => {
-    // The check has to run before the handler, as the host's extractor does, or
-    // a turned-away submit still leaves a submission behind.
+    // The check runs before the handler, as the host's extractor does, or a turned-away submit
+    // still leaves a submission behind.
     const exerciseId = passingExercise.slide.exercise_id
     await withFloor("1.2.3", async (base) => {
       const res = await authFetch(clientApi(base, `/exercises/${exerciseId}/submit`), {
@@ -2214,10 +2165,10 @@ describe("mooc mock client-version floor", () => {
   })
 })
 
-// Injected one-shot failures. Every error the fixtures produce is a 4xx a client
-// provoked; nothing here can otherwise answer 5xx, so the client's retry and
-// error-reporting paths have no way to be driven -- least of all from the
-// out-of-process tiers, which is what the control route exists for.
+// Injected one-shot failures. Every fixture error is a 4xx a client provoked; nothing else
+// answers 5xx, so the client's retry and error-reporting paths could not be driven, least of
+// all from the out-of-process tiers the control route exists for.
+
 describe("mooc mock injected failures", () => {
   let server: Server
   let base: string

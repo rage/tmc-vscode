@@ -6,15 +6,10 @@ import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
 import { TmcPage } from "../pages/tmc"
 
-// A submission the server has no files for has nothing to download. That is
-// ordinary news, not an error: the exercise on disk must be left untouched and
-// the user told.
-//
-// It is unreachable through the client API -- the CLI always uploads before
-// submitting -- so it has to be seeded in the mock (backend/mooc/router.ts
-// `seedMoocFilelessSubmission`). The integration tier
-// covers the CLI's `nothing-to-download` result directly; this walks the UI that
-// reports it: the explorer context menu opens History in the results panel.
+// A submission with no files is ordinary news, not an error: the exercise on disk stays
+// untouched and the user is told. The client API cannot produce one (the CLI always uploads
+// before submitting), so it is seeded in the mock (`seedMoocFilelessSubmission`). The
+// integration tier covers the CLI's `nothing-to-download` result; this walks the UI path.
 vsCodeTest(
   "reports a mooc submission with no downloadable files without touching the exercise",
   async ({ page, webview }) => {

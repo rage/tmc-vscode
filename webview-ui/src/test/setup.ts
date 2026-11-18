@@ -7,9 +7,9 @@ import "../elements"
 import type { RequestMessage, RequestType, WebviewError, WebviewState } from "../../../shared/lib"
 import { ExtensionToWebviewSchema } from "../../../shared/lib"
 
-// The webview wrapper (src/utilities/vscode.ts) calls the global
-// `acquireVsCodeApi()` in its constructor. jsdom has no such global, so stub a
-// minimal in-memory implementation whose postMessage is a spy the tests read.
+// The webview wrapper (src/utilities/vscode.ts) calls the global `acquireVsCodeApi()` in its
+// constructor; jsdom has none, so stub an in-memory one whose postMessage is a spy.
+
 interface MockVsCodeApi {
   postMessage: ReturnType<typeof vi.fn>
   getState: () => unknown
@@ -88,11 +88,11 @@ window.matchMedia ??= (query: string): MediaQueryList =>
     dispatchEvent: () => false,
   }) as MediaQueryList
 
-// `<vscode-icon>` warns when the codicons stylesheet is missing, passing the element
-// itself as `%o`. Node's inspect of that element reaches `document.styleSheets`, whose
-// jsdom `href` getter throws on a non-branded receiver; the throw escapes as a global
-// `error` event, so App renders its crash view instead of the panel under test. The
-// stylesheet only has to exist -- nothing here asserts on glyphs.
+// `<vscode-icon>` warns when the codicons stylesheet is missing, passing the element as `%o`.
+// Node's inspect of it reaches `document.styleSheets`, whose jsdom `href` getter throws; that
+// escapes as a global `error` event and App renders its crash view. The stylesheet only has to
+// exist.
+
 if (typeof document !== "undefined" && !document.querySelector("#vscode-codicon-stylesheet")) {
   const codicons = document.createElement("link")
   codicons.id = "vscode-codicon-stylesheet"

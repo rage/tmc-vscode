@@ -1,21 +1,17 @@
 #!/bin/bash
 set -euo pipefail
 
-# Builds tmc-langs-cli from the sibling ../tmc-langs-rust checkout and installs
-# it where the test harness serves the CLI (backend/cli), so BOTH the
-# integration tier (src/test-integration/tmc_langs_cli.spec.ts, which points
-# Langs straight at backend/cli) and Playwright (mockBackend profile downloads
-# the CLI from the mock backend, which serves backend/cli) transparently use
-# the locally-built binary instead of the released one.
+# Builds tmc-langs-cli from the sibling ../tmc-langs-rust checkout and installs it in
+# backend/cli, which both the integration tier (src/test-integration/tmc_langs_cli.spec.ts)
+# and Playwright (mockBackend profile, served by the mock backend) use as the CLI.
 #
-# LOCAL DEV/TEST ONLY. CI is unchanged and keeps using the released CLI.
+# LOCAL DEV/TEST ONLY; CI keeps using the released CLI.
 #
-# The harness finds the CLI by the `...-<version>` filename config.js pins, so
-# the local build is installed under that name without bumping the pin, which
-# the production download path shares. `<cli> --version` still reports the
-# build's real version.
+# The harness finds the CLI by the `...-<version>` filename config.js pins, so the build is
+# installed under that name without bumping the pin (shared with the production download
+# path). `<cli> --version` still reports the build's real version.
 #
-# backend/cli is gitignored, so nothing here is ever committed.
+# backend/cli is gitignored.
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LANGS_REPO="${TMC_LANGS_RUST_DIR:-$REPO_ROOT/../tmc-langs-rust}"
@@ -44,9 +40,8 @@ if [ ! -f "$BINARY" ]; then
   exit 1
 fi
 
-# Resolve the pinned filename the harness expects (platform triple + version)
-# using the same helper the extension uses. That helper is TypeScript, hence the
-# require hook.
+# Pinned filename the harness expects (platform triple + version), from the extension's own
+# helper; it is TypeScript, hence the require hook.
 FILENAME="$(cd "$REPO_ROOT" && node -e 'require("tsx/cjs");const {getLangsCLIForPlatform,getPlatform}=require("./src/utilities/env");const cfg=require("./config.js");const v=JSON.parse(cfg.mockBackend.__TMC_LANGS_VERSION__);process.stdout.write(getLangsCLIForPlatform(getPlatform(),v))')"
 
 CLI_DIR="$REPO_ROOT/backend/cli"

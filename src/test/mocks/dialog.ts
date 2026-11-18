@@ -38,8 +38,8 @@ export function createDialogMock(): [Dialog, DialogMockValues] {
     ),
   }
 
-  // Any other dialog method (errorNotification, warningNotification, …) is a
-  // loose no-op spy.
+  // Every other method is a loose no-op spy.
+
   const fallback = autoMock<Dialog>()
   const mock = new Proxy(explicit, {
     get(target, prop) {

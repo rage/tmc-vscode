@@ -37,8 +37,7 @@ const pendingRequests = new Map<number, (reply: ReplyMessage) => void>()
 // One window listener for the whole app, so each message is handled once however many
 // components listen.
 function dispatchMessage(event: MessageEvent): void {
-  // The host validates every message it posts against the same schema, so checking again
-  // here only guards this side of the contract while it is being developed.
+  // The host already validates against this schema; this guards the contract during development.
   if (import.meta.env.DEV) {
     const validationResult = ExtensionToWebviewSchema.safeParse(event.data)
     if (!validationResult.success) {
@@ -71,12 +70,11 @@ function dispatchMessage(event: MessageEvent): void {
 window.addEventListener("message", dispatchMessage)
 
 /**
- * Convenience function for listening to messages from the extension host to the webview.
+ * Listens for messages from the extension host to the webview.
  *
- * Removes the listener automatically via `onDestroy` when the component is destroyed, so
- * components recreated on navigation (e.g. via `{#key}`) don't accumulate stale listeners.
- * Must be called synchronously during component initialization, like other Svelte lifecycle
- * functions.
+ * Removed automatically on component destroy, so components recreated on navigation (e.g.
+ * `{#key}`) don't accumulate listeners. Must be called synchronously during component
+ * initialization.
  *
  * @returns A disposer to remove the listener early; most callers can ignore it.
  */
@@ -147,8 +145,8 @@ export type Request = <K extends RequestType>(
   options?: RequestOptions,
 ) => Promise<ReplyOutcome<K>>
 
-// Starts at random so a reloaded page, whose counter restarts, does not reuse the id of a
-// request the host is still working on for the page it replaced.
+// Random start: a reloaded page must not reuse the id of a request the host is still
+// working on for the page it replaced.
 let nextRequestId = Math.floor(Math.random() * 2 ** 30) + 1
 
 /**

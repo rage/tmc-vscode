@@ -26,17 +26,14 @@ type Choice =
   | { kind: "organization"; organization: Organization }
   | { kind: "course"; courseId: CourseIdentifier; name: string; organizationSlug: string }
   | { kind: "added"; courseId: CourseIdentifier }
-  // Neither backend listed anything; the add-course screen says why for each, with Try Again.
+  // Neither backend listed anything; the add-course screen says why.
   | { kind: "unavailable" }
 
 interface ChoiceItem extends vscode.QuickPickItem {
   choice?: Choice
 }
 
-/**
- * A course row. Courses the user already has stay listed rather than hidden, where a
- * student looking for one would wonder where it went, and picking one opens it.
- */
+/** A course row. Added courses stay listed so students can find them; picking one opens it. */
 function courseItem(
   courseId: CourseIdentifier,
   name: string,
@@ -56,13 +53,12 @@ function courseItem(
 }
 
 /**
- * Lets the user pick a course from either backend in a quick pick, the Command Palette's fast
- * path past the add-course screen, then adds it and opens its course home.
+ * Quick pick over both backends' courses, the Command Palette's fast path past the add-course
+ * screen; adds the pick and opens its course home.
  *
- * courses.mooc.fi lists only the courses the user is enrolled in, so they come first and add in
- * one step. tmc.mooc.fi hides thousands of courses behind its organizations, so picking one of
- * those opens a second step, with Back, listing its courses. The rows appear once both backends
- * have answered, so that none moves under the pointer as the other backend's arrive.
+ * courses.mooc.fi lists only enrolled courses, added in one step. tmc.mooc.fi has thousands
+ * behind its organizations, so an organization opens a second step listing its courses.
+ * Rows appear once both backends answer, so none moves under the pointer.
  */
 export async function addNewCourse(actionContext: ReadyActionContext): Promise<void> {
   const { dialog } = actionContext
@@ -113,7 +109,7 @@ export async function addNewCourse(actionContext: ReadyActionContext): Promise<v
   }
 }
 
-/** Runs the pick to a course, a login request, or `undefined` when dismissed. */
+/** Runs the pick; resolves to the choice, or `undefined` when dismissed. */
 function pickCourse(
   actionContext: ReadyActionContext,
   isAdded: (id: CourseIdentifier) => boolean,
@@ -131,7 +127,7 @@ function pickCourse(
   const unavailableNames = (): string[] =>
     [backendName("mooc"), backendName("tmc")].filter((name) => unavailable.includes(name))
   let step: 1 | 2 = 1
-  // Bumped whenever the shown step changes, so a late listing for a step the user left is dropped.
+  // Bumped on every step change, so a late listing for a step the user left is dropped.
   let stepGeneration = 0
   const organizationCourses = new Map<string, ReturnType<typeof actions.listOrganizationCourses>>()
 
@@ -147,8 +143,7 @@ function pickCourse(
 
   /** Redraws the first step's rows without touching the user's filter text. */
   const renderFirstStep = (): void => {
-    // Naming the missing backend in the placeholder keeps it visible for as long as the pick
-    // is open, so a half-populated list is never mistaken for a complete one.
+    // Naming the missing backend in the placeholder keeps a partial list from looking complete.
     const search = `Search your courses or ${backendName("tmc")} organizations`
     quickPick.placeholder =
       unavailable.length === 0

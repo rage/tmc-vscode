@@ -1,21 +1,19 @@
 //@ts-check
 
-// Loaded by test-electron (see bin/runIntegrationTests.js) as the
-// --extensionTestsPath. Runs the bundled integration suite
-// (dist/integration.spec.js) with mocha's tdd UI inside the extension host.
+// Loaded by test-electron (see bin/runIntegrationTests.js) as --extensionTestsPath: runs the
+// bundled suite (dist/integration.spec.js) with mocha's tdd UI inside the extension host.
 const Mocha = require("mocha")
 const path = require("path")
 
-// Zero tests are zero failures, so a suite that stopped reaching the bundle, or
-// whose cases were all skipped, would pass. Raise this with the suite.
+// Zero tests are zero failures, so a suite that stopped reaching the bundle or skipped every
+// case would pass. Raise this with the suite.
 const MINIMUM_PASSING = 62
 
 function run() {
   const mocha = new Mocha({
     ui: "tdd",
     color: true,
-    // Individual tests set their own timeouts; keep a generous default so
-    // slow CI machines don't flake.
+    // Tests set their own timeouts; the generous default avoids flakes on slow CI.
     timeout: 60000,
   })
 

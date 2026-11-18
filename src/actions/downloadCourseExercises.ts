@@ -8,9 +8,9 @@ import { refreshLocalExercises } from "./refreshLocalExercises"
 import type { ReadyActionContext } from "./types"
 
 /**
- * Downloads exercises of one course, takes them off its new-exercise list and rescans the
- * disk, so the Courses view shows the result. Errs, with nothing downloaded, only while some
- * of the exercises are busy with another operation; any other failure is a warning.
+ * Downloads exercises of one course, clears them from its new-exercise list and rescans the
+ * disk. Errs, with nothing downloaded, only while some exercises are busy with another
+ * operation; any other failure is a warning.
  *
  * For exercises already on disk, see `downloadExerciseUpdates`.
  */

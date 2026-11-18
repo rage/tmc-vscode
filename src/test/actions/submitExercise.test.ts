@@ -808,10 +808,8 @@ suite("submitExercise action, mooc", () => {
   })
 
   test("a second submit of the same exercise is rejected while one is in flight", async () => {
-    // The guard lives in the action rather than `commands/submitExercise`, because
-    // `TmcPanel` calls the paste actions -- which share this key -- directly. The
-    // notification for the rejection is `withOperation`'s job now, not this action's:
-    // showing it here too would double it once the command layer also reports it.
+    // The guard lives in the action because `TmcPanel` calls the paste actions, which share
+    // this key, directly. `withOperation` shows the rejection; showing it here too would double it.
     let finishFirst!: () => void
     const submit = vi.fn().mockReturnValue(
       new Promise((resolve) => {
@@ -829,7 +827,6 @@ suite("submitExercise action, mooc", () => {
     expect(second.err).toBe(true)
     expect(second.val).toBeInstanceOf(BottleneckError)
     expect(notification).not.toHaveBeenCalled()
-    // the rejected call must not have reached the CLI
     expect(submit).toHaveBeenCalledTimes(1)
 
     finishFirst()
@@ -869,9 +866,8 @@ function submitBody(actionContext: ReadyActionContext) {
     )
 }
 
-// These drive the action through the real `runForExercise`/`withOperation` boundary
-// (bypassing only `commands/submitExercise`) to prove the
-// cross-layer contract: the busy notice is shown exactly once, and a failure the panel
+// Drives the action through the real `runForExercise`/`withOperation` boundary (bypassing only
+// `commands/submitExercise`): the busy notice is shown exactly once, and a failure the panel
 // shows, remedies included, is not also notified.
 suite("submitExercise action, through the real runForExercise boundary", () => {
   function contextWithWorkspace(

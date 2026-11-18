@@ -5,8 +5,8 @@ import type { BackendKind } from "./enum"
 /**
  * An `Error` carrying the fields Node attaches to a failed system call.
  *
- * Structurally `NodeJS.ErrnoException`, spelled out here so that the webview project, which
- * shares this module, needs no Node type definitions.
+ * Structurally `NodeJS.ErrnoException`, spelled out so the webview project, which shares
+ * this module, needs no Node types.
  */
 export interface ErrnoException extends Error {
   errno?: number | undefined
@@ -15,7 +15,7 @@ export interface ErrnoException extends Error {
   syscall?: string | undefined
 }
 
-// only the optional fields; the caller has already established that `err` is an `Error`
+// Only the errno fields; callers have already established that `err` is an `Error`.
 const errnoExceptionFieldsSchema = z.object({
   errno: z.number().optional(),
   code: z.string().optional(),
@@ -37,7 +37,7 @@ function describeThrown(value: unknown): string {
   try {
     return JSON.stringify(value) ?? String(value)
   } catch {
-    // a circular structure or a bigint makes JSON.stringify throw
+    // circular structures and bigints make JSON.stringify throw
     return "<unserializable>"
   }
 }
@@ -50,7 +50,6 @@ export class BaseError extends Error {
   public override cause?: ErrnoException | string
   public override stack?: string
 
-  // possible fields from ErrnoException
   public errno?: number | undefined
   public code?: string | undefined
   public path?: string | undefined
@@ -91,8 +90,7 @@ export class BaseError extends Error {
         }
       }
     } else {
-      // callers often hit this with `unknown` from catch blocks; anything that
-      // isn't a string or Error falls through to a generic message
+      // `unknown` from a catch block
       message = `Unexpected error ${describeThrown(err)} (${typeof err})`
     }
 

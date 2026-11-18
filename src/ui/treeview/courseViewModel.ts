@@ -28,7 +28,7 @@ export interface ExerciseView {
   slug: string
   status: ExerciseStatus
   passed: boolean
-  /** Below full points with the try limit used up, so the score is final. Only mooc has a limit. */
+  /** Below full points with the try limit used up, so the score is final. */
   isOutOfTries: boolean
   /** Only mooc has a limit; `undefined` means unlimited. */
   maxTries: number | undefined
@@ -68,10 +68,7 @@ export interface PartView {
   number?: number
   /** A mooc chapter's place in the course's chapter locking; `undefined` without locking. */
   lockingStatus: ChapterLockingStatus | undefined
-  /**
-   * When the chapter opens, for one that has not yet: it lists only the exercises already on
-   * disk, which cannot be submitted before then.
-   */
+  /** When a not-yet-open chapter opens; it lists only exercises already on disk. */
   opensAt?: Date | undefined
 }
 
@@ -294,10 +291,7 @@ export function shownDeadline(
   return exercise.isHard ? exercise.hardDeadline : exercise.softDeadline
 }
 
-/**
- * A download in flight wins over the disk, and a failed one shows only while the exercise
- * is still absent: one downloaded since, by any route, is no longer failed.
- */
+/** A download in flight wins over the disk; a failed one shows only while it is absent. */
 function resolveStatus(
   onDisk: WorkspaceStatus | undefined,
   inFlight: ExerciseStatus | undefined,

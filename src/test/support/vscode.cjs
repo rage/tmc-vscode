@@ -4,8 +4,7 @@ const { createVSCodeMock } = require("jest-mock-vscode")
 
 const vscode = createVSCodeMock(vi)
 
-// jest-mock-vscode does not ship every value-class the extension constructs at
-// module load. Fill the gaps the extension host relies on.
+// Value-classes the extension constructs at module load that jest-mock-vscode lacks.
 if (typeof vscode.FileDecoration !== "function") {
   // oxlint-disable-next-line typescript/no-extraneous-class -- mirrors the vscode.FileDecoration constructor shape
   vscode.FileDecoration = class FileDecoration {
@@ -220,10 +219,9 @@ Object.defineProperty(vscode.window, "tabGroups", {
   writable: true,
 })
 
-// jest-mock-vscode returns `undefined` where the real API returns a `Disposable`, and
-// the extension pushes what these return into `context.subscriptions`. Without a real
-// disposable, a test that shuts a context down the way VS Code does walks an array of
-// `undefined` and cannot tell a registered listener from a leaked one.
+// jest-mock-vscode returns `undefined` where the real API returns a `Disposable`; without
+// one, a test disposing `context.subscriptions` cannot tell a registered listener from a
+// leaked one.
 const registrationsReturningDisposables = [
   [vscode.commands, "registerCommand"],
   [vscode.window, "registerFileDecorationProvider"],

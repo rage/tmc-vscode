@@ -40,9 +40,6 @@ export default class ExerciseDecorationProvider
 
   private _eventEmiter: vscode.EventEmitter<vscode.Uri | vscode.Uri[]>
 
-  /**
-   * Creates a new instance of an `ExerciseDecorationProvider`.
-   */
   public constructor(
     private readonly userData: UserData,
     private readonly workspaceManager: WorkspaceManager,
@@ -88,10 +85,7 @@ export default class ExerciseDecorationProvider
     return undefined
   }
 
-  /**
-   * Trigger decorator event for given exercises. Requires this object to be registered with
-   * `vscode.window.registerFileDecorationProvider` for any effects to take any effect.
-   */
+  /** Refreshes the decorations of `exercises`; needs prior `registerFileDecorationProvider`. */
   public updateDecorationsForExercises(...exercises: readonly WorkspaceExercise[]): void {
     this._eventEmiter.fire(exercises.map((x) => x.uri))
   }

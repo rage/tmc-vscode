@@ -84,8 +84,7 @@ export class ExerciseTestController implements vscode.Disposable {
    *
    * @returns `Err(BottleneckError)` when the exercise was already being tested, and, with no
    * run, `Err(WorkspaceUntrustedError)` in Restricted Mode and `Err(AiUseRefusedError)` while AI
-   * assistance may be on; every other outcome,
-   * failures included, is reported in the run itself.
+   * assistance may be on; every other outcome, failures included, is reported in the run itself.
    */
   public async runExercise(exercise: WorkspaceExercise): Promise<Result<void, Error>> {
     const untrusted = this._actionContext.startup.trustGate.refusal(

@@ -23,10 +23,9 @@ export class ConnectionError extends BaseError {
 }
 
 /**
- * Raised when a value in global state no longer matches the schema its migration
- * writes. Callers must fail rather than carry on from an empty value: the blob is the
- * only copy of the user's course catalogue, and the next write would persist the empty
- * one over it. It is left untouched.
+ * A value in global state no longer matches the schema its migration writes. Callers must
+ * fail rather than continue from an empty value: the blob is the only copy of the user's
+ * course catalogue, and the next write would overwrite it. It is left untouched.
  */
 export class CorruptStoredDataError extends BaseError {
   public override readonly name = "Corrupt Stored Data Error"
@@ -273,10 +272,8 @@ export interface ErrorPresentation {
 /**
  * The error as one sentence for the user: its message, and nothing else.
  *
- * Deliberately not the logger's formatter, which also appends the class name, `details` —
- * on a CLI failure that is the process's backtrace and the tail of its stderr — the `cause`
- * chain, and the stack. Those diagnose a failure rather than describe it, and a notification
- * is the one place they cannot be scrolled or copied. Its Show Details screen has them all.
+ * Not the logger's formatter, whose class name, `details` (a CLI backtrace and stderr tail),
+ * `cause` chain and stack cannot be scrolled or copied in a notification. Show Details has them.
  */
 function userSentence(error: Error): string {
   const trimmed = error.message.trim() || error.name
@@ -298,11 +295,9 @@ export function isSessionLost(error: Error): boolean {
 /**
  * How to show `error` to the user.
  *
- * Every class whose remedy follows from the class itself states that remedy here, so no
- * call site spells one out and the same failure reads the same way wherever it surfaces.
- * A class with no entry shows its own message and no buttons, which is the right answer
- * for a failure the user cannot act on. No message carries diagnostics; see
- * {@link userSentence}.
+ * Remedies that follow from the error class live here, so a failure reads the same wherever
+ * it surfaces. A class with no entry shows its message and no buttons. No message carries
+ * diagnostics; see {@link userSentence}.
  */
 export function presentationFor(error: Error): ErrorPresentation {
   const backend = error instanceof BaseError ? error.backend : undefined

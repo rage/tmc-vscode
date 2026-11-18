@@ -184,8 +184,6 @@ export default class WorkspaceManager implements vscode.Disposable {
   public readonly onDidOpenOutsideCourseWorkspace = this._openedOutsideCourseWorkspace.event
 
   /**
-   * Creates a new instance of the WorkspaceManager class.
-   * @param resources Resources instance for constructing the exercise path
    * @param persistClosedExercises Writer for a closed set the manager observed
    * @param exercises The known exercises, with the statuses already on record
    */
@@ -243,24 +241,17 @@ export default class WorkspaceManager implements vscode.Disposable {
     return undefined
   }
 
-  /**
-   * Currently active course slug based on the active workspace, or `undefined`
-   * otherwise.
-   */
+  /** The open course workspace's course slug, or `undefined` outside one. */
   public get activeCourse(): string | undefined {
     return this._activeCourseWorkspace?.slug
   }
 
-  /**
-   * Backend of the currently active course workspace, or `undefined` otherwise.
-   */
+  /** The open course workspace's backend, or `undefined` outside one. */
   public get activeCourseBackend(): BackendKind | undefined {
     return this._activeCourseWorkspace?.backend
   }
 
-  /**
-   * Currently active exercise based on active editor, or `undefined` otherwise.
-   */
+  /** The exercise the active editor is in, if any. */
   public get activeExercise(): WorkspaceExercise | undefined {
     const uri = vscode.window.activeTextEditor?.document.uri
     return uri && this.getExerciseContaining(uri)
@@ -558,9 +549,8 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   /**
-   * Returns the section for the Workspace setting (i.e. .code-workspace).
-   * If section not found in multi-root workspace file, returns User scope setting.
-   * @param section A dot-separated identifier.
+   * The configuration for `section` as the open course workspace resolves it, falling back
+   * to the user's outside one.
    */
   public getWorkspaceSettings(section?: string): vscode.WorkspaceConfiguration {
     if (this.activeCourse) {
@@ -590,9 +580,8 @@ export default class WorkspaceManager implements vscode.Disposable {
   }
 
   /**
-   * Updates a section for the TMC Workspace.code-workspace file, if the workspace is open.
-   * @param section Configuration name, supports dotted names.
-   * @param value The new value
+   * Merges `value` into `section` of the open course's `.code-workspace`; see
+   * {@link replaceWorkspaceSetting} to replace it. A no-op outside a course workspace.
    */
   public async updateWorkspaceSetting(section: string, value: unknown): Promise<void> {
     await this._updateWorkspaceSettings({ [section]: value })
@@ -714,10 +703,8 @@ export default class WorkspaceManager implements vscode.Disposable {
    * Writes each section into the open course workspace's `.code-workspace`,
    * skipping the ones already holding the value that would be written.
    *
-   * Every write VS Code accepts is a configuration-change broadcast each installed
-   * extension has to process, and the integrity pass runs on every activation with
-   * a course workspace open — so the skip is what keeps that pass free once the
-   * file is correct.
+   * Every accepted write is broadcast to every installed extension, and the integrity
+   * pass runs on each activation, so the skip keeps that pass free once the file is correct.
    *
    * Object values are merged over what the workspace file already stores, so a
    * setting the student added by hand to the same section survives.
@@ -767,10 +754,7 @@ export default class WorkspaceManager implements vscode.Disposable {
     )
   }
 
-  /**
-   * Refreshes current active course workspace by first making sure that the `.tmc` folder is at
-   * the top and then lists all that course's open exercises in alphanumeric order.
-   */
+  /** Puts `.tmc` first in the open course workspace, then its open exercises alphanumerically. */
   private _refreshActiveCourseWorkspace(): Promise<Result<void, Error>> {
     return this._workspaceFileWrites.run(() => this._replaceWorkspaceFolders())
   }

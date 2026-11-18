@@ -16,8 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # Uploading the SARIF results to code scanning is a write; without it the
-      # analyze step fails at the very end of the run.
+      # Needed to upload the SARIF results; analyze fails at the end without it.
       security-events: write
 
     steps:

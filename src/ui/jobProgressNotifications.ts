@@ -27,8 +27,8 @@ interface OpenNotification {
 
 /**
  * Shows each long job's progress in a notification while the screen that shows the job is out of
- * sight, and takes it away when the screen comes back or the job ends: a visible screen says it
- * already, and the status bar spinner alone is easy to miss for a job worth waiting on.
+ * sight, and removes it when the screen returns or the job ends. The status bar spinner alone is
+ * easy to miss.
  */
 export class JobProgressNotifications implements vscode.Disposable {
   private readonly _open = new Map<BackgroundJob, OpenNotification>()

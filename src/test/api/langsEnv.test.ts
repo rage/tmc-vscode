@@ -4,9 +4,8 @@ import { vi } from "vitest"
 
 import Langs from "../../api/langs"
 
-// The env is assembled inside `_spawnLangsProcess`, so the assertion has to reach
-// the actual `cp.spawn` call. The mock records the env and aborts the spawn, so no
-// real CLI runs.
+// The env is assembled inside `_spawnLangsProcess`; the mock records it at `cp.spawn` and
+// aborts, so no real CLI runs.
 const spawnCalls: { env: NodeJS.ProcessEnv | undefined }[] = vi.hoisted(() => [])
 
 vi.mock("child_process", () => ({
@@ -47,10 +46,8 @@ suite("Langs CLI environment", function () {
     vi.restoreAllMocks()
   })
 
-  // The tmc code path authenticates with the courses.mooc.fi access token, so it
-  // needs the mooc backend URL and OAuth knobs just as much as `mooc` commands
-  // do. Missing TMC_LANGS_MOOC_TRUST_LOCALHOST is the silent case: the CLI would
-  // then attach no bearer to a localhost backend and run unauthenticated.
+  // The tmc path authenticates with the courses.mooc.fi token. Without
+  // TMC_LANGS_MOOC_TRUST_LOCALHOST the CLI silently attaches no bearer to a localhost backend.
   test("a tmc command carries the mooc backend url and oauth knobs", async function () {
     const langs = new Langs("dummy-cli-path", "test-client", "1.0.0")
 

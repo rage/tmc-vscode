@@ -14,30 +14,22 @@ const DOWNLOAD_RETRIES = 2
 const RETRY_BACKOFF_MS = 500
 
 /**
- * Parses the hash out of a `.sha256` file's contents and normalizes it to
- * lowercase so comparisons are case-insensitive. Accepts both the canonical
- * "HASH  filename" form and a bare hash with no filename, and also tolerates
- * uppercase hex, CRLF, tabs and leading whitespace (it splits on any run of
- * whitespace). An empty or whitespace-only file yields "".
+ * The lowercase hash in a `.sha256` file's contents, from either "HASH  filename" or a bare hash.
+ * Tolerates uppercase hex, CRLF and leading whitespace; an empty file yields "".
  */
 export function parseSha256Sum(contents: string): string {
   return contents.trim().split(/\s+/)[0]?.toLowerCase() ?? ""
 }
 
 /**
- * Hashes the CLI at `cliPath` and compares it against the checksum stored in the
- * `.sha256` file at `shaPath`. Used both for the initial check and for
- * re-verification after a redownload.
+ * Whether the CLI at `cliPath` hashes to the checksum in the `.sha256` file at `shaPath`.
  *
- * The checksum is served by the same origin as the binary, so a match proves the
- * download is intact, not that it is the build we published: this detects
- * corruption and truncation, never substitution.
+ * The checksum comes from the same origin as the binary, so a match proves the download is
+ * intact, not that it is the build we published: it detects corruption and truncation, never
+ * substitution.
  *
- * The CLI is hashed as a stream so a large binary is never read fully into
- * memory and the hashing doesn't block the event loop in one burst during
- * activation. A missing or unreadable CLI/checksum file is reported as a
- * non-match (this never throws) so the caller can redownload instead of
- * crashing activation.
+ * Never throws: a missing or unreadable CLI or checksum file is a non-match, so the caller can
+ * redownload instead of crashing activation.
  */
 export async function verifyCli(
   cliPath: string,
@@ -57,16 +49,12 @@ export async function verifyCli(
     Logger.warn(`Failed to read checksum file at ${shaPath} for verification:`, error)
   }
 
-  // An empty cliDigest means the CLI couldn't be hashed; require a non-empty
-  // digest so two unreadable files don't compare equal ("" === "").
+  // An empty digest means the file couldn't be hashed; two of them must not compare equal.
   const match = cliDigest !== "" && cliDigest === hashData
   return { match, cliDigest, hashData }
 }
 
-/**
- * Streams the file at `filePath` through a SHA-256 hash and resolves with the
- * digest as lowercase hex. Rejects if the file cannot be read.
- */
+/** The SHA-256 of the file at `filePath` as lowercase hex, streamed. Rejects if unreadable. */
 function hashFile(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const hash = createHash("sha256")
@@ -111,13 +99,11 @@ export async function removeStaleCliFiles(cliFolder: string, keep: string[]): Pr
 }
 
 /**
- * Downloads correct langs version for the current extension version, unless already present. Will
- * remove any previous versions once it has.
+ * Downloads the langs version this extension pins, unless already present, then removes
+ * previous versions.
  *
- * @param cliFolder
- * @param dialog
- * @param config Download URL and version to fetch; owned by the caller (the
- * extension passes the build-inlined constants, tests pass a local server).
+ * @param config Download URL and version to fetch; owned by the caller (the extension passes the
+ * build-inlined constants, tests pass a local server).
  */
 async function ensureLangsUpdated(
   cliFolder: string,
@@ -136,7 +122,6 @@ async function ensureLangsUpdated(
   const executable = getLangsCLIForPlatform(platform, version)
   Logger.info("TMC-Langs version: " + executable)
 
-  // download CLI if necessary
   const cliPath = path.join(cliFolder, executable)
   const shaPath = cliPath + ".sha256"
   const cliUrl = downloadUrl + executable
@@ -157,7 +142,6 @@ async function ensureLangsUpdated(
     }
   }
 
-  // check shasum
   const initial = await verifyCli(cliPath, shaPath)
   if (!initial.match) {
     Logger.error("Mismatch between CLI and checksum, trying redownload")
@@ -182,8 +166,7 @@ async function ensureLangsUpdated(
       )
     }
 
-    // Re-verify after the redownload so we never hand back a binary that does
-    // not match its checksum; a persistent mismatch is fatal.
+    // A persistent mismatch is fatal: never hand back a binary that fails its checksum.
     const recheck = await verifyCli(cliPath, shaPath)
     if (!recheck.match) {
       return Err(
@@ -197,10 +180,7 @@ async function ensureLangsUpdated(
   return Ok(cliPath)
 }
 
-/**
- * Builds the shared "CLI (...) and checksum (...)" detail string used in the
- * redownload-failure and persistent-mismatch error messages.
- */
+/** The "CLI (...) and checksum (...)" detail of the redownload and mismatch errors. */
 function checksumMismatchDetails(
   result: { cliDigest: string; hashData: string },
   cliPath: string,
@@ -267,9 +247,7 @@ async function downloadLangs(
     await fs.fchmod(fd, 0o755)
     await fs.close(fd)
   } catch (e) {
-    // not sure what the best way to handle errors here is
-    // this may be a good compromise between allowing expert users to take care of it themselves
-    // vs. allowing new users to easily just try again in case it was a fluke
+    // The message lets expert users fix it by hand while others just retry.
     Logger.error(
       `Error changing permissions for CLI at ${tempPath}. \
             You can try again or make it executable manually and remove the "temp-" prefix.`,

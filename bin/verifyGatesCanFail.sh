@@ -1,16 +1,12 @@
 #!/bin/bash
 # Breaks one input per CI gate, asserts the gate fails on it, and restores it.
 #
-# A gate nobody has seen fail is indistinguishable from one that cannot. Every
-# gate covered here consumes a glob, a generated file or a vendored artifact,
-# and each of those has a way of going empty or stale that exits 0 on its own.
-# The matching green half is the rest of .github/workflows/test.yml running the
-# same gates unbroken on the same commit, so this script proves the red half and
-# that it put the tree back.
+# A gate nobody has seen fail is indistinguishable from one that cannot: each gate here consumes
+# a glob, generated file or vendored artifact that can go empty or stale and still exit 0. The
+# green half is the rest of .github/workflows/test.yml running the gates unbroken.
 #
-# It edits tracked files in place, so run it on a checkout you are not also
-# editing. The one git-index case runs against a scratch index and never touches
-# the checkout's own.
+# It edits tracked files in place, so run it on a checkout you are not also editing. The one
+# git-index case uses a scratch index.
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
@@ -120,8 +116,7 @@ expectGateFailure "integration suite floor / a bundle declaring no tests" \
   node -e 'require("./bin/integrationTestLoader.js").run().catch((e) => { console.error(e.message); process.exitCode = 1 })'
 restoreAll
 
-# A scratch index, so dropping a generated file from it cannot disturb the
-# checkout's own. git honours GIT_INDEX_FILE, so the gate itself runs unmodified.
+# git honours GIT_INDEX_FILE, so the gate runs unmodified against a scratch index.
 export GIT_INDEX_FILE="$scratch/gates.index"
 git read-tree HEAD
 git rm --cached --quiet -- shared/generated/langs/zod.gen.ts

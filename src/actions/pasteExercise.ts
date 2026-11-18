@@ -18,14 +18,13 @@ export interface PasteLink {
 }
 
 /**
- * Sends an exercise to a backend's paste service and answers with the link to it, or with the
- * last paste's link when the student files are what that paste sent.
+ * Sends an exercise to its backend's paste service and returns the link, or the last paste's
+ * link when the student files are unchanged since it.
  *
- * Nothing is reported here: the caller shows the failure, once, in the place the user
- * asked from. A paste that comes back without a link is an error rather than an empty
- * `Ok`, so no caller has to check for one. Errs with `AiUseRefusedError` while AI assistance
- * may be on, with `WorkspaceUntrustedError` in Restricted Mode, and with `CourseAccessLostError`
- * while the course's backend refuses the course.
+ * Reports nothing: the caller shows the failure where the user asked from. A paste without a
+ * link is an `Err`, never an empty `Ok`. Errs with `AiUseRefusedError` while AI assistance may
+ * be on, `WorkspaceUntrustedError` in Restricted Mode, and `CourseAccessLostError` while the
+ * backend refuses the course.
  */
 export async function pasteExercise(
   actionContext: ReadyActionContext,

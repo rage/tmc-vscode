@@ -51,9 +51,7 @@ export function createMockMemento(): Memento {
   }
 }
 
-/**
- * Creates a `vscode.WorkspaceConfiguration` mock whose `update` is a spy.
- */
+/** Creates a `vscode.WorkspaceConfiguration` mock whose `update` is a spy. */
 export function createMockWorkspaceConfiguration(): vscode.WorkspaceConfiguration {
   return {
     get: vi.fn(),

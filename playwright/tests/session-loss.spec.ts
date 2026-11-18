@@ -7,7 +7,7 @@ import { CoursesViewPage } from "../pages/courses-view"
 import { MoocLoginPage } from "../pages/mooc-login"
 
 // A session lost while a screen is on view is told there once, with one Log In, and in the
-// status bar; no notification repeats it. backend/mooc revokes the grant on request.
+// status bar, never by notification. backend/mooc revokes the grant on request.
 
 const COURSE_TITLE = "MOOC Python Course"
 

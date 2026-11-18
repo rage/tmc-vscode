@@ -1,32 +1,19 @@
 #!/bin/bash
-# Re-vendors the courses.mooc.fi exercise-services client OpenAPI document into
-# this repo.
-#
-# The spec is generated in secret-project-331 from the utoipa annotations on
-# the exercise-services client controller
-# (services/headless-lms/server/src/controllers/exercise_services/client.rs)
-# via the existing `export-openapi` pipeline, and committed there as
-# services/headless-lms/server/openapi/exercise-services-client.openapi.generated.json.
-#
-# The vendored copy at backend/mooc/exercise-services-client.openapi.generated.json is the single
-# source of truth the mooc mock backend routes and validates against: the mock
-# cannot silently drift from the real API because every request AND response is
-# validated against this document at runtime (see backend/mooc/router.ts).
+# Re-vendors the courses.mooc.fi exercise-services client OpenAPI document
+# (generated in secret-project-331, see SPEC_PATH) into backend/mooc/, where the
+# mock backend validates every request and response against it (router.ts).
 #
 # Copies from a local secret-project-331 checkout; vendor from a pushed
 # `master` so `--check-source` can fetch the recorded rev.
 #
-# Drift gating (three layers):
-#   * Byte-compare against the sibling checkout (`--check`) needs that checkout,
-#     so it is for local use before committing a spec-touching change.
-#   * A provenance STAMP committed next to the vendored spec
-#     (exercise-services-client.openapi.source.json: the source rev + the spec's
-#     sha256) lets CI verify the vendored spec has not been hand-edited without a
-#     re-vendor. `--check-stamp` performs that check and needs NO sibling
-#     checkout, so it is the gate CI runs (see .github/workflows/test.yml).
-#   * `--check-source` fetches the spec from GitHub at the stamp's source_rev and
-#     byte-compares, which is the only layer that catches a stamp refreshed from
-#     a dirty or unpushed sibling checkout. It needs network.
+# Drift gating:
+#   * `--check`: byte-compare against the sibling checkout; local use only.
+#   * `--check-stamp`: verifies the spec still matches the committed provenance
+#     stamp (source rev + sha256), catching hand-edits. Needs no checkout; this
+#     is the CI gate (.github/workflows/test.yml).
+#   * `--check-source`: fetches the spec at the stamp's source_rev and
+#     byte-compares; the only layer that catches a stamp refreshed from a dirty
+#     or unpushed checkout. Needs network.
 #
 # Run via `pnpm run vendor:langs-openapi` (copy + refresh stamp), or with
 # `-- --check`, `-- --check-stamp` or `-- --check-source`.
@@ -47,17 +34,12 @@ REVENDOR="pnpm run vendor:langs-openapi"
 
 MODE="$(vendor_mode "$@")"
 
-# --check-stamp: verify the vendored spec still matches the committed provenance
-# stamp. Needs NO secret-project-331 checkout, so this is the gate CI runs. It
-# catches a hand-edit of the vendored spec that never went through re-vendoring.
 if [ "$MODE" = "--check-stamp" ]; then
   verify_stamp "$TARGET" "$STAMP" "$REVENDOR"
   exit $?
 fi
 
-# --check-source: fetch the spec at the stamp's recorded rev and byte-compare.
-# Needs no checkout either, but does need network and a rev that is reachable on
-# a pushed branch.
+# --check-source needs the recorded rev to be reachable on a pushed branch.
 if [ "$MODE" = "--check-source" ]; then
   rev="$(stamp_field "$STAMP" source_rev)"
   url="$(stamp_field "$STAMP" source_url)"
@@ -90,7 +72,6 @@ if [ ! -f "$SOURCE" ]; then
   exit 1
 fi
 
-# sanity check: must be valid JSON
 node -e "JSON.parse(require('fs').readFileSync('$SOURCE', 'utf8'))"
 
 if [ "$MODE" = "--check" ]; then
@@ -107,8 +88,7 @@ if [ "$MODE" = "--check" ]; then
   exit $status
 fi
 
-# default: (re-)vendor.
-# copy byte-for-byte so the file can be diffed against the sibling directly
+# default: (re-)vendor. Byte-for-byte so --check can diff against the sibling.
 cp "$SOURCE" "$TARGET"
 
 REV="$(git -C "$SP331_CHECKOUT" rev-parse HEAD 2>/dev/null || echo "unknown")"

@@ -5,9 +5,7 @@ import type { ReadyActionContext } from "../actions/types"
 import { withOperation } from "../api/withOperation"
 import { Logger } from "../utilities"
 
-/**
- * Asks for a new folder for the extension's data and moves the exercises there.
- */
+/** Asks for a new folder for the extension's data and moves the exercises there. */
 export async function changeTmcDataPath(actionContext: ReadyActionContext): Promise<void> {
   const { dialog } = actionContext
   const { resources } = actionContext.startup

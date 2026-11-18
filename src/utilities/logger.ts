@@ -213,8 +213,8 @@ export class Logger {
   /**
    * Reveals the output channel, creating one to explain itself if logging is off.
    *
-   * `none` disposes the channel, so every "Show Logs" affordance would otherwise do
-   * nothing at all — including the one offered next to a fatal activation error.
+   * `none` disposes the channel, so "Show Logs" would otherwise do nothing, even next to a
+   * fatal activation error.
    */
   public static show(): void {
     if (this.output === undefined) {
@@ -268,12 +268,7 @@ export class Logger {
   private static readonly _tail: string[] = []
   private static _tailChars = 0
 
-  /**
-   * Logs the params if the extension has been configured to log with this level.
-   *
-   * @param level The logging level.
-   * @param params The things that should be logged.
-   */
+  /** Logs `params` at `level` if the configured log level allows it. */
   private static _log(level: ConsoleLogLevel, ...params: unknown[]): void {
     this._write(level, this._channelKeeps(level), params)
   }
@@ -281,7 +276,6 @@ export class Logger {
   /** @param toOutput Whether the line reaches the channel, already weighed against the level. */
   private static _write(level: ConsoleLogLevel, toOutput: boolean, params: unknown[]): void {
     if (DEBUG_MODE) {
-      // in debug mode, we log to console with the appropriate level
       const loggableParams = this._toLoggableParams(params)
       switch (level) {
         case ConsoleLogLevel.Debug: {

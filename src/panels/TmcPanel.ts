@@ -59,7 +59,6 @@ export const SIDE_PANEL_VIEW_TYPE = "tmc.sidePanel"
  * from each. What a message does is up to its handler in `./handlers`.
  */
 export class TmcPanel {
-  // primary panel that most data is displayed in
   public static mainPanel: TmcPanel | undefined
 
   // extra panel for situations where we want to render another view beside the main one
@@ -69,7 +68,6 @@ export class TmcPanel {
 
   private readonly _actionContext: ActionContext
 
-  // if true, this is the main panel, otherwise this is the side panel
   private readonly _isMain: boolean
 
   // resent on "ready" so a reloaded webview can recover. Per-instance: the main and
@@ -92,8 +90,8 @@ export class TmcPanel {
   /**
    * Shows the submissions the submit actions report in the side panel. Call once, at activation.
    *
-   * An outcome for a submission the side panel is not showing reopens the panel on it if it is
-   * closed, and otherwise is offered in a notification, so the student's current view stays put.
+   * An outcome for a submission the side panel is not showing reopens a closed panel on it, and
+   * otherwise is offered in a notification, so the student's current view stays put.
    */
   public static showSubmissionViews(
     extensionContext: vscode.ExtensionContext,

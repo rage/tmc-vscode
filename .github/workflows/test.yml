@@ -6,9 +6,8 @@ on:
 
 permissions: read-all
 
-# A pull request from a branch in this repository is built twice, once as the
-# branch and once as the merge result. Keyed on the ref those are two groups, on
-# purpose: a push must never cancel the merge-result run a reviewer waits on.
+# A same-repo PR runs twice (branch and merge result); keyed on the ref they are
+# separate groups so a push never cancels the merge-result run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -31,49 +30,41 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # oxlint fails on an unused local, knip on an export, file or dependency
-      # nothing reaches. Exporting a dead symbol otherwise clears this job.
+      # oxlint flags unused locals, knip unreachable exports, files and dependencies.
       - name: Lint (oxlint, knip)
         run: pnpm run lint
 
       - name: Format check (oxfmt)
         run: pnpm run format:check
 
-      # tsgo skips .svelte entirely, so the webview templates and their script
-      # blocks -- the code consuming the postMessage schemas -- are only typed
-      # by the svelte-check pass this script chains on the end.
+      # tsgo skips .svelte; only the chained svelte-check types the webview templates.
       - name: Typecheck (tsgo, svelte-check)
         run: pnpm run typecheck
 
-      # tsgo is a preview compiler. Stock tsc covers the same projects plus the
-      # webview, so where the two disagree it surfaces here rather than in
-      # whoever next opens the repo in an editor.
+      # tsgo is a preview compiler; stock tsc catches where the two disagree.
       - name: Typecheck (tsc)
         run: pnpm run typecheck:tsc
 
-      # Regenerates from the committed shared/bindings.schema.json, so only the
-      # generated output can drift here; the vendored schema itself is covered by
-      # its provenance stamp below.
+      # Regenerates from the committed shared/bindings.schema.json; the schema
+      # itself is covered by its provenance stamp below.
       - name: Langs schema drift (generate:langs-schema)
         run: bash bin/checkLangsSchemaDrift.sh
 
-      # The two vendored artifacts are copied from sibling checkouts CI does not
-      # have, so it cannot re-vendor them. It asserts instead that each still
-      # matches the sha256 its provenance stamp recorded at vendoring time, which
-      # catches a hand-edit that never went through the vendoring script.
+      # CI has no sibling checkouts to re-vendor from; it checks each artifact still
+      # matches its stamped sha256, catching hand-edits that bypass the vendoring script.
       - name: Vendored langs schema stamp
         run: pnpm run vendor:langs-schema -- --check-stamp
 
-      # Fetches the schema attached to the pinned release and byte-compares, which
-      # is what catches TMC_LANGS_RUST_VERSION bumped without a re-vendor.
+      # Byte-compares against the pinned release's schema: catches a
+      # TMC_LANGS_RUST_VERSION bump without a re-vendor.
       - name: Vendored langs schema source
         run: pnpm run vendor:langs-schema -- --check
 
       - name: Vendored OpenAPI spec stamp
         run: pnpm run vendor:langs-openapi -- --check-stamp
 
-      # Fetches the spec at the rev the stamp records and byte-compares, which is
-      # what catches a stamp refreshed from a dirty or unpushed sibling checkout.
+      # Byte-compares against the spec at the stamped rev: catches a stamp refreshed
+      # from a dirty or unpushed sibling checkout.
       - name: Vendored OpenAPI spec source
         run: pnpm run vendor:langs-openapi -- --check-source
 
@@ -100,15 +91,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # The vitest unit + webview-component tiers mock `vscode` and run in
-      # Node/jsdom, so they need neither a VS Code download nor xvfb.
+      # Unit and webview-component tiers mock `vscode` in Node/jsdom: no VS Code, no xvfb.
       - name: Unit tests (vitest)
         if: matrix.os != 'ubuntu-latest'
         run: pnpm test
 
-      # One leg carries the v8 instrumentation, which is what enforces
-      # vitest.config.ts's coverage thresholds; the other two run the same suite
-      # uninstrumented.
+      # Only one leg is instrumented; it enforces vitest.config.ts's coverage thresholds.
       - name: Unit tests with coverage (vitest)
         if: matrix.os == 'ubuntu-latest'
         run: pnpm run test:coverage
@@ -137,13 +125,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # These node:test suites check the two mocks against the contracts they
-      # imitate -- `backend/mooc` against the vendored OpenAPI spec, the legacy
-      # `backend/controllers` API v8 surface against tmc-langs' own bindings --
-      # so they are what stops either drifting from the server every other test
-      # tier trusts it to stand in for. They talk to nothing but themselves: no
-      # submodules, no `backend` setup, no VS Code download, no xvfb. The script
-      # enforces the pass-count floor that stops the suite vanishing silently.
+      # Checks the mocks against their contracts (`backend/mooc` vs the vendored OpenAPI
+      # spec, `backend/controllers` vs tmc-langs' bindings) so they cannot drift.
+      # Self-contained; the script enforces a pass-count floor against a silently empty suite.
       - name: Mock backend tests (node:test)
         run: bash bin/runMockBackendTests.sh
 
@@ -164,16 +148,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Its own job rather than a step of `playwright_tests`: it needs plain Chromium instead of
-      # VS Code, and neither the mock backend, the submodules nor xvfb, so it finishes in about a
-      # minute beside that job instead of lengthening it.
+      # Separate from `playwright_tests`: needs plain Chromium, no VS Code, mock backend,
+      # submodules or xvfb.
       - name: Install Chromium
         run: pnpm --dir webview-ui exec playwright install --with-deps chromium
 
       - name: Webview accessibility tests (Playwright)
         run: pnpm --dir webview-ui run test:a11y
 
-      # The baselines are rendered with DejaVu, which the screenshot spec pins as the font.
+      # The screenshot spec pins DejaVu as the baseline font.
       - name: Install the baseline fonts
         run: sudo apt-get install -y --no-install-recommends fonts-dejavu-core
 
@@ -204,11 +187,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Several gates above consume a glob, a generated file or a vendored
-      # artifact, and each of those can go empty or stale in a way that exits 0
-      # on its own. This breaks one input per gate and asserts the gate fails on
-      # it; the green half is the other jobs running the same gates unbroken on
-      # this commit.
+      # Gates consuming a glob, generated file or vendored artifact can exit 0 when
+      # it goes empty or stale. This breaks one input per gate and asserts it fails.
       - name: Gates fail on broken input
         run: bash bin/verifyGatesCanFail.sh
 
@@ -220,15 +200,12 @@ jobs:
       CI: true
       VSCODE_TEST_VERSION: ${{ matrix.vscode != 'minimum' && matrix.vscode || '' }}
     strategy:
-      # A platform-specific failure must not cancel the other two, or their real
-      # state is unknown on exactly the runs where it matters.
+      # A failure on one platform must not cancel the others.
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        # Every leg runs the minimum `engines.vscode` declares (config.js's
-        # VSCODE_TEST_VERSION default), so the oldest VS Code the extension
-        # claims to support is actually exercised; one extra leg tracks the
-        # current release, where a VS Code change lands first.
+        # Legs run the minimum `engines.vscode` (config.js's VSCODE_TEST_VERSION
+        # default); one extra leg tracks the current release.
         vscode: [minimum]
         include:
           - os: ubuntu-latest
@@ -253,19 +230,15 @@ jobs:
           chmod -R +x cli
           cd ..
 
-      # The integration tier drives the real tmc-langs CLI inside the VS Code
-      # extension host (test-electron), so it keeps xvfb on Linux. The suite
-      # spawns the bundled mock backend itself; `pretest:integration` builds
-      # the extension + integration bundle.
+      # Drives the real tmc-langs CLI inside the extension host (test-electron), so
+      # Linux needs xvfb. The suite spawns the mock backend itself.
       - name: Integration tests (test-electron)
         uses: coactions/setup-xvfb@b6b4fcfb9f5a895edadc3bc76318fae0ac17c8b3 # v1.0.1
         with:
           run: pnpm run test:integration
 
-      # The suite writes a per-run directory of downloaded exercises, langs
-      # config and submission archives under test-artifacts/. It is the only
-      # record of what the CLI actually did, and a failure here is usually not
-      # reproducible from the log alone.
+      # test-artifacts/ holds downloaded exercises, langs config and submission
+      # archives: the only record of what the CLI did.
       - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         if: failure()
         with:
@@ -289,9 +262,8 @@ jobs:
       - name: Setup Node & pnpm
         uses: ./.github/actions/setup-node-pnpm
 
-      # `backend/cli` is what the extension downloads the tmc-langs binary from,
-      # so the mock still needs its setup; starting it is playwright.config.ts's
-      # `webServer`, and building the extension is `playwright-test` itself.
+      # `backend/cli` serves the tmc-langs binary the extension downloads, so the
+      # mock still needs setup.
       - name: Setup
         run: |
           pnpm install --frozen-lockfile

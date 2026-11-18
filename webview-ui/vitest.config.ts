@@ -1,10 +1,8 @@
 import { svelte } from "@sveltejs/vite-plugin-svelte"
 import { defineConfig } from "vitest/config"
 
-// Webview component tier: renders the Svelte 5 components with
-// @testing-library/svelte in jsdom. Proves the harness end to end (a component
-// mounts, reacts to a valid message payload, and posts messages back through
-// the mocked webview API — see src/test/setup.ts).
+// Webview component tier: renders the Svelte 5 components with @testing-library/svelte in jsdom,
+// against the mocked webview API (src/test/setup.ts).
 export default defineConfig({
   plugins: [svelte()],
   // Resolve the browser build of Svelte and @testing-library/svelte.

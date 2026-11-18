@@ -18,9 +18,7 @@ export const CourseDetailsPanelSchema = z.object({
 
 export type CourseDetailsPanel = z.infer<typeof CourseDetailsPanelSchema>
 
-// used to define messages that should only be sent to a specific instance of a panel
-// for example, a submission's result should only be sent to the ExerciseSubmission
-// panel that made it, not to another one that happens to be open
+// Addresses one open panel instance, so e.g. a result reaches only the panel that made it.
 export type TargetPanel<T extends Panel> = Pick<Extract<Panel, { type: T["type"] }>, "id" | "type">
 
 // schema equivalent of `TargetPanel<T>` for the given panel type(s)

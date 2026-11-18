@@ -12,26 +12,21 @@ minimumReleaseAge: 10080
 minimumReleaseAgeStrict: true
 minimumReleaseAgeIgnoreMissingTime: false
 
-# The Node version dependency `engines` fields are checked against. pnpm
-# requires an exact version here, so it cannot read package.json's
-# `devEngines.runtime.version` itself; .github/actions/setup-node-pnpm asserts
-# the two agree, and that field is the one to edit.
+# pnpm needs an exact version here and cannot read package.json's
+# `devEngines.runtime.version`; .github/actions/setup-node-pnpm asserts the two
+# agree, and that field is the one to edit.
 nodeVersion: 24.18.0
 
-# Reproducible resolution: resolve as of lockfile time. The npm registry does not
-# expose a per-version time field, so pnpm infers it.
+# Resolve as of lockfile time; the npm registry exposes no per-version time field,
+# so pnpm infers it.
 resolutionMode: time-based
 registrySupportsTimeField: false
 
 preferFrozenLockfile: true
 trustLockfile: true
 
-# Registry resilience. pnpm's built-in defaults (2 retries, 60s request timeout,
-# 60s retry ceiling) are tight enough that a single slow or flaky registry
-# response fails `pnpm install --frozen-lockfile` outright — every CI job in
-# .github/workflows starts with exactly that command, and none of them retry.
-# Setting this here rather than in a workflow keeps it in one place: it applies
-# to all of them, to the nested `backend` install, and to local development.
+# pnpm's defaults (2 retries, 60s timeout) let one flaky registry response fail
+# `pnpm install --frozen-lockfile`, which every CI job starts with and none retry.
 fetchRetries: 5
 fetchRetryFactor: 2
 fetchRetryMintimeout: 10000
@@ -47,41 +42,32 @@ strictDepBuilds: true
 confirmModulesPurge: false
 updateNotifier: false
 
-# Explicit decisions for every dependency that ships an install/build script
-# (required because strictDepBuilds fails on any un-decided build).
+# strictDepBuilds fails on any dependency with an undecided install/build script.
 allowBuilds:
-  # esbuild (extension-host bundler + tsx backend runner) needs its native binary
-  # placed by its install script.
+  # Its install script places the native binary.
   esbuild: true
-  # Pulled in transitively; its install script only prints a reminder message.
+  # Install script only prints a reminder.
   svelte-preprocess: false
-  # vsce's optional credential store and its code-signing helper. Neither
-  # `vsce package` nor `vsce publish -p <token>` touches them.
+  # vsce's optional credential store and signing helper; `vsce package` and
+  # `vsce publish -p <token>` do not touch them.
   keytar: false
   "@vscode/vsce-sign": false
 
 patchedDependencies:
   ts-results@3.3.0: patches/ts-results@3.3.0.patch
 
-# Security overrides for advisories in packages we do not depend on directly and
-# whose own parent has not yet released a bump. Every entry here is deliberately
-# scoped to the major line the vulnerable copy resolves to, and every entry is a
-# version the parent's declared range already allows — so this only pulls a
-# security patch forward, it never forces an incompatible major on a dependent.
-#
-# All of these are dev/build/test tooling; none of them are reachable from the
-# packaged extension (see `pnpm audit --prod`).
+# Security overrides for transitive packages whose parent has not released a bump.
+# Each is scoped to the major line the vulnerable copy resolves to and allowed by
+# the parent's declared range, so it only pulls a patch forward. All are dev/build/
+# test tooling, unreachable from the packaged extension (see `pnpm audit --prod`).
 overrides:
   # GHSA-v2hh-gcrm-f6hx: fast-uri mis-parses a backslash authority delimiter.
-  # Reached via ajv (`fast-uri: ^3.0.1`) inside the mock backend's OpenAPI
-  # request/response validation. 3.1.4 is the patch release on the same line.
+  # Reached via ajv in the mock backend's OpenAPI validation.
   fast-uri@3: 3.1.4
-  # GHSA-52cp-r559-cp3m: js-yaml prototype pollution. Reached via
-  # @hey-api/json-schema-ref-parser, which pins js-yaml exactly at the
-  # vulnerable 4.2.0; 4.3.0 is the security release on the same major and is
-  # exercised by `pnpm run generate:langs-schema`.
+  # GHSA-52cp-r559-cp3m: js-yaml prototype pollution. @hey-api/json-schema-ref-parser
+  # pins the vulnerable 4.2.0; `pnpm run generate:langs-schema` exercises 4.3.0.
   js-yaml@4: 4.3.0
 
-# This is a single workspace, so we deliberately keep ONE shared lockfile:
-# sharedWorkspaceLockfile / link-protocol settings (linkWorkspacePackages,
-# preferWorkspacePackages, saveWorkspaceProtocol) are omitted on purpose.
+# One shared lockfile on purpose: sharedWorkspaceLockfile and the link-protocol
+# settings (linkWorkspacePackages, preferWorkspacePackages, saveWorkspaceProtocol)
+# are omitted.

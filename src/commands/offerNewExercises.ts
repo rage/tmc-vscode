@@ -9,10 +9,9 @@ import { downloadNewExercises } from "./downloadNewExercises"
 import { showCourseHomeButton } from "./showCourseHome"
 
 /**
- * Acts on the new exercises a refresh found, as `testMyCode.newExercises` says: asks to download
- * them, downloads them, or leaves them to the course home's notice. Each course's new exercises
- * are acted on once, unless the student asks to be reminded later; a course whose home is on
- * screen gets no notification, as its notice says it.
+ * Acts on the new exercises a refresh found, per `testMyCode.newExercises`: asks to download,
+ * downloads, or leaves them to the course home. Each course's new exercises are offered once
+ * unless the student asks for a reminder; no notification for a course whose home is on screen.
  */
 export function offerNewExercises(
   actionContext: ReadyActionContext,

@@ -6,10 +6,7 @@ import { isSessionLost, presentationFor } from "../errors"
 import { Logger } from "../utilities"
 import { errorDetails } from "./errorDetails"
 
-/**
- * One row of a quick pick: what the user reads and what picking it yields. Rows are
- * resolved by identity, so two may share a label.
- */
+/** One quick-pick row: what the user reads and what picking it yields. */
 export interface Item<T> {
   label: string
   value: T
@@ -30,10 +27,7 @@ export function separator(label: string): Separator {
   return { label, kind: vscode.QuickPickItemKind.Separator }
 }
 
-/**
- * A notification button: its label, and what pressing it does. Buttons are
- * resolved by identity rather than by label, so two may share a label.
- */
+/** A notification button: label and press callback. Resolved by identity, so labels may repeat. */
 export type NotificationButton = [label: string, callback: () => void]
 
 type NotificationAction = vscode.MessageItem & { callback: () => void }
@@ -58,14 +52,10 @@ export interface FractionProgress {
 }
 
 /**
- * Quick-pick rows for a list of courses, labelled by course title, and described by the backend
- * they come from only where another course has the same title.
+ * Quick-pick rows for courses, labelled by title and described by backend only where titles
+ * collide. Titles are unique only within one backend, so every course picker builds rows here.
  *
- * Every place the user chooses among their courses builds its rows here: titles are only
- * unique within one backend, and service names are otherwise kept from students.
- *
- * @param decorate Replaces the label for one course, given the course and the title it would
- * otherwise get — for marking the workspace that is already open, and nothing heavier.
+ * @param decorate Replaces one course's label, given the title it would otherwise get.
  */
 export function courseSelectionItems(
   courses: readonly LocalCourseData[],
@@ -83,20 +73,17 @@ export function courseSelectionItems(
   })
 }
 
-/**
- * A class that provides a centralized interface to user dialogue.
- */
+/** The single interface to user dialogs: confirmations, notifications, progress and pickers. */
 export default class Dialog {
   private _reportSessionLost: ((cause: Error) => boolean) | undefined
 
   /**
    * Asks the user to confirm an action, in a modal dialog.
    *
-   * @param message The question, naming what the action acts on, e.g. "Remove Python from your
-   * courses?".
-   * @param options `confirmLabel` is the verb on the confirm button, e.g. "Remove Course";
-   * the dialog adds Cancel itself. `detail` says what follows from confirming.
-   * @returns Whether the user confirmed. Cancel, Escape and closing the dialog all say no.
+   * @param message The question, naming what the action acts on.
+   * @param options `confirmLabel` is the verb on the confirm button; Cancel is added.
+   * `detail` says what follows from confirming.
+   * @returns Whether the user confirmed; Cancel, Escape and closing all say no.
    */
   public async confirm(
     message: string,
@@ -129,8 +116,7 @@ export default class Dialog {
   }
 
   /**
-   * Wrapper for `vscode.window.showErrorMessage` that resolves optional items to associated
-   * callbacks.
+   * Shows an error notification with `items` as buttons.
    *
    * @param error What failed: logged, and kept for the Show Details button it adds.
    */
@@ -154,19 +140,19 @@ export default class Dialog {
 
   /**
    * Takes over {@link reportError}'s notification for a lost session, which the session's own
-   * warning already tells about; `undefined` hands it back. The reporter returns `false` for a
-   * session the user logged out of, which takes a neutral Log In prompt instead.
+   * warning already covers; `undefined` hands it back. The reporter returns `false` for a
+   * session the user logged out of, which gets a neutral Log In prompt instead.
    */
   public setSessionLostReporter(reporter: ((cause: Error) => boolean) | undefined): void {
     this._reportSessionLost = reporter
   }
 
   /**
-   * Tells the session's own warning about `error` if it is a lost session, for a failure shown
+   * Tells the session's own warning about `error` if it is a lost session, for failures shown
    * somewhere other than {@link reportError}.
    *
-   * @returns Whether `error` is the missing session of a user who logged out or never logged in,
-   * which is no failure to show: a screen's own logged-out notice already asks to log in.
+   * @returns Whether `error` is just a missing session (logged out or never logged in), which is
+   * no failure to show: the screen's logged-out notice already asks to log in.
    */
   public noteSessionLost(error: Error): boolean {
     if (this._reportSessionLost && isSessionLost(error)) {
@@ -176,12 +162,10 @@ export default class Dialog {
   }
 
   /**
-   * Reports a failed operation: `message` says what was being done, and `error` supplies
-   * the rest of the sentence and any buttons its class prescribes.
-   *
-   * The notification carries the sentence and nothing else: the error's diagnostics —
-   * details, cause chain and the log around it — are behind its "Show Details" button. An operation the error only held back, such as
-   * one refused in Restricted Mode, is a warning with the error's sentence alone.
+   * Reports a failed operation: `message` says what was being done, `error` supplies the rest
+   * of the sentence and any buttons its class prescribes. Diagnostics sit behind "Show Details".
+   * An error that only held the operation back, such as Restricted Mode, is a warning with the
+   * error's sentence alone.
    */
   public async reportError(message: string, error: Error): Promise<void> {
     if (this._reportSessionLost && isSessionLost(error)) {
@@ -207,11 +191,10 @@ export default class Dialog {
   }
 
   /**
-   * Asks the user to type `word` to confirm, for an action nothing can undo.
+   * Asks the user to type `word` to confirm an irreversible action. Use {@link confirm}
+   * otherwise: typing is friction only data loss earns.
    *
-   * Everything else confirms with {@link confirm}: typing is friction only data loss earns.
-   *
-   * @returns Whether the user typed `word`, in its case. Escape says no.
+   * @returns Whether the user typed `word`, case-sensitively. Escape says no.
    */
   public async explicitConfirmation(prompt: string, word = "Yes"): Promise<boolean> {
     const matches = (value: string): boolean => value.trim() === word
@@ -226,8 +209,7 @@ export default class Dialog {
   }
 
   /**
-   * Wrapper for `vscode.window.showInformationMessage` that resolves optional items to their
-   * associated callbacks.
+   * Shows an information notification with `items` as buttons.
    */
   public async notification(message: string, ...items: NotificationButton[]): Promise<void> {
     return this._notify(vscode.window.showInformationMessage, message, items)
@@ -245,11 +227,9 @@ export default class Dialog {
   }
 
   /**
-   * Shows a progress notification to the user.
+   * Shows progress for `task` for as long as it runs.
    *
-   * @param message A prompt to be displayed to the user.
-   * @param task Long task that determines the duration of the notification.
-   * The cancellation token only fires when `cancellable` is set.
+   * @param task Its cancellation token only fires when `cancellable` is set.
    * @param options Set `cancellable` to offer a Cancel button. `location` defaults to a
    * notification; a view location shows the view's own progress bar instead, and no message.
    */
@@ -277,12 +257,10 @@ export default class Dialog {
   }
 
   /**
-   * Prompts the user with a selection of items and returns their corresponding value.
+   * Prompts the user to pick one of `items` and returns its value, or `undefined` if dismissed.
    *
-   * @param prompt The quick pick's placeholder, or an object also giving the
-   * pick a title for context.
-   * @param items The rows, resolved by identity: two may share a label as long as the
-   * description tells them apart.
+   * @param prompt The quick pick's placeholder, or an object also giving it a title.
+   * @param items Resolved by identity: rows may share a label if the description tells them apart.
    */
   public async selectItem<T>(
     prompt: string | { title: string; placeHolder: string; matchOnDescription?: boolean },
@@ -301,16 +279,15 @@ export default class Dialog {
   }
 
   /**
-   * Announces a finished operation in the status bar for a few seconds, for news the user
-   * need not act on. Anything with a follow-up belongs in {@link notification}.
+   * Announces a finished operation in the status bar for a few seconds. Anything the user
+   * may act on belongs in {@link notification}.
    */
   public statusMessage(message: string): void {
     vscode.window.setStatusBarMessage(message, STATUS_MESSAGE_MS)
   }
 
   /**
-   * Wrapper for `vscode.window.showWarningMessage` that resolves optional items to associated
-   * callbacks.
+   * Shows a warning notification with `items` as buttons.
    */
   public async warningNotification(message: string, ...items: NotificationButton[]): Promise<void> {
     return this._notify(vscode.window.showWarningMessage, message, items)
@@ -319,8 +296,8 @@ export default class Dialog {
   /**
    * Shows `message` with one button per item and runs the pressed button's callback.
    *
-   * @param show the `vscode.window.show*Message` overload taking `MessageItem`s,
-   * which returns the pressed item itself, so duplicate labels stay distinct.
+   * @param show A `vscode.window.show*Message` overload; it returns the pressed item itself,
+   * so duplicate labels stay distinct.
    */
   private async _notify(
     show: ShowNotification,
@@ -333,12 +310,9 @@ export default class Dialog {
   }
 
   /**
-   * Wraps increment-style `vscode.Progress` with a version that takes an absolute
-   * completion fraction instead. This is mostly useful when using
-   * `vscode.window.withProgress`.
+   * Adapts increment-style `vscode.Progress` to absolute completion fractions.
    *
-   * Callers may report a fraction lower than a previous report; the bar then
-   * stays where it is, but the report's message is still shown.
+   * A fraction below an earlier report leaves the bar where it is; the message still shows.
    */
   private _fractionProgressWrapper(
     progress: vscode.Progress<{ message?: string; increment: number }>,

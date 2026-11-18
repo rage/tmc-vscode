@@ -1,10 +1,8 @@
 import { vi } from "vitest"
 
 /**
- * A loose auto-mock: every property access yields a memoized `vi.fn()`, so
- * any method can be called (returning `undefined`) without being explicitly
- * stubbed. Used for the placeholder fields of the action context that a
- * given action never touches.
+ * A loose auto-mock: every property access yields a memoized `vi.fn()` returning `undefined`.
+ * For action-context fields an action never touches.
  */
 export function autoMock<T>(): T {
   const cache = new Map<PropertyKey, unknown>()

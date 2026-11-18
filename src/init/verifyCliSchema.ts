@@ -11,18 +11,12 @@ import { Logger } from "../utilities"
 const VERIFIED_SCHEMA_KEY = "cli-schema-verified-for"
 
 /**
- * Startup self-check for the tmc-langs-cli output contract.
+ * Startup self-check that the CLI's output contract matches the extension's: byte-compares
+ * `tmc-langs-cli schema` with the vendored `shared/bindings.schema.json`, so a version
+ * mismatch is reported up front rather than as opaque JSON validation failures later.
+ * A match is remembered in `memento` per CLI file and extension version.
  *
- * Runs `tmc-langs-cli schema` and byte-compares it against the vendored
- * `shared/bindings.schema.json` (the same file the generated zod schemas in
- * `shared/langsSchema.ts` are checked against). A mismatch means the CLI
- * binary and the extension were built against different contract versions,
- * which would otherwise only surface later as opaque JSON validation
- * failures. A match is remembered in `memento` for this CLI file and extension
- * version, which skips the check until one of them changes.
- *
- * Diagnostic only: never throws; a mismatch is reported via `Logger.warn`
- * instead of failing activation.
+ * Diagnostic only: never throws; a mismatch goes to `Logger.warn`, not activation failure.
  */
 export async function verifyCliSchema(
   cliPath: string,

@@ -5,11 +5,9 @@ import { AuthorizationError } from "../errors"
 import type { ReadyActionContext } from "./types"
 
 /**
- * Stands for both "the user is not logged in to courses.mooc.fi" and the pick
- * entry offering to fix that. The device flow is offered here because the
- * "Log In" command is gated on the `LoggedIn` context key, which a tmc token
- * stored before courses.mooc.fi logins satisfies on its own — so for those
- * users this is the only route to a courses.mooc.fi login.
+ * Stands for both "not logged in to courses.mooc.fi" and the pick entry offering to fix that.
+ * The "Log In" command is gated on `LoggedIn`, which a legacy stored tmc token already
+ * satisfies, so for those users this is the only route to a courses.mooc.fi login.
  */
 export const MOOC_LOGIN = "mooc-login"
 

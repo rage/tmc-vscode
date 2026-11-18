@@ -4,8 +4,7 @@ import type { FrameLocator, Locator, Page } from "@playwright/test"
 const MAX_ACTIVATION_CLICKS = 3
 const ACTIVATION_TIMEOUT_MS = 10_000
 
-// A target inside a webview frame that VS Code has not created yet cannot be
-// queried at all, which is "not visible yet" rather than a failure.
+// A target in a webview frame VS Code has not created yet throws on query: "not visible yet".
 async function isVisibleNow(target: Locator): Promise<boolean> {
   try {
     return await target.isVisible()
@@ -18,11 +17,10 @@ async function isVisibleNow(target: Locator): Promise<boolean> {
  * Clicks `trigger` until `target` becomes visible, at most
  * {@link MAX_ACTIVATION_CLICKS} times.
  *
- * VS Code renders the extension's activity bar entry and its tree view before
- * the extension host has finished activating, and a click landing in that
- * window opens nothing and reports no error -- so the click has to be retried
+ * VS Code renders the activity bar entry and tree view before the extension host
+ * has activated, and an early click opens nothing silently, so it is retried
  * against its outcome. `description` is suffixed with "after N clicks" in the
- * failure message, so phrase it as "the X did not open".
+ * failure message; phrase it as "the X did not open".
  */
 export async function clickUntilVisible(
   trigger: Locator,
@@ -49,8 +47,8 @@ export async function clickUntilVisible(
 }
 
 /**
- * Waits for `target`, inside a webview, to be visible. VS Code replaces a webview's frame when it
- * reloads the document, which ends a plain wait on the old frame at once.
+ * Waits for `target`, inside a webview, to be visible. A plain wait fails at once when VS Code
+ * replaces the webview's frame on document reload.
  */
 export async function expectVisibleInWebview(target: Locator, timeout = 30_000): Promise<void> {
   await expect(async () => {
@@ -96,10 +94,8 @@ export class TmcPage {
   /**
    * The toast VS Code pops for a `Dialog` notification, matched on `text`.
    *
-   * Scoped to the toast list because VS Code also mirrors every notification into
-   * an off-screen `.monaco-alert` aria-live node, so an unscoped text match
-   * resolves to two elements for a single notification. A notification genuinely
-   * raised twice still stacks two toasts here and trips strict mode.
+   * Scoped to the toast list because VS Code also mirrors each notification into an
+   * off-screen `.monaco-alert` aria-live node, which would match twice.
    */
   public notificationToast(text: string): Locator {
     return this.page.locator(".notifications-toasts").getByText(text)
@@ -113,8 +109,8 @@ export class TmcPage {
   /** Runs the command titled `title` ("Category: Name") from the command palette. */
   public async runPaletteCommand(title: string): Promise<void> {
     const palette = this.page.locator(".quick-input-widget")
-    // A webview that has just taken the focus may swallow the key before it forwards keys, and
-    // an editor the extension opens meanwhile closes the palette; a click that lands ran it.
+    // A just-focused webview may swallow the key, and an editor opened meanwhile closes the
+    // palette; a click that lands ran it.
     await expect(async () => {
       if (!(await palette.locator("input").isVisible())) {
         await this.page.keyboard.press("F1")
@@ -146,9 +142,8 @@ export class TmcPage {
 
   /**
    * Runs a command the palette lists only while the active editor is an exercise, such as
-   * "TestMyCode: Reset Exercise". The palette checks that once, when it opens, so this
-   * first waits for the Submit editor action, shown under the same `when` keys
-   * (package.json).
+   * "TestMyCode: Reset Exercise". The palette checks that once on opening, so this first
+   * waits for the Submit editor action, which has the same `when` keys (package.json).
    */
   public async runExercisePaletteCommand(title: string): Promise<void> {
     await expect(

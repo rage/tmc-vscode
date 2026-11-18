@@ -64,9 +64,8 @@ suite("ExerciseIdentifier", function () {
   })
 
   test("template-stringing the identifier object is the wrong way to key it", function () {
-    // Guard against the recurring bug class: an ExerciseIdentifier is a tagged
-    // union object, so `${id}` collapses to "[object Object]" and every id
-    // looks identical. toString is the only correct way to derive a key.
+    // `${id}` on a tagged-union identifier collapses to "[object Object]", so every id would
+    // look identical; toString is the only correct key.
     const id = idOfTmcExercise(5)
     expect(`${id}`).toBe("[object Object]")
     expect(ExerciseIdentifier.toString(id)).toBe("5")

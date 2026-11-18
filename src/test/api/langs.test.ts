@@ -36,10 +36,9 @@ import {
 import { courseData, courseDetails, moocCourse, submissionFinished } from "../fixtures/cliOutput"
 import { idOfMoocCourse, idOfMoocExercise, idOfTmcExercise } from "../fixtures/identifiers"
 
-// `_spawnLangsProcess` is private; cast to `any` to stub it without spawning a
-// real tmc-langs-cli process.
+// `_spawnLangsProcess` is private; casting to `any` stubs it without spawning the CLI.
 
-// Records the argv of each invocation and short-circuits before spawning.
+// Records each invocation's argv and short-circuits before spawning.
 function spyOnSpawn(langs: Langs): { args: string[] }[] {
   const calls: { args: string[] }[] = []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -50,7 +49,7 @@ function spyOnSpawn(langs: Langs): { args: string[] }[] {
   return calls
 }
 
-// Stubs the spawn so it resolves to a caller-provided response per invocation.
+// Stubs the spawn with a caller-provided response per invocation.
 function stubSpawn(
   langs: Langs,
   respond: (callIndex: number, args: string[]) => Result<OutputData, BaseError>,
@@ -71,9 +70,8 @@ function stubSpawn(
   return calls
 }
 
-// Every fixture goes through the schema `Langs` validates real CLI stdout with, so a
-// payload the CLI could not emit fails where it is written rather than propping up an
-// assertion that could never hold in production.
+// Fixtures go through the schema `Langs` validates CLI stdout with, so a payload the CLI
+// could not emit fails where it is written.
 function cliOutput(value: unknown): OutputData {
   return CliOutputData.parse(value)
 }
@@ -118,13 +116,8 @@ function dataOutput(kind: string, data: unknown): OutputData {
   })
 }
 
-/**
- * An output that carries no data: an `executed-command` with nothing to report
- * (e.g. `reset-exercise`), or one of the login-state results.
- */
-// The `tmc-config` payload keeps its settings in a flattened table the contract does not
-// declare, so `cliOutput` would validate the line and drop them. Feeding the line through
-// the decoder `_spawnLangsProcess` uses keeps the fixture honest about what a caller gets.
+// The `tmc-config` payload keeps settings in a flattened table the contract does not
+// declare, so `cliOutput` would drop them; the real decoder keeps them.
 function decodedOutput(line: unknown): OutputData {
   const { events } = decodeLangsStdout("", JSON.stringify(line) + "\n")
   const output = events.flatMap((event) => (event.kind === "output-data" ? [event.output] : []))
@@ -132,6 +125,7 @@ function decodedOutput(line: unknown): OutputData {
   return output[0] as OutputData
 }
 
+/** An output with no data: an `executed-command` reporting nothing, or a login-state result. */
 function nullOutput(message = "ok", result: OutputResult = "executed-command"): OutputData {
   return cliOutput({
     "output-kind": "output-data",
@@ -142,8 +136,7 @@ function nullOutput(message = "ok", result: OutputResult = "executed-command"): 
   })
 }
 
-// The mooc contract types every id as a UUID, so a fixture cannot use a readable
-// stand-in; these are valid v4 UUIDs whose tail is the number given.
+// The mooc contract types ids as UUIDs; these are valid v4 UUIDs ending in `n`.
 function uuid(n: number): string {
   return `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
 }
@@ -443,8 +436,7 @@ suite("Langs class arg building", function () {
   })
 
   test("restoreSubmission reports a submission with no downloadable files", async function () {
-    // A submission the server has no files for makes the CLI report
-    // `nothing-to-download` instead of failing.
+    // The CLI reports `nothing-to-download` rather than failing.
     const langs = newLangs()
     stubSpawn(langs, () => Ok(dataOutput("mooc-old-submission-restore", "nothing-to-download")))
     const result = await langs.restoreSubmission(MOOC_RESTORE_TARGET, "/path", true)
@@ -896,8 +888,7 @@ suite("Langs error-kind mapping", function () {
       expect(result.val).toBeInstanceOf(errorClass)
     })
 
-    // invalid-token is excluded deliberately: it means the stored credential was
-    // rejected, which is a clean signal that needs no diagnostics attached.
+    // invalid-token is a clean signal that needs no diagnostics.
     if (kind !== "invalid-token") {
       test(`${String(kind)} carries the CLI trace and the process stderr`, async function () {
         const langs = newLangs()
@@ -967,8 +958,7 @@ suite("Langs error-kind mapping", function () {
   })
 
   test("an error kind carries the CLI's message and no remediation of its own", async function () {
-    // `presentationFor` owns every user-facing sentence, so a second copy composed here
-    // would drift from it.
+    // `presentationFor` owns the user-facing sentences.
     for (const kind of ["forbidden", "not-enrolled", "upload-expired", "obsolete-client"]) {
       const langs = newLangs()
       stubSpawn(langs, () => Ok(errorOutput(kind, "Failed to get course")))
@@ -1325,8 +1315,7 @@ suite("Langs response cache", function () {
 
 suite("Langs exercise-update cache invalidation", function () {
   // Each backend's download clears its own cached update list ("exercise-updates" vs
-  // "mooc-exercise-updates"); a stale one keeps just-updated exercises showing as outdated
-  // for the whole cache lifetime.
+  // "mooc-exercise-updates"), or updated exercises keep showing as outdated.
   test("a mooc download invalidates the cached mooc exercise-update list", async function () {
     const langs = newLangs()
     let updateCheckCalls = 0
@@ -1387,8 +1376,7 @@ suite("Langs exercise-update cache invalidation", function () {
   })
 })
 
-// Drives `_executeLangsCommand` with a caller-chosen result and stderr, so the
-// assertions are about what reaches the returned error rather than about spawning.
+// Drives `_executeLangsCommand` with a chosen result and stderr, to assert on the returned error.
 function stubSpawnWithStderr(
   langs: Langs,
   result: Result<OutputData, BaseError>,

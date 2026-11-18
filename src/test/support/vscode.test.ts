@@ -2,9 +2,8 @@ import * as vscode from "vscode"
 
 suite("the vscode mock", () => {
   test("every registration the extension makes returns a disposable", () => {
-    // The extension pushes each of these into `context.subscriptions`, so a mock
-    // returning `undefined` fills that array with nothing to dispose and hides a
-    // leaked listener from any test that shuts a context down.
+    // A mock returning `undefined` would leave nothing to dispose in
+    // `context.subscriptions`, hiding leaked listeners.
     const registrations = [
       (): unknown => vscode.commands.registerCommand("tmc.mockProbe", () => {}),
       (): unknown =>

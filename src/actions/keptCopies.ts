@@ -85,9 +85,10 @@ async function filesUnder(entry: string): Promise<string[]> {
 }
 
 /**
- * Fingerprints the exercise's student files and records them as the newest copy of kind `copy`,
- * and after a download, reset or restore which files there are, for
+ * Fingerprints the exercise's student files and records them as the newest copy of kind `copy`;
+ * after a download, reset or restore it also records which files exist, for
  * {@link findMissingStudentFiles}. Never rejects; files that cannot be read record nothing.
+
  */
 export async function recordKeptCopy(
   actionContext: ReadyActionContext,

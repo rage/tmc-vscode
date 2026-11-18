@@ -2,34 +2,23 @@
 // stdout contract, from the vendored JSON Schema artifact.
 //
 // Pipeline:
-//   shared/bindings.schema.json  (schemars, serialize contract; re-vendor with
-//                                 bin/updateLangsSchema.sh)
+//   shared/bindings.schema.json  (re-vendor with `npm run vendor:langs-schema`)
 //     -> minimal OpenAPI 3.1 doc (this script, generic transforms only)
 //     -> @hey-api/openapi-ts (zod plugin)  -> shared/generated/langs/zod.gen.ts
 //     -> public aliases (this script)      -> shared/generated/langs/index.ts
 //
-// shared/langsSchema.ts re-exports index.ts and adds the handful of schemas
-// that carry a client-side decision. Everything else reaches consumers without
-// anyone editing that file, so a new CLI type cannot be silently left out.
+// shared/langsSchema.ts re-exports index.ts and adds only the schemas that carry
+// a client-side decision, so a new CLI type cannot be silently left out.
 //
-// Run via `npm run generate:langs-schema`. This script only regenerates from
-// the already-vendored shared/bindings.schema.json -- it does not re-vendor
-// (use `npm run vendor:langs-schema` for that, which needs a local
-// tmc-langs-rust checkout). The generated files are committed; a CI step
-// re-runs this script and diffs shared/generated to catch drift (see
-// .github/workflows/test.yml).
+// Run via `npm run generate:langs-schema`. Generated files are committed; CI
+// re-runs this and diffs shared/generated to catch drift.
 //
-// The transforms applied to the JSON Schema are all GENERIC (no
-// type-specific hacks):
-//   1. #/$defs/X  ->  #/components/schemas/X   (OpenAPI component refs)
-//   2. "$ref with sibling keywords"  ->  "allOf: [{$ref}] + siblings".
-//      Semantics-preserving in JSON Schema 2020-12 (siblings of $ref are
-//      ANDed), but codegen tools reliably honor allOf while dropping $ref
-//      siblings -- this is what keeps the internally-tagged-enum discriminators
-//      (output-kind / output-data-kind / update-data-kind) intact.
-//   3. strip `format: "date-time"` -- generated validators map it to Z-only ISO
-//      datetime, but real TMC timestamps carry +03:00 offsets, so timestamps
-//      are validated as plain strings instead.
+// Transforms are generic (no type-specific hacks):
+//   1. #/$defs/X -> #/components/schemas/X
+//   2. $ref with siblings -> allOf: [{$ref}] + siblings. Codegen drops $ref
+//      siblings but honors allOf, which keeps the tagged-enum discriminators.
+//   3. strip `format: "date-time"`: generated validators accept only Z-suffixed
+//      ISO, but real TMC timestamps carry +03:00 offsets.
 import { execFileSync } from "node:child_process"
 import fs from "node:fs"
 import { createRequire } from "node:module"
@@ -57,13 +46,11 @@ function walk(node, fn) {
   }
 }
 
-// 1. #/$defs/X -> #/components/schemas/X
 walk(root, (n) => {
   if (typeof n.$ref === "string" && n.$ref.startsWith("#/$defs/")) {
     n.$ref = "#/components/schemas/" + n.$ref.slice("#/$defs/".length)
   }
 })
-// 2. $ref with siblings -> allOf
 walk(root, (n) => {
   if (typeof n.$ref === "string" && Object.keys(n).length > 1) {
     const ref = n.$ref
@@ -71,22 +58,15 @@ walk(root, (n) => {
     n.allOf = [...(n.allOf ?? []), { $ref: ref }]
   }
 })
-// 3. strip date-time formats
 walk(root, (n) => {
   if (n.format === "date-time") {
     delete n.format
   }
 })
-// 4. materialize boolean-`true` subschemas sitting in schema positions.
-//    JSON Schema allows `true` (accept-anything) as a subschema, and schemars
-//    emits it for any-typed but REQUIRED `serde_json::Value` fields (e.g. the
-//    grading status' `feedback_json`, the `token` output-data). The zod
-//    generator silently DROPS such properties -- so a required key vanishes from
-//    both the generated type and the validation. Replacing `true` with the
-//    equivalent empty object schema `{}` makes the generator emit `z.unknown()`
-//    (same as it already does for `additionalProperties: true`), preserving the
-//    key. Only boolean schemas in real schema positions are touched; boolean
-//    KEYWORDS (uniqueItems, readOnly, ...) are left alone.
+// 4. Replace boolean-`true` subschemas with `{}`. schemars emits `true` for required
+//    `serde_json::Value` fields and the zod generator silently drops such properties;
+//    `{}` yields `z.unknown()` and keeps the key. Boolean keywords (uniqueItems, ...)
+//    are left alone.
 const SCHEMA_MAP_KEYWORDS = ["properties", "patternProperties", "$defs", "definitions"]
 const SCHEMA_SINGLE_KEYWORDS = [
   "additionalProperties",
@@ -131,8 +111,7 @@ const defs = root.$defs ?? {}
 delete root.$defs
 delete root.$schema
 
-// Components-only doc (empty paths): keeps generation to the schema types and
-// avoids emitting dummy endpoint/client artifacts (ClientOptions, ReadCliOutput*).
+// Empty `paths` avoids dummy endpoint/client artifacts (ClientOptions, ReadCliOutput*).
 const doc = {
   openapi: "3.1.1",
   info: { title: "tmc-langs-cli stdout contract", version: "0.0.0" },
@@ -144,10 +123,8 @@ const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "langs-openapi-"))
 const openapiPath = path.join(tmpDir, "langs.openapi.json")
 fs.writeFileSync(openapiPath, JSON.stringify(doc, null, 2) + "\n")
 
-// The package's own entry point, run through this Node, rather than the
-// node_modules/.bin shim: on Windows that shim is a `.cmd`/`.ps1` pair that
-// execFileSync cannot spawn. Only package.json is exported, so the bin path
-// comes from the manifest instead of being spelled out here.
+// Not the node_modules/.bin shim: on Windows it is a `.cmd`/`.ps1` pair execFileSync
+// cannot spawn. Only package.json is exported, hence the bin path from the manifest.
 const openapiTsManifest = require.resolve("@hey-api/openapi-ts/package.json")
 const openapiTsBin = path.resolve(
   path.dirname(openapiTsManifest),
@@ -162,11 +139,9 @@ try {
   fs.rmSync(tmpDir, { recursive: true, force: true })
 }
 
-// shared/langsSchema.ts declares `CliOutput` wrapped in a preprocess step and
-// `MoocOldSubmissionRestore` with a caveat the Rust doc comment does not carry,
-// so an alias here would shadow the hand-written one silently. The numbered
-// `StatusUpdate*` are schemars' monomorphizations of the Rust generic that
-// `zStatusUpdateData` already unions.
+// `CliOutput` and `MoocOldSubmissionRestore` are hand-written in shared/langsSchema.ts
+// (preprocess step; a caveat the Rust docs lack). The numbered `StatusUpdate*` are
+// schemars' monomorphizations that `zStatusUpdateData` already unions.
 const notAliased = new Set([
   "CliOutput",
   "MoocOldSubmissionRestore",
@@ -197,8 +172,7 @@ for (const name of notAliased) {
 const aliases = generated.filter((schema) => !notAliased.has(schema.name))
 aliases.sort((a, b) => a.name.localeCompare(b.name))
 
-// A name exported from both files would resolve to the shim's copy under
-// `export *`, quietly turning a generated schema into a hand-written one.
+// A name exported from both files resolves to the shim's copy under `export *`.
 const shimSource = fs.readFileSync(path.join(repoRoot, "shared", "langsSchema.ts"), "utf8")
 const shimExports = new Set(
   [...shimSource.matchAll(/^export (?:const|type|interface|function|class) ([A-Za-z0-9_]+)/gm)].map(

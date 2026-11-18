@@ -68,14 +68,14 @@ export function createMockActionContext(
     startup: {
       kind: "ready",
       accountHandover: new AccountHandover(createMockMemento()),
-      // Refuses nothing: `refusal` resolves to `undefined`.
+      // `refusal` resolves to `undefined`.
       aiUseGate: autoMock<AiUseGate>(),
       courseWorkspaceSwitches: autoMock<CourseWorkspaceSwitches>(),
       exerciseDecorationProvider: autoMock<ExerciseDecorationProvider>(),
       keptCopies: new KeptCopies(createMockMemento()),
       langs: autoMock<Langs>(),
       resources: autoMock<Resources>(),
-      // Refuses nothing: `refusal` returns `undefined`.
+      // `refusal` returns `undefined`.
       trustGate: autoMock<WorkspaceTrustGate>(),
       userData: autoMock<UserData>(),
       workspaceManager: autoMock<WorkspaceManager>(),

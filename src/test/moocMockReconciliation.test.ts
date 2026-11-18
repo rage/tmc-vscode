@@ -24,26 +24,19 @@ import {
   TmcExerciseTask,
 } from "../../shared/langsSchema"
 
-// Reconciles the two independently-generated descriptions of the same wire: the
-// mooc mock validates against the OpenAPI spec vendored from
-// secret-project-331, while the extension validates the CLI's stdout against
-// zod schemas generated from tmc-langs-rust's bindings. Nothing else compares
-// them, so a shape that satisfies one and not the other slips through (the
-// submit part-name mismatch was one of those).
+// Reconciles the two independently generated descriptions of the wire: the mooc mock validates
+// against the OpenAPI spec vendored from secret-project-331, the extension validates CLI stdout
+// against zod schemas generated from tmc-langs-rust's bindings. Nothing else compares them, so a
+// shape satisfying one but not the other slips through. Drives the mock's shared endpoints over
+// HTTP and validates each payload with the extension's zod schema.
 //
-// This boots the mock, drives the shared mooc endpoints over HTTP, and validates
-// each response payload with the extension's zod schema for that type.
-//
-// Id spaces (mirrors the mock/backend): `submit` returns both an
-// exercise-TASK-submission id (what /grading is polled with) and an
-// exercise-SLIDE-submission id (what the submissions list, /download and /share
-// use). A submission is made in two calls: upload files, then submit an
-// `answer_kind: "file"` body naming them.
+// Id spaces: `submit` returns an exercise-TASK-submission id (polled via /grading) and an
+// exercise-SLIDE-submission id (used by the submissions list, /download and /share). A submission
+// is two calls: upload files, then submit an `answer_kind: "file"` body naming them.
 
 const listen = (): Promise<{ server: Server; base: string; mock: MoocMockControls }> =>
   new Promise((resolve) => {
-    // This suite reconciles response shapes, not auth; the mock enforces a
-    // bearer token by default, so turn it off here.
+    // Shapes, not auth: the mock requires a bearer by default.
     const app = createMoocApp({ requireAuth: false })
     const server = app.listen(0, "127.0.0.1", () => {
       const addr = server.address()
@@ -54,19 +47,12 @@ const listen = (): Promise<{ server: Server; base: string; mock: MoocMockControl
     })
   })
 
-// The CLI does not consume the wire ExerciseSlide verbatim: its
-// `TryFrom<api::ExerciseSlide> for TmcExerciseSlide` and, per task,
+// Hand-written replica of the CLI's `TryFrom<api::ExerciseSlide> for TmcExerciseSlide` and
 // `TryFrom<api::ExerciseTask> for TmcExerciseTask`
-// (tmc-langs-rust/crates/tmc-mooc-client/src/exercise.rs) enrich each task with
-// a top-level `checksum` lifted from its public_spec, and PublicSpec carries a
-// `browser_test` field (null for editor tasks). The mock emits the bare wire
-// shape, so we apply that same minimal enrichment before checking the payload
-// against the CLI-stdout schema (`TmcExerciseSlide`).
-//
-// This function IS the wire<->stdout reconciliation for the exercise shape, and
-// it is a hand-written replica of that Rust: a change to either TryFrom has to
-// be made here too, or this file goes on reconciling a conversion that no longer
-// exists. Exported so the coupling is greppable from the Rust side.
+// (tmc-langs-rust/crates/tmc-mooc-client/src/exercise.rs), which add a top-level `checksum`
+// lifted from public_spec and a `browser_test` field (null for editor tasks) to the bare wire
+// shape the mock emits. A change to either TryFrom must be made here too. Exported so the
+// coupling is greppable from the Rust side.
 export const toCliStdoutSlide = (wire: ExerciseSlide): unknown => ({
   ...wire,
   tasks: wire.tasks.map((task) => ({
@@ -76,15 +62,11 @@ export const toCliStdoutSlide = (wire: ExerciseSlide): unknown => ({
   })),
 })
 
-// The CLI does not relay the wire grading status verbatim either: its
-// `From<api::ExerciseTaskSubmissionStatus> for ExerciseTaskSubmissionStatus`
-// (tmc-langs-rust/crates/tmc-mooc-client/src/lib.rs) re-tags the enum
-// internally and reads `feedback_json` as the tmc service's camelCase RunResult
-// into `test_results`, keeping logs only for a run that failed to run its tests
+// Hand-written replica of the CLI's `From<api::ExerciseTaskSubmissionStatus> for
+// ExerciseTaskSubmissionStatus` (tmc-langs-rust/crates/tmc-mooc-client/src/lib.rs): re-tags the
+// enum internally and reads `feedback_json` as the tmc service's camelCase RunResult into
+// `test_results`, keeping logs only for a run that failed to run its tests
 // (`GradingTestRun::from_feedback_json`, crates/tmc-mooc-client/src/grading.rs).
-// This function IS that reconciliation for the grading shape, a hand-written
-// replica of that Rust; if the wire drifts so the conversion can no longer
-// produce a valid ExerciseTaskSubmissionStatus, the assertion below fails.
 const toCliStdoutGradingStatus = (wire: unknown): unknown => {
   if (wire === "NoGradingYet") {
     return { status: "no-grading-yet" }
@@ -105,12 +87,10 @@ const toCliStdoutGradingStatus = (wire: unknown): unknown => {
   return { status: "grading", grading: { ...grading, test_results } }
 }
 
-// Properties the CLI contract leaves entirely unconstrained -- `true` or `{}` in
-// shared/bindings.schema.json, `{}` in the OpenAPI spec -- are the blind spot the
-// two descriptions share: neither says anything a round trip could violate, so a
-// generator that dropped one instead of emitting `z.unknown()` would look
-// correct everywhere. The set is read out of the vendored schema rather than
-// listed, so a newly opaque property fails below until a round trip covers it.
+// Properties left unconstrained (`true` or `{}` in shared/bindings.schema.json, `{}` in the
+// OpenAPI spec) are a blind spot both descriptions share: a generator that dropped one instead
+// of emitting `z.unknown()` would look correct everywhere. Read from the vendored schema, so a
+// newly opaque property fails below until a round trip covers it.
 const opaqueProperties = (schema: unknown): string[] => {
   const found: string[] = []
   const walk = (node: unknown, definition: string): void => {
@@ -147,11 +127,7 @@ const opaqueProperties = (schema: unknown): string[] => {
   return [...new Set(found)]
 }
 
-/**
- * One round trip per opaque property: a minimal value of the schema that
- * declares it, carrying `opaque` where the property goes, and the way back out
- * of the parsed result.
- */
+/** Per opaque property: a minimal schema value carrying `opaque`, and how to read it back. */
 const opaqueRoundTrips: Record<
   string,
   {
@@ -179,8 +155,7 @@ const opaqueRoundTrips: Record<
   },
 }
 
-// Asserts a payload validates against a zod schema, surfacing the issues on
-// failure so a drift is easy to diagnose.
+// Asserts a payload validates against a zod schema, surfacing the issues on failure.
 const expectValid = (
   schema: { safeParse: (v: unknown) => { success: boolean; error?: unknown } },
   value: unknown,
@@ -252,9 +227,9 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
   // Uploads one file for an exercise and returns the host-assigned file id.
   const uploadFile = async (exercise: typeof passingExercise): Promise<string> => {
     const form = new FormData()
-    // Field name is a client-chosen UUID, as the host requires; the id it returns
-    // is its own and is what a submit names. The part's type is what the CLI sends,
-    // since the host echoes it into `AnswerFile.mime` unchecked.
+    // The field name is a client-chosen UUID, as the host requires; the id it returns is its own
+    // and is what a submit names. The part's type is what the CLI sends, echoed unchecked into
+    // `AnswerFile.mime`.
     form.append(
       crypto.randomUUID(),
       new Blob([new Uint8Array([1, 2, 3])], { type: TMC_ARCHIVE_MIME }),
@@ -269,7 +244,7 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     return body.data_files[0]!.id
   }
 
-  // Uploads then submits, returning both submission ids.
+  // Returns both submission ids.
   const submit = async (
     exercise: typeof passingExercise,
   ): Promise<{ taskSubmissionId: string; slideSubmissionId: string }> => {
@@ -300,7 +275,7 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
   test("grading status validates as ExerciseTaskSubmissionStatus (both variants)", async function () {
     const { taskSubmissionId } = await submit(passingExercise)
 
-    // first poll: the wire's externally-tagged "NoGradingYet" string variant
+    // First poll: the externally tagged "NoGradingYet" string variant.
     const first = await (await fetch(api(`/submissions/${taskSubmissionId}/grading`))).json()
     expect(first).toBe("NoGradingYet")
     expectValid(
@@ -309,7 +284,7 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
       "grading (no-grading-yet)",
     )
 
-    // second poll: the wire's externally-tagged { Grading: { ... } } object variant
+    // Second poll: the externally tagged { Grading: { ... } } object variant.
     const second = (await (
       await fetch(api(`/submissions/${taskSubmissionId}/grading`))
     ).json()) as { Grading: Record<string, unknown> }
@@ -340,7 +315,7 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     const exerciseId = failingExercise.slide.exercise_id
     const { taskSubmissionId } = await submit(failingExercise)
 
-    // before grading completes: score/progress are null
+    // Before grading completes: score/progress are null.
     const pending = (await (
       await fetch(api(`/exercises/${exerciseId}/submissions`))
     ).json()) as unknown[]
@@ -349,7 +324,7 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
       expectValid(ExerciseSlideSubmissionListItem, item, "submission list item (pending)")
     }
 
-    // after grading completes: score/progress are populated
+    // After grading completes: score/progress are populated.
     await fetch(api(`/submissions/${taskSubmissionId}/grading`))
     await fetch(api(`/submissions/${taskSubmissionId}/grading`))
     const graded = (await (
@@ -367,13 +342,12 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
       return res.json()
     }
 
-    // untouched: every exercise is present, zeroed and unattempted
+    // Untouched: every exercise is present, zeroed and unattempted.
     const untouched = (await progressOf()) as { exercises: unknown[] }
     expect(untouched.exercises.length).toBeGreaterThan(0)
     expectValid(CourseProgress, untouched, "course progress (untouched)")
 
-    // graded: score_given and completed are populated, which is the half a
-    // zeroed payload cannot exercise
+    // Graded: score_given and completed are populated, which a zeroed payload cannot exercise.
     const { taskSubmissionId } = await submit(passingExercise)
     await fetch(api(`/submissions/${taskSubmissionId}/grading`))
     await fetch(api(`/submissions/${taskSubmissionId}/grading`))
@@ -421,7 +395,7 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
   test("share result validates as PasteResult", async function () {
     const exerciseId = failingExercise.slide.exercise_id
     await submit(failingExercise)
-    // the submissions list yields the slide-submission id that /share expects
+    // The submissions list yields the slide-submission id that /share expects.
     const items = (await (await fetch(api(`/exercises/${exerciseId}/submissions`))).json()) as {
       id: string
     }[]
@@ -433,13 +407,9 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
   })
 
   test("old-submission /download response carries the submission's files", async function () {
-    // The /download response (`SubmissionFiles`, `{data_files:[AnswerFile]}`) is
-    // consumed by the CLI, not the extension, so langsSchema has no zod schema for
-    // it. Its shape is instead reconciled against the vendored spec via the mock's
-    // OWN response validation: the mock's postResponseHandler validates every
-    // response body against the spec before sending, so a 200 here proves the
-    // payload conforms to the spec's SubmissionFiles schema. The explicit field
-    // assertions document the shape the CLI relies on -- it takes
+    // The /download response (`SubmissionFiles`) is consumed by the CLI, so langsSchema has no
+    // zod schema for it. The mock validates every response against the spec before sending, so a
+    // 200 proves conformance. The field assertions document what the CLI relies on: it takes
     // `data_files[0].url` and refuses any count other than one.
     const { slideSubmissionId } = await submit(failingExercise)
     const res = await fetch(api(`/submissions/${slideSubmissionId}/download`))
@@ -450,17 +420,15 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
     expect(body.data_files.length).toBe(1)
     expect(typeof body.data_files[0]!.id).toBe("string")
     expect(body.data_files[0]!.name).toBe("submission.tar.zst")
-    // The one value no repo can check for another: tmc-langs sends this Content-Type,
-    // the host stores it verbatim, and the tmc plugin writes the same one for an
-    // IFrame answer. A mismatch is only visible where all three meet.
+    // No repo can check this for another: tmc-langs sends this Content-Type, the host stores it
+    // verbatim, and the tmc plugin writes the same one for an IFrame answer.
     expect(body.data_files[0]!.mime).toBe(TMC_ARCHIVE_MIME)
     expect(body.data_files[0]!.url.length).toBeGreaterThan(0)
   })
 
   test("a submission made from no files downloads as an empty list, not a 404", async function () {
-    // The host answers such a download with `{"data_files":[]}` rather than the 404
-    // the archive-shaped contract gave. Only an exercise type with no files at all
-    // submits this way, so the seed is the only route to one.
+    // The host answers with `{"data_files":[]}`, not a 404. Only an exercise type with no files
+    // submits this way, so only the seed reaches it.
     const seeded = mock.seedFilelessSubmission(passingExercise.slide.exercise_id)
     const download = await fetch(api(`/submissions/${seeded!.slideSubmissionId}/download`))
     expect(download.status).toBe(200)
@@ -483,13 +451,10 @@ suite("mooc mock <-> langsSchema reconciliation", function () {
   })
 
   test("a not-enrolled 422 body carries the message key the CLI branches on", async function () {
-    // Error bodies are the other half of the wire, and neither generated
-    // description covers them: langsSchema mirrors CLI stdout, and the vendored
-    // spec's ApiErrorResponse declares no required members, so response
-    // validation only pins the status. What the CLI actually reads is
-    // `message_key` (tmc-mooc-client lifts it into a typed error kind), so that
-    // is what is asserted here; the full envelope is pinned in
-    // backend/mooc/conformance.test.ts against the host's transcribed contract.
+    // Neither generated description covers error bodies: langsSchema mirrors CLI stdout, and the
+    // spec's ApiErrorResponse has no required members, so validation only pins the status. The CLI
+    // reads `message_key` (lifted into a typed error kind), asserted here; the full envelope is
+    // pinned in backend/mooc/conformance.test.ts.
     const res = await fetch(api(`/exercises/${notEnrolledExerciseId}`))
     expect(res.status).toBe(422)
     const body = (await res.json()) as { message_key?: unknown; type?: unknown }

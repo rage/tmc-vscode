@@ -56,9 +56,7 @@ suite("addNewCourse action (mooc)", function () {
     // Organization comes from organization_name, not the passed slug.
     expect(stored?.organization).toBe(moocCourse.organization_name)
     expect(createWorkspaceFile).toHaveBeenCalledWith(moocCourse.slug, "mooc")
-    // The fetched exercise slides are recorded, keyed by their exercise id (the
-    // identity the bulk download subcommand resolves `--exercise-id` against),
-    // so the Courses view can offer them for download.
+    // Keyed by exercise id, which the bulk download subcommand resolves `--exercise-id` against.
     expect(stored?.exercises.map((e) => e.id)).toEqual([MOOC_EXERCISE_UUID])
     expect(stored?.exercises[0]?.name).toBe("mooc_hello")
     // Points and passed state come from the course's progress (fixture: passed, 1/1).
@@ -79,7 +77,6 @@ suite("addNewCourse action (mooc)", function () {
   })
 
   test("re-adding an already-added course fails gracefully instead of throwing", async function () {
-    // Add the course once.
     const first = await addNewCourse(
       actionContext(),
       "unused-org-slug",
@@ -88,8 +85,7 @@ suite("addNewCourse action (mooc)", function () {
     expect(first.ok).toBe(true)
     expect(userData.getMoocCourses()).toHaveLength(1)
 
-    // Adding the same course id again must return an Err, not throw (the
-    // underlying addCourse throws on a duplicate id).
+    // The underlying addCourse throws on a duplicate id; addNewCourse must return an Err.
     let second: Awaited<ReturnType<typeof addNewCourse>> | undefined
     await expect(
       (async () => {
@@ -101,7 +97,6 @@ suite("addNewCourse action (mooc)", function () {
       })(),
     ).resolves.not.toThrow()
     expect(second?.err).toBe(true)
-    // still only one course stored
     expect(userData.getMoocCourses()).toHaveLength(1)
   })
 })

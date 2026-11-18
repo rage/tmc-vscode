@@ -3,11 +3,9 @@ import * as vscode from "vscode"
 import { ExerciseIdentifier } from "../../shared/lib"
 
 /**
- * Remembers which exercises failed to download.
- *
- * The disk cannot tell a failed download from one never tried, and the Courses view says
- * which it was. The failure shows only while the exercise is still absent, so one
- * downloaded since by any route is no longer failed even if never recorded here.
+ * Remembers which exercises failed to download, which the disk cannot tell from never tried.
+ * A failure shows only while the exercise is still absent, so one downloaded since by any
+ * route is no longer failed.
  */
 class DownloadFailures {
   private readonly _failed = new Set<string>()

@@ -6,9 +6,9 @@ import { CourseHomePage } from "../pages/course-home"
 import { CoursesViewPage } from "../pages/courses-view"
 import { QuickPickPage } from "../pages/quick-pick"
 
-// Adding a course from the add-course screen, here from the tmc.mooc.fi side; the
-// Command Palette keeps a quick pick as its fast path. The session comes from the tmc
-// credentials the fixture seeds (fixtures.ts).
+// Adding a course from the add-course screen, from the tmc.mooc.fi side; the Command Palette
+// keeps a quick pick as its fast path. The session comes from the tmc credentials the
+// fixture seeds (fixtures.ts).
 
 vsCodeTest("can add new course", async ({ page, webview }) => {
   const coursesView = new CoursesViewPage(page, webview)

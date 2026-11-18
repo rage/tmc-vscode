@@ -2,8 +2,8 @@
 import FAQ from "../../docs/FAQ.md"
 import type { BackendKind } from "../../shared/lib"
 
-// Build time only globals defined in the esbuild configuration (esbuild.mjs
-// `define`, sourced from config.js). These values are inlined when bundling.
+// Build-time globals from esbuild.mjs `define` (sourced from config.js), inlined when bundling.
+
 declare const __DEBUG_MODE__: boolean
 declare const __TMC_BACKEND_URL__: string
 declare const __TMC_LANGS_CONFIG_DIR__: string | null

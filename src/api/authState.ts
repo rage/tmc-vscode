@@ -7,27 +7,23 @@ import { Logger } from "../utilities"
 import type Langs from "./langs"
 
 /**
- * The extension's single answer to "is the user logged in".
- *
- * Every consumer reads it from here rather than asking the CLI: a check is a
- * cold process start, and the answers have to agree across the context key, the
- * Courses view, the background poll and the actions.
+ * The extension's single answer to "is the user logged in". Consumers read it here instead of
+ * asking the CLI: a check is a cold process start, and the answers must agree everywhere.
  */
 export interface AuthState {
   /** Whether the user has a session; see `Langs.isAuthenticated`. */
   readonly loggedIn: boolean
   /**
-   * Asks the CLI whether the user has a session and records the answer. A check that
-   * fails keeps the previous answer, as it says nothing about the session. Calls made
-   * while a check runs share it.
+   * Asks the CLI whether the user has a session and records the answer. A failed check keeps
+   * the previous answer. Calls made while a check runs share it.
    */
   refresh: (options?: { timeout: number }) => Promise<Result<boolean, Error>>
   /** Records what a login or logout just did to the session. */
   set: (loggedIn: boolean) => Promise<void>
   /**
    * A session this run had ended without a logout. Stays set until the next login: a later
-   * check finding no session is the same expiry, not a logout, and one finding credentials
-   * finds the ones the backend refused, which the CLI keeps when it cannot refresh them.
+   * check finding no session is the same expiry, and one finding credentials finds the ones the
+   * backend refused, which the CLI keeps when it cannot refresh them.
    */
   readonly isSessionExpired: boolean
   /** Records that the session ended without the user logging out. */
@@ -35,18 +31,14 @@ export interface AuthState {
   /** Called whenever {@link loggedIn} or {@link isSessionExpired} changes, once applied. */
   subscribe: (listener: (loggedIn: boolean) => void) => void
   /**
-   * The backends whose refusal of the session the user has been told about: courses.mooc.fi
-   * granting no access to programming exercises, or tmc.mooc.fi not accepting the login.
-   * Whoever reports one adds its backend, and a fetch that backend serves removes it.
+   * Backends whose refusal of the session the user has been told about (courses.mooc.fi
+   * granting no access to programming exercises, tmc.mooc.fi rejecting the login). Reporters
+   * add their backend; a fetch that backend serves removes it.
    */
   readonly sessionRefusalsReported: Set<BackendKind>
 }
 
-/**
- * Builds the {@link AuthState} for one activation.
- *
- * It applies `test-my-code:LoggedIn` itself, so nothing else may set it.
- */
+/** Builds the {@link AuthState} for one activation; it alone sets `test-my-code:LoggedIn`. */
 export function createAuthState(langs: Result<Langs, Error>): AuthState {
   let loggedIn = false
   let isSessionExpired = false

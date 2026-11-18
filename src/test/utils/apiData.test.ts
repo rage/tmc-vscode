@@ -95,8 +95,7 @@ suite("combineTmcApiExerciseData", function () {
   })
 
   test("falls back to placeholder points for an exercise the points endpoint omits", function () {
-    // The two endpoints can disagree, and the tree still has to show the exercise
-    // as passed or not; the placeholders keep that single-point scale.
+    // The endpoints can disagree; the placeholders keep a single-point scale.
     const [passed, unpassed] = combineTmcApiExerciseData(
       [
         apiExercise({ id: 1, name: "solved", completed: true }),
@@ -112,8 +111,7 @@ suite("combineTmcApiExerciseData", function () {
   })
 
   test("keeps a listed zero awarded points rather than falling back", function () {
-    // A completed exercise whose points entry awards nothing: the entry is the
-    // truth, and the placeholder would credit it a point it has not earned.
+    // The points entry is the truth; the placeholder would credit an unearned point.
     const [combined] = combineTmcApiExerciseData(
       [apiExercise({ id: 3, name: "reviewed", completed: true })],
       [pointsForExercise(3, 2, 0)],

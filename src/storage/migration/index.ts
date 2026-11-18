@@ -4,11 +4,10 @@ import type { z } from "zod"
 export interface MigratedData<T> {
   data: T | undefined
   /**
-   * Keys whose contents `data` — or the migration's side effects — now fully
-   * represents. A key left out survives, and since the chain prefers the
-   * oldest key present, the next activation replays that stale snapshot over
-   * the migrated value. Leave a key out only when the migration could not
-   * carry its contents forward and deleting it would lose them.
+   * Keys whose contents `data` (or the migration's side effects) now fully represents. A key
+   * left out survives, and since the chain prefers the oldest key present, the next activation
+   * replays that stale snapshot over the migrated value. Leave one out only when deleting it
+   * would lose contents the migration could not carry forward.
    */
   supersededKeys: string[]
   /** Key `data` is written to, or `undefined` when the migration persists nothing. */
@@ -39,8 +38,7 @@ export default function validateData<T>(data: unknown, schema: z.ZodType<T>): T 
     throw new Error(`Data type mismatch: ${JSON.stringify(data)}`)
   }
 
-  // Return the original value, not zod's parsed copy: zod strips unknown
-  // keys, but persisted data may carry extra keys from a newer extension
-  // version that must be preserved.
+  // Return the original, not zod's parsed copy: zod strips unknown keys that a newer
+  // extension version may have persisted.
   return data as T
 }

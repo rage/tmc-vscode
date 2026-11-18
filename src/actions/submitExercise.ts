@@ -131,16 +131,10 @@ function showSubmissionView(panel: ExerciseSubmissionPanel, view: SubmissionView
 
 const submissionFinished = new vscode.EventEmitter<CourseIdentifier>()
 
-/**
- * Fires with the course of each submission whose outcome is shown, graded or not, as the
- * backend's point totals for it may have changed.
- */
+/** Fires with the course of each submission whose outcome is shown, graded or not. */
 export const onDidFinishSubmission = submissionFinished.event
 
-/**
- * Sends one exercise to its backend and waits for the grading, reporting progress to its panel,
- * and to `job` once the backend has the submission.
- */
+/** Sends one exercise to its backend and waits for grading, reporting to its panel and `job`. */
 type ExerciseSubmitter = (
   submission: Submission,
   job: JobProgress,
@@ -153,10 +147,10 @@ interface PendingFeedback {
   view: SubmissionView
 }
 
-// Keyed by panel id like `unfinishedGradings`; the answer URL never leaves the host, so the
-// webview cannot choose where answers are posted.
+// Keyed by panel id; the answer URL stays in the host so the webview cannot choose where
+// answers are posted.
 const pendingFeedback = new Map<number, PendingFeedback>()
-// The panels whose feedback is being posted, so a second click does not post it twice.
+// Panels whose feedback is being posted, against double clicks.
 const feedbackBeingSent = new Set<number>()
 
 /** A mooc submission whose grading the host stopped waiting for. */
@@ -166,10 +160,10 @@ interface UnfinishedGrading extends Submission {
   exercisePageUrl: string | undefined
 }
 
-// Keyed by the panel showing the submission, so a webview names only which panel it is.
+// Keyed by panel id so a webview names only its own panel.
 const unfinishedGradings = new Map<number, UnfinishedGrading>()
 
-/** Drops what earlier submissions of `panel`'s exercise left pending, which this one supersedes. */
+/** Drops what earlier submissions of `panel`'s exercise left pending. */
 function forgetEarlierSubmissions(panel: ExerciseSubmissionPanel): void {
   for (const pending of [unfinishedGradings, pendingFeedback]) {
     for (const [id, earlier] of pending) {
@@ -212,10 +206,7 @@ function tmcSubmitter(langs: Langs, exerciseId: number): ExerciseSubmitter {
   }
 }
 
-/**
- * Submits without blocking, then waits for the grading separately: the task submission id in
- * between is what lets the student keep waiting after the CLI's poll gives up.
- */
+/** Submits, then waits for grading separately, so a student can keep waiting past the poll. */
 function moocSubmitter(langs: Langs, exerciseId: string): ExerciseSubmitter {
   return async (submission, job) => {
     const reporter = new SubmissionProgressReporter(submission.panel, "uploading")
@@ -301,10 +292,7 @@ function submitterFor(
   )
 }
 
-/**
- * Records the grading locally and shows the outcome, reopening the panel if it was closed. A
- * grading that could not be recorded is a warning.
- */
+/** Records the grading locally and shows the outcome, reopening the panel if closed. */
 async function showOutcome(
   actionContext: ReadyActionContext,
   submission: Submission,
@@ -360,10 +348,8 @@ interface SubmitReady {
 }
 
 /**
- * Whether `exercise` can be submitted now, without submitting it: lets a caller ask the
- * student something first without asking about a submission that would be refused anyway.
- *
- * Errs as {@link submitExercise} does before its panel opens.
+ * Whether `exercise` can be submitted now, without submitting it, so a caller can ask the
+ * student first. Errs as {@link submitExercise} does before its panel opens.
  */
 export async function checkCanSubmit(
   actionContext: ReadyActionContext,
@@ -419,8 +405,8 @@ async function readyToSubmit(
 }
 
 /**
- * The exercise as stored, after refreshing its course if its backend last refused the course:
- * that may have been hours ago. Errs with a `CourseAccessLostError` while the refusal stands.
+ * The exercise as stored, after refreshing its course if the backend last refused it (maybe
+ * hours ago). Errs with a `CourseAccessLostError` while the refusal stands.
  */
 async function storedExerciseWithAccess(
   actionContext: ReadyActionContext,
@@ -473,8 +459,7 @@ export async function submitExercise(
   const exerciseId = exercise.id
   const courseId = LocalCourseData.getCourseId(course)
 
-  // Held only until the result is posted: the panel offers Paste from that point on, and
-  // the refresh that follows doesn't need the same protection.
+  // Held only until the result is posted: the panel offers Paste from then on.
   const job: JobOptions = {
     label: `Submitting ${exercise.exerciseSlug}`,
     screen: resultsScreen(exercise),
@@ -557,12 +542,11 @@ function refusalError(refusal: SubmitRefusal, exercise: LocalCourseExercise): Er
 }
 
 /**
- * Waits again for the grading of the submission panel `panelId` shows, after the wait that
- * followed its submit ended before the grading did.
+ * Resumes waiting for the grading of the submission in panel `panelId`, whose earlier wait
+ * ended first. Fires {@link onDidFinishSubmission} like {@link submitExercise}.
  *
- * Fires {@link onDidFinishSubmission} like {@link submitExercise}. Errs when that panel shows
- * no such submission, when another operation on the exercise is in flight, or as
- * {@link submitExercise} does while AI assistance may be on.
+ * Errs when the panel shows no such submission, another operation on the exercise is in
+ * flight, or AI assistance may be on.
  */
 export async function keepWaitingForGrading(
   actionContext: ReadyActionContext,

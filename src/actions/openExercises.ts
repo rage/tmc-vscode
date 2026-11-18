@@ -13,27 +13,18 @@ import { downloadCourseExercises } from "./downloadCourseExercises"
 import type { DownloadProgressPlace } from "./downloadOrUpdateExercises"
 import type { ReadyActionContext } from "./types"
 
-/**
- * Total RAM, not free RAM: the open-exercise warning is about how many folders the file
- * watcher and explorer can keep up with on this machine, not about what is free right now.
- */
+/** Total RAM, not free: the warning is about what the file watcher and explorer can handle. */
 const UNDER_8GB_RAM = os.totalmem() < 8 * 1024 ** 3
 
 /** What {@link openExercises} opened, and whether the course now has too many open. */
 export interface OpenedExercises {
   /** The requested exercises that are on disk, and so were opened. */
   ids: ExerciseIdentifier[]
-  /**
-   * The open-exercise limit this machine is warned at, when the course's open count now
-   * exceeds it; the caller tells the user.
-   */
+  /** The machine's open-exercise limit, when the course now has more open; the caller warns. */
   exceededOpenLimit: number | undefined
 }
 
-/**
- * Opens given exercises, showing them in the course workspace.
- * @param exerciseIdsToOpen Array of exercise IDs
- */
+/** Opens exercises already on disk; {@link downloadAndOpenExercises} fetches missing ones first. */
 export async function openExercises(
   actionContext: ReadyActionContext,
   exerciseIdsToOpen: ExerciseIdentifier[],
@@ -72,10 +63,8 @@ export async function openExercises(
 }
 
 /**
- * Opens given exercises, first downloading any of them that are not present locally.
- *
- * The Courses view offers Open on an exercise that has never been downloaded, so opening
- * it has to fetch it first.
+ * Opens given exercises, first downloading any not present locally: the Courses view offers
+ * Open on exercises never downloaded.
  */
 export async function downloadAndOpenExercises(
   actionContext: ReadyActionContext,

@@ -10,19 +10,14 @@ import { ExplorerPage } from "../pages/explorer"
 import { TestResultsPage } from "../pages/test-results"
 import { TmcPage } from "../pages/tmc"
 
-// End-to-end walk of the mooc (courses.mooc.fi) student flow against the mooc
-// mock backend (backend/mooc, mounted in the same process as the legacy TMC
-// mock and routed via TMC_LANGS_MOOC_ROOT_URL in fixtures.ts). It covers the
-// full path the mooc migration adds: device-flow login -> picking an enrolled
-// course on the add-course screen -> the course's exercises in the Courses
-// view -> opening (downloading) an exercise from its context menu -> opening the
-// workspace -> opening the exercise file -> running the local tests -> submitting
-// -> the reduced mooc result panel.
+// End-to-end walk of the mooc (courses.mooc.fi) student flow against the mooc mock
+// (backend/mooc, routed via TMC_LANGS_MOOC_ROOT_URL in fixtures.ts): device-flow login ->
+// picking an enrolled course -> its exercises in the Courses view -> downloading one from its
+// context menu -> opening the workspace and file -> local tests -> submit -> the reduced mooc
+// result panel (grading progress and score, no per-test breakdown).
 //
-// Reaching the file explorer, test run and submit depends on mooc workspace
-// tracking (the CLI's `list-local-exercises`, consumed by refreshLocalExercises).
-// The submit result here is the reduced mooc panel (grading progress and score,
-// no per-test breakdown), distinct from the TMC submission view.
+// The file explorer, test run and submit depend on mooc workspace tracking (the CLI's
+// `list-local-exercises`, consumed by refreshLocalExercises).
 vsCodeTest(
   "can add, open, test and submit a mooc course exercise",
   async ({ page, userDataDir, webview }) => {
@@ -31,8 +26,8 @@ vsCodeTest(
     const sidePanel = new TmcPage(page, webview).getSidePanel()
     const explorerPage = new ExplorerPage(page)
 
-    // course + exercise are served by backend/mooc/fixtures.ts; the exercise packs
-    // the same python resource the TMC course uses, so its tests run locally.
+    // Served by backend/mooc/fixtures.ts; the exercise packs the same python resource as the
+    // TMC course, so its tests run locally.
     const courseTitle = "MOOC Python Course"
     const exerciseName = "passing_exercise"
     const filePath = ["src", "passing_exercise.py"]
@@ -85,8 +80,7 @@ vsCodeTest(
     )
 
     await vsCodeTest.step("open exercise file", async () => {
-      // The file only surfaces once the downloaded mooc exercise is registered as a
-      // WorkspaceExercise.
+      // The file only surfaces once the downloaded exercise is registered as a WorkspaceExercise.
       const contents = page.getByText(fileContents)
       await expect(contents).toBeHidden()
       await explorerPage.openPath(filePath)
@@ -98,9 +92,8 @@ vsCodeTest(
     await vsCodeTest.step("run tests", async () => {
       await page.getByText(fileContents).click()
       await expect(allPassed).toBeHidden()
-      // The editor-title action is contributed under `test-my-code:ActiveEditorIsExercise`
-      // (package.json), so it renders only once the extension has recognised the
-      // open exercise.
+      // Contributed under `test-my-code:ActiveEditorIsExercise` (package.json), so it renders
+      // only once the extension has recognised the open exercise.
       const runTests = page.getByLabel("Run Tests", { exact: true })
       await expect(runTests).toBeVisible()
       await runTests.click()
@@ -110,9 +103,9 @@ vsCodeTest(
     })
 
     await vsCodeTest.step("submit exercise and see the reduced mooc result", async () => {
-      // The mooc submit renders the reduced result panel: a "Passed" heading
-      // (full points, as the backend's standing says) plus the score, not the TMC per-test
-      // submission view.
+      // A "Passed" heading (full points, per the backend's standing) plus the score, not the
+      // TMC per-test view.
+
       const gradedHeading = sidePanel.getByRole("heading", { name: "Passed", exact: true })
       await expect(gradedHeading).toBeHidden()
       await sidePanel.getByRole("button", { name: "Submit", exact: true }).click()

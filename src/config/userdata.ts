@@ -150,9 +150,8 @@ export class UserData {
   /**
    * Looks up a stored course by its identifier.
    *
-   * Errs when the course is unknown, which is reachable: identifiers arrive from
-   * webview messages and from workspaces on disk, so they outlive a course the
-   * user has removed.
+   * Errs when the course is unknown, which is reachable: identifiers from webview messages
+   * and workspaces on disk outlive a removed course.
    */
   public getCourse(id: CourseIdentifier): Result<LocalCourseData, Error> {
     switch (id.kind) {
@@ -175,13 +174,8 @@ export class UserData {
   }
 
   /**
-   * Looks up a course by its slug **within one backend**.
-   *
-   * Slugs are only unique per backend: the legacy TMC server and
-   * `courses.mooc.fi` can each have a course called e.g. `python-programming`.
-   * The backend is therefore a required argument. A name-only lookup would have
-   * to pick a scan order, and whichever backend came first would silently
-   * shadow the other backend's course of the same slug.
+   * Looks up a course by its slug **within one backend**; slugs are only unique per backend,
+   * so a name-only lookup would let whichever backend came first shadow the other's course.
    */
   public getCourseBySlug(backend: BackendKind, slug: string): Result<LocalCourseData, Error> {
     switch (backend) {
@@ -384,12 +378,7 @@ export class UserData {
   }
 
   /**
-   * Clears the list of new exercises for a given course.
-   *
-   * If given a list of exercise ids clears these from the course.newExercises array
-   *
-   * @param courseId
-   * @param exercisesToClear Number list of exercises to clear.
+   * Clears a course's new exercises: all of them, or only `exercisesToClear`.
    */
   public async clearFromNewExercises(
     courseId: CourseIdentifier,

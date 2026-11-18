@@ -124,9 +124,8 @@ export function oldSubmissionKey(submission: OldSubmission): string {
 }
 
 /**
- * `submissions` as History lists them: graded submissions first, then help requests and
- * backups, each newest first, so the ones a student almost always wants are not buried under
- * backups. The newest graded submission is marked.
+ * `submissions` as History lists them: graded ones first, then help requests and backups, each
+ * newest first. The newest graded submission is marked.
  *
  * @param locale The language the dates are written in.
  */

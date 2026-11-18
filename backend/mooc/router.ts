@@ -34,54 +34,32 @@ import {
 // Spec-validated mock of the courses.mooc.fi exercise-services client API
 // (`/api/v0/exercise-services/client`).
 //
-// openapi-backend is the routing + validation core: it routes by operationId
-// from the vendored OpenAPI document, validates every REQUEST against the spec
-// (AJV), and -- via a postResponseHandler calling validateResponse -- validates
-// every RESPONSE the mock produces. A response that violates the spec becomes a
-// loud HTTP 500, so the mock provably cannot drift from the contract (a drift
-// is a failing test). See backend/mooc/exercise-services-client.openapi.generated.json
-// (vendored from secret-project-331; re-vendor with `pnpm run vendor:langs-openapi`).
-// That covers success bodies only: the spec's ApiErrorResponse constrains no
-// member, so error envelopes are pinned against ./apiErrors instead.
+// openapi-backend routes by operationId and validates every request and, via
+// postResponseHandler, every response against the vendored spec
+// (`pnpm run vendor:langs-openapi`); a drifting response becomes a loud 500.
+// The spec covers success bodies only (ApiErrorResponse constrains no member),
+// so error envelopes are pinned against ./apiErrors.
 //
-// Auth: by default every resource endpoint requires a valid `Authorization:
-// Bearer <token>` (see the auth middleware in registerMoocRoutes), mirroring the
-// real sp331 backend's UserFromOAuthToken extractor, with the raw sp331
-// 401/403 envelope so the refresh-retry/delete seam is exercised end to end.
-// Pass `requireAuth: false` to opt out (e.g. a test exercising localhost, which
-// the CLI sends no bearer to unless TMC_LANGS_MOOC_TRUST_LOCALHOST is set).
+// Auth: every resource endpoint requires a bearer by default and answers with
+// sp331's raw 401/403 envelope, exercising the refresh-retry/delete seam.
+// `requireAuth: false` opts out (e.g. localhost, to which the CLI sends no bearer
+// unless TMC_LANGS_MOOC_TRUST_LOCALHOST is set).
 
 const SPEC_PATH = path.join(__dirname, "exercise-services-client.openapi.generated.json")
 
-// ---- per-instance state ----
-//
-// Every mutable binding below belongs to ONE mock, built by registerMoocRoutes
-// and closed over by that mock's handlers. Two mocks in one process -- the
-// suites run several -- therefore share no submissions, uploads, auth
-// observations or OAuth tokens, and each hands out URLs naming the address it
-// serves on.
+// All mutable state is per mock (built by registerMoocRoutes): suites run several
+// mocks in one process and they must share nothing.
 
-// The real backend uses TWO distinct submission id spaces, and this mock mirrors
-// the split so the flows exercise the right ids:
-//   - `/grading` is polled with the EXERCISE-TASK-SUBMISSION id.
-//   - the submissions list, `/download` and `/share` use the
-//     EXERCISE-SLIDE-SUBMISSION id.
-// Submit returns BOTH, so a client never re-derives one from the other. Each
-// submit mints one of each; the record is indexed under both so grading resolves
-// by the task-submission id while list/download/share resolve by the
-// slide-submission id.
+// Two submission id spaces, as in the real backend: `/grading` is polled with the
+// exercise-task-submission id; the list, `/download` and `/share` use the
+// exercise-slide-submission id. Submit returns both and the record is indexed under both.
 
-/**
- * Whose submission a record is. The mock authenticates exactly one student, so
- * ownership is binary rather than a user id, and another student's submissions
- * are seeded rather than submitted.
- */
+/** Binary, since the mock authenticates one student; another student's submissions are seeded. */
 type SubmissionOwner = "caller" | "another-user"
 
 /**
- * A graded submission, or an ungraded snapshot stored by `POST snapshots`. A
- * snapshot has no task-submission id: it is never graded, uses no try and earns
- * nothing, so it is invisible to everything but the list, `/download` and `/share`.
+ * A graded submission, or an ungraded snapshot from `POST snapshots`: no task-submission id,
+ * no try used, no points, visible only to the list, `/download` and `/share`.
  */
 type SubmissionKind = "submission" | "paste" | "backup"
 
@@ -101,17 +79,13 @@ interface SubmissionRecord {
   isShared: boolean
 }
 
-// `POST exercises/{id}/files` stores files the client names in a later submit.
-// The real host binds each upload to (exercise, user) and reaps unreferenced
-// ones, so the mock models the binding and a soft-delete.
+// `POST exercises/{id}/files` uploads are bound to (exercise, user) and soft-deleted when
+// reaped, as in the host.
 
 interface UploadRecord {
   /**
-   * The host's own file id, and the ONLY id a submit may name. Deliberately NOT
-   * the client-chosen multipart field name: the real host echoes that field name
-   * back on a different member and keys the file by its `file_uploads` row id,
-   * so a client that confuses the two must fail here exactly as it would in
-   * production.
+   * The host's file id, the ONLY id a submit may name. Not the client-chosen multipart field
+   * name, so a client confusing the two fails as in production.
    */
   id: string
   name: string
@@ -136,10 +110,8 @@ interface MoocMockState {
   /** The course an exercise belongs to, which is where its enrollment is recorded. */
   courseByExerciseId: Map<string, CourseWithExercises>
   /**
-   * Per-exercise point weight (score_maximum), deliberately heterogeneous across
-   * fixtures so progress aggregation exercises differing weights rather than a
-   * uniform 1-per-exercise total. passingExercise stays 1 so the existing
-   * single-exercise pythonCourse progress assertion is unaffected.
+   * Deliberately uneven so progress aggregation sees differing weights; passingExercise
+   * stays 1 for the single-exercise pythonCourse progress assertion.
    */
   scoreMaximumByExerciseId: Map<string, number>
   submissionsByTaskId: Map<string, SubmissionRecord>
@@ -170,10 +142,8 @@ interface MoocMockState {
   delayNextArchiveMs: number | undefined
   /** Exercises republished with a new template, by id, with each task's checksum before it. */
   checksumsBeforeUpdate: Map<string, string[]>
-  // The integration mock runs in a separate process from the test, so the two
-  // members below record the most recent authenticated request's `Authorization`
-  // header and a count, surfaced via `GET /mooc-mock/auth-state`, to let a test
-  // prove the CLI actually attached the bearer it expects.
+  // Last authenticated request's `Authorization` header and a count, surfaced via
+  // `GET /mooc-mock/auth-state`: the mock runs in a separate process from the test.
   lastAuthorization: string | undefined
   authenticatedRequestCount: number
   /** This instance's isolated device-flow + issued-token state; see oauth.ts. */
@@ -247,10 +217,8 @@ const createMoocMockState = (baseUrl: string): MoocMockState => ({
 })
 
 /**
- * Which host error a {@link MoocMockControls.failNext} status stands for. A
- * status alone is ambiguous -- several message keys share one -- so the
- * canonical key per injectable status is named here, and a status with no entry
- * cannot be injected.
+ * The host error each injectable {@link MoocMockControls.failNext} status stands for; a status
+ * alone is ambiguous (several message keys share one). Other statuses cannot be injected.
  */
 const FAULT_ERRORS: Record<number, ApiErrorMessageKey> = {
   401: "unauthorized",
@@ -274,27 +242,20 @@ export type MockCourseAccess = "open" | "forbidden" | "deleted"
  */
 export interface MoocMockControls {
   /**
-   * Discards submissions, uploads, the auth observation, enrollment changes and
-   * every OAuth token this instance has minted or seeded; fixtures and base URL
-   * survive.
+   * Discards submissions, uploads, the auth observation, enrollment changes and OAuth
+   * tokens; fixtures and base URL survive.
    */
   reset: () => void
-  /**
-   * Soft-deletes an upload, modelling the host's reaper. Returns false for an
-   * unknown id. Drives the `upload_expired` path, which is otherwise unreachable.
-   */
+  /** Soft-deletes an upload, as the host's reaper does; false for an unknown id. */
   expireUpload: (fileId: string) => boolean
   /**
-   * Arms the reaper to consume the NEXT upload batch, so the following submit sees
-   * `upload_expired`. This is the only way to hit the race the CLI's upload retry
-   * exists for: the reaper would otherwise have to fire inside the millisecond gap
-   * between the CLI's own two calls.
+   * Arms the reaper to consume the NEXT upload batch so the following submit sees
+   * `upload_expired`; the race the CLI's upload retry exists for is otherwise unreachable.
    */
   expireNextUpload: () => void
   /**
-   * Arms a one-shot failure: the next call to `operationId` answers with the
-   * error the host raises for `status`, without running its handler. Returns why
-   * it could not be armed, or undefined once armed.
+   * Arms a one-shot failure: the next call to `operationId` answers with the host error for
+   * `status` without running its handler. Returns why it could not be armed, else undefined.
    */
   failNext: (operationId: string, status: number) => FailNextRejection | undefined
   /**
@@ -310,84 +271,56 @@ export interface MoocMockControls {
    */
   publishExerciseUpdate: (exerciseId: string) => boolean
   /**
-   * Seeds a submission the host has no files for, so its download is an empty list.
-   * Only an exercise type with no files at all is like this, and a submit through the
-   * client API cannot produce one -- hence the seed.
-   * Returns undefined for an unknown exercise.
+   * Seeds a submission with no files, so its download is an empty list; a submit through the
+   * client API cannot produce one. Returns undefined for an unknown exercise.
    */
   seedFilelessSubmission: (
     exerciseId: string,
   ) => { taskSubmissionId: string; slideSubmissionId: string } | undefined
   /**
-   * Seeds a submission belonging to a different student, so grading, download and
-   * share answer 403 for it. Nothing a client can do produces one, so the owner
-   * check is unreachable without this seed. Returns undefined for an unknown
-   * exercise.
+   * Seeds another student's submission, so grading, download and share answer 403; no client
+   * action produces one. Returns undefined for an unknown exercise.
    */
   seedForeignSubmission: (
     exerciseId: string,
   ) => { taskSubmissionId: string; slideSubmissionId: string } | undefined
-  /**
-   * Enrolls the student on a fixture course or withdraws them from it, as they or a teacher
-   * can on the host. Returns false for an unknown course.
-   */
+  /** Enrolls the student on a fixture course or withdraws them; false for an unknown course. */
   setEnrolled: (courseId: string, enrolled: boolean) => boolean
   /**
-   * Closes a fixture course to students (`forbidden`, as a course put back in draft is),
-   * deletes it (`deleted`), or opens it again (`open`). Returns false for an unknown course.
+   * Closes a fixture course to students (`forbidden`, as a draft course is), deletes it
+   * (`deleted`), or reopens it (`open`). Returns false for an unknown course.
    */
   setCourseAccess: (courseId: string, access: MockCourseAccess) => boolean
-  /**
-   * Sets a fixture course's AI-use policy, as its teacher can on the host. Returns false for an
-   * unknown course.
-   */
+  /** Sets a fixture course's AI-use policy; false for an unknown course. */
   setAiPolicy: (courseId: string, policy: NonNullable<Course["ai_policy"]>) => boolean
   /**
-   * Revokes every token this instance has minted or seeded, as revoking the student's grant on
-   * the host's account page does: resource calls and refreshes are rejected until a new login
-   * or a reset.
+   * Revokes every token this instance has minted or seeded, as revoking the grant on the
+   * account page does: resource calls and refreshes fail until a new login or a reset.
    */
   revokeGrant: () => void
   /**
-   * Deletes a fixture exercise from its course, as a teacher can, or brings it back: every
-   * client operation then treats it as an exercise that never existed. Returns false for an
-   * unknown exercise.
+   * Deletes a fixture exercise from its course, or brings it back; every client operation
+   * treats a deleted one as never existing. Returns false for an unknown exercise.
    */
   setExerciseRemoved: (exerciseId: string, removed: boolean) => boolean
-  /**
-   * Puts a fixture exercise in a chapter, as a teacher can, or takes it out of every chapter
-   * with `undefined`. Returns false for an unknown exercise.
-   */
+  /** Puts a fixture exercise in a chapter, or in none with `undefined`; false for an unknown one. */
   setExerciseChapter: (exerciseId: string, chapter: MockChapter | undefined) => boolean
-  /**
-   * Puts a fixture exercise where chapter locking's teacher review has it, or takes it out of
-   * review with `undefined`. Returns false for an unknown exercise.
-   */
+  /** Puts a fixture exercise in chapter locking's teacher review, or out with `undefined`. */
   setExerciseReview: (exerciseId: string, review: MockReview | undefined) => boolean
-  /**
-   * Makes every token act for another account, as when a second student logs in on the
-   * same computer.
-   */
+  /** Makes every token act for another account, as when a second student logs in on one computer. */
   setCurrentUser: (userId: string) => void
   /** Points every URL this mock hands out at `baseUrl`. */
   rebase: (baseUrl: string) => void
   /**
-   * Drives this instance's device-flow clock, so a test can cross a poll
-   * interval or a token lifetime without a real sleep. Pass nothing to restore
-   * real wall time.
+   * Drives the device-flow clock so a test crosses a poll interval or token lifetime without
+   * sleeping; no argument restores wall time.
    */
   setOAuthClock: (clock?: () => number) => void
-  /**
-   * Scopes `token` carries while this instance honours it, or undefined -- what
-   * tmc-server learns about a courses.mooc.fi token from introspection.
-   */
+  /** Scopes `token` carries while honoured, or undefined: what tmc-server learns from introspection. */
   introspect: (token: string) => string[] | undefined
 }
 
-/**
- * Records one submission, or with `kind` a snapshot, under its id spaces and
- * against its exercise.
- */
+/** Records a submission, or with `kind` a snapshot, under both id spaces and its exercise. */
 const retainSubmission = (
   state: MoocMockState,
   exerciseId: string,
@@ -633,8 +566,6 @@ const createMoocMockControls = (
   introspect: (token) => scopesForBearer(state.oauth, token),
 })
 
-// ---- response envelope threaded through the postResponseHandler ----
-
 interface MockResponse {
   status: number
   body: unknown
@@ -644,8 +575,8 @@ interface MockResponse {
 const ok = (body: unknown): MockResponse => ({ status: 200, body })
 
 /**
- * The host's `ApiErrorResponse` envelope for `messageKey`. The live serializer
- * omits an empty `errors` array and an absent `metadata`, so neither is emitted.
+ * The host's `ApiErrorResponse` envelope for `messageKey`; like the host, omits an empty
+ * `errors` array and an absent `metadata`.
  */
 const apiErrorBody = (
   messageKey: ApiErrorMessageKey,
@@ -657,9 +588,8 @@ const apiErrorBody = (
 })
 
 /**
- * A controlled error, status included: the host derives both the envelope's
- * `type` and the status from the variant the key names, so a handler that picked
- * its own status could disagree with the host while still satisfying the spec.
+ * A controlled error whose status comes from the key's variant, as on the host; a handler
+ * picking its own status could disagree with the host while still satisfying the spec.
  */
 const apiError = (messageKey: ApiErrorMessageKey, message: string): MockResponse => ({
   status: API_ERRORS[messageKey].status,
@@ -673,43 +603,36 @@ const send = (res: Response, { status, body }: MockResponse): void => {
 
 interface CreateMoocApiOptions {
   /**
-   * Test-only fault injection: the named operationId returns a spec-violating
-   * body, exercising the response-validation guard (which must turn it into a
-   * 500). Process-lifetime, unlike the one-shot
-   * {@link MoocMockControls.failNext}.
+   * Test-only: the named operationId returns a spec-violating body, exercising the
+   * response-validation guard (which must turn it into a 500). Unlike the one-shot
+   * {@link MoocMockControls.failNext}, lasts the process.
    */
   injectResponseFault?: string | undefined
   /**
-   * Lowest `X-Client-Version` served, as `major.minor.patch`. Unset (the
-   * default) serves everything, matching the host, whose MINIMUM_CLIENT_VERSION
-   * is None -- so the 426 contract is dormant in production and a mock has to
-   * name a minimum to exercise it. With one set, a missing or unparseable
-   * header counts as obsolete, as on the host.
+   * Lowest `X-Client-Version` served, as `major.minor.patch`. Unset serves everything, as on
+   * the host (MINIMUM_CLIENT_VERSION is None), so the 426 contract needs a minimum to be
+   * exercised. With one set, a missing or unparseable header counts as obsolete.
    */
   minimumClientVersion?: string | undefined
   /**
-   * Bearer validation. When enabled (the default), every resource endpoint
-   * requires a valid `Authorization: Bearer <token>`: missing/unknown/expired
-   * -> 401 `unauthorized`, recognised but lacking the `exercise-services` scope
-   * -> 403 `forbidden`. Pass `false` to serve without auth.
+   * Bearer validation, on by default: missing/unknown/expired -> 401 `unauthorized`, lacking
+   * the `exercise-services` scope -> 403 `forbidden`. `false` serves without auth.
    */
   requireAuth?: boolean
   /**
-   * Origin every absolute URL the mock hands out is built from -- stub and
-   * model-solution downloads, answer-file claims and share links. Defaults to
-   * the env value; createMoocApp overrides it with the address it bound, so a
-   * suite on an ephemeral port gets URLs it can follow verbatim.
+   * Origin of every absolute URL the mock hands out (downloads, answer-file claims, share
+   * links). Defaults to the env value; createMoocApp overrides it with its bound address so
+   * a suite on an ephemeral port gets URLs it can follow.
    */
   baseUrl?: string
 }
 
-// Header a client advertises its version on, read by every client operation
-// (host: SupportedClient / check_client_version).
+// Read by every client operation (host: SupportedClient / check_client_version).
 const CLIENT_VERSION_HEADER = "x-client-version"
 
 /**
- * `major.minor.patch` as comparable components. Missing minor/patch count as 0
- * and anything non-numeric is unparseable, as the host parses it.
+ * `major.minor.patch` as comparable components; missing minor/patch are 0 and non-numeric
+ * is unparseable, as on the host.
  */
 const parseClientVersion = (version: string): number[] | undefined => {
   const parts = version.trim().split(".")
@@ -730,9 +653,8 @@ const isAtLeast = (client: number[], minimum: number[]): boolean => {
 }
 
 /**
- * The host's obsolete-client rule, as a response for the operation to answer
- * with instead of running. A minimum is the only thing that arms it; with one
- * set, a missing or unparseable client version is obsolete.
+ * The host's obsolete-client rule, as a response to answer with instead of running the
+ * operation. Armed only by a minimum; with one set, a missing or unparseable version is obsolete.
  */
 const obsoleteClientError = (
   minimumClientVersion: string | undefined,
@@ -759,8 +681,8 @@ const findCourse = (state: MoocMockState, id: string) =>
     : state.fixtures.courses.find((c) => c.course.id === id)
 
 /**
- * How the host refuses the course of `exerciseId`, if it does: `authorize_access_to_course_material`
- * 403s a course closed to students, and a deleted course's exercises are gone with it.
+ * How the host refuses the course of `exerciseId`, if it does: a course closed to students
+ * 403s (`authorize_access_to_course_material`), and a deleted course takes its exercises along.
  */
 const exerciseCourseRefusal = (
   state: MoocMockState,
@@ -794,9 +716,8 @@ const scoreMaximumFor = (state: MoocMockState, exerciseId: string): number =>
   state.scoreMaximumByExerciseId.get(exerciseId) ?? 1
 
 /**
- * Exercise services that declare `supports_native_client`, i.e. the only ones this
- * API serves. The host reads the live set from `exercise_service_info`; here it is
- * a constant, because the mock serves one plugin.
+ * Exercise services declaring `supports_native_client`, the only ones this API serves. The
+ * host reads the live set from `exercise_service_info`; the mock serves one plugin.
  */
 const NATIVE_CLIENT_CAPABLE_SLUGS = ["tmc"]
 
@@ -804,9 +725,8 @@ const isClientCapable = (serviceSlug: string): boolean =>
   NATIVE_CLIENT_CAPABLE_SLUGS.includes(serviceSlug)
 
 /**
- * The slide as a native client may see it: tasks belonging to a service that
- * cannot serve this client are not merely unusable, they are invisible, so a
- * client never holds a task id that submit would have to reject.
+ * The slide as a native client sees it: tasks of a service that cannot serve it are invisible,
+ * so a client never holds a task id that submit would have to reject.
  */
 const clientServableSlide = (slide: ExerciseSlide): ExerciseSlide => ({
   ...slide,
@@ -884,9 +804,9 @@ const chapterRefusal = (
 }
 
 /**
- * Where the host's chapter locking has an exercise when a teacher reviews answers before
- * awarding points: graded but waiting for the student to lock the chapter, locked and waiting
- * for the teacher, or locked with no review pending (reviewed, or locked unanswered).
+ * Where chapter locking has an exercise when a teacher reviews answers before awarding
+ * points: graded but awaiting the student's chapter lock, locked awaiting the teacher, or
+ * locked with no review pending.
  */
 export type MockReview = "awaits_chapter_lock" | "awaits_teacher" | "locked"
 
@@ -905,9 +825,8 @@ const notEnrolledError = (): MockResponse =>
 const isGraded = (record: SubmissionRecord): boolean => record.polls > 1
 
 /**
- * The caller's own submissions and snapshots of an exercise, oldest first. The
- * submissions list is per-user on the host, so a seeded foreign submission must be
- * invisible to it.
+ * The caller's own submissions and snapshots of an exercise, oldest first; the host's list is
+ * per-user, so a seeded foreign submission must stay invisible.
  */
 const callerEntriesFor = (state: MoocMockState, exerciseId: string): SubmissionRecord[] =>
   (state.submissionsByExercise.get(exerciseId) ?? []).filter((record) => record.owner === "caller")
@@ -920,9 +839,8 @@ const callerSubmissionsFor = (state: MoocMockState, exerciseId: string): Submiss
   callerEntriesFor(state, exerciseId).filter((record) => record.kind === "submission")
 
 /**
- * The host's `verify_user_can_answer_exercise`: a passed effective deadline, then an
- * exhausted per-slide try limit. Answers with the refusal, or undefined when the
- * student may still answer.
+ * The host's `verify_user_can_answer_exercise`: a passed effective deadline, then an exhausted
+ * per-slide try limit. Returns the refusal, or undefined when the student may still answer.
  */
 const answerRefusal = (
   state: MoocMockState,
@@ -951,10 +869,9 @@ const foreignSubmissionError = (
   record.owner === "caller" ? undefined : apiError("forbidden", message)
 
 /**
- * The host's reveal rule (`model_solution_should_be_revealed`): full points, or
- * the slide's try limit used up. The try half counts submissions rather than
- * gradings, so it fires on the last try a student is allowed however that try
- * scores.
+ * The host's reveal rule (`model_solution_should_be_revealed`): full points, or the slide's
+ * try limit used up. The try half counts submissions, not gradings, so it fires on the last
+ * allowed try however it scores.
  */
 const modelSolutionRevealed = (state: MoocMockState, exercise: MoocExerciseFixture): boolean => {
   const exerciseId = exercise.slide.exercise_id
@@ -971,9 +888,8 @@ const modelSolutionRevealed = (state: MoocMockState, exercise: MoocExerciseFixtu
 }
 
 /**
- * The slide as `GET exercises/{id}` serves it, with each task's model solution
- * attached once it may be revealed. The list view never reveals one, mirroring
- * the host's `client_tasks_from_slide` callers.
+ * The slide as `GET exercises/{id}` serves it, with each task's model solution attached once
+ * it may be revealed; the list view never reveals one (host: `client_tasks_from_slide` callers).
  */
 const revealModelSolutions = (
   state: MoocMockState,
@@ -992,10 +908,8 @@ const revealModelSolutions = (
 }
 
 /**
- * Terminal grading outcome per exercise fixture. Shared by the grading-poll
- * response and the submissions list so a submission's listed score/progress
- * matches the grading the exercise actually produces (passing exercises show
- * FullyGraded/1, failing FullyGraded/0, etc.) instead of a hardcoded value.
+ * Terminal grading outcome per exercise fixture, shared by the grading poll and the
+ * submissions list so a listed score/progress matches the grading the exercise produces.
  */
 const GRADING_OUTCOMES = {
   passing: {
@@ -1045,11 +959,10 @@ const outcomeOf = (
   GRADING_OUTCOMES[state.fixtures.exerciseById.get(record.exerciseId)?.gradingOutcome ?? "passing"]
 
 /**
- * The caller's progress on an exercise, derived from this run's submissions: attempted once
- * submitted, completed/scored once a submission has been polled to its terminal (FullyGraded)
- * outcome. `standing` follows the host's `derive_exercise_progress`: passed at full points,
- * else out of tries once the limit is used up, whatever the tries scored. The try counts are
- * per slide, and every fixture exercise has one slide.
+ * The caller's progress on an exercise: attempted once submitted, completed/scored once a
+ * submission is polled to its FullyGraded outcome. `standing` follows the host's
+ * `derive_exercise_progress`: passed at full points, else out of tries once the limit is used
+ * up, whatever the tries scored. Try counts are per slide; every fixture exercise has one.
  */
 const exerciseProgress = (state: MoocMockState, exerciseId: string): unknown => {
   const records = callerSubmissionsFor(state, exerciseId)
@@ -1083,9 +996,8 @@ const exerciseProgress = (state: MoocMockState, exerciseId: string): unknown => 
 }
 
 const gradingStatus = (state: MoocMockState, record: SubmissionRecord): unknown => {
-  // First poll: not graded yet. Subsequent polls: the exercise's terminal
-  // grading outcome. Deterministic (poll-count based) rather than wall-clock
-  // based so tests are not flaky.
+  // First poll: not graded yet; later polls: the terminal outcome. Poll-count based, not
+  // wall-clock, so tests are not flaky.
   if (!isGraded(record)) {
     return "NoGradingYet"
   }
@@ -1106,18 +1018,16 @@ const gradingStatus = (state: MoocMockState, record: SubmissionRecord): unknown 
 }
 
 /**
- * The host's checks on the slide and task an answer names: both must exist,
- * belong to the exercise in the URL, and be servable to this client. Answers
- * with the task, or with the refusal.
+ * The host's checks on the slide and task an answer names: both must exist, belong to the
+ * exercise in the URL, and be servable to this client. Returns the task, or the refusal.
  */
 const answerTarget = (
   state: MoocMockState,
   exerciseId: string,
   body: { exercise_slide_id: string; exercise_task_id: string },
 ): { task: ExerciseTask | undefined } | MockResponse => {
-  // The URL authorizes only the exercise; the slide and task ids come from the
-  // body, so an unrelated exercise's slide/task must be rejected here or a
-  // client could submit into it (host: verify_slide_and_task_belong).
+  // The URL authorizes only the exercise; slide and task ids come from the body, so an
+  // unrelated exercise's slide/task must be rejected here (host: verify_slide_and_task_belong).
   const slide = state.slideById.get(body.exercise_slide_id)
   if (!slide) {
     return apiError("not_found", `no such exercise slide: ${body.exercise_slide_id}`)
@@ -1139,9 +1049,8 @@ const answerTarget = (
     )
   }
   const task = slide.tasks.find((candidate) => candidate.task_id === body.exercise_task_id)
-  // Every listing hides a task this client cannot be served, so naming one
-  // means holding an id from somewhere else; persisting the answer would leave
-  // it to fail deep inside a service that cannot read it (host:
+  // Listings hide tasks this client cannot be served, so naming one means the id came from
+  // elsewhere; persisting it would fail deep in a service that cannot read it (host:
   // verify_task_is_client_capable).
   if (task && !isClientCapable(task.exercise_service_slug)) {
     return apiError(
@@ -1158,8 +1067,8 @@ const namedUploadsError = (
   exerciseId: string,
   fileIds: readonly string[],
 ): MockResponse | undefined => {
-  // Deduplicating instead would record one file twice and list it twice in a
-  // download, hiding the client defect (host: verify_uploads_are_distinct).
+  // Deduplicating instead would list one file twice in a download and hide the client
+  // defect (host: verify_uploads_are_distinct).
   const namedOnce = new Set<string>()
   for (const fileId of fileIds) {
     if (namedOnce.has(fileId)) {
@@ -1169,8 +1078,7 @@ const namedUploadsError = (
   }
   for (const fileId of fileIds) {
     const upload = state.uploadsById.get(fileId)
-    // A file bound to another exercise is indistinguishable from one that was
-    // never uploaded, exactly as in the host: both are `unknown_upload`.
+    // A file bound to another exercise looks never-uploaded, as on the host: `unknown_upload`.
     if (!upload || upload.exerciseId !== exerciseId) {
       return apiError(
         "unknown_upload",
@@ -1188,17 +1096,14 @@ const namedUploadsError = (
 }
 
 /**
- * Builds the openapi-backend instance with all client operation handlers
- * registered, every one of them reading and writing `state` alone. Handlers
- * return a {@link MockResponse}; the postResponseHandler validates its body
- * against the spec before writing it.
+ * Builds the openapi-backend instance with every client operation handler registered, each
+ * reading and writing `state` alone. Handlers return a {@link MockResponse}, which the
+ * postResponseHandler validates against the spec before writing.
  */
 const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): OpenAPIBackend => {
-  // Load the spec as an object and run in `quick` mode. Quick mode skips
-  // openapi-backend's OpenAPI meta-schema validation of the DOCUMENT (which
-  // rejects this valid OpenAPI 3.1 doc -- utoipa emits 3.1 features like
-  // `type: [T, "null"]` that the bundled meta-schema check trips on) while
-  // still building the router and the request/response validators we rely on.
+  // `quick` mode skips meta-schema validation of the document, which rejects this valid
+  // OpenAPI 3.1 doc (utoipa's `type: [T, "null"]`), while still building the router and
+  // validators.
   const definition = JSON.parse(fs.readFileSync(SPEC_PATH, "utf8")) as Document
   const api = new OpenAPIBackend({
     definition,
@@ -1206,27 +1111,20 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
     validate: true,
   })
 
-  // Validate every request against the spec, EXCEPT the multipart file upload:
-  // its requestBody is an opaque `type: string` in the spec, and openapi-backend
-  // only includes a requestBody in request validation when it is an object or
-  // JSON, so a string multipart body always trips a spurious "missing
-  // requestBody". Its path param is trivial (a uuid), the multipart rules are
-  // enforced in the handler, and its response is still validated by the
-  // postResponseHandler -- the drift guard that matters. Submit IS validated:
-  // its body is plain JSON, so the spec's rules on its path param and on the
-  // body's slide and task ids apply before the handler runs. `data_files` is
-  // optional there, so nothing is rejected for omitting it.
-  // NB: the constructor boolean-coerces the `validate` option, so the predicate
-  // is assigned to the property directly (handleRequest honours a function).
+  // Validate every request except the multipart upload: its requestBody is an opaque
+  // `type: string` in the spec, which openapi-backend only validates for object/JSON bodies,
+  // so it always trips a spurious "missing requestBody". The handler enforces the multipart
+  // rules and the postResponseHandler still validates the response. Submit is validated: its
+  // body is plain JSON.
+  // The constructor boolean-coerces `validate`, so assign the predicate to the property
+  // (handleRequest honours a function).
   api.validate = (c: Context) => c.operation?.operationId !== "uploadClientExerciseFiles"
 
   const fault = options.injectResponseFault
 
-  // Runs before every operation handler, as the host's SupportedClient extractor
-  // runs before its actix handler -- so an obsolete client's submit records
-  // nothing. Returning the 426 rather than writing it keeps it under the
-  // postResponseHandler's validation, which proves 426 is documented for the
-  // operation.
+  // Runs before every handler, as the host's SupportedClient extractor does, so an obsolete
+  // client's submit records nothing. Returning the 426 rather than writing it keeps it under
+  // response validation, proving 426 is documented for the operation.
   const guardClient =
     (handler: (c: Context, req: Request) => MockResponse) =>
     (c: Context, req: Request, res: Response): MockResponse | undefined => {
@@ -1245,9 +1143,8 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
         return handler(c, req)
       }
       state.failNextByOperation.delete(operationId)
-      // Written past the response validator: an injected 500 is a status the
-      // spec documents nowhere, so validating it would replace the fault under
-      // test with a different one.
+      // Written past the response validator: an injected 500 is documented nowhere in the
+      // spec, so validating it would replace the fault under test with a different one.
       send(res, apiError(injectedError, `injected ${injected} fault for ${operationId}`))
       return undefined
     }
@@ -1286,13 +1183,11 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       if (!found) {
         return apiError("not_found", `no such course: ${id}`)
       }
-      // Unlike the course and its progress, which any user may view, the exercises are course
-      // material.
+      // Unlike the course and its progress, which any user may view, the exercises are course material.
       if (state.courseAccessById.get(id) === "forbidden") {
         return courseForbiddenError()
       }
-      // A slide left with no servable task drops out of the listing entirely, as
-      // the host's `if !tasks.is_empty()` does.
+      // A slide with no servable task is dropped from the listing, as the host's `if !tasks.is_empty()` does.
       return ok(
         remainingExercises(state, found)
           .filter((e) => !isInClosedChapter(state, e.slide.exercise_id))
@@ -1343,9 +1238,8 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       const id = String(c.request.params.id)
       const exercise = findExercise(state, id)
       if (!exercise) {
-        // An entirely unknown exercise id: the backend's get_by_id yields
-        // RecordNotFound -> 404 (the spec documents 404 on this path). Distinct
-        // from the not-enrolled 422 below.
+        // Unknown exercise id: get_by_id yields RecordNotFound -> 404, distinct from the
+        // not-enrolled 422 below.
         return apiError("not_found", `no such exercise: ${id}`)
       }
       const courseRefused = exerciseCourseRefusal(state, id)
@@ -1353,9 +1247,8 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
         return courseRefused
       }
       if (!isEnrolled(state, id)) {
-        // The backend resolves the slide but its course context is inaccessible,
-        // raising a BadRequest that maps to 422 with message_key `not_enrolled`
-        // (domain/error.rs). The spec documents this 422 (ApiErrorResponse).
+        // The slide resolves but its course context is inaccessible: a BadRequest mapping to
+        // 422 `not_enrolled` (domain/error.rs), which the spec documents.
         return notEnrolledError()
       }
       const closed = chapterRefusal(state, id, false)
@@ -1366,8 +1259,8 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
         slideInChapter(state, revealModelSolutions(state, exercise)),
       )
       if (slide.tasks.length === 0) {
-        // The exercise exists and the student is on its course, but nothing in it
-        // can be rendered here -- which the host reports as a 404, not a 422.
+        // The exercise exists and the student is on its course, but nothing in it can be
+        // rendered here: the host reports 404, not 422.
         return apiError("not_found", "No task of this exercise can be served to this client")
       }
       return ok(slide)
@@ -1380,11 +1273,9 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       if (!exercise) {
         return apiError("not_found", `no such exercise: ${exerciseId}`)
       }
-      // The host runs both checks BEFORE reading the multipart stream, so an upload
-      // is refused for the reason a submit would be refused rather than for a
-      // multipart rule below. Stored objects outlive the request, which is why the
-      // gate is here at all and not only on submit. A snapshot is accepted past the
-      // deadline and out of tries, so its files are too.
+      // The host runs both checks BEFORE reading the multipart stream, so an upload is refused
+      // for the reason a submit would be. Stored objects outlive the request, hence the gate.
+      // A snapshot is accepted past the deadline and out of tries, so its files are too.
       const courseRefused = exerciseCourseRefusal(state, exerciseId)
       if (courseRefused) {
         return courseRefused
@@ -1400,14 +1291,13 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
         return refusal
       }
 
-      // Every multipart rule violation is a `controller_err!(BadRequest, …)` on the
-      // host, which maps to 422 `validation_error` (domain/error.rs) -- NOT 400.
+      // Multipart rule violations are `controller_err!(BadRequest, …)` on the host: 422
+      // `validation_error`, NOT 400.
       const files = (req.files as MulterFile[] | undefined) ?? []
-      // Parts multer classified as plain fields, i.e. parts carrying no filename.
-      // Checked before the file rules because the host's per-part order cannot be
-      // recovered once multer has split the parts into `files` and `body`.
-      // NB multer 2.x silently DROPS a file part whose filename is present but
-      // empty, so that variant stays invisible here and cannot be rejected.
+      // Parts multer classified as plain fields (no filename). Checked before the file rules
+      // because the host's per-part order cannot be recovered once multer splits `files` from
+      // `body`. NB multer 2.x silently DROPS a file part with an empty filename, so that
+      // variant cannot be rejected.
       if (Object.keys((req.body ?? {}) as Record<string, unknown>).length > 0) {
         return apiError(
           "validation_error",
@@ -1417,8 +1307,8 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       let batchBytes = 0
       const seenFieldNames = new Set<string>()
       for (const [index, file] of files.entries()) {
-        // Per-part, as the host counts: a batch that is both over-limit and
-        // malformed reports the malformed part, not the count.
+        // Per-part, as the host counts: an over-limit and malformed batch reports the
+        // malformed part.
         if (index >= MAX_UPLOAD_FILES) {
           return apiError(
             "validation_error",
@@ -1432,9 +1322,8 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
           return apiError("validation_error", "Duplicate exercise upload field id")
         }
         seenFieldNames.add(file.fieldname)
-        // No per-file size check: multer's `fileSize` limit aborts such a part
-        // before the handler sees it, and the error middleware answers it with
-        // the host's message. Only the cross-part batch total is checked here.
+        // No per-file size check: multer's `fileSize` limit aborts such a part first and the
+        // error middleware answers with the host's message. Only the batch total is checked here.
         batchBytes += file.buffer.length
         if (batchBytes > MAX_UPLOAD_BATCH_BYTES) {
           return apiError("validation_error", UPLOAD_TOO_LARGE_MESSAGE)
@@ -1462,17 +1351,15 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
         return courseRefused
       }
       if (!isEnrolled(state, exerciseId)) {
-        // Consistent with getClientExercise's 422 above; the spec documents
-        // this 422 on submit too.
+        // As in getClientExercise; the spec documents this 422 on submit too.
         return notEnrolledError()
       }
       const chapterClosed = chapterRefusal(state, exerciseId, true)
       if (chapterClosed) {
         return chapterClosed
       }
-      // Request validation enforced the body shape. Only the slide and task are
-      // required: all three answer members are optional, and omitting them all is a
-      // valid JSON answer of `null`.
+      // Request validation enforced the body shape. Only slide and task are required; omitting
+      // all three answer members is a valid JSON answer of `null`.
       const body = c.request.requestBody as {
         exercise_slide_id: string
         exercise_task_id: string
@@ -1485,9 +1372,9 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
         return target
       }
       const { task } = target
-      // The two answer shapes the flat body allows but the answer model does not.
-      // Checked here, after the slide/task ownership checks and before the per-upload
-      // ones, in the host's own order (domain/exercises.rs: verify_named_uploads).
+      // Answer shapes the flat body allows but the answer model does not, checked in the host's
+      // order (domain/exercises.rs: verify_named_uploads): after slide/task ownership, before
+      // per-upload checks.
       const namedFiles = body.data_files ?? []
       const isJsonAnswer = (body.answer_kind ?? "json") === "json"
       if (isJsonAnswer) {
@@ -1500,12 +1387,10 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       } else if (namedFiles.length === 0) {
         return apiError("validation_error", "A file answer must name at least one uploaded file.")
       }
-      // The mock runs no exercise service, so a plugin's own answer validation is
-      // a blind spot -- deliberately, except here. A tmc exercise's answer IS its
-      // archive, so the host takes a fileless one and the tmc service fails it at
-      // grading; the mock refuses it at submit instead. That keeps
-      // seedFilelessSubmission the only route to a submission with no files, which
-      // is what its doc comment claims.
+      // The mock runs no exercise service, so plugin answer validation is a blind spot except
+      // here: a tmc answer IS its archive, and the host takes a fileless one and fails it at
+      // grading. The mock refuses at submit, keeping seedFilelessSubmission the only route to
+      // a submission with no files.
       if (isJsonAnswer && task?.exercise_service_slug === "tmc") {
         return apiError(
           "validation_error",
@@ -1516,8 +1401,7 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       if (uploadError) {
         return uploadError
       }
-      // Last, as on the host, where grading is what enforces the deadline and the
-      // try limit: everything about the answer itself is settled first.
+      // Last, as on the host, where grading enforces the deadline and try limit.
       const refusal = answerRefusal(state, exercise)
       if (refusal) {
         return refusal
@@ -1582,9 +1466,7 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       const id = String(c.request.params.id)
       const record = state.submissionsByTaskId.get(id)
       if (!record) {
-        // Unknown submission: the backend's get_by_id yields RecordNotFound ->
-        // 404 (the spec now documents 404 on this path). Mirrors the real
-        // backend rather than the previous synthetic 200 NoGradingYet.
+        // Unknown submission: get_by_id yields RecordNotFound -> 404, as the spec documents.
         return apiError("not_found", `no such submission: ${id}`)
       }
       const foreign = foreignSubmissionError(
@@ -1602,9 +1484,8 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
     getClientExerciseSubmissions: (c: Context): MockResponse => {
       const exerciseId = String(c.request.params.id)
       const records = callerEntriesFor(state, exerciseId)
-      // newest first -- each item's `id` is the slide-submission or snapshot id. A
-      // graded submission reports the exercise's actual grading outcome (score +
-      // progress); an as-yet-ungraded one and every snapshot report nulls.
+      // Newest first; `id` is the slide-submission or snapshot id. A graded submission reports
+      // the exercise's grading outcome; an ungraded one and every snapshot report nulls.
       const items = [...records].toReversed().map((record) => {
         const graded = record.kind === "submission" && isGraded(record)
         const outcome = outcomeOf(state, record)
@@ -1633,13 +1514,11 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       if (foreign) {
         return foreign
       }
-      // A submission made from no files is a 200 with an empty list, not a 404:
-      // the host resolves this from its own upload records, and having none is
-      // not the same as the submission not existing. The host's join filters
-      // soft-deleted rows, so an explicitly reaped file drops out of the listing;
-      // retention never drops a submission's own uploads (see retainUpload).
-      // Order numbers come from the position in the answer as submitted, so a reaped
-      // file leaves a gap rather than renumbering the ones that survive it.
+      // A submission made from no files is a 200 with an empty list, not a 404: the host
+      // resolves this from its own upload records. Its join filters soft-deleted rows, so an
+      // explicitly reaped file drops out (retention never drops a submission's own uploads,
+      // see retainUpload). Order numbers are positions in the answer as submitted, so a
+      // reaped file leaves a gap rather than renumbering survivors.
       const data_files = record.fileIds
         .map((fileId, orderNumber) => ({ upload: state.uploadsById.get(fileId), orderNumber }))
         .filter(
@@ -1656,10 +1535,8 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
       const id = String(c.request.params.id)
       const record = state.submissionsBySlideId.get(id)
       if (!record) {
-        // The backend looks the submission up before it can check ownership, so an
-        // id it has no row for is a 404 here exactly as it is on grading and
-        // download; the 403 below belongs to a submission that exists and is
-        // someone else's.
+        // The host looks the submission up before checking ownership: an unknown id is a 404
+        // here as on grading and download; the 403 below is for someone else's submission.
         return apiError("not_found", `no such submission: ${id}`)
       }
       const foreign = foreignSubmissionError(record, "Cannot share another user's submission")
@@ -1700,10 +1577,8 @@ const createMoocApi = (state: MoocMockState, options: CreateMoocApiOptions): Ope
     res.status(501).json({ error: "not implemented in mock" }),
   )
 
-  // Validate every mock RESPONSE against the spec before sending it. A response
-  // the spec forbids is a mock/spec drift and must fail loudly (500) so tests
-  // catch it. Handlers that already wrote the response (notFound etc.) are
-  // skipped via res.headersSent.
+  // Validates every mock response against the spec; a violation is mock/spec drift and fails
+  // loudly (500). Handlers that already wrote the response (notFound etc.) are skipped.
   api.register("postResponseHandler", (c: Context, _req: Request, res: Response) => {
     if (res.headersSent) {
       return
@@ -1744,8 +1619,8 @@ interface MulterFile {
   buffer: Buffer
 }
 
-// The host's upload limits (controllers/helpers/file_uploading.rs). Kept identical
-// so a client that exceeds them fails here too rather than only in production.
+// The host's upload limits (controllers/helpers/file_uploading.rs), so a client exceeding them
+// fails here too.
 const MAX_UPLOAD_FILES = 10
 const MAX_UPLOAD_FILE_BYTES = 100 * 1024 * 1024
 const MAX_UPLOAD_BATCH_BYTES = 100 * 1024 * 1024
@@ -1754,16 +1629,13 @@ const UPLOAD_TOO_LARGE_MESSAGE = "Exercise upload exceeds the 100 MiB per-file o
 // The host requires every multipart field name to be a UUID the client picked.
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-// ---- download claims ----
+// An answer file's `url` is a one-hour capability the host mints fresh on every response and
+// redirects to the object store (base/src/jwt.rs, controllers/files.rs: redirect_claimed_file).
+// Clients must treat it as opaque, not persist it, and follow the redirect, so the mock makes
+// it opaque and expiring.
 //
-// An answer file's `url` is not a path to the object: it is a capability for that one
-// file for one hour, which the host mints fresh on every response and redirects to the
-// object store (base/src/jwt.rs, controllers/files.rs: redirect_claimed_file). A client
-// must treat it as opaque, must not persist it, and must follow the redirect -- so the
-// mock has to make it opaque and make it expire, or none of that is exercised.
-//
-// An HMAC rather than a real JWT: the client never inspects it, and forging one is the
-// only thing a test could want to do that a JWT library would make harder.
+// An HMAC rather than a JWT: the client never inspects it, and forging one is the only thing
+// a test could want that a JWT library would make harder.
 const DOWNLOAD_CLAIM_PARAM = "download-claim"
 const DOWNLOAD_CLAIM_SECRET = "mooc-mock-download-claim"
 const DOWNLOAD_CLAIM_LIFETIME_SECONDS = 60 * 60
@@ -1792,10 +1664,9 @@ const claimAuthorizes = (claim: string, fileUploadId: string): boolean => {
   return mac.length === expected.length && timingSafeEqual(Buffer.from(mac), Buffer.from(expected))
 }
 
-// `files` is one over the limit so a just-over-limit batch reaches the handler and
-// gets the host's own message. `fileSize` matches the host's per-file cap: the host
-// aborts mid-stream too, and the error middleware below maps the rejection to the
-// host's message, so there is no handler-side per-file check.
+// `files` is one over the limit so a just-over batch reaches the handler and gets the host's
+// own message. `fileSize` matches the host's per-file cap; the error middleware below maps
+// multer's abort to the host's message, so the handler has no per-file check.
 const upload = multer({
   limits: { fileSize: MAX_UPLOAD_FILE_BYTES, files: MAX_UPLOAD_FILES + 1 },
 })
@@ -1809,16 +1680,14 @@ const MULTER_ERROR_MESSAGES: Record<string, string> = {
 /** Path prefix the host stores client uploads under (`CLIENT_UPLOAD_PATH_PREFIX`). */
 const CLIENT_UPLOAD_PATH_PREFIX = "exercise-services-client"
 
-// Caps retained uploads so a long-lived mock doesn't accumulate them unboundedly;
-// oldest is evicted first. Uploads a submission was made from are spared even past
-// the cap, as the host's reaper spares them (`NOT EXISTS … exercise_task_submission_files`):
-// evicting one would silently turn a later restore of that submission into a no-op.
+// Caps retained uploads, evicting oldest first. Uploads a submission was made from are spared
+// even past the cap, as the host's reaper spares them (`NOT EXISTS …
+// exercise_task_submission_files`): evicting one would turn a later restore into a no-op.
 const MAX_RETAINED_UPLOADS = 32
 
 /**
- * An upload as the wire reports it. `orderNumber` is the file's position in the answer it
- * belongs to, so it is null for an upload that is not part of one yet -- which is every
- * file the upload endpoint returns.
+ * An upload as the wire reports it. `orderNumber` is the file's position in its answer, null
+ * for an upload not yet part of one (every file the upload endpoint returns).
  */
 const answerFile = (
   state: MoocMockState,
@@ -1834,8 +1703,8 @@ const answerFile = (
 })
 
 /**
- * Records one uploaded part. The returned `id` is freshly minted and is NEVER the
- * client's field name -- see {@link UploadRecord.id}.
+ * Records one uploaded part under a freshly minted `id`, never the client's field name;
+ * see {@link UploadRecord.id}.
  */
 const retainUpload = (
   state: MoocMockState,
@@ -1891,14 +1760,12 @@ const evictOldUploads = (state: MoocMockState): void => {
 
 /**
  * Mounts the mooc mock onto an existing Express app:
- *   - `/api/v0/exercise-services/client/*`  -> spec-routed + validated client API
- *   - `/mooc-archives/*` -> the .tar.zst stub archives referenced by each
- *     exercise's `stub_download_url`. This route is INTENTIONALLY OUTSIDE the
- *     OpenAPI spec: `stub_download_url` is an arbitrary absolute file-store URL
- *     in the real backend, so it is deliberately spec-exempt here.
- *   - `/api/v0/files/claimed/:id` -> redirects an answer file's claim URL to the
- *     object, and `/api/v0/files/<prefix>/:name` serves it. Both spec-exempt for
- *     the same reason: they are file-store URLs, not client API routes.
+ *   - `/api/v0/exercise-services/client/*` -> spec-routed, validated client API
+ *   - `/mooc-archives/*` -> the .tar.zst stub archives behind each exercise's
+ *     `stub_download_url`.
+ *   - `/api/v0/files/claimed/:id` -> redirects an answer file's claim URL to the object;
+ *     `/api/v0/files/<prefix>/:name` serves it.
+ * The archive and file routes are spec-exempt: they are file-store URLs, not client API routes.
  */
 export const registerMoocRoutes = (
   app: Express,
@@ -1937,10 +1804,9 @@ export const registerMoocRoutes = (
     }, delayMs)
   })
 
-  // Spec-exempt claim route: resolves an answer file's `url` to the object, as the
-  // real host does (controllers/files.rs: redirect_claimed_file). The Location is
-  // RELATIVE on purpose, as the host's is: it resolves against whichever host the
-  // request arrived on, so a client reaching the mock by any name still follows it.
+  // Spec-exempt claim route: resolves an answer file's `url` to the object
+  // (controllers/files.rs: redirect_claimed_file). The Location is RELATIVE, as the host's
+  // is, so a client reaching the mock by any name still follows it.
   app.get("/api/v0/files/claimed/:id", (req, res, next) => {
     const claim = req.query[DOWNLOAD_CLAIM_PARAM]
     if (typeof claim !== "string") {
@@ -1959,11 +1825,9 @@ export const registerMoocRoutes = (
     return res.redirect(302, `/api/v0/files/${CLIENT_UPLOAD_PATH_PREFIX}/${stored.storedName}`)
   })
 
-  // Spec-exempt file-store route: serves the exact bytes of a client upload, so
-  // an old-submission download returns THAT submission's own content rather than
-  // the exercise stub, making the restore flow testable end to end. The real
-  // host's upload URLs are `/api/v0/files/<prefix>/<random>` and sit outside the
-  // client spec, so this path shape is faithful and deliberately spec-exempt.
+  // Spec-exempt file-store route serving a client upload's exact bytes, so an old-submission
+  // download returns THAT submission's content and the restore flow is testable end to end.
+  // The host's upload URLs have this shape (`/api/v0/files/<prefix>/<random>`).
   app.get(`/api/v0/files/${CLIENT_UPLOAD_PATH_PREFIX}/:name`, (req, res, next) => {
     const bytes = state.uploadBytesByStoredName.get(req.params.name)
     if (!bytes) {
@@ -1973,11 +1837,9 @@ export const registerMoocRoutes = (
     res.send(bytes)
   })
 
-  // The /mooc-mock/* control routes below sit on the app rather than on
-  // moocRouter, so they stay outside the bearer middleware: a test drives them
-  // before it holds a token, and the real backend has no counterpart to
-  // authenticate them against. They parse their own JSON bodies, as the OAuth
-  // routes parse their own form bodies.
+  // The /mooc-mock/* control routes sit on the app, outside the bearer middleware: a test
+  // drives them before it holds a token. They parse their own JSON bodies, as the OAuth
+  // routes parse form bodies.
   const json = express.json()
 
   // Spec-exempt observation route; see MoocMockState's auth-observation members.
@@ -1988,8 +1850,8 @@ export const registerMoocRoutes = (
     })
   })
 
-  // Spec-exempt reset route: lets an out-of-process consumer sharing one
-  // long-lived mock (notably the Playwright fixtures) isolate each test.
+  // Spec-exempt reset route, so an out-of-process consumer sharing one long-lived mock
+  // (notably the Playwright fixtures) can isolate each test.
   app.post("/mooc-mock/reset", (_req, res) => {
     controls.reset()
     res.status(204).end()
@@ -2185,18 +2047,16 @@ export const registerMoocRoutes = (
     res.status(204).end()
   })
 
-  // Spec-exempt reaper simulation for out-of-process consumers: arms the reaper
-  // on the next upload so the submit that follows it sees `upload_expired`.
+  // Spec-exempt reaper simulation: the next upload is reaped, so the submit that follows
+  // sees `upload_expired`.
   app.post("/mooc-mock/expire-next-upload", (_req, res) => {
     controls.expireNextUpload()
     res.status(204).end()
   })
 
-  // Spec-exempt fault injection for out-of-process consumers: the named
-  // operation answers once with the host error for `status`. Without it a tier
-  // outside this process can reach no error the fixtures do not already
-  // produce -- a 5xx above all, which is what the client's retry and
-  // error-reporting paths are written for.
+  // Spec-exempt fault injection for out-of-process consumers, which otherwise can reach no
+  // error the fixtures do not produce -- a 5xx above all, which the client's retry and
+  // error-reporting paths exist for.
   app.post("/mooc-mock/fail-next-archive", json, (req, res) => {
     const { delayMs } = (req.body ?? {}) as { delayMs?: unknown }
     if (delayMs !== undefined && typeof delayMs !== "number") {
@@ -2240,10 +2100,9 @@ export const registerMoocRoutes = (
     res.status(204).end()
   })
 
-  // Spec-exempt token invalidation for out-of-process consumers: expires the
-  // named access token (or every live one), so the next resource call 401s while
-  // the client still believes its stored token is good -- the only way to reach
-  // the reactive refresh-and-retry path from outside this process.
+  // Spec-exempt token invalidation: expires the named access token (or every live one), so
+  // the next resource call 401s while the client still believes its token is good -- the only
+  // way to reach the reactive refresh-and-retry path from outside this process.
   app.post("/mooc-mock/expire-access-token", json, (req, res) => {
     const accessToken = (req.body as { access_token?: unknown })?.access_token
     if (accessToken !== undefined && typeof accessToken !== "string") {
@@ -2259,16 +2118,14 @@ export const registerMoocRoutes = (
 
   const moocRouter = express.Router()
 
-  // The router parses its own JSON bodies rather than assuming the host app
-  // mounted a parser: `handle` forwards req.body to openapi-backend, which
-  // validates the submit body against the spec.
+  // Parses its own JSON bodies rather than assuming a host-app parser: `handle` forwards
+  // req.body to openapi-backend, which validates the submit body.
   moocRouter.use(json)
 
   const requireAuth = options.requireAuth ?? true
 
-  // Runs before the spec router (mirroring UserFromOAuthToken running before
-  // the actix handler), so its 401/403 bodies are the raw sp331 envelope
-  // rather than the spec router's ApiErrorResponse shape.
+  // Runs before the spec router (as UserFromOAuthToken runs before the actix handler), so its
+  // 401/403 bodies are the raw sp331 envelope, not the spec router's ApiErrorResponse.
   if (requireAuth) {
     moocRouter.use((req: Request, res: Response, next) => {
       const header = req.headers.authorization
@@ -2310,12 +2167,9 @@ export const registerMoocRoutes = (
         // full path incl. the mount, so it matches the spec paths
         path: req.originalUrl.split("?")[0] ?? req.path,
         query: req.query as Record<string, string>,
-        // The submit requestBody is typed as an opaque string in the spec
-        // (multipart/form-data). openapi-backend validates req.body against
-        // that string schema but cannot parse binary multipart, so we feed it a
-        // non-empty placeholder string (satisfies `type: string` + `required`)
-        // and read the real parsed parts off req (req.body.submission / req.files)
-        // in the handler.
+        // The multipart requestBody is an opaque string in the spec and openapi-backend cannot
+        // parse binary multipart, so feed it a non-empty placeholder (satisfying `type: string`
+        // + `required`); handlers read the real parts off req (req.body.submission / req.files).
         body: isMultipart ? "multipart-form-data" : req.body,
         headers: req.headers as Record<string, string>,
       },
@@ -2324,14 +2178,12 @@ export const registerMoocRoutes = (
     )
   }
 
-  // The file upload is multipart -> parse it before openapi-backend (which
-  // validates but does not parse binary bodies). Field names are client-chosen
-  // UUIDs, so `any()` is the only accepting shape.
+  // Multipart upload: parsed before openapi-backend, which validates but cannot parse binary
+  // bodies. Field names are client-chosen UUIDs, so `any()` is the only accepting shape.
   moocRouter.post("/exercises/:id/files", upload.any(), handle)
   moocRouter.use(handle)
 
-  // Multer rejects an over-size or over-count part before the handler sees it;
-  // answer it as the host answers the same violation.
+  // Multer rejects an over-size or over-count part before the handler; answer as the host does.
   moocRouter.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
     if (err instanceof multer.MulterError) {
       send(
@@ -2348,8 +2200,7 @@ export const registerMoocRoutes = (
 
   app.use("/api/v0/exercise-services/client", moocRouter)
 
-  // Device-flow OAuth endpoints. Registered separately and deliberately NOT
-  // spec-validated (they are not part of the exercise-services client spec).
+  // Device-flow OAuth endpoints, deliberately not spec-validated (not part of the client spec).
   registerMoocOAuthRoutes(app, state.oauth, () => state.baseUrl)
 
   return controls
@@ -2360,10 +2211,9 @@ export const moocMockOf = (app: Express): MoocMockControls =>
   app.locals.moocMock as MoocMockControls
 
 /**
- * Builds a standalone Express app hosting only the mooc mock (used by tests).
- * Unless `baseUrl` names one, the app rebases its mock onto the address it
- * actually binds, so a suite listening on port 0 gets URLs it can follow
- * verbatim instead of ones naming the default port.
+ * Builds a standalone Express app hosting only the mooc mock (used by tests). Unless `baseUrl`
+ * names one, the app rebases its mock onto the address it binds, so a suite listening on port 0
+ * gets URLs it can follow.
  */
 export const createMoocApp = (options: CreateMoocApiOptions = {}): Express => {
   const app = express()
@@ -2375,8 +2225,7 @@ export const createMoocApp = (options: CreateMoocApiOptions = {}): Express => {
   const bind = app.listen.bind(app) as Listen
   app.listen = ((...args: Parameters<Listen>) => {
     const server = bind(...args)
-    // Prepended so the base URL is right before the caller's own listening
-    // callback runs and starts driving the mock.
+    // Prepended so the base URL is right before the caller's listening callback drives the mock.
     server.prependListener("listening", () => {
       const address = server.address()
       if (address !== null && typeof address !== "string") {

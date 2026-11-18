@@ -73,15 +73,14 @@ interface DownloadResults {
  * course its backend last refused are not asked for: they fail with a `CourseAccessLostError`.
  *
  * @param exerciseIds Exercises to download.
- * @param courseId Course the exercises belong to, when they all share one. Passed
- *   to the mooc bulk download so it can fetch just that course's slides instead of
- *   scanning every enrolled course. Omit when the exercises span multiple courses.
+ * @param courseId Course all the exercises belong to, if they share one; lets the mooc bulk
+ *   download fetch just that course's slides instead of scanning every enrolled course.
  * @param options `isUpdate` for exercises already on disk, which the warning then says were
- *   not updated; `isUnrequested` for a download the user did not ask for, such as an
- *   automatic update, whose progress shows in the status bar, not in a cancellable
- *   notification, and whose failed exercises get no warning: the caller reports
+ *   not updated; `isUnrequested` for a download the user did not ask for (an automatic
+ *   update): progress shows in the status bar and failures get no warning, the caller reports
  *   `failureCause` where it can be withdrawn once the cause is gone; `progressPlace` for a
  *   requested one.
+
  */
 export async function downloadOrUpdateExercises(
   actionContext: ReadyActionContext,

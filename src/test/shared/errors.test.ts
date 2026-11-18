@@ -26,7 +26,7 @@ suite("BaseError", function () {
     )
   })
 
-  // an error that fails to construct hides the failure it was reporting
+  // a failing constructor would hide the failure being reported
   test("does not throw on a value that cannot be described", function () {
     const circular: { self?: unknown } = {}
     circular.self = circular

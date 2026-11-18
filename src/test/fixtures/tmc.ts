@@ -39,9 +39,7 @@ const localExercises: LocalExercise[] = localPythonCourseExercises.map((x) => ({
   ...x,
 }))
 
-// -------------------------------------------------------------------------------------------------
-// mooc fixtures (courses.mooc.fi — UUID-keyed)
-// -------------------------------------------------------------------------------------------------
+// mooc fixtures (courses.mooc.fi, UUID-keyed)
 
 const MOOC_COURSE_UUID = "018f6f9b-1c2d-7e3f-8a4b-5c6d7e8f9a0b"
 const MOOC_EXERCISE_UUID = "550e8400-e29b-41d4-a716-446655440000"

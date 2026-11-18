@@ -76,11 +76,7 @@ interface WorkspaceStubs {
   ) => boolean
 }
 
-/**
- * Replaces one `vscode.workspace` member for the duration of a test. The mock
- * exposes the workspace state as prototype getters, which an own data property
- * shadows.
- */
+/** Replaces one `vscode.workspace` member for a test, shadowing the mock's prototype getter. */
 function stubWorkspace<K extends keyof WorkspaceStubs>(key: K, value: WorkspaceStubs[K]): void {
   Object.defineProperty(vscode.workspace, key, { value, configurable: true, writable: true })
 }
@@ -125,10 +121,7 @@ function folderOf(uri: vscode.Uri, name: string): vscode.WorkspaceFolder {
 
 const persistForCourse: PersistClosedCourseExercises = async () => Ok.EMPTY
 
-/**
- * Opens `fileName` as the window's workspace file, together with the display
- * name VS Code derives from it.
- */
+/** Opens `fileName` as the window's workspace file, with the display name derived from it. */
 function openWorkspaceFile(fileName: string): void {
   stubWorkspace("workspaceFile", vscode.Uri.file(path.join(WORKSPACE_FILE_FOLDER, fileName)))
   stubWorkspace("name", `${path.basename(fileName, ".code-workspace")} (Workspace)`)

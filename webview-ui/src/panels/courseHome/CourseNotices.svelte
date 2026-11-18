@@ -30,10 +30,7 @@
     notices: CourseNotice[]
   }
 
-  /**
-   * The course's news and warnings as one compact list, so several do not stack into a wall of
-   * tinted boxes. A status region: one that appears later is announced.
-   */
+  /** The course's news and warnings as one compact list; a status region, so late ones announce. */
   let { notices }: Props = $props()
 
   const icons = { info: "info", warning: "warning" } as const

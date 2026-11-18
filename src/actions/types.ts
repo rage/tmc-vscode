@@ -28,7 +28,7 @@ export interface ReadyStartup {
   workspaceManager: WorkspaceManager
 }
 
-/** An activation step whose failure degrades the extension; every other service depends on these. */
+/** An activation step whose failure degrades the extension: every other service needs it. */
 export type StartupStep = "langs" | "resources" | "userData"
 
 /** The errors behind a failed activation, keyed by the step that failed. */
@@ -40,9 +40,9 @@ export interface DegradedStartup {
 /**
  * What an activation managed to build.
  *
- * Deliberately binary: a caller that needs one of these services needs the rest, and the
- * partial combinations `extension.ts` can produce follow from its construction order
- * rather than from anything a caller could act on.
+ * Deliberately binary: a caller needing one of these services needs the rest, and the partial
+ * combinations `extension.ts` can produce follow from its construction order, not from
+ * anything a caller could act on.
  */
 export type Startup = ReadyStartup | DegradedStartup
 

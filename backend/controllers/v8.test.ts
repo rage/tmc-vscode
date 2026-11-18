@@ -13,19 +13,17 @@ import { failingExerciseId, passingExerciseId } from "../utils"
 import type { CourseWithExercises, TmcMockControls } from "./v8"
 import { courseExercises, createTmcApp, organizations, testCourses, tmcMockOf } from "./v8"
 
-// The legacy TMC mock is what every green CI tier trusts to imitate tmc-server,
-// and nothing checked its responses. They are checked here against
-// shared/bindings.schema.json -- the contract tmc-langs deserialises, vendored
-// from its own bindings. tmc-server's Swagger 2.0 spec is deliberately NOT the
-// reference: it disagrees with the mock on GET /core/exercises/{id}, and there
-// the mock is the one that matches the running server.
+// The legacy TMC mock is what every CI tier trusts to imitate tmc-server, so its responses
+// are checked against shared/bindings.schema.json, the contract tmc-langs deserialises.
+// tmc-server's Swagger 2.0 spec is deliberately NOT the reference: it disagrees with the mock
+// on GET /core/exercises/{id}, where the mock matches the running server.
 
 const langsContract = JSON.parse(
   fs.readFileSync(path.join(__dirname, "..", "..", "shared", "bindings.schema.json"), "utf8"),
 ) as Record<string, unknown>
 
-// `format: "uint32"` is schemars' annotation for a Rust integer width; ajv knows
-// no such format, and the `type`/`minimum` beside it already carry the range.
+// `format: "uint32"` is schemars' Rust integer-width annotation, unknown to ajv; `type` and
+// `minimum` already carry the range.
 const ajv = new Ajv2020({ allErrors: true, validateFormats: false })
 ajv.addSchema(langsContract, "langs")
 
@@ -160,8 +158,8 @@ describe("legacy TMC mock contract", () => {
       }
     })
 
-    // The details response wraps the course, so the CLI's CourseDetails is the
-    // inner object -- validating the wrapper would pass on anything.
+    // The CLI's CourseDetails is the inner object of the wrapper; validating the wrapper would
+    // pass on anything.
     test(`GET core/courses/${course.id} returns ${course.name}'s details`, async () => {
       const res = await authFetch(`${mock.base}/api/v8/core/courses/${course.id}`)
       assert.equal(res.status, 200)
@@ -206,9 +204,8 @@ describe("legacy TMC mock contract", () => {
     assert.equal(res.status, 200)
     const body = (await res.json()) as SubmissionResponseBody
     assertMatches("NewSubmission", body)
-    // The CLI polls submission_url and attaches its bearer only when that URL is
-    // same-origin with the root it was configured with, so a URL naming another
-    // host would silently lose authentication.
+    // The CLI attaches its bearer only to URLs same-origin with its configured root, so one
+    // naming another host would silently lose authentication.
     for (const url of [body.paste_url, body.show_submission_url, body.submission_url]) {
       assert.ok(url.startsWith(mock.base), `${url} is not on ${mock.base}`)
     }
@@ -268,8 +265,8 @@ describe("legacy TMC mock contract", () => {
     )
   })
 
-  // Without this the "Some tests failed on the server" path has no backend that
-  // can produce it, so no tier can assert on it.
+  // Without this no backend produces the "Some tests failed on the server" path, so no tier
+  // can assert on it.
   test("the failing exercise grades as failed", async () => {
     const graded = await gradeOf(failingExerciseId)
     assert.equal(graded.status, "fail")
@@ -382,8 +379,7 @@ describe("legacy TMC mock authentication", () => {
     openMock.server.close()
   })
 
-  // tmc-server's `unauthorize_guest!` is what these mirror; the endpoints left
-  // out below are the ones it does not call.
+  // Mirrors tmc-server's `unauthorize_guest!`; endpoints it does not call are left out below.
   const guarded = [
     `/api/v8/courses/${pythonCourse.id}`,
     `/api/v8/courses/${pythonCourse.id}/exercises`,
@@ -398,8 +394,7 @@ describe("legacy TMC mock authentication", () => {
     test(`GET ${endpoint} refuses a request with no token`, async () => {
       const res = await fetch(`${mock.base}${endpoint}`)
       assert.equal(res.status, 401)
-      // The CLI reads `error` out of the body to build its message; without it
-      // the user sees the bare status.
+      // The CLI builds its message from `error`; without it the user sees the bare status.
       assert.deepEqual(await res.json(), { error: "Authentication required" })
     })
 
@@ -418,9 +413,8 @@ describe("legacy TMC mock authentication", () => {
 
   guarded.forEach((endpoint) => declareGuarded(endpoint))
 
-  // Guest-readable on tmc-server too, and tmc-langs documents both as needing no
-  // authentication: the extension resolves an organization before there is any
-  // session to authenticate with.
+  // Guest-readable on tmc-server too (tmc-langs documents both as needing no authentication):
+  // the extension resolves an organization before any session exists.
   test("GET org.json serves a guest", async () => {
     const res = await fetch(`${mock.base}/api/v8/org.json`)
     assert.equal(res.status, 200)

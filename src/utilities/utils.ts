@@ -29,18 +29,14 @@ export interface DownloadOptions {
   stallTimeoutMs?: number
 }
 
-/**
- * Whether `child` is `parent` itself or somewhere inside it.
- *
- * `pathModule` is only for testing Windows paths on other platforms.
- */
+/** Whether `child` is `parent` itself or somewhere inside it. `pathModule` is for testing only. */
 export function isPathInside(
   parent: string,
   child: string,
   pathModule: path.PlatformPath = path,
 ): boolean {
   const relative = pathModule.relative(parent, child)
-  // on Windows, paths on different drives have no relative path and come back absolute
+  // Paths on different Windows drives come back absolute
   return (
     !pathModule.isAbsolute(relative) &&
     relative !== ".." &&
@@ -49,25 +45,21 @@ export function isPathInside(
 }
 
 /**
- * Whether `a` and `b` refer to the same path, by the platform's rules for case and separators.
- *
- * `pathModule` is only for testing Windows paths on other platforms.
+ * Whether `a` and `b` are the same path by the platform's case and separator rules.
+ * `pathModule` is for testing only.
  */
 export function isSamePath(a: string, b: string, pathModule: path.PlatformPath = path): boolean {
   return pathModule.relative(a, b) === ""
 }
 
 /**
- * Downloads data from given url to the specified file. If file exists, its content will be
- * overwritten.
+ * Downloads `url` to `filePath`, overwriting any existing file.
  *
- * Never hangs: the request is bounded by both a total and a per-chunk budget, and by
- * the caller's own signal. A body that stops short of the `Content-Length` it declared
- * is an `Err`, so a truncated file is never handed back as a complete one. A failed write,
- * such as a full disk, is an `Err` too.
+ * Never hangs: bounded by a total and a per-chunk budget and the caller's signal. A body
+ * shorter than its declared `Content-Length`, or a failed write such as a full disk, is an
+ * `Err`, so a truncated file is never returned as complete.
  *
- * @param url Url to data
- * @param filePath Absolute path to the desired output file
+ * @param filePath Absolute path to the output file
  */
 export async function downloadFile(
   url: string,
@@ -81,8 +73,7 @@ export async function downloadFile(
   }
 
   const stallTimeoutMs = options?.stallTimeoutMs ?? DEFAULT_STALL_TIMEOUT_MS
-  // A `for await` over a silent body never yields again, so the stall watchdog has to
-  // abort the request itself rather than just break out of the loop.
+  // A `for await` over a silent body never yields, so the watchdog must abort the request.
   const stallController = new AbortController()
   const signals = [
     stallController.signal,
@@ -105,9 +96,8 @@ export async function downloadFile(
     let response: Response
     try {
       restartStallTimer()
-      // The extension host's fetch, never a bundled HTTP client: VS Code patches this
-      // one for proxy handling, and undici needs a newer Node than the Electron in the
-      // oldest VS Code `engines.vscode` allows.
+      // The host's fetch, not a bundled client: VS Code patches it for proxies, and undici
+      // needs a newer Node than the oldest supported VS Code's Electron.
       response = await fetch(url, { method: "get", signal })
     } catch (error) {
       return new Err(new ConnectionError(signal.aborted ? signal.reason : error))
@@ -135,8 +125,7 @@ export async function downloadFile(
     const size = sizeString && !isEncoded ? Math.trunc(Number(sizeString)) : 0
     try {
       restartStallTimer()
-      // `pipeline` rather than a write loop: it fails on a write error, such as a full disk,
-      // where a loop waiting for "drain" would hang.
+      // `pipeline` fails on a write error such as a full disk; a loop awaiting "drain" would hang.
       await pipeline(
         body,
         async function* (chunks: AsyncIterable<Uint8Array>) {
@@ -170,17 +159,13 @@ export async function downloadFile(
   }
 }
 
-/**
- * Await this to pause execution for an amount of time
- * @param millis
- */
+/** Resolves after `millis` milliseconds. */
 export function sleep(millis: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, millis)
   })
 }
 
-/** `count` and `noun`, with an "s" unless `count` is 1, e.g. "3 new exercises". */
 /**
  * Like `Promise.all(items.map(task))`, with at most `limit` tasks running at once. Results
  * keep the order of `items`; the first rejection rejects the whole, as with `Promise.all`.

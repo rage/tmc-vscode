@@ -33,12 +33,10 @@ export const BASE_USER_SETTINGS = {
   "workbench.startupEditor": "none",
 }
 
-// Chromium's helper processes (gpu/utility/renderer/crashpad) exit once the
-// main process is gone, so killing the main pid is enough to avoid leaking
-// VS Code processes between tests.
+// Chromium's helper processes exit with the main process, so killing it leaks nothing.
 function forceKill(pid: number): void {
   try {
-    // If Electron leads its own process group this reaps the whole tree.
+    // Reaps the whole tree if Electron leads its own process group.
     process.kill(-pid, "SIGKILL")
   } catch {
     try {
@@ -49,12 +47,11 @@ function forceKill(pid: number): void {
   }
 }
 
-// Under Xvfb in a headless sandbox, electronApp.close() frequently hangs
-// indefinitely instead of resolving; race it against a timeout and force-kill
-// if needed so teardown always completes. Caller has already flushed tracing.
+// Under Xvfb electronApp.close() often hangs, so race it against a timeout and force-kill.
+// The caller has already flushed tracing.
 async function closeElectron(electronApp: ElectronApplication): Promise<void> {
   const electronProcess = electronApp.process()
-  // Swallow close() errors/rejections (e.g. if the context is already gone).
+  // The context may already be gone.
   const gracefulClose = electronApp.close().then(
     () => true,
     () => true,
@@ -78,18 +75,15 @@ async function closeElectron(electronApp: ElectronApplication): Promise<void> {
 function launchArgs(userDataDir: string, isWorkspaceTrustEnabled: boolean): string[] {
   return [
     "--disable-gpu-sandbox",
-    // Xvfb has no real display, so Chromium sometimes backgrounds/kills the
-    // renderer for a window it considers occluded, tearing down VS Code mid-test
-    // ("Target page/context/browser has been closed"). These flags keep the
-    // renderer alive and force software GL.
+    // Under Xvfb Chromium sometimes kills the renderer of a window it deems occluded
+    // ("Target page/context/browser has been closed"); these flags prevent that.
     "--disable-gpu",
     "--disable-dev-shm-usage",
     "--disable-renderer-backgrounding",
     "--disable-backgrounding-occluded-windows",
     "--disable-background-timer-throttling",
     "--disable-updates",
-    // The workspace-trust prompt interrupts at unpredictable points once a
-    // course workspace is opened.
+    // The trust prompt interrupts at unpredictable points once a course workspace opens.
     ...(isWorkspaceTrustEnabled ? [] : ["--disable-workspace-trust"]),
     "--extensionDevelopmentPath=" + rootPath,
     "--new-window",
@@ -97,24 +91,20 @@ function launchArgs(userDataDir: string, isWorkspaceTrustEnabled: boolean): stri
     "--skip-release-notes",
     "--skip-welcome",
     "--user-data-dir=" + userDataDir,
-    // this makes it so vscode will not overwrite the environment
-    // variables we set below in `electron.launch` with values from `~/.bashrc` etc.
+    // Keeps VS Code from overwriting the env set in `electron.launch` with `~/.bashrc` etc.
     "--force-disable-user-env",
   ]
 }
 
-// The only login is the courses.mooc.fi device flow. Seeding a stored tmc token
-// exercises the "existing credentials keep working" path and lets the tmc specs
-// start logged in without a device-flow round trip.
+// The only login is the device flow; a seeded tmc token lets tmc specs start logged in
+// and covers the "existing credentials keep working" path.
 function seedTmcCredentials(configDir: string): void {
   const clientConfigDir = join(configDir, CLIENT_CONFIG_DIR_NAME)
   fs.mkdirSync(clientConfigDir, { recursive: true })
   fs.writeFileSync(join(clientConfigDir, "credentials.json"), JSON.stringify(tmcCredentials()))
 }
 
-// The mock backend is a long-lived process shared across specs, so both of its
-// mocks carry in-memory state from one test into the next; reset them the same
-// way the per-test config/projects dirs isolate on-disk state.
+// The mock backend outlives each test, so its in-memory state must be reset between tests.
 async function resetMockBackend(mock: string): Promise<void> {
   const reset = await fetch(`${MOCK_BACKEND_URL}/${mock}-mock/reset`, { method: "POST" })
   if (!reset.ok) {
@@ -127,8 +117,7 @@ async function resetMockBackend(mock: string): Promise<void> {
 
 type TraceMode = Exclude<PlaywrightWorkerOptions["trace"], { mode: unknown }>
 
-// The `trace` option's modes, applied to the Electron context Playwright's own
-// tracing never sees.
+// The `trace` modes, applied to the Electron context Playwright's own tracing never sees.
 const isTraceRecorded = (mode: TraceMode, testInfo: TestInfo): boolean => {
   switch (mode) {
     case "on":
@@ -146,8 +135,7 @@ const isTraceRecorded = (mode: TraceMode, testInfo: TestInfo): boolean => {
   }
 }
 
-// Each test gets fresh dirs; a ~50MB user data dir per test fills this
-// machine's 16G /tmp tmpfs within a few runs if one leaks.
+// A leaked ~50MB user data dir per test fills the 16G /tmp tmpfs within a few runs.
 const tempDirFixture =
   (prefix: string) =>
   // oxlint-disable-next-line no-empty-pattern -- Playwright requires the fixtures argument to be destructured
@@ -176,12 +164,10 @@ interface CustomTestFixtures {
 }
 
 interface CustomTestOptions {
-  // Overrides TMC_LANGS_MOOC_CLIENT_ID; the mock picks its device-flow
-  // scenario from this id (backend/mooc/oauth.ts), e.g. a "never approves"
-  // client for testing cancellation. Defaults to the real client, which the mock approves.
+  // Overrides TMC_LANGS_MOOC_CLIENT_ID; the mock picks its device-flow scenario from this id
+  // (backend/mooc/oauth.ts), e.g. a "never approves" client. Defaults to the real client.
   moocClientId: string | undefined
-  // Set false for specs that need a logged-out extension, e.g. the login entry
-  // points, which are hidden while a session exists.
+  // Set false for specs that need a logged-out extension; login entry points hide while logged in.
   seedTmcCredentials: boolean
   // Set true to run under Workspace Trust with the VS Code version's own defaults. Newer VS Code
   // keeps the trusted folders in the home directory, so the run gets a home of its own.
@@ -237,15 +223,11 @@ export const customTestFixtures: Fixtures<
         ...process.env,
         ...(isWorkspaceTrustEnabled && { HOME: join(userDataDir, "home") }),
         TMC_LANGS_TMC_ROOT_URL: MOCK_BACKEND_URL,
-        // Route mooc (courses.mooc.fi) CLI calls at the mock mounted in the same
-        // backend process (backend/mooc). Overrides the compiled MOOC_BACKEND_URL
-        // define.
+        // Overrides the compiled MOOC_BACKEND_URL; the mock is mounted in the same process.
         TMC_LANGS_MOOC_ROOT_URL: MOCK_BACKEND_URL,
-        // The CLI only attaches its bearer to trusted domains, not localhost, so
-        // without this every mooc resource call would 401 (same knob the
-        // integration bearer-auth suite uses).
+        // Without this the CLI sends no bearer to localhost and every mooc call 401s.
         TMC_LANGS_MOOC_TRUST_LOCALHOST: "1",
-        // Poll fast so the e2e doesn't wait the real RFC 8628 interval.
+        // Skips the real RFC 8628 polling interval.
         TMC_LANGS_MOOC_DEVICE_POLL_INTERVAL_MS: "250",
         ...(moocClientId ? { TMC_LANGS_MOOC_CLIENT_ID: moocClientId } : {}),
         TMC_LANGS_CONFIG_DIR: configDir,
@@ -258,8 +240,7 @@ export const customTestFixtures: Fixtures<
       if (isTracing) {
         await electronApp.context().tracing.start({ screenshots: true, snapshots: true })
       }
-      // Evaluated before the main process opens its first window, the stub can lose its
-      // execution context mid-call ("Execution context was destroyed").
+      // Evaluating before the first window opens can lose the execution context mid-call.
       await electronApp.firstWindow()
       await electronApp.evaluate(({ shell }) => {
         const opened: string[] = []
@@ -271,8 +252,6 @@ export const customTestFixtures: Fixtures<
 
       if (isTracing) {
         const isDiscarded = traceMode.startsWith("retain-on-") && testInfo.status === "passed"
-        // outputPath sanitises the title and scopes the file to this test, so two
-        // titles cannot collide on one trace.
         await electronApp
           .context()
           .tracing.stop(isDiscarded ? {} : { path: testInfo.outputPath("trace.zip") })

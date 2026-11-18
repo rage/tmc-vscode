@@ -1,14 +1,11 @@
 //@ts-check
 
-// Runner for the VS Code API / tmc-langs integration tier. Downloads the VS Code
-// build config.js pins and runs the bundled integration suite
-// (dist/integration.spec.js) inside the extension host via mocha
+// Runs the integration tier: downloads the VS Code build config.js pins and runs
+// dist/integration.spec.js in the extension host via mocha
 // (bin/integrationTestLoader.js).
 //
-// The suite spawns the bundled mock backend (backend/) itself and drives the
-// real tmc-langs CLI from backend/cli, so `backend` must be set up first
-// (`pnpm --filter tmc-vscode-mock-backend run setup`) and the extension must
-// be built (`pnpm run build`). See the `test:integration` npm script.
+// The suite spawns the mock backend and the real CLI from backend/cli, so run
+// `pnpm --filter tmc-vscode-mock-backend run setup` and `pnpm run build` first.
 const runTests = require("@vscode/test-electron").runTests
 const path = require("path")
 

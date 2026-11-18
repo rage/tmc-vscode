@@ -49,9 +49,8 @@ import { createDegradedContext, createMockActionContext } from "../mocks/actionC
 import { createMockContext } from "../mocks/vscode"
 import { createFakeWebviewPanel } from "../support/webviewPanel"
 
-// Mounts a fresh side panel (resetting any panel state a previous test left
-// behind) and returns the fake webview panel + its captured message listener,
-// so a test can post a message directly and inspect what got posted back.
+// Mounts a fresh side panel (resetting leftover panel state) and returns the fake webview
+// panel and its message listener.
 async function mountSidePanel(
   actionContext: ActionContext,
   extensionContext: vscode.ExtensionContext = createMockContext(),
@@ -69,8 +68,7 @@ async function mountSidePanel(
   TmcPanel.renderSide(extensionContext, actionContext, shownPanel ?? helpPanel())
   await sendReady()
   const listener = getMessageListener()
-  // Clear the initial mount's `setPanel` post so assertions below only see
-  // what the handler under test itself posts.
+  // Drop the mount's `setPanel` so assertions see only the handler's posts.
   vi.mocked(panel.webview.postMessage).mockClear()
 
   return { panel, listener }
@@ -94,8 +92,7 @@ function replyTo(panel: vscode.WebviewPanel, requestId: number): unknown {
 
 suite("TmcPanel initialization guards", () => {
   test("a panel waiting on data is told it is not coming, and nothing else is", async () => {
-    // Nothing else ever answers `requestCourseDetailsData`, so returning silently here
-    // leaves the panel on its spinner for the rest of the session.
+    // Nothing else answers `requestCourseDetailsData`; silence leaves the panel spinning.
     const actionContext = createDegradedContext()
     const { panel, listener } = await mountSidePanel(actionContext)
     const sourcePanel = {
@@ -316,8 +313,7 @@ function stubHandlers(): {
 
 suite("TmcPanel handler dispatch", () => {
   test("reports a handler that rejects instead of dropping it", async () => {
-    // The webview host discards whatever a listener rejects with, so nothing else
-    // would tell the user their click failed.
+    // The webview host discards listener rejections; nothing else would tell the user.
     const handlers = stubHandlers()
     handlers.openWorkspace.mockRejectedValue(new Error("handler exploded"))
     const actionContext = createMockActionContext({
@@ -693,8 +689,7 @@ suite("TmcPanel handler dispatch", () => {
   })
 
   test("a failed paste is reported in the panel, and not also as a notification", async () => {
-    // The panel that asked is on screen and renders the failure itself, so a toast
-    // would be the second report of one failure.
+    // The asking panel renders the failure itself; a toast would report it twice.
     const handlers = stubHandlers()
     handlers.pasteExercise.mockResolvedValue(Err(new Error("paste service is down")))
     const actionContext = createMockActionContext()
@@ -778,8 +773,7 @@ suite("TmcPanel handler dispatch, degraded startup", () => {
 })
 
 suite("TmcPanel inbound message guard", () => {
-  // The webview is a separate document; its messages are the extension's one untrusted
-  // input, and nothing downstream re-checks them.
+  // Webview messages are the extension's one untrusted input; nothing downstream re-checks.
   async function drive(message: unknown): Promise<{
     handlers: ReturnType<typeof stubHandlers>
     posted: ReturnType<typeof vi.fn>
@@ -818,8 +812,7 @@ suite("TmcPanel inbound message guard", () => {
 
 suite("TmcPanel webview-supplied paths and links", () => {
   test("hands the command only the course id, which it resolves from storage", async () => {
-    // The slug becomes a `.code-workspace` path the extension writes and opens, so a
-    // name the webview chose must never reach it.
+    // The slug becomes a `.code-workspace` path, so a webview-chosen name must never reach it.
     const handlers = stubHandlers()
     const actionContext = createMockActionContext({
       startup: { userData: storedCourses(() => Ok(courseWith(0))) },
@@ -846,8 +839,7 @@ suite("TmcPanel webview-supplied paths and links", () => {
   })
 
   test("refuses a link that is not http or https", async () => {
-    // `Uri.parse` in its default mode invents a `file` scheme for anything without one,
-    // so an unrestricted link would reach the OS handler as a local path.
+    // `Uri.parse` invents a `file` scheme for scheme-less input, which would open a local path.
     const openExternal = stubOpenExternal()
     const { listener } = await mountSidePanel(createMockActionContext())
 
@@ -910,8 +902,7 @@ suite("TmcPanel ready handshake", () => {
   test("does not replay a message aimed at a panel that is no longer shown", async () => {
     const { panel, listener } = await mountCourseDetails(createMockActionContext())
 
-    // an id that was never rendered here; buffering it would resend it to a panel
-    // that cannot interpret it
+    // an id never rendered here; buffering it would resend it to a panel that cannot read it
     postToSidePanel(courseDataFor({ id: 9999 }))
     vi.mocked(panel.webview.postMessage).mockClear()
 
@@ -1288,8 +1279,7 @@ suite("TmcPanel refreshCourseDetails", () => {
   })
 })
 
-// `jest-mock-vscode` ships no `env` namespace, so the tests that drive link opening
-// install one on the mock the `vscode` alias resolves to.
+// `jest-mock-vscode` ships no `env` namespace; install one for the link-opening tests.
 const vscodeMock = vscode as unknown as { env: { openExternal: (uri: vscode.Uri) => void } }
 
 function stubOpenExternal(): ReturnType<typeof vi.fn> {

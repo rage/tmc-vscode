@@ -18,10 +18,9 @@ const TRUST_REQUEST_TASK_TYPE = "testMyCode.workspaceTrust"
  * own trust modal. Does nothing in a trusted window. Settles once the question is answered or
  * dismissed, so activation must not await it.
  *
- * Asks nothing where VS Code asks on this startup by itself: always with `startupPrompt` "always",
- * and on a workspace's first untrusted opening with "once". A request made around VS Code's own
- * question would ask a student who has just answered it a second time. Elsewhere it explains first
- * why TestMyCode needs trust.
+ * Asks nothing where VS Code asks on this startup itself (`startupPrompt` "always", or "once" on
+ * a workspace's first untrusted opening), to avoid asking twice. Elsewhere it explains first why
+ * TestMyCode needs trust.
  *
  * @param workspaceState Where this records that the workspace has opened untrusted.
  */

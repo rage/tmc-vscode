@@ -4,8 +4,7 @@ import { createSettingsMock } from "./settings"
 
 suite("the settings mock", () => {
   test("it answers every method Settings exposes", () => {
-    // A method the mock omits reads as `undefined`, which a boolean setting's
-    // caller takes for "off" — a silent wrong answer rather than a failure.
+    // An omitted method reads as `undefined`, which a boolean setting's caller takes for "off".
     const [settings] = createSettingsMock()
     const publicSurface = Object.getOwnPropertyNames(Settings.prototype).filter(
       (name) => name !== "constructor" && !name.startsWith("_"),
@@ -15,9 +14,8 @@ suite("the settings mock", () => {
   })
 
   test("a delivered change reaches the subscriber and the next read alike", () => {
-    // Production reads the new value back out of the VS Code configuration, so a
-    // mock that notified without changing what a getter answers would let a test
-    // pass on a disagreement that cannot happen.
+    // Production reads the new value back from the configuration; a mock that only notified would
+    // pass tests on a disagreement that cannot happen.
     const [settings, values, change] = createSettingsMock()
     const notified: boolean[] = []
     settings.onChangeHideMetaFiles = (hide): void => void notified.push(hide)
@@ -30,8 +28,7 @@ suite("the settings mock", () => {
   })
 
   test("each value field feeds the getter for that same setting", () => {
-    // The two boolean settings default alike and share a type, so a getter wired
-    // to the wrong field reads correctly until a test changes exactly one of them.
+    // The two boolean settings default alike, so a miswired getter reads correctly until exactly one changes.
     const [settings, values] = createSettingsMock()
 
     values.downloadOldSubmission = true

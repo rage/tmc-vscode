@@ -7,14 +7,9 @@ import { Ajv2020 } from "ajv/dist/2020"
 
 import { courses } from "./fixtures"
 
-// Opaque-blob guard: the OpenAPI wire spec types `public_spec` as an opaque blob
-// (the tmc plugin owns its shape, the host only forwards it), so the mock's
-// response validator does NOT check its content. But the CLI deserialises it
-// into tmc-mooc-client's typed `PublicSpec`, so a fixture whose public_spec
-// drifts from that shape would break the CLI silently. This test closes that
-// hole locally: it validates every fixture's public_spec against a JSON schema
-// mirroring the tmc editor/browser public spec (public-spec.schema.json), OUT
-// of band from the OpenAPI spec.
+// The OpenAPI spec types `public_spec` as an opaque blob, so the mock's response validator
+// does not check it, but the CLI deserialises it into a typed `PublicSpec`. This validates
+// every fixture against public-spec.schema.json so drift cannot break the CLI silently.
 
 const schema = JSON.parse(
   fs.readFileSync(path.join(__dirname, "public-spec.schema.json"), "utf8"),
@@ -36,9 +31,7 @@ describe("mooc fixture public_spec shape", () => {
   }
 
   test("the fixtures cover both spec types", () => {
-    // The two types take different paths through the CLI -- only an editor task is
-    // downloadable and submittable -- so a fixture set carrying one of them leaves
-    // the other's branches untested wherever the mock is the backend.
+    // The types take different CLI paths (only an editor task is downloadable and submittable).
     const types = new Set(
       courses.flatMap(({ exercises }) =>
         exercises.flatMap(({ slide }) => slide.tasks.map((task) => task.public_spec.type)),

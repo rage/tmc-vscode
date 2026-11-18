@@ -15,9 +15,8 @@ import { DEVICE_GRANT_TYPE, MOCK_OAUTH_CLIENT_IDS, REAL_VSCODE_CLIENT_ID } from 
 import type { MoocMockControls } from "./router"
 import { createMoocApp, moocMockOf } from "./router"
 
-// These endpoints (see backend/mooc/oauth.ts) are outside the vendored
-// exercise-services OpenAPI spec, so — unlike conformance.test.ts — there's no
-// spec to validate against; this test pins the RFC 8628 behavior directly.
+// These endpoints (backend/mooc/oauth.ts) are outside the vendored OpenAPI spec, so this test
+// pins the RFC 8628 behavior directly rather than validating against it.
 
 const listen = (app: Express): Promise<{ server: Server; base: string; mock: MoocMockControls }> =>
   new Promise((resolve) => {
@@ -30,8 +29,7 @@ const listen = (app: Express): Promise<{ server: Server; base: string; mock: Moo
     })
   })
 
-// Drives `mock`'s injectable device-flow clock deterministically. The
-// advertised interval is 5s, so advancing by 6000ms crosses exactly one interval.
+// The advertised poll interval is 5s, so advancing 6000ms crosses exactly one.
 const useClock = (mock: MoocMockControls, start = 1_000_000): { advance: (ms: number) => void } => {
   let t = start
   mock.setOAuthClock(() => t)
@@ -104,12 +102,10 @@ describe("mooc device-flow oauth mock", () => {
     const clock = useClock(mock)
     const auth = (await (await deviceAuthorization(client)).json()) as { device_code: string }
 
-    // before one poll interval of wall-clock time has elapsed -> still pending
     const pending = await pollToken(auth.device_code, client)
     assert.equal(pending.status, 400)
     assert.equal(((await pending.json()) as { error: string }).error, "authorization_pending")
 
-    // once an interval has elapsed -> approved
     clock.advance(6000)
     const approved = await pollToken(auth.device_code, client)
     assert.equal(approved.status, 200)
@@ -159,16 +155,13 @@ describe("mooc device-flow oauth mock", () => {
     const clock = useClock(mock)
     const auth = (await (await deviceAuthorization(client)).json()) as { device_code: string }
 
-    // within the first interval -> slow_down (polled too soon)
     const first = await pollToken(auth.device_code, client)
     assert.equal(((await first.json()) as { error: string }).error, "slow_down")
 
-    // after one interval -> authorization_pending
     clock.advance(6000)
     const second = await pollToken(auth.device_code, client)
     assert.equal(((await second.json()) as { error: string }).error, "authorization_pending")
 
-    // after two intervals -> approved
     clock.advance(6000)
     const third = await pollToken(auth.device_code, client)
     assert.equal(third.status, 200)
@@ -189,8 +182,7 @@ describe("mooc device-flow oauth mock", () => {
   })
 
   test("unknown device code: invalid_grant", async () => {
-    // `expired_token` is reserved for a code the provider still holds and whose
-    // lifetime has run out; one it never issued is simply not a grant.
+    // `expired_token` is only for a code the provider still holds; one it never issued is no grant.
     const res = await pollToken("no-such-device-code", REAL_VSCODE_CLIENT_ID)
     assert.equal(res.status, 400)
     assert.equal(((await res.json()) as { error: string }).error, "invalid_grant")
@@ -235,8 +227,7 @@ describe("mooc device-flow oauth mock", () => {
   })
 
   test("an approved grant outranks the poll rate, so eager polling still logs in", async () => {
-    // The client that polled too fast must still get its token once the user has
-    // authorized -- otherwise a fast poller could never finish the flow.
+    // A too-fast poller must still get its token once authorized, or it could never finish.
     const client = REAL_VSCODE_CLIENT_ID
     const clock = useClock(mock)
     const auth = (await (await deviceAuthorization(client)).json()) as { device_code: string }
@@ -276,7 +267,6 @@ describe("mooc device-flow oauth mock", () => {
       client_id: clientId,
     })
 
-  // Runs the device flow to approval and returns the minted pair.
   const login = async (
     client = REAL_VSCODE_CLIENT_ID,
   ): Promise<{ access_token: string; refresh_token: string }> => {
@@ -494,8 +484,7 @@ describe("mooc resource-endpoint bearer auth mode", () => {
     })
 
     test("the expire-access-token route makes the next call 401", async () => {
-      // The out-of-process lever for the reactive refresh path: the client still
-      // believes its stored token is good, so the 401 comes as a surprise.
+      // Exercises the reactive refresh path: the client still thinks its token is good.
       assert.equal((await get(base, MOCK_SEEDED_ACCESS_TOKEN)).status, 200)
       const expired = await fetch(`${base}/mooc-mock/expire-access-token`, {
         method: "POST",

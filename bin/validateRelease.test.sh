@@ -1,7 +1,6 @@
 #!/bin/bash
-# Pins the two version checks in bin/validateRelease.sh. Both shipped wrong: the
-# tag pattern rejected 'v3.5.10' while accepting 'v1.2.31.2.3', and the
-# package.json comparison accepted '3.5.30' for tag '3.5.3'.
+# Pins bin/validateRelease.sh: tag 'v3.5.10' is accepted, 'v1.2.31.2.3' rejected, and
+# package.json '3.5.30' does not match tag '3.5.3'.
 set -uo pipefail
 
 source "$(dirname "$0")/validateRelease.sh"

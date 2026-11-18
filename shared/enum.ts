@@ -1,33 +1,18 @@
 import { z } from "zod"
 
-/**
- * Which of the two backends something belongs to.
- *
- * This is the bare tag, for values that name a backend without carrying per-backend data.
- * Anything that does carry per-backend data is an {@link Enum} instead, whose `kind` uses
- * the same two spellings.
- */
+/** The bare backend tag; values with per-backend data are an {@link Enum}, whose `kind` matches. */
 export type BackendKind = "tmc" | "mooc"
 
 export type Enum<Tmc, Mooc> = { kind: "tmc"; data: Tmc } | { kind: "mooc"; data: Mooc }
 
-// schema equivalent of the `Enum<Tmc, Mooc>` tagged union
-//
-// the return type is annotated as `z.ZodType<Enum<...>>` so that the inferred
-// type of an enum schema is exactly the `Enum<A, B>` alias — this keeps
-// generic helpers like `match` inferring the same way they do for
-// hand-written `Enum<A, B>` types
+// Schema for `Enum<Tmc, Mooc>`. Annotated as `z.ZodType<Enum<...>>` so the inferred type is
+// exactly that alias and generic helpers like `match` infer as for hand-written ones.
 export function EnumSchema<Tmc extends z.ZodType, Mooc extends z.ZodType>(
   tmc: Tmc,
   mooc: Mooc,
 ): z.ZodType<Enum<z.output<Tmc>, z.output<Mooc>>> {
-  // the cast is needed because TypeScript cannot prove that the mapped types
-  // in zod's inferred object types simplify to `Enum`'s members while `Tmc` and
-  // `Mooc` are still generic; every call site is checked against the annotated
-  // return type above
-  //
-  // the price of the annotation is that zod's own `.options` and `.extend()` are
-  // no longer visible on the result
+  // The cast: TypeScript cannot prove zod's mapped object types simplify to `Enum`'s
+  // members while `Tmc`/`Mooc` are generic. Costs zod's `.options` and `.extend()` on the result.
   return z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("tmc"), data: tmc }),
     z.object({ kind: z.literal("mooc"), data: mooc }),
@@ -50,10 +35,7 @@ export namespace CourseIdentifier {
     )
   }
 
-  /**
-   * A string naming the course and its backend, for `Map`/`Set` keys and comparisons:
-   * {@link toString} alone makes tmc course `1` and mooc course `"1"` collide.
-   */
+  /** Backend-qualified id for `Map`/`Set` keys; {@link toString} alone collides `1` and `"1"`. */
   export function key(id: CourseIdentifier): string {
     return `${id.kind}:${toString(id)}`
   }
@@ -85,7 +67,6 @@ export namespace ExerciseIdentifier {
   }
 }
 
-// helper to simulate Rust's `match`
 export function match<A, B, C, D>(data: Enum<A, B>, tmc: (x: A) => C, mooc: (x: B) => D): C | D {
   switch (data.kind) {
     case "tmc": {
@@ -101,14 +82,12 @@ export function match<A, B, C, D>(data: Enum<A, B>, tmc: (x: A) => C, mooc: (x: 
 }
 
 /**
- * The name to show the user for a backend, only where they pick a course: elsewhere student
- * text names neither host. Course slugs and titles are only unique within one backend, so a
- * list of courses from both must name the backend alongside them.
+ * The name shown for a backend, only where the student picks a course (slugs and titles are
+ * unique only within one backend); elsewhere student text names neither host.
  *
- * This is the only place those names are spelled: no component, panel or message
- * writes "tmc.mooc.fi", "TestMyCode", "courses.mooc.fi" or "Courses MOOC" itself.
- * Backend base URLs follow the same rule and come from the `__TMC_BACKEND_URL__`
- * and `__MOOC_BACKEND_URL__` build defines in `config.js`, never from a literal.
+ * The only place these names are spelled, so no component, panel or message writes
+ * "tmc.mooc.fi", "TestMyCode", "courses.mooc.fi" or "Courses MOOC" itself. Base URLs likewise
+ * come from the `__TMC_BACKEND_URL__`/`__MOOC_BACKEND_URL__` defines in `config.js`.
  */
 export function backendName(kind: BackendKind): string {
   return kind === "tmc" ? "tmc.mooc.fi" : "courses.mooc.fi"

@@ -42,8 +42,7 @@ suite("logout action", function () {
     expect(dialogMock.reportError).not.toHaveBeenCalled()
   })
 
-  // Composed exactly like `commands/logout.ts`, to prove the failure is
-  // reported exactly once end to end, not zero or twice.
+  // Composed like `commands/logout.ts`, to prove the failure is reported exactly once.
   test("withOperation reports a failed logout once", async function () {
     deauthenticate = vi.fn(async () => Err(new Error("logout failed")))
     await withOperation(dialogMock, { failure: "Failed to log out." }, () =>

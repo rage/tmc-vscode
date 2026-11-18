@@ -13,8 +13,7 @@ import type { ReadyActionContext } from "./types"
 /**
  * Moves every exercise on disk out of the exercises folder into a sibling folder, so whoever
  * is logged in now downloads their own and cannot submit another student's work as theirs.
- * Nothing is deleted: unsaved changes in the exercises' editors are saved first, and the
- * editors closed.
+ * Nothing is deleted; unsaved editor changes are saved first and the editors closed.
  *
  * @returns The folder the exercises are now in; `Err`, moving nothing, when an editor could not
  *   be saved or stayed open.

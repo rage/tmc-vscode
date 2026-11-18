@@ -125,8 +125,8 @@ suite("buildCourseView", () => {
   })
 
   test("ignores an identically named exercise belonging to another course or backend", () => {
-    // The workspace tracks every downloaded exercise, so the course a status belongs to
-    // has to be checked or two courses sharing a slug would read each other's state.
+    // The workspace tracks every downloaded exercise, so the course must be checked or courses
+    // sharing a slug would read each other's state.
     const parts = build(course([exercise({ id: 1, name: "part01-01_hello" })]), [
       onDisk(1, "part01-01_hello", ExerciseStatus.Open, { courseId: idOfTmcCourse(7) }),
       onDisk(1, "part01-01_hello", ExerciseStatus.Open, {

@@ -3,9 +3,8 @@ const CODICON_STYLESHEET_ID = "vscode-codicon-stylesheet"
 /**
  * Serves the codicon rules that every `<vscode-icon>` links into its shadow root from memory.
  *
- * In a webview each such link is a request through VS Code's service worker, and one still
- * pending when VS Code discards the hidden webview stalls the webview it creates on reveal for
- * about 30 s. A `blob:` URL never reaches the worker.
+ * Each such link is a request through VS Code's service worker; one still pending when VS Code
+ * discards a hidden webview stalls the next webview's reveal for ~30 s. A `blob:` URL bypasses it.
  *
  * Call before the first icon renders. Does nothing when the stylesheet's rules cannot be read.
  */

@@ -1,35 +1,22 @@
 #!/bin/bash
-# Re-vendors the tmc-langs-cli output contract JSON Schema into this repo.
+# Re-vendors the tmc-langs-cli output contract JSON Schema: the `bindings.schema-<version>.json`
+# asset of the tmc-langs-rust release that config.js's TMC_LANGS_RUST_VERSION pins.
 #
-# The source is the `bindings.schema-<version>.json` asset of the tmc-langs-rust
-# GitHub release that config.js's TMC_LANGS_RUST_VERSION pins, so the vendored
-# schema is the one the shipped binary emits (`tmc-langs-cli schema`).
+# shared/bindings.schema.json is not used at runtime; it is the drift reference for the generated
+# zod schemas (src/test/langsSchema.test.ts) and for the startup self-check
+# (src/init/verifyCliSchema.ts), which diffs it against `tmc-langs-cli schema`.
 #
-# The vendored copy at shared/bindings.schema.json is NOT used at runtime.
-# It is the drift reference for the generated zod schemas: the contract test
-# (src/test/langsSchema.test.ts) cross-checks them against it, and the startup
-# self-check (src/init/verifyCliSchema.ts) diffs it against `tmc-langs-cli
-# schema` output from the actual binary.
+# Drift gating, mirroring bin/updateLangsOpenapi.sh:
+#   * A provenance stamp (shared/bindings.schema.source.json: source release + sha256) lets CI
+#     catch a hand-edited schema. `--check-stamp` verifies it offline.
+#   * `--check` fetches the pinned release's schema and byte-compares, which also catches a pin
+#     bumped without re-vendoring. Needs network.
+#   * `--from-checkout` vendors the committed schema of a local tmc-langs-rust checkout
+#     (TMC_LANGS_RUST_DIR, default ../tmc-langs-rust) for an unreleased CLI. Its stamp names the
+#     rev and no release, so `--check` fails until the pin is bumped and re-vendored.
 #
-# Drift gating (two layers, mirroring bin/updateLangsOpenapi.sh):
-#   * A provenance STAMP committed next to the vendored schema
-#     (shared/bindings.schema.source.json: the source release + the schema's
-#     sha256) lets CI verify the vendored schema has not been hand-edited without
-#     a re-vendor. `--check-stamp` performs that check offline.
-#   * `--check` fetches the pinned release's schema and byte-compares, which also
-#     catches a pin bumped without re-vendoring. It needs network.
-#
-#   * `--from-checkout` vendors the committed schema of a local tmc-langs-rust
-#     checkout instead (TMC_LANGS_RUST_DIR, default ../tmc-langs-rust), for
-#     building against an unreleased CLI. Its stamp names the checkout's rev and
-#     no release, so `--check` fails until the pin is bumped and re-vendored.
-#
-# Run via `pnpm run vendor:langs-schema`. This step alone only re-vendors the
-# JSON Schema; it does not regenerate the zod/TS output. Follow it with
-# `pnpm run generate:langs-schema` (bin/generateLangsSchema.mjs) to regenerate
-# shared/generated/langs from the freshly vendored schema, then run the contract
-# test. The two steps are split so CI can run `generate:langs-schema` alone
-# (from the committed vendored schema) to check for drift.
+# Run via `pnpm run vendor:langs-schema`, then `pnpm run generate:langs-schema` to regenerate
+# shared/generated/langs; the steps are split so CI can run the generator alone.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
