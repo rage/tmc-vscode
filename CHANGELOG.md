@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- The course home's "AI policy changed" notice goes away once the course's policy changes again, and a course that no longer sets a policy says nothing of it, though AI assistance stays off.
 - After a Log Out, the course home no longer offers to open an exercise that is not downloaded, as that needs a login, and an exercise opened from elsewhere asks you to log in without a red error or a "download failed" row.
 - The Courses view asks you to log in with the same sentence on a fresh install as after a Log Out.
 - Opening a course workspace waits for a running download or update to finish, so the workspace lists the new exercises without restarting the extension once open, and a reload of this window neither stops the download nor forgets which files it gave, which Submit needs to warn about a deleted file.

@@ -2,6 +2,7 @@ import { Err, Ok } from "ts-results"
 import * as vscode from "vscode"
 
 import type { CourseHomeView, ExerciseIdentifier, Panel } from "../../../shared/lib"
+import { LocalCourseData } from "../../../shared/lib"
 import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import type WorkspaceManager from "../../api/workspaceManager"
@@ -12,7 +13,7 @@ import { buildCourseHomeView } from "../../ui/courseHome"
 import { recentPolicyChanges } from "../../ui/recentPolicyChanges"
 import { recentUpdates } from "../../ui/recentUpdates"
 import { openCourseExercises } from "../../ui/treeview/treeCommands"
-import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
+import { moocLocalCourse, tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
 import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
 import { createMockActionContext } from "../mocks/actionContext"
 
@@ -83,10 +84,11 @@ async function exerciseAction(
 async function courseAction(
   actionContext: ReadyActionContext,
   action: Parameters<typeof courseDetailsHandlers.courseAction.handle>[0]["action"],
+  shown: Panel = SHOWN,
 ): Promise<void> {
   await courseDetailsHandlers.courseAction.handle(
     { type: "courseAction", sourcePanel: SOURCE, action },
-    { host: host(), actionContext },
+    { host: host(shown), actionContext },
   )
 }
 
@@ -304,11 +306,15 @@ suite("the course home's course actions", function () {
   })
 
   test("dismissing the AI policy notice forgets the change", async function () {
-    recentPolicyChanges.add(COURSE, "AI may not be used at any point.")
+    const course = moocLocalCourse({ aiPolicy: "no_ai" })
+    recentPolicyChanges.addChangeOf(course)
 
-    await courseAction(context(), "dismissAiPolicyChange")
+    await courseAction(context(), "dismissAiPolicyChange", {
+      ...SHOWN,
+      courseId: LocalCourseData.getCourseId(course),
+    })
 
-    expect(recentPolicyChanges.get(COURSE)).toBeUndefined()
+    expect(recentPolicyChanges.get(course)).toBeUndefined()
   })
 
   test("dismissing the update notice forgets what the automatic update replaced", async function () {

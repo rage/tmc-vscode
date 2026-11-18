@@ -316,7 +316,7 @@ suite("refreshEverything's new-exercises prompt", function () {
 
     await refreshEverything(actionContext, { silent: true })
 
-    expect(recentPolicyChanges.get(courseId)).toBe(
+    expect(recentPolicyChanges.get(course)).toBe(
       "AI may not be used at any point. AI assistance is off in this course.",
     )
     expect(dialog.notification).not.toHaveBeenCalled()

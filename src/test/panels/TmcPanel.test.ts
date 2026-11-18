@@ -1226,7 +1226,7 @@ suite("TmcPanel refreshCourseDetails", () => {
 
     await listener(refreshRequest(shown))
 
-    expect(recentPolicyChanges.get(LocalCourseData.getCourseId(course))).toBeDefined()
+    expect(recentPolicyChanges.get(course)).toBeDefined()
   })
 
   test("answers with the course, not an error, when the student has logged out", async () => {

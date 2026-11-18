@@ -172,7 +172,7 @@ export function buildCourseHomeView(
         name: exerciseName,
         reason,
       })),
-    aiPolicyChange: recentPolicyChanges.get(courseId) ?? null,
+    aiPolicyChange: recentPolicyChanges.get(course) ?? null,
     recentlyUpdated: recentUpdates.get(courseId),
     missingLanguageExtensions: missingLanguageExtensions(
       actionContext.startup.workspaceManager
