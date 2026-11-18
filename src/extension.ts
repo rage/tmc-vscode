@@ -73,7 +73,7 @@ import { BackgroundStatusBarItem } from "./ui/statusBarBackground"
 import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
 import { submissionViews } from "./ui/submissionViews"
 import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
-import { cliFolder, Logger, semVerCompare } from "./utilities"
+import { cliFolder, Logger, semVerCompare, setRedactedExtensionStorage } from "./utilities"
 import { keepExerciseFilesInFirstGroup } from "./window/exerciseEditorPlacement"
 import {
   reachWalkthroughMilestone,
@@ -159,6 +159,7 @@ interface StartupContext {
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  setRedactedExtensionStorage(context.globalStorageUri.fsPath)
   // `onStartupFinished` activates in every window; one TestMyCode has no part in yet stays light.
   if (await init.canDeferActivation(context)) {
     await init.deferActivation(context, () => activateFully(context))

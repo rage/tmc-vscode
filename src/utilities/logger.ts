@@ -97,26 +97,31 @@ export function redactSecrets(text: string): string {
     .replaceAll(USER_CODE, "<redacted>")
 }
 
+let redactedExtensionStorage: string | undefined
+
+/** Sets the extension's storage directory, which {@link redactPersonalInfo} shortens. */
+export function setRedactedExtensionStorage(directory: string | undefined): void {
+  redactedExtensionStorage = directory
+}
+
 /**
- * `text` with the home directory written as `~` (`%USERPROFILE%` on Windows) and the OS username
- * replaced, for what a student may screenshot or paste into a bug report.
+ * `text` with the extension's storage directory written as `<extension storage>`, the home
+ * directory as `~` (`%USERPROFILE%` on Windows) and the OS username replaced, for what a student
+ * may screenshot or paste into a bug report.
  */
 export function redactPersonalInfo(
   text: string,
   home = os.homedir(),
   username = currentUsername(),
   isWindows = process.platform === "win32",
+  extensionStorage = redactedExtensionStorage,
 ): string {
   let redacted = text
-  if (home.length > 1) {
-    const separators = isWindows ? ["\\", "/", "\\\\"] : ["/"]
-    const spellings = _.uniq(
-      separators.map((separator) => home.split(/[\\/]/).join(separator)),
-    ).map((spelling) => _.escapeRegExp(spelling))
-    // Not a longer name that starts with the home's, such as /home/al for /home/alice.
-    const homePattern = new RegExp(`(?:${spellings.join("|")})(?![\\w.-])`, isWindows ? "gi" : "g")
-    redacted = redacted.replace(homePattern, isWindows ? "%USERPROFILE%" : "~")
+  // First, as it may lie in the home.
+  if (extensionStorage !== undefined) {
+    redacted = replaceDirectory(redacted, extensionStorage, "<extension storage>", isWindows)
   }
+  redacted = replaceDirectory(redacted, home, isWindows ? "%USERPROFILE%" : "~", isWindows)
   // A name this short would match inside ordinary words.
   if (username && username.length >= 3) {
     const userPattern = new RegExp(
@@ -126,6 +131,25 @@ export function redactPersonalInfo(
     redacted = redacted.replace(userPattern, "<user>")
   }
   return redacted
+}
+
+/** `text` with `directory` written as `replacement`, in each separator it may be spelled with. */
+function replaceDirectory(
+  text: string,
+  directory: string,
+  replacement: string,
+  isWindows: boolean,
+): string {
+  if (directory.length <= 1) {
+    return text
+  }
+  const separators = isWindows ? ["\\", "/", "\\\\"] : ["/"]
+  const spellings = _.uniq(
+    separators.map((separator) => directory.split(/[\\/]/).join(separator)),
+  ).map((spelling) => _.escapeRegExp(spelling))
+  // Not a longer name that starts with the directory's, such as /home/al for /home/alice.
+  const pattern = new RegExp(`(?:${spellings.join("|")})(?![\\w.-])`, isWindows ? "gi" : "g")
+  return text.replace(pattern, replacement)
 }
 
 function currentUsername(): string | undefined {

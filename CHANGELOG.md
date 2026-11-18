@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Error Details writes the extension's storage folder, where the command-line tool lives, as `<extension storage>` in the text it shows and copies; the log file keeps the full path.
 - A result whose points wait for a teacher's review says "Points after review, out of n" where the points meter would be, and leads on to the next exercise as the course home does, as does one whose pass a review holds back since the grading.
 - History shows "Restoring…" only once you confirm the restore, not behind its confirmation.
 - Get Help opened on a result that did not pass is put away once a later result passes; on a passed result it shows only when you open it from More Actions.
