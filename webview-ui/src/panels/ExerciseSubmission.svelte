@@ -59,7 +59,8 @@
   let isHistoryOpen = $state(false)
   let history = $state<ReturnType<typeof SubmissionHistory> | undefined>(undefined)
   let isGetHelpOpen = $state(false)
-  // Get help stays for a student who asked for it where the result would not offer it.
+  // Get help stays for a student who asked for it where the result would not offer it, until
+  // the result changes.
   const isGetHelpRequested = uiState("isGetHelpRequested", false)
   // The last section request handled, so one resent after a reload does not paste again.
   const handledSectionSerial = uiState("handledSectionSerial", 0)
@@ -266,6 +267,11 @@
     }
     const previous = view
     view = message.view
+    // Help asked for on a result that did not pass stays with it, not with the next one.
+    if (previous?.canPaste && !view.canPaste) {
+      isGetHelpRequested.current = false
+      isGetHelpOpen = false
+    }
     if (previous === undefined) {
       void tick().then(restoreScroll)
     }

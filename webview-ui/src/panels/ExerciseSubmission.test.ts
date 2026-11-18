@@ -358,6 +358,27 @@ suite("ExerciseSubmission panel (tmc results)", () => {
     )
   })
 
+  test("help asked for on a failed result is put away once a later one passes", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showTmcResult(submissionFinished({ status: "fail", all_tests_passed: false, points: [] }))
+    await screen.findByRole("heading", { name: "Not passed" })
+    await chooseMenuItem("Get Help")
+    expect(screen.getByRole("button", { name: "Get Help" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    )
+
+    showTmcResult(submissionFinished())
+
+    await screen.findByRole("heading", { name: "Passed" })
+    expect(screen.queryByRole("button", { name: "Get Help" })).not.toBeInTheDocument()
+    await chooseMenuItem("Get Help")
+    expect(screen.getByRole("button", { name: "Get Help" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    )
+  })
+
   test("valgrind output is available behind a disclosure", async () => {
     render(ExerciseSubmission, { props: { panel } })
     showTmcResult(submissionFinished({ valgrind: "==1== definitely lost: 8 bytes" }))
