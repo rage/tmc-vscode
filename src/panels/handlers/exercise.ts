@@ -82,7 +82,14 @@ export const exerciseHandlers = {
       return withOperation(
         actionContext.dialog,
         { failure: "Failed to restore the submission.", silent: true },
-        () => restoreSubmission(actionContext, exercise, submission),
+        () =>
+          restoreSubmission(actionContext, exercise, submission, () =>
+            host.post({
+              type: "restoreConfirmed",
+              target: { id: shown.id, type: shown.type },
+              key: message.key,
+            }),
+          ),
       )
     },
   },

@@ -1,7 +1,8 @@
 import { render, screen, within } from "@testing-library/svelte"
+import { tick } from "svelte"
 
 import type { SubmissionHistoryEntry } from "../../../../shared/lib"
-import { postedMessages, replyToRequest } from "../../test/setup"
+import { dispatchToWebview, postedMessages, replyToRequest } from "../../test/setup"
 import SubmissionHistory from "./SubmissionHistory.svelte"
 
 const sourcePanel = { id: 4, type: "ExerciseSubmission" } as const
@@ -54,6 +55,11 @@ function rowTexts(): string[] {
   return screen
     .getAllByRole("listitem")
     .map((item) => (item.textContent ?? "").replaceAll(/\s+/g, " ").trim())
+}
+
+/** The host's word that the student confirmed restoring `key`. */
+function confirmRestore(key: string): void {
+  dispatchToWebview({ type: "restoreConfirmed", target: sourcePanel, key })
 }
 
 suite("SubmissionHistory component", () => {
@@ -132,6 +138,13 @@ suite("SubmissionHistory component", () => {
       sourcePanel,
       key: "sub-2",
     })
+    // The host asks first in a modal; until the answer the restore has not begun.
+    await tick()
+    expect(screen.queryByText("Restoring…")).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /^Restore the submission/ })).toHaveAttribute(
+      "disabled",
+    )
+    confirmRestore("sub-2")
     expect(await screen.findByText("Restoring…")).toBeInTheDocument()
     replyToRequest("restoreSubmission", { ok: true, value: "restored" })
     expect(
@@ -146,7 +159,6 @@ suite("SubmissionHistory component", () => {
     render(SubmissionHistory, { props: { sourcePanel } })
     listWith([passed])
     ;(await screen.findByRole("button", { name: /^Restore the submission/ })).click()
-    await screen.findByText("Restoring…")
 
     replyToRequest("restoreSubmission", { ok: true, value: "cancelled" })
 

@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- History shows "Restoring…" only once you confirm the restore, not behind its confirmation.
 - Get Help opened on a result that did not pass is put away once a later result passes; on a passed result it shows only when you open it from More Actions.
 - The results screen's Next follows the course as it stands now, as the course home does: once you are no longer enrolled, or nothing after the exercise is left to do, it is not offered.
 - An automatic update or download that finds its exercises already downloading leaves them to the running one without a notification; the status bar spinner shows that work.

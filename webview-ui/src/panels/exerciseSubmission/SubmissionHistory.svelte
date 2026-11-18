@@ -11,7 +11,7 @@
   import ErrorNotice from "../../components/ErrorNotice.svelte"
   import Spinner from "../../components/Spinner.svelte"
   import { announce } from "../../utilities/a11y.svelte"
-  import { createRequester } from "../../utilities/script"
+  import { addMessageListener, createRequester } from "../../utilities/script"
 
   interface Props {
     /** The host lists and restores the submissions of the exercise `sourcePanel` shows. */
@@ -27,6 +27,8 @@
 
   let entries = $state.raw<SubmissionHistoryEntry[] | undefined>(undefined)
   let loadError = $state<WebviewError | undefined>(undefined)
+  // Asked for, and waiting on the host's confirmation modal; `restoringKey` once confirmed.
+  let requestedKey = $state<string | undefined>(undefined)
   let restoringKey = $state<string | undefined>(undefined)
   let restoreError = $state<WebviewError | undefined>(undefined)
   let restoreNote = $state<string | undefined>(undefined)
@@ -41,6 +43,12 @@
   }
 
   onMount(() => void load())
+  // svelte-ignore state_referenced_locally -- the panel never changes: a new one remounts
+  addMessageListener(sourcePanel as ExerciseSubmissionPanel, (message) => {
+    if (message.type === "restoreConfirmed" && message.key === requestedKey) {
+      restoringKey = message.key
+    }
+  })
 
   let isLoading = false
 
@@ -67,10 +75,11 @@
   }
 
   async function restore(entry: SubmissionHistoryEntry) {
-    restoringKey = entry.key
+    requestedKey = entry.key
     restoreError = undefined
     restoreNote = undefined
     const outcome = await request("restoreSubmission", { sourcePanel, key: entry.key })
+    requestedKey = undefined
     restoringKey = undefined
     if (!outcome.ok) {
       restoreError = outcome.error
@@ -140,7 +149,7 @@
             {:else}
               <Button
                 secondary
-                disabled={restoringKey !== undefined}
+                disabled={requestedKey !== undefined}
                 aria-label="Restore the {KIND_LABELS[
                   entry.kind
                 ].toLowerCase()} from {entry.dateLabel}"

@@ -444,6 +444,12 @@ export const ExtensionToWebviewSchema = z.discriminatedUnion("type", [
     serial: z.number(),
     shouldPaste: z.boolean(),
   }),
+  // The student confirmed restoring History's entry `key`, which runs now.
+  z.object({
+    type: z.literal("restoreConfirmed"),
+    target: targetPanelSchema("ExerciseSubmission"),
+    key: z.string(),
+  }),
   // An action the screen started failed, or one of its buttons could not run.
   z.object({
     type: z.literal("operationFailed"),
