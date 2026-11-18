@@ -899,7 +899,7 @@
       {
         "view": "tmcView",
         "when": "test-my-code:Initialized && !test-my-code:LoggedIn",
-        "contents": "Log in with your MOOC.fi account to download, test and submit exercises.\n[Log In](command:tmc.showMoocLogin)\n[Read the Installation Guide](https://www.mooc.fi/en/installation/vscode)"
+        "contents": "Log in with your MOOC.fi account to download and submit exercises.\n[Log In](command:tmc.showMoocLogin)\n[Read the Installation Guide](https://www.mooc.fi/en/installation/vscode)"
       },
       {
         "view": "tmcView",

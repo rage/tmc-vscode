@@ -23,6 +23,16 @@ console.log("Loading extension from", rootPath)
 
 const GRACEFUL_CLOSE_TIMEOUT_MS = 10_000
 
+/** The user settings every run starts with, before the test's own `userSettings`. */
+export const BASE_USER_SETTINGS = {
+  // A native dialog is outside the page, where Playwright cannot press its buttons; the
+  // extension's confirmations are modal dialogs.
+  "window.dialogStyle": "custom",
+  // On a fresh profile VS Code's own welcome walkthrough sometimes opens late and takes over
+  // the Get Started editor from ours.
+  "workbench.startupEditor": "none",
+}
+
 // Chromium's helper processes (gpu/utility/renderer/crashpad) exit once the
 // main process is gone, so killing the main pid is enough to avoid leaking
 // VS Code processes between tests.
@@ -207,12 +217,10 @@ export const customTestFixtures: Fixtures<
     run,
     testInfo,
   ) => {
-    // A native dialog is outside the page, where Playwright cannot press its buttons; the
-    // extension's confirmations are modal dialogs.
     fs.mkdirSync(join(userDataDir, "User"))
     fs.writeFileSync(
       join(userDataDir, "User", "settings.json"),
-      JSON.stringify({ "window.dialogStyle": "custom", ...userSettings }),
+      JSON.stringify({ ...BASE_USER_SETTINGS, ...userSettings }),
     )
     if (isWorkspaceTrustEnabled) {
       fs.mkdirSync(join(userDataDir, "home"))

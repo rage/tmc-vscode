@@ -91,7 +91,7 @@ vsCodeTest(
       await coursesView.addNewCourse(course)
       await coursesView.expand(coursesView.row(course))
       await coursesView.runInlineAction(coursesView.row(exercise), "Download")
-      await coursesView.runInlineAction(coursesView.row(course), "Open Course Workspace")
+      await coursesView.openCourseWorkspace(course)
     })
 
     await vsCodeTest.step("run the tests and submit from the results screen", async () => {
@@ -112,7 +112,9 @@ vsCodeTest(
       "the walkthrough has both steps ticked, also in a new window",
       async () => {
         // A window opened later, as a course workspace's is, knows the milestones only from storage.
-        await coursesView.runPaletteCommand("Developer: Reload Window")
+        await coursesView.reloadingWindow(() =>
+          coursesView.runPaletteCommand("Developer: Reload Window"),
+        )
         await coursesView.goto()
         await expect(coursesView.row(course)).toBeVisible({ timeout: 30_000 })
         await coursesView.runPaletteCommand("TestMyCode: Get Started")
@@ -164,7 +166,7 @@ vsCodeTest(
       await coursesView.goto()
       await coursesView.expand(coursesView.row(course))
       await coursesView.runInlineAction(coursesView.row("01_passing_exercise"), "Download")
-      await coursesView.runInlineAction(coursesView.row(course), "Open Course Workspace")
+      await coursesView.openCourseWorkspace(course)
       // Wait for the reopened window's Course Details, or it opens over the walkthrough.
       await courseHome.expectShown(course)
     })

@@ -227,6 +227,16 @@ suite("UserData construction", function () {
     const kinds = userData.getCourses().map((c) => c.kind)
     expect(kinds).toEqual(["tmc", "mooc"])
   })
+
+  test("loads a mooc exercise stored with the retired hasModelSolution flag", async function () {
+    const legacy = { ...moocExercise({ id: "exercise-uuid-1" }), hasModelSolution: true }
+    const [userData] = await makeUserData({
+      courses: [],
+      mooc_courses: [moocCourse({ exercises: [legacy] })],
+    })
+    const stored = userData.getExercise(idOfMoocExercise("exercise-uuid-1"))
+    expect(stored.ok).toBe(true)
+  })
 })
 
 suite("UserData course add/get/update/delete", function () {

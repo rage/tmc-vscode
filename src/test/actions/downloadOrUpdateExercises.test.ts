@@ -6,7 +6,7 @@ import * as vscode from "vscode"
 
 import type { ExerciseStatus } from "../../../shared/lib"
 import { ExerciseIdentifier } from "../../../shared/lib"
-import { downloadOrUpdateExercises, findKeptCopy } from "../../actions"
+import { downloadOrUpdateExercises, downloadsSettled, findKeptCopy } from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import Dialog from "../../api/dialog"
 import type Langs from "../../api/langs"
@@ -21,7 +21,7 @@ import { downloadFailures } from "../../ui/downloadFailures"
 import { exerciseOperations } from "../../ui/exerciseOperations"
 import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
 import { idOfMoocExercise, idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
-import { createMockActionContext } from "../mocks/actionContext"
+import { createMockActionContext, createMockAuthState } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
 import type { SettingsMockValues } from "../mocks/settings"
 import { createSettingsMock } from "../mocks/settings"
@@ -218,6 +218,31 @@ suite("downloadOrUpdateExercises action", function () {
 
     expect(heldAfterDownload).toEqual(["downloading", undefined])
     expect(exerciseOperations.current(helloWorld.id)).toBeUndefined()
+  })
+
+  test("downloadsSettled waits for a running download to end", async function () {
+    const finish = Promise.withResolvers<void>()
+    fakeDownloads(tmcMock, async () => {
+      await finish.promise
+      return createDownloadResult([helloWorld], [])
+    })
+    const downloading = downloadOrUpdateExercises(
+      actionContext(),
+      [idOfTmcExercise(1)],
+      TEST_COURSE_ID,
+    )
+    let isSettled = false
+    const settled = downloadsSettled().then(() => {
+      isSettled = true
+    })
+
+    await vi.waitFor(() => expect(tmcMock.downloadTmcExercises).toHaveBeenCalled())
+    expect(isSettled).toBe(false)
+    finish.resolve()
+    await downloading
+    await settled
+
+    expect(isSettled).toBe(true)
   })
 
   test("says a failed update failed to update", async function () {
@@ -526,6 +551,17 @@ suite("downloadOrUpdateExercises action", function () {
       idOfMoocExercise(downloadedId),
       idOfMoocExercise(undownloadedId),
     ])
+  })
+
+  test("leaves the exercises of a download refused for a login after a Log Out not failed", async function () {
+    const exerciseId = "exercise-uuid-7"
+    tmcMockValues.downloadMoocExercises = Err(new InvalidTokenError("not logged in"))
+    const loggedOut = { ...actionContext(), authState: createMockAuthState(false) }
+
+    const result = await downloadResults(loggedOut, [idOfMoocExercise(exerciseId)], TEST_COURSE_ID)
+
+    expect(result.failed).toEqual([idOfMoocExercise(exerciseId)])
+    expect(downloadFailures.has(idOfMoocExercise(exerciseId))).toBe(false)
   })
 
   test("should keep an already-downloaded exercise closed when the mooc leg errors", async function () {

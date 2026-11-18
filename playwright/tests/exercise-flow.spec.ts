@@ -96,7 +96,7 @@ vsCodeTest(
     await vsCodeTest.step(
       "in the course workspace, selecting it shows its code again",
       async () => {
-        await coursesView.runInlineAction(coursesView.row(courseTitle), "Open Course Workspace")
+        await coursesView.openCourseWorkspace(courseTitle)
         // Clicks sent to the window that is reloading are lost.
         await expect(page).toHaveTitle(/\(mooc\) \(Workspace\)/, { timeout: 30_000 })
         await coursesView.goto()

@@ -2218,7 +2218,7 @@ suite("TmcPanel side panel placement", () => {
     ])
   })
 
-  test("a mooc model solution a course refresh reveals adds no link beside the course material", async () => {
+  test("a mooc exercise a course refresh marks passed gets no model solution link", async () => {
     const { panel, sendReady } = createFakeWebviewPanel()
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel)
     const pageUrl = "http://project-331.local/org/uh-cs/courses/c/chapter-1/loops"
@@ -2247,7 +2247,7 @@ suite("TmcPanel side panel placement", () => {
       shouldReopen: false,
     })
 
-    exercise = { ...exercise, passed: true, hasModelSolution: true }
+    exercise = { ...exercise, passed: true }
     changed.fire(undefined)
 
     const solutionUrls = (postedMessages(panel) as PanelMessage[]).flatMap((message) =>

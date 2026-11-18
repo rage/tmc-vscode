@@ -66,15 +66,26 @@ export class TmcPage {
 
   public async openMenu(): Promise<void> {
     // Scoped to the activity bar: editor tabs such as "TestMyCode Help" share the name.
-    const activityBarEntry = this.page
+    const activityBarTab = this.page
       .locator('[id="workbench\\.parts\\.activitybar"]')
       .getByRole("tab", { name: "TestMyCode" })
-      .locator("a")
-    await clickUntilVisible(
-      activityBarEntry,
-      this.page.getByRole("heading", { name: "TestMyCode: Courses" }),
-      "the TestMyCode Courses view did not open",
-    )
+    const heading = this.page.getByRole("heading", { name: "TestMyCode: Courses" })
+    // A click on the entry of the container already shown hides the side bar, and after a
+    // reload the extension shows the Courses view itself, so click only while it is not shown.
+    await expect
+      .poll(
+        async () => {
+          if (
+            !(await isVisibleNow(heading)) &&
+            (await activityBarTab.getAttribute("aria-selected")) !== "true"
+          ) {
+            await activityBarTab.locator("a").click()
+          }
+          return isVisibleNow(heading)
+        },
+        { timeout: ACTIVATION_TIMEOUT_MS, message: "the TestMyCode Courses view did not open" },
+      )
+      .toBe(true)
   }
 
   /** A button in the Courses view's welcome content, shown while the view has no courses. */
@@ -121,6 +132,16 @@ export class TmcPage {
         (await palette.isVisible()) && (await palette.locator("input").inputValue()).startsWith(">")
       expect(isPaletteShown).toBe(false)
     }).toPass()
+  }
+
+  /**
+   * Runs `action`, which reloads the window, and returns once the reloaded window has loaded.
+   * Until then the old window still answers queries, and a click landing there is lost.
+   */
+  public async reloadingWindow(action: () => Promise<void>): Promise<void> {
+    const loaded = this.page.waitForEvent("load", { timeout: 30_000 })
+    await action()
+    await loaded
   }
 
   /**

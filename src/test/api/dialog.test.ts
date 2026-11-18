@@ -369,6 +369,17 @@ suite("Dialog.reportError", function () {
     expect(buttonTitles(showInfo)).toEqual(["Log In"])
   })
 
+  test("tells a screen which lost sessions the user logged out of", function () {
+    const dialog = new Dialog()
+    const rejection = new InvalidTokenError("not logged in")
+
+    dialog.setSessionLostReporter(() => false)
+    expect(dialog.noteSessionLost(rejection)).toBe(true)
+    expect(dialog.noteSessionLost(new Error("disk full"))).toBe(false)
+    dialog.setSessionLostReporter(() => true)
+    expect(dialog.noteSessionLost(rejection)).toBe(false)
+  })
+
   test("a Restricted Mode refusal says trust is needed, not that the operation failed", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     const show = stubMessage("showWarningMessage", (actions) => actions[0])

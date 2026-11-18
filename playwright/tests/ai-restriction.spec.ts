@@ -31,7 +31,7 @@ vsCodeTest(
       await coursesView.expand(coursesView.row(COURSE))
       await coursesView.runInlineAction(coursesView.row(EXERCISE), "Download")
       await expect(coursesView.row(EXERCISE)).toHaveAccessibleName(/, (downloaded|in workspace),/)
-      await coursesView.runInlineAction(coursesView.row(COURSE), "Open Course Workspace")
+      await coursesView.openCourseWorkspace(COURSE)
       await expect
         .poll(() => courseWorkspaceSettings(userDataDir))
         .toMatchObject({ "editor.inlineSuggest.enabled": false })
@@ -93,7 +93,7 @@ vsCodeTest(
       const row = coursesView.row("failing_exercise")
       await coursesView.runContextMenuCommand(row, "Open")
       await expect(row).toHaveAccessibleName(/, (downloaded|in workspace),/)
-      await coursesView.runInlineAction(coursesView.row(courseTitle), "Open Course Workspace")
+      await coursesView.openCourseWorkspace(courseTitle)
       await explorerPage.openPath(["src", "failing_exercise.py"])
       await expect(page.getByText("def hello()")).toBeVisible()
     })

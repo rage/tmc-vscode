@@ -1,6 +1,7 @@
 import { vi } from "vitest"
 import * as vscode from "vscode"
 
+import { downloadsSettled } from "../../actions/downloadOrUpdateExercises"
 import type { ReadyActionContext } from "../../actions/types"
 import type { CourseWorkspaceSwitches } from "../../api/courseWorkspaceSwitches"
 import type Dialog from "../../api/dialog"
@@ -10,6 +11,10 @@ import type Resources from "../../config/resources"
 import { tmcLocalCourse } from "../fixtures/courses"
 import { createMockActionContext } from "../mocks/actionContext"
 import { createDialogMock } from "../mocks/dialog"
+
+vi.mock("../../actions/downloadOrUpdateExercises", () => ({
+  downloadsSettled: vi.fn(async () => {}),
+}))
 
 /** Stubs one `vscode.workspace` member, which the mock exposes as a prototype getter. */
 function stubWorkspace(key: "workspaceFile" | "workspaceFolders" | "name", value: unknown): void {
@@ -88,6 +93,20 @@ suite("openWorkspace command", function () {
       expect.objectContaining({ fsPath: vscode.Uri.file(courseWorkspaceFile).fsPath }),
       { forceNewWindow: false },
     ])
+  })
+
+  test("waits for a running download before writing the workspace file and opening it", async function () {
+    const settled = Promise.withResolvers<void>()
+    vi.mocked(downloadsSettled).mockReturnValueOnce(settled.promise)
+
+    const opening = openWorkspace(actionContext(), course)
+    await vi.waitFor(() => expect(downloadsSettled).toHaveBeenCalled())
+    expect(prepareWorkspaceFileToOpen).not.toHaveBeenCalled()
+    expect(openedFolder()).toBeUndefined()
+    settled.resolve()
+    await opening
+
+    expect(openedFolder()).toBeDefined()
   })
 
   // Course workspaces save on focus change, so leaving one loses nothing.

@@ -698,6 +698,9 @@ suite("the course home", () => {
 
     expect(screen.queryByRole("button", { name: /^Download/ })).not.toBeInTheDocument()
     expect(document.querySelector(`vscode-toolbar-button[title="Download 02_loops"]`)).toBeNull()
+    // Opening an exercise not on disk would download it.
+    expect(screen.queryByRole("button", { name: "02_loops" })).toBeNull()
+    expect(screen.getByRole("button", { name: "01_hello" })).toBeInTheDocument()
     screen.getByRole("button", { name: "Log In" }).click()
 
     expect(postedMessages).toHaveBeenCalledWith({

@@ -6,7 +6,7 @@ import type { FrameLocator, Locator, Page } from "@playwright/test"
 
 import { VSCODE_TEST_VERSION } from "../../config"
 import { courseWorkspaceSettings } from "../courseWorkspace"
-import { vsCodeTest } from "../fixtures"
+import { BASE_USER_SETTINGS, vsCodeTest } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
 import { TestResultsPage } from "../pages/test-results"
@@ -78,7 +78,7 @@ for (const exercise of exercises) {
     })
 
     await vsCodeTest.step("open workspace", async () => {
-      await coursesView.runInlineAction(coursesView.row(exercise.course), "Open Course Workspace")
+      await coursesView.openCourseWorkspace(exercise.course)
     })
 
     await vsCodeTest.step("the course workspace turns AI assistance off", async () => {
@@ -100,7 +100,7 @@ for (const exercise of exercises) {
       const userSettings = JSON.parse(
         fs.readFileSync(join(userDataDir, "User", "settings.json"), "utf-8"),
       )
-      expect(userSettings).toStrictEqual({ "window.dialogStyle": "custom" })
+      expect(userSettings).toStrictEqual(BASE_USER_SETTINGS)
     })
 
     await vsCodeTest.step("open exercise file", async () => {
@@ -219,7 +219,7 @@ vsCodeTest(
       await coursesView.addNewCourse(course)
       await coursesView.expand(coursesView.row(course))
       await coursesView.runInlineAction(coursesView.row(exercise), "Download")
-      await coursesView.runInlineAction(coursesView.row(course), "Open Course Workspace")
+      await coursesView.openCourseWorkspace(course)
     })
 
     await vsCodeTest.step("delete its source file and submit", async () => {

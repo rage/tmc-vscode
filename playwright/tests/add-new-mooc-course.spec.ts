@@ -72,7 +72,7 @@ vsCodeTest(
     })
 
     await vsCodeTest.step("open workspace", async () => {
-      await coursesView.runInlineAction(coursesView.row(courseTitle), "Open Course Workspace")
+      await coursesView.openCourseWorkspace(courseTitle)
     })
 
     await vsCodeTest.step(
@@ -138,10 +138,7 @@ vsCodeTest("submitting an exercise gone from the server says so", async ({ page,
     const row = coursesView.row("passing_exercise")
     await coursesView.runContextMenuCommand(row, "Open")
     await expect(row).toHaveAccessibleName(/, (downloaded|in workspace),/)
-    await coursesView.runInlineAction(
-      coursesView.row("MOOC Python Course"),
-      "Open Course Workspace",
-    )
+    await coursesView.openCourseWorkspace("MOOC Python Course")
     await explorerPage.openPath(["src", "passing_exercise.py"])
     await expect(page.getByText("def hello()")).toBeVisible()
   })

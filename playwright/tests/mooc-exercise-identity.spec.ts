@@ -33,7 +33,7 @@ vsCodeTest(
       await expect(row).toHaveAccessibleName(/, not downloaded,/)
       await coursesView.runContextMenuCommand(row, "Open")
       await expect(row).toHaveAccessibleName(/, (downloaded|in workspace),/)
-      await coursesView.runInlineAction(coursesView.row(courseTitle), "Open Course Workspace")
+      await coursesView.openCourseWorkspace(courseTitle)
     })
 
     await vsCodeTest.step("edit the exercise file and submit it", async () => {
