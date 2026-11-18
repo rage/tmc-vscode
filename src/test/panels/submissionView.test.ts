@@ -193,6 +193,7 @@ suite("moocGradingView", () => {
         "The points wait for a teacher's review, which starts once you complete and lock the chapter.",
     })
     expect(view.points).toBeUndefined()
+    expect(view.heldPointsMax).toBe(3)
   })
 
   test("a grading held for review is judged by its own score, never the held-back 0", () => {
@@ -389,7 +390,9 @@ suite("withExerciseState", () => {
       pendingReview: "The points wait for a teacher's review.",
     })
     expect(shown.points).toBeUndefined()
+    expect(shown.heldPointsMax).toBe(1)
     expect(withExerciseState(view, onDisk).points).toStrictEqual({ given: 1, max: 1 })
+    expect(withExerciseState(view, onDisk).heldPointsMax).toBeUndefined()
   })
 
   test("a standing short of a pass is headed by why it can no longer be submitted", () => {
@@ -541,6 +544,7 @@ suite("standingView", function () {
     )
 
     expect(view.points).toBeUndefined()
+    expect(view.heldPointsMax).toBe(1)
     expect(view.headline).toBe("Waiting for review")
   })
 

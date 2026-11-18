@@ -15,6 +15,7 @@ import {
   submitRefusalOf,
   submitRefusalSentence,
   pendingReviewSentence,
+  unwrap,
   WebviewStateSchema,
 } from "../../shared/lib"
 import type { ActionContext } from "../actions/types"
@@ -22,7 +23,7 @@ import { isReady } from "../actions/types"
 import type { StoredExercise, UserData } from "../config/userdata"
 import { getExerciseIncludingClosedChapters } from "../config/userdata"
 import { buildCourseHomeView } from "../ui/courseHome"
-import { exerciseStandingView, nextExerciseOf } from "../ui/exerciseStanding"
+import { exerciseStandingView, leadsOnFrom, nextExerciseOf } from "../ui/exerciseStanding"
 import { failedUpdates } from "../ui/failedUpdates"
 import { lastExerciseReached } from "../ui/lastExerciseReached"
 import { loginScreens } from "../ui/loginScreens"
@@ -696,10 +697,10 @@ function submissionViewMessage(
   // submission that failed is out of date once the exercise can no longer be submitted at all.
   const isStanding =
     view.phase === "standing" || (view.phase === "failed" && !view.canKeepWaiting && !!refusal)
-  const current = withCurrentNextExercise(
+  const current = withCurrentStanding(
     userData,
     isStanding ? (exerciseStandingView(userData, panel.exerciseId) ?? view) : view,
-    stored.ok ? stored.val.course : undefined,
+    stored.ok ? stored.val : undefined,
     panel.exerciseId,
   )
   const shown = withExerciseState(current, {
@@ -730,22 +731,29 @@ function submissionViewMessage(
 }
 
 /**
- * `view` offering the exercise to go on to as the course stands now: a course change since the
- * grading, such as an ended enrollment, can leave none.
+ * `view` with whether the exercise is passed and the exercise to go on to, as the course stands
+ * now: a refresh since the grading can hold its points for a review, or end the enrollment.
  */
-function withCurrentNextExercise(
+function withCurrentStanding(
   userData: UserData,
   view: SubmissionView,
-  course: LocalCourseData | undefined,
+  stored: StoredExercise | undefined,
   exerciseId: ExerciseIdentifier,
 ): SubmissionView {
-  if (!view.nextExercise) {
+  if (!stored || (view.phase !== "finished" && view.phase !== "standing")) {
     return view
   }
-  const { nextExercise: _graded, ...rest } = view
+  const { nextExercise: _graded, isExercisePassed: gradedPassed, ...rest } = view
+  const isExercisePassed = gradedPassed === undefined ? undefined : unwrap(stored.exercise).passed
   const nextExercise =
-    course && nextExerciseOf(userData, LocalCourseData.getCourseId(course), exerciseId)
-  return nextExercise ? { ...rest, nextExercise } : rest
+    leadsOnFrom(stored.exercise) && stored.course
+      ? nextExerciseOf(userData, LocalCourseData.getCourseId(stored.course), exerciseId)
+      : undefined
+  return {
+    ...rest,
+    ...(isExercisePassed === undefined ? {} : { isExercisePassed }),
+    ...(nextExercise ? { nextExercise } : {}),
+  }
 }
 
 /** The exercise's course material page, else its course's. */

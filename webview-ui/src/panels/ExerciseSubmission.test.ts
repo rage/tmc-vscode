@@ -267,6 +267,35 @@ suite("ExerciseSubmission panel (failures)", () => {
 })
 
 suite("ExerciseSubmission panel (teacher review)", () => {
+  test("says the points come after the review, out of how many", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...testedLocallyView(0),
+      phase: "finished",
+      headline: "All tests passed",
+      explanation: undefined,
+      heldPointsMax: 3,
+    })
+
+    expect(await screen.findByText("Points after review, out of 3")).toBeInTheDocument()
+    expect(screen.queryByRole("meter", { name: "Points" })).not.toBeInTheDocument()
+  })
+
+  test("a result awaiting review leads on to the next exercise, as the course home does", async () => {
+    render(ExerciseSubmission, { props: { panel } })
+    showView(panel.id, {
+      ...testedLocallyView(0),
+      phase: "finished",
+      headline: "All tests passed",
+      explanation: undefined,
+      heldPointsMax: 1,
+      pendingReview: "The points wait for a teacher's review.",
+      nextExercise: { name: "lists" },
+    })
+
+    expect(await screen.findByRole("button", { name: "Next: lists" })).toBeInTheDocument()
+  })
+
   test("says what the review waits for beside the explanation", async () => {
     render(ExerciseSubmission, { props: { panel: moocPanel } })
     showView(moocPanel.id, {

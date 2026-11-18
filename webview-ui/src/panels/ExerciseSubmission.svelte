@@ -161,7 +161,8 @@
         secondary: remedy ? [remedy] : [],
       }
     }
-    if (view?.isExercisePassed && view.nextExercise) {
+    // The host offers the next exercise once this one is passed or waits only for a review.
+    if (view?.nextExercise) {
       const next = view.nextExercise.name
       // A failing submission after the pass: the student may want to fix what they broke.
       const isThisOneFailed = view.tone !== "passed" && !view.exerciseState
@@ -381,6 +382,8 @@
   {/if}
   {#if view?.points}
     <Meter label="Points" value={view.points.given} max={view.points.max} />
+  {:else if view?.heldPointsMax !== undefined}
+    <p class="muted">Points after review, out of {view.heldPointsMax}</p>
   {/if}
   {#if isSubmitPromptShown}
     <p id={submitPromptId}>{SUBMIT_PROMPT}</p>

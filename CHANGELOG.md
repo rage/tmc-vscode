@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- A result whose points wait for a teacher's review says "Points after review, out of n" where the points meter would be, and leads on to the next exercise as the course home does, as does one whose pass a review holds back since the grading.
 - History shows "Restoring…" only once you confirm the restore, not behind its confirmation.
 - Get Help opened on a result that did not pass is put away once a later result passes; on a passed result it shows only when you open it from More Actions.
 - The results screen's Next follows the course as it stands now, as the course home does: once you are no longer enrolled, or nothing after the exercise is left to do, it is not offered.

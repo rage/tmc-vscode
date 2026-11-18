@@ -330,6 +330,8 @@ export const SubmissionViewSchema = z.object({
   progressSteps: z.array(z.string()),
   /** In the exercise's own unit; `given` may be fractional. */
   points: z.object({ given: z.number(), max: z.number() }).optional(),
+  /** The most points a teacher's review can give, while it holds them back in place of `points`. */
+  heldPointsMax: z.number().optional(),
   /** The grader's feedback, shown as-is. */
   feedbackText: z.string().optional(),
   /** Why the submission failed, when the backend or the extension said. */

@@ -1107,6 +1107,23 @@ export const SCENARIOS: Scenario[] = [
     ],
   },
   {
+    id: "exercise-submission/mooc-awaiting-review",
+    panel: moocSubmissionPanel,
+    pushes: [
+      submissionViewMessage(moocSubmissionPanel.id, {
+        ...moocGradingView(moocGrading({ score_given: 3, feedback_text: null }), 3),
+        headline: "All tests passed",
+        tone: "passed",
+        points: undefined,
+        heldPointsMax: 3,
+        pendingReview:
+          "The points wait for a teacher's review, which starts once you complete and lock the chapter.",
+        isExercisePassed: false,
+        nextExercise: { name: "Product of two numbers" },
+      }),
+    ],
+  },
+  {
     id: "exercise-submission/action-failed",
     panel: submissionPanel,
     pushes: [

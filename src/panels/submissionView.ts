@@ -99,6 +99,7 @@ export function standingView(
       availablePoints > 0 && !arePointsHeld
         ? { given: awardedPoints, max: availablePoints }
         : undefined,
+    ...(arePointsHeld && availablePoints > 0 ? { heldPointsMax: availablePoints } : {}),
     solutionUrl,
     canPaste: !passed,
     isExercisePassed: passed,
@@ -260,6 +261,7 @@ export function moocGradingView(
           headline: isBelowMax ? "Some tests failed" : "All tests passed",
           tone: isBelowMax ? scoreTone(given) : "passed",
           points: undefined,
+          heldPointsMax: maxPoints,
           ...reviewNote,
           canPaste: true,
         }
@@ -437,6 +439,7 @@ export function withExerciseState(
     exercise.arePointsHeld && view.phase === "finished" && rest.points !== undefined
       ? {
           points: undefined,
+          heldPointsMax: rest.points.max,
           ...(view.headline === "Passed" ? { headline: "All tests passed" } : {}),
         }
       : {}
