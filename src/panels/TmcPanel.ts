@@ -66,6 +66,8 @@ export class TmcPanel {
 
   private readonly _panel: WebviewPanel
 
+  private readonly _extensionContext: vscode.ExtensionContext
+
   private readonly _actionContext: ActionContext
 
   private readonly _isMain: boolean
@@ -86,6 +88,10 @@ export class TmcPanel {
 
   // `_panel.dispose()` fires `onDidDispose`, which calls back into `dispose()`
   private _isDisposed = false
+
+  // VS Code's webview bootstrap can wait forever for a service worker that never takes over,
+  // leaving the document blank; a new panel gets a new one.
+  private _readyTimeout: ReturnType<typeof setTimeout> | undefined
 
   /**
    * Shows the submissions the submit actions report in the side panel. Call once, at activation.
@@ -373,6 +379,20 @@ export class TmcPanel {
     const showOptions = isMain
       ? { viewColumn: column ?? restoredColumn ?? ViewColumn.One, preserveFocus: false }
       : { viewColumn: column ?? ViewColumn.Two, preserveFocus: !isRequested }
+    TmcPanel._create(isMain, extensionContext, actionContext, route, showOptions)
+    if (isMain) {
+      void closeTabs(restoredMainTabs, "restored main panel tab(s), replaced by a new one")
+    }
+  }
+
+  /** Opens a new main or side panel on `route`, which becomes that panel. */
+  private static _create(
+    isMain: boolean,
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+    route: Panel,
+    showOptions: { viewColumn: ViewColumn; preserveFocus: boolean },
+  ): TmcPanel {
     const panelViewType = isMain ? MAIN_PANEL_VIEW_TYPE : SIDE_PANEL_VIEW_TYPE
     const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", showOptions, {
       ...webviewOptions(extensionContext.extensionUri),
@@ -381,10 +401,10 @@ export class TmcPanel {
     const created = TmcPanel._adopt(webviewPanel, extensionContext, actionContext, route, isMain)
     if (isMain) {
       TmcPanel.mainPanel = created
-      void closeTabs(restoredMainTabs, "restored main panel tab(s), replaced by a new one")
     } else {
       TmcPanel.sidePanel = created
     }
+    return created
   }
 
   /**
@@ -460,6 +480,7 @@ export class TmcPanel {
     isMain: boolean,
   ) {
     this._panel = panel
+    this._extensionContext = extensionContext
     this._actionContext = actionContext
     this._isMain = isMain
 
@@ -467,8 +488,11 @@ export class TmcPanel {
     // A hidden webview's document is destroyed; the one VS Code loads on reveal sends "ready".
     this._panel.onDidChangeViewState(
       ({ webviewPanel }) => {
-        if (!webviewPanel.visible) {
+        if (webviewPanel.visible) {
+          this._awaitReady()
+        } else {
           this._isWebviewReady = false
+          this._stopAwaitingReady()
         }
         this._recordShown()
       },
@@ -477,6 +501,9 @@ export class TmcPanel {
     )
 
     this._panel.webview.html = webviewContent(this._panel.webview, extensionContext.extensionUri)
+    if (this._panel.visible) {
+      this._awaitReady()
+    }
 
     if (isReady(actionContext)) {
       this._disposables.push(
@@ -528,12 +555,20 @@ export class TmcPanel {
   }
 
   public dispose(): void {
+    this._close(true)
+  }
+
+  /** @param isLeavingScreen `false` when a replacement panel goes on showing the screen. */
+  private _close(isLeavingScreen: boolean): void {
     if (this._isDisposed) {
       return
     }
     this._isDisposed = true
+    this._stopAwaitingReady()
     this._panel.dispose()
-    this._leaveLoginScreen()
+    if (isLeavingScreen) {
+      this._leaveLoginScreen()
+    }
 
     if (this._isMain) {
       TmcPanel.mainPanel = undefined
@@ -649,8 +684,49 @@ export class TmcPanel {
     }
   }
 
+  /** Replaces this panel if the document it shows does not say "ready" in time. */
+  private _awaitReady(): void {
+    if (this._isWebviewReady || this._readyTimeout !== undefined) {
+      return
+    }
+    this._readyTimeout = setTimeout(() => this._replace(), READY_TIMEOUT_MS)
+  }
+
+  private _stopAwaitingReady(): void {
+    clearTimeout(this._readyTimeout)
+    this._readyTimeout = undefined
+  }
+
+  /** Opens a new panel on this one's screen and buffered messages, in its place. */
+  private _replace(): void {
+    this._readyTimeout = undefined
+    const route = this._route
+    if (this._isDisposed || route === undefined) {
+      return
+    }
+    Logger.warn(
+      `The ${this._webviewName} did not say "ready" within ${READY_TIMEOUT_MS} ms, replacing it`,
+    )
+    const showOptions = {
+      viewColumn: this._panel.viewColumn ?? ViewColumn.Active,
+      preserveFocus: !this._panel.active,
+    }
+    this._close(false)
+    const replacement = TmcPanel._create(
+      this._isMain,
+      this._extensionContext,
+      this._actionContext,
+      route,
+      showOptions,
+    )
+    replacement._messageBuffer = this._messageBuffer
+    // Replaced only once: a machine this slow would otherwise never get to see the screen.
+    replacement._stopAwaitingReady()
+  }
+
   private _onReady(): void {
     this._isWebviewReady = true
+    this._stopAwaitingReady()
     const route = this._route
     Logger.info(
       `Received "ready" from the ${this._webviewName}` +
@@ -788,6 +864,9 @@ async function offerSubmissionOutcome(
 
 /** How many of a screen's failures a reloaded webview is sent again, the latest. */
 const FAILURES_RESENT = 5
+
+/** How long a shown document may go without saying "ready" before its panel is replaced. */
+export const READY_TIMEOUT_MS = 10_000
 
 function webviewOptions(extensionUri: Uri): WebviewOptions {
   return {

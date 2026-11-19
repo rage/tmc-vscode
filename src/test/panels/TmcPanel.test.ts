@@ -32,7 +32,12 @@ import {
 import type { PanelMessage } from "../../panels/router"
 import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
 import { standingView, submitFailedView } from "../../panels/submissionView"
-import { MAIN_PANEL_VIEW_TYPE, SIDE_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
+import {
+  MAIN_PANEL_VIEW_TYPE,
+  READY_TIMEOUT_MS,
+  SIDE_PANEL_VIEW_TYPE,
+  TmcPanel,
+} from "../../panels/TmcPanel"
 import { loginScreens } from "../../ui/loginScreens"
 import { recentPolicyChanges } from "../../ui/recentPolicyChanges"
 import { shownCourseHome } from "../../ui/shownCourseHome"
@@ -1141,6 +1146,90 @@ suite("TmcPanel hidden webviews", () => {
       expect.objectContaining({ type: "setPanel", panel: shown }),
       courseDataFor(shown),
     ])
+  })
+})
+
+/** The fake that the next panel created gets. */
+function nextFakePanel(): ReturnType<typeof createFakeWebviewPanel> {
+  const fake = createFakeWebviewPanel()
+  vi.mocked(vscode.window.createWebviewPanel).mockReturnValueOnce(fake.panel)
+  return fake
+}
+
+suite("TmcPanel webviews that never say ready", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    resetPanels()
+  })
+  afterEach(() => {
+    resetPanels()
+    vi.useRealTimers()
+  })
+
+  test("a shown screen that stays blank is replaced, and the replacement resends it", async () => {
+    const shown = exerciseSubmissionPanel()
+    const stuck = nextFakePanel()
+    renderSidePanel(shown)
+    postToSidePanel(submissionViewFor(shown, "Graded"))
+    const replacement = nextFakePanel()
+
+    vi.advanceTimersByTime(READY_TIMEOUT_MS)
+    expect(stuck.dispose).toHaveBeenCalled()
+    await replacement.sendReady()
+
+    expect(postedMessages(replacement.panel)).toEqual([
+      expect.objectContaining({ type: "setPanel", panel: shown }),
+      submissionViewFor(shown, "Graded"),
+    ])
+  })
+
+  test("a screen revealed blank after being hidden is replaced", async () => {
+    const fake = nextFakePanel()
+    renderSidePanel(exerciseSubmissionPanel())
+    await fake.sendReady()
+    fake.hide()
+    fake.revealBlank()
+    nextFakePanel()
+
+    vi.advanceTimersByTime(READY_TIMEOUT_MS)
+
+    expect(fake.dispose).toHaveBeenCalled()
+  })
+
+  test("a screen that said ready, or is hidden, is left alone", async () => {
+    const fake = nextFakePanel()
+    renderSidePanel(exerciseSubmissionPanel())
+    await fake.sendReady()
+    vi.advanceTimersByTime(READY_TIMEOUT_MS)
+    fake.hide()
+    vi.advanceTimersByTime(READY_TIMEOUT_MS)
+
+    expect(fake.dispose).not.toHaveBeenCalled()
+  })
+
+  test("a replacement is given all the time it takes", () => {
+    nextFakePanel()
+    renderSidePanel(exerciseSubmissionPanel())
+    const replacement = nextFakePanel()
+    vi.advanceTimersByTime(READY_TIMEOUT_MS)
+
+    vi.advanceTimersByTime(READY_TIMEOUT_MS * 3)
+
+    expect(replacement.dispose).not.toHaveBeenCalled()
+    expect(TmcPanel.sidePanel).toBeDefined()
+  })
+
+  test("replacing a login screen keeps the login going", () => {
+    const left = vi.fn()
+    const subscription = loginScreens.onDidLeave(left)
+    nextFakePanel()
+    renderMainPanel({ id: nextPanelId(), type: "Login", isAddingCourse: false })
+    nextFakePanel()
+
+    vi.advanceTimersByTime(READY_TIMEOUT_MS)
+    subscription.dispose()
+
+    expect(left).not.toHaveBeenCalled()
   })
 })
 
