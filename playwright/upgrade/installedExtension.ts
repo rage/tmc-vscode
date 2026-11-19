@@ -136,7 +136,9 @@ export function createProfile(parentDir: string): Profile {
   return profile
 }
 
-// runVSCodeCommand runs the Windows CLI through a shell, which splits unquoted paths.
+// runVSCodeCommand runs the Windows CLI through a shell, which splits unquoted paths. A flag's
+// value alone is quoted: runVSCodeCommand appends its own default dirs unless an argument starts
+// with `--extensions-dir=` or `--user-data-dir=`.
 const quote = (arg: string): string => (process.platform === "win32" ? `"${arg}"` : arg)
 
 /** Installs `vsix` into `profile` as `code --install-extension` does, replacing any other version. */
@@ -146,8 +148,8 @@ export async function installVsix(profile: Profile, vsix: string): Promise<void>
       "--install-extension",
       quote(vsix),
       "--force",
-      quote(`--extensions-dir=${profile.extensionsDir}`),
-      quote(`--user-data-dir=${profile.userDataDir}`),
+      `--extensions-dir=${quote(profile.extensionsDir)}`,
+      `--user-data-dir=${quote(profile.userDataDir)}`,
     ],
     { version: VSCODE_TEST_VERSION },
   )
