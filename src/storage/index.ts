@@ -26,14 +26,13 @@ import {
 } from "./migration/log"
 import migrateSessionState from "./migration/sessionState"
 import type { UserDataMigration } from "./migration/userData"
-import migrateUserDataToLatest, {
-  writeLegacyMirror,
-  writeLegacyMirrorRecord,
-} from "./migration/userData"
+import migrateUserDataToLatest, { syncLegacyMirror } from "./migration/userData"
 
 /** The only access to VS Code's storage; nothing else reads or writes mementos or settings. */
 export default class Storage {
   private _context: vscode.ExtensionContext
+  // Unset by a write that may have failed half-way, so the next one resyncs the mirror.
+  private _isLegacyMirrorSynced = false
 
   public constructor(context: vscode.ExtensionContext) {
     this._context = context
@@ -49,9 +48,24 @@ export default class Storage {
     return this._readValidated(storage.SESSION_STATE_KEY, storage.sessionStateSchema)
   }
 
-  /** Also mirrors the tmc courses to `user-data-v1`, which a downgrade to 3.x reads. */
-  public async updateUserData(userData: storage.UserData | undefined): Promise<void> {
-    await writeUserData(this._context.globalState, userData)
+  /**
+   * Also mirrors the tmc courses to `user-data-v1`, which a downgrade to 3.x reads.
+   *
+   * @param isMoocOnlyChange The change since the last write touched only mooc courses, so the
+   * mirror needs no work.
+   */
+  public async updateUserData(
+    userData: storage.UserData | undefined,
+    { isMoocOnlyChange = false }: { isMoocOnlyChange?: boolean } = {},
+  ): Promise<void> {
+    const memento = this._context.globalState
+    if (isMoocOnlyChange && this._isLegacyMirrorSynced) {
+      await memento.update(storage.USER_DATA_KEY, userData)
+      return
+    }
+    this._isLegacyMirrorSynced = false
+    await writeUserData(memento, userData)
+    this._isLegacyMirrorSynced = true
   }
 
   /** The recorded migration runs as text, for logs and error details. */
@@ -94,9 +108,9 @@ export default class Storage {
    * Brings every stored key up to the current schema, backing up the legacy keys before the
    * first write and recording the run in the migration log.
    *
-   * A window whose workspace still lives in the pre-2.0 data folder cannot be
-   * migrated in place, so with `langs` this reports `needsReload` with the workspace to
-   * reopen and writes nothing; the caller owns reopening the window.
+   * A window whose workspace still lives in the pre-2.0 data folder cannot be migrated in
+   * place: with `langs` this writes nothing and reports `needsReload` with the workspace to
+   * reopen; the caller reopens the window.
    *
    * Without `langs`, pre-2.0 exercises stay where they are until an activation that has it.
    */
@@ -135,9 +149,7 @@ export default class Storage {
       }
       hasMigratedUserData = true
       if (migratedUserData.isLegacyMirrorStale) {
-        const current = memento.get<storage.UserData>(storage.USER_DATA_KEY)
-        await writeLegacyMirror(memento, current)
-        await writeLegacyMirrorRecord(memento, current)
+        await syncLegacyMirror(memento, memento.get<storage.UserData>(storage.USER_DATA_KEY))
       }
 
       const migratedExtensionSettings = await migrateExtensionSettingsToLatest(memento, settings)
@@ -160,10 +172,9 @@ export default class Storage {
       failure = e instanceof Error ? e : new Error(String(e))
     }
 
+    const droppedEntries = migratedUserData?.dropped.length ?? 0
     const changed =
-      memento.keysWritten.size > 0 ||
-      memento.keysRetired.size > 0 ||
-      (migratedUserData?.dropped.length ?? 0) > 0
+      memento.keysWritten.size > 0 || memento.keysRetired.size > 0 || droppedEntries > 0
     if (failure || changed) {
       await this._recordRun({
         at: new Date().toISOString(),
@@ -174,7 +185,7 @@ export default class Storage {
         keysRead: [...memento.keysRead],
         keysWritten: [...memento.keysWritten],
         keysRetired: [...memento.keysRetired],
-        droppedEntries: migratedUserData?.dropped.length ?? 0,
+        droppedEntries,
       })
     }
     if (failure) {
@@ -206,17 +217,18 @@ async function writeUserData(
   memento: vscode.Memento,
   userData: storage.UserData | undefined,
 ): Promise<void> {
-  // Mirror first: if the v3 write then fails, the next activation merges the change back from it.
-  await writeLegacyMirror(memento, userData)
-  await memento.update(storage.USER_DATA_KEY, userData)
-  await writeLegacyMirrorRecord(memento, userData)
+  await syncLegacyMirror(memento, userData, async () => {
+    await memento.update(storage.USER_DATA_KEY, userData)
+  })
 }
 
-async function retire(memento: vscode.Memento, migrations: MigratedData<unknown>[]): Promise<void> {
+/** Deletes the keys `migrations` made obsolete; a delete of an absent key is not recorded. */
+async function retire(
+  memento: RecordingMemento,
+  migrations: MigratedData<unknown>[],
+): Promise<void> {
   for (const key of obsoleteKeys(migrations)) {
-    if (memento.get(key) !== undefined) {
-      await memento.update(key, undefined)
-    }
+    await memento.update(key, undefined)
   }
 }
 

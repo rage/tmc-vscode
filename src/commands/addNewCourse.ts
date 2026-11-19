@@ -56,9 +56,8 @@ function courseItem(
  * Quick pick over both backends' courses, the Command Palette's fast path past the add-course
  * screen; adds the pick and opens its course home.
  *
- * courses.mooc.fi, listed only while its experimental setting is on, lists only enrolled
- * courses, added in one step. tmc.mooc.fi has thousands behind its organizations, so an
- * organization opens a second step listing its courses.
+ * courses.mooc.fi lists only enrolled courses, added in one step. tmc.mooc.fi has thousands
+ * behind its organizations, so an organization opens a second step listing its courses.
  * Rows appear once both backends answer, so none moves under the pointer.
  */
 export async function addNewCourse(actionContext: ReadyActionContext): Promise<void> {
@@ -121,8 +120,8 @@ function pickCourse(
   quickPick.matchOnDescription = true
   quickPick.ignoreFocusOut = true
 
-  const isMoocEnabled = actionContext.settings.isCoursesMoocFiEnabled()
-  let moocRows: ChoiceItem[] | undefined = isMoocEnabled ? undefined : []
+  let isMoocListed = true
+  let moocRows: ChoiceItem[] | undefined
   let tmcRows: ChoiceItem[] | undefined
   const unavailable: string[] = []
   // In display order, not in the order the backends failed.
@@ -146,7 +145,7 @@ function pickCourse(
   /** Redraws the first step's rows without touching the user's filter text. */
   const renderFirstStep = (): void => {
     // Naming the missing backend in the placeholder keeps a partial list from looking complete.
-    const search = isMoocEnabled
+    const search = isMoocListed
       ? `Search your courses or ${backendName("tmc")} organizations`
       : `Search ${backendName("tmc")} organizations`
     quickPick.placeholder =
@@ -169,11 +168,10 @@ function pickCourse(
     quickPick.busy = false
   }
 
-  const moocListing = isMoocEnabled
-    ? actions.listEnrolledMoocCourses(actionContext).then((listing) => {
-        moocRows = moocListingRows(listing, isAdded, unavailable)
-      })
-    : undefined
+  const moocListing = actions.listEnrolledMoocCourses(actionContext).then((listing) => {
+    isMoocListed = listing !== actions.MOOC_DISABLED
+    moocRows = moocListingRows(listing, isAdded, unavailable)
+  })
   const tmcListing = actions.listTmcOrganizations(actionContext).then((listing) => {
     tmcRows = tmcListingRows(listing, unavailable)
   })
@@ -260,10 +258,13 @@ function pickCourse(
 }
 
 function moocListingRows(
-  listing: Result<MoocCourse[], Error> | typeof actions.MOOC_LOGIN,
+  listing: Result<MoocCourse[], Error> | typeof actions.MOOC_LOGIN | typeof actions.MOOC_DISABLED,
   isAdded: (id: CourseIdentifier) => boolean,
   unavailable: string[],
 ): ChoiceItem[] {
+  if (listing === actions.MOOC_DISABLED) {
+    return []
+  }
   if (listing === actions.MOOC_LOGIN) {
     return [
       {

@@ -25,15 +25,14 @@ export type UnreadableValue = Pick<data.v3.UnreadableLegacyValue, "key" | "value
 
 /** The user data step of a migration run. */
 export interface UserDataMigration extends MigratedData<data.v3.UserData> {
-  /**
-   * Whether `user-data-v1` or its record needs rewriting from the stored v3 even though `data` is
-   * unset.
-   */
+  /** Whether `user-data-v1` or its record needs rewriting though `data` is unset. */
   isLegacyMirrorStale: boolean
   dropped: DroppedEntry[]
-  /** To keep before `user-data-v1` is rewritten; see {@link data.v3.UNREADABLE_LEGACY_DATA_KEY}. */
+  /** To keep before `user-data-v1` is rewritten; see {@link data.v3.MigrationDiagnostics}. */
   unreadable: UnreadableValue[]
 }
+
+type Omitted = Pick<UserDataMigration, "dropped" | "unreadable">
 
 // Shapes every pre-4.0 version wrote: v0 (`userData`, before 2.0) and v1/v2 (`user-data-v1`).
 // 0.1.0 could store a null description, versions before 0.9.0 lack the optional fields, and the
@@ -93,7 +92,7 @@ function readLegacyCourse(
   raw: unknown,
   index: number,
   key: string,
-  omitted: Pick<UserDataMigration, "dropped" | "unreadable">,
+  omitted: Omitted,
   exerciseFallbacks?: Map<number, ExerciseFallback>,
 ): data.v3.TmcLocalCourseData | undefined {
   const { dropped, unreadable } = omitted
@@ -201,10 +200,7 @@ function toLegacyCourse(course: data.v3.TmcLocalCourseData): data.v2.LocalCourse
   }
 }
 
-/**
- * The tmc courses of `userData` in the shape 3.x reads from `user-data-v1`, so a downgrade
- * still shows them; `undefined`, which deletes the key, when there are none.
- */
+/** The tmc courses of `userData` as 3.x reads `user-data-v1`; `undefined` deletes the key. */
 function legacyUserDataOf(userData: data.v3.UserData): data.v2.UserData | undefined {
   return userData.courses.length > 0 ? { courses: userData.courses.map(toLegacyCourse) } : undefined
 }
@@ -214,29 +210,22 @@ function legacyMirrorRecordOf(userData: data.v3.UserData | undefined): data.v3.L
 }
 
 /**
- * Rewrites `user-data-v1`, which 3.x reads after a downgrade, from the tmc courses of `userData`
- * unless it already holds them. Follow the v3 write with {@link writeLegacyMirrorRecord}.
+ * Rewrites `user-data-v1`, which 3.x reads after a downgrade, and its record from the tmc courses
+ * of `userData`, each unless it already holds them; `writeUserData` stores `userData` in between.
+ *
+ * Mirror first: if the v3 write fails, the next activation merges the change back from it. Record
+ * last: until v3 has the change, a course the mirror lost must still count as mirrored.
  */
-export async function writeLegacyMirror(
+export async function syncLegacyMirror(
   memento: vscode.Memento,
   userData: data.v3.UserData | undefined,
+  writeUserData?: () => Promise<void>,
 ): Promise<void> {
   const mirror = userData && legacyUserDataOf(userData)
   if (!isEqual(memento.get(data.v1.USER_DATA_KEY), mirror)) {
     await memento.update(data.v1.USER_DATA_KEY, mirror)
   }
-}
-
-/**
- * Records which tmc courses {@link writeLegacyMirror} mirrored, which the merge needs to tell a
- * course an older version removed from one the mirror never held.
- *
- * Write it after v3: until v3 has the change, a course the mirror lost must still count as mirrored.
- */
-export async function writeLegacyMirrorRecord(
-  memento: vscode.Memento,
-  userData: data.v3.UserData | undefined,
-): Promise<void> {
+  await writeUserData?.()
   const record = legacyMirrorRecordOf(userData)
   if (!isEqual(memento.get(data.v3.LEGACY_MIRROR_RECORD_KEY), record)) {
     await memento.update(data.v3.LEGACY_MIRROR_RECORD_KEY, record)
@@ -258,7 +247,7 @@ function mergeLegacyChanges(
   current: data.v3.UserData,
   rawLegacy: unknown,
   mirrored: ReadonlySet<number> | undefined,
-  omitted: Pick<UserDataMigration, "dropped" | "unreadable">,
+  omitted: Omitted,
 ): data.v3.UserData | undefined {
   const key = data.v1.USER_DATA_KEY
   const legacy = legacyUserDataSchema.safeParse(rawLegacy)
@@ -319,6 +308,9 @@ function mergeLegacyChanges(
   return { ...current, courses }
 }
 
+/** What a migration settled on for user data, defaults left out. */
+type Migrated = Partial<Pick<UserDataMigration, "data" | "supersededKeys" | "isLegacyMirrorStale">>
+
 /**
  * Brings user data up to v3 and keeps `user-data-v1` in step for a downgrade to 3.x.
  *
@@ -330,52 +322,63 @@ function mergeLegacyChanges(
  * @throws {StoredDataMigrationError} when the source holds courses but none can be read.
  */
 export default function migrateUserDataToLatest(memento: vscode.Memento): UserDataMigration {
-  const omitted: Pick<UserDataMigration, "dropped" | "unreadable"> = { dropped: [], unreadable: [] }
+  const omitted: Omitted = { dropped: [], unreadable: [] }
   const rawCurrent = memento.get<unknown>(data.v3.USER_DATA_KEY)
   const rawLegacy = memento.get<unknown>(data.v1.USER_DATA_KEY) ?? undefined
-
-  if (rawCurrent !== undefined) {
-    const current = data.v3.userDataSchema.safeParse(rawCurrent)
-    if (!current.success) {
-      // Reading v3 reports it; merging into it would hide that.
-      return { ...unchanged(), ...omitted }
-    }
-    if (memento.get(data.v0.USER_DATA_KEY) !== undefined) {
-      Logger.warn(`Ignored "${data.v0.USER_DATA_KEY}": "${data.v3.USER_DATA_KEY}" is newer.`)
-    }
-    // The stored value, not zod's copy, keeps fields a newer version added.
-    const currentData = rawCurrent as data.v3.UserData
-    const record = data.v3.legacyMirrorRecordSchema.safeParse(
-      memento.get(data.v3.LEGACY_MIRROR_RECORD_KEY),
-    )
-    const mirrored = record.success ? new Set(record.data.courseIds) : undefined
-    const mirror = legacyUserDataOf(currentData)
-    // This version deletes the mirror itself when it has no tmc course, so only a missing mirror
-    // recorded with courses was wiped by an older version.
-    if (isEqual(rawLegacy, mirror) || (rawLegacy === undefined && !mirrored?.size)) {
-      const isRecordStale =
-        !record.success || !isEqual(record.data, legacyMirrorRecordOf(currentData))
-      return {
-        ...unchanged(),
-        isLegacyMirrorStale: !isEqual(rawLegacy, mirror) || isRecordStale,
-        ...omitted,
-      }
-    }
-    const merged = mergeLegacyChanges(currentData, rawLegacy ?? { courses: [] }, mirrored, omitted)
-    return {
-      data: merged,
-      supersededKeys: [],
-      destinationKey: data.v3.USER_DATA_KEY,
-      isLegacyMirrorStale: merged === undefined,
-      ...omitted,
-    }
+  const migrated =
+    rawCurrent === undefined
+      ? readLegacyUserData(memento, rawLegacy, omitted)
+      : mergeIntoCurrent(memento, rawCurrent, rawLegacy, omitted)
+  return {
+    data: migrated.data,
+    supersededKeys: migrated.supersededKeys ?? [],
+    destinationKey: data.v3.USER_DATA_KEY,
+    isLegacyMirrorStale: migrated.isLegacyMirrorStale ?? false,
+    ...omitted,
   }
+}
 
+function mergeIntoCurrent(
+  memento: vscode.Memento,
+  rawCurrent: unknown,
+  rawLegacy: unknown,
+  omitted: Omitted,
+): Migrated {
+  if (!data.v3.userDataSchema.safeParse(rawCurrent).success) {
+    // Reading v3 reports it; merging into it would hide that.
+    return {}
+  }
+  if (memento.get(data.v0.USER_DATA_KEY) !== undefined) {
+    Logger.warn(`Ignored "${data.v0.USER_DATA_KEY}": "${data.v3.USER_DATA_KEY}" is newer.`)
+  }
+  // The stored value, not zod's copy, keeps fields a newer version added.
+  const current = rawCurrent as data.v3.UserData
+  const record = data.v3.legacyMirrorRecordSchema.safeParse(
+    memento.get(data.v3.LEGACY_MIRROR_RECORD_KEY),
+  )
+  const mirrored = record.success ? new Set(record.data.courseIds) : undefined
+  const isMirrorIntact = isEqual(rawLegacy, legacyUserDataOf(current))
+  // This version deletes the mirror itself when it has no tmc course, so only a missing mirror
+  // recorded with courses was wiped by an older version.
+  const isMirrorDeletedForNoCourses = rawLegacy === undefined && !mirrored?.size
+  if (isMirrorIntact || isMirrorDeletedForNoCourses) {
+    const isRecordStale = !record.success || !isEqual(record.data, legacyMirrorRecordOf(current))
+    return { isLegacyMirrorStale: !isMirrorIntact || isRecordStale }
+  }
+  const merged = mergeLegacyChanges(current, rawLegacy ?? { courses: [] }, mirrored, omitted)
+  return { data: merged, isLegacyMirrorStale: merged === undefined }
+}
+
+function readLegacyUserData(
+  memento: vscode.Memento,
+  rawLegacy: unknown,
+  omitted: Omitted,
+): Migrated {
   const rawV0 = memento.get<unknown>(data.v0.USER_DATA_KEY) ?? undefined
   const [key, raw] =
     rawV0 !== undefined ? [data.v0.USER_DATA_KEY, rawV0] : [data.v1.USER_DATA_KEY, rawLegacy]
   if (raw === undefined) {
-    return { ...unchanged(), ...omitted }
+    return {}
   }
   const legacy = legacyUserDataSchema.safeParse(raw)
   if (!legacy.success) {
@@ -397,17 +400,5 @@ export default function migrateUserDataToLatest(memento: vscode.Memento): UserDa
   return {
     data: { courses, mooc_courses: [] },
     supersededKeys: key === data.v0.USER_DATA_KEY ? [key] : [],
-    destinationKey: data.v3.USER_DATA_KEY,
-    isLegacyMirrorStale: false,
-    ...omitted,
-  }
-}
-
-function unchanged(): Omit<UserDataMigration, "dropped" | "unreadable"> {
-  return {
-    data: undefined,
-    supersededKeys: [],
-    destinationKey: data.v3.USER_DATA_KEY,
-    isLegacyMirrorStale: false,
   }
 }

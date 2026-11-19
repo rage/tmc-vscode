@@ -70,6 +70,20 @@ export async function closeElectron(electronApp: ElectronApplication): Promise<v
   }
 }
 
+/** The folder VS Code keeps the extension's global storage in for the profile in `userDataDir`. */
+export function extensionGlobalStorage(userDataDir: string): string {
+  return join(userDataDir, "User", "globalStorage", "moocfi.test-my-code")
+}
+
+/** The extension's webview: the inner frame of the last of its panels VS Code has ready. */
+export function tmcWebview(page: Page): FrameLocator {
+  // The inner frame's title tracks the tab title, so match the extension id in the outer URL.
+  return page
+    .frameLocator('iframe.webview.ready[src*="extensionId=moocfi.test-my-code"]')
+    .last()
+    .frameLocator("iframe#active-frame")
+}
+
 /** Where VS Code loads the extension from: this checkout, or a dir VSIXs were installed into. */
 export type ExtensionSource = { developmentPath: string } | { extensionsDir: string }
 
@@ -308,13 +322,7 @@ export const customTestFixtures: Fixtures<
     await run(context)
   },
   webview: async ({ page }, run) => {
-    // The inner frame's title follows the panel's tab title, so the extension is
-    // matched on the id VS Code puts in the outer frame's URL instead.
-    const webviewFrame = page
-      .frameLocator('iframe.webview.ready[src*="extensionId=moocfi.test-my-code"]')
-      .last()
-    const tmcFrame = webviewFrame.frameLocator("iframe#active-frame")
-    await run(tmcFrame)
+    await run(tmcWebview(page))
   },
 }
 

@@ -103,9 +103,8 @@ export class LegacyTmcPage {
   }
 
   /**
-   * Downloads the exercises labelled `exercises`, the course's one part, and opens them. 3.5.5's
-   * part counters do not update and no status tells when a download ends, so opening is retried
-   * until it takes.
+   * Downloads and opens the course's one part, `exercises` being its labels. 3.5.5's part counters
+   * do not update and nothing marks a download's end, so opening is retried until it takes.
    */
   public async downloadAndOpenAll(exercises: string[]): Promise<void> {
     await this.button("Download all").click()

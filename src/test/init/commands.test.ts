@@ -314,14 +314,12 @@ suite("registerCommands", function () {
   test("tmc.showAddCourse opens the add-course screen in the main panel", async function () {
     const renderMain = vi.spyOn(TmcPanel, "renderMain").mockReturnValue(undefined)
     const { handlers, context, actionContext } = registerAndCollect()
-    vi.mocked(actionContext.settings.isCoursesMoocFiEnabled).mockReturnValue(false)
 
     await handlers.get("tmc.showAddCourse")?.()
 
     expect(renderMain).toHaveBeenCalledExactlyOnceWith(context, actionContext, {
       id: expect.any(Number),
       type: "AddCourse",
-      canAddMoocCourses: false,
     })
   })
 
@@ -342,7 +340,7 @@ suite("registerCommands", function () {
         .map(({ menu, entry }) => [menu, entry.when !== "false"]),
     ).toEqual([["commandPalette", true]])
     expect(links).not.toContain("tmc.addNewCourse")
-    expect(links.filter((command) => command === "tmc.showAddCourse")).toHaveLength(3)
+    expect(links.filter((command) => command === "tmc.showAddCourse")).toHaveLength(2)
     expect(
       menuCommands
         .filter(({ entry }) => entry.command === "tmc.showAddCourse")

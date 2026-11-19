@@ -7,7 +7,6 @@ import { CourseIdentifier as CourseIdentifiers } from "../../../shared/lib"
 import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import { MOOC_BACKEND_URL } from "../../config/constants"
-import type Settings from "../../config/settings"
 import type { UserData } from "../../config/userdata"
 import { AuthorizationError, ConnectionError } from "../../errors"
 import { addCourseHandlers } from "../../panels/handlers/addCourse"
@@ -18,6 +17,7 @@ import { createMockActionContext } from "../mocks/actionContext"
 
 vi.mock("../../actions", () => ({
   MOOC_LOGIN: "mooc-login",
+  MOOC_DISABLED: "mooc-disabled",
   listEnrolledMoocCourses: vi.fn(),
   listTmcOrganizations: vi.fn(),
   listOrganizationCourses: vi.fn(),
@@ -47,7 +47,7 @@ let nextId = 100
 
 function addCoursePanel(): AddCoursePanel {
   nextId += 1
-  return { id: nextId, type: "AddCourse", canAddMoocCourses: true }
+  return { id: nextId, type: "AddCourse" }
 }
 
 function host(route: Panel | undefined): PanelHost {
@@ -61,20 +61,17 @@ function host(route: Panel | undefined): PanelHost {
   }
 }
 
-/** A context whose user has added `added`, with the courses.mooc.fi setting on unless said. */
-function context(added: CourseIdentifier[] = [], isMoocEnabled = true): ReadyActionContext {
+/** A context whose user has added `added`. */
+function context(added: CourseIdentifier[] = []): ReadyActionContext {
   const keys = new Set(added.map((id) => CourseIdentifiers.key(id)))
-  return {
-    ...createMockActionContext({
-      startup: {
-        userData: {
-          getCourse: (id: CourseIdentifier) =>
-            keys.has(CourseIdentifiers.key(id)) ? Ok({}) : Err(new Error("No such course.")),
-        } as unknown as UserData,
-      },
-    }),
-    settings: { isCoursesMoocFiEnabled: () => isMoocEnabled } as unknown as Settings,
-  }
+  return createMockActionContext({
+    startup: {
+      userData: {
+        getCourse: (id: CourseIdentifier) =>
+          keys.has(CourseIdentifiers.key(id)) ? Ok({}) : Err(new Error("No such course.")),
+      } as unknown as UserData,
+    },
+  })
 }
 
 function request<K extends "requestMoocCatalog" | "requestTmcOrganizations">(
@@ -179,11 +176,10 @@ suite("the add-course screen's handlers", function () {
     expect((await listMooc(context(), panel)).val).toBe(error)
   })
 
-  test("fetches no courses.mooc.fi courses while the setting is off", async function () {
-    const listed = await listMooc(context([], false), addCoursePanel())
+  test("says the courses.mooc.fi courses are not offered while the setting is off", async function () {
+    vi.mocked(actions.listEnrolledMoocCourses).mockResolvedValue(actions.MOOC_DISABLED)
 
-    expect(listed.err).toBe(true)
-    expect(actions.listEnrolledMoocCourses).not.toHaveBeenCalled()
+    expect((await listMooc(context(), addCoursePanel())).val).toEqual({ kind: "disabled" })
   })
 
   test("lists the TMC organizations, pinned first, or that they need a login", async function () {

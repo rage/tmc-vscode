@@ -30,7 +30,7 @@ import {
   StoredDataMigrationError,
 } from "../../errors"
 import type { PanelMessage } from "../../panels/router"
-import { addCoursePanel, initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
+import { initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
 import { standingView, submitFailedView } from "../../panels/submissionView"
 import { MAIN_PANEL_VIEW_TYPE, SIDE_PANEL_VIEW_TYPE, TmcPanel } from "../../panels/TmcPanel"
 import { loginScreens } from "../../ui/loginScreens"
@@ -1548,23 +1548,20 @@ suite("TmcPanel main panel lifecycle", () => {
     expect(shownCourseHome.isShowing(idOfTmcCourse(42))).toBe(false)
   })
 
-  test("redraws a shown add-course screen when the courses.mooc.fi setting changes", async () => {
+  test("reloading a shown add-course screen redraws it as a new one, which lists again", async () => {
     const fake = createFakeWebviewPanel()
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(fake.panel)
-    let isEnabled = false
-    const settings = { isCoursesMoocFiEnabled: () => isEnabled }
-    TmcPanel.renderMain(createMockContext(), createMockActionContext(), addCoursePanel(settings))
+    const route = { id: nextPanelId(), type: "AddCourse" } as const
+    TmcPanel.renderMain(createMockContext(), createMockActionContext(), route)
     await fake.sendReady()
     vi.mocked(fake.panel.webview.postMessage).mockClear()
 
-    TmcPanel.updateAddCourse(settings)
-    isEnabled = true
-    TmcPanel.updateAddCourse(settings)
+    TmcPanel.reloadAddCourse()
 
     expect(fake.panel.webview.postMessage).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
         type: "setPanel",
-        panel: expect.objectContaining({ type: "AddCourse", canAddMoocCourses: true }),
+        panel: { id: route.id + 1, type: "AddCourse" },
       }),
     )
   })

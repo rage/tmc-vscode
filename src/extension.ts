@@ -60,7 +60,6 @@ import {
   trackActiveEditorExercise,
   trackActiveExerciseRemoved,
   trackActiveExerciseSubmitRefused,
-  trackCoursesMoocFiEnabled,
   trackHasCourses,
   trackHasDownloadedExercises,
 } from "./ui/contextKeys"
@@ -74,10 +73,11 @@ import { BackgroundStatusBarItem } from "./ui/statusBarBackground"
 import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
 import { submissionViews } from "./ui/submissionViews"
 import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
+import type { VersionChange } from "./utilities"
 import { cliFolder, Logger, setRedactedExtensionStorage, versionChangeSince } from "./utilities"
 import { keepExerciseFilesInFirstGroup } from "./window/exerciseEditorPlacement"
 import {
-  listWalkthrough,
+  listWalkthroughUnlessUpdated,
   reachWalkthroughMilestone,
   restoreWalkthroughMilestones,
   showNextWalkthroughStep,
@@ -217,7 +217,7 @@ async function activateInner(
 ): Promise<void> {
   const storage = new Storage(context)
   const settings = new Settings()
-  context.subscriptions.push(settings, trackCoursesMoocFiEnabled(settings))
+  context.subscriptions.push(settings)
   // Must precede the first CLI invocation below, which logs at the user's level.
   Logger.configure(settings.getLogLevel())
   context.subscriptions.push({ dispose: () => Logger.dispose() })
@@ -269,30 +269,29 @@ async function activateInner(
 
   const workspaceFileFolder = init.workspaceFileFolderOf(context)
 
-  // Set when the stored courses are left unmigrated: reading them would show an empty list.
-  let unmigratedUserData: Error | undefined
   const migration = await storage.migrateToLatest(
     context,
     dialog,
     langs.ok ? langs.val : undefined,
     vscode.workspace.getConfiguration(),
   )
+  let migrationFailure: Error | undefined
   if (migration.kind === "needsReload") {
     const reopened = await reopenInMigratedWorkspace(workspaceFileFolder, migration.workspaceName)
     if (reopened.ok) {
       Logger.warn("Extension expected to restart to migrate the open workspace")
       return
     }
-    reportInitializationError("Migrating stored data", reopened.val)
-    if (!migration.hasMigratedUserData) {
-      unmigratedUserData = reopened.val
-    }
+    migrationFailure = reopened.val
   } else if (migration.kind === "failed") {
-    reportInitializationError("Migrating stored data", migration.error)
-    if (!migration.hasMigratedUserData) {
-      unmigratedUserData = migration.error
-    }
+    migrationFailure = migration.error
   }
+  if (migrationFailure) {
+    reportInitializationError("Migrating stored data", migrationFailure)
+  }
+  // Courses left unmigrated would read as an empty list.
+  const unmigratedUserData =
+    migration.kind !== "done" && !migration.hasMigratedUserData ? migrationFailure : undefined
 
   // After the migration, which can move the exercises and the projects-dir setting.
   const [authChecked, startupScan] = await Promise.all([
@@ -382,7 +381,7 @@ async function activateInner(
     Logger.warn("Skipped login command setup")
   }
 
-  let versionChange: "installed" | "updated" | undefined
+  let versionChange: VersionChange | undefined
   try {
     const previousVersion = storage.getSessionState()?.extensionVersion
     if (EXTENSION_VERSION !== previousVersion) {
@@ -393,9 +392,7 @@ async function activateInner(
     // An unreadable session state costs the walkthrough or the update notice, nothing else.
     Logger.warn("Skipped version check", e)
   }
-  if (versionChange !== "updated") {
-    await listWalkthrough()
-  }
+  listWalkthroughUnlessUpdated(versionChange)
 
   let workspaceManager: WorkspaceManager | undefined
   let userData: Result<UserData, Error> | undefined =

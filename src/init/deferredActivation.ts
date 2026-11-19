@@ -5,17 +5,17 @@ import * as fs from "fs-extra"
 import * as vscode from "vscode"
 
 import { CLIENT_NAME, EXTENSION_VERSION, TMC_LANGS_CONFIG_DIR } from "../config/constants"
-import Settings from "../config/settings"
 import Storage from "../storage"
 import { v0, v1, v3 } from "../storage/data"
-import { trackCoursesMoocFiEnabled } from "../ui/contextKeys"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
 import { isSamePath, Logger, versionChangeSince } from "../utilities"
-import { listWalkthrough, WALKTHROUGH, whenWalkthroughRegistered } from "../window/walkthrough"
+import { listWalkthroughUnlessUpdated, openWalkthroughWhenRegistered } from "../window/walkthrough"
 
 /**
  * Global state keys only a full activation can migrate or merge. This version also writes
  * `user-data-v1`, but only while it has tmc courses, so the key still means a full activation.
+ * Unlike the backup's `LEGACY_KEYS` (`storage/migration/log.ts`), it omits session state, which a
+ * light activation also reads, and includes the pending exercise moves.
  */
 const LEGACY_DATA_KEYS = [
   v0.USER_DATA_KEY,
@@ -150,8 +150,6 @@ export async function deferActivation(
       },
     }),
   )
-  const settings = new Settings()
-  standIns.push(settings, trackCoursesMoocFiEnabled(settings))
   context.subscriptions.push({ dispose: () => vscode.Disposable.from(...standIns).dispose() })
   void vscode.commands.executeCommand("setContext", LIGHT_CONTEXT_KEY, true)
 
@@ -161,18 +159,14 @@ export async function deferActivation(
       storage.getSessionState()?.extensionVersion,
       EXTENSION_VERSION,
     )
-    if (versionChange !== "updated") {
-      await listWalkthrough()
-    }
+    listWalkthroughUnlessUpdated(versionChange)
     if (versionChange === "installed") {
       await storage.updateSessionState({ extensionVersion: EXTENSION_VERSION })
-      void whenWalkthroughRegistered()
-        .then(() =>
-          vscode.commands.executeCommand("workbench.action.openWalkthrough", WALKTHROUGH, false),
-        )
-        .then(undefined, (e) => Logger.warn("Could not open the walkthrough", e))
+      void openWalkthroughWhenRegistered().catch((e) =>
+        Logger.warn("Could not open the walkthrough", e),
+      )
     }
   } catch (e) {
-    Logger.warn("Could not open the walkthrough", e)
+    Logger.warn("Skipped version check", e)
   }
 }

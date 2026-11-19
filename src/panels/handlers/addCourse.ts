@@ -29,10 +29,10 @@ export const addCourseHandlers = {
       if (!panel) {
         return Err(NOT_SHOWN)
       }
-      if (!actionContext.settings.isCoursesMoocFiEnabled()) {
-        return Err(new Error("Adding courses.mooc.fi courses is turned off in the settings."))
-      }
       const listing = await actions.listEnrolledMoocCourses(actionContext)
+      if (listing === actions.MOOC_DISABLED) {
+        return Ok({ kind: "disabled" })
+      }
       if (listing === actions.MOOC_LOGIN) {
         return Ok({ kind: "loggedOut" })
       }

@@ -90,8 +90,7 @@
   }
 
   onMount(() => {
-    const moocListing = panel.canAddMoocCourses ? loadMooc() : undefined
-    void Promise.all([moocListing, loadOrganizations()]).then(async () => {
+    void Promise.all([loadMooc(), loadOrganizations()]).then(async () => {
       await tick()
       restoreScroll()
     })
@@ -141,6 +140,7 @@
     return terms.every((term) => text.includes(term))
   }
 
+  const isMoocListed = $derived(!(mooc.state === "loaded" && mooc.value.kind === "disabled"))
   const shownMoocCourses = $derived(
     mooc.state === "loaded" && mooc.value.kind === "listed"
       ? mooc.value.items.filter((course) =>
@@ -232,7 +232,7 @@
 {/snippet}
 
 <div class="add-course">
-  <PanelHeader title="Add Course" toolbar={panel.canAddMoocCourses ? toolbar : undefined} />
+  <PanelHeader title="Add Course" toolbar={isMoocListed ? toolbar : undefined} />
   <p class="muted intro">Pick the course you're taking.</p>
 
   <div class="search">
@@ -245,7 +245,7 @@
     />
   </div>
 
-  {#if panel.canAddMoocCourses}
+  {#if isMoocListed}
     <Section title={MOOC}>
       {#if mooc.state === "loading"}
         <Spinner label="Loading your courses…" />
@@ -262,7 +262,7 @@
             <Button onclick={logIn}>Log In</Button>
           {/snippet}
         </Notice>
-      {:else if mooc.value.items.length === 0}
+      {:else if mooc.value.kind === "listed" && mooc.value.items.length === 0}
         <p>You are not enrolled on any {MOOC} course with programming exercises yet.</p>
         <div class="actions">
           <Button secondary onclick={findCourse}>Find a Course on {MOOC}</Button>

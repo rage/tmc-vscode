@@ -298,10 +298,6 @@ export const v3_0_0: v3.UserData = {
   mooc_courses: [],
 }
 
-// -------------------------------------------------------------------------------------------------
-// Shapes older versions wrote that their own types did not admit
-// -------------------------------------------------------------------------------------------------
-
 /** 0.1.0 stored the server's description as is, which is null for a course without one. */
 export const v0_1_0_nullDescription = {
   courses: [

@@ -9,7 +9,7 @@ import type { UnreadableValue } from "./userData"
 const KEPT_RUNS = 10
 const KEPT_UNREADABLE_VALUES = 20
 
-/** Every key a pre-4.0 version stored data under. */
+/** Every pre-4.0 storage key, for the backup; not `LEGACY_DATA_KEYS` (`deferredActivation.ts`). */
 const LEGACY_KEYS = [
   data.v0.USER_DATA_KEY,
   data.v0.EXERCISE_DATA_KEY,
@@ -20,10 +20,7 @@ const LEGACY_KEYS = [
   data.v1.SESSION_STATE_KEY,
 ]
 
-/**
- * A memento that notes which keys a migration run read, wrote and deleted, and that has
- * {@link backUpLegacyData} run before its first write.
- */
+/** A memento that records the keys a migration run read, wrote and deleted, and backs up first. */
 export class RecordingMemento implements vscode.Memento {
   public readonly keysRead = new Set<string>()
   public readonly keysWritten = new Set<string>()
@@ -51,7 +48,11 @@ export class RecordingMemento implements vscode.Memento {
     return value ?? defaultValue
   }
 
+  /** Deleting a key that holds nothing is a no-op, and is not recorded. */
   public async update(key: string, value: unknown): Promise<void> {
+    if (value === undefined && this._memento.get(key) === undefined) {
+      return
+    }
     const beforeFirstWrite = this._beforeFirstWrite
     this._beforeFirstWrite = undefined
     await beforeFirstWrite?.()
@@ -104,34 +105,48 @@ export async function backUpLegacyData(
   Logger.info(`Backed up ${Object.keys(values).join(", ")} before migrating them.`)
 }
 
-/** Adds `values` to {@link data.v3.UNREADABLE_LEGACY_DATA_KEY}, keeping only the latest few. */
+/** The stored diagnostics; an unreadable part reads as empty. */
+function readDiagnostics(memento: vscode.Memento): data.v3.MigrationDiagnostics {
+  return z
+    .object({
+      runs: z.array(data.v3.migrationRunSchema).catch([]),
+      unreadable: z.array(data.v3.unreadableLegacyValueSchema).catch([]),
+    })
+    .catch({ runs: [], unreadable: [] })
+    .parse(memento.get(data.v3.MIGRATION_DIAGNOSTICS_KEY) ?? {})
+}
+
+/** Adds to {@link data.v3.MIGRATION_DIAGNOSTICS_KEY}, keeping only the latest few of each. */
+async function appendDiagnostics(
+  memento: vscode.Memento,
+  added: Partial<data.v3.MigrationDiagnostics>,
+): Promise<void> {
+  const stored = readDiagnostics(memento)
+  const diagnostics: data.v3.MigrationDiagnostics = {
+    runs: [...stored.runs, ...(added.runs ?? [])].slice(-KEPT_RUNS),
+    unreadable: [...stored.unreadable, ...(added.unreadable ?? [])].slice(-KEPT_UNREADABLE_VALUES),
+  }
+  await memento.update(data.v3.MIGRATION_DIAGNOSTICS_KEY, diagnostics)
+}
+
+/** Keeps the `values` not already kept, before rewriting their key would lose them. */
 export async function keepUnreadableLegacyValues(
   memento: vscode.Memento,
   values: UnreadableValue[],
 ): Promise<void> {
-  if (values.length === 0) {
-    return
-  }
-  const stored = z
-    .array(data.v3.unreadableLegacyValueSchema)
-    .safeParse(memento.get(data.v3.UNREADABLE_LEGACY_DATA_KEY))
-  const kept = stored.success ? stored.data : []
+  const kept = readDiagnostics(memento).unreadable
   const keptAt = new Date().toISOString()
   const added = values
     .filter(({ key, value }) => !kept.some((old) => old.key === key && isEqual(old.value, value)))
     .map(({ key, value }) => ({ keptAt, key, value }))
   if (added.length > 0) {
-    await memento.update(
-      data.v3.UNREADABLE_LEGACY_DATA_KEY,
-      [...kept, ...added].slice(-KEPT_UNREADABLE_VALUES),
-    )
+    await appendDiagnostics(memento, { unreadable: added })
   }
 }
 
-/** The recorded migration runs, oldest first; an unreadable record reads as none. */
+/** The recorded migration runs, oldest first. */
 export function readMigrationLog(memento: vscode.Memento): data.v3.MigrationRun[] {
-  const log = z.array(data.v3.migrationRunSchema).safeParse(memento.get(data.v3.MIGRATION_LOG_KEY))
-  return log.success ? log.data : []
+  return readDiagnostics(memento).runs
 }
 
 /** Records `run`, keeping only the latest few. */
@@ -139,8 +154,7 @@ export async function appendMigrationRun(
   memento: vscode.Memento,
   run: data.v3.MigrationRun,
 ): Promise<void> {
-  const log = [...readMigrationLog(memento), run].slice(-KEPT_RUNS)
-  await memento.update(data.v3.MIGRATION_LOG_KEY, log)
+  await appendDiagnostics(memento, { runs: [run] })
 }
 
 function listKeys(keys: string[]): string {

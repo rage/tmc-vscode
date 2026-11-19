@@ -93,7 +93,6 @@
     "knip": "^6.35.1",
     "lint-staged": "^17.0.0",
     "mocha": "^11.0.0",
-    "ovsx": "^1.1.1",
     "oxfmt": "^0.58.0",
     "oxlint": "^1.73.0",
     "tmp": "^0.2.7",
@@ -937,22 +936,8 @@
             "id": "addCourse",
             "title": "Add Course",
             "description": "Pick the course you are taking.\n[Add Course](command:tmc.showAddCourse)",
-            "when": "!test-my-code:CoursesMoocFiEnabled",
             "media": {
               "markdown": "media/walkthrough/add-course.md"
-            },
-            "completionEvents": [
-              "onContext:test-my-code:HasCourses",
-              "onContext:test-my-code:HasCourses && test-my-code:WalkthroughActive"
-            ]
-          },
-          {
-            "id": "addCourseWithCoursesMoocFi",
-            "title": "Add Course",
-            "description": "Pick the course you are taking.\n[Add Course](command:tmc.showAddCourse)",
-            "when": "test-my-code:CoursesMoocFiEnabled",
-            "media": {
-              "markdown": "media/walkthrough/add-course-with-courses-mooc-fi.md"
             },
             "completionEvents": [
               "onContext:test-my-code:HasCourses",

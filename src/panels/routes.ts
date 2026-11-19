@@ -1,17 +1,11 @@
 import type * as vscode from "vscode"
 
-import type {
-  AddCoursePanel,
-  ErrorHelpPanel,
-  ExerciseSubmissionPanel,
-  Panel,
-} from "../../shared/lib"
+import type { ErrorHelpPanel, ExerciseSubmissionPanel, Panel } from "../../shared/lib"
 import { assertUnreachable, BaseError, LocalCourseData, unwrap } from "../../shared/lib"
 import type { ActionContext, StartupStep } from "../actions/types"
 import { isReady } from "../actions/types"
 import { errorDetails } from "../api/errorDetails"
 import type { WorkspaceExercise } from "../api/workspaceManager"
-import type Settings from "../config/settings"
 import type { StoredExercise } from "../config/userdata"
 import { CliVerificationError } from "../errors"
 import { cliFolder, redactPersonalInfo } from "../utilities"
@@ -47,15 +41,6 @@ let panelIdCounter = 0
 export function nextPanelId(): number {
   panelIdCounter += 1
   return panelIdCounter
-}
-
-/** A new add-course screen, listing courses.mooc.fi courses only when the setting allows. */
-export function addCoursePanel(settings: Pick<Settings, "isCoursesMoocFiEnabled">): AddCoursePanel {
-  return {
-    id: nextPanelId(),
-    type: "AddCourse",
-    canAddMoocCourses: settings.isCoursesMoocFiEnabled(),
-  }
 }
 
 /** A new results panel for `exercise`, named as its stored course names it. */

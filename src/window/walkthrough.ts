@@ -3,6 +3,7 @@ import * as vscode from "vscode"
 import type { ReadyActionContext } from "../actions/types"
 import { EXTENSION_ID } from "../config/constants"
 import { trackContextKey } from "../ui/contextKeys"
+import type { VersionChange } from "../utilities"
 import { Logger, sleep } from "../utilities"
 
 /** The Get Started walkthrough; its last part must match the `walkthroughs` entry in package.json. */
@@ -27,19 +28,15 @@ function isWalkthroughTab(tab: vscode.Tab | undefined): boolean {
 /** VS Code's 5 s wait in {@link startWalkthroughRegistration}, with slack. */
 const WALKTHROUGH_REGISTRATION_MS = 6_000
 
-/** When VS Code has registered the walkthrough at the latest; 0 until it starts. */
-let walkthroughRegisteredAt = 0
+let registered = Promise.resolve()
 
 /**
- * Has VS Code register the walkthrough now, which {@link whenWalkthroughRegistered} waits for.
- *
- * VS Code creates its walkthrough service only once something uses it, often the first open, and
- * the service then registers each extension's walkthrough after waiting up to 5 s for an
- * experiment to override its `when` (`gettingStartedService.ts`). Marking a step that does not
- * exist incomplete creates the service and changes nothing.
+ * Has VS Code register the walkthrough now. Its walkthrough service registers extensions'
+ * walkthroughs up to 5 s after it is first used (`gettingStartedService.ts`); marking an unknown
+ * step incomplete creates it and changes nothing.
  */
 export function startWalkthroughRegistration(): void {
-  walkthroughRegisteredAt = Date.now() + WALKTHROUGH_REGISTRATION_MS
+  registered = sleep(WALKTHROUGH_REGISTRATION_MS)
   // VS Code throws for the unknown step after creating the service.
   void Promise.resolve(
     vscode.commands.executeCommand("welcome.markStepIncomplete", `${WALKTHROUGH}#registration`),
@@ -47,30 +44,38 @@ export function startWalkthroughRegistration(): void {
 }
 
 /**
- * Resolves once VS Code has registered the walkthrough, at most a few seconds after
- * {@link startWalkthroughRegistration}.
- *
- * Opened before that, the walkthrough may never show: on a new profile VS Code shows its own first
- * walkthrough instead, and while that tab is active it ignores later opens (`gettingStarted.ts`,
- * `gettingStarted.contribution.ts`).
+ * Lets VS Code show the walkthrough, which package.json hides until this window sets
+ * `test-my-code:WalkthroughListed`.
  */
-export async function whenWalkthroughRegistered(): Promise<void> {
-  const remainingMs = walkthroughRegisteredAt - Date.now()
-  if (remainingMs > 0) {
-    await sleep(remainingMs)
+async function listWalkthrough(): Promise<void> {
+  await vscode.commands.executeCommand("setContext", "test-my-code:WalkthroughListed", true)
+}
+
+/**
+ * Lists the walkthrough, except after an update: VS Code opens a walkthrough new to it, from an
+ * extension updated in the window, over the student's work if its `when` holds then.
+ */
+export function listWalkthroughUnlessUpdated(versionChange: VersionChange | undefined): void {
+  if (versionChange !== "updated") {
+    void listWalkthrough().catch((e) => Logger.warn("Could not list the walkthrough", e))
   }
 }
 
 /**
- * Lets VS Code show the walkthrough, which package.json hides until this window sets
- * `test-my-code:WalkthroughListed`.
- *
- * VS Code opens a walkthrough new to it on registering it from an extension installed or updated
- * in the window, if its `when` holds then (its `gettingStartedService.ts`). Activation leaves the
- * key unset after an update, so the walkthrough does not cover the student's work.
+ * Lists and opens the walkthrough once VS Code has registered it: on the student's next step given
+ * their `progress`, else where VS Code left it. Opened before that, it may never show: on a new
+ * profile VS Code's own walkthrough is active, and it then ignores later opens.
  */
-export async function listWalkthrough(): Promise<void> {
-  await vscode.commands.executeCommand("setContext", "test-my-code:WalkthroughListed", true)
+export async function openWalkthroughWhenRegistered(
+  progress?: () => WalkthroughProgress,
+): Promise<void> {
+  await listWalkthrough()
+  await registered
+  if (progress) {
+    await showNextWalkthroughStep(progress, { isOpenedIfClosed: true })
+  } else {
+    await vscode.commands.executeCommand("workbench.action.openWalkthrough", WALKTHROUGH, false)
+  }
 }
 
 /**
@@ -140,8 +145,6 @@ export function hasReachedWalkthroughMilestone(milestone: WalkthroughMilestone):
 
 /** What TestMyCode knows of the student's progress through the walkthrough. */
 export interface WalkthroughProgress {
-  /** Picks the Add Course step's variant, which package.json shows by the setting. */
-  canAddMoocCourses: boolean
   isLoggedIn: boolean
   hasCourses: boolean
   hasDownloadedExercises: boolean
@@ -161,7 +164,7 @@ export function nextWalkthroughStep(progress: WalkthroughProgress): string {
     return "logIn"
   }
   if (!progress.hasCourses) {
-    return progress.canAddMoocCourses ? "addCourseWithCoursesMoocFi" : "addCourse"
+    return "addCourse"
   }
   if (!progress.hasDownloadedExercises) {
     return "openExercises"
@@ -187,11 +190,9 @@ export function isWalkthroughVisible(): boolean {
 /** The student's progress as this activation sees it. */
 export function walkthroughProgressOf({
   authState,
-  settings,
   startup,
-}: Pick<ReadyActionContext, "authState" | "settings" | "startup">): WalkthroughProgress {
+}: Pick<ReadyActionContext, "authState" | "startup">): WalkthroughProgress {
   return {
-    canAddMoocCourses: settings.isCoursesMoocFiEnabled(),
     isLoggedIn: authState.loggedIn,
     hasCourses: startup.userData.getCourses().length > 0,
     hasDownloadedExercises: startup.workspaceManager.getExercises().length > 0,

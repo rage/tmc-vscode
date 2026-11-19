@@ -8,5 +8,5 @@ export function registerSettingsCallbacks(actionContext: ReadyActionContext): vo
   settings.onChangeHideMetaFiles = async (hide): Promise<void> => {
     await workspaceManager.excludeMetaFilesInWorkspace(hide)
   }
-  settings.onChangeCoursesMoocFiEnabled = (): void => TmcPanel.updateAddCourse(settings)
+  settings.onChangeCoursesMoocFiEnabled = (): void => TmcPanel.reloadAddCourse()
 }

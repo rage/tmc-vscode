@@ -15,12 +15,10 @@ export import SESSION_STATE_KEY = v2.SESSION_STATE_KEY
 export const PENDING_EXERCISE_MIGRATION_KEY = "pending-exercise-migration-v3"
 /** The raw legacy values as the first migration found them; written once, never overwritten. */
 export const LEGACY_DATA_BACKUP_KEY = "legacy-data-backup-v3"
-/** The latest migration runs, oldest first; see {@link MigrationRun}. */
-export const MIGRATION_LOG_KEY = "migration-log-v3"
+/** The latest migration runs and unreadable legacy values; see {@link MigrationDiagnostics}. */
+export const MIGRATION_DIAGNOSTICS_KEY = "migration-diagnostics-v3"
 /** What this version last mirrored to `user-data-v1`; unset until it first does. */
 export const LEGACY_MIRROR_RECORD_KEY = "legacy-mirror-record-v3"
-/** Raw legacy values no migration could read, newest last; see {@link UnreadableLegacyValue}. */
-export const UNREADABLE_LEGACY_DATA_KEY = "unreadable-legacy-data-v3"
 
 export type LogLevel = v2.LogLevel
 export type SessionState = v2.SessionState
@@ -44,15 +42,16 @@ export const userDataSchema = z.object({
   mooc_courses: z.array(moocLocalCourseDataSchema),
 })
 
-export const legacyDataBackupSchema = z.object({
+/** Read only by hand, so it has no schema. */
+export interface LegacyDataBackup {
   /** ISO timestamp. */
-  createdAt: z.string(),
+  createdAt: string
   /** The extension version that last ran before the backup, if one was recorded. */
-  fromVersion: z.string().nullable(),
-  toVersion: z.string(),
+  fromVersion: string | null
+  toVersion: string
   /** Each legacy key that held a value, as stored. */
-  values: z.record(z.string(), z.unknown()),
-})
+  values: Record<string, unknown>
+}
 
 /** One activation's migration that read legacy data, wrote or retired a key, or failed. */
 export const migrationRunSchema = z.object({
@@ -83,10 +82,14 @@ export const unreadableLegacyValueSchema = z.object({
   value: z.unknown(),
 })
 
-export type LegacyDataBackup = z.infer<typeof legacyDataBackupSchema>
 export type LegacyMirrorRecord = z.infer<typeof legacyMirrorRecordSchema>
 export type UnreadableLegacyValue = z.infer<typeof unreadableLegacyValueSchema>
 export type MigrationRun = z.infer<typeof migrationRunSchema>
+/** Both oldest first. */
+export interface MigrationDiagnostics {
+  runs: MigrationRun[]
+  unreadable: UnreadableLegacyValue[]
+}
 export type TmcLocalCourseExercise = z.infer<typeof tmcLocalCourseExerciseSchema>
 export type TmcLocalCourseData = z.infer<typeof tmcLocalCourseDataSchema>
 export type MoocLocalCourseExercise = z.infer<typeof moocLocalCourseExerciseSchema>

@@ -87,13 +87,13 @@ suite("Storage migration safety", function () {
   }
 
   function migrationLog(): v3.MigrationRun[] {
-    return memento.get<v3.MigrationRun[]>(v3.MIGRATION_LOG_KEY) ?? []
+    return memento.get<v3.MigrationDiagnostics>(v3.MIGRATION_DIAGNOSTICS_KEY)?.runs ?? []
   }
 
   function keptUnreadable(): unknown[] {
-    return (memento.get<v3.UnreadableLegacyValue[]>(v3.UNREADABLE_LEGACY_DATA_KEY) ?? []).map(
-      ({ value }) => value,
-    )
+    return (
+      memento.get<v3.MigrationDiagnostics>(v3.MIGRATION_DIAGNOSTICS_KEY)?.unreadable ?? []
+    ).map(({ value }) => value)
   }
 
   suite("upgrading", function () {
@@ -465,6 +465,37 @@ suite("Storage migration safety", function () {
       await storage.updateUserData({ courses: [tmcCourse(1, "tmc")], mooc_courses: [moocCourse] })
 
       expect(update.mock.calls.map(([key]) => key)).toEqual([v3.USER_DATA_KEY])
+    })
+
+    test("does no work on the copy for 3.x for a change said to touch only mooc courses", async function () {
+      await storage.updateUserData({ courses: [tmcCourse(1, "tmc")], mooc_courses: [] })
+      const get = vi.spyOn(memento, "get")
+
+      await storage.updateUserData(
+        { courses: [tmcCourse(1, "tmc")], mooc_courses: [moocCourse] },
+        { isMoocOnlyChange: true },
+      )
+
+      expect(get).not.toHaveBeenCalled()
+      expect(storage.getUserData()?.mooc_courses).toEqual([moocCourse])
+    })
+
+    test("syncs the copy for 3.x after a write that failed, whatever changed", async function () {
+      const update = memento.update.bind(memento)
+      vi.spyOn(memento, "update").mockImplementationOnce(() => {
+        throw new Error("disk full")
+      })
+      await expect(
+        storage.updateUserData({ courses: [tmcCourse(1, "tmc")], mooc_courses: [] }),
+      ).rejects.toThrow("disk full")
+      vi.mocked(memento.update).mockImplementation(update)
+
+      await storage.updateUserData(
+        { courses: [tmcCourse(1, "tmc")], mooc_courses: [moocCourse] },
+        { isMoocOnlyChange: true },
+      )
+
+      expect(memento.get(v1.USER_DATA_KEY)).toEqual({ courses: [tmcCourse(1, "tmc")] })
     })
 
     test("deletes no copy for 3.x a mooc-only student never had", async function () {

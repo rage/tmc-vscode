@@ -14,12 +14,7 @@ import {
   SHOW_AI_USE_PROBLEM_COMMAND,
   TRUST_COURSE_WORKSPACE_COMMAND,
 } from "../errors"
-import {
-  addCoursePanel,
-  errorDetailsPanel,
-  initializationErrorHelpPanel,
-  nextPanelId,
-} from "../panels/routes"
+import { errorDetailsPanel, initializationErrorHelpPanel, nextPanelId } from "../panels/routes"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseTestController } from "../testing/exerciseTestController"
 import { openCourseId } from "../ui/courseHome"
@@ -30,12 +25,7 @@ import * as treeCommands from "../ui/treeview/treeCommands"
 import type { CoursesTreeItem } from "../ui/treeview/treeview"
 import { COURSES_VIEW_ID, CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
 import { Logger } from "../utilities"
-import {
-  listWalkthrough,
-  showNextWalkthroughStep,
-  walkthroughProgressOf,
-  whenWalkthroughRegistered,
-} from "../window/walkthrough"
+import { openWalkthroughWhenRegistered, walkthroughProgressOf } from "../window/walkthrough"
 
 /** A course command's argument: a course id from code, or the Courses view item it runs on. */
 type CourseTarget = CourseIdentifier | CourseTreeItem
@@ -168,7 +158,7 @@ export function registerCommands(
   register("tmc.addNewCourse", async () => commands.addNewCourse(readyContext))
 
   register("tmc.showAddCourse", () =>
-    TmcPanel.renderMain(context, readyContext, addCoursePanel(readyContext.settings)),
+    TmcPanel.renderMain(context, readyContext, { id: nextPanelId(), type: "AddCourse" }),
   )
 
   register("tmc.changeTmcDataPath", async () => commands.changeTmcDataPath(readyContext))
@@ -317,13 +307,9 @@ export function registerCommands(
     commands.showExerciseResults(readyContext, resourceOf(target)),
   )
 
-  register("tmc.showWelcome", async () => {
-    await listWalkthrough()
-    await whenWalkthroughRegistered()
-    await showNextWalkthroughStep(() => walkthroughProgressOf(readyContext), {
-      isOpenedIfClosed: true,
-    })
-  })
+  register("tmc.showWelcome", () =>
+    openWalkthroughWhenRegistered(() => walkthroughProgressOf(readyContext)),
+  )
 
   // Also run from the Courses view's exercise menu, whose row is no `LoginOptions`.
   register("tmc.showMoocLogin", async (options?: LoginOptions) =>

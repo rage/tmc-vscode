@@ -5,7 +5,7 @@ import { basename, join } from "node:path"
 import { expect, test } from "@playwright/test"
 import type { FrameLocator, Page, TestInfo } from "@playwright/test"
 
-import { closeElectron, resetMockBackend } from "../fixtures"
+import { closeElectron, resetMockBackend, tmcWebview } from "../fixtures"
 import { CoursesViewPage } from "../pages/courses-view"
 import type { Profile } from "./installedExtension"
 import {
@@ -33,11 +33,6 @@ interface Session {
   webview: FrameLocator
 }
 
-interface ScenarioOptions {
-  /** Whether to check that each version still knows the downloaded exercises and their states. */
-  isExerciseChecked: boolean
-}
-
 /**
  * Runs `run` against VS Code started on `profile`, then closes it. A failing `phase` leaves its
  * trace behind, named after it.
@@ -53,11 +48,7 @@ async function withVsCode(
   let isFailed = true
   try {
     const page = await vsCode.firstWindow()
-    const webview = page
-      .frameLocator('iframe.webview.ready[src*="extensionId=moocfi.test-my-code"]')
-      .last()
-      .frameLocator("iframe#active-frame")
-    await run({ page, webview })
+    await run({ page, webview: tmcWebview(page) })
     isFailed = false
   } finally {
     await vsCode
@@ -77,15 +68,22 @@ function exerciseDir(profile: Profile, exercise: string): string | undefined {
   return matches[0] && join(profile.projectsDir, matches[0])
 }
 
+function expectEditKept(editedFile: string): void {
+  expect(fs.readFileSync(editedFile, "utf8")).toContain(STUDENT_EDIT)
+}
+
 async function expectNoErrorNotification(page: Page): Promise<void> {
   await expect(page.locator(".notifications-toasts .codicon-error")).toHaveCount(0)
 }
 
-/** What 4.x must show of the 3.5.5 profile: its courses and session, and maybe its exercises. */
+/**
+ * What 4.x must show of the 3.5.5 profile: its courses and session, and with `isExerciseChecked`
+ * the downloaded exercises and their states.
+ */
 async function expectKeptBy4x(
   { page, webview }: Session,
   courses: string[],
-  { isExerciseChecked }: ScenarioOptions,
+  isExerciseChecked: boolean,
 ): Promise<void> {
   const coursesView = new CoursesViewPage(page, webview)
   await coursesView.goto()
@@ -118,10 +116,7 @@ async function expectKeptBy4x(
 }
 
 /** What 3.5.5 must still show after 4.x ran: its course and session, and maybe its exercises. */
-async function expectKeptBy355(
-  legacy: LegacyTmcPage,
-  { isExerciseChecked }: ScenarioOptions,
-): Promise<void> {
+async function expectKeptBy355(legacy: LegacyTmcPage, isExerciseChecked: boolean): Promise<void> {
   await legacy.openCourse(PYTHON_COURSE.title, PYTHON_COURSE.name)
   await expect(legacy.menuItem("Log out")).toBeVisible()
   if (isExerciseChecked) {
@@ -133,44 +128,45 @@ async function expectKeptBy355(
 }
 
 /** Upgrades a 3.5.5 profile with a course and edited exercises to 4.x, back, and up again. */
-async function runUpgradeScenario(testInfo: TestInfo, options: ScenarioOptions): Promise<void> {
+async function runUpgradeScenario(
+  testInfo: TestInfo,
+  { isExerciseChecked }: { isExerciseChecked: boolean },
+): Promise<void> {
   expect(fs.existsSync(NEXT_VSIX), `${NEXT_VSIX} is missing; run bin/packageUpgradeVsix.sh`).toBe(
     true,
   )
   const parentDir = fs.mkdtempSync(join(tmpdir(), "tmc-vscode-upgrade-"))
   const profile = createProfile(parentDir)
-  let editedFile = ""
-  const expectEditKept = (): void => {
-    expect(fs.readFileSync(editedFile, "utf8")).toContain(STUDENT_EDIT)
-  }
 
   try {
     await resetMockBackend("tmc")
     await installVsix(profile, await legacyVsix())
 
-    await test.step("3.5.5: log in, add a course, download, edit and close", async () => {
-      await withVsCode(profile, "legacy", testInfo, async ({ page }) => {
-        const legacy = new LegacyTmcPage(page)
-        await legacy.logIn()
-        await legacy.addCourse(PYTHON_COURSE.title, PYTHON_COURSE.name)
-        await legacy.openCourse(PYTHON_COURSE.title, PYTHON_COURSE.name)
-        await legacy.showExercises()
-        await legacy.downloadAndOpenAll([OPENED_EXERCISE.label, CLOSED_EXERCISE.label])
-        await legacy.closeExercise(CLOSED_EXERCISE.label)
-        await expect(legacy.exerciseStatus(OPENED_EXERCISE.label)).toHaveText("opened")
+    const editedFile =
+      await test.step("3.5.5: log in, add a course, download, edit and close", async () => {
+        await withVsCode(profile, "legacy", testInfo, async ({ page }) => {
+          const legacy = new LegacyTmcPage(page)
+          await legacy.logIn()
+          await legacy.addCourse(PYTHON_COURSE.title, PYTHON_COURSE.name)
+          await legacy.openCourse(PYTHON_COURSE.title, PYTHON_COURSE.name)
+          await legacy.showExercises()
+          await legacy.downloadAndOpenAll([OPENED_EXERCISE.label, CLOSED_EXERCISE.label])
+          await legacy.closeExercise(CLOSED_EXERCISE.label)
+          await expect(legacy.exerciseStatus(OPENED_EXERCISE.label)).toHaveText("opened")
+        })
+        const dir = exerciseDir(profile, OPENED_EXERCISE.slug)
+        expect(dir).toBeDefined()
+        const file = join(dir ?? "", ...EDITED_FILE)
+        fs.appendFileSync(file, STUDENT_EDIT)
+        return file
       })
-      const dir = exerciseDir(profile, OPENED_EXERCISE.slug)
-      expect(dir).toBeDefined()
-      editedFile = join(dir ?? "", ...EDITED_FILE)
-      fs.appendFileSync(editedFile, STUDENT_EDIT)
-    })
 
     await test.step("upgrade: 3.5.5's data is kept, and stays readable by 3.5.5", async () => {
       await installVsix(profile, NEXT_VSIX)
       await withVsCode(profile, "upgrade", testInfo, (session) =>
-        expectKeptBy4x(session, [PYTHON_COURSE.title], options),
+        expectKeptBy4x(session, [PYTHON_COURSE.title], isExerciseChecked),
       )
-      expectEditKept()
+      expectEditKept(editedFile)
       const globalState = readGlobalState(profile)
       expect(globalState).toHaveProperty(["user-data-v1"])
       expect(globalState).toHaveProperty(["user-data-v3"])
@@ -180,18 +176,18 @@ async function runUpgradeScenario(testInfo: TestInfo, options: ScenarioOptions):
       await installVsix(profile, await legacyVsix())
       await withVsCode(profile, "downgrade", testInfo, async ({ page }) => {
         const legacy = new LegacyTmcPage(page)
-        await expectKeptBy355(legacy, options)
+        await expectKeptBy355(legacy, isExerciseChecked)
         await legacy.addCourse(JAVA_COURSE.title, JAVA_COURSE.name)
       })
-      expectEditKept()
+      expectEditKept(editedFile)
     })
 
     await test.step("re-upgrade: nothing is lost, and the course 3.5.5 added shows", async () => {
       await installVsix(profile, NEXT_VSIX)
       await withVsCode(profile, "re-upgrade", testInfo, (session) =>
-        expectKeptBy4x(session, [PYTHON_COURSE.title, JAVA_COURSE.title], options),
+        expectKeptBy4x(session, [PYTHON_COURSE.title, JAVA_COURSE.title], isExerciseChecked),
       )
-      expectEditKept()
+      expectEditKept(editedFile)
     })
   } finally {
     // Windows refuses to delete files a just-killed CLI process still holds for a moment.

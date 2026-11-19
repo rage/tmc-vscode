@@ -11,14 +11,20 @@ import type { ReadyActionContext } from "./types"
  */
 export const MOOC_LOGIN = "mooc-login"
 
+/** Stands for courses.mooc.fi courses being hidden by their experimental setting. */
+export const MOOC_DISABLED = "mooc-disabled"
+
 /**
- * Lists the courses.mooc.fi courses the user is enrolled in, or {@link MOOC_LOGIN} when
- * courses.mooc.fi has no session for them. Independent of {@link listTmcOrganizations}, so a
- * picker can show whichever answers first.
+ * Lists the courses.mooc.fi courses the user is enrolled in, {@link MOOC_LOGIN} when
+ * courses.mooc.fi has no session for them, or {@link MOOC_DISABLED} while the setting hides them.
+ * Independent of {@link listTmcOrganizations}, so a picker can show whichever answers first.
  */
 export async function listEnrolledMoocCourses(
   actionContext: ReadyActionContext,
-): Promise<Result<MoocCourse[], Error> | typeof MOOC_LOGIN> {
+): Promise<Result<MoocCourse[], Error> | typeof MOOC_LOGIN | typeof MOOC_DISABLED> {
+  if (!actionContext.settings.isCoursesMoocFiEnabled()) {
+    return MOOC_DISABLED
+  }
   if (!actionContext.authState.loggedIn) {
     return MOOC_LOGIN
   }

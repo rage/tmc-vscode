@@ -9,7 +9,7 @@ import type {
 import { postedMessages, replyToRequest } from "../test/setup"
 import AddCourse from "./AddCourse.svelte"
 
-const PANEL: AddCoursePanel = { id: 31, type: "AddCourse", canAddMoocCourses: true }
+const PANEL: AddCoursePanel = { id: 31, type: "AddCourse" }
 const SOURCE = { id: PANEL.id, type: PANEL.type }
 
 function course(name: string, overrides: Partial<CatalogCourse> = {}): CatalogCourse {
@@ -257,13 +257,8 @@ suite("the add-course screen", () => {
   })
 
   test("without courses.mooc.fi, lists only tmc.mooc.fi and offers no way to find a course", async () => {
-    render(AddCourse, { props: { panel: { ...PANEL, canAddMoocCourses: false } } })
-    replyToRequest("requestTmcOrganizations", { ok: true, value: ORGANIZATIONS })
-    await screen.findByRole("heading", { level: 2, name: "tmc.mooc.fi" })
+    await renderScreen({ kind: "disabled" })
 
-    expect(postedMessages).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: "requestMoocCatalog" }),
-    )
     expect(screen.queryByRole("region", { name: "courses.mooc.fi" })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "More Actions" })).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Show the courses of MOOC" })).toBeInTheDocument()

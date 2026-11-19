@@ -5,13 +5,13 @@ import {
   hasReachedWalkthroughMilestone,
   isWalkthroughOpen,
   nextWalkthroughStep,
+  openWalkthroughWhenRegistered,
   reachWalkthroughMilestone,
   restoreWalkthroughMilestones,
   showNextWalkthroughStep,
   startWalkthroughRegistration,
   trackWalkthroughActive,
   WALKTHROUGH,
-  whenWalkthroughRegistered,
 } from "../../window/walkthrough"
 
 function openTabs(...tabs: { label: string; input: unknown }[]): void {
@@ -23,7 +23,6 @@ function openTabs(...tabs: { label: string; input: unknown }[]): void {
 
 suite("walkthrough", function () {
   const done = {
-    canAddMoocCourses: false,
     isLoggedIn: true,
     hasCourses: true,
     hasDownloadedExercises: true,
@@ -49,9 +48,6 @@ suite("walkthrough", function () {
   test("the next step is the first one not done, then Get Help", function () {
     expect(nextWalkthroughStep({ ...done, isLoggedIn: false })).toBe("logIn")
     expect(nextWalkthroughStep({ ...done, hasCourses: false })).toBe("addCourse")
-    expect(nextWalkthroughStep({ ...done, hasCourses: false, canAddMoocCourses: true })).toBe(
-      "addCourseWithCoursesMoocFi",
-    )
     expect(nextWalkthroughStep({ ...done, hasDownloadedExercises: false })).toBe("openExercises")
     expect(nextWalkthroughStep({ ...done, hasRunTests: false })).toBe("runTests")
     expect(nextWalkthroughStep({ ...done, hasSubmitted: false })).toBe("submit")
@@ -112,23 +108,26 @@ suite("walkthrough", function () {
     )
   })
 
-  test("has VS Code register the walkthrough, and says when it has", async function () {
-    // From the epoch, so the wait is long over for the other tests.
-    vi.useFakeTimers({ now: 0 })
+  test("has VS Code register the walkthrough, and opens it only once VS Code has", async function () {
+    vi.useFakeTimers()
     try {
       startWalkthroughRegistration()
-      let isRegistered = false
-      void whenWalkthroughRegistered().then(() => (isRegistered = true))
+      const opened = openWalkthroughWhenRegistered()
 
       await vi.advanceTimersByTimeAsync(5_000)
-      expect(isRegistered).toBe(false)
-      await vi.advanceTimersByTimeAsync(1_000)
-
-      expect(isRegistered).toBe(true)
-      expect(executeCommand).toHaveBeenCalledExactlyOnceWith(
-        "welcome.markStepIncomplete",
-        `${WALKTHROUGH}#registration`,
+      expect(executeCommand).not.toHaveBeenCalledWith(
+        "workbench.action.openWalkthrough",
+        WALKTHROUGH,
+        false,
       )
+      await vi.advanceTimersByTimeAsync(1_000)
+      await opened
+
+      expect(executeCommand.mock.calls).toEqual([
+        ["welcome.markStepIncomplete", `${WALKTHROUGH}#registration`],
+        ["setContext", "test-my-code:WalkthroughListed", true],
+        ["workbench.action.openWalkthrough", WALKTHROUGH, false],
+      ])
     } finally {
       vi.useRealTimers()
     }

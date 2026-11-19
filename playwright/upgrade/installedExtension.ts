@@ -9,7 +9,7 @@ import { downloadAndUnzipVSCode, runVSCodeCommand } from "@vscode/test-electron"
 
 import { productionApi, VSCODE_TEST_VERSION } from "../../config"
 import { getLangsCLIForPlatform, getPlatform } from "../../src/utilities/env"
-import { BASE_USER_SETTINGS, launchArgs, mockBackendEnv } from "../fixtures"
+import { BASE_USER_SETTINGS, extensionGlobalStorage, launchArgs, mockBackendEnv } from "../fixtures"
 
 const rootPath = resolve(__dirname, "..", "..")
 
@@ -23,6 +23,7 @@ const EXTENSION_ID = "moocfi.test-my-code"
 
 /** The last 3.x release, as Open VSX serves it to the users who upgrade from it. */
 const LEGACY_RELEASE = {
+  // bin/packageUpgradeVsix.sh reads this line.
   version: "3.5.5",
   vsixUrl: "https://open-vsx.org/api/moocfi/test-my-code/3.5.5/file/moocfi.test-my-code-3.5.5.vsix",
   vsixSha256: "f8d8ce67575d69f08fae8d4b032123bc905b209acbbb39d7517821b58a1f23e7",
@@ -56,8 +57,15 @@ async function download(url: string, destination: string): Promise<void> {
   fs.renameSync(partial, destination)
 }
 
-/** The 3.5.5 VSIX, downloaded once into {@link UPGRADE_CACHE_DIR}. */
-export async function legacyVsix(): Promise<string> {
+let verifiedLegacyVsix: Promise<string> | undefined
+
+/** The 3.5.5 VSIX, downloaded once into {@link UPGRADE_CACHE_DIR} and verified once per run. */
+export function legacyVsix(): Promise<string> {
+  verifiedLegacyVsix ??= downloadLegacyVsix()
+  return verifiedLegacyVsix
+}
+
+async function downloadLegacyVsix(): Promise<string> {
   const vsix = join(UPGRADE_CACHE_DIR, `test-my-code-${LEGACY_RELEASE.version}.vsix`)
   fs.mkdirSync(UPGRADE_CACHE_DIR, { recursive: true })
   if (!fs.existsSync(vsix)) {
@@ -95,7 +103,7 @@ function pinnedLangsCli(): string[] {
  * would otherwise fetch it from download.mooc.fi on every start, and 4.x deletes 0.39.9's.
  */
 async function seedLangsClis(profile: Profile): Promise<void> {
-  const cliFolder = join(profile.userDataDir, "User", "globalStorage", EXTENSION_ID, "cli")
+  const cliFolder = join(extensionGlobalStorage(profile.userDataDir), "cli")
   fs.mkdirSync(cliFolder, { recursive: true })
   for (const file of [...(await legacyLangsCli()), ...pinnedLangsCli()]) {
     const seeded = join(cliFolder, basename(file))
