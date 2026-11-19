@@ -45,6 +45,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:integration": "node ./bin/runIntegrationTests.js",
+    "test:upgrade": "playwright test -c playwright.upgrade.config.ts",
     "ci:test": "pnpm run test && pnpm run test:integration",
     "typecheck": "tsgo --noEmit -p tsconfig.json && tsgo --noEmit -p tsconfig.test.json && tsgo --noEmit -p tsconfig.integration.json && tsgo --noEmit -p webview-ui/tsconfig.json && tsgo --noEmit -p backend/tsconfig.json && tsgo --noEmit -p playwright/tsconfig.json && tsgo --noEmit -p tsconfig.node.json && pnpm run check:svelte",
     "typecheck:tsc": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.integration.json && tsc --noEmit -p webview-ui/tsconfig.json && tsc --noEmit -p backend/tsconfig.json && tsc --noEmit -p playwright/tsconfig.json && tsc --noEmit -p tsconfig.node.json && pnpm --dir webview-ui run check:tsc",

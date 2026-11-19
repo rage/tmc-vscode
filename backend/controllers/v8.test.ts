@@ -7,7 +7,7 @@ import { after, before, beforeEach, describe, test } from "node:test"
 import { Ajv2020 } from "ajv/dist/2020"
 import type { Express } from "express"
 
-import { MOCK_SEEDED_ACCESS_TOKEN, MOCK_TMC_ACCESS_TOKEN } from "../mockSession"
+import { LEGACY_USERNAME, MOCK_SEEDED_ACCESS_TOKEN, MOCK_TMC_ACCESS_TOKEN } from "../mockSession"
 import type { BackendExercise } from "../utils"
 import { failingExerciseId, passingExerciseId } from "../utils"
 import type { CourseWithExercises, TmcMockControls } from "./v8"
@@ -439,6 +439,34 @@ describe("legacy TMC mock authentication", () => {
   test("POST feedback refuses a request with no token", async () => {
     const res = await fetch(`${mock.base}/feedback`, { method: "POST" })
     assert.equal(res.status, 401)
+  })
+
+  const passwordGrant = (password: string): Promise<Response> =>
+    fetch(`${mock.base}/oauth/token`, {
+      method: "POST",
+      body: new URLSearchParams({ grant_type: "password", username: LEGACY_USERNAME, password }),
+    })
+
+  test("the password login issues the token the API accepts", async () => {
+    const credentials = await fetch(`${mock.base}/api/v8/application/vscode_plugin/credentials`)
+    assert.equal(credentials.status, 200)
+    assert.deepEqual(Object.keys((await credentials.json()) as object).toSorted(), [
+      "application_id",
+      "secret",
+    ])
+
+    const res = await passwordGrant(LEGACY_USERNAME)
+    assert.equal(res.status, 200)
+    const { access_token } = (await res.json()) as { access_token: string }
+    const courses = await fetch(`${mock.base}/api/v8/core/org/test/courses`, {
+      headers: { authorization: `Bearer ${access_token}` },
+    })
+    assert.equal(courses.status, 200)
+  })
+
+  test("the password login refuses a wrong password", async () => {
+    const res = await passwordGrant("wrong")
+    assert.equal(res.status, 400)
   })
 
   test("POST /tmc-mock/reset needs no token", async () => {

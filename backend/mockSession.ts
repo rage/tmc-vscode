@@ -19,6 +19,9 @@ export const CLIENT_CONFIG_DIR_NAME = "tmc-vscode_plugin"
  */
 export const MOCK_TMC_ACCESS_TOKEN = "mock-tmc-access-token"
 
+/** The one user the TMC mock's password login knows; the password is the username. */
+export const LEGACY_USERNAME = "student"
+
 // Tokens the mooc mock recognises without a device-flow round trip, so a tier
 // can seed the credentials file directly. Every mock reset restores them.
 /** Scoped, never expires unless a test expires it; the TMC mock accepts it too. */

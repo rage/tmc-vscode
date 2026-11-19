@@ -49,7 +49,7 @@ function forceKill(pid: number): void {
 
 // Under Xvfb electronApp.close() often hangs, so race it against a timeout and force-kill.
 // The caller has already flushed tracing.
-async function closeElectron(electronApp: ElectronApplication): Promise<void> {
+export async function closeElectron(electronApp: ElectronApplication): Promise<void> {
   const electronProcess = electronApp.process()
   // The context may already be gone.
   const gracefulClose = electronApp.close().then(
@@ -70,9 +70,16 @@ async function closeElectron(electronApp: ElectronApplication): Promise<void> {
   }
 }
 
+/** Where VS Code loads the extension from: this checkout, or a dir VSIXs were installed into. */
+export type ExtensionSource = { developmentPath: string } | { extensionsDir: string }
+
 // Must be per-test, hence built here rather than at module load: a shared user data dir makes
 // VS Code restore the previous test's window and workspace state.
-function launchArgs(userDataDir: string, isWorkspaceTrustEnabled: boolean): string[] {
+export function launchArgs(
+  userDataDir: string,
+  isWorkspaceTrustEnabled: boolean,
+  extension: ExtensionSource,
+): string[] {
   return [
     "--disable-gpu-sandbox",
     // Under Xvfb Chromium sometimes kills the renderer of a window it deems occluded
@@ -85,7 +92,9 @@ function launchArgs(userDataDir: string, isWorkspaceTrustEnabled: boolean): stri
     "--disable-updates",
     // The trust prompt interrupts at unpredictable points once a course workspace opens.
     ...(isWorkspaceTrustEnabled ? [] : ["--disable-workspace-trust"]),
-    "--extensionDevelopmentPath=" + rootPath,
+    "developmentPath" in extension
+      ? "--extensionDevelopmentPath=" + extension.developmentPath
+      : "--extensions-dir=" + extension.extensionsDir,
     "--new-window",
     "--no-sandbox",
     "--skip-release-notes",
@@ -105,13 +114,33 @@ function seedTmcCredentials(configDir: string): void {
 }
 
 // The mock backend outlives each test, so its in-memory state must be reset between tests.
-async function resetMockBackend(mock: string): Promise<void> {
+export async function resetMockBackend(mock: string): Promise<void> {
   const reset = await fetch(`${MOCK_BACKEND_URL}/${mock}-mock/reset`, { method: "POST" })
   if (!reset.ok) {
     throw new Error(
       `Could not reset the ${mock} mock state: ${reset.status} ${reset.statusText}. ` +
         "The test would have run against the previous test's state.",
     )
+  }
+}
+
+/** The environment that points the extension and its CLI at the mock backend and the run's dirs. */
+export function mockBackendEnv(configDir: string, projectsDir: string): Record<string, string> {
+  return {
+    ...Object.fromEntries(
+      Object.entries(process.env).filter(
+        (entry): entry is [string, string] => entry[1] !== undefined,
+      ),
+    ),
+    TMC_LANGS_TMC_ROOT_URL: MOCK_BACKEND_URL,
+    // Overrides the compiled MOOC_BACKEND_URL; the mock is mounted in the same process.
+    TMC_LANGS_MOOC_ROOT_URL: MOCK_BACKEND_URL,
+    // Without this the CLI sends no bearer to localhost and every mooc call 401s.
+    TMC_LANGS_MOOC_TRUST_LOCALHOST: "1",
+    // Skips the real RFC 8628 polling interval.
+    TMC_LANGS_MOOC_DEVICE_POLL_INTERVAL_MS: "250",
+    TMC_LANGS_CONFIG_DIR: configDir,
+    TMC_LANGS_DEFAULT_PROJECTS_DIR: projectsDir,
   }
 }
 
@@ -227,20 +256,11 @@ export const customTestFixtures: Fixtures<
     await resetMockBackend("tmc")
     const electronApp = await electron.launch({
       executablePath: await downloadAndUnzipVSCode(VSCODE_TEST_VERSION),
-      args: launchArgs(userDataDir, isWorkspaceTrustEnabled),
+      args: launchArgs(userDataDir, isWorkspaceTrustEnabled, { developmentPath: rootPath }),
       env: {
-        ...process.env,
+        ...mockBackendEnv(configDir, projectsDir),
         ...(isWorkspaceTrustEnabled && { HOME: join(userDataDir, "home") }),
-        TMC_LANGS_TMC_ROOT_URL: MOCK_BACKEND_URL,
-        // Overrides the compiled MOOC_BACKEND_URL; the mock is mounted in the same process.
-        TMC_LANGS_MOOC_ROOT_URL: MOCK_BACKEND_URL,
-        // Without this the CLI sends no bearer to localhost and every mooc call 401s.
-        TMC_LANGS_MOOC_TRUST_LOCALHOST: "1",
-        // Skips the real RFC 8628 polling interval.
-        TMC_LANGS_MOOC_DEVICE_POLL_INTERVAL_MS: "250",
         ...(moocClientId ? { TMC_LANGS_MOOC_CLIENT_ID: moocClientId } : {}),
-        TMC_LANGS_CONFIG_DIR: configDir,
-        TMC_LANGS_DEFAULT_PROJECTS_DIR: projectsDir,
       },
     })
     const traceMode = typeof trace === "string" ? trace : trace.mode
