@@ -1,6 +1,11 @@
-import type * as vscode from "vscode"
+import * as path from "path"
 
-const SWITCH_KEY = "courseWorkspaceSwitch"
+import * as fs from "fs-extra"
+
+import { Logger } from "../utilities"
+
+// Not in globalState, where VS Code drops an update that overlaps another of the extension's.
+const SWITCH_FILE = "course-workspace-switch.json"
 
 /** How long after a switch the window it opened still counts as opened by it. */
 const SWITCH_TTL_MS = 2 * 60 * 1000
@@ -23,11 +28,17 @@ export interface CourseWorkspaceSwitch {
  * or from TestMyCode, so the window it opens need not repeat what the student has just seen.
  */
 export class CourseWorkspaceSwitches {
-  public constructor(
-    private readonly _memento: vscode.Memento,
-    private readonly _now: () => number = Date.now,
-  ) {}
+  private readonly _file: string
 
+  /** @param globalStorageFolder The extension's global storage, shared by every window. */
+  public constructor(
+    globalStorageFolder: string,
+    private readonly _now: () => number = Date.now,
+  ) {
+    this._file = path.join(globalStorageFolder, SWITCH_FILE)
+  }
+
+  /** Records a switch to `workspaceFile`. Never throws: a failure is logged. */
   public async record(workspaceFile: string, state: CourseWorkspaceSwitch): Promise<void> {
     const recorded: RecordedSwitch = {
       workspaceFile,
@@ -35,7 +46,10 @@ export class CourseWorkspaceSwitches {
       isWalkthroughOpen: state.isWalkthroughOpen,
       aiOffSettingsWritten: state.aiOffSettingsWritten,
     }
-    await this._memento.update(SWITCH_KEY, recorded)
+    // Without it the new window only repeats what this one showed; the switch goes ahead.
+    await fs
+      .outputFile(this._file, JSON.stringify(recorded))
+      .catch((e) => Logger.warn("Could not record the course workspace switch", e))
   }
 
   /**
@@ -43,14 +57,17 @@ export class CourseWorkspaceSwitches {
    * too old to count; a switch to another file stays for the window that opens it.
    */
   public async take(workspaceFile: string | undefined): Promise<CourseWorkspaceSwitch | undefined> {
-    const recorded = this._memento.get<RecordedSwitch>(SWITCH_KEY)
+    const recorded = await this._read()
     if (!recorded) {
       return undefined
     }
-    const isExpired = this._now() - recorded.switchedAt > SWITCH_TTL_MS
+    const isExpired =
+      typeof recorded.switchedAt !== "number" || this._now() - recorded.switchedAt > SWITCH_TTL_MS
     const isThisWindow = recorded.workspaceFile === workspaceFile
     if (isExpired || isThisWindow) {
-      await this._memento.update(SWITCH_KEY, undefined)
+      await fs
+        .remove(this._file)
+        .catch((e) => Logger.warn("Could not forget the course workspace switch", e))
     }
     return isThisWindow && !isExpired
       ? {
@@ -60,5 +77,17 @@ export class CourseWorkspaceSwitches {
             : [],
         }
       : undefined
+  }
+
+  /** The recorded switch; `undefined` for none, or one that cannot be read. */
+  private async _read(): Promise<Partial<RecordedSwitch> | undefined> {
+    try {
+      const recorded: unknown = JSON.parse(await fs.readFile(this._file, "utf8"))
+      return typeof recorded === "object" && recorded !== null
+        ? (recorded as Partial<RecordedSwitch>)
+        : undefined
+    } catch {
+      return undefined
+    }
   }
 }

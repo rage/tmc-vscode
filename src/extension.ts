@@ -453,7 +453,7 @@ async function activateInner(
       ? new ExerciseDecorationProvider(userData.val, workspaceManager)
       : undefined
 
-  const courseWorkspaceSwitches = new CourseWorkspaceSwitches(context.globalState)
+  const courseWorkspaceSwitches = new CourseWorkspaceSwitches(context.globalStorageUri.fsPath)
   // The window that switched here has just offered whatever the startup refresh would.
   const openingSwitch = await courseWorkspaceSwitches.take(vscode.workspace.workspaceFile?.fsPath)
   const isOpenedBySwitch = openingSwitch !== undefined

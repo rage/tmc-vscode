@@ -837,7 +837,7 @@ suite("the startup course refresh", function () {
   test("offers nothing in a window another one has just switched to", async function () {
     const context = createContext()
     const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
-    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
+    await new CourseWorkspaceSwitches(context.globalStorageUri.fsPath).record(switchedTo, {
       isWalkthroughOpen: false,
       aiOffSettingsWritten: [],
     })
@@ -874,7 +874,7 @@ suite("the Courses view on startup", function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     const context = createContext()
     const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
-    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
+    await new CourseWorkspaceSwitches(context.globalStorageUri.fsPath).record(switchedTo, {
       isWalkthroughOpen: false,
       aiOffSettingsWritten: [],
     })
@@ -898,7 +898,7 @@ suite("the Courses view on startup", function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
     const context = createContext()
     const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
-    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
+    await new CourseWorkspaceSwitches(context.globalStorageUri.fsPath).record(switchedTo, {
       isWalkthroughOpen: true,
       aiOffSettingsWritten: [],
     })
@@ -939,7 +939,7 @@ suite("the Courses view on startup", function () {
     })
     const context = createContext()
     const switchedTo = path.join(context.globalStorageUri.fsPath, "a.code-workspace")
-    await new CourseWorkspaceSwitches(context.globalState).record(switchedTo, {
+    await new CourseWorkspaceSwitches(context.globalStorageUri.fsPath).record(switchedTo, {
       isWalkthroughOpen: true,
       aiOffSettingsWritten: [],
     })
