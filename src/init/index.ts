@@ -3,3 +3,4 @@ export * from "./resources";
 export * from "./ui";
 export * from "./ensureLangsUpdated";
 export * from "./settings";
+export * from "./moocLogin";

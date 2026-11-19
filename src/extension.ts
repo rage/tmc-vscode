@@ -118,6 +118,13 @@ async function activateInner(context: vscode.ExtensionContext): Promise<void> {
         Logger.warn("Could not check login status");
         await vscode.commands.executeCommand("setContext", "test-my-code:LoggedIn", false);
     }
+    if (tmc.ok && !authenticated && (await init.hasMoocLoginFromNewerVersion())) {
+        void dialog.warningNotification(
+            "This version of TestMyCode cannot use the login of the newer version. " +
+                "Please log in again with your MOOC.fi account.",
+            ["Log in", (): void => void vscode.commands.executeCommand("tmc.showLogin")],
+        );
+    }
 
     // migrate data between versions
     const storage = new Storage(context);
