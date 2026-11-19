@@ -133,6 +133,42 @@ suite("walkthrough", function () {
     }
   })
 
+  test("opens unasked only if the student opened no editor while VS Code registered it", async function () {
+    const tabsChanged = new vscode.EventEmitter<vscode.TabChangeEvent>()
+    Object.defineProperty(vscode.window, "tabGroups", {
+      value: { onDidChangeTabs: tabsChanged.event },
+      configurable: true,
+    })
+    const opensWalkthrough = (): boolean =>
+      executeCommand.mock.calls.some(
+        (call: unknown[]) => call[0] === "workbench.action.openWalkthrough",
+      )
+    const tabOpened = (input: unknown): void =>
+      tabsChanged.fire({ opened: [{ input } as vscode.Tab], closed: [], changed: [] })
+    vi.useFakeTimers()
+    try {
+      startWalkthroughRegistration()
+      const unasked = openWalkthroughWhenRegistered(undefined, { isUnasked: true })
+      tabOpened(undefined)
+      await vi.advanceTimersByTimeAsync(6_000)
+      await unasked
+      expect(opensWalkthrough()).toBe(true)
+
+      executeCommand.mockClear()
+      startWalkthroughRegistration()
+      const coveringPanel = openWalkthroughWhenRegistered(undefined, { isUnasked: true })
+      tabOpened({ viewType: "tmc-panel" })
+      await vi.advanceTimersByTimeAsync(6_000)
+      await coveringPanel
+      expect(opensWalkthrough()).toBe(false)
+
+      await openWalkthroughWhenRegistered()
+      expect(opensWalkthrough()).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test("says whether the walkthrough is the active tab, as the tabs change", function () {
     const tabsChanged = new vscode.EventEmitter<unknown>()
     const tabGroups = {

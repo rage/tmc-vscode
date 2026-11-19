@@ -78,6 +78,7 @@ import { cliFolder, Logger, setRedactedExtensionStorage, versionChangeSince } fr
 import { keepExerciseFilesInFirstGroup } from "./window/exerciseEditorPlacement"
 import {
   listWalkthroughUnlessUpdated,
+  openWalkthroughWhenRegistered,
   reachWalkthroughMilestone,
   restoreWalkthroughMilestones,
   showNextWalkthroughStep,
@@ -694,10 +695,10 @@ async function activateInner(
       .then(undefined, (e) => Logger.warn("Could not show the course home", e))
   }
 
-  // `tmc.showWelcome` is registered only in the ready case, and VS Code rejects a command
-  // it cannot find -- which would abort the rest of this function.
   if (readyContext && versionChange === "installed") {
-    await vscode.commands.executeCommand("tmc.showWelcome")
+    void openWalkthroughWhenRegistered(() => walkthroughProgressOf(readyContext), {
+      isUnasked: true,
+    }).catch((e) => Logger.warn("Could not open the walkthrough", e))
   } else if (readyContext && versionChange === "updated") {
     dialog.statusMessage(`TestMyCode was updated to ${EXTENSION_VERSION}.`)
   }

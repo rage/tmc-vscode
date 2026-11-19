@@ -1159,7 +1159,13 @@ suite("the first start of a new version", function () {
 
     await activate(createContext())
 
-    expect(executeCommand).toHaveBeenCalledWith("tmc.showWelcome")
+    await vi.waitFor(() =>
+      expect(executeCommand).toHaveBeenCalledWith(
+        "workbench.action.openWalkthrough",
+        { category: WALKTHROUGH, step: "logIn" },
+        false,
+      ),
+    )
     expect(recorded.panelTypes).toEqual([])
   })
 
@@ -1171,7 +1177,11 @@ suite("the first start of a new version", function () {
 
     await activate(createContext())
 
-    expect(executeCommand).not.toHaveBeenCalledWith("tmc.showWelcome")
+    expect(executeCommand).not.toHaveBeenCalledWith(
+      "workbench.action.openWalkthrough",
+      expect.anything(),
+      false,
+    )
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
     expect(setStatusBarMessage).toHaveBeenCalledWith(
       `TestMyCode was updated to ${EXTENSION_VERSION}.`,
@@ -1195,18 +1205,19 @@ suite("the first start of a new version", function () {
 
   test("a fresh install and a start of the same version list the walkthrough", async function () {
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const listings = (): number =>
+      executeCommand.mock.calls.filter(
+        ([command, key, value]) =>
+          command === "setContext" && key === "test-my-code:WalkthroughListed" && value === true,
+      ).length
+
     await activate(createContext())
+    const listingsOnInstall = listings()
     sessionState.previousVersion = EXTENSION_VERSION
     await activate(createContext())
 
-    expect(
-      executeCommand.mock.calls.filter(
-        ([command, key]) => command === "setContext" && key === "test-my-code:WalkthroughListed",
-      ),
-    ).toEqual([
-      ["setContext", "test-my-code:WalkthroughListed", true],
-      ["setContext", "test-my-code:WalkthroughListed", true],
-    ])
+    expect(listingsOnInstall).toBeGreaterThan(0)
+    expect(listings()).toBeGreaterThan(listingsOnInstall)
   })
 
   test("a patch release says nothing", async function () {
@@ -1406,8 +1417,14 @@ suite("activation in a window TestMyCode has no part in yet", function () {
 
     expect(recorded.commandsRegisteredBeforeCliDownload).toBeDefined()
     expect(langsStub.authChecks).toBeGreaterThan(0)
-    expect(executeCommand).toHaveBeenCalledWith("setContext", "test-my-code:Initialized", true)
-    expect(executeCommand).toHaveBeenLastCalledWith("tmc.showMoocLogin", "argument")
+    const commands = executeCommand.mock.calls.map(([command, key]) =>
+      command === "setContext" ? `${command} ${String(key)}` : command,
+    )
+    expect(commands.indexOf("setContext test-my-code:Initialized")).toBeGreaterThanOrEqual(0)
+    expect(commands.lastIndexOf("tmc.showMoocLogin")).toBeGreaterThan(
+      commands.indexOf("setContext test-my-code:Initialized"),
+    )
+    expect(executeCommand).toHaveBeenCalledWith("tmc.showMoocLogin", "argument")
   })
 
   test("showing the Courses view activates fully, once", async function () {

@@ -162,7 +162,7 @@ export async function deferActivation(
     listWalkthroughUnlessUpdated(versionChange)
     if (versionChange === "installed") {
       await storage.updateSessionState({ extensionVersion: EXTENSION_VERSION })
-      void openWalkthroughWhenRegistered().catch((e) =>
+      void openWalkthroughWhenRegistered(undefined, { isUnasked: true }).catch((e) =>
         Logger.warn("Could not open the walkthrough", e),
       )
     }

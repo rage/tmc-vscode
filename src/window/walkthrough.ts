@@ -30,6 +30,9 @@ const WALKTHROUGH_REGISTRATION_MS = 6_000
 
 let registered = Promise.resolve()
 
+/** Whether the student opened an editor while VS Code registered the walkthrough. */
+let isEditorOpenedMeanwhile = false
+
 /**
  * Has VS Code register the walkthrough now. Its walkthrough service registers extensions'
  * walkthroughs up to 5 s after it is first used (`gettingStartedService.ts`); marking an unknown
@@ -37,6 +40,12 @@ let registered = Promise.resolve()
  */
 export function startWalkthroughRegistration(): void {
   registered = sleep(WALKTHROUGH_REGISTRATION_MS)
+  isEditorOpenedMeanwhile = false
+  // A walkthrough tab has no input, nor has VS Code's own welcome page.
+  const tabsChanged = vscode.window.tabGroups.onDidChangeTabs(({ opened }) => {
+    isEditorOpenedMeanwhile ||= opened.some((tab) => tab.input !== undefined)
+  })
+  void registered.then(() => tabsChanged.dispose())
   // VS Code throws for the unknown step after creating the service.
   void Promise.resolve(
     vscode.commands.executeCommand("welcome.markStepIncomplete", `${WALKTHROUGH}#registration`),
@@ -65,12 +74,18 @@ export function listWalkthroughUnlessUpdated(versionChange: VersionChange | unde
  * Lists and opens the walkthrough once VS Code has registered it: on the student's next step given
  * their `progress`, else where VS Code left it. Opened before that, it may never show: on a new
  * profile VS Code's own walkthrough is active, and it then ignores later opens.
+ *
+ * @param isUnasked Opens nothing if the student opened an editor meanwhile, which it would cover.
  */
 export async function openWalkthroughWhenRegistered(
   progress?: () => WalkthroughProgress,
+  { isUnasked = false }: { isUnasked?: boolean } = {},
 ): Promise<void> {
   await listWalkthrough()
   await registered
+  if (isUnasked && isEditorOpenedMeanwhile) {
+    return
+  }
   if (progress) {
     await showNextWalkthroughStep(progress, { isOpenedIfClosed: true })
   } else {
