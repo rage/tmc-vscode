@@ -11,7 +11,7 @@ test-artifacts/**
 playwright/**
 playwright-report/**
 coverage/**
-playwright.config.ts
+playwright*.config.ts
 
 **/.dockerignore
 **/.gitattributes
@@ -46,6 +46,7 @@ esbuild.mjs
 webview-ui/src/**
 webview-ui/dev/**
 webview-ui/a11y/**
+webview-ui/visual/**
 webview-ui/README.md
 webview-ui/package.json
 webview-ui/vite.config.ts

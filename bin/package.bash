@@ -22,7 +22,7 @@ BACKEND=production pnpm exec vsce package --no-dependencies "${PRERELEASE_ARG}"
 # Nothing else fails when sources, test bundles, coverage or docs slip into the
 # VSIX, so assert their absence rather than trust .vscodeignore.
 LISTING=$(BACKEND=production pnpm exec vsce ls --no-dependencies)
-if echo "${LISTING}" | grep -E '(^|/)(src|backend|playwright|coverage|docs|node_modules)/|^dist/integration|\.map$|\.test\.js$'; then
+if echo "${LISTING}" | grep -E '(^|/)(src|backend|playwright|coverage|docs|node_modules|visual|a11y)/|^dist/integration|\.map$|\.test\.js$'; then
   echo "The paths above would ship to users; fix .vscodeignore." >&2
   exit 1
 fi

@@ -11,14 +11,15 @@ on:
 
 permissions: read-all
 
+env:
+  PRERELEASE: ${{ endsWith ( github.event.release.tag_name, '-prerelease' ) && '--pre-release' || '' }}
+
 jobs:
   build_and_upload:
     name: Build and Upload
     permissions:
       contents: read
     runs-on: ubuntu-latest
-    env:
-      PRERELEASE: ${{ endsWith ( github.event.release.tag_name, '-prerelease' ) && '--pre-release' || '' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
@@ -26,6 +27,12 @@ jobs:
           submodules: "true"
       - name: Setup Node & pnpm
         uses: ./.github/actions/setup-node-pnpm
+      # Before packaging, so that neither marketplace gets a release that fails it.
+      - name: Validate release
+        if: github.event_name == 'release'
+        run: |
+          pnpm install --frozen-lockfile
+          bash bin/validateRelease.sh ${{ github.event.release.tag_name }}
       - name: Package extension
         run: |
           chmod +x bin/package.bash
@@ -48,13 +55,51 @@ jobs:
         with:
           name: source-maps
           path: dist/*.map
-      - name: Publish to Visual Studio Marketplace
-        if: success() && github.event_name == 'release'
+
+  # One job per marketplace, so either can be re-run alone with the same vsix. Both wait for
+  # approval in the `release` environment.
+  publish_vs_marketplace:
+    name: Publish to Visual Studio Marketplace
+    needs: build_and_upload
+    if: github.event_name == 'release'
+    environment: release
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+      - name: Download packaged extension
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: packaged-extension
+          path: extension/
+      - name: Publish
         run: |
-          chmod +x bin/validateRelease.sh
-          bin/validateRelease.sh ${{ github.event.release.tag_name }}
+          pnpm install --frozen-lockfile
           pnpm exec vsce publish -p ${{ secrets.VSCE_PUBLISH_TOKEN }} ${{ env.PRERELEASE }} --packagePath extension/*.vsix
-      - name: Publish to Open VSX Marketplace
-        if: success() && github.event_name == 'release'
+
+  publish_open_vsx:
+    name: Publish to Open VSX
+    needs: build_and_upload
+    if: github.event_name == 'release'
+    environment: release
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+      - name: Download packaged extension
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: packaged-extension
+          path: extension/
+      - name: Publish
         run: |
+          pnpm install --frozen-lockfile
           pnpm exec ovsx publish extension/*.vsix -p ${{ secrets.OVSX_PUBLISHER_TOKEN }} ${{ env.PRERELEASE }}
