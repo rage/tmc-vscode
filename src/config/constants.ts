@@ -180,6 +180,12 @@ export const WORKSPACE_ROOT_FILE_NAME = "TMC-Readme.md";
 export const WORKSPACE_ROOT_FILE_TEXT = FAQ;
 export const WORKSPACE_ROOT_FOLDER_NAME = ".tmc";
 
+/**
+ * Ends the workspace file name of a courses.mooc.fi course that 4.x keeps in the same folder.
+ * Must match 4.x's `workspaceFileName`.
+ */
+export const MOOC_WORKSPACE_FILE_SUFFIX = " (mooc).code-workspace";
+
 export const EXAM_TEST_RESULT: TestResultData = {
     testResult: {
         status: "PASSED",

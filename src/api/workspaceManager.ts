@@ -1,5 +1,6 @@
 import {
     HIDE_META_FILES,
+    MOOC_WORKSPACE_FILE_SUFFIX,
     SHOW_META_FILES,
     WATCHER_EXCLUDE,
     WORKSPACE_ROOT_FOLDER_NAME,
@@ -104,7 +105,8 @@ export default class WorkspaceManager implements vscode.Disposable {
         const workspaceFile = vscode.workspace.workspaceFile;
         if (
             !workspaceFile ||
-            !isSamePath(path.dirname(workspaceFile.fsPath), this._resources.workspaceFileFolder)
+            !isSamePath(path.dirname(workspaceFile.fsPath), this._resources.workspaceFileFolder) ||
+            path.basename(workspaceFile.fsPath).endsWith(MOOC_WORKSPACE_FILE_SUFFIX)
         ) {
             return undefined;
         }
