@@ -11,7 +11,7 @@ import { v0, v1, v3 } from "../storage/data"
 import { trackCoursesMoocFiEnabled } from "../ui/contextKeys"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
 import { isSamePath, Logger } from "../utilities"
-import { WALKTHROUGH } from "../window/walkthrough"
+import { listWalkthrough, WALKTHROUGH } from "../window/walkthrough"
 
 /** Global state keys that hold data from an older storage version, which only a full activation migrates. */
 const LEGACY_DATA_KEYS = [
@@ -154,9 +154,13 @@ export async function deferActivation(
 
   try {
     const storage = new Storage(context)
-    if (storage.getSessionState()?.extensionVersion === undefined) {
+    const previousVersion = storage.getSessionState()?.extensionVersion
+    if (previousVersion === undefined) {
       await storage.updateSessionState({ extensionVersion: EXTENSION_VERSION })
+      await listWalkthrough()
       await vscode.commands.executeCommand("workbench.action.openWalkthrough", WALKTHROUGH, false)
+    } else if (previousVersion === EXTENSION_VERSION) {
+      await listWalkthrough()
     }
   } catch (e) {
     Logger.warn("Could not open the walkthrough", e)

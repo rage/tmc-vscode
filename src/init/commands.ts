@@ -30,7 +30,11 @@ import * as treeCommands from "../ui/treeview/treeCommands"
 import type { CoursesTreeItem } from "../ui/treeview/treeview"
 import { COURSES_VIEW_ID, CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
 import { Logger } from "../utilities"
-import { showNextWalkthroughStep, walkthroughProgressOf } from "../window/walkthrough"
+import {
+  listWalkthrough,
+  showNextWalkthroughStep,
+  walkthroughProgressOf,
+} from "../window/walkthrough"
 
 /** A course command's argument: a course id from code, or the Courses view item it runs on. */
 type CourseTarget = CourseIdentifier | CourseTreeItem
@@ -313,6 +317,7 @@ export function registerCommands(
   )
 
   register("tmc.showWelcome", async () => {
+    await listWalkthrough()
     await showNextWalkthroughStep(() => walkthroughProgressOf(readyContext), {
       isOpenedIfClosed: true,
     })

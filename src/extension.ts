@@ -77,6 +77,7 @@ import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
 import { cliFolder, Logger, semVerCompare, setRedactedExtensionStorage } from "./utilities"
 import { keepExerciseFilesInFirstGroup } from "./window/exerciseEditorPlacement"
 import {
+  listWalkthrough,
   reachWalkthroughMilestone,
   restoreWalkthroughMilestones,
   showNextWalkthroughStep,
@@ -391,6 +392,9 @@ async function activateInner(
   } catch (e) {
     // An unreadable session state costs the walkthrough or the update notice, nothing else.
     Logger.warn("Skipped version check", e)
+  }
+  if (versionChange !== "updated") {
+    await listWalkthrough()
   }
 
   let workspaceManager: WorkspaceManager | undefined

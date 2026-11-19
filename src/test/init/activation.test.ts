@@ -1095,6 +1095,36 @@ suite("the first start of a new version", function () {
     )
   })
 
+  // VS Code itself opens a walkthrough new to it in a window where the extension was updated.
+  test("an update keeps the walkthrough unlisted, so VS Code does not open it", async function () {
+    sessionState.previousVersion = "1.0.0"
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await activate(createContext())
+
+    expect(executeCommand).not.toHaveBeenCalledWith(
+      "setContext",
+      "test-my-code:WalkthroughListed",
+      true,
+    )
+  })
+
+  test("a fresh install and a start of the same version list the walkthrough", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    await activate(createContext())
+    sessionState.previousVersion = EXTENSION_VERSION
+    await activate(createContext())
+
+    expect(
+      executeCommand.mock.calls.filter(
+        ([command, key]) => command === "setContext" && key === "test-my-code:WalkthroughListed",
+      ),
+    ).toEqual([
+      ["setContext", "test-my-code:WalkthroughListed", true],
+      ["setContext", "test-my-code:WalkthroughListed", true],
+    ])
+  })
+
   test("a patch release says nothing", async function () {
     sessionState.previousVersion = EXTENSION_VERSION.replace(/\d+$/, "0")
 
@@ -1219,13 +1249,31 @@ suite("activation in a window TestMyCode has no part in yet", function () {
     )
   })
 
-  test("an update opens nothing", async function () {
+  test("an update opens nothing, and keeps the walkthrough unlisted", async function () {
     sessionState.previousVersion = "1.0.0"
     const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
 
     await activate(createContext())
 
     expect(executeCommand.mock.calls.filter(([command]) => command !== "setContext")).toEqual([])
+    expect(executeCommand).not.toHaveBeenCalledWith(
+      "setContext",
+      "test-my-code:WalkthroughListed",
+      true,
+    )
+  })
+
+  test("lists the walkthrough before opening it on a fresh install", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await activate(createContext())
+
+    const commands = executeCommand.mock.calls.map(([command, key]) =>
+      command === "setContext" ? `${command} ${String(key)}` : command,
+    )
+    const listed = commands.indexOf("setContext test-my-code:WalkthroughListed")
+    expect(listed).toBeGreaterThanOrEqual(0)
+    expect(listed).toBeLessThan(commands.indexOf("workbench.action.openWalkthrough"))
   })
 
   test("mirrors the courses.mooc.fi setting into its context key", async function () {

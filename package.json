@@ -918,6 +918,7 @@
         "id": "gettingStarted",
         "title": "Get Started with TestMyCode",
         "description": "Log in, add your course, and test and submit your first exercise.",
+        "when": "test-my-code:WalkthroughListed",
         "steps": [
           {
             "id": "logIn",

@@ -25,6 +25,18 @@ function isWalkthroughTab(tab: vscode.Tab | undefined): boolean {
 }
 
 /**
+ * Lets VS Code show the walkthrough, which package.json hides until this window sets
+ * `test-my-code:WalkthroughListed`.
+ *
+ * VS Code opens a walkthrough new to it on registering it from an extension installed or updated
+ * in the window, if its `when` holds then (its `gettingStartedService.ts`). Activation leaves the
+ * key unset after an update, so the walkthrough does not cover the student's work.
+ */
+export async function listWalkthrough(): Promise<void> {
+  await vscode.commands.executeCommand("setContext", "test-my-code:WalkthroughListed", true)
+}
+
+/**
  * Keeps `test-my-code:WalkthroughActive` true while the walkthrough may be the active tab.
  *
  * VS Code never completes an `onContext` step whose expression already holds when it registers
