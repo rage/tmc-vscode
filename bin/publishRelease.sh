@@ -10,9 +10,11 @@ then
     exit $err
 fi
 
-if [ $(git branch --show-current) != master ] 
+# rollback-3.5.x carries the emergency rollback release for 4.x users.
+branch=$(git branch --show-current)
+if [ "$branch" != master ] && [ "$branch" != rollback-3.5.x ]
 then
-    echo You must run this command from the master branch.
+    echo You must run this command from the master or rollback-3.5.x branch.
     exit 1
 fi
 
