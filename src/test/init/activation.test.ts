@@ -14,7 +14,7 @@ import {
   FOCUS_REFRESH_INTERVAL,
   workspaceFileName,
 } from "../../config/constants"
-import { CorruptStoredDataError } from "../../errors"
+import { CorruptStoredDataError, StoredDataMigrationError } from "../../errors"
 import { activate } from "../../extension"
 import { COURSES_VIEW_ID } from "../../ui/treeview/treeview"
 import { Logger, LogLevel } from "../../utilities"
@@ -545,6 +545,46 @@ suite("activation with unreadable stored data", function () {
   })
 })
 
+suite("activation whose migration fails", function () {
+  beforeEach(resetActivationRecording)
+
+  afterEach(function () {
+    disposeActivatedContexts()
+    vi.restoreAllMocks()
+  })
+
+  // Reading v3 now would find nothing and show an empty course list as if it were real.
+  test("degrades instead of reading courses it left unmigrated", async function () {
+    storedMigration.outcome = {
+      kind: "failed",
+      error: new StoredDataMigrationError("unreadable", "migration log"),
+      hasMigratedUserData: false,
+    }
+
+    await activate(createContext())
+
+    expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(true)
+    expect(recorded.isCourseViewFilled).toBe(false)
+    expect(vi.mocked(vscode.window.showErrorMessage)).toHaveBeenCalledExactlyOnceWith(
+      "TestMyCode could not start. Migrating stored data failed.",
+      expect.objectContaining({ title: "Show Details" }),
+    )
+  })
+
+  test("starts with the courses when only a later step failed", async function () {
+    storedMigration.outcome = {
+      kind: "failed",
+      error: new StoredDataMigrationError("langs crashed", "migration log"),
+      hasMigratedUserData: true,
+    }
+
+    await activate(createContext())
+
+    expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(false)
+    expect(recorded.isCourseViewFilled).toBe(true)
+  })
+})
+
 suite("activation with usable storage", function () {
   beforeEach(resetActivationRecording)
 
@@ -1027,7 +1067,7 @@ suite("activation in a workspace the migration cannot use in place", function ()
 
   beforeEach(function () {
     resetActivationRecording()
-    storedMigration.outcome = { kind: "needsReload", workspaceName }
+    storedMigration.outcome = { kind: "needsReload", workspaceName, hasMigratedUserData: false }
   })
 
   afterEach(function () {
@@ -1056,6 +1096,44 @@ suite("activation in a workspace the migration cannot use in place", function ()
 
     expect(recorded.isCourseViewFilled).toBe(false)
     expect(recorded.registeredCommandIds).toContain("tmc.logs")
+  })
+
+  suite("when the workspace cannot be reopened", function () {
+    const unwritableWorkspaceName = path.join("not-a-folder", workspaceName)
+
+    function createContextWithUnwritableWorkspaceFile(): vscode.ExtensionContext {
+      const context = createContext()
+      const workspaceFileFolder = path.join(context.globalStorageUri.fsPath, "workspaces")
+      fs.mkdirSync(workspaceFileFolder, { recursive: true })
+      fs.writeFileSync(path.join(workspaceFileFolder, "not-a-folder"), "")
+      return context
+    }
+
+    test("degrades when the courses are not migrated yet", async function () {
+      storedMigration.outcome = {
+        kind: "needsReload",
+        workspaceName: unwritableWorkspaceName,
+        hasMigratedUserData: false,
+      }
+
+      await activate(createContextWithUnwritableWorkspaceFile())
+
+      expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(true)
+      expect(recorded.isCourseViewFilled).toBe(false)
+    })
+
+    test("starts with the courses an earlier start migrated", async function () {
+      storedMigration.outcome = {
+        kind: "needsReload",
+        workspaceName: unwritableWorkspaceName,
+        hasMigratedUserData: true,
+      }
+
+      await activate(createContextWithUnwritableWorkspaceFile())
+
+      expect(recorded.contextKeys.get("test-my-code:Degraded")).toBe(false)
+      expect(recorded.isCourseViewFilled).toBe(true)
+    })
   })
 })
 
@@ -1243,6 +1321,26 @@ suite("activation in a window TestMyCode has no part in yet", function () {
     await activate(createContext())
 
     expect(executeCommand).toHaveBeenCalledWith(
+      "workbench.action.openWalkthrough",
+      WALKTHROUGH,
+      false,
+    )
+  })
+
+  test("a patch version change lists the walkthrough, as a full activation does", async function () {
+    sessionState.previousVersion = EXTENSION_VERSION.replace(/\d+$/, (patch) =>
+      String(Number(patch) > 0 ? Number(patch) - 1 : 1),
+    )
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await activate(createContext())
+
+    expect(executeCommand).toHaveBeenCalledWith(
+      "setContext",
+      "test-my-code:WalkthroughListed",
+      true,
+    )
+    expect(executeCommand).not.toHaveBeenCalledWith(
       "workbench.action.openWalkthrough",
       WALKTHROUGH,
       false,

@@ -160,6 +160,15 @@
             >
               <CodeBlock label="Stack trace of {failure.service}" code={failure.stack} />
             </Disclosure>
+            {#if failure.details}
+              <Disclosure
+                title="Details of {failure.service}"
+                headingLevel={3}
+                persistAs="details:{failure.service}"
+              >
+                <CodeBlock label="Details of {failure.service}" code={failure.details} />
+              </Disclosure>
+            {/if}
           </li>
         {/each}
       </ul>

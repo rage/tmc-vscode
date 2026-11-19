@@ -27,6 +27,7 @@ import {
   InitializationError,
   presentationFor,
   RateLimitedError,
+  StoredDataMigrationError,
 } from "../../errors"
 import type { PanelMessage } from "../../panels/router"
 import { addCoursePanel, initializationErrorHelpPanel, nextPanelId } from "../../panels/routes"
@@ -240,6 +241,21 @@ suite("initializationErrorHelpPanel", () => {
 
     expect(failure?.hint).toMatch(/^The file '\/storage\/cli\/tmc-langs-cli' may be damaged/)
     expect(failure?.hint).toContain("proxy, firewall or antivirus")
+  })
+
+  test("passes on the migration log a failed migration carries", () => {
+    const actionContext = createDegradedContext({
+      failures: {
+        userData: new StoredDataMigrationError("unreadable courses", "3.5.5 -> 4.0.0: failed"),
+      },
+    })
+
+    const { topic } = initializationErrorHelpPanel(actionContext, createMockContext())
+
+    expect(topic.kind === "startup" && topic.failures[0]).toMatchObject({
+      service: "user data",
+      details: "3.5.5 -> 4.0.0: failed",
+    })
   })
 
   test("folds a failure's cause into the message", () => {

@@ -4,10 +4,8 @@ import type { z } from "zod"
 export interface MigratedData<T> {
   data: T | undefined
   /**
-   * Keys whose contents `data` (or the migration's side effects) now fully represents. A key
-   * left out survives, and since the chain prefers the oldest key present, the next activation
-   * replays that stale snapshot over the migrated value. Leave one out only when deleting it
-   * would lose contents the migration could not carry forward.
+   * Keys whose contents `data` (or the migration's side effects) now fully represents, to be
+   * deleted once it is written. Leave out a key 3.x still reads: a downgrade must find it.
    */
   supersededKeys: string[]
   /** Key `data` is written to, or `undefined` when the migration persists nothing. */

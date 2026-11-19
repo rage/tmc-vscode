@@ -1,4 +1,4 @@
-import { semVerCompare } from "../../utilities"
+import { semVerCompare, versionChangeSince } from "../../utilities"
 
 suite("Semantic version utils", function () {
   test("Major version comparisons work as expected", function () {
@@ -36,5 +36,15 @@ suite("Semantic version utils", function () {
   test("A version embedded in a command's output is still compared", function () {
     expect(semVerCompare("tmc-langs-cli 0.40.0\n", "0.40.0", "patch")).toBe(0)
     expect(semVerCompare("tmc-langs-cli 0.39.6\n", "0.40.0", "patch")).toBeLessThan(0)
+  })
+
+  test("A version change counts minor and major updates alone as updates", function () {
+    expect(versionChangeSince(undefined, "4.1.2")).toBe("installed")
+    expect(versionChangeSince("garbage", "4.1.2")).toBe("installed")
+    expect(versionChangeSince("4.0.9", "4.1.2")).toBe("updated")
+    expect(versionChangeSince("3.5.5", "4.1.2")).toBe("updated")
+    expect(versionChangeSince("4.1.0", "4.1.2")).toBeUndefined()
+    expect(versionChangeSince("4.1.2", "4.1.2")).toBeUndefined()
+    expect(versionChangeSince("4.2.0", "4.1.2")).toBeUndefined()
   })
 })

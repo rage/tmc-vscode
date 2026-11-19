@@ -31,6 +31,15 @@ export class CorruptStoredDataError extends BaseError {
   public override readonly name = "Corrupt Stored Data Error"
 }
 
+/**
+ * Data an earlier version stored could not be brought up to the current storage version. What
+ * was stored is left as it was, so the next activation tries again. `details` holds the
+ * migration log.
+ */
+export class StoredDataMigrationError extends BaseError {
+  public override readonly name = "Stored Data Migration Error"
+}
+
 /** A mooc exercise's try limit is used up, so the backend accepts no further submission. */
 export class OutOfTriesError extends BaseError {
   public override readonly name = "Out Of Tries Error"

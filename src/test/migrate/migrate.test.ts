@@ -194,7 +194,8 @@ suite("Extension data migration", function () {
       v3.PENDING_EXERCISE_MIGRATION_KEY,
       v3.USER_DATA_KEY,
     ]
-    const currentKeys = [v3.SESSION_STATE_KEY, v3.USER_DATA_KEY]
+    // `user-data-v1` stays as the copy a downgrade to 3.x reads.
+    const currentKeys = [v1.USER_DATA_KEY, v3.SESSION_STATE_KEY, v3.USER_DATA_KEY]
 
     function survivingKeys(): string[] {
       return migrationKeys.filter((key) => context.globalState.get(key) !== undefined)
@@ -226,8 +227,9 @@ suite("Extension data migration", function () {
 
       const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
       expect(result.kind).toBe("done")
-      expect(survivingKeys()).toEqual([v3.SESSION_STATE_KEY, v3.USER_DATA_KEY])
+      expect(survivingKeys()).toEqual(currentKeys)
       expect(storage.getUserData()).toEqual(userData.v3_0_0)
+      expect(context.globalState.get(v1.USER_DATA_KEY)).toEqual(userData.v2_1_0)
     })
 
     test("a second run does not replay the first run's source data", async function () {
@@ -305,9 +307,32 @@ suite("Extension data migration", function () {
       expect(result).toEqual({
         kind: "needsReload",
         workspaceName: "python-course.code-workspace",
+        hasMigratedUserData: false,
       })
       expect(storage.getUserData()).toBeUndefined()
       expect(context.globalState.get(v0.USER_DATA_KEY)).toEqual(userData.v0_9_0)
+    })
+
+    test("says the courses are migrated when v3 already holds them", async function () {
+      await context.globalState.update(v0.EXTENSION_SETTINGS_KEY, { dataPath: root })
+      await storage.updateUserData(userData.v3_0_0)
+      openLegacyWorkspace(root, "python-course.code-workspace")
+
+      const result = await storage.migrateToLatest(context, dialogMock, tmcMock, settingsMock)
+
+      expect(result).toEqual(expect.objectContaining({ hasMigratedUserData: true }))
+    })
+
+    test("migrates in place instead without the TestMyCode tools", async function () {
+      await context.globalState.update(v0.EXTENSION_SETTINGS_KEY, { dataPath: root })
+      await context.globalState.update(v0.USER_DATA_KEY, userData.v0_9_0)
+      openLegacyWorkspace(root, "python-course.code-workspace")
+
+      const result = await storage.migrateToLatest(context, dialogMock, undefined, settingsMock)
+
+      expect(result.kind).toBe("done")
+      expect(storage.getUserData()?.courses).toHaveLength(1)
+      expect(context.globalState.get(v0.EXTENSION_SETTINGS_KEY)).toEqual({ dataPath: root })
     })
 
     // The caller writes the files and reopens the window; the migration must leave both alone.

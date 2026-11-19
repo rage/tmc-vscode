@@ -74,7 +74,7 @@ import { BackgroundStatusBarItem } from "./ui/statusBarBackground"
 import { ExerciseStatusBarItem } from "./ui/statusBarExercise"
 import { submissionViews } from "./ui/submissionViews"
 import CoursesTree, { COURSES_VIEW_ID } from "./ui/treeview/treeview"
-import { cliFolder, Logger, semVerCompare, setRedactedExtensionStorage } from "./utilities"
+import { cliFolder, Logger, setRedactedExtensionStorage, versionChangeSince } from "./utilities"
 import { keepExerciseFilesInFirstGroup } from "./window/exerciseEditorPlacement"
 import {
   listWalkthrough,
@@ -267,26 +267,29 @@ async function activateInner(
 
   const workspaceFileFolder = init.workspaceFileFolderOf(context)
 
-  // migrate data between versions
-  if (langs.ok) {
-    const migration = await storage.migrateToLatest(
-      context,
-      dialog,
-      langs.val,
-      vscode.workspace.getConfiguration(),
-    )
-    if (migration.kind === "needsReload") {
-      const reopened = await reopenInMigratedWorkspace(workspaceFileFolder, migration.workspaceName)
-      if (reopened.ok) {
-        Logger.warn("Extension expected to restart to migrate the open workspace")
-        return
-      }
-      reportInitializationError("Migrating stored data", reopened.val)
-    } else if (migration.kind === "failed") {
-      reportInitializationError("Migrating stored data", migration.error)
+  // Set when the stored courses are left unmigrated: reading them would show an empty list.
+  let unmigratedUserData: Error | undefined
+  const migration = await storage.migrateToLatest(
+    context,
+    dialog,
+    langs.ok ? langs.val : undefined,
+    vscode.workspace.getConfiguration(),
+  )
+  if (migration.kind === "needsReload") {
+    const reopened = await reopenInMigratedWorkspace(workspaceFileFolder, migration.workspaceName)
+    if (reopened.ok) {
+      Logger.warn("Extension expected to restart to migrate the open workspace")
+      return
     }
-  } else {
-    Logger.warn("Skipped data migration")
+    reportInitializationError("Migrating stored data", reopened.val)
+    if (!migration.hasMigratedUserData) {
+      unmigratedUserData = reopened.val
+    }
+  } else if (migration.kind === "failed") {
+    reportInitializationError("Migrating stored data", migration.error)
+    if (!migration.hasMigratedUserData) {
+      unmigratedUserData = migration.error
+    }
   }
 
   // After the migration, which can move the exercises and the projects-dir setting.
@@ -383,12 +386,7 @@ async function activateInner(
     if (EXTENSION_VERSION !== previousVersion) {
       await storage.updateSessionState({ extensionVersion: EXTENSION_VERSION })
     }
-    const versionDiff = semVerCompare(EXTENSION_VERSION, previousVersion || "", "minor")
-    if (versionDiff === undefined) {
-      versionChange = "installed"
-    } else if (versionDiff > 0) {
-      versionChange = "updated"
-    }
+    versionChange = versionChangeSince(previousVersion, EXTENSION_VERSION)
   } catch (e) {
     // An unreadable session state costs the walkthrough or the update notice, nothing else.
     Logger.warn("Skipped version check", e)
@@ -398,7 +396,8 @@ async function activateInner(
   }
 
   let workspaceManager: WorkspaceManager | undefined
-  let userData: Result<UserData, Error> | undefined
+  let userData: Result<UserData, Error> | undefined =
+    unmigratedUserData && new Err(unmigratedUserData)
   let aiRestriction: AiRestriction | undefined
   if (resources.ok) {
     workspaceManager = new WorkspaceManager(
@@ -416,7 +415,7 @@ async function activateInner(
     context.subscriptions.push(workspaceManager, trackActiveEditorExercise(workspaceManager))
     // Stored data this version cannot parse must degrade the extension, not abort it.
     try {
-      userData = new Ok(new UserData(storage))
+      userData ??= new Ok(new UserData(storage))
     } catch (e) {
       const error =
         e instanceof Error ? e : new InitializationError(e, "Could not read stored user data")

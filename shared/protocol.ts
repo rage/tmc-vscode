@@ -53,6 +53,8 @@ const InitializationFailureSchema = z.object({
   stack: z.string(),
   /** What the student can do about this particular failure. */
   hint: z.string().optional(),
+  /** Diagnostics the error carries, such as the migration log. */
+  details: z.string().optional(),
 })
 
 /**
