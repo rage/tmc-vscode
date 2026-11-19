@@ -1,48 +1,24 @@
-import * as actions from "../actions";
-import { ActionContext } from "../actions/types";
-import { Logger } from "../utilities";
-import * as vscode from "vscode";
+import { Ok } from "ts-results"
+import type * as vscode from "vscode"
 
+import * as actions from "../actions"
+import type { ReadyActionContext } from "../actions/types"
+import { failure } from "../api/withOperation"
+import { closeExerciseEditors } from "../window/exerciseDocuments"
+import { runForExercise } from "./runForExercise"
+
+/** Closes an exercise; its files stay, and it opens again from the Courses view. */
 export async function closeExercise(
-    actionContext: ActionContext,
-    resource: vscode.Uri | undefined,
+  actionContext: ReadyActionContext,
+  resource: vscode.Uri | undefined,
 ): Promise<void> {
-    const { dialog, userData, workspaceManager } = actionContext;
-    Logger.info("Closing exercise");
-    if (!(workspaceManager.ok && userData.ok)) {
-        Logger.error("Extension was not initialized properly");
-        return;
+  await runForExercise(actionContext, resource, "Closing the exercise", async (exercise) => {
+    const result = await actions.closeExercises(actionContext, [exercise.id], exercise.courseId)
+    if (result.err) {
+      return failure("Error when closing exercise.", result.val)
     }
 
-    const exercise = resource
-        ? workspaceManager.val.getExerciseByPath(resource)
-        : workspaceManager.val.activeExercise;
-    if (!exercise) {
-        dialog.errorNotification("Currently open editor is not part of a TMC exercise.");
-        return;
-    }
-
-    const exerciseId = userData.val.getExerciseByName(
-        exercise.courseSlug,
-        exercise.exerciseSlug,
-    )?.id;
-    if (
-        exerciseId &&
-        (userData.val.getPassed(exerciseId) ||
-            (await dialog.confirmation(
-                `Are you sure you want to close uncompleted exercise ${exercise.exerciseSlug}?`,
-            )))
-    ) {
-        const result = await actions.closeExercises(
-            actionContext,
-            [exerciseId],
-            exercise.courseSlug,
-        );
-        if (result.err) {
-            dialog.errorNotification("Error when closing exercise.", result.val);
-            return;
-        }
-
-        vscode.commands.executeCommand("workbench.action.closeActiveEditor");
-    }
+    await closeExerciseEditors(exercise)
+    return Ok.EMPTY
+  })
 }

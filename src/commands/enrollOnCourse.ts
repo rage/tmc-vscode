@@ -1,0 +1,39 @@
+import type { CourseIdentifier } from "../../shared/lib"
+import { LocalCourseData } from "../../shared/lib"
+import type { ReadyActionContext } from "../actions/types"
+import { MOOC_BACKEND_URL } from "../config/constants"
+import { openWebLink } from "../utilities"
+import { pickCourse } from "./pickCourse"
+
+/**
+ * Opens a courses.mooc.fi course's page, where the student enrolls on it.
+ *
+ * @param courseId The course; when omitted, the one courses.mooc.fi last refused the student on,
+ * else one the student picks.
+ */
+export async function enrollOnCourse(
+  actionContext: ReadyActionContext,
+  courseId?: CourseIdentifier,
+): Promise<void> {
+  const { userData } = actionContext.startup
+  const notEnrolled = userData
+    .getCourses()
+    .filter((course) => LocalCourseData.isNotEnrolled(course))
+  const [only, ...others] = notEnrolled
+  const target =
+    courseId ??
+    (only && others.length === 0
+      ? LocalCourseData.getCourseId(only)
+      : await pickCourse(actionContext, {
+          title: "Enroll on a Course",
+          placeHolder: "Which course do you want to enroll on?",
+        }))
+  if (!target) {
+    return
+  }
+  const course = userData.getCourse(target)
+  // Without the course's own page, the site's front page is where the student finds it.
+  const url =
+    (course.ok ? LocalCourseData.getMaterialUrl(course.val) : undefined) ?? MOOC_BACKEND_URL
+  await openWebLink(url)
+}

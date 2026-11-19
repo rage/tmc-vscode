@@ -1,31 +1,60 @@
-import { UserData } from "../../config/userdata";
-import { v2 } from "../../storage/data";
-import { v2_1_0 as userData } from "../fixtures/userData";
-import { IMock, It, Mock } from "typemoq";
+import type { Result } from "ts-results"
+import { Err, Ok } from "ts-results"
+import { vi } from "vitest"
+
+import {
+  ExerciseIdentifier,
+  LocalCourseData,
+  LocalCourseExercise,
+  makeMoocKind,
+  makeTmcKind,
+} from "../../../shared/lib"
+import type { StoredExercise, UserData } from "../../config/userdata"
+import type { MoocLocalCourseExercise, TmcLocalCourseExercise } from "../../storage/data"
+import { v2_1_0 as userData } from "../fixtures/userData"
 
 export interface UserDataMockValues {
-    getCourses: v2.LocalCourseData[];
-    getExerciseByName: Readonly<v2.LocalCourseExercise> | undefined;
+  getCourses: LocalCourseData[]
+  /** What `getExercise` finds for a tmc id, whatever the id. */
+  tmcExercise: TmcLocalCourseExercise | undefined
+  /** What `getExercise` finds for a mooc id, whatever the id. */
+  moocExercise: MoocLocalCourseExercise | undefined
 }
 
-export function createUserDataMock(): [IMock<UserData>, UserDataMockValues] {
-    const values: UserDataMockValues = {
-        getCourses: userData.courses,
-        getExerciseByName: undefined,
-    };
-    const mock = setupMockValues(values);
+export function createUserDataMock(): [UserData, UserDataMockValues] {
+  const values: UserDataMockValues = {
+    getCourses: userData.courses.map(makeTmcKind),
+    tmcExercise: undefined,
+    moocExercise: undefined,
+  }
 
-    return [mock, values];
+  const mock = {
+    getCourses: vi.fn(() => values.getCourses),
+    getExercise: vi.fn((id: ExerciseIdentifier) => {
+      const exercise =
+        id.kind === "tmc"
+          ? values.tmcExercise && makeTmcKind(values.tmcExercise)
+          : values.moocExercise && makeMoocKind(values.moocExercise)
+      return exercise ? Ok({ course: undefined, exercise }) : Err(new Error("not stored"))
+    }),
+  }
+
+  return [mock as unknown as UserData, values]
 }
 
-function setupMockValues(values: UserDataMockValues): IMock<UserData> {
-    const mock = Mock.ofType<UserData>();
-
-    mock.setup((x) => x.getCourses()).returns(() => values.getCourses);
-
-    mock.setup((x) => x.getExerciseByName(It.isAny(), It.isAny())).returns(
-        () => values.getExerciseByName,
-    );
-
-    return mock;
+/** `UserData.getExercise` over `courses`, for a hand-rolled `UserData` stub. */
+export function exerciseLookupOver(
+  courses: LocalCourseData[],
+): (id: ExerciseIdentifier) => Result<StoredExercise, Error> {
+  return (id) => {
+    for (const course of courses) {
+      const exercise = LocalCourseData.getExercises(course).find(
+        (x) => ExerciseIdentifier.key(LocalCourseExercise.getId(x)) === ExerciseIdentifier.key(id),
+      )
+      if (exercise) {
+        return Ok({ course, exercise })
+      }
+    }
+    return Err(new Error(`No stored exercise ${ExerciseIdentifier.key(id)}`))
+  }
 }

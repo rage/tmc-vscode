@@ -1,0 +1,276 @@
+import { Ok } from "ts-results"
+import * as vscode from "vscode"
+
+import type { CourseIdentifier, ExerciseIdentifier } from "../../../shared/lib"
+import {
+  CourseIdentifier as CourseIdentifierNs,
+  ExerciseIdentifier as ExerciseIdentifierNs,
+  LocalCourseData,
+  LocalCourseExercise,
+} from "../../../shared/lib"
+import {
+  closeExercises as closeExercisesAction,
+  downloadAndOpenExercises,
+  downloadCourseExercises,
+} from "../../actions"
+import type { DownloadProgressPlace } from "../../actions"
+import type { ReadyActionContext } from "../../actions/types"
+import type { FailureSink } from "../../api/withOperation"
+import { withOperation } from "../../api/withOperation"
+import { ExerciseStatus } from "../../api/workspaceManager"
+import { downloadUpdates } from "../../commands/updateExercises"
+import { countOf, openWebLink } from "../../utilities"
+import { showExerciseSourceFile } from "../exerciseSourceFile"
+import { updateablesRegistry } from "../updateablesRegistry"
+import type { CoursesTreeItem, CoursesViewRow } from "./treeview"
+import {
+  ExerciseTreeItem,
+  exerciseItems,
+  isDownloadable,
+  TrustCourseWorkspaceTreeItem,
+} from "./treeview"
+
+/**
+ * The rows a Courses view command acts on: the whole selection when the clicked row is part
+ * of it, else the clicked row alone, which is what VS Code's own views do.
+ *
+ * @param clicked The row the command was invoked on; `undefined` from the palette.
+ * @param selection Every selected row, as VS Code passes it to a `canSelectMany` view's commands.
+ */
+export function targetRows(
+  clicked: CoursesTreeItem | undefined,
+  selection: readonly CoursesViewRow[] | undefined,
+): CoursesTreeItem[] {
+  if (!clicked) {
+    return []
+  }
+  return selection?.includes(clicked)
+    ? selection.filter(
+        (row): row is CoursesTreeItem => !(row instanceof TrustCourseWorkspaceTreeItem),
+      )
+    : [clicked]
+}
+
+/**
+ * Downloads the exercises among `rows`, and under them, that are not on disk yet. A single
+ * exercise row also gets its main source file shown.
+ */
+export async function downloadExercises(
+  actionContext: ReadyActionContext,
+  rows: CoursesTreeItem[],
+): Promise<void> {
+  for (const { courseId, ids } of byCourse(rows, (item) => isDownloadable(item.status))) {
+    await withOperation(
+      actionContext.dialog,
+      { failure: "Failed to download the exercises." },
+      () => downloadCourseExercises(actionContext, courseId, ids),
+    )
+  }
+  await showSourceFileOfOnlyExercise(actionContext, rows)
+}
+
+/**
+ * Opens the exercises among `rows`, and under them, downloading any that are not on disk; a
+ * removed exercise opens only from disk. A single exercise row also gets its main source file
+ * shown, which is what clicking one does.
+ */
+export async function openExercises(
+  actionContext: ReadyActionContext,
+  rows: CoursesTreeItem[],
+): Promise<void> {
+  const selected = byCourse(rows, (item) =>
+    item.status === "removed"
+      ? item.onDiskStatus === ExerciseStatus.Closed
+      : item.status !== "opened" && item.status !== "downloading",
+  )
+  for (const { courseId, ids } of selected) {
+    await openCourseExercises(actionContext, courseId, ids)
+  }
+  await showSourceFileOfOnlyExercise(actionContext, rows)
+}
+
+/**
+ * Opens exercises of one course, downloading any that are not on disk, and warns when the
+ * course then has too many open.
+ *
+ * @param progressPlace See `DownloadProgressPlace`.
+ * @param shownIn The screen the student opened them from, which shows the failure and the warning.
+ */
+export async function openCourseExercises(
+  actionContext: ReadyActionContext,
+  courseId: CourseIdentifier,
+  ids: ExerciseIdentifier[],
+  progressPlace?: DownloadProgressPlace,
+  shownIn?: FailureSink,
+): Promise<void> {
+  const { dialog } = actionContext
+  const failure = "Failed to open the exercises."
+  const open = (): ReturnType<typeof downloadAndOpenExercises> =>
+    downloadAndOpenExercises(actionContext, ids, courseId, progressPlace)
+  const opened = await (shownIn
+    ? withOperation(dialog, { failure, shownIn }, open)
+    : withOperation(dialog, { failure }, open))
+  const openLimit = opened.ok ? opened.val.exceededOpenLimit : undefined
+  if (openLimit === undefined) {
+    return
+  }
+  const tooMany = `You have over ${openLimit} exercises open, which can slow VS Code down. Close the ones you have finished.`
+  if (shownIn?.isVisible()) {
+    // The course home offers Close Completed Exercises itself.
+    shownIn.show(tooMany, undefined, "warning")
+  } else {
+    void dialog.warningNotification(tooMany, [
+      "Close Completed Exercises",
+      (): void => void closeCompletedExercises(actionContext, courseId),
+    ])
+  }
+}
+
+/** Shows the main source file of the exercise when `rows` is one exercise row now on disk. */
+async function showSourceFileOfOnlyExercise(
+  actionContext: ReadyActionContext,
+  rows: CoursesTreeItem[],
+): Promise<void> {
+  const [only, ...others] = rows
+  if (only instanceof ExerciseTreeItem && others.length === 0) {
+    const exercise = actionContext.startup.workspaceManager.getExercise(only.exerciseId)
+    if (exercise) {
+      await showExerciseSourceFile(actionContext, exercise)
+    }
+  }
+}
+
+/** Closes the open exercises among `rows`, and under them, removed ones included. */
+export async function closeExercises(
+  actionContext: ReadyActionContext,
+  rows: CoursesTreeItem[],
+): Promise<void> {
+  for (const { courseId, ids } of byCourse(rows, isOpenRow)) {
+    await withOperation(actionContext.dialog, { failure: "Failed to close the exercises." }, () =>
+      closeExercisesAction(actionContext, ids, courseId),
+    )
+  }
+}
+
+function isOpenRow(item: ExerciseTreeItem): boolean {
+  return (
+    item.status === "opened" ||
+    (item.status === "removed" && item.onDiskStatus === ExerciseStatus.Open)
+  )
+}
+
+/** Closes every open exercise of the course that has been passed. */
+export async function closeCompletedExercises(
+  actionContext: ReadyActionContext,
+  courseId: CourseIdentifier,
+): Promise<void> {
+  const { dialog } = actionContext
+  const { userData, workspaceManager } = actionContext.startup
+  await withOperation(dialog, { failure: "Failed to close the completed exercises." }, async () => {
+    const course = userData.getCourse(courseId)
+    if (course.err) {
+      return course
+    }
+    const courseName = LocalCourseData.getCourseName(course.val)
+    const passed = new Set(
+      LocalCourseData.getExercises(course.val)
+        .filter((ex) => ex.data.passed)
+        .map((ex) => ExerciseIdentifierNs.key(LocalCourseExercise.getId(ex))),
+    )
+    const ids: ExerciseIdentifier[] = workspaceManager
+      .getExercisesByCourseSlug(course.val.kind, courseName)
+      .filter(
+        (ex) => ex.status === ExerciseStatus.Open && passed.has(ExerciseIdentifierNs.key(ex.id)),
+      )
+      .map((ex) => ex.id)
+    if (ids.length === 0) {
+      dialog.statusMessage("No completed exercises are open.")
+      return Ok.EMPTY
+    }
+    const closed = await closeExercisesAction(actionContext, ids, courseId)
+    if (closed.err) {
+      return closed
+    }
+    dialog.statusMessage(`Closed ${countOf(closed.val.length, "completed exercise")}.`)
+    return Ok.EMPTY
+  })
+}
+
+/**
+ * Downloads the updates the last check found for the course's exercises, or for the one
+ * exercise when `row` is an exercise's.
+ */
+export async function updateCourseExercises(
+  actionContext: ReadyActionContext,
+  row: CoursesTreeItem,
+): Promise<void> {
+  const { courseId } = row
+  const exerciseIds =
+    row instanceof ExerciseTreeItem ? [row.exerciseId] : updateablesRegistry.get(courseId)
+  await downloadUpdates(
+    actionContext,
+    exerciseIds.map((exerciseId) => ({ courseId, exerciseId })),
+  )
+}
+
+/** Stops announcing the course's new exercises, without downloading them. */
+export async function dismissNewExercises(
+  actionContext: ReadyActionContext,
+  courseId: CourseIdentifier,
+): Promise<void> {
+  await withOperation(
+    actionContext.dialog,
+    { failure: "Failed to dismiss the new exercises." },
+    () => actionContext.startup.userData.clearFromNewExercises(courseId),
+  )
+}
+
+/** The exercises under `rows` that `isWanted`, grouped by course, each exercise once. */
+function byCourse(
+  rows: CoursesTreeItem[],
+  isWanted: (item: ExerciseTreeItem) => boolean,
+): { courseId: CourseIdentifier; ids: ExerciseIdentifier[] }[] {
+  const courses = new Map<
+    string,
+    { courseId: CourseIdentifier; ids: Map<string, ExerciseIdentifier> }
+  >()
+  for (const item of rows.flatMap((row) => exerciseItems(row))) {
+    if (!isWanted(item)) {
+      continue
+    }
+    const courseKey = CourseIdentifierNs.key(item.courseId)
+    const course = courses.get(courseKey) ?? { courseId: item.courseId, ids: new Map() }
+    course.ids.set(ExerciseIdentifierNs.key(item.exerciseId), item.exerciseId)
+    courses.set(courseKey, course)
+  }
+  return [...courses.values()].map(({ courseId, ids }) => ({ courseId, ids: [...ids.values()] }))
+}
+
+/**
+ * Opens the course material page an exercise is on.
+ *
+ * @param target An exercise row, or a file or folder of an exercise on disk.
+ */
+export async function openExerciseMaterial(
+  actionContext: ReadyActionContext,
+  target: CoursesTreeItem | vscode.Uri | undefined,
+): Promise<void> {
+  const url =
+    target === undefined || target instanceof vscode.TreeItem
+      ? target instanceof ExerciseTreeItem
+        ? target.materialUrl
+        : undefined
+      : materialUrlOf(actionContext, target)
+  if (url) {
+    await openWebLink(url)
+  }
+}
+
+function materialUrlOf(actionContext: ReadyActionContext, uri: vscode.Uri): string | undefined {
+  const { userData, workspaceManager } = actionContext.startup
+  const exercise = workspaceManager.getExerciseContaining(uri)
+  const stored = exercise && userData.getExercise(exercise.id)
+  return stored?.ok && stored.val.exercise.kind === "mooc"
+    ? stored.val.exercise.data.pageUrl
+    : undefined
+}

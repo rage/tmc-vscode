@@ -1,26 +1,101 @@
-import { ActionContext } from "../../actions/types";
-import Dialog from "../../api/dialog";
-import ExerciseDecorationProvider from "../../api/exerciseDecorationProvider";
-import TMC from "../../api/tmc";
-import WorkspaceManager from "../../api/workspaceManager";
-import Resouces from "../../config/resources";
-import Settings from "../../config/settings";
-import { UserData } from "../../config/userdata";
-import { VisibilityGroups } from "../../ui/types";
-import UI from "../../ui/ui";
-import { Result } from "ts-results";
-import { Mock } from "typemoq";
+import { Ok } from "ts-results"
+import { vi } from "vitest"
 
-export function createMockActionContext(): ActionContext {
-    return {
-        dialog: Mock.ofType<Dialog>().object,
-        exerciseDecorationProvider: Mock.ofType<Result<ExerciseDecorationProvider, Error>>().object,
-        resources: Mock.ofType<Result<Resouces, Error>>().object,
-        settings: Mock.ofType<Settings>().object,
-        tmc: Mock.ofType<Result<TMC, Error>>().object,
-        ui: Mock.ofType<UI>().object,
-        userData: Mock.ofType<Result<UserData, Error>>().object,
-        workspaceManager: Mock.ofType<Result<WorkspaceManager, Error>>().object,
-        visibilityGroups: Mock.ofType<VisibilityGroups>().object,
-    };
+import type { ActionContext, ReadyActionContext, ReadyStartup } from "../../actions/types"
+import { AccountHandover } from "../../api/accountHandover"
+import type { AiUseGate } from "../../api/aiUseGate"
+import type { AuthState } from "../../api/authState"
+import type { CourseWorkspaceSwitches } from "../../api/courseWorkspaceSwitches"
+import type Dialog from "../../api/dialog"
+import type ExerciseDecorationProvider from "../../api/exerciseDecorationProvider"
+import { KeptCopies } from "../../api/keptCopies"
+import type Langs from "../../api/langs"
+import type WorkspaceManager from "../../api/workspaceManager"
+import type { WorkspaceTrustGate } from "../../api/workspaceTrustGate"
+import type Resources from "../../config/resources"
+import type Settings from "../../config/settings"
+import type { UserData } from "../../config/userdata"
+import type CoursesTree from "../../ui/treeview/treeview"
+import { autoMock } from "../support/mock"
+import { createDialogMock } from "./dialog"
+import { createMockMemento } from "./vscode"
+
+export interface MockActionContextOptions {
+  /** Whether the user has a session; they do unless said otherwise. */
+  loggedIn?: boolean
+  /** Services the test drives itself; the rest stay loose auto-mocks. */
+  startup?: Partial<Omit<ReadyStartup, "kind">>
+}
+
+/** An auth state stuck at a fixed login status, with no CLI behind it. */
+export function createMockAuthState(loggedIn = true): AuthState {
+  return {
+    loggedIn,
+    refresh: vi.fn(async () => Ok(loggedIn)),
+    set: vi.fn(async () => {}),
+    isSessionExpired: false,
+    markSessionExpired: vi.fn(),
+    subscribe: vi.fn(),
+    sessionRefusalsReported: new Set(),
+  }
+}
+
+// A bare auto-mock would return a stub from `progressNotification`, silently skipping
+// every task run under a progress bar.
+function dialogRunningProgressTasks(): Dialog {
+  const fallback = autoMock<Dialog>()
+  const { progressNotification } = createDialogMock()[0]
+  return new Proxy(fallback as object, {
+    get: (target, prop) =>
+      prop === "progressNotification" ? progressNotification : Reflect.get(target, prop),
+  }) as Dialog
+}
+
+/**
+ * A loose baseline action context whose activation succeeded.
+ *
+ * Every service is an auto-mock whose property access is truthy; pass the ones the test
+ * drives in `startup`. Use {@link createDegradedContext} for the failed-activation arm.
+ */
+export function createMockActionContext(
+  options: MockActionContextOptions = {},
+): ReadyActionContext {
+  return {
+    authState: createMockAuthState(options.loggedIn),
+    dialog: dialogRunningProgressTasks(),
+    settings: autoMock<Settings>(),
+    coursesTree: autoMock<CoursesTree>(),
+    startup: {
+      kind: "ready",
+      accountHandover: new AccountHandover(createMockMemento()),
+      // `refusal` resolves to `undefined`.
+      aiUseGate: autoMock<AiUseGate>(),
+      courseWorkspaceSwitches: autoMock<CourseWorkspaceSwitches>(),
+      exerciseDecorationProvider: autoMock<ExerciseDecorationProvider>(),
+      keptCopies: new KeptCopies(createMockMemento()),
+      langs: autoMock<Langs>(),
+      resources: autoMock<Resources>(),
+      // `refusal` returns `undefined`.
+      trustGate: autoMock<WorkspaceTrustGate>(),
+      userData: autoMock<UserData>(),
+      workspaceManager: autoMock<WorkspaceManager>(),
+      ...options.startup,
+    },
+  }
+}
+
+/** A context whose activation failed, which is the only way to reach a degraded arm. */
+export function createDegradedContext(
+  options: Omit<MockActionContextOptions, "startup"> & {
+    failures?: Record<string, Error>
+  } = {},
+): ActionContext {
+  const { failures, ...shared } = options
+  return {
+    ...createMockActionContext(shared),
+    startup: {
+      kind: "degraded",
+      failures: failures ?? { langs: new Error("langs failed to initialize") },
+    },
+  }
 }

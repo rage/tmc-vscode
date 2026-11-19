@@ -1,0 +1,657 @@
+import { Err, Ok } from "ts-results"
+
+import type {
+  CombinedCourseData,
+  CourseData,
+  CourseExercise,
+  Exercise,
+} from "../../../shared/langsSchema"
+import { makeMoocKind } from "../../../shared/lib"
+import { addNewCourse } from "../../actions/addNewCourse"
+import type { ReadyActionContext } from "../../actions/types"
+import { updateCourse } from "../../actions/updateCourse"
+import type { AuthState } from "../../api/authState"
+import type Langs from "../../api/langs"
+import type WorkspaceManager from "../../api/workspaceManager"
+import { UserData } from "../../config/userdata"
+import {
+  ConnectionError,
+  ForbiddenError,
+  InsufficientScopeError,
+  InvalidTokenError,
+  NotFoundError,
+  ServerError,
+  TmcLoginNotAcceptedError,
+} from "../../errors"
+import Storage from "../../storage"
+import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
+import { downloadFailures } from "../../ui/downloadFailures"
+import type CoursesTree from "../../ui/treeview/treeview"
+import { Logger } from "../../utilities"
+import { combineTmcApiExerciseData } from "../../utilities/apiData"
+import { tmcCourseData as storedTmcCourseData } from "../fixtures/courses"
+import { idOfMoocCourse, idOfTmcCourse } from "../fixtures/identifiers"
+import {
+  MOOC_COURSE_UUID,
+  MOOC_EXERCISE_UUID,
+  moocCourse,
+  moocCourseProgress,
+  moocExerciseSlides,
+} from "../fixtures/tmc"
+import { createMockActionContext, createMockAuthState } from "../mocks/actionContext"
+import type { TMCMockValues } from "../mocks/tmc"
+import { createTMCMock } from "../mocks/tmc"
+import { createMockContext } from "../mocks/vscode"
+import { createWorkspaceMangerMock } from "../mocks/workspaceManager"
+
+const storedMoocCourse: MoocLocalCourseData = {
+  id: MOOC_COURSE_UUID,
+  name: "mooc-python-course",
+  title: "Mooc Python",
+  description: null,
+  organization: "mooc",
+  aiPolicy: "not_set",
+  exercises: [],
+  availablePoints: 0,
+  awardedPoints: 0,
+  newExercises: [],
+  notifyAfter: 0,
+}
+
+suite("updateCourse action (mooc)", function () {
+  const courseId = idOfMoocCourse(MOOC_COURSE_UUID)
+
+  let tmcMock: Langs
+  let tmcMockValues: TMCMockValues
+  let userData: UserData
+  let workspaceManagerMock: WorkspaceManager
+  let authState: AuthState
+
+  // One activation's contexts share its auth state.
+  const actionContext = (): ReadyActionContext => ({
+    ...createMockActionContext({
+      startup: { langs: tmcMock, userData, workspaceManager: workspaceManagerMock },
+    }),
+    authState,
+  })
+
+  // Replaces the stored course, for a test that needs it in some other starting state.
+  async function storeCourse(course: MoocLocalCourseData): Promise<void> {
+    const storage = new Storage(createMockContext())
+    await storage.updateUserData({ courses: [], mooc_courses: [{ ...course }] })
+    userData = new UserData(storage)
+  }
+
+  beforeEach(async function () {
+    ;[tmcMock, tmcMockValues] = createTMCMock()
+    ;[workspaceManagerMock] = createWorkspaceMangerMock()
+    authState = createMockAuthState()
+    await storeCourse(storedMoocCourse)
+  })
+
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("maps course slides into local mooc exercises keyed by exercise id", async function () {
+    const result = await updateCourse(actionContext(), courseId)
+    expect(result.unwrap().isUpdated).toBe(true)
+    const stored = userData.getMoocCourses()[0]
+    // Keyed by the slide's exercise id (matches what the bulk download subcommand
+    // resolves `--exercise-id` against), not the task id.
+    expect(stored?.exercises.map((e) => e.id)).toEqual([MOOC_EXERCISE_UUID])
+    expect(stored?.exercises[0]?.name).toBe("mooc_hello")
+  })
+
+  test("populates exercise and course points from the user's course progress", async function () {
+    const result = await updateCourse(actionContext(), courseId)
+    expect(result.unwrap().isUpdated).toBe(true)
+    const stored = userData.getMoocCourses()[0]
+    // Fixture: passed, 1/1 points.
+    expect(stored?.exercises[0]?.passed).toBe(true)
+    expect(stored?.exercises[0]?.awardedPoints).toBe(1)
+    expect(stored?.exercises[0]?.availablePoints).toBe(1)
+    expect(stored?.awardedPoints).toBe(1)
+    expect(stored?.availablePoints).toBe(1)
+  })
+
+  test("forgets a download refused while its chapter was closed", async function () {
+    const closedId = makeMoocKind({ moocExerciseId: MOOC_EXERCISE_UUID })
+    await storeCourse({
+      ...storedMoocCourse,
+      closedChapters: [
+        {
+          name: "Basics",
+          number: 1,
+          opensAt: "2026-01-01T00:00:00Z",
+          exercises: [
+            {
+              id: MOOC_EXERCISE_UUID,
+              name: "mooc_hello",
+              deadline: null,
+              passed: false,
+              availablePoints: 1,
+              awardedPoints: 0,
+            },
+          ],
+        },
+      ],
+    })
+    downloadFailures.record([closedId], [])
+
+    await updateCourse(actionContext(), courseId)
+
+    expect(downloadFailures.has(closedId)).toBe(false)
+  })
+
+  test("refreshes the course metadata that the backend can change", async function () {
+    // A refresh writes back the fetched course, not just its points, or a renamed course
+    // stays stale forever. The stored fixture disagrees with the fetched one on every field.
+    const result = await updateCourse(actionContext(), courseId)
+    expect(result.unwrap().isUpdated).toBe(true)
+    const stored = userData.getMoocCourses()[0]
+    expect(stored?.description).toBe("A mooc course")
+    expect(stored?.title).toBe("Mooc Python")
+    expect(stored?.organization).toBe("University of Helsinki")
+    // The slug keys the workspace folder and the closed-exercise settings, so it
+    // must NOT be adopted from the fetched course without an accompanying move.
+    expect(stored?.name).toBe("mooc-python-course")
+  })
+
+  test("reports a changed AI policy with the course as stored now", async function () {
+    await storeCourse({ ...storedMoocCourse, aiPolicy: "full_use" })
+    tmcMockValues.getMoocCourseData = Ok({
+      ...tmcMockValues.getMoocCourseData.unwrap(),
+      course: { ...moocCourse, ai_policy: "no_ai" },
+    })
+
+    const update = (await updateCourse(actionContext(), courseId)).unwrap()
+
+    expect(
+      update.aiPolicyChange?.course.kind === "mooc" && update.aiPolicyChange.course.data.aiPolicy,
+    ).toBe("no_ai")
+    expect((await updateCourse(actionContext(), courseId)).unwrap().aiPolicyChange).toBeUndefined()
+  })
+
+  test("a failed fetch leaves previously known progress alone", async function () {
+    await updateCourse(actionContext(), courseId)
+    expect(userData.getMoocCourses()[0]?.exercises[0]?.passed).toBe(true)
+
+    tmcMockValues.getMoocCourseData = Err(new Error("transient"))
+    const result = await updateCourse(actionContext(), courseId)
+    expect(result.err).toBe(true)
+    const stored = userData.getMoocCourses()[0]
+    expect(stored?.exercises[0]?.passed).toBe(true)
+    expect(stored?.exercises[0]?.awardedPoints).toBe(1)
+    expect(stored?.awardedPoints).toBe(1)
+  })
+
+  test("leaves the course alone when the session lacks the exercise scope", async function () {
+    // The mooc backend 403s an underscoped token, which says nothing about the course.
+    tmcMockValues.getMoocCourseData = Err(new InsufficientScopeError("no scope"))
+    tmcMockValues.getEnrolledMoocCourses = Err(new InsufficientScopeError("no scope"))
+    const before = structuredClone(userData.getMoocCourses())
+
+    const result = await updateCourse(actionContext(), courseId)
+
+    expect(result.unwrap().isUpdated).toBe(false)
+    expect(userData.getMoocCourses()).toEqual(before)
+  })
+
+  test("offers a login once per lapse, and again once the session is renewed", async function () {
+    tmcMockValues.getMoocCourseData = Err(new InsufficientScopeError("no scope"))
+    tmcMockValues.getEnrolledMoocCourses = Err(new InsufficientScopeError("no scope"))
+
+    expect((await updateCourse(actionContext(), courseId)).unwrap().warnings).toEqual([
+      { headline: "Failed to update course data.", error: expect.any(InsufficientScopeError) },
+    ])
+
+    // updateCourse runs once per course and from a background poll, so a second
+    // failure must stay quiet.
+    expect((await updateCourse(actionContext(), courseId)).unwrap().warnings).toEqual([])
+
+    tmcMockValues.getMoocCourseData = Ok({
+      course: moocCourse,
+      slides: moocExerciseSlides,
+      progress: moocCourseProgress,
+    })
+    await updateCourse(actionContext(), courseId)
+    tmcMockValues.getMoocCourseData = Err(new InsufficientScopeError("no scope"))
+
+    expect((await updateCourse(actionContext(), courseId)).unwrap().warnings).toHaveLength(1)
+  })
+
+  test.each([new ConnectionError("down"), new ServerError("503")])(
+    "returns offline on %s",
+    async function (error) {
+      const warn = vi.spyOn(Logger, "warn").mockImplementation(() => {})
+      tmcMockValues.getMoocCourseData = Err(error)
+      const result = await updateCourse(actionContext(), courseId)
+      expect(result.unwrap().isUpdated).toBe(false)
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("courses.mooc.fi"))
+    },
+  )
+
+  // The course's data is served to anyone who may view it, enrolled or not.
+  test("keeps a course marked not enrolled until the student's courses list it", async function () {
+    await storeCourse({ ...storedMoocCourse, notEnrolled: true })
+    tmcMockValues.getEnrolledMoocCourses = Ok([])
+
+    await updateCourse(actionContext(), courseId)
+    expect(userData.getMoocCourses()[0]?.notEnrolled).toBe(true)
+
+    tmcMockValues.getEnrolledMoocCourses = Ok([moocCourse])
+    await updateCourse(actionContext(), courseId)
+    expect(userData.getMoocCourses()[0]?.notEnrolled).toBeUndefined()
+  })
+
+  test("marks a course the student's courses do not list as not enrolled", async function () {
+    tmcMockValues.getEnrolledMoocCourses = Ok([])
+
+    await updateCourse(actionContext(), courseId)
+
+    expect(userData.getMoocCourses()[0]?.notEnrolled).toBe(true)
+  })
+
+  test("keeps the last enrollment answer when the student's courses cannot be listed", async function () {
+    vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    await storeCourse({ ...storedMoocCourse, notEnrolled: true })
+    tmcMockValues.getEnrolledMoocCourses = Err(new ConnectionError("down"))
+
+    await updateCourse(actionContext(), courseId)
+    expect(userData.getMoocCourses()[0]?.notEnrolled).toBe(true)
+
+    await storeCourse(storedMoocCourse)
+    await updateCourse(actionContext(), courseId)
+    expect(userData.getMoocCourses()[0]?.notEnrolled).toBeUndefined()
+  })
+
+  test("uses the enrollments it is given instead of listing them", async function () {
+    await updateCourse(actionContext(), courseId, Ok(new Set<string>()))
+
+    expect(tmcMock.getEnrolledMoocCourses).not.toHaveBeenCalled()
+    expect(userData.getMoocCourses()[0]?.notEnrolled).toBe(true)
+  })
+
+  // courses.mooc.fi 403s a hidden or closed course's exercises, which tmc-langs reports as an
+  // insufficient scope; the session listing the student's courses tells the two apart.
+  test("marks a course refused while the session still works as forbidden", async function () {
+    vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    tmcMockValues.getMoocCourseData = Err(new InsufficientScopeError("forbidden"))
+    const context = actionContext()
+
+    const result = await updateCourse(context, courseId)
+
+    expect(result.unwrap()).toEqual({ isUpdated: false, warnings: [] })
+    expect(userData.getMoocCourses()[0]?.accessLoss).toEqual({
+      reason: "forbidden",
+      checkedAt: expect.any(Number),
+    })
+    expect(vi.mocked(context.coursesTree.setBackendReachable)).toHaveBeenCalledWith("mooc", true)
+  })
+
+  test("marks a course the backend no longer has as not found, keeping its exercises", async function () {
+    vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    await updateCourse(actionContext(), courseId)
+    tmcMockValues.getMoocCourseData = Err(new NotFoundError("no such course"))
+
+    const result = await updateCourse(actionContext(), courseId)
+
+    expect(result.unwrap().isUpdated).toBe(false)
+    const stored = userData.getMoocCourses()[0]
+    expect(stored?.accessLoss?.reason).toBe("notFound")
+    expect(stored?.exercises.map((e) => e.id)).toEqual([MOOC_EXERCISE_UUID])
+  })
+
+  test("clears the access loss once the backend serves the course again", async function () {
+    await storeCourse({ ...storedMoocCourse, accessLoss: { reason: "forbidden", checkedAt: 0 } })
+
+    const result = await updateCourse(actionContext(), courseId)
+
+    expect(result.unwrap().isUpdated).toBe(true)
+    expect(userData.getMoocCourses()[0]?.accessLoss).toBeUndefined()
+  })
+
+  test("leaves the course's access alone when the session is gone", async function () {
+    // A revoked grant: tmc-langs deletes the credentials and reports an invalid token.
+    tmcMockValues.getMoocCourseData = Err(new InvalidTokenError("grant revoked"))
+    tmcMockValues.getEnrolledMoocCourses = Err(new InvalidTokenError("grant revoked"))
+
+    const result = await updateCourse(actionContext(), courseId)
+
+    expect(result.val).toBeInstanceOf(InvalidTokenError)
+    expect(userData.getMoocCourses()[0]?.accessLoss).toBeUndefined()
+  })
+
+  test("tells the Courses view whether the backend answered", async function () {
+    vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    const context = actionContext()
+    tmcMockValues.getMoocCourseData = Err(new ConnectionError("down"))
+    await updateCourse(context, courseId)
+    tmcMockValues.getMoocCourseData = Ok({
+      course: moocCourse,
+      slides: moocExerciseSlides,
+      progress: moocCourseProgress,
+    })
+    await updateCourse(context, courseId)
+
+    expect(vi.mocked(context.coursesTree.setBackendReachable).mock.calls).toEqual([
+      ["mooc", false],
+      ["mooc", true],
+    ])
+  })
+})
+
+const tmcCourse: TmcLocalCourseData = storedTmcCourseData({
+  id: 1,
+  name: "test-python-course",
+  title: "Stale title",
+  description: "Stale description",
+  organization: "test",
+  disabled: true,
+})
+
+const tmcExerciseDefaults: Omit<Exercise, "id" | "name" | "completed"> = {
+  all_review_points_given: false,
+  attempted: true,
+  checksum: "checksum",
+  code_review_requests_enabled: false,
+  deadline: null,
+  deadline_description: null,
+  latest_submission_id: null,
+  latest_submission_url: null,
+  locked: false,
+  memory_limit: null,
+  requires_review: false,
+  return_url: "",
+  returnable: true,
+  reviewed: false,
+  run_tests_locally_action_enabled: true,
+  runtime_params: [],
+  soft_deadline: null,
+  soft_deadline_description: null,
+  solution_zip_url: null,
+  valgrind_strategy: null,
+  zip_url: "",
+}
+
+const tmcCourseSettings: CourseData = {
+  cache_version: null,
+  certificate_downloadable: null,
+  certificate_unlock_spec: null,
+  course_template_id: null,
+  description: null,
+  disabled_status: "enabled",
+  external_scoreboard_url: null,
+  formal_name: null,
+  hidden: false,
+  hidden_if_registered_after: null,
+  hide_after: null,
+  hide_submission_results: false,
+  locked_exercise_points_visible: true,
+  material_url: "https://materials.example/test-python-course",
+  name: "test-python-course",
+  organization_id: null,
+  organization_slug: "test",
+  paste_visibility: null,
+  refreshed_at: null,
+  spreadsheet_key: null,
+  title: "Test Python Course",
+}
+
+/** A points-endpoint entry: `awarded` of the exercise's `available` points are scored. */
+function tmcCourseExercise(id: number, available: number, awarded: number): CourseExercise {
+  const pointNames = Array.from({ length: available }, (_, i) => `${id}.${i + 1}`)
+  return {
+    available_points: pointNames.map((name, i) => ({
+      exercise_id: id,
+      id: id * 100 + i,
+      name,
+      requires_review: false,
+    })),
+    awarded_points: pointNames.slice(0, awarded),
+    deadline: null,
+    disabled: false,
+    id,
+    name: `exercise_${id}`,
+    publish_time: null,
+    soft_deadline: null,
+    solution_visible_after: null,
+    unlocked: true,
+  }
+}
+
+/**
+ * The tmc course as the two endpoints report it: exercise 1 is listed by both, while
+ * exercises 2 and 3 are listed only by the details endpoint, so they fall back to
+ * placeholder points — unpassed and passed respectively.
+ */
+const tmcCourseData: CombinedCourseData = {
+  details: {
+    comet_url: "",
+    description: "A tmc course",
+    details_url: "",
+    exercises: [
+      { ...tmcExerciseDefaults, id: 1, name: "exercise_1", completed: true },
+      { ...tmcExerciseDefaults, id: 2, name: "exercise_2", completed: false },
+      { ...tmcExerciseDefaults, id: 3, name: "exercise_3", completed: true },
+    ],
+    id: 1,
+    name: "test-python-course",
+    reviews_url: "",
+    spyware_urls: [],
+    title: "Test Python Course",
+    unlock_url: "",
+    unlockables: [],
+  },
+  exercises: [tmcCourseExercise(1, 2, 2)],
+  settings: tmcCourseSettings,
+}
+
+suite("updateCourse action (tmc)", function () {
+  const courseId = idOfTmcCourse(1)
+
+  let langsMock: Langs
+  let getTmcCourseData: ReturnType<typeof vi.fn>
+  let userData: UserData
+  let workspaceManagerMock: WorkspaceManager
+
+  const actionContext = (): ReadyActionContext =>
+    createMockActionContext({
+      startup: { langs: langsMock, userData, workspaceManager: workspaceManagerMock },
+    })
+
+  beforeEach(async function () {
+    ;[langsMock] = createTMCMock()
+    getTmcCourseData = vi.fn(async () => Ok(tmcCourseData))
+    ;(langsMock as unknown as { getTmcCourseData: unknown }).getTmcCourseData = getTmcCourseData
+    ;[workspaceManagerMock] = createWorkspaceMangerMock()
+    const storage = new Storage(createMockContext())
+    await storage.updateUserData({ courses: [{ ...tmcCourse }], mooc_courses: [] })
+    userData = new UserData(storage)
+  })
+
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("refreshes the course metadata the tmc server owns", async function () {
+    const result = await updateCourse(actionContext(), courseId)
+
+    expect(result.unwrap().isUpdated).toBe(true)
+    const stored = userData.getTmcCourses()[0]
+    expect(stored?.description).toBe("A tmc course")
+    expect(stored?.materialUrl).toBe("https://materials.example/test-python-course")
+    expect(stored?.perhapsExamMode).toBe(false)
+    // `disabled_status` is the authority, so an enabled course lifts a stale flag.
+    expect(stored?.disabled).toBe(false)
+  })
+
+  test("keeps the slug, organization and new-exercise state it was stored with", async function () {
+    const storage = new Storage(createMockContext())
+    await storage.updateUserData({
+      courses: [
+        {
+          ...tmcCourse,
+          name: "old-slug",
+          organization: "old-org",
+          exercises: combineTmcApiExerciseData(
+            tmcCourseData.details.exercises,
+            tmcCourseData.exercises,
+          ),
+          newExercises: [3],
+          notifyAfter: 5,
+        },
+      ],
+      mooc_courses: [],
+    })
+    userData = new UserData(storage)
+
+    expect((await updateCourse(actionContext(), courseId)).unwrap().isUpdated).toBe(true)
+
+    const stored = userData.getTmcCourses()[0]
+    expect(stored?.name).toBe("old-slug")
+    expect(stored?.organization).toBe("old-org")
+    expect(stored?.newExercises).toEqual([3])
+    expect(stored?.notifyAfter).toBe(5)
+    expect(stored?.title).toBe("Test Python Course")
+  })
+
+  test("records an exercise the refresh brings as new", async function () {
+    const storage = new Storage(createMockContext())
+    const known = combineTmcApiExerciseData(
+      tmcCourseData.details.exercises,
+      tmcCourseData.exercises,
+    ).filter((x) => x.id !== 3)
+    await storage.updateUserData({
+      courses: [{ ...tmcCourse, exercises: known }],
+      mooc_courses: [],
+    })
+    userData = new UserData(storage)
+
+    expect((await updateCourse(actionContext(), courseId)).unwrap().isUpdated).toBe(true)
+
+    expect(userData.getTmcCourses()[0]?.newExercises).toEqual([3])
+  })
+
+  test("takes the course totals from the points endpoint, not the combined exercises", async function () {
+    // Exercise 2 is missing from the points endpoint and so carries placeholder
+    // points; folding those into the totals would overstate what the course is worth.
+    const result = await updateCourse(actionContext(), courseId)
+
+    expect(result.unwrap().isUpdated).toBe(true)
+    const stored = userData.getTmcCourses()[0]
+    expect(stored?.availablePoints).toBe(2)
+    expect(stored?.awardedPoints).toBe(2)
+  })
+
+  test("falls back to placeholder points for an exercise the points endpoint omits", async function () {
+    const result = await updateCourse(actionContext(), courseId)
+
+    expect(result.unwrap().isUpdated).toBe(true)
+    const stored = userData.getTmcCourses()[0]
+    const [first, second, third] = stored?.exercises ?? []
+    expect(first).toMatchObject({ id: 1, availablePoints: 2, awardedPoints: 2, passed: true })
+    // Unlisted: one placeholder point, awarded only if the exercise is completed.
+    expect(second).toMatchObject({ id: 2, availablePoints: 1, awardedPoints: 0, passed: false })
+    expect(third).toMatchObject({ id: 3, availablePoints: 1, awardedPoints: 1, passed: true })
+  })
+
+  // tmc.mooc.fi may not accept courses.mooc.fi logins yet: nothing about the course, and a
+  // background poll must not repeat it.
+  test("reports a login tmc.mooc.fi does not accept once, leaving the course alone", async function () {
+    const context = actionContext()
+    getTmcCourseData.mockResolvedValue(Err(new TmcLoginNotAcceptedError("not logged in")))
+
+    const first = (await updateCourse(context, courseId)).unwrap()
+    const repeat = (await updateCourse(context, courseId)).unwrap()
+
+    expect(first).toEqual({ isUpdated: false, warnings: [expect.anything()] })
+    expect(repeat).toEqual({ isUpdated: false, warnings: [] })
+    expect(userData.getTmcCourses()[0]?.title).toBe("Stale title")
+  })
+
+  test.each([
+    [new ForbiddenError("forbidden"), "forbidden"],
+    [new NotFoundError("not found"), "notFound"],
+  ] as const)("marks the course refused on %s", async function (error, reason) {
+    await storeEnabledTmcCourse()
+    vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    getTmcCourseData.mockResolvedValue(Err(error))
+
+    const result = await updateCourse(actionContext(), courseId)
+
+    expect(result.unwrap().isUpdated).toBe(false)
+    const stored = userData.getTmcCourses()[0]
+    expect(stored?.accessLoss?.reason).toBe(reason)
+    expect(stored?.disabled).toBe(false)
+  })
+
+  test("returns offline (not disabled) on a ConnectionError", async function () {
+    await storeEnabledTmcCourse()
+    const warn = vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    getTmcCourseData.mockResolvedValue(Err(new ConnectionError("down")))
+
+    const result = await updateCourse(actionContext(), courseId)
+
+    expect(result.unwrap().isUpdated).toBe(false)
+    expect(userData.getTmcCourses()[0]?.disabled).toBe(false)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("tmc.mooc.fi"))
+  })
+
+  // The failure arms must start from an enabled course, or "still disabled" and
+  // "just disabled" are indistinguishable.
+  async function storeEnabledTmcCourse(): Promise<void> {
+    const storage = new Storage(createMockContext())
+    await storage.updateUserData({ courses: [{ ...tmcCourse, disabled: false }], mooc_courses: [] })
+    userData = new UserData(storage)
+  }
+})
+
+suite("updateCourse after addNewCourse", function () {
+  let langsMock: Langs
+  let userData: UserData
+
+  const actionContext = (): ReadyActionContext => {
+    const [workspaceManager] = createWorkspaceMangerMock()
+    workspaceManager.createWorkspaceFile = vi.fn() as never
+    return {
+      ...createMockActionContext({ startup: { langs: langsMock, userData, workspaceManager } }),
+      coursesTree: { setBackendReachable: vi.fn() } as unknown as CoursesTree,
+    }
+  }
+
+  beforeEach(async function () {
+    ;[langsMock] = createTMCMock()
+    ;(langsMock as unknown as { getTmcCourseData: unknown }).getTmcCourseData = vi.fn(async () =>
+      Ok(tmcCourseData),
+    )
+    const storage = new Storage(createMockContext())
+    await storage.updateUserData({ courses: [], mooc_courses: [] })
+    userData = new UserData(storage)
+  })
+
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("a refresh of an unchanged tmc course stores what adding it stored", async function () {
+    const courseId = idOfTmcCourse(tmcCourseData.details.id)
+    expect((await addNewCourse(actionContext(), "test", courseId)).ok).toBe(true)
+    const added = structuredClone(userData.getTmcCourses())
+
+    expect((await updateCourse(actionContext(), courseId)).unwrap().isUpdated).toBe(true)
+
+    expect(userData.getTmcCourses()).toEqual(added)
+  })
+
+  test("a refresh of an unchanged mooc course stores what adding it stored", async function () {
+    const courseId = idOfMoocCourse(MOOC_COURSE_UUID)
+    expect((await addNewCourse(actionContext(), "", courseId)).ok).toBe(true)
+    const added = structuredClone(userData.getMoocCourses())
+
+    expect((await updateCourse(actionContext(), courseId)).unwrap().isUpdated).toBe(true)
+
+    expect(userData.getMoocCourses()).toEqual(added)
+  })
+})

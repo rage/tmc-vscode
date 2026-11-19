@@ -1,64 +1,66 @@
-import { ActionContext } from "../actions/types";
-import { Logger } from "../utilities";
-import * as vscode from "vscode";
+import { Ok } from "ts-results"
+import type * as vscode from "vscode"
+
+import { checkAiUse, resetExercise as resetExerciseAction, storedExerciseOf } from "../actions"
+import type { ReadyActionContext } from "../actions/types"
+import { failure } from "../api/withOperation"
+import {
+  confirmSubmitBeforeDestructiveAction,
+  keepingVerb,
+} from "../window/confirmSubmitBeforeDestructiveAction"
+import { revertExerciseDocuments } from "../window/exerciseDocuments"
+import { checkTrustRetrying, runForExercise } from "./runForExercise"
 
 /**
- * Resets an exercise to its initial state. Optionally submits the exercise beforehand.
+ * Resets an exercise to its initial state, optionally keeping its current state on the backend
+ * beforehand.
  *
- * @param id ID of the exercise to reset.
- * @param options Optional parameters that can be used to control the action behavior.
+ * @param resource An exercise file or folder; the active editor's exercise when omitted.
  */
 export async function resetExercise(
-    actionContext: ActionContext,
-    resource: vscode.Uri | undefined,
+  actionContext: ReadyActionContext,
+  resource: vscode.Uri | undefined,
 ): Promise<void> {
-    const { dialog, tmc, userData, workspaceManager } = actionContext;
-    Logger.info("Resetting exercise");
-    if (!(tmc.ok && userData.ok && workspaceManager.ok)) {
-        Logger.error("Extension was not initialized properly");
-        return;
+  const { dialog } = actionContext
+  await runForExercise(actionContext, resource, "Resetting the exercise", async (exercise) => {
+    const stored = storedExerciseOf(actionContext, exercise)
+    if (stored.err) {
+      return failure(`Missing exercise data for ${exercise.exerciseSlug}.`, stored.val)
     }
 
-    const exercise = resource
-        ? workspaceManager.val.getExerciseByPath(resource)
-        : workspaceManager.val.activeExercise;
-    if (!exercise) {
-        dialog.errorNotification("Currently open editor is not part of a TMC exercise.");
-        return;
-    }
-
-    const exerciseDetails = userData.val.getExerciseByName(
-        exercise.courseSlug,
-        exercise.exerciseSlug,
-    );
-    if (!exerciseDetails) {
-        dialog.errorNotification(`Missing exercise data for ${exercise.exerciseSlug}.`);
-        return;
-    }
-
-    const submitFirst = await dialog.confirmation(
-        "Do you want to save the current state of the exercise by submitting it to TMC Server?",
-    );
+    const { id } = exercise
+    const submitFirst = await confirmSubmitBeforeDestructiveAction(actionContext, exercise, {
+      message: `Reset ${exercise.exerciseSlug}?`,
+      replacement: "the exercise template",
+      verb: "Reset",
+      backend: id.kind,
+    })
     if (submitFirst === undefined) {
-        Logger.debug("Answer for submitting first not provided, returning early.");
-        return;
+      return Ok.EMPTY
+    }
+    if (submitFirst) {
+      const trusted = checkTrustRetrying(actionContext, "tmc.resetExercise", exercise)
+      if (trusted.err) {
+        return trusted
+      }
+      const allowed = await checkAiUse(actionContext, exercise)
+      if (allowed.err) {
+        return allowed
+      }
     }
 
-    const editor = vscode.window.activeTextEditor;
-    const document = editor?.document.uri;
-
-    const resetResult = await tmc.val.resetExercise(
-        exerciseDetails.id,
-        exercise.uri.fsPath,
-        submitFirst,
-    );
+    const resetResult = await dialog.progressNotification(
+      submitFirst
+        ? `${keepingVerb(id.kind)} and resetting ${exercise.exerciseSlug}…`
+        : `Resetting ${exercise.exerciseSlug}…`,
+      () => resetExerciseAction(actionContext, id, exercise, submitFirst),
+    )
     if (resetResult.err) {
-        dialog.errorNotification("Failed to reset exercise.", resetResult.val);
-        return;
+      return failure("Failed to reset exercise.", resetResult.val)
     }
 
-    if (editor && document) {
-        Logger.debug(`Reopening original file "${document.fsPath}"`);
-        await vscode.commands.executeCommand("workbench.action.files.revert", document);
-    }
+    await revertExerciseDocuments(exercise)
+    dialog.statusMessage(`Reset ${exercise.exerciseSlug}.`)
+    return Ok.EMPTY
+  })
 }

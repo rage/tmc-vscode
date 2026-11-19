@@ -1,0 +1,523 @@
+import { Err, Ok } from "ts-results"
+import { onTestFinished, vi } from "vitest"
+import * as vscode from "vscode"
+
+import type { CourseIdentifier, ExerciseIdentifier, LocalCourseData } from "../../../shared/lib"
+import { CourseIdentifier as CourseIdentifierNs } from "../../../shared/lib"
+import type { ExerciseUpdateCheck } from "../../actions/checkForExerciseUpdates"
+import type { ReadyActionContext } from "../../actions/types"
+import { downloadUpdates, updateExercises } from "../../commands/updateExercises"
+import type Settings from "../../config/settings"
+import type { UserData } from "../../config/userdata"
+import { BottleneckError } from "../../errors"
+import { recentUpdates } from "../../ui/recentUpdates"
+import { shownCourseHome } from "../../ui/shownCourseHome"
+import { updateablesRegistry } from "../../ui/updateablesRegistry"
+import {
+  idOfMoocCourse,
+  idOfMoocExercise,
+  idOfTmcCourse,
+  idOfTmcExercise,
+} from "../fixtures/identifiers"
+import { createMockActionContext } from "../mocks/actionContext"
+import { createDialogMock } from "../mocks/dialog"
+
+const checkForExerciseUpdates = vi.hoisted(() => vi.fn())
+const downloadExerciseUpdates = vi.hoisted(() => vi.fn())
+
+vi.mock("../../actions/checkForExerciseUpdates", () => ({ checkForExerciseUpdates }))
+vi.mock("../../actions/downloadExerciseUpdates", () => ({ downloadExerciseUpdates }))
+
+/** An outdated exercise as `checkForExerciseUpdates` reports it: a fresh id object per exercise. */
+function outdated(
+  courseId: number,
+  exerciseId: number,
+): {
+  courseId: CourseIdentifier
+  exerciseId: ExerciseIdentifier
+  exerciseName: string
+} {
+  return {
+    courseId: idOfTmcCourse(courseId),
+    exerciseId: idOfTmcExercise(exerciseId),
+    exerciseName: `exercise-${exerciseId}`,
+  }
+}
+
+function tmcCourse(id: number): LocalCourseData {
+  return { kind: "tmc", data: { id, newExercises: [] } } as unknown as LocalCourseData
+}
+
+const moocCourse = {
+  kind: "mooc",
+  data: { id: "mooc-course", newExercises: [] },
+} as unknown as LocalCourseData
+
+/** A check that reached every backend. */
+function checked(exercises: ExerciseUpdateCheck["outdated"]): ExerciseUpdateCheck {
+  return { outdated: exercises, removed: [], failures: [], unchecked: [] }
+}
+
+function contextWith(
+  automaticallyUpdate: boolean,
+): [ReadyActionContext, ReturnType<typeof createDialogMock>[0], ReturnType<typeof vi.fn>] {
+  const [dialog] = createDialogMock()
+  const setNewExerciseNotifyAfter = vi.fn(async () => Ok.EMPTY)
+  return [
+    {
+      ...createMockActionContext({
+        startup: {
+          userData: {
+            getCourses: () => [tmcCourse(1), tmcCourse(2), moocCourse],
+            getCourse: (id: CourseIdentifier) =>
+              Ok({
+                kind: "tmc",
+                data: {
+                  notifyAfter: 0,
+                  disabled: false,
+                  title: `Course ${CourseIdentifierNs.toString(id)}`,
+                },
+              }),
+            setNewExerciseNotifyAfter,
+          } as unknown as UserData,
+        },
+      }),
+      dialog,
+      settings: {
+        getAutomaticallyUpdateExercises: () => automaticallyUpdate,
+      } as unknown as Settings,
+    },
+    dialog,
+    setNewExerciseNotifyAfter,
+  ]
+}
+
+suite("updateExercises command", function () {
+  beforeEach(function () {
+    checkForExerciseUpdates.mockReset()
+    downloadExerciseUpdates.mockReset().mockResolvedValue(Ok({ updated: [], warnings: [] }))
+    updateablesRegistry.clear()
+  })
+
+  test("records what it found per course, keeping a failed backend's last answer", async function () {
+    const staleMooc = [idOfMoocExercise("mooc-exercise")]
+    updateablesRegistry.setMany([[idOfTmcCourse(2), [idOfTmcExercise(99)]]])
+    updateablesRegistry.setMany([[idOfMoocCourse("mooc-course"), staleMooc]])
+    updateablesRegistry.setRemoved("mooc", [idOfMoocExercise("mooc-removed")])
+    checkForExerciseUpdates.mockResolvedValue({
+      outdated: [outdated(1, 10), outdated(1, 11)],
+      removed: [idOfTmcExercise(12)],
+      failures: [{ backend: "mooc", error: new Error("offline") }],
+      unchecked: [],
+    })
+    const [actionContext] = contextWith(true)
+
+    await updateExercises(actionContext, "silent")
+
+    expect(updateablesRegistry.isRemoved(idOfTmcExercise(12))).toBe(true)
+    expect(updateablesRegistry.isRemoved(idOfMoocExercise("mooc-removed"))).toBe(true)
+
+    expect(updateablesRegistry.get(idOfTmcCourse(1))).toEqual([
+      idOfTmcExercise(10),
+      idOfTmcExercise(11),
+    ])
+    expect(updateablesRegistry.get(idOfTmcCourse(2))).toEqual([])
+    expect(updateablesRegistry.get(idOfMoocCourse("mooc-course"))).toEqual(staleMooc)
+  })
+
+  test("keeps a course it could not check at its last answer", async function () {
+    const lostCourse = {
+      kind: "mooc",
+      data: {
+        id: "lost",
+        exercises: [{ id: "lost-removed" }, { id: "lost-kept" }],
+        newExercises: [],
+      },
+    } as unknown as LocalCourseData
+    const staleLost = [idOfMoocExercise("lost-outdated")]
+    updateablesRegistry.setMany([
+      [idOfMoocCourse("lost"), staleLost],
+      [idOfMoocCourse("mooc-course"), [idOfMoocExercise("stale")]],
+    ])
+    updateablesRegistry.setRemoved("mooc", [
+      idOfMoocExercise("lost-removed"),
+      idOfMoocExercise("checked-removed"),
+    ])
+    checkForExerciseUpdates.mockResolvedValue({
+      outdated: [],
+      removed: [],
+      failures: [],
+      unchecked: [idOfMoocCourse("lost")],
+    })
+    const [actionContext] = contextWith(true)
+    vi.spyOn(actionContext.startup.userData, "getCourses").mockReturnValue([moocCourse, lostCourse])
+
+    await updateExercises(actionContext, "silent")
+
+    expect(updateablesRegistry.get(idOfMoocCourse("lost"))).toEqual(staleLost)
+    expect(updateablesRegistry.get(idOfMoocCourse("mooc-course"))).toEqual([])
+    expect(updateablesRegistry.isRemoved(idOfMoocExercise("lost-removed"))).toBe(true)
+    expect(updateablesRegistry.isRemoved(idOfMoocExercise("checked-removed"))).toBe(false)
+  })
+
+  test("does not credit a tmc course's updates to a mooc course with the same id", async function () {
+    checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10)]))
+    const [actionContext] = contextWith(true)
+    const userData = actionContext.startup.userData
+    vi.spyOn(userData, "getCourses").mockReturnValue([
+      tmcCourse(1),
+      { kind: "mooc", data: { id: "1" } } as LocalCourseData,
+    ])
+
+    await updateExercises(actionContext, "silent")
+
+    expect(updateablesRegistry.get(idOfTmcCourse(1))).toEqual([idOfTmcExercise(10)])
+    expect(updateablesRegistry.get(idOfMoocCourse("1"))).toEqual([])
+  })
+
+  suite("with the reminder postponed", function () {
+    function postponed(automaticallyUpdate: boolean): ReturnType<typeof contextWith> {
+      const context = contextWith(automaticallyUpdate)
+      context[0].startup.userData.getCourse = () =>
+        Ok({
+          kind: "tmc",
+          data: { notifyAfter: Date.now() + 60_000, disabled: false, title: "Course" },
+        } as LocalCourseData)
+      return context
+    }
+
+    test("still downloads the updates when automatic updates are on", async function () {
+      const updates = [outdated(1, 10)]
+      checkForExerciseUpdates.mockResolvedValue(checked(updates))
+      const [actionContext] = postponed(true)
+
+      await updateExercises(actionContext, "silent")
+
+      expect(downloadExerciseUpdates).toHaveBeenCalledExactlyOnceWith(actionContext, updates, true)
+    })
+
+    test("does not prompt on a run the user did not ask for", async function () {
+      checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10)]))
+      const [actionContext, dialog] = postponed(false)
+
+      await updateExercises(actionContext, "silent")
+
+      expect(dialog.notification).not.toHaveBeenCalled()
+    })
+
+    test("prompts when the user asks for the updates", async function () {
+      checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10)]))
+      const [actionContext, dialog] = postponed(false)
+
+      await updateExercises(actionContext, "loud")
+
+      expect(dialog.notification).toHaveBeenCalledOnce()
+    })
+  })
+
+  test("downloads the updates without asking when automatic updates are on", async function () {
+    const updates = [outdated(1, 10), outdated(2, 20)]
+    checkForExerciseUpdates.mockResolvedValue(checked(updates))
+    const [actionContext, dialog] = contextWith(true)
+
+    await updateExercises(actionContext, "loud")
+
+    expect(downloadExerciseUpdates).toHaveBeenCalledExactlyOnceWith(actionContext, updates, false)
+    expect(dialog.notification).not.toHaveBeenCalled()
+  })
+
+  test("asks the backends afresh when the user asked, and accepts a cached answer otherwise", async function () {
+    checkForExerciseUpdates.mockResolvedValue(checked([]))
+    const [actionContext] = contextWith(true)
+
+    await updateExercises(actionContext, "loud")
+    await updateExercises(actionContext, "silent")
+    await updateExercises(actionContext, "silent", true)
+
+    expect(checkForExerciseUpdates.mock.calls.map(([, options]) => options)).toEqual([
+      { forceRefresh: true },
+      { forceRefresh: false },
+      { forceRefresh: true },
+    ])
+  })
+
+  test("offers to show the course with the updates, and downloads nothing itself", async function () {
+    checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10), outdated(1, 11)]))
+    const [actionContext, dialog] = contextWith(false)
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await updateExercises(actionContext, "loud")
+    const [message, show] = vi.mocked(dialog.notification).mock.calls[0] ?? []
+    show?.[1]()
+
+    expect(message).toBe("2 exercises of Course 1 have updates.")
+    expect(show?.[0]).toBe("Show")
+    expect(executeCommand).toHaveBeenCalledWith("tmc.courseDetails", idOfTmcCourse(1))
+    expect(downloadExerciseUpdates).not.toHaveBeenCalled()
+  })
+
+  test("offers nothing while the course home shows a course with updates", async function () {
+    checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10)]))
+    const [actionContext, dialog] = contextWith(false)
+    shownCourseHome.set(idOfTmcCourse(1))
+    onTestFinished(() => shownCourseHome.set(undefined))
+
+    await updateExercises(actionContext, "loud")
+
+    expect(dialog.notification).not.toHaveBeenCalled()
+  })
+
+  test("an automatic update leaves a trace in the course home and offers to show it", async function () {
+    checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10)]))
+    downloadExerciseUpdates.mockResolvedValue(Ok({ updated: [idOfTmcExercise(10)], warnings: [] }))
+    const [actionContext, dialog] = contextWith(true)
+    Object.assign(actionContext.startup.userData, {
+      getExercise: () => Ok({ exercise: { kind: "tmc", data: { name: "loops" } } }),
+    })
+    onTestFinished(() => recentUpdates.dismiss(idOfTmcCourse(1)))
+
+    await updateExercises(actionContext, "silent")
+
+    expect(recentUpdates.get(idOfTmcCourse(1))).toEqual(["loops"])
+    expect(dialog.statusMessage).not.toHaveBeenCalled()
+    expect(dialog.notification).toHaveBeenCalledExactlyOnceWith(
+      "Updated the exercise loops to the latest version.",
+      ["Show", expect.any(Function)],
+    )
+  })
+
+  test("a refresh the student asked for announces an automatic update as a background one does", async function () {
+    checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10)]))
+    downloadExerciseUpdates.mockResolvedValue(Ok({ updated: [idOfTmcExercise(10)], warnings: [] }))
+    const [actionContext, dialog] = contextWith(true)
+    Object.assign(actionContext.startup.userData, {
+      getExercise: () => Ok({ exercise: { kind: "tmc", data: { name: "loops" } } }),
+    })
+    onTestFinished(() => recentUpdates.dismiss(idOfTmcCourse(1)))
+
+    await updateExercises(actionContext, "loud")
+
+    expect(downloadExerciseUpdates).toHaveBeenCalledWith(actionContext, expect.anything(), false)
+    expect(recentUpdates.get(idOfTmcCourse(1))).toEqual(["loops"])
+    expect(dialog.notification).toHaveBeenCalledExactlyOnceWith(
+      "Updated the exercise loops to the latest version.",
+      ["Show", expect.any(Function)],
+    )
+  })
+
+  test("an automatic update of the course on screen leaves only the trace", async function () {
+    checkForExerciseUpdates.mockResolvedValue(checked([outdated(1, 10)]))
+    downloadExerciseUpdates.mockResolvedValue(Ok({ updated: [idOfTmcExercise(10)], warnings: [] }))
+    const [actionContext, dialog] = contextWith(true)
+    Object.assign(actionContext.startup.userData, {
+      getExercise: () => Ok({ exercise: { kind: "tmc", data: { name: "loops" } } }),
+    })
+    shownCourseHome.set(idOfTmcCourse(1))
+    onTestFinished(() => {
+      shownCourseHome.set(undefined)
+      recentUpdates.dismiss(idOfTmcCourse(1))
+    })
+
+    await updateExercises(actionContext, "silent")
+
+    expect(recentUpdates.get(idOfTmcCourse(1))).toEqual(["loops"])
+    expect(dialog.notification).not.toHaveBeenCalled()
+  })
+
+  test("an update the student picked leaves a trace in the course home, and a status message only while it is hidden", async function () {
+    downloadExerciseUpdates.mockResolvedValue(Ok({ updated: [idOfTmcExercise(10)], warnings: [] }))
+    const [actionContext, dialog] = contextWith(false)
+    Object.assign(actionContext.startup.userData, {
+      getExercise: () => Ok({ exercise: { kind: "tmc", data: { name: "loops" } } }),
+    })
+    onTestFinished(() => {
+      shownCourseHome.set(undefined)
+      recentUpdates.dismiss(idOfTmcCourse(1))
+    })
+    const picked = [{ courseId: idOfTmcCourse(1), exerciseId: idOfTmcExercise(10) }]
+
+    await downloadUpdates(actionContext, picked)
+    expect(dialog.statusMessage).toHaveBeenCalledExactlyOnceWith("Updated the exercise loops.")
+
+    vi.mocked(dialog.statusMessage).mockClear()
+    shownCourseHome.set(idOfTmcCourse(1))
+    await downloadUpdates(actionContext, picked)
+
+    expect(recentUpdates.get(idOfTmcCourse(1))).toEqual(["loops"])
+    expect(dialog.statusMessage).not.toHaveBeenCalled()
+  })
+
+  test("leaves a picked update's failed exercise to the failed-update item, not a notification", async function () {
+    const failure = new Error("archive 500")
+    downloadExerciseUpdates.mockResolvedValue(
+      Ok({
+        updated: [],
+        warnings: [
+          {
+            headline: "Failed to update the exercise loops.",
+            error: failure,
+            failedExercises: [idOfTmcExercise(10)],
+          },
+          { headline: "Failed to refresh local exercises.", error: failure },
+        ],
+      }),
+    )
+    const [actionContext, dialog] = contextWith(false)
+    const picked = [{ courseId: idOfTmcCourse(1), exerciseId: idOfTmcExercise(10) }]
+
+    await downloadUpdates(actionContext, picked)
+
+    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to refresh local exercises.",
+      failure,
+    )
+  })
+
+  test("an automatic update another one holds back stays quiet", async function () {
+    downloadExerciseUpdates.mockResolvedValue(Err(new BottleneckError("busy")))
+    const [actionContext, dialog] = contextWith(false)
+    const picked = [{ courseId: idOfTmcCourse(1), exerciseId: idOfTmcExercise(10) }]
+
+    await downloadUpdates(actionContext, picked, { isUnrequested: true })
+    // Automatic also when a check the student asked for found it.
+    await downloadUpdates(actionContext, picked, { isAnnounced: true })
+
+    expect(dialog.notification).not.toHaveBeenCalled()
+    expect(dialog.reportError).not.toHaveBeenCalled()
+  })
+
+  test("reports a failed check once when loud, and only logs it when silent", async function () {
+    checkForExerciseUpdates.mockRejectedValue(new Error("offline"))
+    const [loudContext, loudDialog] = contextWith(false)
+    const [silentContext, silentDialog] = contextWith(false)
+
+    await updateExercises(loudContext, "loud")
+    await updateExercises(silentContext, "silent")
+
+    expect(loudDialog.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to check for exercise updates.",
+      expect.objectContaining({ message: "offline" }),
+    )
+    expect(silentDialog.reportError).not.toHaveBeenCalled()
+    expect(silentDialog.notification).not.toHaveBeenCalled()
+  })
+
+  test("reports a backend it could not check when loud, instead of the all-clear", async function () {
+    const error = new Error("offline")
+    checkForExerciseUpdates.mockResolvedValue({
+      outdated: [],
+      removed: [],
+      failures: [{ backend: "mooc", error }],
+      unchecked: [],
+    })
+    const [loudContext, loudDialog] = contextWith(false)
+    const [silentContext, silentDialog] = contextWith(false)
+
+    await updateExercises(loudContext, "loud")
+    await updateExercises(silentContext, "silent")
+
+    expect(loudDialog.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to check for exercise updates.",
+      error,
+    )
+    expect(loudDialog.notification).not.toHaveBeenCalled()
+    expect(loudDialog.statusMessage).not.toHaveBeenCalled()
+    expect(silentDialog.reportError).not.toHaveBeenCalled()
+  })
+
+  test("reports both backends failing in one notification", async function () {
+    const tmcError = new Error("tmc offline")
+    checkForExerciseUpdates.mockResolvedValue({
+      outdated: [],
+      removed: [],
+      failures: [
+        { backend: "tmc", error: tmcError },
+        { backend: "mooc", error: new Error("mooc offline") },
+      ],
+      unchecked: [],
+    })
+    const [context, dialog] = contextWith(false)
+
+    await updateExercises(context, "loud")
+
+    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to check for exercise updates.",
+      tmcError,
+    )
+  })
+
+  test("says in the status bar, not a notification, that everything is up to date", async function () {
+    checkForExerciseUpdates.mockResolvedValue(checked([]))
+    const [context, dialog] = contextWith(false)
+
+    await updateExercises(context, "loud")
+
+    expect(dialog.statusMessage).toHaveBeenCalledExactlyOnceWith("All exercises are up to date.")
+    expect(dialog.notification).not.toHaveBeenCalled()
+  })
+
+  test("says nothing is up to date while a course has new exercises to offer", async function () {
+    checkForExerciseUpdates.mockResolvedValue(checked([]))
+    const [context, dialog] = contextWith(false)
+    vi.spyOn(context.startup.userData, "getCourses").mockReturnValue([
+      {
+        kind: "mooc",
+        data: { id: "c", title: "Course", exercises: [], newExercises: ["new-one"] },
+      } as unknown as LocalCourseData,
+    ])
+
+    await updateExercises(context, "loud")
+
+    expect(dialog.statusMessage).not.toHaveBeenCalled()
+  })
+
+  test("names the courses it could not check in the all-clear", async function () {
+    checkForExerciseUpdates.mockResolvedValue({
+      ...checked([]),
+      unchecked: [idOfTmcCourse(1), idOfTmcCourse(2)],
+    })
+    const [context, dialog] = contextWith(false)
+    vi.spyOn(context.startup.userData, "getCourses").mockReturnValue([
+      {
+        kind: "tmc",
+        data: { id: 1, title: "Lost One", exercises: [], newExercises: [] },
+      } as unknown as LocalCourseData,
+      {
+        kind: "tmc",
+        data: { id: 2, title: "Lost Two", exercises: [], newExercises: [] },
+      } as unknown as LocalCourseData,
+    ])
+
+    await updateExercises(context, "loud")
+
+    expect(dialog.statusMessage).toHaveBeenCalledExactlyOnceWith(
+      "Lost One and Lost Two are no longer available. Your other exercises are up to date.",
+    )
+  })
+
+  test("offers an update once in silent runs, and never the all-clear", async function () {
+    checkForExerciseUpdates.mockResolvedValueOnce(checked([outdated(1, 10)]))
+    checkForExerciseUpdates.mockResolvedValueOnce(checked([outdated(1, 10)]))
+    checkForExerciseUpdates.mockResolvedValueOnce(checked([]))
+    const [actionContext, dialog] = contextWith(false)
+
+    await updateExercises(actionContext, "silent")
+    await updateExercises(actionContext, "silent")
+    await updateExercises(actionContext, "silent")
+
+    expect(dialog.notification).toHaveBeenCalledExactlyOnceWith(
+      "1 exercise of Course 1 has an update.",
+      ["Show", expect.any(Function)],
+    )
+  })
+
+  test("a promptless run offers nothing, but still records what it found", async function () {
+    checkForExerciseUpdates.mockResolvedValueOnce(checked([outdated(1, 10)]))
+    const [actionContext, dialog] = contextWith(false)
+
+    await updateExercises(actionContext, "promptless")
+
+    expect(dialog.notification).not.toHaveBeenCalled()
+    expect(updateablesRegistry.get(idOfTmcCourse(1))).toHaveLength(1)
+  })
+})

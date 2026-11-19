@@ -1,22 +1,53 @@
-import Dialog from "../../api/dialog";
-import { IMock, It, Mock } from "typemoq";
+import { vi } from "vitest"
+
+import type Dialog from "../../api/dialog"
+import { autoMock } from "../support/mock"
 
 export interface DialogMockValues {
-    confirmation: boolean | undefined;
+  /** What {@link Dialog.confirm} answers. */
+  confirmation: boolean
 }
 
-export function createDialogMock(): [IMock<Dialog>, DialogMockValues] {
-    const mock = Mock.ofType<Dialog>();
-    const values: DialogMockValues = {
-        confirmation: true,
-    };
+export function createDialogMock(): [Dialog, DialogMockValues] {
+  const values: DialogMockValues = {
+    confirmation: true,
+  }
 
-    mock.setup((x) => x.confirmation(It.isAny())).returns(async () => values.confirmation);
+  const explicit: Partial<Record<keyof Dialog, unknown>> = {
+    confirm: vi.fn(async () => values.confirmation),
+    // Takes the first way offered, as a user pressing the default button does.
+    choose: vi.fn(
+      async (_message: string, _options: unknown, ...choices: [string, unknown][]) =>
+        choices[0]?.[1],
+    ),
+    progressNotification: vi.fn(
+      (
+        _message: string,
+        task: (
+          progress: { report: () => void },
+          token: { isCancellationRequested: boolean; onCancellationRequested: () => unknown },
+        ) => unknown,
+      ) =>
+        task(
+          { report: () => {} },
+          {
+            isCancellationRequested: false,
+            onCancellationRequested: () => ({ dispose: (): void => {} }),
+          },
+        ),
+    ),
+  }
 
-    // Call the attached callback.
-    mock.setup((x) => x.progressNotification(It.isAny(), It.isAny())).returns((_, cb) =>
-        cb({ report: () => {} }),
-    );
+  // Every other method is a loose no-op spy.
 
-    return [mock, values];
+  const fallback = autoMock<Dialog>()
+  const mock = new Proxy(explicit, {
+    get(target, prop) {
+      return prop in target
+        ? Reflect.get(target, prop)
+        : (fallback as unknown as Record<PropertyKey, unknown>)[prop]
+    },
+  })
+
+  return [mock as unknown as Dialog, values]
 }

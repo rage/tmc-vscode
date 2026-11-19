@@ -1,0 +1,114 @@
+<script lang="ts">
+  import type { Snippet } from "svelte"
+
+  import { uiState } from "../utilities/uiState.svelte"
+
+  interface Props {
+    title: string
+    /** Level of the heading that wraps the toggle, so the section sits in the page outline. */
+    headingLevel?: 2 | 3 | 4
+    /** Keeps the open state across the panel being hidden, under this name unique on the screen. */
+    persistAs?: string | undefined
+    /** Bind it to open the section from outside, as a command that leads to it does. */
+    open?: boolean
+    /** The toggle button's id, for moving focus to the section. */
+    toggleId?: string | undefined
+    /** Small controls at the header's right end while open, e.g. a refresh `ToolbarButton`. */
+    actions?: Snippet | undefined
+    children: Snippet
+  }
+
+  let {
+    title,
+    headingLevel = 2,
+    persistAs,
+    open = $bindable(false),
+    toggleId,
+    actions,
+    children,
+  }: Props = $props()
+
+  const regionId = $props.id()
+
+  // svelte-ignore state_referenced_locally -- read once: the name seeds it
+  const persisted = persistAs === undefined ? undefined : uiState(`disclosure:${persistAs}`, false)
+  if (persisted?.current) {
+    open = true
+  }
+  $effect(() => {
+    if (persisted && persisted.current !== open) {
+      persisted.current = open
+    }
+  })
+
+  function toggle() {
+    open = !open
+  }
+</script>
+
+<section class="disclosure">
+  <div class="header">
+    <svelte:element this={`h${headingLevel}`} class="heading">
+      <button
+        id={toggleId}
+        type="button"
+        class="toggle"
+        aria-expanded={open}
+        aria-controls={regionId}
+        onclick={toggle}
+      >
+        <vscode-icon name={open ? "chevron-down" : "chevron-right"}></vscode-icon>
+        <span class="title">{title}</span>
+      </button>
+    </svelte:element>
+    {#if open && actions}{@render actions()}{/if}
+  </div>
+  <div id={regionId} class="content" hidden={!open}>
+    {@render children()}
+  </div>
+</section>
+
+<style>
+  .header {
+    display: flex;
+    align-items: center;
+    gap: var(--tmc-space-2);
+  }
+  .heading {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: var(--tmc-font-size-body);
+    font-weight: normal;
+    text-transform: none;
+    letter-spacing: normal;
+    color: inherit;
+  }
+  .toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--tmc-space-1);
+    width: 100%;
+    min-height: var(--tmc-list-row-height);
+    padding: 0 var(--tmc-space-1);
+    border: 1px solid transparent;
+    border-radius: var(--tmc-radius);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+  /* Inside the row, as VS Code rings a focused list row. */
+  .toggle:focus-visible {
+    outline-offset: -1px;
+  }
+  .toggle:hover {
+    background: var(--tmc-list-hover);
+    border-color: var(--tmc-hc-active-outline);
+    border-style: dashed;
+  }
+  .content {
+    padding: var(--tmc-space-1) 0 var(--tmc-space-2) calc(16px + var(--tmc-space-2));
+  }
+</style>

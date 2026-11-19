@@ -1,555 +1,1049 @@
+import * as path from "path"
+
+import * as fs from "fs-extra"
+import * as jsonc from "jsonc-parser"
+import * as _ from "lodash"
+import type { Result } from "ts-results"
+import { Err, Ok } from "ts-results"
+import * as vscode from "vscode"
+
+import type { BackendKind } from "../../shared/lib"
+import { CourseIdentifier, ExerciseIdentifier } from "../../shared/lib"
 import {
-    HIDE_META_FILES,
-    SHOW_META_FILES,
-    WATCHER_EXCLUDE,
-    WORKSPACE_ROOT_FOLDER_NAME,
-    WORKSPACE_SETTINGS,
-} from "../config/constants";
-import Resources, { EditorKind } from "../config/resources";
-import { isPathInside, isSamePath, Logger, SerialQueue } from "../utilities";
-import * as fs from "fs-extra";
-import * as _ from "lodash";
-import * as path from "path";
-import { Err, Ok, Result } from "ts-results";
-import * as vscode from "vscode";
+  HIDE_META_FILES,
+  SHOW_META_FILES,
+  WATCHER_EXCLUDE,
+  WORKSPACE_ROOT_FILE_NAME,
+  WORKSPACE_ROOT_FILE_TEXT,
+  WORKSPACE_ROOT_FOLDER_NAME,
+  WORKSPACE_SETTINGS,
+  workspaceFileName,
+} from "../config/constants"
+import type Resources from "../config/resources"
+import { EditorKind } from "../config/resources"
+import { FileSystemError } from "../errors"
+import { isSamePath, Logger } from "../utilities"
+import { missingAiOffSettings } from "./aiRestriction"
+import { languageExtensionForLanguageId } from "./languageExtensions"
 
-export enum ExerciseStatus {
-    Closed = "closed",
-    Missing = "missing",
-    Open = "opened",
-}
-
-export interface WorkspaceExercise {
-    courseSlug: string;
-    exerciseSlug: string;
-    status: ExerciseStatus;
-    uri: vscode.Uri;
-}
+/** What keeps VS Code from writing a course's `.code-workspace`. */
+export type WorkspaceFileProblem = "unsaved" | "readOnly"
 
 /** `WorkspaceConfiguration.inspect`'s answer, with the value that wins among them. */
 export type SettingInspection = NonNullable<
-    ReturnType<vscode.WorkspaceConfiguration["inspect"]>
-> & { effectiveValue: unknown };
+  ReturnType<vscode.WorkspaceConfiguration["inspect"]>
+> & { effectiveValue: unknown }
 
-interface ConfigurationProperties {
-    default?: unknown;
-    type?: string;
-    description?: string;
-    scope?: string;
-    enum?: Array<string>;
-    enumDescriptions?: Array<string>;
+export enum ExerciseStatus {
+  Closed = "closed",
+  Missing = "missing",
+  Open = "opened",
 }
 
-function configurationScope(
-    uri: vscode.Uri | undefined,
-    languageId: string | undefined,
-): vscode.ConfigurationScope | undefined {
-    return languageId === undefined ? uri : { ...(uri && { uri }), languageId };
+/** An exercise on disk, joined to the stored course it belongs to. */
+export interface WorkspaceExercise {
+  /** The stored exercise's id; join stored data on this, never on {@link exerciseSlug}. */
+  id: ExerciseIdentifier
+  courseId: CourseIdentifier
+  backend: BackendKind
+  courseSlug: string
+  /**
+   * The exercise's folder name. A mooc exercise's stored name is free text, which langs
+   * kebab-cases for its folder, so this need not equal any stored name.
+   */
+  exerciseSlug: string
+  status: ExerciseStatus
+  uri: vscode.Uri
+}
+
+/**
+ * Writes the durable record of which of a course's exercises are closed.
+ *
+ * `WorkspaceManager` awaits this before it changes anything the user can see, so
+ * an implementation must have completed the write by the time it resolves `Ok`.
+ * The manager keeps one last-written set per course and skips a write that would
+ * not change it.
+ */
+export type PersistClosedCourseExercises = (
+  backend: BackendKind,
+  courseSlug: string,
+  closedExerciseSlugs: string[],
+) => Promise<Result<void, Error>>
+
+/** A course, as its workspace knows it. */
+export interface CourseWorkspaceKey {
+  backend: BackendKind
+  courseSlug: string
+}
+
+/** How long a workspace folder change may keep the workspace file to itself. */
+const FOLDER_CHANGE_TIMEOUT_MS = 5_000
+
+/**
+ * Runs `update`, an `updateWorkspaceFolders` call, and waits for the folder change event, which
+ * VS Code fires only once it has saved the new folder list into the workspace file.
+ */
+async function updateWorkspaceFoldersAndWait(
+  update: () => boolean,
+): Promise<"changed" | "refused" | "timedOut"> {
+  let listener: vscode.Disposable | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const changed = new Promise<"changed" | "timedOut">((resolve) => {
+    listener = vscode.workspace.onDidChangeWorkspaceFolders(() => resolve("changed"))
+    timer = setTimeout(() => resolve("timedOut"), FOLDER_CHANGE_TIMEOUT_MS)
+  })
+  try {
+    return update() ? await changed : "refused"
+  } finally {
+    listener?.dispose()
+    clearTimeout(timer)
+  }
+}
+
+/** Runs tasks one at a time, each once every earlier one has settled. */
+class SerialQueue {
+  private _tail: Promise<unknown> = Promise.resolve()
+
+  /** Settles as `task` does; a rejection does not stop the tasks queued after it. */
+  public run<T>(task: () => T | Thenable<T>): Promise<T> {
+    const result = this._tail.then(task)
+    this._tail = result.catch(() => undefined)
+    return result
+  }
+}
+
+/**
+ * Creates a course's `.code-workspace` file at `workspaceFilePath`, leaving an
+ * existing one untouched.
+ *
+ * A free function rather than a method because activation writes workspace files
+ * before `WorkspaceManager` is constructed.
+ */
+export async function ensureCourseWorkspaceFile(workspaceFilePath: string): Promise<void> {
+  await fs.ensureDir(path.dirname(workspaceFilePath))
+  try {
+    await fs.writeFile(workspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS), { flag: "wx" })
+    Logger.info("Created course workspace file at", workspaceFilePath)
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "EEXIST") {
+      throw e
+    }
+  }
+}
+
+/**
+ * Creates the `.tmc` folder every course workspace opens at its root, and the
+ * readme inside it.
+ *
+ * The readme ships with the extension, so an upgrade has to replace an older
+ * copy; an unchanged one is left alone rather than rewritten on every startup.
+ */
+export async function ensureWorkspaceRootFile(workspaceFileFolder: string): Promise<void> {
+  const rootFolder = path.join(workspaceFileFolder, WORKSPACE_ROOT_FOLDER_NAME)
+  await fs.ensureDir(rootFolder)
+
+  const rootFile = path.join(rootFolder, WORKSPACE_ROOT_FILE_NAME)
+  const stored = await fs.readFile(rootFile, "utf-8").catch(() => undefined)
+  if (stored !== WORKSPACE_ROOT_FILE_TEXT) {
+    await fs.writeFile(rootFile, WORKSPACE_ROOT_FILE_TEXT)
+  }
 }
 
 /**
  * Class for managing active workspace.
  */
 export default class WorkspaceManager implements vscode.Disposable {
-    private _exercises: WorkspaceExercise[];
-    private readonly _resources: Resources;
-    private readonly _disposables: vscode.Disposable[];
-    private readonly _onDidChangeExercises = new vscode.EventEmitter<void>();
-    // The recommendation write replaces the whole file, so it must not interleave with a settings edit.
-    private readonly _workspaceFileWrites = new SerialQueue();
+  private _exercises: WorkspaceExercise[]
+  // The same objects as `_exercises`, keyed by `_pathKey(uri.fsPath)` and by
+  // `ExerciseIdentifier.key`. Replace all three together.
+  private _exercisesByPath: Map<string, WorkspaceExercise>
+  private _exercisesById: Map<string, WorkspaceExercise>
+  private readonly _resources: Resources
+  private readonly _disposables: vscode.Disposable[]
+  private readonly _persistClosedExercises: PersistClosedCourseExercises
+  private _recordedClosedExercises: Map<string, string>
+  private _isClosedStateKnown = true
+  // Per course key, so that one course's record is read and written by one change at a time.
+  private readonly _closedRecordWrites = new Map<string, SerialQueue>()
+  private readonly _exercisesChanged = new vscode.EventEmitter<void>()
+  private readonly _openedOutsideCourseWorkspace = new vscode.EventEmitter<CourseWorkspaceKey>()
+  /** Whether a scan has set `_exercises` yet: the first one finds nothing newly opened. */
+  private _isScanned = false
+  // Every write of the open workspace file. VS Code refuses a settings write while it has the
+  // file's folder list unsaved, and addWorkspaceRecommendation's raw rewrite would lose a change
+  // interleaved with it.
+  private readonly _workspaceFileWrites = new SerialQueue()
 
-    /** Fires when the set of known exercises changes. */
-    public readonly onDidChangeExercises = this._onDidChangeExercises.event;
+  /** Fires after the known exercises, or whether one is open or closed, change. */
+  public readonly onDidChangeExercises = this._exercisesChanged.event
 
-    /**
-     * Creates a new instance of the WorkspaceManager class.
-     * @param resources Resources instance for constructing the exercise path
-     */
-    constructor(resources: Resources, exercises?: WorkspaceExercise[]) {
-        this._exercises = exercises ?? [];
-        this._resources = resources;
-        this._disposables = [
-            vscode.workspace.onDidChangeWorkspaceFolders((e) =>
-                this._onDidChangeWorkspaceFolders(e),
-            ),
-            vscode.workspace.onDidOpenTextDocument((e) => this._onDidOpenTextDocument(e)),
-            this._onDidChangeExercises,
-        ];
+  /**
+   * Fires, once per course, when exercises become open in a course whose workspace this window
+   * does not show, so nothing visible changes: one downloaded, or opened, from elsewhere.
+   */
+  public readonly onDidOpenOutsideCourseWorkspace = this._openedOutsideCourseWorkspace.event
+
+  /**
+   * @param persistClosedExercises Writer for a closed set the manager observed
+   * @param exercises The known exercises, with the statuses already on record
+   */
+  public constructor(
+    resources: Resources,
+    persistClosedExercises: PersistClosedCourseExercises,
+    exercises?: WorkspaceExercise[],
+  ) {
+    this._exercises = exercises ?? []
+    this._exercisesByPath = WorkspaceManager._indexByPath(this._exercises)
+    this._exercisesById = WorkspaceManager._indexById(this._exercises)
+    this._persistClosedExercises = persistClosedExercises
+    this._recordedClosedExercises = WorkspaceManager._closedByCourse(this._exercises)
+    this._resources = resources
+    this._disposables = [
+      vscode.workspace.onDidChangeWorkspaceFolders((e) => this._onDidChangeWorkspaceFolders(e)),
+      vscode.workspace.onDidOpenTextDocument((e) => this._onDidOpenTextDocument(e)),
+    ]
+  }
+
+  /**
+   * The open course workspace's course slug and backend, or `undefined` when no
+   * course workspace is open.
+   *
+   * Resolved from the workspace file's own path and accepted only once it
+   * reproduces that path through {@link Resources.getWorkspaceFilePath}. Never
+   * from `vscode.workspace.name`: that is a display string carrying a
+   * " (Workspace)" suffix, and a course slug may itself contain spaces.
+   */
+  private get _activeCourseWorkspace(): { slug: string; backend: BackendKind } | undefined {
+    const workspaceFile = vscode.workspace.workspaceFile
+    if (
+      !workspaceFile ||
+      !isSamePath(path.dirname(workspaceFile.fsPath), this._resources.workspaceFileFolder)
+    ) {
+      return undefined
     }
 
-    /**
-     * Currently active course based on active workspace, or `undefined` otherwise.
-     */
-    public get activeCourse(): string | undefined {
-        if (!this.workspaceFileUri) {
-            return undefined;
+    const fileName = path.basename(workspaceFile.fsPath)
+    // Mooc first: the tmc tag is a suffix of the mooc one.
+    for (const backend of ["mooc", "tmc"] as const) {
+      // What the name generator adds to an empty slug is what a file of that backend ends with.
+      const tag = workspaceFileName("", backend)
+      if (fileName.length <= tag.length || !fileName.endsWith(tag)) {
+        continue
+      }
+      const slug = fileName.slice(0, -tag.length)
+      if (
+        path.relative(this._resources.getWorkspaceFilePath(slug, backend), workspaceFile.fsPath) ===
+        ""
+      ) {
+        return { slug, backend }
+      }
+    }
+    return undefined
+  }
+
+  /** The open course workspace's course slug, or `undefined` outside one. */
+  public get activeCourse(): string | undefined {
+    return this._activeCourseWorkspace?.slug
+  }
+
+  /** The open course workspace's backend, or `undefined` outside one. */
+  public get activeCourseBackend(): BackendKind | undefined {
+    return this._activeCourseWorkspace?.backend
+  }
+
+  /** The exercise the active editor is in, if any. */
+  public get activeExercise(): WorkspaceExercise | undefined {
+    const uri = vscode.window.activeTextEditor?.document.uri
+    return uri && this.getExerciseContaining(uri)
+  }
+
+  /** The open course workspace's `.code-workspace` file, or `undefined` outside one. */
+  public get workspaceFileUri(): vscode.Uri | undefined {
+    const workspaceFile = vscode.workspace.workspaceFile
+    if (
+      !workspaceFile ||
+      !isSamePath(path.dirname(workspaceFile.fsPath), this._resources.workspaceFileFolder)
+    ) {
+      return undefined
+    }
+    return workspaceFile
+  }
+
+  /**
+   * Replaces the known exercises. Their statuses are what the durable record
+   * already says, so they become the last-written closed set rather than being
+   * written back to it.
+   *
+   * @param isClosedStateKnown `false` when the durable record could not be read, so the
+   * statuses are a guess; nothing is written to the record, and opening or closing errs,
+   * until a call with it `true`.
+   *
+   * Fires {@link onDidChangeExercises} only when an exercise differs from the one known before.
+   */
+  public async setExercises(
+    exercises: WorkspaceExercise[],
+    isClosedStateKnown = true,
+  ): Promise<Result<void, Error>> {
+    const isChanged = !WorkspaceManager._isSameExercises(this._exercises, exercises)
+    const known = new Set(this._exercises.map((x) => ExerciseIdentifier.key(x.id)))
+    const newlyOpen = this._isScanned
+      ? exercises.filter(
+          (x) => x.status === ExerciseStatus.Open && !known.has(ExerciseIdentifier.key(x.id)),
+        )
+      : []
+    this._isScanned = true
+    this._exercises = exercises
+    this._exercisesByPath = WorkspaceManager._indexByPath(exercises)
+    this._exercisesById = WorkspaceManager._indexById(exercises)
+    this._recordedClosedExercises = WorkspaceManager._closedByCourse(exercises)
+    this._isClosedStateKnown = isClosedStateKnown
+    if (isChanged) {
+      this._exercisesChanged.fire()
+    }
+    this._announceOpenedOutsideCourseWorkspace(newlyOpen)
+    return this._refreshActiveCourseWorkspace()
+  }
+
+  private _announceOpenedOutsideCourseWorkspace(opened: WorkspaceExercise[]): void {
+    const active = this._activeCourseWorkspace
+    const courses = new Map<string, CourseWorkspaceKey>()
+    for (const { backend, courseSlug } of opened) {
+      if (backend !== active?.backend || courseSlug !== active.slug) {
+        courses.set(WorkspaceManager._courseKey(backend, courseSlug), { backend, courseSlug })
+      }
+    }
+    courses.forEach((course) => this._openedOutsideCourseWorkspace.fire(course))
+  }
+
+  private static _isSameExercises(
+    known: readonly WorkspaceExercise[],
+    replacing: readonly WorkspaceExercise[],
+  ): boolean {
+    return (
+      known.length === replacing.length &&
+      known.every((a, i) => {
+        const b = replacing[i]
+        return (
+          b !== undefined &&
+          ExerciseIdentifier.key(a.id) === ExerciseIdentifier.key(b.id) &&
+          CourseIdentifier.equals(a.courseId, b.courseId) &&
+          a.backend === b.backend &&
+          a.courseSlug === b.courseSlug &&
+          a.exerciseSlug === b.exerciseSlug &&
+          a.status === b.status &&
+          a.uri.fsPath === b.uri.fsPath
+        )
+      })
+    )
+  }
+
+  /**
+   * The exercise whose own folder is `uri`, and nothing else — a file inside an
+   * exercise does not match. File decoration calls this for every row the
+   * explorer renders, and decorates only the exercise folders themselves.
+   *
+   * Use {@link getExerciseContaining} for a path the user pointed at, which may
+   * be a file within the exercise.
+   */
+  public getExerciseByPath(uri: vscode.Uri): WorkspaceExercise | undefined {
+    return this._exercisesByPath.get(WorkspaceManager._pathKey(uri.fsPath))
+  }
+
+  /**
+   * The exercise `uri` belongs to — its own folder, or any path inside it.
+   *
+   * `undefined` for a path outside every known exercise, including a course
+   * folder and a sibling whose name an exercise name prefixes. Costs the path's
+   * depth rather than the exercise count.
+   */
+  public getExerciseContaining(uri: vscode.Uri): WorkspaceExercise | undefined {
+    let candidate = uri.fsPath
+    for (;;) {
+      const exercise = this._exercisesByPath.get(WorkspaceManager._pathKey(candidate))
+      if (exercise) {
+        return exercise
+      }
+      const parent = path.dirname(candidate)
+      if (parent === candidate) {
+        return undefined
+      }
+      candidate = parent
+    }
+  }
+
+  /** The exercise on disk with this id, or `undefined` while it is not downloaded. */
+  public getExercise(id: ExerciseIdentifier): WorkspaceExercise | undefined {
+    return this._exercisesById.get(ExerciseIdentifier.key(id))
+  }
+
+  /** The open workspace folders that are exercises themselves; never `.tmc` or one added by hand. */
+  public exerciseFolders(): vscode.Uri[] {
+    return (vscode.workspace.workspaceFolders ?? [])
+      .map((folder) => folder.uri)
+      .filter((uri) => this._exercisesByPath.has(WorkspaceManager._pathKey(uri.fsPath)))
+  }
+
+  public getExercises(): WorkspaceExercise[] {
+    return this._exercises
+  }
+
+  /**
+   * A course's exercises. Ported material gives a mooc course the same slug and
+   * the same on-disk exercise names as its TMC counterpart, so the backend is
+   * part of the key.
+   */
+  public getExercisesByCourseSlug(backend: BackendKind, courseSlug: string): WorkspaceExercise[] {
+    return this._exercises.filter((x) => x.backend === backend && x.courseSlug === courseSlug)
+  }
+
+  public openCourseExercises(
+    backend: BackendKind,
+    courseSlug: string,
+    exerciseIds: ExerciseIdentifier[],
+  ): Promise<Result<WorkspaceExercise[], Error>> {
+    return this._setOpen(backend, courseSlug, exerciseIds, true)
+  }
+
+  public closeCourseExercises(
+    backend: BackendKind,
+    courseSlug: string,
+    exerciseIds: ExerciseIdentifier[],
+  ): Promise<Result<WorkspaceExercise[], Error>> {
+    return this._setOpen(backend, courseSlug, exerciseIds, false)
+  }
+
+  /** Adds extension recommendations to a course's workspace file. Never rejects. */
+  public async addWorkspaceRecommendation(
+    workspace: string,
+    backend: BackendKind,
+    extensions: string[],
+  ): Promise<void> {
+    const pathToWorkspace = this._resources.getWorkspaceFilePath(workspace, backend)
+    try {
+      await this._workspaceFileWrites.run(async () => {
+        const text = await fs.readFile(pathToWorkspace, "utf-8")
+        const errors: jsonc.ParseError[] = []
+        const workspaceData: { extensions?: { recommendations?: unknown } } | undefined =
+          jsonc.parse(text, errors, { allowTrailingComma: true })
+        const [error] = errors
+        if (error) {
+          throw new Error(`Unparseable workspace file: ${jsonc.printParseErrorCode(error.error)}`)
         }
-
-        // Strip "(workspace)" part of the name
-        return vscode.workspace.name?.split(" ")[0];
-    }
-
-    /**
-     * Currently active exercise based on active editor, or `undefined` otherwise.
-     */
-    public get activeExercise(): Readonly<WorkspaceExercise> | undefined {
-        const uri = vscode.window.activeTextEditor?.document.uri;
-        return uri && this.getExerciseByPath(uri);
-    }
-
-    /**
-     * Currently active course workspace uri, or `undefined` otherwise.
-     */
-    public get workspaceFileUri(): vscode.Uri | undefined {
-        const workspaceFile = vscode.workspace.workspaceFile;
-        if (
-            !workspaceFile ||
-            !isSamePath(path.dirname(workspaceFile.fsPath), this._resources.workspaceFileFolder)
-        ) {
-            return undefined;
+        const stored = workspaceData?.extensions?.recommendations
+        const current = Array.isArray(stored) ? stored : []
+        const recommendations = _.union(current, extensions)
+        if (_.isEqual(recommendations, current)) {
+          return
         }
-        return workspaceFile;
+        const edits = jsonc.modify(text, ["extensions", "recommendations"], recommendations, {
+          formattingOptions: { insertSpaces: true, tabSize: 2 },
+        })
+        await fs.writeFile(pathToWorkspace, jsonc.applyEdits(text, edits))
+      })
+    } catch (e) {
+      // Called from the document-open handler, where a recommendation the
+      // student can add by hand is not worth failing the open over.
+      Logger.warn(`Could not add extension recommendations to ${pathToWorkspace}.`, e)
     }
+  }
 
-    public async setExercises(exercises: WorkspaceExercise[]): Promise<Result<void, Error>> {
-        this._exercises = exercises;
-        this._onDidChangeExercises.fire();
-        return this._refreshActiveCourseWorkspace();
+  /**
+   * Creates the course's `.code-workspace` file unless it is already there.
+   *
+   * Await it: every caller opens that file, or lists the course, in the next
+   * statement.
+   */
+  public createWorkspaceFile(courseName: string, backend: BackendKind): Promise<void> {
+    return ensureCourseWorkspaceFile(this._resources.getWorkspaceFilePath(courseName, backend))
+  }
+
+  /**
+   * Creates the course's `.code-workspace` file if needed, and lists the course's open exercises
+   * as its folders, so that VS Code asks once to trust the workspace with all of them rather than
+   * again for each folder added after it is trusted. Keeps the file's other contents.
+   *
+   * @param isAiOff Also write the settings that turn AI assistance off, so the window opens
+   * with them.
+   * @returns The AI-off settings written.
+   */
+  public async prepareWorkspaceFileToOpen(
+    courseSlug: string,
+    backend: BackendKind,
+    isAiOff: boolean,
+  ): Promise<string[]> {
+    const workspaceFile = this._resources.getWorkspaceFilePath(courseSlug, backend)
+    await ensureCourseWorkspaceFile(workspaceFile)
+    const text = await fs.readFile(workspaceFile, "utf-8")
+    const folders = [
+      { path: WORKSPACE_ROOT_FOLDER_NAME },
+      ...this._openExerciseFolders(courseSlug, backend).map((uri) => ({ path: uri.fsPath })),
+    ]
+    const formattingOptions = { insertSpaces: true, tabSize: 2 }
+    let prepared = jsonc.applyEdits(
+      text,
+      jsonc.modify(text, ["folders"], folders, { formattingOptions }),
+    )
+    const stored: unknown = jsonc.parse(prepared, [], { allowTrailingComma: true })?.settings
+    const aiOff = isAiOff
+      ? missingAiOffSettings(_.isPlainObject(stored) ? (stored as Record<string, unknown>) : {})
+      : {}
+    for (const [section, value] of Object.entries(aiOff)) {
+      prepared = jsonc.applyEdits(
+        prepared,
+        jsonc.modify(prepared, ["settings", section], value, { formattingOptions }),
+      )
     }
-
-    public getExerciseByPath(exercise: vscode.Uri): Readonly<WorkspaceExercise> | undefined {
-        return this._exercises.find((x) => isPathInside(x.uri.fsPath, exercise.fsPath));
+    if (prepared !== text) {
+      await fs.writeFile(workspaceFile, prepared)
     }
+    return Object.keys(aiOff)
+  }
 
-    public getExerciseBySlug(
-        courseSlug: string,
-        exerciseSlug: string,
-    ): Readonly<WorkspaceExercise> | undefined {
-        return this._exercises.find(
-            (x) => x.courseSlug === courseSlug && x.exerciseSlug === exerciseSlug,
-        );
+  /**
+   * Deletes a course's `.code-workspace` file, so that re-adding the course gets
+   * a fresh one instead of a folder list pointing at exercises that are gone.
+   *
+   * The course's downloaded exercises are left on disk.
+   */
+  public async deleteWorkspaceFile(
+    courseName: string,
+    backend: BackendKind,
+  ): Promise<Result<void, Error>> {
+    const workspaceFilePath = this._resources.getWorkspaceFilePath(courseName, backend)
+    try {
+      await fs.remove(workspaceFilePath)
+    } catch (e) {
+      return Err(new FileSystemError(e, `Failed to remove ${workspaceFilePath}.`))
     }
+    return Ok.EMPTY
+  }
 
-    public getExercises(): ReadonlyArray<WorkspaceExercise> {
-        return this._exercises;
-    }
-
-    public getExercisesByCourseSlug(courseSlug: string): ReadonlyArray<WorkspaceExercise> {
-        return this._exercises.filter((x) => x.courseSlug === courseSlug);
-    }
-
-    public addExercise(exercise: WorkspaceExercise): void {
-        this._exercises = this._exercises.concat(exercise);
-        this._onDidChangeExercises.fire();
-    }
-
-    public openCourseExercises(
-        courseSlug: string,
-        exerciseSlugs: string[],
-    ): Promise<Result<void, Error>> {
-        this._exercises.forEach((x) => {
-            if (x.courseSlug === courseSlug && exerciseSlugs.includes(x.exerciseSlug)) {
-                x.status = ExerciseStatus.Open;
-            }
-        });
-
-        return this._refreshActiveCourseWorkspace();
-    }
-
-    public async closeCourseExercises(
-        courseSlug: string,
-        exerciseSlugs: string[],
-    ): Promise<Result<Array<WorkspaceExercise>, Error>> {
-        const closedExercises: Array<WorkspaceExercise> = [];
-        this._exercises.forEach((x) => {
-            if (x.courseSlug === courseSlug && exerciseSlugs.includes(x.exerciseSlug)) {
-                x.status = ExerciseStatus.Closed;
-                closedExercises.push(x);
-            }
-        });
-
-        const result = await this._refreshActiveCourseWorkspace();
-        if (result.err) {
-            return result;
+  /**
+   * Deletes every course's `.code-workspace` file, leaving the `.tmc` root folder
+   * each of them opens at its top.
+   */
+  public async deleteAllWorkspaceFiles(): Promise<Result<void, Error>> {
+    const workspaceFileFolder = this._resources.workspaceFileFolder
+    try {
+      const entries = await fs.readdir(workspaceFileFolder)
+      for (const entry of entries) {
+        if (entry.endsWith(".code-workspace")) {
+          await fs.remove(path.join(workspaceFileFolder, entry))
         }
-        return Ok(closedExercises);
+      }
+    } catch (e) {
+      return Err(new FileSystemError(e, `Failed to empty ${workspaceFileFolder}.`))
     }
+    return Ok.EMPTY
+  }
 
-    /**
-     * Adds extension recommendations to current course workspace.
-     *
-     * @param workspace
-     * @param extensions
-     */
-    public async addWorkspaceRecommendation(
-        workspace: string,
-        extensions: string[],
-    ): Promise<void> {
-        const pathToWorkspace = path.join(this._resources.getWorkspaceFilePath(workspace));
+  public dispose(): void {
+    this._disposables.forEach((x) => x.dispose())
+    this._exercisesChanged.dispose()
+    this._openedOutsideCourseWorkspace.dispose()
+  }
+
+  public async excludeMetaFilesInWorkspace(hide: boolean): Promise<void> {
+    const value = hide ? HIDE_META_FILES : SHOW_META_FILES
+    await this.updateWorkspaceSetting("files.exclude", value)
+  }
+
+  /**
+   * The configuration for `section` as the open course workspace resolves it, falling back
+   * to the user's outside one.
+   */
+  public getWorkspaceSettings(section?: string): vscode.WorkspaceConfiguration {
+    if (this.activeCourse) {
+      return vscode.workspace.getConfiguration(section, this.workspaceFileUri)
+    }
+    return vscode.workspace.getConfiguration(section)
+  }
+
+  public async verifyWorkspaceSettingsIntegrity(): Promise<void> {
+    if (!this.activeCourse) {
+      return
+    }
+    Logger.info("TMC Workspace open, verifying workspace settings integrity.")
+    const hideMetaFiles = this.getWorkspaceSettings("testMyCode").get<boolean>(
+      "hideMetaFiles",
+      true,
+    )
+    await this._updateWorkspaceSettings({
+      "files.exclude": hideMetaFiles ? HIDE_META_FILES : SHOW_META_FILES,
+      // Our watcher would otherwise delete an exercise folder's `.vscode`, and
+      // with it per-folder settings such as the exercise's Python interpreter.
+      "files.watcherExclude": WATCHER_EXCLUDE,
+      "explorer.decorations.colors": false,
+      "explorer.decorations.badges": true,
+      "problems.decorations.enabled": false,
+    })
+  }
+
+  /**
+   * Merges `value` into `section` of the open course's `.code-workspace`; see
+   * {@link replaceWorkspaceSetting} to replace it. A no-op outside a course workspace.
+   */
+  public async updateWorkspaceSetting(section: string, value: unknown): Promise<void> {
+    await this._updateWorkspaceSettings({ [section]: value })
+  }
+
+  /**
+   * The value the open course's `.code-workspace` itself stores for `section`, or `undefined`
+   * when it stores none — never a user-scope value or a default.
+   *
+   * @param languageId Reads the file's `[languageId]` block instead of its top level.
+   */
+  public getStoredWorkspaceSetting(section: string, languageId?: string): unknown {
+    // `inspect`, not `get`: the effective configuration would materialize
+    // every VS Code default into the workspace file as an explicit entry.
+    const inspection = this.inspectSetting(section, languageId)
+    return languageId === undefined
+      ? inspection?.workspaceValue
+      : inspection?.workspaceLanguageValue
+  }
+
+  /**
+   * Every scope's value of `section` as an editor of `languageId` inside `resource` would
+   * resolve it, and the language ids anything overrides it for.
+   *
+   * @param resource An exercise folder, whose own `.vscode/settings.json` then counts; the
+   * workspace file when omitted.
+   */
+  public inspectSetting(
+    section: string,
+    languageId?: string,
+    resource?: vscode.Uri,
+  ): SettingInspection | undefined {
+    const uri = resource ?? this.workspaceFileUri
+    const scope = languageId === undefined ? uri : { ...(uri && { uri }), languageId }
+    const configuration = vscode.workspace.getConfiguration(undefined, scope)
+    const inspection = configuration.inspect<unknown>(section)
+    return inspection && { ...inspection, effectiveValue: configuration.get<unknown>(section) }
+  }
+
+  /**
+   * Writes `value` into the open course's `.code-workspace` as is, replacing a stored object
+   * rather than merging into it (compare {@link updateWorkspaceSetting}); `undefined` removes
+   * the section. Rejects when VS Code refuses the write, e.g. for a setting no installed
+   * extension declares, or while the file has unsaved changes. A no-op outside a course
+   * workspace.
+   *
+   * @param languageId Writes into the file's `[languageId]` block, which only a
+   * language-overridable setting may appear in.
+   */
+  public async replaceWorkspaceSetting(
+    section: string,
+    value: unknown,
+    languageId?: string,
+  ): Promise<void> {
+    await this._workspaceFileWrites.run(async () => {
+      if (languageId === undefined) {
+        await this._courseWorkspaceConfiguration()?.update(
+          section,
+          value,
+          vscode.ConfigurationTarget.Workspace,
+        )
+        return
+      }
+      await this._courseWorkspaceConfiguration(languageId)?.update(
+        section,
+        value,
+        vscode.ConfigurationTarget.Workspace,
+        true,
+      )
+    })
+  }
+
+  /**
+   * Writes `value` into a workspace folder's own `.vscode/settings.json` as is, like
+   * {@link replaceWorkspaceSetting} does into the workspace file; VS Code creates the file if
+   * it is missing.
+   */
+  public async replaceFolderSetting(
+    folder: vscode.Uri,
+    section: string,
+    value: unknown,
+    languageId?: string,
+  ): Promise<void> {
+    const scope = languageId === undefined ? folder : { uri: folder, languageId }
+    await vscode.workspace
+      .getConfiguration(undefined, scope)
+      .update(section, value, vscode.ConfigurationTarget.WorkspaceFolder, languageId !== undefined)
+  }
+
+  /**
+   * Why VS Code cannot write the open course's `.code-workspace` at the moment, as far as the
+   * file itself shows it, or `undefined` when nothing does.
+   */
+  public async workspaceFileProblem(): Promise<WorkspaceFileProblem | undefined> {
+    const uri = this.workspaceFileUri
+    if (!uri) {
+      return undefined
+    }
+    // Checked first: a write VS Code fails to save leaves the file dirty, and saving a
+    // read-only file cannot clear that.
+    try {
+      await fs.access(uri.fsPath, fs.constants.W_OK)
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code
+      if (code === "EACCES" || code === "EPERM") {
+        return "readOnly"
+      }
+    }
+    // VS Code refuses every extension write to a settings file with unsaved changes.
+    if (
+      vscode.workspace.textDocuments.some((d) => d.isDirty && isSamePath(d.uri.fsPath, uri.fsPath))
+    ) {
+      return "unsaved"
+    }
+    return undefined
+  }
+
+  /**
+   * Writes each section into the open course workspace's `.code-workspace`,
+   * skipping the ones already holding the value that would be written.
+   *
+   * Every accepted write is broadcast to every installed extension, and the integrity
+   * pass runs on each activation, so the skip keeps that pass free once the file is correct.
+   *
+   * Object values are merged over what the workspace file already stores, so a
+   * setting the student added by hand to the same section survives.
+   */
+  private async _updateWorkspaceSettings(sections: Record<string, unknown>): Promise<void> {
+    const workspaceConfiguration = this._courseWorkspaceConfiguration()
+    if (!workspaceConfiguration) {
+      return
+    }
+    await this._workspaceFileWrites.run(async () => {
+      for (const [section, value] of Object.entries(sections)) {
+        const stored = this.getStoredWorkspaceSetting(section)
+        const desired = value instanceof Object ? { ...(stored as object), ...value } : value
+        if (_.isEqual(stored, desired)) {
+          continue
+        }
+        // A section VS Code rejects must not cost the others, nor fail the activation that runs this.
         try {
-            await this._workspaceFileWrites.run(() => {
-                const workspaceData = JSON.parse(fs.readFileSync(pathToWorkspace, "utf-8"));
-                let recommendations: string[] | undefined =
-                    workspaceData.extensions?.recommendations;
-                if (recommendations) {
-                    Logger.debug("Current workspace recommendations", recommendations);
-                    recommendations = _.union(recommendations, extensions);
-                }
-                const workspaceDataRecommend = {
-                    ...workspaceData,
-                    extensions: { recommendations: recommendations ?? extensions },
-                };
-                Logger.debug("New workspace data", workspaceDataRecommend);
-                fs.writeFileSync(pathToWorkspace, JSON.stringify(workspaceDataRecommend));
-            });
+          await workspaceConfiguration.update(
+            section,
+            desired,
+            vscode.ConfigurationTarget.Workspace,
+          )
         } catch (e) {
-            Logger.warn("Could not add extension recommendations to the course workspace.", e);
+          Logger.warn(`Could not write ${section} into the course workspace file.`, e)
         }
+      }
+    })
+  }
+
+  private _courseWorkspaceConfiguration(
+    languageId?: string,
+  ): vscode.WorkspaceConfiguration | undefined {
+    const activeCourseWorkspace = this._activeCourseWorkspace
+    if (!activeCourseWorkspace) {
+      return undefined
+    }
+    const uri = vscode.Uri.file(
+      this._resources.getWorkspaceFilePath(
+        activeCourseWorkspace.slug,
+        activeCourseWorkspace.backend,
+      ),
+    )
+    return vscode.workspace.getConfiguration(
+      undefined,
+      languageId === undefined ? uri : { uri, languageId },
+    )
+  }
+
+  /** Puts `.tmc` first in the open course workspace, then its open exercises alphanumerically. */
+  private _refreshActiveCourseWorkspace(): Promise<Result<void, Error>> {
+    return this._workspaceFileWrites.run(() => this._replaceWorkspaceFolders())
+  }
+
+  /** The folders of the course's open exercises, in the order its workspace lists them. */
+  private _openExerciseFolders(courseSlug: string, backend: BackendKind): vscode.Uri[] {
+    return this._exercises
+      .filter(
+        (x) =>
+          x.courseSlug === courseSlug && x.backend === backend && x.status === ExerciseStatus.Open,
+      )
+      .toSorted((a, b) => a.exerciseSlug.localeCompare(b.exerciseSlug))
+      .map((x) => x.uri)
+  }
+
+  private async _replaceWorkspaceFolders(): Promise<Result<void, Error>> {
+    const activeCourseWorkspace = this._activeCourseWorkspace
+    const workspaceFolders = vscode.workspace.workspaceFolders
+    if (!activeCourseWorkspace || !workspaceFolders) {
+      Logger.debug("No course workspace to refresh the folders of.")
+      return Ok.EMPTY
     }
 
-    public createWorkspaceFile(courseName: string): void {
-        const tmcWorkspaceFilePath = this._resources.getWorkspaceFilePath(courseName);
-        if (!fs.existsSync(tmcWorkspaceFilePath)) {
-            fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
-            Logger.info("Created tmc workspace file at", tmcWorkspaceFilePath);
-        }
+    const rootFolder = this._resources.workspaceRootFolder
+    const openExercises = this._openExerciseFolders(
+      activeCourseWorkspace.slug,
+      activeCourseWorkspace.backend,
+    ).map((uri) => ({ uri }))
+    const correctStructure = [{ uri: rootFolder }, ...openExercises]
+    if (
+      _.zip(correctStructure, workspaceFolders).every(
+        ([a, b]) => a !== undefined && b !== undefined && isSamePath(a.uri.fsPath, b.uri.fsPath),
+      )
+    ) {
+      Logger.debug("Workspace refresh was a no-op.")
+      return Ok.EMPTY
     }
 
-    public dispose(): void {
-        this._disposables.forEach((x) => x.dispose());
+    Logger.info("Refreshing workspace structure in the current workspace")
+    if (workspaceFolders[0]?.name !== WORKSPACE_ROOT_FOLDER_NAME) {
+      Logger.warn("Fixing incorrect root folder. This may restart the extension.")
     }
 
-    public async excludeMetaFilesInWorkspace(hide: boolean): Promise<void> {
-        const value = hide ? HIDE_META_FILES : SHOW_META_FILES;
-        await this.updateWorkspaceSetting("files.exclude", value);
+    const deleteCount = workspaceFolders.length
+    Logger.debug(`Replacing ${deleteCount} workspace folders with ${correctStructure.length}`)
+    const outcome = await updateWorkspaceFoldersAndWait(() =>
+      vscode.workspace.updateWorkspaceFolders(0, deleteCount, ...correctStructure),
+    )
+    if (outcome === "refused") {
+      Logger.error("Replace operation failed.")
+      Logger.debug("Failed with folders:", ...correctStructure)
+      return Err(new Error("Failed to refresh active workspace."))
+    }
+    if (outcome === "timedOut") {
+      Logger.warn("VS Code did not confirm the workspace folder change in time.")
+    }
+    return Ok.EMPTY
+  }
+
+  /**
+   * The one place a course's exercises change between open and closed.
+   *
+   * Records the resulting closed set first and gives up on a failed write, so the
+   * student never sees exercises open or close in a way the next
+   * {@link setExercises} silently reverts.
+   *
+   * @returns the exercises the request named — matched, not changed: one already
+   * in the requested state is included.
+   */
+  private _setOpen(
+    backend: BackendKind,
+    courseSlug: string,
+    exerciseIds: ExerciseIdentifier[],
+    open: boolean,
+  ): Promise<Result<WorkspaceExercise[], Error>> {
+    const requested = new Set(exerciseIds.map((id) => ExerciseIdentifier.key(id)))
+    const isRequested = (x: WorkspaceExercise): boolean =>
+      requested.has(ExerciseIdentifier.key(x.id))
+    const courseExercises = (): WorkspaceExercise[] =>
+      this._exercises.filter((x) => x.backend === backend && x.courseSlug === courseSlug)
+
+    return this._closedRecordWrite(backend, courseSlug, async () => {
+      if (!this._isClosedStateKnown) {
+        return Err(
+          new Error("Which exercises are closed could not be read. Refresh the courses and retry."),
+        )
+      }
+      const closedAfterwards = courseExercises()
+        .filter((x) => (isRequested(x) ? !open : x.status === ExerciseStatus.Closed))
+        .map((x) => x.exerciseSlug)
+
+      const persisted = await this._persistClosedExercises(backend, courseSlug, closedAfterwards)
+      if (persisted.err) {
+        return persisted
+      }
+      this._recordedClosedExercises.set(
+        WorkspaceManager._courseKey(backend, courseSlug),
+        WorkspaceManager._closedFingerprint(closedAfterwards),
+      )
+
+      // `setExercises` may have replaced the exercises while the write was in flight.
+      const matched = courseExercises().filter((x) => isRequested(x))
+      if (open) {
+        this._announceOpenedOutsideCourseWorkspace(
+          matched.filter((x) => x.status !== ExerciseStatus.Open),
+        )
+      }
+      for (const exercise of matched) {
+        exercise.status = open ? ExerciseStatus.Open : ExerciseStatus.Closed
+      }
+      this._exercisesChanged.fire()
+
+      const refreshed = await this._refreshActiveCourseWorkspace()
+      return refreshed.err ? refreshed : Ok(matched)
+    })
+  }
+
+  /**
+   * Writes the course's closed set unless it already matches the last one
+   * written.
+   *
+   * {@link _refreshActiveCourseWorkspace} moves workspace folders, which
+   * re-enters the folder-change handler with the state it has just applied, so
+   * writing unconditionally would cost a second CLI call per open or close.
+   */
+  private _recordClosedExercises(backend: BackendKind, courseSlug: string): Promise<void> {
+    return this._closedRecordWrite(backend, courseSlug, async () => {
+      if (!this._isClosedStateKnown) {
+        return
+      }
+      const closedExerciseSlugs = this._exercises
+        .filter(
+          (x) =>
+            x.backend === backend &&
+            x.courseSlug === courseSlug &&
+            x.status === ExerciseStatus.Closed,
+        )
+        .map((x) => x.exerciseSlug)
+      const key = WorkspaceManager._courseKey(backend, courseSlug)
+      const fingerprint = WorkspaceManager._closedFingerprint(closedExerciseSlugs)
+      if (this._recordedClosedExercises.get(key) === fingerprint) {
+        return
+      }
+      const persisted = await this._persistClosedExercises(backend, courseSlug, closedExerciseSlugs)
+      if (persisted.err) {
+        Logger.error(`Failed to record the closed exercises of ${courseSlug}.`, persisted.val)
+        return
+      }
+      this._recordedClosedExercises.set(key, fingerprint)
+    })
+  }
+
+  /** Runs `task` after every earlier read-and-write of the course's closed record. */
+  private _closedRecordWrite<T>(
+    backend: BackendKind,
+    courseSlug: string,
+    task: () => Promise<T>,
+  ): Promise<T> {
+    const key = WorkspaceManager._courseKey(backend, courseSlug)
+    let queue = this._closedRecordWrites.get(key)
+    if (!queue) {
+      queue = new SerialQueue()
+      this._closedRecordWrites.set(key, queue)
+    }
+    return queue.run(task)
+  }
+
+  private static _courseKey(backend: BackendKind, courseSlug: string): string {
+    return `${backend}:${courseSlug}`
+  }
+
+  private static _closedFingerprint(closedExerciseSlugs: string[]): string {
+    return closedExerciseSlugs.toSorted().join("\n")
+  }
+
+  private static _closedByCourse(exercises: WorkspaceExercise[]): Map<string, string> {
+    const closedByCourse = new Map<string, string[]>()
+    for (const exercise of exercises) {
+      const key = WorkspaceManager._courseKey(exercise.backend, exercise.courseSlug)
+      const closed = closedByCourse.get(key) ?? []
+      if (exercise.status === ExerciseStatus.Closed) {
+        closed.push(exercise.exerciseSlug)
+      }
+      closedByCourse.set(key, closed)
+    }
+    return new Map(
+      [...closedByCourse].map(([key, closed]) => [
+        key,
+        WorkspaceManager._closedFingerprint(closed),
+      ]),
+    )
+  }
+
+  private static _indexByPath(exercises: WorkspaceExercise[]): Map<string, WorkspaceExercise> {
+    return new Map(exercises.map((x) => [WorkspaceManager._pathKey(x.uri.fsPath), x]))
+  }
+
+  /** `fsPath` as a map key that matches the way the platform compares paths. */
+  private static _pathKey(fsPath: string): string {
+    return process.platform === "win32" ? path.win32.normalize(fsPath).toLowerCase() : fsPath
+  }
+
+  private static _indexById(exercises: WorkspaceExercise[]): Map<string, WorkspaceExercise> {
+    return new Map(exercises.map((x) => [ExerciseIdentifier.key(x.id), x]))
+  }
+
+  private _onDidChangeWorkspaceFolders(e: vscode.WorkspaceFoldersChangeEvent): void {
+    const activeCourseWorkspace = this._activeCourseWorkspace
+
+    let incorrectFolderAdded = false
+    let isStatusChanged = false
+    const setStatus = (exercise: WorkspaceExercise, status: ExerciseStatus): void => {
+      isStatusChanged ||= exercise.status !== status
+      exercise.status = status
+    }
+    e.added.forEach((added) => {
+      const exercise = this._exercisesByPath.get(WorkspaceManager._pathKey(added.uri.fsPath))
+      if (!exercise) {
+        incorrectFolderAdded = true
+      } else if (
+        exercise.courseSlug === activeCourseWorkspace?.slug &&
+        exercise.backend === activeCourseWorkspace?.backend
+      ) {
+        setStatus(exercise, ExerciseStatus.Open)
+      }
+    })
+
+    e.removed.forEach((removed) => {
+      const exercise = this._exercisesByPath.get(WorkspaceManager._pathKey(removed.uri.fsPath))
+      if (exercise) {
+        setStatus(exercise, ExerciseStatus.Closed)
+      }
+    })
+
+    if (activeCourseWorkspace) {
+      void this._recordClosedExercises(activeCourseWorkspace.backend, activeCourseWorkspace.slug)
+    }
+    // The folder moves that open and close make only confirm the status `_setOpen` announced.
+    if (isStatusChanged) {
+      this._exercisesChanged.fire()
     }
 
-    /**
-     * Returns the section for the Workspace setting (i.e. .code-workspace).
-     * If section not found in multi-root workspace file, returns User scope setting.
-     * @param section A dot-separated identifier.
-     */
-    public getWorkspaceSettings(section?: string): vscode.WorkspaceConfiguration {
-        if (this.activeCourse) {
-            return vscode.workspace.getConfiguration(section, this.workspaceFileUri);
-        }
-        return vscode.workspace.getConfiguration(section);
+    if (incorrectFolderAdded) {
+      Logger.warn(
+        `Folders added that are not part of course ${activeCourseWorkspace?.slug}. These may be removed later.`,
+      )
     }
-
-    public async verifyWorkspaceSettingsIntegrity(): Promise<void> {
-        if (this.activeCourse) {
-            Logger.info("TMC Workspace open, verifying workspace settings integrity.");
-            const hideMetaFiles = this.getWorkspaceSettings("testMyCode").get<boolean>(
-                "hideMetaFiles",
-                true,
-            );
-            await this._updateWorkspaceSettingOrWarn(
-                "files.exclude",
-                hideMetaFiles ? HIDE_META_FILES : SHOW_META_FILES,
-            );
-            await this._ensureSettingsAreStoredInMultiRootWorkspace();
-            await this._verifyWatcherPatternExclusion();
-            await this._forceTMCWorkspaceSettings();
-        }
+    if (e.added.length > 5) {
+      vscode.commands.executeCommand("workbench.files.action.collapseExplorerFolders")
     }
+  }
 
-    /**
-     * Updates a section for the TMC Workspace.code-workspace file, if the workspace is open.
-     * @param section Configuration name, supports dotted names.
-     * @param value The new value
-     */
-    public async updateWorkspaceSetting(section: string, value: unknown): Promise<void> {
-        const activeCourse = this.activeCourse;
-        if (activeCourse) {
-            let newValue = value;
-            if (value instanceof Object) {
-                const oldValue = this.getWorkspaceSettings(section);
-                newValue = { ...oldValue, ...value };
-            }
-            await this._workspaceFileWrites.run(() =>
-                vscode.workspace
-                    .getConfiguration(
-                        undefined,
-                        vscode.Uri.file(this._resources.getWorkspaceFilePath(activeCourse)),
-                    )
-                    .update(section, newValue, vscode.ConfigurationTarget.Workspace),
-            );
-        }
+  private _onDidOpenTextDocument(e: vscode.TextDocument): void {
+    const activeCourseWorkspace = this._activeCourseWorkspace
+    if (!activeCourseWorkspace) {
+      return
     }
-
-    /**
-     * The value the open course's `.code-workspace` itself stores for `section`, or `undefined`
-     * when it stores none — never a user-scope value or a default.
-     */
-    public getStoredWorkspaceSetting(section: string): unknown {
-        return this.inspectSetting(section)?.workspaceValue;
+    const { slug: activeCourse, backend: activeBackend } = activeCourseWorkspace
+    if (e.languageId === "markdown") {
+      // Only instructions open rendered: other markdown may be the student's own writing.
+      if (/^(tmc-)?readme\b/i.test(path.basename(e.uri.fsPath))) {
+        void vscode.commands.executeCommand("markdown.showPreview", e.uri)
+      }
+      return
     }
-
-    /**
-     * Every scope's value of `section` as an editor of `languageId` would resolve it, and the
-     * language ids anything overrides it for.
-     *
-     * @param folder A workspace folder, whose own `.vscode/settings.json` then counts; the
-     * workspace file when omitted.
-     */
-    public inspectSetting(
-        section: string,
-        languageId?: string,
-        folder?: vscode.Uri,
-    ): SettingInspection | undefined {
-        const configuration = vscode.workspace.getConfiguration(
-            undefined,
-            configurationScope(folder ?? this.workspaceFileUri, languageId),
-        );
-        const inspection = configuration.inspect<unknown>(section);
-        return inspection && { ...inspection, effectiveValue: configuration.get<unknown>(section) };
+    // VS Code itself recommends a language's extension when a file of it opens; a workspace
+    // recommendation on top only adds a second toast. Other editors lack that.
+    if (this._resources.editorKind === EditorKind.Code) {
+      return
     }
-
-    /**
-     * Writes `value` into the open course's `.code-workspace` as is, replacing a stored object
-     * rather than merging into it (compare {@link updateWorkspaceSetting}). Rejects when VS Code
-     * refuses the write, e.g. for a setting no installed extension declares, or while the file
-     * has unsaved changes. A no-op outside a course workspace.
-     *
-     * @param languageId Writes into the file's `[languageId]` block, which only a
-     * language-overridable setting may appear in.
-     */
-    public async replaceWorkspaceSetting(
-        section: string,
-        value: unknown,
-        languageId?: string,
-    ): Promise<void> {
-        const uri = this.workspaceFileUri;
-        if (!uri) {
-            return;
-        }
-        await this._workspaceFileWrites.run(() =>
-            vscode.workspace
-                .getConfiguration(undefined, configurationScope(uri, languageId))
-                .update(
-                    section,
-                    value,
-                    vscode.ConfigurationTarget.Workspace,
-                    languageId !== undefined,
-                ),
-        );
+    const extensionId =
+      e.languageId === "r"
+        ? "ikuyadeu.r"
+        : languageExtensionForLanguageId(e.languageId)?.extensionId
+    if (extensionId && !vscode.extensions.getExtension(extensionId)) {
+      void this.addWorkspaceRecommendation(activeCourse, activeBackend, [extensionId])
     }
+  }
+}
 
-    /**
-     * Writes `value` into an exercise folder's own `.vscode/settings.json`, like
-     * {@link replaceWorkspaceSetting} does into the workspace file.
-     */
-    public async replaceFolderSetting(
-        folder: vscode.Uri,
-        section: string,
-        value: unknown,
-        languageId?: string,
-    ): Promise<void> {
-        await vscode.workspace
-            .getConfiguration(undefined, configurationScope(folder, languageId))
-            .update(
-                section,
-                value,
-                vscode.ConfigurationTarget.WorkspaceFolder,
-                languageId !== undefined,
-            );
-    }
-
-    /** The open workspace folders that are exercises; never `.tmc` or a folder added by hand. */
-    public exerciseFolders(
-        workspaceFolders: readonly Pick<vscode.WorkspaceFolder, "uri">[] = vscode.workspace
-            .workspaceFolders ?? [],
-    ): vscode.Uri[] {
-        return workspaceFolders
-            .map((folder) => folder.uri)
-            .filter((uri) => this._getExerciseByFolder(uri) !== undefined);
-    }
-
-    /**
-     * Ensures that settings defined in package.json are written to the multi-root
-     * workspace file. If the key can't be found in the .code-workspace file, it will write the
-     * setting defined in the User scope to the file. Last resort, default value.
-     *
-     * This is to ensure that workspace defined settings really overrides the user scope...
-     * https://github.com/microsoft/vscode/issues/58038
-     */
-    private async _ensureSettingsAreStoredInMultiRootWorkspace(): Promise<void> {
-        const extension = vscode.extensions.getExtension("moocfi.test-my-code");
-        const extensionDefinedSettings: Record<string, ConfigurationProperties> =
-            extension?.packageJSON?.contributes?.configuration?.properties;
-        for (const [key, value] of Object.entries(extensionDefinedSettings)) {
-            if (value.scope !== "application" && value.type === "boolean") {
-                const codeSettings = this.getWorkspaceSettings().inspect<boolean>(key);
-                if (codeSettings?.workspaceValue !== undefined) {
-                    await this._updateWorkspaceSettingOrWarn(key, codeSettings.workspaceValue);
-                } else if (codeSettings?.globalValue !== undefined) {
-                    await this._updateWorkspaceSettingOrWarn(key, codeSettings.globalValue);
-                } else {
-                    await this._updateWorkspaceSettingOrWarn(key, codeSettings?.defaultValue);
-                }
-            }
-        }
-    }
-
-    /** {@link updateWorkspaceSetting}, where VS Code refusing the write must not cost the other sections or fail activation. */
-    private async _updateWorkspaceSettingOrWarn(section: string, value: unknown): Promise<void> {
-        try {
-            await this.updateWorkspaceSetting(section, value);
-        } catch (e) {
-            Logger.warn(`Could not write ${section} into the course workspace file.`, e);
-        }
-    }
-
-    /**
-     * Force some settings for TMC multi-root workspaces that we want.
-     */
-    private async _forceTMCWorkspaceSettings(): Promise<void> {
-        await this._updateWorkspaceSettingOrWarn("explorer.decorations.colors", false);
-        await this._updateWorkspaceSettingOrWarn("explorer.decorations.badges", true);
-        await this._updateWorkspaceSettingOrWarn("problems.decorations.enabled", false);
-    }
-
-    /**
-     * Refreshes current active course workspace by first making sure that the `.tmc` folder is at
-     * the top and then lists all that course's open exercises in alphanumeric order.
-     */
-    private async _refreshActiveCourseWorkspace(): Promise<Result<void, Error>> {
-        const workspaceName = this.activeCourse;
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceName || !workspaceFolders) {
-            Logger.warn("Attempted refresh for a non-course workspace.");
-            return Ok.EMPTY;
-        }
-
-        const rootFolder = this._resources.workspaceRootFolder;
-        const openExercises = this._exercises
-            .filter((x) => x.courseSlug === workspaceName && x.status === ExerciseStatus.Open)
-            .sort((a, b) => a.exerciseSlug.localeCompare(b.exerciseSlug))
-            .map((x) => ({ uri: x.uri }));
-        const correctStructure = [{ uri: rootFolder }, ...openExercises];
-        if (
-            _.zip(correctStructure, workspaceFolders).every(
-                ([a, b]) => a && b && isSamePath(a.uri.fsPath, b.uri.fsPath),
-            )
-        ) {
-            Logger.debug("Workspace refresh was a no-op.");
-            return Ok.EMPTY;
-        }
-
-        Logger.info("Refreshing workspace structure in the current workspace");
-        if (workspaceFolders[0]?.name !== WORKSPACE_ROOT_FOLDER_NAME) {
-            Logger.warn("Fixing incorrect root folder. This may restart the extension.");
-        }
-
-        const deleteCount = workspaceFolders.length;
-        Logger.debug(`Replacing ${deleteCount} workspace folders with ${correctStructure.length}`);
-        const success = vscode.workspace.updateWorkspaceFolders(
-            0,
-            deleteCount,
-            ...correctStructure,
-        );
-        if (!success) {
-            Logger.error("Replace operation failed.");
-            Logger.debug("Failed with folders:", ...correctStructure);
-        }
-
-        return success ? Ok.EMPTY : Err(new Error("Failed to refresh active workspace."));
-    }
-
-    private _getExerciseByFolder(folder: vscode.Uri): WorkspaceExercise | undefined {
-        return this._exercises.find((x) => isSamePath(x.uri.fsPath, folder.fsPath));
-    }
-
-    private _onDidChangeWorkspaceFolders(e: vscode.WorkspaceFoldersChangeEvent): void {
-        const activeCourse = this.activeCourse;
-
-        let incorrectFolderAdded = false;
-        e.added.forEach((added) => {
-            const exercise = this._getExerciseByFolder(added.uri);
-            if (!exercise) {
-                incorrectFolderAdded = true;
-            } else if (exercise.courseSlug === activeCourse) {
-                exercise.status = ExerciseStatus.Open;
-            }
-        });
-
-        e.removed.forEach((removed) => {
-            const exercise = this._getExerciseByFolder(removed.uri);
-            if (exercise) {
-                exercise.status = ExerciseStatus.Closed;
-            }
-        });
-
-        if (incorrectFolderAdded) {
-            Logger.warn(
-                `Folders added that are not part of course ${activeCourse}. These may be removed later.`,
-            );
-        }
-        if (e.added.length > 5) {
-            vscode.commands.executeCommand("workbench.files.action.collapseExplorerFolders");
-        }
-    }
-
-    private _onDidOpenTextDocument(e: vscode.TextDocument): void {
-        const activeCourse = this.activeCourse;
-        if (!activeCourse) {
-            return;
-        }
-
-        // TODO: Check that document is a valid exercise
-        const isCode = this._resources.editorKind === EditorKind.Code;
-        Logger.debug("Text document languageId", e.languageId);
-        switch (e.languageId) {
-            case "c":
-            case "cpp":
-            case "objective-c":
-            case "objective-cpp":
-                if (isCode && !vscode.extensions.getExtension("ms-vscode.cpptools")) {
-                    void this.addWorkspaceRecommendation(activeCourse, ["ms-vscode.cpptools"]);
-                }
-                break;
-            case "csharp":
-                if (isCode && !vscode.extensions.getExtension("ms-dotnettools.csharp")) {
-                    void this.addWorkspaceRecommendation(activeCourse, ["ms-dotnettools.csharp"]);
-                }
-                break;
-            case "markdown":
-                vscode.commands.executeCommand("markdown.showPreview", e.uri);
-                break;
-            case "r":
-                if (!vscode.extensions.getExtension("ikuyadeu.r")) {
-                    void this.addWorkspaceRecommendation(activeCourse, ["ikuyadeu.r"]);
-                }
-                break;
-            case "python":
-                if (!vscode.extensions.getExtension("ms-python.python")) {
-                    if (isCode && !vscode.extensions.getExtension("ms-python.vscode-pylance")) {
-                        void this.addWorkspaceRecommendation(activeCourse, [
-                            "ms-python.vscode-pylance",
-                            "ms-python.python",
-                        ]);
-                    } else {
-                        void this.addWorkspaceRecommendation(activeCourse, ["ms-python.python"]);
-                    }
-                }
-
-                break;
-            case "java":
-                if (isCode && !vscode.extensions.getExtension("vscjava.vscode-java-pack")) {
-                    void this.addWorkspaceRecommendation(activeCourse, [
-                        "vscjava.vscode-java-pack",
-                    ]);
-                }
-                break;
-        }
-    }
-
-    /**
-     * Makes sure that folders and its contents aren't deleted by our watcher.
-     * .vscode folder needs to be unwatched, otherwise adding settings to WorkspaceFolder level
-     * doesn't work. For example defining Python interpreter for the Exercise folder.
-     */
-    private async _verifyWatcherPatternExclusion(): Promise<void> {
-        await this._updateWorkspaceSettingOrWarn("files.watcherExclude", { ...WATCHER_EXCLUDE });
-    }
+/**
+ * The exercise an exercise command targets: the one `resource` is in, else the active
+ * editor's when `resource` is omitted.
+ */
+export function exerciseFor(
+  workspaceManager: Pick<WorkspaceManager, "activeExercise" | "getExerciseContaining">,
+  resource: vscode.Uri | undefined,
+): WorkspaceExercise | undefined {
+  return resource
+    ? workspaceManager.getExerciseContaining(resource)
+    : workspaceManager.activeExercise
 }

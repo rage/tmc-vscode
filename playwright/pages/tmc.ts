@@ -1,26 +1,180 @@
-import { FrameLocator, Page } from "@playwright/test";
+import { expect } from "@playwright/test"
+import type { FrameLocator, Locator, Page } from "@playwright/test"
+
+const MAX_ACTIVATION_CLICKS = 3
+const ACTIVATION_TIMEOUT_MS = 10_000
+
+// A target in a webview frame VS Code has not created yet throws on query: "not visible yet".
+async function isVisibleNow(target: Locator): Promise<boolean> {
+  try {
+    return await target.isVisible()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Clicks `trigger` until `target` becomes visible, at most
+ * {@link MAX_ACTIVATION_CLICKS} times.
+ *
+ * VS Code renders the activity bar entry and tree view before the extension host
+ * has activated, and an early click opens nothing silently, so it is retried
+ * against its outcome. `description` is suffixed with "after N clicks" in the
+ * failure message; phrase it as "the X did not open".
+ */
+export async function clickUntilVisible(
+  trigger: Locator,
+  target: Locator,
+  description: string,
+): Promise<void> {
+  await trigger.waitFor()
+  let remainingClicks = MAX_ACTIVATION_CLICKS
+  await expect
+    .poll(
+      async () => {
+        if (!(await isVisibleNow(target)) && remainingClicks > 0) {
+          remainingClicks--
+          await trigger.click()
+        }
+        return isVisibleNow(target)
+      },
+      {
+        timeout: ACTIVATION_TIMEOUT_MS,
+        message: `${description} after ${MAX_ACTIVATION_CLICKS} clicks`,
+      },
+    )
+    .toBe(true)
+}
+
+/**
+ * Waits for `target`, inside a webview, to be visible. A plain wait fails at once when VS Code
+ * replaces the webview's frame on document reload.
+ */
+export async function expectVisibleInWebview(target: Locator, timeout = 30_000): Promise<void> {
+  await expect(async () => {
+    await expect(target).toBeVisible({ timeout: 5_000 })
+  }).toPass({ timeout })
+}
 
 export class TmcPage {
-    constructor(
-        public readonly page: Page,
-        public readonly webview: FrameLocator,
-    ) {}
+  public constructor(
+    public readonly page: Page,
+    public readonly webview: FrameLocator,
+  ) {}
 
-    async openMenu(): Promise<void> {
-        // for some reason the extension button doesn't work properly for some reason,
-        // so we'll just keep clicking until it works...
-        while (!(await this.page.getByRole("heading", { name: "TestMyCode: Menu" }).isVisible())) {
-            // the locator is very specific to not conflict with the "Welcome to TestMyCode" tab
-            await this.page
-                .locator('[id="workbench\\.parts\\.activitybar"]')
-                .getByRole("tab", { name: "TestMyCode" })
-                .locator("a")
-                .click();
-            await this.page.waitForTimeout(200);
+  public async openMenu(): Promise<void> {
+    // Scoped to the activity bar: editor tabs such as "TestMyCode Help" share the name.
+    const activityBarTab = this.page
+      .locator('[id="workbench\\.parts\\.activitybar"]')
+      .getByRole("tab", { name: "TestMyCode" })
+    const heading = this.page.getByRole("heading", { name: "TestMyCode: Courses" })
+    // A click on the entry of the container already shown hides the side bar, and after a
+    // reload the extension shows the Courses view itself, so click only while it is not shown.
+    await expect
+      .poll(
+        async () => {
+          if (
+            !(await isVisibleNow(heading)) &&
+            (await activityBarTab.getAttribute("aria-selected")) !== "true"
+          ) {
+            await activityBarTab.locator("a").click()
+          }
+          return isVisibleNow(heading)
+        },
+        { timeout: ACTIVATION_TIMEOUT_MS, message: "the TestMyCode Courses view did not open" },
+      )
+      .toBe(true)
+  }
+
+  /** A button in the Courses view's welcome content, shown while the view has no courses. */
+  public coursesViewWelcomeButton(name: string): Locator {
+    return this.page.locator(".welcome-view-content").getByRole("button", { name, exact: true })
+  }
+
+  /**
+   * The toast VS Code pops for a `Dialog` notification, matched on `text`.
+   *
+   * Scoped to the toast list because VS Code also mirrors each notification into an
+   * off-screen `.monaco-alert` aria-live node, which would match twice.
+   */
+  public notificationToast(text: string): Locator {
+    return this.page.locator(".notifications-toasts").getByText(text)
+  }
+
+  /** A message the extension shows in the status bar for a few seconds, matched on `text`. */
+  public statusBarMessage(text: string): Locator {
+    return this.page.locator('[id="workbench\\.parts\\.statusbar"]').getByText(text)
+  }
+
+  /** Runs the command titled `title` ("Category: Name") from the command palette. */
+  public async runPaletteCommand(title: string): Promise<void> {
+    const palette = this.page.locator(".quick-input-widget")
+    // A just-focused webview may swallow the key, and an editor opened meanwhile closes the
+    // palette; a click that lands ran it.
+    await expect(async () => {
+      if (!(await palette.locator("input").isVisible())) {
+        await this.page.keyboard.press("F1")
+      }
+      await palette.locator("input").fill(`>${title}`, { timeout: 2_000 })
+      await palette
+        .locator(".quick-input-list .monaco-list-row")
+        .filter({ hasText: title })
+        .first()
+        .click({ timeout: 2_000 })
+    }).toPass({ timeout: 30_000 })
+    // A command that opens a quick pick reuses the palette's widget, often before it is seen hidden.
+    await expect(async () => {
+      const isPaletteShown =
+        (await palette.isVisible()) && (await palette.locator("input").inputValue()).startsWith(">")
+      expect(isPaletteShown).toBe(false)
+    }).toPass()
+  }
+
+  /**
+   * Runs `action`, which reloads the window, and returns once the reloaded window has loaded.
+   * Until then the old window still answers queries, and a click landing there is lost.
+   */
+  public async reloadingWindow(action: () => Promise<void>): Promise<void> {
+    const loaded = this.page.waitForEvent("load", { timeout: 30_000 })
+    await action()
+    await loaded
+  }
+
+  /**
+   * Runs a command the palette lists only while the active editor is an exercise, such as
+   * "TestMyCode: Reset Exercise". The palette checks that once on opening, so this first
+   * waits for the Submit editor action, which has the same `when` keys (package.json).
+   */
+  public async runExercisePaletteCommand(title: string): Promise<void> {
+    await expect(
+      this.page
+        .getByRole("toolbar", { name: "Editor actions" })
+        .getByLabel("Submit", { exact: true }),
+    ).toBeVisible()
+    await this.runPaletteCommand(title)
+  }
+
+  public getSidePanel(): FrameLocator {
+    return this.page.frameLocator(`.webview.ready`).last().frameLocator("iframe#active-frame")
+  }
+
+  /** The webview whose screen is headed `heading`, whichever editor group it is in. */
+  public async panelHeaded(heading: string): Promise<FrameLocator> {
+    const webviews = this.page.locator("iframe.webview.ready")
+    let found: FrameLocator | undefined
+    await expect(async () => {
+      for (let index = (await webviews.count()) - 1; index >= 0; index--) {
+        const screen = webviews.nth(index).contentFrame().frameLocator("iframe#active-frame")
+        if ((await screen.getByRole("heading", { level: 1, name: heading }).count()) > 0) {
+          found = screen
+          return
         }
+      }
+      throw new Error(`No webview is headed "${heading}"`)
+    }).toPass({ timeout: 30_000 })
+    if (!found) {
+      throw new Error(`No webview is headed "${heading}"`)
     }
-
-    getSidePanel(): FrameLocator {
-        return this.page.frameLocator(`.webview.ready`).last().frameLocator("iframe#active-frame");
-    }
+    return found
+  }
 }

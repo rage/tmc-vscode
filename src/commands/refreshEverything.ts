@@ -1,0 +1,204 @@
+import type { Result } from "ts-results"
+import { Err, Ok } from "ts-results"
+
+import { CourseIdentifier, LocalCourseData } from "../../shared/lib"
+import type { AiPolicyChange, CourseUpdateOptions } from "../actions"
+import { checkForCourseUpdates } from "../actions"
+import type { ReadyActionContext } from "../actions/types"
+import type { OperationWarning } from "../api/withOperation"
+import { reportFailureIn, reportWarnings, withOperation } from "../api/withOperation"
+import { BottleneckError } from "../errors"
+import { backgroundJobs } from "../ui/backgroundJobs"
+import { recentPolicyChanges } from "../ui/recentPolicyChanges"
+import { shownCourseHome } from "../ui/shownCourseHome"
+import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
+import { Logger } from "../utilities"
+import { offerNewExercises } from "./offerNewExercises"
+import { showCourseHomeButton } from "./showCourseHome"
+import { updateExercises } from "./updateExercises"
+
+const REFRESH_FAILED = "Failed to check for course updates."
+
+/** How a refresh runs; see {@link refreshEverything}. */
+type RefreshOptions = {
+  silent: boolean
+  isQueuedWhenBusy?: boolean
+  offersNewExercises?: boolean
+  isPromptless?: boolean
+} & CourseUpdateOptions
+
+/**
+ * The extension's one background refresh: course data first, then the exercise
+ * update check.
+ *
+ * Activation, the maintenance poll, the Courses view's refresh button and the tail
+ * of each submit all want this, and two passes overlapping would interleave
+ * writes to `UserData` and prompt twice about the same exercises. A call made while
+ * another is running comes back as a `BottleneckError`, unless it asks to be queued.
+ *
+ * @param courseId Refresh only that course's data; the exercise update check
+ * always covers every course.
+ * @param silent Logs a failed refresh, or one rejected as already running, instead
+ * of notifying, and runs the exercise update check quietly. A refresh that fails runs
+ * that check quietly either way: its own failure is the one report, and stale course
+ * data cannot vouch for "All exercises are up to date." A refresh that is not silent
+ * bypasses the CLI's cached update check.
+ * @param isQueuedWhenBusy While another refresh runs, runs this one silently once that one
+ * ends, and returns `Ok` at once. Calls queued meanwhile run together, as one refresh.
+ * @param offersNewExercises `false` keeps the new exercises found for a later refresh to
+ * act on, e.g. while a submission's result is what the student is reading.
+ * @param isPromptless Offers neither new exercises nor exercise updates, for a window that
+ * another one has just opened after offering them itself.
+ */
+export async function refreshEverything(
+  actionContext: ReadyActionContext,
+  options: RefreshOptions,
+): Promise<Result<void, Error>> {
+  return withOperation(
+    actionContext.dialog,
+    { failure: REFRESH_FAILED, silent: options.silent },
+    () => refresh(actionContext, options),
+  )
+}
+
+/**
+ * {@link refreshEverything} for the Courses view's refresh button: loud, with each finished
+ * course advancing the view's progress bar. One already running is waited for, not refused.
+ */
+export async function refreshCourses(actionContext: ReadyActionContext): Promise<void> {
+  // A refresh queued behind the running one starts as it ends, so wait until none runs.
+  for (let busy = running; busy; busy = running) {
+    await busy
+  }
+  await withOperation(
+    actionContext.dialog,
+    {
+      failure: REFRESH_FAILED,
+      progress: "Fetching course updates…",
+      progressLocation: { viewId: COURSES_VIEW_ID },
+    },
+    (report) =>
+      refresh(actionContext, {
+        silent: false,
+        onProgress: (done, total) => report({ fraction: total === 0 ? 1 : done / total }),
+      }),
+  )
+}
+
+/** The refresh in progress; settles, never rejecting, once it ends. */
+let running: Promise<unknown> | undefined
+
+/** The refresh to run once the one in progress ends; no `courseId` means every course. */
+let queued: { courseId?: CourseIdentifier | undefined; offersNewExercises: boolean } | undefined
+
+function refresh(
+  actionContext: ReadyActionContext,
+  options: RefreshOptions,
+): Promise<Result<void, Error>> {
+  const { courseId, isQueuedWhenBusy } = options
+  const offersNewExercises = (options.offersNewExercises ?? true) && !options.isPromptless
+  if (running) {
+    if (isQueuedWhenBusy) {
+      const isSameCourse =
+        queued === undefined ||
+        (queued.courseId !== undefined &&
+          courseId !== undefined &&
+          CourseIdentifier.equals(queued.courseId, courseId))
+      queued = {
+        courseId: isSameCourse ? courseId : undefined,
+        offersNewExercises: offersNewExercises || (queued?.offersNewExercises ?? false),
+      }
+      return Promise.resolve(Ok.EMPTY)
+    }
+    Logger.info("Rejected a refresh, one is already in flight")
+    return Promise.resolve(Err(new BottleneckError("A refresh is already in progress.")))
+  }
+  const result = runRefresh(actionContext, { ...options, offersNewExercises })
+  running = result.catch(() => undefined)
+  return result.finally(() => {
+    running = undefined
+    const next = queued
+    queued = undefined
+    if (next) {
+      void refreshEverything(actionContext, {
+        silent: true,
+        isQueuedWhenBusy: true,
+        ...next,
+      }).catch((e) => Logger.error("Queued refresh failed", e))
+    }
+  })
+}
+
+async function runRefresh(
+  actionContext: ReadyActionContext,
+  options: RefreshOptions,
+): Promise<Result<void, Error>> {
+  const { silent, courseId, onProgress, offersNewExercises, isPromptless } = options
+  const course = courseId && actionContext.startup.userData.getCourse(courseId)
+  const refreshed = await backgroundJobs.run(
+    course?.ok
+      ? {
+          label: `Refreshing ${LocalCourseData.getCourseTitle(course.val)}`,
+          screen: { kind: "courseHome", courseId: LocalCourseData.getCourseId(course.val) },
+        }
+      : { label: "Refreshing courses", screen: { kind: "coursesView" } },
+    () =>
+      checkForCourseUpdates(actionContext, {
+        courseId,
+        onProgress,
+        skipsRecentlyLostCourses: options.skipsRecentlyLostCourses,
+      }),
+  )
+  if (refreshed.ok) {
+    reportRefreshWarnings(actionContext, refreshed.val.warnings)
+    announceAiPolicyChanges(actionContext, refreshed.val.aiPolicyChanges)
+    if (offersNewExercises) {
+      offerNewExercises(actionContext, refreshed.val.courses)
+    }
+  }
+  const refreshFailure = refreshed.err ? refreshed.val : refreshed.val.failure
+  await updateExercises(
+    actionContext,
+    isPromptless ? "promptless" : silent || refreshFailure ? "silent" : "loud",
+  )
+  return refreshFailure ? Err(refreshFailure) : Ok.EMPTY
+}
+
+/**
+ * Shows the refresh's warnings, which concern the session rather than a course, in the course
+ * home on screen if there is one, and otherwise in notifications.
+ */
+function reportRefreshWarnings(
+  { dialog }: ReadyActionContext,
+  warnings: readonly OperationWarning[],
+): void {
+  const shownCourse = shownCourseHome.courseId
+  if (!shownCourse) {
+    reportWarnings(dialog, warnings)
+    return
+  }
+  for (const { headline, error } of warnings) {
+    reportFailureIn(dialog, shownCourseHome.failureSink(shownCourse), headline, error)
+  }
+}
+
+/**
+ * Notes in its course home each course whose AI policy changed, and what that does to AI
+ * assistance: the workspace follows the policy silently, and a refused submit would otherwise be
+ * the first sign. A course whose home is not on screen is notified too.
+ */
+function announceAiPolicyChanges(
+  { dialog }: ReadyActionContext,
+  changes: readonly AiPolicyChange[],
+): void {
+  for (const { course } of changes) {
+    const sentence = recentPolicyChanges.addChangeOf(course)
+    const courseId = LocalCourseData.getCourseId(course)
+    if (sentence !== undefined && !shownCourseHome.isShowing(courseId)) {
+      void dialog.notification(
+        `${LocalCourseData.getCourseTitle(course)} changed its AI policy: ${sentence}`,
+        showCourseHomeButton(courseId),
+      )
+    }
+  }
+}

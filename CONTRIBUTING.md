@@ -6,21 +6,21 @@ You can start by looking through the issues marked with label [`good first issue
 
 ## Project structure
 
--   `./src`: contains the "backend" of the extension
-    -   `./src/actions`: Contains composable actions used by the VSCode commands and other actions
-    -   `./src/commands`: Contains a source file for each VSCode command contributed by the extension
--   `./webview-ui`: contains the "frontend" of the extension
--   `./shared`: contains types that are shared between the backend and frontend
+- `./src`: contains the "backend" of the extension
+  - `./src/actions`: Contains composable actions used by the VSCode commands and other actions
+  - `./src/commands`: Contains a source file for each VSCode command contributed by the extension
+- `./webview-ui`: contains the "frontend" of the extension
+- `./shared`: contains types that are shared between the backend and frontend
 
 ## Setup
 
 ### Prerequisites
 
--   [Git](https://git-scm.com/)
--   [NodeJS / npm](https://nodejs.org/)
--   [VSCode](https://code.visualstudio.com/)
--   [vsce](https://www.npmjs.com/package/vsce)
--   Chromium based browser for Playwright (`npx playwright install chromium`)
+- [Git](https://git-scm.com/)
+- [NodeJS](https://nodejs.org/) and [pnpm](https://pnpm.io/)
+- [VSCode](https://code.visualstudio.com/)
+- [vsce](https://www.npmjs.com/package/@vscode/vsce)
+- Chromium based browser for Playwright (`pnpm dlx playwright install chromium`)
 
 ### Getting the code
 
@@ -39,31 +39,35 @@ git submodule init && git submodule update
 Then execute the following command to install the required dependencies:
 
 ```bash
-npm run ci:all
+pnpm run ci:all
 ```
 
 Then prepare the backend:
 
 ```bash
-cd backend && npm run setup
+cd backend && pnpm run setup
 ```
 
 You will need to rerun the setup when langs is updated, as this step will download the appropriate version of the CLI for the integration tests.
 
+### MOOC backend
+
+To run the MOOC backend locally, see https://github.com/rage/secret-project-331.
+
 ## Formatting
 
-This project uses [prettier](https://prettier.io/) for code formatting. You can run prettier across the code by calling `npm run prettier` from a terminal.
+This project uses [oxfmt](https://oxc.rs/) for code formatting. You can run oxfmt across the code by calling `pnpm run format` from a terminal, or check formatting without writing with `pnpm run format:check`.
 
 ## Linting
 
-This project uses [ESLint](https://eslint.org/) for code linting. You can run ESLint across the code by calling `npm run eslint` from a terminal.
+This project uses [oxlint](https://oxc.rs/) for code linting. You can run oxlint across the code by calling `pnpm run lint:fix` from a terminal, or check linting without autofixing with `pnpm run lint`. `pnpm run lint` also runs [knip](https://knip.dev/), which fails on an export, file, or dependency that nothing reaches.
 
 ## Developing the extension
 
 From VSCode, the extension can be launched with `F5` by default.
 Automatic build task starts the first time that the extension is launched from VSCode.
 
-You can also build the extension by running `npm run webpack` or `npm run webpack:watch`.
+You can also build the extension by running `pnpm run build` or `pnpm run watch`.
 
 ## Updating dependencies
 
@@ -71,13 +75,13 @@ The tmc-langs version can be updated by changing the `TMC_LANGS_RUST_VERSION` va
 
 ## Testing
 
-The tests use a mock backend which needs to be initialised. Run `cd backend && npm run setup` to do so. The tests can be run with `npm run test`. If you get a `Connection error: TypeError`, make sure the backend is running.
+The tests use a mock backend which needs to be initialised. Run `cd backend && pnpm run setup` to do so. Unit and component tests (vitest) can be run with `pnpm run test`; the test-electron integration tier with `pnpm run test:integration`. If you get a `Connection error: TypeError`, make sure the backend is running.
 
-1. `npm run webpack:watch` to keep building the extension while writing code while VSCode is closed.
+1. `pnpm run watch` to keep building the extension while writing code while VSCode is closed.
 
-2. `npm run backend:start` to start the mock backend used by the tests.
+2. `pnpm run backend:start` to start the mock backend used by the tests.
 
-3. `npm run playwright-test` to run the tests, `npm run playwright-test-debug` to debug the tests.
+3. `pnpm run playwright-test` to run the tests, `pnpm run playwright-test-debug` to debug the tests.
 
 Playwright integration tests can be written in the `./playwright` directory.
 
@@ -90,8 +94,10 @@ You can set the environment variable `PW_TEST_REPORT_OPEN` to `never` to prevent
 To generate a VSIX (installation package) run the following from a terminal:
 
 ```
-vsce package
+vsce package --no-dependencies
 ```
+
+The `--no-dependencies` flag is required: esbuild bundles all runtime dependencies into `dist/`, so `vsce` should not also try to walk pnpm's symlinked `node_modules` layout looking for production dependencies to include (see `./bin/package.bash`, which is the script CI actually runs).
 
 ## Submitting a Pull Request
 
@@ -103,10 +109,9 @@ To release, create a release with the tag in the format `vMAJOR.MINOR.PATCH`, fo
 
 A script, `./bin/validateRelease.sh`, is ran during the release process to ensure that
 
--   the `CHANGELOG.md` has an entry for the tagged version
--   the `package.json` and `package-lock.json` has the same version number as the tagged version
-
-You can update the `package-lock.json` version with `npm i --package-lock-only`.
+- the `CHANGELOG.md` has an entry for the tagged version
+- the `package.json` version matches the tagged version
+- all configured tmc-langs builds referenced from `config.js` exist on the download server
 
 You can run the script manually by giving the GitHub release tag you're going to use as an argument. For example `./bin/validateRelease.sh v3.0.0-prerelease`.
 
@@ -116,7 +121,7 @@ The extension is packaged using the script `./bin/package.bash`. Like the valida
 
 Running the extension produces the following superfluous warnings:
 
--   `An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.`: https://github.com/microsoft/vscode/issues/192853
--   `[Violation] Avoid using document.write(). <URL>`: https://github.com/microsoft/vscode/issues/156147
+- `An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.`: https://github.com/microsoft/vscode/issues/192853
+- `[Violation] Avoid using document.write(). <URL>`: https://github.com/microsoft/vscode/issues/156147
 
 Updating langs can be done by changing the version number at `config.js`.

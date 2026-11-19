@@ -1,113 +1,118 @@
-import TMC from "../../api/tmc";
-import {
-    DownloadOrUpdateTmcCourseExercisesResult,
-    LocalTmcExercise,
-} from "../../shared/langsSchema";
-import {
-    checkExerciseUpdates,
-    closedExercisesPythonCourse,
-    listLocalCourseExercisesPythonCourse,
-} from "../fixtures/tmc";
-import { Err, Ok, Result } from "ts-results";
-import { IMock, It, Mock } from "typemoq";
+import type { Result } from "ts-results"
+import { Err, Ok } from "ts-results"
+import { vi } from "vitest"
 
-const NOT_MOCKED_ERROR = Err(new Error("Method was not mocked."));
+import type { CombinedMoocCourseData, LocalExercise, MoocCourse } from "../../../shared/langsSchema"
+import type { BackendKind } from "../../../shared/lib"
+import type Langs from "../../api/langs"
+import type { ExerciseDownloads, LocalExerciseUpdates } from "../../api/langs"
+import {
+  closedExercisesPythonCourse,
+  localExercises,
+  moocCourse,
+  moocCourseProgress,
+  moocEnrolledCourses,
+  moocExerciseSlides,
+  moocExerciseUpdates,
+  tmcExerciseUpdates,
+} from "../fixtures/tmc"
+
+const NOT_MOCKED_ERROR = Err(new Error("Method was not mocked."))
 
 export interface TMCMockValues {
-    clean: Result<void, Error>;
-    downloadExercises: Result<DownloadOrUpdateTmcCourseExercisesResult, Error>;
-    listLocalCourseExercisesPythonCourse: Result<LocalTmcExercise[], Error>;
-    getSettingClosedExercises: Result<string[], Error>;
-    getSettingProjectsDir: Result<string, Error>;
-    migrateExercise: Result<void, Error>;
-    moveProjectsDirectory: Result<void, Error>;
-    setSettingClosedExercises: Result<void, Error>;
-    checkExerciseUpdates: Result<Array<{ id: number }>, Error>;
+  clean: Result<void, Error>
+  downloadTmcExercises: Result<ExerciseDownloads, Error>
+  downloadMoocExercises: Result<ExerciseDownloads, Error>
+  listLocalExercises: Result<LocalExercise[], Error>
+  getSettingClosedExercises: Result<string[], Error>
+  getSettingProjectsDir: Result<string, Error>
+  listSettings: Result<Record<string, unknown>, Error>
+  migrateExercise: Result<void, Error>
+  moveProjectsDirectory: Result<void, Error>
+  setSettingClosedExercises: Result<void, Error>
+  tmcExerciseUpdates: Result<LocalExerciseUpdates, Error>
+  moocExerciseUpdates: Result<LocalExerciseUpdates, Error>
+  getMoocCourseData: Result<CombinedMoocCourseData, Error>
+  getEnrolledMoocCourses: Result<MoocCourse[], Error>
 }
 
-export function createTMCMock(): [IMock<TMC>, TMCMockValues] {
-    const values: TMCMockValues = {
-        clean: Ok.EMPTY,
-        downloadExercises: NOT_MOCKED_ERROR,
-        listLocalCourseExercisesPythonCourse: Ok(listLocalCourseExercisesPythonCourse),
-        getSettingClosedExercises: Ok(closedExercisesPythonCourse),
-        getSettingProjectsDir: Ok("/langs/path/to/exercises"),
-        migrateExercise: Ok.EMPTY,
-        moveProjectsDirectory: Ok.EMPTY,
-        setSettingClosedExercises: Ok.EMPTY,
-        checkExerciseUpdates: Ok(checkExerciseUpdates),
-    };
-    const mock = setupMockValues(values);
+const NO_DOWNLOADS: ExerciseDownloads = { downloaded: [], skipped: [], failed: [] }
 
-    return [mock, values];
+export function createTMCMock(): [Langs, TMCMockValues] {
+  const values: TMCMockValues = {
+    clean: Ok.EMPTY,
+    downloadTmcExercises: Ok(NO_DOWNLOADS),
+    downloadMoocExercises: Ok(NO_DOWNLOADS),
+    listLocalExercises: Ok(localExercises),
+    getSettingClosedExercises: Ok(closedExercisesPythonCourse),
+    getSettingProjectsDir: Ok("/langs/path/to/exercises"),
+    listSettings: Ok({
+      projects_dir: "/langs/path/to/exercises",
+      "closed-exercises-for:test-python-course": closedExercisesPythonCourse,
+    }),
+    migrateExercise: Ok.EMPTY,
+    moveProjectsDirectory: Ok.EMPTY,
+    setSettingClosedExercises: Ok.EMPTY,
+    tmcExerciseUpdates: Ok(tmcExerciseUpdates),
+    moocExerciseUpdates: Ok(moocExerciseUpdates),
+    getMoocCourseData: Ok({
+      course: moocCourse,
+      slides: moocExerciseSlides,
+      progress: moocCourseProgress,
+    }),
+    getEnrolledMoocCourses: Ok(moocEnrolledCourses),
+  }
+
+  return [setupMockValues(values), values]
 }
 
-export function createFailingTMCMock(): [IMock<TMC>, TMCMockValues] {
-    const error = Err(new Error());
-    const values: TMCMockValues = {
-        clean: error,
-        downloadExercises: NOT_MOCKED_ERROR,
-        listLocalCourseExercisesPythonCourse: error,
-        getSettingClosedExercises: error,
-        getSettingProjectsDir: error,
-        migrateExercise: error,
-        moveProjectsDirectory: error,
-        setSettingClosedExercises: error,
-        checkExerciseUpdates: error,
-    };
-    const mock = setupMockValues(values);
+export function createFailingTMCMock(): [Langs, TMCMockValues] {
+  const error = Err(new Error())
+  const values: TMCMockValues = {
+    clean: error,
+    downloadTmcExercises: error,
+    downloadMoocExercises: error,
+    listLocalExercises: error,
+    getSettingClosedExercises: error,
+    getSettingProjectsDir: error,
+    listSettings: error,
+    migrateExercise: error,
+    moveProjectsDirectory: error,
+    setSettingClosedExercises: error,
+    tmcExerciseUpdates: error,
+    moocExerciseUpdates: error,
+    getMoocCourseData: error,
+    getEnrolledMoocCourses: error,
+  }
 
-    return [mock, values];
+  return [setupMockValues(values), values]
 }
 
-function setupMockValues(values: TMCMockValues): IMock<TMC> {
-    const mock = Mock.ofType<TMC>();
+function setupMockValues(values: TMCMockValues): Langs {
+  const mock = {
+    clean: vi.fn(async () => values.clean),
+    listLocalExercises: vi.fn(async () => values.listLocalExercises),
+    getSetting: vi.fn(async (key: string) =>
+      key === "closed-exercises-for:test-python-course"
+        ? values.getSettingClosedExercises
+        : NOT_MOCKED_ERROR,
+    ),
+    listSettings: vi.fn(async () => values.listSettings),
+    setSetting: vi.fn(async (key: string, _value: unknown) =>
+      key === "closed-exercises-for:test-python-course"
+        ? values.setSettingClosedExercises
+        : NOT_MOCKED_ERROR,
+    ),
+    migrateExercise: vi.fn(async () => values.migrateExercise),
+    moveProjectsDirectory: vi.fn(async () => values.moveProjectsDirectory),
+    checkExerciseUpdates: vi.fn(async (backend: BackendKind) =>
+      backend === "tmc" ? values.tmcExerciseUpdates : values.moocExerciseUpdates,
+    ),
+    getMoocCourseData: vi.fn(async () => values.getMoocCourseData),
+    getEnrolledMoocCourses: vi.fn(async () => values.getEnrolledMoocCourses),
+    downloadTmcExercises: vi.fn(async () => values.downloadTmcExercises),
+    downloadMoocExercises: vi.fn(async () => values.downloadMoocExercises),
+  }
 
-    // ---------------------------------------------------------------------------------------------
-    // Authentication commands
-    // ---------------------------------------------------------------------------------------------
-
-    // ---------------------------------------------------------------------------------------------
-    // Non-core commands
-    // ---------------------------------------------------------------------------------------------
-
-    mock.setup((x) => x.clean(It.isAny())).returns(async () => values.clean);
-
-    mock.setup((x) => x.listLocalCourseExercises(It.isValue("test-python-course"))).returns(
-        async () => values.listLocalCourseExercisesPythonCourse,
-    );
-
-    // ---------------------------------------------------------------------------------------------
-    // Settings commands
-    // ---------------------------------------------------------------------------------------------
-
-    mock.setup((x) =>
-        x.getSetting<string[]>(It.isValue("closed-exercises-for:test-python-course"), It.isAny()),
-    ).returns(async () => values.getSettingClosedExercises);
-
-    mock.setup((x) =>
-        x.migrateExercise(It.isAny(), It.isAny(), It.isAny(), It.isAny(), It.isAny()),
-    ).returns(async () => values.migrateExercise);
-
-    mock.setup((x) => x.moveProjectsDirectory(It.isAny(), It.isAny())).returns(
-        async () => values.moveProjectsDirectory,
-    );
-
-    mock.setup((x) =>
-        x.setSetting(It.isValue("closed-exercises-for:test-python-course"), It.isAny()),
-    ).returns(async () => values.setSettingClosedExercises);
-
-    // ---------------------------------------------------------------------------------------------
-    // Core commands
-    // ---------------------------------------------------------------------------------------------
-
-    mock.setup((x) => x.checkExerciseUpdates(It.isAny())).returns(
-        async () => values.checkExerciseUpdates,
-    );
-
-    mock.setup((x) => x.downloadExercises(It.isAny(), It.isAny(), It.isAny())).returns(
-        async () => values.downloadExercises,
-    );
-
-    return mock;
+  return mock as unknown as Langs
 }

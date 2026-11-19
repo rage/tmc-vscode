@@ -1,0 +1,24 @@
+version: 2
+updates:
+  # Dependabot reads the tag from each SHA pin's trailing comment and rewrites both.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Covers every workspace package via pnpm-workspace.yaml.
+  # `cooldown` mirrors `minimumReleaseAge`; without it Dependabot proposes releases the
+  # install refuses.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        patterns: ["*"]

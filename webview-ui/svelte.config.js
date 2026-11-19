@@ -1,0 +1,7 @@
+import { vitePreprocess } from "@sveltejs/vite-plugin-svelte"
+
+export default {
+  preprocess: vitePreprocess(),
+  // Without this, a file with no rune in it silently compiles in legacy mode.
+  compilerOptions: { runes: true },
+}

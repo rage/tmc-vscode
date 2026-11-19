@@ -1,93 +1,290 @@
 name: Extension tests
 
-on: push
+on:
+  push:
+  pull_request:
+
+permissions: read-all
+
+# A same-repo PR runs twice (branch and merge result); keyed on the ref they are
+# separate groups so a push never cancels the merge-result run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-    extension_tests:
-        name: Extension tests
-        env:
-            CI: true
-        strategy:
-            matrix:
-                node-version: [22.x]
-                os: [ubuntu-latest, macos-latest, windows-latest]
-        runs-on: ${{ matrix.os }}
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4.1.0
-              with:
-                  submodules: "true"
+  code_style:
+    name: Code style
+    permissions:
+      contents: read
+    env:
+      CI: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
 
-            - name: Use Node.js ${{ matrix.node-version }}
-              uses: actions/setup-node@v3.8.1
-              with:
-                  node-version: ${{ matrix.node-version }}
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
 
-            - name: Lint source
-              run: |
-                  npm run ci:all
-                  npm run eslint-check
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-            - name: Run prettier if not Windows
-              if: matrix.os != 'windows-latest'
-              run: npm run prettier-check
+      # oxlint flags unused locals, knip unreachable exports, files and dependencies.
+      - name: Lint (oxlint, knip)
+        run: pnpm run lint
 
-            - name: Setup backend
-              run: |
-                  cd backend
-                  npm run setup
-                  chmod -R +x cli
-                  cd ..
+      - name: Format check (oxfmt)
+        run: pnpm run format:check
 
-            - name: Unit tests
-              uses: coactions/setup-xvfb@v1.0.1
-              with:
-                  run: npm test
+      # tsgo skips .svelte; only the chained svelte-check types the webview templates.
+      - name: Typecheck (tsgo, svelte-check)
+        run: pnpm run typecheck
 
-    playwright_tests:
-        name: Playwright tests
-        env:
-            CI: true
-        strategy:
-            matrix:
-                node-version: [22.x]
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4.1.0
-              with:
-                  submodules: "true"
+      # tsgo is a preview compiler; stock tsc catches where the two disagree.
+      - name: Typecheck (tsc)
+        run: pnpm run typecheck:tsc
 
-            - name: Use Node.js ${{ matrix.node-version }}
-              uses: actions/setup-node@v3.8.1
-              with:
-                  node-version: ${{ matrix.node-version }}
+      # Regenerates from the committed shared/bindings.schema.json; the schema
+      # itself is covered by its provenance stamp below.
+      - name: Langs schema drift (generate:langs-schema)
+        run: bash bin/checkLangsSchemaDrift.sh
 
-            - name: Setup
-              run: |
-                  npm run ci:all
-                  cd backend
-                  npm run setup
-                  chmod -R +x cli
-                  cd ..
-                  npm run pretest
+      # CI has no sibling checkouts to re-vendor from; it checks each artifact still
+      # matches its stamped sha256, catching hand-edits that bypass the vendoring script.
+      - name: Vendored langs schema stamp
+        run: pnpm run vendor:langs-schema -- --check-stamp
 
-            - name: Start backend
-              run: npm run backend:start &
+      # Byte-compares against the pinned release's schema: catches a
+      # TMC_LANGS_RUST_VERSION bump without a re-vendor.
+      - name: Vendored langs schema source
+        run: pnpm run vendor:langs-schema -- --check
 
-            - name: Playwright tests
-              run: npm run playwright-test
+      - name: Vendored OpenAPI spec stamp
+        run: pnpm run vendor:langs-openapi -- --check-stamp
 
-            - uses: actions/upload-artifact@v4.4.0
-              if: failure()
-              with:
-                  name: test-results
-                  path: ./test-results/
-                  if-no-files-found: ignore
+      # Byte-compares against the spec at the stamped rev: catches a stamp refreshed
+      # from a dirty or unpushed sibling checkout.
+      - name: Vendored OpenAPI spec source
+        run: pnpm run vendor:langs-openapi -- --check-source
 
-            - uses: actions/upload-artifact@v4.4.0
-              if: failure()
-              with:
-                  name: playwright-html-report
-                  path: ./playwright-report/index.html
-                  if-no-files-found: ignore
+      - name: Release tag validation (bin/validateRelease.test.sh)
+        run: bash bin/validateRelease.test.sh
+
+  unit_tests:
+    name: Unit tests
+    permissions:
+      contents: read
+    env:
+      CI: true
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Unit and webview-component tiers mock `vscode` in Node/jsdom: no VS Code, no xvfb.
+      - name: Unit tests (vitest)
+        if: matrix.os != 'ubuntu-latest'
+        run: pnpm test
+
+      # Only one leg is instrumented; it enforces vitest.config.ts's coverage thresholds.
+      - name: Unit tests with coverage (vitest)
+        if: matrix.os == 'ubuntu-latest'
+        run: pnpm run test:coverage
+
+      - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        if: ${{ always() && matrix.os == 'ubuntu-latest' }}
+        with:
+          name: coverage-report
+          path: ./coverage/
+          if-no-files-found: ignore
+
+  mock_backend_tests:
+    name: Mock backend tests
+    permissions:
+      contents: read
+    env:
+      CI: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Checks the mocks against their contracts (`backend/mooc` vs the vendored OpenAPI
+      # spec, `backend/controllers` vs tmc-langs' bindings) so they cannot drift.
+      # Self-contained; the script enforces a pass-count floor against a silently empty suite.
+      - name: Mock backend tests (node:test)
+        run: bash bin/runMockBackendTests.sh
+
+  webview_a11y_tests:
+    name: Webview accessibility and screenshot tests
+    permissions:
+      contents: read
+    env:
+      CI: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Separate from `playwright_tests`: needs plain Chromium, no VS Code, mock backend,
+      # submodules or xvfb.
+      - name: Install Chromium
+        run: pnpm --dir webview-ui exec playwright install --with-deps chromium
+
+      - name: Webview accessibility tests (Playwright)
+        run: pnpm --dir webview-ui run test:a11y
+
+      # The screenshot spec pins DejaVu as the baseline font.
+      - name: Install the baseline fonts
+        run: sudo apt-get install -y --no-install-recommends fonts-dejavu-core
+
+      - name: Webview screenshot tests (Playwright)
+        run: pnpm --dir webview-ui exec playwright test --project=visual
+
+      - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        if: failure()
+        with:
+          name: webview-harness-results
+          path: ./test-results/webview-harness/
+          if-no-files-found: ignore
+
+  gates:
+    name: Gates can fail
+    permissions:
+      contents: read
+    env:
+      CI: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Gates consuming a glob, generated file or vendored artifact can exit 0 when
+      # it goes empty or stale. This breaks one input per gate and asserts it fails.
+      - name: Gates fail on broken input
+        run: bash bin/verifyGatesCanFail.sh
+
+  integration_tests:
+    name: Integration tests
+    permissions:
+      contents: read
+    env:
+      CI: true
+      VSCODE_TEST_VERSION: ${{ matrix.vscode != 'minimum' && matrix.vscode || '' }}
+    strategy:
+      # A failure on one platform must not cancel the others.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Legs run the minimum `engines.vscode` (config.js's VSCODE_TEST_VERSION
+        # default); one extra leg tracks the current release.
+        vscode: [minimum]
+        include:
+          - os: ubuntu-latest
+            vscode: stable
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+        with:
+          submodules: "true"
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup backend
+        run: |
+          cd backend
+          pnpm run setup
+          chmod -R +x cli
+          cd ..
+
+      # Drives the real tmc-langs CLI inside the extension host (test-electron), so
+      # Linux needs xvfb. The suite spawns the mock backend itself.
+      - name: Integration tests (test-electron)
+        uses: coactions/setup-xvfb@b6b4fcfb9f5a895edadc3bc76318fae0ac17c8b3 # v1.0.1
+        with:
+          run: pnpm run test:integration
+
+      # test-artifacts/ holds downloaded exercises, langs config and submission
+      # archives: the only record of what the CLI did.
+      - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        if: failure()
+        with:
+          name: integration-artifacts-${{ matrix.os }}-${{ matrix.vscode }}
+          path: ./test-artifacts/
+          if-no-files-found: ignore
+
+  playwright_tests:
+    name: Playwright tests
+    permissions:
+      contents: read
+    env:
+      CI: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+        with:
+          submodules: "true"
+
+      - name: Setup Node & pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      # `backend/cli` serves the tmc-langs binary the extension downloads, so the
+      # mock still needs setup.
+      - name: Setup
+        run: |
+          pnpm install --frozen-lockfile
+          cd backend
+          pnpm run setup
+          chmod -R +x cli
+          cd ..
+
+      - name: Playwright tests
+        run: pnpm run playwright-test
+
+      - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        if: failure()
+        with:
+          name: test-results
+          path: ./test-results/
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        if: failure()
+        with:
+          name: playwright-html-report
+          path: ./playwright-report/
+          if-no-files-found: ignore

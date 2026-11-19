@@ -1,7 +1,18 @@
-import App from "./App.svelte";
+import { mount } from "svelte"
 
-const app = new App({
-    target: document.body,
-});
+import "./elements"
 
-export default app;
+import "./styles/tokens.css"
+import "./styles/base.css"
+import App from "./App.svelte"
+import { mountAnnouncer } from "./utilities/a11y.svelte"
+import { serveCodiconsFromMemory } from "./utilities/codicons"
+
+serveCodiconsFromMemory()
+mountAnnouncer()
+
+const app = mount(App, {
+  target: document.body,
+})
+
+export default app

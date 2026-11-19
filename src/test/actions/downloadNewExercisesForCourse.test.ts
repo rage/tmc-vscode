@@ -1,0 +1,116 @@
+import { Err, Ok } from "ts-results"
+import { vi } from "vitest"
+
+import type { LocalCourseData, CourseIdentifier } from "../../../shared/lib"
+import { ExerciseIdentifier } from "../../../shared/lib"
+import { downloadNewExercisesForCourse } from "../../actions/downloadNewExercisesForCourse"
+import { downloadOrUpdateExercises } from "../../actions/downloadOrUpdateExercises"
+import { refreshLocalExercises } from "../../actions/refreshLocalExercises"
+import type { ReadyActionContext } from "../../actions/types"
+import type { UserData } from "../../config/userdata"
+import { BottleneckError } from "../../errors"
+import { tmcLocalCourse } from "../fixtures/courses"
+import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
+import { createMockActionContext } from "../mocks/actionContext"
+
+vi.mock("../../actions/downloadOrUpdateExercises", () => ({
+  downloadOrUpdateExercises: vi.fn(),
+}))
+vi.mock("../../actions/refreshLocalExercises", () => ({
+  refreshLocalExercises: vi.fn(),
+}))
+
+const COURSE_ID = idOfTmcCourse(1)
+
+function courseWithNewExercises(newExercises: number[]): LocalCourseData {
+  return tmcLocalCourse({
+    id: 1,
+    name: "test-python-course",
+    title: "The Python Course",
+    organization: "test",
+    newExercises,
+  })
+}
+
+suite("downloadNewExercisesForCourse action", function () {
+  let course: LocalCourseData
+
+  // Clears exactly what UserData clears, so the course's new exercises are real state.
+  function actionContext(): ReadyActionContext {
+    const userData = {
+      getCourse: () => Ok(course),
+      clearFromNewExercises: async (
+        _courseId: CourseIdentifier,
+        cleared?: ExerciseIdentifier[],
+      ) => {
+        const clearedIds = new Set((cleared ?? []).map((id) => ExerciseIdentifier.toString(id)))
+        if (course.kind === "tmc") {
+          course.data.newExercises = course.data.newExercises.filter(
+            (id) => !clearedIds.has(String(id)),
+          )
+        }
+        return Ok.EMPTY
+      },
+    } as unknown as UserData
+    return createMockActionContext({ startup: { userData } })
+  }
+
+  const stillNew = (): number[] => (course.kind === "tmc" ? course.data.newExercises : [])
+
+  beforeEach(function () {
+    course = courseWithNewExercises([1, 2])
+    vi.mocked(refreshLocalExercises).mockResolvedValue(Ok.EMPTY)
+  })
+
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("leaves nothing new once every exercise has been downloaded", async function () {
+    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(
+      Ok({
+        successful: [idOfTmcExercise(1), idOfTmcExercise(2)],
+        failed: [],
+        warnings: [],
+      }),
+    )
+
+    const result = await downloadNewExercisesForCourse(actionContext(), COURSE_ID)
+
+    expect(result.ok && result.val.downloaded).toEqual([idOfTmcExercise(1), idOfTmcExercise(2)])
+    expect(stillNew()).toEqual([])
+  })
+
+  test("keeps only the exercises that failed to download new", async function () {
+    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(
+      Ok({
+        successful: [idOfTmcExercise(1)],
+        failed: [idOfTmcExercise(2)],
+        warnings: [],
+      }),
+    )
+
+    await downloadNewExercisesForCourse(actionContext(), COURSE_ID)
+
+    expect(stillNew()).toEqual([2])
+  })
+
+  test("keeps every exercise new when the download throws", async function () {
+    vi.mocked(downloadOrUpdateExercises).mockRejectedValue(new Error("boom"))
+
+    await expect(downloadNewExercisesForCourse(actionContext(), COURSE_ID)).rejects.toThrow("boom")
+
+    expect(stillNew()).toEqual([1, 2])
+  })
+
+  test("keeps every exercise new when the download is refused as already running", async function () {
+    vi.mocked(downloadOrUpdateExercises).mockResolvedValue(
+      Err(new BottleneckError("Some of these exercises are already downloading.")),
+    )
+
+    const result = await downloadNewExercisesForCourse(actionContext(), COURSE_ID)
+
+    expect(result.err && result.val).toBeInstanceOf(BottleneckError)
+    expect(stillNew()).toEqual([1, 2])
+  })
+})

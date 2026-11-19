@@ -1,101 +1,544 @@
-import { ExerciseUpdateError, InitializationError } from "../errors";
-import { TmcPanel } from "../panels/TmcPanel";
-import { ExtensionToWebview } from "../shared/shared";
-import { ExerciseStatus } from "../ui/types";
-import { Logger } from "../utilities";
-import { ActionContext } from "./types";
-import { Err, Ok, Result } from "ts-results";
+import * as _ from "lodash"
+import type { Result } from "ts-results"
+import { Ok } from "ts-results"
+import * as vscode from "vscode"
 
-interface DownloadResults {
-    successful: number[];
-    failed: number[];
+import type { BackendKind } from "../../shared/lib"
+import {
+  backendName,
+  CourseIdentifier,
+  ExerciseIdentifier,
+  LocalCourseData,
+  makeMoocKind,
+  makeTmcKind,
+  match,
+  partition,
+} from "../../shared/lib"
+import type Dialog from "../api/dialog"
+import type { FractionProgress } from "../api/dialog"
+import type Langs from "../api/langs"
+import type { ExerciseDownload, ExerciseDownloadProgress, ExerciseDownloads } from "../api/langs"
+import type { OperationWarning, Warned } from "../api/withOperation"
+import {
+  ChapterNotOpenError,
+  CourseAccessLostError,
+  ExerciseUpdateError,
+  isSessionLost,
+  ServerError,
+  presentationFor,
+} from "../errors"
+import type { JobOptions } from "../ui/backgroundJobs"
+import { backgroundJobs } from "../ui/backgroundJobs"
+import { downloadFailures } from "../ui/downloadFailures"
+import type { ExerciseClaim } from "../ui/exerciseOperations"
+import { exerciseOperations } from "../ui/exerciseOperations"
+import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
+import { countOf, formatDateTime, Logger, mapConcurrently, parseDate } from "../utilities"
+import { describeExercises, exerciseName } from "./exerciseNames"
+import { recordKeptCopy } from "./keptCopies"
+import type { ReadyActionContext } from "./types"
+
+/** What one backend's download came back with. */
+interface DownloadLeg {
+  backend: BackendKind
+  result: Result<ExerciseDownloads, Error>
 }
 
 /**
- * Downloads given exercises and opens them in TMC workspace.
+ * Where a requested download shows its progress: in a cancellable notification, only on the
+ * Courses view's progress bar, for one started from a screen that shows each exercise's
+ * progress itself, or only in the status bar, for one a setting started.
+ */
+export type DownloadProgressPlace = "notification" | "coursesView" | "statusBar"
+
+interface DownloadOptions {
+  isUpdate?: boolean
+  isUnrequested?: boolean
+  progressPlace?: DownloadProgressPlace | undefined
+}
+
+interface DownloadResults {
+  successful: ExerciseIdentifier[]
+  failed: ExerciseIdentifier[]
+  /** Why the `failed` exercises failed; `undefined` when none did or the user cancelled. */
+  failureCause?: Error | undefined
+}
+
+/**
+ * Downloads given exercises and opens them in the course workspace.
+ *
+ * Fails as a whole only with a `BottleneckError`, downloading nothing, while any of the
+ * exercises is busy with another operation. Every other failure lands in `failed`, with one
+ * warning naming the exercises; a cancelled download returns what had completed. Exercises of a
+ * course its backend last refused are not asked for: they fail with a `CourseAccessLostError`.
  *
  * @param exerciseIds Exercises to download.
- * @returns Exercise ids for successful downloads.
+ * @param courseId Course all the exercises belong to, if they share one; lets the mooc bulk
+ *   download fetch just that course's slides instead of scanning every enrolled course.
+ * @param options `isUpdate` for exercises already on disk, which the warning then says were
+ *   not updated; `isUnrequested` for a download the user did not ask for (an automatic
+ *   update): progress shows in the status bar and failures get no warning, the caller reports
+ *   `failureCause` where it can be withdrawn once the cause is gone; `progressPlace` for a
+ *   requested one.
+
  */
 export async function downloadOrUpdateExercises(
-    actionContext: ActionContext,
-    exerciseIds: number[],
-): Promise<Result<DownloadResults, Error>> {
-    const { dialog, settings, tmc } = actionContext;
-    if (tmc.err) {
-        return new Err(new InitializationError("Extension was not initialized properly"));
-    }
-    Logger.info("Downloading exercises", exerciseIds);
-
-    if (exerciseIds.length === 0) {
-        return Ok({ successful: [], failed: [] });
-    }
-
-    TmcPanel.postMessage(...exerciseIds.map((x) => wrapToMessage(x, "downloading")));
-    const statuses = new Map<number, ExerciseStatus>(exerciseIds.map((x) => [x, "downloadFailed"]));
-
-    const downloadTemplate = !settings.getDownloadOldSubmission();
-    const downloadResult = await dialog.progressNotification(
-        "Downloading exercises...",
-        (progress) => {
-            return tmc.val.downloadExercises(exerciseIds, downloadTemplate, (download) => {
-                progress.report(download);
-                statuses.set(download.id, "closed");
-                TmcPanel.postMessage(wrapToMessage(download.id, "closed"));
-            });
-        },
-    );
-    if (downloadResult.err) {
-        postMessages(statuses);
-        return downloadResult;
-    }
-
-    const { downloaded, failed, skipped } = downloadResult.val;
-    if (skipped.length > 0) {
-        Logger.warn(`${skipped.length} downloads were skipped.`);
-    }
-    downloaded.forEach((x) => statuses.set(x.id, "closed"));
-    skipped.forEach((x) => statuses.set(x.id, "closed"));
-    failed?.forEach(([exercise, reason]) => {
-        Logger.error(`Failed to download exercise ${exercise["exercise-slug"]}: ${reason}`);
-        statuses.set(exercise.id, "downloadFailed");
-    });
-    postMessages(statuses);
-    if (failed && failed.length > 0) {
-        const failedDownloads = failed.map(([f]) => f["exercise-slug"]);
-        dialog.errorNotification(
-            "Failed to update exercises.",
-            new ExerciseUpdateError(failedDownloads.join(", ")),
-        );
-    }
-
-    return Ok(sortResults(statuses));
+  actionContext: ReadyActionContext,
+  exerciseIds: ExerciseIdentifier[],
+  courseId?: CourseIdentifier,
+  options: DownloadOptions = {},
+): Promise<Result<DownloadResults & Warned, Error>> {
+  Logger.info("Downloading exercises", exerciseIds)
+  const refusal = courseAccessRefusal(actionContext, exerciseIds)
+  const refused = new Set(refusal?.exerciseIds.map((id) => ExerciseIdentifier.key(id)))
+  const requested = exerciseIds.filter((id) => !refused.has(ExerciseIdentifier.key(id)))
+  if (requested.length === 0) {
+    return Ok(withRefusal({ successful: [], failed: [], warnings: [] }, refusal, options))
+  }
+  const claim = exerciseOperations.claim(requested, "downloading")
+  if (claim.err) {
+    return claim
+  }
+  const running = download(actionContext, requested, courseId, claim.val, options)
+  runningDownloads.add(running)
+  try {
+    const results = await running
+    return Ok(withRefusal(results, refusal, options))
+  } finally {
+    runningDownloads.delete(running)
+    claim.val.releaseAll()
+  }
 }
 
-function postMessages(statuses: Map<number, ExerciseStatus>): void {
-    TmcPanel.postMessage(...Array.from(statuses.entries()).map(([id, s]) => wrapToMessage(id, s)));
+const runningDownloads = new Set<Promise<unknown>>()
+
+/** Settles once every download or update running now has ended, its downloaded copies recorded. */
+export async function downloadsSettled(): Promise<void> {
+  await Promise.allSettled(runningDownloads)
 }
 
-function wrapToMessage(exerciseId: number, status: ExerciseStatus): ExtensionToWebview {
-    return {
-        type: "exerciseStatusChange",
-        target: {
-            type: "CourseDetails",
-        },
-        exerciseId,
-        status,
-    };
+/** Exercises whose course's backend last refused the course, and why, in a sentence. */
+interface CourseAccessRefusal {
+  exerciseIds: ExerciseIdentifier[]
+  error: CourseAccessLostError
 }
 
-function sortResults(statuses: Map<number, ExerciseStatus>): DownloadResults {
-    const successful: number[] = [];
-    const failed: number[] = [];
-    statuses.forEach((status, id) => {
-        if (status !== "downloadFailed") {
-            successful.push(id);
-        } else {
-            failed.push(id);
+function courseAccessRefusal(
+  { startup }: ReadyActionContext,
+  exerciseIds: ExerciseIdentifier[],
+): CourseAccessRefusal | undefined {
+  let firstCourse: LocalCourseData | undefined
+  const refused = exerciseIds.filter((id) => {
+    const stored = startup.userData.getExercise(id)
+    if (stored.err || LocalCourseData.getAccessLoss(stored.val.course) === undefined) {
+      return false
+    }
+    firstCourse ??= stored.val.course
+    return true
+  })
+  if (firstCourse === undefined) {
+    return undefined
+  }
+  const title = LocalCourseData.getCourseTitle(firstCourse)
+  const sentence =
+    LocalCourseData.getAccessLoss(firstCourse) === "forbidden"
+      ? `You no longer have access to ${title}, so its exercises cannot be downloaded.`
+      : `${title} no longer exists, so its exercises cannot be downloaded.`
+  return { exerciseIds: refused, error: new CourseAccessLostError(sentence) }
+}
+
+function withRefusal(
+  results: DownloadResults & Warned,
+  refusal: CourseAccessRefusal | undefined,
+  options: DownloadOptions,
+): DownloadResults & Warned {
+  if (!refusal) {
+    return results
+  }
+  return {
+    successful: results.successful,
+    failed: [...results.failed, ...refusal.exerciseIds],
+    failureCause: results.failureCause ?? refusal.error,
+    warnings: options.isUnrequested
+      ? results.warnings
+      : [...results.warnings, { headline: refusal.error.message, error: refusal.error }],
+  }
+}
+
+async function download(
+  actionContext: ReadyActionContext,
+  exerciseIds: ExerciseIdentifier[],
+  courseId: CourseIdentifier | undefined,
+  claim: ExerciseClaim,
+  options: DownloadOptions,
+): Promise<DownloadResults & Warned> {
+  const { authState, dialog, settings } = actionContext
+  const { langs } = actionContext.startup
+  const isLoggedOut = !authState.loggedIn && !authState.isSessionExpired
+
+  const succeeded = new Set<string>()
+  const downloadTemplate = !settings.getDownloadOldSubmission()
+  const byBackend = partition(exerciseIds)
+  const tmcIds = byBackend.tmc.map((id) => id.tmcExerciseId)
+  const moocIds = byBackend.mooc.map((id) => id.moocExerciseId)
+  const moocCourseId =
+    courseId &&
+    match(
+      courseId,
+      () => undefined,
+      (mooc) => mooc.moocCourseId,
+    )
+
+  let cancelled = false
+  const unrestored: ExerciseIdentifier[] = []
+  const fresh: ExerciseDownload[] = []
+  const legs = await backgroundJobs.run(
+    jobOf(actionContext, exerciseIds, courseId, options),
+    (job) =>
+      withProgress(dialog, options, async (progress, token) => {
+        // Cancelling kills the CLI download process; already-written exercises stay downloaded.
+        let interruptDownload: (() => void) | undefined
+        token.onCancellationRequested(() => {
+          cancelled = true
+          interruptDownload?.()
+        })
+        // A leg that was still starting up when the user cancelled gets killed as
+        // soon as the CLI hands back its handle.
+        const registerInterrupt = (interrupt: () => void): void => {
+          if (cancelled) {
+            interrupt()
+            return
+          }
+          interruptDownload = interrupt
         }
-    });
-    return { successful, failed };
+
+        // Each backend reports its own completion fraction, so counting finished
+        // exercises is the only measure that keeps rising across both.
+        const onDownloaded = (downloaded: ExerciseDownloadProgress): void => {
+          succeeded.add(ExerciseIdentifier.key(downloaded.id))
+          const fraction = succeeded.size / exerciseIds.length
+          progress.report({ fraction, message: downloaded.message })
+          job.report(fraction)
+          downloadFailures.record([], [downloaded.id])
+          // An update holds its exercises to the end, lest a check that began before it ends
+          // update them again under a second progress notification.
+          if (!options.isUpdate) {
+            claim.release(downloaded.id)
+          }
+        }
+
+        // One backend after the other, so a cancel stops the second before it starts.
+        const finished: DownloadLeg[] = []
+        const runLeg = async (
+          backend: BackendKind,
+          count: number,
+          run: () => Promise<Result<ExerciseDownloads, Error>>,
+        ): Promise<void> => {
+          if (count > 0 && !cancelled) {
+            finished.push({ backend, result: await run() })
+            interruptDownload = undefined
+          }
+        }
+        const alreadyLocal = await localExerciseKeys(langs)
+        const freshDownloads = (downloads: Result<ExerciseDownloads, Error>): ExerciseDownload[] =>
+          alreadyLocal && downloads.ok
+            ? downloads.val.downloaded.filter(
+                ({ id }) => !alreadyLocal.has(ExerciseIdentifier.key(id)),
+              )
+            : []
+        await runLeg("tmc", tmcIds.length, async () => {
+          const downloads = await langs.downloadTmcExercises(
+            tmcIds,
+            downloadTemplate,
+            onDownloaded,
+            registerInterrupt,
+          )
+          fresh.push(...freshDownloads(downloads))
+          return downloads
+        })
+        await runLeg("mooc", moocIds.length, async () => {
+          const downloads = await langs.downloadMoocExercises(
+            moocIds,
+            moocCourseId,
+            onDownloaded,
+            registerInterrupt,
+          )
+          const freshMooc = freshDownloads(downloads)
+          if (!downloadTemplate && !cancelled) {
+            unrestored.push(...(await restoreLatestSubmissions(langs, freshMooc)))
+          }
+          fresh.push(...freshMooc)
+          return downloads
+        })
+        if (!options.isUpdate) {
+          await recordDownloadedCopies(actionContext, fresh)
+        }
+        return finished
+      }),
+  )
+  const failedLegs: Error[] = []
+  const exerciseReasons: string[][] = []
+  for (const { backend, result } of legs) {
+    if (result.err) {
+      if (!cancelled) {
+        Logger.error(`Failed to download exercises from ${backendName(backend)}`, result.val)
+      }
+      failedLegs.push(result.val)
+      continue
+    }
+    const { downloaded, skipped, failed } = result.val
+    if (skipped.length > 0) {
+      Logger.warn(`${skipped.length} downloads were skipped.`)
+    }
+    for (const { id } of [...downloaded, ...skipped]) {
+      succeeded.add(ExerciseIdentifier.key(id))
+    }
+    for (const [{ id }, reasons] of failed) {
+      Logger.error(`Failed to download exercise ${exerciseName(actionContext, id)}: ${reasons}`)
+      succeeded.delete(ExerciseIdentifier.key(id))
+      exerciseReasons.push(reasons)
+    }
+  }
+
+  const results = sortResults(exerciseIds, succeeded)
+  // Refused for want of a login the user knows they lack, the exercises were never really tried.
+  const isRefusedForLogin =
+    isLoggedOut &&
+    exerciseReasons.length === 0 &&
+    failedLegs.length > 0 &&
+    failedLegs.every((error) => isSessionLost(error))
+  downloadFailures.record(isRefusedForLogin ? [] : results.failed, results.successful)
+  if (cancelled) {
+    // The user chose to stop; what completed is the answer, not an error.
+    Logger.info("Exercise download cancelled by the user")
+    return { ...results, warnings: [] }
+  }
+  const warnings: OperationWarning[] = []
+  if (unrestored.length > 0) {
+    const names = unrestored.map((id) => exerciseName(actionContext, id))
+    warnings.push({
+      headline: `Downloaded the template of ${describeExercises(names)}: the latest submission could not be restored. Use History to get it.`,
+      error: new ExerciseUpdateError("restoring the latest submission failed"),
+    })
+  }
+  if (results.failed.length === 0) {
+    return { ...results, warnings }
+  }
+  const cause = failureCause(failedLegs, exerciseReasons)
+  if (!options.isUnrequested) {
+    const names = results.failed.map((id) => exerciseName(actionContext, id))
+    warnings.push({
+      headline: `Failed to ${options.isUpdate ? "update" : "download"} ${describeExercises(names)}.`,
+      error: cause,
+      failedExercises: results.failed,
+    })
+  }
+  return { ...results, failureCause: cause, warnings }
+}
+
+type DownloadTask<T> = (
+  progress: vscode.Progress<FractionProgress>,
+  token: vscode.CancellationToken,
+) => Promise<T>
+
+/**
+ * Runs `task` under the progress a download of its kind shows: a cancellable notification for a
+ * requested one, the Courses view's bar for one started from a screen, and only the status bar
+ * spinner for one the student did not start.
+ */
+function withProgress<T>(
+  dialog: Dialog,
+  options: DownloadOptions,
+  task: DownloadTask<T>,
+): Promise<T> {
+  if (options.isUnrequested || options.progressPlace === "statusBar") {
+    return task({ report: () => {} }, new vscode.CancellationTokenSource().token)
+  }
+  return dialog.progressNotification(
+    "Downloading exercises…",
+    task,
+    options.progressPlace === "coursesView"
+      ? { location: { viewId: COURSES_VIEW_ID } }
+      : { cancellable: true, location: vscode.ProgressLocation.Notification },
+  )
+}
+
+/**
+ * The background job a download is. It is long, and notified while its screen is hidden, when it
+ * updates or downloads several exercises without a cancellable notification of its own.
+ */
+function jobOf(
+  actionContext: ReadyActionContext,
+  exerciseIds: readonly ExerciseIdentifier[],
+  courseId: CourseIdentifier | undefined,
+  options: DownloadOptions,
+): JobOptions {
+  const [only] = exerciseIds
+  const what =
+    only && exerciseIds.length === 1
+      ? exerciseName(actionContext, only)
+      : countOf(exerciseIds.length, "exercise")
+  const courseIds = courseId
+    ? [courseId]
+    : _.uniqBy(
+        exerciseIds.flatMap((id) => {
+          const stored = actionContext.startup.userData.getExercise(id)
+          return stored.ok ? [LocalCourseData.getCourseId(stored.val.course)] : []
+        }),
+        (id) => CourseIdentifier.key(id),
+      )
+  const [onlyCourse] = courseIds
+  const hasOwnNotification =
+    !options.isUnrequested &&
+    options.progressPlace !== "statusBar" &&
+    options.progressPlace !== "coursesView"
+  return {
+    label: `${options.isUpdate ? "Updating" : "Downloading"} ${what}`,
+    screen:
+      onlyCourse && courseIds.length === 1
+        ? { kind: "courseHome", courseId: onlyCourse }
+        : { kind: "coursesView" },
+    isLong: (options.isUpdate === true || exerciseIds.length > 1) && !hasOwnNotification,
+  }
+}
+
+/**
+ * The exercises already in the projects directory, by `ExerciseIdentifier.key`, or `undefined`
+ * when they cannot be listed: a download then must not put a submission over what may be the
+ * student's work.
+ */
+async function localExerciseKeys(langs: Langs): Promise<Set<string> | undefined> {
+  const local = await langs.listLocalExercises()
+  if (local.err) {
+    Logger.error("Could not list local exercises; downloading templates only", local.val)
+    return undefined
+  }
+  return new Set(
+    local.val.map((exercise) =>
+      ExerciseIdentifier.key(
+        exercise.backend === "mooc"
+          ? makeMoocKind({ moocExerciseId: exercise["exercise-id"] })
+          : makeTmcKind({ tmcExerciseId: exercise["exercise-id"] }),
+      ),
+    ),
+  )
+}
+
+/** How many exercises' student files are fingerprinted at once after a download. */
+const FINGERPRINT_CONCURRENCY = 8
+
+/** Records the files of exercises that were not on disk before as their downloaded copies. */
+async function recordDownloadedCopies(
+  actionContext: ReadyActionContext,
+  downloads: ExerciseDownload[],
+): Promise<void> {
+  await mapConcurrently(downloads, FINGERPRINT_CONCURRENCY, ({ id, path }) =>
+    recordKeptCopy(actionContext, { id, uri: vscode.Uri.file(path) }, "download"),
+  )
+}
+
+/**
+ * Puts each newly downloaded mooc exercise's latest graded submission over its template, as
+ * the tmc download does itself for `testMyCode.downloadOldSubmission`.
+ *
+ * @returns The exercises left at their template because the restore failed.
+ */
+async function restoreLatestSubmissions(
+  langs: Langs,
+  downloads: ExerciseDownload[],
+): Promise<ExerciseIdentifier[]> {
+  const unrestored: ExerciseIdentifier[] = []
+  for (const { id, path } of downloads) {
+    const listed = await langs.getOldSubmissions(id)
+    if (listed.err) {
+      Logger.error(
+        `Could not list the submissions of ${ExerciseIdentifier.toString(id)}`,
+        listed.val,
+      )
+      unrestored.push(id)
+      continue
+    }
+    // `get-exercise-submissions` lists newest first. A backup or paste is not restored: a
+    // backup may be code the student chose to discard by resetting.
+    const latest = match(
+      listed.val,
+      () => undefined,
+      ({ exerciseId, submissions }) => {
+        const graded = submissions.find(({ kind }) => kind === "submission")
+        return graded && makeMoocKind({ exerciseId, submissionId: graded.id })
+      },
+    )
+    if (!latest) {
+      continue
+    }
+    const restored = await langs.restoreSubmission(latest, path, false)
+    if (restored.err) {
+      Logger.error(
+        `Could not restore the latest submission of ${ExerciseIdentifier.toString(id)}`,
+        restored.val,
+      )
+      unrestored.push(id)
+    }
+  }
+  return unrestored
+}
+
+/** tmc-langs' reason for a mooc exercise of a chapter not open yet: its name and opening time. */
+const CLOSED_CHAPTER_REASON = /is in chapter \d+ "(.*)", which opens at (.+)$/
+
+/** tmc-langs' reasons for an exercise whose package on the server cannot be unpacked. */
+const BROKEN_PACKAGE_REASON = /archive|\bzip\b|project directory/i
+
+/** tmc-langs' reason for a server that failed a request: "500 Internal Server Error from <url>". */
+const SERVER_FAILURE_REASON = /\b5\d\d [A-Z][\w ]* from \S/
+
+/**
+ * The one error a failed download is reported with.
+ *
+ * A backend that failed as a whole is the cause worth naming, preferring one whose
+ * presentation carries a remedy (e.g. "Log In"); otherwise the per-exercise reasons, in plain
+ * words, with tmc-langs' own as the details the log gets.
+ */
+function failureCause(failedLegs: Error[], exerciseReasons: string[][]): Error {
+  const leg = failedLegs.find((error) => presentationFor(error).actions.length > 0) ?? failedLegs[0]
+  if (leg) {
+    return leg
+  }
+  const reasons = [...new Set(exerciseReasons.flat().filter((reason) => reason !== ""))]
+  const details =
+    reasons.length > 0 ? reasons.join("; ") : "tmc-langs did not report them as downloaded"
+  const closedChapter = reasons.map((reason) => CLOSED_CHAPTER_REASON.exec(reason)).find(Boolean)
+  if (closedChapter && reasons.every((reason) => CLOSED_CHAPTER_REASON.test(reason))) {
+    const [, name = "", opensAtText = ""] = closedChapter
+    const opensAt = parseDate(opensAtText)
+    const when = opensAt ? ` on ${formatDateTime(opensAt, vscode.env.language)}` : " later"
+    return new ChapterNotOpenError(
+      `The chapter "${name}" has not opened yet. Its exercises can be downloaded once it opens${when}.`,
+      details,
+    )
+  }
+  // An archive URL names "archive" too, but the package is not to blame for the server's failure.
+  if (reasons.length > 0 && reasons.every((reason) => SERVER_FAILURE_REASON.test(reason))) {
+    return new ServerError("The server ran into a problem. Try again later.", details)
+  }
+  if (reasons.length > 0 && reasons.every((reason) => BROKEN_PACKAGE_REASON.test(reason))) {
+    return new ExerciseUpdateError(
+      "The exercise on the server is not a valid exercise package; the course staff need to fix it.",
+      details,
+    )
+  }
+  return new ExerciseUpdateError("The download did not complete.", details)
+}
+
+function sortResults(exerciseIds: ExerciseIdentifier[], succeeded: Set<string>): DownloadResults {
+  const successful: ExerciseIdentifier[] = []
+  const failed: ExerciseIdentifier[] = []
+  for (const id of exerciseIds) {
+    if (succeeded.has(ExerciseIdentifier.key(id))) {
+      successful.push(id)
+    } else {
+      failed.push(id)
+    }
+  }
+  return { successful, failed }
 }

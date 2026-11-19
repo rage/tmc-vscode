@@ -1,0 +1,73 @@
+packages:
+  - "."
+  - "webview-ui"
+  - "backend"
+
+engineStrict: true
+
+pmOnFail: download
+
+# Supply-chain hardening: refuse dependency versions younger than 7 days.
+minimumReleaseAge: 10080
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
+
+# pnpm needs an exact version here and cannot read package.json's
+# `devEngines.runtime.version`; .github/actions/setup-node-pnpm asserts the two
+# agree, and that field is the one to edit.
+nodeVersion: 24.18.0
+
+# Resolve as of lockfile time; the npm registry exposes no per-version time field,
+# so pnpm infers it.
+resolutionMode: time-based
+registrySupportsTimeField: false
+
+preferFrozenLockfile: true
+trustLockfile: true
+
+# pnpm's defaults (2 retries, 60s timeout) let one flaky registry response fail
+# `pnpm install --frozen-lockfile`, which every CI job starts with and none retry.
+fetchRetries: 5
+fetchRetryFactor: 2
+fetchRetryMintimeout: 10000
+fetchRetryMaxtimeout: 120000
+fetchTimeout: 300000
+
+# Auto-run install when node_modules is stale before running a script.
+verifyDepsBeforeRun: install
+
+# Fail if a dependency wants to run an install/build script that is not allow-listed.
+strictDepBuilds: true
+
+confirmModulesPurge: false
+updateNotifier: false
+
+# strictDepBuilds fails on any dependency with an undecided install/build script.
+allowBuilds:
+  # Its install script places the native binary.
+  esbuild: true
+  # Install script only prints a reminder.
+  svelte-preprocess: false
+  # vsce's optional credential store and signing helper; `vsce package` and
+  # `vsce publish -p <token>` do not touch them.
+  keytar: false
+  "@vscode/vsce-sign": false
+
+patchedDependencies:
+  ts-results@3.3.0: patches/ts-results@3.3.0.patch
+
+# Security overrides for transitive packages whose parent has not released a bump.
+# Each is scoped to the major line the vulnerable copy resolves to and allowed by
+# the parent's declared range, so it only pulls a patch forward. All are dev/build/
+# test tooling, unreachable from the packaged extension (see `pnpm audit --prod`).
+overrides:
+  # GHSA-v2hh-gcrm-f6hx: fast-uri mis-parses a backslash authority delimiter.
+  # Reached via ajv in the mock backend's OpenAPI validation.
+  fast-uri@3: 3.1.4
+  # GHSA-52cp-r559-cp3m: js-yaml prototype pollution. @hey-api/json-schema-ref-parser
+  # pins the vulnerable 4.2.0; `pnpm run generate:langs-schema` exercises 4.3.0.
+  js-yaml@4: 4.3.0
+
+# One shared lockfile on purpose: sharedWorkspaceLockfile and the link-protocol
+# settings (linkWorkspacePackages, preferWorkspacePackages, saveWorkspaceProtocol)
+# are omitted.

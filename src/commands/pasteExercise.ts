@@ -1,45 +1,38 @@
-import * as actions from "../actions";
-import { ActionContext } from "../actions/types";
-import { BottleneckError } from "../errors";
-import { Logger } from "../utilities";
-import * as vscode from "vscode";
+import { Ok } from "ts-results"
+import type * as vscode from "vscode"
 
+import type { ReadyActionContext } from "../actions/types"
+import { runForExercise } from "./runForExercise"
+import { showExerciseResults } from "./showExerciseResults"
+
+/**
+ * Opens Get Help in the exercise's results panel and sends the exercise there to its
+ * backend's pastebin, where the link can be copied or opened.
+ *
+ * @param resource An exercise file or folder; the active editor's exercise when omitted.
+ */
 export async function pasteExercise(
-    actionContext: ActionContext,
-    resource: vscode.Uri | undefined,
+  actionContext: ReadyActionContext,
+  resource: vscode.Uri | undefined,
 ): Promise<void> {
-    const { dialog, workspaceManager } = actionContext;
-    Logger.info("Pasting exercise");
-    if (workspaceManager.err) {
-        Logger.error("Extension was not initialized properly");
-        return;
-    }
-
-    const exercise = resource
-        ? workspaceManager.val.getExerciseByPath(resource)
-        : workspaceManager.val.activeExercise;
-    if (!exercise) {
-        dialog.errorNotification("Currently open editor is not part of a TMC exercise.");
-        return;
-    }
-
-    const pasteResult = await actions.pasteExercise(
-        actionContext,
-        exercise.courseSlug,
-        exercise.exerciseSlug,
-    );
-    if (pasteResult.err) {
-        if (pasteResult.val instanceof BottleneckError) {
-            Logger.warn(`Paste submission was cancelled: ${pasteResult.val.message}.`);
-            return;
-        }
-
-        dialog.errorNotification("TMC Paste command failed.", pasteResult.val);
-        return;
-    }
-
-    dialog.notification(`Paste link: ${pasteResult.val}`, [
-        "Open URL",
-        (): Thenable<boolean> => vscode.env.openExternal(vscode.Uri.parse(pasteResult.val)),
-    ]);
+  await runForExercise(
+    actionContext,
+    resource,
+    "Pasting the exercise",
+    async (exercise) => {
+      await showExerciseResults(actionContext, exercise.uri, { name: "getHelp", shouldPaste: true })
+      return Ok.EMPTY
+    },
+    {
+      // Checked before the panel opens, so the share can be offered again once trusted.
+      trustedCommand: "tmc.pasteExercise",
+      retryOffer: (exercise) => ({
+        message: `The course workspace is trusted now. Send ${exercise.exerciseSlug} to the pastebin?`,
+        action: "Send to Pastebin",
+        expiredMessage:
+          `That offer to send ${exercise.exerciseSlug} has expired, so nothing was sent. ` +
+          "Use Get Help again to send your code as it is now.",
+      }),
+    },
+  )
 }

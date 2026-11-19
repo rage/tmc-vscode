@@ -1,0 +1,120 @@
+import { expect } from "@playwright/test"
+import type { Locator } from "@playwright/test"
+
+import { AddCoursePage } from "./add-course"
+import { CourseHomePage } from "./course-home"
+import { TmcPage } from "./tmc"
+
+function startingWith(text: string): RegExp {
+  return new RegExp(`^${text.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&")},`)
+}
+
+/**
+ * The native Courses view in the TestMyCode sidebar, driven by the accessible names its
+ * rows carry (`accessibilityInformation` in src/ui/treeview/treeview.ts): a row's name
+ * starts with its label and a comma, followed by its status, points and deadline.
+ */
+export class CoursesViewPage extends TmcPage {
+  public async goto(): Promise<void> {
+    await this.openMenu()
+  }
+
+  public tree(): Locator {
+    return this.page.getByRole("tree", { name: "Courses" })
+  }
+
+  /** The row of a course, part or exercise whose label is `label`. */
+  public row(label: string): Locator {
+    return this.tree().getByRole("treeitem", { name: startingWith(label) })
+  }
+
+  /**
+   * Expands `row` unless it already is. A click on a part toggles it; on a course it opens the
+   * course's Course Details and expands the row.
+   */
+  public async expand(row: Locator): Promise<void> {
+    await expect(row).toHaveAttribute("aria-expanded", /true|false/)
+    if ((await row.getAttribute("aria-expanded")) === "false") {
+      await row.click()
+    }
+    await expect(row).toHaveAttribute("aria-expanded", "true")
+  }
+
+  /** Clicks one of the buttons VS Code shows on `row` while it is hovered. */
+  public async runInlineAction(row: Locator, action: string): Promise<void> {
+    await row.hover()
+    await row.getByRole("button", { name: action, exact: true }).click()
+    // The row's hover tooltip outlives the click and swallows clicks on the rows below it.
+    await this.page.mouse.move(0, 0)
+    await expect(this.page.locator(".context-view:visible")).toHaveCount(0)
+  }
+
+  /** Opens the workspace of the course labelled `course`, which reloads the window. */
+  public async openCourseWorkspace(course: string): Promise<void> {
+    await this.reloadingWindow(() =>
+      this.runInlineAction(this.row(course), "Open Course Workspace"),
+    )
+  }
+
+  /** Runs `command` from `row`'s context menu, on the rows selected with it. */
+  public async runContextMenuCommand(row: Locator, command: string): Promise<void> {
+    const item = this.page
+      .locator(".monaco-menu")
+      .getByRole("menuitem", { name: command, exact: true })
+    // A right-click landing while the row's hover tooltip opens is sometimes swallowed.
+    await expect(async () => {
+      await row.click({ button: "right" })
+      await expect(item).toBeVisible({ timeout: 2_000 })
+    }).toPass()
+    // A synthetic click on a monaco menu item does not activate it; Enter on the
+    // hovered item does.
+    await item.hover()
+    await this.page.keyboard.press("Enter")
+    await expect(item).toBeHidden()
+  }
+
+  /** Opens the add-course screen from the view's title bar. */
+  public async openAddCourse(): Promise<AddCoursePage> {
+    await this.page
+      .getByRole("toolbar", { name: "TestMyCode: Courses actions" })
+      .getByRole("button", { name: "Add Course", exact: true })
+      .click()
+    const addCourse = new AddCoursePage(this.page, this.webview)
+    await addCourse.expectShown()
+    return addCourse
+  }
+
+  /** Adds a tmc.mooc.fi course, which is picked inside its organization, and waits for its home. */
+  public async addNewCourse(name: string): Promise<void> {
+    const addCourse = await this.openAddCourse()
+    await addCourse.addTmcCourse("Test Organization", name)
+    await new CourseHomePage(this.page, this.webview).expectShown(name)
+  }
+
+  /**
+   * Adds a courses.mooc.fi course and waits for its home. Enrolled courses are only listed once
+   * that backend has a session, so this logs in first.
+   */
+  public async addNewMoocCourse(name: string): Promise<void> {
+    await this.logInToMooc()
+    const addCourse = new AddCoursePage(this.page, this.webview)
+    await addCourse.addMoocCourse(name)
+    await new CourseHomePage(this.page, this.webview).expectShown(name)
+  }
+
+  /** Logs in from the add-course screen, which offers it while courses.mooc.fi has no session. */
+  public async startMoocLogin(): Promise<void> {
+    const addCourse = await this.openAddCourse()
+    await addCourse.section("courses.mooc.fi").getByRole("button", { name: "Log In" }).click()
+  }
+
+  /**
+   * Runs the device flow to completion against the mock's auto-approving client, which leaves
+   * the add-course screen showing the enrolled courses.
+   */
+  public async logInToMooc(): Promise<void> {
+    await this.startMoocLogin()
+    await expect(this.statusBarMessage("Logged in.")).toBeVisible()
+    await new AddCoursePage(this.page, this.webview).expectShown()
+  }
+}

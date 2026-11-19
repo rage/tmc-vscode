@@ -1,231 +1,870 @@
+import { upperFirst } from "lodash"
+import type { Webview, WebviewOptions, WebviewPanel } from "vscode"
+import { Disposable, extensions, Uri, ViewColumn, window } from "vscode"
+import type * as vscode from "vscode"
+
+import type { ExerciseSubmissionPanel, LoginPanel, Panel, SubmissionView } from "../../shared/lib"
 import {
-    addNewCourse,
-    closeExercises,
-    login,
-    openExercises,
-    openWorkspace,
-    pasteExercise,
-    removeCourse,
-    testInterrupts,
-    updateCourse,
-} from "../actions";
-import { ActionContext } from "../actions/types";
-import { ExerciseStatus } from "../api/workspaceManager";
-import * as commands from "../commands";
-import { TMC_BACKEND_URL } from "../config/constants";
-import { uiDownloadExercises } from "../init";
-import { ExtensionToWebview, Panel, WebviewToExtension } from "../shared/shared";
-import * as UITypes from "../ui/types";
-import {
-    cliFolder,
-    dateToString,
-    formatSizeInBytes,
-    Logger,
-    parseDate,
-    parseNextDeadlineAfter,
-} from "../utilities";
-import { getNonce } from "../utilities/getNonce";
-import { getUri } from "../utilities/getUri";
-import { postMessageToWebview, renderPanel } from "../utilities/panel";
-import getFolderSize from "get-folder-size";
-import { compact } from "lodash";
-import { Result } from "ts-results";
-import { Disposable, Uri, ViewColumn, Webview, WebviewPanel, window } from "vscode";
-import * as vscode from "vscode";
+  assertUnreachable,
+  CourseIdentifier,
+  ExerciseIdentifier,
+  LocalCourseData,
+  arePointsHeldForReview,
+  offersLogIn,
+  SUBMIT_REFUSAL_LABELS,
+  submitRefusalOf,
+  submitRefusalSentence,
+  pendingReviewSentence,
+  unwrap,
+  WebviewStateSchema,
+} from "../../shared/lib"
+import type { ActionContext } from "../actions/types"
+import { isReady } from "../actions/types"
+import type { StoredExercise, UserData } from "../config/userdata"
+import { getExerciseIncludingClosedChapters } from "../config/userdata"
+import { buildCourseHomeView } from "../ui/courseHome"
+import { exerciseStandingView, leadsOnFrom, nextExerciseOf } from "../ui/exerciseStanding"
+import { failedUpdates } from "../ui/failedUpdates"
+import { lastExerciseReached } from "../ui/lastExerciseReached"
+import { loginScreens } from "../ui/loginScreens"
+import { modelSolutionUrl } from "../ui/modelSolution"
+import { recentPolicyChanges } from "../ui/recentPolicyChanges"
+import { recentUpdates } from "../ui/recentUpdates"
+import { shownCourseHome } from "../ui/shownCourseHome"
+import { submissionViews } from "../ui/submissionViews"
+import { Logger } from "../utilities"
+import { getNonce } from "./getNonce"
+import { getUri } from "./getUri"
+import { messageHandlers } from "./handlers"
+import { postMessageToWebview, renderPanel } from "./panel"
+import type { HandlerContext, PanelHost, PanelMessage } from "./router"
+import { dispatch } from "./router"
+import { errorDetailsPanel, initializationErrorHelpPanel, nextPanelId, panelTitle } from "./routes"
+import { failuresClearedMessage, screenFailureMessage } from "./screenFailures"
+import { withExerciseState } from "./submissionView"
 
 /**
- * Manages the rendering of the extension webview panels.
+ * The main panel's webview type, which its serializer is registered for.
+ *
+ * Namespaced, as webview types are one registry shared by every extension. package.json's
+ * `onWebviewPanel:` activation event must name it.
+ */
+export const MAIN_PANEL_VIEW_TYPE = "tmc.mainPanel"
+
+/** The side panel's webview type; like {@link MAIN_PANEL_VIEW_TYPE}, an activation event names it. */
+export const SIDE_PANEL_VIEW_TYPE = "tmc.sidePanel"
+
+/**
+ * Manages the extension's two webview panels: their lifecycle, and the transport to and
+ * from each. What a message does is up to its handler in `./handlers`.
  */
 export class TmcPanel {
-    // primary panel that most data is displayed in
-    public static mainPanel: TmcPanel | undefined;
+  public static mainPanel: TmcPanel | undefined
 
-    // extra panel for situations where we want to render another view beside the main one
-    public static sidePanel: TmcPanel | undefined;
+  // extra panel for situations where we want to render another view beside the main one
+  public static sidePanel: TmcPanel | undefined
 
-    private readonly _panel: WebviewPanel;
+  private readonly _panel: WebviewPanel
 
-    // if true, this is the main panel, otherwise this is the side panel
-    private readonly _isMain: boolean;
+  private readonly _actionContext: ActionContext
 
-    // resent on "ready" so a reloaded webview can recover
-    private _lastPanel: Panel | undefined;
+  private readonly _isMain: boolean
 
-    // latest message per type targeted at _lastPanel's id, resent after it on "ready"
-    // so a reload doesn't lose one-shot results that already fired
-    private _messageBuffer: Map<string, ExtensionToWebview> = new Map();
+  // resent on "ready" so a reloaded webview can recover. Per-instance: the main and
+  // side panels show different panels.
+  private _route: Panel | undefined
 
-    private _disposables: Disposable[] = [];
+  // Until "ready", messages are only buffered: that handshake is the single path that
+  // renders a panel, for a new document and one reloaded after being hidden alike.
+  private _isWebviewReady = false
 
-    // sends a message to the main and side panels
-    public static async postMessage(...messages: Array<ExtensionToWebview>): Promise<void> {
-        for (const message of messages) {
-            TmcPanel.mainPanel?._postMessage(message, "Main webview");
-            TmcPanel.sidePanel?._postMessage(message, "Side webview");
+  // latest message per type targeted at _route's id, resent after it on "ready"
+  // so a reload doesn't lose one-shot results that already fired
+  private _messageBuffer = new Map<string, PanelMessage>()
+
+  private _disposables: Disposable[] = []
+
+  // `_panel.dispose()` fires `onDidDispose`, which calls back into `dispose()`
+  private _isDisposed = false
+
+  /**
+   * Shows the submissions the submit actions report in the side panel. Call once, at activation.
+   *
+   * An outcome for a submission the side panel is not showing reopens a closed panel on it, and
+   * otherwise is offered in a notification, so the student's current view stays put.
+   */
+  public static showSubmissionViews(
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+  ): Disposable {
+    const show = (panel: ExerciseSubmissionPanel): void =>
+      TmcPanel._showSubmission(extensionContext, actionContext, panel)
+    const repostShown = (): void => {
+      const route = TmcPanel.sidePanel?._route
+      const view = route?.type === "ExerciseSubmission" && submissionViews.latestView(route.id)
+      if (route?.type === "ExerciseSubmission" && view) {
+        TmcPanel.sidePanel?._postMessage(submissionViewMessage(actionContext, route, view))
+      }
+    }
+    const subscriptions = Disposable.from(
+      submissionViews.onDidOpen(show),
+      submissionViews.onDidRequestReveal(({ panel, section }) => {
+        TmcPanel._renderIn(false, extensionContext, actionContext, panel, true)
+        const sidePanel = TmcPanel.sidePanel
+        const view = submissionViews.latestView(panel.id)
+        if (view !== undefined) {
+          sidePanel?._postMessage(submissionViewMessage(actionContext, panel, view))
         }
-    }
-
-    private _postMessage(message: ExtensionToWebview, context: string): void {
-        // an entry for any other id could never match the resent _lastPanel, nor be cleared
-        if ("id" in message.target && message.target.id === this._lastPanel?.id) {
-            this._messageBuffer.set(`${message.target.id}:${message.type}`, message);
+        if (section) {
+          sidePanel?._postMessage({
+            type: "openExerciseSection",
+            target: { id: panel.id, type: panel.type },
+            section: section.name,
+            serial: section.serial,
+            shouldPaste: section.shouldPaste,
+          })
         }
-        postMessageToWebview(this._panel.webview, message, context);
-    }
-
-    // renders the `panel` in the main panel
-    public static async renderMain(
-        extensionUri: Uri,
-        extensionContext: vscode.ExtensionContext,
-        actionContext: ActionContext,
-        panel: Panel,
-    ): Promise<void> {
-        if (TmcPanel.mainPanel !== undefined) {
-            TmcPanel.mainPanel._panel.dispose();
+      }),
+      submissionViews.onDidFail(({ exerciseId, headline, error, tone }) => {
+        const sidePanel = TmcPanel.sidePanel
+        const route = sidePanel?._route
+        if (
+          route?.type === "ExerciseSubmission" &&
+          ExerciseIdentifier.key(route.exerciseId) === ExerciseIdentifier.key(exerciseId)
+        ) {
+          sidePanel?._postMessage(screenFailureMessage(route, headline, error, tone))
         }
-        const currentPanel = await TmcPanel.renderNew(
-            extensionUri,
-            extensionContext,
-            actionContext,
-            panel,
-            true,
-        );
-        TmcPanel.mainPanel = currentPanel;
-    }
-
-    // renders the `panel` in the side panel
-    static async renderSide(
-        extensionUri: Uri,
-        extensionContext: vscode.ExtensionContext,
-        actionContext: ActionContext,
-        panel: Panel,
-    ): Promise<void> {
-        const column = ViewColumn.Two;
-        if (TmcPanel.sidePanel !== undefined) {
-            Logger.info(`Revealing existing side panel for "${panel.type}"`);
-            await TmcPanel.sidePanel._renderPanel(panel);
-            TmcPanel.sidePanel._panel.reveal(column, false);
-        } else {
-            const currentPanel = await TmcPanel.renderNew(
-                extensionUri,
-                extensionContext,
-                actionContext,
-                panel,
-                false,
-            );
-            TmcPanel.sidePanel = currentPanel;
+      }),
+      submissionViews.onDidClearFailures(({ exerciseId, operation }) => {
+        const route = TmcPanel.sidePanel?._route
+        if (
+          route?.type === "ExerciseSubmission" &&
+          ExerciseIdentifier.key(route.exerciseId) === ExerciseIdentifier.key(exerciseId)
+        ) {
+          TmcPanel.sidePanel?._postMessage(failuresClearedMessage(route, operation))
         }
-    }
-
-    // convenience function for rendering a main/side panel when no main/side panel exists yet
-    // otherwise the panel can simply be "revealed" with `panel.reveal`
-    static async renderNew(
-        extensionUri: Uri,
-        extensionContext: vscode.ExtensionContext,
-        actionContext: ActionContext,
-        panel: Panel,
-        isMain: boolean,
-    ): Promise<TmcPanel> {
-        let panelViewType;
-        let column;
-        if (isMain) {
-            panelViewType = "mainPanel";
-            column = ViewColumn.One;
-        } else {
-            panelViewType = "sidePanel";
-            column = ViewColumn.Two;
+      }),
+      submissionViews.onDidClear(() => {
+        if (TmcPanel.sidePanel?._route?.type === "ExerciseSubmission") {
+          TmcPanel.sidePanel.dispose()
         }
-        const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", column, {
-            enableScripts: true,
-            // otherwise a hidden-then-revealed panel reloads and drops messages posted
-            // before the reveal
-            retainContextWhenHidden: true,
-            localResourceRoots: [
-                Uri.joinPath(extensionUri, "out"),
-                Uri.joinPath(extensionUri, "webview-ui/public/build"),
-                Uri.joinPath(extensionUri, "media"),
-                Uri.joinPath(extensionUri, "resources"),
-            ],
-        });
-        const currentPanel = new TmcPanel(
-            webviewPanel,
-            extensionContext,
-            extensionUri,
-            actionContext,
-            isMain,
-        );
-        await currentPanel._renderPanel(panel);
-        return currentPanel;
-    }
-
-    private constructor(
-        panel: WebviewPanel,
-        extensionContext: vscode.ExtensionContext,
-        extensionUri: Uri,
-        actionContext: ActionContext,
-        isMain: boolean,
-    ) {
-        this._panel = panel;
-
-        this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
-
-        this._panel.webview.html = this._getWebviewContent(this._panel.webview, extensionUri);
-
-        this._setWebviewMessageListener(
-            this._panel.webview,
-            extensionContext,
-            extensionUri,
-            actionContext,
-        );
-
-        this._isMain = isMain;
-        Logger.info(`Created ${isMain ? "main" : "side"} panel`);
-    }
-
-    // disposes the side panel when disposing the main panel as well
-    public dispose(): void {
-        Logger.info(`Disposing ${this._isMain ? "main" : "side"} panel`);
-        this._panel.dispose();
-
-        if (this._isMain) {
-            TmcPanel.mainPanel = undefined;
-            // if we're disposing the main panel, we'll dispose the side panel as well
-            TmcPanel.sidePanel?.dispose();
+      }),
+      submissionViews.onDidUpdate(({ panel, view, shouldReopen }) => {
+        const { sidePanel } = TmcPanel
+        if (sidePanel?._route?.id === panel.id) {
+          sidePanel._postMessage(submissionViewMessage(actionContext, panel, view))
+        } else if (shouldReopen && sidePanel === undefined) {
+          show(panel)
+        } else if (shouldReopen) {
+          void offerSubmissionOutcome(actionContext, panel, view, show)
         }
-        TmcPanel.sidePanel = undefined;
+      }),
+      ...(isReady(actionContext)
+        ? [
+            actionContext.startup.workspaceManager.onDidChangeExercises(repostShown),
+            actionContext.startup.userData.onDidChangeCourses(repostShown),
+          ]
+        : []),
+    )
+    // A login or logout turns the results screen's Submit into Log In to Submit, or back.
+    let wasLoggedIn = actionContext.authState.loggedIn
+    actionContext.authState.subscribe((loggedIn) => {
+      const isAccountChange = loggedIn !== wasLoggedIn
+      wasLoggedIn = loggedIn
+      submissionViews.replaceLatest(({ panel, view }) =>
+        isSupersededByAuthChange(view, loggedIn && isAccountChange)
+          ? standingAfterFailure(actionContext, panel)
+          : undefined,
+      )
+      // What failed under the earlier account, or for the lack of one, is no longer the story.
+      if (isAccountChange) {
+        TmcPanel.mainPanel?._clearFailures()
+        TmcPanel.sidePanel?._clearFailures()
+      }
+      repostShown()
+    })
+    return subscriptions
+  }
 
-        while (this._disposables.length) {
-            const disposable = this._disposables.pop();
-            if (disposable) {
-                disposable.dispose();
-            }
+  /**
+   * Shows each login's screen in the main panel, with the views the login sends it. Call once,
+   * at activation.
+   */
+  public static showLoginScreens(
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+  ): Disposable {
+    const post = (panel: LoginPanel): void => {
+      const view = loginScreens.latestView(panel.id)
+      if (view && TmcPanel.mainPanel?._route?.id === panel.id) {
+        TmcPanel.mainPanel._postMessage({
+          type: "loginView",
+          target: { id: panel.id, type: panel.type },
+          view,
+        })
+      }
+    }
+    return Disposable.from(
+      loginScreens.onDidOpen((panel) => {
+        TmcPanel.renderMain(extensionContext, actionContext, panel)
+        post(panel)
+      }),
+      loginScreens.onDidUpdate(({ panel }) => post(panel)),
+      loginScreens.onDidRequestClose((panel) => {
+        if (TmcPanel.mainPanel?._route?.id === panel.id) {
+          TmcPanel.mainPanel.dispose()
         }
+      }),
+    )
+  }
+
+  /** Shows `panel` in the side panel with the latest view its submission reported. */
+  private static _showSubmission(
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+    panel: ExerciseSubmissionPanel,
+  ): void {
+    TmcPanel.renderSide(extensionContext, actionContext, panel)
+    const view = submissionViews.latestView(panel.id)
+    if (view !== undefined) {
+      TmcPanel.sidePanel?._postMessage(submissionViewMessage(actionContext, panel, view))
+    }
+  }
+
+  /** Whether the student can see either panel now, whichever screen it shows. */
+  public static isAnyScreenVisible(): boolean {
+    return [TmcPanel.mainPanel, TmcPanel.sidePanel].some(
+      (shown) => shown !== undefined && !shown._isDisposed && shown._panel.visible,
+    )
+  }
+
+  /** Tells the two panels' log lines apart. */
+  private get _webviewName(): string {
+    return this._isMain ? "Main webview" : "Side webview"
+  }
+
+  /** Takes back every failure this panel's screen shows. */
+  private _clearFailures(): void {
+    const route = this._route
+    if (route?.type === "CourseDetails" || route?.type === "ExerciseSubmission") {
+      this._postMessage(failuresClearedMessage(route))
+    }
+  }
+
+  /** Sends `message` to this panel's webview alone, buffering it for a reload. */
+  private _postMessage(message: PanelMessage): void {
+    if (message.type === "failuresCleared") {
+      for (const [key, buffered] of this._messageBuffer) {
+        if (
+          buffered.type === "operationFailed" &&
+          buffered.target.id === message.target.id &&
+          (message.operation === undefined || buffered.failure.operation === message.operation)
+        ) {
+          this._messageBuffer.delete(key)
+        }
+      }
+      // Not buffered: a reloaded document is resent only the failures still standing.
+      this._postTransient(message)
+      return
+    }
+    // A `reply` is left out: the reloaded webview asks again, and a replayed answer to the
+    // request of a page that no longer exists settles nothing.
+    if (message.type !== "reply" && message.target.id === this._route?.id) {
+      // Each failure is resent, not only the latest: a reloaded screen lists them all.
+      const key =
+        message.type === "operationFailed"
+          ? `${message.target.id}:${message.type}:${message.failure.serial}`
+          : `${message.target.id}:${message.type}`
+      this._messageBuffer.set(key, message)
+      this._dropOldestFailures()
+    }
+    this._postTransient(message)
+  }
+
+  private _dropOldestFailures(): void {
+    const failures = [...this._messageBuffer].filter(
+      ([, buffered]) => buffered.type === "operationFailed",
+    )
+    for (const [key] of failures.slice(0, -FAILURES_RESENT)) {
+      this._messageBuffer.delete(key)
+    }
+  }
+
+  private _postTransient(message: PanelMessage): void {
+    if (!this._isWebviewReady || this._isDisposed) {
+      return
+    }
+    postMessageToWebview(this._panel.webview, message, this._webviewName)
+  }
+
+  /** Shows `route` in the main panel, creating the panel if needed. */
+  public static renderMain(
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+    route: Panel,
+  ): void {
+    TmcPanel._renderIn(true, extensionContext, actionContext, route)
+  }
+
+  /**
+   * Shows `route` in the side panel without taking focus: submission results appear while the
+   * student is typing, and must not pull their keystrokes away.
+   */
+  public static renderSide(
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+    route: Panel,
+  ): void {
+    TmcPanel._renderIn(false, extensionContext, actionContext, route)
+  }
+
+  /**
+   * Shows `route`, which the student asked for, focused in the panel other than the screen they
+   * asked from, as a tab in that screen's editor group; asked from no screen, in the side panel.
+   */
+  public static renderBeside(
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+    route: Panel,
+    askedFrom: "main" | "side" | undefined,
+  ): void {
+    const opener = askedFrom === "main" ? TmcPanel.mainPanel : TmcPanel.sidePanel
+    const column = askedFrom === undefined ? undefined : opener?._panel.viewColumn
+    TmcPanel._renderIn(askedFrom === "side", extensionContext, actionContext, route, true, column)
+  }
+
+  /**
+   * @param isRequested The student asked for `route`, so it takes the focus even beside.
+   * @param column The editor group to show the panel in; by default the main panel stays where it
+   * is, and the side panel stays beside the first group, which holds the exercise files.
+   */
+  private static _renderIn(
+    isMain: boolean,
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+    route: Panel,
+    isRequested = isMain,
+    column?: ViewColumn,
+  ): void {
+    const existing = isMain ? TmcPanel.mainPanel : TmcPanel.sidePanel
+    if (existing !== undefined) {
+      Logger.info(`Revealing the ${existing._webviewName} for "${route.type}"`)
+      // Rendering the shown screen again would reload its document for nothing.
+      if (existing._route?.id !== route.id) {
+        existing._render(route)
+      }
+      // A side panel Error Details put among the exercise files goes back beside them.
+      const isAmongCode = !isMain && existing._panel.viewColumn === ViewColumn.One
+      existing._panel.reveal(column ?? (isAmongCode ? ViewColumn.Two : undefined), !isRequested)
+      return
+    }
+    // VS Code restores a background webview without asking the serializer until it is shown,
+    // so the main panel a reload brought back may sit there unadopted.
+    const restoredMainTabs = isMain ? panelTabs(MAIN_PANEL_VIEW_TYPE) : []
+    const restoredColumn = restoredMainTabs[0]?.group.viewColumn
+    // `Beside` would follow the active group, which a third group could be.
+    const showOptions = isMain
+      ? { viewColumn: column ?? restoredColumn ?? ViewColumn.One, preserveFocus: false }
+      : { viewColumn: column ?? ViewColumn.Two, preserveFocus: !isRequested }
+    const panelViewType = isMain ? MAIN_PANEL_VIEW_TYPE : SIDE_PANEL_VIEW_TYPE
+    const webviewPanel = window.createWebviewPanel(panelViewType, "TestMyCode", showOptions, {
+      ...webviewOptions(extensionContext.extensionUri),
+      enableFindWidget: true,
+    })
+    const created = TmcPanel._adopt(webviewPanel, extensionContext, actionContext, route, isMain)
+    if (isMain) {
+      TmcPanel.mainPanel = created
+      void closeTabs(restoredMainTabs, "restored main panel tab(s), replaced by a new one")
+    } else {
+      TmcPanel.sidePanel = created
+    }
+  }
+
+  /**
+   * Reopens the main panel VS Code restores after a window reload, on the screen its webview
+   * saved. One whose screen cannot be shown any more, or whose activation failures this one
+   * did not repeat, is closed instead. A restored side panel is always closed: the submission
+   * it showed lived only in the previous extension host's memory.
+   */
+  public static registerSerializers(
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+  ): Disposable {
+    const main = TmcPanel._registerMainSerializer(extensionContext, actionContext)
+    // Without a serializer VS Code would restore the side panel's editor group empty.
+    const side = window.registerWebviewPanelSerializer(SIDE_PANEL_VIEW_TYPE, {
+      deserializeWebviewPanel: async (webviewPanel) => {
+        Logger.info("Closing a restored side panel, whose submission is gone")
+        webviewPanel.dispose()
+      },
+    })
+    // VS Code asks the serializer only once a restored tab is shown, so a background one stays.
+    void closeSidePanelTabs()
+    return Disposable.from(main, side)
+  }
+
+  private static _registerMainSerializer(
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+  ): Disposable {
+    return window.registerWebviewPanelSerializer(MAIN_PANEL_VIEW_TYPE, {
+      deserializeWebviewPanel: async (webviewPanel, state) => {
+        const route = restoredRoute(state, actionContext, extensionContext)
+        if (!route || TmcPanel.mainPanel !== undefined) {
+          Logger.info("Closing a restored main panel, which has no screen to show")
+          webviewPanel.dispose()
+          return
+        }
+        Logger.info(`Restoring the main panel on "${route.type}"`)
+        // The saved options may name an older install's directory.
+        webviewPanel.webview.options = webviewOptions(extensionContext.extensionUri)
+        TmcPanel.mainPanel = TmcPanel._adopt(
+          webviewPanel,
+          extensionContext,
+          actionContext,
+          route,
+          true,
+        )
+      },
+    })
+  }
+
+  private static _adopt(
+    webviewPanel: WebviewPanel,
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+    route: Panel,
+    isMain: boolean,
+  ): TmcPanel {
+    const { extensionUri } = extensionContext
+    webviewPanel.iconPath = {
+      light: Uri.joinPath(extensionUri, "media", "TMC-light.svg"),
+      dark: Uri.joinPath(extensionUri, "media", "TMC.svg"),
+    }
+    const currentPanel = new TmcPanel(webviewPanel, extensionContext, actionContext, isMain)
+    currentPanel._render(route)
+    return currentPanel
+  }
+
+  private constructor(
+    panel: WebviewPanel,
+    extensionContext: vscode.ExtensionContext,
+    actionContext: ActionContext,
+    isMain: boolean,
+  ) {
+    this._panel = panel
+    this._actionContext = actionContext
+    this._isMain = isMain
+
+    this._panel.onDidDispose(() => this.dispose(), null, this._disposables)
+    // A hidden webview's document is destroyed; the one VS Code loads on reveal sends "ready".
+    this._panel.onDidChangeViewState(
+      ({ webviewPanel }) => {
+        if (!webviewPanel.visible) {
+          this._isWebviewReady = false
+        }
+        this._recordShown()
+      },
+      null,
+      this._disposables,
+    )
+
+    this._panel.webview.html = webviewContent(this._panel.webview, extensionContext.extensionUri)
+
+    if (isReady(actionContext)) {
+      this._disposables.push(
+        actionContext.startup.userData.onDidChangeCourses((changed) =>
+          this._onDidChangeCourses(changed),
+        ),
+        // Every other source of the Courses view, gathered into one change per burst.
+        actionContext.coursesTree.onDidRender(() => this._onDidChangeCourses(undefined)),
+        recentUpdates.onDidChange(() => this._onDidChangeCourses(undefined)),
+        failedUpdates.onDidChange(() => this._onDidChangeCourses(undefined)),
+        recentPolicyChanges.onDidChange(() => this._onDidChangeCourses(undefined)),
+        lastExerciseReached.onDidChange(() => this._onDidChangeCourses(undefined)),
+        shownCourseHome.onDidClearFailures(({ courseId, operation }) => {
+          const route = this._route
+          if (
+            route?.type === "CourseDetails" &&
+            CourseIdentifier.equals(route.courseId, courseId)
+          ) {
+            this._postMessage(failuresClearedMessage(route, operation))
+          }
+        }),
+        // Installing a language extension the course home asks for clears its notice.
+        extensions.onDidChange(() => this._onDidChangeCourses(undefined)),
+        shownCourseHome.onDidFail(({ courseId, headline, error, tone }) => {
+          const route = this._route
+          if (
+            route?.type === "CourseDetails" &&
+            CourseIdentifier.equals(route.courseId, courseId)
+          ) {
+            this._postMessage(screenFailureMessage(route, headline, error, tone))
+          }
+        }),
+      )
     }
 
-    // remembers `panel` so "ready" can resend it
-    private async _renderPanel(panel: Panel): Promise<void> {
-        this._lastPanel = panel;
-        this._messageBuffer.clear();
-        await renderPanel(panel, this._panel.webview);
+    const handlerContext: HandlerContext = {
+      host: this._createHost(extensionContext),
+      actionContext,
+    }
+    const handlers = {
+      ...messageHandlers,
+      ready: { requiresReady: false, handle: () => this._onReady() },
+    } as const
+    this._panel.webview.onDidReceiveMessage(
+      (message: unknown) => dispatch(handlers, message, handlerContext),
+      undefined,
+      this._disposables,
+    )
+  }
+
+  public dispose(): void {
+    if (this._isDisposed) {
+      return
+    }
+    this._isDisposed = true
+    this._panel.dispose()
+    this._leaveLoginScreen()
+
+    if (this._isMain) {
+      TmcPanel.mainPanel = undefined
+      shownCourseHome.set(undefined)
+    } else {
+      TmcPanel.sidePanel = undefined
+      submissionViews.setShown(undefined)
     }
 
-    private _getWebviewContent(webview: Webview, extensionUri: Uri): string {
-        const stylesUri = getUri(webview, extensionUri, [
-            "webview-ui",
-            "public",
-            "build",
-            "bundle.css",
-        ]);
-        const scriptUri = getUri(webview, extensionUri, [
-            "webview-ui",
-            "public",
-            "build",
-            "bundle.js",
-        ]);
+    while (this._disposables.length > 0) {
+      const disposable = this._disposables.pop()
+      if (disposable) {
+        disposable.dispose()
+      }
+    }
+  }
 
-        const nonce = getNonce();
+  private _createHost(extensionContext: vscode.ExtensionContext): PanelHost {
+    const currentRoute = (): Panel | undefined => this._route
+    const isVisible = (): boolean => !this._isDisposed && this._panel.visible
+    return {
+      name: this._webviewName,
+      get route() {
+        return currentRoute()
+      },
+      get isVisible() {
+        return isVisible()
+      },
+      post: (message) => this._postMessage(message),
+      closeSidePanel: () => TmcPanel.sidePanel?.dispose(),
+      showBeside: (route) =>
+        TmcPanel.renderBeside(
+          extensionContext,
+          this._actionContext,
+          route,
+          this._isMain ? "main" : "side",
+        ),
+    }
+  }
 
-        return /*html*/ `
+  /**
+   * Keeps a CourseDetails screen and its tab title on the course's current state. Not
+   * buffered: the screen asks for it whenever its document loads.
+   *
+   * @param changed The one course that changed; `undefined` when any may have.
+   */
+  private _onDidChangeCourses(changed: CourseIdentifier | undefined): void {
+    const route = this._route
+    if (route?.type !== "CourseDetails" || !isReady(this._actionContext)) {
+      return
+    }
+    if (changed && !CourseIdentifier.equals(changed, route.courseId)) {
+      return
+    }
+    // A removed course leaves nothing to show, e.g. after Remove Course in its own notice.
+    if (this._actionContext.startup.userData.getCourse(route.courseId).err) {
+      this.dispose()
+      return
+    }
+    // Hidden, the document is gone, and the one loaded on reveal asks for the view itself.
+    if (!this._isWebviewReady) {
+      return
+    }
+    const view = buildCourseHomeView(this._actionContext, route.courseId)
+    if (view.err) {
+      return
+    }
+    this._panel.title = panelTitle(route, this._actionContext)
+    this._postTransient({
+      type: "setCourseHomeView",
+      target: { id: route.id, type: route.type },
+      view: view.val,
+    })
+  }
+
+  /**
+   * Tells {@link shownCourseHome} which course this main panel shows on screen, and
+   * {@link submissionViews} which submission this side panel shows, if any.
+   */
+  private _recordShown(): void {
+    if (this._isDisposed) {
+      return
+    }
+    const route = this._route
+    const isVisible = this._panel.visible
+    if (this._isMain) {
+      shownCourseHome.set(route?.type === "CourseDetails" && isVisible ? route.courseId : undefined)
+    } else {
+      submissionViews.setShown(
+        route?.type === "ExerciseSubmission" && isVisible ? route : undefined,
+      )
+    }
+  }
+
+  /** Tells the login this panel shows, if any, that its screen is gone. */
+  private _leaveLoginScreen(): void {
+    if (this._route?.type === "Login") {
+      loginScreens.leave(this._route.id)
+    }
+  }
+
+  // remembers `route` so "ready" can (re)send it
+  private _render(route: Panel): void {
+    if (this._route?.id !== route.id) {
+      this._leaveLoginScreen()
+    }
+    this._route = route
+    this._recordShown()
+    this._messageBuffer.clear()
+    this._panel.title = panelTitle(route, this._actionContext)
+    if (this._isWebviewReady && !this._isDisposed) {
+      renderPanel(route, this._panel.webview)
+    }
+  }
+
+  private _onReady(): void {
+    this._isWebviewReady = true
+    const route = this._route
+    Logger.info(
+      `Received "ready" from the ${this._webviewName}` +
+        (route ? `, resending panel "${route.type}"` : ", no panel to resend"),
+    )
+    if (!route) {
+      return
+    }
+    // Not `_render`, which would clear the buffer about to be resent.
+    renderPanel(route, this._panel.webview)
+    for (const buffered of this._messageBuffer.values()) {
+      postMessageToWebview(this._panel.webview, buffered, this._webviewName)
+    }
+  }
+}
+
+/**
+ * Whether an account change makes `view` out of date: a submission that failed before reaching
+ * the backend. One whose remedy is logging in stays until a login, as it still says what to do.
+ */
+function isSupersededByAuthChange(view: SubmissionView, isLogin: boolean): boolean {
+  return view.phase === "failed" && !view.canKeepWaiting && (isLogin || !offersLogIn(view.error))
+}
+
+/** The exercise's standing, shown in place of a failure that no longer holds. */
+function standingAfterFailure(
+  actionContext: ActionContext,
+  panel: ExerciseSubmissionPanel,
+): SubmissionView | undefined {
+  return isReady(actionContext)
+    ? exerciseStandingView(actionContext.startup.userData, panel.exerciseId)
+    : undefined
+}
+
+function submissionViewMessage(
+  actionContext: ActionContext,
+  panel: ExerciseSubmissionPanel,
+  view: SubmissionView,
+): PanelMessage {
+  if (!isReady(actionContext)) {
+    return { type: "submissionView", target: { id: panel.id, type: panel.type }, view }
+  }
+  const { userData } = actionContext.startup
+  const stored = getExerciseIncludingClosedChapters(userData, panel.exerciseId)
+  const exercise = stored.ok ? stored.val.exercise : undefined
+  const refusal =
+    exercise && submitRefusalOf(exercise, new Date(), stored.ok ? stored.val.course : undefined)
+  // Without a submission the view is the stored standing, which a course refresh changes. A
+  // submission that failed is out of date once the exercise can no longer be submitted at all.
+  const isStanding =
+    view.phase === "standing" || (view.phase === "failed" && !view.canKeepWaiting && !!refusal)
+  const current = withCurrentStanding(
+    userData,
+    isStanding ? (exerciseStandingView(userData, panel.exerciseId) ?? view) : view,
+    stored.ok ? stored.val : undefined,
+    panel.exerciseId,
+  )
+  const shown = withExerciseState(current, {
+    isOnDisk: actionContext.startup.workspaceManager.getExercise(panel.exerciseId) !== undefined,
+    isInCourse: stored.ok,
+    submitRefusal:
+      exercise && refusal
+        ? submitRefusalSentence(
+            refusal,
+            exercise.data.name,
+            exercise.kind === "mooc" ? exercise.data.chapter?.name : undefined,
+          )
+        : undefined,
+    submitRefusalLabel: refusal && upperFirst(SUBMIT_REFUSAL_LABELS[refusal]),
+    triesLeft: exercise?.kind === "mooc" ? exercise.data.triesLeft : undefined,
+    pendingReview:
+      exercise?.kind === "mooc" && exercise.data.pendingReview
+        ? pendingReviewSentence(exercise.data.pendingReview, exercise.data.awardedPoints)
+        : undefined,
+    solutionUrl: exercise && stored.ok ? modelSolutionUrl(stored.val) : undefined,
+    materialUrl: exercise && stored.ok ? materialUrlOf(stored.val) : undefined,
+    isLoggedOut: !actionContext.authState.loggedIn,
+    arePointsHeld:
+      exercise?.kind === "mooc" &&
+      arePointsHeldForReview(exercise.data.pendingReview, exercise.data.awardedPoints),
+  })
+  return { type: "submissionView", target: { id: panel.id, type: panel.type }, view: shown }
+}
+
+/**
+ * `view` with whether the exercise is passed and the exercise to go on to, as the course stands
+ * now: a refresh since the grading can hold its points for a review, or end the enrollment.
+ */
+function withCurrentStanding(
+  userData: UserData,
+  view: SubmissionView,
+  stored: StoredExercise | undefined,
+  exerciseId: ExerciseIdentifier,
+): SubmissionView {
+  if (!stored || (view.phase !== "finished" && view.phase !== "standing")) {
+    return view
+  }
+  const { nextExercise: _graded, isExercisePassed: gradedPassed, ...rest } = view
+  const isExercisePassed = gradedPassed === undefined ? undefined : unwrap(stored.exercise).passed
+  const nextExercise =
+    leadsOnFrom(stored.exercise) && stored.course
+      ? nextExerciseOf(userData, LocalCourseData.getCourseId(stored.course), exerciseId)
+      : undefined
+  return {
+    ...rest,
+    ...(isExercisePassed === undefined ? {} : { isExercisePassed }),
+    ...(nextExercise ? { nextExercise } : {}),
+  }
+}
+
+/** The exercise's course material page, else its course's. */
+function materialUrlOf({ exercise, course }: StoredExercise): string | undefined {
+  if (exercise.kind === "mooc") {
+    return exercise.data.pageUrl
+  }
+  return course.kind === "tmc" ? (course.data.materialUrl ?? undefined) : undefined
+}
+
+/** Offers to show the outcome of a submission the side panel is not showing. */
+async function offerSubmissionOutcome(
+  { dialog }: ActionContext,
+  panel: ExerciseSubmissionPanel,
+  view: SubmissionView,
+  show: (panel: ExerciseSubmissionPanel) => void,
+): Promise<void> {
+  const isShowRequested = await dialog.offer(
+    `Submission of ${panel.exerciseName}: ${view.headline}`,
+    "Show Result",
+  )
+  // A later submission of the exercise supersedes this one.
+  if (isShowRequested && submissionViews.latestView(panel.id) !== undefined) {
+    show(panel)
+  }
+}
+
+/** How many of a screen's failures a reloaded webview is sent again, the latest. */
+const FAILURES_RESENT = 5
+
+function webviewOptions(extensionUri: Uri): WebviewOptions {
+  return {
+    enableScripts: true,
+    localResourceRoots: [Uri.joinPath(extensionUri, "webview-ui/public/build")],
+  }
+}
+
+/** Closes every side panel tab, which at activation can only be one restored from before. */
+async function closeSidePanelTabs(): Promise<void> {
+  await closeTabs(
+    panelTabs(SIDE_PANEL_VIEW_TYPE),
+    "restored side panel tab(s), whose submission is gone",
+  )
+}
+
+/** The tabs of every panel of `viewType`, in this window's tab groups. */
+function panelTabs(viewType: string): vscode.Tab[] {
+  return window.tabGroups.all.flatMap((group) =>
+    group.tabs.filter((tab) => {
+      const tabViewType = (tab.input as { viewType?: unknown } | undefined)?.viewType
+      // VS Code prefixes the type a webview was created with, e.g. "mainThreadWebview-".
+      return typeof tabViewType === "string" && tabViewType.endsWith(viewType)
+    }),
+  )
+}
+
+/** @param what Completes "Closing <n> ..." in the log. */
+async function closeTabs(tabs: vscode.Tab[], what: string): Promise<void> {
+  if (tabs.length === 0) {
+    return
+  }
+  Logger.info(`Closing ${tabs.length} ${what}`)
+  try {
+    await window.tabGroups.close(tabs)
+  } catch (error) {
+    Logger.warn(`Could not close ${what}`, error)
+  }
+}
+
+/** The screen a restored main panel's saved `state` names, if it can still be shown. */
+function restoredRoute(
+  state: unknown,
+  actionContext: ActionContext,
+  extensionContext: vscode.ExtensionContext,
+): Panel | undefined {
+  const saved = WebviewStateSchema.safeParse(state)
+  const route = saved.success ? saved.data.route : undefined
+  switch (route?.type) {
+    case "CourseDetails": {
+      const isCourseStored =
+        isReady(actionContext) && actionContext.startup.userData.getCourse(route.courseId).ok
+      return isCourseStored ? { id: nextPanelId(), ...route } : undefined
+    }
+    case "ErrorHelp":
+      if (route.kind === "operation") {
+        return route.detailsId === undefined ? undefined : errorDetailsPanel(route.detailsId)
+      }
+      // A startup help reopened after a healthy start would list another start's failures.
+      return route.kind === "startup" && isReady(actionContext)
+        ? undefined
+        : initializationErrorHelpPanel(actionContext, extensionContext)
+    case "AddCourse":
+      return isReady(actionContext) ? { id: nextPanelId(), type: route.type } : undefined
+    case undefined:
+      return undefined
+    default:
+      return assertUnreachable(route)
+  }
+}
+
+function webviewContent(webview: Webview, extensionUri: Uri): string {
+  const stylesUri = getUri(webview, extensionUri, ["webview-ui", "public", "build", "bundle.css"])
+  const scriptUri = getUri(webview, extensionUri, ["webview-ui", "public", "build", "bundle.js"])
+  const codiconCssUri = getUri(webview, extensionUri, [
+    "webview-ui",
+    "public",
+    "build",
+    "codicon.css",
+  ])
+
+  const nonce = getNonce()
+
+  return /*html*/ `
             <!DOCTYPE html>
             <html lang="en">
             <head>
@@ -236,681 +875,26 @@ export class TmcPanel {
                     http-equiv="Content-Security-Policy"
                     content="
                         default-src 'none';
-                        img-src ${webview.cspSource} https:;;
+                        img-src ${webview.cspSource};
+                        font-src ${webview.cspSource};
                         style-src 'nonce-${nonce}';
                         script-src 'nonce-${nonce}';"
                 />
                 <meta property="csp-nonce" content="${nonce}" />
                 <link nonce="${nonce}" rel="stylesheet" type="text/css" href="${stylesUri}" />
-                <script defer nonce="${nonce}" src="${scriptUri}" />
+                <!-- id required: vscode-icon clones this stylesheet into each icon's shadow root.
+                     crossorigin: serveCodiconsFromMemory reads its rules. -->
+                <link
+                    nonce="${nonce}"
+                    id="vscode-codicon-stylesheet"
+                    rel="stylesheet"
+                    type="text/css"
+                    crossorigin="anonymous"
+                    href="${codiconCssUri}"
+                />
+                <script defer nonce="${nonce}" src="${scriptUri}"></script>
             </head>
-                <body>
-                </body>
+            <body></body>
             </html>
-
-            <style>
-                body {
-                    /* ensures no layout shift during loading */
-                    scrollbar-gutter: stable;
-                }
-            </style>
-      `;
-    }
-
-    // receives messages from the webview
-    private _setWebviewMessageListener(
-        webview: Webview,
-        extensionContext: vscode.ExtensionContext,
-        extensionUri: Uri,
-        actionContext: ActionContext,
-    ): void {
-        webview.onDidReceiveMessage(
-            async (message: WebviewToExtension) => {
-                switch (message.type) {
-                    case "ready": {
-                        Logger.info(
-                            `Received "ready" from ${this._isMain ? "main" : "side"} webview` +
-                                (this._lastPanel
-                                    ? `, resending panel "${this._lastPanel.type}"`
-                                    : ", no panel to resend"),
-                        );
-                        if (this._lastPanel) {
-                            // not this._renderPanel(), which would clear the buffer
-                            // we're about to resend
-                            await renderPanel(this._lastPanel, webview);
-                            const context = this._isMain ? "Main webview" : "Side webview";
-                            for (const buffered of this._messageBuffer.values()) {
-                                postMessageToWebview(webview, buffered, context);
-                            }
-                        }
-                        break;
-                    }
-                    case "requestCourseDetailsData": {
-                        const { tmc, userData, workspaceManager } = actionContext;
-                        if (!(tmc.ok && userData.ok && workspaceManager.ok)) {
-                            Logger.error("Extension was not initialized properly");
-                            return;
-                        }
-
-                        const course = userData.val.getCourse(message.sourcePanel.courseId);
-                        postMessageToWebview(webview, {
-                            type: "setCourseData",
-                            target: message.sourcePanel,
-                            courseData: course,
-                        });
-
-                        tmc.val.getCourseDetails(message.sourcePanel.courseId).then((apiCourse) => {
-                            const offlineMode = apiCourse.err; // failed to get course details = offline mode
-                            const exerciseData = new Map<
-                                string,
-                                UITypes.CourseDetailsExerciseGroup
-                            >();
-
-                            const mapStatus = (
-                                status: ExerciseStatus,
-                                expired: boolean,
-                            ): UITypes.ExerciseStatus => {
-                                switch (status) {
-                                    case ExerciseStatus.Closed:
-                                        return "closed";
-                                    case ExerciseStatus.Open:
-                                        return "opened";
-                                    default:
-                                        return expired ? "expired" : "new";
-                                }
-                            };
-                            const currentDate = new Date();
-                            postMessageToWebview(webview, {
-                                type: "setCourseDisabledStatus",
-                                target: message.sourcePanel,
-                                courseId: course.id,
-                                disabled: course.disabled,
-                            });
-                            course.exercises.forEach((ex) => {
-                                const nameMatch = ex.name.match(/(\w+)-(.+)/);
-                                const groupName = nameMatch?.[1] || "";
-                                const group = exerciseData.get(groupName);
-                                const name = nameMatch?.[2] || "";
-                                const exData = workspaceManager.val.getExerciseBySlug(
-                                    course.name,
-                                    ex.name,
-                                );
-                                const softDeadline = ex.softDeadline
-                                    ? parseDate(ex.softDeadline)
-                                    : null;
-                                const hardDeadline = ex.deadline ? parseDate(ex.deadline) : null;
-                                postMessageToWebview(webview, {
-                                    type: "exerciseStatusChange",
-                                    target: message.sourcePanel,
-                                    exerciseId: ex.id,
-                                    status: mapStatus(
-                                        exData?.status ?? ExerciseStatus.Missing,
-                                        hardDeadline !== null && currentDate >= hardDeadline,
-                                    ),
-                                });
-                                const entry: UITypes.CourseDetailsExercise = {
-                                    id: ex.id,
-                                    name,
-                                    passed:
-                                        course.exercises.find((ce) => ce.id === ex.id)?.passed ||
-                                        false,
-                                    softDeadline,
-                                    softDeadlineString: softDeadline
-                                        ? dateToString(softDeadline)
-                                        : "-",
-                                    hardDeadline,
-                                    hardDeadlineString: hardDeadline
-                                        ? dateToString(hardDeadline)
-                                        : "-",
-                                    isHard:
-                                        softDeadline && hardDeadline
-                                            ? hardDeadline <= softDeadline
-                                            : true,
-                                };
-
-                                exerciseData.set(groupName, {
-                                    name: groupName,
-                                    nextDeadlineString: "",
-                                    exercises: group?.exercises.concat(entry) || [entry],
-                                });
-                            });
-                            const exerciseGroups = Array.from(exerciseData.values())
-                                .sort((a, b) => (a.name > b.name ? 1 : -1))
-                                .map((e) => {
-                                    return {
-                                        ...e,
-                                        exercises: e.exercises.sort((a, b) =>
-                                            a.name > b.name ? 1 : -1,
-                                        ),
-                                        nextDeadlineString: offlineMode
-                                            ? "Next deadline: Not available"
-                                            : parseNextDeadlineAfter(
-                                                  currentDate,
-                                                  e.exercises.map((ex) => ({
-                                                      date: ex.isHard
-                                                          ? ex.hardDeadline
-                                                          : ex.softDeadline,
-                                                      active: !ex.passed,
-                                                  })),
-                                              ),
-                                    };
-                                });
-                            postMessageToWebview(webview, {
-                                type: "setCourseGroups",
-                                target: message.sourcePanel,
-                                offlineMode,
-                                exerciseGroups,
-                            });
-                        });
-                        break;
-                    }
-                    case "requestExerciseSubmissionData": {
-                        break;
-                    }
-                    case "requestExerciseTestsData": {
-                        break;
-                    }
-                    case "requestLoginData": {
-                        break;
-                    }
-                    case "requestMyCoursesData": {
-                        const { userData, workspaceManager, resources } = actionContext;
-                        if (
-                            !(
-                                userData.ok &&
-                                workspaceManager.ok &&
-                                resources.ok &&
-                                resources.val.projectsDirectory
-                            )
-                        ) {
-                            Logger.error("Extension was not initialized properly");
-                            return;
-                        }
-
-                        postMessageToWebview(webview, {
-                            type: "setMyCourses",
-                            target: message.sourcePanel,
-                            courses: userData.val.getCourses(),
-                        });
-                        postMessageToWebview(webview, {
-                            type: "setTmcDataPath",
-                            target: message.sourcePanel,
-                            tmcDataPath: resources.val.projectsDirectory,
-                        });
-                        getFolderSize.loose(resources.val.projectsDirectory).then((size) =>
-                            postMessageToWebview(webview, {
-                                type: "setTmcDataSize",
-                                target: message.sourcePanel,
-                                tmcDataSize: formatSizeInBytes(size),
-                            }),
-                        );
-                        break;
-                    }
-                    case "requestSelectCourseData": {
-                        const { tmc } = actionContext;
-                        if (!tmc.ok) {
-                            Logger.error("Extension was not initialized properly");
-                            return;
-                        }
-
-                        postMessageToWebview(webview, {
-                            type: "setTmcBackendUrl",
-                            target: message.sourcePanel,
-                            tmcBackendUrl: TMC_BACKEND_URL,
-                        });
-
-                        const organizations = await tmc.val.getOrganizations();
-                        if (organizations.err) {
-                            actionContext.dialog.errorNotification(
-                                "Failed to open panel.",
-                                organizations.val,
-                            );
-                            return;
-                        }
-                        const organization = organizations.val.find(
-                            (o) => o.slug === message.sourcePanel.organizationSlug,
-                        );
-                        if (organization === undefined) {
-                            actionContext.dialog.errorNotification(
-                                `Failed to open panel: could not find organization "${message.sourcePanel.organizationSlug}"`,
-                            );
-                            return;
-                        }
-                        postMessageToWebview(webview, {
-                            type: "setOrganization",
-                            target: message.sourcePanel,
-                            organization,
-                        });
-
-                        const courses = await tmc.val.getCourses(organization.slug);
-                        if (courses.err) {
-                            actionContext.dialog.errorNotification(
-                                "Failed to open panel.",
-                                courses.val,
-                            );
-                            return;
-                        }
-                        postMessageToWebview(webview, {
-                            type: "setSelectableCourses",
-                            target: message.sourcePanel,
-                            courses: courses.val,
-                        });
-                        break;
-                    }
-                    case "requestSelectOrganizationData": {
-                        const { tmc } = actionContext;
-                        if (!tmc.ok) {
-                            Logger.error("Extension was not initialized properly");
-                            return;
-                        }
-
-                        postMessageToWebview(webview, {
-                            type: "setTmcBackendUrl",
-                            target: message.sourcePanel,
-                            tmcBackendUrl: TMC_BACKEND_URL,
-                        });
-
-                        const organizations = await tmc.val.getOrganizations();
-                        if (organizations.err) {
-                            actionContext.dialog.errorNotification(
-                                "Failed to open panel.",
-                                organizations.val,
-                            );
-                            return;
-                        }
-                        postMessageToWebview(webview, {
-                            type: "setOrganizations",
-                            target: message.sourcePanel,
-                            organizations: organizations.val,
-                        });
-                        break;
-                    }
-                    case "requestWelcomeData": {
-                        const { resources } = actionContext;
-                        if (!resources.ok) {
-                            Logger.error("Extension was not initialized properly");
-                            return;
-                        }
-
-                        const version = resources.val.extensionVersion;
-                        postMessageToWebview(webview, {
-                            type: "setWelcomeData",
-                            target: message.sourcePanel,
-                            version,
-                        });
-                        break;
-                    }
-                    case "login": {
-                        const result = await login(
-                            actionContext,
-                            message.username,
-                            message.password,
-                        );
-                        if (result.err) {
-                            postMessageToWebview(webview, {
-                                type: "loginError",
-                                target: message.sourcePanel,
-                                error: result.val.message,
-                            });
-                        } else {
-                            await this._renderPanel({
-                                id: randomPanelId(),
-                                type: "MyCourses",
-                                courseDeadlines: {},
-                            });
-                        }
-                        break;
-                    }
-                    case "openCourseDetails": {
-                        await this._renderPanel({
-                            id: randomPanelId(),
-                            type: "CourseDetails",
-                            courseId: message.courseId,
-                        });
-                        break;
-                    }
-                    case "selectOrganization": {
-                        await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
-                            id: randomPanelId(),
-                            type: "SelectOrganization",
-                            requestingPanel: message.sourcePanel,
-                        });
-                        break;
-                    }
-                    case "removeCourse": {
-                        const { userData } = actionContext;
-                        if (!userData.ok) {
-                            Logger.error("Extension was not initialized properly");
-                            return;
-                        }
-
-                        const course = userData.val.getCourse(message.id);
-                        if (
-                            await actionContext.dialog.explicitConfirmation(
-                                `Do you want to remove ${course.name} from your courses? \
-                                This won't delete your downloaded exercises.`,
-                            )
-                        ) {
-                            await removeCourse(actionContext, message.id);
-                            await this._renderPanel({
-                                id: randomPanelId(),
-                                type: "MyCourses",
-                                courseDeadlines: {},
-                            });
-                            actionContext.dialog.notification(
-                                `${course.name} was removed from courses.`,
-                            );
-                        }
-                        break;
-                    }
-                    case "openCourseWorkspace": {
-                        openWorkspace(actionContext, message.courseName);
-                        break;
-                    }
-                    case "changeTmcDataPath": {
-                        await vscode.commands.executeCommand("tmc.changeTmcDataPath");
-                        break;
-                    }
-                    case "openMyCourses": {
-                        await this._renderPanel({
-                            id: randomPanelId(),
-                            type: "MyCourses",
-                            courseDeadlines: {},
-                        });
-                        break;
-                    }
-                    case "closeExercises": {
-                        const result = await closeExercises(
-                            actionContext,
-                            message.ids,
-                            message.courseName,
-                        );
-                        if (result.err) {
-                            actionContext.dialog.errorNotification(
-                                "Errored while closing selected exercises.",
-                                result.val,
-                            );
-                        }
-                        break;
-                    }
-                    case "clearNewExercises": {
-                        const { userData } = actionContext;
-                        if (!userData.ok) {
-                            Logger.error("Extension was not initialized properly");
-                            return;
-                        }
-
-                        userData.val.clearFromNewExercises(message.courseId);
-                        break;
-                    }
-                    case "downloadExercises": {
-                        await uiDownloadExercises(
-                            actionContext.ui,
-                            actionContext,
-                            message.mode,
-                            message.courseId,
-                            message.ids,
-                        );
-                        break;
-                    }
-                    case "openExercises": {
-                        const { tmc, userData } = actionContext;
-                        if (!(tmc.ok && userData.ok)) {
-                            Logger.error("Extension was not initialized properly");
-                            return;
-                        }
-
-                        // todo: move to actions
-                        // download exercises that don't exist locally
-                        const course = userData.val.getCourseByName(message.courseName);
-                        const courseExercises = new Map(course.exercises.map((x) => [x.id, x]));
-                        const exercisesToOpen = compact(
-                            message.ids.map((x) => courseExercises.get(x)),
-                        );
-                        const localCourseExercises = await tmc.val.listLocalCourseExercises(
-                            message.courseName,
-                        );
-                        if (localCourseExercises.err) {
-                            actionContext.dialog.errorNotification(
-                                "Error trying to list local exercises while opening selected exercises.",
-                                localCourseExercises.val,
-                            );
-                            return;
-                        }
-                        const localCourseExerciseSlugs = localCourseExercises.val.map(
-                            (lce) => lce["exercise-slug"],
-                        );
-                        const exercisesToDownload = exercisesToOpen.filter(
-                            (eto) => !localCourseExerciseSlugs.includes(eto.name),
-                        );
-                        if (exercisesToDownload.length !== 0) {
-                            await uiDownloadExercises(
-                                actionContext.ui,
-                                actionContext,
-                                "",
-                                course.id,
-                                exercisesToDownload.map((etd) => etd.id),
-                            );
-                        }
-
-                        // now, actually open the exercises
-                        const result = await openExercises(
-                            extensionContext,
-                            actionContext,
-                            message.ids,
-                            message.courseName,
-                        );
-                        if (result.err) {
-                            actionContext.dialog.errorNotification(
-                                "Errored while opening selected exercises.",
-                                result.val,
-                            );
-                        }
-                        const exerciseStatusChangeMessages: Array<ExtensionToWebview> =
-                            message.ids.map((id) => {
-                                const message: ExtensionToWebview = {
-                                    type: "exerciseStatusChange",
-                                    exerciseId: id,
-                                    status: "opened",
-                                    target: {
-                                        type: "CourseDetails",
-                                    },
-                                };
-                                return message;
-                            });
-                        TmcPanel.postMessage(...exerciseStatusChangeMessages);
-                        break;
-                    }
-                    case "refreshCourseDetails": {
-                        const courseId: number = message.id;
-                        const updateResult = await updateCourse(actionContext, courseId);
-                        if (updateResult.err) {
-                            actionContext.dialog.errorNotification(
-                                "Failed to update course.",
-                                updateResult.val,
-                            );
-                        }
-                        await this._renderPanel({
-                            id: randomPanelId(),
-                            type: "CourseDetails",
-                            courseId: courseId,
-                        });
-                        break;
-                    }
-                    case "selectCourse": {
-                        await TmcPanel.renderSide(extensionUri, extensionContext, actionContext, {
-                            id: randomPanelId(),
-                            type: "SelectCourse",
-                            organizationSlug: message.slug,
-                            requestingPanel: message.sourcePanel,
-                        });
-                        break;
-                    }
-                    case "addCourse": {
-                        const { userData } = actionContext;
-                        if (!userData.ok) {
-                            Logger.error("Extension was not initialized properly");
-                            return;
-                        }
-
-                        const result = await addNewCourse(
-                            actionContext,
-                            message.organizationSlug,
-                            message.courseId,
-                        );
-                        if (result.err) {
-                            actionContext.dialog.errorNotification(
-                                "Failed to add new course.",
-                                result.val,
-                            );
-                        }
-                        postMessageToWebview(webview, {
-                            type: "setMyCourses",
-                            target: message.requestingPanel,
-                            courses: userData.val.getCourses(),
-                        });
-                        break;
-                    }
-                    case "relayToWebview": {
-                        if (this._isMain) {
-                            // relay msg from main panel to side panel
-                            if (TmcPanel.sidePanel) {
-                                TmcPanel.sidePanel._panel.webview.postMessage(message.message);
-                            }
-                        } else {
-                            // relay msg from side panel to main panel
-                            if (TmcPanel.mainPanel) {
-                                TmcPanel.mainPanel._panel.webview.postMessage(message.message);
-                            }
-                        }
-                        break;
-                    }
-                    case "closeSidePanel": {
-                        if (TmcPanel.sidePanel) {
-                            TmcPanel.sidePanel.dispose();
-                        }
-                        break;
-                    }
-                    case "cancelTests": {
-                        const interrupts = testInterrupts.get(message.testRunId);
-                        if (interrupts) {
-                            for (const interrupt of interrupts) {
-                                interrupt();
-                                testInterrupts.delete(message.testRunId);
-                            }
-                        }
-                        break;
-                    }
-                    case "submitExercise": {
-                        // actions.submitExercise renders the ExerciseSubmission panel behind
-                        // its single-flight guard; rendering it here would bypass the guard
-                        // and orphan the panel on a duplicate click
-                        try {
-                            const result = await commands.submitExercise(
-                                extensionContext,
-                                actionContext,
-                                message.exerciseUri,
-                            );
-                            if (result.err) {
-                                TmcPanel.postMessage({
-                                    type: "submitFailed",
-                                    target: { type: "ExerciseTests" },
-                                });
-                            }
-                        } catch (error) {
-                            Logger.error("Unexpected error during exercise submission", error);
-                            TmcPanel.postMessage({
-                                type: "submitFailed",
-                                target: { type: "ExerciseTests" },
-                            });
-                        }
-                        break;
-                    }
-                    case "pasteExercise": {
-                        const pasteResult = await pasteExercise(
-                            actionContext,
-                            message.course.name,
-                            message.exercise.name,
-                        );
-                        if (pasteResult.err) {
-                            actionContext.dialog.errorNotification(
-                                "Failed to send to TMC Paste.",
-                                pasteResult.val,
-                            );
-                            TmcPanel.postMessage({
-                                type: "pasteError",
-                                target: message.requestingPanel,
-                                error: pasteResult.val.message,
-                            });
-                        } else {
-                            const value = pasteResult.val || "Link not provided by server.";
-                            TmcPanel.postMessage({
-                                type: "pasteResult",
-                                target: message.requestingPanel,
-                                pasteLink: value,
-                            });
-                        }
-                        break;
-                    }
-                    case "openLinkInBrowser": {
-                        vscode.env.openExternal(vscode.Uri.parse(message.url));
-                        break;
-                    }
-                    case "requestInitializationErrors": {
-                        const {
-                            exerciseDecorationProvider,
-                            resources,
-                            tmc,
-                            userData,
-                            workspaceManager,
-                        } = actionContext;
-
-                        TmcPanel.postMessage({
-                            type: "initializationErrors",
-                            target: message.sourcePanel,
-                            cliFolder: cliFolder(extensionContext),
-                            initializationErrors: {
-                                tmc: formatError(tmc),
-                                userData: formatError(userData),
-                                workspaceManager: formatError(workspaceManager),
-                                resources: formatError(resources),
-                                exerciseDecorationProvider: formatError(exerciseDecorationProvider),
-                            },
-                        });
-                        break;
-                    }
-                    default:
-                        assertUnreachable(message);
-                }
-            },
-            undefined,
-            this._disposables,
-        );
-    }
-}
-
-// helper to make an exhaustive switch statement
-function assertUnreachable(x: never): never {
-    throw new Error(`unreachable ${x}`);
-}
-
-// helper to generate a random ids when creating panels
-export function randomPanelId(): number {
-    return Math.floor(Math.random() * 100_000_000);
-}
-
-function formatError(res: Result<unknown, Error>): { error: string; stack: string } | null {
-    if (res.err) {
-        if (res.val.cause) {
-            const error = `${res.val.message}: ${res.val.cause}`;
-            const stack = res.val.stack ?? "no stack trace";
-            return { error, stack };
-        } else {
-            const error = res.val.message;
-            const stack = res.val.stack ?? "no stack trace";
-            return { error, stack };
-        }
-    } else {
-        return null;
-    }
+      `
 }

@@ -1,223 +1,220 @@
-import { FeedbackQuestion } from "../actions/types";
-import { ConnectionError } from "../errors";
-import { SubmissionFeedbackQuestion } from "../shared/langsSchema";
-import { BaseError } from "../shared/shared";
-import { Logger } from "./logger";
-import * as fs from "fs-extra";
-import { once } from "node:events";
-import { finished } from "node:stream/promises";
-import * as path from "path";
-import { Err, Ok, Result } from "ts-results";
-import { fetch, Response } from "undici";
-import { ExtensionContext } from "vscode";
+import { pipeline } from "node:stream/promises"
+import * as path from "path"
 
-/**
- * Whether `child` is `parent` itself or somewhere inside it.
- *
- * `pathModule` is only for testing Windows paths on other platforms.
- */
+import * as fs from "fs-extra"
+import type { Result } from "ts-results"
+import { Err, Ok } from "ts-results"
+import type { ExtensionContext } from "vscode"
+
+import type { SubmissionFeedbackQuestion } from "../../shared/langsSchema"
+import type { FeedbackQuestion } from "../../shared/lib"
+import { BaseError } from "../../shared/lib"
+import { ConnectionError } from "../errors"
+import { Logger } from "./logger"
+
+/** Budget for a whole download, from request to last byte. */
+const DEFAULT_TOTAL_TIMEOUT_MS = 10 * 60 * 1000
+
+/** Budget between two consecutive chunks. Matches tmc-langs' own HTTP timeout. */
+const DEFAULT_STALL_TIMEOUT_MS = 30 * 1000
+
+export interface DownloadOptions {
+  /** Reports the percentage downloaded (0-100). Silent unless the response declares its length. */
+  onProgress?: (downloadedPct: number) => void
+  /** Aborts the download; the call then resolves to an `Err`. */
+  signal?: AbortSignal
+  /** Defaults to ten minutes. */
+  totalTimeoutMs?: number
+  /** Defaults to thirty seconds. A server that sends headers and then goes silent trips this. */
+  stallTimeoutMs?: number
+}
+
+/** Whether `child` is `parent` itself or somewhere inside it. `pathModule` is for testing only. */
 export function isPathInside(
-    parent: string,
-    child: string,
-    pathModule: path.PlatformPath = path,
+  parent: string,
+  child: string,
+  pathModule: path.PlatformPath = path,
 ): boolean {
-    const relative = pathModule.relative(parent, child);
-    // on Windows, paths on different drives have no relative path and come back absolute
-    return (
-        !pathModule.isAbsolute(relative) &&
-        relative !== ".." &&
-        !relative.startsWith(".." + pathModule.sep)
-    );
+  const relative = pathModule.relative(parent, child)
+  // Paths on different Windows drives come back absolute
+  return (
+    !pathModule.isAbsolute(relative) &&
+    relative !== ".." &&
+    !relative.startsWith(".." + pathModule.sep)
+  )
 }
 
 /**
- * Whether `a` and `b` refer to the same path, by the platform's rules for case and separators.
- *
- * `pathModule` is only for testing Windows paths on other platforms.
+ * Whether `a` and `b` are the same path by the platform's case and separator rules.
+ * `pathModule` is for testing only.
  */
 export function isSamePath(a: string, b: string, pathModule: path.PlatformPath = path): boolean {
-    return pathModule.relative(a, b) === "";
+  return pathModule.relative(a, b) === ""
 }
 
 /**
- * Downloads data from given url to the specified file. If file exists, its content will be
- * overwritten.
+ * Downloads `url` to `filePath`, overwriting any existing file.
  *
- * @param url Url to data
- * @param filePath Absolute path to the desired output file
- * @param headers Request headers if any
+ * Never hangs: bounded by a total and a per-chunk budget and the caller's signal. A body
+ * shorter than its declared `Content-Length`, or a failed write such as a full disk, is an
+ * `Err`, so a truncated file is never returned as complete.
+ *
+ * @param filePath Absolute path to the output file
  */
 export async function downloadFile(
-    url: string,
-    filePath: string,
-    headers?: { [key: string]: string },
-    progressCallback?: (downloadedPct: number, increment: number) => void,
+  url: string,
+  filePath: string,
+  options?: DownloadOptions,
 ): Promise<Result<void, Error>> {
-    try {
-        fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true });
-    } catch (error) {
-        return new Err(new BaseError(error, "Failed to create download directory"));
-    }
+  try {
+    fs.mkdirSync(path.resolve(filePath, ".."), { recursive: true })
+  } catch (error) {
+    return new Err(new BaseError(error, "Failed to create download directory"))
+  }
 
-    let response: Response;
+  const stallTimeoutMs = options?.stallTimeoutMs ?? DEFAULT_STALL_TIMEOUT_MS
+  // A `for await` over a silent body never yields, so the watchdog must abort the request.
+  const stallController = new AbortController()
+  const signals = [
+    stallController.signal,
+    AbortSignal.timeout(options?.totalTimeoutMs ?? DEFAULT_TOTAL_TIMEOUT_MS),
+  ]
+  if (options?.signal) {
+    signals.push(options.signal)
+  }
+  const signal = AbortSignal.any(signals)
+
+  let stallTimer: NodeJS.Timeout | undefined
+  const restartStallTimer = (): void => {
+    clearTimeout(stallTimer)
+    stallTimer = setTimeout(() => {
+      stallController.abort(new Error(`No data received from ${url} in ${stallTimeoutMs} ms`))
+    }, stallTimeoutMs)
+  }
+
+  try {
+    let response: Response
     try {
-        const request = { url, method: "get", headers };
-        response = await fetch(request.url, request);
+      restartStallTimer()
+      // The host's fetch, not a bundled client: VS Code patches it for proxies, and undici
+      // needs a newer Node than the oldest supported VS Code's Electron.
+      response = await fetch(url, { method: "get", signal })
     } catch (error) {
-        // Typing change from update
-        return new Err(new ConnectionError(error));
+      return new Err(new ConnectionError(signal.aborted ? signal.reason : error))
     }
 
     if (!response.ok) {
-        let cause: string | undefined;
-        try {
-            cause = await response.text();
-        } catch (_error) {
-            // ignore error in reading response, not important
-        }
+      let cause: string | undefined
+      try {
+        cause = await response.text()
+      } catch (_error) {
+        // ignore error in reading response, not important
+      }
 
-        return new Err(new Error("Request failed: " + response.statusText, { cause }));
+      return new Err(new Error("Request failed: " + response.statusText, { cause }))
     }
 
-    // Created outside the try so the catch can always release the fd.
-    const writeStream = fs.createWriteStream(filePath);
+    const body = response.body
+    if (!body) {
+      return new Err(new Error("Unexpected null response body"))
+    }
+    let downloaded = 0
+    // `fetch` decodes a compressed body, and `Content-Length` counts the bytes before that.
+    const isEncoded = (response.headers.get("content-encoding") ?? "identity") !== "identity"
+    const sizeString = response.headers.get("content-length")
+    const size = sizeString && !isEncoded ? Math.trunc(Number(sizeString)) : 0
     try {
-        if (!response.body) {
-            throw new Error("Unexpected null response body");
-        }
-
-        let downloaded = 0;
-        const sizeString = response.headers.get("content-length");
-        const size = sizeString ? parseInt(sizeString, 10) : 0;
-        for await (const chunk of response.body) {
-            if (sizeString && progressCallback && size > 0) {
-                downloaded += chunk.length;
-                progressCallback(
-                    Math.round((downloaded / size) * 100),
-                    (100 * chunk.length) / size,
-                );
+      restartStallTimer()
+      // `pipeline` fails on a write error such as a full disk; a loop awaiting "drain" would hang.
+      await pipeline(
+        body,
+        async function* (chunks: AsyncIterable<Uint8Array>) {
+          for await (const chunk of chunks) {
+            restartStallTimer()
+            downloaded += chunk.length
+            if (size > 0) {
+              options?.onProgress?.(Math.round((downloaded / size) * 100))
             }
-            // write() returns false when the internal buffer is full; wait for
-            // "drain" so large downloads don't grow memory unbounded.
-            if (!writeStream.write(chunk)) {
-                await once(writeStream, "drain");
-            }
-        }
-
-        // Wait until everything is flushed and the fd is closed, so callers
-        // always see a complete file with no handle left open.
-        writeStream.end();
-        await finished(writeStream);
+            yield chunk
+          }
+        },
+        fs.createWriteStream(filePath),
+      )
     } catch (error) {
-        // Destroy on error so we never leak an open handle.
-        writeStream.destroy();
-        return new Err(new BaseError(error, "Writing to file failed"));
+      if (signal.aborted) {
+        return new Err(new ConnectionError(signal.reason, `Download from ${url} was aborted`))
+      }
+      return new Err(new BaseError(error, "Writing to file failed"))
     }
 
-    return Ok.EMPTY;
+    if (size > 0 && downloaded !== size) {
+      return new Err(
+        new Error(`Download from ${url} ended after ${downloaded} of ${size} declared bytes`),
+      )
+    }
+
+    return Ok.EMPTY
+  } finally {
+    clearTimeout(stallTimer)
+  }
 }
 
-/**
- * Await this to pause execution for an amount of time
- * @param millis
- */
+/** Resolves after `millis` milliseconds. */
 export function sleep(millis: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, millis));
-}
-
-export function formatSizeInBytes(size: number, precision = 3): string {
-    let suffix = "B";
-    let cSize = size;
-    const targetPrecision = Math.min(
-        size === 0 ? 1 : Math.floor(Math.log10(size) + 1),
-        21,
-        precision,
-    );
-
-    for (const s of ["kB", "MB", "GB", "TB", "EB"]) {
-        if (Number.parseFloat(cSize.toPrecision(targetPrecision)) >= 1000) {
-            cSize /= 1000;
-            suffix = s;
-        } else {
-            break;
-        }
-    }
-
-    return `${cSize.toPrecision(targetPrecision)} ${suffix}`;
+  return new Promise((resolve) => {
+    setTimeout(resolve, millis)
+  })
 }
 
 /**
- * Return bootstrap striped, animated progress bar div as string
- * @param percentDone How much done of the progress
+ * Like `Promise.all(items.map(task))`, with at most `limit` tasks running at once. Results
+ * keep the order of `items`; the first rejection rejects the whole, as with `Promise.all`.
  */
-export function getProgressBar(percentDone: number): string {
-    return `<div class="progress">
-        <div
-            class="progress-bar progress-bar-striped progress-bar-animated"
-            role="progressbar"
-            aria-valuenow="${percentDone}"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            style="width: ${percentDone}%"
-        ></div>
-    </div>`;
+export async function mapConcurrently<T, R>(
+  items: readonly T[],
+  limit: number,
+  task: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = []
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const index = next++
+      results[index] = await task(items[index] as T)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
+
+export function countOf(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`
 }
 
 export function parseFeedbackQuestion(questions: SubmissionFeedbackQuestion[]): FeedbackQuestion[] {
-    const feedbackQuestions: FeedbackQuestion[] = [];
-    questions.forEach((x) => {
-        if (x.kind === "Text") {
-            feedbackQuestions.push({
-                id: x.id,
-                kind: "text",
-                question: x.question,
-            });
-        } else if (x.kind.IntRange) {
-            feedbackQuestions.push({
-                id: x.id,
-                kind: "intrange",
-                lower: x.kind.IntRange.lower,
-                question: x.question,
-                upper: x.kind.IntRange.upper,
-            });
-        } else {
-            Logger.info("Unexpected feedback question type:", x.kind);
-        }
-    });
-    return feedbackQuestions;
-}
-
-export function parseTestResultsText(value: string): string {
-    return value
-        .replace(/\\/g, "\\\\")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;")
-        .replace(/`/g, "&#96;");
-}
-
-/**
- * Tries to remove old data if extension restarted within 10 minutes of moving TMC Data and
- * receiving error that some data could not be removed and has to be removed manually.
- * @param oldDataObject
- */
-export async function removeOldData(oldDataObject: {
-    path: string;
-    timestamp: number;
-}): Promise<Result<string, Error>> {
-    if (oldDataObject.timestamp + 10 * 60 * 1000 > Date.now()) {
-        try {
-            fs.removeSync(oldDataObject.path);
-        } catch (_err) {
-            return new Err(new Error(`Still failed to remove data from ${oldDataObject.path}`));
-        }
-        return new Ok(`Removed successfully from ${oldDataObject.path}`);
+  const feedbackQuestions: FeedbackQuestion[] = []
+  questions.forEach((x) => {
+    if (x.kind === "Text") {
+      feedbackQuestions.push({
+        id: x.id,
+        kind: "text",
+        question: x.question,
+      })
+    } else if (x.kind.IntRange) {
+      feedbackQuestions.push({
+        id: x.id,
+        kind: "intrange",
+        lower: x.kind.IntRange.lower,
+        question: x.question,
+        upper: x.kind.IntRange.upper,
+      })
+    } else {
+      Logger.info("Unexpected feedback question type:", x.kind)
     }
-    return new Ok(`Time exceeded, will not remove data from ${oldDataObject.path}`);
+  })
+  return feedbackQuestions
 }
 
 export function cliFolder(context: ExtensionContext): string {
-    return path.join(context.globalStorageUri.fsPath, "cli");
+  return path.join(context.globalStorageUri.fsPath, "cli")
 }

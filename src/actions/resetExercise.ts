@@ -1,0 +1,39 @@
+import type { Result } from "ts-results"
+
+import type { ExerciseIdentifier } from "../../shared/lib"
+import type { WorkspaceExercise } from "../api/workspaceManager"
+import { exerciseOperations } from "../ui/exerciseOperations"
+import { saveExerciseDocuments } from "../window/exerciseDocuments"
+import { fingerprintStudentFiles, recordKeptCopy } from "./keptCopies"
+import type { ReadyActionContext } from "./types"
+
+/**
+ * Resets an exercise to its initial state on disk, optionally keeping its current state on the
+ * backend first.
+ *
+ * Rejects as a `BottleneckError` while another operation on the exercise is in flight.
+ */
+export async function resetExercise(
+  actionContext: ReadyActionContext,
+  id: ExerciseIdentifier,
+  exercise: WorkspaceExercise,
+  submitFirst: boolean,
+): Promise<Result<void, Error>> {
+  const { langs, keptCopies } = actionContext.startup
+  return exerciseOperations.run(id, "resetting", async () => {
+    let keptFingerprint: string | undefined
+    if (submitFirst) {
+      const saved = await saveExerciseDocuments(exercise)
+      if (saved.err) {
+        return saved
+      }
+      keptFingerprint = await fingerprintStudentFiles(actionContext, exercise)
+    }
+    const reset = await langs.resetExercise(id, exercise.uri.fsPath, submitFirst)
+    if (reset.ok) {
+      await keptCopies.record(id, id.kind === "mooc" ? "backup" : "submission", keptFingerprint)
+      await recordKeptCopy(actionContext, exercise, "reset")
+    }
+    return reset
+  })
+}

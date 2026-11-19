@@ -1,31 +1,306 @@
 # Setting up development environment
 
 You need the following installed on your computer:
+
 - Visual Studio Code
-- Node.js / npm
+- Node.js / [pnpm](https://pnpm.io/)
 
 Setup the environment:
 
 1. Download / git clone the repo
 2. Go to root of the repository using terminal
-3. Run: ```npm ci```
-4. Run: ```code .```
+3. Run: `pnpm install --frozen-lockfile`
+4. Run: `code .`
 5. Done
 
 ## Quick start
 
-* From VSCode, the extension can be launched with `F5` by default
-* Code execution starts from `src/extension.ts`
-* Contributions such as new commands are defined in `package.json`
-* Automatic build task starts the first time that the extension is launched from VSCode
-  * Editing only type definitions doesn't seem to trigger a new build
-* There are separate webpack configurations for development and production
-  * When API data is casted to a type at runtime, "extra" fields are only allowed in production builds. Hence, if API is expanded, the corresponding API type definitions must be fixed by then.
-* The main intention behind the `UserData` and `WorkspaceManager` split is that the former mostly reflects user data on server while the latter manages local data on disk.
-* Validation for persistent data is run at launch because new releases may not be backwards compatible.
+- From VSCode, the extension can be launched with `F5` by default
+- Code execution starts from `src/extension.ts`
+- Contributions such as new commands are defined in `package.json`
+- Automatic build task starts the first time that the extension is launched from VSCode
+  - Editing only type definitions doesn't seem to trigger a new build
+- The extension host is bundled by a single esbuild config (`esbuild.mjs`); `NODE_ENV=production` only affects minification/sourcemaps
+  - The backend URLs (TMC/mooc) are baked in at build time by the `BACKEND` env var, which picks one of the build profiles in `config.js`. `BACKEND=mockBackend` points both at the bundled mock on `localhost:4001`; `BACKEND=mockTmcLocalMooc` keeps TMC on the mock but sends mooc to a local `secret-project-331` cluster (`http://project-331.local`); anything else (including unset) falls back to `productionApi`. The profiles also pin `TMC_LANGS_RUST_VERSION`, i.e. which `tmc-langs-cli` release gets downloaded.
+- The main intention behind the `UserData` and `WorkspaceManager` split is that the former mostly reflects user data on server while the latter manages local data on disk.
+- Validation for persistent data is run at launch because new releases may not be backwards compatible.
+
+## Two backends
+
+The extension talks to two unrelated backends:
+
+|        | legacy TMC                   | mooc                                          |
+| ------ | ---------------------------- | --------------------------------------------- |
+| Server | `tmc.mooc.fi` (`tmc-server`) | `courses.mooc.fi` (`secret-project-331`)      |
+| API    | REST v8                      | `/api/v0/exercise-services/client`            |
+| Ids    | integers                     | UUID strings                                  |
+| Auth   | courses.mooc.fi access token | OAuth2 device authorization (RFC 8628) bearer |
+
+Both are supported at the same time, and a course carries its platform with it
+from then on. The user is not asked which platform to use: the add-course screen
+(`tmc.showAddCourse`) lists the courses.mooc.fi courses the user is enrolled in
+above the TMC organizations, and dispatches on what was added. tmc.mooc.fi has far
+too many courses to enumerate, so its courses are listed under the organization
+the user opens. Each backend's section loads, fails and offers its login on its
+own. When courses.mooc.fi has no session its section offers the device-flow login,
+which is the only route to it for a user whose TMC credential already satisfies
+the `LoggedIn` context key. The Command Palette's `Add Course...` (`tmc.addNewCourse`)
+is the keyboard fast path to the same courses in one quick pick.
+
+Because course slugs and titles are only unique within one backend, anything
+listing courses from both must name the backend beside them — `backendName` in
+`shared/lib.ts`, passed as `Dialog.selectItem`'s optional third tuple element.
+That function is the single source of those names: "tmc.mooc.fi" and
+"courses.mooc.fi" are the only two spellings, and nothing else writes either.
+
+### One login
+
+There is a single login: the courses.mooc.fi device flow (`tmc.showMoocLogin`,
+reached from the Command Palette, the Courses view's logged-out welcome content and the
+session-expired prompt). The TMC username/password login is gone; `tmc-server`
+accepts courses.mooc.fi access tokens by introspecting them, so the CLI
+authenticates the tmc backend with the same credential. A tmc token already in
+`credentials.json` keeps working until it expires — the extension never creates
+one, and `tmc logout` (the only thing that removes it) does not touch the mooc
+credentials.
+
+The login runs in `src/commands/login.ts` and shows on the login screen, which
+`src/ui/loginScreens.ts` connects to the main panel: the code with Copy, and Open
+courses.mooc.fi, which opens the verification page in the browser so an existing
+courses.mooc.fi browser session is reused. Leaving the screen cancels the login. A login that
+leaves the user with no course goes on to the add-course screen. `MoocAuthenticationProvider` puts the session in
+the Accounts menu; its `accessToken` is empty, because the CLI owns the real tokens and no
+other extension may obtain them through VS Code.
+
+Consequence for the CLI environment: the mooc knobs
+(`TMC_LANGS_MOOC_ROOT_URL`, `TMC_LANGS_MOOC_CLIENT_ID`,
+`TMC_LANGS_MOOC_TRUST_LOCALHOST`) apply to `tmc` commands too, not just `mooc`
+ones.
+
+### Everything goes through tmc-langs-cli
+
+The extension makes no HTTP requests to either backend. `src/api/langs.ts`
+(class `Langs`) spawns the `tmc-langs-cli` binary for every operation, one
+one-shot process per call, and parses the JSON it writes to stdout. The only
+HTTP the extension does itself is downloading that binary
+(`downloadFile` in `src/utilities/utils.ts`).
+
+Which backend a command hits is decided by the CLI's top-level subcommand, so
+the argv builders in `Langs` are the split:
+
+- `_tmcCmd(...)` → `tmc --client-name <name> --client-version <version> ...`
+- `_moocCmd(...)` → `mooc --client-name <name> ...`
+- `_settingsCmd(...)` → `settings --client-name <name> ...` (backend-agnostic)
+
+The root URLs are passed to the child process in the environment:
+`TMC_LANGS_TMC_ROOT_URL`, `TMC_LANGS_MOOC_ROOT_URL` and `TMC_LANGS_CONFIG_DIR`
+(where the CLI keeps credentials). Each falls back to the build-profile value
+(see below) if not already set in `process.env`, which is how the test tiers
+point the CLI at a mock.
+
+Most operations exist as a pair of methods (`checkTmcExerciseUpdates` /
+`checkMoocExerciseUpdates`), with a dispatcher on top that branches on the
+identifier's `kind`.
+
+### The `Enum<Tmc, Mooc>` union
+
+`shared/lib.ts` holds the abstraction the rest of the code is written against:
+
+```ts
+type Enum<Tmc, Mooc> = { kind: "tmc"; data: Tmc } | { kind: "mooc"; data: Mooc }
+```
+
+`match(value, onTmc, onMooc)` is the Rust-style exhaustive switch over it and is
+the intended way to consume one; `makeTmcKind` / `makeMoocKind` construct one,
+and `EnumSchema(tmcSchema, moocSchema)` is the zod equivalent for persisted or
+webview-transported data. `matchBackend` does the same for the flatter
+`{ backend: "tmc" | "mooc" }` shape used for CLI invocations.
+
+Ids are modelled with it rather than as bare numbers/strings, because the two
+backends disagree on both type and meaning:
+
+- `CourseIdentifier` — tmc `{ courseId: number }`, mooc `{ moocCourseId: string }`
+- `ExerciseIdentifier` — tmc `{ tmcExerciseId: number }`, mooc
+  `{ moocExerciseId: string }`
+
+New mooc functionality belongs beside its tmc counterpart behind these types.
+Do not thread raw ids around.
+
+### The CLI's stdout contract
+
+`shared/langsSchema.ts` is a zod mirror of the CLI's JSON output. The schemas
+under `shared/generated/langs/` are generated from `shared/bindings.schema.json`,
+which is vendored from tmc-langs-rust — do not hand-edit either:
+
+- `pnpm run vendor:langs-schema` re-vendors the JSON Schema from the
+  tmc-langs-rust release `config.js` pins (its `bindings.schema-<version>.json`
+  asset)
+- `pnpm run generate:langs-schema` regenerates the zod/TS files from it
+
+CI re-runs the generate step and diffs, so a stale generated file fails the
+build. Because the mooc types originate in `secret-project-331`
+(`exercise-services-api`), a backend type change has to travel all three repos:
+backend crate → CLI → this file.
+
+Vendoring also writes a provenance stamp beside the artifact — the source rev
+and the artifact's sha256 — and CI checks it:
+
+| artifact                                                       | stamp                                                       | gate                                             |
+| -------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------ |
+| `shared/bindings.schema.json`                                  | `shared/bindings.schema.source.json`                        | `pnpm run vendor:langs-schema -- --check-stamp`  |
+| `backend/mooc/exercise-services-client.openapi.generated.json` | `backend/mooc/exercise-services-client.openapi.source.json` | `pnpm run vendor:langs-openapi -- --check-stamp` |
+
+Both gates read only this repo, so they run in CI, which has no sibling
+checkout to re-vendor from. The consequence is the rule: never `cp` an artifact
+into place. A hand-copy leaves the stamp naming the previous revision and fails
+the gate; run the vendoring script, which rewrites both.
+
+## Native views
+
+Most of the UI is VS Code's own, and webviews are left for what native UI cannot show:
+
+- **Courses view** (`src/ui/treeview/`): a tree of course → part → exercise.
+  `courseViewModel.ts` builds it from `UserData`, the exercises on disk, the downloads in
+  flight (`src/ui/exerciseOperations.ts`), and `src/ui/downloadFailures.ts` and
+  `src/ui/updateablesRegistry.ts`; it re-renders on `UserData.onDidChangeCourses` and each
+  registry's change. `treeCommands.ts` runs the row actions on the selection.
+- **Exercise operations** (`src/ui/exerciseOperations.ts`): every download, test run, submit,
+  paste, reset and restore claims its exercises here, which refuses a conflicting one.
+- **Local test runs** go through the Testing API (`src/testing/`): results land in the
+  Test Results view and checkstyle findings in the Problems view.
+- **Status bar** (`src/ui/statusBar*.ts`): the account, which logs in or lists the account's
+  actions, and the open exercise with its points, a spinner while it is tested or submitted,
+  and a quick pick of its actions.
+  The webview panels are the course home (`CourseDetails`), the submission result, the login and
+  add-course screens (see [One login](#one-login)) and the initialization error help. The course home lists the course's exercises, news and actions; it is
+  built by `src/ui/courseHome.ts` from the same view model and registries as the Courses view, and
+  pushed again whenever that view re-renders, so the two always agree. While it is on screen, news
+  about its course goes into it instead of a notification (`src/ui/shownCourseHome.ts`).
+
+## Webview panels
+
+The extension host is authoritative for panel state. `TmcPanel` keeps the last
+panel it posted and the latest message of each type aimed at it, and replays them
+when the webview says `ready`. Panels do not use `retainContextWhenHidden`: VS Code
+destroys a hidden panel's document and loads a fresh one on reveal, which sends
+`ready` and is rendered from the host again. A reply to a request the destroyed
+document made is dropped; the new document asks again.
+
+What only the webview knows — scroll position, open disclosures, a feedback draft,
+a paste link — goes in the webview state bag through `uiState`
+(`webview-ui/src/utilities/uiState.svelte.ts`). It is keyed by screen, so a
+different course or a new submission starts clean.
+
+The main panel survives a window reload: `TmcPanel.registerSerializer` registers a
+`WebviewPanelSerializer` for `tmc.mainPanel` (activated by `onWebviewPanel:tmc.mainPanel`),
+which reads the screen the webview saved in its state bag, validates it, and reopens
+Course Details only if the course is still stored. A panel it cannot reopen is closed. The
+side panel (`tmc.sidePanel`) has no serializer: a submission's view lives only in the
+extension host's memory.
+
+## Operations and entry points
+
+Code that does something on the user's behalf is split in two layers:
+
+- **Operations** (`src/actions/`) change state through the services, broadcast it to
+  the panels (`TmcPanel.postToSidePanel`, `renderSide`, the tree view) and return a
+  `Result`. They never prompt, never show a notification of their own and never
+  report the failure they return. The one exception is a failure they carried on
+  past — a cleanup step, one backend of two — which they report with
+  `dialog.reportError` and do not return.
+- **Entry points** (`src/commands/`, the `TmcPanel` message handlers,
+  `src/init/commands.ts`, `src/extension.ts`, notification buttons) resolve
+  arguments, prompt, announce success, and run the operation inside
+  `withOperation` (`src/api/withOperation.ts`). Commands never call `langs`.
+
+`withOperation` reports how the operation failed, exactly once: a thrown error
+becomes an `Err`, a `BottleneckError` (the operation was already running, or the
+submission throttle refused it) is shown as information rather than an error,
+and `silent` logs instead of notifying, for runs the user did not ask for and for
+panel requests: a panel renders the failure itself, with its presentation's remedy
+buttons such as "Log in" (`src/panels/webviewError.ts`).
+`failure(headline, cause)` lets an operation's `Err` carry its own sentence.
+Exercise commands go through `runForExercise`, which resolves the exercise and
+wraps the rest in `withOperation`.
+
+`.oxlintrc.json` rejects prompts, notifications and `vscode.window` in
+`src/actions/` and `langs` in `src/commands/`. `src/test/layerContract.test.ts`
+lists every failure an operation may report itself, and
+`src/test/reporting.test.ts` drives each entry point over the real operations to
+check that a failure reaches the user once.
+
+## Mock backends
+
+`backend/` is one Express app on port 4001 (`pnpm run backend:start`) serving
+both mocks:
+
+- the legacy TMC v8 mock — routes in `backend/index.ts` and
+  `backend/controllers/`, plus a `backend/cli/` directory the CLI download is
+  served from
+- the mooc mock — `backend/mooc/`, registered by `registerMoocRoutes`. Its
+  resource endpoints are routed and validated by `openapi-backend` against the
+  OpenAPI document vendored from `secret-project-331`
+  (`backend/mooc/exercise-services-client.openapi.generated.json`,
+  re-vendored with `pnpm run vendor:langs-openapi`): requests _and_ responses
+  are validated, so a spec violation surfaces as a 500 instead of drifting
+  silently. `backend/mooc/oauth.ts` mocks the device-flow endpoints under
+  `/api/v0/main-frontend/oauth`, deliberately outside the validated router
+  because they are not part of that spec.
+
+The mooc mock has its own `node:test` suites (`backend/mooc/*.test.ts`), run
+with `pnpm test` inside `backend/` and by the "Mooc mock backend tests" CI job.
+They are what keeps the mock honest against the vendored spec, so run them after
+touching anything under `backend/mooc/`.
+
+The integration and Playwright tiers point the CLI at this mock with
+`TMC_LANGS_MOOC_ROOT_URL=http://localhost:4001`. Note that the CLI only attaches
+a bearer token to trusted domains, so those tiers also set
+`TMC_LANGS_MOOC_TRUST_LOCALHOST=1`; without it every authenticated mooc call
+against localhost 401s.
+
+## What green CI proves
+
+`.github/workflows/test.yml` runs six jobs on every push and pull request:
+
+| job                     | proves                                                                                                                                                               |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code style              | lint, format, typecheck (including `.svelte` via svelte-check), the generated zod schemas match the vendored contract, and neither vendored artifact was hand-edited |
+| Unit tests              | the vitest unit + webview-component tiers on Linux, macOS and Windows                                                                                                |
+| Mooc mock backend tests | `backend/mooc` still matches the vendored OpenAPI spec, above a pass-count floor                                                                                     |
+| Gates can fail          | each of the gates above still fails when its input is broken (`bin/verifyGatesCanFail.sh`)                                                                           |
+| Integration tests       | the extension drives the real `tmc-langs-cli` against the mock backend inside a VS Code extension host, on all three platforms, above a test-count floor             |
+| Playwright tests        | the webview flows end to end against that same mock                                                                                                                  |
+
+What it does **not** prove:
+
+- **A production-mode build.** The `.vsix` is packaged only by the
+  master-triggered `build-and-upload.yml`.
+
+## Using a locally-built tmc-langs CLI
+
+By default the dev/test flow downloads the released `tmc-langs-cli` pinned in
+`config.js` (`TMC_LANGS_RUST_VERSION`). To test against an unreleased
+`tmc-langs-rust` change instead, build and install it locally:
+
+```
+bin/useLocalLangs.bash
+```
+
+This expects a sibling `../tmc-langs-rust` checkout (override with
+`TMC_LANGS_RUST_DIR`). It builds `tmc-langs-cli` in release mode and installs it
+into `backend/cli` under the pinned filename with a regenerated `.sha256`, so
+both the integration tier and Playwright pick it up transparently.
+`backend/cli` is gitignored — the local build is never
+committed.
+
+- Integration: `pnpm run test:integration`
+- Playwright: `pnpm run playwright-test` (builds with the `mockBackend`
+  profile and starts the mock backend itself, or reuses one already on 4001)
+
+To restore the released CLI: `rm -rf backend/cli && (cd backend && pnpm run setup)`.
 
 ## Third party resources
 
-* [TMC API](http://testmycode.github.io/tmc-server/)
-* [TMC Langs](https://github.com/rage/tmc-langs-rust)
-* [VSCode API Documentation](https://code.visualstudio.com/api/references/commands)
+- [TMC API](http://testmycode.github.io/tmc-server/)
+- [TMC Langs](https://github.com/rage/tmc-langs-rust)
+- [VSCode API Documentation](https://code.visualstudio.com/api/references/commands)

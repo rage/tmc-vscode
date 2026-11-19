@@ -1,0 +1,33 @@
+import { z } from "zod"
+
+import type { ExtensionToWebview, WebviewToExtension } from "../../shared/lib"
+import { ExtensionToWebviewSchema } from "../../shared/lib"
+import type { Scenario } from "./scenarios"
+
+/**
+ * Plays the extension host for `scenario`: answers each webview message by handing the replies,
+ * in order, to `deliver`.
+ *
+ * Replies are validated first: the webview silently drops a message failing its schema, which
+ * would make a drifted scenario look like a panel bug.
+ */
+export function createFakeHost(
+  scenario: Scenario,
+  deliver: (message: ExtensionToWebview) => Promise<void>,
+): (message: WebviewToExtension) => Promise<void> {
+  return async (message) => {
+    const replies: ExtensionToWebview[] =
+      message.type === "ready"
+        ? [{ type: "setPanel", panel: scenario.panel }, ...(scenario.pushes ?? [])]
+        : (scenario.reply?.(message) ?? [])
+    for (const reply of replies) {
+      const validation = ExtensionToWebviewSchema.safeParse(reply)
+      if (!validation.success) {
+        throw new Error(
+          `Scenario ${scenario.id} sent an invalid ${reply.type}: ${z.prettifyError(validation.error)}`,
+        )
+      }
+      await deliver(structuredClone(reply))
+    }
+  }
+}

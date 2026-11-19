@@ -1,0 +1,1020 @@
+import * as fs from "node:fs"
+import * as path from "node:path"
+
+import { vi } from "vitest"
+import * as vscode from "vscode"
+
+import type {
+  LocalCourseData,
+  SharedMoocCourseData,
+  SharedTmcCourseData,
+  SharedTmcCourseExercise,
+} from "../../../shared/lib"
+import { makeTmcKind, LOGGED_OUT_MESSAGE, NOT_LOGGED_IN_MESSAGE } from "../../../shared/lib"
+import type { WorkspaceExercise } from "../../api/workspaceManager"
+import { ExerciseStatus } from "../../api/workspaceManager"
+import { downloadFailures } from "../../ui/downloadFailures"
+import { exerciseOperations } from "../../ui/exerciseOperations"
+import type { CoursesTreeItem, CoursesTreeSource } from "../../ui/treeview/treeview"
+import CoursesTree, {
+  CourseTreeItem,
+  TrustCourseWorkspaceTreeItem,
+  ExerciseTreeItem,
+  exerciseItems,
+  PartTreeItem,
+} from "../../ui/treeview/treeview"
+import { updateablesRegistry } from "../../ui/updateablesRegistry"
+import {
+  moocCourseExercise,
+  moocLocalCourse,
+  tmcCourseExercise,
+  tmcLocalCourse,
+} from "../fixtures/courses"
+import { idOfTmcCourse, idOfTmcExercise } from "../fixtures/identifiers"
+
+const NOW = new Date("2026-06-01T12:00:00Z")
+
+// jest-mock-vscode ships no `env` namespace.
+beforeAll(function () {
+  const vscodeModule: object = vscode
+  Object.defineProperty(vscodeModule, "env", { value: { language: "en" }, configurable: true })
+})
+
+function tmcExercise(
+  id: number,
+  name: string,
+  overrides: Partial<SharedTmcCourseExercise> = {},
+): SharedTmcCourseExercise {
+  return tmcCourseExercise({ id, name, ...overrides })
+}
+
+function tmcCourse(overrides: Partial<SharedTmcCourseData> = {}): LocalCourseData {
+  return tmcLocalCourse({
+    id: 1,
+    name: "tmc-slug",
+    title: "The Python Course",
+    awardedPoints: 12,
+    availablePoints: 40,
+    ...overrides,
+  })
+}
+
+function moocCourse(overrides: Partial<SharedMoocCourseData> = {}): LocalCourseData {
+  return moocLocalCourse({
+    id: "course-uuid",
+    name: "mooc-slug",
+    title: "Introduction to CS",
+    ...overrides,
+  })
+}
+
+function onDisk(exerciseSlug: string, status: ExerciseStatus): WorkspaceExercise {
+  return {
+    id: idOfTmcExercise(1),
+    courseId: idOfTmcCourse(1),
+    backend: "tmc",
+    courseSlug: "tmc-slug",
+    exerciseSlug,
+    status,
+    uri: vscode.Uri.file(`/exercises/tmc-slug/${exerciseSlug}`),
+  }
+}
+
+function first<T>(items: T[]): T {
+  const [item] = items
+  if (item === undefined) {
+    throw new Error("expected at least one item")
+  }
+  return item
+}
+
+function exercisesOf(course: CoursesTreeItem | undefined): ExerciseTreeItem[] {
+  return course ? exerciseItems(course) : []
+}
+
+function icon(item: ExerciseTreeItem): [string, string | undefined] {
+  // jest-mock-vscode keeps the colour as `themeColor`, VS Code as `color`.
+  const themeIcon = item.iconPath as vscode.ThemeIcon & { themeColor?: vscode.ThemeColor }
+  return [themeIcon.id, (themeIcon.color ?? themeIcon.themeColor)?.id]
+}
+
+/** Lets the view's delayed render, with its badge and change event, happen. */
+function settle(): void {
+  vi.advanceTimersByTime(1000)
+}
+
+interface FakeView {
+  badge: vscode.ViewBadge | undefined
+  message: string | undefined
+  visible: boolean
+  reveal: ReturnType<typeof vi.fn>
+  dispose: ReturnType<typeof vi.fn>
+  onDidChangeVisibility: vscode.Event<unknown>
+}
+
+suite("CoursesTree", function () {
+  let tree: CoursesTree
+  let view: FakeView
+  let courses: LocalCourseData[]
+  let workspaceExercises: WorkspaceExercise[]
+  let exercisesChanged: vscode.EventEmitter<void>
+  let coursesChanged: vscode.EventEmitter<void>
+  let activeEditorChanged: vscode.EventEmitter<vscode.TextEditor | undefined>
+
+  function source(): CoursesTreeSource {
+    return {
+      getCourses: () => courses,
+      onDidChangeCourses: coursesChanged.event,
+      workspaceManager: {
+        activeCourse: undefined,
+        activeCourseBackend: undefined,
+        getExercises: () => workspaceExercises,
+        getExerciseContaining: (uri: vscode.Uri) =>
+          workspaceExercises.find((ex) => uri.fsPath.startsWith(ex.uri.fsPath)),
+        onDidChangeExercises: exercisesChanged.event,
+      },
+    }
+  }
+
+  function show(...shown: LocalCourseData[]): CoursesTreeItem[] {
+    courses = shown
+    tree.setAccount({ loggedIn: true, isSessionExpired: false })
+    tree.setSource(source())
+    settle()
+    return tree
+      .getChildren()
+      .filter((row): row is CoursesTreeItem => !(row instanceof TrustCourseWorkspaceTreeItem))
+  }
+
+  function tooltipOf(item: CoursesTreeItem | undefined): string {
+    return item ? (tree.resolveTreeItem(item, item).tooltip as vscode.MarkdownString).value : ""
+  }
+
+  beforeEach(function () {
+    vi.useFakeTimers({ now: NOW, toFake: ["Date", "setTimeout", "clearTimeout"] })
+    courses = []
+    workspaceExercises = []
+    exercisesChanged = new vscode.EventEmitter<void>()
+    coursesChanged = new vscode.EventEmitter<void>()
+    activeEditorChanged = new vscode.EventEmitter<vscode.TextEditor | undefined>()
+    view = {
+      badge: undefined,
+      message: undefined,
+      visible: true,
+      reveal: vi.fn(async () => undefined),
+      dispose: vi.fn(),
+      onDidChangeVisibility: new vscode.EventEmitter<unknown>().event,
+    }
+    // jest-mock-vscode's createTreeView returns nothing.
+    vi.spyOn(vscode.window, "createTreeView").mockReturnValue(view as never)
+    vi.spyOn(vscode.window, "onDidChangeActiveTextEditor").mockImplementation(
+      activeEditorChanged.event,
+    )
+    downloadFailures.clear()
+    updateablesRegistry.clear()
+    tree = new CoursesTree()
+  })
+
+  afterEach(function () {
+    tree.dispose()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  // An empty view is what lets `viewsWelcome` explain why there is nothing in it.
+  test("is empty until activation gives it courses", function () {
+    courses = [tmcCourse()]
+    expect(tree.getChildren()).toEqual([])
+    tree.setSource(source())
+    expect(tree.getChildren()).toHaveLength(1)
+  })
+
+  // A lost session must not take the exercises on disk away: they open and test offline.
+  test("keeps listing the courses logged out, and says what logging in adds", function () {
+    courses = [tmcCourse()]
+    tree.setSource(source())
+    tree.setAccount({ loggedIn: false, isSessionExpired: false })
+    settle()
+
+    expect(tree.getChildren()).toHaveLength(1)
+    expect(view.message).toBe("Log in with your MOOC.fi account to download and submit exercises.")
+
+    tree.setAccount({ loggedIn: true, isSessionExpired: false })
+    settle()
+    expect(view.message).toBe("")
+  })
+
+  test("the fresh-install welcome says what the logged-out view says", function () {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),
+    ) as { contributes: { viewsWelcome: { when: string; contents: string }[] } }
+    const welcomes = manifest.contributes.viewsWelcome
+    const loggedOut = welcomes.find((w) => w.when.includes("!test-my-code:LoggedIn"))
+    expect(loggedOut?.contents.split("\n")[0]).toBe(NOT_LOGGED_IN_MESSAGE)
+  })
+
+  test("says a session expired in the account status bar item's words", function () {
+    courses = [tmcCourse()]
+    tree.setSource(source())
+    tree.setAccount({ loggedIn: false, isSessionExpired: true })
+    settle()
+
+    expect(view.message).toBe(LOGGED_OUT_MESSAGE)
+  })
+
+  test("lists the courses as roots, read afresh on every refresh", function () {
+    show(tmcCourse())
+    courses.push(moocCourse())
+    tree.refresh()
+
+    expect(tree.getChildren().map((item) => item.label)).toEqual([
+      "The Python Course",
+      "Introduction to CS",
+    ])
+  })
+
+  // A click expands the course, so Course Details is left to the context menu.
+  test("a course item carries its points and id, and opens its course home on click", function () {
+    const item = first(show(tmcCourse())) as CourseTreeItem
+
+    expect(item.description).toBe("12/40")
+    expect(item.accessibilityInformation?.label).toBe("The Python Course, 12 of 40 points")
+    expect(item.contextValue).toBe("course.tmc")
+    expect(item.courseId).toEqual(idOfTmcCourse(1))
+    expect(item.command).toMatchObject({ command: "tmc.courseDetails", arguments: [item] })
+    expect((item.iconPath as vscode.ThemeIcon).id).toBe("book")
+  })
+
+  test("an exercise on disk is downloaded outside its course workspace, and in workspace inside", function () {
+    const course = tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] })
+    workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Open)]
+    const [outside] = exercisesOf(first(show(course)))
+    expect(outside?.accessibilityInformation?.label).toMatch(/, downloaded,/)
+
+    const plain = source()
+    tree.setSource({
+      ...plain,
+      workspaceManager: {
+        ...plain.workspaceManager,
+        activeCourse: "tmc-slug",
+        activeCourseBackend: "tmc",
+      },
+    })
+    settle()
+    const [inWorkspace] = exercisesOf(first(tree.getChildren() as CoursesTreeItem[]))
+    expect(inWorkspace?.accessibilityInformation?.label).toMatch(/, in workspace,/)
+  })
+
+  test("a course item does not name its backend's host", function () {
+    expect(show(moocCourse())[0]?.description).toBe("")
+  })
+
+  test("every row's hover leads with the full name the sidebar may truncate", function () {
+    const courseTitle = "Introduction to Programming with Python, Autumn 2026 Edition"
+    const chapterName = "Loops, conditionals and the first longer programs"
+    const exerciseName = "a_rather_long_exercise_name_that_does_not_fit"
+    const course = first(
+      show(
+        moocCourse({
+          title: courseTitle,
+          exercises: [
+            moocCourseExercise({ name: exerciseName, chapter: { name: chapterName, number: 1 } }),
+          ],
+        }),
+      ),
+    )
+    const part = tree
+      .getChildren(course)
+      .find((child): child is PartTreeItem => child instanceof PartTreeItem)
+
+    expect(tooltipOf(course).split("\n\n")[0]).toBe(`**${courseTitle}**`)
+    expect(tooltipOf(part).split("\n\n")[0]).toBe(`**${chapterName}**`)
+    expect(tooltipOf(first(exercisesOf(course))).split("\n\n")[0]).toBe(`**${exerciseName}**`)
+  })
+
+  test("a disabled course says so", function () {
+    const item = first(show(tmcCourse({ disabled: true })))
+
+    expect(item.description).toBe("12/40 · disabled")
+    expect(tooltipOf(item)).toContain("disabled")
+  })
+
+  test("a mooc course the student is not enrolled on says so", function () {
+    const item = first(show(moocCourse({ notEnrolled: true })))
+
+    expect(item.description).toBe("not enrolled")
+    expect(tooltipOf(item)).toContain("You are not enrolled on this course")
+  })
+
+  test("a course its backend refuses says why, and offers no download", function () {
+    const forbidden = first(
+      show(
+        moocCourse({
+          newExercises: ["a"],
+          notEnrolled: true,
+          accessLoss: { reason: "forbidden", checkedAt: 0 },
+        }),
+      ),
+    )
+    const removed = first(
+      show(tmcCourse({ disabled: true, accessLoss: { reason: "notFound", checkedAt: 0 } })),
+    )
+
+    expect(forbidden.description).toBe("no access")
+    expect(tooltipOf(forbidden)).toContain("You no longer have access to this course")
+    expect(forbidden.contextValue).toBe("course.mooc")
+    expect(removed.description).toBe("12/40 · removed")
+    expect(tooltipOf(removed)).toContain("This course no longer exists.")
+  })
+
+  test("a course with new exercises is marked for the inline download action", function () {
+    const item = first(show(moocCourse({ newExercises: ["a", "b"] })))
+
+    expect(item.contextValue).toBe("course.mooc.hasNew")
+    expect(tooltipOf(item)).toContain("2 new exercises")
+  })
+
+  test("reveals a course expanded, and only focuses the view for one it does not list", async function () {
+    const [item] = show(tmcCourse())
+    vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await tree.revealCourse(idOfTmcCourse(1))
+    await tree.revealCourse(idOfTmcCourse(999))
+
+    expect(view.reveal).toHaveBeenCalledExactlyOnceWith(item, {
+      select: true,
+      focus: true,
+      expand: true,
+    })
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith("tmcView.focus")
+  })
+
+  test("a course with exercises not downloaded is marked for downloading them all", function () {
+    const [item] = show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))
+
+    expect(item?.contextValue).toBe("course.tmc.hasMissing")
+  })
+
+  test("a course with a passed exercise still open is marked for closing it", function () {
+    workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Open)]
+
+    const [item] = show(
+      tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello", { passed: true })] }),
+    )
+
+    expect(item?.contextValue).toBe("course.tmc.hasCompleted")
+  })
+
+  test("a tmc course's exercises sit under its parts, named by number", function () {
+    const [course] = show(
+      tmcCourse({
+        exercises: [
+          tmcExercise(3, "part02-01_loops"),
+          tmcExercise(1, "part01-01_hello", { passed: true }),
+          tmcExercise(2, "part01-02_world"),
+        ],
+      }),
+    )
+    const parts = tree.getChildren(course)
+
+    expect(parts.map((part) => [part.label, part.description])).toEqual([
+      ["Part 1", "1/2 passed"],
+      ["Part 2", "0/1 passed"],
+    ])
+    expect(tree.getChildren(parts[0]).map((item) => item.label)).toEqual(["01_hello", "02_world"])
+    expect(tree.getParent(tree.getChildren(parts[0])[0] as CoursesTreeItem)).toBe(parts[0])
+    expect(tree.getParent(parts[0] as CoursesTreeItem)).toBe(course)
+  })
+
+  test("a tmc course with one part so far still shows the part", function () {
+    const [course] = show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))
+
+    expect(tree.getChildren(course).map((child) => child.label)).toEqual(["Part 1"])
+  })
+
+  test("a course whose exercises name no part lists them directly", function () {
+    const [course] = show(
+      moocCourse({
+        exercises: [
+          { ...tmcExercise(0, "python3_simple"), id: "ex-1" },
+          { ...tmcExercise(0, "Hello world"), id: "ex-2" },
+        ],
+      }),
+    )
+    const children = tree.getChildren(course)
+
+    expect(children.every((child) => child instanceof ExerciseTreeItem)).toBe(true)
+    expect(children.map((child) => child.label)).toEqual(["python3_simple", "Hello world"])
+    expect(tree.getParent(children[0] as CoursesTreeItem)).toBe(course)
+  })
+
+  test("two mooc exercises sharing a name are two rows", function () {
+    const [course] = show(
+      moocCourse({
+        exercises: [
+          { ...tmcExercise(0, "Exercise"), id: "ex-1" },
+          { ...tmcExercise(0, "Exercise"), id: "ex-2" },
+        ],
+      }),
+    )
+
+    expect(new Set(exercisesOf(course).map((item) => item.id)).size).toBe(2)
+  })
+
+  test("a part names its next deadline, and withholds it while its backend is unreachable", function () {
+    const course = tmcCourse({
+      exercises: [
+        tmcExercise(1, "part01-01_hello", { deadline: "2026-07-01T00:00:00Z" }),
+        tmcExercise(2, "part02-01_loops"),
+      ],
+    })
+    const [part] = tree.getChildren(show(course)[0])
+    expect(part?.description).toMatch(/^0\/1 passed · next deadline /)
+
+    tree.setBackendReachable("tmc", false)
+    const [offlinePart] = tree.getChildren(tree.getChildren()[0])
+    expect(offlinePart?.description).toBe("0/1 passed")
+  })
+
+  test("a part is marked for the bulk actions its exercises allow", function () {
+    workspaceExercises = [onDisk("part01-02_world", ExerciseStatus.Closed)]
+    const [course] = show(
+      tmcCourse({
+        exercises: [
+          tmcExercise(1, "part01-01_hello"),
+          tmcExercise(2, "part01-02_world"),
+          tmcExercise(3, "part02-01_loops"),
+        ],
+      }),
+    )
+
+    expect(tree.getChildren(course)[0]?.contextValue).toBe("part.hasMissing.hasClosed")
+  })
+
+  suite("an exercise", function () {
+    function onlyExercise(
+      overrides: Record<string, unknown> = {},
+      courseOverrides: Record<string, unknown> = {},
+    ): ExerciseTreeItem {
+      const [course] = show(
+        tmcCourse({
+          exercises: [tmcExercise(1, "part01-01_hello", overrides)],
+          ...courseOverrides,
+        }),
+      )
+      const [item] = exercisesOf(course)
+      if (!item) {
+        throw new Error("no exercise")
+      }
+      return item
+    }
+
+    test("not downloaded offers the download", function () {
+      const item = onlyExercise()
+
+      expect(icon(item)).toEqual(["cloud-download", "testing.iconUnset"])
+      expect(item.contextValue).toBe("exercise.missing")
+      expect(item.description).toBe("not downloaded · 0/1 points")
+      expect(item.exerciseUri).toBeUndefined()
+    })
+
+    test("a click opens it, downloading it first when it is not on disk", function () {
+      const item = onlyExercise()
+
+      expect(item.command).toEqual({
+        command: "tmc.openExercises",
+        title: "Open",
+        arguments: [item],
+      })
+    })
+
+    test("new is told apart from merely not downloaded", function () {
+      const item = onlyExercise({}, { newExercises: [1] })
+
+      expect(icon(item)).toEqual(["cloud-download", "testing.iconQueued"])
+      expect(item.contextValue).toBe("exercise.new")
+    })
+
+    test("open and not passed carries its folder for the exercise commands", function () {
+      workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Open)]
+      const item = onlyExercise()
+
+      expect(icon(item)).toEqual(["circle-large-outline", "testing.iconUnset"])
+      expect(item.contextValue).toBe("exercise.opened")
+      expect(item.description).toBe("0/1 points")
+      expect(item.exerciseUri?.toString()).toBe(
+        vscode.Uri.file("/exercises/tmc-slug/part01-01_hello").toString(),
+      )
+    })
+
+    test("passed shows the passed icon whatever its local state, and offers the model solution", function () {
+      workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Closed)]
+      const item = onlyExercise({ passed: true, awardedPoints: 1 })
+
+      expect(icon(item)).toEqual(["pass-filled", "testing.iconPassed"])
+      expect(item.contextValue).toBe("exercise.closed.passed.hasModelSolution")
+      expect(item.description).toBe("closed · 1/1 points")
+    })
+
+    test("a mooc exercise with a material page says so, for its Open Course Material", function () {
+      const [course] = show(
+        moocCourse({
+          exercises: [moocCourseExercise({ name: "loops", pageUrl: "https://courses.example/p" })],
+        }),
+      )
+
+      expect(exercisesOf(course)[0]?.contextValue).toBe("exercise.missing.hasMaterial")
+      expect(exercisesOf(course)[0]?.materialUrl).toBe("https://courses.example/p")
+    })
+
+    test("a removed exercise on disk says whether it is open, for the commands that run locally", function () {
+      workspaceExercises = [
+        { ...onDisk("part01-02_gone", ExerciseStatus.Open), id: idOfTmcExercise(2) },
+        { ...onDisk("part01-03_gone", ExerciseStatus.Closed), id: idOfTmcExercise(3) },
+      ]
+      const [course] = show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))
+
+      const removed = exercisesOf(course).filter((item) => item.status === "removed")
+      expect(removed.map((item) => item.contextValue)).toEqual([
+        "exercise.removed.opened",
+        "exercise.removed.closed",
+      ])
+    })
+
+    test("out of tries below full points is final, not due", function () {
+      const [course] = show(
+        moocCourse({
+          exercises: [
+            moocCourseExercise({
+              name: "loops",
+              availablePoints: 3,
+              awardedPoints: 2,
+              outOfTries: true,
+              deadline: "2026-07-01T00:00:00Z",
+            }),
+          ],
+        }),
+      )
+      const [item] = exercisesOf(course)
+      if (!item) {
+        throw new Error("no exercise")
+      }
+
+      expect(icon(item)).toEqual(["circle-slash", "disabledForeground"])
+      expect(item.contextValue).toBe("exercise.missing")
+      expect(item.description).toBe("not downloaded · 2/3 points · no tries left")
+      expect(item.accessibilityInformation?.label).toBe(
+        "loops, not passed, not downloaded, 2 of 3 points, no tries left",
+      )
+      expect(tooltipOf(item)).toContain("No tries left, so this score is final.")
+    })
+
+    test("a downloaded exercise past its deadline says so, and is marked so Submit is hidden", function () {
+      workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Open)]
+      const item = onlyExercise({ deadline: "2000-01-01T00:00:00Z" })
+
+      expect(item.contextValue).toBe("exercise.opened.submitRefused")
+      expect(item.description).toBe("0/1 points · deadline passed")
+      expect(tooltipOf(item)).toContain(
+        "The deadline of part01-01_hello has passed, so it can no longer be submitted.",
+      )
+    })
+
+    test("a mooc exercise whose points wait for review says so instead of 0 points", function () {
+      const [course] = show(
+        moocCourse({
+          exercises: [
+            moocCourseExercise({ name: "loops", pendingReview: "awaits_chapter_lock" }),
+            moocCourseExercise({
+              id: "locked-one",
+              name: "recursion",
+              pendingReview: "awaits_teacher",
+              exerciseLocked: true,
+            }),
+          ],
+        }),
+      )
+      const loops = exercisesOf(course).find((item) => item.label === "loops")
+      const recursion = exercisesOf(course).find((item) => item.label === "recursion")
+
+      expect(loops?.description).toBe("not downloaded · waiting for the chapter to be locked")
+      expect(tooltipOf(loops!)).toContain(
+        "The points wait for a teacher's review, which starts once you complete and lock the chapter.",
+      )
+      expect(recursion?.description).toBe("not downloaded · waiting for teacher review")
+      expect(tooltipOf(recursion!)).toContain(
+        "The teacher has locked recursion, so it can no longer be submitted.",
+      )
+      expect(icon(loops!)).toEqual(["milestone", "disabledForeground"])
+      expect(icon(recursion!)).toEqual(["eye", "disabledForeground"])
+    })
+
+    test.each([
+      [{ exerciseLocked: true }, {}, "lock"],
+      [{ chapter: { name: "Two", number: 2, lockingStatus: "CompletedAndLocked" } }, {}, "lock"],
+      [
+        { chapter: { name: "Two", number: 2, lockingStatus: "NotUnlockedYet" } },
+        {},
+        "list-ordered",
+      ],
+      [{}, { notEnrolled: true }, "person"],
+    ] as const)(
+      "a mooc exercise refused for %o shows the reason's icon",
+      function (data, course, name) {
+        const [item] = show(moocCourse({ ...course, exercises: [moocCourseExercise(data)] }))
+
+        expect(icon(exercisesOf(item!)[0]!)).toEqual([name, "disabledForeground"])
+      },
+    )
+
+    test("a mooc exercise under review keeps showing points already given", function () {
+      const [course] = show(
+        moocCourse({
+          exercises: [
+            moocCourseExercise({
+              name: "loops",
+              passed: true,
+              awardedPoints: 1,
+              pendingReview: "awaits_teacher",
+            }),
+          ],
+        }),
+      )
+      const [loops] = exercisesOf(course)
+
+      expect(loops?.description).toBe("not downloaded · 1/1 points · waiting for teacher review")
+      expect(tooltipOf(loops!)).toContain(
+        "A teacher reviews this answer, which can change the points.",
+      )
+    })
+
+    test("a mooc exercise counts its tries left, and its locked chapter names the lock", function () {
+      const [course] = show(
+        moocCourse({
+          exercises: [
+            moocCourseExercise({ name: "loops", maxTries: 3, triesLeft: 2 }),
+            moocCourseExercise({
+              id: "locked-one",
+              name: "recursion",
+              chapter: { name: "Recursion", number: 2, lockingStatus: "NotUnlockedYet" },
+            }),
+          ],
+        }),
+      )
+      const loops = exercisesOf(course).find((item) => item.label === "loops")
+      const recursion = exercisesOf(course).find((item) => item.label === "recursion")
+
+      expect(loops?.description).toBe("not downloaded · 0/1 points · 2 tries left")
+      expect(recursion?.description).toBe(
+        "not downloaded · 0/1 points · complete earlier chapters first",
+      )
+      expect(tooltipOf(recursion!)).toContain(
+        'Complete the chapters before the chapter "Recursion" to submit recursion.',
+      )
+      expect(icon(recursion!)).toEqual(["list-ordered", "disabledForeground"])
+      const part = tree
+        .getChildren(course)
+        .find(
+          (child): child is PartTreeItem =>
+            child instanceof PartTreeItem && child.label === "Recursion",
+        )
+      expect(part?.description).toContain("complete earlier chapters first")
+    })
+
+    test("downloading spins, and a failed download says so", function () {
+      const exerciseId = makeTmcKind({ tmcExerciseId: 1 })
+      const claim = exerciseOperations.claim([exerciseId], "downloading").unwrap()
+      expect(icon(onlyExercise())).toEqual(["sync~spin", undefined])
+
+      claim.releaseAll()
+      downloadFailures.record([exerciseId], [])
+      const failed = onlyExercise()
+      expect(icon(failed)).toEqual(["error", "testing.iconErrored"])
+      expect(failed.contextValue).toBe("exercise.downloadFailed")
+    })
+
+    test("re-renders once its deadline passes, so the row stops saying it is due", function () {
+      const item = onlyExercise({ deadline: new Date(NOW.getTime() + 90_000).toISOString() })
+      expect(item.description).toMatch(/· due in /)
+
+      vi.advanceTimersByTime(91_000)
+      settle()
+
+      const [after] = exercisesOf(first(tree.getChildren() as CoursesTreeItem[]))
+      expect(after?.description).not.toMatch(/due/)
+      expect(after?.description).toMatch(/deadline passed/)
+    })
+
+    test("past its hard deadline and not downloaded is expired", function () {
+      const item = onlyExercise({ deadline: "2026-05-01T00:00:00Z" })
+
+      expect(icon(item)).toEqual(["watch", "disabledForeground"])
+      expect(item.contextValue).toBe("exercise.expired")
+    })
+
+    test("names its upcoming deadline while not passed, and explains a soft one", function () {
+      const item = onlyExercise({
+        softDeadline: "2026-06-20T00:00:00Z",
+        deadline: "2026-07-01T00:00:00Z",
+      })
+
+      expect(item.description).toMatch(/^not downloaded · 0\/1 points · due /)
+      expect(item.tooltip).toBeUndefined()
+      const tooltip = tooltipOf(item)
+      expect(tooltip).toContain("Soft deadline: ")
+      expect(tooltip).toContain("75%")
+      expect(tooltip).toContain("Deadline: ")
+    })
+
+    test("is read to a screen reader with its status, points and deadline", function () {
+      const item = onlyExercise({ deadline: "2026-07-01T00:00:00Z" })
+
+      expect(item.accessibilityInformation?.label).toMatch(
+        /^01_hello, not passed, not downloaded, 0 of 1 points, due /,
+      )
+    })
+
+    test("with an update is marked, and the course and badge count it", function () {
+      workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Open)]
+      updateablesRegistry.setMany([[idOfTmcCourse(1), [makeTmcKind({ tmcExerciseId: 1 })]]])
+      const item = onlyExercise()
+
+      expect(item.contextValue).toBe("exercise.opened.updateable")
+      expect(item.description).toBe("update available · 0/1 points")
+      expect(tree.getChildren()[0]?.contextValue).toBe("course.tmc.hasUpdates")
+      settle()
+      expect(view.badge).toEqual({ value: 1, tooltip: "1 exercise update" })
+    })
+  })
+
+  test("the view badge counts the new exercises across courses", function () {
+    show(tmcCourse({ newExercises: [7] }), moocCourse({ newExercises: ["a"] }))
+
+    expect(view.badge).toEqual({ value: 2, tooltip: "2 new exercises" })
+  })
+
+  test("updates the badge when the stored courses change", function () {
+    show(tmcCourse({ newExercises: [7] }))
+
+    courses = [tmcCourse()]
+    coursesChanged.fire()
+    settle()
+
+    expect(view.badge).toBeUndefined()
+  })
+
+  test("says a backend could not be reached, until it answers again", function () {
+    show(tmcCourse())
+
+    tree.setBackendReachable("tmc", false)
+    settle()
+    expect(view.message).toMatch(/^Could not reach the server\./)
+
+    tree.setBackendReachable("tmc", true)
+    settle()
+    expect(view.message).toBe("")
+  })
+
+  test("explains Restricted Mode until the course workspace is trusted", function () {
+    show(tmcCourse())
+
+    tree.setRestricted(true)
+    settle()
+    expect(view.message).toMatch(/Restricted Mode\. Trust it to run tests, submit and get help/)
+
+    tree.setRestricted(false)
+    settle()
+    expect(view.message).toBe("")
+  })
+
+  test("offers to trust the course workspace in its first row while in Restricted Mode", function () {
+    show(tmcCourse())
+
+    tree.setRestricted(true)
+    settle()
+    const [trustRow, ...courseRows] = tree.getChildren()
+    expect(trustRow?.label).toBe("Trust Course Workspace")
+    expect(trustRow?.command?.command).toBe("tmc.trustCourseWorkspace")
+    expect(trustRow && tree.getChildren(trustRow)).toEqual([])
+    expect(courseRows).toHaveLength(1)
+
+    tree.setRestricted(false)
+    settle()
+    expect(tree.getChildren().map((row) => row.label)).not.toContain("Trust Course Workspace")
+  })
+
+  test("re-renders on each download status, change on disk and change to the courses", function () {
+    show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))
+    const refreshed: unknown[] = []
+    tree.onDidChangeTreeData((node) => refreshed.push(node))
+    const changes = [
+      () => downloadFailures.record([makeTmcKind({ tmcExerciseId: 1 })], []),
+      () => updateablesRegistry.setMany([[idOfTmcCourse(1), [makeTmcKind({ tmcExerciseId: 1 })]]]),
+      () => {
+        workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Open)]
+        exercisesChanged.fire()
+      },
+      () => {
+        courses = [tmcCourse({ title: "Renamed", exercises: [tmcExercise(1, "part01-01_hello")] })]
+        coursesChanged.fire()
+      },
+    ]
+
+    for (const change of changes) {
+      change()
+      settle()
+    }
+
+    expect(refreshed).toEqual([undefined, undefined, undefined, undefined])
+  })
+
+  // VS Code forgets every row while it redraws, so a row action clicked then runs on nothing.
+  test("does not redraw when a change leaves every row as it was", function () {
+    show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))
+    const refreshed: unknown[] = []
+    tree.onDidChangeTreeData((node) => refreshed.push(node))
+
+    exercisesChanged.fire()
+    coursesChanged.fire()
+    settle()
+
+    expect(refreshed).toEqual([])
+  })
+
+  test("does not redraw the rows VS Code has already fetched", function () {
+    courses = [tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] })]
+    tree.setAccount({ loggedIn: true, isSessionExpired: false })
+    const refreshed: unknown[] = []
+    tree.onDidChangeTreeData((node) => refreshed.push(node))
+
+    tree.setSource(source())
+    tree.getChildren()
+    settle()
+
+    expect(refreshed).toEqual([])
+  })
+
+  test("renders a burst of changes once", function () {
+    show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))
+    const refreshed: unknown[] = []
+    tree.onDidChangeTreeData((node) => refreshed.push(node))
+
+    const claim = exerciseOperations
+      .claim([makeTmcKind({ tmcExerciseId: 1 })], "downloading")
+      .unwrap()
+    for (let id = 1; id <= 20; id++) {
+      downloadFailures.record([makeTmcKind({ tmcExerciseId: id })], [])
+    }
+    claim.releaseAll()
+    expect(refreshed).toEqual([])
+    settle()
+
+    expect(refreshed).toEqual([undefined])
+  })
+
+  test("a hidden view keeps its badge current and repaints once shown", function () {
+    const visibilityChanged = new vscode.EventEmitter<unknown>()
+    view.onDidChangeVisibility = visibilityChanged.event
+    tree.dispose()
+    tree = new CoursesTree()
+    show(tmcCourse())
+    const refreshed: unknown[] = []
+    tree.onDidChangeTreeData((node) => refreshed.push(node))
+    view.visible = false
+
+    courses = [tmcCourse({ newExercises: [7] })]
+    coursesChanged.fire()
+    settle()
+
+    expect(view.badge).toEqual({ value: 1, tooltip: "1 new exercise" })
+    expect(refreshed).toEqual([])
+    view.visible = true
+    visibilityChanged.fire(undefined)
+    expect(refreshed).toEqual([undefined])
+  })
+
+  test("a view VS Code fetched afresh on showing is not drawn again", function () {
+    const visibilityChanged = new vscode.EventEmitter<unknown>()
+    view.onDidChangeVisibility = visibilityChanged.event
+    tree.dispose()
+    tree = new CoursesTree()
+    show(tmcCourse())
+    const refreshed: unknown[] = []
+    tree.onDidChangeTreeData((node) => refreshed.push(node))
+    view.visible = false
+
+    courses = [tmcCourse({ newExercises: [7] })]
+    coursesChanged.fire()
+    settle()
+    view.visible = true
+    tree.getChildren()
+    visibilityChanged.fire(undefined)
+
+    expect(refreshed).toEqual([])
+  })
+
+  suite("revealing the active exercise", function () {
+    function openEditorOn(fsPath: string): void {
+      vi.spyOn(vscode.window, "activeTextEditor", "get").mockReturnValue({
+        document: { uri: vscode.Uri.file(fsPath) },
+      } as vscode.TextEditor)
+      activeEditorChanged.fire(vscode.window.activeTextEditor)
+    }
+
+    beforeEach(function () {
+      workspaceExercises = [onDisk("part01-01_hello", ExerciseStatus.Open)]
+      show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }))
+    })
+
+    test("selects the exercise a newly active file belongs to, keeping focus in the editor", function () {
+      openEditorOn("/exercises/tmc-slug/part01-01_hello/src/hello.py")
+
+      expect(view.reveal).toHaveBeenCalledOnce()
+      const [item, options] = view.reveal.mock.calls[0] as [ExerciseTreeItem, object]
+      expect(item.label).toBe("01_hello")
+      expect(options).toEqual({ select: true, focus: false })
+    })
+
+    test("selects the exercise already open when the view first fills", function () {
+      vi.spyOn(vscode.window, "activeTextEditor", "get").mockReturnValue({
+        document: { uri: vscode.Uri.file("/exercises/tmc-slug/part01-01_hello/src/hello.py") },
+      } as vscode.TextEditor)
+
+      tree.setSource(source())
+
+      expect(view.reveal).toHaveBeenCalledOnce()
+    })
+
+    test("leaves a hidden view alone", function () {
+      view.visible = false
+      openEditorOn("/exercises/tmc-slug/part01-01_hello/src/hello.py")
+
+      expect(view.reveal).not.toHaveBeenCalled()
+    })
+
+    test("ignores a file outside every exercise", function () {
+      openEditorOn("/home/student/notes.txt")
+
+      expect(view.reveal).not.toHaveBeenCalled()
+    })
+
+    test("on request, opens even a hidden view and focuses the exercise's row", async function () {
+      view.visible = false
+
+      const isRevealed = await tree.revealExercise(
+        vscode.Uri.file("/exercises/tmc-slug/part01-01_hello/src/hello.py"),
+      )
+
+      expect(isRevealed).toBe(true)
+      const [item, options] = view.reveal.mock.calls[0] as [ExerciseTreeItem, object]
+      expect(item.label).toBe("01_hello")
+      expect(options).toEqual({ select: true, focus: true })
+    })
+
+    test("builds no other course's rows to find the exercise", async function () {
+      show(tmcCourse({ exercises: [tmcExercise(1, "part01-01_hello")] }), moocCourse())
+      const childrenRead = vi.spyOn(CourseTreeItem.prototype, "children", "get")
+
+      await tree.revealExercise(vscode.Uri.file("/exercises/tmc-slug/part01-01_hello/src/hello.py"))
+
+      expect(childrenRead.mock.contexts.map((course) => (course as CourseTreeItem).label)).toEqual([
+        "The Python Course",
+      ])
+    })
+
+    test("on request, reports a file no row holds", async function () {
+      expect(await tree.revealExercise(vscode.Uri.file("/home/student/notes.txt"))).toBe(false)
+      expect(view.reveal).not.toHaveBeenCalled()
+    })
+  })
+
+  test("a refresh re-renders the whole view", function () {
+    const refreshed: unknown[] = []
+    tree.onDidChangeTreeData((node) => refreshed.push(node))
+    tree.refresh()
+    settle()
+
+    expect(refreshed).toEqual([undefined])
+  })
+
+  test("disposing releases the view and stops further refresh events", function () {
+    const refreshed: unknown[] = []
+    tree.onDidChangeTreeData((node) => refreshed.push(node))
+    tree.dispose()
+    tree.refresh()
+    downloadFailures.clear()
+    settle()
+
+    expect(view.dispose).toHaveBeenCalledOnce()
+    expect(refreshed).toEqual([])
+  })
+
+  test("part and course rows are the classes the commands test for", function () {
+    const [course] = show(
+      tmcCourse({ exercises: [tmcExercise(1, "part01-01_a"), tmcExercise(2, "part02-01_b")] }),
+    )
+
+    expect(course).toBeInstanceOf(CourseTreeItem)
+    expect(tree.getChildren(course)[0]).toBeInstanceOf(PartTreeItem)
+  })
+})

@@ -1,95 +1,111 @@
-import validateData, { MigratedData } from ".";
+import type * as vscode from "vscode"
+
+import type { MigratedData } from "."
+import validateData from "."
 import {
-    LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
-    LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
-    LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
-} from "../../config/constants";
-import * as data from "../data";
-import { createIs } from "typia";
-import * as vscode from "vscode";
+  LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
+  LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
+  LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
+} from "../../config/constants"
+import * as data from "../data"
 
 export function v1_migrateFromV0(
-    unstableData: data.v0.LocalCourseData[],
-    memento: vscode.Memento,
+  unstableData: data.v0.LocalCourseData[],
+  memento: vscode.Memento,
 ): data.v1.LocalCourseData[] {
-    interface LocalExerciseDataPartial {
-        id: number;
-        deadline?: string | undefined;
-        name?: string;
-        softDeadline?: string | undefined;
+  interface LocalExerciseDataPartial {
+    id: number
+    deadline?: string | undefined
+    name?: string
+    softDeadline?: string | undefined
+  }
+
+  const localExerciseData = memento.get<LocalExerciseDataPartial[]>(data.v0.EXERCISE_DATA_KEY)
+  const courseExercises = localExerciseData && new Map(localExerciseData.map((x) => [x.id, x]))
+
+  return unstableData.map<data.v1.LocalCourseData>((x) => {
+    const exercises = x.exercises.map<data.v1.LocalCourseData["exercises"][0]>((e) => {
+      const fallback = courseExercises?.get(e.id)
+      return {
+        ...e,
+        deadline: e.deadline ?? fallback?.deadline ?? null,
+        name: e.name ?? fallback?.name ?? e.id.toString(),
+        softDeadline: e.softDeadline ?? fallback?.softDeadline ?? null,
+      }
+    })
+
+    return {
+      ...x,
+      availablePoints: x.availablePoints ?? 0,
+      awardedPoints: x.awardedPoints ?? 0,
+      description: x.description,
+      disabled: x.disabled ?? false,
+      exercises: exercises,
+      materialUrl: x.material_url ?? null,
+      newExercises: x.newExercises ?? [],
+      notifyAfter: x.notifyAfter ?? 0,
+      organization: x.organization,
+      perhapsExamMode: x.perhapsExamMode ?? false,
+      title: x.title ?? x.name,
     }
-
-    const localExerciseData = memento.get<LocalExerciseDataPartial[]>(data.v0.EXERCISE_DATA_KEY);
-    const courseExercises = localExerciseData && new Map(localExerciseData.map((x) => [x.id, x]));
-
-    return unstableData.map<data.v1.LocalCourseData>((x) => {
-        const exercises = x.exercises.map<data.v1.LocalCourseData["exercises"][0]>((e) => {
-            const fallback = courseExercises?.get(e.id);
-            return {
-                ...e,
-                deadline: e.deadline ?? fallback?.deadline ?? null,
-                name: e.name ?? fallback?.name ?? e.id.toString(),
-                softDeadline: e.softDeadline ?? fallback?.softDeadline ?? null,
-            };
-        });
-
-        return {
-            ...x,
-            availablePoints: x.availablePoints ?? 0,
-            awardedPoints: x.awardedPoints ?? 0,
-            description: x.description,
-            disabled: x.disabled ?? false,
-            exercises: exercises,
-            materialUrl: x.material_url ?? null,
-            newExercises: x.newExercises ?? [],
-            notifyAfter: x.notifyAfter ?? 0,
-            organization: x.organization,
-            perhapsExamMode: x.perhapsExamMode ?? false,
-            title: x.title ?? x.name,
-        };
-    });
+  })
 }
 
 export function v1_resolveMissingFields(
-    localCourseData: data.v1.LocalCourseData[],
+  localCourseData: data.v1.LocalCourseData[],
 ): data.v2.LocalCourseData[] {
-    return localCourseData.map((course) => {
-        const exercises = course.exercises.map((x) => {
-            const resolvedAwardedPoints = x.passed
-                ? LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER
-                : LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER;
-            return {
-                ...x,
-                availablePoints: x.availablePoints ?? LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
-                awardedPoints: x.awardedPoints ?? resolvedAwardedPoints,
-            };
-        });
-        return { ...course, exercises };
-    });
+  return localCourseData.map((course) => {
+    const exercises = course.exercises.map((x) => {
+      const resolvedAwardedPoints = x.passed
+        ? LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER
+        : LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER
+      return {
+        ...x,
+        availablePoints: x.availablePoints ?? LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
+        awardedPoints: x.awardedPoints ?? resolvedAwardedPoints,
+      }
+    })
+    return { ...course, exercises }
+  })
 }
 
+export function v3_migrateFromV2(prev: data.v2.UserData): data.v3.UserData {
+  // validateData returns the original object so fields a newer extension version persisted
+  // survive; `mooc_courses` is kept if already present.
+
+  const maybeFuture = prev as Partial<data.v3.UserData>
+  return {
+    ...prev,
+    mooc_courses: maybeFuture.mooc_courses ?? [],
+  }
+}
+
+/** Every key user data has ever been stored under; one left out survives to shadow the migrated value. */
+const USER_DATA_KEYS = [
+  data.v0.USER_DATA_KEY,
+  data.v1.USER_DATA_KEY,
+  data.v2.USER_DATA_KEY,
+  data.v3.USER_DATA_KEY,
+]
+
+/** Brings older user data up to v3; `data` is `undefined` when v3 is already current. */
 export default function migrateUserDataToLatest(
-    memento: vscode.Memento,
-): MigratedData<{ courses: data.v2.LocalCourseData[] }> {
-    const obsoleteKeys: string[] = [];
-    const dataV0 = validateData(
-        memento.get(data.v0.USER_DATA_KEY),
-        createIs<{ courses: data.v0.LocalCourseData[] }>(),
-    );
-    if (dataV0) {
-        obsoleteKeys.push(data.v0.USER_DATA_KEY);
-    }
+  memento: vscode.Memento,
+): MigratedData<data.v3.UserData> {
+  // v0 => v1
+  const dataV0 = validateData(memento.get(data.v0.USER_DATA_KEY), data.v0.userDataSchema)
+  const dataV1 = dataV0
+    ? { courses: v1_migrateFromV0(dataV0.courses, memento) }
+    : validateData(memento.get(data.v1.USER_DATA_KEY), data.v1.userDataSchema)
 
-    const dataV1 = dataV0
-        ? { courses: v1_migrateFromV0(dataV0.courses, memento) }
-        : validateData(
-              memento.get(data.v1.USER_DATA_KEY),
-              createIs<{ courses: data.v1.LocalCourseData[] }>(),
-          );
+  // v1 => v2
+  const dataV2 = dataV1
+    ? { ...dataV1, courses: v1_resolveMissingFields(dataV1?.courses) }
+    : validateData(memento.get(data.v2.USER_DATA_KEY), data.v2.userDataSchema)
 
-    const dataV2 = dataV1
-        ? { ...dataV1, courses: v1_resolveMissingFields(dataV1?.courses) }
-        : undefined;
-
-    return { data: dataV2, obsoleteKeys };
+  return {
+    data: dataV2 && v3_migrateFromV2(dataV2),
+    supersededKeys: USER_DATA_KEYS,
+    destinationKey: data.v3.USER_DATA_KEY,
+  }
 }

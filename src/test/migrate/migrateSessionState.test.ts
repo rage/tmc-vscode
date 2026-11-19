@@ -1,58 +1,50 @@
-import migrateSessionState from "../../storage/migration/sessionState";
-import * as sessionState from "../fixtures/sessionState";
-import { createMockMemento } from "../mocks/vscode";
-import { expect } from "chai";
-import * as vscode from "vscode";
+import type * as vscode from "vscode"
 
-const EXTENSION_VERSION_KEY = "extensionVersion";
-const SESSION_STATE_KEY_V1 = "session-state-v1";
+import { v0, v1 } from "../../storage/data"
+import migrateSessionState from "../../storage/migration/sessionState"
+import * as sessionState from "../fixtures/sessionState"
+import { createMockMemento } from "../mocks/vscode"
 
 suite("Session state migration", function () {
-    let memento: vscode.Memento;
+  let memento: vscode.Memento
 
-    setup(function () {
-        memento = createMockMemento();
-    });
+  beforeEach(function () {
+    memento = createMockMemento()
+  })
 
-    suite("between versions", function () {
-        test("succeeds without any data", function () {
-            const migrated = migrateSessionState(memento).data;
-            expect(migrated).to.be.deep.equal({
-                extensionVersion: undefined,
-            });
-        });
+  suite("between versions", function () {
+    test("has nothing to write without any data", function () {
+      expect(migrateSessionState(memento).data).toBeUndefined()
+    })
 
-        test("succeeds with version 2.0.0 data", async function () {
-            await memento.update(SESSION_STATE_KEY_V1, sessionState.v2_0_0);
-            const migrated = migrateSessionState(memento).data;
-            expect(migrated).to.be.deep.equal(sessionState.v2_0_0);
-        });
+    test("leaves current data to stay as it is", async function () {
+      await memento.update(v1.SESSION_STATE_KEY, sessionState.v2_0_0)
+      expect(migrateSessionState(memento).data).toBeUndefined()
+    })
 
-        test("should succeed with backwards compatible future data", async function () {
-            const data = { ...sessionState.v2_0_0, wonderwoman: "Diana Prince" };
-            await memento.update(SESSION_STATE_KEY_V1, data);
-            const migrated = migrateSessionState(memento).data;
-            expect(migrated).to.be.deep.equal(data);
-        });
-    });
+    test("accepts backwards compatible future data", async function () {
+      await memento.update(v1.SESSION_STATE_KEY, { ...sessionState.v2_0_0, wonderwoman: "Diana" })
+      expect(migrateSessionState(memento).data).toBeUndefined()
+    })
+  })
 
-    suite("with unstable data", function () {
-        test("fails with garbage data", async function () {
-            await memento.update(EXTENSION_VERSION_KEY, { wonderwoman: "Diana Prince" });
-            expect(() => migrateSessionState(memento)).to.throw(/mismatch/);
-        });
+  suite("with unstable data", function () {
+    test("fails with garbage data", async function () {
+      await memento.update(v0.EXTENSION_VERSION_KEY, { wonderwoman: "Diana Prince" })
+      expect(() => migrateSessionState(memento)).toThrow(/mismatch/)
+    })
 
-        test("finds extension version", async function () {
-            await memento.update(EXTENSION_VERSION_KEY, "1.3.4");
-            const migrated = migrateSessionState(memento).data;
-            expect(migrated?.extensionVersion).to.be.equal("1.3.4");
-        });
-    });
+    test("finds extension version", async function () {
+      await memento.update(v0.EXTENSION_VERSION_KEY, "1.3.4")
+      const migrated = migrateSessionState(memento).data
+      expect(migrated?.extensionVersion).toBe("1.3.4")
+    })
+  })
 
-    suite("with stable data", function () {
-        test("fails with garbage version 1 data", async function () {
-            await memento.update(SESSION_STATE_KEY_V1, { extensionVersion: 1 });
-            expect(() => migrateSessionState(memento)).to.throw(/mismatch/);
-        });
-    });
-});
+  suite("with stable data", function () {
+    test("fails with garbage version 1 data", async function () {
+      await memento.update(v1.SESSION_STATE_KEY, { extensionVersion: 1 })
+      expect(() => migrateSessionState(memento)).toThrow(/mismatch/)
+    })
+  })
+})

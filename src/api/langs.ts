@@ -1,0 +1,1966 @@
+import * as cp from "child_process"
+
+import kill from "tree-kill"
+import type { Result } from "ts-results"
+import { Err, Ok } from "ts-results"
+import { z } from "zod"
+
+import type {
+  CombinedCourseData,
+  CombinedMoocCourseData,
+  Course,
+  DataKind,
+  ExerciseTaskSubmissionResult,
+  ExerciseTaskSubmissionStatus,
+  LocalExercise,
+  MoocCourse,
+  MoocDeviceLogin,
+  MoocOldSubmissionRestore,
+  ExerciseSlideSubmissionListItem,
+  Notification,
+  Organization,
+  OutputData,
+  RunResult,
+  StatusUpdateData,
+  StyleValidationResult,
+  Submission,
+  SubmissionFeedback,
+  SubmissionFeedbackResponse,
+  SubmissionFinished,
+  TmcConfig,
+} from "../../shared/langsSchema"
+import { CliNotification, CliOutputData, CliStatusUpdate } from "../../shared/langsSchema"
+import type { BackendKind, CourseIdentifier, Enum } from "../../shared/lib"
+import {
+  BaseError,
+  ExerciseIdentifier,
+  makeMoocKind,
+  makeTmcKind,
+  match,
+  unwrap,
+} from "../../shared/lib"
+import {
+  API_CACHE_LIFETIME,
+  CLI_PROCESS_TIMEOUT,
+  DOWNLOAD_PROCESS_TIMEOUT,
+  LOGIN_PROCESS_TIMEOUT,
+  MINIMUM_SUBMISSION_INTERVAL,
+  MOOC_BACKEND_URL,
+  SUBMIT_PROCESS_TIMEOUT,
+  TEST_PROCESS_TIMEOUT,
+  TMC_BACKEND_URL,
+} from "../config/constants"
+import type { InitializationError } from "../errors"
+import {
+  AuthorizationError,
+  ChapterLockedError,
+  ExerciseLockedError,
+  ChapterNotOpenError,
+  ConnectionError,
+  DeadlinePassedError,
+  DeviceLoginDeniedError,
+  DeviceLoginExpiredError,
+  EmptyLangsResponseError,
+  ExerciseNotFoundError,
+  ForbiddenError,
+  InsufficientScopeError,
+  InvalidTokenError,
+  LangsResponseSchemaError,
+  NotEnrolledError,
+  NotFoundError,
+  ObsoleteClientError,
+  OutOfTriesError,
+  RateLimitedError,
+  RuntimeError,
+  ServerError,
+  SpawnError,
+  TimeoutError,
+  TmcLoginNotAcceptedError,
+  UnknownUploadError,
+  UploadExpiredError,
+} from "../errors"
+import { Logger, LogLevel, redactSecrets } from "../utilities/logger"
+import { sleep } from "../utilities/utils"
+import type { FractionProgress } from "./dialog"
+
+interface Options {
+  cliConfigDir?: string | undefined
+  /** The JDK the CLI's Java plugin should use, read per spawn; empty for the one on `PATH`. */
+  javaHome?: (() => string) | undefined
+}
+
+interface ExecutionOptions {
+  timeout: number
+}
+
+interface LangsProcessArgs {
+  args: string[]
+  /**
+   * Threaded explicitly rather than sniffed from `args[0]`, so an
+   * auth-flavored error can be attributed to the right backend. `undefined`
+   * for backend-agnostic commands (local ops, settings).
+   */
+  backend?: BackendKind | undefined
+  env?: Record<string, string> | undefined
+  onStdout?: ((data: StatusUpdateData) => void) | undefined
+  /**
+   * Surfaces a CLI notification to the user. Set only for commands the user is watching,
+   * so a background poll cannot toast.
+   */
+  onNotification?: ((notification: Notification) => void) | undefined
+  /** Kills the process after this many milliseconds: `CLI_PROCESS_TIMEOUT` when unset, never when `null`. */
+  processTimeout?: number | null | undefined
+  /** Set on login/logout commands, where an auth-flavored error is expected rather than a lost session. */
+  suppressAuthEvents?: boolean | undefined
+  onInterruptHandle?: ((interrupt: () => void) => void) | undefined
+  /**
+   * Registers the process with {@link Langs.killAllProcesses}. Only set for commands with no
+   * partial-write failure mode (login, which saves nothing until approved, network-only
+   * submit/paste, local test runs) -- a killed download or settings write can corrupt state.
+   */
+  interruptOnDeactivate?: boolean | undefined
+}
+
+/** How an auth failure in a CLI response is attributed. */
+interface AuthAttribution {
+  /**
+   * The backend the command talked to. Only its cached responses are dropped when it
+   * rejects our credentials, and it names the site in a not-enrolled message.
+   */
+  backend?: BackendKind | undefined
+  /** Set on login/logout commands, where an auth error means no session was lost. */
+  expected?: boolean | undefined
+}
+
+interface LangsProcessRunner {
+  interrupt: () => void
+  result: Promise<Result<OutputData, BaseError>>
+  /** Raw stderr collected so far; complete once `result` has settled. */
+  getStderr: () => string
+}
+
+interface ResponseCacheEntry {
+  response: OutputData
+  timestamp: number
+}
+
+interface CacheOptions {
+  forceRefresh?: boolean | undefined
+}
+
+interface CacheConfig {
+  forceRefresh?: boolean | undefined
+  key: string
+}
+
+/**
+ * Builds a response-cache key.
+ *
+ * Every key starts with the backend, because tmc.mooc.fi and courses.mooc.fi share an id
+ * space here — both arrive as strings — and because {@link Langs} drops one backend's
+ * entries without touching the other's by matching that prefix.
+ *
+ * @param resource What the entry holds, e.g. `course-data`. One resource name per CLI
+ * output-data kind, so two commands returning the same thing share an entry.
+ * @param parts The ids the entry is keyed by, in the order the resource names them.
+ */
+function cacheKey(backend: BackendKind, resource: string, ...parts: (string | number)[]): string {
+  return [backend, resource, ...parts].join(":")
+}
+
+/** Bounds the cache so a long session that visits many courses cannot grow it without limit. */
+const MAX_CACHED_RESPONSES = 128
+
+/** Long enough for every flag and id the CLI takes; only a settings value exceeds it. */
+const MAX_LOGGED_ARG_LENGTH = 120
+
+/**
+ * Replaces an oversized argument with its length, so the output channel users paste into
+ * bug reports stays readable when a whole settings value goes through argv.
+ */
+function loggableArg(arg: string): string {
+  return arg.length > MAX_LOGGED_ARG_LENGTH ? `<${arg.length} characters>` : arg
+}
+
+/**
+ * Whether a failed call is known not to have reached its backend: the CLI never ran, could
+ * not connect, or failed without an answer from the server.
+ */
+function neverReachedBackend(error: Error): boolean {
+  return (
+    error instanceof SpawnError ||
+    error instanceof ConnectionError ||
+    error instanceof EmptyLangsResponseError ||
+    (error instanceof RuntimeError && error.httpStatus === undefined)
+  )
+}
+
+/** The `output-data` payload a response of `output-data-kind` `K` carries. */
+type OutputDataOf<K extends DataKind["output-data-kind"]> = Extract<
+  DataKind,
+  { "output-data-kind": K }
+>["output-data"]
+
+/** How far a download has got, reported as each exercise finishes. */
+export type ExerciseDownloadProgress = FractionProgress & { id: ExerciseIdentifier }
+
+/** One exercise a download wrote, or meant to write, to `path`. */
+export interface ExerciseDownload {
+  id: ExerciseIdentifier
+  path: string
+}
+
+/** What one download of several exercises did with each of them. */
+export interface ExerciseDownloads {
+  downloaded: ExerciseDownload[]
+  /** Already up to date. */
+  skipped: ExerciseDownload[]
+  /** Each with the reasons the CLI gave. */
+  failed: [ExerciseDownload, string[]][]
+}
+
+/** How a backend's copies of the locally downloaded exercises differ from the local ones. */
+export interface LocalExerciseUpdates {
+  /** Changed on the server since download. */
+  updated: ExerciseIdentifier[]
+  /** No longer on the server; their local copies stay and are never updated. */
+  removed: ExerciseIdentifier[]
+  /**
+   * Courses the backend refused to serve, which `updated` and `removed` say nothing about. Only
+   * courses.mooc.fi refuses single courses; tmc.mooc.fi fails the whole check instead.
+   */
+  uncheckedCourses?: UncheckedCourse[]
+}
+
+/** A course an update check could not check. */
+export interface UncheckedCourse {
+  courseId: CourseIdentifier
+  /** What a command about this course alone fails with. */
+  refusal: InsufficientScopeError | NotFoundError
+}
+
+/** A backend's download result, with each exercise as `toDownload` identifies it. */
+function toExerciseDownloads<T>(
+  {
+    downloaded,
+    skipped,
+    failed,
+  }: { downloaded: T[]; skipped: T[]; failed?: [T, string[]][] | null | undefined },
+  toDownload: (exercise: T) => ExerciseDownload,
+): ExerciseDownloads {
+  return {
+    downloaded: downloaded.map((exercise) => toDownload(exercise)),
+    skipped: skipped.map((exercise) => toDownload(exercise)),
+    failed: (failed ?? []).map(([exercise, reasons]) => [toDownload(exercise), reasons]),
+  }
+}
+
+/**
+ * One earlier submission of one exercise, for {@link Langs.restoreSubmission}. The exercise
+ * and submission ids pair up per backend, so a mismatch cannot be built.
+ */
+export type RestoreTarget = Enum<
+  { exerciseId: number; submissionId: number },
+  { exerciseId: string; submissionId: string }
+>
+
+/** Ample for the failure diagnostics stderr feeds; a test run can write orders of magnitude more. */
+const MAX_RETAINED_STDERR_BYTES = 64 * 1024
+
+/** POSIX has process groups, so a child spawned `detached` can be signalled as a whole tree. */
+const HAS_PROCESS_GROUPS = process.platform !== "win32"
+
+/**
+ * Kills the CLI process and everything it spawned, doing nothing if it never started.
+ *
+ * On POSIX the child leads its own process group (see the `detached` spawn option), so one
+ * synchronous signal reaches the whole tree and has taken effect before this returns --
+ * which is what lets a synchronous `deactivate` stop a submit in flight. Windows has no
+ * process groups, so `tree-kill` walks the tree asynchronously there instead.
+ */
+function killProcessTree(cprocess: cp.ChildProcess): void {
+  const pid = cprocess.pid
+  // Undefined until the spawn succeeds, and `tree-kill` throws on a non-numeric pid.
+  if (pid === undefined) {
+    return
+  }
+  if (!HAS_PROCESS_GROUPS) {
+    kill(pid)
+    return
+  }
+  try {
+    process.kill(-pid, "SIGKILL")
+  } catch {
+    // ESRCH: the group is already gone, which is the outcome asked for.
+  }
+}
+
+/**
+ * The tail of a CLI process's stderr, and of the stdout lines that are not its JSON, kept for
+ * the error details a failure attaches; redacted, as those details reach the output channel.
+ *
+ * Once {@link MAX_RETAINED_STDERR_BYTES} is exceeded the oldest output is dropped and
+ * `text()` says how much went; the most recent chunk is always kept whole.
+ */
+class BoundedStderr {
+  private readonly _chunks: string[] = []
+  private _retainedBytes = 0
+  private _droppedBytes = 0
+  private _text: string | undefined
+
+  public push(chunk: string): void {
+    this._chunks.push(chunk)
+    this._retainedBytes += Buffer.byteLength(chunk)
+    while (this._retainedBytes > MAX_RETAINED_STDERR_BYTES && this._chunks.length > 1) {
+      const droppedBytes = Buffer.byteLength(this._chunks.shift() as string)
+      this._retainedBytes -= droppedBytes
+      this._droppedBytes += droppedBytes
+    }
+    this._text = undefined
+  }
+
+  public text(): string {
+    if (this._text === undefined) {
+      const tail = redactSecrets(this._chunks.join(""))
+      this._text =
+        this._droppedBytes === 0
+          ? tail
+          : `[…${this._droppedBytes} bytes of earlier stderr dropped…]\n${tail}`
+    }
+    return this._text
+  }
+}
+
+/** The extension's interface to `tmc-langs-cli`; one method per CLI operation. */
+export default class Langs {
+  // Per-backend: tmc.mooc.fi and courses.mooc.fi are unrelated servers, so one must not throttle the other.
+  private readonly _nextSubmissionAllowedTimestamp: Record<BackendKind, number>
+  private readonly _options: Options
+  private readonly _responseCache: Map<string, ResponseCacheEntry>
+  private _onLogin?: () => void
+  private _onLogout?: (expected: boolean, rejection?: Error) => void
+  private _onNotification?: (notification: Notification) => void
+  /** Messages already surfaced; the CLI repeats a plugin's warning on every run. */
+  private readonly _shownNotifications = new Set<string>()
+
+  private readonly _activeInterrupts = new Set<() => void>()
+
+  public constructor(
+    private readonly cliPath: string,
+    private readonly clientName: string,
+    private readonly clientVersion: string,
+    options?: Options,
+  ) {
+    this._nextSubmissionAllowedTimestamp = { tmc: 0, mooc: 0 }
+    this._options = { ...options }
+    this._responseCache = new Map()
+  }
+
+  /**
+   * Kills every CLI process opted in via `interruptOnDeactivate` (login, submit, paste and
+   * local test runs); downloads, extraction, and settings/credentials writes are left running so a
+   * window reload can't leave them half-written.
+   *
+   * Safe to call from a synchronous `deactivate`: each kill is a single syscall that has
+   * taken effect by the time it returns.
+   */
+  public killAllProcesses(): void {
+    const interrupts = Array.from(this._activeInterrupts)
+    Logger.info(`Killing ${interrupts.length} active CLI process(es)`)
+    for (const interrupt of interrupts) {
+      interrupt()
+    }
+  }
+
+  /**
+   * Sets the callback to an event, replacing any earlier one.
+   *
+   * There is one session: `login` follows a successful {@link authenticate}, and `logout`
+   * carries `expected: true` after {@link deauthenticate} and `false`, with the error the call
+   * resolves to, when a backend rejected the credentials it was sent. A rejection need not end
+   * the session, as the other credential may still be good, so a subscriber re-checks with
+   * {@link isAuthenticated}.
+   */
+  public on(event: "login", callback: () => void): void
+  public on(event: "logout", callback: (expected: boolean, rejection?: Error) => void): void
+  public on(event: "notification", callback: (notification: Notification) => void): void
+  public on(
+    event: "login" | "logout" | "notification",
+    callback:
+      | (() => void)
+      | ((expected: boolean, rejection?: Error) => void)
+      | ((notification: Notification) => void),
+  ): void {
+    switch (event) {
+      case "login":
+        this._onLogin = callback as () => void
+        break
+      case "logout":
+        this._onLogout = callback as (expected: boolean, rejection?: Error) => void
+        break
+      case "notification":
+        this._onNotification = callback as (notification: Notification) => void
+        break
+    }
+  }
+
+  /**
+   * Whether the user has a session: stored courses.mooc.fi credentials, or else a tmc token
+   * stored before courses.mooc.fi logins replaced tmc ones.
+   */
+  public async isAuthenticated(options?: ExecutionOptions): Promise<Result<boolean, Error>> {
+    // Not `tmc logged-in` alone: it reports the courses.mooc.fi login only to a tmc server
+    // trusted with its token, so any other tmc root would read as logged out.
+    const mooc = await this._isLoggedIn("mooc", options)
+    if (mooc.err || mooc.val) {
+      return mooc
+    }
+    return this._isLoggedIn("tmc", options)
+  }
+
+  private async _isLoggedIn(
+    backend: BackendKind,
+    options?: ExecutionOptions,
+  ): Promise<Result<boolean, Error>> {
+    const res = await this._executeLangsCommand(
+      {
+        backend,
+        args: this._backendCmd(backend, "logged-in"),
+        processTimeout: options?.timeout,
+      },
+      null,
+    )
+    return res.andThen<boolean, Error>((x) => {
+      switch (x.result) {
+        case "logged-in":
+          return Ok(true)
+        case "not-logged-in":
+          return Ok(false)
+        default:
+          return Err(new Error(`Unexpected langs result: ${x.result}`))
+      }
+    })
+  }
+
+  /**
+   * The id of the courses.mooc.fi account logged in, from `mooc logged-in`; `undefined` when
+   * none is, or when courses.mooc.fi could not be asked which one. Makes a request, so keep it
+   * off hot paths.
+   */
+  public async getMoocAccountId(): Promise<Result<string | undefined, Error>> {
+    const res = await this._executeLangsCommand(
+      { backend: "mooc", args: this._moocCmd("logged-in") },
+      null,
+    )
+    return res.map((x) => {
+      const data = (x as OutputData).data
+      return data?.["output-data-kind"] === "mooc-current-user" ? data["output-data"].id : undefined
+    })
+  }
+
+  /**
+   * Logs in to courses.mooc.fi with the OAuth2 device authorization flow (RFC 8628), via
+   * `mooc login`, and fires `login` once approved.
+   *
+   * Errs with a `DeviceLoginDeniedError` or `DeviceLoginExpiredError` when the user denies the
+   * login or does not approve it in time. `interrupt` kills the process; nothing is saved
+   * until the approval.
+   *
+   * @param onDeviceCode Called with the verification URL and user code once the CLI has them.
+   */
+  public authenticate(onDeviceCode: (info: MoocDeviceLogin) => void): {
+    result: Promise<Result<void, BaseError | InitializationError>>
+    interrupt: () => void
+  } {
+    const onStdout = (res: StatusUpdateData): void => {
+      if (res["update-data-kind"] === "mooc-device-login" && res.data) {
+        onDeviceCode(res.data)
+      }
+    }
+    const { result, interrupt } = this._spawnChecked(
+      {
+        backend: "mooc",
+        args: this._moocCmd("login"),
+        onStdout,
+        processTimeout: LOGIN_PROCESS_TIMEOUT,
+        suppressAuthEvents: true,
+        interruptOnDeactivate: true,
+      },
+      null,
+    )
+    const loginResult = result.then((res) =>
+      res.map(() => {
+        this._onLogin?.()
+        return undefined
+      }),
+    )
+    return { result: loginResult, interrupt }
+  }
+
+  /**
+   * Removes every stored credential, the courses.mooc.fi one and any tmc one, and fires
+   * `logout` with `expected: true` once both are gone.
+   */
+  public async deauthenticate(): Promise<Result<void, Error>> {
+    const results: Result<void, Error>[] = []
+    // In turn: `tmc logout` reads the mooc credentials, and fails if `mooc logout` removes them
+    // under it.
+    for (const backend of ["tmc", "mooc"] as const) {
+      results.push(
+        await this._run({ args: this._backendCmd(backend, "logout"), suppressAuthEvents: true }),
+      )
+    }
+    this._responseCache.clear()
+    const failed = results.find((res) => res.err)
+    if (failed) {
+      return failed
+    }
+    this._onLogout?.(true)
+    return Ok.EMPTY
+  }
+
+  /** Removes build output and other generated files from an exercise, via `clean`. */
+  public async clean(exercisePath: string): Promise<Result<void, Error>> {
+    return this._run({ args: ["clean", "--exercise-path", exercisePath] })
+  }
+
+  /**
+   * The files and folders of an exercise that hold the student's work, relative to the
+   * exercise folder, as its language plugin and `.tmcproject.yml` define them.
+   */
+  public async getStudentFilePaths(exercisePath: string): Promise<Result<string[], Error>> {
+    const res = await this._fetch(
+      { args: ["get-exercise-packaging-configuration", "--exercise-path", exercisePath] },
+      "exercise-packaging-configuration",
+    )
+    return res.map((configuration) => configuration.student_file_paths)
+  }
+
+  /**
+   * Lists every exercise in the projects directory, from both backends, in one call.
+   *
+   * Each entry is tagged with the backend it came from and carries the ids needed to
+   * place it — an exercise id on both arms, and a course id on the mooc arm (TMC course
+   * configs store no course id).
+   */
+  public async listLocalExercises(): Promise<Result<LocalExercise[], Error>> {
+    return this._fetch(
+      { args: ["list-local-exercises", "--client-name", this.clientName] },
+      "local-exercises",
+    )
+  }
+
+  /**
+   * Runs an exercise's tests locally, via `run-tests`.
+   *
+   * @param pythonExecutablePath The Python to run them with instead of the one on `PATH`.
+   */
+  public runTests(
+    exercisePath: string,
+    pythonExecutablePath?: string,
+  ): {
+    process: Promise<Result<RunResult, BaseError | InitializationError>>
+    interrupt: () => void
+  } {
+    const env: Record<string, string> = {}
+    if (pythonExecutablePath) {
+      env.TMC_LANGS_PYTHON_EXEC = pythonExecutablePath
+    }
+    const { result, interrupt } = this._spawnChecked(
+      {
+        args: ["run-tests", "--exercise-path", exercisePath],
+        env,
+        onNotification: (notification) => this._showNotification(notification),
+        interruptOnDeactivate: true,
+        processTimeout: TEST_PROCESS_TIMEOUT,
+      },
+      "test-result",
+    )
+    return { process: result.then((res) => res.map((x) => x.data["output-data"])), interrupt }
+  }
+
+  /**
+   * Runs an exercise's code quality checks, via `checkstyle`. Resolves to `null` for a
+   * language that has none.
+   */
+  public runCheckstyle(exercisePath: string): {
+    process: Promise<Result<StyleValidationResult | null, BaseError | InitializationError>>
+    interrupt: () => void
+  } {
+    const { result, interrupt } = this._spawnChecked(
+      {
+        args: ["checkstyle", "--locale", "en", "--exercise-path", exercisePath],
+        onNotification: (notification) => this._showNotification(notification),
+        interruptOnDeactivate: true,
+      },
+      "validation",
+    )
+    return { process: result.then((res) => res.map((x) => x.data["output-data"])), interrupt }
+  }
+
+  /**
+   * Migrates exercise under TMC-langs's management. The new location will be determined by
+   * langs's `projects-dir` setting.
+   */
+  public async migrateExercise(
+    courseSlug: string,
+    exerciseChecksum: string,
+    exerciseId: number,
+    exercisePath: string,
+    exerciseSlug: string,
+  ): Promise<Result<void, Error>> {
+    return this._run({
+      args: this._settingsCmd(
+        "migrate",
+        "--exercise-path",
+        exercisePath,
+        "--course-slug",
+        courseSlug,
+        "--exercise-id",
+        `${exerciseId}`,
+        "--exercise-slug",
+        exerciseSlug,
+        "--exercise-checksum",
+        exerciseChecksum,
+      ),
+      processTimeout: DOWNLOAD_PROCESS_TIMEOUT,
+    })
+  }
+
+  /**
+   * Moves this instance's projects directory on disk. Uses TMC-langs `settings move-projects-dir`
+   * setting internally.
+   *
+   * @param newDirectory New location for projects directory.
+   * @param onUpdate Progress callback.
+   */
+  public async moveProjectsDirectory(
+    newDirectory: string,
+    onUpdate?: (progress: FractionProgress) => void,
+  ): Promise<Result<void, Error>> {
+    const onStdout = (res: StatusUpdateData): void => {
+      onUpdate?.({
+        fraction: res["percent-done"],
+        message: res.message ?? undefined,
+      })
+    }
+    // Killing it midway would leave the exercises split between the two directories.
+    return this._run({
+      args: this._settingsCmd("move-projects-dir", newDirectory),
+      onStdout,
+      processTimeout: null,
+    })
+  }
+
+  /**
+   * Gets the value for given key and asserts it's type. Uses TMC-langs `settings get` command
+   * internally.
+   */
+  public async getSetting<T>(
+    key: string,
+    checker: (object: unknown) => object is T,
+  ): Promise<Result<T | undefined, Error>> {
+    const res = await this._fetch({ args: this._settingsCmd("get", key) }, "config-value")
+    return res.andThen<T | undefined, Error>((data) => {
+      if (data === undefined || data === null) {
+        return Ok(undefined)
+      }
+      return checker(data) ? Ok(data) : Err(new Error("Invalid object type."))
+    })
+  }
+
+  /**
+   * Reads the whole settings file in one call. Uses TMC-langs `settings list` command
+   * internally.
+   *
+   * Values other than `projects_dir` arrive unchecked and keyed by setting name, so a caller
+   * validates the shape of each key it reads, as it would pass a checker to
+   * {@link getSetting}. Prefer this whenever more than one key is wanted: {@link getSetting}
+   * costs a CLI process per key.
+   */
+  public async listSettings(): Promise<Result<TmcConfig & Record<string, unknown>, Error>> {
+    return this._fetch({ args: this._settingsCmd("list") }, "tmc-config")
+  }
+
+  /**
+   * Sets a value for given key in stored settings. Uses TMC-langs `settings set` command
+   * internally.
+   */
+  public async setSetting(key: string, value: unknown): Promise<Result<void, Error>> {
+    // Base64 rather than raw JSON: the value goes through argv, where quoting rules differ
+    // per platform and a course's closed-exercise list is long enough to matter.
+    const encoded = Buffer.from(JSON.stringify(value)).toString("base64")
+    return this._run({ args: this._settingsCmd("set", key, encoded, "--base64") })
+  }
+
+  /**
+   * Resets all settings back to initial values. Uses TMC-langs `settings reset` command
+   * internally.
+   */
+  public async resetSettings(): Promise<Result<void, Error>> {
+    return this._run({ args: this._settingsCmd("reset") })
+  }
+
+  /**
+   * Unsets the value of given key in stored settings. Uses TMC-langs `settings unset` command
+   * internally.
+   */
+  public async unsetSetting(key: string): Promise<Result<void, Error>> {
+    return this._run({ args: this._settingsCmd("unset", key) })
+  }
+
+  /**
+   * Compares the locally downloaded exercises of `backend` with the server: those with a newer
+   * version there, and those the server no longer has.
+   *
+   * The result is cached per backend; `forceRefresh` bypasses that cache. A caller
+   * wanting both backends calls this twice, so one server being unreachable does not
+   * discard the other's answer.
+   */
+  public async checkExerciseUpdates(
+    backend: BackendKind,
+    options?: CacheOptions,
+  ): Promise<Result<LocalExerciseUpdates, Error>> {
+    const command = { backend, args: this._backendCmd(backend, "check-exercise-updates") }
+    const cacheConfig = {
+      forceRefresh: options?.forceRefresh,
+      key: cacheKey(backend, "exercise-updates"),
+    }
+    if (backend === "mooc") {
+      const res = await this._fetch(command, "mooc-exercise-updates", cacheConfig)
+      return res.map(({ updated, removed, unchecked_courses }) => ({
+        updated: updated.map((id) => makeMoocKind({ moocExerciseId: id })),
+        removed: removed.map((id) => makeMoocKind({ moocExerciseId: id })),
+        uncheckedCourses: unchecked_courses.map(({ course_id, kind }) => ({
+          courseId: makeMoocKind({ moocCourseId: course_id }),
+          refusal:
+            kind === "insufficient-scope"
+              ? new InsufficientScopeError("You no longer have access to the course.")
+              : new NotFoundError("The course no longer exists."),
+        })),
+      }))
+    }
+    const res = await this._fetch(command, "exercise-updates", cacheConfig)
+    return res.map(({ updated, removed }) => ({
+      updated: updated.map((id) => makeTmcKind({ tmcExerciseId: id })),
+      removed: removed.map((id) => makeTmcKind({ tmcExerciseId: id })),
+    }))
+  }
+
+  /**
+   * Downloads tmc exercises into the projects directory, or updates those already there,
+   * via `download-or-update-course-exercises`.
+   *
+   * @param downloadTemplate Downloads each exercise's template instead of the user's latest
+   * submission.
+   * @param onDownloaded Called as each exercise finishes.
+   * @param onInterruptHandle Receives the function that kills the download.
+   */
+  public async downloadTmcExercises(
+    exerciseIds: number[],
+    downloadTemplate: boolean,
+    onDownloaded: (progress: ExerciseDownloadProgress) => void,
+    onInterruptHandle?: (interrupt: () => void) => void,
+  ): Promise<Result<ExerciseDownloads, Error>> {
+    const res = await this._fetch(
+      {
+        backend: "tmc",
+        args: this._tmcCmd(
+          "download-or-update-course-exercises",
+          ...(downloadTemplate ? ["--download-template"] : []),
+          "--exercise-id",
+          ...exerciseIds.map((id) => id.toString()),
+        ),
+        onStdout: (update) => {
+          if (
+            update["update-data-kind"] === "client-update-data" &&
+            update.data?.["client-update-data-kind"] === "exercise-download"
+          ) {
+            onDownloaded({
+              id: makeTmcKind({ tmcExerciseId: update.data.id }),
+              fraction: update["percent-done"],
+              message: update.message ?? undefined,
+            })
+          }
+        },
+        onInterruptHandle,
+        processTimeout: DOWNLOAD_PROCESS_TIMEOUT,
+      },
+      "tmc-exercise-download",
+    )
+    this._responseCache.delete(cacheKey("tmc", "exercise-updates"))
+    return res.map((result) =>
+      toExerciseDownloads(result, ({ id, path }) => ({
+        id: makeTmcKind({ tmcExerciseId: id }),
+        path,
+      })),
+    )
+  }
+
+  /**
+   * Downloads courses.mooc.fi exercises into the projects directory, or updates those already
+   * there, via `mooc download-or-update-course-exercises`. Each exercise is its template: the
+   * CLI has no latest-submission download for courses.mooc.fi, so `downloadOrUpdateExercises`
+   * restores that itself.
+   *
+   * @param courseId The course every exercise belongs to, when they share one; without it the
+   * CLI looks for each exercise in every course the user is enrolled in.
+   * @param onDownloaded Called as each exercise finishes.
+   * @param onInterruptHandle Receives the function that kills the download.
+   */
+  public async downloadMoocExercises(
+    exerciseIds: string[],
+    courseId: string | undefined,
+    onDownloaded: (progress: ExerciseDownloadProgress) => void,
+    onInterruptHandle?: (interrupt: () => void) => void,
+  ): Promise<Result<ExerciseDownloads, Error>> {
+    const res = await this._fetch(
+      {
+        backend: "mooc",
+        args: this._moocCmd(
+          "download-or-update-course-exercises",
+          ...(courseId ? ["--course-id", courseId] : []),
+          "--exercise-id",
+          ...exerciseIds,
+        ),
+        onStdout: (update) => {
+          if (
+            update["update-data-kind"] === "mooc-client-update-data" &&
+            update.data?.["client-update-data-kind"] === "exercise-download"
+          ) {
+            onDownloaded({
+              id: makeMoocKind({ moocExerciseId: update.data.id }),
+              fraction: update["percent-done"],
+              message: update.message ?? undefined,
+            })
+          }
+        },
+        onInterruptHandle,
+        processTimeout: DOWNLOAD_PROCESS_TIMEOUT,
+      },
+      "mooc-exercise-download",
+    )
+    this._responseCache.delete(cacheKey("mooc", "exercise-updates"))
+    return res.map((result) =>
+      toExerciseDownloads(result, (exercise) => ({
+        id: makeMoocKind({ moocExerciseId: exercise["exercise-id"] }),
+        path: exercise.path,
+      })),
+    )
+  }
+
+  /**
+   * Lists an exercise's earlier submissions, each backend's in its own shape. The exercise id
+   * comes back beside them, narrowed to its backend's id type.
+   */
+  public async getOldSubmissions(
+    exerciseId: ExerciseIdentifier,
+  ): Promise<
+    Result<
+      Enum<
+        { exerciseId: number; submissions: Submission[] },
+        { exerciseId: string; submissions: ExerciseSlideSubmissionListItem[] }
+      >,
+      Error
+    >
+  > {
+    const command = {
+      backend: exerciseId.kind,
+      args: this._backendCmd(
+        exerciseId.kind,
+        "get-exercise-submissions",
+        "--exercise-id",
+        ExerciseIdentifier.toString(exerciseId),
+      ),
+    }
+    return match(
+      exerciseId,
+      async ({ tmcExerciseId }) =>
+        (await this._fetch(command, "submissions")).map((submissions) =>
+          makeTmcKind({ exerciseId: tmcExerciseId, submissions }),
+        ),
+      async ({ moocExerciseId }) =>
+        (await this._fetch(command, "mooc-submissions")).map((submissions) =>
+          makeMoocKind({ exerciseId: moocExerciseId, submissions }),
+        ),
+    )
+  }
+
+  /**
+   * Replaces an exercise's files at `exercisePath` with one of its earlier submissions.
+   *
+   * Resolves to `nothing-to-download` for a submission the server has no files for, which only
+   * an exercise type with no files at all can be. Nothing on disk or on the server is touched
+   * then, `saveOldState` included.
+   *
+   * @param saveOldState Keeps the exercise's current state on the server first: a submission on
+   * tmc, which goes through the submission throttle, and an ungraded backup on courses.mooc.fi.
+   */
+  public async restoreSubmission(
+    target: RestoreTarget,
+    exercisePath: string,
+    saveOldState: boolean,
+  ): Promise<Result<MoocOldSubmissionRestore, Error>> {
+    const { exerciseId, submissionId } = unwrap(target)
+    const command = {
+      backend: target.kind,
+      args: this._backendCmd(
+        target.kind,
+        "download-old-submission",
+        "--submission-id",
+        submissionId.toString(),
+        ...(saveOldState ? ["--save-old-state"] : []),
+        "--exercise-id",
+        exerciseId.toString(),
+        "--output-path",
+        exercisePath,
+      ),
+      processTimeout: DOWNLOAD_PROCESS_TIMEOUT,
+    }
+    const restore = (): Promise<Result<MoocOldSubmissionRestore, Error>> =>
+      match(
+        target,
+        async () => (await this._run(command)).map(() => "restored" as const),
+        () => this._fetch(command, "mooc-old-submission-restore"),
+      )
+    return saveOldState && target.kind === "tmc" ? this._submitting("tmc", restore) : restore()
+  }
+
+  /**
+   * Gets all courses of the given organization. Results may vary depending on the user account's
+   * priviledges. Uses TMC-langs `get-courses` core command internally.
+   *
+   * @param organization Slug of the organization.
+   * @returns Array of the organization's courses.
+   */
+  public async getCourses(
+    organization: string,
+    options?: CacheOptions,
+  ): Promise<Result<Course[], Error>> {
+    return this._fetch(
+      { backend: "tmc", args: this._tmcCmd("get-courses", "--organization", organization) },
+      "courses",
+      {
+        forceRefresh: options?.forceRefresh,
+        key: cacheKey("tmc", "organization-courses", organization),
+      },
+    )
+  }
+
+  /**
+   * Gets user-specific data of the given course. Uses TMC-langs `get-course-data` core
+   * command internally.
+   *
+   * @param courseId Id to the course.
+   * @returns The course's details, its exercises and its settings in one response.
+   */
+  public async getTmcCourseData(
+    courseId: number,
+    options?: CacheOptions,
+  ): Promise<Result<CombinedCourseData, Error>> {
+    return this._fetch(
+      { backend: "tmc", args: this._tmcCmd("get-course-data", "--course-id", courseId.toString()) },
+      "combined-course-data",
+      { forceRefresh: options?.forceRefresh, key: cacheKey("tmc", "course-data", courseId) },
+    )
+  }
+
+  /** Gets a courses.mooc.fi course with its exercise slides and the user's progress on them. */
+  public async getMoocCourseData(
+    courseId: string,
+    options?: CacheOptions,
+  ): Promise<Result<CombinedMoocCourseData, Error>> {
+    return this._fetch(
+      { backend: "mooc", args: this._moocCmd("course-data", "--course-id", courseId) },
+      "mooc-combined-course-data",
+      { forceRefresh: options?.forceRefresh, key: cacheKey("mooc", "course-data", courseId) },
+    )
+  }
+
+  /**
+   * Gets all organizations. Uses TMC-langs `get-organizations` core command internally.
+   *
+   * @returns A list of organizations.
+   */
+  public async getTmcOrganizations(options?: CacheOptions): Promise<Result<Organization[], Error>> {
+    return this._fetch(
+      { backend: "tmc", args: this._tmcCmd("get-organizations") },
+      "organizations",
+      {
+        forceRefresh: options?.forceRefresh,
+        key: cacheKey("tmc", "organizations"),
+      },
+    )
+  }
+
+  /**
+   * Reverts an exercise to its template, via `reset-exercise`. The CLI downloads the template
+   * before clearing the directory, so a failed download leaves the student's work in place.
+   *
+   * @param saveOldState Keeps the exercise's current state on the server first: a submission on
+   * tmc, which goes through the submission throttle, and an ungraded backup on courses.mooc.fi.
+   */
+  public async resetExercise(
+    exerciseId: ExerciseIdentifier,
+    exercisePath: string,
+    saveOldState: boolean,
+  ): Promise<Result<void, Error>> {
+    const reset = (): Promise<Result<void, Error>> =>
+      this._run({
+        backend: exerciseId.kind,
+        args: this._backendCmd(
+          exerciseId.kind,
+          "reset-exercise",
+          ...(saveOldState ? ["--save-old-state"] : []),
+          "--exercise-id",
+          ExerciseIdentifier.toString(exerciseId),
+          "--exercise-path",
+          exercisePath,
+        ),
+        processTimeout: DOWNLOAD_PROCESS_TIMEOUT,
+      })
+    return saveOldState && exerciseId.kind === "tmc" ? this._submitting("tmc", reset) : reset()
+  }
+
+  /**
+   * Submits an exercise to server and waits for test results. Uses TMC-langs `submit` core
+   * command internally.
+   *
+   * Throttled to one call per `MINIMUM_SUBMISSION_INTERVAL` shared with every other tmc call
+   * that submits — paste, and `--save-old-state` on reset and restore — waiting its turn.
+   *
+   * @param exerciseId Id of the exercise.
+   * @param progressCallback Reports completion as a 0..1 fraction, the unit every
+   * progress value in the extension uses.
+   */
+  public async submitTmcExerciseAndWaitForResults(
+    exerciseId: number,
+    exercisePath: string,
+    progressCallback?: (fraction: number, message?: string) => void,
+    onSubmissionUrl?: (url: string) => void,
+  ): Promise<Result<SubmissionFinished, Error>> {
+    const onStdout = (res: StatusUpdateData): void => {
+      progressCallback?.(res["percent-done"], res.message ?? undefined)
+      if (
+        res["update-data-kind"] === "client-update-data" &&
+        res.data?.["client-update-data-kind"] === "posted-submission"
+      ) {
+        onSubmissionUrl?.(res.data.show_submission_url)
+      }
+    }
+    return this._submitting("tmc", () =>
+      this._fetch(
+        {
+          backend: "tmc",
+          args: this._tmcCmd(
+            "submit",
+            "--submission-path",
+            exercisePath,
+            "--exercise-id",
+            String(exerciseId),
+          ),
+          onStdout,
+          onNotification: (notification) => this._showNotification(notification),
+          processTimeout: SUBMIT_PROCESS_TIMEOUT,
+          interruptOnDeactivate: true,
+        },
+        "submission-finished",
+      ),
+    )
+  }
+
+  /**
+   * Submits a mooc exercise without waiting for its grading; follow with
+   * {@link waitForMoocGrading}. The CLI resolves the slide and task ids from the exercise id.
+   *
+   * Throttled to one call per `MINIMUM_SUBMISSION_INTERVAL`, per backend, so the tmc path is
+   * unaffected. Errs with an `ExerciseNotFoundError` when the exercise is gone from
+   * courses.mooc.fi.
+   *
+   * @param exerciseId Mooc exercise id (a UUID string).
+   * @param exercisePath Path to the local exercise directory.
+   */
+  public async submitMoocExercise(
+    exerciseId: string,
+    exercisePath: string,
+  ): Promise<Result<ExerciseTaskSubmissionResult, Error>> {
+    return this._submitting("mooc", () =>
+      this._fetch(
+        {
+          backend: "mooc",
+          args: this._moocCmd(
+            "submit",
+            "--dont-block",
+            "--exercise-id",
+            exerciseId,
+            "--submission-path",
+            exercisePath,
+          ),
+          onNotification: (notification) => this._showNotification(notification),
+          processTimeout: SUBMIT_PROCESS_TIMEOUT,
+          interruptOnDeactivate: true,
+        },
+        "mooc-submission-finished",
+      ),
+    )
+  }
+
+  /**
+   * Polls a mooc submission's grading until it is terminal or the CLI stops waiting.
+   *
+   * Terminal includes `PendingManual`. On the CLI's poll timeout this resolves to the latest
+   * non-terminal status, not an error, so it can be called again for the same submission.
+   *
+   * @param taskSubmissionId The `task_submission_id` {@link submitMoocExercise} returned.
+   * @param progressCallback Reports completion as a 0..1 fraction; the CLI's is not
+   * meaningful for grading, only its messages are.
+   */
+  public async waitForMoocGrading(
+    taskSubmissionId: string,
+    progressCallback?: (fraction: number, message?: string) => void,
+  ): Promise<Result<ExerciseTaskSubmissionStatus, Error>> {
+    const onStdout = (res: StatusUpdateData): void => {
+      progressCallback?.(res["percent-done"], res.message ?? undefined)
+    }
+    return this._fetch(
+      {
+        backend: "mooc",
+        args: this._moocCmd("wait-for-grading", "--submission-id", taskSubmissionId),
+        onStdout,
+        onNotification: (notification) => this._showNotification(notification),
+        processTimeout: SUBMIT_PROCESS_TIMEOUT,
+        interruptOnDeactivate: true,
+      },
+      "mooc-submission-status",
+    )
+  }
+
+  /**
+   * Sends an exercise to its backend's paste service and returns the link to it. On
+   * courses.mooc.fi that is an ungraded paste snapshot the CLI then shares, which uses no try
+   * and is accepted past the deadline.
+   *
+   * A tmc paste is a submission, so it takes a slot in the submission throttle, waiting its
+   * turn. Errs with an `ExerciseNotFoundError` when the exercise is gone from its backend, and
+   * on courses.mooc.fi with a `RateLimitedError` after too many pastes of the exercise.
+   */
+  public async paste(
+    exerciseId: ExerciseIdentifier,
+    exercisePath: string,
+  ): Promise<Result<string, Error>> {
+    const command = {
+      backend: exerciseId.kind,
+      args: this._backendCmd(
+        exerciseId.kind,
+        "paste",
+        "--exercise-id",
+        ExerciseIdentifier.toString(exerciseId),
+        "--submission-path",
+        exercisePath,
+      ),
+      processTimeout: SUBMIT_PROCESS_TIMEOUT,
+      interruptOnDeactivate: true,
+    }
+    const res = await match(
+      exerciseId,
+      () => this._submitting("tmc", () => this._fetch(command, "new-submission")),
+      () => this._fetch(command, "mooc-paste"),
+    )
+    return res.map((pasted) => pasted.paste_url)
+  }
+
+  /**
+   * Submits feedback for an exercise. Uses TMC-langs `send-feedback` core command internally.
+   *
+   * @param feedbackUrl URL for feedback. Usually provided by a successful exercise submission.
+   * @param feedback Feedback to submit.
+   * @returns Response from submitting the feedback.
+   */
+  public async submitSubmissionFeedback(
+    feedbackUrl: string,
+    feedback: SubmissionFeedback,
+  ): Promise<Result<SubmissionFeedbackResponse, Error>> {
+    const feedbackArgs = feedback.status.reduce<string[]>(
+      (acc, next) => acc.concat("--feedback", next.question_id.toString(), next.answer),
+      [],
+    )
+    return this._fetch(
+      {
+        backend: "tmc",
+        args: this._tmcCmd("send-feedback", "--feedback-url", feedbackUrl, ...feedbackArgs),
+      },
+      "submission-feedback-response",
+    )
+  }
+
+  /** Lists the courses.mooc.fi courses the user is enrolled in. */
+  public async getEnrolledMoocCourses(): Promise<Result<MoocCourse[], Error>> {
+    return this._fetch({ backend: "mooc", args: this._moocCmd("courses") }, "mooc-courses")
+  }
+
+  /**
+   * Runs `submit`, a call that makes the CLI submit to `backend`, at least
+   * `MINIMUM_SUBMISSION_INTERVAL` after the previous one, waiting out the rest of it first.
+   *
+   * Every call that submits goes through here — the submit commands, and on tmc the paste
+   * command and `--save-old-state` on reset and old-submission restore — so they throttle each
+   * other rather than only their own kind. A call that never reached the backend frees its slot.
+   */
+  private async _submitting<T>(
+    backend: BackendKind,
+    submit: () => Promise<Result<T, Error>>,
+  ): Promise<Result<T, Error>> {
+    const previous = this._nextSubmissionAllowedTimestamp[backend]
+    const start = Math.max(Date.now(), previous)
+    const claimed = start + MINIMUM_SUBMISSION_INTERVAL
+    this._nextSubmissionAllowedTimestamp[backend] = claimed
+    const wait = start - Date.now()
+    if (wait > 0) {
+      Logger.info(`Submitting in ${wait} ms, ${MINIMUM_SUBMISSION_INTERVAL} ms after the previous`)
+      await sleep(wait)
+    }
+    const result = await submit()
+    if (
+      result.err &&
+      neverReachedBackend(result.val) &&
+      this._nextSubmissionAllowedTimestamp[backend] === claimed
+    ) {
+      this._nextSubmissionAllowedTimestamp[backend] = previous
+    }
+    return result
+  }
+
+  /** The base arguments of a `backend` subcommand, followed by `rest`. */
+  private _backendCmd(backend: BackendKind, ...rest: string[]): string[] {
+    return backend === "tmc" ? this._tmcCmd(...rest) : this._moocCmd(...rest)
+  }
+
+  /** The base arguments of a `mooc` subcommand, followed by `rest`. */
+  private _moocCmd(...rest: string[]): string[] {
+    return ["mooc", "--client-name", this.clientName].concat(rest)
+  }
+
+  /** The base arguments of a `tmc` subcommand, followed by `rest`. */
+  private _tmcCmd(...rest: string[]): string[] {
+    return ["tmc", "--client-name", this.clientName, "--client-version", this.clientVersion].concat(
+      rest,
+    )
+  }
+
+  /** The base arguments of a `settings` subcommand, followed by `rest`. */
+  private _settingsCmd(...rest: string[]): string[] {
+    return ["settings", "--client-name", this.clientName].concat(rest)
+  }
+
+  /** Runs a command for its `output-data` of kind `outputDataKind`; see {@link _executeLangsCommand}. */
+  private async _fetch<K extends DataKind["output-data-kind"]>(
+    langsArgs: LangsProcessArgs,
+    outputDataKind: K,
+    cacheConfig?: CacheConfig,
+  ): Promise<Result<OutputDataOf<K>, Error>> {
+    const res = await this._executeLangsCommand(langsArgs, outputDataKind, cacheConfig)
+    return res.map((x) => x.data["output-data"] as OutputDataOf<K>)
+  }
+
+  /** Runs a command for its effect alone; see {@link _executeLangsCommand}. */
+  private async _run(langsArgs: LangsProcessArgs): Promise<Result<void, Error>> {
+    const res = await this._executeLangsCommand(langsArgs, null)
+    return res.err ? res : Ok.EMPTY
+  }
+
+  /**
+   * Starts a CLI process and checks its final response, which must carry `output-data` of
+   * kind `outputDataKind` (anything, when `null`).
+   */
+  private _spawnChecked<T extends DataKind["output-data-kind"] | null>(
+    langsArgs: LangsProcessArgs,
+    outputDataKind: T,
+  ): {
+    result: Promise<
+      Result<
+        OutputData & { data: T extends null ? null : { "output-data-kind": T } },
+        BaseError | InitializationError
+      >
+    >
+    interrupt: () => void
+  } {
+    const process = this._spawnLangsProcess(langsArgs)
+    if (process.err) {
+      return { result: Promise.resolve(process), interrupt: (): void => {} }
+    }
+    const { interrupt, result, getStderr } = process.val
+    langsArgs.onInterruptHandle?.(interrupt)
+    const auth: AuthAttribution = {
+      backend: langsArgs.backend,
+      expected: langsArgs.suppressAuthEvents,
+    }
+    return {
+      result: result.then((res) =>
+        res
+          .andThen((x) => this._checkLangsResponse(x, outputDataKind, auth, getStderr()))
+          .mapErr((error) => Object.assign(error, { backend: langsArgs.backend })),
+      ),
+      interrupt,
+    }
+  }
+
+  /**
+   * Executes a tmc-langs-cli process to completion and validates the final response.
+   *
+   * @param langsArgs Command arguments passed to `_spawnLangsProcess`.
+   * @param outputDataKind Expected `output-data-kind` of the result.
+   * @param cacheConfig Cache options.
+   */
+  private async _executeLangsCommand<T extends DataKind["output-data-kind"] | null>(
+    langsArgs: LangsProcessArgs,
+    outputDataKind: T,
+    cacheConfig?: CacheConfig,
+  ): Promise<
+    Result<OutputData & { data: T extends null ? null : { "output-data-kind": T } }, Error>
+  > {
+    const key = cacheConfig?.key
+    const currentTime = Date.now()
+    if (!cacheConfig?.forceRefresh && key) {
+      const cachedEntry = this._readCachedResponse(key)
+      if (cachedEntry) {
+        const { response, timestamp } = cachedEntry
+        const cachedDataLifeLeft = timestamp + API_CACHE_LIFETIME - currentTime
+        if (cachedDataLifeLeft > 0 && dataMatchesKind(response, outputDataKind)) {
+          const prettySecondsLeft = Math.ceil(cachedDataLifeLeft / 1000)
+          Logger.info(`Using cached data for key: ${key}. Still valid for ${prettySecondsLeft}s`)
+          return Ok(response)
+        }
+        Logger.debug(`Discarding invalidated cache data for key: ${key}`)
+        this._responseCache.delete(key)
+      }
+    }
+
+    const res = await this._spawnChecked(langsArgs, outputDataKind).result
+    if (res.ok && key) {
+      this._writeCachedResponse(key, { response: res.val, timestamp: currentTime })
+    }
+    return res
+  }
+
+  /** Reads an entry and marks it most recently used, so {@link _writeCachedResponse} evicts it last. */
+  private _readCachedResponse(key: string): ResponseCacheEntry | undefined {
+    const entry = this._responseCache.get(key)
+    if (entry) {
+      // A Map iterates in insertion order, so re-inserting moves the entry to the back.
+      this._responseCache.delete(key)
+      this._responseCache.set(key, entry)
+    }
+    return entry
+  }
+
+  /** Stores an entry, evicting the least recently used ones once the cache is over its cap. */
+  private _writeCachedResponse(key: string, entry: ResponseCacheEntry): void {
+    this._responseCache.delete(key)
+    this._responseCache.set(key, entry)
+    for (const oldest of this._responseCache.keys()) {
+      if (this._responseCache.size <= MAX_CACHED_RESPONSES) {
+        break
+      }
+      this._responseCache.delete(oldest)
+    }
+  }
+
+  /**
+   * Drops every cached response belonging to `backend`, leaving the other backend's alone:
+   * the two servers are unrelated, so one rejecting our credentials says nothing about the
+   * other's data. An unattributed failure drops everything, having ruled nothing out.
+   */
+  private _clearBackendCache(backend: BackendKind | undefined): void {
+    if (backend === undefined) {
+      this._responseCache.clear()
+      return
+    }
+    const prefix = `${backend}:`
+    for (const key of this._responseCache.keys()) {
+      if (key.startsWith(prefix)) {
+        this._responseCache.delete(key)
+      }
+    }
+  }
+
+  /**
+   * Checks langs response for generic errors.
+   *
+   * @param auth How an auth failure in this response is attributed; see {@link AuthAttribution}.
+   */
+  private _checkLangsResponse<T extends DataKind["output-data-kind"] | null>(
+    langsResponse: OutputData,
+    outputDataKind: T,
+    auth: AuthAttribution = {},
+    stderr = "",
+  ): Result<OutputData & { data: T extends null ? null : { "output-data-kind": T } }, BaseError> {
+    // The CLI's panic handler emits `status: "crashed"` with no data, so narrowing on the
+    // expected data kind first would misreport every panic and discard its message.
+    if (langsResponse.status === "crashed") {
+      Logger.error("Langs process crashed.", langsResponse.message)
+      return Err(new BaseError(langsResponse.message || "Langs process crashed.", stderr))
+    }
+    if (!dataMatchesKind(langsResponse, outputDataKind)) {
+      // The kinds, not the payload: that is the user's data, in a log users paste into bug reports.
+      Logger.error(
+        "Unexpected TMC-langs response.",
+        `result: ${langsResponse.result}, output-data-kind: ${langsResponse.data?.["output-data-kind"]}`,
+      )
+      return Err(new BaseError("Unexpected response from the TestMyCode tools.", stderr))
+    }
+    if (langsResponse.result !== "error") {
+      return Ok(langsResponse)
+    }
+    if (langsResponse.data?.["output-data-kind"] !== "error") {
+      Logger.error("Unexpected data in error response.", JSON.stringify(langsResponse, null, 2))
+      return Err(new BaseError("Unexpected data in error response", stderr))
+    }
+
+    const data = langsResponse.data
+    const message = langsResponse.message
+    const errorKind = data["output-data"].kind
+    // `trace` is the CLI's own reported backtrace; `stderr` is what the process wrote.
+    // Neither alone suffices to diagnose a failure, so every error carries both.
+    // The CLI lists a boxed error twice in a row, once as the box and once as itself.
+    const trace = data["output-data"].trace.filter((line, i, lines) => line !== lines[i - 1])
+    const details = [trace.join("\n"), stderr].filter(Boolean).join("\n\n")
+    const httpStatus = data["output-data"].http_status ?? undefined
+    switch (errorKind) {
+      case "connection-error":
+        return Err(new ConnectionError(message, details))
+      case "forbidden":
+        return Err(new ForbiddenError(message, details))
+      case "insufficient-scope":
+        return Err(new InsufficientScopeError(message, details))
+      case "not-enrolled":
+        return Err(new NotEnrolledError(message, details))
+      case "deadline-passed":
+        return Err(
+          new DeadlinePassedError(
+            "The deadline of this exercise has passed, so it can no longer be submitted.",
+            details,
+          ),
+        )
+      case "out-of-tries":
+        return Err(
+          new OutOfTriesError(
+            "You have no tries left on this exercise, so it can no longer be submitted.",
+            details,
+          ),
+        )
+      case "chapter-not-open-yet":
+        return Err(
+          new ChapterNotOpenError(
+            "This exercise's chapter has not opened yet. Try again once it opens.",
+            details,
+          ),
+        )
+      case "chapter-not-unlocked-yet":
+        return Err(
+          new ChapterLockedError(
+            "Complete the chapters before this exercise's chapter to submit it.",
+            details,
+          ),
+        )
+      case "chapter-completed-and-locked":
+        return Err(
+          new ChapterLockedError(
+            "This exercise's chapter is locked, so the exercise can no longer be submitted.",
+            details,
+          ),
+        )
+      case "exercise-locked":
+        return Err(
+          new ExerciseLockedError(
+            "The teacher has locked this exercise, so it can no longer be submitted.",
+            details,
+          ),
+        )
+      case "upload-expired":
+        return Err(new UploadExpiredError(message, details))
+      case "rate-limited":
+        return Err(
+          new RateLimitedError(
+            "You have sent this exercise to the pastebin too often. Try again in a few minutes.",
+            details,
+          ),
+        )
+      case "unknown-upload":
+        // Never a race: the backend has no record of a file the CLI named for this
+        // exercise, so a retry cannot help.
+        return Err(new UnknownUploadError(message, details))
+      case "invalid-token": {
+        this._clearBackendCache(auth.backend)
+        const rejection = new InvalidTokenError(message)
+        if (!auth.expected) {
+          this._onLogout?.(false, rejection)
+        }
+        return Err(rejection)
+      }
+      case "not-logged-in": {
+        this._clearBackendCache(auth.backend)
+        // tmc.mooc.fi may not accept courses.mooc.fi tokens yet, and logging in again
+        // cannot change that.
+        const rejection =
+          auth.backend === "tmc"
+            ? new TmcLoginNotAcceptedError(message, details)
+            : new AuthorizationError(message, details)
+        if (!auth.expected) {
+          this._onLogout?.(false, rejection)
+        }
+        return Err(rejection)
+      }
+      case "device-login-denied":
+        return Err(new DeviceLoginDeniedError(message, details))
+      case "device-login-expired":
+        return Err(new DeviceLoginExpiredError(message, details))
+      case "not-found":
+        return Err(Object.assign(new NotFoundError(message, details), { httpStatus }))
+      case "exercise-not-found":
+        return Err(
+          new ExerciseNotFoundError(
+            auth.backend ? "This exercise is no longer in the course." : message,
+            details,
+          ),
+        )
+      case "server-error":
+        return Err(Object.assign(new ServerError(message, details), { httpStatus }))
+      case "obsolete-client":
+        return Err(new ObsoleteClientError(message, details))
+    }
+
+    return Err(Object.assign(new RuntimeError(message, details), { httpStatus }))
+  }
+
+  /**
+   * Passes a CLI notification on to the `notification` subscriber, at most once per
+   * distinct message: the plugin that warns about an outdated Python repeats it on every
+   * test run, and identical toasts would stack.
+   */
+  private _showNotification(notification: Notification): void {
+    if (this._shownNotifications.has(notification.message)) {
+      return
+    }
+    this._shownNotifications.add(notification.message)
+    this._onNotification?.(notification)
+  }
+
+  /**
+   * Spawns a new tmc-langs-cli process with given arguments.
+   *
+   * @returns Rust process runner.
+   */
+  private _spawnLangsProcess(
+    commandArgs: LangsProcessArgs,
+  ): Result<LangsProcessRunner, InitializationError | SpawnError> {
+    const { args, env, onStdout, onNotification, processTimeout, interruptOnDeactivate } =
+      commandArgs
+
+    let theResult: OutputData | undefined
+    let stdoutBuffer = ""
+    // Lets a process that ends without output data report why.
+    let lastSchemaFailure: LangsSchemaFailure | undefined
+
+    const loggableCommand = [this.cliPath]
+      .concat(args.map((arg) => loggableArg(arg)))
+      .map((x) => JSON.stringify(x))
+      .join(" ")
+
+    // override settings with environment variables, mainly for testing
+    const tmcBackendUrl = process.env.TMC_LANGS_TMC_ROOT_URL ?? TMC_BACKEND_URL
+    const moocBackendUrl = process.env.TMC_LANGS_MOOC_ROOT_URL ?? MOOC_BACKEND_URL
+    const tmcLangsConfigDir = process.env.TMC_LANGS_CONFIG_DIR ?? this._options.cliConfigDir
+    const javaHome = this._options.javaHome?.() ?? ""
+
+    Logger.info(`Running ${loggableCommand}`)
+    Logger.debug(`TMC backend at ${tmcBackendUrl}`)
+    Logger.debug(`MOOC backend at ${moocBackendUrl}`)
+    Logger.debug(`Config dir at ${tmcLangsConfigDir}`)
+
+    // debug pulls in j4rs/JNI spam, so only ask for it when the user opted into verbose
+    const cliLogLevel = Logger.level === LogLevel.Verbose ? "debug" : "info"
+
+    let active = true
+    let interrupted = false
+    let spawnFailure: Error | undefined
+    let cprocess
+    const startTime = Date.now()
+    try {
+      cprocess = cp.spawn(this.cliPath, args, {
+        // Gives the child its own process group, so {@link killProcessTree} can reach the
+        // plugins it spawns (Maven, pytest) with one signal. No-op on Windows.
+        detached: HAS_PROCESS_GROUPS,
+        env: {
+          ...process.env,
+          ...env,
+          RUST_LOG: `${cliLogLevel},rustls=warn,reqwest=warn`,
+          TMC_LANGS_TMC_ROOT_URL: tmcBackendUrl,
+          TMC_LANGS_MOOC_ROOT_URL: moocBackendUrl,
+          TMC_LANGS_CONFIG_DIR: tmcLangsConfigDir,
+          ...(javaHome ? { JAVA_HOME: javaHome } : {}),
+        },
+      })
+    } catch (error) {
+      return Err(new SpawnError(error, "Failed to run tmc-langs-cli"))
+    }
+    // Chunk boundaries fall wherever the pipe buffer does, so a decode per chunk splits
+    // multi-byte characters -- Finnish exercise names, Java failure messages -- into
+    // replacement characters while leaving the JSON syntactically valid. An encoding on
+    // the stream makes Node hold an incomplete sequence until the rest of it arrives.
+    cprocess.stdout.setEncoding("utf8")
+    cprocess.stderr.setEncoding("utf8")
+
+    const stderr = new BoundedStderr()
+    const processResult = new Promise<number | null>((resolve, reject) => {
+      let resultCode: number | undefined
+      let stdoutEnded = false
+
+      const timeoutMs = processTimeout === undefined ? CLI_PROCESS_TIMEOUT : processTimeout
+      const timeout =
+        timeoutMs !== null &&
+        setTimeout(() => {
+          killProcessTree(cprocess)
+          reject(
+            new TimeoutError(
+              `The TestMyCode tools did not finish within ${Math.round(timeoutMs / 1000)} s and were stopped.`,
+            ),
+          )
+        }, timeoutMs)
+
+      cprocess.on("error", (error) => {
+        active = false
+        if (timeout) {
+          clearTimeout(timeout)
+        }
+        // macOS error -88 indicates an architecture (Rosetta) mismatch
+        if ("errno" in error && error.errno === -88) {
+          error.message = `A compatibility error was detected.
+If you're on macOS: Try installing Rosetta by running \`softwareupdate --install-rosetta\` in the terminal. (See https://support.apple.com/en-us/102527).
+${error.message}`
+        }
+        spawnFailure = error
+        reject(error)
+      })
+      cprocess.stderr.on("data", (data: string) => {
+        stderr.push(data)
+      })
+      cprocess.stdout.on("end", () => {
+        stdoutEnded = true
+        if (resultCode !== undefined) {
+          if (timeout) {
+            clearTimeout(timeout)
+          }
+          resolve(resultCode)
+        }
+      })
+      cprocess.on("exit", (code, signal) => {
+        // The pid is free for the OS to reuse from here on, so a retained `interrupt`
+        // closure must not signal it.
+        active = false
+        resultCode = code ?? 0
+        const ending = signal ? `was killed by ${signal}` : `exited with code ${resultCode}`
+        Logger.info(`Process ${ending} after ${Date.now() - startTime}ms: ${loggableCommand}`)
+        if (stdoutEnded) {
+          if (timeout) {
+            clearTimeout(timeout)
+          }
+          resolve(code)
+        }
+      })
+      cprocess.stdout.on("data", (chunk: string) => {
+        const decoded = decodeLangsStdout(stdoutBuffer, chunk)
+        stdoutBuffer = decoded.carry
+        for (const event of decoded.events) {
+          switch (event.kind) {
+            case "output-data":
+              theResult = event.output
+              break
+            case "status-update":
+              onStdout?.(event.update)
+              break
+            case "notification": {
+              const { message } = event.notification
+              if (event.notification["notification-kind"] === "warning") {
+                Logger.warn(message)
+              } else {
+                Logger.info(message)
+              }
+              onNotification?.(event.notification)
+              break
+            }
+            case "schema-mismatch":
+              lastSchemaFailure = event.failure
+              Logger.error(
+                "TMC-langs response didn't match expected type:",
+                event.failure.issueSummary,
+              )
+              Logger.debug("Rejected output shape:", JSON.stringify(event.failure.shape))
+              break
+            case "unparseable":
+              // A tool the CLI runs, such as a JVM failing to start, can write here directly.
+              Logger.warn(
+                `Kept a ${event.line.length}-character TMC-langs output line that is not JSON for the error details`,
+              )
+              stderr.push(`${event.line}\n`)
+              break
+          }
+        }
+      })
+    })
+
+    const result = (async (): LangsProcessRunner["result"] => {
+      try {
+        await processResult
+      } catch (error) {
+        if (spawnFailure) {
+          // ENOENT/EACCES/EPERM arrive here rather than as a `cp.spawn` throw, and
+          // `presentationFor` gives antivirus-exception advice for this class.
+          return Err(new SpawnError(spawnFailure, stderr.text()))
+        }
+        if (error instanceof TimeoutError) {
+          return Err(new TimeoutError(error.message, stderr.text()))
+        }
+        return Err(new RuntimeError(error as string, stderr.text()))
+      }
+
+      if (interrupted) {
+        return Err(new RuntimeError("The TestMyCode tools were stopped.", stderr.text()))
+      }
+
+      if (stdoutBuffer !== "") {
+        Logger.warn(`Discarded ${stdoutBuffer.length} characters of unterminated TMC-langs output`)
+      }
+
+      if (theResult) {
+        return Ok(theResult)
+      }
+      if (lastSchemaFailure) {
+        return Err(
+          new LangsResponseSchemaError(
+            `Langs process ended without result data because its output didn't match the ` +
+              `expected schema (output-kind: ${JSON.stringify(lastSchemaFailure.outputKind)}): ` +
+              `${lastSchemaFailure.issueSummary}`,
+          ),
+        )
+      }
+      return Err(
+        new EmptyLangsResponseError("Langs process ended without result data.", stderr.text()),
+      )
+    })()
+
+    const interrupt = (): void => {
+      if (active) {
+        active = false
+        interrupted = true
+        killProcessTree(cprocess)
+      }
+    }
+    // Once, redacted as a whole: a chunk can end mid-token.
+    void result.finally(() => {
+      const output = stderr.text()
+      if (output !== "") {
+        Logger.debug("stderr", output)
+      }
+    })
+    if (interruptOnDeactivate) {
+      this._activeInterrupts.add(interrupt)
+      void result.finally(() => this._activeInterrupts.delete(interrupt))
+    }
+    return Ok({ interrupt, result, getStderr: (): string => stderr.text() })
+  }
+}
+
+/** A stdout line the CLI's output contract rejected, described without its values. */
+export interface LangsSchemaFailure {
+  /** `z.prettifyError`'s paths and messages. */
+  issueSummary: string
+  /** The line's `output-kind`, when it is a string. */
+  outputKind: string | undefined
+  /** The line's JSON with every value replaced by its type. */
+  shape: unknown
+}
+
+/** One decoded line of the CLI's newline-delimited stdout. */
+export type LangsStdoutEvent =
+  | { kind: "output-data"; output: OutputData }
+  | { kind: "status-update"; update: StatusUpdateData }
+  | { kind: "notification"; notification: Notification }
+  | { kind: "schema-mismatch"; failure: LangsSchemaFailure }
+  | { kind: "unparseable"; line: string }
+
+export interface LangsStdoutDecoding {
+  /** The chunk's unterminated tail; pass it back as `carry` with the next chunk. */
+  carry: string
+  events: LangsStdoutEvent[]
+}
+
+/**
+ * Splits one chunk of the CLI's stdout into whole lines and classifies each one.
+ *
+ * Pure, and deliberately silent. A payload is the user's data and the output channel is what
+ * users are asked to paste into bug reports, so a rejected line is described by shape alone
+ * and callers have no payload to log.
+ *
+ * @param carry The previous chunk's unterminated tail; `""` at the start of the stream.
+ */
+export function decodeLangsStdout(carry: string, chunk: string): LangsStdoutDecoding {
+  // Only `chunk` is searched: one output line can span many chunks, and rescanning the
+  // carry on each would make a long line quadratic.
+  const lastNewline = chunk.lastIndexOf("\n")
+  if (lastNewline === -1) {
+    return { carry: carry + chunk, events: [] }
+  }
+  const events: LangsStdoutEvent[] = []
+  const lines = (carry + chunk.slice(0, lastNewline)).split("\n")
+  const tail = chunk.slice(lastNewline + 1)
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) {
+      continue
+    }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(trimmed)
+    } catch {
+      events.push({ kind: "unparseable", line: trimmed })
+      continue
+    }
+    events.push(classifyCliOutputLine(parsed))
+  }
+  return { carry: tail, events }
+}
+
+/** The line's `output-kind`, when the line is an object carrying one as a string. */
+function readOutputKind(parsed: unknown): string | undefined {
+  if (parsed === null || typeof parsed !== "object" || !("output-kind" in parsed)) {
+    return undefined
+  }
+  const outputKind = (parsed as Record<string, unknown>)["output-kind"]
+  return typeof outputKind === "string" ? outputKind : undefined
+}
+
+function schemaMismatch(
+  parsed: unknown,
+  outputKind: string | undefined,
+  issueSummary: string,
+): LangsStdoutEvent {
+  return {
+    kind: "schema-mismatch",
+    failure: { issueSummary, outputKind, shape: redactedShape(parsed) },
+  }
+}
+
+/**
+ * Puts the settings a `tmc-config` payload carries back into it.
+ *
+ * tmc-langs keeps every setting in a serde-flattened TOML table its exported schema
+ * omits, so the contract describes `projects_dir` alone and validation drops the
+ * settings themselves. They are taken back off the raw line; callers still check the
+ * shape of each key they read, so nothing reaches them unvalidated.
+ */
+function withFlattenedSettings(output: CliOutputData, parsed: unknown): CliOutputData {
+  const data = output.data
+  if (data?.["output-data-kind"] !== "tmc-config") {
+    return output
+  }
+  const rawData = (parsed as { data?: { "output-data"?: unknown } }).data?.["output-data"]
+  if (rawData === null || typeof rawData !== "object") {
+    return output
+  }
+  return {
+    ...output,
+    data: {
+      ...data,
+      "output-data": { ...(rawData as Record<string, unknown>), ...data["output-data"] },
+    },
+  }
+}
+
+/**
+ * Validates one parsed stdout line against the single contract branch its `output-kind`
+ * names, so a `status-update` is never first measured against the 44-way `output-data`
+ * payload union, and a rejection names one branch rather than all three.
+ */
+function classifyCliOutputLine(parsed: unknown): LangsStdoutEvent {
+  const outputKind = readOutputKind(parsed)
+  switch (outputKind) {
+    case "output-data": {
+      const validation = CliOutputData.safeParse(parsed)
+      return validation.success
+        ? { kind: "output-data", output: withFlattenedSettings(validation.data, parsed) }
+        : schemaMismatch(parsed, outputKind, z.prettifyError(validation.error))
+    }
+    case "status-update": {
+      const validation = CliStatusUpdate.safeParse(parsed)
+      return validation.success
+        ? { kind: "status-update", update: validation.data }
+        : schemaMismatch(parsed, outputKind, z.prettifyError(validation.error))
+    }
+    case "notification": {
+      const validation = CliNotification.safeParse(parsed)
+      return validation.success
+        ? { kind: "notification", notification: validation.data }
+        : schemaMismatch(parsed, outputKind, z.prettifyError(validation.error))
+    }
+  }
+  // Every branch pins `output-kind` to a literal, so nothing else can match the contract
+  // and no branch's issues are worth listing.
+  return schemaMismatch(parsed, outputKind, "unrecognized output-kind")
+}
+
+// These name a variant of the output contract rather than anything the user typed or the
+// backend issued, so they survive redaction; without them a drift report cannot say which
+// variant drifted.
+const CONTRACT_DISCRIMINATOR_KEYS = new Set([
+  "output-kind",
+  "output-data-kind",
+  "update-data-kind",
+  "client-update-data-kind",
+  "result",
+  "status",
+])
+
+const MAX_SHAPE_DEPTH = 6
+
+/** Replaces every value in `value` with its JSON type, so key names can be logged safely. */
+function redactedShape(value: unknown, depth = 0): unknown {
+  if (value === null) {
+    return "null"
+  }
+  if (Array.isArray(value)) {
+    return value.length === 0 || depth >= MAX_SHAPE_DEPTH
+      ? []
+      : [redactedShape(value[0], depth + 1)]
+  }
+  if (typeof value !== "object") {
+    return typeof value
+  }
+  if (depth >= MAX_SHAPE_DEPTH) {
+    return "object"
+  }
+  const shape: Record<string, unknown> = {}
+  for (const [key, member] of Object.entries(value)) {
+    shape[key] =
+      CONTRACT_DISCRIMINATOR_KEYS.has(key) && typeof member === "string"
+        ? member
+        : redactedShape(member, depth + 1)
+  }
+  return shape
+}
+
+/**
+ * Type guard for OutputData with the data matching the given `output-data-kind`.
+ *
+ * @param data The `OutputData` with unknown result data.
+ * @param kind The expected `output-data-kind`. If `null`, doesn't check `output-data`.
+ */
+function dataMatchesKind<T extends DataKind["output-data-kind"] | null>(
+  data: OutputData,
+  kind: T,
+): data is OutputData & { data: T extends null ? null : { "output-data-kind": T } } {
+  return (
+    kind === null ||
+    data.data?.["output-data-kind"] === kind ||
+    data.data?.["output-data-kind"] === "error"
+  )
+}

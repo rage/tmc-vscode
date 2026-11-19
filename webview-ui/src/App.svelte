@@ -1,145 +1,152 @@
 <script lang="ts">
-    import { writable } from "svelte/store";
-    import MyCourses from "./panels/MyCourses.svelte";
-    import Welcome from "./panels/Welcome.svelte";
-    import { vscode } from "./utilities/vscode";
-    import { State, assertUnreachable, AppPanel, Panel } from "./shared/shared";
-    import Login from "./panels/Login.svelte";
-    import CourseDetails from "./panels/CourseDetails.svelte";
-    import SelectOrganization from "./panels/SelectOrganization.svelte";
-    import SelectCourse from "./panels/SelectCourse.svelte";
-    import { addMessageListener } from "./utilities/script";
-    import {
-        provideVSCodeDesignSystem,
-        vsCodeButton,
-        vsCodeTextField,
-        vsCodeCheckbox,
-        vsCodeProgressRing,
-        vsCodeTag,
-        vsCodeDivider,
-    } from "@vscode/webview-ui-toolkit";
-    import ExerciseTests from "./panels/ExerciseTests.svelte";
-    import ExerciseSubmission from "./panels/ExerciseSubmission.svelte";
-    import { onMount } from "svelte";
-    import InitializationErrorHelp from "./panels/InitializationErrorHelp.svelte";
+  import type { Panel } from "../../shared/lib"
+  import { assertUnreachable } from "../../shared/lib"
+  import Button from "./components/Button.svelte"
+  import CodeBlock from "./components/CodeBlock.svelte"
+  import Notice from "./components/Notice.svelte"
+  import PanelHeader from "./components/PanelHeader.svelte"
+  import Spinner from "./components/Spinner.svelte"
+  import AddCourse from "./panels/AddCourse.svelte"
+  import CourseDetails from "./panels/CourseDetails.svelte"
+  import ErrorHelp from "./panels/ErrorHelp.svelte"
+  import ExerciseSubmission from "./panels/ExerciseSubmission.svelte"
+  import Login from "./panels/Login.svelte"
+  import { onSetPanel } from "./utilities/script"
+  import { enterScreen } from "./utilities/uiState.svelte"
+  import { vscode } from "./utilities/vscode"
 
-    onMount(() => {
-        // we shouldn't have any uncaught errors, but if they happen, this will show the user a simple error message
-        // without this, the result is just a blank page
-        window.addEventListener("error", (ev) => {
-            console.error("Uncaught error", ev);
-            document.body.innerHTML = `
-<div>Uncaught error: ${ev.message}</div>
-<div>This is a bug in the extension.</div>
-<div>Stack trace:<div>
-<pre>
-${ev.error.stack}
-</pre>
-`;
-        });
-        window.onunhandledrejection = (ev) => {
-            console.error("Unhandled rejection", ev);
-            document.body.innerHTML = `
-<div>Unhandled rejection: ${ev.reason.message}</div>
-<div>This is a bug in the extension.</div>
-<div>Stack trace:<div>
-<pre>
-${ev.reason.stack}
-</pre>
-`;
-        };
+  interface Crash {
+    title: string
+    message: string
+    stack: string | undefined
+  }
 
-        // a reload loses whatever the extension already posted, so ask it to resend
-        vscode.postMessage({ type: "ready" });
-    });
+  // Window handlers catch errors outside rendering; `<svelte:boundary>` below catches the
+  // ones thrown while a panel renders, which never reach them.
+  let crash = $state.raw<Crash | null>(null)
 
-    // here, we register all of the components from VSCode's toolkit that we use
-    provideVSCodeDesignSystem().register(
-        vsCodeButton(),
-        vsCodeTextField(),
-        vsCodeCheckbox(),
-        vsCodeProgressRing(),
-        vsCodeTag(),
-        vsCodeDivider(),
-    );
+  // "ResizeObserver loop completed/limit exceeded" is a benign browser notice (deferred resize
+  // callbacks), not a real error, but surfaces as a global `error` event.
+  function isBenignError(message: string): boolean {
+    return message.includes("ResizeObserver loop")
+  }
 
-    const appPanel: AppPanel = {
-        id: 0,
-        type: "App",
-    };
-    const initialState = vscode.getState() ?? {
-        panel: appPanel,
-    };
+  function reportCrash({ title, message, stack }: Crash): void {
+    console.error(title, message, stack)
+    vscode.postMessage({
+      type: "webviewError",
+      message: `${title}: ${message}`,
+      ...(stack === undefined ? {} : { stack }),
+    })
+  }
 
-    const state = writable<State>(initialState, (set) => {
-        addMessageListener(appPanel, (message) => {
-            switch (message.type) {
-                case "setPanel": {
-                    const newState = { panel: message.panel };
-                    if (!isTransient(newState.panel)) {
-                        vscode.setState(newState);
-                    }
-                    set(newState);
-                    break;
-                }
-                default:
-                    return assertUnreachable(message.type);
-            }
-        });
-        return () => {};
-    });
-    // need at least one subscriber to add the message listener
-    state.subscribe((ev) => {
-        console.log(ev);
-    });
-
-    // "transient" panels which shouldn't be saved/loaded
-    function isTransient(panel: Panel) {
-        return (
-            panel.type === "SelectCourse" ||
-            panel.type === "SelectOrganization" ||
-            panel.type === "ExerciseTests" ||
-            panel.type === "ExerciseSubmission"
-        );
+  function toCrash(title: string, error: unknown): Crash {
+    return {
+      title,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
     }
+  }
+
+  function handleError(event: Event) {
+    const { message, error } = event as ErrorEvent
+    if (isBenignError(message)) {
+      return
+    }
+    crash = { ...toCrash("Uncaught error", error), message }
+    reportCrash(crash)
+  }
+  function handleRejection(event: Event) {
+    crash = toCrash("Unhandled rejection", (event as PromiseRejectionEvent).reason)
+    reportCrash(crash)
+  }
+  function handleRenderError(error: unknown) {
+    reportCrash(toCrash("Uncaught error", error))
+  }
+
+  let panel = $state.raw<Panel | undefined>(undefined)
+  onSetPanel((next) => {
+    crash = null
+    enterScreen(next)
+    panel = next
+  })
+
+  // A reload loses whatever the extension already posted, so ask it to resend. Posted
+  // after the listener above is registered, or the reply could arrive unheard.
+  vscode.postMessage({ type: "ready" })
 </script>
 
+{#snippet crashView({ title, message, stack }: Crash, retry: () => void)}
+  <PanelHeader title="TestMyCode ran into a problem" />
+  <Notice kind="error" title="{title}: {message}">
+    <p>This is a bug in the extension.</p>
+    {#if stack}
+      <CodeBlock label="Stack trace" code={stack} />
+    {/if}
+    {#snippet actions()}
+      <Button onclick={retry}>Reload</Button>
+      <Button
+        secondary
+        onclick={() => vscode.postMessage({ type: "runCommand", command: "tmc.logs" })}
+      >
+        Show Logs
+      </Button>
+    {/snippet}
+  </Notice>
+{/snippet}
+
+<svelte:window onerror={handleError} onunhandledrejection={handleRejection} />
+
 <main>
-    <div class="container">
-        {#key $state.panel.id}
-            {#if $state.panel.type === "Welcome"}
-                <Welcome panel={$state.panel} />
-            {:else if $state.panel.type === "Login"}
-                <Login panel={$state.panel} />
-            {:else if $state.panel.type === "MyCourses"}
-                <MyCourses panel={$state.panel} />
-            {:else if $state.panel.type === "CourseDetails"}
-                <CourseDetails panel={$state.panel} />
-            {:else if $state.panel.type === "SelectOrganization"}
-                <SelectOrganization panel={$state.panel} />
-            {:else if $state.panel.type === "SelectCourse"}
-                <SelectCourse panel={$state.panel} />
-            {:else if $state.panel.type === "ExerciseTests"}
-                <ExerciseTests panel={$state.panel} />
-            {:else if $state.panel.type === "ExerciseSubmission"}
-                <ExerciseSubmission panel={$state.panel} />
-            {:else if $state.panel.type === "InitializationErrorHelp"}
-                <InitializationErrorHelp panel={$state.panel} />
-            {:else if $state.panel.type === "App"}
-                <div>Loading TestMyCode...</div>
-            {:else}
-                {assertUnreachable($state.panel)}
-            {/if}
-        {/key}
-    </div>
+  <div class="container">
+    {#if crash}
+      {@render crashView(crash, () => {
+        crash = null
+        // The extension answers "ready" with the last rendered panel, so the view comes back.
+        vscode.postMessage({ type: "ready" })
+      })}
+    {:else if panel === undefined}
+      <Spinner label="Loading TestMyCode…" />
+    {:else}
+      {#key panel.id}
+        <svelte:boundary onerror={handleRenderError}>
+          {#if panel.type === "CourseDetails"}
+            <CourseDetails {panel} />
+          {:else if panel.type === "ExerciseSubmission"}
+            <ExerciseSubmission {panel} />
+          {:else if panel.type === "ErrorHelp"}
+            <ErrorHelp {panel} />
+          {:else if panel.type === "Login"}
+            <Login {panel} />
+          {:else if panel.type === "AddCourse"}
+            <AddCourse {panel} />
+          {:else}
+            {assertUnreachable(panel)}
+          {/if}
+
+          {#snippet failed(error: unknown, reset: () => void)}
+            {@render crashView(toCrash("Uncaught error", error), () => {
+              // The boundary keeps rendering its fallback until `reset`; asking the
+              // extension to resend the panel alone would change nothing on screen.
+              reset()
+              vscode.postMessage({ type: "ready" })
+            })}
+          {/snippet}
+        </svelte:boundary>
+      {/key}
+    {/if}
+  </div>
 </main>
 
 <style>
-    .container {
-        /*
-            locks the side margins to be at most 20vw,
-            gradually decreasing to zero as the viewport becomes more narrow
-        */
-        margin: 0rem min(20vw, max(0vw, calc(40vw - 20rem)));
-    }
+  :global(body) {
+    /* ensures no layout shift during loading */
+    scrollbar-gutter: stable;
+  }
+
+  .container {
+    max-width: var(--tmc-content-max-width);
+    margin: 0 auto;
+    padding-bottom: var(--tmc-space-6);
+  }
 </style>

@@ -1,204 +1,268 @@
-// @ts-ignore "No module found" error even though the file exists
-import FAQ from "../../docs/FAQ.md";
-import { TestResultData } from "../shared/shared";
+// @ts-expect-error "No module found" error even though the file exists
+import FAQ from "../../docs/FAQ.md"
+import type { BackendKind } from "../../shared/lib"
 
-// Build time only globals defined in webpack configuration. These values are inlined when
-// compiling.
-declare const __DEBUG_MODE__: boolean;
-declare const __TMC_BACKEND_URL__: string;
-declare const __TMC_LANGS_CONFIG_DIR__: string | null;
-declare const __TMC_LANGS_DL_URL__: string;
-declare const __TMC_LANGS_VERSION__: string;
-declare const __MOOC_BACKEND_URL__: string;
+// Build-time globals from esbuild.mjs `define` (sourced from config.js), inlined when bundling.
 
-export const DEBUG_MODE = __DEBUG_MODE__;
-export const TMC_BACKEND_URL = __TMC_BACKEND_URL__;
-export const TMC_LANGS_CONFIG_DIR = __TMC_LANGS_CONFIG_DIR__ || undefined;
-export const TMC_LANGS_DL_URL = __TMC_LANGS_DL_URL__;
-export const TMC_LANGS_VERSION = __TMC_LANGS_VERSION__;
-export const MOOC_BACKEND_URL = __MOOC_BACKEND_URL__;
+declare const __DEBUG_MODE__: boolean
+declare const __TMC_BACKEND_URL__: string
+declare const __TMC_LANGS_CONFIG_DIR__: string | null
+declare const __TMC_LANGS_DL_URL__: string
+declare const __TMC_LANGS_VERSION__: string
+declare const __MOOC_BACKEND_URL__: string
+declare const __EXTENSION_VERSION__: string
 
-export const CLIENT_NAME = "vscode_plugin";
-export const EXTENSION_ID = "moocfi.test-my-code";
-export const OUTPUT_CHANNEL_NAME = "TestMyCode";
+export const DEBUG_MODE = __DEBUG_MODE__
+export const TMC_BACKEND_URL = __TMC_BACKEND_URL__
+export const TMC_LANGS_CONFIG_DIR = __TMC_LANGS_CONFIG_DIR__ || undefined
+export const TMC_LANGS_DL_URL = __TMC_LANGS_DL_URL__
+export const TMC_LANGS_VERSION = __TMC_LANGS_VERSION__
+export const MOOC_BACKEND_URL = __MOOC_BACKEND_URL__
+
+/** This build's `package.json` version, inlined so it needs no extension-registry lookup. */
+export const EXTENSION_VERSION = __EXTENSION_VERSION__
+
+export const CLIENT_NAME = "vscode_plugin"
+export const EXTENSION_ID = "moocfi.test-my-code"
+export const OUTPUT_CHANNEL_NAME = "TestMyCode"
+
+export const API_CACHE_LIFETIME = 5 * 60 * 1000
+
+/** How long a CLI command may run before it is killed, unless its kind has a limit of its own below. */
+export const CLI_PROCESS_TIMEOUT = 2 * 60 * 1000
 
 /**
- * Delay for notifications that offer a "remind me later" option.
+ * The limit on `run-tests`: well above tmc-langs' own limit on the tests (60 s unless the exercise
+ * sets more) plus a build, so the CLI reports a timeout itself rather than being killed.
  */
-export const NOTIFICATION_DELAY = 30 * 60 * 1000;
+export const TEST_PROCESS_TIMEOUT = 10 * 60 * 1000
 
-export const API_CACHE_LIFETIME = 5 * 60 * 1000;
-export const CLI_PROCESS_TIMEOUT = 2 * 60 * 1000;
+/**
+ * The limit on a command that writes exercises to disk. Killing one mid-write can leave an
+ * exercise half-written, so this is set to outlast a slow connection, not to catch it.
+ */
+export const DOWNLOAD_PROCESS_TIMEOUT = 30 * 60 * 1000
+
+/** Outlasts the device code, whose expiry the CLI reports as an error of its own. */
+export const LOGIN_PROCESS_TIMEOUT = 30 * 60 * 1000
+
 /**
  * The CLI polls for test results with no timeout of its own, so this is the only bound on a submit;
  * keep it above the worst realistic sandbox queue wait or a queued submission gets killed.
  */
-export const SUBMIT_PROCESS_TIMEOUT = 2 * 60 * 60 * 1000;
-export const EXERCISE_CHECK_INTERVAL = 30 * 60 * 1000;
+export const SUBMIT_PROCESS_TIMEOUT = 2 * 60 * 60 * 1000
+export const EXERCISE_CHECK_INTERVAL = 30 * 60 * 1000
+
+/** How long Later on the new-exercises notification holds the next one back. */
+export const NEW_EXERCISES_REMINDER_DELAY = 30 * 60 * 1000
+
+/** How long after an unprompted refresh the window regaining focus refreshes again. */
+export const FOCUS_REFRESH_INTERVAL = 10 * 60 * 1000
+
+/**
+ * How long after the open course was last checked the window regaining focus checks it again.
+ * Short, since a student back from the course material may be looking for what was just
+ * published; it costs one course's data per return at most.
+ */
+export const OPEN_COURSE_FOCUS_REFRESH_INTERVAL = 60 * 1000
+
+/** How long an unprompted refresh leaves alone a course whose backend refused it. */
+export const LOST_COURSE_RECHECK_INTERVAL = 12 * 60 * 60 * 1000
+
+/** How often the open course is checked while the window has focus. */
+export const OPEN_COURSE_POLL_INTERVAL = 5 * 60 * 1000
 
 /** Minimum time that should be waited between submission attempts. */
-export const MINIMUM_SUBMISSION_INTERVAL = 5 * 1000;
+export const MINIMUM_SUBMISSION_INTERVAL = 5 * 1000
 
-export const LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER = 1;
-export const LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER =
-    LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER;
-export const LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER = 0;
+export const LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER = 1
+export const LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER = LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER
+export const LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER = 0
 
 export const HIDE_META_FILES = {
-    "**/__pycache__": true,
-    "**/.available_points.json": true,
-    "**/.tmc_test_results.json": true,
-    "**/.tmcproject.yml": true,
-    "**/tmc": true,
-    "**/.settings": true,
-    "**/.tmcproject.json": true,
-    "**/.tmc.json": true,
-    "**/.tmc.lock": true,
-    "**/.tmc_test_results.hmac.sha256": true,
-};
+  "**/__pycache__": true,
+  "**/.available_points.json": true,
+  "**/.tmc_test_results.json": true,
+  "**/.tmcproject.yml": true,
+  "**/tmc": true,
+  "**/.settings": true,
+  "**/.tmcproject.json": true,
+  "**/.tmc.json": true,
+  "**/.tmc.lock": true,
+  "**/.tmc_test_results.hmac.sha256": true,
+}
 
-export const SHOW_META_FILES = {
-    "**/__pycache__": false,
-    "**/.available_points.json": false,
-    "**/.tmc_test_results.json": false,
-    "**/.tmcproject.yml": false,
-    "**/tmc": false,
-    "**/.settings": false,
-    "**/.tmcproject.json": false,
-    "**/.tmc.json": false,
-    "**/.tmc.lock": false,
-    "**/.tmc_test_results.hmac.sha256": false,
-};
+/** Derived, so a glob added to {@link HIDE_META_FILES} cannot be missing here. */
+export const SHOW_META_FILES: Record<string, boolean> = Object.fromEntries(
+  Object.keys(HIDE_META_FILES).map((glob) => [glob, false]),
+)
 
 export const WATCHER_EXCLUDE = {
-    "**/.vscode/**": true,
-    "**/.tmc.json": true,
-};
+  "**/.vscode/**": true,
+  "**/.tmc.json": true,
+}
 
 /** VS Code language ids of the exercises the language plugins handle, plus the prose files around them. */
 export const COURSE_LANGUAGE_IDS = [
-    "c",
-    "cpp",
-    "csharp",
-    "java",
-    "javascript",
-    "markdown",
-    "plaintext",
-    "python",
-    "r",
-    "typescript",
-];
+  "c",
+  "cpp",
+  "csharp",
+  "java",
+  "javascript",
+  "markdown",
+  "plaintext",
+  "python",
+  "r",
+  "typescript",
+]
 
 // Per-language maps merge across scopes, so a user-scope `{"python": true}` would beat a bare
 // `{"*": false}`: every course language is named.
 const OFF_FOR_COURSE_LANGUAGES = {
-    "*": false,
-    ...Object.fromEntries(COURSE_LANGUAGE_IDS.map((languageId) => [languageId, false])),
-};
+  "*": false,
+  ...Object.fromEntries(COURSE_LANGUAGE_IDS.map((languageId) => [languageId, false])),
+}
 
 /**
  * The settings that turn AI assistance off in a course workspace, written into its
- * `.code-workspace`. Every key must be window-, resource- or language-scoped: a workspace file
- * cannot hold application or machine settings.
+ * `.code-workspace` unless the course allows AI. Every key must be window-, resource- or
+ * language-scoped: a workspace file cannot hold application or machine settings.
  */
 export const AI_OFF_SETTINGS: Readonly<Record<string, unknown>> = {
-    // The only core switch that also reaches third-party ghost text.
-    "editor.inlineSuggest.enabled": false,
-    "chat.agent.enabled": false,
-    "chat.extensionTools.enabled": false,
-    "chat.mcp.access": "none",
-    "chat.plugins.enabled": false,
-    "github.copilot.enable": OFF_FOR_COURSE_LANGUAGES,
-    "github.copilot.nextEditSuggestions.enabled": false,
-    "github.copilot.editor.enableCodeActions": false,
-    "github.copilot.renameSuggestions.triggerAutomatically": false,
-    "github.copilot.chat.reviewSelection.enabled": false,
-    "github.copilot.chat.reviewAgent.enabled": false,
-    "codeium.enableConfig": OFF_FOR_COURSE_LANGUAGES,
-    "codeium.enableCodeLens": false,
-    "codeium.enableSearch": false,
-    "codeium.enableExplainProblem": false,
-    "codeium.disableSupercomplete": true,
-    "codeium.disableTabJump": true,
-    // Tabnine has no enable switch, and answers `editor.inlineSuggest.enabled` by moving to the suggest list.
-    "tabnine.disableFileRegex": [".*"],
-    "tabnine.codeLensEnabled": false,
-    "continue.enableTabAutocomplete": false,
-    "continue.enableNextEdit": false,
-    "continue.enableQuickActions": false,
-    "continue.disableQuickFix": true,
-    "continue.showInlineTip": false,
-    "cody.suggestions.mode": "off",
-    "cody.autocomplete.languages": OFF_FOR_COURSE_LANGUAGES,
-    "cody.codeActions.enabled": false,
-    "cody.commandHints.enabled": false,
-    "geminicodeassist.enable": false,
-    "geminicodeassist.inlineSuggestions.enableAuto": false,
-    "geminicodeassist.inlineSuggestions.nextEditPredictions": false,
-    // An allow-list: empty enables no language.
-    "geminicodeassist.languages": [],
-    "supermaven.enable": OFF_FOR_COURSE_LANGUAGES,
-    "supermaven.enableFixWithSupermaven": false,
-    "supermaven.enableJumpSuggestions": false,
-    "supermaven.enableDeleteSuggestions": false,
-    "roo-cline.enableCodeActions": false,
-    "kilo-code.new.autocomplete.enableAutoTrigger": false,
-    "kilo-code.new.autocomplete.enableSmartInlineTaskKeybinding": false,
-    "kilo-code.new.autocomplete.enableChatAutocomplete": false,
-    "augment.completions.enableAutomaticCompletions": false,
-    "augment.completions.disableCompletionsByLanguage": COURSE_LANGUAGE_IDS,
-    "intellicodeCompletions.language.javascript": false,
-    "intellicodeCompletions.language.python": false,
-    "intellicodeCompletions.language.typescript": false,
-    "vsintellicode.java.completionsEnabled": false,
-    "vsintellicode.python.completionsEnabled": false,
-    "vsintellicode.typescript.completionsEnabled": false,
-    "genieai.quickFix.enable": false,
-    "genieai.enableGenerateCommitMessage": false,
-    "chat.disableAIFeatures": true,
-};
-
-export const WORKSPACE_SETTINGS = {
-    folders: [{ path: ".tmc" }],
-    settings: {
-        "explorer.decorations.colors": false,
-        "files.autoSave": "onFocusChange",
-        "files.exclude": { ...HIDE_META_FILES },
-        "files.watcherExclude": { ...WATCHER_EXCLUDE },
-        "problems.decorations.enabled": false,
-        "workbench.editor.closeOnFileDelete": true,
-    },
-};
-
-export const EMPTY_HTML_DOCUMENT = `<html><head><meta http-equiv="${"Content-Security-Policy"}" content="default-src 'none';" /></head></html>`;
+  // The only core switch that also reaches third-party ghost text.
+  "editor.inlineSuggest.enabled": false,
+  "chat.agent.enabled": false,
+  "chat.extensionTools.enabled": false,
+  "chat.mcp.access": "none",
+  "chat.plugins.enabled": false,
+  "github.copilot.enable": OFF_FOR_COURSE_LANGUAGES,
+  "github.copilot.nextEditSuggestions.enabled": false,
+  "github.copilot.editor.enableCodeActions": false,
+  "github.copilot.renameSuggestions.triggerAutomatically": false,
+  "github.copilot.chat.reviewSelection.enabled": false,
+  "github.copilot.chat.reviewAgent.enabled": false,
+  "codeium.enableConfig": OFF_FOR_COURSE_LANGUAGES,
+  "codeium.enableCodeLens": false,
+  "codeium.enableSearch": false,
+  "codeium.enableExplainProblem": false,
+  "codeium.disableSupercomplete": true,
+  "codeium.disableTabJump": true,
+  // Tabnine has no enable switch, and answers `editor.inlineSuggest.enabled` by moving to the suggest list.
+  "tabnine.disableFileRegex": [".*"],
+  "tabnine.codeLensEnabled": false,
+  "continue.enableTabAutocomplete": false,
+  "continue.enableNextEdit": false,
+  "continue.enableQuickActions": false,
+  "continue.disableQuickFix": true,
+  "continue.showInlineTip": false,
+  "cody.suggestions.mode": "off",
+  "cody.autocomplete.languages": OFF_FOR_COURSE_LANGUAGES,
+  "cody.codeActions.enabled": false,
+  "cody.commandHints.enabled": false,
+  "geminicodeassist.enable": false,
+  "geminicodeassist.inlineSuggestions.enableAuto": false,
+  "geminicodeassist.inlineSuggestions.nextEditPredictions": false,
+  // An allow-list: empty enables no language.
+  "geminicodeassist.languages": [],
+  "supermaven.enable": OFF_FOR_COURSE_LANGUAGES,
+  "supermaven.enableFixWithSupermaven": false,
+  "supermaven.enableJumpSuggestions": false,
+  "supermaven.enableDeleteSuggestions": false,
+  "roo-cline.enableCodeActions": false,
+  "kilo-code.new.autocomplete.enableAutoTrigger": false,
+  "kilo-code.new.autocomplete.enableSmartInlineTaskKeybinding": false,
+  "kilo-code.new.autocomplete.enableChatAutocomplete": false,
+  "augment.completions.enableAutomaticCompletions": false,
+  "augment.completions.disableCompletionsByLanguage": COURSE_LANGUAGE_IDS,
+  "intellicodeCompletions.language.javascript": false,
+  "intellicodeCompletions.language.python": false,
+  "intellicodeCompletions.language.typescript": false,
+  "vsintellicode.java.completionsEnabled": false,
+  "vsintellicode.python.completionsEnabled": false,
+  "vsintellicode.typescript.completionsEnabled": false,
+  "genieai.quickFix.enable": false,
+  "genieai.enableGenerateCommitMessage": false,
+  // Chat's home, which newer VS Code opens in a workspace it has not seen before.
+  "workbench.secondarySideBar.defaultVisibility": "hidden",
+  // Last: turning it on disables Copilot Chat and restarts the extension host, which would cut
+  // off any write still to come.
+  "chat.disableAIFeatures": true,
+}
 
 /**
- * If changed WORKSPACEROOTFILE is changed, remember to update
- * "workspaceContains:**\TMC-Readme.md", with the new name below
+ * AI assistants that {@link AI_OFF_SETTINGS} cannot fully turn off, by extension id, each with
+ * the name the Extensions view shows it under. Submitting, testing and pasting are refused
+ * while one of them is enabled in the window.
  */
-export const WORKSPACE_ROOT_FILE_NAME = "TMC-Readme.md";
-export const WORKSPACE_ROOT_FILE_TEXT = FAQ;
-export const WORKSPACE_ROOT_FOLDER_NAME = ".tmc";
+export const AI_EXTENSIONS: Readonly<Record<string, string>> = {
+  "Alibaba-Cloud.tongyi-lingma": "Qoder CN (Lingma)",
+  "AmazonWebServices.amazon-q-vscode": "Amazon Q",
+  "anthropic.claude-code": "Claude Code",
+  "augment.vscode-augment": "Augment",
+  "Bito.Bito": "Bito",
+  "Blackboxapp.blackbox": "BLACKBOXAI",
+  "Blackboxapp.blackboxagent": "Blackbox Agent",
+  "Codeium.codeium": "Windsurf Plugin (Codeium)",
+  "Codeium.codeium-enterprise-updater": "Codeium Enterprise Updater",
+  "Codium.codium": "Qodo",
+  "Continue.continue": "Continue",
+  "DanielSanMedium.dscodegpt": "CodeGPT",
+  "FittenTech.Fitten-Code": "Fitten Code",
+  "genieai.chatgpt-vscode": "Genie AI",
+  "Google.gemini-cli-vscode-ide-companion": "Gemini CLI Companion",
+  "Google.geminicodeassist": "Gemini Code Assist",
+  "kilocode.Kilo-Code": "Kilo Code",
+  "Kingleo.qwen": "Qwen",
+  "openai.chatgpt": "Codex",
+  "RooVeterinaryInc.roo-cline": "Roo Code",
+  "saoudrizwan.claude-dev": "Cline",
+  "Sixth.sixth-ai": "Sixth",
+  "smallcloud.codify": "Refact",
+  "sourcegraph.cody-ai": "Cody",
+  "sourcery.sourcery": "Sourcery",
+  "supermaven.supermaven": "Supermaven",
+  "TabNine.tabnine-vscode": "Tabnine",
+  "TabNine.tabnine-vscode-self-hosted-updater": "Tabnine for Enterprise",
+  "ZencoderAI.zencoder": "Zencoder",
+}
 
-export const EXAM_TEST_RESULT: TestResultData = {
-    testResult: {
-        status: "PASSED",
-        testResults: [
-            {
-                name: "Hidden Exam Test: hidden_test",
-                successful: true,
-                message: "Remember to submit your solution to the server for evaluation.",
-                points: [],
-                exception: [],
-            },
-        ],
-        logs: {},
-    },
-    id: 0,
-    courseSlug: "",
-    exerciseName: "part01-exam01",
-    tmcLogs: {
-        stdout: "",
-        stderr: "",
-    },
-};
+export const WORKSPACE_SETTINGS = {
+  folders: [{ path: ".tmc" }],
+  settings: {
+    "explorer.decorations.colors": false,
+    "files.autoSave": "onFocusChange",
+    "files.exclude": { ...HIDE_META_FILES },
+    "files.watcherExclude": { ...WATCHER_EXCLUDE },
+    "problems.decorations.enabled": false,
+    "workbench.editor.closeOnFileDelete": true,
+  },
+}
+
+/** package.json's `workspaceContains:**\/TMC-Readme.md` activation event names it too. */
+export const WORKSPACE_ROOT_FILE_NAME = "TMC-Readme.md"
+export const WORKSPACE_ROOT_FILE_TEXT = FAQ
+export const WORKSPACE_ROOT_FOLDER_NAME = ".tmc"
+
+/**
+ * Settings key for a course's manually-closed exercises. A tmc key keeps its pre-mooc
+ * spelling; a mooc key differs from every tmc key at the character after
+ * `closed-exercises-for`, so courses sharing a slug cannot collide.
+ */
+export function closedExercisesSettingKey(backend: BackendKind, courseName: string): string {
+  return backend === "tmc"
+    ? `closed-exercises-for:${courseName}`
+    : `closed-exercises-for-mooc:${courseName}`
+}
+
+/** Appended to a mooc course's workspace file name; tmc course names never contain a space. */
+const MOOC_WORKSPACE_FILE_SUFFIX = " (mooc)"
+
+/**
+ * Basename of a course's `.code-workspace` file. A tmc file keeps its pre-mooc name; a
+ * mooc one carries a suffix no tmc name can, for the same reason as
+ * {@link closedExercisesSettingKey}.
+ */
+export function workspaceFileName(courseName: string, backend: BackendKind): string {
+  const suffix = backend === "mooc" ? MOOC_WORKSPACE_FILE_SUFFIX : ""
+  return `${courseName}${suffix}.code-workspace`
+}

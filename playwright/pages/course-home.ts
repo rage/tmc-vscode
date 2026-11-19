@@ -1,0 +1,74 @@
+import { expect } from "@playwright/test"
+import type { FrameLocator, Locator, Page } from "@playwright/test"
+
+import { expectVisibleInWebview } from "./tmc"
+
+/**
+ * Course Details, the course home in the main panel, driven by its accessible names
+ * (webview-ui/src/panels/CourseDetails.svelte).
+ *
+ * `webview` is the fixture's frame: the TestMyCode webview shown last, which is the course home
+ * as long as no submission result has opened beside it since.
+ */
+export class CourseHomePage {
+  public constructor(
+    public readonly page: Page,
+    public readonly webview: FrameLocator,
+  ) {}
+
+  public heading(courseTitle: string): Locator {
+    return this.webview.getByRole("heading", { level: 1, name: courseTitle })
+  }
+
+  public async expectShown(courseTitle: string): Promise<void> {
+    await expectVisibleInWebview(this.heading(courseTitle))
+  }
+
+  /** Brings Course Details back from behind another editor through its tab. */
+  public async reveal(courseTitle: string): Promise<void> {
+    await this.page.getByRole("tab", { name: new RegExp(`^${courseTitle}`) }).click()
+    await this.expectShown(courseTitle)
+  }
+
+  /** The row of the exercise named `name`. */
+  public row(name: string): Locator {
+    return this.webview
+      .getByRole("listitem")
+      .filter({ has: this.webview.getByTitle(name, { exact: true }) })
+  }
+
+  /** The course's notices: new exercises, updates, Restricted Mode and the like. */
+  public notices(): Locator {
+    return this.webview.getByRole("list", { name: "Course notices" })
+  }
+
+  /** Clicks the course's Download button, which names how many exercises it downloads. */
+  public async downloadAll(): Promise<void> {
+    await this.webview.getByRole("button", { name: /^Download \d+ Exercises?$/ }).click()
+  }
+
+  public async openCourseWorkspace(): Promise<void> {
+    await this.webview.getByRole("button", { name: "Open Course Workspace" }).click()
+  }
+
+  /** Opens the exercise from its row, as a click on its name does. */
+  public async openExercise(name: string): Promise<void> {
+    await this.webview.getByRole("button", { name, exact: true }).click()
+  }
+
+  /** Asks the backend for the course afresh, as its Refresh button does. */
+  public async refresh(): Promise<void> {
+    await this.webview.getByRole("button", { name: "Refresh", exact: true }).click()
+  }
+
+  /** Opens the "⋯" menu labelled `label`: the course's, or an exercise row's. */
+  public async openMenu(label = "More Actions"): Promise<Locator> {
+    await this.webview.getByRole("button", { name: label, exact: true }).click()
+    return this.webview.getByRole("menu")
+  }
+
+  /** Waits for the exercise's row to say it is `state`, e.g. "Downloaded" or "Not downloaded". */
+  public async expectState(name: string, state: string): Promise<void> {
+    await expect(this.row(name)).toContainText(state, { timeout: 30_000 })
+  }
+}

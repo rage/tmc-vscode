@@ -1,19 +1,44 @@
+import type { z } from "zod"
+
+/** One stored value brought up to the current storage version. */
 export interface MigratedData<T> {
-    data: T | undefined;
-    obsoleteKeys: string[];
+  data: T | undefined
+  /**
+   * Keys whose contents `data` (or the migration's side effects) now fully represents. A key
+   * left out survives, and since the chain prefers the oldest key present, the next activation
+   * replays that stale snapshot over the migrated value. Leave one out only when deleting it
+   * would lose contents the migration could not carry forward.
+   */
+  supersededKeys: string[]
+  /** Key `data` is written to, or `undefined` when the migration persists nothing. */
+  destinationKey: string | undefined
 }
 
-export default function validateData<T>(
-    data: unknown,
-    validator: (object: unknown) => object is T,
-): T | undefined {
-    if (!data) {
-        return undefined;
+/** Keys safe to delete once every migration's `data` has been persisted. */
+export function obsoleteKeys(migrations: MigratedData<unknown>[]): string[] {
+  // A key one migration is finished with may still be where another one writes.
+  const destinations = new Set(migrations.map((migration) => migration.destinationKey))
+  const obsolete = new Set<string>()
+  for (const { supersededKeys } of migrations) {
+    for (const key of supersededKeys) {
+      if (!destinations.has(key)) {
+        obsolete.add(key)
+      }
     }
+  }
+  return [...obsolete]
+}
 
-    if (!validator(data)) {
-        throw new Error(`Data type mismatch: ${JSON.stringify(data)}`);
-    }
+export default function validateData<T>(data: unknown, schema: z.ZodType<T>): T | undefined {
+  if (!data) {
+    return undefined
+  }
 
-    return data;
+  if (!schema.safeParse(data).success) {
+    throw new Error(`Data type mismatch: ${JSON.stringify(data)}`)
+  }
+
+  // Return the original, not zod's parsed copy: zod strips unknown keys that a newer
+  // extension version may have persisted.
+  return data as T
 }

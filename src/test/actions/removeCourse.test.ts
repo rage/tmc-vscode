@@ -1,0 +1,124 @@
+import { Err, Ok } from "ts-results"
+import { vi } from "vitest"
+
+import { removeCourse } from "../../actions/removeCourse"
+import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
+import type Dialog from "../../api/dialog"
+import type { UserData } from "../../config/userdata"
+import { tmcLocalCourse } from "../fixtures/courses"
+import { idOfTmcCourse } from "../fixtures/identifiers"
+import { createMockActionContext } from "../mocks/actionContext"
+import { createDialogMock } from "../mocks/dialog"
+
+function contextWith(
+  userData: Partial<UserData>,
+  unsetSetting: ReturnType<typeof vi.fn> = vi.fn(async () => Ok.EMPTY),
+): [ReadyActionContext, Dialog] {
+  const [dialog] = createDialogMock()
+  return [
+    {
+      ...createMockActionContext({
+        startup: {
+          langs: { unsetSetting } as unknown as ReadyStartup["langs"],
+          userData: { getCourses: () => [], ...userData } as ReadyStartup["userData"],
+          workspaceManager: {
+            activeCourse: undefined,
+            activeCourseBackend: undefined,
+            deleteWorkspaceFile: vi.fn(async () => Ok.EMPTY),
+          } as unknown as ReadyStartup["workspaceManager"],
+        },
+      }),
+      dialog,
+    },
+    dialog,
+  ]
+}
+
+suite("removeCourse action", function () {
+  const course = tmcLocalCourse({
+    id: 1,
+    name: "test-python-course",
+    title: "The Python Course",
+    organization: "test",
+  })
+
+  // The entry point that started the removal reports what ended it.
+  test("returns a course it cannot look up, without reporting it", async function () {
+    const deleteCourse = vi.fn(async () => Ok.EMPTY)
+    const [actionContext, dialog] = contextWith({
+      getCourse: () => Err(new Error("no such course")),
+      deleteCourse,
+    } as unknown as Partial<UserData>)
+
+    const result = await removeCourse(actionContext, idOfTmcCourse(1))
+
+    expect(result.err).toBe(true)
+    expect(dialog.reportError).not.toHaveBeenCalled()
+    expect(deleteCourse).not.toHaveBeenCalled()
+  })
+
+  test("returns a removal that could not be persisted, without reporting it", async function () {
+    const error = new Error("globalState is full")
+    const unsetSetting = vi.fn(async () => Ok.EMPTY)
+    const [actionContext, dialog] = contextWith(
+      {
+        getCourse: () => Ok(course),
+        deleteCourse: vi.fn(async () => Err(error)),
+      } as unknown as Partial<UserData>,
+      unsetSetting,
+    )
+
+    const result = await removeCourse(actionContext, idOfTmcCourse(1))
+
+    // The course stays, so its closed exercises and workspace file must too.
+    expect(unsetSetting).not.toHaveBeenCalled()
+    expect(actionContext.startup.workspaceManager.deleteWorkspaceFile).not.toHaveBeenCalled()
+
+    expect(result.err && result.val.message).toBe(
+      'Failed to remove "test-python-course" from your courses.',
+    )
+    expect(result.err && result.val.cause).toBe(error)
+    expect(dialog.reportError).not.toHaveBeenCalled()
+  })
+
+  test("warns about a cleanup it could not do and removes the course anyway", async function () {
+    const error = new Error("settings file is read-only")
+    const deleteCourse = vi.fn(async () => Ok.EMPTY)
+    const [actionContext] = contextWith(
+      { getCourse: () => Ok(course), deleteCourse } as unknown as Partial<UserData>,
+      vi.fn(async () => Err(error)),
+    )
+
+    const result = await removeCourse(actionContext, idOfTmcCourse(1))
+
+    expect(result.unwrap().warnings).toEqual([{ headline: expect.any(String), error }])
+    expect(deleteCourse).toHaveBeenCalled()
+  })
+
+  test("removes the stored course", async function () {
+    const deleteCourse = vi.fn(async () => Ok.EMPTY)
+    const [actionContext] = contextWith({
+      getCourse: () => Ok(course),
+      deleteCourse,
+    } as unknown as Partial<UserData>)
+
+    const result = await removeCourse(actionContext, idOfTmcCourse(1))
+
+    expect(result.unwrap().warnings).toEqual([])
+    expect(deleteCourse).toHaveBeenCalledWith(idOfTmcCourse(1))
+  })
+
+  // Left behind, it is reused verbatim when the course is added back.
+  test("removes the course's workspace file", async function () {
+    const [actionContext] = contextWith({
+      getCourse: () => Ok(course),
+      deleteCourse: vi.fn(async () => Ok.EMPTY),
+    } as unknown as Partial<UserData>)
+
+    await removeCourse(actionContext, idOfTmcCourse(1))
+
+    expect(
+      actionContext.startup.workspaceManager.deleteWorkspaceFile,
+    ).toHaveBeenCalledExactlyOnceWith("test-python-course", "tmc")
+  })
+})

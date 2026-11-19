@@ -1,33 +1,18 @@
 {
-    "compilerOptions": {
-        "jsx": "react",
-        "module": "commonjs",
-        "target": "ES2022",
-        "outDir": "out",
-        "lib": ["ES2022", "dom"],
-        "plugins": [
-            {
-                "transform": "typia/lib/transform"
-            }
-        ],
-        "typeRoots": ["./types", "./node_modules/@types"],
-        "sourceMap": true,
-        "rootDirs": ["src", "shared"],
-        "strict": true /* enable all strict type-checking options */
-        /* Additional Checks */
-        // "noImplicitReturns": true, /* Report error when not all code paths in function return a value. */
-        // "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */
-        // "noUnusedParameters": true,  /* Report errors on unused parameters. */
-    },
-    "exclude": [
-        ".vscode-test",
-        "backend",
-        "node_modules",
-        "test-resources",
-        "typings",
-        "webview-ui",
-        "shared",
-        "playwright",
-        "playwright.config.ts"
-    ]
+  // Extension-host project: everything under src/ and the shared/ it imports.
+  // The sources are authored as ESM and bundled to a single CJS file by
+  // esbuild, so module resolution follows the bundler. No DOM: the extension host runs in
+  // Node; the webview has its own project (webview-ui/tsconfig.json).
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    // explicit so tsc and tsgo agree on which globals-providing packages
+    // are in scope (tsgo does not auto-include everything under @types)
+    "types": ["node", "vscode"]
+  },
+  // The two test tiers have their own projects (tsconfig.test.json for the
+  // vitest unit tier, tsconfig.integration.json for the mocha test-electron
+  // tier) because their global environments differ (vitest vs mocha).
+  "include": ["src/**/*"],
+  "exclude": ["src/test/**", "src/test-integration/**"]
 }

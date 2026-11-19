@@ -1,0 +1,135 @@
+import { vi } from "vitest"
+import * as vscode from "vscode"
+
+import type { LocalCourseData } from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind } from "../../../shared/lib"
+import type { ReadyActionContext } from "../../actions/types"
+import type { Item } from "../../api/dialog"
+import type WorkspaceManager from "../../api/workspaceManager"
+import { pickCourse } from "../../commands/pickCourse"
+import type { UserData } from "../../config/userdata"
+import { idOfMoocCourse, idOfTmcCourse } from "../fixtures/identifiers"
+import { createMockActionContext } from "../mocks/actionContext"
+import { createDialogMock } from "../mocks/dialog"
+
+type SelectPrompt = string | { title: string; placeHolder: string }
+
+const courses = [
+  makeTmcKind({ id: 1, name: "tmc-slug", title: "The Python Course" }),
+  makeMoocKind({ id: "course-uuid", name: "mooc-slug", title: "Introduction to CS" }),
+] as never[] as LocalCourseData[]
+
+function contextWith(
+  courseList: LocalCourseData[],
+  openCourse?: { slug: string; backend: string },
+  loggedIn = true,
+): [ReadyActionContext, ReturnType<typeof createDialogMock>[0]] {
+  const [dialog] = createDialogMock()
+  const workspaceManager = {
+    activeCourse: openCourse?.slug,
+    activeCourseBackend: openCourse?.backend,
+  } as unknown as WorkspaceManager
+  return [
+    {
+      ...createMockActionContext({
+        loggedIn,
+        startup: { userData: { getCourses: () => courseList } as UserData, workspaceManager },
+      }),
+      dialog,
+    },
+    dialog,
+  ]
+}
+
+suite("pickCourse", function () {
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test.each([true, false])(
+    "opens the add-course screen on an empty list, logged in %s, and picks nothing",
+    async function (isLoggedIn) {
+      const [context, dialog] = contextWith([], undefined, isLoggedIn)
+      const notification = vi.fn(async () => undefined)
+      dialog.notification = notification
+      const executeCommand = vi
+        .spyOn(vscode.commands, "executeCommand")
+        .mockResolvedValue(undefined)
+
+      const picked = await pickCourse(context, { title: "Title", placeHolder: "Pick one" })
+
+      expect(picked).toBeUndefined()
+      expect(executeCommand).toHaveBeenCalledExactlyOnceWith("tmc.showAddCourse")
+      expect(notification).not.toHaveBeenCalled()
+    },
+  )
+
+  test("prompts among the user's courses, labelled by title", async function () {
+    const [context, dialog] = contextWith(courses)
+    const selectItem = vi.fn(async (_prompt: SelectPrompt, ..._items: unknown[]) => undefined)
+    dialog.selectItem = selectItem
+
+    await pickCourse(context, { title: "Open Course Home", placeHolder: "Which course?" })
+
+    expect(selectItem).toHaveBeenCalledOnce()
+    const [prompt, ...items] = selectItem.mock.calls[0] ?? []
+    expect(prompt).toEqual({ title: "Open Course Home", placeHolder: "Which course?" })
+    expect(items).toEqual([
+      { label: "The Python Course", value: idOfTmcCourse(1) },
+      { label: "Introduction to CS", value: idOfMoocCourse("course-uuid") },
+    ])
+  })
+
+  test("returns the course identifier the user picked", async function () {
+    const [context, dialog] = contextWith(courses)
+    dialog.selectItem = vi.fn(
+      async (_prompt: SelectPrompt, ...items: Item<unknown>[]) => items[1]?.value,
+    ) as unknown as typeof dialog.selectItem
+
+    const picked = await pickCourse(context, { title: "Title", placeHolder: "Pick one" })
+
+    expect(picked).toEqual(idOfMoocCourse("course-uuid"))
+  })
+
+  test("decorate replaces the label", async function () {
+    const [context, dialog] = contextWith(courses)
+
+    await pickCourse(context, {
+      title: "Switch Course Workspace",
+      placeHolder: "Pick one",
+      decorate: (_course: LocalCourseData, title: string) => `${title} (Currently open)`,
+    })
+
+    const [, ...items] = vi.mocked(dialog.selectItem).mock.calls[0] ?? []
+    expect(items.map((item) => item.label)).toEqual([
+      "The Python Course (Currently open)",
+      "Introduction to CS (Currently open)",
+    ])
+  })
+
+  test("with one course, picks it without asking", async function () {
+    const [context, dialog] = contextWith([courses[0] as LocalCourseData])
+
+    const picked = await pickCourse(context, { title: "Title", placeHolder: "Pick one" })
+
+    expect(picked).toEqual(idOfTmcCourse(1))
+    expect(dialog.selectItem).not.toHaveBeenCalled()
+  })
+
+  test("with one course, still asks when told to", async function () {
+    const [context, dialog] = contextWith([courses[0] as LocalCourseData])
+
+    await pickCourse(context, { title: "Remove Course", placeHolder: "Pick one", alwaysAsk: true })
+
+    expect(dialog.selectItem).toHaveBeenCalledOnce()
+  })
+
+  test("offers the course whose workspace is open first", async function () {
+    const [context, dialog] = contextWith(courses, { slug: "mooc-slug", backend: "mooc" })
+
+    await pickCourse(context, { title: "Title", placeHolder: "Pick one" })
+
+    const [, ...items] = vi.mocked(dialog.selectItem).mock.calls[0] ?? []
+    expect(items.map((item) => item.label)).toEqual(["Introduction to CS", "The Python Course"])
+  })
+})

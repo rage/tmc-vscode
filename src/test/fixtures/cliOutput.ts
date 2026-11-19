@@ -1,0 +1,858 @@
+// Representative tmc-langs-cli stdout messages for the langs contract test
+// (src/test/langsSchema.test.ts). Shapes follow the generated contract
+// artifacts in tmc-langs-rust (bindings.schema.json / bindings.d.ts); see
+// shared/langsSchema.ts for the conventions.
+
+const UUID_A = "018f6f9b-1c2d-7e3f-8a4b-5c6d7e8f9a0b"
+const UUID_B = "550e8400-e29b-41d4-a716-446655440000"
+const UUID_C = "67e55044-10b1-426f-9247-bb680e5fe0c8"
+
+interface CliOutputFixture {
+  name: string
+  value: unknown
+}
+
+/** Wraps an output-data payload into a full CliOutput message. */
+function outputData(kind: string, data: unknown): unknown {
+  return {
+    "output-kind": "output-data",
+    status: "finished",
+    message: "Executed command successfully",
+    result: "executed-command",
+    data: { "output-data-kind": kind, "output-data": data },
+  }
+}
+
+const course = {
+  id: 590,
+  name: "mooc-java-programming-i",
+  title: "Java Programming I",
+  description: "Introduction to programming.",
+  details_url: "https://tmc.mooc.fi/api/v8/core/courses/590",
+  unlock_url: "https://tmc.mooc.fi/api/v8/core/courses/590/unlock",
+  reviews_url: "https://tmc.mooc.fi/api/v8/core/courses/590/reviews",
+  comet_url: "",
+  spyware_urls: ["http://spyware.testmycode.net/"],
+}
+
+const exercise = {
+  id: 83114,
+  name: "part01-Part01_01.Sandbox",
+  locked: false,
+  deadline_description: "2026-08-19 23:59:59 +0300",
+  deadline: "2026-08-19T23:59:59.999+03:00",
+  soft_deadline: null,
+  soft_deadline_description: null,
+  checksum: "f25e139769b2688e213938bf85d09fb8",
+  return_url: "https://tmc.mooc.fi/api/v8/core/exercises/83114/submissions",
+  zip_url: "https://tmc.mooc.fi/api/v8/core/exercises/83114/download",
+  returnable: true,
+  requires_review: false,
+  attempted: false,
+  completed: false,
+  reviewed: false,
+  all_review_points_given: true,
+  memory_limit: null,
+  runtime_params: ["-Xss64M"],
+  valgrind_strategy: "fail",
+  code_review_requests_enabled: false,
+  run_tests_locally_action_enabled: true,
+  latest_submission_url: null,
+  latest_submission_id: null,
+  solution_zip_url: null,
+}
+
+// Flattened — see the CourseDetails serialize-contract note in langsSchema.test.ts
+const courseDetails = {
+  ...course,
+  unlockables: [],
+  exercises: [exercise],
+}
+
+const courseExercise = {
+  id: 83114,
+  available_points: [{ id: 954510, exercise_id: 83114, name: "01-01", requires_review: false }],
+  awarded_points: [],
+  name: "part01-Part01_01.Sandbox",
+  publish_time: null,
+  solution_visible_after: null,
+  deadline: "2026-08-19T23:59:59.999+03:00",
+  soft_deadline: null,
+  disabled: false,
+  unlocked: true,
+}
+
+const courseData = {
+  name: "mooc-java-programming-i",
+  hide_after: null,
+  hidden: false,
+  cache_version: 51,
+  spreadsheet_key: null,
+  hidden_if_registered_after: null,
+  refreshed_at: "2026-07-01T14:53:44.892+03:00",
+  locked_exercise_points_visible: true,
+  description: "Introduction to programming.",
+  paste_visibility: null,
+  formal_name: null,
+  certificate_downloadable: false,
+  certificate_unlock_spec: null,
+  organization_id: 21,
+  disabled_status: "enabled",
+  title: "Java Programming I",
+  material_url: "",
+  course_template_id: 100,
+  hide_submission_results: false,
+  external_scoreboard_url: null,
+  organization_slug: "mooc",
+}
+
+const exerciseSubmission = {
+  exercise_name: "part01-Part01_01.Sandbox",
+  id: 7402793,
+  user_id: 131421,
+  course_id: 590,
+  created_at: "2026-07-13T09:12:33.123+03:00",
+  all_tests_passed: true,
+  points: "01-01",
+  submitted_zip_url: "https://tmc.mooc.fi/api/v8/core/submissions/7402793/download",
+  paste_url: null,
+  processing_time: 25,
+  reviewed: false,
+  requests_review: false,
+}
+
+const submission = {
+  id: 7402793,
+  user_id: 131421,
+  pretest_error: null,
+  created_at: "2026-07-13T09:12:33.123+03:00",
+  exercise_name: "part01-Part01_01.Sandbox",
+  course_id: 590,
+  processed: true,
+  all_tests_passed: true,
+  points: "01-01",
+  processing_tried_at: "2026-07-13T09:12:33.456+03:00",
+  processing_began_at: "2026-07-13T09:12:34.001+03:00",
+  processing_completed_at: "2026-07-13T09:12:58.999+03:00",
+  times_sent_to_sandbox: 1,
+  processing_attempts_started_at: "2026-07-13T09:12:33.123+03:00",
+  params_json: null,
+  requires_review: false,
+  requests_review: false,
+  reviewed: false,
+  message_for_reviewer: "",
+  newer_submission_reviewed: false,
+  review_dismissed: false,
+  paste_available: false,
+  message_for_paste: "",
+  paste_key: null,
+}
+
+const organization = {
+  name: "MOOC",
+  information: "Massive Open Online Courses from the University of Helsinki",
+  slug: "mooc",
+  logo_path: "/system/organizations/logos/000/000/021/original/mooc-logo.png",
+  pinned: true,
+}
+
+const review = {
+  submission_id: 7402793,
+  exercise_name: "part01-Part01_01.Sandbox",
+  id: 12,
+  marked_as_read: false,
+  reviewer_name: "Reviewer",
+  review_body: "Looks good",
+  points: ["01-01"],
+  points_not_awarded: [],
+  url: "https://tmc.mooc.fi/submissions/7402793/reviews",
+  update_url: "https://tmc.mooc.fi/api/v8/core/courses/590/reviews/12",
+  created_at: "2026-07-14T10:00:00.000+03:00",
+  updated_at: "2026-07-14T10:00:00.000+03:00",
+}
+
+const newSubmission = {
+  show_submission_url: "https://tmc.mooc.fi/api/v8/core/submissions/7402793",
+  paste_url: "https://tmc.mooc.fi/paste/8VVBEYCqjB9U9M8M",
+  submission_url: "https://tmc.mooc.fi/submissions/7402793",
+}
+
+const submissionFinished = {
+  api_version: 7,
+  all_tests_passed: true,
+  user_id: 131421,
+  login: "student@example.com",
+  course: "mooc-java-programming-i",
+  exercise_name: "part01-Part01_01.Sandbox",
+  status: "ok",
+  points: ["01-01"],
+  valgrind: null,
+  submission_url: "https://tmc.mooc.fi/submissions/7402793",
+  solution_url: "https://tmc.mooc.fi/exercises/83114/solution",
+  submitted_at: "2026-07-13T09:12:33.123+03:00",
+  processing_time: 25,
+  reviewed: false,
+  requests_review: false,
+  paste_url: null,
+  message_for_paste: null,
+  missing_review_points: [],
+  test_cases: [
+    {
+      name: "SandboxTest test",
+      successful: true,
+      message: null,
+      exception: null,
+      detailed_message: null,
+    },
+  ],
+  feedback_questions: [
+    { id: 1, question: "How difficult was this?", kind: { IntRange: { lower: 1, upper: 5 } } },
+    { id: 2, question: "Free feedback", kind: "Text" },
+  ],
+  feedback_answer_url: "https://tmc.mooc.fi/api/v8/core/submissions/7402793/feedback",
+  error: null,
+  validations: {
+    strategy: "WARN",
+    validationErrors: {
+      "Sandbox.java": [
+        {
+          column: 1,
+          line: 5,
+          message: "Indentation incorrect.",
+          sourceName: "Sandbox.java",
+        },
+      ],
+    },
+  },
+}
+
+const exerciseDetails = {
+  course_name: "mooc-java-programming-i",
+  course_id: 590,
+  code_review_requests_enabled: false,
+  run_tests_locally_action_enabled: true,
+  exercise_name: "part01-Part01_01.Sandbox",
+  exercise_id: 83114,
+  unlocked_at: null,
+  deadline: "2026-08-19T23:59:59.999+03:00",
+  submissions: [exerciseSubmission],
+}
+
+const localTmcExercise = {
+  "course-slug": "python-course",
+  "course-id": 1,
+  "exercise-slug": "part01-Part01_01.Sandbox",
+  "exercise-id": 4321,
+  "exercise-path": "/p/ex",
+}
+
+const localMoocExercise = {
+  "course-slug": "mooc-python-course",
+  "course-id": UUID_A,
+  "exercise-slug": "mooc-ex",
+  "exercise-id": UUID_B,
+  "exercise-path": "/p/mooc-ex",
+}
+
+const moocCourse = {
+  id: UUID_A,
+  slug: "introduction-to-everything",
+  name: "Introduction to Everything",
+  description: "An example course.",
+  organization_name: "University of Helsinki",
+  ai_policy: "not_set",
+}
+
+const moocExerciseSlide = {
+  slide_id: UUID_A,
+  exercise_id: UUID_B,
+  course_id: UUID_A,
+  exercise_name: "Best exercise",
+  exercise_order_number: 1,
+  deadline: "2026-08-19T23:59:59.999999Z",
+  page_url: "https://courses.mooc.fi/org/uh-cs/courses/python/chapter-1/best-exercise",
+  chapter: { id: UUID_C, name: "Getting started", chapter_number: 1 },
+  tasks: [
+    {
+      task_id: UUID_C,
+      order_number: 0,
+      assignment: { type: "doc", content: [] },
+      public_spec: {
+        type: "editor",
+        archive_name: "part01.tar.zst",
+        stub_download_url: "https://courses.mooc.fi/api/v0/files/stub.tar.zst",
+        student_file_paths: ["src/main.rs"],
+        checksum: "1234abcd",
+        browser_test: { runtime: "python", script: "print('hello')", error: null },
+      },
+      // The shape the `tmc` service emits (pinned in services/tmc/.../modelSolution.test.ts);
+      // a wrong one would hide the CLI failing on every later command for a solved exercise.
+      model_solution_spec: {
+        type: "editor",
+        solution_download_url: "https://courses.mooc.fi/api/v0/files/solution.tar.zst",
+      },
+      checksum: "1234abcd",
+    },
+    {
+      task_id: UUID_B,
+      order_number: 1,
+      assignment: null,
+      public_spec: null,
+      model_solution_spec: {
+        type: "browser",
+        solution_download_url: "https://courses.mooc.fi/api/v0/files/browser-solution.tar.zst",
+      },
+      checksum: null,
+    },
+  ],
+}
+
+const validCliOutputFixtures: CliOutputFixture[] = [
+  {
+    name: "status-update: client-update-data / exercise-download",
+    value: {
+      "output-kind": "status-update",
+      "update-data-kind": "client-update-data",
+      finished: false,
+      message: "Downloading exercise",
+      "percent-done": 0.5,
+      time: 1234,
+      data: {
+        "client-update-data-kind": "exercise-download",
+        id: 83114,
+        path: "/home/student/tmcdata/course/part01",
+      },
+    },
+  },
+  {
+    name: "status-update: client-update-data / posted-submission",
+    value: {
+      "output-kind": "status-update",
+      "update-data-kind": "client-update-data",
+      finished: false,
+      message: "Posted submission",
+      "percent-done": 0.5,
+      time: 5000,
+      data: {
+        "client-update-data-kind": "posted-submission",
+        ...newSubmission,
+      },
+    },
+  },
+  {
+    name: "status-update: none",
+    value: {
+      "output-kind": "status-update",
+      "update-data-kind": "none",
+      finished: true,
+      message: "Finished",
+      "percent-done": 1.0,
+      time: 8000,
+      data: null,
+    },
+  },
+  {
+    name: "notification",
+    value: {
+      "output-kind": "notification",
+      "notification-kind": "warning",
+      message: "Your Python version is outdated",
+    },
+  },
+  {
+    name: "output-data with null data",
+    value: {
+      "output-kind": "output-data",
+      status: "finished",
+      message: "Logged in",
+      result: "logged-in",
+      data: null,
+    },
+  },
+  {
+    name: "error: generic",
+    value: {
+      "output-kind": "output-data",
+      status: "finished",
+      message: "Something went wrong",
+      result: "error",
+      data: {
+        "output-data-kind": "error",
+        "output-data": { kind: "generic", trace: ["error", "caused by: io error"] },
+      },
+    },
+  },
+  {
+    name: "validation (result)",
+    value: outputData("validation", {
+      strategy: "WARN",
+      validation_errors: {
+        "Sandbox.java": [
+          {
+            column: 1,
+            line: 5,
+            message: "Indentation incorrect.",
+            source_name: "Sandbox.java",
+          },
+        ],
+      },
+    }),
+  },
+  { name: "validation (null)", value: outputData("validation", null) },
+  { name: "available-points", value: outputData("available-points", ["01-01", "01-02"]) },
+  { name: "exercises", value: outputData("exercises", ["/path/to/exercise"]) },
+  {
+    name: "exercise-packaging-configuration",
+    value: outputData("exercise-packaging-configuration", {
+      student_file_paths: ["src"],
+      exercise_file_paths: ["test", "pom.xml"],
+    }),
+  },
+  {
+    name: "refresh-result",
+    value: outputData("refresh-result", {
+      "new-cache-path": "/cache/course",
+      "course-options": { hide_after: null },
+      exercises: [
+        {
+          name: "part01-Part01_01.Sandbox",
+          checksum: "f25e139769b2688e213938bf85d09fb8",
+          points: ["01-01"],
+          "sandbox-image": "eu.gcr.io/moocfi-public/tmc-sandbox-java",
+          "tmcproject-yml": {
+            extra_student_files: [],
+            extra_exercise_files: [],
+            force_update: [],
+          },
+        },
+      ],
+    }),
+  },
+  {
+    name: "test-result",
+    value: outputData("test-result", {
+      status: "TESTS_FAILED",
+      testResults: [
+        {
+          name: "SandboxTest test",
+          successful: false,
+          points: ["01-01"],
+          message: "expected 3 but was 4",
+          exception: ["java.lang.AssertionError"],
+        },
+      ],
+      logs: { stdout: "..." },
+    }),
+  },
+  {
+    name: "exercise-desc",
+    value: outputData("exercise-desc", {
+      name: "Part01_01.Sandbox",
+      tests: [{ name: "SandboxTest test", points: ["01-01"] }],
+    }),
+  },
+  {
+    name: "exercise-updates",
+    value: outputData("exercise-updates", { updated: [83114], removed: [83115] }),
+  },
+  {
+    name: "combined-course-data",
+    value: outputData("combined-course-data", {
+      details: courseDetails,
+      exercises: [courseExercise],
+      settings: courseData,
+    }),
+  },
+  { name: "course-details", value: outputData("course-details", courseDetails) },
+  { name: "course-exercises", value: outputData("course-exercises", [courseExercise]) },
+  { name: "course-data", value: outputData("course-data", courseData) },
+  { name: "courses", value: outputData("courses", [course]) },
+  { name: "exercise-details", value: outputData("exercise-details", exerciseDetails) },
+  { name: "submissions", value: outputData("submissions", [submission]) },
+  {
+    name: "update-result",
+    value: outputData("update-result", { created: [exercise], updated: [] }),
+  },
+  { name: "organization", value: outputData("organization", organization) },
+  { name: "organizations", value: outputData("organizations", [organization]) },
+  { name: "reviews", value: outputData("reviews", [review]) },
+  {
+    name: "token",
+    value: outputData("token", {
+      access_token: "abcdef",
+      token_type: "bearer",
+      scope: "public",
+    }),
+  },
+  { name: "new-submission", value: outputData("new-submission", newSubmission) },
+  {
+    name: "submission-feedback-response",
+    value: outputData("submission-feedback-response", { api_version: 8, status: "ok" }),
+  },
+  {
+    name: "submission-finished",
+    value: outputData("submission-finished", submissionFinished),
+  },
+  { name: "config-value (string)", value: outputData("config-value", "/projects/dir") },
+  { name: "config-value (null)", value: outputData("config-value", null) },
+  {
+    name: "compressed-project-hash",
+    value: outputData("compressed-project-hash", "9f86d081884c7d659a2feaa0c55ad015"),
+  },
+  {
+    name: "submission-sandbox",
+    value: outputData("submission-sandbox", "https://sandbox.example.com/1"),
+  },
+  {
+    name: "local-tmc-exercises",
+    value: outputData("local-tmc-exercises", [localTmcExercise]),
+  },
+  {
+    name: "local-mooc-exercises",
+    value: outputData("local-mooc-exercises", [localMoocExercise]),
+  },
+  {
+    name: "local-exercises",
+    value: outputData("local-exercises", [
+      { backend: "tmc", ...localTmcExercise },
+      { backend: "mooc", ...localMoocExercise },
+    ]),
+  },
+  {
+    name: "tmc-exercise-download",
+    value: outputData("tmc-exercise-download", {
+      downloaded: [{ id: 1, "course-slug": "course", "exercise-slug": "ex1", path: "/p/ex1" }],
+      skipped: [],
+      failed: [
+        [
+          { id: 2, "course-slug": "course", "exercise-slug": "ex2", path: "/p/ex2" },
+          ["download failed"],
+        ],
+      ],
+    }),
+  },
+  {
+    name: "mooc-exercise-download",
+    value: outputData("mooc-exercise-download", {
+      downloaded: [{ "exercise-id": UUID_C, path: "/p/mooc-ex" }],
+      skipped: [{ "exercise-id": UUID_B, path: "/p/mooc-ex2" }],
+    }),
+  },
+  { name: "tmc-config", value: outputData("tmc-config", { projects_dir: "/projects" }) },
+  {
+    name: "mooc-exercise-updates",
+    value: outputData("mooc-exercise-updates", {
+      updated: [UUID_B],
+      removed: [UUID_C],
+      unchecked_courses: [{ course_id: UUID_A, kind: "not-found" }],
+    }),
+  },
+  {
+    name: "mooc-submission-status: no-grading-yet",
+    value: outputData("mooc-submission-status", { status: "no-grading-yet" }),
+  },
+  {
+    name: "mooc-submission-status: grading",
+    value: outputData("mooc-submission-status", {
+      status: "grading",
+      grading: {
+        grading_progress: "FullyGraded",
+        score_given: 1,
+        grading_started_at: "2026-07-21T00:00:00Z",
+        grading_completed_at: "2026-07-21T00:00:01Z",
+        feedback_text: "All tests passed",
+        exercise_progress: {
+          exercise_id: UUID_B,
+          score_given: 1,
+          score_maximum: 1,
+          completed: true,
+          attempted: true,
+          standing: "Passed",
+        },
+        test_results: {
+          status: "PASSED",
+          test_results: [
+            { name: "Test passes", successful: true, points: ["1.1"], message: "", exception: [] },
+          ],
+          logs: {},
+        },
+      },
+    }),
+  },
+  {
+    name: "mooc-submission-status: grading of a compile failure",
+    value: outputData("mooc-submission-status", {
+      status: "grading",
+      grading: {
+        grading_progress: "FullyGraded",
+        score_given: 0,
+        grading_started_at: null,
+        grading_completed_at: null,
+        feedback_text: null,
+        exercise_progress: null,
+        test_results: {
+          status: "COMPILE_FAILED",
+          test_results: [],
+          logs: { stdout: "error: cannot find symbol" },
+        },
+      },
+    }),
+  },
+  {
+    name: "mooc-combined-course-data",
+    value: outputData("mooc-combined-course-data", {
+      course: moocCourse,
+      progress: {
+        course_id: UUID_A,
+        exercises: [
+          {
+            exercise_id: UUID_B,
+            score_given: 1.5,
+            score_maximum: 2,
+            completed: false,
+            attempted: true,
+            standing: "Attempted",
+          },
+        ],
+      },
+      slides: [moocExerciseSlide],
+    }),
+  },
+  { name: "mooc-course", value: outputData("mooc-course", moocCourse) },
+  { name: "mooc-courses", value: outputData("mooc-courses", [moocCourse]) },
+  { name: "mooc-current-user", value: outputData("mooc-current-user", { id: UUID_A }) },
+  {
+    name: "mooc-exercise-slides",
+    value: outputData("mooc-exercise-slides", [moocExerciseSlide]),
+  },
+  { name: "mooc-exercise-slide", value: outputData("mooc-exercise-slide", moocExerciseSlide) },
+  {
+    name: "mooc-submission-finished",
+    value: outputData("mooc-submission-finished", {
+      task_submission_id: UUID_A,
+      slide_submission_id: UUID_B,
+      exercise_page_url: null,
+    }),
+  },
+  {
+    name: "mooc-submissions",
+    value: outputData("mooc-submissions", [
+      {
+        id: UUID_B,
+        exercise_id: UUID_A,
+        created_at: "2026-07-21T12:00:00Z",
+        score_given: 1,
+        grading_progress: "FullyGraded",
+        kind: "submission",
+        is_shared: false,
+      },
+      // not yet graded: the host reports both nullable members as null
+      {
+        id: UUID_C,
+        exercise_id: UUID_A,
+        created_at: "2026-07-21T10:00:00Z",
+        score_given: null,
+        grading_progress: null,
+        kind: "submission",
+        is_shared: true,
+      },
+      // a snapshot is never graded
+      {
+        id: UUID_A,
+        exercise_id: UUID_A,
+        created_at: "2026-07-21T09:00:00Z",
+        score_given: null,
+        grading_progress: null,
+        kind: "paste",
+        is_shared: true,
+      },
+    ]),
+  },
+  {
+    name: "mooc-paste",
+    value: outputData("mooc-paste", {
+      paste_url: "https://courses.mooc.fi/paste/8VVBEYCqjB9U9M8M",
+    }),
+  },
+  {
+    name: "mooc-course-progress",
+    value: outputData("mooc-course-progress", {
+      course_id: UUID_A,
+      exercises: [
+        {
+          exercise_id: UUID_B,
+          score_given: 1.5,
+          score_maximum: 2,
+          completed: true,
+          attempted: true,
+          standing: "OutOfTries",
+        },
+        {
+          exercise_id: UUID_C,
+          score_given: 0,
+          score_maximum: 1,
+          completed: false,
+          attempted: false,
+          standing: null,
+        },
+      ],
+    }),
+  },
+  {
+    name: "mooc-old-submission-restore: restored",
+    value: outputData("mooc-old-submission-restore", "restored"),
+  },
+  {
+    name: "mooc-old-submission-restore: nothing-to-download",
+    value: outputData("mooc-old-submission-restore", "nothing-to-download"),
+  },
+  // forward compatibility: unknown extra fields must not fail validation
+  {
+    name: "unknown extra field is tolerated",
+    value: {
+      "output-kind": "notification",
+      "notification-kind": "info",
+      message: "hello",
+      "added-in-a-future-version": { x: 1 },
+    },
+  },
+]
+
+const invalidCliOutputFixtures: CliOutputFixture[] = [
+  { name: "not an object", value: "finished" },
+  {
+    name: "missing output-kind",
+    value: { status: "finished", message: "m", result: "executed-command", data: null },
+  },
+  {
+    name: "unknown output-kind",
+    value: { "output-kind": "surprise", message: "m" },
+  },
+  {
+    name: "unknown output-data-kind",
+    value: outputData("mooc-not-a-kind", []),
+  },
+  {
+    name: "error trace with non-string elements",
+    value: {
+      "output-kind": "output-data",
+      status: "finished",
+      message: "m",
+      result: "error",
+      data: {
+        "output-data-kind": "error",
+        "output-data": { kind: "generic", trace: [42] },
+      },
+    },
+  },
+  {
+    name: "tmc course with string id",
+    value: outputData("courses", [{ ...course, id: "590" }]),
+  },
+  {
+    name: "mooc course with non-uuid id",
+    value: outputData("mooc-courses", [{ ...moocCourse, id: 590 }]),
+  },
+  {
+    // A shape the `tmc` exercise service never emits; accepting it would mean langs and
+    // the service have drifted apart.
+    name: "mooc exercise slide with a type-tagged Editor model solution",
+    value: outputData("mooc-exercise-slide", {
+      ...moocExerciseSlide,
+      tasks: [
+        {
+          ...moocExerciseSlide.tasks[0],
+          model_solution_spec: { type: "Editor", download_url: "https://x/solution.tar.zst" },
+        },
+      ],
+    }),
+  },
+  {
+    name: "mooc exercise slide with an untagged model solution",
+    value: outputData("mooc-exercise-slide", {
+      ...moocExerciseSlide,
+      tasks: [
+        {
+          ...moocExerciseSlide.tasks[0],
+          model_solution_spec: { solution_download_url: "https://x/solution.tar.zst" },
+        },
+      ],
+    }),
+  },
+  {
+    // The pre-0.42.0 shape, which listed only the updated exercises.
+    name: "mooc-exercise-updates as a list of ids",
+    value: outputData("mooc-exercise-updates", [{ id: UUID_B }]),
+  },
+  {
+    // the caller sums the per-exercise points into the course totals
+    name: "mooc-course-progress without score_maximum or attempted",
+    value: outputData("mooc-course-progress", {
+      exercises: [{ exercise_id: UUID_B, completed: true, points: 3 }],
+    }),
+  },
+  {
+    name: "mooc-submission-status externally tagged as NoGradingYet",
+    value: outputData("mooc-submission-status", "NoGradingYet"),
+  },
+  {
+    name: "mooc-submission-status externally tagged as Grading",
+    value: outputData("mooc-submission-status", {
+      Grading: {
+        grading_progress: "FullyGraded",
+        score_given: 1,
+        grading_started_at: null,
+        grading_completed_at: null,
+        feedback_json: null,
+        feedback_text: null,
+      },
+    }),
+  },
+  {
+    name: "local-tmc-exercises without an exercise id",
+    value: outputData("local-tmc-exercises", [
+      { "course-slug": "python-course", "exercise-slug": "ex", "exercise-path": "/p/ex" },
+    ]),
+  },
+  {
+    name: "status-update none with object data",
+    value: {
+      "output-kind": "status-update",
+      "update-data-kind": "none",
+      finished: true,
+      message: "m",
+      "percent-done": 1.0,
+      time: 1,
+      data: { unexpected: true },
+    },
+  },
+  {
+    name: "notification with invalid notification-kind",
+    value: { "output-kind": "notification", "notification-kind": "fatal", message: "m" },
+  },
+  {
+    name: "output-data with missing result",
+    value: {
+      "output-kind": "output-data",
+      status: "finished",
+      message: "m",
+      data: null,
+    },
+  },
+]
+
+export type { CliOutputFixture }
+export { invalidCliOutputFixtures, validCliOutputFixtures }
+// Exported piecemeal too: a test needing a payload the CLI could really emit starts from
+// one of these rather than hand-rolling a partial one.
+export {
+  course,
+  courseData,
+  courseDetails,
+  exerciseDetails,
+  localMoocExercise,
+  localTmcExercise,
+  moocCourse,
+  organization,
+  submissionFinished,
+}

@@ -1,80 +1,64 @@
-import { State, WebviewToExtension } from "../shared/shared";
-import type { WebviewApi } from "vscode-webview";
+import type { WebviewApi } from "vscode-webview"
+import { z } from "zod"
+
+import type { WebviewState, WebviewToExtension } from "../../../shared/lib"
+import { WebviewStateSchema, WebviewToExtensionSchema } from "../../../shared/lib"
+import { snapshot } from "./snapshot.svelte"
 
 /**
- * A utility wrapper around the acquireVsCodeApi() function, which enables
- * message passing and state management between the webview and extension
- * contexts.
- *
- * This utility also enables webview code to be run in a web browser-based
- * dev server by using native web browser features that mock the functionality
- * enabled by acquireVsCodeApi.
+ * The webview's only channel to the extension host; wraps `acquireVsCodeApi()`, which may be
+ * called once per page.
  */
 class VSCodeAPIWrapper {
-    private readonly vsCodeApi: WebviewApi<State> | undefined;
+  private readonly vsCodeApi: WebviewApi<WebviewState> | undefined
 
-    constructor() {
-        // Check if the acquireVsCodeApi function exists in the current development
-        // context (i.e. VS Code development window or web browser)
-        if (typeof acquireVsCodeApi === "function") {
-            this.vsCodeApi = acquireVsCodeApi();
-        }
+  public constructor() {
+    if (typeof acquireVsCodeApi === "function") {
+      this.vsCodeApi = acquireVsCodeApi()
     }
+  }
 
-    /**
-     * Post a message (i.e. send arbitrary data) to the owner of the webview.
-     *
-     * @remarks When running webview code inside a web browser, postMessage will instead
-     * log the given message to the console.
-     *
-     * @param message Abitrary data (must be JSON serializable) to send to the extension context.
-     */
-    public postMessage(message: WebviewToExtension): void {
-        console.log("Message from webview", message);
-        if (this.vsCodeApi) {
-            this.vsCodeApi.postMessage(message);
-        } else {
-            console.error("No vsCodeApi");
-        }
+  /**
+   * Posts a message to the extension host.
+   *
+   * `$state` proxies anywhere in the message are unwrapped here, so callers pass state as is. A
+   * message the shared schema rejects is logged and dropped.
+   *
+   * @returns whether the message was posted.
+   */
+  public postMessage(message: WebviewToExtension): boolean {
+    const plainMessage = snapshot(message)
+    const validationResult = WebviewToExtensionSchema.safeParse(plainMessage)
+    if (!validationResult.success) {
+      console.error(
+        "Refusing to post malformed message to extension host:",
+        z.prettifyError(validationResult.error),
+        plainMessage,
+      )
+      return false
     }
+    if (!this.vsCodeApi) {
+      console.error("No vsCodeApi")
+      return false
+    }
+    // Not zod's parse result, which drops fields the schema does not declare.
+    this.vsCodeApi.postMessage(plainMessage)
+    return true
+  }
 
-    /**
-     * Get the persistent state stored for this webview.
-     *
-     * @remarks When running webview source code inside a web browser, getState will retrieve state
-     * from local storage (https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage).
-     *
-     * @return The current state or `undefined` if no state has been set.
-     */
-    public getState(): State | undefined {
-        if (this.vsCodeApi) {
-            return this.vsCodeApi.getState();
-        } else {
-            const state = localStorage.getItem("vscodeState");
-            return state ? JSON.parse(state) : undefined;
-        }
-    }
+  /** What {@link setState} saved before this document loaded, if it still parses. */
+  public getState(): WebviewState | undefined {
+    const parsed = WebviewStateSchema.safeParse(this.vsCodeApi?.getState())
+    return parsed.success ? parsed.data : undefined
+  }
 
-    /**
-     * Set the persistent state stored for this webview.
-     *
-     * @remarks When running webview source code inside a web browser, setState will set the given
-     * state using local storage (https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage).
-     *
-     * @param newState New persisted state. This must be a JSON serializable object. Can be retrieved
-     * using {@link getState}.
-     *
-     * @return The new state.
-     */
-    public setState<T extends State | undefined>(newState: T): T {
-        if (this.vsCodeApi) {
-            return this.vsCodeApi.setState(newState);
-        } else {
-            localStorage.setItem("vscodeState", JSON.stringify(newState));
-            return newState;
-        }
-    }
+  /**
+   * Saves UI-only state for the document VS Code reloads this panel with. The extension host
+   * owns every other piece of panel state; see `uiState.svelte.ts`.
+   */
+  public setState(state: WebviewState): void {
+    this.vsCodeApi?.setState(snapshot(state))
+  }
 }
 
-// Exports class singleton to prevent multiple invocations of acquireVsCodeApi.
-export const vscode = new VSCodeAPIWrapper();
+export const vscode = new VSCodeAPIWrapper()

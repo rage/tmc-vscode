@@ -1,0 +1,523 @@
+import type { Result } from "ts-results"
+import { Err, Ok } from "ts-results"
+import * as vscode from "vscode"
+
+import type { RunResult, TestResult } from "../../shared/langsSchema"
+import {
+  BaseError,
+  submitRefusalOf,
+  submitRefusalSentence,
+  withDistinctKeys,
+} from "../../shared/lib"
+import { checkAiUse } from "../actions/checkAiUse"
+import { exerciseResultsPanel } from "../actions/exerciseResults"
+import type { ExerciseTestOutcome } from "../actions/testExercise"
+import { testExercise } from "../actions/testExercise"
+import type { ReadyActionContext } from "../actions/types"
+import type WorkspaceManager from "../api/workspaceManager"
+import type { WorkspaceExercise } from "../api/workspaceManager"
+import { ExerciseStatus } from "../api/workspaceManager"
+import {
+  AiUseRefusedError,
+  BottleneckError,
+  RuntimeError,
+  SHOW_AI_USE_PROBLEM_COMMAND,
+  TRUST_COURSE_WORKSPACE_COMMAND,
+  WorkspaceUntrustedError,
+} from "../errors"
+import { testedLocallyView } from "../panels/submissionView"
+import { submissionViews } from "../ui/submissionViews"
+import { countOf } from "../utilities"
+import { reachWalkthroughMilestone } from "../window/walkthrough"
+import type { CheckstyleDiagnostics } from "./checkstyleDiagnostics"
+import { createSourceFileFinder } from "./sourceFiles"
+import {
+  BROKEN_JAVA_HEADLINE,
+  BROKEN_JAVA_REMEDY,
+  failureMessage,
+  isBrokenJava,
+  runFailureText,
+  timeoutText,
+} from "./testMessages"
+
+/** The `controllerId` that package.json's `testing/*` menus match on. */
+export const TEST_CONTROLLER_ID = "tmc"
+
+/**
+ * Reports local test runs through the VS Code Testing API: one test item per exercise open
+ * in the course workspace, with its tests as children once a run has named them.
+ *
+ * tmc-langs only runs whole exercises, so running any test runs its exercise.
+ */
+export class ExerciseTestController implements vscode.Disposable {
+  private readonly _controller: vscode.TestController
+  private readonly _profile: vscode.TestRunProfile
+  private readonly _exercisesByItemId = new Map<string, WorkspaceExercise>()
+
+  public constructor(
+    private readonly _actionContext: ReadyActionContext,
+    private readonly _diagnostics: CheckstyleDiagnostics,
+  ) {
+    this._controller = vscode.tests.createTestController(TEST_CONTROLLER_ID, "TestMyCode")
+    this._profile = this._controller.createRunProfile(
+      "Run Tests",
+      vscode.TestRunProfileKind.Run,
+      async (request, token) => {
+        await this._run(request, token)
+      },
+      true,
+    )
+    this.syncExercises()
+  }
+
+  /** Makes the test items match the exercises open in the course workspace. */
+  public syncExercises(): void {
+    const exercises = exercisesOpenInCourseWorkspace(this._actionContext.startup.workspaceManager)
+    this._exercisesByItemId.clear()
+    this._controller.items.replace(exercises.map((exercise) => this._itemFor(exercise)))
+    this._diagnostics.retain(exercises.map((exercise) => exercise.uri))
+  }
+
+  /**
+   * Runs an exercise's tests as a run of its test item, so the results land in the Test
+   * Results view.
+   *
+   * @returns `Err(BottleneckError)` when the exercise was already being tested, and, with no
+   * run, `Err(WorkspaceUntrustedError)` in Restricted Mode and `Err(AiUseRefusedError)` while AI
+   * assistance may be on; every other outcome, failures included, is reported in the run itself.
+   */
+  public async runExercise(exercise: WorkspaceExercise): Promise<Result<void, Error>> {
+    const untrusted = this._actionContext.startup.trustGate.refusal(
+      () => void vscode.commands.executeCommand("tmc.testExercise", exercise.uri),
+    )
+    if (untrusted) {
+      return Err(untrusted)
+    }
+    const allowed = await checkAiUse(this._actionContext, exercise)
+    if (allowed.err && allowed.val instanceof AiUseRefusedError) {
+      return allowed
+    }
+    const item = this._itemFor(exercise)
+    if (!this._controller.items.get(item.id)) {
+      this._controller.items.add(item)
+    }
+    const cancellation = new vscode.CancellationTokenSource()
+    try {
+      // An unset `preserveFocus` defaults to true, which keeps Test Results from opening.
+      return await this._run(
+        new vscode.TestRunRequest([item], undefined, this._profile, false, false),
+        cancellation.token,
+        // A check that failed otherwise is the run's to repeat and report.
+        allowed.ok ? exercise : undefined,
+      )
+    } finally {
+      cancellation.dispose()
+    }
+  }
+
+  /** The exercise folder of a test item, or of the exercise a test belongs to. */
+  public exerciseUriOf(item: vscode.TestItem | undefined): vscode.Uri | undefined {
+    return item && this._exercisesByItemId.get(rootOf(item).id)?.uri
+  }
+
+  public dispose(): void {
+    this._controller.dispose()
+  }
+
+  private _itemFor(exercise: WorkspaceExercise): vscode.TestItem {
+    const id = exercise.uri.toString()
+    this._exercisesByItemId.set(id, exercise)
+    return (
+      this._controller.items.get(id) ??
+      this._controller.createTestItem(id, exercise.exerciseSlug, exercise.uri)
+    )
+  }
+
+  private _requestedExercises(
+    request: vscode.TestRunRequest,
+  ): [vscode.TestItem, WorkspaceExercise][] {
+    const included: vscode.TestItem[] = []
+    if (request.include) {
+      included.push(...request.include)
+    } else {
+      this._controller.items.forEach((item) => void included.push(item))
+    }
+    const excluded = new Set(request.exclude?.map((item) => item.id))
+    const requested = new Map<string, [vscode.TestItem, WorkspaceExercise]>()
+    for (const item of included) {
+      const root = rootOf(item)
+      const exercise = this._exercisesByItemId.get(root.id)
+      if (exercise && !excluded.has(root.id)) {
+        requested.set(root.id, [root, exercise])
+      }
+    }
+    return [...requested.values()]
+  }
+
+  /** @param aiUseChecked An exercise whose AI use the caller has already checked. */
+  private async _run(
+    request: vscode.TestRunRequest,
+    token: vscode.CancellationToken,
+    aiUseChecked?: WorkspaceExercise,
+  ): Promise<Result<void, Error>> {
+    const requested = this._requestedExercises(request)
+    const [only] = requested
+    const run = this._controller.createTestRun(
+      request,
+      requested.length === 1 ? only?.[1].exerciseSlug : undefined,
+    )
+    const untrusted = this._actionContext.startup.trustGate.refusal(
+      () => void this._run(request, new vscode.CancellationTokenSource().token),
+    )
+    if (untrusted) {
+      for (const [item] of requested) {
+        run.errored(item, new vscode.TestMessage(untrustedMessage(untrusted)))
+      }
+      run.end()
+      return Err(untrusted)
+    }
+    const cancellation = new vscode.CancellationTokenSource()
+    const forwards = [token, run.token].map((source) =>
+      source.onCancellationRequested(() => cancellation.cancel()),
+    )
+    let busy: Result<void, Error> = Ok.EMPTY
+    try {
+      for (const [item] of requested) {
+        run.enqueued(item)
+      }
+      for (const [item, exercise] of requested) {
+        if (cancellation.token.isCancellationRequested) {
+          run.skipped(item)
+          continue
+        }
+        run.started(item)
+        const outcome = await testExercise(this._actionContext, exercise, cancellation.token, {
+          isAiUseChecked: exercise === aiUseChecked,
+        })
+        if (cancellation.token.isCancellationRequested) {
+          run.skipped(item)
+        } else if (outcome.err) {
+          if (outcome.val instanceof BottleneckError) {
+            busy = outcome
+          }
+          this._reportError(run, item, outcome.val)
+        } else {
+          reachWalkthroughMilestone("test-my-code:HasRunTests")
+          const isAllPassed = await this._reportOutcome(run, item, exercise, outcome.val)
+          if (requested.length === 1) {
+            this._offerSubmit(exercise, outcome.val, isAllPassed)
+          }
+        }
+      }
+    } finally {
+      run.end()
+      forwards.forEach((forward) => forward.dispose())
+      cancellation.dispose()
+    }
+    return busy
+  }
+
+  private _reportError(run: vscode.TestRun, item: vscode.TestItem, error: Error): void {
+    if (!(error instanceof BottleneckError)) {
+      clearTests(item)
+    }
+    if (error instanceof AiUseRefusedError) {
+      run.errored(item, new vscode.TestMessage(refusalMessage(error)))
+      return
+    }
+    if (error instanceof WorkspaceUntrustedError) {
+      run.errored(item, new vscode.TestMessage(untrustedMessage(error)))
+      return
+    }
+    if (error instanceof BottleneckError) {
+      run.appendOutput(toTerminalText(`${error.message}\n`), undefined, item)
+      run.skipped(item)
+      return
+    }
+    const details = error instanceof BaseError ? (error.details ?? "") : ""
+    const text = runFailureText(error, details, error instanceof RuntimeError)
+    run.appendOutput(toTerminalText(`${text}\n`), undefined, item)
+    run.errored(item, new vscode.TestMessage(text))
+    if (isBrokenJava(`${error.message}\n${details}`)) {
+      void this._actionContext.dialog.warningNotification(
+        `${BROKEN_JAVA_HEADLINE} ${BROKEN_JAVA_REMEDY}`,
+        [
+          "Open Settings",
+          (): void =>
+            void vscode.commands.executeCommand(
+              "workbench.action.openSettings",
+              "testMyCode.javaHome",
+            ),
+        ],
+      )
+    }
+  }
+
+  /** @returns Whether every test passed with nothing for the code quality checks to fault. */
+  private async _reportOutcome(
+    run: vscode.TestRun,
+    item: vscode.TestItem,
+    exercise: WorkspaceExercise,
+    outcome: ExerciseTestOutcome,
+  ): Promise<boolean> {
+    if (outcome.kind === "examMode") {
+      clearTests(item)
+      this._diagnostics.clear(exercise.uri)
+      run.appendOutput(
+        toTerminalText(
+          "Tests are not run locally in exam mode. Submit the exercise to have it graded.\n",
+        ),
+        undefined,
+        item,
+      )
+      run.skipped(item)
+      return false
+    }
+
+    const { runResult, styleValidation } = outcome
+    for (const [stream, text] of Object.entries(runResult.logs)) {
+      if (text.trim() !== "") {
+        run.appendOutput(toTerminalText(`${stream}:\n${text}\n`), undefined, item)
+      }
+    }
+    await this._diagnostics.report(exercise.uri, styleValidation.ok ? styleValidation.val : null)
+    if (styleValidation.err) {
+      run.appendOutput(
+        toTerminalText(`Code quality checks could not be run: ${styleValidation.val.message}\n`),
+        undefined,
+        item,
+      )
+    }
+
+    if (runResult.timedOutAfterMs !== undefined && runResult.timedOutAfterMs !== null) {
+      const text = timeoutText(Number(runResult.timedOutAfterMs))
+      clearTests(item)
+      run.appendOutput(toTerminalText(`${text}\n`), undefined, item)
+      run.failed(item, new vscode.TestMessage(text))
+      // After a run this long, Test Results may well be out of view.
+      void this._actionContext.dialog.warningNotification(`${exercise.exerciseSlug}: ${text}`)
+      return false
+    }
+    const failure = runFailure(runResult)
+    if (failure !== undefined) {
+      clearTests(item)
+      run.errored(item, new vscode.TestMessage(failure))
+      return false
+    }
+
+    const results = runResult.testResults
+    await this._reportTests(run, item, exercise, results)
+    const passedCount = results.filter((result) => result.successful).length
+    item.description = `${passedCount}/${results.length} tests passed`
+
+    const styleProblemCount =
+      styleValidation.ok && styleValidation.val?.strategy === "FAIL"
+        ? Object.values(styleValidation.val.validation_errors ?? {}).flat().length
+        : 0
+    const messages: vscode.TestMessage[] = []
+    if (passedCount < results.length || runResult.status !== "PASSED") {
+      messages.push(
+        new vscode.TestMessage(
+          `${results.length - passedCount} of ${results.length} tests failed.`,
+        ),
+      )
+    }
+    // The Python runner's own failure for a test folder that is gone or emptied.
+    if (
+      results.some((result) => !result.successful && result.message.startsWith("No tests found"))
+    ) {
+      const hint = "If the exercise's tests are missing, Reset Exercise restores its template."
+      run.appendOutput(toTerminalText(`${hint}\n`), undefined, item)
+      messages.push(new vscode.TestMessage(hint))
+    }
+    if (styleProblemCount > 0) {
+      messages.push(
+        new vscode.TestMessage(
+          `Code quality checks found ${countOf(styleProblemCount, "problem")}. They are listed in the Problems panel.`,
+        ),
+      )
+    }
+    if (messages.length > 0) {
+      run.failed(item, messages)
+      return false
+    }
+    run.passed(item)
+    return true
+  }
+
+  private async _reportTests(
+    run: vscode.TestRun,
+    item: vscode.TestItem,
+    exercise: WorkspaceExercise,
+    results: readonly TestResult[],
+  ): Promise<void> {
+    const children = new Map<string, [vscode.TestItem, TestResult]>()
+    const keyed = withDistinctKeys(results, (testResult) => testResult.name)
+    for (const { key, item: result } of keyed) {
+      const id = `${item.id}/${key}`
+      const child = item.children.get(id) ?? this._controller.createTestItem(id, result.name)
+      child.description = result.points.join(", ")
+      children.set(id, [child, result])
+    }
+    item.children.replace([...children.values()].map(([child]) => child))
+    const findFile = createSourceFileFinder(exercise.uri.fsPath)
+    const outcomes = await Promise.all(
+      [...children.values()].map(async ([child, result]) => ({
+        child,
+        failure: result.successful
+          ? undefined
+          : await failureMessage(result, exercise.uri.fsPath, findFile),
+      })),
+    )
+    for (const { child, failure } of outcomes) {
+      if (failure) {
+        run.failed(child, failure)
+      } else {
+        run.passed(child)
+      }
+    }
+  }
+
+  private _offerSubmit(
+    exercise: WorkspaceExercise,
+    outcome: ExerciseTestOutcome,
+    isAllPassed: boolean,
+  ): void {
+    // Test Results already says that exam mode runs no tests locally.
+    if (outcome.kind === "examMode" || !isAllPassed || outcome.isCourseDisabled) {
+      return
+    }
+    const message = `Tests pass on your computer for ${exercise.exerciseSlug}.`
+    // The panel says so itself when the exercise cannot be submitted, or needs a login first.
+    if (showLocalPassInResults(this._actionContext, exercise)) {
+      return
+    }
+    const stored = this._actionContext.startup.userData.getExercise(exercise.id)
+    if (stored.err) {
+      return
+    }
+    const storedExercise = stored.val.exercise
+    const refusal = submitRefusalOf(storedExercise, new Date(), stored.val.course)
+    if (refusal) {
+      const chapterName =
+        storedExercise.kind === "mooc" ? storedExercise.data.chapter?.name : undefined
+      void this._actionContext.dialog.notification(
+        `${message} ${submitRefusalSentence(refusal, exercise.exerciseSlug, chapterName)}`,
+      )
+      return
+    }
+    const submit = (): void =>
+      void vscode.commands.executeCommand("tmc.submitExercise", exercise.uri)
+    if (this._actionContext.authState.loggedIn) {
+      void this._actionContext.dialog.notification(message, ["Submit", submit])
+      return
+    }
+    void this._actionContext.dialog.notification(message, [
+      "Log In to Submit",
+      (): void =>
+        void Promise.resolve(vscode.commands.executeCommand("tmc.showMoocLogin")).then(
+          (loginOutcome) => loginOutcome === "loggedIn" && submit(),
+        ),
+    ])
+  }
+}
+
+/**
+ * Shows a local all-pass in the exercise's results panel, opening it without taking the focus,
+ * which asks whether to submit it. A panel still busy with a submission keeps showing that.
+ *
+ * @returns Whether the pass was handled here; `false` when the exercise has no results panel.
+ */
+function showLocalPassInResults(
+  actionContext: ReadyActionContext,
+  exercise: WorkspaceExercise,
+): boolean {
+  const latest = submissionViews.latestFor(exercise.id)
+  if (
+    latest &&
+    (latest.view.canKeepWaiting || ["uploading", "grading"].includes(latest.view.phase))
+  ) {
+    return true
+  }
+  const panel = exerciseResultsPanel(actionContext, exercise)
+  if (panel.err) {
+    return false
+  }
+  submissionViews.update({
+    panel: panel.val,
+    view: testedLocallyView(Date.now()),
+    shouldReopen: false,
+  })
+  submissionViews.show(panel.val)
+  return true
+}
+
+/** The open course workspace's exercises that are open in it; none outside a course workspace. */
+function exercisesOpenInCourseWorkspace(workspaceManager: WorkspaceManager): WorkspaceExercise[] {
+  const { activeCourse, activeCourseBackend } = workspaceManager
+  if (activeCourse === undefined || activeCourseBackend === undefined) {
+    return []
+  }
+  return workspaceManager
+    .getExercisesByCourseSlug(activeCourseBackend, activeCourse)
+    .filter((exercise) => exercise.status === ExerciseStatus.Open)
+}
+
+/** Drops the tests and pass count an earlier run reported under `item`, for a run that named none. */
+function clearTests(item: vscode.TestItem): void {
+  item.description = ""
+  item.children.replace([])
+}
+
+/** The refusal's sentence, and its remedy as the one command the message may run. */
+function refusalMessage(error: AiUseRefusedError): vscode.MarkdownString {
+  const message = new vscode.MarkdownString()
+  message.appendText(error.message)
+  if (error.remedyLabel) {
+    message.appendMarkdown(` [${error.remedyLabel}](command:${SHOW_AI_USE_PROBLEM_COMMAND})`)
+    message.isTrusted = { enabledCommands: [SHOW_AI_USE_PROBLEM_COMMAND] }
+  }
+  return message
+}
+
+function untrustedMessage(error: WorkspaceUntrustedError): vscode.MarkdownString {
+  const message = new vscode.MarkdownString()
+  message.appendText(error.message)
+  message.appendMarkdown(` [Trust Course Workspace](command:${TRUST_COURSE_WORKSPACE_COMMAND})`)
+  message.isTrusted = { enabledCommands: [TRUST_COURSE_WORKSPACE_COMMAND] }
+  return message
+}
+
+/** Why a run produced no per-test results, or `undefined` when it did. */
+function runFailure(runResult: RunResult): string | undefined {
+  const output = Object.values(runResult.logs)
+    .filter((text) => text.trim() !== "")
+    .join("\n")
+  const withOutput = (headline: string): string => (output ? `${headline}\n\n${output}` : headline)
+  switch (runResult.status) {
+    case "COMPILE_FAILED":
+      return withOutput("The exercise did not compile.")
+    case "GENERIC_ERROR":
+      return withOutput("The tests could not be run.")
+    case "TESTRUN_INTERRUPTED":
+      return withOutput("The test run was interrupted before it finished.")
+    default:
+      return runResult.testResults.length === 0 && runResult.status !== "PASSED"
+        ? withOutput("The tests reported no results.")
+        : undefined
+  }
+}
+
+// The Test Results terminal needs CRLF line endings.
+function toTerminalText(text: string): string {
+  return text.replaceAll(/\r?\n/g, "\r\n")
+}
+
+/** The exercise item a test item sits under, or the item itself when it is one. */
+function rootOf(item: vscode.TestItem): vscode.TestItem {
+  let root = item
+  while (root.parent) {
+    root = root.parent
+  }
+  return root
+}

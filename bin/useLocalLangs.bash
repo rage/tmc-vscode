@@ -1,0 +1,68 @@
+#!/bin/bash
+set -euo pipefail
+
+# Builds tmc-langs-cli from the sibling ../tmc-langs-rust checkout and installs it in
+# backend/cli, which both the integration tier (src/test-integration/tmc_langs_cli.spec.ts)
+# and Playwright (mockBackend profile, served by the mock backend) use as the CLI.
+#
+# LOCAL DEV/TEST ONLY; CI keeps using the released CLI.
+#
+# The harness finds the CLI by the `...-<version>` filename config.js pins, so the build is
+# installed under that name without bumping the pin (shared with the production download
+# path). `<cli> --version` still reports the build's real version.
+#
+# backend/cli is gitignored.
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LANGS_REPO="${TMC_LANGS_RUST_DIR:-$REPO_ROOT/../tmc-langs-rust}"
+
+if [ ! -d "$LANGS_REPO" ]; then
+  echo "tmc-langs-rust checkout not found at $LANGS_REPO" >&2
+  echo "Set TMC_LANGS_RUST_DIR to override." >&2
+  exit 1
+fi
+
+# cargo may only be on PATH via the rustup env script.
+if ! command -v cargo >/dev/null 2>&1 && [ -f "$HOME/.cargo/env" ]; then
+  # shellcheck disable=SC1091
+  source "$HOME/.cargo/env"
+fi
+
+echo "Building tmc-langs-cli (release) from $LANGS_REPO ..."
+cargo build --release -p tmc-langs-cli --manifest-path "$LANGS_REPO/Cargo.toml"
+
+BINARY="$LANGS_REPO/target/release/tmc-langs-cli"
+if [ ! -f "$BINARY" ]; then
+  BINARY="$LANGS_REPO/target/release/tmc-langs-cli.exe"
+fi
+if [ ! -f "$BINARY" ]; then
+  echo "Built binary not found under $LANGS_REPO/target/release" >&2
+  exit 1
+fi
+
+# Pinned filename the harness expects (platform triple + version), from the extension's own
+# helper; it is TypeScript, hence the require hook.
+FILENAME="$(cd "$REPO_ROOT" && node -e 'require("tsx/cjs");const {getLangsCLIForPlatform,getPlatform}=require("./src/utilities/env");const cfg=require("./config.js");const v=JSON.parse(cfg.mockBackend.__TMC_LANGS_VERSION__);process.stdout.write(getLangsCLIForPlatform(getPlatform(),v))')"
+
+CLI_DIR="$REPO_ROOT/backend/cli"
+DEST="$CLI_DIR/$FILENAME"
+mkdir -p "$CLI_DIR"
+
+cp "$BINARY" "$DEST"
+chmod +x "$DEST"
+
+# Regenerate the checksum the extension verifies the CLI against.
+( cd "$CLI_DIR" && sha256sum "$FILENAME" > "$FILENAME.sha256" )
+
+echo "Installed local tmc-langs-cli -> $DEST"
+echo -n "Version: "
+"$DEST" --version
+
+cat <<EOF
+
+Done. To use it:
+  - integration: pnpm run test:integration
+  - playwright:  pnpm run backend:start   (in one shell)
+                 pnpm run playwright-test
+To restore the released CLI: rm -rf backend/cli && (cd backend && pnpm run setup)
+EOF

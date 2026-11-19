@@ -1,0 +1,141 @@
+import * as fs from "fs"
+import * as path from "path"
+
+// Guards shared/langsSchema.ts (generated from shared/bindings.schema.json) against drifting
+// from the CLI contract: fixtures must (in)validate as expected, and the zod discriminators
+// are cross-checked against the vendored JSON Schema (re-vendor with bin/updateLangsSchema.sh).
+import {
+  CliNotification,
+  CliOutput,
+  CliOutputData,
+  CliStatusUpdate,
+  DataKind,
+} from "../../shared/langsSchema"
+import type { CliOutputFixture } from "./fixtures/cliOutput"
+import { invalidCliOutputFixtures, validCliOutputFixtures } from "./fixtures/cliOutput"
+
+/** The envelope tag of a fixture, i.e. which branch schema is meant to parse it. */
+function outputKindOf(fixture: CliOutputFixture): string {
+  const kind = (fixture.value as { "output-kind"?: unknown })["output-kind"]
+  if (typeof kind !== "string") {
+    throw new TypeError(`fixture ${fixture.name} declares no output-kind`)
+  }
+  return kind
+}
+
+/** The payload tag of an `output-data` fixture, or undefined for the other envelopes. */
+function dataKindOf(fixture: CliOutputFixture): string | undefined {
+  const data = (fixture.value as { data?: unknown }).data
+  if (data === null || typeof data !== "object") {
+    return undefined
+  }
+  const kind = (data as { "output-data-kind"?: unknown })["output-data-kind"]
+  return typeof kind === "string" ? kind : undefined
+}
+
+/** Locates the repo-root shared/bindings.schema.json from wherever the compiled test runs. */
+function readVendoredSchema(): {
+  oneOf: { properties: { "output-kind": { const: string } } }[]
+  $defs: Record<
+    string,
+    {
+      oneOf?: { properties?: Record<string, { const?: string }> }[]
+      properties?: Record<string, unknown>
+    }
+  >
+} {
+  let dir = __dirname
+  for (let i = 0; i < 6; i++) {
+    const candidate = path.join(dir, "shared", "bindings.schema.json")
+    if (fs.existsSync(candidate)) {
+      return JSON.parse(fs.readFileSync(candidate, "utf8"))
+    }
+    dir = path.dirname(dir)
+  }
+  throw new Error("shared/bindings.schema.json not found")
+}
+
+suite("Langs CLI output contract", function () {
+  suite("fixtures", function () {
+    for (const fixture of validCliOutputFixtures) {
+      test(`accepts ${fixture.name}`, function () {
+        const result = CliOutput.safeParse(fixture.value)
+        expect(
+          result.success,
+          result.success ? undefined : `expected fixture to validate:\n${result.error.message}`,
+        ).toBe(true)
+      })
+    }
+
+    for (const fixture of invalidCliOutputFixtures) {
+      test(`rejects ${fixture.name}`, function () {
+        const result = CliOutput.safeParse(fixture.value)
+        expect(result.success, "expected fixture to be rejected").toBe(false)
+      })
+    }
+  })
+
+  suite("vendored JSON Schema cross-check", function () {
+    test("DataKind covers exactly the output-data-kinds of the vendored schema", function () {
+      const schema = readVendoredSchema()
+      const schemaKinds = (schema.$defs.DataKind?.oneOf ?? [])
+        .map((variant) => variant.properties?.["output-data-kind"]?.const)
+        .filter((kind): kind is string => typeof kind === "string")
+        .toSorted()
+      const zodKinds = DataKind.options
+        .map((option) => option.shape["output-data-kind"].value)
+        .toSorted()
+      expect(schemaKinds.length).toBeGreaterThan(0)
+      expect(zodKinds).toEqual(schemaKinds)
+    })
+
+    test("CliOutput covers exactly the output-kinds of the vendored schema", function () {
+      const schema = readVendoredSchema()
+      const schemaKinds = schema.oneOf
+        .map((variant) => variant.properties["output-kind"].const)
+        .toSorted()
+
+      // `Langs` decodes a stdout line by picking one of these by its `output-kind`
+      // (src/api/langs.ts), rather than measuring the line against the whole union, so
+      // a line two of them accept — or none — is a decoder that picks the wrong shape.
+      const branchSchemas = [CliOutputData, CliStatusUpdate, CliNotification]
+      const coveredKinds = new Set<string>()
+      for (const fixture of validCliOutputFixtures) {
+        const accepting = branchSchemas.filter((branch) => branch.safeParse(fixture.value).success)
+        expect(accepting, `exactly one branch must parse ${fixture.name}`).toHaveLength(1)
+        coveredKinds.add(outputKindOf(fixture))
+      }
+      expect([...coveredKinds].toSorted()).toEqual(schemaKinds)
+
+      for (const kind of schemaKinds) {
+        const minimal = { "output-kind": kind }
+        const result = CliOutput.safeParse(minimal)
+        expect(result.success).toBe(false)
+      }
+    })
+
+    test("every output-data-kind of the vendored schema has a valid fixture", function () {
+      // Without this, a kind nothing constructs is validated by nothing: the DataKind
+      // cross-check above only proves the schema declares it.
+      const schema = readVendoredSchema()
+      const schemaKinds = (schema.$defs.DataKind?.oneOf ?? [])
+        .map((variant) => variant.properties?.["output-data-kind"]?.const)
+        .filter((kind): kind is string => typeof kind === "string")
+      const covered = new Set(validCliOutputFixtures.map((fixture) => dataKindOf(fixture)))
+      expect(schemaKinds.length).toBeGreaterThan(0)
+      expect(schemaKinds.filter((kind) => !covered.has(kind))).toEqual([])
+    })
+
+    test("CourseDetails is flattened in the vendored schema (serialize contract)", function () {
+      // The schema uses schemars' serialize contract, so CourseDetails is flat as the CLI
+      // writes it, not wrapped in `{ course: ... }` (the deserialize shape from
+      // #[serde(from = ...)]). A failure here means the generator switched contracts.
+      const schema = readVendoredSchema()
+      const courseDetails = schema.$defs.CourseDetails
+      expect(courseDetails, "CourseDetails must be present in the schema").toBeDefined()
+      expect(courseDetails?.properties).not.toHaveProperty("course")
+      expect(courseDetails?.properties).toHaveProperty("exercises")
+      expect(courseDetails?.properties).toHaveProperty("unlockables")
+    })
+  })
+})

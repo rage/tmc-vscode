@@ -1,11 +1,12 @@
 {
-    "compilerOptions": {
-        "noEmit": true,
-        "module": "commonjs",
-        "target": "ES2022",
-        "lib": ["ES2022"],
-        "sourceMap": true,
-        "rootDir": ".",
-        "strict": true
-    }
+  // Shares the strict baseline with the rest of the workspace.
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    // DOM for the callbacks page.evaluate runs in the window.
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    // fixtures.ts reads the VS Code test version from ../config.js
+    "allowJs": true
+  },
+  "include": ["**/*", "../playwright.config.ts"]
 }

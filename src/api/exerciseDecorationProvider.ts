@@ -1,88 +1,92 @@
-import WorkspaceManager, { WorkspaceExercise } from "../api/workspaceManager";
-import { UserData } from "../config/userdata";
-import { isSamePath } from "../utilities";
-import * as vscode from "vscode";
+import * as vscode from "vscode"
+
+import type { WorkspaceExercise } from "../api/workspaceManager"
+import type WorkspaceManager from "../api/workspaceManager"
+import type { UserData } from "../config/userdata"
 
 /**
  * Class that adds decorations like completion icons for exercises.
  */
 export default class ExerciseDecorationProvider
-    implements vscode.Disposable, vscode.FileDecorationProvider
+  implements vscode.Disposable, vscode.FileDecorationProvider
 {
-    public onDidChangeFileDecorations: vscode.Event<vscode.Uri | vscode.Uri[] | undefined>;
+  public onDidChangeFileDecorations: vscode.Event<vscode.Uri | vscode.Uri[] | undefined>
 
-    private static _passedExercise = new vscode.FileDecoration(
-        "⬤",
-        "Exercise completed!",
-        new vscode.ThemeColor("gitDecoration.addedResourceForeground"),
-    );
+  private static _passedExercise = new vscode.FileDecoration(
+    "⬤",
+    "Passed",
+    new vscode.ThemeColor("gitDecoration.addedResourceForeground"),
+  )
 
-    private static _partiallyCompletedExercise = new vscode.FileDecoration(
-        "○",
-        "Some points gained",
-        new vscode.ThemeColor("gitDecoration.modifiedResourceForeground"),
-    );
+  private static _partiallyCompletedExercise = new vscode.FileDecoration(
+    "○",
+    "Not passed, some points",
+    new vscode.ThemeColor("gitDecoration.modifiedResourceForeground"),
+  )
 
-    private static _missingExercise = new vscode.FileDecoration(
-        "ⓘ",
-        "Exercise not found in course. This could be an old exercise that has been renamed or removed from course.",
-        new vscode.ThemeColor("gitDecoration.ignoredResourceForeground"),
-    );
+  private static _outOfTriesExercise = new vscode.FileDecoration(
+    "⊘",
+    "No tries left, so this score is final.",
+    new vscode.ThemeColor("disabledForeground"),
+  )
 
-    private static _expiredExercise = new vscode.FileDecoration("✗", "Deadline exceeded.");
+  private static _missingExercise = new vscode.FileDecoration(
+    "ⓘ",
+    "This exercise is no longer in the course.",
+    new vscode.ThemeColor("gitDecoration.ignoredResourceForeground"),
+  )
 
-    private _eventEmiter: vscode.EventEmitter<vscode.Uri | vscode.Uri[]>;
+  private static _expiredExercise = new vscode.FileDecoration("✗", "Deadline passed")
 
-    /**
-     * Creates a new instance of an `ExerciseDecorationProvider`.
-     */
-    constructor(
-        private readonly userData: UserData,
-        private readonly workspaceManager: WorkspaceManager,
-    ) {
-        this._eventEmiter = new vscode.EventEmitter();
-        this.onDidChangeFileDecorations = this._eventEmiter.event;
+  private _eventEmiter: vscode.EventEmitter<vscode.Uri | vscode.Uri[]>
+
+  public constructor(
+    private readonly userData: UserData,
+    private readonly workspaceManager: WorkspaceManager,
+  ) {
+    this._eventEmiter = new vscode.EventEmitter()
+    this.onDidChangeFileDecorations = this._eventEmiter.event
+  }
+
+  public dispose(): void {
+    this._eventEmiter.dispose()
+  }
+
+  public provideFileDecoration(uri: vscode.Uri): vscode.ProviderResult<vscode.FileDecoration> {
+    const exercise = this.workspaceManager.getExerciseByPath(uri)
+    if (!exercise) {
+      return
     }
 
-    public dispose(): void {
-        this._eventEmiter.dispose();
+    const stored = this.userData.getExercise(exercise.id)
+    if (stored.err) {
+      return ExerciseDecorationProvider._missingExercise
+    }
+    const apiExercise = stored.val.exercise.data
+
+    if (apiExercise.passed) {
+      return ExerciseDecorationProvider._passedExercise
+    }
+    if ("outOfTries" in apiExercise && apiExercise.outOfTries) {
+      return ExerciseDecorationProvider._outOfTriesExercise
     }
 
-    public provideFileDecoration(uri: vscode.Uri): vscode.ProviderResult<vscode.FileDecoration> {
-        const exercise = this.workspaceManager.getExerciseByPath(uri);
-        if (!exercise || !isSamePath(exercise.uri.fsPath, uri.fsPath)) {
-            return;
-        }
-
-        const apiExercise = this.userData.getExerciseByName(
-            exercise.courseSlug,
-            exercise.exerciseSlug,
-        );
-        if (!apiExercise) {
-            return ExerciseDecorationProvider._missingExercise;
-        }
-
-        if (apiExercise.passed) {
-            return ExerciseDecorationProvider._passedExercise;
-        }
-
-        const deadlinePassed = apiExercise.deadline
-            ? Date.now() > Date.parse(apiExercise.deadline)
-            : undefined;
-        if (deadlinePassed) {
-            return ExerciseDecorationProvider._expiredExercise;
-        }
-
-        if (apiExercise.awardedPoints > 0) {
-            return ExerciseDecorationProvider._partiallyCompletedExercise;
-        }
+    const deadlinePassed = apiExercise.deadline
+      ? Date.now() > Date.parse(apiExercise.deadline)
+      : undefined
+    if (deadlinePassed) {
+      return ExerciseDecorationProvider._expiredExercise
     }
 
-    /**
-     * Trigger decorator event for given exercises. Requires this object to be registered with
-     * `vscode.window.registerFileDecorationProvider` for any effects to take any effect.
-     */
-    public updateDecorationsForExercises(...exercises: ReadonlyArray<WorkspaceExercise>): void {
-        this._eventEmiter.fire(exercises.map((x) => x.uri));
+    if (apiExercise.awardedPoints > 0) {
+      return ExerciseDecorationProvider._partiallyCompletedExercise
     }
+
+    return undefined
+  }
+
+  /** Refreshes the decorations of `exercises`; needs prior `registerFileDecorationProvider`. */
+  public updateDecorationsForExercises(...exercises: readonly WorkspaceExercise[]): void {
+    this._eventEmiter.fire(exercises.map((x) => x.uri))
+  }
 }

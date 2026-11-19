@@ -1,0 +1,102 @@
+import { Err } from "ts-results"
+
+import { addNewCourse } from "../../actions/addNewCourse"
+import type { ReadyActionContext } from "../../actions/types"
+import type Langs from "../../api/langs"
+import type WorkspaceManager from "../../api/workspaceManager"
+import { UserData } from "../../config/userdata"
+import Storage from "../../storage"
+import { idOfMoocCourse } from "../fixtures/identifiers"
+import { MOOC_COURSE_UUID, MOOC_EXERCISE_UUID, moocCourse } from "../fixtures/tmc"
+import { createMockActionContext } from "../mocks/actionContext"
+import type { TMCMockValues } from "../mocks/tmc"
+import { createTMCMock } from "../mocks/tmc"
+import { createMockContext } from "../mocks/vscode"
+import { createWorkspaceMangerMock } from "../mocks/workspaceManager"
+
+suite("addNewCourse action (mooc)", function () {
+  let tmcMock: Langs
+  let tmcMockValues: TMCMockValues
+  let userData: UserData
+  let workspaceManagerMock: WorkspaceManager
+  let createWorkspaceFile: ReturnType<typeof vi.fn>
+
+  const actionContext = (): ReadyActionContext => ({
+    ...createMockActionContext({
+      startup: { langs: tmcMock, userData, workspaceManager: workspaceManagerMock },
+    }),
+  })
+
+  beforeEach(async function () {
+    ;[tmcMock, tmcMockValues] = createTMCMock()
+    ;[workspaceManagerMock] = createWorkspaceMangerMock()
+    createWorkspaceFile = vi.fn()
+    workspaceManagerMock.createWorkspaceFile = createWorkspaceFile as never
+    const storage = new Storage(createMockContext())
+    await storage.updateUserData({ courses: [], mooc_courses: [] })
+    userData = new UserData(storage)
+  })
+
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("constructs MoocLocalCourseData from the fetched course", async function () {
+    const result = await addNewCourse(
+      actionContext(),
+      "unused-org-slug",
+      idOfMoocCourse(MOOC_COURSE_UUID),
+    )
+    expect(result.ok).toBe(true)
+    const stored = userData.getMoocCourses()[0]
+    // The course id is the sole client-side course key.
+    expect(stored?.id).toBe(moocCourse.id)
+    expect(stored?.name).toBe(moocCourse.slug)
+    expect(stored?.title).toBe(moocCourse.name)
+    // Organization comes from organization_name, not the passed slug.
+    expect(stored?.organization).toBe(moocCourse.organization_name)
+    expect(createWorkspaceFile).toHaveBeenCalledWith(moocCourse.slug, "mooc")
+    // Keyed by exercise id, which the bulk download subcommand resolves `--exercise-id` against.
+    expect(stored?.exercises.map((e) => e.id)).toEqual([MOOC_EXERCISE_UUID])
+    expect(stored?.exercises[0]?.name).toBe("mooc_hello")
+    // Points and passed state come from the course's progress (fixture: passed, 1/1).
+    expect(stored?.exercises[0]?.passed).toBe(true)
+    expect(stored?.awardedPoints).toBe(1)
+    expect(stored?.availablePoints).toBe(1)
+  })
+
+  test("propagates a Langs error and adds no course", async function () {
+    tmcMockValues.getMoocCourseData = Err(new Error("boom"))
+    const result = await addNewCourse(
+      actionContext(),
+      "unused-org-slug",
+      idOfMoocCourse(MOOC_COURSE_UUID),
+    )
+    expect(result.err).toBe(true)
+    expect(userData.getMoocCourses()).toEqual([])
+  })
+
+  test("re-adding an already-added course fails gracefully instead of throwing", async function () {
+    const first = await addNewCourse(
+      actionContext(),
+      "unused-org-slug",
+      idOfMoocCourse(MOOC_COURSE_UUID),
+    )
+    expect(first.ok).toBe(true)
+    expect(userData.getMoocCourses()).toHaveLength(1)
+
+    // The underlying addCourse throws on a duplicate id; addNewCourse must return an Err.
+    let second: Awaited<ReturnType<typeof addNewCourse>> | undefined
+    await expect(
+      (async () => {
+        second = await addNewCourse(
+          actionContext(),
+          "unused-org-slug",
+          idOfMoocCourse(MOOC_COURSE_UUID),
+        )
+      })(),
+    ).resolves.not.toThrow()
+    expect(second?.err).toBe(true)
+    expect(userData.getMoocCourses()).toHaveLength(1)
+  })
+})

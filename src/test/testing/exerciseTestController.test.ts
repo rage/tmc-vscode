@@ -1,0 +1,914 @@
+import * as fs from "fs"
+import * as os from "os"
+import * as path from "path"
+
+import { Err, Ok } from "ts-results"
+import { vi } from "vitest"
+import * as vscode from "vscode"
+
+import type { RunResult, StyleValidationResult } from "../../../shared/langsSchema"
+import type { CourseAccessLoss, SubmissionView } from "../../../shared/lib"
+import { BaseError, LocalCourseData } from "../../../shared/lib"
+import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
+import type { AiUseGate } from "../../api/aiUseGate"
+import type WorkspaceManager from "../../api/workspaceManager"
+import type { WorkspaceExercise } from "../../api/workspaceManager"
+import { ExerciseStatus } from "../../api/workspaceManager"
+import {
+  AiUseRefusedError,
+  BottleneckError,
+  EmptyLangsResponseError,
+  RuntimeError,
+  SHOW_AI_USE_PROBLEM_COMMAND,
+  TRUST_COURSE_WORKSPACE_COMMAND,
+  WorkspaceUntrustedError,
+} from "../../errors"
+import { testedLocallyView } from "../../panels/submissionView"
+import { CheckstyleDiagnostics } from "../../testing/checkstyleDiagnostics"
+import { ExerciseTestController } from "../../testing/exerciseTestController"
+import { exerciseOperations } from "../../ui/exerciseOperations"
+import { submissionViews } from "../../ui/submissionViews"
+import { tmcCourseExercise, tmcLocalCourse } from "../fixtures/courses"
+import { idOfTmcExercise } from "../fixtures/identifiers"
+import { createMockActionContext } from "../mocks/actionContext"
+import { createDialogMock } from "../mocks/dialog"
+import { exerciseLookupOver } from "../mocks/userdata"
+import { autoMock } from "../support/mock"
+import { restrictedTrustGate } from "../support/trustGate"
+
+vi.mock("../../window", () => ({ resolvePythonInterpreter: () => undefined }))
+
+const COURSE_SLUG = "python-course"
+
+type Reported = [state: string, itemId: string, message?: vscode.TestMessage | vscode.TestMessage[]]
+
+interface FakeTestItem extends vscode.TestItem {
+  children: vscode.TestItemCollection & { size: number }
+}
+
+interface FakeTestRun {
+  name: string | undefined
+  results: Reported[]
+  output: { output: string; test?: vscode.TestItem }[]
+  ended: boolean
+  cancel: () => void
+}
+
+interface FakeTestController {
+  items: vscode.TestItemCollection & { size: number }
+  profiles: { label: string; isDefault: boolean; runHandler: vscode.TestRunProfile["runHandler"] }[]
+  runs: FakeTestRun[]
+}
+
+function course(options: {
+  examMode?: boolean | undefined
+  disabled?: boolean | undefined
+  deadline?: string | undefined
+  accessLoss?: CourseAccessLoss | undefined
+  slugs: string[]
+}) {
+  return tmcLocalCourse({
+    name: COURSE_SLUG,
+    exercises: options.slugs.map((name, index) =>
+      tmcCourseExercise({ id: index + 1, name, deadline: options.deadline ?? null }),
+    ),
+    availablePoints: 1,
+    perhapsExamMode: options.examMode ?? false,
+    disabled: options.disabled ?? false,
+    ...(options.accessLoss ? { accessLoss: options.accessLoss } : {}),
+  })
+}
+
+const passingRun: RunResult = {
+  status: "PASSED",
+  logs: { stdout: "Hello\nWorld\n", stderr: "" },
+  testResults: [
+    {
+      name: "test.test_hello.Hello.test_first",
+      successful: true,
+      points: ["1.1"],
+      message: "",
+      exception: [],
+    },
+    {
+      name: "test.test_hello.Hello.test_second",
+      successful: true,
+      points: ["1.2"],
+      message: "",
+      exception: [],
+    },
+  ],
+}
+
+interface Setup {
+  controller: ExerciseTestController
+  fake: FakeTestController
+  actionContext: ReadyActionContext
+  exercises: WorkspaceExercise[]
+  runTests: ReturnType<typeof vi.fn>
+  interrupts: ReturnType<typeof vi.fn>[]
+  diagnostics: CheckstyleDiagnostics
+}
+
+let tempDir: string
+
+beforeEach(function () {
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "r3-controller-"))
+})
+
+afterEach(function () {
+  fs.rmSync(tempDir, { recursive: true, force: true })
+  submissionViews.clear()
+})
+
+function setup(
+  options: {
+    run?: Promise<unknown> | unknown
+    checkstyle?: StyleValidationResult | Error
+    examMode?: boolean
+    disabled?: boolean
+    deadline?: string
+    accessLoss?: CourseAccessLoss
+    loggedIn?: boolean
+    slugs?: string[]
+    closedSlugs?: string[]
+    refusal?: AiUseRefusedError
+  } = {},
+): Setup {
+  const slugs = options.slugs ?? ["part01-01_hello"]
+  const storedCourse = course({
+    examMode: options.examMode,
+    disabled: options.disabled,
+    deadline: options.deadline,
+    accessLoss: options.accessLoss,
+    slugs,
+  })
+  const exercises: WorkspaceExercise[] = [...slugs, ...(options.closedSlugs ?? [])].map(
+    (slug, index) => ({
+      id: idOfTmcExercise(index + 1),
+      courseId: LocalCourseData.getCourseId(storedCourse),
+      backend: "tmc",
+      courseSlug: COURSE_SLUG,
+      exerciseSlug: slug,
+      status: slugs.includes(slug) ? ExerciseStatus.Open : ExerciseStatus.Closed,
+      uri: vscode.Uri.file(path.join(tempDir, slug)),
+    }),
+  )
+  const interrupts: ReturnType<typeof vi.fn>[] = []
+  const runTests = vi.fn(() => {
+    const interrupt = vi.fn()
+    interrupts.push(interrupt)
+    return { process: Promise.resolve(options.run ?? Ok(passingRun)), interrupt }
+  })
+  const checkstyle = options.checkstyle ?? { strategy: "DISABLED", validation_errors: null }
+  const [dialog] = createDialogMock()
+  const actionContext: ReadyActionContext = {
+    ...createMockActionContext({
+      loggedIn: options.loggedIn ?? true,
+      startup: {
+        aiUseGate: { refusal: async () => options.refusal } as unknown as AiUseGate,
+        langs: {
+          runTests,
+          runCheckstyle: () => {
+            const interrupt = vi.fn()
+            interrupts.push(interrupt)
+            return {
+              process: Promise.resolve(
+                checkstyle instanceof Error ? Err(checkstyle) : Ok(checkstyle),
+              ),
+              interrupt,
+            }
+          },
+        } as unknown as ReadyStartup["langs"],
+        userData: {
+          getCourse: () => Ok(storedCourse),
+          getExercise: exerciseLookupOver([storedCourse]),
+        } as unknown as ReadyStartup["userData"],
+        workspaceManager: {
+          activeCourse: COURSE_SLUG,
+          activeCourseBackend: "tmc",
+          getExercisesByCourseSlug: () => exercises,
+        } as unknown as WorkspaceManager,
+      },
+    }),
+    dialog,
+  }
+  const diagnostics = new CheckstyleDiagnostics(
+    vscode.languages.createDiagnosticCollection("tmc-checkstyle"),
+  )
+  const controller = new ExerciseTestController(actionContext, diagnostics)
+  const fake = vi.mocked(vscode.tests.createTestController).mock.results.at(-1)
+    ?.value as FakeTestController
+  return { controller, fake, actionContext, exercises, runTests, interrupts, diagnostics }
+}
+
+/** The results screen's local pass, as of any run. */
+function localPass(): SubmissionView {
+  return { ...testedLocallyView(0), localPassAt: expect.any(Number) as number }
+}
+
+function exerciseAt(s: Setup, index = 0): WorkspaceExercise {
+  const exercise = s.exercises[index]
+  if (!exercise) {
+    throw new Error(`no exercise ${index}`)
+  }
+  return exercise
+}
+
+function itemOf(s: Setup, exercise: WorkspaceExercise): FakeTestItem {
+  const item = s.fake.items.get(exercise.uri.toString())
+  if (!item) {
+    throw new Error(`no item for ${exercise.exerciseSlug}`)
+  }
+  return item as FakeTestItem
+}
+
+function lastRun(s: Setup): FakeTestRun {
+  const run = s.fake.runs.at(-1)
+  if (!run) {
+    throw new Error("no run")
+  }
+  return run
+}
+
+function finalStates(run: FakeTestRun): Map<string, Reported> {
+  return new Map(
+    run.results
+      .filter(([state]) => state !== "enqueued" && state !== "started")
+      .map((reported) => [reported[1], reported]),
+  )
+}
+
+function messagesOf(reported: Reported | undefined): vscode.TestMessage[] {
+  const message = reported?.[2]
+  return message === undefined ? [] : Array.isArray(message) ? message : [message]
+}
+
+suite("ExerciseTestController", function () {
+  test("has one item per exercise open in the course workspace and a default run profile", function () {
+    const s = setup({ slugs: ["a", "b"], closedSlugs: ["c"] })
+
+    const labels: string[] = []
+    s.fake.items.forEach((item) => void labels.push(item.label))
+    expect(labels.toSorted()).toEqual(["a", "b"])
+    expect(itemOf(s, exerciseAt(s)).uri?.fsPath).toBe(exerciseAt(s).uri.fsPath)
+    expect(s.fake.profiles).toEqual([
+      expect.objectContaining({ label: "Run Tests", isDefault: true }),
+    ])
+  })
+
+  test("re-syncing keeps an exercise's item and the tests found under it", async function () {
+    const s = setup()
+    await s.controller.runExercise(exerciseAt(s))
+    const item = itemOf(s, exerciseAt(s))
+
+    s.controller.syncExercises()
+
+    expect(itemOf(s, exerciseAt(s))).toBe(item)
+    expect(item.children.size).toBe(2)
+  })
+
+  test("a passing run reports each test, the exercise, its output and offers Submit", async function () {
+    const s = setup()
+    const exercise = exerciseAt(s)
+
+    const result = await s.controller.runExercise(exercise)
+
+    expect(result.ok).toBe(true)
+    const run = lastRun(s)
+    expect(run.ended).toBe(true)
+    expect(run.name).toBe("part01-01_hello")
+    const item = itemOf(s, exercise)
+    const states = finalStates(run)
+    expect(states.get(item.id)?.[0]).toBe("passed")
+    item.children.forEach((child) => expect(states.get(child.id)?.[0]).toBe("passed"))
+    expect(item.description).toBe("2/2 tests passed")
+    expect(run.output).toEqual([{ output: "stdout:\r\nHello\r\nWorld\r\n\r\n", test: item }])
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      "setContext",
+      "test-my-code:HasRunTests",
+      true,
+    )
+
+    expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+    expect(submissionViews.latestFor(exercise.id)?.view).toEqual(localPass())
+  })
+
+  test("a passing run opens the results panel without taking the focus", async function () {
+    const s = setup()
+    const exercise = exerciseAt(s)
+    const opened = vi.fn()
+    const subscription = submissionViews.onDidOpen(opened)
+    onTestFinished(() => subscription.dispose())
+
+    await s.controller.runExercise(exercise)
+
+    expect(opened).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ type: "ExerciseSubmission", exerciseId: exercise.id }),
+    )
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
+      "tmc.showExerciseResults",
+      expect.anything(),
+    )
+  })
+
+  test("a passing run past the deadline shows in the results panel, which says why", async function () {
+    const s = setup({ deadline: "2000-01-01T00:00:00Z" })
+
+    await s.controller.runExercise(exerciseAt(s))
+
+    expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+    expect(submissionViews.latestFor(exerciseAt(s).id)?.view.phase).toBe("testedLocally")
+  })
+
+  test("a run langs stopped for taking too long says so, not as failed tests", async function () {
+    const s = setup({
+      run: Ok({
+        status: "TESTS_FAILED",
+        logs: {},
+        timedOutAfterMs: 60000n,
+        testResults: [
+          {
+            name: "Timeout test",
+            successful: false,
+            points: [],
+            message: "timed out",
+            exception: [],
+          },
+        ],
+      }),
+    })
+    const exercise = exerciseAt(s)
+
+    await s.controller.runExercise(exercise)
+
+    const item = itemOf(s, exercise)
+    const reported = finalStates(lastRun(s)).get(item.id)
+    expect(reported?.[0]).toBe("failed")
+    expect(messagesOf(reported).map((message) => message.message)).toEqual([
+      "The tests did not finish within 60 s, so they were stopped. An infinite loop is the usual cause.",
+    ])
+    expect(item.children.size).toBe(0)
+    expect(s.actionContext.dialog.warningNotification).toHaveBeenCalledExactlyOnceWith(
+      "part01-01_hello: The tests did not finish within 60 s, so they were stopped. An infinite loop is the usual cause.",
+    )
+  })
+
+  test("a JDK that does not start says how to point at a working one, not to reset", async function () {
+    const s = setup({
+      run: Err(
+        new RuntimeError(
+          "Java at /usr/lib/jvm/broken does not start; point JAVA_HOME at a working JDK.",
+          "Error occurred during initialization of VM",
+        ),
+      ),
+    })
+    const exercise = exerciseAt(s)
+
+    await s.controller.runExercise(exercise)
+
+    const reported = finalStates(lastRun(s)).get(itemOf(s, exercise).id)
+    const text = String(messagesOf(reported)[0]?.message)
+    expect(text).toContain("Set testMyCode.javaHome")
+    expect(text).not.toContain("Reset Exercise")
+    expect(s.actionContext.dialog.warningNotification).toHaveBeenCalledWith(
+      expect.stringContaining("Java does not start"),
+      ["Open Settings", expect.any(Function)],
+    )
+  })
+
+  test("a JVM that dies inside the CLI is headed as Java not starting, with its own lines", async function () {
+    const s = setup({
+      run: Err(
+        new EmptyLangsResponseError(
+          "Langs process ended without result data.",
+          "Error occurred during initialization of VM\nUnable to load zip library: /usr/lib/jvm/x/lib/libzip.so",
+        ),
+      ),
+    })
+    const exercise = exerciseAt(s)
+
+    await s.controller.runExercise(exercise)
+
+    const reported = finalStates(lastRun(s)).get(itemOf(s, exercise).id)
+    const text = String(messagesOf(reported)[0]?.message)
+    expect(text.split("\n").slice(0, 2)).toEqual([
+      "The tests could not be run: Java does not start.",
+      "Set testMyCode.javaHome (Settings › TestMyCode › Java Home) to a working JDK.",
+    ])
+    expect(text).toContain("Unable to load zip library")
+    expect(text).not.toContain("without result data")
+  })
+
+  test("a failing test is reported at its stack frame, and Submit is not offered", async function () {
+    const testFile = path.join(tempDir, "part01-01_hello", "test", "test_hello.py")
+    const s = setup({
+      run: Ok({
+        status: "TESTS_FAILED",
+        logs: {},
+        testResults: [
+          passingRun.testResults[0],
+          {
+            name: "test.test_hello.Hello.test_second",
+            successful: false,
+            points: [],
+            message: "'Hi' != 'Hello'",
+            exception: [
+              `  File "${testFile}", line 12, in test_second\n    self.assertEqual(greet(), "Hello")\n`,
+            ],
+          },
+        ],
+      }),
+    })
+    const exercise = exerciseAt(s)
+
+    await s.controller.runExercise(exercise)
+
+    const item = itemOf(s, exercise)
+    const states = finalStates(lastRun(s))
+    const failedChild = item.children.get(`${item.id}/test.test_hello.Hello.test_second`)
+    const [failure] = messagesOf(states.get(failedChild?.id ?? ""))
+    expect(failure?.message).toBe("'Hi' != 'Hello'")
+    expect(failure?.location?.uri.toString()).toBe(vscode.Uri.file(testFile).toString())
+    expect(failure?.location?.range.start.line).toBe(11)
+    expect(states.get(item.id)?.[0]).toBe("failed")
+    expect(messagesOf(states.get(item.id)).map((m) => m.message)).toEqual(["1 of 2 tests failed."])
+    expect(item.description).toBe("1/2 tests passed")
+    expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+  })
+
+  test("a run that could not run the tests drops the tests an earlier run found", async function () {
+    const s = setup()
+    const exercise = exerciseAt(s)
+    await s.controller.runExercise(exercise)
+    const item = itemOf(s, exercise)
+    expect(item.children.size).toBe(2)
+    s.runTests.mockReturnValueOnce({
+      process: Promise.resolve(Err(new Error("compilation failed"))),
+      interrupt: vi.fn(),
+    })
+
+    await s.controller.runExercise(exercise)
+
+    expect(finalStates(lastRun(s)).get(item.id)?.[0]).toBe("errored")
+    expect(item.children.size).toBe(0)
+    expect(item.description).toBe("")
+  })
+
+  test("marks the exercise as being tested while the run lasts", async function () {
+    const s = setup()
+    const exercise = exerciseAt(s)
+    let during: unknown
+    s.runTests.mockImplementation(() => {
+      during = exerciseOperations.current(idOfTmcExercise(1))
+      return { process: Promise.resolve(Ok(passingRun)), interrupt: vi.fn() }
+    })
+
+    await s.controller.runExercise(exercise)
+
+    expect(during).toBe("testing")
+    expect(exerciseOperations.current(idOfTmcExercise(1))).toBeUndefined()
+  })
+
+  test("running one test runs its whole exercise once", async function () {
+    const s = setup()
+    await s.controller.runExercise(exerciseAt(s))
+    const item = itemOf(s, exerciseAt(s))
+    const [, child] = [...item.children][0] as [string, vscode.TestItem]
+    s.runTests.mockClear()
+
+    const [profile] = s.fake.profiles
+    await profile?.runHandler(
+      new vscode.TestRunRequest([child, item]),
+      new vscode.CancellationTokenSource().token,
+    )
+
+    expect(s.runTests).toHaveBeenCalledExactlyOnceWith(exerciseAt(s).uri.fsPath, undefined)
+  })
+
+  test("a compile failure marks the exercise errored with the compiler output", async function () {
+    const s = setup({
+      run: Ok({
+        status: "COMPILE_FAILED",
+        logs: { stdout: "", stderr: "Hello.java:3: error: ';' expected" },
+        testResults: [],
+      }),
+    })
+
+    await s.controller.runExercise(exerciseAt(s))
+
+    const reported = finalStates(lastRun(s)).get(itemOf(s, exerciseAt(s)).id)
+    expect(reported?.[0]).toBe("errored")
+    expect(messagesOf(reported)[0]?.message).toBe(
+      "The exercise did not compile.\n\nHello.java:3: error: ';' expected",
+    )
+  })
+
+  test("a run the CLI could not start is errored with the error's details", async function () {
+    const s = setup({ run: Err(new BaseError("No Python found", "python3: not found")) })
+
+    await s.controller.runExercise(exerciseAt(s))
+
+    const reported = finalStates(lastRun(s)).get(itemOf(s, exerciseAt(s)).id)
+    expect(reported?.[0]).toBe("errored")
+    expect(messagesOf(reported)[0]?.message).toBe(
+      "The tests could not be run: No Python found\n\npython3: not found",
+    )
+  })
+
+  test("a broken exercise leads with the CLI's deepest cause and suggests a reset", async function () {
+    const trace = [
+      "Caused by: Failed to run tests for exercise at /ex",
+      "Caused by: Failed to deserialize YAML from file at /ex/.tmcproject.yml",
+      "Caused by: mapping values are not allowed in this context at line 1 column 9",
+    ].join("\n")
+    const s = setup({
+      run: Err(new RuntimeError("Failed to run tests for exercise at /ex", trace)),
+    })
+
+    await s.controller.runExercise(exerciseAt(s))
+
+    const reported = finalStates(lastRun(s)).get(itemOf(s, exerciseAt(s)).id)
+    expect(messagesOf(reported)[0]?.message).toBe(
+      [
+        "The tests could not be run: mapping values are not allowed in this context at line 1 column 9.",
+        "Failed to deserialize YAML from file at /ex/.tmcproject.yml.",
+        "Failed to run tests for exercise at /ex.",
+        "If the exercise's files are damaged or incomplete, Reset Exercise restores its template.",
+        "",
+        trace,
+      ].join("\n"),
+    )
+  })
+
+  test("an exercise missing its tests is said to be missing files", async function () {
+    const trace = [
+      "Caused by: Failed to run tests for exercise at /ex",
+      "Caused by: No matching plugin found for /ex",
+    ].join("\n")
+    const s = setup({
+      run: Err(new RuntimeError("Failed to run tests for exercise at /ex", trace)),
+    })
+
+    await s.controller.runExercise(exerciseAt(s))
+
+    const reported = finalStates(lastRun(s)).get(itemOf(s, exerciseAt(s)).id)
+    expect(messagesOf(reported)[0]?.message).toMatch(
+      /^The tests could not be run: TestMyCode cannot tell what kind of exercise this is: files it needs, such as the test folder, are missing\.\nFailed to run tests for exercise at \/ex\.\nIf the exercise's files are damaged/,
+    )
+  })
+
+  test("a run that found no tests suggests a reset", async function () {
+    const s = setup({
+      run: Ok({
+        status: "TESTS_FAILED",
+        logs: {},
+        testResults: [
+          {
+            name: "Tests",
+            successful: false,
+            points: [],
+            message: "No tests found. Did you terminate your program with an exit() command?",
+            exception: [],
+          },
+        ],
+      }),
+    })
+    const exercise = exerciseAt(s)
+
+    await s.controller.runExercise(exercise)
+
+    const reported = finalStates(lastRun(s)).get(itemOf(s, exercise).id)
+    expect(messagesOf(reported).map((message) => message.message)).toContain(
+      "If the exercise's tests are missing, Reset Exercise restores its template.",
+    )
+  })
+
+  test("exam mode skips the exercise and says why in Test Results alone", async function () {
+    const s = setup({ examMode: true })
+
+    await s.controller.runExercise(exerciseAt(s))
+
+    const run = lastRun(s)
+    expect(finalStates(run).get(itemOf(s, exerciseAt(s)).id)?.[0]).toBe("skipped")
+    expect(run.output[0]?.output).toContain("not run locally in exam mode")
+    expect(s.runTests).not.toHaveBeenCalled()
+    expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+  })
+
+  test("code quality problems fail an otherwise passing exercise and show as diagnostics", async function () {
+    const source = path.join(tempDir, "part01-01_hello", "src", "Hello.java")
+    fs.mkdirSync(path.dirname(source), { recursive: true })
+    fs.writeFileSync(source, "class Hello {}\n")
+    const s = setup({
+      checkstyle: {
+        strategy: "FAIL",
+        validation_errors: {
+          "Hello.java": [
+            {
+              line: 1,
+              column: 1,
+              message: "Missing a Javadoc comment.",
+              source_name: "x.JavadocCheck",
+            },
+          ],
+        },
+      },
+    })
+
+    await s.controller.runExercise(exerciseAt(s))
+
+    const reported = finalStates(lastRun(s)).get(itemOf(s, exerciseAt(s)).id)
+    expect(reported?.[0]).toBe("failed")
+    expect(messagesOf(reported)[0]?.message).toMatch(/found 1 problem\. /)
+    const collection = vi.mocked(vscode.languages.createDiagnosticCollection).mock.results.at(-1)
+      ?.value as vscode.DiagnosticCollection
+    expect(collection.get(vscode.Uri.file(source))).toHaveLength(1)
+    expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+  })
+
+  test("a code quality check that fails to run is noted in the output, not failed", async function () {
+    const s = setup({ checkstyle: new Error("Checkstyle crashed") })
+
+    await s.controller.runExercise(exerciseAt(s))
+
+    const run = lastRun(s)
+    expect(finalStates(run).get(itemOf(s, exerciseAt(s)).id)?.[0]).toBe("passed")
+    expect(run.output.map(({ output }) => output)).toContain(
+      "Code quality checks could not be run: Checkstyle crashed\r\n",
+    )
+  })
+
+  test("cancelling the run stops the CLI and skips the exercise", async function () {
+    let finish!: (value: unknown) => void
+    const s = setup({
+      run: new Promise((resolve) => {
+        finish = resolve
+      }),
+    })
+
+    const running = s.controller.runExercise(exerciseAt(s))
+    await vi.waitFor(() => expect(s.interrupts).toHaveLength(2))
+    lastRun(s).cancel()
+    for (const interrupt of s.interrupts) {
+      expect(interrupt).toHaveBeenCalled()
+    }
+    finish(Ok({ status: "TESTRUN_INTERRUPTED", logs: {}, testResults: [] }))
+    await running
+
+    expect(finalStates(lastRun(s)).get(itemOf(s, exerciseAt(s)).id)?.[0]).toBe("skipped")
+  })
+
+  test("a second run of a busy exercise is skipped and handed back as busy", async function () {
+    let finish!: (value: unknown) => void
+    const s = setup({
+      run: new Promise((resolve) => {
+        finish = resolve
+      }),
+    })
+
+    const first = s.controller.runExercise(exerciseAt(s))
+    const second = await s.controller.runExercise(exerciseAt(s))
+    finish(Ok(passingRun))
+    await first
+
+    expect(second.err && second.val).toBeInstanceOf(BottleneckError)
+    expect(finalStates(s.fake.runs[1] as FakeTestRun).get(itemOf(s, exerciseAt(s)).id)?.[0]).toBe(
+      "skipped",
+    )
+  })
+
+  test("logged out, a pass shows in the results screen, which offers to log in", async function () {
+    const s = setup({ loggedIn: false })
+    const opened = vi.fn()
+    const subscription = submissionViews.onDidOpen(opened)
+    onTestFinished(() => {
+      subscription.dispose()
+      submissionViews.clear()
+    })
+
+    await s.controller.runExercise(exerciseAt(s))
+
+    expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+    const [panel] = opened.mock.calls[0] as [{ id: number }]
+    expect(submissionViews.latestView(panel.id)).toEqual(localPass())
+  })
+
+  test("Submit is not offered for a disabled course, or for several exercises", async function () {
+    const disabled = setup({ disabled: true })
+    await disabled.controller.runExercise(exerciseAt(disabled))
+    expect(disabled.actionContext.dialog.notification).not.toHaveBeenCalled()
+
+    const several = setup({ slugs: ["a", "b"] })
+    await several.fake.profiles[0]?.runHandler(
+      new vscode.TestRunRequest(),
+      new vscode.CancellationTokenSource().token,
+    )
+    expect(several.runTests).toHaveBeenCalledTimes(2)
+    expect(several.actionContext.dialog.notification).not.toHaveBeenCalled()
+  })
+
+  suite("with the exercise's results panel", function () {
+    const panel = {
+      id: 900,
+      type: "ExerciseSubmission",
+      exerciseId: idOfTmcExercise(1),
+      backend: "tmc",
+      exerciseName: "part01-01_hello",
+      courseTitle: "Python Course",
+    } as const
+
+    function showResults(view: Partial<SubmissionView> = {}, isOnScreen = true): void {
+      submissionViews.update({
+        panel,
+        view: {
+          ...testedLocallyView(0),
+          phase: "finished",
+          headline: "Some tests failed",
+          ...view,
+        },
+        shouldReopen: false,
+      })
+      submissionViews.setShown(isOnScreen ? panel : undefined)
+      onTestFinished(() => {
+        submissionViews.setShown(undefined)
+        submissionViews.clear()
+      })
+    }
+
+    test("on screen, a pass shows there with Submit, and toasts nothing", async function () {
+      const s = setup()
+      showResults()
+
+      await s.controller.runExercise(exerciseAt(s))
+
+      expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+      expect(submissionViews.latestView(panel.id)).toEqual(localPass())
+    })
+
+    test("on screen, a pass past the deadline shows there too, which says why", async function () {
+      const s = setup({ deadline: "2000-01-01T00:00:00Z" })
+      showResults()
+
+      await s.controller.runExercise(exerciseAt(s))
+
+      expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+      expect(submissionViews.latestView(panel.id)?.phase).toBe("testedLocally")
+    })
+
+    test("hidden, a pass opens the panel there too", async function () {
+      const s = setup()
+      showResults({}, false)
+      const opened = vi.fn()
+      const subscription = submissionViews.onDidOpen(opened)
+      onTestFinished(() => subscription.dispose())
+
+      await s.controller.runExercise(exerciseAt(s))
+
+      expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+      expect(opened).toHaveBeenCalledExactlyOnceWith(panel)
+      expect(submissionViews.latestView(panel.id)).toEqual(localPass())
+    })
+
+    test.each<[string, Partial<SubmissionView>]>([
+      ["still grading", { phase: "grading" }],
+      ["waiting to be checked again", { canKeepWaiting: true }],
+    ])("a panel %s keeps its submission, and nothing else shows", async function (_name, view) {
+      const s = setup()
+      showResults(view, false)
+
+      await s.controller.runExercise(exerciseAt(s))
+
+      expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+      expect(submissionViews.latestView(panel.id)?.phase).not.toBe("testedLocally")
+    })
+
+    test("logged out, the pass shows there too", async function () {
+      const s = setup({ loggedIn: false })
+      showResults()
+
+      await s.controller.runExercise(exerciseAt(s))
+
+      expect(s.actionContext.dialog.notification).not.toHaveBeenCalled()
+      expect(submissionViews.latestView(panel.id)).toEqual(localPass())
+    })
+  })
+
+  test("a test's exercise folder is found through its parent", async function () {
+    const s = setup()
+    await s.controller.runExercise(exerciseAt(s))
+    const item = itemOf(s, exerciseAt(s))
+    const [, child] = [...item.children][0] as [string, vscode.TestItem]
+
+    expect(s.controller.exerciseUriOf(child)).toBe(exerciseAt(s).uri)
+    expect(s.controller.exerciseUriOf(undefined)).toBeUndefined()
+  })
+})
+
+suite("ExerciseTestController while AI may be on", function () {
+  const refusal = new AiUseRefusedError(
+    "AI assistance must be off in this course. Disable Cline for this workspace.",
+    "Show Cline",
+  )
+
+  test("a Test Explorer run errors the item with the reason and its one remedy link", async function () {
+    const s = setup({ refusal })
+    const item = itemOf(s, exerciseAt(s))
+
+    await s.fake.profiles[0]?.runHandler(
+      new vscode.TestRunRequest([item]),
+      new vscode.CancellationTokenSource().token,
+    )
+
+    expect(s.runTests).not.toHaveBeenCalled()
+    const reported = finalStates(lastRun(s)).get(item.id)
+    expect(reported?.[0]).toBe("errored")
+    const message = messagesOf(reported)[0]?.message as vscode.MarkdownString
+    expect(message.value).toContain("Disable Cline for this workspace.")
+    expect(message.value).toContain(`[Show Cline](command:${SHOW_AI_USE_PROBLEM_COMMAND})`)
+    expect(message.isTrusted).toEqual({ enabledCommands: [SHOW_AI_USE_PROBLEM_COMMAND] })
+  })
+
+  test("a run the Run Tests command asks for is refused before any test run starts", async function () {
+    const s = setup({ refusal })
+
+    const result = await s.controller.runExercise(exerciseAt(s))
+
+    expect(result.err && result.val).toBe(refusal)
+    expect(s.fake.runs).toEqual([])
+    expect(s.runTests).not.toHaveBeenCalled()
+  })
+
+  test("a run the Run Tests command asks for checks AI use once", async function () {
+    const s = setup()
+    const refusalAsked = vi.spyOn(s.actionContext.startup.aiUseGate, "refusal")
+
+    await s.controller.runExercise(exerciseAt(s))
+
+    expect(refusalAsked).toHaveBeenCalledOnce()
+    expect(s.runTests).toHaveBeenCalledOnce()
+  })
+
+  test("exam mode still skips the run without asking", async function () {
+    const s = setup({ examMode: true })
+    const refusalAsked = vi.spyOn(s.actionContext.startup.aiUseGate, "refusal")
+
+    await s.fake.profiles[0]?.runHandler(
+      new vscode.TestRunRequest([itemOf(s, exerciseAt(s))]),
+      new vscode.CancellationTokenSource().token,
+    )
+
+    expect(finalStates(lastRun(s)).get(itemOf(s, exerciseAt(s)).id)?.[0]).toBe("skipped")
+    expect(refusalAsked).not.toHaveBeenCalled()
+  })
+})
+
+suite("ExerciseTestController in Restricted Mode", function () {
+  function restrictedSetup(): Setup & { retries: (() => void)[] } {
+    const s = setup()
+    const { trustGate, retries } = restrictedTrustGate()
+    s.actionContext.startup.trustGate = trustGate
+    return { ...s, retries }
+  }
+
+  test("a Test Explorer run errors every item with a link that trusts the workspace", async function () {
+    const s = restrictedSetup()
+    const item = itemOf(s, exerciseAt(s))
+
+    await s.fake.profiles[0]?.runHandler(
+      new vscode.TestRunRequest([item]),
+      new vscode.CancellationTokenSource().token,
+    )
+
+    expect(s.runTests).not.toHaveBeenCalled()
+    const reported = finalStates(lastRun(s)).get(item.id)
+    expect(reported?.[0]).toBe("errored")
+    const message = messagesOf(reported)[0]?.message as vscode.MarkdownString
+    expect(message.value).toContain(
+      `[Trust Course Workspace](command:${TRUST_COURSE_WORKSPACE_COMMAND})`,
+    )
+    expect(message.isTrusted).toEqual({ enabledCommands: [TRUST_COURSE_WORKSPACE_COMMAND] })
+  })
+
+  test("the refused run runs once the workspace is trusted", async function () {
+    const s = restrictedSetup()
+    const item = itemOf(s, exerciseAt(s))
+    await s.fake.profiles[0]?.runHandler(
+      new vscode.TestRunRequest([item]),
+      new vscode.CancellationTokenSource().token,
+    )
+
+    s.actionContext.startup.trustGate = autoMock<ReadyStartup["trustGate"]>()
+    s.retries.at(-1)?.()
+    await vi.waitFor(() => expect(s.runTests).toHaveBeenCalledOnce())
+  })
+
+  test("a run the Run Tests command asks for is refused before any test run starts", async function () {
+    const s = restrictedSetup()
+
+    const result = await s.controller.runExercise(exerciseAt(s))
+
+    expect(result.val).toBeInstanceOf(WorkspaceUntrustedError)
+    expect(s.fake.runs).toEqual([])
+  })
+})

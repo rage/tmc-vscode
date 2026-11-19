@@ -1,98 +1,95 @@
 <script lang="ts">
-    // "Need help?" button that can be expanded for a prompt to submit to paste
+  import type {
+    ExerciseSubmissionPanel,
+    ReplyValue,
+    TargetPanel,
+    WebviewError,
+  } from "../../../shared/lib"
+  import { announce } from "../utilities/a11y.svelte"
+  import { createRequester } from "../utilities/script"
+  import { uiState } from "../utilities/uiState.svelte"
+  import { vscode } from "../utilities/vscode"
+  import Button from "./Button.svelte"
+  import ErrorNotice from "./ErrorNotice.svelte"
+  import Spinner from "./Spinner.svelte"
 
-    import { writable } from "svelte/store";
-    import { vscode } from "../utilities/vscode";
-    import {
-        ExerciseSubmissionPanel,
-        ExerciseTestsPanel,
-        TargetPanel,
-        TestCourse,
-        TestExercise,
-    } from "../shared/shared";
+  interface Props {
+    /** The host pastes the exercise this panel shows. */
+    sourcePanel: TargetPanel<ExerciseSubmissionPanel>
+    /** Copies the paste link through the host. */
+    oncopy: (text: string) => void
+  }
 
-    export let hidden: boolean;
-    export let course: TestCourse;
-    export let exercise: TestExercise;
-    export let sourcePanel: TargetPanel<ExerciseTestsPanel | ExerciseSubmissionPanel>;
-    export let pasteUrl: string | undefined = undefined;
-    export let pasteError: string | undefined = undefined;
+  /** The body of the Get Help section: sends the exercise to the backend's pastebin. */
+  let { sourcePanel, oncopy }: Props = $props()
 
-    const pasting = writable<boolean>(false);
-    const showHelp = writable<boolean>(false);
+  const request = createRequester()
 
-    function toggleShowHelp() {
-        showHelp.update((val) => {
-            return !val;
-        });
+  let isPasting = $state<boolean>(false)
+  // The host answers a paste once, so its link is kept here for the panel to show again.
+  const pasted = uiState<ReplyValue<"pasteExercise"> | null>("paste", null)
+  let pasteError = $state<WebviewError | undefined>(undefined)
+
+  /** Sends the exercise, unless a send is already under way. */
+  export async function paste() {
+    if (isPasting) {
+      return
     }
-    function paste() {
-        pasteUrl = undefined;
-        pasteError = undefined;
-        pasting.set(true);
-        vscode.postMessage({
-            type: "pasteExercise",
-            course: course,
-            exercise: exercise,
-            requestingPanel: sourcePanel,
-        });
+    isPasting = true
+    pasted.current = null
+    pasteError = undefined
+    const outcome = await request("pasteExercise", { sourcePanel })
+    isPasting = false
+    if (outcome.ok) {
+      pasted.current = outcome.value
+      announce(
+        outcome.value.isReused ? "Your code is unchanged, so its link is the same" : "Link ready",
+      )
+    } else {
+      pasteError = outcome.error
     }
+  }
 </script>
 
-<vscode-button
-    role="button"
-    tabindex="0"
-    {hidden}
-    appearance="secondary"
-    on:click={toggleShowHelp}
-    on:keypress={toggleShowHelp}
-    enabled={false}
->
-    Need help?
-</vscode-button>
-<div class="help" hidden={!$showHelp}>
-    <h2 class="header">Submit to TMC Paste</h2>
-    <div>
-        You can submit your code to TMC Paste and share the link to the course discussion channel
-        and ask for help.
-    </div>
-    <div class="paste-button-container">
-        <vscode-button role="button" tabindex="0" on:click={paste} on:keypress={paste}>
-            Submit to TMC Paste
-        </vscode-button>
-    </div>
-    <div class="paste-results-container">
-        {#if pasteUrl !== undefined}
-            <div>
-                Paste available at <a href={pasteUrl}>{pasteUrl}</a>
-            </div>
-        {/if}
-        {#if pasteError !== undefined}
-            <div>
-                Failed to submit to TMC Paste: {pasteError}
-            </div>
-        {/if}
-        {#if $pasting && pasteUrl === undefined && pasteError === undefined}
-            <div>Sending to TMC Paste...</div>
-            <vscode-progress-ring />
-        {/if}
-    </div>
-</div>
+<p>
+  Send your code to the pastebin and share the link on the course's discussion channel to ask for
+  help.
+</p>
+{#if pasted.current !== null}
+  {@const { link, isReused } = pasted.current}
+  <p class="paste-url">
+    <span class="muted">Link:</span>
+    <span class="url">{link}</span>
+  </p>
+  {#if isReused}
+    <p class="muted">Your code is unchanged since you last sent it, so this is the same link.</p>
+  {/if}
+  <div class="actions">
+    <Button secondary icon="copy" onclick={() => oncopy(link)}>Copy Link</Button>
+    <Button
+      secondary
+      icon="link-external"
+      onclick={() => vscode.postMessage({ type: "openLinkInBrowser", url: link })}
+    >
+      Open Link
+    </Button>
+    <Button secondary icon="cloud-upload" disabled={isPasting} onclick={paste}>Send Again</Button>
+  </div>
+{:else}
+  <div class="actions">
+    <Button secondary disabled={isPasting} onclick={paste}>Send to Pastebin</Button>
+    {#if isPasting}
+      <Spinner label="Sending to the pastebin…" />
+    {/if}
+  </div>
+{/if}
+{#if pasteError !== undefined}
+  <ErrorNotice error={pasteError} title="Could not send to the pastebin" />
+{/if}
 
 <style>
-    .help {
-        border: 1px solid;
-        padding: 0.8rem;
-        margin-top: 0.4rem;
-    }
-    .paste-button-container {
-        margin-top: 0.8rem;
-    }
-    .header {
-        margin-top: 0rem;
-        margin-bottom: 0.4rem;
-    }
-    .paste-results-container {
-        margin-top: 0.8rem;
-    }
+  .url {
+    font-family: var(--tmc-font-mono);
+    overflow-wrap: anywhere;
+  }
 </style>

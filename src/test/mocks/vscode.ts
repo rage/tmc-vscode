@@ -1,48 +1,62 @@
-import { IMock, It, Mock } from "typemoq";
-import * as vscode from "vscode";
+import * as tmp from "tmp"
+import { vi } from "vitest"
+import * as vscode from "vscode"
 
-type Memento = vscode.Memento & { setKeysForSync(keys: string[]): void };
+import { autoMock } from "../support/mock"
+
+type Memento = vscode.Memento & { setKeysForSync: (keys: string[]) => void }
 
 /**
- * Creates a new `vscode.ExtensionContext` mock object that uses mocked globalState.
+ * Creates a `vscode.ExtensionContext` mock backed by an in-memory globalState.
  */
 export function createMockContext(): vscode.ExtensionContext {
-    const mockContext = Mock.ofType<vscode.ExtensionContext>();
-
-    const memento = createMockMemento();
-    mockContext.setup((x) => x.globalState).returns(() => memento);
-
-    return mockContext.object;
+  const globalState = createMockMemento()
+  // A real temp dir, so code deriving paths from the global storage gets a usable path
+  // rather than an auto-mocked function.
+  const globalStoragePath = tmp.dirSync().name
+  const globalStorageUri = vscode.Uri.file(globalStoragePath)
+  const extensionUri = vscode.Uri.file("/ext")
+  return new Proxy(autoMock<vscode.ExtensionContext>(), {
+    get(target, prop) {
+      if (prop === "globalState") {
+        return globalState
+      }
+      if (prop === "globalStoragePath") {
+        return globalStoragePath
+      }
+      if (prop === "globalStorageUri") {
+        return globalStorageUri
+      }
+      if (prop === "extensionUri") {
+        return extensionUri
+      }
+      return Reflect.get(target, prop)
+    },
+  })
 }
 
 /**
- * Creates a new `vscode.Memento` mock object that wraps a map object.
+ * Creates a `vscode.Memento` mock that wraps a plain Map.
  */
 export function createMockMemento(): Memento {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const storage = new Map<string, any>();
-    const mockMemento = Mock.ofType<Memento>();
-    mockMemento
-        .setup((x) => x.get)
-        .returns(
-            () =>
-                <T>(x: string): T | undefined =>
-                    storage.get(x),
-        );
-    mockMemento
-        .setup((x) => x.update)
-        .returns(() => async (key, value): Promise<void> => {
-            storage.set(key, value);
-        });
-    return mockMemento.object;
+  const storage = new Map<string, unknown>()
+  return {
+    keys: () => [...storage.keys()],
+    get: <T>(key: string, defaultValue?: T): T | undefined =>
+      (storage.has(key) ? storage.get(key) : defaultValue) as T | undefined,
+    update: async (key: string, value: unknown): Promise<void> => {
+      storage.set(key, value)
+    },
+    setKeysForSync: () => {},
+  }
 }
 
-export function createMockWorkspaceConfiguration(): IMock<vscode.WorkspaceConfiguration> {
-    const mockWorkspaceConfiguration = Mock.ofType<vscode.WorkspaceConfiguration>();
-
-    mockWorkspaceConfiguration
-        .setup((x) => x.update(It.isAny(), It.isAny(), It.isAny()))
-        .returns(async () => {});
-
-    return mockWorkspaceConfiguration;
+/** Creates a `vscode.WorkspaceConfiguration` mock whose `update` is a spy. */
+export function createMockWorkspaceConfiguration(): vscode.WorkspaceConfiguration {
+  return {
+    get: vi.fn(),
+    has: vi.fn(() => false),
+    inspect: vi.fn(),
+    update: vi.fn(async () => {}),
+  } as unknown as vscode.WorkspaceConfiguration
 }

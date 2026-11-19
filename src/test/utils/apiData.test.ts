@@ -1,0 +1,425 @@
+import type {
+  CourseExercise,
+  Exercise,
+  ExerciseProgress,
+  CourseProgress,
+} from "../../../shared/langsSchema"
+import {
+  LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER,
+  LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER,
+  LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
+} from "../../config/constants"
+import type { MoocLocalCourseData } from "../../storage/data"
+import {
+  combineMoocApiExerciseData,
+  combineTmcApiExerciseData,
+  sumCoursePoints,
+  sumTmcApiCoursePoints,
+  toStoredMoocCourse,
+} from "../../utilities/apiData"
+import {
+  MOOC_COURSE_UUID,
+  moocCourse,
+  moocCourseProgress,
+  moocExerciseSlides,
+} from "../fixtures/tmc"
+
+/** An exercise as `/api/v8/core/courses/{id}` lists it; only the combined fields vary. */
+function apiExercise(exercise: Pick<Exercise, "id" | "name" | "completed">): Exercise {
+  return {
+    all_review_points_given: false,
+    attempted: true,
+    checksum: "abc123",
+    code_review_requests_enabled: false,
+    deadline: "2026-01-01T00:00:00.000+02:00",
+    deadline_description: null,
+    latest_submission_id: null,
+    latest_submission_url: null,
+    locked: false,
+    memory_limit: null,
+    requires_review: false,
+    return_url: "https://tmc.mooc.fi/return",
+    returnable: true,
+    reviewed: false,
+    run_tests_locally_action_enabled: true,
+    runtime_params: [],
+    soft_deadline: "2025-12-01T00:00:00.000+02:00",
+    soft_deadline_description: null,
+    solution_zip_url: null,
+    valgrind_strategy: null,
+    zip_url: "https://tmc.mooc.fi/zip",
+    ...exercise,
+  }
+}
+
+/** The same exercise as `/api/v8/courses/{id}/exercises` lists it, which is where the points live. */
+function pointsForExercise(id: number, available: number, awarded: number): CourseExercise {
+  return {
+    available_points: Array.from({ length: available }, (_, index) => ({
+      exercise_id: id,
+      id: id * 100 + index,
+      name: `p${index}`,
+      requires_review: false,
+    })),
+    awarded_points: Array.from({ length: awarded }, (_, index) => `p${index}`),
+    deadline: null,
+    disabled: false,
+    id,
+    name: `exercise${id}`,
+    publish_time: null,
+    soft_deadline: null,
+    solution_visible_after: null,
+    unlocked: true,
+  }
+}
+
+suite("combineTmcApiExerciseData", function () {
+  test("takes points from the matching points-endpoint entry", function () {
+    const combined = combineTmcApiExerciseData(
+      [apiExercise({ id: 7, name: "week1-01", completed: true })],
+      [pointsForExercise(7, 3, 2)],
+    )
+
+    expect(combined).toEqual([
+      {
+        id: 7,
+        name: "week1-01",
+        availablePoints: 3,
+        awardedPoints: 2,
+        passed: true,
+        attempted: true,
+        deadline: "2026-01-01T00:00:00.000+02:00",
+        softDeadline: "2025-12-01T00:00:00.000+02:00",
+      },
+    ])
+  })
+
+  test("falls back to placeholder points for an exercise the points endpoint omits", function () {
+    // The endpoints can disagree; the placeholders keep a single-point scale.
+    const [passed, unpassed] = combineTmcApiExerciseData(
+      [
+        apiExercise({ id: 1, name: "solved", completed: true }),
+        apiExercise({ id: 2, name: "unsolved", completed: false }),
+      ],
+      [],
+    )
+
+    expect(passed?.availablePoints).toBe(LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER)
+    expect(passed?.awardedPoints).toBe(LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER)
+    expect(unpassed?.availablePoints).toBe(LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER)
+    expect(unpassed?.awardedPoints).toBe(LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER)
+  })
+
+  test("keeps a listed zero awarded points rather than falling back", function () {
+    // The points entry is the truth; the placeholder would credit an unearned point.
+    const [combined] = combineTmcApiExerciseData(
+      [apiExercise({ id: 3, name: "reviewed", completed: true })],
+      [pointsForExercise(3, 2, 0)],
+    )
+
+    expect(combined?.awardedPoints).toBe(0)
+  })
+
+  test("yields one exercise per listed exercise, ignoring points for exercises not listed", function () {
+    const combined = combineTmcApiExerciseData(
+      [apiExercise({ id: 4, name: "week1-01", completed: false })],
+      [pointsForExercise(4, 1, 1), pointsForExercise(99, 5, 5)],
+    )
+
+    expect(combined.map((exercise) => exercise.id)).toEqual([4])
+  })
+})
+
+suite("sumTmcApiCoursePoints", function () {
+  test("sums the points endpoint's own totals, free of the placeholder fallback", function () {
+    const courseExercises = [pointsForExercise(1, 3, 1), pointsForExercise(2, 2, 2)]
+    const combined = combineTmcApiExerciseData(
+      [
+        apiExercise({ id: 1, name: "a", completed: false }),
+        apiExercise({ id: 2, name: "b", completed: true }),
+        apiExercise({ id: 3, name: "not-in-points", completed: true }),
+      ],
+      courseExercises,
+    )
+
+    expect(sumTmcApiCoursePoints(courseExercises)).toEqual({
+      availablePoints: 5,
+      awardedPoints: 3,
+    })
+    // Summing the combined exercises instead would count the omitted one's placeholders.
+    expect(sumCoursePoints(combined)).toEqual({ availablePoints: 6, awardedPoints: 4 })
+  })
+
+  test("is zero for a course with no exercises", function () {
+    expect(sumTmcApiCoursePoints([])).toEqual({ availablePoints: 0, awardedPoints: 0 })
+  })
+})
+
+const addedMoocCourse = (): MoocLocalCourseData =>
+  toStoredMoocCourse({
+    course: moocCourse,
+    slides: moocExerciseSlides,
+    progress: moocCourseProgress,
+  })
+
+suite("toStoredMoocCourse", function () {
+  test("stores the course's AI policy, replacing the one it refreshes", function () {
+    const stored = toStoredMoocCourse(
+      {
+        course: { ...moocCourse, ai_policy: "full_use" },
+        slides: moocExerciseSlides,
+        progress: moocCourseProgress,
+      },
+      { ...addedMoocCourse(), aiPolicy: "no_ai" },
+    )
+
+    expect(stored.aiPolicy).toBe("full_use")
+  })
+
+  test("keeps only the slug and the new-exercise state of the course it refreshes", function () {
+    const previous: MoocLocalCourseData = {
+      ...addedMoocCourse(),
+      name: "old-slug",
+      title: "Old title",
+      description: "Old description",
+      organization: "Old organization",
+      newExercises: ["new-exercise"],
+      notifyAfter: 1234,
+    }
+
+    expect(
+      toStoredMoocCourse(
+        { course: moocCourse, slides: moocExerciseSlides, progress: moocCourseProgress },
+        previous,
+      ),
+    ).toEqual({
+      ...addedMoocCourse(),
+      name: "old-slug",
+      newExercises: ["new-exercise"],
+      notifyAfter: 1234,
+    })
+  })
+})
+
+const NO_PROGRESS: CourseProgress = {
+  course_id: MOOC_COURSE_UUID,
+  exercises: [],
+  closed_chapters: [],
+}
+
+suite("combineMoocApiExerciseData", function () {
+  test("keeps each exercise's chapter, and none for an exercise outside one", function () {
+    const [slide] = moocExerciseSlides
+    if (slide === undefined) {
+      throw new Error("the fixture has a slide")
+    }
+    const chaptered = {
+      ...slide,
+      chapter: { id: "chapter-1", name: "Basics", chapter_number: 1, locking_status: null },
+    }
+
+    const [stored, unchaptered] = combineMoocApiExerciseData([chaptered, slide], NO_PROGRESS)
+
+    expect(stored?.chapter).toEqual({ name: "Basics", number: 1 })
+    expect(unchaptered).not.toHaveProperty("chapter")
+  })
+
+  test("keeps the course material page an exercise is on, and none where the host sent none", function () {
+    const [slide] = moocExerciseSlides
+    if (slide === undefined) {
+      throw new Error("the fixture has a slide")
+    }
+    const onPage = { ...slide, page_url: "https://courses.mooc.fi/org/o/courses/c/page" }
+
+    const [stored, pageless] = combineMoocApiExerciseData(
+      [onPage, { ...slide, page_url: null }],
+      NO_PROGRESS,
+    )
+
+    expect(stored?.pageUrl).toBe("https://courses.mooc.fi/org/o/courses/c/page")
+    expect(pageless).not.toHaveProperty("pageUrl")
+  })
+
+  const [slide] = moocExerciseSlides
+  /** The fixture slide's progress, completed with the given standing and points of 3. */
+  function progressOf(standing: ExerciseProgress["standing"], scoreGiven: number): CourseProgress {
+    return {
+      course_id: MOOC_COURSE_UUID,
+      exercises: [
+        {
+          exercise_id: slide!.exercise_id,
+          score_given: scoreGiven,
+          score_maximum: 3,
+          completed: true,
+          attempted: true,
+          standing,
+          max_tries: null,
+          tries_left: null,
+          pending_teacher_review: null,
+          exercise_locked: false,
+        },
+      ],
+      closed_chapters: [],
+    }
+  }
+
+  test.each([
+    ["Passed", 3, { passed: true, outOfTries: false }],
+    ["Attempted", 3, { passed: false, outOfTries: false }],
+    ["OutOfTries", 2, { passed: false, outOfTries: true }],
+    ["NotAttempted", 0, { passed: false, outOfTries: false }],
+  ] as const)(
+    "a %s standing at %i points is stored as the backend decides",
+    (standing, score, flags) => {
+      const [stored] = combineMoocApiExerciseData([slide!], progressOf(standing, score))
+      expect(stored).toMatchObject({ ...flags, awardedPoints: score, availablePoints: 3 })
+    },
+  )
+
+  test("without a standing from the backend, the previous flags stay, not the score's", () => {
+    const previous = {
+      ...combineMoocApiExerciseData([slide!], NO_PROGRESS)[0]!,
+      passed: false,
+      outOfTries: true,
+    }
+    const [stored] = combineMoocApiExerciseData([slide!], progressOf(null, 3), [previous])
+    expect(stored).toMatchObject({ passed: false, outOfTries: true, awardedPoints: 3 })
+  })
+})
+
+function progressEntry(
+  exerciseId: string,
+  overrides: Partial<ExerciseProgress> = {},
+): ExerciseProgress {
+  return {
+    exercise_id: exerciseId,
+    score_given: 1,
+    score_maximum: 2,
+    completed: true,
+    attempted: true,
+    standing: "Attempted",
+    max_tries: null,
+    tries_left: null,
+    pending_teacher_review: null,
+    exercise_locked: false,
+    ...overrides,
+  }
+}
+
+suite("mooc tries, chapter locking and closed chapters", function () {
+  const [slide] = moocExerciseSlides
+
+  test("stores the tries the backend counts, and none for unlimited tries", function () {
+    const limited = combineMoocApiExerciseData([slide!], {
+      ...NO_PROGRESS,
+      exercises: [progressEntry(slide!.exercise_id, { max_tries: 3, tries_left: 1 })],
+    })[0]
+    expect(limited).toMatchObject({ maxTries: 3, triesLeft: 1 })
+
+    const unlimited = combineMoocApiExerciseData([slide!], {
+      ...NO_PROGRESS,
+      exercises: [progressEntry(slide!.exercise_id)],
+    })[0]
+    expect(unlimited).not.toHaveProperty("maxTries")
+    expect(unlimited).not.toHaveProperty("triesLeft")
+  })
+
+  test("stores a pending teacher review and a locked exercise, and neither once gone", function () {
+    const reviewed = combineMoocApiExerciseData([slide!], {
+      ...NO_PROGRESS,
+      exercises: [
+        progressEntry(slide!.exercise_id, {
+          pending_teacher_review: "awaits_teacher",
+          exercise_locked: true,
+        }),
+      ],
+    })[0]
+    expect(reviewed).toMatchObject({ pendingReview: "awaits_teacher", exerciseLocked: true })
+
+    const cleared = combineMoocApiExerciseData(
+      [slide!],
+      { ...NO_PROGRESS, exercises: [progressEntry(slide!.exercise_id)] },
+      [reviewed!],
+    )[0]
+    expect(cleared).not.toHaveProperty("pendingReview")
+    expect(cleared).not.toHaveProperty("exerciseLocked")
+  })
+
+  test("keeps a chapter's locking status, and none without locking", function () {
+    const locked = combineMoocApiExerciseData(
+      [
+        {
+          ...slide!,
+          chapter: {
+            id: "chapter-2",
+            name: "Loops",
+            chapter_number: 2,
+            locking_status: "NotUnlockedYet",
+          },
+        },
+      ],
+      NO_PROGRESS,
+    )[0]
+    expect(locked?.chapter).toEqual({ name: "Loops", number: 2, lockingStatus: "NotUnlockedYet" })
+  })
+
+  const closedProgress = (exerciseId: string): CourseProgress => ({
+    ...NO_PROGRESS,
+    closed_chapters: [
+      {
+        id: "chapter-3",
+        name: "Recursion",
+        chapter_number: 3,
+        opens_at: "2100-01-01T00:00:00Z",
+        exercises: [progressEntry(exerciseId, { score_given: 2, standing: "Passed" })],
+      },
+    ],
+  })
+
+  test("keeps a closed chapter's exercises apart with their points, as last seen open", function () {
+    const previous = toStoredMoocCourse({
+      course: moocCourse,
+      slides: moocExerciseSlides,
+      progress: moocCourseProgress,
+    })
+    const stored = toStoredMoocCourse(
+      { course: moocCourse, slides: [], progress: closedProgress(slide!.exercise_id) },
+      previous,
+    )
+
+    expect(stored.exercises).toEqual([])
+    expect(stored.closedChapters).toEqual([
+      {
+        name: "Recursion",
+        number: 3,
+        opensAt: "2100-01-01T00:00:00Z",
+        exercises: [
+          expect.objectContaining({
+            id: slide!.exercise_id,
+            name: previous.exercises[0]!.name,
+            passed: true,
+            awardedPoints: 2,
+            availablePoints: 2,
+          }),
+        ],
+      },
+    ])
+    expect(stored).toMatchObject({ awardedPoints: 2, availablePoints: 2 })
+  })
+
+  test("an exercise whose chapter reopens comes back with what it had", function () {
+    const added = toStoredMoocCourse({
+      course: moocCourse,
+      slides: [],
+      progress: closedProgress(slide!.exercise_id),
+    })
+    expect(added.closedChapters?.[0]?.exercises[0]).toMatchObject({ name: "", passed: true })
+
+    const reopened = toStoredMoocCourse(
+      { course: moocCourse, slides: moocExerciseSlides, progress: NO_PROGRESS },
+      added,
+    )
+    expect(reopened).not.toHaveProperty("closedChapters")
+    expect(reopened.exercises[0]).toMatchObject({ id: slide!.exercise_id, passed: true })
+  })
+})

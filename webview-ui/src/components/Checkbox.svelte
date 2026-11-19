@@ -1,31 +1,25 @@
 <script lang="ts">
-    export let checked: boolean = false;
-    export let onClick: (checked: boolean) => void = () => {};
+  import type { VscodeCheckbox } from "@vscode-elements/elements"
+  import type { SvelteHTMLElements } from "svelte/elements"
 
-    export let hidden: boolean = false;
+  type Props = Omit<
+    SvelteHTMLElements["vscode-checkbox"],
+    "checked" | "indeterminate" | "onchange" | "aria-label" | "label"
+  > & {
+    checked: boolean
+    /** Receives the state the user asked for; the box only moves once `checked` changes. */
+    oncheckedchange?: ((checked: boolean) => void) | undefined
+  }
 
-    function onClickWrapper() {
-        checked = !checked;
-        onClick(checked);
-    }
+  let { checked, oncheckedchange, children, ...rest }: Props = $props()
+
+  function handleChange(event: Event & { currentTarget: VscodeCheckbox }) {
+    const requested = event.currentTarget.checked
+    event.currentTarget.checked = checked
+    oncheckedchange?.(requested)
+  }
 </script>
 
-<!--
-    the span blocks the checkbox from receiving events
-    this is necessary to block the user from actually manipulating
-    the checkbox in order to make the component controlled,
-    as there's no way to properly bind the `checked`
-    property to the store
-    instead we use the span's event handlers to check/uncheck
--->
-<span
-    role="button"
-    tabindex="0"
-    {hidden}
-    on:click|capture|stopPropagation={onClickWrapper}
-    on:keypress|capture|stopPropagation={onClickWrapper}
->
-    <vscode-checkbox {checked}>
-        <slot />
-    </vscode-checkbox>
-</span>
+<vscode-checkbox {...rest} {checked} onchange={handleChange}>
+  {@render children?.()}
+</vscode-checkbox>

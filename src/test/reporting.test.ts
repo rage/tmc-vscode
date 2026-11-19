@@ -1,0 +1,1111 @@
+import * as os from "os"
+
+import * as fs from "fs-extra"
+import { Err, Ok } from "ts-results"
+import { vi } from "vitest"
+import * as vscode from "vscode"
+
+import type { ExerciseStatus as RowStatus, ExtensionToWebview } from "../../shared/lib"
+import { makeMoocKind } from "../../shared/lib"
+import type { ReadyActionContext, ReadyStartup } from "../actions/types"
+import { AiUseGate } from "../api/aiUseGate"
+import type Dialog from "../api/dialog"
+import type Langs from "../api/langs"
+import type { WorkspaceExercise } from "../api/workspaceManager"
+import type WorkspaceManager from "../api/workspaceManager"
+import { ExerciseStatus } from "../api/workspaceManager"
+import * as commands from "../commands"
+import type Resources from "../config/resources"
+import { UserData } from "../config/userdata"
+import { BottleneckError, ConnectionError, InsufficientScopeError, NotFoundError } from "../errors"
+import { registerCommands } from "../init/commands"
+import { registerTesting } from "../init/testing"
+import { nextPanelId } from "../panels/routes"
+import { TmcPanel } from "../panels/TmcPanel"
+import Storage from "../storage"
+import type { MoocLocalCourseData } from "../storage/data"
+import { failedUpdates } from "../ui/failedUpdates"
+import { submissionViews } from "../ui/submissionViews"
+import { CourseTreeItem, ExerciseTreeItem } from "../ui/treeview/treeview"
+import type CoursesTree from "../ui/treeview/treeview"
+import { updateablesRegistry } from "../ui/updateablesRegistry"
+import { moocCourseData, moocCourseExercise } from "./fixtures/courses"
+import { idOfMoocCourse, idOfMoocExercise } from "./fixtures/identifiers"
+import { createMockActionContext } from "./mocks/actionContext"
+import { createMockContext } from "./mocks/vscode"
+import { autoMock } from "./support/mock"
+import { createFakeWebviewPanel } from "./support/webviewPanel"
+
+// Each layer's own tests mock the layer next to it, so a failure both layers report (or
+// neither does) passes both. These drive the registered command or the webview message
+// over the real operations, with only the services faked, and read what the user was shown.
+
+const COURSE = "mooc-course"
+const EXERCISE = "loops"
+const EXERCISE_ID = "mooc-ex-1"
+const COURSE_ID = idOfMoocCourse("instance-1")
+
+/** The stored exercise's row in the Courses view, as its commands receive it. */
+function exerciseRow(status: RowStatus): ExerciseTreeItem {
+  return Object.assign(Object.create(ExerciseTreeItem.prototype) as ExerciseTreeItem, {
+    id: EXERCISE_ID,
+    courseId: COURSE_ID,
+    exerciseId: idOfMoocExercise(EXERCISE_ID),
+    status,
+  })
+}
+
+function courseRow(): CourseTreeItem {
+  return Object.assign(Object.create(CourseTreeItem.prototype) as CourseTreeItem, {
+    courseId: COURSE_ID,
+  })
+}
+
+function storedCourse(overrides: Partial<MoocLocalCourseData> = {}): MoocLocalCourseData {
+  return moocCourseData({
+    id: "instance-1",
+    name: COURSE,
+    title: "Mooc Course",
+    availablePoints: 1,
+    exercises: [moocCourseExercise({ id: EXERCISE_ID, name: EXERCISE })],
+    ...overrides,
+  })
+}
+
+const exercise: WorkspaceExercise = {
+  id: idOfMoocExercise(EXERCISE_ID),
+  courseId: COURSE_ID,
+  backend: "mooc",
+  courseSlug: COURSE,
+  exerciseSlug: EXERCISE,
+  status: ExerciseStatus.Open,
+  uri: vscode.Uri.file("/projects/mooc-course/loops"),
+}
+
+/** Services with the defaults a flow reaches on its way to the failure under test. */
+function fakeService<T>(overrides: Record<string, unknown>, defaults: Record<string, unknown>): T {
+  const fallback = autoMock<Record<string, unknown>>()
+  const methods = { ...defaults, ...overrides }
+  return new Proxy(
+    {},
+    { get: (_target, prop: string) => (prop in methods ? methods[prop] : fallback[prop]) },
+  ) as T
+}
+
+interface Harness {
+  actionContext: ReadyActionContext
+  storage: Storage
+  /** Runs a registered command, as the palette would. */
+  run: (id: string, ...args: unknown[]) => Promise<unknown>
+  /** Posts a message from the webview to the side panel. */
+  post: (message: unknown) => Promise<void>
+  /** Every notification shown, as `kind: sentence`, in order. */
+  shown: string[]
+  /** Every failure a webview was told to render, as `type: message`; a reply by its request's type. */
+  panelFailures: () => string[]
+  /** The id and type of the panel the side webview shows. */
+  shownPanel: () => { id: number; type: string }
+}
+
+async function harness(
+  services: {
+    langs?: Record<string, unknown>
+    workspaceManager?: Record<string, unknown>
+    resources?: Partial<Resources>
+    course?: MoocLocalCourseData
+    aiUseGate?: AiUseGate
+  } = {},
+): Promise<Harness> {
+  const shown: string[] = []
+  const toast = (kind: string) =>
+    vi.fn(async (message: string) => {
+      shown.push(`${kind}: ${message}`)
+    })
+  const dialog = {
+    reportError: toast("error"),
+    noteSessionLost: vi.fn(),
+    errorNotification: toast("error"),
+    warningNotification: toast("warning"),
+    notification: toast("info"),
+    statusMessage: vi.fn((message: string) => {
+      shown.push(`status: ${message}`)
+    }),
+    confirm: vi.fn(async () => true),
+    explicitConfirmation: vi.fn(async () => true),
+    // Takes the first offer of every prompt: the course, the submission, "Submit and …" or "Back Up and …".
+    choose: vi.fn(
+      async (_message: string, _options: unknown, ...choices: [string, unknown][]) =>
+        choices[0]?.[1],
+    ),
+    selectItem: vi.fn(async (_options: unknown, ...items: { value: unknown }[]) => items[0]?.value),
+    progressNotification: vi.fn(
+      (_message: string, task: (progress: unknown, token: unknown) => unknown) =>
+        task(
+          { report: () => {} },
+          { isCancellationRequested: false, onCancellationRequested: () => ({ dispose() {} }) },
+        ),
+    ),
+  } as unknown as Dialog
+
+  const storage = new Storage(createMockContext())
+  await storage.updateUserData({ courses: [], mooc_courses: [services.course ?? storedCourse()] })
+
+  const langs = fakeService<Langs>(services.langs ?? {}, {
+    listLocalExercises: async () => Ok([]),
+    listSettings: async () => Ok({}),
+    checkExerciseUpdates: async () => Ok({ updated: [], removed: [] }),
+    getEnrolledMoocCourses: async () =>
+      Ok([{ id: "instance-1", name: "Mooc Course", organization_name: "mooc" }]),
+    getStudentFilePaths: async () => Ok([]),
+    unsetSetting: async () => Ok.EMPTY,
+  })
+  const workspaceManager = fakeService<WorkspaceManager>(services.workspaceManager ?? {}, {
+    activeExercise: exercise,
+    activeCourse: undefined,
+    getExerciseContaining: () => exercise,
+    getExercise: () => exercise,
+    getExercisesByCourseSlug: () => [exercise],
+    getExercises: () => [exercise],
+    setExercises: async () => Ok.EMPTY,
+    deleteWorkspaceFile: async () => Ok.EMPTY,
+    createWorkspaceFile: async () => {},
+    prepareWorkspaceFileToOpen: async () => [],
+  })
+
+  const actionContext: ReadyActionContext = {
+    ...createMockActionContext({
+      startup: {
+        ...(services.aiUseGate && { aiUseGate: services.aiUseGate }),
+        langs,
+        userData: new UserData(storage),
+        workspaceManager,
+        resources: {
+          projectsDirectory: "/projects",
+          getWorkspaceFilePath: () => "/workspaces/mooc-course.code-workspace",
+          ...services.resources,
+        } as Resources,
+      } as Partial<ReadyStartup>,
+    }),
+    dialog,
+    coursesTree: {
+      setBackendReachable: vi.fn(),
+      isBackendReachable: () => true,
+      onDidRender: () => ({ dispose: vi.fn() }),
+    } as unknown as CoursesTree,
+  }
+
+  const commandHandlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()
+  const registerCommand = vi
+    .spyOn(vscode.commands, "registerCommand")
+    .mockImplementation((id: string, handler: (...args: unknown[]) => unknown) => {
+      commandHandlers.set(id, handler as (...args: unknown[]) => Promise<unknown>)
+      return { dispose: vi.fn() }
+    })
+  const subscriptions: vscode.Disposable[] = []
+  const extensionContext = new Proxy(createMockContext(), {
+    get: (target, prop) => (prop === "subscriptions" ? subscriptions : Reflect.get(target, prop)),
+  })
+  registerCommands(
+    extensionContext,
+    actionContext,
+    registerTesting(extensionContext, actionContext),
+  )
+  registerCommand.mockRestore()
+  // The panel runs a command through VS Code, which dispatches to the registered handler.
+  vi.mocked(vscode.commands.executeCommand).mockImplementation(async (id, ...args) =>
+    commandHandlers.get(id)?.(...args),
+  )
+  const submissionViewing = TmcPanel.showSubmissionViews(extensionContext, actionContext)
+  onTestFinished(() => submissionViewing.dispose())
+
+  const webviews: ReturnType<typeof createFakeWebviewPanel>[] = []
+  const requestTypes = new Map<number, string>()
+  vi.mocked(vscode.window.createWebviewPanel).mockImplementation(() => {
+    const webview = createFakeWebviewPanel()
+    webviews.push(webview)
+    return webview.panel
+  })
+  TmcPanel.mainPanel?.dispose()
+  TmcPanel.sidePanel?.dispose()
+  TmcPanel.renderSide(extensionContext, actionContext, {
+    id: nextPanelId(),
+    type: "CourseDetails",
+    courseId: COURSE_ID,
+  })
+  const sidePanel = webviews[0]
+  if (!sidePanel) {
+    throw new Error("the side panel was never created")
+  }
+  await sidePanel.sendReady()
+
+  return {
+    actionContext,
+    storage,
+    run: async (id, ...args) => {
+      const handler = commandHandlers.get(id)
+      if (!handler) {
+        throw new Error(`${id} is not registered`)
+      }
+      return handler(...args)
+    },
+    post: (message) => {
+      const request = message as { type: string; requestId?: number }
+      if (request.requestId !== undefined) {
+        requestTypes.set(request.requestId, request.type)
+      }
+      return sidePanel.getMessageListener()(message)
+    },
+    shown,
+    panelFailures: () =>
+      webviews
+        .flatMap((webview) => vi.mocked(webview.panel.webview.postMessage).mock.calls)
+        .map(([message]) => message as ExtensionToWebview)
+        .flatMap((message) => {
+          if (message.type === "reply") {
+            return message.outcome.ok
+              ? []
+              : [`${requestTypes.get(message.requestId)}: ${message.outcome.error.message}`]
+          }
+          return message.type === "submissionView" && message.view.error
+            ? [`${message.type}: ${message.view.error.message}`]
+            : []
+        }),
+    shownPanel: () => {
+      const { id, type } = (
+        TmcPanel.sidePanel as unknown as { _route: { id: number; type: string } }
+      )._route
+      return { id, type }
+    },
+  }
+}
+
+/** Shows the stored exercise's submission panel on the side, as submitting does. */
+function showSubmission(actionContext: ReadyActionContext): void {
+  const [storedExercise] = storedCourse().exercises
+  if (!storedExercise) {
+    throw new Error("the stored course has no exercise")
+  }
+  TmcPanel.renderSide(createMockContext(), actionContext, {
+    id: nextPanelId(),
+    type: "ExerciseSubmission",
+    exerciseId: idOfMoocExercise(EXERCISE_ID),
+    backend: "mooc",
+    exerciseName: storedExercise.name,
+    courseTitle: storedCourse().title,
+  })
+}
+
+const offline = (): Error => new Error("offline")
+const busy = async (): Promise<Err<Error>> =>
+  Err(new BottleneckError("This exercise is being reset."))
+const oldSubmission = makeMoocKind({
+  exerciseId: EXERCISE_ID,
+  submissions: [
+    {
+      id: "sub-1",
+      created_at: "2026-01-01T00:00:00Z",
+      grading_progress: null,
+      kind: "submission",
+      is_shared: false,
+    },
+  ],
+})
+const oldSubmissions = async (): Promise<Ok<typeof oldSubmission>> => Ok(oldSubmission)
+const pending = <T>(): { promise: Promise<T>; resolve: (value: T) => void } => {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
+
+/** The messages the latest local test run errored its items with. */
+function lastTestRunErrors(): string[] {
+  const controller = vi.mocked(vscode.tests.createTestController).mock.results.at(-1)?.value as {
+    runs: { results: [string, string, vscode.TestMessage?][] }[]
+  }
+  return (controller.runs.at(-1)?.results ?? [])
+    .filter(([state]) => state === "errored")
+    .map(([, , message]) => String(message?.message))
+}
+
+beforeEach(function () {
+  vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+  submissionViews.clear()
+  updateablesRegistry.clear()
+  failedUpdates.clear()
+})
+
+// jest-mock-vscode ships no `env` namespace; the old-submission picker formats dates with it.
+beforeAll(function () {
+  const vscodeModule: object = vscode
+  Object.defineProperty(vscodeModule, "env", { value: { language: "en" }, configurable: true })
+})
+
+suite("reported once: exercise commands", function () {
+  test("a failed test run shows in Test Results, and nothing else", async function () {
+    const { run, shown } = await harness({
+      langs: {
+        runTests: () => ({
+          process: Promise.resolve(Err(new Error("compile failed"))),
+          interrupt() {},
+        }),
+        runCheckstyle: () => ({ process: Promise.resolve(Ok(null)), interrupt() {} }),
+      },
+    })
+
+    await run("tmc.testExercise")
+
+    expect(shown).toEqual([])
+    expect(lastTestRunErrors()).toEqual(["The tests could not be run: compile failed"])
+  })
+
+  test("a test run that cannot start shows in Test Results, and nothing else", async function () {
+    const { run, shown } = await harness({
+      course: storedCourse({ id: "another-instance", exercises: [] }),
+    })
+
+    await run("tmc.testExercise")
+
+    expect(shown).toEqual([])
+    expect(lastTestRunErrors()).toEqual([
+      "The tests could not be run: No stored mooc exercise mooc-ex-1.",
+    ])
+  })
+
+  test("a failed submission shows in its panel only", async function () {
+    const { run, shown, panelFailures } = await harness({
+      langs: { submitMoocExercise: async () => Err(new ConnectionError("reset")) },
+    })
+
+    await run("tmc.submitExercise")
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual(["submissionView: Reset."])
+  })
+
+  test("a failed submission with a remedy shows in its panel only, remedy included", async function () {
+    const { run, shown, panelFailures } = await harness({
+      langs: {
+        submitMoocExercise: async () => Err(new InsufficientScopeError("exercise-services")),
+      },
+    })
+
+    await run("tmc.submitExercise")
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual([
+      expect.stringMatching(/^submissionView: You were logged out\. Log in again\.$/),
+    ])
+  })
+
+  test("a failed paste from the palette shows in the Get help it opens only", async function () {
+    const { run, post, shown, panelFailures, shownPanel } = await harness({
+      langs: { paste: async () => Err(offline()) },
+    })
+
+    await run("tmc.pasteExercise")
+    await post({ type: "pasteExercise", requestId: 1, sourcePanel: shownPanel() })
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual(["pasteExercise: Offline."])
+  })
+
+  test("a busy restore from the History shows in the panel only", async function () {
+    const { run, post, shown, panelFailures, shownPanel } = await harness({
+      langs: { getOldSubmissions: oldSubmissions, restoreSubmission: busy },
+    })
+
+    await run("tmc.downloadOldSubmission")
+    await post({ type: "requestSubmissionHistory", requestId: 1, sourcePanel: shownPanel() })
+    await post({ type: "restoreSubmission", requestId: 2, sourcePanel: shownPanel(), key: "sub-1" })
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual(["restoreSubmission: This exercise is being reset."])
+  })
+
+  test.each([["tmc.resetExercise", "resetExercise"]])(
+    "a busy %s says so, as information",
+    async function (id, method) {
+      const { run, shown } = await harness({
+        langs: { getOldSubmissions: oldSubmissions, [method]: busy },
+      })
+
+      await run(id)
+
+      expect(shown).toEqual(["info: This exercise is being reset."])
+    },
+  )
+
+  test("a failed paste from the panel shows in the panel only", async function () {
+    const { actionContext, post, shown, panelFailures, shownPanel } = await harness({
+      langs: { paste: async () => Err(offline()) },
+    })
+    showSubmission(actionContext)
+
+    await post({ type: "pasteExercise", requestId: 1, sourcePanel: shownPanel() })
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual(["pasteExercise: Offline."])
+  })
+
+  test("a panel paste that finds a submission in flight shows in the panel only", async function () {
+    const submission = pending<Err<Error>>()
+    const uploading = pending<void>()
+    const { actionContext, run, post, shown, panelFailures, shownPanel } = await harness({
+      langs: {
+        submitMoocExercise: () => {
+          uploading.resolve()
+          return submission.promise
+        },
+      },
+    })
+    showSubmission(actionContext)
+
+    const submitting = run("tmc.submitExercise")
+    await uploading.promise
+    await post({ type: "pasteExercise", requestId: 1, sourcePanel: shownPanel() })
+    submission.resolve(Err(new ConnectionError("reset")))
+    await submitting
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual([
+      "pasteExercise: A submission for this exercise is already in progress.",
+      "submissionView: Reset.",
+    ])
+  })
+
+  test("a restore names only what the panel's own History listed", async function () {
+    const restoreSubmission = vi.fn()
+    const { run, post, shown, panelFailures, shownPanel } = await harness({
+      langs: { getOldSubmissions: oldSubmissions, restoreSubmission },
+    })
+
+    await run("tmc.downloadOldSubmission")
+    await post({ type: "restoreSubmission", requestId: 1, sourcePanel: shownPanel(), key: "sub-1" })
+    await post({ type: "requestSubmissionHistory", requestId: 2, sourcePanel: shownPanel() })
+    await post({ type: "restoreSubmission", requestId: 3, sourcePanel: shownPanel(), key: "sub-9" })
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual([
+      "restoreSubmission: That submission is no longer listed. Refresh the history.",
+      "restoreSubmission: That submission is no longer listed. Refresh the history.",
+    ])
+    expect(restoreSubmission).not.toHaveBeenCalled()
+  })
+
+  test("a restore over an exercise no longer on disk says so in the panel", async function () {
+    const restoreSubmission = vi.fn()
+    let isOnDisk = true
+    const { run, post, panelFailures, shownPanel } = await harness({
+      langs: { getOldSubmissions: oldSubmissions, restoreSubmission },
+      workspaceManager: { getExercise: () => (isOnDisk ? exercise : undefined) },
+    })
+
+    await run("tmc.downloadOldSubmission")
+    await post({ type: "requestSubmissionHistory", requestId: 1, sourcePanel: shownPanel() })
+    isOnDisk = false
+    await post({ type: "restoreSubmission", requestId: 2, sourcePanel: shownPanel(), key: "sub-1" })
+
+    expect(panelFailures()).toEqual([
+      "restoreSubmission: This exercise is no longer downloaded. Open it to restore.",
+    ])
+    expect(restoreSubmission).not.toHaveBeenCalled()
+  })
+
+  test("a History that fails to list or restore shows it in the panel only", async function () {
+    let isListed = false
+    const { run, post, shown, panelFailures, shownPanel } = await harness({
+      langs: {
+        getOldSubmissions: async () => (isListed ? Ok(oldSubmission) : Err(offline())),
+        restoreSubmission: async () => Err(offline()),
+      },
+    })
+
+    await run("tmc.downloadOldSubmission")
+    await post({ type: "requestSubmissionHistory", requestId: 1, sourcePanel: shownPanel() })
+    isListed = true
+    await post({ type: "requestSubmissionHistory", requestId: 2, sourcePanel: shownPanel() })
+    await post({ type: "restoreSubmission", requestId: 3, sourcePanel: shownPanel(), key: "sub-1" })
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual([
+      "requestSubmissionHistory: Offline.",
+      "restoreSubmission: Offline.",
+    ])
+  })
+
+  test.each([
+    ["tmc.cleanExercise", { clean: offline }, "Failed to clean exercise."],
+    ["tmc.resetExercise", { resetExercise: offline }, "Failed to reset exercise."],
+  ])("a failed %s is one notification", async function (id, failing, headline) {
+    const langs = Object.fromEntries(
+      Object.entries(failing).map(([method, outcome]) => [
+        method,
+        async () => {
+          const result = outcome()
+          return result instanceof Error ? Err(result) : result
+        },
+      ]),
+    )
+    const { run, shown } = await harness({ langs })
+
+    await run(id)
+
+    expect(shown).toEqual([`error: ${headline}`])
+  })
+
+  test("closing an exercise that fails is one notification", async function () {
+    const { run, shown } = await harness({
+      workspaceManager: { closeCourseExercises: async () => Err(offline()) },
+    })
+
+    await run("tmc.closeExercise")
+
+    expect(shown).toEqual(["error: Error when closing exercise."])
+  })
+})
+
+suite("reported once: course administration", function () {
+  test("a failed logout is one notification", async function () {
+    const { run, shown } = await harness({
+      langs: { deauthenticate: async () => Err(offline()) },
+    })
+
+    await run("tmc.logout")
+
+    expect(shown).toEqual(["error: Failed to log out."])
+  })
+
+  test("a course that fails to add is one notification", async function () {
+    const { run, shown } = await harness({
+      langs: {
+        getTmcOrganizations: async () => Err(offline()),
+        getEnrolledMoocCourses: async () =>
+          Ok([{ id: "instance-2", name: "other", organization_name: "mooc" }]),
+        getMoocCourseData: async () => Err(offline()),
+      },
+    })
+
+    // A quick pick that accepts the first course row as soon as one is listed.
+    const accept = new vscode.EventEmitter<void>()
+    const quickPick = {
+      items: [] as { choice?: unknown }[],
+      selectedItems: [] as unknown[],
+      buttons: [],
+      onDidAccept: accept.event,
+      onDidHide: () => ({ dispose() {} }),
+      onDidTriggerButton: () => ({ dispose() {} }),
+      show() {},
+      hide() {},
+      dispose() {},
+    }
+    vi.spyOn(vscode.window, "createQuickPick").mockReturnValue(quickPick as never)
+    const running = run("tmc.addNewCourse")
+    await vi.waitFor(() => expect(quickPick.items.some((x) => x.choice)).toBe(true))
+    quickPick.selectedItems = [quickPick.items.find((x) => x.choice)]
+    accept.fire()
+    await running
+
+    expect(shown).toEqual(["error: Failed to add course."])
+  })
+
+  test("a data path that fails to move is one notification", async function () {
+    const target = fs.mkdtempSync(`${os.tmpdir()}/tmc-reporting-`)
+    vi.mocked(vscode.window.showOpenDialog).mockResolvedValue([vscode.Uri.file(target)])
+    const { run, shown } = await harness({
+      langs: { moveProjectsDirectory: async () => Err(offline()) },
+    })
+
+    await run("tmc.changeTmcDataPath")
+    fs.removeSync(target)
+
+    expect(shown).toEqual(["error: Failed to move the exercises folder."])
+  })
+
+  test("a wipe that fails is one notification, and does not reload", async function () {
+    const { run, shown } = await harness({ langs: { resetSettings: async () => Err(offline()) } })
+
+    await run("tmc.wipe")
+
+    expect(shown).toEqual(["error: Failed to wipe extension data."])
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith("workbench.action.reloadWindow")
+  })
+
+  test("a removal that fails is one notification, and is not announced", async function () {
+    const { run, shown, storage } = await harness()
+    vi.spyOn(storage, "updateUserData").mockRejectedValue(new Error("disk full"))
+
+    await run("tmc.removeCourse", COURSE_ID)
+
+    expect(shown).toEqual([`error: Failed to remove "${COURSE}" from your courses.`])
+  })
+
+  test("a removal whose cleanup fails warns once, and still announces it", async function () {
+    const { run, shown } = await harness({ langs: { unsetSetting: async () => Err(offline()) } })
+
+    await run("tmc.removeCourse", COURSE_ID)
+
+    expect(shown).toEqual([
+      `error: Failed to clear the record of closed exercises for "${COURSE}".`,
+      "status: Removed Mooc Course.",
+    ])
+  })
+
+  test("a course workspace that fails to open is one notification", async function () {
+    const { post, shown } = await harness({
+      workspaceManager: {
+        prepareWorkspaceFileToOpen: async () => {
+          throw offline()
+        },
+      },
+    })
+
+    await post({ type: "openCourseWorkspace", courseId: COURSE_ID })
+
+    expect(shown).toEqual(["error: Failed to open the course workspace."])
+  })
+})
+
+suite("reported once: the Courses view and course details", function () {
+  test("exercises that fail to open are one notification", async function () {
+    const { run, shown } = await harness({
+      workspaceManager: { openCourseExercises: async () => Err(offline()) },
+    })
+
+    await run("tmc.openExercises", exerciseRow("closed"))
+
+    expect(shown).toEqual(["error: Failed to open the exercises."])
+  })
+
+  test("exercises that fail to close are one notification", async function () {
+    const { run, shown } = await harness({
+      workspaceManager: { closeCourseExercises: async () => Err(offline()) },
+    })
+
+    await run("tmc.closeExercises", exerciseRow("opened"))
+
+    expect(shown).toEqual(["error: Failed to close the exercises."])
+  })
+
+  const moocDownloadFails = {
+    downloadMoocExercises: async () => Err(offline()),
+  }
+
+  test("a failed download from the Courses view is one warning", async function () {
+    const { run, shown } = await harness({ langs: moocDownloadFails })
+
+    await run("tmc.downloadExercises", exerciseRow("missing"))
+
+    expect(shown).toEqual(["error: Failed to download the exercise loops."])
+  })
+
+  test("a failed update from the Courses view is the status bar's, not a notification", async function () {
+    const { run, shown } = await harness({ langs: moocDownloadFails })
+    updateablesRegistry.setMany([[COURSE_ID, [idOfMoocExercise(EXERCISE_ID)]]])
+
+    await run("tmc.updateCourseExercises", courseRow())
+
+    expect(shown).toEqual([])
+    expect(failedUpdates.all().map((x) => x.exerciseName)).toEqual([EXERCISE])
+  })
+
+  test("a failed new-exercise download from the palette is one warning", async function () {
+    const { run, shown } = await harness({
+      langs: moocDownloadFails,
+      course: storedCourse({ newExercises: [EXERCISE_ID] }),
+    })
+
+    await run("tmc.downloadNewExercises")
+
+    expect(shown).toEqual(["error: Failed to download the exercise loops."])
+  })
+
+  test("a failed update download from the palette is the status bar's, not a notification", async function () {
+    const { actionContext, run, shown } = await harness({
+      langs: {
+        ...moocDownloadFails,
+        checkExerciseUpdates: async () =>
+          Ok({ updated: [idOfMoocExercise(EXERCISE_ID)], removed: [] }),
+      },
+    })
+    vi.mocked(actionContext.settings.getAutomaticallyUpdateExercises).mockReturnValue(true)
+
+    await run("tmc.updateExercises", "loud")
+
+    expect(shown).toEqual([])
+    expect(failedUpdates.all().map((x) => x.exerciseName)).toEqual([EXERCISE])
+  })
+
+  test("a failed automatic update shows in the status bar only, until an update succeeds", async function () {
+    const updateable = {
+      checkExerciseUpdates: async () =>
+        Ok({ updated: [idOfMoocExercise(EXERCISE_ID)], removed: [] }),
+    }
+    const failing = await harness({ langs: { ...moocDownloadFails, ...updateable } })
+    vi.mocked(failing.actionContext.settings.getAutomaticallyUpdateExercises).mockReturnValue(true)
+
+    await failing.run("tmc.updateExercises", "silent")
+
+    expect(failing.shown).toEqual([])
+    expect(failedUpdates.all().map((x) => x.exerciseName)).toEqual([EXERCISE])
+
+    const succeeding = await harness({
+      langs: {
+        ...updateable,
+        downloadMoocExercises: async () =>
+          Ok({
+            downloaded: [{ id: idOfMoocExercise(EXERCISE_ID), path: "/tmp/loops" }],
+            skipped: [],
+            failed: [],
+          }),
+      },
+    })
+    vi.mocked(succeeding.actionContext.settings.getAutomaticallyUpdateExercises).mockReturnValue(
+      true,
+    )
+
+    await succeeding.run("tmc.updateExercises", "silent")
+
+    expect(succeeding.shown).toEqual(["info: Updated the exercise loops to the latest version."])
+    expect(failedUpdates.all()).toEqual([])
+  })
+
+  test("an update check that throws is one notification, or none when silent", async function () {
+    const throwing = {
+      checkExerciseUpdates: async () => {
+        throw offline()
+      },
+    }
+    const loud = await harness({ langs: throwing })
+    const silent = await harness({ langs: throwing })
+
+    await loud.run("tmc.updateExercises", "loud")
+    await silent.run("tmc.updateExercises", "silent")
+
+    expect(loud.shown).toEqual(["error: Failed to check for exercise updates."])
+    expect(silent.shown).toEqual([])
+  })
+
+  test("an update check a backend with courses fails is one notification, and no all-clear", async function () {
+    const moocFails = {
+      checkExerciseUpdates: async (backend: string) =>
+        backend === "mooc" ? Err(offline()) : Ok({ updated: [], removed: [] }),
+    }
+    const loud = await harness({ langs: moocFails })
+    const silent = await harness({ langs: moocFails })
+
+    await loud.run("tmc.updateExercises", "loud")
+    await silent.run("tmc.updateExercises", "silent")
+
+    expect(loud.shown).toEqual(["error: Failed to check for exercise updates."])
+    expect(silent.shown).toEqual([])
+  })
+
+  test("an update check that a course's backend refused marks the course and names it", async function () {
+    const { run, shown, actionContext } = await harness({
+      langs: {
+        checkExerciseUpdates: async () =>
+          Ok({
+            updated: [],
+            removed: [],
+            uncheckedCourses: [
+              { courseId: COURSE_ID, refusal: new NotFoundError("courses.mooc.fi refused") },
+            ],
+          }),
+      },
+    })
+
+    await run("tmc.updateExercises", "loud")
+
+    expect(shown).toEqual([
+      "status: Mooc Course is no longer available. Your other exercises are up to date.",
+    ])
+    const [course] = actionContext.startup.userData.getMoocCourses()
+    expect(course?.accessLoss?.reason).toBe("notFound")
+  })
+
+  test("an update check that every course refused for scope asks for a new login", async function () {
+    const { run, actionContext } = await harness({
+      langs: {
+        checkExerciseUpdates: async () =>
+          Ok({
+            updated: [],
+            removed: [],
+            uncheckedCourses: [{ courseId: COURSE_ID, refusal: new InsufficientScopeError("403") }],
+          }),
+      },
+    })
+
+    await run("tmc.updateExercises", "loud")
+
+    const [[headline, error]] = vi.mocked(actionContext.dialog.reportError).mock.calls as [
+      [string, Error],
+    ]
+    expect(headline).toBe("Failed to check for exercise updates.")
+    expect(error).toBeInstanceOf(InsufficientScopeError)
+    expect(actionContext.startup.userData.getMoocCourses()[0]?.accessLoss).toBeUndefined()
+  })
+
+  test("an update check that fails where the user has no courses is still an all-clear", async function () {
+    const { run, shown } = await harness({
+      langs: {
+        checkExerciseUpdates: async (backend: string) =>
+          backend === "tmc" ? Err(offline()) : Ok({ updated: [], removed: [] }),
+      },
+    })
+
+    await run("tmc.updateExercises", "loud")
+
+    expect(shown).toEqual(["status: All exercises are up to date."])
+  })
+
+  test("a course that fails to refresh from its panel shows in the panel only", async function () {
+    const { post, shown, panelFailures, shownPanel } = await harness({
+      langs: {
+        getMoocCourseData: async () => Err(offline()),
+        listLocalExercises: async () => Err(new Error("rescan failed")),
+      },
+    })
+
+    await post({
+      type: "refreshCourseDetails",
+      requestId: 1,
+      sourcePanel: shownPanel(),
+    })
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual(["refreshCourseDetails: Offline."])
+  })
+
+  test("a lost session scope is warned once, however often it is hit", async function () {
+    const { post, shown, shownPanel } = await harness({
+      langs: {
+        getMoocCourseData: async () => Err(new InsufficientScopeError("exercise-services")),
+        getEnrolledMoocCourses: async () => Err(new InsufficientScopeError("exercise-services")),
+      },
+    })
+    const sourcePanel = shownPanel()
+
+    await post({ type: "refreshCourseDetails", requestId: 1, sourcePanel })
+    await post({ type: "refreshCourseDetails", requestId: 2, sourcePanel })
+
+    expect(shown).toEqual(["error: Failed to update course data."])
+  })
+})
+
+suite("reported once: the refresh", function () {
+  test("a tree refresh that fails is one notification", async function () {
+    const { run, shown } = await harness({
+      langs: { getMoocCourseData: async () => Err(offline()) },
+    })
+
+    await run("tmcTreeView.refreshCourses")
+
+    expect(shown).toEqual([expect.stringMatching(/^error: Failed to fetch updates for \S+\.$/)])
+  })
+
+  test("a lost session scope is warned on a tree refresh too", async function () {
+    const { run, shown } = await harness({
+      langs: {
+        getMoocCourseData: async () => Err(new InsufficientScopeError("exercise-services")),
+        getEnrolledMoocCourses: async () => Err(new InsufficientScopeError("exercise-services")),
+      },
+    })
+
+    await run("tmcTreeView.refreshCourses")
+
+    expect(shown).toContain("error: Failed to update course data.")
+  })
+
+  test("a background refresh that fails shows nothing", async function () {
+    const { actionContext, shown } = await harness({
+      langs: { getMoocCourseData: async () => Err(offline()) },
+    })
+
+    await commands.refreshEverything(actionContext, { silent: true })
+
+    expect(shown).toEqual([])
+  })
+
+  test("new exercises are one notification, which offers Download or Later", async function () {
+    const { actionContext, shown } = await harness({
+      langs: { getMoocCourseData: async () => Err(new ConnectionError("offline")) },
+      course: storedCourse({ newExercises: [EXERCISE_ID] }),
+    })
+
+    await commands.refreshEverything(actionContext, { silent: true })
+    const offer = vi
+      .mocked(actionContext.dialog.notification)
+      .mock.calls.find(([message]) => message.includes("new exercise"))
+
+    expect(shown).toEqual(["info: 1 new exercise in Mooc Course."])
+    expect(offer?.slice(1).map((button) => button?.[0])).toEqual(["Download", "Later"])
+  })
+})
+
+/** The langs calls a refused submit, test run or paste must not reach. */
+const neverCalled = (): Record<string, ReturnType<typeof vi.fn>> => ({
+  submitMoocExercise: vi.fn(),
+  paste: vi.fn(),
+  runTests: vi.fn(),
+  runCheckstyle: vi.fn(),
+})
+
+suite("refused while an AI extension runs: every entry point", function () {
+  const reason =
+    "AI assistance must be off in this course. Disable Cline for this workspace" +
+    " (Extensions → Disable (Workspace)) and try again."
+  const vscodeModule = vscode as unknown as { extensions: typeof vscode.extensions }
+
+  function withEnabledExtensions(ids: string[]): void {
+    Object.defineProperty(vscodeModule, "extensions", {
+      value: {
+        all: ids.map((id) => ({ id })),
+        onDidChange: () => new vscode.Disposable(() => {}),
+      },
+      configurable: true,
+    })
+  }
+
+  // The restriction itself holds: only the extension check refuses.
+  const refusingHarness = (langs: Record<string, unknown> = {}): Promise<Harness> =>
+    harness({ langs, aiUseGate: new AiUseGate({ enforce: async () => undefined }) })
+
+  beforeEach(function () {
+    withEnabledExtensions(["saoudrizwan.claude-dev"])
+    onTestFinished(() => withEnabledExtensions([]))
+  })
+
+  const row = (): ExerciseTreeItem =>
+    Object.assign(exerciseRow("opened"), { exerciseUri: exercise.uri })
+
+  test.each<[string, string, () => unknown[]]>([
+    ["the palette", "tmc.submitExercise", () => []],
+    ["the palette", "tmc.testExercise", () => []],
+    ["an editor title button", "tmc.submitExercise", () => [exercise.uri]],
+    ["an editor title button", "tmc.testExercise", () => [exercise.uri]],
+    ["a Courses view inline action", "tmc.submitExercise", () => [row()]],
+    ["a Courses view inline action", "tmc.testExercise", () => [row()]],
+  ])(
+    "%s's %s says why, once, with one remedy, and does nothing",
+    async function (_entry, id, args) {
+      const langs = neverCalled()
+      const { actionContext, run, shown } = await refusingHarness(langs)
+
+      await run(id, ...args())
+
+      expect(shown).toEqual([`warning: ${reason}`])
+      const buttons = vi.mocked(actionContext.dialog.warningNotification).mock.calls[0]?.slice(1)
+      expect(buttons?.map((button) => (button as unknown as [string])[0])).toEqual(["Show Cline"])
+      for (const method of Object.values(langs)) {
+        expect(method).not.toHaveBeenCalled()
+      }
+    },
+  )
+
+  test("the status bar's action pick's Run Tests says why, once, and does nothing", async function () {
+    const langs = neverCalled()
+    const { actionContext, run, shown } = await refusingHarness(langs)
+    vi.mocked(actionContext.dialog.selectItem).mockImplementation(
+      async (_options, ...items) =>
+        items.filter((item) => "value" in item).find((item) => item.label.includes("Run Tests"))
+          ?.value,
+    )
+
+    await run("tmc.showExerciseActions")
+
+    expect(shown).toEqual([`warning: ${reason}`])
+    for (const method of Object.values(langs)) {
+      expect(method).not.toHaveBeenCalled()
+    }
+  })
+
+  test.each<[string, string, () => unknown[]]>([
+    ["the palette", "tmc.pasteExercise", () => []],
+    ["a test item's context menu", "tmc.testing.pasteExercise", () => [undefined]],
+  ])("%s's %s opens Get help, whose paste says why", async function (_entry, id, args) {
+    const langs = neverCalled()
+    const { run, post, shown, panelFailures, shownPanel } = await refusingHarness(langs)
+
+    await run(id, ...args())
+    await post({ type: "pasteExercise", requestId: 1, sourcePanel: shownPanel() })
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual([`pasteExercise: ${reason}`])
+    expect(langs.paste).not.toHaveBeenCalled()
+  })
+
+  test("a restore from the History says why its backup first is refused, and changes nothing", async function () {
+    const destructive = vi.fn()
+    const { run, post, shown, panelFailures, shownPanel } = await refusingHarness({
+      getOldSubmissions: oldSubmissions,
+      restoreSubmission: destructive,
+    })
+
+    await run("tmc.downloadOldSubmission")
+    await post({ type: "requestSubmissionHistory", requestId: 1, sourcePanel: shownPanel() })
+    await post({ type: "restoreSubmission", requestId: 2, sourcePanel: shownPanel(), key: "sub-1" })
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual([`restoreSubmission: ${reason}`])
+    expect(destructive).not.toHaveBeenCalled()
+  })
+
+  test.each([["tmc.resetExercise", "resetExercise"]])(
+    "%s's Submit first says why, once, and changes nothing",
+    async function (id, method) {
+      const destructive = vi.fn()
+      const { run, shown } = await refusingHarness({
+        getOldSubmissions: oldSubmissions,
+        [method]: destructive,
+      })
+
+      await run(id)
+
+      expect(shown).toEqual([`warning: ${reason}`])
+      expect(destructive).not.toHaveBeenCalled()
+    },
+  )
+
+  test("the remedy shows the extension in the Extensions view", async function () {
+    const { run } = await refusingHarness()
+    await run("tmc.submitExercise")
+
+    await run("tmc.showAiUseProblem")
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      "workbench.extensions.search",
+      "@id:saoudrizwan.claude-dev",
+    )
+  })
+
+  test("a paste from the submission panel says why in the panel, remedy included", async function () {
+    const langs = neverCalled()
+    const { actionContext, post, shown, panelFailures, shownPanel } = await refusingHarness(langs)
+    showSubmission(actionContext)
+
+    await post({ type: "pasteExercise", requestId: 1, sourcePanel: shownPanel() })
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toEqual([`pasteExercise: ${reason}`])
+    expect(langs.paste).not.toHaveBeenCalled()
+  })
+
+  test("keep waiting from the submission panel says why in the panel", async function () {
+    withEnabledExtensions([])
+    const waitForMoocGrading = vi.fn(async () => Err(offline()))
+    const { run, post, shown, panelFailures, shownPanel } = await refusingHarness({
+      submitMoocExercise: async () => Ok({ task_submission_id: "task-1" }),
+      waitForMoocGrading,
+    })
+    await run("tmc.submitExercise")
+    withEnabledExtensions(["saoudrizwan.claude-dev"])
+
+    await post({ type: "keepWaitingForGrading", requestId: 1, sourcePanel: shownPanel() })
+
+    expect(shown).toEqual([])
+    expect(panelFailures()).toContain(`keepWaitingForGrading: ${reason}`)
+    expect(waitForMoocGrading).toHaveBeenCalledOnce()
+  })
+})

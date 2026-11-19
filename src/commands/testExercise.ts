@@ -1,37 +1,23 @@
-import * as actions from "../actions";
-import { ActionContext } from "../actions/types";
-import { BottleneckError } from "../errors";
-import { Logger } from "../utilities";
-import * as vscode from "vscode";
+import { Err } from "ts-results"
+import type * as vscode from "vscode"
 
+import type { ReadyActionContext } from "../actions/types"
+import type { ExerciseTestController } from "../testing/exerciseTestController"
+import { runForExercise } from "./runForExercise"
+
+/**
+ * Runs an exercise's tests through the test controller, so the results land in Test Results.
+ *
+ * @param controller `undefined` when activation set up no local testing.
+ */
 export async function testExercise(
-    context: vscode.ExtensionContext,
-    actionContext: ActionContext,
-    resource: vscode.Uri | undefined,
+  actionContext: ReadyActionContext,
+  controller: ExerciseTestController | undefined,
+  resource: vscode.Uri | undefined,
 ): Promise<void> {
-    const { dialog, workspaceManager } = actionContext;
-    Logger.info("Testing exercise");
-    if (workspaceManager.err) {
-        Logger.error("Extension was not initialized properly");
-        return;
-    }
-
-    const exercise = resource
-        ? workspaceManager.val.getExerciseByPath(resource)
-        : workspaceManager.val.activeExercise;
-    if (!exercise) {
-        dialog.errorNotification("Currently open editor is not part of a TMC exercise.");
-        return;
-    }
-
-    const result = await actions.testExercise(context, actionContext, exercise);
-    if (result.err) {
-        if (result.val instanceof BottleneckError) {
-            Logger.warn("Test run was cancelled:", result.val);
-            return;
-        }
-
-        dialog.errorNotification("Exercise test run failed.", result.val);
-        return;
-    }
+  await runForExercise(actionContext, resource, "Testing the exercise", async (exercise) => {
+    return controller
+      ? controller.runExercise(exercise)
+      : Err(new Error("Local testing is not available."))
+  })
 }

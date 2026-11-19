@@ -17,6 +17,10 @@ backend/cli/
 dist/
 out/
 *.vsix
+coverage/
 /test-results/
 /playwright-report/
 /playwright/.cache/
+
+# svelte-check --tsgo transpilation scratch dir
+webview-ui/.svelte-check/

@@ -1,99 +1,105 @@
 import {
-    dateToString,
-    findNextDateAfter,
-    parseNextDeadlineAfter,
-} from "../../utilities/dateDeadline";
-import { strictEqual } from "assert";
+  findNextDateAfter,
+  formatDateTime,
+  formatDeadline,
+  formatDeadlineBriefly,
+  formatNearRelativeTime,
+  formatTimestamp,
+  parseDate,
+} from "../../utilities/dateDeadline"
+
+const absolute = (date: Date, locale: string): string =>
+  new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date)
 
 suite("Date utils", () => {
-    const CURRENT_TIME = new Date(2020, 3, 1);
-    const TARGET_TIME = new Date(2020, 3, 2);
-    const PASSED_DATES = [new Date(2020, 1, 1), new Date(2020, 2, 23), new Date(2020, 2, 17)];
-    const FUTURE_DATES = [TARGET_TIME, new Date(2020, 6, 1)];
-    const TESTSET = PASSED_DATES.concat(FUTURE_DATES);
+  const CURRENT_TIME = new Date(2020, 3, 1)
+  const TARGET_TIME = new Date(2020, 3, 2)
+  const PASSED_DATES = [new Date(2020, 1, 1), new Date(2020, 2, 23), new Date(2020, 2, 17)]
+  const FUTURE_DATES = [TARGET_TIME, new Date(2020, 6, 1)]
+  const TESTSET = PASSED_DATES.concat(FUTURE_DATES)
 
-    test("findNextDateAfter", () => {
-        strictEqual(
-            findNextDateAfter(CURRENT_TIME, []),
-            null,
-            "Next date in empty array should be null.",
-        );
-        strictEqual(
-            findNextDateAfter(CURRENT_TIME, [CURRENT_TIME]),
-            null,
-            "Next date after start date can't be itself.",
-        );
-        strictEqual(
-            findNextDateAfter(CURRENT_TIME, PASSED_DATES),
-            null,
-            "Next date after too early dates should be null.",
-        );
-        strictEqual(
-            findNextDateAfter(CURRENT_TIME, FUTURE_DATES),
-            TARGET_TIME,
-            "Next date isn't correct with only later dates.",
-        );
-        strictEqual(
-            findNextDateAfter(CURRENT_TIME, TESTSET),
-            TARGET_TIME,
-            "Next date isn't correct with both earlier and later dates.",
-        );
-    });
+  test("findNextDateAfter", () => {
+    expect(
+      findNextDateAfter(CURRENT_TIME, []),
+      "Next date in empty array should be null.",
+    ).toBeNull()
+    expect(
+      findNextDateAfter(CURRENT_TIME, [CURRENT_TIME]),
+      "Next date after start date can't be itself.",
+    ).toBeNull()
+    expect(
+      findNextDateAfter(CURRENT_TIME, PASSED_DATES),
+      "Next date after too early dates should be null.",
+    ).toBeNull()
+    expect(
+      findNextDateAfter(CURRENT_TIME, FUTURE_DATES),
+      "Next date isn't correct with only later dates.",
+    ).toBe(TARGET_TIME)
+    expect(
+      findNextDateAfter(CURRENT_TIME, TESTSET),
+      "Next date isn't correct with both earlier and later dates.",
+    ).toBe(TARGET_TIME)
+  })
 
-    test("parseNextDeadline", () => {
-        const NO_DEADLINE = "No deadline";
-        const ALL_DEADLINES_HAVE_EXPIRED = "All deadlines have expired";
+  test("an unparseable deadline does not hide a real one", () => {
+    const invalid = parseDate("whenever")
+    expect(invalid, "An unparseable timestamp must not become a date.").toBeNull()
 
-        strictEqual(
-            parseNextDeadlineAfter(CURRENT_TIME, []),
-            NO_DEADLINE,
-            `Parsed deadline from empty array should be "${NO_DEADLINE}"`,
-        );
-        strictEqual(
-            parseNextDeadlineAfter(CURRENT_TIME, [{ date: CURRENT_TIME, active: true }]),
-            ALL_DEADLINES_HAVE_EXPIRED,
-            "Parsed deadline after current date can't be itself",
-        );
+    expect(findNextDateAfter(CURRENT_TIME, [invalid, TARGET_TIME])).toBe(TARGET_TIME)
+    expect(findNextDateAfter(CURRENT_TIME, [TARGET_TIME, invalid])).toBe(TARGET_TIME)
+  })
 
-        const parsedTarget = parseNextDeadlineAfter(CURRENT_TIME, [
-            { date: TARGET_TIME, active: true },
-        ]);
-        strictEqual(
-            parsedTarget,
-            `Next deadline: ${dateToString(TARGET_TIME)}`,
-            "Parsed deadline from one active target time should be that",
-        );
-        strictEqual(
-            parseNextDeadlineAfter(
-                CURRENT_TIME,
-                PASSED_DATES.map((x) => ({ date: x, active: true })),
-            ),
-            ALL_DEADLINES_HAVE_EXPIRED,
-            `Parsed deadline after active past dates should be "${ALL_DEADLINES_HAVE_EXPIRED}"`,
-        );
-        strictEqual(
-            parseNextDeadlineAfter(
-                CURRENT_TIME,
-                PASSED_DATES.map((x) => ({ date: x, active: false })),
-            ),
-            ALL_DEADLINES_HAVE_EXPIRED,
-            `Parsed deadline after inactive past dates should be "${ALL_DEADLINES_HAVE_EXPIRED}"`,
-        );
-        strictEqual(
-            parseNextDeadlineAfter(
-                CURRENT_TIME,
-                FUTURE_DATES.map((x) => ({ date: x, active: true })),
-            ),
-            parsedTarget,
-            `Parsed deadline from active future dates was expected to be "${parsedTarget}"`,
-        );
-        strictEqual(
-            parseNextDeadlineAfter(
-                CURRENT_TIME,
-                FUTURE_DATES.map((x) => ({ date: x, active: false })),
-            ),
-            parsedTarget,
-            `Parsed deadline from inactive future dates was expected to be "${parsedTarget}"`,
-        );
-    });
-});
+  suite("formatDeadline", () => {
+    const NOW = new Date("2026-06-01T12:00:00Z")
+
+    test("renders a distant deadline in the given language, without a hint", () => {
+      const date = new Date("2026-09-01T12:00:00Z")
+      expect(formatDeadline(date, NOW, "fi")).toBe(absolute(date, "fi"))
+      expect(formatDeadline(date, NOW, "en-US")).not.toMatch(/GMT|\(/)
+    })
+
+    test("adds a relative hint within a week, either side of now", () => {
+      const soon = new Date("2026-06-04T12:00:00Z")
+      expect(formatDeadline(soon, NOW, "en-US")).toBe(`${absolute(soon, "en-US")} (in 3 days)`)
+      const hoursAgo = new Date("2026-06-01T07:00:00Z")
+      expect(formatDeadline(hoursAgo, NOW, "en-US")).toBe(
+        `${absolute(hoursAgo, "en-US")} (5 hours ago)`,
+      )
+    })
+
+    test("briefly, is relative within a week and the date alone further off", () => {
+      expect(formatDeadlineBriefly(new Date("2026-06-04T12:00:00Z"), NOW, "en-US")).toBe(
+        "in 3 days",
+      )
+      expect(formatDeadlineBriefly(new Date("2225-01-02T12:00:00Z"), NOW, "en-US")).toBe(
+        "Jan 2, 2225",
+      )
+      expect(formatNearRelativeTime(new Date("2225-01-02T12:00:00Z"), NOW, "en-US")).toBeUndefined()
+    })
+
+    test("renders nothing for a date that cannot be rendered", () => {
+      expect(formatDeadline(new Date(NaN), NOW, "en-US")).toBe("")
+      expect(formatDateTime(new Date(NaN), "en-US")).toBe("")
+    })
+
+    test("keeps each language's formatting apart", () => {
+      const date = new Date("2026-09-01T12:00:00Z")
+      expect(formatDateTime(date, "fi")).toBe(absolute(date, "fi"))
+      expect(formatDateTime(date, "en-US")).toBe(absolute(date, "en-US"))
+      expect(formatDateTime(date, "fi")).toBe(absolute(date, "fi"))
+    })
+  })
+
+  suite("formatTimestamp", () => {
+    test("tells apart moments a second apart, with the date only when not today", () => {
+      const now = new Date(2026, 10, 12, 21, 40, 0)
+      const first = new Date(2026, 10, 12, 21, 37, 1)
+      const second = new Date(2026, 10, 12, 21, 37, 2)
+      expect(formatTimestamp(first, now, "en-US")).toBe("9:37:01 PM")
+      expect(formatTimestamp(second, now, "en-US")).toBe("9:37:02 PM")
+      expect(formatTimestamp(new Date(2026, 10, 11, 21, 37, 1), now, "en-US")).toBe(
+        "Nov 11, 2026, 9:37:01 PM",
+      )
+    })
+  })
+})

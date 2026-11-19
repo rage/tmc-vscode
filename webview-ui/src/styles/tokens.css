@@ -1,0 +1,96 @@
+/*
+ * App-level design tokens. Components use these instead of raw `--vscode-*` names or literals.
+ * Size tokens are only exported by VS Code >= 1.137 and the engine floor is 1.100, hence the px
+ * fallbacks. Colour chains end in a token every theme kind defines: several `--vscode-*` colours
+ * are absent in High Contrast, and an absent variable renders its fallback.
+ */
+:root {
+  --tmc-space-1: var(--vscode-spacing-size40, 4px);
+  --tmc-space-2: var(--vscode-spacing-size80, 8px);
+  --tmc-space-3: var(--vscode-spacing-size120, 12px);
+  --tmc-space-4: var(--vscode-spacing-size160, 16px);
+  --tmc-space-6: var(--vscode-spacing-size240, 24px);
+
+  --tmc-radius: var(--vscode-cornerRadius-small, 4px);
+
+  --tmc-font-size-body: var(--vscode-font-size, 13px);
+  --tmc-font-size-heading: 1.4em;
+  --tmc-font-size-section: 11px;
+  --tmc-content-max-width: 720px;
+  /* The tree's row height, for lists that sit beside it. */
+  --tmc-list-row-height: 22px;
+  --tmc-font-mono: var(--vscode-editor-font-family, monospace);
+  --tmc-font-size-mono: var(--vscode-editor-font-size, 13px);
+
+  --tmc-fg-muted: var(--vscode-descriptionForeground);
+
+  /* Icon colours only: these fail text contrast on light themes. charts.green comes first
+     because testing.iconPassed stays #73c991, 2:1 on white, in light themes. */
+  --tmc-status-passed: var(--vscode-charts-green, var(--vscode-testing-iconPassed));
+  --tmc-status-failed: var(--vscode-testing-iconFailed, var(--vscode-errorForeground));
+  --tmc-status-warning: var(--vscode-editorWarning-foreground);
+
+  --tmc-surface-border: var(
+    --vscode-welcomePage-tileBorder,
+    var(--vscode-contrastBorder, transparent)
+  );
+  --tmc-hc-outline: var(--vscode-contrastBorder, transparent);
+  --tmc-hc-active-outline: var(--vscode-contrastActiveBorder, transparent);
+  --tmc-focus-border: var(--vscode-focusBorder);
+
+  --tmc-code-background: var(--vscode-textCodeBlock-background, transparent);
+
+  /* High Contrast's button.background is the page colour. */
+  --tmc-meter-fill: var(
+    --vscode-contrastActiveBorder,
+    var(--vscode-button-background, var(--vscode-foreground))
+  );
+  --tmc-meter-track: var(--vscode-scrollbarSlider-background, transparent);
+
+  --tmc-list-hover: var(--vscode-list-hoverBackground, transparent);
+  --tmc-list-active: var(--vscode-list-activeSelectionBackground, transparent);
+  --tmc-list-active-foreground: var(--vscode-list-activeSelectionForeground, inherit);
+  --tmc-list-focus-outline: var(--vscode-list-focusOutline, var(--tmc-focus-border));
+
+  /* The settings editor's inputs, which @vscode-elements' text fields also use. */
+  --tmc-input-background: var(--vscode-settings-textInputBackground);
+  --tmc-input-foreground: var(--vscode-settings-textInputForeground);
+  /* input.placeholderForeground fails text contrast in the 2026 themes. */
+  --tmc-input-placeholder: var(--tmc-fg-muted);
+  --tmc-input-border: var(--vscode-settings-textInputBorder, var(--tmc-hc-outline));
+
+  --tmc-badge-background: var(--vscode-badge-background);
+  --tmc-badge-foreground: var(--vscode-badge-foreground);
+
+  --tmc-toolbar-hover: var(--vscode-toolbar-hoverBackground, transparent);
+  --tmc-icon-foreground: var(--vscode-icon-foreground, var(--vscode-foreground));
+
+  --tmc-menu-background: var(--vscode-menu-background);
+  --tmc-menu-foreground: var(--vscode-menu-foreground);
+  --tmc-menu-border: var(--vscode-menu-border, var(--vscode-contrastBorder, transparent));
+  --tmc-menu-selection-background: var(--vscode-menu-selectionBackground, transparent);
+  --tmc-menu-selection-foreground: var(--vscode-menu-selectionForeground, inherit);
+  --tmc-menu-selection-border: var(--vscode-menu-selectionBorder, transparent);
+  --tmc-menu-shadow: var(--vscode-widget-shadow, transparent);
+
+  /* The banner states an outcome; its tone is the accent alone, so one background serves all. */
+  --tmc-banner-background: var(--vscode-textBlockQuote-background, transparent);
+
+  /* The accent alone carries the kind; inputValidation's fills are heavier than VS Code's own. */
+  --tmc-notice-error-background: var(--tmc-banner-background);
+  --tmc-notice-warning-background: var(--tmc-banner-background);
+  --tmc-notice-info-background: var(--tmc-banner-background);
+  /* errorForeground and editorWarning.foreground are under 3:1 on their tints in light themes. */
+  --tmc-notice-error-accent: var(--tmc-status-failed);
+  --tmc-notice-warning-accent: var(
+    --vscode-list-warningForeground,
+    var(--vscode-editorWarning-foreground)
+  );
+  --tmc-notice-info-accent: var(--vscode-editorInfo-foreground, var(--vscode-foreground));
+
+  --tmc-section-header-foreground: var(--vscode-sideBarSectionHeader-foreground, inherit);
+  --tmc-section-header-border: var(
+    --vscode-sideBarSectionHeader-border,
+    var(--vscode-contrastBorder, transparent)
+  );
+}

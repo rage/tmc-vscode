@@ -1,63 +1,73 @@
-import { EXTENSION_ID, WORKSPACE_ROOT_FILE_TEXT, WORKSPACE_SETTINGS } from "../config/constants";
-import Resources from "../config/resources";
-import Storage from "../storage";
-import { Logger } from "../utilities/logger";
-import * as fs from "fs-extra";
-import * as path from "path";
-import { Ok, Result } from "ts-results";
-import * as vscode from "vscode";
+import * as fs from "fs-extra"
+import type { Result } from "ts-results"
+import { Err, Ok } from "ts-results"
+
+import { ensureCourseWorkspaceFile, ensureWorkspaceRootFile } from "../api/workspaceManager"
+import Resources from "../config/resources"
+import { CorruptStoredDataError, FileSystemError } from "../errors"
+import type Storage from "../storage"
+import { unpinExtensionSettings } from "../storage/migration/courseWorkspaceFiles"
+import { Logger } from "../utilities/logger"
 
 /**
- * Performs resource initialization on extension activation
- * @param extensionContext Extension context
+ * Creates the directories and workspace files the extension needs, and describes where
+ * they live.
+ *
+ * Returns `Err` for every failure, such as a filesystem the user cannot write to.
+ * Activation degrades on that `Err` instead of aborting, so nothing here may throw.
+ * Unreadable stored courses are not a failure here: `UserData` reports them, and only
+ * what needs the courses degrades.
  */
 export async function resourceInitialization(
-    extensionContext: vscode.ExtensionContext,
-    storage: Storage,
-    tmcDataPath: string | undefined,
-    workspaceFileFolder: string,
+  storage: Storage,
+  tmcDataPath: string | undefined,
+  workspaceFileFolder: string,
 ): Promise<Result<Resources, Error>> {
-    const extensionVersion = vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON.version;
-
-    const cssPath = extensionContext.asAbsolutePath("resources/styles");
-    const htmlPath = extensionContext.asAbsolutePath("resources/templates");
-    const mediaPath = extensionContext.asAbsolutePath("media");
-
+  try {
     if (tmcDataPath) {
-        if (!fs.existsSync(tmcDataPath)) {
-            fs.mkdirSync(tmcDataPath, { recursive: true });
-            Logger.info(`Created tmc data directory at ${tmcDataPath}`);
-        }
+      const created = await fs.mkdir(tmcDataPath, { recursive: true })
+      if (created !== undefined) {
+        Logger.info(`Created tmc data directory at ${tmcDataPath}`)
+      }
     } else {
-        Logger.warn("Skipped tmc data directory check");
+      Logger.warn("Skipped tmc data directory check")
     }
 
-    const resources = new Resources(
-        cssPath,
-        extensionVersion,
-        htmlPath,
-        mediaPath,
-        workspaceFileFolder,
-        tmcDataPath,
-    );
+    const resources = new Resources(workspaceFileFolder, tmcDataPath)
+    await unpinExtensionSettings(workspaceFileFolder)
 
-    // Verify that all course .code-workspaces are in-place on startup.
-    fs.ensureDirSync(workspaceFileFolder);
-    const userData = storage.getUserData();
-    userData?.courses.forEach((course) => {
-        const tmcWorkspaceFilePath = path.join(
-            workspaceFileFolder,
-            course.name + ".code-workspace",
-        );
-        if (!fs.existsSync(tmcWorkspaceFilePath)) {
-            fs.writeFileSync(tmcWorkspaceFilePath, JSON.stringify(WORKSPACE_SETTINGS));
-            Logger.info(`Created tmc workspace file at ${tmcWorkspaceFilePath}`);
-        }
-    });
+    const userData = readableUserData(storage)
+    const storedCourses = [
+      ["tmc", userData?.courses ?? []],
+      ["mooc", userData?.mooc_courses ?? []],
+    ] as const
 
-    // Verify that .tmc folder and its contents exists
-    fs.ensureDirSync(resources.workspaceRootFolder.fsPath);
-    fs.writeFileSync(resources.workspaceRootFile.fsPath, WORKSPACE_ROOT_FILE_TEXT);
+    // A course whose workspace file went missing is unopenable, so every stored
+    // course gets one back on startup.
+    await Promise.all([
+      ensureWorkspaceRootFile(workspaceFileFolder),
+      ...storedCourses.flatMap(([backend, courses]) =>
+        courses.map((course) =>
+          ensureCourseWorkspaceFile(resources.getWorkspaceFilePath(course.name, backend)),
+        ),
+      ),
+    ])
 
-    return new Ok(resources);
+    return new Ok(resources)
+  } catch (e) {
+    return new Err(new FileSystemError(e, "Failed to create the extension's workspace files"))
+  }
+}
+
+/** The stored courses, or `undefined` when unreadable: reading them is `UserData`'s failure to report. */
+function readableUserData(storage: Storage): ReturnType<Storage["getUserData"]> {
+  try {
+    return storage.getUserData()
+  } catch (e) {
+    if (e instanceof CorruptStoredDataError) {
+      Logger.warn("Skipped restoring course workspace files: stored courses are unreadable.")
+      return undefined
+    }
+    throw e
+  }
 }

@@ -3,57 +3,53 @@
 .vscode/**
 .vscode-test/**
 bin/**
-containers/**
 node_modules/**
-out/**
 src/**
 submodules/**
-test-resources/**
+test-results/**
+test-artifacts/**
+playwright/**
+playwright-report/**
+coverage/**
+playwright.config.ts
 
 **/.dockerignore
-**/.eslintcache
 **/.gitattributes
 **/.gitignore
 **/.gitmodules
-**/.eslintignore
-**/.eslintrc.json
-**dist/integration*
+**/dist/integration*
 **/dist/test*
-**/tsconfig.json
-**/tsconfig.production.json
-**/tslint.json
+**/tsconfig*.json
 **/*.map
 **/*.ts
 **/vsc-extension-quickstart.md
 config.js
 
+# pnpm workspace files (not needed in the packaged extension)
+pnpm-workspace.yaml
+pnpm-lock.yaml
+patches/**
+
 # Media
 # Nothing hidden
 
-# Docs
-docs/architecture.md
-docs/development.md
-docs/extension-state.md
-docs/publish.md
+# Docs (docs/FAQ.md is inlined into the bundle by the esbuild text loader)
+docs/**
 
 # Development backend
 backend/**
 
-# Webpack configuration
-webpack.common.js
-webpack.config.js
-webpack.dev.js
-webpack.prod.js
+# Build configuration (esbuild bundles the extension host)
+esbuild.mjs
 
 # Ignore all webview-ui files except the build directory
 webview-ui/src/**
-#webview-ui/public/**
-webview-ui/scripts/**
-webview-ui/index.html
+webview-ui/dev/**
+webview-ui/a11y/**
 webview-ui/README.md
 webview-ui/package.json
-webview-ui/package-lock.json
-webview-ui/rollup.config.js
+webview-ui/vite.config.ts
+webview-ui/svelte.config.js
 webview-ui/node_modules/**
 
 # Other files

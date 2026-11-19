@@ -1,44 +1,308 @@
-import * as actions from "../actions";
-import { ActionContext } from "../actions/types";
-import { Logger } from "../utilities";
+import type { Result } from "ts-results"
+import * as vscode from "vscode"
 
-export async function addNewCourse(actionContext: ActionContext): Promise<void> {
-    const { dialog, tmc } = actionContext;
-    Logger.info("Adding new course");
-    if (tmc.err) {
-        Logger.error("Extension was not initialized properly");
-        return;
+import type { Course, MoocCourse, Organization } from "../../shared/langsSchema"
+import {
+  backendName,
+  CourseIdentifier,
+  LocalCourseData,
+  makeMoocKind,
+  makeTmcKind,
+} from "../../shared/lib"
+import * as actions from "../actions"
+import type { ReadyActionContext } from "../actions/types"
+import { separator } from "../api/dialog"
+import { withOperation } from "../api/withOperation"
+import { MOOC_BACKEND_URL } from "../config/constants"
+import { Logger, openWebLink } from "../utilities"
+import { showNextWalkthroughStep, walkthroughProgressOf } from "../window/walkthrough"
+
+const TITLE = "Add Course"
+
+/** What accepting a row of the pick does. */
+type Choice =
+  | { kind: "login" }
+  | { kind: "findCourse" }
+  | { kind: "organization"; organization: Organization }
+  | { kind: "course"; courseId: CourseIdentifier; name: string; organizationSlug: string }
+  | { kind: "added"; courseId: CourseIdentifier }
+  // Neither backend listed anything; the add-course screen says why.
+  | { kind: "unavailable" }
+
+interface ChoiceItem extends vscode.QuickPickItem {
+  choice?: Choice
+}
+
+/** A course row. Added courses stay listed so students can find them; picking one opens it. */
+function courseItem(
+  courseId: CourseIdentifier,
+  name: string,
+  organizationSlug: string,
+  isAdded: boolean,
+  description?: string,
+): ChoiceItem {
+  const note = isAdded ? "Already added" : undefined
+  return {
+    label: name,
+    description: [description, note].filter(Boolean).join(" · "),
+    iconPath: new vscode.ThemeIcon(isAdded ? "check" : "mortar-board"),
+    choice: isAdded
+      ? { kind: "added", courseId }
+      : { kind: "course", courseId, name, organizationSlug },
+  }
+}
+
+/**
+ * Quick pick over both backends' courses, the Command Palette's fast path past the add-course
+ * screen; adds the pick and opens its course home.
+ *
+ * courses.mooc.fi lists only enrolled courses, added in one step. tmc.mooc.fi has thousands
+ * behind its organizations, so an organization opens a second step listing its courses.
+ * Rows appear once both backends answer, so none moves under the pointer.
+ */
+export async function addNewCourse(actionContext: ReadyActionContext): Promise<void> {
+  const { dialog } = actionContext
+  const { userData } = actionContext.startup
+  Logger.info("Adding new course")
+
+  const addedCourses = new Set(
+    userData
+      .getCourses()
+      .map((course) => CourseIdentifier.key(LocalCourseData.getCourseId(course))),
+  )
+  const isAdded = (id: CourseIdentifier): boolean => addedCourses.has(CourseIdentifier.key(id))
+
+  const chosen = await pickCourse(actionContext, isAdded)
+  if (!chosen) {
+    return
+  }
+  if (chosen.kind === "login") {
+    await vscode.commands.executeCommand("tmc.showMoocLogin")
+    return
+  }
+  if (chosen.kind === "unavailable") {
+    await vscode.commands.executeCommand("tmc.showAddCourse")
+    return
+  }
+  if (chosen.kind === "findCourse") {
+    await openWebLink(MOOC_BACKEND_URL)
+    return
+  }
+  if (chosen.kind === "added") {
+    await vscode.commands.executeCommand("tmc.courseDetails", chosen.courseId)
+    return
+  }
+  const added = await withOperation(
+    dialog,
+    {
+      failure: "Failed to add course.",
+      progress: `Adding ${chosen.name}…`,
+    },
+    () => actions.addNewCourse(actionContext, chosen.organizationSlug, chosen.courseId),
+  )
+  if (added.ok) {
+    // Behind the course home, which opens next.
+    await showNextWalkthroughStep(() => walkthroughProgressOf(actionContext)).catch((e) =>
+      Logger.warn("Could not show the next walkthrough step", e),
+    )
+    await vscode.commands.executeCommand("tmc.courseDetails", chosen.courseId)
+  }
+}
+
+/** Runs the pick; resolves to the choice, or `undefined` when dismissed. */
+function pickCourse(
+  actionContext: ReadyActionContext,
+  isAdded: (id: CourseIdentifier) => boolean,
+): Promise<Exclude<Choice, { kind: "organization" }> | undefined> {
+  const { dialog } = actionContext
+  const quickPick = vscode.window.createQuickPick<ChoiceItem>()
+  quickPick.title = TITLE
+  quickPick.matchOnDescription = true
+  quickPick.ignoreFocusOut = true
+
+  let moocRows: ChoiceItem[] | undefined
+  let tmcRows: ChoiceItem[] | undefined
+  const unavailable: string[] = []
+  // In display order, not in the order the backends failed.
+  const unavailableNames = (): string[] =>
+    [backendName("mooc"), backendName("tmc")].filter((name) => unavailable.includes(name))
+  let step: 1 | 2 = 1
+  // Bumped on every step change, so a late listing for a step the user left is dropped.
+  let stepGeneration = 0
+  const organizationCourses = new Map<string, ReturnType<typeof actions.listOrganizationCourses>>()
+
+  const enterFirstStep = (): void => {
+    step = 1
+    stepGeneration++
+    quickPick.step = undefined
+    quickPick.totalSteps = undefined
+    quickPick.buttons = []
+    quickPick.value = ""
+    renderFirstStep()
+  }
+
+  /** Redraws the first step's rows without touching the user's filter text. */
+  const renderFirstStep = (): void => {
+    // Naming the missing backend in the placeholder keeps a partial list from looking complete.
+    const search = `Search your courses or ${backendName("tmc")} organizations`
+    quickPick.placeholder =
+      unavailable.length === 0
+        ? search
+        : `${search} (${unavailableNames().join(" and ")} unavailable)`
+    if (moocRows === undefined || tmcRows === undefined) {
+      quickPick.items = []
+      quickPick.busy = true
+      return
+    }
+    quickPick.items = [
+      ...(moocRows.length > 0
+        ? [separator(`${backendName("mooc")} — your courses`), ...moocRows]
+        : []),
+      ...(tmcRows.length > 0
+        ? [separator(`${backendName("tmc")} — organizations`), ...tmcRows]
+        : []),
+    ]
+    quickPick.busy = false
+  }
+
+  const moocListing = actions.listEnrolledMoocCourses(actionContext).then((listing) => {
+    moocRows = moocListingRows(listing, isAdded, unavailable)
+  })
+  const tmcListing = actions.listTmcOrganizations(actionContext).then((listing) => {
+    tmcRows = tmcListingRows(listing, unavailable)
+  })
+
+  return new Promise((resolve) => {
+    let isSettled = false
+    const settle = (choice: Exclude<Choice, { kind: "organization" }> | undefined): void => {
+      if (!isSettled) {
+        isSettled = true
+        resolve(choice)
+        quickPick.hide()
+      }
     }
 
-    const organizationsResult = await tmc.val.getOrganizations();
-    if (organizationsResult.err) {
-        dialog.errorNotification("Failed to fetch organizations.", organizationsResult.val);
-        return;
+    const showOrganization = async (organization: Organization): Promise<void> => {
+      step = 2
+      const generation = ++stepGeneration
+      quickPick.step = 2
+      quickPick.totalSteps = 2
+      quickPick.buttons = [vscode.QuickInputButtons.Back]
+      quickPick.value = ""
+      quickPick.placeholder = `Which course in ${organization.name}?`
+      quickPick.items = []
+      quickPick.busy = true
+      let listing = organizationCourses.get(organization.slug)
+      if (!listing) {
+        listing = actions.listOrganizationCourses(actionContext, organization.slug)
+        organizationCourses.set(organization.slug, listing)
+      }
+      const courses = await listing
+      if (generation !== stepGeneration || isSettled) {
+        return
+      }
+      quickPick.busy = false
+      if (courses.err) {
+        void dialog.reportError(
+          `Failed to fetch organization courses for ${organization.name}.`,
+          courses.val,
+        )
+        settle(undefined)
+        return
+      }
+      quickPick.items = courses.val.map((course: Course) => {
+        const id = makeTmcKind({ courseId: course.id })
+        return courseItem(id, course.title, organization.slug, isAdded(id), course.name)
+      })
     }
 
-    const chosenOrg = await dialog.selectItem(
-        "Which organization?",
-        ...organizationsResult.val.map<[string, string]>((org) => [org.name, org.slug]),
-    );
-    if (chosenOrg === undefined) {
-        return;
-    }
+    quickPick.onDidAccept(() => {
+      const choice = quickPick.selectedItems[0]?.choice
+      if (!choice) {
+        return
+      }
+      if (choice.kind === "organization") {
+        void showOrganization(choice.organization)
+      } else {
+        settle(choice)
+      }
+    })
+    quickPick.onDidTriggerButton((button) => {
+      if (button === vscode.QuickInputButtons.Back) {
+        enterFirstStep()
+      }
+    })
+    quickPick.onDidHide(() => {
+      settle(undefined)
+      quickPick.dispose()
+    })
 
-    const courses = await tmc.val.getCourses(chosenOrg);
-    if (courses.err) {
-        dialog.errorNotification(`Failed to fetch organization courses for ${chosenOrg}.`);
-        return;
-    }
-    const chosenCourse = await dialog.selectItem<number>(
-        "Which course?",
-        ...courses.val.map<[string, number]>((course) => [course.title, course.id]),
-    );
-    if (chosenCourse === undefined) {
-        return;
-    }
+    void Promise.all([moocListing, tmcListing]).then(() => {
+      if (step !== 1 || isSettled) {
+        return
+      }
+      renderFirstStep()
+      if (quickPick.items.length === 0) {
+        Logger.warn(`Failed to fetch courses from ${unavailableNames().join(" or ")}.`)
+        settle({ kind: "unavailable" })
+      }
+    })
 
-    const result = await actions.addNewCourse(actionContext, chosenOrg, chosenCourse);
-    if (result.err) {
-        dialog.errorNotification("Failed to add course.", result.val);
-    }
+    enterFirstStep()
+    quickPick.show()
+  })
+}
+
+function moocListingRows(
+  listing: Result<MoocCourse[], Error> | typeof actions.MOOC_LOGIN,
+  isAdded: (id: CourseIdentifier) => boolean,
+  unavailable: string[],
+): ChoiceItem[] {
+  if (listing === actions.MOOC_LOGIN) {
+    return [
+      {
+        label: "Log In",
+        description: "with your MOOC.fi account to list the courses you are enrolled in",
+        iconPath: new vscode.ThemeIcon("sign-in"),
+        choice: { kind: "login" },
+      },
+    ]
+  }
+  if (listing.err) {
+    unavailable.push(backendName("mooc"))
+    Logger.warn(`Failed to fetch ${backendName("mooc")} courses.`, listing.val)
+    return []
+  }
+  if (listing.val.length === 0) {
+    return [
+      {
+        label: `Find a Course on ${backendName("mooc")}`,
+        description: "You are not enrolled on any course with programming exercises yet",
+        iconPath: new vscode.ThemeIcon("link-external"),
+        choice: { kind: "findCourse" },
+      },
+    ]
+  }
+  return listing.val.map((course) => {
+    const id = makeMoocKind({ moocCourseId: course.id })
+    // The mooc arm of the action takes the organization from the course it fetches.
+    return courseItem(id, course.name, "", isAdded(id), course.organization_name)
+  })
+}
+
+function tmcListingRows(
+  listing: Result<Organization[], Error>,
+  unavailable: string[],
+): ChoiceItem[] {
+  if (listing.err) {
+    unavailable.push(backendName("tmc"))
+    Logger.warn("Failed to fetch TMC organizations.", listing.val)
+    return []
+  }
+  return listing.val.map((organization) => ({
+    label: organization.name,
+    description: "Browse courses",
+    iconPath: new vscode.ThemeIcon("organization"),
+    choice: { kind: "organization", organization },
+  }))
 }

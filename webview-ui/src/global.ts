@@ -1,3 +1,0 @@
-/// <reference types="svelte" />
-
-export {};

@@ -1,0 +1,45 @@
+{
+  "$schema": "./node_modules/knip/schema.json",
+  // An export read only inside its own module is over-wide, not dead. Narrowing
+  // those is a far larger cleanup, and reporting them would bury the dead ones.
+  "ignoreExportsUsedInFile": true,
+  // Entry and ignore patterns that stopped matching anything are how this config
+  // rots into a rubber stamp, so they fail it.
+  "treatConfigHintsAsErrors": true,
+  "ignoreIssues": {
+    // Each data_vN module states one storage version's complete shape, members
+    // no current code reads included; VS Code storage can still hold them.
+    "src/storage/data/**": ["exports", "types", "enumMembers"],
+
+    // LOCAL_EXERCISE_AWARDED_POINTS_PLACEHOLDER is deliberately defined equal to
+    // LOCAL_EXERCISE_AVAILABLE_POINTS_PLACEHOLDER (both 1, for a placeholder passed
+    // exercise); each name is used independently at its own call sites, so this is
+    // not a real duplicate, just two constants knip's value-based check can't tell apart.
+    "src/config/constants.ts": ["duplicates"]
+  },
+  "workspaces": {
+    ".": {
+      // knip's plugins already find the extension host entry, the webview build
+      // and every test tier. These are the ones nothing declares: the bin
+      // scripts that shell scripts and CI invoke by filename, husky's
+      // lint-staged config, and the `vscode` mock vitest reaches through a
+      // resolve alias.
+      "entry": ["src/test/support/vscode.cjs", "bin/*.{js,mjs,ts}", ".husky/lint-staged-config.js"],
+      "project": [
+        "src/**/*.{ts,cjs}",
+        "shared/**/*.ts",
+        "!shared/generated/**",
+        "playwright/**/*.ts",
+        "bin/**/*.{js,mjs,ts}",
+        "*.{ts,mjs,js}",
+        ".husky/*.js"
+      ]
+    },
+    "webview-ui": {
+      "project": ["src/**/*.{ts,svelte}", "*.ts"]
+    },
+    "backend": {
+      "project": ["**/*.ts", "!cli/**", "!resources/**"]
+    }
+  }
+}

@@ -1,0 +1,160 @@
+import { render, screen, waitFor } from "@testing-library/svelte"
+import { tick } from "svelte"
+
+import { makeTmcKind } from "../../shared/lib"
+import App from "./App.svelte"
+import { courseHomeView } from "./test/fixtures"
+import { dispatchToWebview, postedMessages } from "./test/setup"
+
+suite("App global error handling", () => {
+  test("renders the loading placeholder until the host sets a panel", () => {
+    render(App)
+    expect(document.body.textContent).toContain("Loading TestMyCode…")
+  })
+
+  test("shows an error message on an uncaught window error", async () => {
+    render(App)
+
+    window.dispatchEvent(
+      new ErrorEvent("error", {
+        message: "boom",
+        error: new Error("boom"),
+      }),
+    )
+
+    await waitFor(() => {
+      expect(document.body.innerHTML).toContain("Uncaught error: boom")
+      expect(document.body.innerHTML).toContain("This is a bug in the extension.")
+    })
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "webviewError",
+      message: "Uncaught error: boom",
+      stack: expect.stringContaining("boom"),
+    })
+  })
+
+  test("shows an error message on an unhandled rejection", async () => {
+    render(App)
+
+    // jsdom does not fire `unhandledrejection` for real rejected promises.
+    const event = new Event("unhandledrejection") as Event & { reason: unknown }
+    event.reason = new Error("rejected")
+    window.dispatchEvent(event)
+
+    await waitFor(() => {
+      expect(document.body.innerHTML).toContain("Unhandled rejection: rejected")
+      expect(document.body.innerHTML).toContain("This is a bug in the extension.")
+    })
+    expect(postedMessages).toHaveBeenCalledWith({
+      type: "webviewError",
+      message: "Unhandled rejection: rejected",
+      stack: expect.stringContaining("rejected"),
+    })
+  })
+
+  test("reports a rejection without a stack using only its message", async () => {
+    render(App)
+
+    const event = new Event("unhandledrejection") as Event & { reason: unknown }
+    event.reason = "plain string"
+    window.dispatchEvent(event)
+
+    await waitFor(() => {
+      expect(postedMessages).toHaveBeenCalledWith({
+        type: "webviewError",
+        message: "Unhandled rejection: plain string",
+      })
+    })
+  })
+
+  test("ignores the benign ResizeObserver loop notice", async () => {
+    render(App)
+    window.dispatchEvent(
+      new ErrorEvent("error", {
+        message: "ResizeObserver loop completed with undelivered notifications.",
+      }),
+    )
+    await tick()
+    expect(document.body.innerHTML).not.toContain("This is a bug in the extension.")
+    expect(postedMessages).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "webviewError" }),
+    )
+  })
+
+  test("the crash view opens the extension logs", async () => {
+    render(App)
+    window.dispatchEvent(new ErrorEvent("error", { message: "boom", error: new Error("boom") }))
+
+    ;(await screen.findByRole("button", { name: "Show Logs" })).click()
+
+    expect(postedMessages).toHaveBeenCalledWith({ type: "runCommand", command: "tmc.logs" })
+  })
+
+  test("the crash view offers a way back to the panel that crashed", async () => {
+    render(App)
+    window.dispatchEvent(new ErrorEvent("error", { message: "boom", error: new Error("boom") }))
+    await waitFor(() => {
+      expect(document.body.innerHTML).toContain("Uncaught error: boom")
+    })
+
+    postedMessages.mockClear()
+    ;(await screen.findByRole("button", { name: "Reload" })).click()
+
+    await waitFor(() => {
+      expect(document.body.innerHTML).not.toContain("This is a bug in the extension.")
+    })
+    expect(postedMessages).toHaveBeenCalledWith({ type: "ready" })
+  })
+})
+
+suite("App reload handshake", () => {
+  test("asks the extension to resend the current panel on mount", () => {
+    render(App)
+    expect(postedMessages).toHaveBeenCalledWith({ type: "ready" })
+  })
+
+  test("renders a message that arrives right after the panel it targets", async () => {
+    // The extension answers "ready" with setPanel, then replays its buffer. In production each
+    // postMessage is its own task, so the child panel has registered its listener before the
+    // next lands; jsdom's dispatchEvent is synchronous, so `tick` below stands in for that gap.
+    render(App)
+    const view = courseHomeView({ title: "Ordering Course" })
+
+    dispatchToWebview({
+      type: "setPanel",
+      panel: { id: 7, type: "CourseDetails", courseId: makeTmcKind({ courseId: 42 }) },
+    })
+    await tick()
+
+    dispatchToWebview({
+      type: "setCourseHomeView",
+      target: { id: 7, type: "CourseDetails" },
+      view,
+    })
+
+    expect(await screen.findByText("Ordering Course")).toBeInTheDocument()
+  })
+})
+
+suite("App navigation after a crash", () => {
+  test("a new panel from the extension replaces the crash view", async () => {
+    render(App)
+    window.dispatchEvent(new ErrorEvent("error", { message: "boom", error: new Error("boom") }))
+    await waitFor(() => {
+      expect(document.body.innerHTML).toContain("Uncaught error: boom")
+    })
+
+    postedMessages.mockClear()
+    dispatchToWebview({
+      type: "setPanel",
+      panel: { id: 2, type: "CourseDetails", courseId: makeTmcKind({ courseId: 42 }) },
+    })
+
+    await waitFor(() => {
+      expect(document.body.innerHTML).not.toContain("Uncaught error: boom")
+    })
+    expect(postedMessages).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "requestCourseDetailsData" }),
+    )
+  })
+})

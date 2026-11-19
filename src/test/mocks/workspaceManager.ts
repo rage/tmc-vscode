@@ -1,48 +1,86 @@
-import WorkspaceManager, { WorkspaceExercise } from "../../api/workspaceManager";
-import { workspaceExercises } from "../fixtures/workspaceManager";
-import { Ok, Result } from "ts-results";
-import { IMock, It, Mock } from "typemoq";
+import * as path from "path"
+
+import type { Result } from "ts-results"
+import { Err, Ok } from "ts-results"
+import { vi } from "vitest"
+import * as vscode from "vscode"
+
+import type { BackendKind } from "../../../shared/lib"
+import { ExerciseIdentifier } from "../../../shared/lib"
+import type { WorkspaceExercise } from "../../api/workspaceManager"
+import type WorkspaceManager from "../../api/workspaceManager"
+import { workspaceExercises } from "../fixtures/workspaceManager"
+
+const NOT_MOCKED_ERROR = Err(new Error("Method was not mocked."))
 
 export interface WorkspaceManagerMockValues {
-    activeCourse?: string;
-    activeExercise?: Readonly<WorkspaceExercise>;
-    closeExercises: Result<Array<WorkspaceExercise>, Error>;
-    getExerciseByPath: Readonly<WorkspaceExercise> | undefined;
-    getExercisesByCoursePythonCourse: ReadonlyArray<WorkspaceExercise>;
-    setExercises: Result<void, Error>;
+  activeCourse?: string | undefined
+  activeCourseBackend?: BackendKind | undefined
+  activeExercise?: Readonly<WorkspaceExercise> | undefined
+  closeExercises: Result<WorkspaceExercise[], Error>
+  /** Fires the mock's `onDidChangeExercises`. */
+  exercisesChanged: vscode.EventEmitter<void>
+  getExercises: readonly WorkspaceExercise[]
+  getExerciseByPath: Readonly<WorkspaceExercise> | undefined
+  getExercisesByCoursePythonCourse: readonly WorkspaceExercise[]
+  setExercises: Result<void, Error>
 }
 
-export function createWorkspaceMangerMock(): [IMock<WorkspaceManager>, WorkspaceManagerMockValues] {
-    const values: WorkspaceManagerMockValues = {
-        activeCourse: undefined,
-        activeExercise: undefined,
-        closeExercises: Ok(workspaceExercises),
-        getExerciseByPath: undefined,
-        getExercisesByCoursePythonCourse: workspaceExercises,
-        setExercises: Ok.EMPTY,
-    };
-    const mock = setupMockValues(values);
+export function createWorkspaceMangerMock(): [WorkspaceManager, WorkspaceManagerMockValues] {
+  const values: WorkspaceManagerMockValues = {
+    activeCourse: undefined,
+    activeCourseBackend: undefined,
+    activeExercise: undefined,
+    closeExercises: Ok(workspaceExercises),
+    exercisesChanged: new vscode.EventEmitter<void>(),
+    getExercises: workspaceExercises,
+    getExerciseByPath: undefined,
+    getExercisesByCoursePythonCourse: workspaceExercises,
+    setExercises: Ok.EMPTY,
+  }
 
-    return [mock, values];
-}
+  const mock = {
+    get activeCourse() {
+      return values.activeCourse
+    },
+    get activeCourseBackend() {
+      return values.activeCourseBackend
+    },
+    get activeExercise() {
+      return values.activeExercise
+    },
+    closeCourseExercises: vi.fn(async (backend: string, courseSlug: string) =>
+      backend === "tmc" && courseSlug === "test-python-course"
+        ? values.closeExercises
+        : NOT_MOCKED_ERROR,
+    ),
+    getExerciseByPath: vi.fn((uri: vscode.Uri) =>
+      values.getExerciseByPath?.uri.fsPath === uri.fsPath ? values.getExerciseByPath : undefined,
+    ),
+    // Unlike production, there is one fixture exercise, not a path map: containment is
+    // its own uri or any path below it.
+    getExerciseContaining: vi.fn((uri: vscode.Uri) => {
+      const exercise = values.getExerciseByPath
+      if (!exercise) {
+        return undefined
+      }
+      const exercisePath = exercise.uri.fsPath
+      return uri.fsPath === exercisePath || uri.fsPath.startsWith(exercisePath + path.sep)
+        ? exercise
+        : undefined
+    }),
+    getExercisesByCourseSlug: vi.fn((backend: string, courseSlug: string) =>
+      backend === "tmc" && courseSlug === "test-python-course"
+        ? values.getExercisesByCoursePythonCourse
+        : [],
+    ),
+    getExercise: vi.fn((id: ExerciseIdentifier) =>
+      values.getExercises.find((x) => ExerciseIdentifier.key(x.id) === ExerciseIdentifier.key(id)),
+    ),
+    getExercises: vi.fn(() => values.getExercises),
+    onDidChangeExercises: values.exercisesChanged.event,
+    setExercises: vi.fn(async () => values.setExercises),
+  }
 
-function setupMockValues(values: WorkspaceManagerMockValues): IMock<WorkspaceManager> {
-    const mock = Mock.ofType<WorkspaceManager>();
-
-    mock.setup((x) => x.activeCourse).returns(() => values.activeCourse);
-    mock.setup((x) => x.activeExercise).returns(() => values.activeExercise);
-
-    mock.setup((x) => x.closeCourseExercises(It.isAny(), It.isAny())).returns(
-        async () => values.closeExercises,
-    );
-
-    mock.setup((x) => x.getExerciseByPath(It.isAny())).returns(() => values.getExerciseByPath);
-
-    mock.setup((x) => x.getExercisesByCourseSlug(It.isValue("test-python-course"))).returns(
-        () => values.getExercisesByCoursePythonCourse,
-    );
-
-    mock.setup((x) => x.setExercises(It.isAny())).returns(async () => values.setExercises);
-
-    return mock;
+  return [mock as unknown as WorkspaceManager, values]
 }

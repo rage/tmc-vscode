@@ -1,0 +1,264 @@
+import * as vscode from "vscode"
+
+import type { LocalCourseExercise, SubmitRefusal } from "../../shared/lib"
+import {
+  arePointsHeldForReview,
+  ExerciseIdentifier,
+  LocalCourseData,
+  SUBMIT_REFUSAL_ICONS,
+  SUBMIT_REFUSAL_LABELS,
+  submitRefusalOf,
+  PENDING_REVIEW_ICONS,
+  PENDING_REVIEW_LABELS,
+  triesLeftText,
+} from "../../shared/lib"
+import type Dialog from "../api/dialog"
+import type { Item } from "../api/dialog"
+import { separator } from "../api/dialog"
+import type WorkspaceManager from "../api/workspaceManager"
+import type { WorkspaceExercise } from "../api/workspaceManager"
+import { exerciseFor } from "../api/workspaceManager"
+import type { UserData } from "../config/userdata"
+import { getExerciseIncludingClosedChapters } from "../config/userdata"
+import { modelSolutionUrl } from "./modelSolution"
+import { pointsText } from "./points"
+import { tooltipOf } from "./tooltip"
+
+/** What the exercise status bar item and its action pick read. */
+export interface ExerciseStatusSources {
+  workspaceManager: Pick<
+    WorkspaceManager,
+    "activeExercise" | "getExerciseContaining" | "onDidChangeExercises"
+  >
+  userData: Pick<
+    UserData,
+    "getExercise" | "getExerciseInClosedChapter" | "getCourse" | "onDidChangeCourses"
+  >
+}
+
+/**
+ * The status bar item that names the exercise the active editor belongs to, with its points,
+ * and opens {@link showExerciseActions} when clicked. Hidden on any other file. A test run or
+ * submission in progress shows in `BackgroundStatusBarItem` instead.
+ */
+export class ExerciseStatusBarItem implements vscode.Disposable {
+  private readonly _item: vscode.StatusBarItem
+  private readonly _subscriptions: vscode.Disposable[]
+  private _lastShown: WorkspaceExercise | undefined
+
+  public constructor(private readonly _sources: ExerciseStatusSources) {
+    this._item = vscode.window.createStatusBarItem(
+      "tmc.activeExercise",
+      vscode.StatusBarAlignment.Right,
+      100,
+    )
+    this._item.name = "TestMyCode Exercise"
+    const render = (): void => this.render()
+    this._subscriptions = [
+      vscode.window.onDidChangeActiveTextEditor(render),
+      vscode.window.onDidChangeVisibleTextEditors(render),
+      _sources.workspaceManager.onDidChangeExercises(render),
+      _sources.userData.onDidChangeCourses(render),
+    ]
+    this.render()
+  }
+
+  /** Shows the item for the active editor's exercise, or hides it. */
+  public render(): void {
+    const exercise = this._shownExercise()
+    if (!exercise) {
+      this._item.hide()
+      return
+    }
+    this._item.command = {
+      title: "Show Exercise Actions",
+      command: "tmc.showExerciseActions",
+      arguments: [exercise.uri],
+    }
+    const slug = exercise.exerciseSlug
+    const storedResult = getExerciseIncludingClosedChapters(this._sources.userData, exercise.id)
+    const stored = storedResult.ok ? storedResult.val.exercise : undefined
+    const arePointsHeld =
+      stored?.kind === "mooc" &&
+      arePointsHeldForReview(stored.data.pendingReview, stored.data.awardedPoints)
+    const points =
+      stored && !arePointsHeld
+        ? pointsText(stored.data.awardedPoints, stored.data.availablePoints)
+        : undefined
+    const course = this._sources.userData.getCourse(exercise.courseId)
+    const standing = standingOf(stored, course.ok ? course.val : undefined)
+    const shownStanding = standing?.text === "passed" ? undefined : standing
+
+    this._item.text = [
+      `$(beaker) ${slug}`,
+      points?.short,
+      shownStanding &&
+        (shownStanding.icon
+          ? `$(${shownStanding.icon}) ${shownStanding.text}`
+          : shownStanding.text),
+    ]
+      .filter(Boolean)
+      .join(" · ")
+    this._item.accessibilityInformation = {
+      label:
+        `TestMyCode exercise ${slug}` +
+        (points ? `, ${points.spoken}` : "") +
+        (shownStanding ? `, ${shownStanding.text}` : "") +
+        ". Show exercise actions",
+    }
+    this._item.tooltip = tooltipOf([
+      slug,
+      exercise.courseSlug,
+      ...(points ? [`${points.short} points${standing ? ` · ${standing.text}` : ""}`] : []),
+      "Click for exercise actions.",
+    ])
+    this._item.show()
+  }
+
+  public dispose(): void {
+    vscode.Disposable.from(...this._subscriptions).dispose()
+    this._item.dispose()
+  }
+
+  /**
+   * The active editor's exercise; while a panel such as the submission result has the focus,
+   * which leaves no active text editor, the one last shown if its editor is still visible.
+   */
+  private _shownExercise(): WorkspaceExercise | undefined {
+    const { workspaceManager } = this._sources
+    const active = workspaceManager.activeExercise
+    const last = this._lastShown
+    this._lastShown = active
+    if (active || vscode.window.activeTextEditor || !last) {
+      return active
+    }
+    const isStillVisible = vscode.window.visibleTextEditors.some((editor) => {
+      const visible = workspaceManager.getExerciseContaining(editor.document.uri)
+      return (
+        visible !== undefined &&
+        ExerciseIdentifier.key(visible.id) === ExerciseIdentifier.key(last.id)
+      )
+    })
+    this._lastShown = isStillVisible ? last : undefined
+    return this._lastShown
+  }
+}
+
+/** Where an exercise stands in a few words, with the icon of the reason it is locked, if any. */
+interface Standing {
+  text: string
+  icon?: string
+}
+
+function refusalStanding(refusal: SubmitRefusal): Standing {
+  return { text: SUBMIT_REFUSAL_LABELS[refusal], icon: SUBMIT_REFUSAL_ICONS[refusal] }
+}
+
+/**
+ * Where the stored exercise stands, e.g. "passed", "1 try left" or "deadline passed"; `undefined`
+ * when there is nothing to tell.
+ */
+function standingOf(
+  stored: Readonly<LocalCourseExercise> | undefined,
+  course: Readonly<LocalCourseData> | undefined,
+): Standing | undefined {
+  if (!stored) {
+    return undefined
+  }
+  if (stored.data.passed) {
+    return { text: "passed" }
+  }
+  if (stored.kind === "mooc" && stored.data.pendingReview !== undefined) {
+    return {
+      text: PENDING_REVIEW_LABELS[stored.data.pendingReview],
+      icon: PENDING_REVIEW_ICONS[stored.data.pendingReview],
+    }
+  }
+  const refusal = submitRefusalOf(stored, new Date(), course)
+  if (refusal) {
+    return refusalStanding(refusal)
+  }
+  const tries = stored.kind === "mooc" ? triesLeftText(stored.data.triesLeft) : undefined
+  return tries === undefined ? undefined : { text: tries }
+}
+
+interface ExerciseAction {
+  command: string
+  arguments: unknown[]
+}
+
+/**
+ * Offers the actions for one exercise and runs the one the user picks.
+ *
+ * @param resource A file or folder of the exercise; the active editor's exercise when omitted.
+ * @param isLoggedIn Whether to offer the actions that reach a backend.
+ */
+export async function showExerciseActions(
+  dialog: Dialog,
+  sources: Pick<ExerciseStatusSources, "workspaceManager" | "userData">,
+  isLoggedIn: boolean,
+  resource?: vscode.Uri,
+): Promise<void> {
+  const exercise = exerciseFor(sources.workspaceManager, resource)
+  if (!exercise) {
+    return
+  }
+  const target = [exercise.uri]
+  const action = (label: string, command: string): Item<ExerciseAction> => ({
+    label,
+    value: { command, arguments: target },
+  })
+  const course = sources.userData.getCourse(exercise.courseId)
+  const stored = getExerciseIncludingClosedChapters(sources.userData, exercise.id)
+  const isUnlisted = course.ok && stored.err
+  const refusal = stored.ok
+    ? submitRefusalOf(stored.val.exercise, new Date(), stored.val.course)
+    : undefined
+  // A passed exercise reads as passed, as its row does; the chapter's lock is the chapter's to tell.
+  const shownRefusal =
+    refusal === "chapterNotUnlockedYet" && stored.ok && stored.val.exercise.data.passed
+      ? undefined
+      : refusal
+  const closedChapter =
+    refusal === "chapterNotOpenYet" && course.ok
+      ? LocalCourseData.getClosedChapterOf(course.val, exercise.id)
+      : undefined
+  const placeHolder = closedChapter
+    ? `Its chapter "${closedChapter.name}" has not opened yet: it can't be submitted, but its tests run here`
+    : isUnlisted
+      ? "Removed from the course: it can no longer be submitted, but its tests still run here"
+      : shownRefusal
+        ? `Can't be submitted: ${SUBMIT_REFUSAL_LABELS[shownRefusal]}`
+        : "What do you want to do with this exercise?"
+  const hasBackendActions = isLoggedIn && !isUnlisted
+  const materialUrl =
+    stored.ok && stored.val.exercise.kind === "mooc" ? stored.val.exercise.data.pageUrl : undefined
+  // The same actions, order and labels as the Courses view's exercise menu in package.json.
+  const picked = await dialog.selectItem(
+    { title: exercise.exerciseSlug, placeHolder },
+    action("$(beaker) Run Tests", "tmc.testExercise"),
+    ...(hasBackendActions
+      ? [
+          ...(refusal ? [] : [action("$(cloud-upload) Submit", "tmc.submitExercise")]),
+          action("$(output) Show Results", "tmc.showExerciseResults"),
+          action("$(link) Get Help", "tmc.pasteExercise"),
+          separator("Restore"),
+          action("$(history) History", "tmc.downloadOldSubmission"),
+          action("$(discard) Reset Exercise", "tmc.resetExercise"),
+        ]
+      : []),
+    separator("Course"),
+    action("$(arrow-right) Open Next Exercise", "tmc.openNextExercise"),
+    ...(stored.ok && modelSolutionUrl(stored.val)
+      ? [action("$(lightbulb) Show Model Solution", "tmc.showModelSolution")]
+      : []),
+    ...(materialUrl ? [action("$(book) Open Course Material", "tmc.openExerciseMaterial")] : []),
+    ...(course.ok ? [action("$(list-tree) Show in Courses View", "tmc.revealInCoursesView")] : []),
+    separator("Folder"),
+    action("$(trash) Delete Generated Files", "tmc.cleanExercise"),
+    action("$(close) Close Exercise", "tmc.closeExercise"),
+  )
+  if (picked) {
+    await vscode.commands.executeCommand(picked.command, ...picked.arguments)
+  }
+}

@@ -1,31 +1,70 @@
-import Dialog from "../api/dialog";
-import ExerciseDecorationProvider from "../api/exerciseDecorationProvider";
-import TMC from "../api/tmc";
-import WorkspaceManager from "../api/workspaceManager";
-import Resources from "../config/resources";
-import Settings from "../config/settings";
-import { UserData } from "../config/userdata";
-import { VisibilityGroups } from "../ui/types";
-import UI from "../ui/ui";
-import { Result } from "ts-results";
+import type { AccountHandover } from "../api/accountHandover"
+import type { AiUseGate } from "../api/aiUseGate"
+import type { AuthState } from "../api/authState"
+import type { CourseWorkspaceSwitches } from "../api/courseWorkspaceSwitches"
+import type Dialog from "../api/dialog"
+import type ExerciseDecorationProvider from "../api/exerciseDecorationProvider"
+import type { KeptCopies } from "../api/keptCopies"
+import type Langs from "../api/langs"
+import type WorkspaceManager from "../api/workspaceManager"
+import type { WorkspaceTrustGate } from "../api/workspaceTrustGate"
+import type Resources from "../config/resources"
+import type Settings from "../config/settings"
+import type { UserData } from "../config/userdata"
+import type CoursesTree from "../ui/treeview/treeview"
 
-// fields may be undefined if something went wrong during initialization
-export type ActionContext = {
-    dialog: Dialog;
-    exerciseDecorationProvider: Result<ExerciseDecorationProvider, Error>;
-    resources: Result<Resources, Error>;
-    settings: Settings;
-    tmc: Result<TMC, Error>;
-    ui: UI;
-    userData: Result<UserData, Error>;
-    workspaceManager: Result<WorkspaceManager, Error>;
-    visibilityGroups: VisibilityGroups;
-};
+/** The services an activation builds, once all of them have succeeded. */
+export interface ReadyStartup {
+  kind: "ready"
+  accountHandover: AccountHandover
+  aiUseGate: AiUseGate
+  courseWorkspaceSwitches: CourseWorkspaceSwitches
+  exerciseDecorationProvider: ExerciseDecorationProvider
+  keptCopies: KeptCopies
+  langs: Langs
+  resources: Resources
+  trustGate: WorkspaceTrustGate
+  userData: UserData
+  workspaceManager: WorkspaceManager
+}
 
-export type FeedbackQuestion = {
-    id: number;
-    kind: string;
-    lower?: number;
-    upper?: number;
-    question: string;
-};
+/** An activation step whose failure degrades the extension: every other service needs it. */
+export type StartupStep = "langs" | "resources" | "userData"
+
+/** The errors behind a failed activation, keyed by the step that failed. */
+export interface DegradedStartup {
+  kind: "degraded"
+  failures: Partial<Record<StartupStep, Error>>
+}
+
+/**
+ * What an activation managed to build.
+ *
+ * Deliberately binary: a caller needing one of these services needs the rest, and the partial
+ * combinations `extension.ts` can produce follow from its construction order, not from
+ * anything a caller could act on.
+ */
+export type Startup = ReadyStartup | DegradedStartup
+
+export interface ActionContext {
+  authState: AuthState
+  dialog: Dialog
+  settings: Settings
+  startup: Startup
+  coursesTree: CoursesTree
+}
+
+/** A context whose services are all available, and the argument most actions want. */
+export interface ReadyActionContext extends ActionContext {
+  startup: ReadyStartup
+}
+
+/**
+ * Whether the activation behind this context built everything.
+ *
+ * Narrows the context itself, not just its {@link Startup}, so a caller can hand it
+ * straight to something that takes a {@link ReadyActionContext}.
+ */
+export function isReady(context: ActionContext): context is ReadyActionContext {
+  return context.startup.kind === "ready"
+}

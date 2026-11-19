@@ -1,60 +1,45 @@
-import { InitializationError } from "../errors";
-import { v2 as storage } from "../storage/data";
-import { Logger } from "../utilities";
-import { combineApiExerciseData } from "../utilities/apiData";
-import { refreshLocalExercises } from "./refreshLocalExercises";
-import { ActionContext } from "./types";
-import { Err, Result } from "ts-results";
+import type { Result } from "ts-results"
+
+import type { CourseIdentifier } from "../../shared/lib"
+import { LocalCourseData, makeMoocKind, makeTmcKind, match } from "../../shared/lib"
+import { Logger } from "../utilities"
+import { refreshLocalExercises } from "./refreshLocalExercises"
+import type { ReadyActionContext } from "./types"
+import { fetchStoredCourse } from "./updateCourse"
 
 /**
- * Adds a new course to user's courses.
+ * Adds a new course to user's courses and shows it in the Courses view.
+ *
+ * @param organizationSlug The tmc organization the course was picked from;
+ *   ignored for a mooc course, which carries its own.
  */
 export async function addNewCourse(
-    actionContext: ActionContext,
-    organization: string,
-    course: number,
+  actionContext: ReadyActionContext,
+  organizationSlug: string,
+  course: CourseIdentifier,
 ): Promise<Result<void, Error>> {
-    const { tmc, ui, userData, workspaceManager } = actionContext;
-    if (!(tmc.ok && userData.ok && workspaceManager.ok)) {
-        return new Err(new InitializationError("Extension was not initialized properly"));
-    }
-    Logger.info("Adding new course");
+  const { langs, userData, workspaceManager } = actionContext.startup
+  Logger.info("Adding new course")
 
-    const courseDataResult = await tmc.val.getCourseData(course);
-    if (courseDataResult.err) {
-        return courseDataResult;
-    }
-    const courseData = courseDataResult.val;
+  const fetched = await fetchStoredCourse(
+    langs,
+    match(
+      course,
+      (tmc) => makeTmcKind({ courseId: tmc.courseId, organization: organizationSlug }),
+      (mooc) => makeMoocKind({ courseId: mooc.moocCourseId }),
+    ),
+  )
+  if (fetched.err) {
+    return fetched
+  }
 
-    let availablePoints = 0;
-    let awardedPoints = 0;
-    courseData.exercises.forEach((x) => {
-        availablePoints += x.available_points.length;
-        awardedPoints += x.awarded_points.length;
-    });
-
-    const localData: storage.LocalCourseData = {
-        description: courseData.details.description || "",
-        exercises: combineApiExerciseData(courseData.details.exercises, courseData.exercises),
-        id: courseData.details.id,
-        name: courseData.details.name,
-        title: courseData.details.title,
-        organization: organization,
-        availablePoints: availablePoints,
-        awardedPoints: awardedPoints,
-        perhapsExamMode: courseData.settings.hide_submission_results,
-        newExercises: [],
-        notifyAfter: 0,
-        disabled: courseData.settings.disabled_status === "enabled" ? false : true,
-        materialUrl: courseData.settings.material_url,
-    };
-    userData.val.addCourse(localData);
-    ui.treeDP.addChildWithId("myCourses", localData.id, localData.title, {
-        command: "tmc.courseDetails",
-        title: "Go To Course Details",
-        arguments: [localData.id],
-    });
-    workspaceManager.val.createWorkspaceFile(courseData.details.name);
-    //await displayUserCourses(actionContext);
-    return refreshLocalExercises(actionContext);
+  const addResult = await userData.addCourse(fetched.val)
+  if (addResult.err) {
+    return addResult
+  }
+  await workspaceManager.createWorkspaceFile(
+    LocalCourseData.getCourseName(fetched.val),
+    fetched.val.kind,
+  )
+  return refreshLocalExercises(actionContext)
 }

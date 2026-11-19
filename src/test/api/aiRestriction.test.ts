@@ -1,565 +1,1169 @@
-import AiRestriction, {
-    AiRestrictionEvents,
-    CourseWorkspaceSettings,
-} from "../../api/aiRestriction";
-import { SettingInspection } from "../../api/workspaceManager";
-import { AI_OFF_SETTINGS } from "../../config/constants";
-import { Logger } from "../../utilities";
-import { createMockMemento } from "../mocks/vscode";
-import { expect } from "chai";
-import * as _ from "lodash";
-import * as vscode from "vscode";
+import * as _ from "lodash"
+import { Ok } from "ts-results"
+import { vi } from "vitest"
+import * as vscode from "vscode"
 
-const AI_SECTIONS = Object.keys(AI_OFF_SETTINGS);
-const INLINE_SUGGEST = "editor.inlineSuggest.enabled";
-const EXERCISE_FOLDER = vscode.Uri.file("/tmc/projects/python-course/loops");
+import type { CourseAiPolicy } from "../../../shared/langsSchema"
+import { updateCourse } from "../../actions/updateCourse"
+import AiRestriction, {
+  closeChatSideBar,
+  isActiveCourseAiAllowed,
+  isAiAllowed,
+  missingAiOffSettings,
+} from "../../api/aiRestriction"
+import type { AiRestrictionEvents } from "../../api/aiRestriction"
+import type { SettingInspection, WorkspaceFileProblem } from "../../api/workspaceManager"
+import { AI_OFF_SETTINGS } from "../../config/constants"
+import { UserData } from "../../config/userdata"
+import Storage from "../../storage"
+import { Logger } from "../../utilities"
+import { moocCourseData, moocLocalCourse, tmcLocalCourse } from "../fixtures/courses"
+import { idOfMoocCourse } from "../fixtures/identifiers"
+import {
+  MOOC_COURSE_UUID,
+  moocCourse,
+  moocCourseProgress,
+  moocExerciseSlides,
+} from "../fixtures/tmc"
+import { createMockActionContext, createMockAuthState } from "../mocks/actionContext"
+import { createTMCMock } from "../mocks/tmc"
+import { createMockContext, createMockMemento } from "../mocks/vscode"
+
+const AI_SECTIONS = Object.keys(AI_OFF_SETTINGS)
+const INLINE_SUGGEST = "editor.inlineSuggest.enabled"
+const WORKSPACE_FILE = vscode.Uri.file("/tmc/workspaces/python-course.code-workspace")
+const EXERCISE_FOLDER = vscode.Uri.file("/tmc/projects/python-course/loops")
 
 function keyOf(section: string, languageId?: string): string {
-    return languageId === undefined ? section : `[${languageId}]${section}`;
-}
-
-function wait(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+  return languageId === undefined ? section : `[${languageId}]${section}`
 }
 
 /**
  * A course workspace as `AiRestriction` sees it, with every write recorded. Each scope maps
  * `section`, or `[languageId]section` for a language override, to its value.
  */
-class FakeCourseWorkspace implements CourseWorkspaceSettings {
-    public activeCourse: string | undefined = "python-course";
-    public workspaceFileUri = vscode.Uri.file("/tmc/workspaces/python-course.code-workspace");
-    /** The workspace file. */
-    public readonly stored = new Map<string, unknown>();
-    public readonly user = new Map<string, unknown>();
-    /** The exercise folder's `.vscode/settings.json`. */
-    public readonly folder = new Map<string, unknown>();
-    public folders: vscode.Uri[] = [EXERCISE_FOLDER];
-    /** What VS Code declares; a section missing here belongs to an extension not installed. */
-    public readonly defaults = new Map<string, unknown>(
-        AI_SECTIONS.map((section) => [section, section === INLINE_SUGGEST ? true : null]),
-    );
+class FakeCourseWorkspace {
+  public activeCourse: string | undefined = "python-course"
+  public workspaceFileUri: vscode.Uri | undefined = WORKSPACE_FILE
+  /** The workspace file. */
+  public readonly stored = new Map<string, unknown>()
+  public readonly user = new Map<string, unknown>()
+  /** The exercise folder's `.vscode/settings.json`, which counts only for a resource inside it. */
+  public readonly folder = new Map<string, unknown>()
+  public readonly defaults = new Map<string, unknown>([[INLINE_SUGGEST, true]])
+  /** Keys whose writes VS Code refuses. */
+  public readonly rejected = new Set<string>()
+  public problem: WorkspaceFileProblem | undefined
+  /** What `exerciseFolders` answers; the folder these name is {@link folder}. */
+  public exerciseFolderUris: vscode.Uri[] = []
+  public readonly onDidChangeExercises = new vscode.EventEmitter<void>().event
+  public onWrite: (section: string, languageId: string | undefined) => void = () => {}
+  public readonly replaceWorkspaceSetting = vi.fn(
+    async (section: string, value: unknown, languageId?: string) => {
+      const key = keyOf(section, languageId)
+      if (this.rejected.has(key)) {
+        throw new Error("Unable to write into the workspace configuration file.")
+      }
+      if (value === undefined) {
+        this.stored.delete(key)
+      } else {
+        this.stored.set(key, value)
+      }
+      this.onWrite(section, languageId)
+    },
+  )
 
-    /** Keys whose writes VS Code refuses. */
-    public readonly rejected = new Set<string>();
-    public readonly writtenKeys: string[] = [];
-    public writeDelayMs = 0;
-    public writesInFlight = 0;
-    public maxWritesInFlight = 0;
-    public onWrite: (section: string, languageId: string | undefined) => void = () => {};
-    public onInspect: () => void = () => {};
-    public readonly exercisesChanged = new vscode.EventEmitter<void>();
-    public readonly onDidChangeExercises = this.exercisesChanged.event;
+  public readonly replaceFolderSetting = vi.fn(
+    async (_folder: vscode.Uri, section: string, value: unknown, languageId?: string) => {
+      const key = keyOf(section, languageId)
+      if (value === undefined) {
+        this.folder.delete(key)
+      } else {
+        this.folder.set(key, value)
+      }
+    },
+  )
 
-    public exerciseFolders(): vscode.Uri[] {
-        return this.folders;
+  public readonly workspaceFileProblem = vi.fn(async () => this.problem)
+
+  public exerciseFolders(): vscode.Uri[] {
+    return this.exerciseFolderUris
+  }
+
+  public getStoredWorkspaceSetting(section: string, languageId?: string): unknown {
+    return this.stored.get(keyOf(section, languageId))
+  }
+
+  /** Resolves like VS Code: a language override at any scope beats every scope's plain value. */
+  public inspectSetting(
+    section: string,
+    languageId?: string,
+    resource?: vscode.Uri,
+  ): SettingInspection {
+    const folder = resource ? this.folder : new Map<string, unknown>()
+    const plain = [this.defaults, this.user, this.stored, folder].map((s) => s.get(section))
+    const language =
+      languageId === undefined
+        ? []
+        : [this.defaults, this.user, this.stored, folder].map((s) =>
+            s.get(keyOf(section, languageId)),
+          )
+    const effectiveValue = [...plain, ...language].reduce<unknown>((winner, value) => {
+      if (value === undefined) {
+        return winner
+      }
+      return _.isPlainObject(winner) && _.isPlainObject(value)
+        ? { ...(winner as object), ...(value as object) }
+        : value
+    }, undefined)
+    const languageIds = [this.user, this.stored, this.folder].flatMap((scope) =>
+      [...scope.keys()].flatMap((key) => {
+        const match = /^\[(.+)\](.+)$/.exec(key)
+        return match?.[2] === section ? [match[1] as string] : []
+      }),
+    )
+    return {
+      key: section,
+      defaultValue: plain[0],
+      globalValue: plain[1],
+      workspaceValue: plain[2],
+      workspaceFolderValue: plain[3],
+      defaultLanguageValue: language[0],
+      globalLanguageValue: language[1],
+      workspaceLanguageValue: language[2],
+      workspaceFolderLanguageValue: language[3],
+      languageIds: _.uniq(languageIds),
+      effectiveValue,
     }
+  }
 
-    public replaceWorkspaceSetting(
-        section: string,
-        value: unknown,
-        languageId?: string,
-    ): Promise<void> {
-        return this._write(this.stored, keyOf(section, languageId), value, section, languageId);
-    }
+  public writtenKeys(): string[] {
+    return this.replaceWorkspaceSetting.mock.calls.map(([section, , languageId]) =>
+      keyOf(section, languageId),
+    )
+  }
+}
 
-    public replaceFolderSetting(
-        folder: vscode.Uri,
-        section: string,
-        value: unknown,
-        languageId?: string,
-    ): Promise<void> {
-        expect(folder.fsPath).to.equal(EXERCISE_FOLDER.fsPath);
-        const key = keyOf(section, languageId);
-        return this._write(this.folder, key, value, section, languageId, `folder:${key}`);
-    }
+/** Declares `sections` the way installed extensions would; the rest are unknown to VS Code. */
+function declare(sections: string[]): void {
+  const declared = new Set(sections)
+  vi.spyOn(vscode.workspace, "getConfiguration").mockReturnValue({
+    inspect: (section: string) => (declared.has(section) ? { defaultValue: null } : undefined),
+  } as unknown as vscode.WorkspaceConfiguration)
+}
 
-    public getStoredWorkspaceSetting(section: string): unknown {
-        return this.stored.get(section);
-    }
+/** The events an `AiRestriction` listens to, fired by hand. */
+class FakeEvents implements AiRestrictionEvents {
+  public readonly configurationChanged = new vscode.EventEmitter<vscode.ConfigurationChangeEvent>()
+  public readonly documentOpened = new vscode.EventEmitter<vscode.TextDocument>()
+  public readonly workspaceFileChanged = new vscode.EventEmitter<void>()
+  public readonly exerciseFoldersChanged = new vscode.EventEmitter<void>()
+  public readonly extensionsChanged = new vscode.EventEmitter<void>()
+  public readonly onDidChangeConfiguration = this.configurationChanged.event
+  public readonly onDidOpenTextDocument = this.documentOpened.event
+  public readonly onDidChangeWorkspaceFile = this.workspaceFileChanged.event
+  public readonly onDidChangeExerciseFolders = this.exerciseFoldersChanged.event
+  public readonly onDidChangeExtensions = this.extensionsChanged.event
+}
 
-    /** Resolves like VS Code: a language override at any scope beats every scope's plain value. */
-    public inspectSetting(
-        section: string,
-        languageId?: string,
-        folder?: vscode.Uri,
-    ): SettingInspection {
-        this.onInspect();
-        const scopes = [this.defaults, this.user, this.stored, folder ? this.folder : new Map()];
-        const plain = scopes.map((s) => s.get(section));
-        const language =
-            languageId === undefined ? [] : scopes.map((s) => s.get(keyOf(section, languageId)));
-        const effectiveValue = [...plain, ...language].reduce<unknown>((winner, value) => {
-            if (value === undefined) {
-                return winner;
-            }
-            return _.isPlainObject(winner) && _.isPlainObject(value)
-                ? { ...(winner as object), ...(value as object) }
-                : value;
-        }, undefined);
-        const languageIds = scopes.slice(1).flatMap((scope) =>
-            [...scope.keys()].flatMap((key) => {
-                const match = /^\[(.+)\](.+)$/.exec(key);
-                return match?.[2] === section ? [match[1]] : [];
-            }),
-        );
-        return {
-            key: section,
-            defaultValue: plain[0],
-            globalValue: plain[1],
-            workspaceValue: plain[2],
-            workspaceFolderValue: plain[3],
-            defaultLanguageValue: language[0],
-            globalLanguageValue: language[1],
-            workspaceLanguageValue: language[2],
-            workspaceFolderLanguageValue: language[3],
-            languageIds: _.uniq(languageIds),
-            effectiveValue,
-        };
-    }
+let events: FakeEvents
 
-    private async _write(
-        scope: Map<string, unknown>,
-        key: string,
-        value: unknown,
-        section: string,
-        languageId: string | undefined,
-        writtenKey = key,
-    ): Promise<void> {
-        if (this.rejected.has(writtenKey)) {
-            throw new Error("Unable to write into the workspace configuration file.");
-        }
-        this.writesInFlight++;
-        this.maxWritesInFlight = Math.max(this.maxWritesInFlight, this.writesInFlight);
-        this.writtenKeys.push(writtenKey);
-        scope.set(key, value);
-        this.onWrite(section, languageId);
-        if (this.writeDelayMs > 0) {
-            await wait(this.writeDelayMs);
-        }
-        this.writesInFlight--;
-    }
+function changeListener(): (event: vscode.ConfigurationChangeEvent) => void {
+  return (event) => events.configurationChanged.fire(event)
+}
+
+function openListener(): (document: vscode.TextDocument) => void {
+  return (document) => events.documentOpened.fire(document)
 }
 
 function changeOf(section: string): vscode.ConfigurationChangeEvent {
-    return { affectsConfiguration: (asked: string) => asked === section };
+  return { affectsConfiguration: (asked: string) => asked === section }
 }
 
 function holdEverySetting(workspace: FakeCourseWorkspace): void {
-    for (const [section, value] of Object.entries(AI_OFF_SETTINGS)) {
-        workspace.stored.set(section, value);
-    }
+  for (const [section, value] of Object.entries(AI_OFF_SETTINGS)) {
+    workspace.stored.set(section, value)
+  }
 }
 
-suite("AiRestriction class", function () {
-    let workspace: FakeCourseWorkspace;
-    let state: vscode.Memento;
-    let configurationChanges: vscode.EventEmitter<vscode.ConfigurationChangeEvent>;
-    let documentOpens: vscode.EventEmitter<vscode.TextDocument>;
-    let workspaceFileChanges: vscode.EventEmitter<void>;
-    let extensionChanges: vscode.EventEmitter<void>;
-    let restriction: AiRestriction;
-    let warnings: string[];
-    const realWarn = Logger.warn;
+function withOpenDocuments(languageIds: string[]): void {
+  const documents = languageIds.map((languageId) => ({ languageId }))
+  vi.spyOn(vscode.workspace, "textDocuments", "get").mockReturnValue(
+    documents as unknown as vscode.TextDocument[],
+  )
+}
 
-    function createRestriction(): AiRestriction {
-        const events: AiRestrictionEvents = {
-            onDidChangeConfiguration: configurationChanges.event,
-            onDidOpenTextDocument: documentOpens.event,
-            onDidChangeWorkspaceFile: workspaceFileChanges.event,
-            onDidChangeExerciseFolders: workspace.onDidChangeExercises,
-            onDidChangeExtensions: extensionChanges.event,
-        };
-        return new AiRestriction(workspace, state, events);
-    }
+suite("AI restriction", function () {
+  let workspace: FakeCourseWorkspace
+  let ownership: vscode.Memento
+  let isAllowed: boolean
+  let restriction: AiRestriction
 
-    setup(function () {
-        workspace = new FakeCourseWorkspace();
-        state = createMockMemento();
-        configurationChanges = new vscode.EventEmitter();
-        documentOpens = new vscode.EventEmitter();
-        workspaceFileChanges = new vscode.EventEmitter();
-        extensionChanges = new vscode.EventEmitter();
-        warnings = [];
-        Logger.warn = (...params: unknown[]): void => {
-            warnings.push(String(params[0]));
-        };
-        restriction = createRestriction();
-    });
+  function createRestriction(onDidChangeCourses?: vscode.Event<unknown>): AiRestriction {
+    return new AiRestriction(workspace, ownership, () => isAllowed, onDidChangeCourses, events)
+  }
 
-    teardown(function () {
-        Logger.warn = realWarn;
-        restriction.dispose();
-        configurationChanges.dispose();
-        documentOpens.dispose();
-        workspaceFileChanges.dispose();
-        extensionChanges.dispose();
-        workspace.exercisesChanged.dispose();
-    });
+  beforeEach(function () {
+    events = new FakeEvents()
+    workspace = new FakeCourseWorkspace()
+    ownership = createMockMemento()
+    isAllowed = false
+    declare(AI_SECTIONS)
+    Object.defineProperty(vscode.workspace, "textDocuments", {
+      get: () => [],
+      configurable: true,
+    })
+    vi.spyOn(Logger, "info").mockImplementation(() => undefined)
+    vi.spyOn(Logger, "debug").mockImplementation(() => undefined)
+    vi.spyOn(Logger, "warn").mockImplementation(() => undefined)
+    restriction = createRestriction()
+  })
 
+  afterEach(function () {
+    restriction.dispose()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  suite("when the course does not allow AI", function () {
     test("writes every setting, the one that restarts the extension host last", async function () {
-        await restriction.apply();
+      await restriction.apply()
 
-        expect(Object.fromEntries(workspace.stored)).to.deep.equal(AI_OFF_SETTINGS);
-        expect(_.last(workspace.writtenKeys)).to.equal("chat.disableAIFeatures");
-    });
+      expect(Object.fromEntries(workspace.stored)).toEqual(AI_OFF_SETTINGS)
+      expect(workspace.writtenKeys().at(-1)).toBe("chat.disableAIFeatures")
+    })
 
     test("writes nothing when the workspace file already holds the settings", async function () {
-        holdEverySetting(workspace);
+      holdEverySetting(workspace)
 
-        await restriction.apply();
+      await restriction.apply()
 
-        expect(workspace.writtenKeys).to.be.empty;
-    });
+      expect(workspace.replaceWorkspaceSetting).not.toHaveBeenCalled()
+    })
 
     test("writes only the setting that drifted", async function () {
-        holdEverySetting(workspace);
-        workspace.stored.set("chat.disableAIFeatures", false);
+      holdEverySetting(workspace)
+      workspace.stored.set("chat.disableAIFeatures", false)
 
-        await restriction.apply();
+      await restriction.apply()
 
-        expect(workspace.writtenKeys).to.deep.equal(["chat.disableAIFeatures"]);
-    });
+      expect(workspace.writtenKeys()).toEqual(["chat.disableAIFeatures"])
+    })
 
     test("turns off each course language in a per-language map and keeps other entries", async function () {
-        workspace.stored.set("github.copilot.enable", { python: true, rust: true });
+      workspace.stored.set("github.copilot.enable", { python: true, rust: true })
 
-        await restriction.apply();
+      await restriction.apply()
 
-        expect(workspace.stored.get("github.copilot.enable")).to.deep.equal({
-            ...(AI_OFF_SETTINGS["github.copilot.enable"] as object),
-            rust: true,
-        });
-    });
+      expect(workspace.stored.get("github.copilot.enable")).toEqual({
+        ...(AI_OFF_SETTINGS["github.copilot.enable"] as object),
+        rust: true,
+      })
+    })
 
     test("skips a setting no installed extension declares", async function () {
-        AI_SECTIONS.filter(
-            (s) => s.startsWith("codeium.") || s === "chat.disableAIFeatures",
-        ).forEach((s) => workspace.defaults.delete(s));
+      declare(AI_SECTIONS.filter((section) => !section.startsWith("codeium.")))
 
-        await restriction.apply();
+      await restriction.apply()
 
-        expect(workspace.writtenKeys.filter((s) => s.startsWith("codeium."))).to.be.empty;
-        expect(workspace.stored.has("chat.disableAIFeatures")).to.be.false;
-        expect(workspace.stored.get("cody.suggestions.mode")).to.equal("off");
-    });
+      expect(workspace.writtenKeys().filter((s) => s.startsWith("codeium."))).toEqual([])
+      expect(workspace.stored.get("chat.disableAIFeatures")).toBe(true)
+    })
 
-    test("a refused write neither stops the others nor rejects, and is logged as a write error", async function () {
-        workspace.rejected.add("chat.mcp.access");
+    test("writes the rest on a VS Code that declares none of the 1.104 chat settings", async function () {
+      const since1104 = ["chat.disableAIFeatures", "chat.mcp.access", "chat.plugins.enabled"]
+      declare(AI_SECTIONS.filter((section) => !since1104.includes(section)))
 
-        await restriction.apply();
+      await restriction.apply()
 
-        expect(workspace.stored.has("chat.mcp.access")).to.be.false;
-        expect(workspace.stored.get("chat.disableAIFeatures")).to.equal(true);
-        expect(warnings).to.deep.equal([
-            "Could not write chat.mcp.access to turn off AI assistance.",
-        ]);
-    });
+      expect(workspace.writtenKeys().filter((key) => since1104.includes(key))).toEqual([])
+      expect(workspace.stored.get("chat.agent.enabled")).toBe(false)
+      expect(Logger.warn).not.toHaveBeenCalled()
+    })
+
+    test("a rejected write neither stops the others nor rejects", async function () {
+      workspace.rejected.add("chat.mcp.access")
+
+      await expect(restriction.apply()).resolves.toBeUndefined()
+
+      expect(workspace.stored.has("chat.mcp.access")).toBe(false)
+      expect(workspace.stored.get("chat.disableAIFeatures")).toBe(true)
+    })
 
     test("touches nothing outside a course workspace", async function () {
-        workspace.activeCourse = undefined;
+      workspace.activeCourse = undefined
 
-        await restriction.apply();
+      await restriction.apply()
 
-        expect(workspace.writtenKeys).to.be.empty;
-    });
+      expect(workspace.replaceWorkspaceSetting).not.toHaveBeenCalled()
+    })
+  })
 
-    suite("refused writes", function () {
-        test("are retried a while later, with nothing else changing", async function () {
-            this.timeout(10_000);
-            workspace.rejected.add("chat.mcp.access");
-            await restriction.apply();
+  suite("language overrides", function () {
+    test("a user-scope language override is beaten by a workspace one of its own", async function () {
+      holdEverySetting(workspace)
+      workspace.user.set(keyOf(INLINE_SUGGEST, "python"), true)
 
-            workspace.rejected.clear();
-            await wait(5_500);
+      await restriction.apply()
 
-            expect(workspace.stored.get("chat.mcp.access")).to.equal("none");
-        });
+      expect(workspace.writtenKeys()).toEqual([keyOf(INLINE_SUGGEST, "python")])
+      expect(workspace.inspectSetting(INLINE_SUGGEST, "python").effectiveValue).toBe(false)
+      await expect(restriction.enforce()).resolves.toBeUndefined()
+    })
 
-        test("are retried as soon as the workspace file is saved or changed on disk", async function () {
-            workspace.rejected.add("chat.mcp.access");
-            await restriction.apply();
+    test("a language outside the course languages is covered once something overrides it", async function () {
+      holdEverySetting(workspace)
+      workspace.user.set(keyOf(INLINE_SUGGEST, "haskell"), true)
 
-            workspace.rejected.clear();
-            workspaceFileChanges.fire();
-            await restriction.apply();
+      await restriction.apply()
 
-            expect(workspace.stored.get("chat.mcp.access")).to.equal("none");
-        });
+      expect(workspace.stored.get(keyOf(INLINE_SUGGEST, "haskell"))).toBe(false)
+    })
 
-        test("do not count toward the backoff", async function () {
-            workspace.rejected.add("chat.mcp.access");
-            for (let i = 0; i < 8; i++) {
-                await restriction.apply();
-            }
+    test("covers the language of an open document", async function () {
+      holdEverySetting(workspace)
+      // A contributed language default, which no scope the student edits lists.
+      workspace.defaults.set(keyOf(INLINE_SUGGEST, "ruby"), true)
+      withOpenDocuments(["ruby"])
 
-            workspace.rejected.clear();
-            await restriction.apply();
+      await restriction.apply()
 
-            expect(workspace.stored.get("chat.mcp.access")).to.equal("none");
-            expect(warnings.filter((w) => w.startsWith("Something keeps"))).to.be.empty;
-        });
-    });
+      expect(workspace.stored.get(keyOf(INLINE_SUGGEST, "ruby"))).toBe(false)
+    })
 
-    suite("language overrides", function () {
-        test("a user-scope language override is beaten by a workspace one of its own", async function () {
-            holdEverySetting(workspace);
-            workspace.user.set(keyOf(INLINE_SUGGEST, "python"), true);
+    test("a document opening in a language not seen before starts a pass", async function () {
+      holdEverySetting(workspace)
+      await restriction.apply()
+      workspace.defaults.set(keyOf(INLINE_SUGGEST, "ruby"), true)
+      withOpenDocuments(["ruby"])
 
-            await restriction.apply();
+      openListener()({ languageId: "ruby" } as vscode.TextDocument)
 
-            expect(workspace.writtenKeys).to.deep.equal([keyOf(INLINE_SUGGEST, "python")]);
-            expect(workspace.inspectSetting(INLINE_SUGGEST, "python").effectiveValue).to.be.false;
-        });
+      await vi.waitFor(() =>
+        expect(workspace.stored.get(keyOf(INLINE_SUGGEST, "ruby"))).toBe(false),
+      )
+    })
 
-        test("a language outside the course languages is covered once something overrides it", async function () {
-            holdEverySetting(workspace);
-            workspace.user.set(keyOf(INLINE_SUGGEST, "haskell"), true);
+    test("an extension's language-overridable setting is looked up once, and again after extensions change", async function () {
+      const COPILOT_ENABLE = "github.copilot.enable"
+      const installed = [
+        {
+          packageJSON: {
+            contributes: {
+              configuration: {
+                properties: { [COPILOT_ENABLE]: { scope: "language-overridable" } },
+              },
+            },
+          },
+        },
+      ]
+      const extensionsListed = vi.fn(() => installed)
+      Object.defineProperty(vscode.extensions, "all", { get: extensionsListed, configurable: true })
+      holdEverySetting(workspace)
+      workspace.user.set(keyOf(COPILOT_ENABLE, "python"), { python: true })
+      try {
+        await restriction.apply()
+        await restriction.apply()
+        expect(extensionsListed).toHaveBeenCalledOnce()
+        expect(workspace.stored.get(keyOf(COPILOT_ENABLE, "python"))).toEqual(
+          AI_OFF_SETTINGS[COPILOT_ENABLE],
+        )
 
-            await restriction.apply();
+        installed.length = 0
+        events.extensionsChanged.fire()
+        await restriction.apply()
 
-            expect(workspace.stored.get(keyOf(INLINE_SUGGEST, "haskell"))).to.be.false;
-        });
+        expect(extensionsListed).toHaveBeenCalledTimes(2)
+      } finally {
+        Object.defineProperty(vscode.extensions, "all", {
+          value: [],
+          configurable: true,
+          writable: true,
+        })
+      }
+    })
 
-        test("a document opening in a language not seen before starts a pass that covers it", async function () {
-            holdEverySetting(workspace);
-            await restriction.apply();
-            // A contributed language default, which no scope the student edits lists.
-            workspace.defaults.set(keyOf(INLINE_SUGGEST, "ruby"), true);
-            const document = await vscode.workspace.openTextDocument({ language: "ruby" });
+    test("writes no language block where the workspace file's own value already wins", async function () {
+      await restriction.apply()
 
-            documentOpens.fire(document);
-            await restriction.apply();
+      expect(workspace.writtenKeys().filter((key) => key.startsWith("["))).toEqual([])
+    })
 
-            expect(workspace.stored.get(keyOf(INLINE_SUGGEST, "ruby"))).to.be.false;
-        });
+    test("removes the language blocks it wrote once the course allows AI", async function () {
+      workspace.user.set(keyOf(INLINE_SUGGEST, "python"), true)
+      await restriction.apply()
+      isAllowed = true
 
-        test("writes no language block where the workspace file's own value already wins", async function () {
-            await restriction.apply();
+      await restriction.apply()
 
-            expect(workspace.writtenKeys.filter((key) => key.startsWith("["))).to.be.empty;
-        });
+      expect(workspace.stored.size).toBe(0)
+    })
+  })
 
-        test("writes no language block while the top level does not hold", async function () {
-            workspace.rejected.add(INLINE_SUGGEST);
-            workspace.user.set(keyOf(INLINE_SUGGEST, "python"), true);
+  suite("exercise folders", function () {
+    beforeEach(function () {
+      holdEverySetting(workspace)
+      workspace.exerciseFolderUris = [EXERCISE_FOLDER]
+    })
 
-            await restriction.apply();
+    test("a value or language value of an exercise folder's own that turns AI on is overridden", async function () {
+      workspace.folder.set(INLINE_SUGGEST, true)
+      workspace.folder.set(keyOf(INLINE_SUGGEST, "python"), true)
+      workspace.folder.set("github.copilot.enable", { python: true, rust: true })
 
-            expect(workspace.writtenKeys.filter((key) => key.startsWith("["))).to.be.empty;
-        });
-    });
+      await restriction.apply()
 
-    suite("exercise folders", function () {
-        test("a folder setting that turns AI back on is overridden in that folder", async function () {
-            holdEverySetting(workspace);
-            workspace.folder.set(INLINE_SUGGEST, true);
+      expect(Object.fromEntries(workspace.folder)).toEqual({
+        [INLINE_SUGGEST]: false,
+        [keyOf(INLINE_SUGGEST, "python")]: false,
+        "github.copilot.enable": {
+          ...(AI_OFF_SETTINGS["github.copilot.enable"] as object),
+          rust: true,
+        },
+      })
+      expect(workspace.replaceWorkspaceSetting).not.toHaveBeenCalled()
+      expect(new Set(workspace.replaceFolderSetting.mock.calls.map(([folder]) => folder))).toEqual(
+        new Set([EXERCISE_FOLDER]),
+      )
+      await expect(restriction.enforce(EXERCISE_FOLDER)).resolves.toBeUndefined()
+    })
 
-            await restriction.apply();
+    test("a folder that sets nothing, or only values that hold, is left untouched", async function () {
+      workspace.folder.set(INLINE_SUGGEST, false)
 
-            expect(workspace.writtenKeys).to.deep.equal([`folder:${INLINE_SUGGEST}`]);
-            expect(workspace.folder.get(INLINE_SUGGEST)).to.be.false;
-        });
+      await restriction.apply()
 
-        test("a folder language block that turns AI back on is overridden in that folder", async function () {
-            holdEverySetting(workspace);
-            workspace.folder.set(keyOf(INLINE_SUGGEST, "python"), true);
+      expect(workspace.replaceFolderSetting).not.toHaveBeenCalled()
+    })
 
-            await restriction.apply();
+    test("a folder that is not an exercise is left untouched", async function () {
+      workspace.exerciseFolderUris = []
+      workspace.folder.set(INLINE_SUGGEST, true)
 
-            expect(workspace.folder.get(keyOf(INLINE_SUGGEST, "python"))).to.be.false;
-        });
+      await restriction.apply()
 
-        test("a folder that sets nothing is left untouched", async function () {
-            await restriction.apply();
+      expect(workspace.replaceFolderSetting).not.toHaveBeenCalled()
+    })
 
-            expect(workspace.writtenKeys.filter((key) => key.startsWith("folder:"))).to.be.empty;
-        });
+    test("a change to the exercise folders starts a pass", async function () {
+      await restriction.apply()
+      workspace.folder.set(INLINE_SUGGEST, true)
 
-        test("a newly found exercise folder starts a pass", async function () {
-            holdEverySetting(workspace);
-            workspace.folders = [];
-            await restriction.apply();
-            workspace.folder.set(INLINE_SUGGEST, true);
-            workspace.folders = [EXERCISE_FOLDER];
+      events.exerciseFoldersChanged.fire()
+      await vi.waitFor(() => expect(workspace.folder.get(INLINE_SUGGEST)).toBe(false))
+    })
 
-            workspace.exercisesChanged.fire();
-            await restriction.apply();
+    test("what it wrote into a folder is removed once the course allows AI", async function () {
+      workspace.folder.set(INLINE_SUGGEST, true)
+      await restriction.apply()
+      isAllowed = true
 
-            expect(workspace.folder.get(INLINE_SUGGEST)).to.be.false;
-        });
-    });
+      await restriction.apply()
 
-    suite("live re-apply", function () {
-        test("puts back a setting the student turned on", async function () {
-            await restriction.apply();
-            workspace.stored.set("chat.disableAIFeatures", false);
+      expect(workspace.folder.has(INLINE_SUGGEST)).toBe(false)
+    })
+  })
 
-            configurationChanges.fire(changeOf("chat.disableAIFeatures"));
-            await restriction.apply();
+  suite("when the course allows AI", function () {
+    test("removes the settings it wrote", async function () {
+      await restriction.apply()
+      isAllowed = true
 
-            expect(workspace.stored.get("chat.disableAIFeatures")).to.equal(true);
-        });
+      await restriction.apply()
 
-        test("ignores a change to any other setting", async function () {
-            configurationChanges.fire(changeOf("files.autoSave"));
-            await wait(0);
+      expect(workspace.stored.size).toBe(0)
+    })
 
-            expect(workspace.writtenKeys).to.be.empty;
-        });
+    test("removes the settings another window wrote before opening the workspace", async function () {
+      holdEverySetting(workspace)
+      workspace.stored.set("chat.agent.enabled", true)
+      await restriction.apply()
+      await restriction.adopt(AI_SECTIONS.filter((section) => section !== "chat.agent.enabled"))
+      isAllowed = true
 
-        test("its own writes end in a pass that writes nothing, not a loop", async function () {
-            workspace.onWrite = (section): void => configurationChanges.fire(changeOf(section));
+      await restriction.apply()
 
-            await restriction.apply();
+      expect(workspace.stored.size).toBe(0)
+    })
 
-            expect(workspace.writtenKeys).to.have.lengthOf(AI_SECTIONS.length);
-        });
+    test("leaves a setting it did not write", async function () {
+      workspace.stored.set("editor.inlineSuggest.enabled", false)
+      await restriction.apply()
+      isAllowed = true
 
-        test("a change during a pass waits for it instead of starting another alongside", async function () {
-            workspace.writeDelayMs = 5;
-            let isFirstInspect = true;
-            // The earliest a pass can call back in: its first read, before anything is awaited.
-            workspace.onInspect = (): void => {
-                if (isFirstInspect) {
-                    isFirstInspect = false;
-                    configurationChanges.fire(changeOf("chat.agent.enabled"));
-                }
-            };
+      await restriction.apply()
 
-            await restriction.apply();
+      expect([...workspace.stored.keys()]).toEqual(["editor.inlineSuggest.enabled"])
+    })
 
-            expect(workspace.maxWritesInFlight).to.equal(1);
-            expect(workspace.writtenKeys).to.have.lengthOf(AI_SECTIONS.length);
-        });
+    test("keeps the student's own entries of a per-language map", async function () {
+      workspace.stored.set("github.copilot.enable", { rust: true })
+      await restriction.apply()
+      isAllowed = true
 
-        test("an installed or removed extension starts a pass", async function () {
-            holdEverySetting(workspace);
-            await restriction.apply();
-            workspace.stored.set("chat.agent.enabled", true);
+      await restriction.apply()
 
-            extensionChanges.fire();
-            await restriction.apply();
+      expect(workspace.stored.get("github.copilot.enable")).toEqual({ rust: true })
+    })
 
-            expect(workspace.stored.get("chat.agent.enabled")).to.be.false;
-        });
-    });
+    test("keeps a value the student changed after it was written", async function () {
+      await restriction.apply()
+      workspace.stored.set("cody.suggestions.mode", "autocomplete")
+      isAllowed = true
 
-    suite("dispose", function () {
-        test("no pass runs after it", async function () {
-            restriction.dispose();
+      await restriction.apply()
 
-            configurationChanges.fire(changeOf("chat.agent.enabled"));
-            await restriction.apply();
+      expect(Object.fromEntries(workspace.stored)).toEqual({
+        "cody.suggestions.mode": "autocomplete",
+      })
+    })
 
-            expect(workspace.writtenKeys).to.be.empty;
-        });
+    test("writes nothing when it owns nothing", async function () {
+      isAllowed = true
 
-        test("stops a pass in progress before its next write", async function () {
-            workspace.onWrite = (): void => restriction.dispose();
+      await restriction.apply()
 
-            await restriction.apply();
+      expect(workspace.replaceWorkspaceSetting).not.toHaveBeenCalled()
+    })
 
-            expect(workspace.writtenKeys).to.have.lengthOf(1);
-        });
+    test("removes the one that restarts the extension host last", async function () {
+      holdEverySetting(workspace)
+      workspace.stored.set("chat.disableAIFeatures", false)
+      await restriction.apply()
+      workspace.stored.set(INLINE_SUGGEST, true)
+      await restriction.apply()
+      workspace.replaceWorkspaceSetting.mockClear()
+      isAllowed = true
 
-        test("cancels a pending retry", async function () {
-            this.timeout(10_000);
-            workspace.rejected.add("chat.mcp.access");
-            await restriction.apply();
-            restriction.dispose();
+      await restriction.apply()
 
-            workspace.rejected.clear();
-            await wait(5_500);
+      expect(workspace.writtenKeys()).toEqual([INLINE_SUGGEST, "chat.disableAIFeatures"])
+    })
 
-            expect(workspace.stored.has("chat.mcp.access")).to.be.false;
-        });
-    });
+    suite("with no record of what it wrote, as 3.5.4 kept none", function () {
+      test("removes the workspace file's values that equal its own, the restarting one last", async function () {
+        holdEverySetting(workspace)
+        isAllowed = true
 
-    suite("backoff", function () {
-        const FLAPPED = "chat.agent.enabled";
+        await restriction.apply()
 
-        /** Something that turns `FLAPPED` back on each time it is written, until stopped. */
-        function flapUntilStopped(): () => void {
-            let isFlapping = true;
-            workspace.onWrite = (section): void => {
-                if (isFlapping && section === FLAPPED) {
-                    workspace.stored.set(section, true);
-                    configurationChanges.fire(changeOf(section));
-                }
-            };
-            return () => {
-                isFlapping = false;
-            };
+        expect(workspace.stored.size).toBe(0)
+        expect(workspace.writtenKeys().at(-1)).toBe("chat.disableAIFeatures")
+      })
+
+      test("keeps other values, the student's entries of a per-language map and language blocks", async function () {
+        holdEverySetting(workspace)
+        workspace.stored.set("cody.suggestions.mode", "autocomplete")
+        workspace.stored.set("github.copilot.enable", {
+          ...(AI_OFF_SETTINGS["github.copilot.enable"] as object),
+          rust: true,
+        })
+        workspace.stored.set(keyOf(INLINE_SUGGEST, "python"), false)
+        isAllowed = true
+
+        await restriction.apply()
+
+        expect(Object.fromEntries(workspace.stored)).toEqual({
+          "cody.suggestions.mode": "autocomplete",
+          "github.copilot.enable": { rust: true },
+          [keyOf(INLINE_SUGGEST, "python")]: false,
+        })
+      })
+
+      test("takes them as its own only on the first pass", async function () {
+        isAllowed = true
+        await restriction.apply()
+        workspace.stored.set(INLINE_SUGGEST, false)
+
+        await restriction.apply()
+
+        expect(workspace.stored.get(INLINE_SUGGEST)).toBe(false)
+      })
+    })
+  })
+
+  suite("live re-apply", function () {
+    test("puts back a setting the student turned on", async function () {
+      await restriction.apply()
+      workspace.stored.set("chat.disableAIFeatures", false)
+
+      changeListener()(changeOf("chat.disableAIFeatures"))
+      await restriction.apply()
+
+      expect(workspace.stored.get("chat.disableAIFeatures")).toBe(true)
+    })
+
+    test("ignores a change to any other setting", async function () {
+      changeListener()(changeOf("files.autoSave"))
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0)
+      })
+
+      expect(workspace.replaceWorkspaceSetting).not.toHaveBeenCalled()
+    })
+
+    test("its own writes end in a pass that writes nothing, not a loop", async function () {
+      const listener = changeListener()
+      workspace.onWrite = (section): void => listener(changeOf(section))
+
+      await restriction.apply()
+
+      expect(workspace.replaceWorkspaceSetting).toHaveBeenCalledTimes(AI_SECTIONS.length)
+    })
+
+    test("an installed or removed extension starts a pass", async function () {
+      holdEverySetting(workspace)
+      await restriction.apply()
+      workspace.stored.set("chat.agent.enabled", true)
+
+      events.extensionsChanged.fire()
+
+      await vi.waitFor(() => expect(workspace.stored.get("chat.agent.enabled")).toBe(false))
+    })
+
+    test("a course data change re-decides", async function () {
+      let notifyCoursesChanged: (() => void) | undefined
+      restriction.dispose()
+      restriction = createRestriction((listener) => {
+        notifyCoursesChanged = listener as () => void
+        return { dispose: () => undefined }
+      })
+      await restriction.apply()
+      isAllowed = true
+
+      notifyCoursesChanged?.()
+      await restriction.apply()
+
+      expect(workspace.stored.size).toBe(0)
+    })
+  })
+
+  suite("passes", function () {
+    test("a pass re-entered from its first read runs once more after it, not alongside", async function () {
+      let writesInFlight = 0
+      let mostWritesInFlight = 0
+      workspace.replaceWorkspaceSetting.mockImplementation(async (section, value) => {
+        writesInFlight++
+        mostWritesInFlight = Math.max(mostWritesInFlight, writesInFlight)
+        await new Promise((resolve) => {
+          setTimeout(resolve, 0)
+        })
+        workspace.stored.set(section, value)
+        writesInFlight--
+      })
+      let reentries = 0
+      restriction.dispose()
+      restriction = new AiRestriction(
+        workspace,
+        ownership,
+        () => {
+          if (reentries++ === 0) {
+            void restriction.apply()
+          }
+          return isAllowed
+        },
+        undefined,
+        events,
+      )
+
+      await restriction.apply()
+
+      expect(mostWritesInFlight).toBe(1)
+      expect(reentries).toBe(2)
+      expect(Object.fromEntries(workspace.stored)).toEqual(AI_OFF_SETTINGS)
+    })
+
+    test("writes nothing once disposed", async function () {
+      restriction.dispose()
+
+      await restriction.apply()
+
+      expect(workspace.replaceWorkspaceSetting).not.toHaveBeenCalled()
+    })
+
+    test("a pass in progress stops before its next write once disposed", async function () {
+      workspace.onWrite = (): void => restriction.dispose()
+
+      await restriction.apply()
+
+      expect(workspace.replaceWorkspaceSetting).toHaveBeenCalledOnce()
+    })
+  })
+
+  suite("refused writes", function () {
+    const REFUSED = "chat.mcp.access"
+
+    function attempts(): number {
+      return workspace.writtenKeys().filter((key) => key === REFUSED).length
+    }
+
+    beforeEach(function () {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] })
+      workspace.rejected.add(REFUSED)
+    })
+
+    test("are retried on a timer, each wait twice as long as the last", async function () {
+      await restriction.apply()
+      expect(attempts()).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(attempts()).toBe(2)
+      await vi.advanceTimersByTimeAsync(9_999)
+      expect(attempts()).toBe(2)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(attempts()).toBe(3)
+
+      workspace.rejected.clear()
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(workspace.stored.get(REFUSED)).toBe("none")
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    test("are retried as soon as the workspace file is saved or changed on disk", async function () {
+      await restriction.apply()
+      workspace.rejected.clear()
+
+      events.workspaceFileChanged.fire()
+      // Well before the timer's retry.
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(workspace.stored.get(REFUSED)).toBe("none")
+    })
+
+    test("are announced once, and again only after a pass got every write through", async function () {
+      workspace.problem = "unsaved"
+      const announced = vi.fn()
+      restriction.onDidRefuseWorkspaceFile(announced)
+
+      await restriction.apply()
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(announced).toHaveBeenCalledExactlyOnceWith({
+        kind: "workspaceFileUnwritable",
+        file: WORKSPACE_FILE,
+        problem: "unsaved",
+        reason: "Unable to write into the workspace configuration file.",
+      })
+
+      workspace.rejected.clear()
+      await vi.advanceTimersByTimeAsync(10_000)
+      workspace.rejected.add(REFUSED)
+      workspace.stored.delete(REFUSED)
+      await restriction.apply()
+      expect(announced).toHaveBeenCalledTimes(2)
+    })
+
+    test("are left to an enforcing caller to report", async function () {
+      const announced = vi.fn()
+      restriction.onDidRefuseWorkspaceFile(announced)
+
+      await restriction.enforce()
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      expect(announced).not.toHaveBeenCalled()
+    })
+
+    test("are not retried once disposed", async function () {
+      await restriction.apply()
+      expect(vi.getTimerCount()).toBe(1)
+
+      restriction.dispose()
+
+      expect(vi.getTimerCount()).toBe(0)
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(attempts()).toBe(1)
+    })
+  })
+
+  suite("backoff", function () {
+    const FLAPPED = "chat.agent.enabled"
+
+    /** Something that turns `FLAPPED` back on each time it is written, until stopped. */
+    function flapUntilStopped(): () => void {
+      let isFlapping = true
+      const listener = changeListener()
+      workspace.onWrite = (section): void => {
+        if (isFlapping && section === FLAPPED) {
+          workspace.stored.set(section, true)
+          listener(changeOf(section))
         }
+      }
+      return () => {
+        isFlapping = false
+      }
+    }
 
-        setup(function () {
-            holdEverySetting(workspace);
-            workspace.stored.set(FLAPPED, true);
-        });
+    beforeEach(function () {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] })
+      holdEverySetting(workspace)
+    })
 
-        test("leaves a setting that keeps flipping back alone after a few writes", async function () {
-            flapUntilStopped();
+    test("leaves a setting that keeps flipping back alone after a few writes", async function () {
+      flapUntilStopped()
+      workspace.stored.set(FLAPPED, true)
 
-            await restriction.apply();
+      await restriction.apply()
 
-            expect(workspace.writtenKeys.filter((key) => key === FLAPPED)).to.have.lengthOf(5);
-            expect(warnings.filter((w) => w.startsWith("Something keeps"))).to.have.lengthOf(1);
-        });
+      expect(workspace.writtenKeys().filter((key) => key === FLAPPED)).toHaveLength(5)
+      expect(Logger.warn).toHaveBeenCalledExactlyOnceWith(expect.stringContaining("keeps turning"))
+    })
 
-        test("flapping one setting does not stop the others being put back", async function () {
-            flapUntilStopped();
-            await restriction.apply();
+    test("flapping one setting does not stop the others being put back", async function () {
+      flapUntilStopped()
+      workspace.stored.set(FLAPPED, true)
+      await restriction.apply()
 
-            workspace.stored.set("cody.suggestions.mode", "autocomplete");
-            configurationChanges.fire(changeOf("cody.suggestions.mode"));
-            await restriction.apply();
+      workspace.stored.set("cody.suggestions.mode", "autocomplete")
+      changeListener()(changeOf("cody.suggestions.mode"))
+      await restriction.apply()
 
-            expect(workspace.stored.get("cody.suggestions.mode")).to.equal("off");
-            expect(workspace.stored.get(FLAPPED)).to.equal(true);
-        });
+      expect(workspace.stored.get("cody.suggestions.mode")).toBe("off")
+      expect(workspace.stored.get(FLAPPED)).toBe(true)
+    })
 
-        test("puts the setting back once its backoff ends, with nothing else changing", async function () {
-            this.timeout(10_000);
-            const stop = flapUntilStopped();
-            await restriction.apply();
-            stop();
+    test("puts the setting back once its backoff ends, with nothing else changing", async function () {
+      const stop = flapUntilStopped()
+      workspace.stored.set(FLAPPED, true)
+      await restriction.apply()
+      stop()
 
-            await wait(5_500);
+      await vi.advanceTimersByTimeAsync(5_000)
 
-            expect(workspace.stored.get(FLAPPED)).to.equal(false);
-        });
+      expect(workspace.stored.get(FLAPPED)).toBe(false)
+    })
 
-        test("a write is counted before it is made, as it may restart the extension host", async function () {
-            workspace.stored.set("chat.disableAIFeatures", false);
-            let countedWrites: number | undefined;
-            workspace.onWrite = (section): void => {
-                if (section === "chat.disableAIFeatures") {
-                    const backoffs =
-                        state.get<Record<string, { writeTimes: number[] }>>(
-                            "aiOffSettingsBackoffs",
-                        );
-                    countedWrites = backoffs?.["chat.disableAIFeatures"]?.writeTimes.length;
-                }
-            };
+    test("each backoff of the same setting lasts twice as long", async function () {
+      flapUntilStopped()
+      workspace.stored.set(FLAPPED, true)
+      await restriction.apply()
+      await vi.advanceTimersByTimeAsync(5_000)
+      const writesAfterFirstBackoff = workspace.writtenKeys().length
 
-            await restriction.apply();
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(workspace.writtenKeys()).toHaveLength(writesAfterFirstBackoff)
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(workspace.writtenKeys().length).toBeGreaterThan(writesAfterFirstBackoff)
+    })
 
-            expect(countedWrites).to.equal(1);
-        });
+    test("schedules no retry once disposed", async function () {
+      flapUntilStopped()
+      workspace.stored.set(FLAPPED, true)
+      // Disposed in the pass that backs the setting off.
+      vi.mocked(Logger.warn).mockImplementation(() => restriction.dispose())
 
-        test("survives an extension host restart", async function () {
-            flapUntilStopped();
-            await restriction.apply();
-            restriction.dispose();
-            workspace.onWrite = (): void => {};
-            const writesBeforeRestart = workspace.writtenKeys.length;
+      await restriction.apply()
 
-            restriction = createRestriction();
-            await restriction.apply();
+      expect(vi.getTimerCount()).toBe(0)
+    })
 
-            expect(workspace.writtenKeys).to.have.lengthOf(writesBeforeRestart);
-            expect(workspace.stored.get(FLAPPED)).to.equal(true);
-        });
-    });
-});
+    test("refused writes do not count toward it", async function () {
+      workspace.stored.set(FLAPPED, true)
+      workspace.rejected.add(FLAPPED)
+      for (let i = 0; i < 2 * 5; i++) {
+        await restriction.apply()
+      }
+      workspace.rejected.clear()
+
+      await restriction.apply()
+
+      expect(workspace.stored.get(FLAPPED)).toBe(false)
+      expect(Logger.warn).toHaveBeenCalledWith(
+        `Could not write ${FLAPPED} to turn off AI assistance.`,
+        expect.any(Error),
+      )
+      expect(Logger.warn).not.toHaveBeenCalledWith(expect.stringContaining("keeps turning"))
+    })
+
+    test("a write is on record before it is made, and taken back when refused", async function () {
+      const recorded = (): number[] | undefined =>
+        ownership.get<Record<string, { writeTimes: number[] }>>("aiOffSettingsBackoffs")?.[FLAPPED]
+          ?.writeTimes
+      const recordedDuringWrites: (number[] | undefined)[] = []
+      workspace.onWrite = (): void => void recordedDuringWrites.push(recorded())
+      workspace.stored.set(FLAPPED, true)
+      workspace.rejected.add(FLAPPED)
+      await restriction.apply()
+      expect(recorded()).toEqual([])
+      workspace.rejected.clear()
+
+      await restriction.apply()
+
+      expect(recordedDuringWrites).toEqual([[Date.now()]])
+    })
+
+    test("outlives the extension host", async function () {
+      flapUntilStopped()
+      workspace.stored.set(FLAPPED, true)
+      await restriction.apply()
+      restriction.dispose()
+      workspace.replaceWorkspaceSetting.mockClear()
+
+      restriction = createRestriction()
+      await restriction.apply()
+
+      expect(workspace.writtenKeys()).toEqual([])
+    })
+
+    test("writes no language block for a setting backed off at the top level", async function () {
+      const listener = changeListener()
+      workspace.onWrite = (section, languageId): void => {
+        if (section === INLINE_SUGGEST && languageId === undefined) {
+          workspace.stored.set(section, true)
+          listener(changeOf(section))
+        }
+      }
+      workspace.stored.set(INLINE_SUGGEST, true)
+      workspace.user.set(keyOf(INLINE_SUGGEST, "haskell"), true)
+
+      await restriction.apply()
+
+      expect(workspace.writtenKeys().filter((key) => key.startsWith("["))).toEqual([])
+    })
+
+    test("enforce writes a backed-off setting anyway", async function () {
+      const stop = flapUntilStopped()
+      workspace.stored.set(FLAPPED, true)
+      await restriction.apply()
+      stop()
+
+      await expect(restriction.enforce()).resolves.toBeUndefined()
+
+      expect(workspace.stored.get(FLAPPED)).toBe(false)
+    })
+  })
+
+  suite("enforce", function () {
+    test("the restriction is in force once every setting holds", async function () {
+      await expect(restriction.enforce()).resolves.toBeUndefined()
+    })
+
+    test.each<[string, WorkspaceFileProblem | undefined]>([
+      ["has unsaved changes", "unsaved"],
+      ["is read-only", "readOnly"],
+      ["has a syntax error", undefined],
+    ])(
+      "is not in force while the workspace file %s and refuses writes",
+      async function (_case, problem) {
+        workspace.problem = problem
+        workspace.rejected.add("chat.mcp.access")
+
+        await expect(restriction.enforce()).resolves.toEqual({
+          kind: "workspaceFileUnwritable",
+          file: WORKSPACE_FILE,
+          problem,
+          reason: "Unable to write into the workspace configuration file.",
+        })
+      },
+    )
+
+    test("waits for a pass already under way, then makes one of its own", async function () {
+      let finishBlockedWrite: (() => void) | undefined
+      const blockedWrite = new Promise<void>((resolve) => {
+        finishBlockedWrite = resolve
+      })
+      const write = workspace.replaceWorkspaceSetting.getMockImplementation()
+      workspace.replaceWorkspaceSetting.mockImplementation(async (section, ...rest) => {
+        if (section === "chat.mcp.access") {
+          await blockedWrite
+        }
+        await write?.(section, ...rest)
+      })
+      void restriction.apply()
+      await vi.waitFor(() => expect(workspace.writtenKeys()).toContain("chat.mcp.access"))
+
+      const lapse = restriction.enforce()
+      // Turned back on behind the pass, with no event to say so.
+      workspace.stored.set(INLINE_SUGGEST, true)
+      finishBlockedWrite?.()
+
+      await expect(lapse).resolves.toBeUndefined()
+      expect(workspace.stored.get(INLINE_SUGGEST)).toBe(false)
+    })
+
+    test("a write refused in the background still counts once nothing has changed", async function () {
+      workspace.rejected.add("chat.mcp.access")
+      await restriction.apply()
+
+      workspace.rejected.clear()
+      await expect(restriction.enforce()).resolves.toBeUndefined()
+
+      expect(workspace.stored.get("chat.mcp.access")).toBe("none")
+    })
+
+    test("a refused top-level write is not also tried for every language", async function () {
+      workspace.rejected.add(INLINE_SUGGEST)
+
+      await restriction.enforce()
+
+      expect(workspace.writtenKeys().filter((key) => key.startsWith("["))).toEqual([])
+    })
+
+    test("is not in force while the exercise folder's own settings turn a setting back on", async function () {
+      workspace.folder.set(INLINE_SUGGEST, true)
+      vi.spyOn(vscode.workspace, "getWorkspaceFolder").mockReturnValue({
+        uri: EXERCISE_FOLDER,
+        name: "loops",
+        index: 1,
+      })
+
+      await expect(restriction.enforce(EXERCISE_FOLDER)).resolves.toEqual({
+        kind: "settingOverridden",
+        section: INLINE_SUGGEST,
+        languageId: undefined,
+        source: { kind: "folder", folder: EXERCISE_FOLDER },
+      })
+    })
+
+    test("a value nothing the student set wins is not held against them", async function () {
+      await restriction.apply()
+      // e.g. a machine policy; no scope the student edits holds the value.
+      vi.spyOn(workspace, "inspectSetting").mockImplementation((section) => ({
+        key: section,
+        effectiveValue: section === "chat.mcp.access" ? "all" : AI_OFF_SETTINGS[section],
+      }))
+
+      await expect(restriction.enforce()).resolves.toBeUndefined()
+    })
+
+    test("is not in force outside a course workspace", async function () {
+      workspace.activeCourse = undefined
+
+      await expect(restriction.enforce()).resolves.toEqual({ kind: "outsideCourseWorkspace" })
+    })
+
+    test("is not in force when the open course allows AI", async function () {
+      isAllowed = true
+
+      await expect(restriction.enforce()).resolves.toEqual({ kind: "outsideCourseWorkspace" })
+    })
+  })
+})
+
+suite("isAiAllowed", function () {
+  test.each([
+    ["full_use", true],
+    ["required", true],
+    ["not_set", false],
+    ["no_ai", false],
+    ["planning_only", false],
+    ["limited", false],
+    ["unrecognized", false],
+  ] as const)("a mooc course whose policy is %s: %s", function (aiPolicy, isAllowed) {
+    expect(isAiAllowed(moocLocalCourse({ aiPolicy }))).toBe(isAllowed)
+  })
+
+  test("a tmc course or an unknown one is not allowed AI", function () {
+    expect([isAiAllowed(tmcLocalCourse()), isAiAllowed(undefined)]).toEqual([false, false])
+  })
+
+  test("the open course is not allowed AI without course data", function () {
+    expect(
+      isActiveCourseAiAllowed(
+        { activeCourse: "python-course", activeCourseBackend: "mooc" },
+        undefined,
+      ),
+    ).toBe(false)
+  })
+})
+
+suite("a course refresh that changes the AI policy", function () {
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("removes the settings once the course allows AI, and writes them back once it does not", async function () {
+    declare(AI_SECTIONS)
+    vi.spyOn(Logger, "info").mockImplementation(() => undefined)
+    const storage = new Storage(createMockContext())
+    await storage.updateUserData({
+      courses: [],
+      mooc_courses: [moocCourseData({ id: MOOC_COURSE_UUID, name: "python-course" })],
+    })
+    const userData = new UserData(storage)
+    const workspace = Object.assign(new FakeCourseWorkspace(), {
+      activeCourseBackend: "mooc" as const,
+    })
+    const [langs, langsValues] = createTMCMock()
+    const context = {
+      ...createMockActionContext({ startup: { langs, userData } }),
+      authState: createMockAuthState(),
+    }
+    const refreshWithPolicy = async (aiPolicy: CourseAiPolicy): Promise<void> => {
+      langsValues.getMoocCourseData = Ok({
+        course: { ...moocCourse, ai_policy: aiPolicy },
+        slides: moocExerciseSlides,
+        progress: moocCourseProgress,
+      })
+      ;(await updateCourse(context, idOfMoocCourse(MOOC_COURSE_UUID))).unwrap()
+    }
+    const restriction = new AiRestriction(
+      workspace,
+      createMockMemento(),
+      () => isActiveCourseAiAllowed(workspace, userData),
+      userData.onDidChangeCourses,
+      new FakeEvents(),
+    )
+    await restriction.apply()
+    expect(Object.fromEntries(workspace.stored)).toEqual(AI_OFF_SETTINGS)
+
+    await refreshWithPolicy("full_use")
+    await vi.waitFor(() => expect(workspace.stored.size).toBe(0))
+
+    await refreshWithPolicy("limited")
+    await vi.waitFor(() => expect(Object.fromEntries(workspace.stored)).toEqual(AI_OFF_SETTINGS))
+    restriction.dispose()
+  })
+})
+
+function isEveryDeclared(): boolean {
+  return true
+}
+
+suite("AI-off settings written before a course workspace opens", function () {
+  test("are every declared setting for a file that sets none", function () {
+    expect(missingAiOffSettings({}, isEveryDeclared)).toEqual(AI_OFF_SETTINGS)
+  })
+
+  test("leave out what the file already holds and what nothing declares", function () {
+    const missing = missingAiOffSettings(
+      { "chat.agent.enabled": false },
+      (section) => section !== "codeium.enableSearch",
+    )
+
+    expect(missing).not.toHaveProperty(["chat.agent.enabled"])
+    expect(missing).not.toHaveProperty(["codeium.enableSearch"])
+    expect(missing).toHaveProperty(["chat.disableAIFeatures"], true)
+  })
+
+  test("keep the student's own entries of a per-language map", function () {
+    const missing = missingAiOffSettings(
+      { "github.copilot.enable": { rust: true } },
+      isEveryDeclared,
+    )
+
+    expect(missing["github.copilot.enable"]).toEqual({
+      rust: true,
+      ...(AI_OFF_SETTINGS["github.copilot.enable"] as object),
+    })
+  })
+})
+
+suite("closing the chat side bar", function () {
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("closes the secondary side bar", async function () {
+    const executed = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await closeChatSideBar()
+
+    expect(executed).toHaveBeenCalledWith("workbench.action.closeAuxiliaryBar")
+  })
+
+  test("never rejects, as on a VS Code without the command", async function () {
+    vi.spyOn(vscode.commands, "executeCommand").mockRejectedValue(new Error("command not found"))
+    vi.spyOn(Logger, "debug").mockImplementation(() => undefined)
+
+    await expect(closeChatSideBar()).resolves.toBeUndefined()
+  })
+})

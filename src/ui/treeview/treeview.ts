@@ -1,252 +1,900 @@
-import { VisibilityGroup, VisibilityGroupNegated } from "../types";
-import { TmcTreeNode } from "./treenode";
-import { Visibility } from "./visibility";
-import * as vscode from "vscode";
+import * as vscode from "vscode"
 
-/**
- * A class for managing the TMC menu treeview.
- */
-export default class TmcMenuTree {
-    private readonly _treeDP: TmcMenuTreeDataProvider;
-    private readonly _visibility: Visibility;
-    private readonly _treeview: vscode.TreeView<TmcTreeNode>;
+import type { BackendKind } from "../../../shared/lib"
+import {
+  CourseIdentifier,
+  ExerciseIdentifier,
+  LocalCourseData,
+  LOGGED_OUT_MESSAGE,
+  NOT_LOGGED_IN_MESSAGE,
+  SOFT_DEADLINE_PENALTY,
+  SUBMIT_REFUSAL_ICONS,
+  SUBMIT_REFUSAL_LABELS,
+  submitRefusalSentence,
+  arePointsHeldForReview,
+  pendingReviewSentence,
+  PENDING_REVIEW_ICONS,
+  PENDING_REVIEW_LABELS,
+  triesLeftText,
+} from "../../../shared/lib"
+import type { AuthState } from "../../api/authState"
+import type WorkspaceManager from "../../api/workspaceManager"
+import type { WorkspaceExercise } from "../../api/workspaceManager"
+import { ExerciseStatus as WorkspaceExerciseStatus } from "../../api/workspaceManager"
+import { TRUST_COURSE_WORKSPACE_COMMAND } from "../../errors"
+import { countOf, formatDeadline, formatDeadlineBriefly } from "../../utilities"
+import { downloadFailures } from "../downloadFailures"
+import { exerciseOperations } from "../exerciseOperations"
+import { pointsText } from "../points"
+import { tooltipOf } from "../tooltip"
+import { updateablesRegistry } from "../updateablesRegistry"
+import type { ExerciseView, PartView } from "./courseViewModel"
+import { buildCourseView, onDiskByCourse, shownDeadline } from "./courseViewModel"
 
-    /**
-     * Creates and registers a new instance of TMCMenuTree with given viewId.
-     * @param viewId Id of the view passed to `vscode.window.registerTreeDataProvider`
-     */
-    constructor(viewId: string) {
-        this._treeDP = new TmcMenuTreeDataProvider();
-        this._treeview = vscode.window.createTreeView(viewId, { treeDataProvider: this._treeDP });
+/** The id of the TestMyCode view, for `withProgress({ location: { viewId } })` too. */
+export const COURSES_VIEW_ID = "tmcView"
 
-        this._visibility = new Visibility();
-    }
+/** What the Courses view is drawn from; read afresh on every render. */
+export interface CoursesTreeSource {
+  getCourses: () => LocalCourseData[]
+  onDidChangeCourses: vscode.Event<unknown>
+  workspaceManager: Pick<
+    WorkspaceManager,
+    | "activeCourse"
+    | "activeCourseBackend"
+    | "getExerciseContaining"
+    | "getExercises"
+    | "onDidChangeExercises"
+  >
+}
 
-    /**
-     * Register an action to be shown in the action treeview.
-     *
-     * @param label A label, displayed in the treeview
-     * @param onClick An action handler
-     * @param groups Determines when the action should be visible in the treeview
-     * @param id Optional, required for [[triggerCallback]]
-     */
-    public registerAction(
-        label: string,
-        id: string,
-        groups: Array<VisibilityGroup | VisibilityGroupNegated>,
-        command: vscode.Command,
-        collapsibleState?: vscode.TreeItemCollapsibleState,
-        children?: Array<{ label: string; id: string; command: vscode.Command }>,
-    ): void {
-        // Use internal classes
-        this._visibility.registerAction(id, groups);
-        this._treeDP.registerAction(
-            label,
-            id,
-            command,
-            this._visibility.getVisible(id),
-            collapsibleState,
-            children,
-        );
-    }
+/** How the items render, fixed for one render of the view. */
+const MINUTE_MS = 60_000
+const HOUR_MS = 60 * MINUTE_MS
+/** How long after a deadline to re-render, so the render sees it as passed. */
+const DEADLINE_TICK_SLACK_MS = 500
 
-    /**
-     * Removes child from TreeView item.
-     * @param parentId Parent node ID
-     * @param removeId Child node ID
-     */
-    public removeChildWithId(parentId: string, removeId: string): void {
-        this._treeDP.removeChildWithId(parentId, removeId);
-    }
+interface RenderContext {
+  now: Date
+  locale: string | undefined
+  /** The course's backend could not be reached, so its deadlines may be stale. */
+  isOffline: boolean
+  /** The course whose workspace is open, which starts expanded. */
+  activeCourse: { slug: string; backend: BackendKind } | undefined
+  /** This window is the workspace of the course being rendered. */
+  isCourseWorkspace?: boolean
+}
 
-    /**
-     * Adds a child to the TreeView item.
-     * @param parentId Parent ID in treeview
-     * @param childId Child ID in treeview
-     * @param title Human readable text for child item, e.g. course title or name
-     * @param command The vscode command to be called when pressing the child node.
-     */
-    public addChildWithId(
-        parentId: string,
-        childId: number,
-        title: string,
-        command: vscode.Command,
-    ): void {
-        const childIdString = childId.toString();
-        this._treeDP.addChildWithId(
-            parentId,
-            childIdString,
-            new TmcTreeNode(title, childIdString, command, "child"),
-        );
-    }
+/** A course, part or exercise row of the Courses view; the view's row commands receive these. */
+export type CoursesTreeItem = CourseTreeItem | PartTreeItem | ExerciseTreeItem
 
-    /**
-     * Register a visibility group for the action treeview
-     * @param group Name of the group
-     * @param visible Whether the group should start as active or not
-     */
-    public createVisibilityGroup(visible?: boolean): VisibilityGroup {
-        // Use internal class
-        return this._visibility.createGroup(visible ? visible : false);
-    }
+/** Any row of the Courses view. */
+export type CoursesViewRow = CoursesTreeItem | TrustCourseWorkspaceTreeItem
 
-    /**
-     * Update the visibility status of a list of groups
-     * @param groups The groups to be updated, prepend an exclamation mark to disable
-     */
-    public updateVisibility(groups: Array<VisibilityGroup | VisibilityGroupNegated>): void {
-        if (
-            new Set(
-                groups.map((group) =>
-                    group.id.startsWith("!") ? group.id.substring(1) : group.id,
-                ),
-            ).size !== groups.length
-        ) {
-            throw new Error("Visibility group list contains duplicates and/or conflicts");
-        }
-
-        let changes: Array<[string, boolean]> = [];
-
-        // Collect changes from each update
-        groups.forEach((group) => {
-            changes = changes.concat(this._visibility.setGroupVisible(group));
-        });
-
-        // Apply changes
-        changes.forEach(([id, isVisible]) => this._treeDP.setVisibility(id, isVisible));
-
-        // Refresh if necessary
-        if (changes.length > 0) {
-            this._treeDP.refresh();
-        }
-    }
+/** The Courses view's first row while its course workspace is in Restricted Mode. */
+export class TrustCourseWorkspaceTreeItem extends vscode.TreeItem {
+  public constructor() {
+    super("Trust Course Workspace", vscode.TreeItemCollapsibleState.None)
+    this.id = "trustCourseWorkspace"
+    this.description = "to run tests and submit"
+    this.iconPath = new vscode.ThemeIcon("workspace-untrusted")
+    this.command = { command: TRUST_COURSE_WORKSPACE_COMMAND, title: "Trust Course Workspace" }
+  }
 }
 
 /**
- * A class required by VSCode to fulfill the role of a data provider for the action treeview
+ * One of the user's courses in the Courses view.
+ *
+ * `contextValue` is `course.<backend>` followed by the flags package.json's `viewItem`
+ * clauses match on: `.hasNew` (exercises announced as new), `.hasMissing` (exercises not
+ * downloaded that can still be submitted), `.hasUpdates` and `.hasCompleted` (passed
+ * exercises still open). The order is part of the contract: the inline Download All shows
+ * only where `.hasMissing` directly follows the backend, i.e. without `.hasNew`.
  */
-class TmcMenuTreeDataProvider implements vscode.TreeDataProvider<TmcTreeNode> {
-    /**
-     * @implements {vscode.TreeDataProvider<TmcTreeNode>}
-     */
-    public readonly onDidChangeTreeData: vscode.Event<TmcTreeNode | undefined>;
+export class CourseTreeItem extends vscode.TreeItem {
+  public readonly courseId: CourseIdentifier
+  public readonly parent: undefined = undefined
+  private readonly _tooltipLines: string[]
+  private readonly _buildChildren: () => (PartTreeItem | ExerciseTreeItem)[]
+  private _children: (PartTreeItem | ExerciseTreeItem)[] | undefined
 
-    /**
-     * @implements {vscode.TreeDataProvider<TmcTreeNode>}
-     */
-    private _refreshEventEmitter: vscode.EventEmitter<TmcTreeNode | undefined>;
+  public constructor(course: LocalCourseData, parts: PartView[], context: RenderContext) {
+    const title = LocalCourseData.getCourseTitle(course)
+    const isActive =
+      context.activeCourse?.backend === course.kind &&
+      context.activeCourse.slug === LocalCourseData.getCourseName(course)
+    super(
+      title,
+      isActive
+        ? vscode.TreeItemCollapsibleState.Expanded
+        : vscode.TreeItemCollapsibleState.Collapsed,
+    )
+    this.courseId = LocalCourseData.getCourseId(course)
+    this.id = CourseIdentifier.key(this.courseId)
+    const exercises = parts.flatMap((part) => part.exercises)
+    const newCount = LocalCourseData.getNewExercises(course).length
+    const updateCount = exercises.filter((ex) => ex.isUpdateable).length
+    const hasCompleted = exercises.some((ex) => ex.passed && ex.status === "opened")
+    const hasMissing = exercises.some((ex) => ex.status === "missing" || ex.status === "new")
+    const disabled = LocalCourseData.isDisabled(course)
+    const notEnrolled = LocalCourseData.isNotEnrolled(course)
+    const accessLoss = LocalCourseData.getAccessLoss(course)
+    const points = pointsText(course.data.awardedPoints, course.data.availablePoints)
 
-    private _actions: Map<string, { action: TmcTreeNode; visible: boolean }>;
+    this.iconPath =
+      disabled || notEnrolled || accessLoss
+        ? new vscode.ThemeIcon("book", new vscode.ThemeColor("disabledForeground"))
+        : new vscode.ThemeIcon("book")
+    this.contextValue = [
+      `course.${course.kind}`,
+      // A course its backend refuses offers no downloads; the download would only be refused.
+      ...(newCount > 0 && !accessLoss ? ["hasNew"] : []),
+      ...(hasMissing && !accessLoss ? ["hasMissing"] : []),
+      ...(updateCount > 0 && !accessLoss ? ["hasUpdates"] : []),
+      ...(hasCompleted ? ["hasCompleted"] : []),
+    ].join(".")
+    const newExercises = countOf(newCount, "new exercise")
+    const updates = countOf(updateCount, "exercise update")
+    this._tooltipLines = showFacts(this, title, [
+      points && {
+        description: points.short,
+        spoken: points.spoken,
+        tooltip: `${points.short} points`,
+      },
+      accessLoss === "forbidden" && {
+        description: "no access",
+        spoken: "no access",
+        tooltip:
+          "You no longer have access to this course. Its exercises on this computer still run their tests.",
+      },
+      accessLoss === "notFound" && {
+        description: "removed",
+        spoken: "removed",
+        tooltip:
+          "This course no longer exists. Its exercises on this computer still run their tests.",
+      },
+      disabled &&
+        !accessLoss && {
+          description: "disabled",
+          spoken: "disabled",
+          tooltip: "This course is disabled: its exercises cannot be downloaded or submitted.",
+        },
+      notEnrolled &&
+        !accessLoss && {
+          description: "not enrolled",
+          spoken: "not enrolled",
+          tooltip: "You are not enrolled on this course: its exercises cannot be submitted.",
+        },
+      newCount > 0 && { spoken: newExercises, tooltip: newExercises },
+      updateCount > 0 && { spoken: updates, tooltip: updates },
+    ])
+    this.command = { command: "tmc.courseDetails", title: "Show Course", arguments: [this] }
+    const courseContext = { ...context, isCourseWorkspace: isActive }
+    this._buildChildren = () =>
+      parts.length === 1 && parts[0]?.isUngrouped
+        ? exercises.map((ex) => new ExerciseTreeItem(this, this.courseId, ex, courseContext))
+        : parts.map((part) => new PartTreeItem(this, part, courseContext))
+  }
 
-    /**
-     * Creates new instance of TMC treeview.
-     */
-    public constructor() {
-        this._refreshEventEmitter = new vscode.EventEmitter<TmcTreeNode | undefined>();
-        this.onDidChangeTreeData = this._refreshEventEmitter.event;
-        this._actions = new Map<string, { action: TmcTreeNode; visible: boolean }>();
+  /** The course's parts, or its exercises directly when none of them names a part. */
+  public get children(): (PartTreeItem | ExerciseTreeItem)[] {
+    this._children ??= this._buildChildren()
+    return this._children
+  }
+
+  public buildTooltip(): vscode.MarkdownString {
+    return tooltipOf(this._tooltipLines)
+  }
+}
+
+/**
+ * A part of a course. `contextValue` is `part` followed by `.hasMissing`, `.hasClosed` and
+ * `.hasOpened`, for the bulk actions that apply to its exercises.
+ */
+export class PartTreeItem extends vscode.TreeItem {
+  public readonly courseId: CourseIdentifier
+  /** The mooc chapter the part is; `undefined` for a tmc part or the ungrouped exercises. */
+  public readonly chapterName: string | undefined
+  public readonly children: ExerciseTreeItem[]
+  private readonly _tooltipLines: string[]
+
+  public constructor(
+    public readonly parent: CourseTreeItem,
+    part: PartView,
+    context: RenderContext,
+  ) {
+    const label = partLabel(part.name)
+    super(
+      label,
+      part.isDefaultOpen
+        ? vscode.TreeItemCollapsibleState.Expanded
+        : vscode.TreeItemCollapsibleState.Collapsed,
+    )
+    this.courseId = parent.courseId
+    this.chapterName = part.number === undefined ? undefined : part.name
+    this.id = `${parent.id}/${part.key}`
+    const passed = part.exercises.filter((ex) => ex.passed).length
+    const shownNextDeadline = part.nextDeadline && !context.isOffline ? part.nextDeadline : null
+    const nextDeadline = shownNextDeadline
+      ? formatDeadline(shownNextDeadline, context.now, context.locale)
+      : undefined
+    this._tooltipLines = showFacts(this, label, [
+      {
+        description: `${passed}/${part.exercises.length} passed`,
+        spoken: `${passed} of ${part.exercises.length} passed`,
+        tooltip: `${passed} of ${part.exercises.length} exercises passed`,
+      },
+      shownNextDeadline && {
+        description: `next deadline ${formatDeadlineBriefly(shownNextDeadline, context.now, context.locale)}`,
+        spoken: `next deadline ${nextDeadline}`,
+        tooltip: `Next deadline: ${nextDeadline}`,
+      },
+      part.opensAt && {
+        description: `opens ${formatDeadlineBriefly(part.opensAt, context.now, context.locale)}`,
+        spoken: `opens ${formatDeadline(part.opensAt, context.now, context.locale)}`,
+        tooltip:
+          `Opens on ${formatDeadline(part.opensAt, context.now, context.locale)}. Until then ` +
+          "its exercises on this computer can be tested but not submitted.",
+      },
+      part.lockingStatus === "NotUnlockedYet" && {
+        description: "complete earlier chapters first",
+        spoken: "complete earlier chapters first",
+        tooltip: "Complete the earlier chapters first to submit its exercises.",
+      },
+      part.lockingStatus === "CompletedAndLocked" && {
+        description: "locked",
+        spoken: "locked",
+        tooltip: "This chapter is locked, so its exercises can no longer be submitted.",
+      },
+    ])
+    this.iconPath = new vscode.ThemeIcon(
+      passed === part.exercises.length ? "pass-filled" : "list-tree",
+      passed === part.exercises.length ? new vscode.ThemeColor("testing.iconPassed") : undefined,
+    )
+    this.contextValue = [
+      "part",
+      ...(part.exercises.some((ex) => isDownloadable(ex.status)) ? ["hasMissing"] : []),
+      ...(part.exercises.some((ex) => ex.status === "closed") ? ["hasClosed"] : []),
+      ...(part.exercises.some((ex) => ex.status === "opened") ? ["hasOpened"] : []),
+    ].join(".")
+    this.children = part.exercises.map(
+      (ex) => new ExerciseTreeItem(this, this.courseId, ex, context),
+    )
+  }
+
+  public buildTooltip(): vscode.MarkdownString {
+    return tooltipOf(this._tooltipLines)
+  }
+}
+
+// The course home's words, so the two views name a state alike.
+const STATUS_LABELS: Record<Exclude<ExerciseView["status"], "opened">, string> = {
+  closed: "closed",
+  missing: "not downloaded",
+  new: "new, not downloaded",
+  downloading: "downloading…",
+  downloadFailed: "download failed",
+  expired: "deadline passed, not downloaded",
+  removed: "removed from the course",
+}
+
+/**
+ * One exercise. `contextValue` is `exercise.<status>` (see `ExerciseStatus`), then for a removed
+ * exercise still on disk `.opened` or `.closed`, then `.passed`, `.updateable`, `.hasMaterial` and,
+ * on disk, `.hasModelSolution` and `.submitRefused` (see `submitRefusalOf`) when they apply.
+ */
+export class ExerciseTreeItem extends vscode.TreeItem {
+  public readonly exerciseId: ExerciseIdentifier
+  /** The exercise's folder, while it is on disk. */
+  public readonly exerciseUri: vscode.Uri | undefined
+  public readonly status: ExerciseView["status"]
+  public readonly materialUrl: string | undefined
+  /** Whether the exercise is open or closed in its course workspace; `undefined` off disk. */
+  public readonly onDiskStatus: WorkspaceExerciseStatus | undefined
+  private readonly _tooltipLines: string[]
+
+  public constructor(
+    public readonly parent: CourseTreeItem | PartTreeItem,
+    public readonly courseId: CourseIdentifier,
+    exercise: ExerciseView,
+    context: RenderContext,
+  ) {
+    super(exercise.name, vscode.TreeItemCollapsibleState.None)
+    // A mooc exercise's name need not be unique in its course; its id is.
+    this.id = `${parent.id}/${ExerciseIdentifier.key(exercise.id)}`
+    this.exerciseId = exercise.id
+    this.exerciseUri = exercise.onDisk?.uri
+    this.status = exercise.status
+    this.iconPath = exerciseIcon(exercise)
+    this.materialUrl = exercise.materialUrl
+    this.onDiskStatus = exercise.onDisk?.status
+    this.contextValue = [
+      `exercise.${exercise.status}`,
+      ...(exercise.status === "removed" ? removedOnDiskFlags(exercise.onDisk) : []),
+      ...(exercise.passed ? ["passed"] : []),
+      ...(exercise.isUpdateable ? ["updateable"] : []),
+      ...(exercise.materialUrl ? ["hasMaterial"] : []),
+      ...(exercise.onDisk && exercise.solutionUrl ? ["hasModelSolution"] : []),
+      ...(exercise.onDisk && exercise.submitRefusal ? ["submitRefused"] : []),
+    ].join(".")
+    this.command = { command: "tmc.openExercises", title: "Open", arguments: [this] }
+
+    const { now, locale } = context
+    const partName = parent instanceof PartTreeItem ? parent.chapterName : undefined
+    const deadline = shownDeadline(exercise)
+    const isDue = !exercise.passed && !exercise.submitRefusal && deadline !== null && deadline > now
+    const refusal =
+      exercise.submitRefusal && !exercise.passed && exercise.status !== "expired"
+        ? exercise.submitRefusal
+        : undefined
+    const tries =
+      !exercise.submitRefusal && !exercise.passed ? triesLeftText(exercise.triesLeft) : undefined
+    const points = pointsText(exercise.awardedPoints, exercise.availablePoints)
+    const status =
+      exercise.status === "opened"
+        ? context.isCourseWorkspace
+          ? "in workspace"
+          : "downloaded"
+        : STATUS_LABELS[exercise.status]
+    const due = isDue && `due ${formatDeadline(deadline, now, locale)}`
+    const briefDue = isDue && `due ${formatDeadlineBriefly(deadline, now, locale)}`
+    this._tooltipLines = showFacts(this, exercise.name, [
+      {
+        spoken: exercise.passed ? "passed" : "not passed",
+        tooltip: exercise.passed ? "Passed" : "Not passed",
+      },
+      {
+        description: exercise.status === "opened" ? undefined : status,
+        spoken: status,
+        tooltip: `Status: ${status}`,
+      },
+      exercise.isUpdateable && {
+        description: "update available",
+        spoken: "update available",
+        tooltip: "An update is available.",
+      },
+      !arePointsHeldForReview(exercise.pendingReview, exercise.awardedPoints) &&
+        points && {
+          description: `${points.short} points`,
+          spoken: points.spoken,
+          tooltip: `${points.short} points`,
+        },
+      exercise.pendingReview && {
+        description: PENDING_REVIEW_LABELS[exercise.pendingReview],
+        spoken: PENDING_REVIEW_LABELS[exercise.pendingReview],
+        tooltip: pendingReviewSentence(exercise.pendingReview, exercise.awardedPoints),
+      },
+      exercise.isOutOfTries && {
+        tooltip: "No tries left, so this score is final.",
+      },
+      refusal && {
+        // On a locked exercise under review, the review label tells more than the lock's.
+        ...(exercise.pendingReview
+          ? {}
+          : {
+              description: SUBMIT_REFUSAL_LABELS[refusal],
+              spoken: SUBMIT_REFUSAL_LABELS[refusal],
+            }),
+        tooltip: submitRefusalSentence(refusal, exercise.slug, partName),
+      },
+      tries && {
+        description: tries,
+        spoken: tries,
+        tooltip: `Tries left: ${exercise.triesLeft} of ${exercise.maxTries ?? exercise.triesLeft}`,
+      },
+      due && briefDue && { description: briefDue, spoken: due },
+      exercise.softDeadline &&
+        !exercise.isHard && {
+          tooltip: `Soft deadline: ${formatDeadline(exercise.softDeadline, now, locale)}. ${SOFT_DEADLINE_PENALTY}`,
+        },
+      exercise.hardDeadline && {
+        tooltip: `Deadline: ${formatDeadline(exercise.hardDeadline, now, locale)}`,
+      },
+    ])
+  }
+
+  public buildTooltip(): vscode.MarkdownString {
+    return tooltipOf(this._tooltipLines)
+  }
+}
+
+/** Whether a removed exercise is in its course workspace, when it is on disk at all. */
+function removedOnDiskFlags(onDisk: WorkspaceExercise | undefined): string[] {
+  switch (onDisk?.status) {
+    case WorkspaceExerciseStatus.Open:
+      return ["opened"]
+    case WorkspaceExerciseStatus.Closed:
+      return ["closed"]
+    default:
+      return []
+  }
+}
+
+/**
+ * One fact about a row, worded for each place the row shows it: its description, its
+ * accessible name and its hover. A fact without a wording for a place is left out there.
+ */
+interface RowFact {
+  description?: string | undefined
+  spoken?: string
+  tooltip?: string
+}
+
+/**
+ * Sets `item`'s description and accessible name from `facts`, in their order.
+ *
+ * @returns The hover's lines, which the item turns into a tooltip only when hovered.
+ */
+function showFacts(
+  item: vscode.TreeItem,
+  label: string,
+  facts: readonly (RowFact | false | undefined | null | "")[],
+): string[] {
+  const shown = facts.filter((fact) => typeof fact === "object" && fact !== null)
+  item.description = shown.flatMap((fact) => fact.description ?? []).join(" · ")
+  item.accessibilityInformation = {
+    label: [label, ...shown.flatMap((fact) => fact.spoken ?? [])].join(", "),
+  }
+  return [label, ...shown.flatMap((fact) => fact.tooltip ?? [])]
+}
+
+/** How long a burst of changes, such as one per downloaded exercise, is gathered into one render. */
+const RENDER_DELAY_MS = 50
+
+/** A course with its exercises grouped and resolved, before any tree item is built. */
+interface CourseView {
+  course: LocalCourseData
+  parts: PartView[]
+}
+
+/**
+ * The Courses view: the user's courses, their parts and exercises, logged in or not, since
+ * the exercises on disk stay usable; with none, package.json's `viewsWelcome` explains the
+ * empty, logged-out and failed states.
+ */
+export default class CoursesTree implements vscode.TreeDataProvider<CoursesViewRow> {
+  private readonly _changed = new vscode.EventEmitter<undefined>()
+  public readonly onDidChangeTreeData = this._changed.event
+  private readonly _rendered = new vscode.EventEmitter<void>()
+  /**
+   * Fires once per burst of changes to anything the view shows, whether or not it is visible,
+   * so a screen showing the same courses can follow it.
+   */
+  public readonly onDidRender = this._rendered.event
+  private readonly _view: vscode.TreeView<CoursesViewRow>
+  private readonly _disposables: vscode.Disposable[]
+  private _source: CoursesTreeSource | undefined
+  private _sourceSubscriptions: vscode.Disposable[] = []
+  private _isLoggedIn = false
+  private _isSessionExpired = false
+  private _isRestricted = false
+  private readonly _unreachableBackends = new Set<BackendKind>()
+  private _views: CourseView[] | undefined
+  private _roots: CourseTreeItem[] | undefined
+  private _pendingRender: ReturnType<typeof setTimeout> | undefined
+  /** Renders again when the soonest deadline passes, or a relative time shown goes stale. */
+  private _deadlineTick: ReturnType<typeof setTimeout> | undefined
+  /** A render happened while the view was hidden, so VS Code still shows the one before. */
+  private _isShownStale = false
+  /** {@link drawnRows} of the rows VS Code last fetched or was last told to draw. */
+  private _drawnRows: string | undefined
+  private _isDisposed = false
+
+  public constructor() {
+    this._view = vscode.window.createTreeView(COURSES_VIEW_ID, {
+      treeDataProvider: this,
+      canSelectMany: true,
+      showCollapseAll: true,
+    })
+    this._disposables = [
+      this._view,
+      this._changed,
+      this._rendered,
+      downloadFailures.onDidChange(() => this.refresh()),
+      exerciseOperations.onDidChange(() => this.refresh()),
+      updateablesRegistry.onDidChange(() => this.refresh()),
+      vscode.window.onDidChangeActiveTextEditor(() => void this.revealActiveExercise()),
+      this._view.onDidChangeVisibility(() => this._onDidChangeVisibility()),
+    ]
+  }
+
+  public dispose(): void {
+    this._isDisposed = true
+    clearTimeout(this._pendingRender)
+    this._pendingRender = undefined
+    clearTimeout(this._deadlineTick)
+    this._sourceSubscriptions.forEach((subscription) => subscription.dispose())
+    for (const disposable of this._disposables) {
+      disposable.dispose()
     }
+  }
 
-    /**
-     * @implements {vscode.TreeDataProvider<TmcTreeNode>}
-     */
-    public getChildren(element?: TmcTreeNode): Thenable<TmcTreeNode[]> {
-        const actionList: TmcTreeNode[] = [];
-        if (element) {
-            for (const action of this._actions) {
-                if (action[1].visible) {
-                    action[1].action.children?.forEach((child) => actionList.push(child));
-                }
-            }
-            return Promise.resolve(actionList);
-        } else {
-            for (const action of this._actions) {
-                if (action[1].visible) {
-                    actionList.push(action[1].action);
-                }
-            }
-            return Promise.resolve(actionList);
-        }
+  /** Sets what the view is drawn from. Call once activation has it. */
+  public setSource(source: CoursesTreeSource): void {
+    this._sourceSubscriptions.forEach((subscription) => subscription.dispose())
+    this._source = source
+    this._sourceSubscriptions = [
+      source.onDidChangeCourses(() => this.refresh()),
+      source.workspaceManager.onDidChangeExercises(() => this.refresh()),
+    ]
+    this.refresh()
+    void this.revealActiveExercise()
+  }
+
+  /** Follows `AuthState`. */
+  public setAccount({
+    loggedIn,
+    isSessionExpired,
+  }: Pick<AuthState, "loggedIn" | "isSessionExpired">): void {
+    if (loggedIn !== this._isLoggedIn || isSessionExpired !== this._isSessionExpired) {
+      this._isLoggedIn = loggedIn
+      this._isSessionExpired = isSessionExpired
+      this.refresh()
     }
+  }
 
-    public removeChildWithId(parentId: string, childId: string): void {
-        this._actions.get(parentId)?.action.children.delete(childId);
-        this.refresh();
+  /** Records whether this window is a course workspace in Restricted Mode. */
+  public setRestricted(isRestricted: boolean): void {
+    if (isRestricted !== this._isRestricted) {
+      this._isRestricted = isRestricted
+      this.refresh()
     }
+  }
 
-    public addChildWithId(parentId: string, childId: string, node: TmcTreeNode): void {
-        this._actions.get(parentId)?.action.children.set(childId, node);
-        this.refresh();
+  /** Whether `backend` answered the last course refresh, as far as this window knows. */
+  public isBackendReachable(backend: BackendKind): boolean {
+    return !this._unreachableBackends.has(backend)
+  }
+
+  /** Records whether `backend` answered the last course refresh. */
+  public setBackendReachable(backend: BackendKind, isReachable: boolean): void {
+    const wasUnreachable = this._unreachableBackends.has(backend)
+    if (isReachable === !wasUnreachable) {
+      return
     }
-
-    /**
-     * @implements {vscode.TreeDataProvider<TmcTreeNode>}
-     */
-    public getTreeItem(element: TmcTreeNode): TmcTreeNode {
-        return element;
+    if (isReachable) {
+      this._unreachableBackends.delete(backend)
+    } else {
+      this._unreachableBackends.add(backend)
     }
+    this.refresh()
+  }
 
-    /**
-     * @implements {vscode.TreeDataProvider<TmcTreeNode>}
-     */
-    public getParent(): TmcTreeNode | undefined {
-        return undefined;
+  /**
+   * Re-renders the view. The rows VS Code asks for from now on are current; the badge and
+   * the change event follow after {@link RENDER_DELAY_MS}, once per burst of calls.
+   */
+  public refresh(): void {
+    this._views = undefined
+    this._roots = undefined
+    if (this._isDisposed) {
+      return
     }
+    this._pendingRender ??= setTimeout(() => this._render(), RENDER_DELAY_MS)
+  }
 
-    /**
-     * Internal logic for TmcMenuTree.registerAction
-     */
-    public registerAction(
-        label: string,
-        id: string,
-        command: vscode.Command,
-        visible: boolean,
-        collapsibleState?: vscode.TreeItemCollapsibleState,
-        children?: Array<{ label: string; id: string; command: vscode.Command }>,
-    ): void {
-        if (this._actions.get(label) !== undefined) {
-            throw new Error("Action already registered");
-        }
-        this._actions.set(id, {
-            action: new TmcTreeNode(
-                label,
-                id,
-                command,
-                "parent",
-                collapsibleState,
-                children?.map((c) => new TmcTreeNode(c.label, c.id, c.command, "child")),
-            ),
-            visible,
-        });
-        this.refresh();
+  private _render(): void {
+    this._pendingRender = undefined
+    const views = this._currentViews()
+    const newCount = views.reduce(
+      (total, { course }) => total + LocalCourseData.getNewExercises(course).length,
+      0,
+    )
+    const updateCount = views
+      .flatMap(({ parts }) => parts.flatMap((part) => part.exercises))
+      .filter((exercise) => exercise.isUpdateable).length
+    const counts = [
+      ...(newCount > 0 ? [countOf(newCount, "new exercise")] : []),
+      ...(updateCount > 0 ? [countOf(updateCount, "exercise update")] : []),
+    ]
+    this._view.badge =
+      counts.length > 0 ? { value: newCount + updateCount, tooltip: counts.join(", ") } : undefined
+    const restricted = this._isRestricted
+      ? "This course workspace is in Restricted Mode. Trust it to run tests, submit and get help."
+      : undefined
+    let status: string | undefined
+    if (views.length === 0) {
+      // Nothing to say about courses there are none of.
+    } else if (this._isSessionExpired) {
+      status = LOGGED_OUT_MESSAGE
+    } else if (!this._isLoggedIn) {
+      status = NOT_LOGGED_IN_MESSAGE
+    } else if (this._unreachableBackends.size > 0) {
+      status =
+        "Could not reach the server. Showing the exercises on this computer; deadlines may be out of date."
     }
-
-    /**
-     * Internal logic for TmcMenuTree.registerAction
-     */
-    public setVisibility(id: string, visible: boolean): void {
-        const action = this._actions.get(id);
-
-        if (action) {
-            action.visible = visible;
-        } else {
-            throw new Error("Visibility logic very badly broken.");
-        }
+    // An empty message hides it; the typings do not admit `undefined`.
+    this._view.message = [restricted, status].filter((x) => x !== undefined).join(" ")
+    if (this._view.visible) {
+      this._redrawIfChanged()
+    } else {
+      this._isShownStale = true
     }
+    this._scheduleDeadlineTick(views)
+    this._rendered.fire()
+  }
 
-    /**
-     * Triggers a treeview refresh
-     */
-    public refresh(): void {
-        this._refreshEventEmitter.fire(undefined);
+  private _scheduleDeadlineTick(views: CourseView[]): void {
+    clearTimeout(this._deadlineTick)
+    this._deadlineTick = undefined
+    const now = Date.now()
+    const untilSoonest = Math.min(
+      ...views
+        .flatMap(({ parts }) => parts.flatMap((part) => part.exercises))
+        .map((exercise) => (shownDeadline(exercise)?.getTime() ?? 0) - now)
+        .filter((until) => until > 0),
+    )
+    if (!Number.isFinite(untilSoonest)) {
+      return
     }
+    // Within the hour the hint counts minutes; further off, hours or days.
+    const staleAfter = untilSoonest < HOUR_MS ? MINUTE_MS : HOUR_MS
+    this._deadlineTick = setTimeout(
+      () => this.refresh(),
+      Math.min(untilSoonest + DEADLINE_TICK_SLACK_MS, staleAfter),
+    )
+  }
 
-    /**
-     * Returns an action by id
-     *
-     * @param id
-     */
-    public getAction(id: string): { action: TmcTreeNode; visible: boolean } | undefined {
-        return this._actions.get(id);
+  private _onDidChangeVisibility(): void {
+    if (this._view.visible && this._isShownStale) {
+      this._isShownStale = false
+      this._redrawIfChanged()
     }
+    void this.revealActiveExercise()
+  }
+
+  /**
+   * Asks VS Code to redraw only rows it has not drawn: it forgets every row while it redraws,
+   * and a row action clicked meanwhile runs without its row.
+   */
+  private _redrawIfChanged(): void {
+    const rows = drawnRows(this._currentRoots(), this._isRestricted)
+    if (rows !== this._drawnRows) {
+      this._drawnRows = rows
+      this._changed.fire(undefined)
+    }
+  }
+
+  /** Whether the student can see the view now. */
+  public get isVisible(): boolean {
+    return this._view.visible
+  }
+
+  /** Fires when the view comes into sight or goes out of it. */
+  public get onDidChangeVisibility(): vscode.Event<unknown> {
+    return this._view.onDidChangeVisibility
+  }
+
+  public getChildren(element?: CoursesViewRow): CoursesViewRow[] {
+    if (!element) {
+      const roots = this._currentRoots()
+      this._drawnRows = drawnRows(roots, this._isRestricted)
+      return this._isRestricted ? [new TrustCourseWorkspaceTreeItem(), ...roots] : roots
+    }
+    return element instanceof ExerciseTreeItem || element instanceof TrustCourseWorkspaceTreeItem
+      ? []
+      : element.children
+  }
+
+  public getTreeItem(element: CoursesViewRow): CoursesViewRow {
+    return element
+  }
+
+  /** Builds a row's hover only when it is hovered. */
+  public resolveTreeItem(_item: vscode.TreeItem, element: CoursesViewRow): CoursesViewRow {
+    if (!(element instanceof TrustCourseWorkspaceTreeItem)) {
+      element.tooltip ??= element.buildTooltip()
+    }
+    return element
+  }
+
+  public getParent(element: CoursesViewRow): CoursesTreeItem | undefined {
+    return element instanceof TrustCourseWorkspaceTreeItem ? undefined : element.parent
+  }
+
+  /**
+   * Selects the exercise the active editor belongs to, without taking focus. Only while
+   * the view is visible: revealing into a hidden view would open the sidebar.
+   */
+  public async revealActiveExercise(): Promise<void> {
+    if (!this._view.visible) {
+      return
+    }
+    const uri = vscode.window.activeTextEditor?.document.uri
+    const item = uri && this._exerciseItemContaining(uri)
+    if (item) {
+      await this._view.reveal(item, { select: true, focus: false })
+    }
+  }
+
+  /**
+   * Opens the view with the row of the exercise `uri` belongs to selected and focused.
+   *
+   * @returns false when no row shows that exercise.
+   */
+  public async revealExercise(uri: vscode.Uri): Promise<boolean> {
+    const item = this._exerciseItemContaining(uri)
+    if (!item) {
+      return false
+    }
+    await this._view.reveal(item, { select: true, focus: true })
+    return true
+  }
+
+  /**
+   * Expands the course's row without taking focus: a click on a course runs its command instead
+   * of expanding it, and the student still expects to see its exercises.
+   */
+  public async expandCourse(courseId: CourseIdentifier): Promise<void> {
+    const item = this._currentRoots().find((root) =>
+      CourseIdentifier.equals(root.courseId, courseId),
+    )
+    if (item && this._view.visible) {
+      await this._view.reveal(item, { select: true, focus: false, expand: true })
+    }
+  }
+
+  /** Opens the view with the course's row selected, focused and expanded. */
+  public async revealCourse(courseId: CourseIdentifier): Promise<void> {
+    const item = this._currentRoots().find((root) =>
+      CourseIdentifier.equals(root.courseId, courseId),
+    )
+    if (item) {
+      await this._view.reveal(item, { select: true, focus: true, expand: true })
+    } else {
+      await vscode.commands.executeCommand(`${COURSES_VIEW_ID}.focus`)
+    }
+  }
+
+  private _exerciseItemContaining(uri: vscode.Uri): ExerciseTreeItem | undefined {
+    const exercise = this._source?.workspaceManager.getExerciseContaining(uri)
+    if (!exercise) {
+      return undefined
+    }
+    // Builds only that course's rows; the others stay lazy.
+    const courseIndex = this._currentViews().findIndex(({ course }) =>
+      CourseIdentifier.equals(LocalCourseData.getCourseId(course), exercise.courseId),
+    )
+    const root = this._currentRoots()[courseIndex]
+    const key = ExerciseIdentifier.key(exercise.id)
+    return (
+      root && exerciseItems(root).find((item) => ExerciseIdentifier.key(item.exerciseId) === key)
+    )
+  }
+
+  private _currentViews(): CourseView[] {
+    if (!this._views) {
+      const onDiskOf = onDiskByCourse(this._source?.workspaceManager.getExercises() ?? [])
+      const now = new Date()
+      this._views = this._visibleCourses().map((course) => {
+        const courseId = LocalCourseData.getCourseId(course)
+        const parts = buildCourseView(course, {
+          onDisk: onDiskOf(course),
+          downloadStatusOf,
+          updateable: updateablesRegistry.get(courseId),
+          isRemoved: (id) => updateablesRegistry.isRemoved(id),
+          now,
+        })
+        return { course, parts }
+      })
+    }
+    return this._views
+  }
+
+  private _currentRoots(): CourseTreeItem[] {
+    if (!this._roots) {
+      const workspaceManager = this._source?.workspaceManager
+      const now = new Date()
+      const slug = workspaceManager?.activeCourse
+      const backend = workspaceManager?.activeCourseBackend
+      const activeCourse = slug && backend ? { slug, backend } : undefined
+      this._roots = this._currentViews().map(
+        ({ course, parts }) =>
+          new CourseTreeItem(course, parts, {
+            now,
+            locale: vscode.env.language,
+            isOffline: this._unreachableBackends.has(course.kind),
+            activeCourse,
+          }),
+      )
+    }
+    return this._roots
+  }
+
+  private _visibleCourses(): LocalCourseData[] {
+    return this._source ? this._source.getCourses() : []
+  }
+}
+
+/** Whether the exercise is downloading or failed to, as the Courses view and course home show it. */
+export function downloadStatusOf(
+  id: ExerciseIdentifier,
+): "downloading" | "downloadFailed" | undefined {
+  if (exerciseOperations.isRunning(id, "downloading")) {
+    return "downloading"
+  }
+  return downloadFailures.has(id) ? "downloadFailed" : undefined
+}
+
+/**
+ * Everything VS Code draws of `items` and the rows under them, and what their actions act on,
+ * below the trust row while `isRestricted`.
+ */
+function drawnRows(items: readonly CoursesTreeItem[], isRestricted: boolean): string {
+  const drawn = (item: CoursesTreeItem): unknown => [
+    item.id,
+    item.label,
+    item.description,
+    item.contextValue,
+    item.collapsibleState,
+    item.iconPath,
+    item.accessibilityInformation,
+    item.buildTooltip().value,
+    item instanceof ExerciseTreeItem
+      ? item.exerciseUri?.fsPath
+      : item.children.map((child) => drawn(child)),
+  ]
+  return JSON.stringify([isRestricted, items.map((item) => drawn(item))])
+}
+
+/** Every exercise under `item`, in view order. */
+export function exerciseItems(item: CoursesTreeItem): ExerciseTreeItem[] {
+  return item instanceof ExerciseTreeItem
+    ? [item]
+    : item.children.flatMap((child) => exerciseItems(child))
+}
+
+/** Whether an exercise in `status` can be downloaded: it is not on disk, nor on its way. */
+export function isDownloadable(status: ExerciseView["status"]): boolean {
+  return (
+    status === "missing" || status === "new" || status === "expired" || status === "downloadFailed"
+  )
+}
+
+function exerciseIcon(exercise: ExerciseView): vscode.ThemeIcon {
+  switch (exercise.status) {
+    case "downloading":
+      return new vscode.ThemeIcon("sync~spin")
+    case "downloadFailed":
+      return new vscode.ThemeIcon("error", new vscode.ThemeColor("testing.iconErrored"))
+    default:
+      break
+  }
+  if (exercise.passed) {
+    return new vscode.ThemeIcon("pass-filled", new vscode.ThemeColor("testing.iconPassed"))
+  }
+  if (exercise.pendingReview) {
+    return new vscode.ThemeIcon(
+      PENDING_REVIEW_ICONS[exercise.pendingReview],
+      new vscode.ThemeColor("disabledForeground"),
+    )
+  }
+  if (exercise.submitRefusal) {
+    return new vscode.ThemeIcon(
+      SUBMIT_REFUSAL_ICONS[exercise.submitRefusal],
+      new vscode.ThemeColor("disabledForeground"),
+    )
+  }
+  switch (exercise.status) {
+    case "expired":
+      return new vscode.ThemeIcon(
+        SUBMIT_REFUSAL_ICONS.deadlinePassed,
+        new vscode.ThemeColor("disabledForeground"),
+      )
+    case "new":
+      return new vscode.ThemeIcon("cloud-download", new vscode.ThemeColor("testing.iconQueued"))
+    case "missing":
+      return new vscode.ThemeIcon("cloud-download", new vscode.ThemeColor("testing.iconUnset"))
+    default:
+      return new vscode.ThemeIcon(
+        "circle-large-outline",
+        new vscode.ThemeColor("testing.iconUnset"),
+      )
+  }
+}
+
+/** A tmc part's slug prefix as a student reads it: `part01` is "Part 1". */
+export function partLabel(name: string): string {
+  const number = name.match(/^part0*(\d+)$/i)?.[1]
+  return number ? `Part ${number}` : name
 }

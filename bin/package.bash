@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euxo pipefail
 
-# requires @vscode/vsce
 # the script takes an argument that can be set to "--pre-release" to package as a pre-release
 PRERELEASE_ARG=${1:-""}
 
@@ -9,10 +8,24 @@ PRERELEASE_ARG=${1:-""}
 # otherwise, a package could work locally because some file happened to be there that's not there in CI
 rm -rf ./dist
 rm -rf ./webview-ui/public/build
+rm -f ./*.vsix
 
 # run ci and build webview
-npm run ci:all
-npm run webview:build
+pnpm install --frozen-lockfile
+pnpm run webview:build
 
 # create package
-BACKEND=production npx vsce package "${PRERELEASE_ARG}"
+# --no-dependencies: esbuild bundles dist/, and vsce chokes on pnpm's symlinked
+# node_modules.
+BACKEND=production pnpm exec vsce package --no-dependencies "${PRERELEASE_ARG}"
+
+# Nothing else fails when sources, test bundles, coverage or docs slip into the
+# VSIX, so assert their absence rather than trust .vscodeignore.
+LISTING=$(BACKEND=production pnpm exec vsce ls --no-dependencies)
+if echo "${LISTING}" | grep -E '(^|/)(src|backend|playwright|coverage|docs|node_modules)/|^dist/integration|\.map$|\.test\.js$'; then
+  echo "The paths above would ship to users; fix .vscodeignore." >&2
+  exit 1
+fi
+
+VSIX=$(echo ./*.vsix)
+echo "Packaged ${VSIX}: $(wc -c <"${VSIX}") bytes, $(echo "${LISTING}" | wc -l) files."

@@ -1,0 +1,89 @@
+import * as path from "path"
+
+import * as fs from "fs-extra"
+import type { Result } from "ts-results"
+import { Err, Ok } from "ts-results"
+import * as vscode from "vscode"
+
+import { FileSystemError } from "../errors"
+import { closeExerciseEditors, saveExerciseDocuments } from "../window/exerciseDocuments"
+import { refreshLocalExercises } from "./refreshLocalExercises"
+import type { ReadyActionContext } from "./types"
+
+/**
+ * Moves every exercise on disk out of the exercises folder into a sibling folder, so whoever
+ * is logged in now downloads their own and cannot submit another student's work as theirs.
+ * Nothing is deleted; unsaved editor changes are saved first and the editors closed.
+ *
+ * @returns The folder the exercises are now in; `Err`, moving nothing, when an editor could not
+ *   be saved or stayed open.
+ */
+export async function moveExercisesAside(
+  actionContext: ReadyActionContext,
+  now: Date = new Date(),
+): Promise<Result<string, Error>> {
+  const { keptCopies, resources } = actionContext.startup
+  const projectsDirectory = resources.projectsDirectory
+  if (!projectsDirectory) {
+    return Err(new Error("The exercises folder is not known."))
+  }
+  const stamp = now
+    .toISOString()
+    .replaceAll(":", "-")
+    .replace(/\.\d+Z$/, "")
+  const target = `${projectsDirectory}-moved-${stamp}`
+  // An editor left open would write its file back into the emptied exercises folder on save.
+  const folder = { uri: vscode.Uri.file(projectsDirectory) }
+  const saved = await saveExerciseDocuments(folder)
+  if (saved.err) {
+    return saved
+  }
+  if (!(await closeExerciseEditors(folder))) {
+    return Err(new Error("Some of the exercises' editors are still open."))
+  }
+  try {
+    await fs.move(projectsDirectory, target)
+    await fs.ensureDir(projectsDirectory)
+  } catch (e) {
+    return Err(new FileSystemError(e, `Failed to move ${projectsDirectory} to ${target}.`))
+  }
+  // The fingerprints and paste links describe the moved files and the previous account.
+  await keptCopies.clear()
+  const refreshed = await refreshLocalExercises(actionContext)
+  if (refreshed.err) {
+    return refreshed
+  }
+  return Ok(target)
+}
+
+/**
+ * Moves exercises moved aside by {@link moveExercisesAside} back into the exercises folder.
+ *
+ * @returns `false`, moving nothing, when the exercises folder is not empty: merging two sets of
+ *   exercises could overwrite one with the other.
+ */
+export async function bringBackMovedExercises(
+  actionContext: ReadyActionContext,
+  folder: string,
+): Promise<Result<boolean, Error>> {
+  const projectsDirectory = actionContext.startup.resources.projectsDirectory
+  if (!projectsDirectory) {
+    return Err(new Error("The exercises folder is not known."))
+  }
+  try {
+    const entries = await fs.readdir(projectsDirectory).catch(() => [])
+    if (entries.length > 0) {
+      return Ok(false)
+    }
+    // Fills the folder rather than replacing it: every tmc-langs call recreates a missing one.
+    await fs.ensureDir(projectsDirectory)
+    for (const entry of await fs.readdir(folder)) {
+      await fs.move(path.join(folder, entry), path.join(projectsDirectory, entry))
+    }
+    await fs.rmdir(folder)
+  } catch (e) {
+    return Err(new FileSystemError(e, `Failed to move ${folder} back to ${projectsDirectory}.`))
+  }
+  const refreshed = await refreshLocalExercises(actionContext)
+  return refreshed.err ? refreshed : Ok(true)
+}

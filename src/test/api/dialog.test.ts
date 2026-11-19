@@ -1,0 +1,512 @@
+import { vi } from "vitest"
+import type { OutputChannel } from "vscode"
+import * as vscode from "vscode"
+
+import type {
+  LocalCourseData,
+  SharedMoocCourseData,
+  SharedTmcCourseData,
+} from "../../../shared/lib"
+import { makeMoocKind, makeTmcKind, NOT_LOGGED_IN_MESSAGE } from "../../../shared/lib"
+import Dialog, { courseSelectionItems, separator } from "../../api/dialog"
+import { errorDetails } from "../../api/errorDetails"
+import {
+  InsufficientScopeError,
+  InvalidTokenError,
+  RuntimeError,
+  WorkspaceUntrustedError,
+} from "../../errors"
+import { Logger, LogLevel } from "../../utilities"
+
+suite("Dialog.selectItem", function () {
+  let showQuickPick: ReturnType<typeof vi.spyOn>
+
+  function stubPick(choose: (picks: vscode.QuickPickItem[]) => unknown): void {
+    showQuickPick = vi
+      .spyOn(vscode.window, "showQuickPick")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .mockImplementation((async (items: vscode.QuickPickItem[]) => choose(items)) as any)
+  }
+
+  afterEach(function () {
+    showQuickPick.mockRestore()
+  })
+
+  test("shows the items as given, with their descriptions", async function () {
+    stubPick(() => undefined)
+    const items = [
+      { label: "Programming 1", value: "a", description: "tmc.mooc.fi" },
+      { label: "Programming 1", value: "b", description: "courses.mooc.fi" },
+      { label: "No description", value: "c" },
+    ]
+    await new Dialog().selectItem(
+      { title: "Add New Course", placeHolder: "Which course?" },
+      ...items,
+    )
+
+    expect(showQuickPick.mock.calls[0]?.[0]).toEqual(items)
+    expect(showQuickPick.mock.calls[0]?.[1]).toEqual({
+      title: "Add New Course",
+      placeHolder: "Which course?",
+    })
+  })
+
+  test("resolves duplicate labels by the picked item, not by label equality", async function () {
+    // Two courses can share a slug across backends; picking the second must not
+    // silently yield the first.
+    stubPick((items) => items[1])
+    const picked = await new Dialog().selectItem(
+      "Which course?",
+      { label: "shared-slug", value: "tmc-course", description: "tmc.mooc.fi" },
+      { label: "shared-slug", value: "mooc-course", description: "courses.mooc.fi" },
+    )
+    expect(picked).toBe("mooc-course")
+  })
+
+  test("shows separators between the rows, as headings", async function () {
+    stubPick((items) => items[2])
+    const heading = separator("More")
+
+    const picked = await new Dialog().selectItem("Which?", { label: "a", value: 1 }, heading, {
+      label: "b",
+      value: 2,
+    })
+
+    expect(showQuickPick.mock.calls[0]?.[0]?.[1]).toEqual({
+      label: "More",
+      kind: vscode.QuickPickItemKind.Separator,
+    })
+    expect(picked).toBe(2)
+  })
+
+  test("returns undefined when the pick is dismissed", async function () {
+    stubPick(() => undefined)
+    expect(await new Dialog().selectItem("Which course?", { label: "a", value: 1 })).toBeUndefined()
+  })
+})
+
+suite("Dialog.progressNotification", function () {
+  let reports: { message?: string; increment?: number }[]
+
+  beforeEach(function () {
+    reports = []
+    vi.spyOn(vscode.window, "withProgress").mockImplementation((async (
+      _options: unknown,
+      task: (
+        progress: { report: (value: { message?: string; increment?: number }) => void },
+        token: vscode.CancellationToken,
+      ) => Promise<unknown>,
+    ) =>
+      task({ report: (value): void => void reports.push(value) }, {
+        isCancellationRequested: false,
+        onCancellationRequested: () => ({ dispose: (): void => {} }),
+      } as unknown as vscode.CancellationToken)) as unknown as typeof vscode.window.withProgress)
+  })
+
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("delivers a message reported at an unchanged fraction", async function () {
+    await new Dialog().progressNotification("Downloading", async (progress) => {
+      progress.report({ message: "Fetching exercise 1", fraction: 0.5 })
+      progress.report({ message: "Fetching exercise 2", fraction: 0.5 })
+    })
+
+    expect(reports).toEqual([
+      { message: "Downloading", increment: 0 },
+      { message: "Fetching exercise 1", increment: 50 },
+      { message: "Fetching exercise 2", increment: 0 },
+    ])
+  })
+
+  test("keeps the bar from moving backwards when the fraction drops", async function () {
+    await new Dialog().progressNotification("Downloading", async (progress) => {
+      progress.report({ message: "Exercise 1 done", fraction: 0.6 })
+      progress.report({ message: "Restarting exercise 2", fraction: 0.2 })
+      progress.report({ message: "Exercise 2 done", fraction: 0.8 })
+    })
+
+    const increments = reports.map((report) => report.increment)
+    expect(increments.slice(0, 3)).toEqual([0, 60, 0])
+    expect(increments[3]).toBeCloseTo(20)
+    expect(reports.at(-2)?.message).toBe("Restarting exercise 2")
+  })
+
+  test("drops a report that neither advances the bar nor carries a message", async function () {
+    await new Dialog().progressNotification("Downloading", async (progress) => {
+      progress.report({ fraction: 0.4 })
+      progress.report({ fraction: 0.4 })
+    })
+
+    expect(reports).toEqual([{ message: "Downloading", increment: 0 }, { increment: 40 }])
+  })
+})
+
+type MessageAction = vscode.MessageItem & { callback: () => void }
+
+type NotificationButton = [label: string, callback: () => void]
+
+const notificationWrappers = [
+  {
+    name: "errorNotification",
+    showMethod: "showErrorMessage",
+    notify: (dialog: Dialog, message: string, ...buttons: NotificationButton[]): Promise<void> =>
+      dialog.errorNotification(message, undefined, ...buttons),
+  },
+  {
+    name: "notification",
+    showMethod: "showInformationMessage",
+    notify: (dialog: Dialog, message: string, ...buttons: NotificationButton[]): Promise<void> =>
+      dialog.notification(message, ...buttons),
+  },
+  {
+    name: "warningNotification",
+    showMethod: "showWarningMessage",
+    notify: (dialog: Dialog, message: string, ...buttons: NotificationButton[]): Promise<void> =>
+      dialog.warningNotification(message, ...buttons),
+  },
+] as const
+
+function stubMessage(
+  showMethod: (typeof notificationWrappers)[number]["showMethod"],
+  press: (actions: MessageAction[]) => MessageAction | undefined,
+): ReturnType<typeof vi.spyOn> {
+  const show = vi
+    .spyOn(vscode.window, showMethod)
+    .mockImplementation((async (_message: string, ...actions: MessageAction[]) =>
+      press(actions)) as never)
+  return show
+}
+
+function buttonTitles(show: ReturnType<typeof vi.spyOn>): string[] {
+  const actions = (show.mock.calls[0] ?? []).slice(1) as MessageAction[]
+  return actions.map((action) => action.title)
+}
+
+for (const { name, showMethod, notify } of notificationWrappers) {
+  suite(`Dialog.${name}`, function () {
+    afterEach(function () {
+      vi.restoreAllMocks()
+    })
+
+    test("runs the callback of the button pressed, not of an earlier one sharing its label", async function () {
+      stubMessage(showMethod, (actions) => actions[1])
+      const pressed: string[] = []
+      await notify(
+        new Dialog(),
+        "Two courses are named the same",
+        ["Open", (): void => void pressed.push("first")],
+        ["Open", (): void => void pressed.push("second")],
+      )
+
+      expect(pressed).toEqual(["second"])
+    })
+
+    test("shows the message unprefixed and offers one button per item", async function () {
+      const show = stubMessage(showMethod, () => undefined)
+      await notify(new Dialog(), "Exercise downloaded", ["Open", (): void => {}])
+
+      expect(show.mock.calls[0]?.[0]).toBe("Exercise downloaded")
+      expect(buttonTitles(show)).toEqual(["Open"])
+    })
+
+    test("runs no callback when the notification is dismissed", async function () {
+      stubMessage(showMethod, () => undefined)
+      let ran = false
+      await notify(new Dialog(), "Exercise downloaded", [
+        "Open",
+        (): void => {
+          ran = true
+        },
+      ])
+
+      expect(ran).toBe(false)
+    })
+  })
+}
+
+suite("Dialog.errorNotification with an error", function () {
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("offers the error's details after the caller's own buttons, and opens them when pressed", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const logError = vi.spyOn(Logger, "error").mockImplementation(() => {})
+    const show = stubMessage("showErrorMessage", (actions) => actions.at(-1))
+    const boom = new Error("boom")
+    await new Dialog().errorNotification("Download failed", boom, ["Try Again", (): void => {}])
+
+    expect(logError).toHaveBeenCalledWith("Download failed", boom)
+    expect(buttonTitles(show)).toEqual(["Try Again", "Show Details"])
+    const [command, detailsId] = executeCommand.mock.calls[0] ?? []
+    expect(command).toBe("tmc.showErrorDetails")
+    expect(errorDetails.get(detailsId as string)).toMatchObject({
+      summary: "Download failed",
+      causeChain: "Error: boom",
+    })
+  })
+
+  test("without an error, neither logs nor offers details", async function () {
+    const logError = vi.spyOn(Logger, "error").mockImplementation(() => {})
+    const show = stubMessage("showErrorMessage", () => undefined)
+    await new Dialog().errorNotification("Download failed")
+
+    expect(logError).not.toHaveBeenCalled()
+    expect(buttonTitles(show)).toEqual([])
+  })
+})
+
+suite("Dialog.offer", function () {
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("resolves true when its one button is pressed", async function () {
+    const show = stubMessage("showInformationMessage", (actions) => actions[0])
+
+    expect(await new Dialog().offer("Trusted now. Submit?", "Submit")).toBe(true)
+    expect(buttonTitles(show)).toEqual(["Submit"])
+  })
+
+  test("resolves false when the notification is dismissed", async function () {
+    stubMessage("showInformationMessage", () => undefined)
+
+    expect(await new Dialog().offer("Trusted now. Submit?", "Submit")).toBe(false)
+  })
+})
+
+function tmcCourse(id: number, name: string, title: string): LocalCourseData {
+  return makeTmcKind({ id, name, title } as SharedTmcCourseData)
+}
+
+function moocCourse(id: string, name: string, title: string): LocalCourseData {
+  return makeMoocKind({ id, name, title } as SharedMoocCourseData)
+}
+
+suite("courseSelectionItems", function () {
+  const courses = [
+    tmcCourse(3, "python-mooc", "Programming 1"),
+    moocCourse("course-uuid", "python-mooc", "Programming 1"),
+  ]
+
+  test("names no backend where the titles alone tell the courses apart", function () {
+    const items = courseSelectionItems([
+      tmcCourse(3, "python-mooc", "Programming 1"),
+      moocCourse("course-uuid", "java-mooc", "Programming 2"),
+    ])
+
+    expect(items.map(({ description }) => description)).toEqual([undefined, undefined])
+  })
+
+  test("describes courses of the same title by their backend", function () {
+    expect(courseSelectionItems(courses)).toEqual([
+      { label: "Programming 1", value: makeTmcKind({ courseId: 3 }), description: "tmc.mooc.fi" },
+      {
+        label: "Programming 1",
+        value: makeMoocKind({ moocCourseId: "course-uuid" }),
+        description: "courses.mooc.fi",
+      },
+    ])
+  })
+
+  test("decorate replaces the label of the course it marks and leaves the rest alone", function () {
+    const items = courseSelectionItems(courses, (course, title) =>
+      course.kind === "mooc" ? `${title} (Currently open)` : title,
+    )
+
+    expect(items.map(({ label }) => label)).toEqual([
+      "Programming 1",
+      "Programming 1 (Currently open)",
+    ])
+  })
+})
+
+suite("Dialog.reportError", function () {
+  afterEach(function () {
+    Logger.configure(LogLevel.None)
+    Logger.output = undefined
+    vi.restoreAllMocks()
+  })
+
+  test("offers the command the error's class prescribes and runs it when pressed", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    vi.spyOn(Logger, "error").mockImplementation(() => {})
+    const show = stubMessage("showErrorMessage", (actions) => actions[0])
+    await new Dialog().reportError("Could not read the course.", new InsufficientScopeError("403"))
+
+    expect(buttonTitles(show)).toEqual(["Log In", "Show Details"])
+    expect(executeCommand).toHaveBeenCalledWith("tmc.showMoocLogin")
+  })
+
+  // The session-expired warning is the one message for a lost session.
+  test("hands a lost session to the session reporter instead of a notification", async function () {
+    vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    const show = stubMessage("showErrorMessage", () => undefined)
+    const reportSessionLost = vi.fn(() => true)
+    const dialog = new Dialog()
+    dialog.setSessionLostReporter(reportSessionLost)
+    const rejection = new InvalidTokenError("Invalid token. Deleted credentials file.")
+
+    await dialog.reportError("Failed to fetch updates for python.", rejection)
+
+    expect(reportSessionLost).toHaveBeenCalledWith(rejection)
+    expect(show).not.toHaveBeenCalled()
+  })
+
+  test("a session refused after a logout asks to log in, without an error", async function () {
+    vi.spyOn(Logger, "warn").mockImplementation(() => {})
+    const showError = stubMessage("showErrorMessage", () => undefined)
+    const showInfo = stubMessage("showInformationMessage", () => undefined)
+    const dialog = new Dialog()
+    dialog.setSessionLostReporter(() => false)
+
+    await dialog.reportError("Failed to submit.", new InvalidTokenError("not logged in"))
+
+    expect(showError).not.toHaveBeenCalled()
+    expect(showInfo.mock.calls[0]?.[0]).toBe(NOT_LOGGED_IN_MESSAGE)
+    expect(buttonTitles(showInfo)).toEqual(["Log In"])
+  })
+
+  test("tells a screen which lost sessions the user logged out of", function () {
+    const dialog = new Dialog()
+    const rejection = new InvalidTokenError("not logged in")
+
+    dialog.setSessionLostReporter(() => false)
+    expect(dialog.noteSessionLost(rejection)).toBe(true)
+    expect(dialog.noteSessionLost(new Error("disk full"))).toBe(false)
+    dialog.setSessionLostReporter(() => true)
+    expect(dialog.noteSessionLost(rejection)).toBe(false)
+  })
+
+  test("a Restricted Mode refusal says trust is needed, not that the operation failed", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const show = stubMessage("showWarningMessage", (actions) => actions[0])
+    const refusal = new WorkspaceUntrustedError("Trust the course workspace to run tests.")
+
+    await new Dialog().reportError("Testing the exercise failed.", refusal)
+
+    expect(show.mock.calls[0]?.[0]).toBe("Trust the course workspace to run tests.")
+    expect(buttonTitles(show)).toEqual(["Trust Course Workspace"])
+    expect(executeCommand).toHaveBeenCalledWith("tmc.trustCourseWorkspace")
+  })
+
+  test("an error with no remedy of its own reads as the operation plus the error", async function () {
+    const logError = vi.spyOn(Logger, "error").mockImplementation(() => {})
+    const show = stubMessage("showErrorMessage", () => undefined)
+    const boom = new RuntimeError("the CLI exited with 1")
+    await new Dialog().reportError("Could not run the tests.", boom)
+
+    expect(show.mock.calls[0]?.[0]).toBe("Could not run the tests. The CLI exited with 1.")
+    expect(logError).toHaveBeenCalledOnce()
+    expect(buttonTitles(show)).toEqual(["Show Details"])
+  })
+
+  test("a CLI failure's diagnostics reach the logs and not the notification", async function () {
+    const lines: string[] = []
+    Logger.output = {
+      appendLine: (line: string) => lines.push(line),
+      dispose: () => {},
+    } as unknown as OutputChannel
+    Logger.configure(LogLevel.Verbose)
+    const show = stubMessage("showErrorMessage", () => undefined)
+    const details = "at tmc_langs::submit\n\nthread 'main' panicked\nnote: run with RUST_BACKTRACE"
+    const boom = new RuntimeError(new Error("the CLI exited with 1"), details)
+    boom.cause = "EPIPE while writing the submission archive"
+
+    await new Dialog().reportError("Could not run the tests.", boom)
+
+    const notification = show.mock.calls[0]?.[0] as string
+    expect(notification).toBe("Could not run the tests. The CLI exited with 1.")
+    const logged = lines.join("\n")
+    for (const line of details.split("\n").filter(Boolean)) {
+      expect(notification).not.toContain(line)
+      expect(logged).toContain(line)
+    }
+    expect(notification).not.toContain("EPIPE")
+    expect(logged).toContain("EPIPE")
+    expect(notification).not.toContain("<TRACE>")
+    expect(logged).toContain("<TRACE>")
+  })
+})
+
+function stubModal(press: (items: vscode.MessageItem[]) => vscode.MessageItem | undefined) {
+  return vi
+    .spyOn(vscode.window, "showWarningMessage")
+    .mockImplementation((async (
+      _message: string,
+      _options: unknown,
+      ...items: vscode.MessageItem[]
+    ) => press(items)) as never)
+}
+
+suite("Dialog.confirm and Dialog.choose", function () {
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("confirm shows a modal whose one button is the given verb", async function () {
+    const show = stubModal((items) => items[0])
+
+    const confirmed = await new Dialog().confirm("Log out of TestMyCode?", {
+      confirmLabel: "Log Out",
+      detail: "You need to log in again.",
+    })
+
+    expect(confirmed).toBe(true)
+    const [message, options, ...items] = show.mock.calls[0] ?? []
+    expect(message).toBe("Log out of TestMyCode?")
+    expect(options).toEqual({ modal: true, detail: "You need to log in again." })
+    expect(items.map((x) => (x as vscode.MessageItem).title)).toEqual(["Log Out"])
+  })
+
+  test("confirm reads Cancel as no", async function () {
+    stubModal(() => undefined)
+
+    expect(await new Dialog().confirm("Close part01-01?", { confirmLabel: "Close" })).toBe(false)
+  })
+
+  test("choose yields the value of the pressed button, falsy values included", async function () {
+    stubModal((items) => items[1])
+
+    const submitFirst = await new Dialog().choose(
+      "Reset part01-01?",
+      {},
+      ["Submit and Reset", true],
+      ["Reset Without Submitting", false],
+    )
+
+    expect(submitFirst).toBe(false)
+  })
+})
+
+suite("Dialog.explicitConfirmation", function () {
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("accepts only the word as written and explains a wrong entry instead of cancelling", async function () {
+    let validate: ((value: string) => unknown) | undefined
+    let typed = "DELETE"
+    vi.spyOn(vscode.window, "showInputBox").mockImplementation((async (
+      options: vscode.InputBoxOptions,
+    ) => {
+      validate = options.validateInput as (value: string) => unknown
+      return typed
+    }) as never)
+
+    expect(await new Dialog().explicitConfirmation("Type DELETE", "DELETE")).toBe(true)
+    expect(validate?.("delete")).toBe("Type DELETE to confirm.")
+    expect(validate?.("DELETE")).toBeUndefined()
+
+    typed = "delete"
+    expect(await new Dialog().explicitConfirmation("Type DELETE", "DELETE")).toBe(false)
+  })
+
+  test("reads Escape as no", async function () {
+    vi.spyOn(vscode.window, "showInputBox").mockResolvedValue(undefined)
+
+    expect(await new Dialog().explicitConfirmation("Type DELETE", "DELETE")).toBe(false)
+  })
+})

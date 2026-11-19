@@ -1,0 +1,395 @@
+import { Err, Ok } from "ts-results"
+import type { Mock } from "vitest"
+import { vi } from "vitest"
+
+import type Dialog from "../../api/dialog"
+import type { FailureSink } from "../../api/withOperation"
+import { failure, reportFailureIn, withOperation } from "../../api/withOperation"
+import { BottleneckError, InsufficientScopeError } from "../../errors"
+import { Logger } from "../../utilities"
+import { createMockActionContext } from "../mocks/actionContext"
+
+suite("withOperation", function () {
+  let dialog: Dialog
+
+  beforeEach(function () {
+    dialog = createMockActionContext().dialog
+  })
+
+  function notificationCount(): number {
+    return (
+      vi.mocked(dialog.reportError).mock.calls.length +
+      vi.mocked(dialog.errorNotification).mock.calls.length +
+      vi.mocked(dialog.notification).mock.calls.length +
+      vi.mocked(dialog.warningNotification).mock.calls.length
+    )
+  }
+
+  test("resolves to the body's value and shows nothing on success", async function () {
+    const result = await withOperation(dialog, { failure: "Failed." }, async () => Ok(42))
+
+    expect(result.val).toBe(42)
+    expect(notificationCount()).toBe(0)
+  })
+
+  test("reports a plain Err under the options' headline", async function () {
+    const error = new Error("langs exited with 1")
+
+    const result = await withOperation(dialog, { failure: "Failed to add the course." }, async () =>
+      Err(error),
+    )
+
+    expect(result.val).toBe(error)
+    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith("Failed to add the course.", error)
+    expect(notificationCount()).toBe(1)
+  })
+
+  test("leads with a failure's own headline, reporting its cause as the detail", async function () {
+    const cause = new Error("langs exited with 1")
+
+    await withOperation(dialog, { failure: "Failed." }, async () =>
+      failure("Failed to log out of courses.mooc.fi.", cause),
+    )
+
+    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith(
+      "Failed to log out of courses.mooc.fi.",
+      cause,
+    )
+    expect(notificationCount()).toBe(1)
+  })
+
+  test("shows a failure without a cause as its headline alone", async function () {
+    const result = await withOperation(dialog, { failure: "Failed." }, async () =>
+      failure("Missing exercise data for ex-1."),
+    )
+
+    expect(dialog.errorNotification).toHaveBeenCalledExactlyOnceWith(
+      "Missing exercise data for ex-1.",
+      result.val,
+    )
+    expect(notificationCount()).toBe(1)
+  })
+
+  test("turns a throw into an Err reported under the options' headline", async function () {
+    const thrown = new Error("unexpected")
+
+    const result = await withOperation(dialog, { failure: "Failed to wipe." }, async () => {
+      throw thrown
+    })
+
+    expect(result.err).toBe(true)
+    expect(result.val).toBe(thrown)
+    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith("Failed to wipe.", thrown)
+  })
+
+  test("turns a thrown non-Error into an Error", async function () {
+    const result = await withOperation(dialog, { failure: "Failed." }, () =>
+      Promise.reject("just a string"),
+    )
+
+    expect(result.val).toBeInstanceOf(Error)
+    expect((result.val as Error).message).toBe("just a string")
+  })
+
+  test("shows a busy rejection once, as information", async function () {
+    await withOperation(dialog, { failure: "Failed." }, async () =>
+      Err(new BottleneckError("Already submitting.")),
+    )
+
+    expect(dialog.notification).toHaveBeenCalledExactlyOnceWith("Already submitting.")
+    expect(notificationCount()).toBe(1)
+  })
+
+  test("recognises a busy rejection a failure wraps", async function () {
+    await withOperation(dialog, { failure: "Failed." }, async () =>
+      failure("Exercise submission failed.", new BottleneckError("Already submitting.")),
+    )
+
+    expect(dialog.notification).toHaveBeenCalledExactlyOnceWith("Already submitting.")
+    expect(notificationCount()).toBe(1)
+  })
+
+  test("logs rather than shows a failure or a busy rejection when silent", async function () {
+    const warn = vi.spyOn(Logger, "warn")
+    const info = vi.spyOn(Logger, "info")
+
+    await withOperation(dialog, { failure: "Failed.", silent: true }, async () =>
+      Err(new Error("offline")),
+    )
+    await withOperation(dialog, { failure: "Failed.", silent: true }, async () =>
+      Err(new BottleneckError("busy")),
+    )
+
+    expect(notificationCount()).toBe(0)
+    expect(warn).toHaveBeenCalledOnce()
+    expect(info).toHaveBeenCalledExactlyOnceWith("Not started: busy")
+    warn.mockRestore()
+    info.mockRestore()
+  })
+
+  test("logs a busy rejection as information, not as the operation failing", async function () {
+    const warn = vi.spyOn(Logger, "warn")
+
+    await withOperation(dialog, { failure: "Failed." }, async () =>
+      failure("Exercise submission failed.", new BottleneckError("Already submitting.")),
+    )
+
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  test("shows each warning of a success, silent or not", async function () {
+    const scope = new InsufficientScopeError("scope")
+    const disk = new Error("disk full")
+
+    const result = await withOperation(dialog, { failure: "Failed.", silent: true }, async () =>
+      Ok({
+        warnings: [
+          { headline: "Log in again.", error: scope },
+          { headline: "Failed to refresh local exercises.", error: disk },
+        ],
+      }),
+    )
+
+    expect(result.ok).toBe(true)
+    expect(vi.mocked(dialog.reportError).mock.calls).toEqual([
+      ["Log in again.", scope],
+      ["Failed to refresh local exercises.", disk],
+    ])
+  })
+
+  test("resolves without waiting for the notification to be dismissed", async function () {
+    const never = new Promise<void>(() => {})
+    vi.mocked(dialog.reportError).mockReturnValue(never)
+    vi.mocked(dialog.errorNotification).mockReturnValue(never)
+    vi.mocked(dialog.notification).mockReturnValue(never)
+    const hung = Symbol("hung")
+    const timeout = (): Promise<typeof hung> =>
+      new Promise((resolve) => {
+        setTimeout(() => resolve(hung), 50)
+      })
+
+    for (const outcome of [
+      Err(new Error("boom")),
+      failure("Headline only."),
+      Err(new BottleneckError("busy")),
+    ]) {
+      const settled = await Promise.race([
+        withOperation(dialog, { failure: "Failed." }, async () => outcome),
+        timeout(),
+      ])
+      expect(settled).not.toBe(hung)
+    }
+  })
+
+  test("runs the body under a progress notification", async function () {
+    const body = vi.fn(async (report: (progress: { fraction: number }) => void) => {
+      report({ fraction: 0.5 })
+      return Ok("done")
+    })
+
+    const result = await withOperation(
+      dialog,
+      { failure: "Failed.", progress: "Moving data..." },
+      body,
+    )
+
+    expect(result.val).toBe("done")
+    expect(body).toHaveBeenCalledOnce()
+    expect(dialog.progressNotification).toHaveBeenCalledWith(
+      "Moving data...",
+      expect.any(Function),
+      undefined,
+    )
+  })
+
+  test("shows the progress where the options say", async function () {
+    await withOperation(
+      dialog,
+      { failure: "Failed.", progress: "Refreshing…", progressLocation: { viewId: "tmcView" } },
+      async () => Ok.EMPTY,
+    )
+
+    expect(dialog.progressNotification).toHaveBeenCalledWith("Refreshing…", expect.any(Function), {
+      location: { viewId: "tmcView" },
+    })
+  })
+
+  test("forwards the body's reports to the progress bar", async function () {
+    const report = vi.fn()
+    vi.mocked(dialog.progressNotification).mockImplementation(async (_message, task) =>
+      task({ report }, {} as never),
+    )
+
+    await withOperation(dialog, { failure: "Failed.", progress: "Moving data..." }, async (r) => {
+      r({ fraction: 0.5 })
+      return Ok.EMPTY
+    })
+
+    expect(report).toHaveBeenCalledExactlyOnceWith({ fraction: 0.5 })
+  })
+
+  test("reports a throw from inside the progress notification", async function () {
+    const thrown = new Error("unexpected")
+
+    const result = await withOperation(dialog, { failure: "Failed.", progress: "Wiping..." }, () =>
+      Promise.reject(thrown),
+    )
+
+    expect(result.val).toBe(thrown)
+    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith("Failed.", thrown)
+  })
+
+  test("shows no progress notification unless asked", async function () {
+    await withOperation(dialog, { failure: "Failed." }, async (report) => {
+      report({ fraction: 1 })
+      return Ok.EMPTY
+    })
+
+    expect(dialog.progressNotification).not.toHaveBeenCalled()
+  })
+})
+
+suite("withOperation shown in a screen", function () {
+  let dialog: Dialog
+  let isVisible: boolean
+  let shownIn: FailureSink & {
+    show: Mock<FailureSink["show"]>
+    clear: Mock<FailureSink["clear"]>
+  }
+
+  beforeEach(function () {
+    dialog = createMockActionContext().dialog
+    isVisible = true
+    shownIn = { isVisible: () => isVisible, show: vi.fn(), clear: vi.fn() }
+  })
+
+  function notified(): number {
+    return (
+      vi.mocked(dialog.reportError).mock.calls.length +
+      vi.mocked(dialog.errorNotification).mock.calls.length +
+      vi.mocked(dialog.notification).mock.calls.length +
+      vi.mocked(dialog.warningNotification).mock.calls.length
+    )
+  }
+
+  test("shows a failure in the screen on screen, and notifies nothing", async function () {
+    const error = new Error("langs exited with 1")
+
+    await withOperation(dialog, { failure: "Failed to download.", shownIn }, async () => Err(error))
+
+    expect(shownIn.show).toHaveBeenCalledExactlyOnceWith("Failed to download.", error, "error")
+    expect(notified()).toBe(0)
+  })
+
+  test("notifies a failure of a screen not on screen, which keeps it too", async function () {
+    isVisible = false
+    const error = new Error("langs exited with 1")
+
+    await withOperation(dialog, { failure: "Failed to download.", shownIn }, async () => Err(error))
+
+    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith("Failed to download.", error)
+    expect(shownIn.show).toHaveBeenCalledExactlyOnceWith("Failed to download.", error, "error")
+  })
+
+  test("shows a busy rejection as a warning in the screen", async function () {
+    const busy = new BottleneckError("A refresh is already in progress.")
+
+    await withOperation(dialog, { failure: "Failed.", shownIn }, async () => Err(busy))
+
+    expect(shownIn.show).toHaveBeenCalledExactlyOnceWith("Failed.", busy, "warning")
+    expect(notified()).toBe(0)
+  })
+
+  test("a background job held back by another shows nothing, the other's progress being shown", async function () {
+    const busy = new BottleneckError("Some of these exercises are already downloading.")
+
+    await withOperation(dialog, { failure: "Failed.", shownIn, isBackground: true }, async () =>
+      Err(busy),
+    )
+    isVisible = false
+    await withOperation(dialog, { failure: "Failed.", shownIn, isBackground: true }, async () =>
+      Err(busy),
+    )
+
+    expect(shownIn.show).not.toHaveBeenCalled()
+    expect(notified()).toBe(0)
+  })
+
+  test("a background job's own failure still shows", async function () {
+    const error = new Error("disk full")
+
+    await withOperation(dialog, { failure: "Failed.", shownIn, isBackground: true }, async () =>
+      Err(error),
+    )
+
+    expect(shownIn.show).toHaveBeenCalledExactlyOnceWith("Failed.", error, "error")
+  })
+
+  test("shows each warning of a success in the screen", async function () {
+    const error = new Error("one exercise failed")
+
+    await withOperation(dialog, { failure: "Failed.", shownIn }, async () =>
+      Ok({ warnings: [{ headline: "Failed to download ex-1.", error }] }),
+    )
+
+    expect(shownIn.show).toHaveBeenCalledExactlyOnceWith("Failed to download ex-1.", error, "error")
+    expect(notified()).toBe(0)
+  })
+
+  test("takes back the screen's earlier failures of an operation that succeeds", async function () {
+    await withOperation(dialog, { failure: "Failed to download.", shownIn }, async () => Ok(1))
+
+    expect(shownIn.clear).toHaveBeenCalledExactlyOnceWith("Failed to download.")
+    expect(shownIn.show).not.toHaveBeenCalled()
+  })
+
+  test("a lost session shown in the screen still reaches the session's own warning", async function () {
+    const error = new Error("token revoked")
+
+    await withOperation(dialog, { failure: "Failed.", shownIn }, async () => Err(error))
+
+    expect(dialog.noteSessionLost).toHaveBeenCalledExactlyOnceWith(error)
+    expect(notified()).toBe(0)
+  })
+
+  test("a session logged out of fails nowhere in a screen whose own notice asks to log in", async function () {
+    const error = new Error("not logged in")
+    vi.mocked(dialog.noteSessionLost).mockReturnValue(true)
+
+    await withOperation(dialog, { failure: "Failed.", shownIn }, async () =>
+      Ok({ warnings: [{ headline: "Failed to download ex-1.", error }] }),
+    )
+
+    expect(shownIn.show).not.toHaveBeenCalled()
+    expect(notified()).toBe(0)
+  })
+
+  test("a session logged out of, failing in a hidden screen, takes only the neutral prompt", async function () {
+    isVisible = false
+    const error = new Error("not logged in")
+    vi.mocked(dialog.noteSessionLost).mockReturnValue(true)
+
+    await withOperation(dialog, { failure: "Failed.", shownIn }, async () => Err(error))
+
+    expect(shownIn.show).not.toHaveBeenCalled()
+    expect(dialog.reportError).toHaveBeenCalledExactlyOnceWith("Failed.", error)
+  })
+
+  test("takes back no failure of an operation that fails again", async function () {
+    await withOperation(dialog, { failure: "Failed.", shownIn }, async () => Err(new Error("x")))
+
+    expect(shownIn.clear).not.toHaveBeenCalled()
+  })
+
+  test("shows a failure that is not an operation's, headline alone", function () {
+    reportFailureIn(dialog, shownIn, "This exercise is not downloaded.")
+
+    expect(shownIn.show).toHaveBeenCalledExactlyOnceWith(
+      "This exercise is not downloaded.",
+      undefined,
+      "error",
+    )
+    expect(notified()).toBe(0)
+  })
+})

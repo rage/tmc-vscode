@@ -1,0 +1,262 @@
+import * as fs from "fs"
+import * as path from "path"
+
+import { Err, Ok } from "ts-results"
+import { vi } from "vitest"
+import * as vscode from "vscode"
+
+import type { ExerciseIdentifier } from "../../../shared/lib"
+import { pasteExercise } from "../../actions/pasteExercise"
+import type { ReadyActionContext, ReadyStartup } from "../../actions/types"
+import { failure } from "../../api/withOperation"
+import type { WorkspaceExercise } from "../../api/workspaceManager"
+import { ExerciseStatus } from "../../api/workspaceManager"
+import { runForExercise } from "../../commands/runForExercise"
+import { BottleneckError, CourseAccessLostError, WorkspaceUntrustedError } from "../../errors"
+import { idOfMoocCourse, idOfMoocExercise, idOfTmcExercise } from "../fixtures/identifiers"
+import { createMockActionContext } from "../mocks/actionContext"
+import { restrictedTrustGate } from "../support/trustGate"
+import { makeTmpDirs } from "../utils"
+
+const COURSE_SLUG = "mooc-python-course"
+const EXERCISE_SLUG = "loops"
+const MOOC_EXERCISE_ID = "mooc-ex-1"
+const TMC_EXERCISE_ID = 4321
+const EXERCISE_PATH = "/path/to/exercise"
+
+const MOOC_ID = idOfMoocExercise(MOOC_EXERCISE_ID)
+const TMC_ID = idOfTmcExercise(TMC_EXERCISE_ID)
+
+const moocExercise: WorkspaceExercise = {
+  id: MOOC_ID,
+  courseId: idOfMoocCourse("mooc-course-1"),
+  backend: "mooc",
+  courseSlug: COURSE_SLUG,
+  exerciseSlug: EXERCISE_SLUG,
+  status: ExerciseStatus.Open,
+  uri: { fsPath: EXERCISE_PATH } as unknown as vscode.Uri,
+}
+
+function contextFor(langsMethods: Record<string, unknown>): ReadyActionContext {
+  return createMockActionContext({
+    startup: {
+      langs: langsMethods as unknown as ReadyStartup["langs"],
+      userData: {
+        getCourse: () => Ok({ kind: "mooc", data: {} }),
+      } as unknown as ReadyStartup["userData"],
+      workspaceManager: {
+        getExercise: (id: ExerciseIdentifier) => ({ ...moocExercise, id }),
+      } as unknown as ReadyStartup["workspaceManager"],
+    },
+  })
+}
+
+function contextWith(pasteResult: unknown): {
+  actionContext: ReadyActionContext
+  submit: ReturnType<typeof vi.fn>
+} {
+  const submit = vi.fn().mockResolvedValue(pasteResult)
+  return { actionContext: contextFor({ paste: submit }), submit }
+}
+
+/** Mirrors `commands/pasteExercise.ts`'s headline-wrapping, for driving the action
+ * through the real `runForExercise`/`withOperation` boundary. */
+function pasteBody(actionContext: ReadyActionContext) {
+  return (exercise: WorkspaceExercise) =>
+    pasteExercise(actionContext, exercise.id).then((result) =>
+      result.ok ? result : failure("Failed to send the exercise to the pastebin.", result.val),
+    )
+}
+
+suite("paste action", () => {
+  test("sends nothing in Restricted Mode", async () => {
+    const { actionContext, submit } = contextWith(Ok("https://tmc.mooc.fi/paste/abc123"))
+    actionContext.startup.trustGate = restrictedTrustGate().trustGate
+
+    const result = await pasteExercise(actionContext, TMC_ID)
+
+    expect(result.val).toBeInstanceOf(WorkspaceUntrustedError)
+    expect(submit).not.toHaveBeenCalled()
+  })
+
+  test("sends nothing for a course its backend refuses", async () => {
+    const { actionContext, submit } = contextWith(Ok("https://tmc.mooc.fi/paste/abc123"))
+    actionContext.startup.userData = {
+      getCourse: () =>
+        Ok({ kind: "mooc", data: { accessLoss: { reason: "forbidden", checkedAt: 0 } } }),
+    } as unknown as ReadyStartup["userData"]
+
+    const result = await pasteExercise(actionContext, TMC_ID)
+
+    expect(result.val).toBeInstanceOf(CourseAccessLostError)
+    expect((result.val as Error).message).toMatch(/^You no longer have access to this course, so /)
+    expect(submit).not.toHaveBeenCalled()
+  })
+
+  test("a tmc exercise goes to the tmc paste service with its numeric id", async () => {
+    const { actionContext, submit } = contextWith(Ok("https://tmc.mooc.fi/paste/abc123"))
+
+    const result = await pasteExercise(actionContext, TMC_ID)
+
+    expect(submit).toHaveBeenCalledWith(TMC_ID, EXERCISE_PATH)
+    expect(result.val).toEqual({ link: "https://tmc.mooc.fi/paste/abc123", isReused: false })
+  })
+
+  test("a mooc exercise goes to the mooc paste service with its uuid", async () => {
+    const { actionContext, submit } = contextWith(Ok("https://paste.example/abc123"))
+
+    const result = await pasteExercise(actionContext, MOOC_ID)
+
+    expect(submit).toHaveBeenCalledWith(MOOC_ID, EXERCISE_PATH)
+    expect(result.ok).toBe(true)
+    expect(result.val).toEqual({ link: "https://paste.example/abc123", isReused: false })
+  })
+
+  test("a paste is rejected while a submit of the same exercise is in flight", async () => {
+    // Paste and submit deliberately share one key: both drive the CLI against the
+    // same exercise directory, so they must not overlap. The busy notice is
+    // `withOperation`'s job at the command layer; showing it here too would double it.
+    let finish!: () => void
+    const { actionContext } = contextWith(undefined)
+    ;(actionContext.startup.langs as unknown as Record<string, unknown>).paste = vi
+      .fn()
+      .mockReturnValue(
+        new Promise((resolve) => {
+          finish = () => resolve(Ok("link"))
+        }),
+      )
+    const notification = vi.mocked(actionContext.dialog.notification)
+
+    const first = pasteExercise(actionContext, MOOC_ID)
+    const second = await pasteExercise(actionContext, MOOC_ID)
+
+    expect(second.err).toBe(true)
+    expect(second.val).toBeInstanceOf(BottleneckError)
+    expect(notification).not.toHaveBeenCalled()
+
+    finish()
+    expect((await first).val).toEqual({ link: "link", isReused: false })
+  })
+
+  test("unchanged code gets the last paste's link without a new paste", async () => {
+    const root = makeTmpDirs({ "src/main.py": "print(1)" })
+    const paste = vi.fn().mockResolvedValue(Ok("https://paste.example/first"))
+    const actionContext = createMockActionContext({
+      startup: {
+        langs: {
+          paste,
+          getStudentFilePaths: async () => Ok(["src"]),
+        } as unknown as ReadyStartup["langs"],
+        userData: {
+          getCourse: () => Ok({ kind: "mooc", data: {} }),
+        } as unknown as ReadyStartup["userData"],
+        workspaceManager: {
+          getExercise: () => ({ ...moocExercise, uri: vscode.Uri.file(root) }),
+        } as unknown as ReadyStartup["workspaceManager"],
+      },
+    })
+
+    expect((await pasteExercise(actionContext, MOOC_ID)).val).toEqual({
+      link: "https://paste.example/first",
+      isReused: false,
+    })
+    expect((await pasteExercise(actionContext, MOOC_ID)).val).toEqual({
+      link: "https://paste.example/first",
+      isReused: true,
+    })
+    expect(paste).toHaveBeenCalledOnce()
+
+    fs.writeFileSync(path.join(root, "src/main.py"), "print(2)")
+    paste.mockResolvedValue(Ok("https://paste.example/second"))
+    expect((await pasteExercise(actionContext, MOOC_ID)).val).toEqual({
+      link: "https://paste.example/second",
+      isReused: false,
+    })
+  })
+
+  test("a CLI or backend failure is returned unreported", async () => {
+    // Both callers report it themselves, in the place the user asked from; a
+    // notification here would make every failed paste two of them.
+    const error = new Error("backend unreachable")
+    const { actionContext } = contextWith(Err(error))
+
+    const result = await pasteExercise(actionContext, MOOC_ID)
+
+    expect(result.err).toBe(true)
+    expect(result.val).toBe(error)
+    expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
+  })
+
+  test("an empty paste link from the server is its own error case", async () => {
+    const { actionContext } = contextWith(Ok(""))
+
+    const result = await pasteExercise(actionContext, MOOC_ID)
+
+    expect(result.err).toBe(true)
+    expect((result.val as Error).message).toContain("did not answer with a paste link")
+    expect(actionContext.dialog.reportError).not.toHaveBeenCalled()
+  })
+})
+
+// Drives the action through the real `runForExercise`/`withOperation` boundary: the busy
+// notice is the boundary's to show, exactly once.
+suite("paste action, through the real runForExercise boundary", () => {
+  function moocWorkspaceContext(): {
+    actionContext: ReadyActionContext
+    exercise: WorkspaceExercise
+  } {
+    const exercise = moocExercise
+    const actionContext = createMockActionContext({
+      startup: {
+        langs: {} as unknown as ReadyStartup["langs"],
+        userData: {
+          getCourse: () => Ok({ kind: "mooc", data: {} }),
+        } as unknown as ReadyStartup["userData"],
+        workspaceManager: {
+          getExercise: () => exercise,
+          get activeExercise() {
+            return exercise
+          },
+          getExerciseContaining: () => exercise,
+        } as unknown as ReadyStartup["workspaceManager"],
+      },
+    })
+    return { actionContext, exercise }
+  }
+
+  test("a busy rejection notifies exactly once and reports no error", async () => {
+    let finish!: () => void
+    const { actionContext } = moocWorkspaceContext()
+    ;(actionContext.startup.langs as unknown as Record<string, unknown>).paste = vi
+      .fn()
+      .mockReturnValue(
+        new Promise((resolve) => {
+          finish = () => resolve(Ok("link"))
+        }),
+      )
+    const notification = vi.mocked(actionContext.dialog.notification)
+    const reportError = vi.mocked(actionContext.dialog.reportError)
+
+    const first = runForExercise(
+      actionContext,
+      undefined,
+      "Pasting the exercise",
+      pasteBody(actionContext),
+    )
+    const second = await runForExercise(
+      actionContext,
+      undefined,
+      "Pasting the exercise",
+      pasteBody(actionContext),
+    )
+
+    expect(second.err).toBe(true)
+    expect(notification).toHaveBeenCalledExactlyOnceWith(
+      "A submission for this exercise is already in progress.",
+    )
+    expect(reportError).not.toHaveBeenCalled()
+
+    finish()
+    await first
+  })
+})

@@ -1,207 +1,528 @@
-import Storage from "../storage";
-import { v2 as storage } from "../storage/data";
-import { Logger } from "../utilities/logger";
-import * as _ from "lodash";
-import { Err, Ok, Result } from "ts-results";
+import * as _ from "lodash"
+import type { Result } from "ts-results"
+import { Err, Ok } from "ts-results"
+import * as vscode from "vscode"
+
+import type { BackendKind } from "../../shared/lib"
+import {
+  assertUnreachable,
+  CourseIdentifier,
+  ExerciseIdentifier,
+  LocalCourseExercise,
+  makeMoocKind,
+  makeTmcKind,
+  match,
+  LocalCourseData,
+  partition,
+  toError,
+} from "../../shared/lib"
+import type Storage from "../storage"
+import type { MoocLocalCourseData, TmcLocalCourseData } from "../storage/data"
+import type { MoocStoredStanding } from "../utilities/apiData"
+import { Logger } from "../utilities/logger"
+
+interface StoredCourse<Id> {
+  exercises: { id: Id }[]
+  newExercises: Id[]
+  offeredNewExercises?: Id[] | undefined
+  notifyAfter: number
+  /** An exercise's `name` is empty while it has never been seen open. */
+  closedChapters?: { exercises: { id: Id; name: string }[] }[] | undefined
+}
+
+/**
+ * Puts `refreshed` in `courses` in place of the course stored under `id`, carrying over which
+ * exercises are new and which of those were offered. An exercise that arrives with it ends a
+ * postponed reminder; one whose chapter has just opened arrives only if it was never seen open.
+ * Returns whether a course was stored there.
+ */
+function replaceIn<Id, Course extends StoredCourse<Id>>(
+  courses: Map<Id, Course>,
+  id: Id,
+  refreshed: Course,
+): boolean {
+  const stored = courses.get(id)
+  if (!stored) {
+    return false
+  }
+  const refreshedIds = new Set(refreshed.exercises.map((exercise) => exercise.id))
+  const storedIds = new Set(
+    [
+      stored.exercises,
+      ...(stored.closedChapters ?? []).map((chapter) =>
+        chapter.exercises.filter((exercise) => exercise.name !== ""),
+      ),
+    ]
+      .flat()
+      .map((exercise) => exercise.id),
+  )
+  const arrived = [...refreshedIds].filter((exerciseId) => !storedIds.has(exerciseId))
+  refreshed.newExercises = _.uniq([
+    ...stored.newExercises.filter((exerciseId) => refreshedIds.has(exerciseId)),
+    ...arrived,
+  ])
+  const isNew = new Set(refreshed.newExercises)
+  refreshed.offeredNewExercises = stored.offeredNewExercises?.filter((x) => isNew.has(x))
+  refreshed.notifyAfter = arrived.length > 0 ? 0 : stored.notifyAfter
+  courses.set(id, refreshed)
+  return true
+}
+
+/** A stored exercise and the stored course holding it. */
+export interface StoredExercise {
+  course: LocalCourseData
+  exercise: LocalCourseExercise
+}
+
+/** The course holding the exercise with id `exerciseId`, and that exercise. */
+function findExercise<Course extends { exercises: { id: unknown }[] }>(
+  courses: Map<unknown, Course>,
+  exerciseId: Course["exercises"][number]["id"],
+): { course: Course; exercise: Course["exercises"][number] } | undefined {
+  for (const course of courses.values()) {
+    const exercise = course.exercises.find((x) => x.id === exerciseId)
+    if (exercise) {
+      return { course, exercise }
+    }
+  }
+  return undefined
+}
+
+/** The stored exercise, including one of a chapter not open yet, which is not removed. */
+export function getExerciseIncludingClosedChapters(
+  userData: Pick<UserData, "getExercise" | "getExerciseInClosedChapter">,
+  id: ExerciseIdentifier,
+): Result<StoredExercise, Error> {
+  const listed = userData.getExercise(id)
+  return listed.ok ? listed : userData.getExerciseInClosedChapter(id)
+}
 
 export class UserData {
-    private _courses: Map<number, storage.LocalCourseData>;
-    private _passedExercises: Set<number> = new Set();
-    private _storage: Storage;
-    constructor(storage: Storage) {
-        const persistentData = storage.getUserData();
-        if (persistentData) {
-            this._courses = new Map(persistentData.courses.map((x) => [x.id, x]));
+  private _tmcCourses: Map<number, TmcLocalCourseData>
+  // keyed by course id, not slug
+  private _moocCourses: Map<string, MoocLocalCourseData>
+  // keyed by `ExerciseIdentifier.key`: a `Set` of id objects matches on reference only
+  private _passedExercises = new Set<string>()
+  /** Tail of the serialized write chain; see {@link _enqueueWrite}. */
+  private _pendingWrite: Promise<Result<void, Error>> = Promise.resolve(Ok.EMPTY)
+  private _storage: Storage
+  private readonly _coursesChanged = new vscode.EventEmitter<CourseIdentifier | undefined>()
 
-            persistentData.courses.forEach((x) =>
-                x.exercises.forEach((y) => {
-                    if (y.passed) {
-                        this._passedExercises.add(y.id);
-                    }
-                }),
-            );
-        } else {
-            this._courses = new Map();
+  /**
+   * Fires after any change to the stored courses, as soon as memory holds it: before it is
+   * persisted, and even when persisting then fails. Carries the changed course, or
+   * `undefined` when any course may have changed.
+   */
+  public readonly onDidChangeCourses = this._coursesChanged.event
+
+  public constructor(storage: Storage) {
+    const persistentData = storage.getUserData()
+    if (persistentData) {
+      this._tmcCourses = new Map(persistentData.courses.map((x) => [x.id, x]))
+      this._moocCourses = new Map(persistentData.mooc_courses.map((x) => [x.id, x]))
+
+      for (const course of this.getCourses()) {
+        for (const exercise of LocalCourseData.getExercises(course)) {
+          this._setPassed(LocalCourseExercise.getId(exercise), exercise.data.passed)
         }
-        this._storage = storage;
+      }
+    } else {
+      this._tmcCourses = new Map()
+      this._moocCourses = new Map()
     }
+    this._storage = storage
+  }
 
-    public getCourses(): storage.LocalCourseData[] {
-        return Array.from(this._courses.values());
+  public getCourses(): LocalCourseData[] {
+    const tmc = this.getTmcCourses().map<LocalCourseData>((x) => makeTmcKind(x))
+    const mooc = this.getMoocCourses().map<LocalCourseData>((x) => makeMoocKind(x))
+    return tmc.concat(mooc)
+  }
+
+  public getTmcCourses(): TmcLocalCourseData[] {
+    return Array.from(this._tmcCourses.values())
+  }
+
+  public getMoocCourses(): MoocLocalCourseData[] {
+    return Array.from(this._moocCourses.values())
+  }
+
+  /**
+   * Looks up a stored course by its identifier.
+   *
+   * Errs when the course is unknown, which is reachable: identifiers from webview messages
+   * and workspaces on disk outlive a removed course.
+   */
+  public getCourse(id: CourseIdentifier): Result<LocalCourseData, Error> {
+    switch (id.kind) {
+      case "tmc": {
+        const course = this._tmcCourses.get(id.data.courseId)
+        return course
+          ? Ok(makeTmcKind(course))
+          : Err(new Error(`No tmc course with id ${id.data.courseId}`))
+      }
+      case "mooc": {
+        const course = this._moocCourses.get(id.data.moocCourseId)
+        return course
+          ? Ok(makeMoocKind(course))
+          : Err(new Error(`No mooc course with id ${id.data.moocCourseId}`))
+      }
+      default: {
+        assertUnreachable(id)
+      }
     }
+  }
 
-    public getCourse(id: number): Readonly<storage.LocalCourseData> {
-        const course = this._courses.get(id);
-        return course as storage.LocalCourseData;
-    }
-
-    public getCourseByName(name: string): Readonly<storage.LocalCourseData> {
-        return this.getCourses().filter((x) => x.name === name)[0];
-    }
-
-    public getExerciseByName(
-        courseSlug: string,
-        exerciseName: string,
-    ): Readonly<storage.LocalCourseExercise> | undefined {
-        for (const course of this._courses.values()) {
-            if (course.name === courseSlug) {
-                return course.exercises.find((x) => x.name === exerciseName);
-            }
+  /**
+   * Looks up a course by its slug **within one backend**; slugs are only unique per backend,
+   * so a name-only lookup would let whichever backend came first shadow the other's course.
+   */
+  public getCourseBySlug(backend: BackendKind, slug: string): Result<LocalCourseData, Error> {
+    switch (backend) {
+      case "tmc": {
+        for (const course of this._tmcCourses.values()) {
+          if (course.name === slug) {
+            return Ok(makeTmcKind(course))
+          }
         }
-    }
-
-    public async setExerciseAsPassed(courseSlug: string, exerciseName: string): Promise<void> {
-        for (const course of this._courses.values()) {
-            if (course.name === courseSlug) {
-                const exercise = course.exercises.find((x) => x.name === exerciseName);
-                if (exercise) {
-                    exercise.passed = true;
-                    await this._updatePersistentData();
-                    break;
-                }
-            }
+        break
+      }
+      case "mooc": {
+        for (const course of this._moocCourses.values()) {
+          if (course.name === slug) {
+            return Ok(makeMoocKind(course))
+          }
         }
+        break
+      }
+      default: {
+        assertUnreachable(backend)
+      }
     }
+    return Err(new Error(`No ${backend} course with slug ${slug}`))
+  }
 
-    public addCourse(data: storage.LocalCourseData): void {
-        if (this._courses.has(data.id)) {
-            throw new Error("Trying to add an already existing course");
+  /**
+   * Looks up a stored exercise, and its course, by id.
+   *
+   * The returned records are the stored ones, not copies. Errs when no stored course holds
+   * the exercise, e.g. for a folder left behind by a removed course.
+   */
+  public getExercise(id: ExerciseIdentifier): Result<StoredExercise, Error> {
+    const found = match(
+      id,
+      (tmc) => {
+        const stored = findExercise(this._tmcCourses, tmc.tmcExerciseId)
+        return (
+          stored && { course: makeTmcKind(stored.course), exercise: makeTmcKind(stored.exercise) }
+        )
+      },
+      (mooc) => {
+        const stored = findExercise(this._moocCourses, mooc.moocExerciseId)
+        return (
+          stored && { course: makeMoocKind(stored.course), exercise: makeMoocKind(stored.exercise) }
+        )
+      },
+    )
+    return found
+      ? Ok(found)
+      : Err(new Error(`No stored ${id.kind} exercise ${ExerciseIdentifier.toString(id)}.`))
+  }
+
+  /**
+   * An exercise of a chapter not open yet, which its course hides from the exercises
+   * {@link getExercise} finds without removing it; see {@link getExerciseIncludingClosedChapters}.
+   */
+  public getExerciseInClosedChapter(id: ExerciseIdentifier): Result<StoredExercise, Error> {
+    if (id.kind === "mooc") {
+      for (const course of this._moocCourses.values()) {
+        for (const chapter of course.closedChapters ?? []) {
+          const exercise = chapter.exercises.find((x) => x.id === id.data.moocExerciseId)
+          if (exercise) {
+            return Ok({ course: makeMoocKind(course), exercise: makeMoocKind(exercise) })
+          }
         }
-        Logger.info(`Adding course ${data.name} to My Courses`);
-        this._courses.set(data.id, data);
-        this._updatePersistentData();
+      }
     }
+    return Err(
+      new Error(`No ${id.kind} exercise ${ExerciseIdentifier.toString(id)} in a closed chapter.`),
+    )
+  }
 
-    public deleteCourse(id: number): void {
-        this._courses.delete(id);
-        this._updatePersistentData();
+  /**
+   * Records a single exercise as passed, in memory and in storage.
+   *
+   * Errs when the exercise is not in the catalogue, which after a passing
+   * submission means the catalogue is out of step with what was submitted.
+   */
+  public async setExerciseAsPassed(id: ExerciseIdentifier): Promise<Result<void, Error>> {
+    const stored = this.getExercise(id)
+    if (stored.err) {
+      return stored
     }
+    stored.val.exercise.data.passed = true
+    this._setPassed(id, true)
+    return this._updatePersistentData()
+  }
 
-    public async updateCourse(data: storage.LocalCourseData): Promise<void> {
-        if (!this._courses.has(data.id)) {
-            throw new Error("Trying to fetch course that doesn't exist.");
+  /**
+   * Records a mooc exercise's standing and points as a grading reported them, in memory and in
+   * storage. Unlike {@link setExerciseAsPassed} it can also clear `passed`, as the backend decides.
+   *
+   * Errs when the catalogue holds no mooc exercise with this id.
+   */
+  public async setMoocExerciseStanding(
+    id: ExerciseIdentifier,
+    standing: MoocStoredStanding,
+    awardedPoints: number,
+  ): Promise<Result<void, Error>> {
+    const stored = this.getExercise(id)
+    if (stored.err) {
+      return stored
+    }
+    const { exercise } = stored.val
+    if (exercise.kind !== "mooc") {
+      return Err(new Error(`Exercise ${ExerciseIdentifier.toString(id)} is not a mooc exercise.`))
+    }
+    // In place: `exercise.data` is the catalogue's own object.
+    delete exercise.data.maxTries
+    delete exercise.data.triesLeft
+    delete exercise.data.pendingReview
+    delete exercise.data.exerciseLocked
+    Object.assign(exercise.data, standing, { awardedPoints })
+    this._setPassed(id, standing.passed)
+    return this._updatePersistentData()
+  }
+
+  public async addCourse(data: LocalCourseData): Promise<Result<void, Error>> {
+    switch (data.kind) {
+      case "tmc": {
+        const course = data
+        if (this._tmcCourses.has(course.data.id)) {
+          return Err(new Error(`Course ${course.data.name} has already been added`))
         }
-        this._courses.set(data.id, data);
-        await this._updatePersistentData();
-    }
-
-    public async updateExercises(
-        courseId: number,
-        exercises: storage.LocalCourseExercise[],
-    ): Promise<Result<void, Error>> {
-        const courseData = this._courses.get(courseId);
-        if (!courseData) {
-            return new Err(new Error(`Course data missing for ${courseId}`));
+        Logger.info(`Adding course ${course.data.name} to the stored courses`)
+        this._tmcCourses.set(course.data.id, course.data)
+        break
+      }
+      case "mooc": {
+        const course = data
+        if (this._moocCourses.has(course.data.id)) {
+          return Err(new Error(`Course ${course.data.name} has already been added`))
         }
-        const exerciseIds = exercises.map((exercise) => exercise.id);
-        // Filter out "new" exercises that no longer were in the API, and then append new data
-        courseData.newExercises = courseData.newExercises
-            .filter((exerciseId) => exerciseIds.includes(exerciseId))
-            .concat(
-                exerciseIds.filter(
-                    (newExerciseId) => !courseData.exercises.find((e) => e.id === newExerciseId),
-                ),
-            );
-        if (courseData.newExercises.length > 0) {
-            Logger.info(
-                `Found ${courseData.newExercises.length} new exercises for ${courseData.name}`,
-            );
-        }
-        courseData.exercises = exercises;
-        courseData.exercises.forEach((x) =>
-            x.passed ? this._passedExercises.add(x.id) : this._passedExercises.delete(x.id),
-        );
-        this._courses.set(courseId, courseData);
-        await this._updatePersistentData();
-        return Ok.EMPTY;
+        Logger.info(`Adding course ${course.data.name} to the stored courses`)
+        this._moocCourses.set(course.data.id, course.data)
+        break
+      }
+      default: {
+        assertUnreachable(data)
+      }
     }
+    LocalCourseData.getExercises(data).forEach((x) =>
+      this._setPassed(LocalCourseExercise.getId(x), x.data.passed),
+    )
+    return this._updatePersistentData(LocalCourseData.getCourseId(data))
+  }
 
-    public async updatePoints(
-        courseId: number,
-        awardedPoints: number,
-        availablePoints: number,
-    ): Promise<Result<void, Error>> {
-        const courseData = this._courses.get(courseId);
-        if (!courseData) {
-            return new Err(new Error(`Course data missing for ${courseId}`));
-        }
-        courseData.awardedPoints = awardedPoints;
-        courseData.availablePoints = availablePoints;
-        this._courses.set(courseId, courseData);
-        await this._updatePersistentData();
-        return Ok.EMPTY;
-    }
+  public async deleteCourse(id: CourseIdentifier): Promise<Result<void, Error>> {
+    match(
+      id,
+      (tmc) => {
+        this._tmcCourses.delete(tmc.courseId)
+      },
+      (mooc) => {
+        this._moocCourses.delete(mooc.moocCourseId)
+      },
+    )
+    return this._updatePersistentData(id)
+  }
 
-    public getPassed(exerciseId: number): boolean {
-        return this._passedExercises.has(exerciseId);
+  /**
+   * Replaces a stored course, exercises included, with a refreshed copy in one write.
+   *
+   * Exercises the stored copy lacks are recorded as new, and new exercises the refreshed
+   * copy no longer lists are dropped; the refreshed copy's own `newExercises` is ignored.
+   * Errs when the course is not stored.
+   */
+  public async replaceCourse(course: LocalCourseData): Promise<Result<void, Error>> {
+    const courseId = LocalCourseData.getCourseId(course)
+    const replaced = match(
+      course,
+      (tmc) => replaceIn(this._tmcCourses, tmc.id, tmc),
+      (mooc) => replaceIn(this._moocCourses, mooc.id, mooc),
+    )
+    if (!replaced) {
+      return Err(new Error(`No course ${CourseIdentifier.toString(courseId)} to replace`))
     }
+    if (course.data.newExercises.length > 0) {
+      Logger.info(`${course.data.name} has ${course.data.newExercises.length} new exercises`)
+    }
+    LocalCourseData.getExercises(course).forEach((x) =>
+      this._setPassed(LocalCourseExercise.getId(x), x.data.passed),
+    )
+    return this._updatePersistentData(courseId)
+  }
 
-    /**
-     * Clears the list of new exercises for a given course.
-     *
-     * If given a list of exercise ids clears these from the course.newExercises array
-     *
-     * @param courseId
-     * @param exercisesToClear Number list of exercises to clear.
-     */
-    public async clearFromNewExercises(
-        courseId: number,
-        exercisesToClear?: number[],
-    ): Promise<Result<void, Error>> {
-        const courseData = this._courses.get(courseId);
-        if (!courseData) {
-            return new Err(new Error(`Course data missing for ${courseId}`));
-        }
-        Logger.info(`Clearing new exercises for ${courseData.name}`);
-        if (exercisesToClear !== undefined) {
-            const unSuccessfullyDownloaded = _.difference(
-                courseData.newExercises,
-                exercisesToClear,
-            );
-            courseData.newExercises = unSuccessfullyDownloaded;
-            if (unSuccessfullyDownloaded.length === 0) {
-                courseData.notifyAfter = 0;
-            }
-        } else {
-            courseData.newExercises = [];
-            courseData.notifyAfter = 0;
-        }
-        await this._updatePersistentData();
-        return Ok.EMPTY;
-    }
+  public getPassed(exerciseId: ExerciseIdentifier): boolean {
+    return this._passedExercises.has(ExerciseIdentifier.key(exerciseId))
+  }
 
-    /**
-     * Sets a timeout for when the user can be notified about the given course the next time.
-     *
-     * @param courseId ID of the course where the notification timeout is being set.
-     * @param dateInMillis Next possible notification date, in milliseconds.
-     */
-    public async setNotifyDate(
-        courseId: number,
-        dateInMillis: number,
-    ): Promise<Result<void, Error>> {
-        const courseData = this._courses.get(courseId);
-        if (!courseData) {
-            return new Err(new Error(`Course data missing for ${courseId}`));
-        }
-        Logger.info(
-            `Notifying user for course ${courseData.name} again at ${new Date(
-                dateInMillis,
-            ).toString()}`,
-        );
-        courseData.notifyAfter = dateInMillis;
-        await this._updatePersistentData();
-        return Ok.EMPTY;
+  /** The only writer of `_passedExercises`, so the set cannot drift from the stored flags. */
+  private _setPassed(exerciseId: ExerciseIdentifier, passed: boolean): void {
+    const key = ExerciseIdentifier.key(exerciseId)
+    if (passed) {
+      this._passedExercises.add(key)
+    } else {
+      this._passedExercises.delete(key)
     }
+  }
 
-    /**
-     * Tries to set all storage data to undefined.
-     */
-    public async wipeDataFromStorage(): Promise<void> {
-        return this._storage.wipeStorage();
+  /**
+   * Clears a course's new exercises: all of them, or only `exercisesToClear`.
+   */
+  public async clearFromNewExercises(
+    courseId: CourseIdentifier,
+    exercisesToClear?: ExerciseIdentifier[],
+  ): Promise<Result<void, Error>> {
+    const courseResult = this.getCourse(courseId)
+    if (courseResult.err) {
+      return courseResult
     }
+    const courseData = courseResult.val
+    const newExercises = LocalCourseData.getNewExercises(courseData)
+    Logger.info(`Clearing new exercises`)
+    if (exercisesToClear !== undefined) {
+      // A plain `difference` compares the id objects by reference and subtracts nothing.
+      const unSuccessfullyDownloaded = _.differenceBy(
+        newExercises,
+        exercisesToClear,
+        ExerciseIdentifier.key,
+      )
+      const remaining = partition(unSuccessfullyDownloaded)
+      match(
+        courseData,
+        (tmc) => {
+          tmc.newExercises = remaining.tmc.map((id) => id.tmcExerciseId)
+        },
+        (mooc) => {
+          mooc.newExercises = remaining.mooc.map((id) => id.moocExerciseId)
+        },
+      )
+      if (unSuccessfullyDownloaded.length === 0) {
+        courseData.data.notifyAfter = 0
+      }
+    } else {
+      courseData.data.newExercises = []
+      courseData.data.notifyAfter = 0
+    }
+    return this._updatePersistentData(courseId)
+  }
 
-    private _updatePersistentData(): Promise<void> {
-        return this._storage.updateUserData({ courses: Array.from(this._courses.values()) });
+  /**
+   * Throttles the new-exercise notification for a course until `dateInMillis`.
+   *
+   * Only the toast is suppressed; the course data refresh ignores this.
+   *
+   * @param dateInMillis Epoch milliseconds before which not to notify again.
+   */
+  public async setNewExerciseNotifyAfter(
+    courseId: CourseIdentifier,
+    dateInMillis: number,
+  ): Promise<Result<void, Error>> {
+    const courseData = match(
+      courseId,
+      (tmc) => this._tmcCourses.get(tmc.courseId),
+      (mooc) => this._moocCourses.get(mooc.moocCourseId),
+    )
+    if (!courseData) {
+      return new Err(new Error(`Course data missing for ${CourseIdentifier.toString(courseId)}`))
     }
+    Logger.info(`Notifying user for course again at ${new Date(dateInMillis).toString()}`)
+    courseData.notifyAfter = dateInMillis
+    return this._updatePersistentData(courseId)
+  }
+
+  /** Records that a notification has offered the course's new exercises as they are now. */
+  public async setNewExercisesOffered(courseId: CourseIdentifier): Promise<Result<void, Error>> {
+    const course = this.getCourse(courseId)
+    if (course.err) {
+      return course
+    }
+    match(
+      course.val,
+      (tmc) => {
+        tmc.offeredNewExercises = [...tmc.newExercises]
+      },
+      (mooc) => {
+        mooc.offeredNewExercises = [...mooc.newExercises]
+      },
+    )
+    return this._updatePersistentData(courseId)
+  }
+
+  /**
+   * Offers the course's new exercises again once `dateInMillis` has passed, or sooner when
+   * more arrive.
+   */
+  public async postponeNewExercises(
+    courseId: CourseIdentifier,
+    dateInMillis: number,
+  ): Promise<Result<void, Error>> {
+    const course = this.getCourse(courseId)
+    if (course.err) {
+      return course
+    }
+    course.val.data.offeredNewExercises = []
+    return this.setNewExerciseNotifyAfter(courseId, dateInMillis)
+  }
+
+  /**
+   * Forgets every course, in memory and in storage.
+   *
+   * Runs after any write already queued, so none of them can put the wiped data back.
+   */
+  public async wipeDataFromStorage(): Promise<Result<void, Error>> {
+    this._tmcCourses.clear()
+    this._moocCourses.clear()
+    this._passedExercises.clear()
+    this._coursesChanged.fire(undefined)
+    return this._enqueueWrite(() => this._storage.wipeStorage())
+  }
+
+  /**
+   * Announces the change the in-memory maps hold, and writes the whole catalogue back to
+   * storage.
+   *
+   * The in-memory maps are already mutated by the time this runs, so an `Err`
+   * means the two copies have diverged and the caller must tell the user —
+   * dropping it silently reverts their action at the next restart.
+   */
+  private async _updatePersistentData(
+    changedCourse?: CourseIdentifier,
+  ): Promise<Result<void, Error>> {
+    this._coursesChanged.fire(changedCourse)
+    const snapshot = {
+      courses: Array.from(this._tmcCourses.values()),
+      mooc_courses: Array.from(this._moocCourses.values()),
+    }
+    return this._enqueueWrite(() => this._storage.updateUserData(snapshot))
+  }
+
+  /**
+   * Runs `write` after every storage write queued before it. Each write replaces the whole
+   * catalogue, so two overlapping ones would otherwise let the later drop the earlier's
+   * changes.
+   */
+  private _enqueueWrite(write: () => Promise<void>): Promise<Result<void, Error>> {
+    const queued = this._pendingWrite.then(async (): Promise<Result<void, Error>> => {
+      try {
+        await write()
+        return Ok.EMPTY
+      } catch (e) {
+        return Err(toError(e))
+      }
+    })
+    this._pendingWrite = queued
+    return queued
+  }
 }

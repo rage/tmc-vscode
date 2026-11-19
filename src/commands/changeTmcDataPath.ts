@@ -1,54 +1,60 @@
-import { moveExtensionDataPath } from "../actions";
-import { ActionContext } from "../actions/types";
-import { TmcPanel } from "../panels/TmcPanel";
-import { Logger } from "../utilities";
-import * as vscode from "vscode";
+import * as vscode from "vscode"
 
-/**
- * Removes language specific meta files from exercise directory.
- */
-export async function changeTmcDataPath(actionContext: ActionContext): Promise<void> {
-    const { dialog, resources } = actionContext;
-    Logger.info("Changing TMC data path");
-    if (!(resources.ok && resources.val.projectsDirectory)) {
-        Logger.error("Extension was not initialized properly");
-        return;
-    }
+import { moveExtensionDataPath } from "../actions"
+import type { ReadyActionContext } from "../actions/types"
+import { withOperation } from "../api/withOperation"
+import { Logger } from "../utilities"
 
-    const old = resources.val.projectsDirectory;
-    const options: vscode.OpenDialogOptions = {
-        canSelectFiles: false,
-        canSelectFolders: true,
-        canSelectMany: false,
-        openLabel: "Select folder",
-        defaultUri: vscode.Uri.file(old),
-    };
+/** Asks for a new folder for the extension's data and moves the exercises there. */
+export async function changeTmcDataPath(actionContext: ReadyActionContext): Promise<void> {
+  const { dialog } = actionContext
+  const { resources } = actionContext.startup
+  if (!resources.projectsDirectory) {
+    await dialog.errorNotification(
+      "Moving the exercises folder is unavailable: the TestMyCode tools did not report where the exercises folder is.",
+      new Error("tmc-langs did not report an exercise directory"),
+    )
+    return
+  }
 
-    const newPath = (await vscode.window.showOpenDialog(options))?.[0];
-    if (newPath && old) {
-        const res = await dialog.progressNotification(
-            "Moving projects directory...",
-            (progress) => {
-                return moveExtensionDataPath(actionContext, newPath, (update) =>
-                    progress.report(update),
-                );
-            },
-        );
-        if (res.ok) {
-            Logger.info(`Moved workspace folder from ${old} to ${newPath.fsPath}`);
-            dialog.notification(`TMC Data was successfully moved to ${newPath.fsPath}`, [
-                "OK",
-                (): void => {},
-            ]);
-        } else {
-            dialog.errorNotification(res.val.message, res.val);
-        }
-        TmcPanel.postMessage({
-            type: "setTmcDataPath",
-            tmcDataPath: resources.val.projectsDirectory,
-            target: {
-                type: "MyCourses",
-            },
-        });
-    }
+  const old = resources.projectsDirectory
+  const options: vscode.OpenDialogOptions = {
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+    openLabel: "Move Here",
+    defaultUri: vscode.Uri.file(old),
+  }
+
+  const newPath = (await vscode.window.showOpenDialog(options))?.[0]
+  if (!newPath) {
+    return
+  }
+
+  Logger.info(`Moving the exercises folder to ${newPath.fsPath}`)
+  const res = await withOperation(
+    dialog,
+    {
+      failure: "Failed to move the exercises folder.",
+      progress: "Moving the exercises folder…",
+    },
+    (report) => moveExtensionDataPath(actionContext, newPath, report),
+  )
+  if (res.err) {
+    return
+  }
+  const { projectsDirectory, rescanError } = res.val
+  Logger.info(`Moved workspace folder from ${old} to ${projectsDirectory}`)
+  dialog.notification(
+    projectsDirectory === newPath.fsPath
+      ? `Moved the exercises folder to ${projectsDirectory}.`
+      : `Moved the exercises folder to ${projectsDirectory}. The folder you chose was not empty,` +
+          " so a tmcdata subfolder was used.",
+  )
+  if (rescanError) {
+    dialog.warningNotification("The exercises could not be listed in their new folder.", [
+      "Refresh Courses",
+      (): void => void vscode.commands.executeCommand("tmcTreeView.refreshCourses"),
+    ])
+  }
 }
