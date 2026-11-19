@@ -6,6 +6,8 @@ import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
 import { TmcPage } from "../pages/tmc"
 
+vsCodeTest.use({ isCoursesMoocFiEnabled: true })
+
 // A submission with no files is ordinary news, not an error: the exercise on disk stays
 // untouched and the user is told. The client API cannot produce one (the CLI always uploads
 // before submitting), so it is seeded in the mock (`seedMoocFilelessSubmission`). The

@@ -6,6 +6,8 @@ import { vsCodeTest } from "../fixtures"
 import { CourseHomePage } from "../pages/course-home"
 import { CoursesViewPage } from "../pages/courses-view"
 
+vsCodeTest.use({ isCoursesMoocFiEnabled: true })
+
 const COURSE_TITLE = "MOOC Extra Course"
 
 async function postToMock(path: string, body: object): Promise<void> {

@@ -10,6 +10,8 @@ import { ExplorerPage } from "../pages/explorer"
 import { TestResultsPage } from "../pages/test-results"
 import { TmcPage } from "../pages/tmc"
 
+vsCodeTest.use({ isCoursesMoocFiEnabled: true })
+
 const COURSE = "Python Course"
 const EXERCISE = "01_passing_exercise"
 const EXERCISE_FILE = ["src", "passing_exercise.py"]

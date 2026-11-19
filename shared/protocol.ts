@@ -131,6 +131,8 @@ export type LoginPanel = z.infer<typeof LoginPanelSchema>
 export const AddCoursePanelSchema = z.object({
   id: z.number(),
   type: z.literal("AddCourse"),
+  /** Whether it lists the student's courses.mooc.fi courses, from the experimental setting. */
+  canAddMoocCourses: z.boolean(),
 })
 
 export type AddCoursePanel = z.infer<typeof AddCoursePanelSchema>

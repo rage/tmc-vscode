@@ -91,6 +91,8 @@ export function hasReachedWalkthroughMilestone(milestone: WalkthroughMilestone):
 
 /** What TestMyCode knows of the student's progress through the walkthrough. */
 export interface WalkthroughProgress {
+  /** Picks the Add Course step's variant, which package.json shows by the setting. */
+  canAddMoocCourses: boolean
   isLoggedIn: boolean
   hasCourses: boolean
   hasDownloadedExercises: boolean
@@ -110,7 +112,7 @@ export function nextWalkthroughStep(progress: WalkthroughProgress): string {
     return "logIn"
   }
   if (!progress.hasCourses) {
-    return "addCourse"
+    return progress.canAddMoocCourses ? "addCourseWithCoursesMoocFi" : "addCourse"
   }
   if (!progress.hasDownloadedExercises) {
     return "openExercises"
@@ -136,9 +138,11 @@ export function isWalkthroughVisible(): boolean {
 /** The student's progress as this activation sees it. */
 export function walkthroughProgressOf({
   authState,
+  settings,
   startup,
-}: Pick<ReadyActionContext, "authState" | "startup">): WalkthroughProgress {
+}: Pick<ReadyActionContext, "authState" | "settings" | "startup">): WalkthroughProgress {
   return {
+    canAddMoocCourses: settings.isCoursesMoocFiEnabled(),
     isLoggedIn: authState.loggedIn,
     hasCourses: startup.userData.getCourses().length > 0,
     hasDownloadedExercises: startup.workspaceManager.getExercises().length > 0,

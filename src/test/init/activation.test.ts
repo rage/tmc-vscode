@@ -1228,6 +1228,18 @@ suite("activation in a window TestMyCode has no part in yet", function () {
     expect(executeCommand.mock.calls.filter(([command]) => command !== "setContext")).toEqual([])
   })
 
+  test("mirrors the courses.mooc.fi setting into its context key", async function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+
+    await activate(createContext())
+
+    expect(executeCommand).toHaveBeenCalledWith(
+      "setContext",
+      "test-my-code:CoursesMoocFiEnabled",
+      false,
+    )
+  })
+
   test("marks the window light, for the palette's entry commands, until it activates fully", async function () {
     await activate(createContext())
     expect(recorded.contextKeys.get("test-my-code:Light")).toBe(true)

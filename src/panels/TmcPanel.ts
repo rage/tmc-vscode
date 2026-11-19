@@ -20,6 +20,7 @@ import {
 } from "../../shared/lib"
 import type { ActionContext } from "../actions/types"
 import { isReady } from "../actions/types"
+import type Settings from "../config/settings"
 import type { StoredExercise, UserData } from "../config/userdata"
 import { getExerciseIncludingClosedChapters } from "../config/userdata"
 import { buildCourseHomeView } from "../ui/courseHome"
@@ -39,7 +40,13 @@ import { messageHandlers } from "./handlers"
 import { postMessageToWebview, renderPanel } from "./panel"
 import type { HandlerContext, PanelHost, PanelMessage } from "./router"
 import { dispatch } from "./router"
-import { errorDetailsPanel, initializationErrorHelpPanel, nextPanelId, panelTitle } from "./routes"
+import {
+  addCoursePanel,
+  errorDetailsPanel,
+  initializationErrorHelpPanel,
+  nextPanelId,
+  panelTitle,
+} from "./routes"
 import { failuresClearedMessage, screenFailureMessage } from "./screenFailures"
 import { withExerciseState } from "./submissionView"
 
@@ -295,6 +302,18 @@ export class TmcPanel {
       return
     }
     postMessageToWebview(this._panel.webview, message, this._webviewName)
+  }
+
+  /** Redraws a shown add-course screen whose courses.mooc.fi listing the setting changed. */
+  public static updateAddCourse(settings: Pick<Settings, "isCoursesMoocFiEnabled">): void {
+    const main = TmcPanel.mainPanel
+    const route = main?._route
+    if (
+      route?.type === "AddCourse" &&
+      route.canAddMoocCourses !== settings.isCoursesMoocFiEnabled()
+    ) {
+      main?._render(addCoursePanel(settings))
+    }
   }
 
   /** Shows `route` in the main panel, creating the panel if needed. */
@@ -844,7 +863,7 @@ function restoredRoute(
         ? undefined
         : initializationErrorHelpPanel(actionContext, extensionContext)
     case "AddCourse":
-      return isReady(actionContext) ? { id: nextPanelId(), type: route.type } : undefined
+      return isReady(actionContext) ? addCoursePanel(actionContext.settings) : undefined
     case undefined:
       return undefined
     default:

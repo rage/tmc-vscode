@@ -174,6 +174,9 @@ interface CustomTestOptions {
   isWorkspaceTrustEnabled: boolean
   // User settings beside the ones every run gets, e.g. `{ "testMyCode.newExercises": "download" }`.
   userSettings: Record<string, unknown>
+  // Turns on `testMyCode.experimental.coursesMoocFi`, without which no courses.mooc.fi course
+  // can be added.
+  isCoursesMoocFiEnabled: boolean
 }
 
 export const customTestFixtures: Fixtures<
@@ -186,12 +189,14 @@ export const customTestFixtures: Fixtures<
   seedTmcCredentials: [true, { option: true }],
   isWorkspaceTrustEnabled: [false, { option: true }],
   userSettings: [{}, { option: true }],
+  isCoursesMoocFiEnabled: [false, { option: true }],
   userDataDir: tempDirFixture("tmc-vscode-playwright-user"),
   configDir: tempDirFixture("tmc-vscode-playwright-config"),
   projectsDir: tempDirFixture("tmc-vscode-playwright-projects"),
   vsCode: async (
     {
       configDir,
+      isCoursesMoocFiEnabled,
       isWorkspaceTrustEnabled,
       moocClientId,
       projectsDir,
@@ -206,7 +211,11 @@ export const customTestFixtures: Fixtures<
     fs.mkdirSync(join(userDataDir, "User"))
     fs.writeFileSync(
       join(userDataDir, "User", "settings.json"),
-      JSON.stringify({ ...BASE_USER_SETTINGS, ...userSettings }),
+      JSON.stringify({
+        ...BASE_USER_SETTINGS,
+        ...(isCoursesMoocFiEnabled && { "testMyCode.experimental.coursesMoocFi": true }),
+        ...userSettings,
+      }),
     )
     if (isWorkspaceTrustEnabled) {
       fs.mkdirSync(join(userDataDir, "home"))

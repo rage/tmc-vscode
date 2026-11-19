@@ -10,6 +10,7 @@ import {
   trackActiveEditorExercise,
   trackActiveExerciseRemoved,
   trackActiveExerciseSubmitRefused,
+  trackCoursesMoocFiEnabled,
   trackHasCourses,
   trackHasDownloadedExercises,
 } from "../../ui/contextKeys"
@@ -102,6 +103,35 @@ suite("trackHasCourses", function () {
 
     const updates = executeCommand.mock.calls
       .filter(([command, key]) => command === "setContext" && key === "test-my-code:HasCourses")
+      .map(([, , value]) => value)
+    expect(updates).toEqual([false, true, false])
+  })
+})
+
+suite("trackCoursesMoocFiEnabled", function () {
+  afterEach(function () {
+    vi.restoreAllMocks()
+  })
+
+  test("sets the key from the setting, and again whenever the configuration changes it", function () {
+    const executeCommand = vi.spyOn(vscode.commands, "executeCommand").mockResolvedValue(undefined)
+    const configurationChanged = new vscode.EventEmitter<unknown>()
+    vi.spyOn(vscode.workspace, "onDidChangeConfiguration").mockImplementation(
+      configurationChanged.event as never,
+    )
+    let isEnabled = false
+
+    trackCoursesMoocFiEnabled({ isCoursesMoocFiEnabled: () => isEnabled })
+    isEnabled = true
+    configurationChanged.fire(undefined)
+    configurationChanged.fire(undefined)
+    isEnabled = false
+    configurationChanged.fire(undefined)
+
+    const updates = executeCommand.mock.calls
+      .filter(
+        ([command, key]) => command === "setContext" && key === "test-my-code:CoursesMoocFiEnabled",
+      )
       .map(([, , value]) => value)
     expect(updates).toEqual([false, true, false])
   })

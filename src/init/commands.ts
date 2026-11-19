@@ -14,7 +14,12 @@ import {
   SHOW_AI_USE_PROBLEM_COMMAND,
   TRUST_COURSE_WORKSPACE_COMMAND,
 } from "../errors"
-import { errorDetailsPanel, initializationErrorHelpPanel, nextPanelId } from "../panels/routes"
+import {
+  addCoursePanel,
+  errorDetailsPanel,
+  initializationErrorHelpPanel,
+  nextPanelId,
+} from "../panels/routes"
 import { TmcPanel } from "../panels/TmcPanel"
 import type { ExerciseTestController } from "../testing/exerciseTestController"
 import { openCourseId } from "../ui/courseHome"
@@ -158,7 +163,7 @@ export function registerCommands(
   register("tmc.addNewCourse", async () => commands.addNewCourse(readyContext))
 
   register("tmc.showAddCourse", () =>
-    TmcPanel.renderMain(context, readyContext, { id: nextPanelId(), type: "AddCourse" }),
+    TmcPanel.renderMain(context, readyContext, addCoursePanel(readyContext.settings)),
   )
 
   register("tmc.changeTmcDataPath", async () => commands.changeTmcDataPath(readyContext))

@@ -500,7 +500,7 @@ function loginScenario(id: string, view: LoginView): Scenario {
 // The visual tier fixes the clock at 2026-10-01T09:00:00Z.
 const LOGIN_EXPIRES_AT = "2026-10-01T09:15:00.000Z"
 
-const addCoursePanel: AddCoursePanel = { id: 70, type: "AddCourse" }
+const addCoursePanel: AddCoursePanel = { id: 70, type: "AddCourse", canAddMoocCourses: true }
 
 function catalogCourse(name: string, overrides: Partial<CatalogCourse> = {}): CatalogCourse {
   return {
@@ -574,10 +574,11 @@ function addCourseScenario(
   id: string,
   answers: Parameters<typeof answerCatalog>[0],
   savedState?: WebviewState,
+  panel: AddCoursePanel = addCoursePanel,
 ): Scenario {
   return {
     id: `add-course/${id}`,
-    panel: addCoursePanel,
+    panel,
     reply: answerCatalog(answers),
     ...(savedState ? { savedState } : {}),
   }
@@ -1217,6 +1218,12 @@ export const SCENARIOS: Scenario[] = [
       },
     },
     { screen: "AddCourse", ui: { organization: "mooc" } },
+  ),
+  addCourseScenario(
+    "tmc-only",
+    { requestTmcOrganizations: { ok: true, value: tmcOrganizations } },
+    undefined,
+    { ...addCoursePanel, canAddMoocCourses: false },
   ),
   addCourseScenario("not-enrolled", {
     requestMoocCatalog: { ok: true, value: { kind: "listed", items: [] } },

@@ -416,6 +416,12 @@
           "default": "",
           "description": "Path to the JDK used for Java exercises, such as /usr/lib/jvm/java-21. Leave empty to use the Java found on your PATH.",
           "order": 3
+        },
+        "testMyCode.experimental.coursesMoocFi": {
+          "type": "boolean",
+          "default": false,
+          "description": "(Experimental) List the courses you are enrolled in on courses.mooc.fi in Add Course, so you can add them. Courses you have already added keep working when this is off.",
+          "order": 5
         }
       }
     },
@@ -929,8 +935,22 @@
             "id": "addCourse",
             "title": "Add Course",
             "description": "Pick the course you are taking.\n[Add Course](command:tmc.showAddCourse)",
+            "when": "!test-my-code:CoursesMoocFiEnabled",
             "media": {
               "markdown": "media/walkthrough/add-course.md"
+            },
+            "completionEvents": [
+              "onContext:test-my-code:HasCourses",
+              "onContext:test-my-code:HasCourses && test-my-code:WalkthroughActive"
+            ]
+          },
+          {
+            "id": "addCourseWithCoursesMoocFi",
+            "title": "Add Course",
+            "description": "Pick the course you are taking.\n[Add Course](command:tmc.showAddCourse)",
+            "when": "test-my-code:CoursesMoocFiEnabled",
+            "media": {
+              "markdown": "media/walkthrough/add-course-with-courses-mooc-fi.md"
             },
             "completionEvents": [
               "onContext:test-my-code:HasCourses",

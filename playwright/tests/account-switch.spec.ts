@@ -8,6 +8,8 @@ import { AddCoursePage } from "../pages/add-course"
 import { CoursesViewPage } from "../pages/courses-view"
 import { MoocLoginPage } from "../pages/mooc-login"
 
+vsCodeTest.use({ isCoursesMoocFiEnabled: true })
+
 const OTHER_STUDENT_ID = "0d6a3a7e-1f0b-4c8e-8f3d-6b2a9c4e5f70"
 
 function accountStatusBarItem(page: Page, name: RegExp) {

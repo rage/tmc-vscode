@@ -60,6 +60,7 @@ import {
   trackActiveEditorExercise,
   trackActiveExerciseRemoved,
   trackActiveExerciseSubmitRefused,
+  trackCoursesMoocFiEnabled,
   trackHasCourses,
   trackHasDownloadedExercises,
 } from "./ui/contextKeys"
@@ -213,7 +214,7 @@ async function activateInner(
 ): Promise<void> {
   const storage = new Storage(context)
   const settings = new Settings()
-  context.subscriptions.push(settings)
+  context.subscriptions.push(settings, trackCoursesMoocFiEnabled(settings))
   // Must precede the first CLI invocation below, which logs at the user's level.
   Logger.configure(settings.getLogLevel())
   context.subscriptions.push({ dispose: () => Logger.dispose() })

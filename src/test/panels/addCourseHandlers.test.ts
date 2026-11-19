@@ -7,6 +7,7 @@ import { CourseIdentifier as CourseIdentifiers } from "../../../shared/lib"
 import * as actions from "../../actions"
 import type { ReadyActionContext } from "../../actions/types"
 import { MOOC_BACKEND_URL } from "../../config/constants"
+import type Settings from "../../config/settings"
 import type { UserData } from "../../config/userdata"
 import { AuthorizationError, ConnectionError } from "../../errors"
 import { addCourseHandlers } from "../../panels/handlers/addCourse"
@@ -46,7 +47,7 @@ let nextId = 100
 
 function addCoursePanel(): AddCoursePanel {
   nextId += 1
-  return { id: nextId, type: "AddCourse" }
+  return { id: nextId, type: "AddCourse", canAddMoocCourses: true }
 }
 
 function host(route: Panel | undefined): PanelHost {
@@ -60,17 +61,20 @@ function host(route: Panel | undefined): PanelHost {
   }
 }
 
-/** A context whose user has added `added`. */
-function context(added: CourseIdentifier[] = []): ReadyActionContext {
+/** A context whose user has added `added`, with the courses.mooc.fi setting on unless said. */
+function context(added: CourseIdentifier[] = [], isMoocEnabled = true): ReadyActionContext {
   const keys = new Set(added.map((id) => CourseIdentifiers.key(id)))
-  return createMockActionContext({
-    startup: {
-      userData: {
-        getCourse: (id: CourseIdentifier) =>
-          keys.has(CourseIdentifiers.key(id)) ? Ok({}) : Err(new Error("No such course.")),
-      } as unknown as UserData,
-    },
-  })
+  return {
+    ...createMockActionContext({
+      startup: {
+        userData: {
+          getCourse: (id: CourseIdentifier) =>
+            keys.has(CourseIdentifiers.key(id)) ? Ok({}) : Err(new Error("No such course.")),
+        } as unknown as UserData,
+      },
+    }),
+    settings: { isCoursesMoocFiEnabled: () => isMoocEnabled } as unknown as Settings,
+  }
 }
 
 function request<K extends "requestMoocCatalog" | "requestTmcOrganizations">(
@@ -173,6 +177,13 @@ suite("the add-course screen's handlers", function () {
     const error = new ConnectionError("dns error")
     vi.mocked(actions.listEnrolledMoocCourses).mockResolvedValueOnce(Err(error))
     expect((await listMooc(context(), panel)).val).toBe(error)
+  })
+
+  test("fetches no courses.mooc.fi courses while the setting is off", async function () {
+    const listed = await listMooc(context([], false), addCoursePanel())
+
+    expect(listed.err).toBe(true)
+    expect(actions.listEnrolledMoocCourses).not.toHaveBeenCalled()
   })
 
   test("lists the TMC organizations, pinned first, or that they need a login", async function () {

@@ -17,6 +17,7 @@ export interface SettingsMockValues {
   newExercises: NewExerciseHandling
   javaHome: string
   logLevel: LogLevel
+  "experimental.coursesMoocFi": boolean
 }
 
 /**
@@ -26,6 +27,7 @@ export interface SettingsMockValues {
  */
 export interface SettingsMockChanges {
   hideMetaFiles: (value: boolean) => void
+  "experimental.coursesMoocFi": (value: boolean) => void
 }
 
 export function createSettingsMock(): [Settings, SettingsMockValues, SettingsMockChanges] {
@@ -36,9 +38,11 @@ export function createSettingsMock(): [Settings, SettingsMockValues, SettingsMoc
     newExercises: "ask",
     javaHome: "",
     logLevel: LogLevel.Errors,
+    "experimental.coursesMoocFi": false,
   }
 
   let onChangeHideMetaFiles: ((hide: boolean) => void) | undefined
+  let onChangeCoursesMoocFiEnabled: ((isEnabled: boolean) => void) | undefined
 
   const mock = {
     getDownloadOldSubmission: vi.fn(() => values.downloadOldSubmission),
@@ -47,9 +51,13 @@ export function createSettingsMock(): [Settings, SettingsMockValues, SettingsMoc
     getNewExerciseHandling: vi.fn(() => values.newExercises),
     getJavaHome: vi.fn(() => values.javaHome),
     getLogLevel: vi.fn(() => values.logLevel),
+    isCoursesMoocFiEnabled: vi.fn(() => values["experimental.coursesMoocFi"]),
     dispose: vi.fn(),
     set onChangeHideMetaFiles(callback: (hide: boolean) => void) {
       onChangeHideMetaFiles = callback
+    },
+    set onChangeCoursesMoocFiEnabled(callback: (isEnabled: boolean) => void) {
+      onChangeCoursesMoocFiEnabled = callback
     },
   }
 
@@ -57,6 +65,10 @@ export function createSettingsMock(): [Settings, SettingsMockValues, SettingsMoc
     hideMetaFiles: (value) => {
       values.hideMetaFiles = value
       onChangeHideMetaFiles?.(value)
+    },
+    "experimental.coursesMoocFi": (value) => {
+      values["experimental.coursesMoocFi"] = value
+      onChangeCoursesMoocFiEnabled?.(value)
     },
   }
 

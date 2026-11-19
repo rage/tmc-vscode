@@ -21,6 +21,7 @@ function openTabs(...tabs: { label: string; input: unknown }[]): void {
 
 suite("walkthrough", function () {
   const done = {
+    canAddMoocCourses: false,
     isLoggedIn: true,
     hasCourses: true,
     hasDownloadedExercises: true,
@@ -46,6 +47,9 @@ suite("walkthrough", function () {
   test("the next step is the first one not done, then Get Help", function () {
     expect(nextWalkthroughStep({ ...done, isLoggedIn: false })).toBe("logIn")
     expect(nextWalkthroughStep({ ...done, hasCourses: false })).toBe("addCourse")
+    expect(nextWalkthroughStep({ ...done, hasCourses: false, canAddMoocCourses: true })).toBe(
+      "addCourseWithCoursesMoocFi",
+    )
     expect(nextWalkthroughStep({ ...done, hasDownloadedExercises: false })).toBe("openExercises")
     expect(nextWalkthroughStep({ ...done, hasRunTests: false })).toBe("runTests")
     expect(nextWalkthroughStep({ ...done, hasSubmitted: false })).toBe("submit")

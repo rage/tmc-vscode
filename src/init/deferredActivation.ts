@@ -5,8 +5,10 @@ import * as fs from "fs-extra"
 import * as vscode from "vscode"
 
 import { CLIENT_NAME, EXTENSION_VERSION, TMC_LANGS_CONFIG_DIR } from "../config/constants"
+import Settings from "../config/settings"
 import Storage from "../storage"
 import { v0, v1, v3 } from "../storage/data"
+import { trackCoursesMoocFiEnabled } from "../ui/contextKeys"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
 import { isSamePath, Logger } from "../utilities"
 import { WALKTHROUGH } from "../window/walkthrough"
@@ -145,6 +147,8 @@ export async function deferActivation(
       },
     }),
   )
+  const settings = new Settings()
+  standIns.push(settings, trackCoursesMoocFiEnabled(settings))
   context.subscriptions.push({ dispose: () => vscode.Disposable.from(...standIns).dispose() })
   void vscode.commands.executeCommand("setContext", LIGHT_CONTEXT_KEY, true)
 

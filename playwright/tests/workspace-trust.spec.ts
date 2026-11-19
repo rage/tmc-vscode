@@ -7,6 +7,8 @@ import { CoursesViewPage } from "../pages/courses-view"
 import { ExplorerPage } from "../pages/explorer"
 import { TmcPage } from "../pages/tmc"
 
+vsCodeTest.use({ isCoursesMoocFiEnabled: true })
+
 const COURSE = "Python Course"
 const FIRST_EXERCISE = "01_passing_exercise"
 const SECOND_EXERCISE = "02_failing_exercise"

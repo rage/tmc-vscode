@@ -2,6 +2,7 @@ import * as vscode from "vscode"
 
 import { submitRefusalOf } from "../../shared/lib"
 import type WorkspaceManager from "../api/workspaceManager"
+import type Settings from "../config/settings"
 import type { UserData } from "../config/userdata"
 
 /**
@@ -37,6 +38,20 @@ export function trackActiveEditorExercise(
     "test-my-code:ActiveEditorIsExercise",
     () => workspaceManager.activeExercise !== undefined,
     [vscode.window.onDidChangeActiveTextEditor, workspaceManager.onDidChangeExercises],
+  )
+}
+
+/**
+ * Keeps `test-my-code:CoursesMoocFiEnabled` equal to {@link Settings.isCoursesMoocFiEnabled},
+ * which shows the ways to add a courses.mooc.fi course.
+ */
+export function trackCoursesMoocFiEnabled(
+  settings: Pick<Settings, "isCoursesMoocFiEnabled">,
+): vscode.Disposable {
+  return trackContextKey(
+    "test-my-code:CoursesMoocFiEnabled",
+    () => settings.isCoursesMoocFiEnabled(),
+    [vscode.workspace.onDidChangeConfiguration],
   )
 }
 
