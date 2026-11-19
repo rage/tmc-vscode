@@ -1,5 +1,11 @@
 # Changelog
 
+## [4.99.0] - 2026-11-19
+
+- Restores the 3.5 series of the extension for users who updated to 4.x.
+- Keeps your TestMyCode courses from 4.x. Courses added from courses.mooc.fi are not shown in this version, but they are kept for the next update.
+- If you logged in with 4.x, log in again with your MOOC.fi account.
+
 ## [3.5.5] - 2026-10-30
 
 - Fixed the exercise panel getting stuck on "Loading TestMyCode..." when it had been hidden and reopened before its contents arrived.

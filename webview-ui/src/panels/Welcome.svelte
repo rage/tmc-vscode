@@ -72,6 +72,15 @@
         <!-- This list should generally contain only the last couple versions/months worth of updates -->
 
         <div class="content_section">
+            <h3>4.99.0 - 2026-11-19</h3>
+            <h4>Back to the 3.5 series</h4>
+            <p>
+                This version restores the 3.5 series of the extension. Your TestMyCode courses from
+                4.x are kept. Courses added from courses.mooc.fi are not shown here, but they are
+                kept for the next update.
+            </p>
+            <h4>Log in again if asked</h4>
+            <p>If you logged in with 4.x, log in again with your MOOC.fi account.</p>
             <h3>3.5.5 - 2026-10-30</h3>
             <h4>Fixed files missing from submissions on Windows</h4>
             <p>
