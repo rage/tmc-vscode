@@ -8,7 +8,7 @@ import {
     WORKSPACE_SETTINGS,
 } from "../config/constants";
 import { HaltForReloadError } from "../errors";
-import { v2 as storage, v0 } from "./data";
+import { v2 as storage, v0, v3 } from "./data";
 import migrateExerciseDataToLatest from "./migration/exerciseData";
 import migrateExtensionSettingsToLatest from "./migration/extensionSettings";
 import migrateSessionState from "./migration/sessionState";
@@ -103,6 +103,12 @@ export default class Storage {
             await this.updateExtensionSettings(migratedExtensionSettings.data);
             await this.updateSessionState(migratedSessionState.data);
             await this.updateUserData(migratedUserData.data);
+            if (migratedUserData.importedV3Fingerprint) {
+                await memento.update(
+                    v3.IMPORTED_USER_DATA_FINGERPRINT_KEY,
+                    migratedUserData.importedV3Fingerprint,
+                );
+            }
 
             const keysToRemove = concat(
                 migratedExerciseData.obsoleteKeys,

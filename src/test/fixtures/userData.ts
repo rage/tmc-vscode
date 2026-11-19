@@ -265,3 +265,47 @@ export const v2_1_0: v2.UserData = {
         },
     ],
 };
+
+// -------------------------------------------------------------------------------------------------
+// Written by 4.x, under `user-data-v3`
+// -------------------------------------------------------------------------------------------------
+
+/** As origin/master's `data_v3.ts` stores it, with every optional field 4.x may add. */
+export const v4_0_0 = {
+    courses: [
+        {
+            ...v2_1_0.courses[0],
+            exercises: [
+                { ...v2_1_0.courses[0].exercises[0], attempted: true },
+                v2_1_0.courses[0].exercises[1],
+            ],
+            offeredNewExercises: [2],
+            accessLoss: { reason: "forbidden", checkedAt: 1763539200000 },
+        },
+    ],
+    mooc_courses: [
+        {
+            id: "4f9d5e1c-2a8b-4c3d-9e7f-1a2b3c4d5e6f",
+            name: "intro-to-programming",
+            title: "Introduction to Programming",
+            description: null,
+            organization: "uh-cs",
+            aiPolicy: "not_set",
+            exercises: [
+                {
+                    id: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
+                    availablePoints: 1,
+                    awardedPoints: 1,
+                    name: "Hello World",
+                    deadline: null,
+                    passed: true,
+                    chapter: { name: "Basics", number: 1 },
+                },
+            ],
+            availablePoints: 1,
+            awardedPoints: 1,
+            newExercises: [],
+            notifyAfter: 0,
+        },
+    ],
+};

@@ -22,6 +22,7 @@ const UNSTABLE_USER_DATA_KEY = "userData";
 const EXTENSION_SETTINGS_KEY_V1 = "extension-settings-v1";
 const SESSION_STATE_KEY_V1 = "session-state-v1";
 const USER_DATA_KEY_V1 = "user-data-v1";
+const USER_DATA_KEY_V3 = "user-data-v3";
 
 suite("Extension data migration", function () {
     const virtualFileSystem = {
@@ -251,6 +252,29 @@ suite("Extension data migration", function () {
             expect(storage.getUserData()).to.not.be.undefined;
             expect(storage.getExtensionSettings()).to.not.be.undefined;
             expect(storage.getSessionState()).to.not.be.undefined;
+        });
+    });
+    suite("from 4.x", function () {
+        test("should keep the courses changed here and leave user-data-v3 alone", async function () {
+            await context.globalState.update(USER_DATA_KEY_V1, { courses: [] });
+            await context.globalState.update(USER_DATA_KEY_V3, userData.v4_0_0);
+            await context.globalState.update(SESSION_STATE_KEY_V1, { extensionVersion: "4.0.0" });
+            const migrate = (): ReturnType<Storage["migrateToLatest"]> =>
+                storage.migrateToLatest(
+                    context,
+                    dialogMock.object,
+                    tmcMock.object,
+                    settingsMock.object,
+                );
+
+            expect(await migrate()).to.be.equal(Ok.EMPTY);
+            expect(storage.getUserData()).to.be.deep.equal(userData.v2_1_0);
+
+            const removedHere = { courses: [] };
+            await storage.updateUserData(removedHere);
+            expect(await migrate()).to.be.equal(Ok.EMPTY);
+            expect(storage.getUserData()).to.be.deep.equal(removedHere);
+            expect(context.globalState.get(USER_DATA_KEY_V3)).to.be.deep.equal(userData.v4_0_0);
         });
     });
 });

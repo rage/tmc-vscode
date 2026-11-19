@@ -4,7 +4,7 @@ import {
     LOCAL_EXERCISE_UNAWARDED_POINTS_PLACEHOLDER,
 } from "../../config/constants";
 import { v0 } from "../../storage/data";
-import migrateUserDataToLatest from "../../storage/migration/userData";
+import migrateUserDataToLatest, { v3_fingerprint } from "../../storage/migration/userData";
 import * as exerciseData from "../fixtures/exerciseData";
 import * as userData from "../fixtures/userData";
 import { createMockMemento } from "../mocks/vscode";
@@ -15,6 +15,8 @@ import * as vscode from "vscode";
 const UNSTABLE_EXERCISE_DATA_KEY = "exerciseData";
 const USER_DATA_KEY_V0 = "userData";
 const USER_DATA_KEY_V1 = "user-data-v1";
+const USER_DATA_KEY_V3 = "user-data-v3";
+const IMPORTED_V3_KEY = "user-data-v3-imported";
 
 suite("User data migration", function () {
     let memento: vscode.Memento;
@@ -122,6 +124,69 @@ suite("User data migration", function () {
             const data = { ...userData.v2_1_0, batman: "Bruce Wayne" };
             await memento.update(USER_DATA_KEY_V1, data);
             expect(migrateUserDataToLatest(memento).data).to.be.deep.equal(data);
+        });
+    });
+
+    suite("from 4.x", function () {
+        test("should take the tmc courses without the fields this version drops", async function () {
+            await memento.update(USER_DATA_KEY_V3, userData.v4_0_0);
+            expect(migrateUserDataToLatest(memento).data).to.be.deep.equal(userData.v2_1_0);
+        });
+
+        test("should ignore courses.mooc.fi courses", async function () {
+            await memento.update(USER_DATA_KEY_V3, {
+                ...userData.v4_0_0,
+                courses: [],
+            });
+            expect(migrateUserDataToLatest(memento).data).to.be.deep.equal({ courses: [] });
+        });
+
+        test("should keep user-data-v3 and record what it imported", async function () {
+            await memento.update(USER_DATA_KEY_V3, userData.v4_0_0);
+            const migrated = migrateUserDataToLatest(memento);
+            expect(migrated.obsoleteKeys).to.be.empty;
+            expect(migrated.importedV3Fingerprint).to.be.equal(v3_fingerprint(userData.v4_0_0));
+        });
+
+        test("should prefer user-data-v3 over user-data-v1 until it is imported", async function () {
+            await memento.update(USER_DATA_KEY_V1, { courses: [] });
+            await memento.update(USER_DATA_KEY_V3, userData.v4_0_0);
+            expect(migrateUserDataToLatest(memento).data).to.be.deep.equal(userData.v2_1_0);
+        });
+
+        test("should prefer user-data-v1 once user-data-v3 is imported", async function () {
+            const changedHere = { courses: [] };
+            await memento.update(USER_DATA_KEY_V1, changedHere);
+            await memento.update(USER_DATA_KEY_V3, userData.v4_0_0);
+            await memento.update(IMPORTED_V3_KEY, v3_fingerprint(userData.v4_0_0));
+            const migrated = migrateUserDataToLatest(memento);
+            expect(migrated.data).to.be.deep.equal(changedHere);
+            expect(migrated.importedV3Fingerprint).to.be.undefined;
+        });
+
+        test("should import user-data-v3 again once 4.x changes it", async function () {
+            const changedBy4x = {
+                ...userData.v4_0_0,
+                courses: [{ ...userData.v4_0_0.courses[0], awardedPoints: 2 }],
+            };
+            await memento.update(USER_DATA_KEY_V1, { courses: [] });
+            await memento.update(USER_DATA_KEY_V3, changedBy4x);
+            await memento.update(IMPORTED_V3_KEY, v3_fingerprint(userData.v4_0_0));
+            expect(migrateUserDataToLatest(memento).data?.courses[0].awardedPoints).to.be.equal(2);
+        });
+
+        test("should leave out a tmc course this version cannot read", async function () {
+            await memento.update(USER_DATA_KEY_V3, {
+                ...userData.v4_0_0,
+                courses: [...userData.v4_0_0.courses, { id: "not a number" }],
+            });
+            expect(migrateUserDataToLatest(memento).data).to.be.deep.equal(userData.v2_1_0);
+        });
+
+        test("should fall back to user-data-v1 if user-data-v3 is unreadable", async function () {
+            await memento.update(USER_DATA_KEY_V1, userData.v2_1_0);
+            await memento.update(USER_DATA_KEY_V3, { batman: "Bruce Wayne" });
+            expect(migrateUserDataToLatest(memento).data).to.be.deep.equal(userData.v2_1_0);
         });
     });
 
