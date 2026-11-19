@@ -11,7 +11,7 @@ import { v0, v1, v3 } from "../storage/data"
 import { trackCoursesMoocFiEnabled } from "../ui/contextKeys"
 import { COURSES_VIEW_ID } from "../ui/treeview/treeview"
 import { isSamePath, Logger, versionChangeSince } from "../utilities"
-import { listWalkthrough, WALKTHROUGH } from "../window/walkthrough"
+import { listWalkthrough, WALKTHROUGH, whenWalkthroughRegistered } from "../window/walkthrough"
 
 /**
  * Global state keys only a full activation can migrate or merge. This version also writes
@@ -166,7 +166,11 @@ export async function deferActivation(
     }
     if (versionChange === "installed") {
       await storage.updateSessionState({ extensionVersion: EXTENSION_VERSION })
-      await vscode.commands.executeCommand("workbench.action.openWalkthrough", WALKTHROUGH, false)
+      void whenWalkthroughRegistered()
+        .then(() =>
+          vscode.commands.executeCommand("workbench.action.openWalkthrough", WALKTHROUGH, false),
+        )
+        .then(undefined, (e) => Logger.warn("Could not open the walkthrough", e))
     }
   } catch (e) {
     Logger.warn("Could not open the walkthrough", e)

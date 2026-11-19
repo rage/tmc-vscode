@@ -34,6 +34,7 @@ import {
   listWalkthrough,
   showNextWalkthroughStep,
   walkthroughProgressOf,
+  whenWalkthroughRegistered,
 } from "../window/walkthrough"
 
 /** A course command's argument: a course id from code, or the Courses view item it runs on. */
@@ -318,6 +319,7 @@ export function registerCommands(
 
   register("tmc.showWelcome", async () => {
     await listWalkthrough()
+    await whenWalkthroughRegistered()
     await showNextWalkthroughStep(() => walkthroughProgressOf(readyContext), {
       isOpenedIfClosed: true,
     })

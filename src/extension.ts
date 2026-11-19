@@ -81,6 +81,7 @@ import {
   reachWalkthroughMilestone,
   restoreWalkthroughMilestones,
   showNextWalkthroughStep,
+  startWalkthroughRegistration,
   trackWalkthroughActive,
   walkthroughProgressOf,
 } from "./window/walkthrough"
@@ -162,6 +163,7 @@ interface StartupContext {
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   setRedactedExtensionStorage(context.globalStorageUri.fsPath)
+  startWalkthroughRegistration()
   // `onStartupFinished` activates in every window; one TestMyCode has no part in yet stays light.
   if (await init.canDeferActivation(context)) {
     await init.deferActivation(context, () => activateFully(context))

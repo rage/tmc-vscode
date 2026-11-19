@@ -8,8 +8,10 @@ import {
   reachWalkthroughMilestone,
   restoreWalkthroughMilestones,
   showNextWalkthroughStep,
+  startWalkthroughRegistration,
   trackWalkthroughActive,
   WALKTHROUGH,
+  whenWalkthroughRegistered,
 } from "../../window/walkthrough"
 
 function openTabs(...tabs: { label: string; input: unknown }[]): void {
@@ -108,6 +110,28 @@ suite("walkthrough", function () {
       { category: WALKTHROUGH, step: "openExercises" },
       false,
     )
+  })
+
+  test("has VS Code register the walkthrough, and says when it has", async function () {
+    // From the epoch, so the wait is long over for the other tests.
+    vi.useFakeTimers({ now: 0 })
+    try {
+      startWalkthroughRegistration()
+      let isRegistered = false
+      void whenWalkthroughRegistered().then(() => (isRegistered = true))
+
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(isRegistered).toBe(false)
+      await vi.advanceTimersByTimeAsync(1_000)
+
+      expect(isRegistered).toBe(true)
+      expect(executeCommand).toHaveBeenCalledExactlyOnceWith(
+        "welcome.markStepIncomplete",
+        `${WALKTHROUGH}#registration`,
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   test("says whether the walkthrough is the active tab, as the tabs change", function () {

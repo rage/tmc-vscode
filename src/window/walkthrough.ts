@@ -3,7 +3,7 @@ import * as vscode from "vscode"
 import type { ReadyActionContext } from "../actions/types"
 import { EXTENSION_ID } from "../config/constants"
 import { trackContextKey } from "../ui/contextKeys"
-import { Logger } from "../utilities"
+import { Logger, sleep } from "../utilities"
 
 /** The Get Started walkthrough; its last part must match the `walkthroughs` entry in package.json. */
 export const WALKTHROUGH = `${EXTENSION_ID}#gettingStarted`
@@ -22,6 +22,43 @@ const WALKTHROUGH_TAB_LABELS = [
 /** Whether `tab` may be this walkthrough: VS Code gives extensions no input for it. */
 function isWalkthroughTab(tab: vscode.Tab | undefined): boolean {
   return tab !== undefined && WALKTHROUGH_TAB_LABELS.includes(tab.label) && tab.input === undefined
+}
+
+/** VS Code's 5 s wait in {@link startWalkthroughRegistration}, with slack. */
+const WALKTHROUGH_REGISTRATION_MS = 6_000
+
+/** When VS Code has registered the walkthrough at the latest; 0 until it starts. */
+let walkthroughRegisteredAt = 0
+
+/**
+ * Has VS Code register the walkthrough now, which {@link whenWalkthroughRegistered} waits for.
+ *
+ * VS Code creates its walkthrough service only once something uses it, often the first open, and
+ * the service then registers each extension's walkthrough after waiting up to 5 s for an
+ * experiment to override its `when` (`gettingStartedService.ts`). Marking a step that does not
+ * exist incomplete creates the service and changes nothing.
+ */
+export function startWalkthroughRegistration(): void {
+  walkthroughRegisteredAt = Date.now() + WALKTHROUGH_REGISTRATION_MS
+  // VS Code throws for the unknown step after creating the service.
+  void Promise.resolve(
+    vscode.commands.executeCommand("welcome.markStepIncomplete", `${WALKTHROUGH}#registration`),
+  ).catch(() => {})
+}
+
+/**
+ * Resolves once VS Code has registered the walkthrough, at most a few seconds after
+ * {@link startWalkthroughRegistration}.
+ *
+ * Opened before that, the walkthrough may never show: on a new profile VS Code shows its own first
+ * walkthrough instead, and while that tab is active it ignores later opens (`gettingStarted.ts`,
+ * `gettingStarted.contribution.ts`).
+ */
+export async function whenWalkthroughRegistered(): Promise<void> {
+  const remainingMs = walkthroughRegisteredAt - Date.now()
+  if (remainingMs > 0) {
+    await sleep(remainingMs)
+  }
 }
 
 /**

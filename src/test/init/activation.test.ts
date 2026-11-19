@@ -250,6 +250,12 @@ vi.mock("../../init/deferredActivation", async (importOriginal) => ({
   canDeferActivation: async (): Promise<boolean> => deferral.isAllowed,
 }))
 
+// Opens the walkthrough without waiting for VS Code to register it; walkthrough.test.ts covers that.
+vi.mock("../../window/walkthrough", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  startWalkthroughRegistration: (): void => {},
+}))
+
 vi.mock("../../init/verifyCliSchema", () => ({
   verifyCliSchema: async (): Promise<void> => {},
 }))
@@ -1320,10 +1326,12 @@ suite("activation in a window TestMyCode has no part in yet", function () {
 
     await activate(createContext())
 
-    expect(executeCommand).toHaveBeenCalledWith(
-      "workbench.action.openWalkthrough",
-      WALKTHROUGH,
-      false,
+    await vi.waitFor(() =>
+      expect(executeCommand).toHaveBeenCalledWith(
+        "workbench.action.openWalkthrough",
+        WALKTHROUGH,
+        false,
+      ),
     )
   })
 
@@ -1366,6 +1374,13 @@ suite("activation in a window TestMyCode has no part in yet", function () {
 
     await activate(createContext())
 
+    await vi.waitFor(() =>
+      expect(executeCommand).toHaveBeenCalledWith(
+        "workbench.action.openWalkthrough",
+        WALKTHROUGH,
+        false,
+      ),
+    )
     const commands = executeCommand.mock.calls.map(([command, key]) =>
       command === "setContext" ? `${command} ${String(key)}` : command,
     )
