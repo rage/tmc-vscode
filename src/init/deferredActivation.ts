@@ -76,7 +76,10 @@ export async function hasStoredLogin(folder: string | undefined): Promise<boolea
  * Whether this window can start TestMyCode light: it is not a course workspace, and
  * TestMyCode holds no course, legacy data or login yet.
  */
-export async function canDeferActivation(context: vscode.ExtensionContext): Promise<boolean> {
+export async function canDeferActivation(
+  context: vscode.ExtensionContext,
+  globalState: vscode.Memento,
+): Promise<boolean> {
   const workspaceFile = vscode.workspace.workspaceFile
   if (
     workspaceFile &&
@@ -84,12 +87,12 @@ export async function canDeferActivation(context: vscode.ExtensionContext): Prom
   ) {
     return false
   }
-  const storedKeys = new Set(context.globalState.keys())
+  const storedKeys = new Set(globalState.keys())
   if (LEGACY_DATA_KEYS.some((key) => storedKeys.has(key))) {
     return false
   }
   try {
-    const userData = new Storage(context).getUserData()
+    const userData = new Storage(globalState).getUserData()
     if (userData && userData.courses.length + userData.mooc_courses.length > 0) {
       return false
     }
@@ -111,6 +114,7 @@ export const LIGHT_CONTEXT_KEY = "test-my-code:Light"
  */
 export async function deferActivation(
   context: vscode.ExtensionContext,
+  globalState: vscode.Memento,
   activateFully: () => Promise<void>,
 ): Promise<void> {
   const standIns: vscode.Disposable[] = []
@@ -154,7 +158,7 @@ export async function deferActivation(
   void vscode.commands.executeCommand("setContext", LIGHT_CONTEXT_KEY, true)
 
   try {
-    const storage = new Storage(context)
+    const storage = new Storage(globalState)
     const versionChange = versionChangeSince(
       storage.getSessionState()?.extensionVersion,
       EXTENSION_VERSION,

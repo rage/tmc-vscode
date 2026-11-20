@@ -30,12 +30,13 @@ import migrateUserDataToLatest, { syncLegacyMirror } from "./migration/userData"
 
 /** The only access to VS Code's storage; nothing else reads or writes mementos or settings. */
 export default class Storage {
-  private _context: vscode.ExtensionContext
+  private readonly _memento: vscode.Memento
   // Unset by a write that may have failed half-way, so the next one resyncs the mirror.
   private _isLegacyMirrorSynced = false
 
-  public constructor(context: vscode.ExtensionContext) {
-    this._context = context
+  /** @param memento The extension's `globalState`, behind its `SerializedMemento`. */
+  public constructor(memento: vscode.Memento) {
+    this._memento = memento
   }
 
   /** @throws {CorruptStoredDataError} if the stored value does not match the current schema. */
@@ -58,7 +59,7 @@ export default class Storage {
     userData: storage.UserData | undefined,
     { isMoocOnlyChange = false }: { isMoocOnlyChange?: boolean } = {},
   ): Promise<void> {
-    const memento = this._context.globalState
+    const memento = this._memento
     if (isMoocOnlyChange && this._isLegacyMirrorSynced) {
       await memento.update(storage.USER_DATA_KEY, userData)
       return
@@ -70,15 +71,15 @@ export default class Storage {
 
   /** The recorded migration runs as text, for logs and error details. */
   public getMigrationLog(): string {
-    return formatMigrationLog(readMigrationLog(this._context.globalState))
+    return formatMigrationLog(readMigrationLog(this._memento))
   }
 
   public async updateSessionState(sessionState: storage.SessionState | undefined): Promise<void> {
-    await this._context.globalState.update(storage.SESSION_STATE_KEY, sessionState)
+    await this._memento.update(storage.SESSION_STATE_KEY, sessionState)
   }
 
   private _readValidated<T>(key: string, schema: z.ZodType<T>): T | undefined {
-    const stored = this._context.globalState.get<unknown>(key)
+    const stored = this._memento.get<unknown>(key)
     if (stored === undefined) {
       return undefined
     }
@@ -115,24 +116,23 @@ export default class Storage {
    * Without `langs`, pre-2.0 exercises stay where they are until an activation that has it.
    */
   public async migrateToLatest(
-    context: vscode.ExtensionContext,
     dialog: Dialog,
     langs: Langs | undefined,
     settings: vscode.WorkspaceConfiguration,
   ): Promise<MigrationOutcome> {
     // Without langs the exercises cannot move, so the reopened workspace would be empty.
-    const activeOldWorkspaceName = langs && getActiveOldWorkspaceName(context.globalState)
+    const activeOldWorkspaceName = langs && getActiveOldWorkspaceName(this._memento)
     if (activeOldWorkspaceName) {
       return {
         kind: "needsReload",
         workspaceName: activeOldWorkspaceName,
-        hasMigratedUserData: context.globalState.get(storage.USER_DATA_KEY) !== undefined,
+        hasMigratedUserData: this._memento.get(storage.USER_DATA_KEY) !== undefined,
       }
     }
 
-    const fromVersion = lastSeenVersion(context.globalState)
-    const memento = new RecordingMemento(context.globalState, () =>
-      backUpLegacyData(context.globalState, fromVersion, EXTENSION_VERSION),
+    const fromVersion = lastSeenVersion(this._memento)
+    const memento = new RecordingMemento(this._memento, () =>
+      backUpLegacyData(this._memento, fromVersion, EXTENSION_VERSION),
     )
     let migratedUserData: UserDataMigration | undefined
     let hasMigratedUserData = false
@@ -206,7 +206,7 @@ export default class Storage {
       Logger.info(`Migrated stored data: ${line}`)
     }
     try {
-      await appendMigrationRun(this._context.globalState, run)
+      await appendMigrationRun(this._memento, run)
     } catch (e) {
       Logger.warn("Could not record the migration run", e)
     }

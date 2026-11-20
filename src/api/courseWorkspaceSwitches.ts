@@ -4,7 +4,8 @@ import * as fs from "fs-extra"
 
 import { Logger } from "../utilities"
 
-// Not in globalState, where VS Code drops an update that overlaps another of the extension's.
+// Not in globalState: VS Code drops an update that overlaps another, and the window that writes
+// this cannot queue behind the one it opens.
 const SWITCH_FILE = "course-workspace-switch.json"
 
 /** How long after a switch the window it opened still counts as opened by it. */

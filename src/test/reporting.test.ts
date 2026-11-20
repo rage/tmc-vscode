@@ -147,7 +147,7 @@ async function harness(
     ),
   } as unknown as Dialog
 
-  const storage = new Storage(createMockContext())
+  const storage = new Storage(createMockContext().globalState)
   await storage.updateUserData({ courses: [], mooc_courses: [services.course ?? storedCourse()] })
 
   const langs = fakeService<Langs>(services.langs ?? {}, {

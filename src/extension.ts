@@ -55,6 +55,7 @@ import { OpenCourseRefresh } from "./openCourseRefresh"
 import { TmcPanel } from "./panels/TmcPanel"
 import { createExpiryNotifier, createSessionExpiryTracker } from "./sessionExpiryTracker"
 import Storage from "./storage"
+import { SerializedMemento } from "./storage/serializedMemento"
 import { backgroundJobs } from "./ui/backgroundJobs"
 import {
   trackActiveEditorExercise,
@@ -162,24 +163,36 @@ interface StartupContext {
   isApplied: boolean
 }
 
+/** The extension's mementos; `context`'s own are written only through these. */
+interface Mementos {
+  globalState: SerializedMemento
+  workspaceState: SerializedMemento
+}
+
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   setRedactedExtensionStorage(context.globalStorageUri.fsPath)
   startWalkthroughRegistration()
+  const mementos: Mementos = {
+    globalState: new SerializedMemento(context.globalState),
+    workspaceState: new SerializedMemento(context.workspaceState),
+  }
   // `onStartupFinished` activates in every window; one TestMyCode has no part in yet stays light.
-  if (await init.canDeferActivation(context)) {
-    await init.deferActivation(context, () => activateFully(context))
+  if (await init.canDeferActivation(context, mementos.globalState)) {
+    await init.deferActivation(context, mementos.globalState, () =>
+      activateFully(context, mementos),
+    )
   } else {
-    await activateFully(context)
+    await activateFully(context, mementos)
   }
 }
 
-async function activateFully(context: vscode.ExtensionContext): Promise<void> {
+async function activateFully(context: vscode.ExtensionContext, mementos: Mementos): Promise<void> {
   const startupContext: StartupContext = { isApplied: false }
   try {
     // The Courses view shows "Starting TestMyCode…" until activation settles; this gives it
     // a progress bar too.
     await vscode.window.withProgress({ location: { viewId: COURSES_VIEW_ID } }, () =>
-      activateInner(context, startupContext),
+      activateInner(context, mementos, startupContext),
     )
   } catch (e) {
     // this should never occur, we always want to activate the extension even if only partially
@@ -214,9 +227,10 @@ function refreshInBackground(
 
 async function activateInner(
   context: vscode.ExtensionContext,
+  { globalState, workspaceState }: Mementos,
   startupContext: StartupContext,
 ): Promise<void> {
-  const storage = new Storage(context)
+  const storage = new Storage(globalState)
   const settings = new Settings()
   context.subscriptions.push(settings)
   // Must precede the first CLI invocation below, which logs at the user's level.
@@ -250,7 +264,7 @@ async function activateInner(
     reportInitializationError("Setting up the TestMyCode tools", cliPathResult.val)
   } else {
     // fire-and-forget: verify the CLI's output contract matches this build's schema
-    void init.verifyCliSchema(cliPathResult.val, context.extensionPath, context.globalState)
+    void init.verifyCliSchema(cliPathResult.val, context.extensionPath, globalState)
     const langsInstance = new Langs(cliPathResult.val, CLIENT_NAME, EXTENSION_VERSION, {
       cliConfigDir: TMC_LANGS_CONFIG_DIR,
       javaHome: () => settings.getJavaHome(),
@@ -263,7 +277,7 @@ async function activateInner(
   const authState = createAuthState(langs)
   authState.subscribe(() => coursesTree.setAccount(authState))
   context.subscriptions.push(trackWalkthroughActive())
-  restoreWalkthroughMilestones(context.globalState)
+  restoreWalkthroughMilestones(globalState)
   // Awaited only after the migration: it can refresh a token over the network, and nothing
   // before needs its answer.
   const initialAuthCheck = authState.refresh({ timeout: 15000 })
@@ -271,7 +285,6 @@ async function activateInner(
   const workspaceFileFolder = init.workspaceFileFolderOf(context)
 
   const migration = await storage.migrateToLatest(
-    context,
     dialog,
     langs.ok ? langs.val : undefined,
     vscode.workspace.getConfiguration(),
@@ -429,7 +442,7 @@ async function activateInner(
       const courses = userData.ok ? userData.val : undefined
       aiRestriction = new AiRestriction(
         courseWorkspace,
-        context.workspaceState,
+        workspaceState,
         () => isActiveCourseAiAllowed(courseWorkspace, courses),
         courses?.onDidChangeCourses,
       )
@@ -467,7 +480,7 @@ async function activateInner(
     langs.ok && resources.ok && workspaceManager && userData?.ok && exerciseDecorationProvider
       ? {
           kind: "ready",
-          accountHandover: new AccountHandover(context.globalState),
+          accountHandover: new AccountHandover(globalState),
           aiUseGate: new AiUseGate(aiRestriction),
           courseWorkspaceSwitches,
           langs: langs.val,
@@ -476,7 +489,7 @@ async function activateInner(
           workspaceManager,
           userData: userData.val,
           exerciseDecorationProvider,
-          keptCopies: new KeptCopies(context.globalState),
+          keptCopies: new KeptCopies(globalState),
         }
       : { kind: "degraded", failures: startupFailures({ langs, resources, userData }) }
   if (startup.kind === "degraded") {
@@ -499,7 +512,7 @@ async function activateInner(
       void promptForCourseWorkspaceTrust(
         readyContext.dialog,
         course.ok ? LocalCourseData.getCourseTitle(course.val) : activeCourse,
-        context.workspaceState,
+        workspaceState,
       )
     }
     context.subscriptions.push(
@@ -564,7 +577,7 @@ async function activateInner(
       new LanguageExtensionOffer(
         readyContext.dialog,
         readyContext.startup.workspaceManager,
-        context.globalState,
+        globalState,
       ),
       trackHasCourses(readyContext.startup.userData),
       trackActiveExerciseRemoved(

@@ -8,6 +8,7 @@ import { StoredDataMigrationError } from "../../errors"
 import Storage from "../../storage"
 import type { MoocLocalCourseData, TmcLocalCourseData } from "../../storage/data"
 import { v0, v1, v2, v3 } from "../../storage/data"
+import { SerializedMemento } from "../../storage/serializedMemento"
 import { Logger, LogLevel } from "../../utilities"
 import * as extensionSettings from "../fixtures/extensionSettings"
 import * as userData from "../fixtures/userData"
@@ -75,7 +76,7 @@ suite("Storage migration safety", function () {
     ;[dialog] = createDialogMock()
     ;[langs] = createTMCMock()
     settings = createMockWorkspaceConfiguration()
-    storage = new Storage(context)
+    storage = new Storage(new SerializedMemento(context.globalState))
   })
 
   afterEach(function () {
@@ -83,7 +84,7 @@ suite("Storage migration safety", function () {
   })
 
   function migrate(withLangs = true): ReturnType<Storage["migrateToLatest"]> {
-    return storage.migrateToLatest(context, dialog, withLangs ? langs : undefined, settings)
+    return storage.migrateToLatest(dialog, withLangs ? langs : undefined, settings)
   }
 
   function migrationLog(): v3.MigrationRun[] {
